@@ -567,3 +567,26 @@ nameId setup to the sealed ID. Neutral review accepted all three finite scopes.
 Source compatibility check succeeds; no fresh full build/performance is claimed
 for this adapter repair. Parameterized value source-application consumer controls,
 exact Syntax pin and whole-task gates remain open.
+
+## Parameterized Value Consumer Controls
+
+Reuse SourceViewApplications and ArrayViewAdmission rather than replacing their
+original preservation guarantees. ValueViewApplicationConsumers adds direct and
+materialized controls for one/nested/multiple positional arguments, missing/extra
+arguments, forbidden labels and an index-valid/type-invalid packet. Successful
+selectors must retain owner, complete argument children and written name range;
+selected invalid syntax cannot fall back to indexing. Adapter setup success is
+mandatory, and rejection assertions include original diagnostic line plus the
+materialized invalid-type receipt offset. These are preserved GREEN contracts
+for the existing implementation, not an invented new product RED. Qualified
+value paths/aliases and whole-task acceptance remain separate open checks.
+
+[Saved consumer verification](../../../evidence/rejection-domains/diagnostic-domain-implementation/value-view-consumer-preservation.json)
+records final14 direct/materialized controls plus3 existing preservation
+executions (including all9 Array conditions), independently reexecuted by a
+neutral reviewer. Strengthened adapter setup admission and exact receipt/range
+assertions were re-reviewed; no mandatory repair remains in this finite scope.
+Standard build20261107T184618-build-449dcd passes with immutable inputs; saved
+candidate bin/plewc-source-application-consumers performs check/run8 on actual
+value-view and three indexing fixtures. Invocation/setup failures are excluded
+from product RED. No new formal performance or full-task closure is claimed.

@@ -218,3 +218,19 @@ composed view sources, and the actual proof-source activation query's exclusion
 of the other bundle. It does not certify complete trait-instance proof search
 or associated-call dispatch. The setup itself is also valid for `--check` and
 `--run` (no stdout).
+
+### Value source-application consumers (manual)
+
+`ValueViewApplicationConsumers.pw` covers direct Syntax and the materialized
+ExprAst adapter. Run without arguments and with `nested`, `multiple`, `missing`,
+`extra`, `named`, `indexOnly`, `adapter`, `adapterNested`, `adapterMultiple`,
+`adapterMissing`, `adapterExtra`, `adapterNamed`, `adapterIndexOnly`; each must
+exit0 with empty stderr and the companion golden. Success inspects exact owner,
+arguments/children and original source-name range. Refusals require the selected
+branch's Source diagnostic at its original line; the materialized invalid type
+receipt also retains its exact offset. Adapter setup must succeed before Lower
+is exercised. A comment carries the source text for an explicit programmatic
+AST without forcing the setup analysis to consume that expression. These are
+formation/handoff controls, not full conformance proof or final method dispatch.
+`SourceViewApplications` and `ArrayViewAdmission` preserve existing value/plain
+and extension/zero-arity/parenthesized indexing paths separately.

@@ -1,0 +1,92 @@
+// Formation and source handoff only; complete conformance dispatch has its own task.
+use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontend, Expr }
+use ../../../src/SourceAccess only { SourceAccess }
+use ../../../src/Diag only { emitDiagnostic, CompileDiagnostic, DiagnosticLocation }
+use @Plew/Syntax only { parseExprFrom, rangeEquals, ExprAst, SourceTypesAst }
+use @Std/Io only { print }
+use @Std/Process only { argAt }
+
+fn retained(compiler: inout Comp, traitName: String, argumentName: String, arity: U64, writtenStart: U64) -> Bool {
+    val name = compiler.internBytes(s: traitName)
+    val trait = compiler.decls.traitAt(index: compiler.decls.firstTraitNamed(nameId: name.nameId))
+    mut val count = 0U64
+    for val expression in compiler.arena.exprs {
+        match expression {
+            Expr.ExtView(recv: _, source: val source, strip: val strip) => {
+                if strip || source.surfaceId != trait.nameId || source.traitInstance.owner != trait.nameStart || source.writtenStart != writtenStart || source.writtenLen != traitName.bytes().count() || source.traitInstance.positionalArgs.count() != arity { return false }
+                val argument = compiler.arena.typeAt(index: source.traitInstance.positionalArgs[0U64])
+                if !rangeEquals(bytes: compiler.arena.bytes, start: argument.nameStart, len: argument.nameLen, kw: argumentName) { return false }
+                if argumentName == "Box" {
+                    if argument.args.count() != 1U64 { return false }
+                    val child = compiler.arena.typeAt(index: argument.args[0U64])
+                    if !rangeEquals(bytes: compiler.arena.bytes, start: child.nameStart, len: child.nameLen, kw: "I64") { return false }
+                }
+                if arity == 2U64 {
+                    val second = compiler.arena.typeAt(index: source.traitInstance.positionalArgs[1U64])
+                    if !rangeEquals(bytes: compiler.arena.bytes, start: second.nameStart, len: second.nameLen, kw: "Bool") { return false }
+                }
+                count += 1U64
+            }
+            _ => {}
+        }
+    }
+    return count == 1U64
+}
+
+fn rejectedAt(diagnostic: CompileDiagnostic, message: String, line: I64) -> Bool {
+    if !diagnostic.isSourceRejection() || diagnostic.message != message { return false }
+    match diagnostic.location {
+        DiagnosticLocation.File(path: val path, line: val actual) => { return path == "ValueViewConsumers.pw" && actual == line }
+        DiagnosticLocation.Line(line: val actual) => { return actual == line }
+        _ => { return false }
+    }
+}
+
+fn main() {
+    val mode = argAt(1I64)
+    val scenario = if mode == "adapterNested" { give "nested" } else if mode == "adapterMultiple" { give "multiple" } else if mode == "adapterMissing" { give "missing" } else if mode == "adapterExtra" { give "extra" } else if mode == "adapterNamed" { give "named" } else if mode == "adapterIndexOnly" { give "indexOnly" } else { give mode }
+    val expression = if scenario == "nested" { give "value#P[Box[I64]]" } else if scenario == "multiple" { give "value#Pair[I64,Bool]" } else if scenario == "missing" { give "value#P" } else if scenario == "extra" { give "value#P[I64,Bool]" } else if scenario == "named" { give "value#P[K=I64]" } else if scenario == "indexOnly" { give "value#P[\n0U64]" } else { give "value#P[I64]" }
+    val invalid = scenario == "missing" || scenario == "extra" || scenario == "named" || scenario == "indexOnly"
+    val expected = if scenario == "indexOnly" { give "expected a type name" } else if scenario == "named" { give "trait view source accepts positional type arguments only" } else { give "a trait view requires all positional type arguments" }
+    val declarations = "trait P[K] {{}} trait Pair[K,L] {{}} struct Box[T] {{}} struct S {{}} pub impl S {{ factory }} impl S as P[I64] {{}} impl S as P[Box[I64]] {{}} impl S as Pair[I64,Bool] {{}} "
+    val adapter = mode == "adapter" || mode == "adapterNested" || mode == "adapterMultiple" || mode == "adapterMissing" || mode == "adapterExtra" || mode == "adapterNamed" || mode == "adapterIndexOnly"
+    val chosen = expression
+    val prefix = declarations + "\n" + (if adapter { give "fn main() {{}} /* " } else { give "fn target() {{ val value = <S /> val result = " })
+    val text = prefix + chosen + (if adapter { give " */" } else { give " }} fn main() {{}}" })
+    mut val compiler = <Comp />
+    match analyzeFrontend(c: inout compiler, input: <FrontendInput.Text text=text path="ValueViewConsumers.pw" />, sources: <SourceAccess stdRoot="std/".bytes() />) {
+        Result.Err(error: val diagnostic) => {
+            // A literal index is not a type application: the bound trait must
+            // report its selected parser branch's failure, never use indexing.
+            if !adapter && invalid && rejectedAt(diagnostic: diagnostic, message: expected, line: (if scenario == "indexOnly" { give 3I64 } else { give 2I64 })) { print("1") return }
+            emitDiagnostic(diagnostic: diagnostic) print("0") return
+        }
+        Result.Ok(value: _) => { if invalid && !adapter { print("0") return } }
+    }
+    if adapter {
+        val parsed = parseExprFrom(source: chosen, start: prefix.bytes().count())
+        if scenario == "indexOnly" {
+            match parsed {
+                ExprAst.SourceSelection(recv: _, path: _, application: val application, strip: _, sourceSpan: _, span: _) => {
+                    match application.unwrap().types {
+                        SourceTypesAst.Invalid(offset: val offset, message: val message) => {
+                            if offset != prefix.bytes().count() + 9U64 || message != expected { print("0") return }
+                        }
+                        _ => { print("0") return }
+                    }
+                }
+                _ => { print("0") return }
+            }
+        }
+        match compiler.lowerExpr(e: parsed) {
+            Result.Err(error: val diagnostic) => {
+                if invalid && rejectedAt(diagnostic: diagnostic, message: expected, line: (if scenario == "indexOnly" { give 3I64 } else { give 2I64 })) { print("1") return }
+                emitDiagnostic(diagnostic: diagnostic) print("0") return
+            }
+            Result.Ok(value: _) => { if invalid { print("0") return } }
+        }
+    }
+    val multiple = scenario == "multiple" || scenario == "adapterMultiple"
+    val nested = scenario == "nested" || scenario == "adapterNested"
+    print(retained(compiler: inout compiler, traitName: (if multiple { give "Pair" } else { give "P" }), argumentName: (if nested { give "Box" } else { give "I64" }), arity: (if multiple { give 2U64 } else { give 1U64 }), writtenStart: prefix.bytes().count() + 6U64))
+}
