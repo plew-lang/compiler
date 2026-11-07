@@ -181,7 +181,18 @@ Neutral impact review found no semantic change or missing child. The linked
 [reader-cost record](../../../evidence/rejection-domains/diagnostic-domain-implementation/semantic-trait-view-reader-cost.json)
 retains alternating same-source diagnosis: old median 11.189354s versus fresh
 candidate 6.992590s. This is not a new formal fixed-point measurement. [Native revalidation](../../../evidence/rejection-domains/diagnostic-domain-implementation/semantic-trait-view-arena-readers-green.json)
-passes all seven fixtures/97 cases with unchanged inputs. Formal performance
+passes all seven fixtures/97 cases with unchanged inputs. [Formal remeasurement](../../../evidence/rejection-domains/diagnostic-domain-implementation/semantic-trait-view-arena-readers-self-host.json)
+reaches generation three but median 7.045220s is still over the strict seven
+second threshold (samples 7.646217/7.045220/6.659092). Do not certify from the
+single sub-seven sample. A final local read optimization uses the already-held
+empty view-source range in all four grounding wrappers before asking the pool
+for its argument count. Full sources still enter the unchanged traversal.
+Build 20261107T041032-build-26fd48 passed; candidate
+bin/plewc-semantic-trait-view-empty-range. Neutral impact review confirms that
+the guards follow from the old count relation, including raw empty-range and
+legacy/projection behavior. Same-source alternating diagnosis compares the
+previous fixed-point median 6.751016s with fresh candidate 6.615871s. [Native revalidation](../../../evidence/rejection-domains/diagnostic-domain-implementation/semantic-trait-view-empty-range-green.json)
+passes all seven fixtures/97 cases with fixed inputs. New formal performance
 and applicable task gates remain pending.
 
 ## Remaining Work
