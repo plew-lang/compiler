@@ -1,0 +1,51 @@
+use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontend, ImplAst, TypeAst, Span }
+use ../../../src/SourceAccess only { SourceAccess }
+use ../../../src/Diag only { emitDiagnostic }
+use @Std/Io only { print }
+use @Std/Process only { argAt }
+
+fn main() {
+    val scenario = if argAt(1I64) == "" { give "valid" } else { give argAt(1I64) }
+    val ast = scenario == "astMissing" || scenario == "astExtra" || scenario == "astUnknown" || scenario == "astValid" || scenario == "astZero" || scenario == "astSpanlessMissing" || scenario == "astSpanlessValid"
+    val file = scenario == "barrel" || scenario == "alias" || scenario == "direct" || scenario == "barrelMissing" || scenario == "hidden"
+    val valid = scenario == "valid" || scenario == "zero" || scenario == "astValid" || scenario == "astZero" || scenario == "astSpanlessValid" || scenario == "barrel" || scenario == "alias" || scenario == "direct"
+    val path = if scenario == "barrel" { give "Valid" } else if scenario == "alias" { give "Alias" } else if scenario == "direct" { give "Direct" } else if scenario == "hidden" { give "Hidden" } else { give "Missing" }
+    val implementation = if ast { give "" } else if scenario == "missing" { give "impl S as P {{}}" } else if scenario == "extra" { give "impl S as P[I64, Bool] {{}}" } else if scenario == "unknown" { give "impl S as Missing[I64] {{}}" } else if scenario == "zero" { give "impl S as Zero {{}}" } else { give "impl S as P[I64] {{}}" }
+    val text = "trait P[K] {{}} trait Zero {{}} struct S {{}} " + implementation + " fn main() {{}}"
+    mut val compiler = <Comp />
+    match analyzeFrontend(c: inout compiler, input: (if file { give <FrontendInput.File path="tests/compiler/frontend/fixtures/ImplTraitInstances/" + path + ".pw" /> } else { give <FrontendInput.Text text=text path="ImplInstances.pw" /> }), sources: <SourceAccess stdRoot="std/".bytes() />) {
+        Result.Ok(value: _) => {
+            if !ast { print(valid) return }
+            val name = compiler.internBytes(s: "S")
+            val declaration = compiler.arena.structAt(index: compiler.arena.firstStructNamed(nameId: name.nameId))
+            val receiverSpan = <Span start=declaration.nameStart end=declaration.nameStart + declaration.nameLen />
+            val receiver = <TypeAst name="S" nameSpan=receiverSpan args=[] span=receiverSpan />
+            val zero = scenario == "astZero"
+            val traitName = if zero { give "Zero" } else if scenario == "astUnknown" { give "Missing" } else { give "P" }
+            val traitId = compiler.internBytes(s: if zero { give "Zero" } else { give "P" }).nameId
+            val trait = compiler.decls.traitAt(index: compiler.decls.firstTraitNamed(nameId: traitId))
+            val spanless = scenario == "astUnknown" || scenario == "astSpanlessMissing" || scenario == "astSpanlessValid"
+            val traitSpan = if spanless { give <Span start=0U64 end=0U64 /> } else { give <Span start=trait.nameStart end=trait.nameStart + trait.nameLen /> }
+            val integer = <TypeAst name="I64" args=[] span=receiverSpan />
+            val arguments: Array[TypeAst] = if zero || scenario == "astMissing" || scenario == "astSpanlessMissing" { give [] } else if scenario == "astExtra" { give [integer, integer] } else { give [integer] }
+            val implementation = <ImplAst recvType=receiver implParams=[] isTraitImpl=true traitName=traitName traitNameSpan=traitSpan traitArgs=arguments whereParams=[] whereTraits=[] isPub=false members=[] span=receiverSpan />
+            match compiler.lowerImpl(im: implementation) {
+                Result.Ok(value: _) => {
+                    if scenario != "astValid" && scenario != "astZero" && scenario != "astSpanlessValid" { print("0") return }
+                    val conformance = compiler.decls.conformAt(index: compiler.decls.conformCount() - 1U64)
+                    print(conformance.traitStart == trait.nameStart && conformance.traitArgs.count() == arguments.count())
+                }
+                Result.Err(error: val diagnostic) => {
+                    if valid { emitDiagnostic(diagnostic: diagnostic) print("0") return }
+                    val expected = if scenario == "astUnknown" { give "unknown trait in impl conformance" } else { give "an impl conformance requires all positional trait type arguments" }
+                    if diagnostic.isSourceRejection() && diagnostic.message == expected { print("1") } else { emitDiagnostic(diagnostic: diagnostic) print("0") }
+                }
+            }
+        }
+        Result.Err(error: val diagnostic) => {
+            if valid { emitDiagnostic(diagnostic: diagnostic) print("0") return }
+            val expected = if scenario == "unknown" || scenario == "hidden" { give "unknown trait in impl conformance" } else { give "an impl conformance requires all positional trait type arguments" }
+            if diagnostic.isSourceRejection() && diagnostic.message == expected { print("1") } else { emitDiagnostic(diagnostic: diagnostic) print("0") }
+        }
+    }
+}

@@ -265,15 +265,10 @@ pub impl Comp {
             val origin: ImportOrigin = self.modules.importOriginAt(index: i)
             if origin.localModule == mod {
                 if intern(c: inout self, start: origin.localStart, len: origin.localLength) == nameId {
-                    val targetNameId = intern(c: inout self, start: origin.sourceStart, len: origin.sourceLength)
-                    mut val oi = self.decls.firstTraitOwnerNamed(nameId: targetNameId)
-                    while oi < self.decls.traitOwnerCount() {
-                        val candidate: TraitOwner = self.decls.traitOwnerAt(index: oi)
-                        if candidate.nameId == targetNameId && candidate.sourceModule == origin.targetModule {
-                            if found != 0U64 && found != candidate.nameStart { return 0U64 }
-                            found = candidate.nameStart
-                        }
-                        oi = self.decls.nextTraitOwnerNamed(index: oi)
+                    val owner = self.traitOwnerFromSurfaceForSelector(surfaceMod: origin.targetModule, start: origin.sourceStart, len: origin.sourceLength)
+                    if owner != 0U64 {
+                        if found != 0U64 && found != owner { return 0U64 }
+                        found = owner
                     }
                 }
             }
@@ -284,15 +279,10 @@ pub impl Comp {
             val origin: ImportOrigin = self.modules.reExportOriginAt(index: i)
             if origin.localModule == mod {
                 if intern(c: inout self, start: origin.localStart, len: origin.localLength) == nameId {
-                    val targetNameId = intern(c: inout self, start: origin.sourceStart, len: origin.sourceLength)
-                    mut val oi = self.decls.firstTraitOwnerNamed(nameId: targetNameId)
-                    while oi < self.decls.traitOwnerCount() {
-                        val candidate: TraitOwner = self.decls.traitOwnerAt(index: oi)
-                        if candidate.nameId == targetNameId && candidate.sourceModule == origin.targetModule {
-                            if found != 0U64 && found != candidate.nameStart { return 0U64 }
-                            found = candidate.nameStart
-                        }
-                        oi = self.decls.nextTraitOwnerNamed(index: oi)
+                    val owner = self.traitOwnerFromSurfaceForSelector(surfaceMod: origin.targetModule, start: origin.sourceStart, len: origin.sourceLength)
+                    if owner != 0U64 {
+                        if found != 0U64 && found != owner { return 0U64 }
+                        found = owner
                     }
                 }
             }

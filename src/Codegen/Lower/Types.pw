@@ -56,6 +56,19 @@ pub impl Comp {
         return <Result.Ok value=<SyntaxType name=head.name args=head.args span=t.span extView=t.extView viewNames=t.viewNames viewSources=t.viewSources projectionTrait=t.projectionTrait projectionTraitArgs=t.projectionTraitArgs projectionTraitArgLabels=t.projectionTraitArgLabels projectionAssoc=associated isAny=t.isAny argLabels=head.argLabels isSendable=t.isSendable isDiverging=t.isDiverging isRecord=t.isRecord /> />
     }
 
+    // Declaration lookup establishes the owner before this exact-arity check.
+    // A missing owner is diagnosed by the source-specific lookup boundary.
+    inout fn checkTraitPositionalArity(owner: U64, arity: U64, offset: U64, message: String) -> Result[(), CompileDiagnostic] {
+        val index = self.decls.traitOwnerIndex(offset: owner)
+        if index >= self.decls.traitOwnerCount() {
+            return <Result.Err error=self.diagnosticAt(offset: offset, msg: "invalid trait instance owner", failureDomain: <FailureDomain.Input />) />
+        }
+        if arity != self.decls.traitOwnerAt(index: index).arity {
+            return <Result.Err error=self.diagnosticAt(offset: offset, msg: message, failureDomain: <FailureDomain.Source />) />
+        }
+        return <Result.Ok value=() />
+    }
+
     // Both syntax carriers decode children, then publish the same authored
     // source contract. Conformance is checked later, not inferred here.
     inout fn completeTypeViewSource(source: ResolvedViewSource, arguments: Array[U64], hasLabels: Bool) -> Result[ResolvedViewSource, CompileDiagnostic] {
@@ -63,13 +76,7 @@ pub impl Comp {
             return <Result.Err error=self.diagnosticAt(offset: source.writtenStart, msg: "trait view source accepts positional type arguments only", failureDomain: <FailureDomain.Source />) />
         }
         if source.traitInstance.owner != 0U64 {
-            val ownerIndex = self.decls.traitOwnerIndex(offset: source.traitInstance.owner)
-            if ownerIndex >= self.decls.traitOwnerCount() {
-                return <Result.Err error=self.patternTypeInputFailure(offset: source.writtenStart, reason: "invalid trait view owner") />
-            }
-            if arguments.count() != self.decls.traitOwnerAt(index: ownerIndex).arity {
-                return <Result.Err error=self.diagnosticAt(offset: source.writtenStart, msg: "a trait view requires all positional type arguments", failureDomain: <FailureDomain.Source />) />
-            }
+            try self.checkTraitPositionalArity(owner: source.traitInstance.owner, arity: arguments.count(), offset: source.writtenStart, message: "a trait view requires all positional type arguments")
         }
         return <Result.Ok value=<ResolvedViewSource writtenStart=source.writtenStart writtenLen=source.writtenLen lexicalSurfaceModule=source.lexicalSurfaceModule surfaceId=source.surfaceId traitInstance=<TraitInstanceKey owner=source.traitInstance.owner positionalArgs=arguments /> /> />
     }

@@ -371,47 +371,29 @@ pub impl Comp {
         return <Result.Ok value=<ImplAst recvType=im.recvType implParams=im.implParams implParamSpans=im.implParamSpans implParamSendable=im.implParamSendable isTraitImpl=im.isTraitImpl traitName=ty.name traitNameSpan=ty.nameSpan traitArgs=ty.args whereParams=im.whereParams whereTraits=im.whereTraits whereTypes=im.whereTypes whereTraitTypes=im.whereTraitTypes isPub=im.isPub members=im.members span=im.span extName=im.extName extNameSpan=im.extNameSpan /> />
     }
 
-    // An `as` trait is a type-level use.  Resolve its use alias from the
-    // original occurrence, rather than re-interning alias text after its
-    // module identity has been lost.
-    inout fn resolvedImplTraitBind(im: ImplAst) -> Bind {
-        if im.traitNameSpan.end > im.traitNameSpan.start {
-            val owner: U64 = self.traitOwnerAtUse(start: im.traitNameSpan.start, len: im.traitNameSpan.end - im.traitNameSpan.start, arity: im.traitArgs.count())
-            if owner != 0U64 {
-                val ownerLen: U64 = self.traitNameLenByOwner(owner: owner)
-                return <Bind nameStart=owner nameLen=ownerLen nameId=intern(c: inout self, start: owner, len: ownerLen) fieldStart=owner fieldLen=ownerLen />
-            }
-            val resolved: Bind = self.aliasReal(start: im.traitNameSpan.start, len: im.traitNameSpan.end - im.traitNameSpan.start)
-            return <Bind nameStart=resolved.nameStart nameLen=resolved.nameLen nameId=intern(c: inout self, start: resolved.nameStart, len: resolved.nameLen) fieldStart=resolved.fieldStart fieldLen=resolved.fieldLen />
+    // Resolve the declaration independently of argument count. The returned
+    // canonical head is retained for members, associated bindings and conformance.
+    inout fn checkedImplTraitBind(owner: U64, arity: U64, offset: U64) -> Result[Bind, CompileDiagnostic] {
+        if owner == 0U64 {
+            return <Result.Err error=self.diagnosticAt(offset: offset, msg: "unknown trait in impl conformance", failureDomain: <FailureDomain.Source />) />
         }
-        val raw: Bind = self.internBytes(s: im.traitName)
-        val owner: U64 = self.traitOwnerInScopeById(mod: self.moduleOf(offset: im.span.start), nameId: raw.nameId, arity: im.traitArgs.count())
-        if owner != 0U64 {
-            val ownerLen: U64 = self.traitNameLenByOwner(owner: owner)
-            return <Bind nameStart=owner nameLen=ownerLen nameId=intern(c: inout self, start: owner, len: ownerLen) fieldStart=owner fieldLen=ownerLen />
-        }
-        return raw
+        try self.checkTraitPositionalArity(owner: owner, arity: arity, offset: offset, message: "an impl conformance requires all positional trait type arguments")
+        val length = self.traitNameLenByOwner(owner: owner)
+        return <Result.Ok value=<Bind nameStart=owner nameLen=length nameId=intern(c: inout self, start: owner, len: length) fieldStart=owner fieldLen=length /> />
     }
 
-    // SyntaxFile keeps the authored trait occurrence as a Span, so the same
-    // alias/provenance rule as the value parser can be applied without ever
-    // materializing an ImplAst.
-    inout fn resolvedSyntaxImplTraitBind(im: SyntaxImpl) -> Bind {
+    inout fn resolvedImplTraitBind(im: ImplAst) -> Result[Bind, CompileDiagnostic] {
         if im.traitNameSpan.end > im.traitNameSpan.start {
-            val arity: U64 = syntaxImplTraitArgCount(file: self.syntax, impl: im)
-            val owner: U64 = self.traitOwnerAtUse(start: im.traitNameSpan.start, len: im.traitNameSpan.end - im.traitNameSpan.start, arity: arity)
-            if owner != 0U64 {
-                val ownerLen: U64 = self.traitNameLenByOwner(owner: owner)
-                return <Bind nameStart=owner nameLen=ownerLen nameId=intern(c: inout self, start: owner, len: ownerLen) fieldStart=owner fieldLen=ownerLen />
-            }
-            val resolved: Bind = self.aliasReal(start: im.traitNameSpan.start, len: im.traitNameSpan.end - im.traitNameSpan.start)
-            return <Bind nameStart=resolved.nameStart nameLen=resolved.nameLen nameId=intern(c: inout self, start: resolved.nameStart, len: resolved.nameLen) fieldStart=resolved.fieldStart fieldLen=resolved.fieldLen />
+            val owner = self.traitOwnerAtUse(start: im.traitNameSpan.start, len: im.traitNameSpan.end - im.traitNameSpan.start, arity: 0U64, openArgs: true)
+            return self.checkedImplTraitBind(owner: owner, arity: im.traitArgs.count(), offset: im.traitNameSpan.start)
         }
-        // `Bind` is also the absence carrier here, but it has four required
-        // structural fields. Keep the sentinel fully formed so every branch is
-        // valid when LLVM compiles this helper, not only the branches reached by
-        // the compiler's own source.
-        return <Bind nameStart=0U64 nameLen=0U64 fieldStart=0U64 fieldLen=0U64 />
+        val owner = self.traitOwnerForSelector(siteOffset: im.span.start, text: im.traitName)
+        return self.checkedImplTraitBind(owner: owner, arity: im.traitArgs.count(), offset: im.span.start)
+    }
+
+    inout fn resolvedSyntaxImplTraitBind(im: SyntaxImpl) -> Result[Bind, CompileDiagnostic] {
+        val owner = self.traitOwnerAtUse(start: im.traitNameSpan.start, len: im.traitNameSpan.end - im.traitNameSpan.start, arity: 0U64, openArgs: true)
+        return self.checkedImplTraitBind(owner: owner, arity: syntaxImplTraitArgCount(file: self.syntax, impl: im), offset: im.traitNameSpan.start)
     }
 
     inout fn appendTraitAssocTypes(scope: inout Array[Bind], owner: U64) {
@@ -720,7 +702,7 @@ pub impl Comp {
     // The Syntax decoder deliberately converges on Func/Conform/AssocBinding,
     // not on a shadow MemberAst.  Its temporary arrays are semantic scopes and
     // pool payloads; no source tree is reconstructed or retained.
-    inout fn lowerSyntaxMethodMember(im: SyntaxImpl, m: SyntaxMember, recvN: Bind, recvTy: U64, recvTraitArgs: Array[U64], recvTraitOwner: U64, implParamBinds: Array[Bind], hasRecv: Bool, isAssoc: Bool, witnessed: inout Array[Func]) -> Result[(), CompileDiagnostic] {
+    inout fn lowerSyntaxMethodMember(im: SyntaxImpl, conformanceTrait: Bind, m: SyntaxMember, recvN: Bind, recvTy: U64, recvTraitArgs: Array[U64], recvTraitOwner: U64, implParamBinds: Array[Bind], hasRecv: Bool, isAssoc: Bool, witnessed: inout Array[Func]) -> Result[(), CompileDiagnostic] {
         val nameN: Bind = <Bind nameStart=m.name.start nameLen=m.name.end - m.name.start fieldStart=m.name.start fieldLen=m.name.end - m.name.start />
         mut val boundTypes: Array[TypeId] = []
         mut val boundTraits: Array[Span] = []
@@ -826,7 +808,7 @@ pub impl Comp {
         mut val originTraitOwner: U64 = 0U64
         mut val originTraitArity: U64 = 0U64
         if im.isTraitImpl {
-            val origin: Bind = self.resolvedSyntaxImplTraitBind(im: im)
+            val origin: Bind = conformanceTrait
             originTraitId = origin.nameId
             originTraitOwner = origin.nameStart
             originTraitArity = syntaxImplTraitArgCount(file: self.syntax, impl: im)
@@ -847,7 +829,7 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
-    inout fn lowerMethodMember(im: ImplAst, m: MemberAst, recvN: Bind, recvTy: U64, recvTraitArgs: Array[U64], recvTraitOwner: U64, implParamBinds: Array[Bind], hasRecv: Bool, isAssoc: Bool, witnessed: inout Array[Func]) -> Result[(), CompileDiagnostic] {
+    inout fn lowerMethodMember(im: ImplAst, conformanceTrait: Bind, m: MemberAst, recvN: Bind, recvTy: U64, recvTraitArgs: Array[U64], recvTraitOwner: U64, implParamBinds: Array[Bind], hasRecv: Bool, isAssoc: Bool, witnessed: inout Array[Func]) -> Result[(), CompileDiagnostic] {
         val nameN: Bind = self.internBytes(s: m.name)
         mut val boundTypes: Array[TypeAst] = []
         mut val boundTraits: Array[String] = []
@@ -982,7 +964,7 @@ pub impl Comp {
         mut val originTraitOwner: U64 = 0U64
         mut val originTraitArity: U64 = 0U64
         if im.isTraitImpl {
-            val originTrait: Bind = self.resolvedImplTraitBind(im: im)
+            val originTrait: Bind = conformanceTrait
             originTraitId = originTrait.nameId
             originTraitOwner = originTrait.nameStart
             originTraitArity = im.traitArgs.count()
@@ -1008,6 +990,9 @@ pub impl Comp {
         val receiverParams = self.cur.typeParams
         self.cur.typeParams = implParamBinds
         val normalizedImpl = (try self.normalizeImplAstTrait(im: im))
+        val conformanceTrait = if normalizedImpl.isTraitImpl {
+            give (try self.resolvedImplTraitBind(im: normalizedImpl))
+        } else { give <Bind nameStart=0U64 nameLen=0U64 fieldStart=0U64 fieldLen=0U64 /> }
         val receiverType = (try self.normalizeProjectionTypeActive(t: normalizedImpl.recvType))
         val rawRecvN: Bind = self.lowerTypeName(name: receiverType.name, span: receiverType.nameSpan)
         val recvTraitOwner: U64 = self.traitOwnerAtUse(start: rawRecvN.nameStart, len: rawRecvN.nameLen, arity: receiverType.args.count())
@@ -1035,7 +1020,7 @@ pub impl Comp {
         }
         self.appendTraitAssocTypes(scope: inout implScope, owner: recvTraitOwner)
         if normalizedImpl.isTraitImpl {
-            val trN: Bind = self.resolvedImplTraitBind(im: normalizedImpl)
+            val trN: Bind = conformanceTrait
             self.appendTraitAssocTypes(scope: inout implScope, owner: trN.nameStart)
         }
         val savedTP: Array[Bind] = self.cur.typeParams
@@ -1072,12 +1057,12 @@ pub impl Comp {
             match m.kind {
                 MemberKind.Method => {
                     val beforeFuncCount: U64 = self.arena.functionCount()
-                    try self.lowerMethodMember(im: normalizedImpl, m: m, recvN: recvN, recvTy: recvTy, recvTraitArgs: subjectArgs, recvTraitOwner: recvTraitOwner, implParamBinds: implParamBinds, hasRecv: true, isAssoc: false, witnessed: inout witnessed)
+                    try self.lowerMethodMember(im: normalizedImpl, conformanceTrait: conformanceTrait, m: m, recvN: recvN, recvTy: recvTy, recvTraitArgs: subjectArgs, recvTraitOwner: recvTraitOwner, implParamBinds: implParamBinds, hasRecv: true, isAssoc: false, witnessed: inout witnessed)
                     if normalizedImpl.isTraitImpl && self.arena.functionCount() > beforeFuncCount { witnessFuncIds.append(beforeFuncCount) }
                 }
                 MemberKind.AssocFn => {
                     val beforeFuncCount: U64 = self.arena.functionCount()
-                    try self.lowerMethodMember(im: normalizedImpl, m: m, recvN: recvN, recvTy: recvTy, recvTraitArgs: subjectArgs, recvTraitOwner: recvTraitOwner, implParamBinds: implParamBinds, hasRecv: false, isAssoc: true, witnessed: inout witnessed)
+                    try self.lowerMethodMember(im: normalizedImpl, conformanceTrait: conformanceTrait, m: m, recvN: recvN, recvTy: recvTy, recvTraitArgs: subjectArgs, recvTraitOwner: recvTraitOwner, implParamBinds: implParamBinds, hasRecv: false, isAssoc: true, witnessed: inout witnessed)
                     if normalizedImpl.isTraitImpl && self.arena.functionCount() > beforeFuncCount { witnessFuncIds.append(beforeFuncCount) }
                 }
                 MemberKind.Deinit => {
@@ -1093,7 +1078,7 @@ pub impl Comp {
                     mut val trId: U64 = 0
                     mut val trOwner: U64 = 0
                     if normalizedImpl.traitName.bytes().count() > 0 {
-                        val trN: Bind = self.resolvedImplTraitBind(im: normalizedImpl)
+                        val trN: Bind = conformanceTrait
                         trId = trN.nameId
                         trOwner = trN.nameStart
                     }
@@ -1112,7 +1097,7 @@ pub impl Comp {
             mi += 1
         }
         if normalizedImpl.isTraitImpl {
-            val traitN: Bind = self.resolvedImplTraitBind(im: normalizedImpl)
+            val traitN: Bind = conformanceTrait
             mut val cfExtId: U64 = 0
             if normalizedImpl.extName.bytes().count() > 0 {
                 val cfExtN: Bind = self.internBytes(s: normalizedImpl.extName)
@@ -1142,6 +1127,9 @@ pub impl Comp {
         val receiverParams = self.cur.typeParams
         self.cur.typeParams = implParamBinds
         val normalizedImpl = (try self.normalizeSyntaxImplTrait(im: im))
+        val conformanceTrait = if normalizedImpl.isTraitImpl {
+            give (try self.resolvedSyntaxImplTraitBind(im: normalizedImpl))
+        } else { give <Bind nameStart=0U64 nameLen=0U64 fieldStart=0U64 fieldLen=0U64 /> }
         val recvSyntax: SyntaxType = (try self.resolveSyntaxTypePath(t: syntaxType(file: self.syntax, id: normalizedImpl.recvType)))
         val rawRecvN: Bind = <Bind nameStart=recvSyntax.name.start nameLen=recvSyntax.name.end - recvSyntax.name.start fieldStart=recvSyntax.name.start fieldLen=recvSyntax.name.end - recvSyntax.name.start />
         val recvArity: U64 = syntaxTypeArgCount(file: self.syntax, ty: recvSyntax)
@@ -1158,7 +1146,7 @@ pub impl Comp {
         if recvTraitOwner != 0U64 { self.appendTraitSelfBinder(scope: inout implScope, owner: recvTraitOwner) }
         self.appendTraitAssocTypes(scope: inout implScope, owner: recvTraitOwner)
         if normalizedImpl.isTraitImpl {
-            val trN: Bind = self.resolvedSyntaxImplTraitBind(im: normalizedImpl)
+            val trN: Bind = conformanceTrait
             self.appendTraitAssocTypes(scope: inout implScope, owner: trN.nameStart)
         }
         val savedTP: Array[Bind] = self.cur.typeParams
@@ -1198,12 +1186,12 @@ pub impl Comp {
             match m.kind {
                 MemberKind.Method => {
                     val before: U64 = self.arena.functionCount()
-                    try self.lowerSyntaxMethodMember(im: normalizedImpl, m: m, recvN: recvN, recvTy: recvTy, recvTraitArgs: subjectArgs, recvTraitOwner: recvTraitOwner, implParamBinds: implParamBinds, hasRecv: true, isAssoc: false, witnessed: inout witnessed)
+                    try self.lowerSyntaxMethodMember(im: normalizedImpl, conformanceTrait: conformanceTrait, m: m, recvN: recvN, recvTy: recvTy, recvTraitArgs: subjectArgs, recvTraitOwner: recvTraitOwner, implParamBinds: implParamBinds, hasRecv: true, isAssoc: false, witnessed: inout witnessed)
                     if normalizedImpl.isTraitImpl && self.arena.functionCount() > before { witnessFuncIds.append(before) }
                 }
                 MemberKind.AssocFn => {
                     val before: U64 = self.arena.functionCount()
-                    try self.lowerSyntaxMethodMember(im: normalizedImpl, m: m, recvN: recvN, recvTy: recvTy, recvTraitArgs: subjectArgs, recvTraitOwner: recvTraitOwner, implParamBinds: implParamBinds, hasRecv: false, isAssoc: true, witnessed: inout witnessed)
+                    try self.lowerSyntaxMethodMember(im: normalizedImpl, conformanceTrait: conformanceTrait, m: m, recvN: recvN, recvTy: recvTy, recvTraitArgs: subjectArgs, recvTraitOwner: recvTraitOwner, implParamBinds: implParamBinds, hasRecv: false, isAssoc: true, witnessed: inout witnessed)
                     if normalizedImpl.isTraitImpl && self.arena.functionCount() > before { witnessFuncIds.append(before) }
                 }
                 MemberKind.Deinit => {
@@ -1218,7 +1206,7 @@ pub impl Comp {
                     mut val traitId: U64 = 0U64
                     mut val traitOwner: U64 = 0U64
                     if normalizedImpl.isTraitImpl {
-                        val trN: Bind = self.resolvedSyntaxImplTraitBind(im: normalizedImpl)
+                        val trN: Bind = conformanceTrait
                         traitId = trN.nameId
                         traitOwner = trN.nameStart
                     }
@@ -1234,7 +1222,7 @@ pub impl Comp {
             i += 1U64
         }
         if normalizedImpl.isTraitImpl {
-            val traitN: Bind = self.resolvedSyntaxImplTraitBind(im: normalizedImpl)
+            val traitN: Bind = conformanceTrait
             mut val extId: U64 = 0U64
             if normalizedImpl.extName.end > normalizedImpl.extName.start { extId = intern(c: inout self, start: normalizedImpl.extName.start, len: normalizedImpl.extName.end - normalizedImpl.extName.start) }
             try self.registerDeclaredConformance(cf: <Conform subjectTraitOwner=recvTraitOwner sourceModule=self.moduleOf(offset: normalizedImpl.span.start) typeStart=recvN.nameStart typeLen=recvN.nameLen typeId=intern(c: inout self, start: recvN.nameStart, len: recvN.nameLen) subjectTy=recvTy subjectArgs=self.pushConformTypes(types: subjectArgs) typeParams=self.pushConformBinds(binds: implParamBinds) typeArity=recvArity traitStart=traitN.nameStart traitLen=traitN.nameLen traitId=intern(c: inout self, start: traitN.nameStart, len: traitN.nameLen) traitArgs=self.pushConformTypes(types: conformanceTraitArgs) derived=false isPub=normalizedImpl.isPub witnessed=self.pushConformWitnesses(witnesses: witnessed) witnessFuncIds=self.pushConformFuncIds(ids: witnessFuncIds) extId=extId defOffset=normalizedImpl.span.start assocBindingIds=self.pushConformFuncIds(ids: assocBindingIds) bounds=(try self.lowerSyntaxConformanceBounds(im: normalizedImpl)) />)

@@ -106,3 +106,29 @@ final review independently reran all 56 saved native cases and verified all
 was found for this finite increment. This finite increment does not close
 the whole task or certify a full suite/performance gate. The remaining boundaries
 listed above stay open.
+
+
+## Known-owner impl arity increment (in progress)
+
+This existing task requirement is independent of the pending value-bracket
+handoff. [Executed RED and scope](../../../evidence/rejection-domains/diagnostic-domain-implementation/impl-trait-arity-increment.json):
+valid one-argument and zero-argument conformances pass; missing/extra arguments
+incorrectly diagnose an unknown trait. Unknown trait is already rejected, not an
+acceptance defect. New AST/spanless controls additionally exercise the adapter.
+
+Resolve the lexical owner before strict positional arity admission. Reuse the
+trait instance arity check and carry the resulting canonical head to method
+provenance, associated bindings and conformance registration instead of resolving
+it again at each consumer. Remove raw-name fallback after a failed resolution.
+Standard build 20261107T094608-build-12b01f succeeded. Neutral review found
+a new-test positive Err loophole (corrected), and an existing open-owner helper
+that did not follow reexports. The17-case native run confirmed14 successes and
+3 barrel/alias/missing-through-barrel failures; the previous CLI accepts the
+valid File graphs. Both open-helper import/reexport branches now use the existing
+recursive surface resolver. Source follow-up found no additional required fix.
+Second standard build 20261107T095229-build-77741a passed. All17 native cases
+(source, AST/spanless, direct/barrel/alias and hidden-name controls),13 type-view
+cases and5 existing generic/trait controls pass with unchanged recorded inputs.
+Independent final review reran all35 native cases and checked194/197 input
+hashes and6 preservation fixture goldens against current files; no additional
+required fix for this finite increment. The full task remains open.

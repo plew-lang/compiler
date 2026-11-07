@@ -1,0 +1,4 @@
+use ./Barrel only { P }
+struct S {}
+impl S as P {}
+fn main() {}
