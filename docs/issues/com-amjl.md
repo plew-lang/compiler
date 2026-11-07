@@ -279,3 +279,30 @@ fresh candidate bin/plewc-short-projection-bound-context is WIP only.
 Fresh candidate target17 and preservation37 now all pass with immutable inputs.
 Neutral source/native review accepts only this finite context increment, not
 common view proof or the remaining task. Formal current-source gates remain open.
+
+## Authorized Structural-normalization Test Repair
+
+The user authorized correcting associated_condition_normalization_structural
+after reviewing its missing Parser premises. Preserve normalization inside
+receiver constructors, positional trait inputs and associated output equations
+with explicit T:Parser premises and executed selected-method result checks.
+The repeated-projection condition moves to an automatically discovered internal
+run fixture, associated_condition_normalization_chain: build nested semantic
+projection receivers against valid concrete witnesses, record both ordered
+normalization equations, validate their proof/receiver/output, replay to Leaf,
+require the final Mark conformance and reject the intermediate Next control.
+Omitting either saved equation must leave replay unresolved rather than trigger
+fresh lookup. This repairs the oracle; it neither adopts chained surface syntax
+nor completes common source admission. No product/spec change is authorized by
+this test correction. Focused check, AOT execution and lazy-run source companion,
+internal native execution and independent review are required.
+
+[Finite verification](../../../evidence/rejection-domains/diagnostic-domain-implementation/structural-normalization-test-repair.json):
+both fixtures pass check, AOT compile/link and native empty-output goldens; the
+public source companion also passes lazy run. Production normal dispatcher
+executes both cases successfully. Final203 inputs match before/after/current.
+Neutral review required a stronger missing-equation assertion: both results now
+retain a projection and equal the exact expected unresolved term. Review accepted
+that repair and independently replayed both saved native binaries successfully.
+The initial new internal setup lacked nominal declaration identity; its failure
+is not a product RED. Full suite/ASan/common proof-admission closure remains open.

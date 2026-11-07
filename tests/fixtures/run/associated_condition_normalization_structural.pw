@@ -1,3 +1,6 @@
+// Valid source companions for structural condition normalization. Every
+// associated projection declares its receiver premise. The internal chain
+// control is associated_condition_normalization_chain.pw.
 trait Parser { type Output }
 trait Mark {}
 trait Use { fn use() -> I64 }
@@ -14,17 +17,16 @@ impl Source as Other { type Output = Next }
 struct Wrap[T] {}
 impl Wrap[Next] as Mark {}
 struct Nested[T] { val value: T }
-impl[T] Nested[T] as Use where Wrap[T#Parser.Output]: Mark { fn use() -> I64 { return 1I64 } }
+impl[T] Nested[T] as Use where T: Parser, Wrap[T#Parser.Output]: Mark { fn use() -> I64 { return 1I64 } }
 struct Arguments[T] { val value: T }
-impl[T] Arguments[T] as Use where T: Convert[T#Parser.Output] { fn use() -> I64 { return 2I64 } }
+impl[T] Arguments[T] as Use where T: Parser + Convert[T#Parser.Output] { fn use() -> I64 { return 2I64 } }
 struct Outputs[T] { val value: T }
-impl[T] Outputs[T] as Use where T: Other[Output = T#Parser.Output] { fn use() -> I64 { return 3I64 } }
-struct Chain[T] { val value: T }
-impl[T] Chain[T] as Use where T#Parser.Output#Parser.Output: Mark { fn use() -> I64 { return 4I64 } }
-fn requireUse[T](value: T) where T: Use {}
+impl[T] Outputs[T] as Use where T: Parser + Other[Output = T#Parser.Output] { fn use() -> I64 { return 3I64 } }
+fn requireUse[T](value: T, expected: I64) where T: Use {
+    if value.use() != expected { panic("wrong conditional implementation") }
+}
 fn main() {
-    requireUse(value: <Nested[Source] value=<Source /> />)
-    requireUse(value: <Arguments[Source] value=<Source /> />)
-    requireUse(value: <Outputs[Source] value=<Source /> />)
-    requireUse(value: <Chain[Source] value=<Source /> />)
+    requireUse(value: <Nested[Source] value=<Source /> />, expected: 1I64)
+    requireUse(value: <Arguments[Source] value=<Source /> />, expected: 2I64)
+    requireUse(value: <Outputs[Source] value=<Source /> />, expected: 3I64)
 }

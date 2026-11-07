@@ -1,0 +1,44 @@
+// Internal semantic-term test: repeated projection normalization must retain
+// both prerequisite equations. This does not specify chained surface syntax.
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use /SourceAccess only { SourceAccess }
+use /Ir only { TypeRef, ProjectionNormalizationStep, TraitConstraint, TraitInstanceKey, ConformanceProofDemand }
+
+fn main() {
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text text="trait Parser {{ type Output }}\ntrait Mark {{}}\nstruct Leaf {{}}\nstruct Next {{}}\nstruct Source {{}}\nimpl Source as Parser {{ type Output = Next }}\nimpl Next as Parser {{ type Output = Leaf }}\nimpl Leaf as Mark {{}}\nfn main() {{}}\n" path="normalization-chain.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
+    val sourceName = compiler.internBytes(s: "Source")
+    val nextName = compiler.internBytes(s: "Next")
+    val leafName = compiler.internBytes(s: "Leaf")
+    val parserName = compiler.internBytes(s: "Parser")
+    val parser = compiler.decls.traitAt(index: compiler.decls.firstTraitNamed(nameId: parserName.nameId))
+    val output = compiler.internBytes(s: "Output")
+    val sourceDeclaration = compiler.arena.structAt(index: compiler.arena.firstStructNamed(nameId: sourceName.nameId))
+    val source = compiler.pushType(t: <TypeRef nameStart=sourceDeclaration.nameStart nameLen=sourceDeclaration.nameLen args=[] hasDecl=true declOffset=sourceDeclaration.defOffset />)
+    val nextDeclaration = compiler.arena.structAt(index: compiler.arena.firstStructNamed(nameId: nextName.nameId))
+    val next = compiler.pushType(t: <TypeRef nameStart=nextDeclaration.nameStart nameLen=nextDeclaration.nameLen args=[] hasDecl=true declOffset=nextDeclaration.defOffset />)
+    val leafDeclaration = compiler.arena.structAt(index: compiler.arena.firstStructNamed(nameId: leafName.nameId))
+    val leaf = compiler.pushType(t: <TypeRef nameStart=leafDeclaration.nameStart nameLen=leafDeclaration.nameLen args=[] hasDecl=true declOffset=leafDeclaration.defOffset />)
+    val first = compiler.pushType(t: <TypeRef nameStart=sourceDeclaration.nameStart nameLen=sourceDeclaration.nameLen args=[] hasDecl=true declOffset=sourceDeclaration.defOffset projectionReceiver=source assocTraitStart=parser.nameStart assocTraitLen=parser.nameLen assocTraitId=parser.nameId hasAssocTraitDecl=true assocTraitDeclOffset=parser.nameStart assocNameStart=output.nameStart assocNameLen=output.nameLen assocNameId=output.nameId />)
+    val second = compiler.rebuildProjectionTerm(t: compiler.arena.typeAt(index: first), receiver: first, traitArgs: [])
+    mut val equations: Array[ProjectionNormalizationStep] = []
+    val normalized = compiler.recordConditionTypeNormalization(ref: second, assumptions: [], normalizations: inout equations).unwrap()
+    if !compiler.typeRefEq(a: normalized, b: leaf) || equations.count() != 2U64 { panic("chain did not normalize through both outputs") }
+    if !compiler.typeRefEq(a: equations[0U64].source, b: first) || !compiler.typeRefEq(a: equations[0U64].output, b: next) || !compiler.typeRefEq(a: equations[1U64].output, b: leaf) { panic("wrong ordered projection equations") }
+    val outer = compiler.arena.typeAt(index: equations[1U64].source)
+    if !compiler.typeRefEq(a: compiler.typeTermProjectionReceiver(t: outer), b: next) { panic("outer projection did not use normalized receiver") }
+    compiler.checkProjectionNormalizations(normalizations: equations, offset: 0U64).unwrap()
+    val replayed = compiler.replayProjectionNormalizations(ref: second, normalizations: equations, offset: 0U64).unwrap()
+    if !compiler.typeRefEq(a: replayed, b: leaf) { panic("saved chain equations did not replay") }
+    // A missing equation must stay unresolved, even though a fresh conformance
+    // query could discover the output. The reader must consume saved evidence.
+    val missingFirst = compiler.replayProjectionNormalizations(ref: second, normalizations: [equations[1U64]], offset: 0U64).unwrap()
+    val missingSecond = compiler.replayProjectionNormalizations(ref: second, normalizations: [equations[0U64]], offset: 0U64).unwrap()
+    if !compiler.arena.typeContainsAssociatedProjection(ref: missingFirst) || !compiler.arena.typeContainsAssociatedProjection(ref: missingSecond) { panic("replay discarded an unresolved projection") }
+    if !compiler.typeRefEq(a: missingFirst, b: second) || !compiler.typeRefEq(a: missingSecond, b: equations[1U64].source) { panic("replay changed an unsupported equation") }
+    val markName = compiler.internBytes(s: "Mark")
+    val mark = compiler.decls.traitAt(index: compiler.decls.firstTraitNamed(nameId: markName.nameId))
+    val constraint = <TraitConstraint key=<TraitInstanceKey owner=mark.nameStart positionalArgs=[] /> positionalArgsOpen=false assocPredicates=[] />
+    if !compiler.viewedTypeConformsTraitConstraint(demand: <ConformanceProofDemand.SourceAdmission />, ref: replayed, constraint: constraint).unwrap() { panic("normalized condition lost its witness") }
+    if compiler.viewedTypeConformsTraitConstraint(demand: <ConformanceProofDemand.SourceAdmission />, ref: next, constraint: constraint).unwrap() { panic("intermediate output incorrectly satisfies final condition") }
+}
