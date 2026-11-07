@@ -214,8 +214,8 @@ admission/name/ParamId receiver only; shorthandInstance requires canonical trait
 owner plus the bound I64 argument and currently prints0 against golden1. A
 focused raw-shape diagnostic found the written bound span rather than canonical
 declaration owner and an empty positional-argument list; this is not proof of a valid
-complete instance. Preserve this RED when closing this task rather than counting
-short-form acceptance as full evidence retention.
+complete instance. Retain this failing control as required work, and make it GREEN before closing
+this task; short-form admission alone is insufficient.
 
 The unchanged old candidate487138f4 also rejects
 fixtures/ImplTraitInstances/QualifiedShorthandInstance.pw (`where T: Types.P[I64]`)
