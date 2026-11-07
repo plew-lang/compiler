@@ -1,0 +1,3 @@
+use ./MixedBarrel only { choose, own }
+use @Std/Io only { print }
+fn main() { print(choose(value: 1I64)) print(own()) }

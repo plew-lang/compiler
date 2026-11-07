@@ -1,0 +1,2 @@
+use ./MixedFunctions as Calls
+fn main() { Calls.choose(value: true) }

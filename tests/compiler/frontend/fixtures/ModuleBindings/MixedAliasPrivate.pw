@@ -1,0 +1,2 @@
+use ./MixedFunctions only { choose as selected, own }
+fn main() { selected(value: true) }

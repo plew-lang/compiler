@@ -1,0 +1,4 @@
+use ./MixedFunctions only { choose }
+use @Std/Io only { print }
+fn choose(value: Bool) -> I64 { return 33I64 }
+fn main() { print(choose(value: 1I64)) print(choose(value: true)) }

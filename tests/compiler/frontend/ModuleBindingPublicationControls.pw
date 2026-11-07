@@ -1,0 +1,22 @@
+// Only public overloads reach the importing scope: Bool must fail against
+// the visible I64 candidate, never call the private same-named overload.
+use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontend }
+use ../../../src/SourceAccess only { SourceAccess }
+use ../../../src/Diag only { emitDiagnostic }
+use @Std/Io only { print }
+use @Std/Process only { argAt }
+fn main() {
+    val scenario = if argAt(1I64) == "" { give "MixedAlias" } else { give argAt(1I64) }
+    val privateCall = scenario == "MixedAliasPrivate" || scenario == "MixedReexportPrivate" || scenario == "MixedNamespacePrivate"
+    val collision = scenario == "ExternFunctionValueCollision" || scenario == "ExternTypeTraitCollision"
+    val expected = if collision { give "duplicate module binding name (spec/15): only valid free-function overloads may share a name" } else { give "type mismatch: this value's type does not match the type required here (Plew has no implicit conversion — spec/12)" }
+    mut val compiler = <Comp />
+    match analyzeFrontend(c: inout compiler, input: <FrontendInput.File path="tests/compiler/frontend/fixtures/ModuleBindings/" + scenario + ".pw" />, sources: <SourceAccess stdRoot="std/".bytes() />) {
+        Result.Ok(value: _) => { print(if privateCall || collision { give "0" } else { give "1" }) }
+        Result.Err(error: val diagnostic) => {
+            if collision && diagnostic.isSourceRejection() && diagnostic.message == expected && diagnostic.notes.count() == 1U64 && diagnostic.notes[0U64].message == "previous binding is here" { print("1") return }
+            if privateCall && diagnostic.isSourceRejection() && diagnostic.message == expected { print("1") return }
+            emitDiagnostic(diagnostic: diagnostic) print("0")
+        }
+    }
+}

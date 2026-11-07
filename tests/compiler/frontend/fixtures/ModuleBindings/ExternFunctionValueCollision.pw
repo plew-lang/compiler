@@ -1,0 +1,3 @@
+extern(c) { fn conflict() }
+val conflict = 1I64
+fn main() {}

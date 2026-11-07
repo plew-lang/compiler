@@ -243,3 +243,16 @@ graphs contain I64 and Bool instances of one imported trait; the test checks
 canonical owner, each argument and exact original source-token range through
 direct Syntax and materialized Lower. CLI fixtures call both target bodies
 from main. This covers selector formation, not final method dispatch.
+
+`ModuleBindingPublicationControls.pw` runs without arguments (`MixedAlias`) or
+with `MixedReexport`, `MixedNamespace`, `MixedAliasPrivate`,
+`MixedReexportPrivate`, `MixedNamespacePrivate`, `SameNamespacePaths`,
+`LocalImportedOverloads`, `ExternFunctionValueCollision`,
+`ExternTypeTraitCollision`, `ExternSeparateNames`. All11 native invocations
+must exit0 with empty stderr and the companion golden. They preserve individual
+overload publication and defining-module authority, namespace identity dedup,
+local/imported overload unions and unused extern-name collision admission.
+Actual CLI executions additionally require11/22 for the three published routes
+and same namespace,11/33 for local/imported union, and exit1 with the intended
+Source diagnostic for rejected inputs. Source rejection followed by the existing
+ORC diagnostic wrapper is not certification of that failure-transport boundary.

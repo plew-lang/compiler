@@ -1,0 +1,3 @@
+use ./MixedFunctions as Calls
+use @Std/Io only { print }
+fn main() { print(Calls.choose(value: 1I64)) print(Calls.own()) }

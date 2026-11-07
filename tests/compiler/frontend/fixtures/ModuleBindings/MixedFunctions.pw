@@ -1,0 +1,3 @@
+pub fn choose(value: I64) -> I64 { return 11I64 }
+fn choose(value: Bool) -> I64 { return 22I64 }
+pub fn own() -> I64 { return choose(value: true) }

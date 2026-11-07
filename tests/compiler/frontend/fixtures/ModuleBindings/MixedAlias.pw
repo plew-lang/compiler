@@ -1,0 +1,3 @@
+use ./MixedFunctions only { choose as selected, own }
+use @Std/Io only { print }
+fn main() { print(selected(value: 1I64)) print(own()) }

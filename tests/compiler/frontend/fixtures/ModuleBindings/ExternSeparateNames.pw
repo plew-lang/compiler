@@ -1,0 +1,4 @@
+extern(c) { fn foreign() struct Foreign }
+fn local() {}
+struct Local {}
+fn main() { local() }

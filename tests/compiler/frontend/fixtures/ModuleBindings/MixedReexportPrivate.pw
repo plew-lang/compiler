@@ -1,0 +1,2 @@
+use ./MixedBarrel only { choose, own }
+fn main() { choose(value: true) }

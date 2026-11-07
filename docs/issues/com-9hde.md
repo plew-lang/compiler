@@ -608,3 +608,16 @@ projection and zero-arity view. Close these before task-wide review. Missing
 evidence is not a diagnosed implementation defect. Exact Syntax pin/lock and
 current-candidate acceptance remain open; do not reuse the pre-repair formal
 median as a measurement of the latest source.
+
+## Remaining Binding Publication Controls
+
+ModuleBindingPublicationControls supplies the four missing original integration
+review groups. Native11 and candidate check/run22 pass with immutable inputs;
+neutral review independently reexecuted both sets and accepted this finite scope.
+Private Bool overloads are absent externally: the visible I64 candidate produces
+a Source type mismatch. A public wrapper still calls the private Bool overload
+in its defining module. The initial never-green expectation of a private-name
+diagnostic was corrected from this actual candidate rule, not counted as product
+RED. CLI outputs11/22 and11/33 prove the positive call paths. Reject scripts
+require exact exit1, not arbitrary nonzero. Existing Source-to-ORC wrapper output
+remains outside this binding guarantee and under com-yeua's transport boundary.

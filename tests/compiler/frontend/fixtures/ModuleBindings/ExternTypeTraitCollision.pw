@@ -1,0 +1,3 @@
+extern(c) { struct Item }
+trait Item {}
+fn main() {}
