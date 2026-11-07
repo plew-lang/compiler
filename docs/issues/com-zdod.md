@@ -174,7 +174,15 @@ from hot child-count queries. The loop only needs its range and source pool.
 A scoped behavior-preserving repair moves those loops to the pooled-range
 owner, retaining read-only semantics and the common semantic-child API. No
 compiler-specific retain/drop exception or fake mutable receiver is allowed.
-Fresh build, targeted GREEN, same-source performance and review are pending.
+Build 20261107T034443-build-7cc5a2 passed for ec812e66. All production
+callers now use the owning Arena readers directly; five Comp wrappers were
+removed, and two internal tests follow the API without expectation changes.
+Neutral impact review found no semantic change or missing child. The linked
+[reader-cost record](../../../evidence/rejection-domains/diagnostic-domain-implementation/semantic-trait-view-reader-cost.json)
+retains alternating same-source diagnosis: old median 11.189354s versus fresh
+candidate 6.992590s. This is not a new formal fixed-point measurement. [Native revalidation](../../../evidence/rejection-domains/diagnostic-domain-implementation/semantic-trait-view-arena-readers-green.json)
+passes all seven fixtures/97 cases with unchanged inputs. Formal performance
+and applicable task gates remain pending.
 
 ## Remaining Work
 

@@ -24,7 +24,7 @@ pub impl Comp {
         // of closedness: unbound parameters and projections remain untouched.
         if (params.count() == 0U64 || values.count() == 0U64) && selfRef == 0U64 && itemRef == 0U64 { return ref }
         val t = self.arena.typeTermAt(index: ref)
-        if t.assocNameId == 0U64 && self.arena.typeViewArgumentCount(ref: ref) != 0U64 {
+        if t.assocNameId == 0U64 && t.viewSources.len != 0U64 && self.arena.typeViewArgumentCount(ref: ref) != 0U64 {
             mut val arguments: Array[U64] = []
             mut val index = 0U64
             while index < self.arena.typeViewArgumentCount(ref: ref) {
@@ -233,7 +233,7 @@ pub impl Comp {
         // A non-projection leaf has no children to close. Read its scalar
         // shape before materializing any owning compatibility type record.
         val term = self.arena.typeTermAt(index: ref)
-        if term.assocNameId == 0U64 && self.arena.typeViewArgumentCount(ref: ref) != 0U64 {
+        if term.assocNameId == 0U64 && term.viewSources.len != 0U64 && self.arena.typeViewArgumentCount(ref: ref) != 0U64 {
             mut val arguments: Array[U64] = []
             mut val index = 0U64
             while index < self.arena.typeViewArgumentCount(ref: ref) {
@@ -572,7 +572,7 @@ pub impl Comp {
     inout fn groundWitnessTypeTerm(ref: U64, params: PatternBindInput, matchResult: WitnessMatch) -> Result[U64, CompileDiagnostic] {
         if ref == 0U64 || ref >= self.arena.typeCount() { return <Result.Ok value=ref />}
         val semantic: TypeRef = self.arena.typeAt(index: ref)
-        if semantic.assocNameId == 0U64 && self.arena.typeViewArgumentCount(ref: ref) != 0U64 {
+        if semantic.assocNameId == 0U64 && semantic.viewSources.count() != 0U64 && self.arena.typeViewArgumentCount(ref: ref) != 0U64 {
             mut val arguments: Array[U64] = []
             mut val index = 0U64
             while index < self.arena.typeViewArgumentCount(ref: ref) {
@@ -984,7 +984,7 @@ pub impl Comp {
             return <Result.Ok value=ref />
         }
         val t = self.arena.typeTermAt(index: ref)
-        if t.assocNameId == 0U64 && self.arena.typeViewArgumentCount(ref: ref) != 0U64 {
+        if t.assocNameId == 0U64 && t.viewSources.len != 0U64 && self.arena.typeViewArgumentCount(ref: ref) != 0U64 {
             mut val arguments: Array[U64] = []
             mut val index = 0U64
             while index < self.arena.typeViewArgumentCount(ref: ref) {
