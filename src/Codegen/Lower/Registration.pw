@@ -331,7 +331,7 @@ pub impl Comp {
         return a.extId == b.extId
     }
 
-    inout fn binderIndex(params: PatternBindInput, nameId: U64) -> U64 {
+    fn binderIndex(params: PatternBindInput, nameId: U64) -> U64 {
         mut val i: U64 = 0
         while i < params.count() {
             if params.at(index: i, declarations: self.decls, functions: self.arena).nameId == nameId { return i }
@@ -356,6 +356,17 @@ pub impl Comp {
         return params.count()
     }
 
+    // Identify a parameter in the term's head, independently of whether the
+    // occurrence has a view. A resolved nominal or structural constructor is
+    // never a binder merely because its spelling matches a parameter name.
+    fn typeParameterHeadIndex(ref: U64, params: PatternBindInput) -> U64 {
+        if ref == 0U64 || ref >= self.arena.typeTermCount() { return params.count() }
+        val term = self.arena.typeTermAt(index: ref)
+        if term.hasDecl || term.isRecord || term.isAny || term.isDiverging || term.assocNameId != 0U64 || term.projectionReceiver != 0U64 || term.assocTraitId != 0U64 || term.args.len != 0U64 || term.assocTraitArgs.len != 0U64 { return params.count() }
+        if term.paramId != 0U64 { return self.patternBinderIdentityIndex(params: params, identity: term.paramId) }
+        return self.binderIndex(params: params, nameId: term.nameId)
+    }
+
     // Structural equality modulo the two declaration binder lists. This is the
     // declaration-key equality, not call-site type compatibility.
     inout fn typeRefsAlphaEq(a: U64, b: U64, aParams: Array[Bind], bParams: Array[Bind]) -> Bool {
@@ -363,15 +374,21 @@ pub impl Comp {
         if a >= self.arena.typeCount() || b >= self.arena.typeCount() { return false }
         val ta: TypeRef = self.arena.typeAt(index: a)
         val tb: TypeRef = self.arena.typeAt(index: b)
-        val ai: U64 = self.binderIndex(params: <PatternBindInput.Values values=aParams />, nameId: ta.nameId)
-        val bi: U64 = self.binderIndex(params: <PatternBindInput.Values values=bParams />, nameId: tb.nameId)
+        val ai = self.typeParameterHeadIndex(ref: a, params: <PatternBindInput.Values values=aParams />)
+        val bi = self.typeParameterHeadIndex(ref: b, params: <PatternBindInput.Values values=bParams />)
         if ai < aParams.count() || bi < bParams.count() {
-            return ai == bi && ai < aParams.count() && bi < bParams.count()
+            if ai != bi || ai >= aParams.count() || bi >= bParams.count() { return false }
+        } else {
+            // Parameters outside the explicitly designated alpha binders stay
+            // rigid by lexical identity, including same-spelled outer binders.
+            if ta.paramId != tb.paramId { return false }
+            // Compare nominal owners when available; registration retains the
+            // legacy spelling bridge only for unstamped constructor heads.
+            if ((ta.hasDecl && tb.hasDecl) && ta.declOffset != tb.declOffset) || (!(ta.hasDecl && tb.hasDecl) && ta.nameId != tb.nameId) { return false }
         }
-        // Registration runs before the visibility pass annotates every
-        // TypeRef with a declaration owner.  Compare owner identity whenever
-        // both terms already carry it; later semantic consumers require it.
-        if ((ta.hasDecl && tb.hasDecl) && ta.declOffset != tb.declOffset) || (!(ta.hasDecl && tb.hasDecl) && ta.nameId != tb.nameId) || !(self.typeTermViewSourceHeadsEqual(a: a, b: b)) || ta.isAny != tb.isAny || ta.isSendable != tb.isSendable || ta.isDiverging != tb.isDiverging { return false }
+        // Matching binders establish only the head. A qualified occurrence
+        // still owns its view source set and all of its semantic children.
+        if !self.typeTermViewSourceHeadsEqual(a: a, b: b) || ta.isAny != tb.isAny || ta.isSendable != tb.isSendable || ta.isDiverging != tb.isDiverging { return false }
         if ta.assocTraitId != tb.assocTraitId || (ta.hasAssocTraitDecl && tb.hasAssocTraitDecl && ta.assocTraitDeclOffset != tb.assocTraitDeclOffset) || ta.assocNameId != tb.assocNameId { return false }
         if ta.args.count() != tb.args.count() { return false }
         mut val i: U64 = 0
@@ -426,10 +443,7 @@ pub impl Comp {
         if ref == 0U64 || ref >= self.arena.typeCount() { return params.count() }
         val term: TypeTerm = self.arena.typeTermAt(index: ref)
         if term.hasTopLevelView() || term.assocTraitId != 0U64 || term.args.len != 0U64 { return params.count() }
-        if term.paramId != 0U64 {
-            return self.patternBinderIdentityIndex(params: params, identity: term.paramId)
-        }
-        return self.binderIndex(params: params, nameId: term.nameId)
+        return self.typeParameterHeadIndex(ref: ref, params: params)
     }
 
     inout fn occursInPattern(side: U64, binderId: U64, ref: U64, refSide: U64, aParams: PatternBindInput, bParams: PatternBindInput, binds: Array[UnifyBind]) -> Bool {

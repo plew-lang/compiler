@@ -146,7 +146,9 @@ using the procedure above, then run each of `differentArguments`,
 `closedControl`, `environment`, `nestedEnvironment`, `callerOwned`, `witness`,
 `legacyGrounding`, `projectionNormalization`, `rigidViewMismatch`,
 `alphaViewMismatch`, `completeViewSet`, `genericBinding`, `genericBindingControl`, `occursView`
-and `duplicateBuilder`. Each must exit 0 with empty stderr and the exact `.out`.
+`duplicateBuilder`, `nominalBinderCollision`, `qualifiedAlphaDifferent`,
+`qualifiedAlphaOwnerDistinct`, `qualifiedAlphaSame`, `rigidParamScope`
+and `rigidParamScopeControl`. Each must exit 0 with empty stderr and the exact `.out`.
 It tests production semantic view storage/readers, not source syntax or final
 method dispatch (which have separate follow-up tasks).
 

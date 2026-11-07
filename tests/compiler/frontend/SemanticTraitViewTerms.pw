@@ -9,7 +9,7 @@ use @Std/Process only { argAt }
 fn main() {
     val scenario = argAt(1I64)
     mut val compiler = <Comp />
-    analyzeFrontend(c: inout compiler, input: <FrontendInput.Text text="trait P[K] {{ type Item }} struct S {{}} impl S as P[I64] {{ type Item=Bool }} fn main() {{}}" path="SemanticViews.pw" />, sources: <SourceAccess />).unwrap()
+    analyzeFrontend(c: inout compiler, input: <FrontendInput.Text text="trait P[K] {{ type Item }} trait Q[K] {{}} struct S {{}} impl S as P[I64] {{ type Item=Bool }} fn main() {{}}" path="SemanticViews.pw" />, sources: <SourceAccess />).unwrap()
     val traitName = compiler.internBytes(s: "P")
     val owner = compiler.decls.traitAt(index: compiler.decls.firstTraitNamed(nameId: traitName.nameId))
     val integerName = compiler.internBytes(s: "I64")
@@ -42,6 +42,34 @@ fn main() {
     val argument = if scenario == "closedness" || scenario == "environment" || scenario == "witness" || scenario == "legacyGrounding" || scenario == "genericBinding" || scenario == "genericBindingControl" || scenario == "occursView" || scenario == "callerOwned" { give parameter } else if scenario == "nestedEnvironment" { give nested } else if scenario == "projectionNormalization" { give validProjection } else if scenario == "projectionPresence" { give projection } else { give integer }
     val source = <ResolvedViewSource surfaceId=traitName.nameId traitInstance=<TraitInstanceKey owner=owner.nameStart positionalArgs=[argument] /> />
     val viewed = compiler.pushType(t: <TypeRef nameStart=declaration.nameStart nameLen=declaration.nameLen args=[] hasDecl=true declOffset=declaration.defOffset viewSources=[source] />)
+    if scenario == "rigidParamScope" || scenario == "rigidParamScopeControl" {
+        val identity = if scenario == "rigidParamScopeControl" { give binding.paramId } else { give compiler.nextParamId }
+        val other = compiler.pushType(t: <TypeRef nameStart=parameterName.nameStart nameLen=parameterName.nameLen paramId=identity args=[] />)
+        val same = compiler.typeRefsAlphaEq(a: parameter, b: other, aParams: [], bParams: [])
+        print(if scenario == "rigidParamScopeControl" { give same } else { give !same })
+        return
+    }
+    if scenario == "nominalBinderCollision" {
+        // The caller's resolved nominal spelling can equal a callee binder's
+        // name. Its established declaration owner makes it rigid.
+        val nominal = compiler.pushType(t: <TypeRef nameStart=parameterName.nameStart nameLen=parameterName.nameLen args=[] hasDecl=true declOffset=declaration.defOffset />)
+        print(!compiler.typeRefListPatternMatches(pattern: <PatternTypeInput.Values values=[nominal] />, patternParams: <PatternBindInput.Values values=[binding] />, actual: <PatternTypeInput.Values values=[integer] />))
+        return
+    }
+    if scenario == "qualifiedAlphaDifferent" || scenario == "qualifiedAlphaSame" || scenario == "qualifiedAlphaOwnerDistinct" {
+        val otherName = compiler.internBytes(s: "U")
+        val otherBinding = <Bind nameStart=otherName.nameStart nameLen=otherName.nameLen nameId=otherName.nameId paramId=compiler.nextParamId fieldStart=0U64 fieldLen=0U64 />
+        compiler.nextParamId += 1U64
+        val otherTraitName = compiler.internBytes(s: "Q")
+        val otherTrait = compiler.decls.traitAt(index: compiler.decls.firstTraitNamed(nameId: otherTraitName.nameId))
+        val chosen = if scenario == "qualifiedAlphaOwnerDistinct" { give otherTrait } else { give owner }
+        val argument = if scenario == "qualifiedAlphaDifferent" { give boolean } else { give integer }
+        val left = compiler.pushType(t: <TypeRef nameStart=parameterName.nameStart nameLen=parameterName.nameLen paramId=binding.paramId args=[] viewSources=[integerSource] />)
+        val right = compiler.pushType(t: <TypeRef nameStart=otherName.nameStart nameLen=otherName.nameLen paramId=otherBinding.paramId args=[] viewSources=[<ResolvedViewSource surfaceId=chosen.nameId traitInstance=<TraitInstanceKey owner=chosen.nameStart positionalArgs=[argument] /> />] />)
+        val same = compiler.typeRefsAlphaEq(a: left, b: right, aParams: [binding], bParams: [otherBinding])
+        print(if scenario == "qualifiedAlphaSame" { give same } else { give !same })
+        return
+    }
     if scenario == "rigidViewMismatch" || scenario == "alphaViewMismatch" || scenario == "completeViewSet" || scenario == "genericBinding" || scenario == "genericBindingControl" {
         val actual = compiler.typeRefWithViewSources(ref: receiver, sources: [otherSource])
         val pattern = if scenario != "genericBinding" && scenario != "genericBindingControl" { give compiler.typeRefWithViewSources(ref: receiver, sources: [integerSource]) } else { give compiler.typeRefWithViewSources(ref: receiver, sources: [source]) }

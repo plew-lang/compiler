@@ -123,6 +123,22 @@ mangles remain distinct from semantic body keys; do not add selector spellings
 to physical layout names or use those names as semantic equality.
 Task-wide gates and completion review remain pending.
 
+## Qualified Binder Checkpoint
+
+Four native REDs expose qualified alpha head short-circuiting, owner-established
+nominals mistaken for same-spelled binders, and same-spelled non-designated
+parameters treated alike. Matching explicit alpha binder slots now establishes
+only a head correspondence; view sources and children still compare. A shared
+head classifier distinguishes canonical parameters from nominal/structural
+constructors; plainBinder additionally requires an unqualified occurrence.
+Non-designated ParamIds remain rigid. This changes no implicit policy for
+solving an unknown view-qualified generic argument. Positive same-alpha and
+same-rigid-identity controls passed before repair.
+[Four REDs, two preserved controls and fresh verification](../../../evidence/rejection-domains/diagnostic-domain-implementation/semantic-trait-view-qualified-binder-increment.json)
+records successful build 20261107T023851-build-3d74c1 and all seven fixture/86
+native case executions passing. binderIndex is read-only. Completion gates and
+independent review are still outstanding; this checkpoint does not certify them.
+
 ## Remaining Work
 
 Reconcile qualified-binder handling, alias/owner
