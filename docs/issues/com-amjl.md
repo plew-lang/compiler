@@ -1,6 +1,6 @@
 ---
 id: com-amjl
-status: open
+status: in_progress
 deps: [com-x95z, com-zdod]
 links: [com-oir7, com-8egj, met-c1pg, com-16j0, com-0w38, com-wka4, com-9hde]
 created: 2026-11-06T09:51:26Z
@@ -159,3 +159,49 @@ instance/evidence. This is a finite investigation item within the existing
 view/projection proof repair, not a reproduced source-level wrong witness or
 new inference rule. Structural runtime erasure and existential equality are
 repaired/tested in com-zdod; those do not certify this proof activation.
+
+## Array Receiver Admission Increment
+
+The com-9hde preservation probes expose an existing common source-query defect,
+not an ambiguity of bracket parsing. Array TypeInfo intentionally carries an
+I64 element-name adapter together with a complete Array[I64] term. The authored
+value-view checker passes both to resolveViewSourceKey; its conformance filter
+and extAppliesToType's extension filter compare the element-name head before
+matching the structured receiver. A parenthesized extension view fails too.
+
+[Executed diagnosis](../../../evidence/rejection-domains/diagnostic-domain-implementation/array-view-receiver-investigation.json)
+retains noninstrumented rejection, successful plain indexing, scratch-only output
+at the actual query boundary, and a canonical-head counterfactual. Neutral review
+assigns this repair to this existing common receiver/source-admission scope;
+com-79k3 remains responsible for API authority narrowing, not these algorithms.
+No new whole-task dependency or language rule is introduced.
+
+Finite guarantee: when the query has a complete receiver term, candidate head
+filtering and structured matching consume that same receiver. Legacy name input
+is only an adapter fallback when no term is available. This is not an Array
+exception, a proof of selected-instance arguments, or completion of this task.
+Cover extension, parenthesized extension, zero-argument trait and view-free array
+indexing, nominal receiver preservation, and rejection of a mismatched extension
+or missing trait conformance. Remove the competing element-head interpretation
+from both common source-query filters; do not merely patch one verifier call.
+Run fresh focused native tests and shared source-query controls, inspect the
+actual consumers, and obtain neutral review of this increment before returning
+to com-9hde's parser work. Task-wide retained evidence/projection/final-consumer
+requirements remain open.
+
+[Finite repair verification](../../../evidence/rejection-domains/diagnostic-domain-implementation/array-view-receiver-repair.json):
+standard build `20261107T104002-build-ff7b35` passed. The common read-only arena
+projection supplies the complete term's head to both filters, with a ref0-only
+legacy fallback. Nine Frontend scenarios plus an actual ref0 source-query
+control pass with exact golden/empty stderr. Seven old/new native programs match
+goldens and three rejection controls retain their diagnostics. An additional
+old-candidate RED accepts `Array[Meter]#E` for an I64 extension; the fresh candidate
+rejects it, while Meter's own inherited extension remains valid. Neutral review
+independently reran the final native probe and reconciled all 198 target/210
+control input hashes without mismatch; no additional finite required repair.
+
+The existing newtype-underlying extension recursion still omits the underlying
+full term ref. This increment does not establish generic newtype inheritance or
+repair that erasure. Full exact-instance evidence, retained source facts,
+projection/final-consumer work and task-wide gates remain open; do not close this
+task or infer that parser preservation alone supplies these guarantees.

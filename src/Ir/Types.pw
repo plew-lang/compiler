@@ -16,6 +16,14 @@ pub impl Arena {
     // Scalar reads preserve immutable pooled children without copying arrays.
     fn typeTermCount() -> U64 { return self.typeTerms.count() }
     fn typeTermAt(index: U64) -> TypeTerm { return self.typeTerms[index] }
+    // Lookup head filters project the complete receiver term. TypeInfo names
+    // may describe an Array element and cannot override an available term.
+    // The fallback serves only legacy callers without a structured receiver.
+    fn typeHeadSpan(ref: U64, fallback: InternedSpan) -> InternedSpan {
+        if ref == 0U64 { return fallback }
+        val term = self.typeTermAt(index: ref)
+        return <InternedSpan start=term.nameStart len=term.nameLen />
+    }
     fn typeArgumentAt(index: U64) -> U64 { return self.typeArgumentPool[index] }
     fn typeRecordLabelAt(index: U64) -> U64 { return self.typeRecordLabelPool[index] }
     fn typeRecordFieldAt(index: U64) -> U64 { return self.typeRecordFieldPool[index] }

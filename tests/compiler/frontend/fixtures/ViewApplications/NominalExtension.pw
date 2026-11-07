@@ -1,0 +1,5 @@
+struct S {}
+pub impl S { factory }
+extension E { pub impl S { fn marker() -> I64 { return 0I64 } } }
+fn target() -> I64 { val value = <S /> return value#E.marker() }
+fn main() {}

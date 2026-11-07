@@ -565,9 +565,10 @@ pub impl Comp {
     // lookup. The spelling is only an input to this conversion: candidates
     // thereafter compare kind + declaration/bundle owner + arity.
     inout fn resolveViewSourceKey(recvStart: U64, recvLen: U64, recvRef: U64, sourceId: U64, sourceOwner: U64 = 0U64) -> Result[CallableSourceHead, CompileDiagnostic] {
+        val receiverHead = self.arena.typeHeadSpan(ref: recvRef, fallback: <InternedSpan start=recvStart len=recvLen />)
         mut val found: CallableSourceHead = <CallableSourceHead />
         val entry: InternedSpan = self.interner.entries[sourceId - 1U64]
-        if (try self.extAppliesToType(extStart: entry.start, extLen: entry.len, typeStart: recvStart, typeLen: recvLen, typeRef: recvRef)) {
+        if (try self.extAppliesToType(extStart: entry.start, extLen: entry.len, typeStart: receiverHead.start, typeLen: receiverHead.len, typeRef: recvRef)) {
             found = <CallableSourceHead kind=1U64 id=sourceId owner=sourceId arity=0U64 />
         }
         // A trait selector is resolved while lowering at its lexical use site.
@@ -593,7 +594,7 @@ pub impl Comp {
         if self.traceCodegen {
             eprint(text: "[trace-codegen] view-source trait query\n")
         }
-        val recvId: U64 = intern(c: inout self, start: recvStart, len: recvLen)
+        val recvId: U64 = intern(c: inout self, start: receiverHead.start, len: receiverHead.len)
         mut val i: U64 = 0U64
         while i < self.decls.conformCount() {
             val cf: Conform = self.decls.conformAt(index: i)

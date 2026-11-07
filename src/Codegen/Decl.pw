@@ -561,8 +561,9 @@ pub impl Comp {
     // available.  A named extension on `Box[I64]` must not make `Box[String]#X`
     // valid merely because both receivers share the `Box` head.
     inout fn extAppliesToType(extStart: U64, extLen: U64, typeStart: U64, typeLen: U64, typeRef: U64 = 0U64) -> Result[Bool, CompileDiagnostic] {
+        val receiverHead = self.arena.typeHeadSpan(ref: typeRef, fallback: <InternedSpan start=typeStart len=typeLen />)
         val qExt: U64 = intern(c: inout self, start: extStart, len: extLen)
-        val qType: U64 = intern(c: inout self, start: typeStart, len: typeLen)
+        val qType: U64 = intern(c: inout self, start: receiverHead.start, len: receiverHead.len)
         mut val i: U64 = 0
         while i < self.arena.functionCount() {
             val f: Func = self.arena.functionAt(index: i)
@@ -620,7 +621,7 @@ pub impl Comp {
             i += 1U64
         }
         // a newtype inherits the underlying type's extensions (spec/10).
-        val underlying = self.newtypeUnderRef(start: typeStart, len: typeLen)
+        val underlying = self.newtypeUnderRef(start: receiverHead.start, len: receiverHead.len)
         if underlying != 0U64 {
             val type = self.arena.typeAt(index: underlying)
             return <Result.Ok value=(try self.extAppliesToType(extStart: extStart, extLen: extLen, typeStart: type.nameStart, typeLen: type.nameLen)) />

@@ -1,0 +1,3 @@
+extension E { pub impl Array[I64] { fn marker() -> I64 { return 0I64 } } }
+fn target() -> Bool { val values = [true] return values#E[0U64] }
+fn main() {}

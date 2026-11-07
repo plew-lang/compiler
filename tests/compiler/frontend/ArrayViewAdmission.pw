@@ -1,0 +1,39 @@
+use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontend }
+use ../../../src/SourceAccess only { SourceAccess }
+use ../../../src/Diag only { emitDiagnostic }
+use @Std/Io only { print }
+
+fn accepts(scenario: String, expectedError: String = "") -> Bool {
+    mut val compiler = <Comp />
+    match analyzeFrontend(c: inout compiler, input: <FrontendInput.File path="tests/compiler/frontend/fixtures/ViewApplications/" + scenario + ".pw" />, sources: <SourceAccess stdRoot="std/".bytes() />) {
+        Result.Ok(value: _) => {
+            if expectedError != "" { return false }
+            if scenario == "NominalExtension" {
+                // The legacy no-term entry still resolves the same source.
+                val receiver = compiler.internBytes(s: "S")
+                val extension = compiler.internBytes(s: "E")
+                val selected = compiler.resolveViewSourceKey(recvStart: receiver.nameStart, recvLen: receiver.nameLen, recvRef: 0U64, sourceId: extension.nameId).unwrap()
+                return selected.kind == 1U64 && selected.id == extension.nameId
+            }
+            return true
+        }
+        Result.Err(error: val diagnostic) => {
+            if expectedError != "" && diagnostic.message == expectedError { return true }
+            emitDiagnostic(diagnostic: diagnostic)
+            return false
+        }
+    }
+}
+
+fn main() {
+    if !accepts(scenario: "PlainIndex") { print("0") return }
+    if !accepts(scenario: "ExtensionIndex") { print("0") return }
+    if !accepts(scenario: "GroupedExtensionIndex") { print("0") return }
+    if !accepts(scenario: "ZeroTraitIndex") { print("0") return }
+    if !accepts(scenario: "NominalExtension") { print("0") return }
+    if !accepts(scenario: "NewtypeExtension") { print("0") return }
+    if !accepts(scenario: "ArrayNewtypeWrongExtension", expectedError: "extension does not apply to this trait instance or concrete receiver (spec/09)") { print("0") return }
+    if !accepts(scenario: "WrongExtension", expectedError: "extension does not apply to this trait instance or concrete receiver (spec/09)") { print("0") return }
+    if !accepts(scenario: "MissingConformance", expectedError: "cannot view this value through that trait (`value#P`): its type does not conform to the trait — a trait view only narrows an existing conformance, it never confers one (spec/09)") { print("0") return }
+    print("1")
+}

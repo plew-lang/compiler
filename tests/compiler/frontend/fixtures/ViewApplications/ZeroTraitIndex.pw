@@ -1,0 +1,3 @@
+use @Std/Core only { Eq }
+fn target() -> I64 { val values = [3I64] return values#Eq[0U64] }
+fn main() {}
