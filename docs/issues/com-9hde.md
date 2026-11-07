@@ -1,6 +1,6 @@
 ---
 id: com-9hde
-status: open
+status: in_progress
 deps: [com-zdod]
 links: [com-amjl]
 created: 2026-11-06T23:54:58Z
@@ -31,3 +31,30 @@ Turn the saved explicit value-view and matching annotated-view failures into pro
 Close the Syntax->Lower->shared published selector path with meaningful RED/GREEN, exact Syntax pin uptake and neutral review. A successfully formed term is not proof of receiver conformance or correct method dispatch. Associated projection and memberless view arguments must not share phantom storage. com-amjl owns common source-conformance evidence admission; the call-selection task owns actual exact-instance dispatch/final consumers. Existing extension bindings, ordinary indexing, block/interpolation syntax and projection rules are preserved; no parser-wide cleanup, new surface feature, blanket undeclared-type recovery or verifier weakening.
 
 
+
+## Initial Producer Scenarios
+
+Start with the existing-API producer regression in Syntax/tests/TraitViewSelectors:
+memberless A#P[I64] must retain its selector through direct parsing, materialization
+and freezing; zero-argument A#P and A#P[I64].Item are preserved controls. Extend
+this to complete child arguments, aliases/qualified paths and ordinary indexing
+before final uptake. A parser setup failure is not semantic RED. Product source
+remains unchanged until the executed regression is established.
+
+## Pending Grammar Handoff Decision
+
+The producer RED is executed: compile/link/native exit0 with empty runtime
+stderr; direct/materialized/frozen memberless A#P[I64] each prints0 instead of1,
+while plain A#P and A#P[I64].Item controls print1. See
+[producer evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/trait-view-syntax-producer-red.json).
+
+The shared parser has no lexical declaration environment. Immediately after
+#Source, square brackets may be positional trait type arguments or existing
+indexing on extension/zero-argument-trait views. Identifier spelling cannot
+choose meaning, and a later compiler-owned reparser would violate the single
+grammar authority. Before product changes, the user is asked whether to retain
+an unresolved bracket-application syntax and classify it after ordinary lexical
+source resolution, preserving existing syntax. The alternative requires
+parenthesized views for indexing and changes the language surface. The former
+is a proposal, not adopted yet; its precise grammar representation and lowering
+must be designed before implementation. Current source remains unchanged.
