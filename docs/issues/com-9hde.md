@@ -681,3 +681,5 @@ its existing inference path, owned by com-amjl. Cover default/foreign, missing/
 extra/named arguments, extension-only source and omitted labels. Candidate build,
 fresh controls, independent review and updated final gates are required before
 accepting this increment; prior6.738295 measurement precedes this repair.
+
+[Saved frozen legacy evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/qualified-type-path-repair.json) records executed RED and seven native successes, independently replayed and source-reviewed without a required finding. Standard build20261107T201530-build-4672e6 passes with unchanged inputs; fresh candidate preserves36 native successes plus the existing com-amjl shorthand RED1, and CLI check/run14. Updated formal performance/fixed point, exact Syntax uptake, full suites and task closure remain unproven.
