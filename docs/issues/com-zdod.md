@@ -18,7 +18,7 @@ Evidence: [executed investigation](../../../evidence/rejection-domains/diagnosti
 
 ## Scope and Endpoint
 
-Replace owner/arity-only view identity with retained canonical owner and positional semantic argument terms. Trace ResolvedViewSource/ViewSource, view construction/publication, interning/equality, traversal/folding, occurs/free-binder queries, substitution/grounding, view-set normalization and keys consumed downstream. Current Ir.pw:81/2865, Frontend.pw:964 and Registration.pw:1089 cannot distinguish argument values. Establish one shared semantic instance authority rather than another lookup-specific tuple or projection-field mirror.
+Replace owner/arity-only view identity with retained canonical owner and positional semantic argument terms. Trace ResolvedViewSource/ViewSource, view construction/publication, interning/equality, traversal/folding, occurs/free-binder queries, substitution/grounding, view-set normalization and keys consumed downstream. The original owner-only carriers and comparisons identified by the investigation must be replaced through their real structural consumers. Establish one shared semantic instance authority rather than another lookup-specific tuple or projection-field mirror.
 
 Publish a well-formed structural selector artifact that later syntax lowering and lookup can consume. Positional arguments are semantic children in their owning compilation/binder environment. Projection-only assoc fields cannot represent memberless views. Normalize duplicate identical selectors; retain extension-set order independence; distinguish different arguments and same-spelled foreign owners. Preserve selected evidence/cache identity through storage, copying and rebinding. Do not mark existing source/call paths fixed merely because a new field/type or equality helper exists.
 
@@ -60,85 +60,55 @@ Do not count missing-new-field harness compile failures as defect RED. Pure
 carrier migration uses preserved GREEN controls; newly representable input must
 reach an executed assertion before being counted as a behavior regression.
 
-## First Structural Reader Checkpoint
+## Implementation Decisions
 
-Carrier migration and the first equality/traversal/cache repair are implemented,
-not task completion. [Executed RED/GREEN and build evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/semantic-trait-view-first-increment.json)
-records five genuine native REDs, two preserved controls and fresh-candidate
-GREEN for all seven; TypeTermPublication and seven canonical identity controls
-also passed. Standard build 20261107T012241-build-3ee70c passed with fixed inputs.
-The coarse callable head has been named CallableSourceHead; it intentionally
-remains insufficient for final selection (com-4k31). Full semantic equality
-compares argument terms, while head matching leaves those terms to designated
-binder traversal. Projection compatibility mirrors remain receiver-owned.
+ResolvedViewSource retains TraitInstanceKey (canonical owner plus positional
+semantic arguments). CallableSourceHead is explicitly a coarse candidate
+bucket, not semantic identity or a final selection receipt (com-4k31).
+Full instance equality compares argument terms; head matching leaves children
+to the designated-binder traversal. Exact source-set equality has a separate
+name and is used by the existential compatibility consumer. Projection mirror
+views remain receiver-owned. Obsolete pooled-id and duplicated set relations
+were removed from the migrated structural paths.
 
-Still required: normalization and ordering/duplicates, structural raw admission,
-view arguments in explicit/witness/body/legacy grounding and rebuild paths,
-rigid versus designated-binder scenarios, nested and caller-owned replacements,
-real key/caller reconciliation, applicable gates and neutral completion review.
-The graph uses normalized source heads, so its children must be reconciled with
-that normalization before claiming parameterized duplicate-selector support.
+Environment/witness/legacy grounding and body projection normalization transform
+view arguments using their existing substitution/proof authority. The rebuilding
+bridge preserves owner and diagnostic use metadata. Caller-owned replacement
+terms are not recursively captured by the same substitution. typeRefViewSources
+is read-only and does not require mutable Comp access.
 
-## Grounding Checkpoint
+Raw source heads are checked before folding, so normalization cannot hide a
+malformed duplicate. Complete-instance comparison follows child admission, so
+unchecked cyclic children cannot enter equality. The admitted receipt maps raw
+terms to immutable normalized terms; graph nodes and constructor/binder ranking
+consume that mapping. Common semantic-child reconstruction handles projection
+receivers, record fields, ordinary/associated arguments and selector arguments.
+Original rows are not rewritten, and unchanged terms do not allocate replacement
+child arrays. No separate graph-only equality solver was added. This boundary
+does not solve concrete receiver conformance.
 
-[Six executed RED/GREEN cases and second fresh build](../../../evidence/rejection-domains/diagnostic-domain-implementation/semantic-trait-view-grounding-increment.json)
-cover explicit environment substitution, nested selector arguments,
-caller-owned replacement terms, witness grounding, legacy grounding and
-body projection normalization. Build 20261107T013334-build-ea255b passed;
-the fresh candidate retained the original seven assertions and eight existing
-native controls. The view-rebuilding bridge changes selector children while
-preserving owner/use provenance; each grounding operation keeps its existing
-substitution/proof authority. typeRefViewSources is read-only and no longer
-requires mutable Comp access.
+## Executed Evidence
 
-Task remains in progress. Next cover raw selector normalization/admission,
-rigid versus designated-binder matching and occurs checks. In particular,
-unifyPatterns/typeRefsAlphaEq/occursInPattern still have legacy argument-only
-walks; reconcile these actual consumers rather than declaring the shared
-reader fix sufficient. Follow with keys/callers, gates and independent review.
+- [Carrier/readers](../../../evidence/rejection-domains/diagnostic-domain-implementation/semantic-trait-view-first-increment.json): five native REDs, two positive controls, fresh build and existing identity/publication controls.
+- [Grounding](../../../evidence/rejection-domains/diagnostic-domain-implementation/semantic-trait-view-grounding-increment.json): six native RED/GREEN cases across explicit/nested/caller-owned/witness/legacy/body normalization.
+- [Relations/builders](../../../evidence/rejection-domains/diagnostic-domain-implementation/semantic-trait-view-relations-increment.json): rigid/alpha/full-set equality, designated-binder consistency and positive control, occurs, duplicate builders; actual nongeneric direct/stored view check/JIT/AOT controls. An initial binder test rejected for mismatched compatibility mirrors and is excluded from RED evidence; aligned builders expose the intended RED.
+- [Raw boundary RED](../../../evidence/rejection-domains/diagnostic-domain-implementation/semantic-trait-view-raw-boundary-red.json) and [admission repair](../../../evidence/rejection-domains/diagnostic-domain-implementation/semantic-trait-view-admission-increment.json): missing/extra arity, extension arguments, invalid refs/foreign binders, distinct instances, top-level/nested duplicates, and malformed metadata combined with child normalization. The intermediate metadata-fold WIP was tested RED and repaired before claiming GREEN. Native assertion aborts are failed tests, never passing rejections.
 
-## Relation and Builder Checkpoint
+Latest build 20261107T020653-build-11a31c passed with fixed inputs. Candidate
+bin/plewc-semantic-trait-view-admission passes six internal fixtures/69 case
+executions. The final duplicate tests also assert that original input rows retain
+their duplicate source data. The first broad run remains recorded as failed:
+multipleTraitViews originally omitted the parameterized A selector's argument.
+Its internal setup now supplies [I64], preserving the original multiple-trait
+Input diagnostic assertion. Only changed fixtures were rerun; unchanged inputs
+retain their exact prior result. This is not whole-suite or task certification.
 
-[Six native REDs, seven fresh cases and retained controls](../../../evidence/rejection-domains/diagnostic-domain-implementation/semantic-trait-view-relations-increment.json)
-cover rigid matching, designated-binder consistency across a later argument,
-alpha equality, full source-set equality, occurs through view arguments and
-duplicate semantic builder normalization. The positive designated-binder
-control passes too. Build 20261107T014604-build-f9ee4e passed with fixed inputs;
-the fresh candidate passes all 20 semantic-view cases and eight earlier native
-controls. Direct and stored nongeneric provided-method views also retain their
-11/22 output under actual check/JIT/AOT source controls.
+## Remaining Work
 
-The initial generic-binding test setup used different compatibility mirrors and
-was rejected for that unrelated reason; it is excluded as a binder-propagation
-RED. Aligning both sides to the same production builder exposes the intended
-failure before repair. Full selector equality and source-head equality now have
-separate names; the existential compatibility consumer uses the complete form.
-The owner/arity callable bucket remains a separate, explicitly coarse carrier.
-Unused pooled-id equality and the duplicated semantic source-set relation were
-removed. Raw graph admission still preserves raw sources: its normalization and
-child alignment must be repaired before claiming valid duplicate parameterized
-selectors in that boundary.
-
-Next increment: raw wrong owner/arity/ref/foreign binder/selector combinations,
-canonicalized checked graph children, and remaining inference/type recovery
-view-id consumers. Finish key/rebuild caller reconciliation and required gates,
-then obtain neutral task-completion review. No task or parent closure yet.
-
-## Next Raw Boundary RED
-
-[Executed raw boundary checkpoint](../../../evidence/rejection-domains/diagnostic-domain-implementation/semantic-trait-view-raw-boundary-red.json)
-adds five PatternInputs and three CanonicalIdentity scenarios. Missing trait
-arguments, arguments on an extension, two different instances of the same
-trait, and duplicate parameterized selectors currently fail their test
-assertions. Invalid argument refs and foreign binders already return Input;
-equal and different well-formed arguments produce the expected cycle results.
-Both fixtures compiled successfully in the confirmed run. The earlier empty
-Array inference setup error is excluded from RED evidence. Exit134 is the native
-test's failing assertion after observing the wrong API result, not a compiler
-crash being accepted as a rejection.
-
-These are intentionally pending RED tests. Shape validation and normalized
-checked selector children must be repaired together; graph head normalization
-alone currently disagrees with its raw child count. Keep the common structural
-traversal authoritative rather than adding another cycle-specific type solver.
-Do not close the task from the preceding finite GREEN checkpoints.
+Reconcile remaining Infer/Type and TypeRecovery view-id consumers, alias/owner
+and normalization composition scenarios, complete keys/rebuild/caller use,
+applicable normal/fixed-point/performance gates and neutral completion review.
+Keep known projection-versus-receiver category repair assigned to com-bvc8;
+coordinate shared readers without claiming that whole repair here. Syntax,
+source conformance proof and final executable view selection remain separate
+mandatory tasks. Task and parent remain open.

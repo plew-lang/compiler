@@ -151,8 +151,9 @@ It tests production semantic view storage/readers, not source syntax or final
 method dispatch (which have separate follow-up tasks).
 
 The com-zdod manual raw-input increment adds TraitCyclePatternInputs scenarios
-`viewArity`, `viewArgumentRef`, `extensionArguments`, `viewArgumentBinder`,
-`differentViewInstances`, and TraitCycleCanonicalIdentity scenarios
-`viewArgumentSame`, `viewArgumentDistinct`, `viewArgumentDuplicate`. Compare each
+`viewArity`, `viewExtraArity`, `viewArgumentRef`, `extensionArguments`, `viewArgumentBinder`,
+`differentViewInstances`, `viewMetadataAfterNormalization`, and TraitCycleCanonicalIdentity scenarios
+`viewArgumentSame`, `viewArgumentDistinct`, `viewArgumentDuplicate`,
+`viewNestedDuplicate`. Compare each
 successful execution with its existing companion `.out`. Pending RED results
 are recorded in com-zdod; an assertion abort is a failed test, never a pass.

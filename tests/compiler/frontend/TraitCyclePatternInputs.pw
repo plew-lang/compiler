@@ -20,12 +20,21 @@ fn main() {
     mut val parameters: Array[Bind] = [parameter]
     mut val argument = integer
     mut val expected = ""
-    if scenario == "viewArity" || scenario == "viewArgumentRef" || scenario == "extensionArguments" || scenario == "viewArgumentBinder" || scenario == "differentViewInstances" {
+    if scenario == "viewMetadataAfterNormalization" {
+        val projectionName = compiler.internBytes(s: "Projection")
+        val projection = compiler.decls.traitAt(index: compiler.decls.firstTraitNamed(nameId: projectionName.nameId))
+        val innerSource = <ResolvedViewSource surfaceId=projection.nameId traitInstance=<TraitInstanceKey owner=projection.nameStart positionalArgs=[] /> />
+        val inner = compiler.pushType(t: <TypeRef nameStart=integerName.nameStart nameLen=integerName.nameLen args=[] viewSources=[innerSource, innerSource] />)
+        val valid = <ResolvedViewSource surfaceId=subject.nameId traitInstance=<TraitInstanceKey owner=subject.nameStart positionalArgs=[inner] /> />
+        val malformed = <ResolvedViewSource surfaceId=target.nameId traitInstance=<TraitInstanceKey owner=subject.nameStart positionalArgs=[inner] /> />
+        argument = compiler.pushType(t: <TypeRef nameStart=integerName.nameStart nameLen=integerName.nameLen args=[] viewSources=[valid, malformed] />)
+        expected = "invalid pattern type input: inconsistent view trait identity"
+    } else if scenario == "viewArity" || scenario == "viewExtraArity" || scenario == "viewArgumentRef" || scenario == "extensionArguments" || scenario == "viewArgumentBinder" || scenario == "differentViewInstances" {
         val extension = compiler.internBytes(s: "E")
         val selectorArgument = if scenario == "viewArgumentRef" { give 999999U64 } else if scenario == "viewArgumentBinder" {
             give compiler.pushType(t: <TypeRef nameStart=parameterName.nameStart nameLen=parameterName.nameLen paramId=identity + 1U64 args=[] />)
         } else { give integer }
-        val arguments: Array[U64] = if scenario == "viewArity" { give [] } else { give [selectorArgument] }
+        val arguments: Array[U64] = if scenario == "viewArity" { give [] } else if scenario == "viewExtraArity" { give [integer, integer] } else { give [selectorArgument] }
         val source = if scenario == "extensionArguments" {
             give <ResolvedViewSource surfaceId=extension.nameId traitInstance=<TraitInstanceKey owner=0U64 positionalArgs=arguments /> />
         } else { give <ResolvedViewSource surfaceId=subject.nameId traitInstance=<TraitInstanceKey owner=subject.nameStart positionalArgs=arguments /> /> }
@@ -36,7 +45,7 @@ fn main() {
             sources.append(<ResolvedViewSource surfaceId=subject.nameId traitInstance=<TraitInstanceKey owner=subject.nameStart positionalArgs=[boolean] /> />)
         }
         argument = compiler.pushType(t: <TypeRef nameStart=integerName.nameStart nameLen=integerName.nameLen args=[] viewSources=sources />)
-        expected = if scenario == "viewArity" { give "invalid pattern type input: view trait instance mismatch" } else if scenario == "viewArgumentRef" { give "invalid pattern type input: invalid type term reference" } else if scenario == "viewArgumentBinder" { give "invalid pattern type input: foreign lexical type parameter" } else if scenario == "extensionArguments" { give "invalid pattern type input: extension view arguments" } else { give "invalid pattern type input: multiple trait view selectors" }
+        expected = if scenario == "viewArity" || scenario == "viewExtraArity" { give "invalid pattern type input: view trait instance mismatch" } else if scenario == "viewArgumentRef" { give "invalid pattern type input: invalid type term reference" } else if scenario == "viewArgumentBinder" { give "invalid pattern type input: foreign lexical type parameter" } else if scenario == "extensionArguments" { give "invalid pattern type input: extension view arguments" } else { give "invalid pattern type input: multiple trait view selectors" }
     } else if scenario == "viewedBinder" {
         // A structural graph pattern may retain a view-qualified lexical
         // parameter without solving that view's receiver applicability.
@@ -53,7 +62,7 @@ fn main() {
         val name = compiler.internBytes(s: "Projection")
         val declaration = compiler.decls.traitAt(index: compiler.decls.firstTraitNamed(nameId: name.nameId))
         val first = <ResolvedViewSource surfaceId=declaration.nameId traitInstance=<TraitInstanceKey owner=declaration.nameStart positionalArgs=[] /> />
-        val second = if scenario == "multipleTraitViews" { give <ResolvedViewSource surfaceId=subject.nameId traitInstance=<TraitInstanceKey owner=subject.nameStart positionalArgs=[] /> /> } else { give first }
+        val second = if scenario == "multipleTraitViews" { give <ResolvedViewSource surfaceId=subject.nameId traitInstance=<TraitInstanceKey owner=subject.nameStart positionalArgs=[integer] /> /> } else { give first }
         argument = compiler.pushType(t: <TypeRef nameStart=integerName.nameStart nameLen=integerName.nameLen args=[] viewSources=[first, second] />)
         if scenario == "multipleTraitViews" { expected = "invalid pattern type input: multiple trait view selectors" }
     } else if scenario == "parameterArity" {

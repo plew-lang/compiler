@@ -11,14 +11,20 @@ fn appendEdge(compiler: inout Comp, subject: TraitDef, target: TraitDef, argumen
 }
 
 fn viewArgument(compiler: inout Comp, integerName: Bind, scenario: String, second: Bool) -> U64 {
-    if scenario == "viewArgumentSame" || scenario == "viewArgumentDistinct" || scenario == "viewArgumentDuplicate" {
+    if scenario == "viewArgumentSame" || scenario == "viewArgumentDistinct" || scenario == "viewArgumentDuplicate" || scenario == "viewNestedDuplicate" {
         val name = compiler.internBytes(s: "ParameterView")
         val declaration = compiler.decls.traitAt(index: compiler.decls.firstTraitNamed(nameId: name.nameId))
         val argumentName = if second && scenario == "viewArgumentDistinct" { give compiler.internBytes(s: "Bool") } else { give integerName }
         val argument = compiler.pushType(t: <TypeRef nameStart=argumentName.nameStart nameLen=argumentName.nameLen args=[] />)
         val source = <ResolvedViewSource surfaceId=name.nameId traitInstance=<TraitInstanceKey owner=declaration.nameStart positionalArgs=[argument] /> />
-        val sources = if !second && scenario == "viewArgumentDuplicate" { give [source, source] } else { give [source] }
-        return compiler.pushType(t: <TypeRef nameStart=integerName.nameStart nameLen=integerName.nameLen args=[] viewSources=sources />)
+        val sources = if !second && (scenario == "viewArgumentDuplicate" || scenario == "viewNestedDuplicate") { give [source, source] } else { give [source] }
+        val viewed = compiler.pushType(t: <TypeRef nameStart=integerName.nameStart nameLen=integerName.nameLen args=[] viewSources=sources />)
+        if scenario == "viewNestedDuplicate" {
+            val boxName = compiler.internBytes(s: "Box")
+            val box = compiler.arena.structAt(index: compiler.arena.firstStructNamed(nameId: boxName.nameId))
+            return compiler.pushType(t: <TypeRef nameStart=box.nameStart nameLen=box.nameLen args=[viewed] hasDecl=true declOffset=box.defOffset />)
+        }
+        return viewed
     }
     if scenario == "projectionMirror" {
         val name = compiler.internBytes(s: "FirstView")
@@ -73,7 +79,7 @@ fn main() {
     val box = compiler.arena.structAt(index: compiler.arena.firstStructNamed(nameId: boxName.nameId))
     val integerName = compiler.internBytes(s: "I64")
     val integer = compiler.pushType(t: <TypeRef nameStart=integerName.nameStart nameLen=integerName.nameLen args=[] />)
-    val viewScenario = scenario == "viewArgumentSame" || scenario == "viewArgumentDistinct" || scenario == "viewArgumentDuplicate" || scenario == "projectionMirror" || scenario == "viewSameSpellingDistinct" || scenario == "viewSame" || scenario == "viewDistinct" || scenario == "extensionLegacy" || scenario == "extensionSet" || scenario == "extensionDistinct"
+    val viewScenario = scenario == "viewNestedDuplicate" || scenario == "viewArgumentSame" || scenario == "viewArgumentDistinct" || scenario == "viewArgumentDuplicate" || scenario == "projectionMirror" || scenario == "viewSameSpellingDistinct" || scenario == "viewSame" || scenario == "viewDistinct" || scenario == "extensionLegacy" || scenario == "extensionSet" || scenario == "extensionDistinct"
     val recordScenario = scenario == "recordSame" || scenario == "recordLabelDistinct" || scenario == "recordChildDistinct"
     val field = compiler.internBytes(s: "field")
     val canonical = if viewScenario {
@@ -116,6 +122,10 @@ fn main() {
                 panic("wrong canonical identity result")
             }
         }
+    }
+    if scenario == "viewArgumentDuplicate" || scenario == "viewNestedDuplicate" {
+        val original = if scenario == "viewNestedDuplicate" { give compiler.typeTermRefChildRef(ref: canonical, index: 0U64) } else { give canonical }
+        if compiler.arena.typeAt(index: original).viewSources.count() != 2U64 { panic("admission rewrote the raw view input") }
     }
     print("canonical graph identity retained")
 }

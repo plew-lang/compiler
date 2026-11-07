@@ -1619,3 +1619,48 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 }
+
+
+impl Comp {
+    // Fold the same child sequence exposed by typeTermRefChild*. Admission
+    // calls this only after every child is validated. No source text or
+    // ambient binder/proof state participates in structural reconstruction.
+    inout fn rebuildTypeTermChildren(ref: U64, children: Array[U64]) -> U64 {
+        if children.count() != self.typeTermRefChildCount(ref: ref) { panic("semantic child rebuild shape mismatch") }
+        val type = self.arena.typeAt(index: ref)
+        mut val index = 0U64
+        mut val arguments: Array[U64] = []
+        if type.assocNameId != 0U64 {
+            index = 1U64
+            while index < children.count() {
+                arguments.append(children[index])
+                index += 1U64
+            }
+            return self.rebuildProjectionTerm(t: type, receiver: children[0U64], traitArgs: arguments)
+        }
+        val count = if type.isRecord { give type.recordFieldTerms.count() } else { give type.args.count() }
+        while index < count {
+            arguments.append(children[index])
+            index += 1U64
+        }
+        mut val associated: Array[U64] = []
+        if !type.isRecord {
+            mut val position = 0U64
+            while position < type.assocTraitArgs.count() {
+                associated.append(children[index])
+                index += 1U64
+                position += 1U64
+            }
+        }
+        val rebuilt = if type.isRecord {
+            give self.rebuildRecordTypeTerm(t: type, fieldTerms: arguments)
+        } else { give self.rebuildTypeTerm(t: type, args: arguments, assocTraitArgs: associated) }
+        if self.typeTermViewSourceCount(ref: ref) == 0U64 { return rebuilt }
+        mut val viewArguments: Array[U64] = []
+        while index < children.count() {
+            viewArguments.append(children[index])
+            index += 1U64
+        }
+        return self.typeRefWithViewSources(ref: rebuilt, sources: self.viewSourcesWithArguments(ref: ref, arguments: viewArguments))
+    }
+}

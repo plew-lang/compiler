@@ -307,6 +307,12 @@ struct PatternInputFacts {
     mut val nominalOwners: Dictionary[U64, U64] = [:]
     mut val projectionOwners: Dictionary[U64, U64] = [:]
     mut val viewSources: Dictionary[U64, Array[ResolvedViewSource]] = [:]
+    // Admitted immutable terms with normalized view sets and children. Raw
+    // source/argument rows are left intact; consumers use these receipts.
+    mut val normalizedTerms: Dictionary[U64, U64] = [:]
+}
+impl PatternInputFacts {
+    fn normalizedRef(ref: U64) -> U64 { return self.normalizedTerms.getOr(key: ref, fallback: ref) }
 }
 
 struct CheckedTraitCycleGraph {

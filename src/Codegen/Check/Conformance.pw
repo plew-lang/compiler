@@ -394,9 +394,9 @@ impl Comp {
                 val edge: Conform = self.decls.conformAt(index: ci)
                 mut val nextBinds: Array[TraitCycleBind] = self.copyTraitCycleBinds(binds: current.binds)
                 val scope: U64 = (cursor + 1U64) * self.decls.conformCount() + ci
-                val subject: TraitCycleNode = <TraitCycleNode owner=edge.typeStart args=self.copyConformTypes(types: edge.subjectArgs) scope=scope />
+                val subject: TraitCycleNode = <TraitCycleNode owner=edge.typeStart args=self.copyCheckedPatternTypes(types: edge.subjectArgs, facts: facts) scope=scope />
                 if self.traitCycleNodeMatches(a: current.node, b: subject, binds: inout nextBinds, facts: facts) {
-                    val target: TraitCycleNode = <TraitCycleNode owner=edge.traitStart args=self.copyConformTypes(types: edge.traitArgs) scope=scope />
+                    val target: TraitCycleNode = <TraitCycleNode owner=edge.traitStart args=self.copyCheckedPatternTypes(types: edge.traitArgs, facts: facts) scope=scope />
                     pending.append(<TraitCycleSearch node=target binds=nextBinds />)
                 }
                 edgeId = graph.nextOutgoing(edge: edgeId)
@@ -457,17 +457,17 @@ impl Comp {
     // This local ranking rule admits Array[T] -> T while rejecting T ->
     // Array[T] and T -> (T, T), without mistaking a shrinking path for an
     // occurs-check cycle.
-    inout fn traitCycleEdgeIsNonIncreasing(cf: Conform) -> Bool {
+    inout fn traitCycleEdgeIsNonIncreasing(cf: Conform, facts: PatternInputFacts) -> Bool {
         mut val subjectConstructors: U64 = 0U64
         mut val targetConstructors: U64 = 0U64
         mut val i: U64 = 0U64
         while i < cf.subjectArgs.count() {
-            subjectConstructors += self.traitCycleConstructorCount(ref: self.conformTypeAt(types: cf.subjectArgs, index: i), params: <PatternBindInput.Conformance range=cf.typeParams />)
+            subjectConstructors += self.traitCycleConstructorCount(ref: facts.normalizedRef(ref: self.conformTypeAt(types: cf.subjectArgs, index: i)), params: <PatternBindInput.Conformance range=cf.typeParams />)
             i += 1U64
         }
         i = 0U64
         while i < cf.traitArgs.count() {
-            targetConstructors += self.traitCycleConstructorCount(ref: self.conformTypeAt(types: cf.traitArgs, index: i), params: <PatternBindInput.Conformance range=cf.typeParams />)
+            targetConstructors += self.traitCycleConstructorCount(ref: facts.normalizedRef(ref: self.conformTypeAt(types: cf.traitArgs, index: i)), params: <PatternBindInput.Conformance range=cf.typeParams />)
             i += 1U64
         }
         if targetConstructors > subjectConstructors { return false }
@@ -477,12 +477,12 @@ impl Comp {
             mut val targetUses: U64 = 0U64
             i = 0U64
             while i < cf.subjectArgs.count() {
-                subjectUses += self.traitCycleBinderOccurrences(ref: self.conformTypeAt(types: cf.subjectArgs, index: i), params: <PatternBindInput.Conformance range=cf.typeParams />, binder: binder)
+                subjectUses += self.traitCycleBinderOccurrences(ref: facts.normalizedRef(ref: self.conformTypeAt(types: cf.subjectArgs, index: i)), params: <PatternBindInput.Conformance range=cf.typeParams />, binder: binder)
                 i += 1U64
             }
             i = 0U64
             while i < cf.traitArgs.count() {
-                targetUses += self.traitCycleBinderOccurrences(ref: self.conformTypeAt(types: cf.traitArgs, index: i), params: <PatternBindInput.Conformance range=cf.typeParams />, binder: binder)
+                targetUses += self.traitCycleBinderOccurrences(ref: facts.normalizedRef(ref: self.conformTypeAt(types: cf.traitArgs, index: i)), params: <PatternBindInput.Conformance range=cf.typeParams />, binder: binder)
                 i += 1U64
             }
             if targetUses > subjectUses { return false }
@@ -509,14 +509,14 @@ pub impl Comp {
             val sourceOwner: U64 = graph.sourceIndex(edge: edgeId)
             val targetOwner: U64 = graph.targetIndex(edge: edgeId)
             if components[sourceOwner] == components[targetOwner] {
-                if !(self.traitCycleEdgeIsNonIncreasing(cf: edge)) {
+                if !(self.traitCycleEdgeIsNonIncreasing(cf: edge, facts: facts)) {
                     mut val report: U64 = edge.defOffset
                     if offset != 0U64 { report = offset }
                     return <Result.Err error=self.diagnosticAt(offset: report, msg: "trait-to-trait conformance edge grows within a cycle") />
                 }
             }
-            val source: TraitCycleNode = <TraitCycleNode owner=edge.typeStart args=self.copyConformTypes(types: edge.subjectArgs) scope=ci />
-            val target: TraitCycleNode = <TraitCycleNode owner=edge.traitStart args=self.copyConformTypes(types: edge.traitArgs) scope=ci />
+            val source: TraitCycleNode = <TraitCycleNode owner=edge.typeStart args=self.copyCheckedPatternTypes(types: edge.subjectArgs, facts: facts) scope=ci />
+            val target: TraitCycleNode = <TraitCycleNode owner=edge.traitStart args=self.copyCheckedPatternTypes(types: edge.traitArgs, facts: facts) scope=ci />
             val binds: Array[TraitCycleBind] = []
             if self.traitCyclePathReaches(start: source, node: target, binds: binds, graph: graph, facts: facts) {
                 mut val report: U64 = edge.defOffset
