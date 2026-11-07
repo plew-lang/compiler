@@ -1,7 +1,7 @@
 ---
 id: com-9hde
 status: in_progress
-deps: [com-zdod]
+deps: [com-zdod, com-scq5]
 links: [com-amjl]
 created: 2026-11-06T23:54:58Z
 type: bug
@@ -400,12 +400,27 @@ Inferring declaration publication from pub impl was a provisional WIP
 assumption, not an adopted rule, and has been removed. The current collector
 keeps unmodified extension declarations private rather than inventing that rule.
 
-Stop for user surface judgment: recommended explicit `pub extension Name`,
-module-private unmodified declarations, and pub impl controlling members only.
-Alternatives are publication inferred from members or always-public extension
-names. The decision belongs with met-bejv; confirm its implementation owner and
-real com-9hde prerequisite before adding the public syntax/consumer repair.
-Do not weaken import existence checking merely to make the owner probe run.
+The user confirmed publication composition on 2026-11-08: explicit
+`pub extension Name`, module-private unmodified extension declarations, and
+independent impl visibility. A non-public extension may contain `pub impl`;
+that neither publishes its name nor authorizes external access. No new warning
+is part of this decision. [com-scq5](com-scq5.md) owns specification/design
+clarification and is a real prerequisite of this task.
+
+After that contract is synchronized, this task owns the product handoff:
+accept the public extension declaration in shared Syntax and every supported
+AST adapter, retain declaration publication independently of impl publication,
+and consume it in admitted module/public-surface bindings. Remove any inferred
+publication from members; do not add an extension-specific private-owner
+rejection. Cover all four extension/impl visibility combinations, local access,
+external public-member success/private-member rejection, selective/namespace/
+alias/re-publication routes and package-root reachability, with intended reasons
+and valid positive setups. Preserve empty declaration markers and exact package
+pin uptake. Existing owner/kind/legacy-path review repairs remain mandatory;
+this publication increment does not certify them. Test-purpose reconciliation
+for the three existing fixtures remains met-bejv, which depends on this task
+rather than blocking it in return. Do not weaken import existence checking to
+make an owner probe run.
 
 The local Syntax override has been restored to exact dev31/ae70 before WIP
 commit. Current WIP source imports new Syntax APIs from revision3e328b2 and is
@@ -425,4 +440,4 @@ was76ea32e6 without in-flight edits, but this is not formal input/gate evidence.
 The publication-blocked owner probes are scratch diagnostics, not normative test
 fixtures. R4 final review checks declaration/import construction failures and
 subsequent finish/declaration/import calls all retain the initial Collision and
-both offsets. Other review requirements and the surface decision remain open.
+both offsets. Other review requirements and implementation remain open; the adopted publication decision is recorded above.

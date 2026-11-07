@@ -1,7 +1,7 @@
 ---
 id: met-bejv
 status: open
-deps: []
+deps: [com-9hde]
 links: []
 created: 2026-10-27T20:48:04Z
 type: task
@@ -35,3 +35,15 @@ The [exact scoped outcome](../../../evidence/existing-feature-conformance/audit-
 Row35: Keep same-resolved-owner cycle/duplicate and distinct-owner/private controls. No global union or new priority chosen. met-bejv must distinguish explicit bound extension selector and resolved bundle identity before selected source member/visibility admission; com-604k separately receives module publication/declaration-cycle premise. Namespace-only imports do not prove flat #Extra binding or global same-spelling bundle identity. Required admission: met-ucze, com-604k.
 
 Preserve the original finite contract and meaningful controls; intake does not choose unresolved source semantics, implement new APIs, certify product GREEN or close a mixed future/optional parent. Required repair/investigation must finish before its affected admission; classification closure cannot bypass it.
+
+## Adopted Publication and Execution Order
+
+The 2026-11-08 user decision permits non-public extensions containing public
+impls. Declaration publication uses `pub extension`; member publication remains
+independent. [com-scq5](com-scq5.md) clarifies the normative documents, then
+[com-9hde](com-9hde.md) implements publication and canonical source binding.
+This investigation depends on com-9hde so its cross-module fixture controls can
+reach their intended owner/member checks. It is not a prerequisite of that
+implementation. Preserve the three original fixture purposes and distinguish
+published-name availability, member visibility and same/different resolved
+extension identity; no global spelling union or automatic namespace flattening.
