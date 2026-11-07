@@ -3,7 +3,7 @@ use @Std/Io only { print }
 use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
 use /SourceAccess only { SourceAccess }
 use /Diag only { CompileDiagnostic }
-use /Ir only { Bind, Stmt, Expr, InstanceEnvironment, TypeRef, ResolvedViewSource, StructDef }
+use /Ir only { Bind, Stmt, Expr, InstanceEnvironment, TypeRef, ResolvedViewSource, TraitInstanceKey, StructDef }
 
 fn requireSuccess(result: Result[(), CompileDiagnostic]) {
     match result {
@@ -73,7 +73,7 @@ fn main() {
     val facetOwner = compiler.typeDeclIdentityInModule(mod: 0U64, start: facet.nameStart, len: facet.nameLen)
     val named = compiler.internBytes(s: "Named")
     val namedOwner = compiler.typeDeclIdentityInModule(mod: 0U64, start: named.nameStart, len: named.nameLen)
-    val viewed = compiler.pushType(t: <TypeRef nameStart=facet.nameStart nameLen=facet.nameLen args=[] hasDecl=true declOffset=facetOwner.nameStart viewSources=[<ResolvedViewSource traitOwner=namedOwner.nameStart />] />)
+    val viewed = compiler.pushType(t: <TypeRef nameStart=facet.nameStart nameLen=facet.nameLen args=[] hasDecl=true declOffset=facetOwner.nameStart viewSources=[<ResolvedViewSource traitInstance=<TraitInstanceKey owner=namedOwner.nameStart positionalArgs=[] /> />] />)
     val plain = compiler.declaredTypeRef(nameStart: facet.nameStart, nameLen: facet.nameLen, args: [], declaration: facetOwner)
     assert(plain != viewed)
     assert(compiler.arena.typeAt(index: plain).viewSources.count() == 0U64)

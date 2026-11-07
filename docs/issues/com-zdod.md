@@ -229,3 +229,18 @@ Keep known projection-versus-receiver category repair assigned to com-bvc8;
 coordinate shared readers without claiming that whole repair here. Syntax,
 source conformance proof and final executable view selection remain separate
 mandatory tasks. Task and parent remain open.
+
+
+## Normal Fixture API Uptake
+
+Normal gate 20261107T045605-test-efd960 passed tooling setup and exposed
+a legacy traitOwner field initializer in an internal body-receiver fixture.
+The controller was interrupted and collected before editing inputs. Scoped
+search found four internal API fixtures (seven initializers). Each failed
+--check for the removed field; this is an API setup failure, not semantic RED.
+They now use the same canonical owner with empty positional arguments in
+TraitInstanceKey. All existing assertions and goldens are unchanged; four
+fresh native compile/link/executions match them with empty stderr and exit0.
+Neutral static review verifies exact inverse-translation equivalence and
+original zero-argument identity/setup intent. Evidence is in the linked final
+consumer repair record. Normal gate remains to be repeated.

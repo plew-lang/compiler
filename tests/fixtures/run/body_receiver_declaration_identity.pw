@@ -1,7 +1,7 @@
 use @Std/Core only { assert }
 use @Std/Io only { print }
 use /Frontend only { Comp }
-use /Ir only { TypeRef, StructDef, Func, InstanceEnvironment, CallResolution, TraitDef, TraitOwner, ResolvedViewSource }
+use /Ir only { TypeRef, StructDef, Func, InstanceEnvironment, CallResolution, TraitDef, TraitOwner, ResolvedViewSource, TraitInstanceKey }
 fn main() {
     mut val compiler = <Comp />
     compiler.arena.reserveTypeSentinel()
@@ -60,8 +60,8 @@ fn checkNestedViews(compiler: inout Comp, element: U64) {
     compiler.decls.registerTraitOwner(<TraitOwner sourceModule=2U64 nameStart=otherStart nameLen=traitName.nameLen nameId=traitName.nameId arity=0U64 />)
     compiler.decls.registerTrait(<TraitDef nameStart=traitName.nameStart nameLen=traitName.nameLen nameId=traitName.nameId reqs=compiler.pushTraitReqs(reqs: []) />)
     compiler.decls.registerTrait(<TraitDef nameStart=otherStart nameLen=traitName.nameLen nameId=traitName.nameId reqs=compiler.pushTraitReqs(reqs: []) />)
-    val first = compiler.typeRefWithViewSources(ref: element, sources: [<ResolvedViewSource surfaceId=traitName.nameId traitOwner=traitName.nameStart />])
-    val second = compiler.typeRefWithViewSources(ref: element, sources: [<ResolvedViewSource surfaceId=traitName.nameId traitOwner=otherStart />])
+    val first = compiler.typeRefWithViewSources(ref: element, sources: [<ResolvedViewSource surfaceId=traitName.nameId traitInstance=<TraitInstanceKey owner=traitName.nameStart positionalArgs=[] /> />])
+    val second = compiler.typeRefWithViewSources(ref: element, sources: [<ResolvedViewSource surfaceId=traitName.nameId traitInstance=<TraitInstanceKey owner=otherStart positionalArgs=[] /> />])
     assert(!compiler.typeRefEq(a: first, b: second))
     assert(compiler.typeRefEq(a: compiler.canonicalBodyReceiverRef(fnIdx: 0U64, recvInstRef: first), b: element))
     val name = compiler.internBytes(s: "Wrapper")

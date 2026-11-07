@@ -1,5 +1,5 @@
 use /Frontend only { Comp }
-use /Ir only { TypeRef, ResolvedViewSource }
+use /Ir only { TypeRef, ResolvedViewSource, TraitInstanceKey }
 use @Std/Core only { assert }
 use @Std/Io only { print }
 
@@ -35,11 +35,11 @@ fn main() {
         assert(compiler.typeTermRefSameHead(a: viewed, b: selected))
         assert(compiler.typeTermRefSameHead(a: selected, b: viewed))
     }
-    val ordered = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] hasDecl=true declOffset=name.nameStart viewSources=[<ResolvedViewSource surfaceId=1U64 />, <ResolvedViewSource traitOwner=2U64 />] />)
-    val reversed = compiler.pushType(t: <TypeRef nameStart=alias.nameStart nameLen=alias.nameLen args=[] hasDecl=true declOffset=name.nameStart viewSources=[<ResolvedViewSource traitOwner=2U64 />, <ResolvedViewSource surfaceId=1U64 />] />)
+    val ordered = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] hasDecl=true declOffset=name.nameStart viewSources=[<ResolvedViewSource surfaceId=1U64 />, <ResolvedViewSource traitInstance=<TraitInstanceKey owner=2U64 positionalArgs=[] /> />] />)
+    val reversed = compiler.pushType(t: <TypeRef nameStart=alias.nameStart nameLen=alias.nameLen args=[] hasDecl=true declOffset=name.nameStart viewSources=[<ResolvedViewSource traitInstance=<TraitInstanceKey owner=2U64 positionalArgs=[] /> />, <ResolvedViewSource surfaceId=1U64 />] />)
     assert(compiler.typeTermRefSameHead(a: ordered, b: reversed))
     assert(compiler.typeTermRefSameHead(a: reversed, b: ordered))
-    val traitView = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] hasDecl=true declOffset=name.nameStart viewSources=[<ResolvedViewSource traitOwner=1U64 />] />)
+    val traitView = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] hasDecl=true declOffset=name.nameStart viewSources=[<ResolvedViewSource traitInstance=<TraitInstanceKey owner=1U64 positionalArgs=[] /> />] />)
     assert(!compiler.typeTermRefSameHead(a: sources, b: traitView))
     assert(!compiler.typeTermRefSameHead(a: traitView, b: sources))
     // Empty outer views never establish recursive equality of the children.
