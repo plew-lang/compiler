@@ -1,0 +1,3 @@
+use ./PublicFunctions only { choose }
+use ./OtherFunctions only { choose }
+fn main() { choose(value: 1I64) choose(value: true) }

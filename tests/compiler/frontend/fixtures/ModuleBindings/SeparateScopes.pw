@@ -1,0 +1,4 @@
+fn duplicate() {}
+struct S {}
+impl S { fn duplicate() {} }
+fn main() { val duplicate = 1I64 }

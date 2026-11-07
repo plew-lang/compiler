@@ -1,0 +1,3 @@
+use ./PublicType as Shared
+val Shared = 1I64
+fn main() {}

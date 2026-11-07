@@ -141,6 +141,7 @@ pub impl Comp {
                 val nm: Bind = self.internBytes(s: name)
                 result = self.pushExpr(e: <Expr.ExtMethod recv=r source=self.lowerViewSource(siteOffset: span.start, text: src) nameStart=nm.nameStart nameLen=nm.nameLen args=a />)
             }
+            ExprAst.SourceSelection(val recv, val path, val application, val strip, sourceSpan: _, span: _) => { result = try self.lowerValueSourceSelection(recv: recv, path: path, application: application, strip: strip) }
             ExprAst.ExtView(val recv, val src, srcSpan: _, val strip, val span) => {
                 val r: U64 = (try self.lowerExpr(e: recv))
                 result = self.pushExpr(e: <Expr.ExtView recv=r source=self.lowerViewSource(siteOffset: span.start, text: src) strip=strip />)
@@ -484,6 +485,7 @@ pub impl Comp {
             SyntaxExprKind.Await => {
                 result = self.pushExpr(e: <Expr.Await operand=(try self.lowerSyntaxExpr(id: e.child0)) />)
             }
+            SyntaxExprKind.SourceSelection => { result = try self.lowerSyntaxSourceSelection(expr: e) }
             SyntaxExprKind.ExtView => {
                 val receiver = (try self.lowerSyntaxExpr(id: e.child0))
                 result = self.pushExpr(e: <Expr.ExtView recv=receiver source=self.lowerViewSourceSpan(siteOffset: e.span.start, start: e.text.start, len: e.text.end - e.text.start) strip=e.flag0 />)

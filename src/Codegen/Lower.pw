@@ -23,3 +23,5 @@ part ./Lower/Match
 part ./Lower/Decl
 part ./Lower/Impl
 part ./Lower/TopLevel
+
+part ./Lower/SourceSelection

@@ -1,0 +1,204 @@
+use @Std/Core only { Eq }
+
+// A module name has one semantic kind. Function bindings may retain several
+// original overload groups; non-functions must resolve to one original binding.
+pub enum ScopeBindingKind { Type Trait Extension Function Value Namespace }
+impl ScopeBindingKind {
+    fn code() -> U64 {
+        return match self { ScopeBindingKind.Type => 1U64 ScopeBindingKind.Trait => 2U64 ScopeBindingKind.Extension => 3U64 ScopeBindingKind.Function => 4U64 ScopeBindingKind.Value => 5U64 ScopeBindingKind.Namespace => 6U64 }
+    }
+}
+pub impl ScopeBindingKind as Eq {
+    assoc fn eq(lhs~: Self, rhs~: Self) -> Bool { return lhs.code() == rhs.code() }
+}
+
+pub enum ScopeBindingFailure {
+    Collision(firstOffset: U64, secondOffset: U64)
+    MissingImport(offset: U64)
+    ImportCycle(offset: U64)
+    Closed(offset: U64)
+}
+pub struct ScopeBinding {
+    pub val moduleId: U64
+    pub val nameId: U64
+    pub val kind: ScopeBindingKind
+    pub val ownerModule: U64
+    pub val ownerNameId: U64
+    pub val declarationOffset: U64
+    pub val origin: U64
+    pub val isPublic: Bool
+}
+pub impl ScopeBinding { factory }
+pub struct ScopeImport {
+    val nameId: U64
+    val targetModule: U64
+    val targetNameId: U64
+    val isNamespace: Bool
+    val isPublic: Bool
+    val origin: U64
+}
+impl ScopeImport { factory }
+
+// Constructed only by successful admission; readers cannot observe a partial
+// graph as an optional missing name, or mutate a published binding table.
+pub struct AdmittedModuleScopeBindings {
+    val entries: Array[ScopeBinding]
+    val nextNamed: Array[U64]
+    val nameHeads: Dictionary[U64, U64]
+}
+impl AdmittedModuleScopeBindings { factory }
+
+pub struct ModuleScopeBindings {
+    mut val entries: Array[ScopeBinding] = []
+    mut val nextNamed: Array[U64] = []
+    mut val nameHeads: Dictionary[U64, U64] = [:]
+    mut val imports: Array[ScopeImport] = []
+    mut val nextImport: Array[U64] = []
+    mut val importHeads: Dictionary[U64, U64] = [:]
+    mut val states: Dictionary[U64, U64] = [:]
+    mut val modules: Array[U64] = []
+    mut val closed: Bool = false
+    mut val failure: Optional[ScopeBindingFailure] = <Optional.None />
+}
+pub impl ModuleScopeBindings {
+    factory
+
+    inout fn addDeclaration(moduleId: U64, nameId: U64, kind: ScopeBindingKind, offset: U64, isPublic: Bool) -> Result[(), ScopeBindingFailure] {
+        if self.closed { return <Result.Err error=<ScopeBindingFailure.Closed offset=offset /> /> }
+        match self.failure { Optional.Some(v: val failure) => { return <Result.Err error=failure /> } _ => {} }
+        self.rememberModule(moduleId: moduleId)
+        val result = self.merge(binding: <ScopeBinding moduleId=moduleId nameId=nameId kind=kind ownerModule=moduleId ownerNameId=nameId declarationOffset=offset origin=offset isPublic=isPublic />)
+        match result { Result.Err(error: val failure) => { self.failure = <Optional.Some v=failure /> } _ => {} }
+        return result
+    }
+
+    inout fn addImport(moduleId: U64, nameId: U64, targetModule: U64, targetNameId: U64, isNamespace: Bool, isPublic: Bool, offset: U64) -> Result[(), ScopeBindingFailure] {
+        if self.closed { return <Result.Err error=<ScopeBindingFailure.Closed offset=offset /> /> }
+        match self.failure { Optional.Some(v: val failure) => { return <Result.Err error=failure /> } _ => {} }
+        self.rememberModule(moduleId: moduleId)
+        self.rememberModule(moduleId: targetModule)
+        self.nextImport.append(self.importHeads.getOr(key: moduleId, fallback: 0U64))
+        self.importHeads[moduleId] = self.imports.count() + 1U64
+        self.imports.append(<ScopeImport nameId=nameId targetModule=targetModule targetNameId=targetNameId isNamespace=isNamespace isPublic=isPublic origin=offset />)
+        return <Result.Ok value=() />
+    }
+
+    inout fn finish() -> Result[AdmittedModuleScopeBindings, ScopeBindingFailure] {
+        match self.failure { Optional.Some(v: val failure) => { return <Result.Err error=failure /> } _ => {} }
+        if self.closed { return <Result.Ok value=<AdmittedModuleScopeBindings entries=self.entries nextNamed=self.nextNamed nameHeads=self.nameHeads /> /> }
+        mut val index = 0U64
+        while index < self.modules.count() {
+            match self.finishModule(moduleId: self.modules[index], offset: 0U64) {
+                Result.Err(error: val failure) => { self.failure = <Optional.Some v=failure /> return <Result.Err error=failure /> }
+                _ => {}
+            }
+            index += 1U64
+        }
+        self.closed = true
+        return <Result.Ok value=<AdmittedModuleScopeBindings entries=self.entries nextNamed=self.nextNamed nameHeads=self.nameHeads /> />
+    }
+}
+
+pub impl AdmittedModuleScopeBindings {
+    fn kind(moduleId: U64, nameId: U64) -> Optional[ScopeBindingKind] {
+        mut val entry = self.nameHeads.getOr(key: nameId, fallback: 0U64)
+        while entry != 0U64 {
+            val binding = self.entries[entry - 1U64]
+            if binding.moduleId == moduleId { return <Optional.Some v=binding.kind /> }
+            entry = self.nextNamed[entry - 1U64]
+        }
+        return <Optional.None />
+    }
+
+    // A free-function overload union has no single declaration owner. Its
+    // callable reader retains the full public candidate/provenance set.
+    fn uniqueBinding(moduleId: U64, nameId: U64) -> Optional[ScopeBinding] {
+        mut val entry = self.nameHeads.getOr(key: nameId, fallback: 0U64)
+        while entry != 0U64 {
+            val binding = self.entries[entry - 1U64]
+            if binding.moduleId == moduleId {
+                match binding.kind { ScopeBindingKind.Function => { return <Optional.None /> } _ => {} }
+                return <Optional.Some v=binding />
+            }
+            entry = self.nextNamed[entry - 1U64]
+        }
+        return <Optional.None />
+    }
+}
+
+impl ModuleScopeBindings {
+    inout fn rememberModule(moduleId: U64) {
+        if !self.states.contains(key: moduleId) {
+            self.states[moduleId] = 0U64
+            self.modules.append(moduleId)
+        }
+    }
+
+    fn sameOriginal(left: ScopeBinding, right: ScopeBinding) -> Bool {
+        if left.kind != right.kind || left.ownerModule != right.ownerModule || left.ownerNameId != right.ownerNameId { return false }
+        match left.kind {
+            ScopeBindingKind.Function => { return true }
+            ScopeBindingKind.Extension => { return true }
+            ScopeBindingKind.Namespace => { return true }
+            _ => { return left.declarationOffset == right.declarationOffset }
+        }
+    }
+
+    inout fn merge(binding: ScopeBinding) -> Result[(), ScopeBindingFailure] {
+        mut val entry = self.nameHeads.getOr(key: binding.nameId, fallback: 0U64)
+        while entry != 0U64 {
+            val previous = self.entries[entry - 1U64]
+            if previous.moduleId == binding.moduleId {
+                if self.sameOriginal(left: previous, right: binding) {
+                    if binding.isPublic && !previous.isPublic {
+                        self.entries[entry - 1U64] = <ScopeBinding moduleId=previous.moduleId nameId=previous.nameId kind=previous.kind ownerModule=previous.ownerModule ownerNameId=previous.ownerNameId declarationOffset=previous.declarationOffset origin=previous.origin isPublic=true />
+                    }
+                    return <Result.Ok value=() />
+                }
+                if previous.kind != <ScopeBindingKind.Function /> || binding.kind != <ScopeBindingKind.Function /> {
+                    return <Result.Err error=<ScopeBindingFailure.Collision firstOffset=previous.origin secondOffset=binding.origin /> />
+                }
+            }
+            entry = self.nextNamed[entry - 1U64]
+        }
+        self.nextNamed.append(self.nameHeads.getOr(key: binding.nameId, fallback: 0U64))
+        self.nameHeads[binding.nameId] = self.entries.count() + 1U64
+        self.entries.append(binding)
+        return <Result.Ok value=() />
+    }
+
+    inout fn finishModule(moduleId: U64, offset: U64) -> Result[(), ScopeBindingFailure] {
+        val state = self.states.getOr(key: moduleId, fallback: 0U64)
+        if state == 2U64 { return <Result.Ok value=() /> }
+        if state == 1U64 { return <Result.Err error=<ScopeBindingFailure.ImportCycle offset=offset /> /> }
+        self.states[moduleId] = 1U64
+        mut val importIndex = self.importHeads.getOr(key: moduleId, fallback: 0U64)
+        while importIndex != 0U64 {
+            val origin = self.imports[importIndex - 1U64]
+            try self.finishModule(moduleId: origin.targetModule, offset: origin.origin)
+            if origin.isNamespace {
+                // Namespace identity is its target module, independent of the
+                // local alias or which barrel made that namespace public.
+                try self.merge(binding: <ScopeBinding moduleId=moduleId nameId=origin.nameId kind=<ScopeBindingKind.Namespace /> ownerModule=origin.targetModule ownerNameId=0U64 declarationOffset=0U64 origin=origin.origin isPublic=origin.isPublic />)
+            } else {
+                mut val found = false
+                mut val entry = self.nameHeads.getOr(key: origin.targetNameId, fallback: 0U64)
+                while entry != 0U64 {
+                    val binding = self.entries[entry - 1U64]
+                    // Save before appending, including when target/local name
+                    // spellings are identical and share this name chain.
+                    val next = self.nextNamed[entry - 1U64]
+                    if binding.moduleId == origin.targetModule && binding.isPublic {
+                        found = true
+                        try self.merge(binding: <ScopeBinding moduleId=moduleId nameId=origin.nameId kind=binding.kind ownerModule=binding.ownerModule ownerNameId=binding.ownerNameId declarationOffset=binding.declarationOffset origin=origin.origin isPublic=origin.isPublic />)
+                    }
+                    entry = next
+                }
+                if !found { return <Result.Err error=<ScopeBindingFailure.MissingImport offset=origin.origin /> /> }
+            }
+            importIndex = self.nextImport[importIndex - 1U64]
+        }
+        self.states[moduleId] = 2U64
+        return <Result.Ok value=() />
+    }
+}

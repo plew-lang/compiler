@@ -321,7 +321,6 @@ pub impl Comp {
         try self.checkLangItemRedef()
         try self.checkBlanketHeadless()
         try self.checkNewtypeCycles()
-        try self.checkDupTypeNames()
         try self.checkDupParamLabels(sourceFuncLimit: sourceFuncLimit)
         mut val si: U64 = 0
         while si < self.arena.structCount() {
@@ -429,44 +428,6 @@ pub impl Comp {
                 }
             }
             ei += 1U64
-        }
-        return <Result.Ok value=() />
-    }
-
-    inout fn checkDupTypeNames() -> Result[(), CompileDiagnostic] {
-        mut val names: Array[U64] = []
-        mut val offs: Array[U64] = []
-        mut val mods: Array[U64] = []
-        mut val si: U64 = 0
-        while si < self.arena.structCount() {
-            val sd: StructDef = self.arena.structAt(index: si)
-            if self.offsetIsLoaded(offset: sd.defOffset) {
-                names.append(sd.nameId)
-                offs.append(sd.defOffset)
-                mods.append(self.moduleOf(offset: sd.defOffset))
-            }
-            si += 1
-        }
-        mut val ei: U64 = 0
-        while ei < self.arena.enumCount() {
-            val ed: EnumDef = self.arena.enumAt(index: ei)
-            if self.offsetIsLoaded(offset: ed.defOffset) {
-                names.append(intern(c: inout self, start: ed.nameStart, len: ed.nameLen))
-                offs.append(ed.defOffset)
-                mods.append(self.moduleOf(offset: ed.defOffset))
-            }
-            ei += 1
-        }
-        mut val i: U64 = 0
-        while i < names.count() {
-            mut val j: U64 = i + 1U64
-            while j < names.count() {
-                if mods[i] == mods[j] && names[i] == names[j] {
-                    return <Result.Err error=self.diagnosticAt(offset: offs[j], msg: "duplicate type name (a struct/enum with this name is already declared in this module)") />
-                }
-                j += 1
-            }
-            i += 1
         }
         return <Result.Ok value=() />
     }

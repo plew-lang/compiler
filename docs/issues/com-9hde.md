@@ -347,3 +347,82 @@ source order and tagged impl data; it does not itself admit any module binding.
 Next: consume these declaration roots in common module binding admission and
 connect the neutral source-application consumer. The exact compiler Syntax pin,
 package-wide gates, collision rejection and com-9hde completion remain open.
+
+### Shared Module Binding Admission (in progress)
+
+Source-boundary RED now covers unused trait/extension (including empty),
+type/function, function/global and type/trait declarations, imported type versus
+local trait and namespace versus global. The old candidate accepts these
+invalid programs. Different imported kinds and conflicting re-exports already
+reject but lack the new shared Source-classified admission; distinguish those
+classification/path controls from new acceptance RED. Valid overloads, separate
+lexical/member scopes, two paths to one declaration, imported overload unions
+and extension fragments are preserved controls. The first SeparateScopes input
+incorrectly used a normally completing value block without give; corrected as
+a never-green test, not counted as product RED.
+
+Implement a source declaration/use graph independent of Comp/receiver/type
+checking: preserve original identity through aliases/re-exports, validate all
+module binding groups before lowering and retain an admitted read-only result.
+Function-set admission remains the existing callable authority; it is not
+replaced by this kind/identity merge. Remove the old struct/enum-only and
+import/import-only collision decisions after the common authority is connected.
+The temporary Syntax path override is WIP-only and must never be committed;
+restore an exact released pin before increment closure.
+
+### Integration Review and Publication Decision Stop
+
+The first common-admission candidate rejects the seven newly accepted-invalid
+source scenarios; the existing import/re-export rejection reasons are also
+routed through the shared diagnostic in the initial CLI controls. Standard
+builds `20261107T123207-build-c059bb` and
+`20261107T123815-build-bcf801` passed with the temporary local Syntax override.
+The latter uses a distinct admitted reader type; neither build proves the
+current uncommitted follow-up source or a fixed point/performance gate.
+
+Neutral integration review (`shared_module_binding_integration_review`) found:
+(1) downstream trait-kind reselection through same-named extension applicability;
+(2) extension owner module discarded before query; (3) legacy AST classifiers
+not converged; (4) builder registration failure not latched before finish;
+(5) first collision location discarded by the diagnostic adapter. These are
+required, not optional. The pending source-selection/mapping checks and
+private/public overload, namespace/alias, extern, packet/no-fallback and
+interpolation controls remain open. Item4 has an executed unit RED/GREEN in the
+saved evidence; item5 and source-selection closure are not claimed fixed.
+
+A concrete cross-module alias probe could not yet test findings1/2: it is
+rejected at extension-name import/publication, before source selection. Do not
+call that rejection a source-owner RED. This recovers the existing unresolved
+[met-bejv](met-bejv.md) publication/identity premise: spec15 requires an explicit
+binding for #Ext and mentions published extensions, but does not spell out how
+an extension declaration is made public; the grammar has no pub extension.
+Inferring declaration publication from pub impl was a provisional WIP
+assumption, not an adopted rule, and has been removed. The current collector
+keeps unmodified extension declarations private rather than inventing that rule.
+
+Stop for user surface judgment: recommended explicit `pub extension Name`,
+module-private unmodified declarations, and pub impl controlling members only.
+Alternatives are publication inferred from members or always-public extension
+names. The decision belongs with met-bejv; confirm its implementation owner and
+real com-9hde prerequisite before adding the public syntax/consumer repair.
+Do not weaken import existence checking merely to make the owner probe run.
+
+The local Syntax override has been restored to exact dev31/ae70 before WIP
+commit. Current WIP source imports new Syntax APIs from revision3e328b2 and is
+therefore not buildable with that old exact pin. Resume locally by reapplying
+`{ path = "../syntax" }` only while finishing the paired consumer; release/pin
+uptake and gates remain required before completion. No unsupported source is
+promoted to main/seed/adopted carrier. WIP candidates
+`bin/plewc-module-bindings-first` and `bin/plewc-module-bindings-sealed-first`
+are evidence from their saved build inputs, not the latest source or accepted
+publication policy. The tracked bin/plewc remains a generated WIP artifact.
+
+[WIP evidence and review disposition](../../../evidence/rejection-domains/diagnostic-domain-implementation/module-binding-admission-wip.json)
+preserves builds, focused acceptance observations, exact API RED/GREEN,
+source-owner probe text and the required review findings/limits. The baseline
+acceptance runners omitted compiler/src and fixture hash maps; tracked source
+was76ea32e6 without in-flight edits, but this is not formal input/gate evidence.
+The publication-blocked owner probes are scratch diagnostics, not normative test
+fixtures. R4 final review checks declaration/import construction failures and
+subsequent finish/declaration/import calls all retain the initial Collision and
+both offsets. Other review requirements and the surface decision remain open.

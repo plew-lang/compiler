@@ -1,0 +1,130 @@
+// Shared semantic selection; the two syntax adapters only decode children.
+impl Comp {
+    inout fn bindValueViewSource(names: Array[Span]) -> Result[BoundValueViewHead, CompileDiagnostic] {
+        if names.count() == 0U64 { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "missing view source path", failureDomain: <FailureDomain.Input />) /> }
+        val head = try self.typePathHead(names: names)
+        val name = names[head]
+        mut val moduleId = self.moduleOf(offset: name.start)
+        mut val nameId = intern(c: inout self, start: name.start, len: name.end - name.start)
+        val qualified = self.modules.qualifiedUseIndex(offset: name.start)
+        if qualified < self.modules.qualifiedUseCount() {
+            val origin = self.modules.qualifiedUseAt(index: qualified)
+            moduleId = origin.targetModule
+            nameId = intern(c: inout self, start: origin.sourceStart, len: origin.sourceLength)
+        }
+        val bindings = match self.moduleScopeBindings {
+            Optional.Some(v: val admitted) => admitted
+            Optional.None => { return <Result.Err error=self.diagnosticAt(offset: name.start, msg: "view source lookup before module binding admission", failureDomain: <FailureDomain.Internal />) /> }
+        }
+        match bindings.uniqueBinding(moduleId: moduleId, nameId: nameId) {
+            Optional.Some(v: val binding) => {
+                if qualified < self.modules.qualifiedUseCount() && !binding.isPublic {
+                    return <Result.Err error=self.diagnosticAt(offset: name.start, msg: "name is not public in the specified namespace", failureDomain: <FailureDomain.Source />) />
+                }
+                mut val traitOwner = 0U64
+                match binding.kind {
+                    ScopeBindingKind.Trait => { traitOwner = binding.declarationOffset }
+                    ScopeBindingKind.Extension => {}
+                    _ => { return <Result.Err error=self.diagnosticAt(offset: name.start, msg: "view source must name a trait or extension (spec/09)", failureDomain: <FailureDomain.Source />) /> }
+                }
+                val source = <ResolvedViewSource writtenStart=name.start writtenLen=name.end - name.start lexicalSurfaceModule=self.moduleOf(offset: name.start) surfaceId=binding.ownerNameId traitInstance=<TraitInstanceKey owner=traitOwner positionalArgs=[] /> />
+                return <Result.Ok value=<BoundValueViewHead index=head source=source /> />
+            }
+            Optional.None => { return <Result.Err error=self.diagnosticAt(offset: name.start, msg: "unknown view source (spec/09)", failureDomain: <FailureDomain.Source />) /> }
+        }
+    }
+
+    fn valueViewNeedsArguments(source: ResolvedViewSource) -> Bool {
+        if source.traitInstance.owner == 0U64 { return false }
+        val index = self.decls.traitOwnerIndex(offset: source.traitInstance.owner)
+        return index < self.decls.traitOwnerCount() && self.decls.traitOwnerAt(index: index).arity != 0U64
+    }
+
+    inout fn lowerBoundValueView(recv: U64, source: ResolvedViewSource, names: Array[Span], head: U64, strip: Bool) -> U64 {
+        mut val result = self.pushExpr(e: <Expr.ExtView recv=recv source=source strip=strip />)
+        self.decls.registerPlaceSource(exprId: result, source: self.decls.placeSource(exprId: recv), expressionCount: self.arena.exprs.count())
+        mut val index = head + 1U64
+        while index < names.count() {
+            val name = names[index]
+            result = self.pushExpr(e: <Expr.Field base=result nameStart=name.start nameLen=name.end - name.start />)
+            index += 1U64
+        }
+        return result
+    }
+
+    inout fn lowerSyntaxSourceSelection(expr: SyntaxExpr) -> Result[U64, CompileDiagnostic] {
+        mut val names: Array[Span] = []
+        mut val index = 0U64
+        while index < expr.typePath.count { names.append(syntaxExprTypeSegment(file: self.syntax, expr: expr, index: index).name) index += 1U64 }
+        val head = try self.bindValueViewSource(names: names)
+        val typeApplication = self.valueViewNeedsArguments(source: head.source)
+        mut val arguments: Array[U64] = []
+        mut val labels = false
+        mut val key: Optional[ExprId] = <Optional.None />
+        if expr.application.raw != 0U64 {
+            val application = syntaxSourceApplication(file: self.syntax, id: expr.application)
+            if typeApplication && head.index + 1U64 == names.count() {
+                match application.types {
+                    SyntaxSourceTypes.Parsed(val args, labels: _) => {
+                        index = 0U64
+                        while index < args.count {
+                            arguments.append((try self.lowerSyntaxType(id: syntaxSourceApplicationTypeArg(file: self.syntax, application: application, index: index).unwrap())).ref)
+                            val label = syntaxSourceApplicationTypeLabel(file: self.syntax, application: application, index: index).unwrap()
+                            if label.end > label.start { labels = true }
+                            index += 1U64
+                        }
+                    }
+                    SyntaxSourceTypes.Invalid(val offset, val message) => { return <Result.Err error=self.diagnosticAt(offset: offset, msg: message, failureDomain: <FailureDomain.Source />) /> }
+                }
+            } else {
+                match application.index {
+                    SyntaxSourceIndex.Parsed(val expression) => { key = <Optional.Some v=expression /> }
+                    SyntaxSourceIndex.Invalid(val offset, val message) => { return <Result.Err error=self.diagnosticAt(offset: offset, msg: message, failureDomain: <FailureDomain.Source />) /> }
+                }
+            }
+        }
+        val source = try self.completeTypeViewSource(source: head.source, arguments: arguments, hasLabels: labels)
+        val receiver = try self.lowerSyntaxExpr(id: expr.child0)
+        val viewed = self.lowerBoundValueView(recv: receiver, source: source, names: names, head: head.index, strip: expr.flag0)
+        match key {
+            Optional.Some(v: val expression) => { return self.lowerIndexRead(recv: viewed, key: (try self.lowerSyntaxExpr(id: expression))) }
+            Optional.None => { return <Result.Ok value=viewed /> }
+        }
+    }
+
+    inout fn lowerValueSourceSelection(recv: ExprAst, path: Array[NameSegmentAst], application: Optional[SourceApplicationAst], strip: Bool) -> Result[U64, CompileDiagnostic] {
+        mut val names: Array[Span] = []
+        for segment in path { names.append(segment.nameSpan) }
+        val head = try self.bindValueViewSource(names: names)
+        val typeApplication = self.valueViewNeedsArguments(source: head.source)
+        mut val arguments: Array[U64] = []
+        mut val labels = false
+        mut val key: Optional[ExprAst] = <Optional.None />
+        match application {
+            Optional.Some(v: val packet) => {
+                if typeApplication && head.index + 1U64 == names.count() {
+                    match packet.types {
+                        SourceTypesAst.Parsed(val args, labels: val written, labelSpans: _) => {
+                            for argument in args { arguments.append((try self.lowerType(t: argument)).ref) }
+                            for label in written { if label != "" { labels = true } }
+                        }
+                        SourceTypesAst.Invalid(val offset, val message) => { return <Result.Err error=self.diagnosticAt(offset: offset, msg: message, failureDomain: <FailureDomain.Source />) /> }
+                    }
+                } else {
+                    match packet.index {
+                        SourceIndexAst.Parsed(val expression) => { key = <Optional.Some v=expression /> }
+                        SourceIndexAst.Invalid(val offset, val message) => { return <Result.Err error=self.diagnosticAt(offset: offset, msg: message, failureDomain: <FailureDomain.Source />) /> }
+                    }
+                }
+            }
+            Optional.None => {}
+        }
+        val source = try self.completeTypeViewSource(source: head.source, arguments: arguments, hasLabels: labels)
+        val receiver = try self.lowerExpr(e: recv)
+        val viewed = self.lowerBoundValueView(recv: receiver, source: source, names: names, head: head.index, strip: strip)
+        match key {
+            Optional.Some(v: val expression) => { return self.lowerIndexRead(recv: viewed, key: (try self.lowerExpr(e: expression))) }
+            Optional.None => { return <Result.Ok value=viewed /> }
+        }
+    }
+}

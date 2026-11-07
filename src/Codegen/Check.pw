@@ -24,3 +24,5 @@ part ./Check/Obligations
 part ./Check/CallConstraints
 
 part ./Check/InterfaceEvidence
+
+part ./Check/ModuleBindings

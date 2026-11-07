@@ -1,0 +1,3 @@
+fn choose(value: I64) {}
+fn choose(value: Bool) {}
+fn main() { choose(value: 1I64) choose(value: true) }

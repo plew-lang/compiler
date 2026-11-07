@@ -1,0 +1,30 @@
+use ../../../src/ModuleScopeBindings only { ModuleScopeBindings, ScopeBindingKind, ScopeBindingFailure }
+use @Std/Io only { print }
+
+fn main() {
+    mut val index = <ModuleScopeBindings />
+    index.addDeclaration(moduleId: 1U64, nameId: 10U64, kind: <ScopeBindingKind.Type />, offset: 11U64, isPublic: true).unwrap()
+    index.addDeclaration(moduleId: 2U64, nameId: 10U64, kind: <ScopeBindingKind.Trait />, offset: 21U64, isPublic: true).unwrap()
+    index.addImport(moduleId: 3U64, nameId: 30U64, targetModule: 1U64, targetNameId: 10U64, isNamespace: false, isPublic: true, offset: 31U64).unwrap()
+    index.addImport(moduleId: 0U64, nameId: 40U64, targetModule: 1U64, targetNameId: 10U64, isNamespace: false, isPublic: false, offset: 1U64).unwrap()
+    index.addImport(moduleId: 0U64, nameId: 40U64, targetModule: 3U64, targetNameId: 30U64, isNamespace: false, isPublic: false, offset: 2U64).unwrap()
+    index.addDeclaration(moduleId: 1U64, nameId: 20U64, kind: <ScopeBindingKind.Function />, offset: 12U64, isPublic: false).unwrap()
+    index.addDeclaration(moduleId: 1U64, nameId: 20U64, kind: <ScopeBindingKind.Function />, offset: 13U64, isPublic: true).unwrap()
+    index.addDeclaration(moduleId: 2U64, nameId: 20U64, kind: <ScopeBindingKind.Function />, offset: 22U64, isPublic: true).unwrap()
+    index.addImport(moduleId: 0U64, nameId: 50U64, targetModule: 1U64, targetNameId: 20U64, isNamespace: false, isPublic: false, offset: 3U64).unwrap()
+    index.addImport(moduleId: 0U64, nameId: 50U64, targetModule: 2U64, targetNameId: 20U64, isNamespace: false, isPublic: false, offset: 4U64).unwrap()
+    val admitted = index.finish().unwrap()
+    val bound = admitted.uniqueBinding(moduleId: 0U64, nameId: 40U64).unwrap()
+    if bound.ownerModule != 1U64 || bound.ownerNameId != 10U64 || bound.declarationOffset != 11U64 || bound.kind != <ScopeBindingKind.Type /> || admitted.kind(moduleId: 0U64, nameId: 50U64).unwrap() != <ScopeBindingKind.Function /> || admitted.uniqueBinding(moduleId: 0U64, nameId: 50U64).isSome() { print("0") return }
+    match index.addDeclaration(moduleId: 0U64, nameId: 60U64, kind: <ScopeBindingKind.Value />, offset: 5U64, isPublic: false) { Result.Err(error: val failure) => { match failure { ScopeBindingFailure.Closed(val offset) => { if offset != 5U64 { print("0") return } } _ => { print("0") return } } } _ => { print("0") return } }
+    mut val conflict = <ModuleScopeBindings />
+    conflict.addDeclaration(moduleId: 0U64, nameId: 10U64, kind: <ScopeBindingKind.Function />, offset: 1U64, isPublic: false).unwrap()
+    match conflict.addDeclaration(moduleId: 0U64, nameId: 10U64, kind: <ScopeBindingKind.Value />, offset: 2U64, isPublic: false) { Result.Err(error: val failure) => { match failure { ScopeBindingFailure.Collision(firstOffset: val first, secondOffset: val second) => { if first != 1U64 || second != 2U64 { print("0") return } } _ => { print("0") return } } } _ => { print("0") return } }
+    mut val imported = <ModuleScopeBindings />
+    imported.addDeclaration(moduleId: 1U64, nameId: 10U64, kind: <ScopeBindingKind.Type />, offset: 11U64, isPublic: true).unwrap()
+    imported.addDeclaration(moduleId: 2U64, nameId: 10U64, kind: <ScopeBindingKind.Trait />, offset: 21U64, isPublic: true).unwrap()
+    imported.addImport(moduleId: 0U64, nameId: 40U64, targetModule: 1U64, targetNameId: 10U64, isNamespace: false, isPublic: false, offset: 1U64).unwrap()
+    imported.addImport(moduleId: 0U64, nameId: 40U64, targetModule: 2U64, targetNameId: 10U64, isNamespace: false, isPublic: false, offset: 2U64).unwrap()
+    match imported.finish() { Result.Err(error: val failure) => { match failure { ScopeBindingFailure.Collision(firstOffset: _, secondOffset: _) => {} _ => { print("0") return } } } _ => { print("0") return } }
+    print("1")
+}

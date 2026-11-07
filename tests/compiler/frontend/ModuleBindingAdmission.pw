@@ -1,0 +1,18 @@
+use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontend }
+use ../../../src/SourceAccess only { SourceAccess }
+use ../../../src/Diag only { emitDiagnostic }
+use @Std/Io only { print }
+use @Std/Process only { argAt }
+
+fn main() {
+    val scenario = argAt(1I64)
+    val valid = scenario == "ValidOverloads" || scenario == "SeparateScopes" || scenario == "SameIdentityPaths" || scenario == "ImportedOverloads" || scenario == "ExtensionFragments"
+    mut val compiler = <Comp />
+    match analyzeFrontend(c: inout compiler, input: <FrontendInput.File path="tests/compiler/frontend/fixtures/ModuleBindings/" + scenario + ".pw" />, sources: <SourceAccess stdRoot="std/".bytes() />) {
+        Result.Ok(value: _) => { print(if valid { give "1" } else { give "0" }) }
+        Result.Err(error: val diagnostic) => {
+            if !valid && diagnostic.isSourceRejection() && diagnostic.message == "duplicate module binding name (spec/15): only valid free-function overloads may share a name" { print("1") }
+            else { emitDiagnostic(diagnostic: diagnostic) print("0") }
+        }
+    }
+}

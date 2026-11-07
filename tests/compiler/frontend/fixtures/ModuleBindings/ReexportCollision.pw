@@ -1,0 +1,2 @@
+use ./ConflictingBarrel as Barrel
+fn main() {}

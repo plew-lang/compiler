@@ -1,0 +1,4 @@
+trait Shared {}
+struct S {}
+extension Shared { pub impl S { fn value() -> I64 { return 1I64 } } }
+fn main() {}

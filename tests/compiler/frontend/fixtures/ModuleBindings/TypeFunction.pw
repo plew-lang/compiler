@@ -1,0 +1,3 @@
+struct duplicate {}
+fn duplicate() {}
+fn main() {}

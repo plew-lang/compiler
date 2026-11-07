@@ -1,0 +1,81 @@
+// Declaration/use construction has one conflict authority, before any lowering
+// can choose a name's kind from its use. This adapter supplies syntax facts;
+// ModuleScopeBindings owns merge, identity deduplication and public forwarding.
+impl Comp {
+    inout fn moduleBindingResult(result: Result[(), ScopeBindingFailure]) -> Result[(), CompileDiagnostic] {
+        match result {
+            Result.Ok(value: _) => { return <Result.Ok value=() /> }
+            Result.Err(error: val failure) => {
+                match failure {
+                    ScopeBindingFailure.Collision(firstOffset: _, secondOffset: val offset) => { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "duplicate module binding name (spec/15): only valid free-function overloads may share a name", failureDomain: <FailureDomain.Source />) /> }
+                    ScopeBindingFailure.MissingImport(val offset) => { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "imported name is not exported by the specified module (declare it `pub` in that module)", failureDomain: <FailureDomain.Source />) /> }
+                    ScopeBindingFailure.ImportCycle(val offset) => { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "module use graph contains a cycle (spec/15)", failureDomain: <FailureDomain.Source />) /> }
+                    ScopeBindingFailure.Closed(val offset) => { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "module binding registration after admission", failureDomain: <FailureDomain.Internal />) /> }
+                }
+            }
+        }
+    }
+
+    inout fn registerSyntaxModuleName(bindings: inout ModuleScopeBindings, name: Span, kind: ScopeBindingKind, isPublic: Bool) -> Result[(), CompileDiagnostic] {
+        return self.moduleBindingResult(result: bindings.addDeclaration(moduleId: self.moduleOf(offset: name.start), nameId: intern(c: inout self, start: name.start, len: name.end - name.start), kind: kind, offset: name.start, isPublic: isPublic))
+    }
+
+    inout fn registerSyntaxModuleItem(bindings: inout ModuleScopeBindings, item: TopItemId, isPublic: Bool = false) -> Result[(), CompileDiagnostic] {
+        val payload = syntaxTopItemPayload(file: self.syntax, item: item)
+        match syntaxTopItemKind(file: self.syntax, item: item) {
+            SyntaxTopItemKind.Published => { try self.registerSyntaxModuleItem(bindings: inout bindings, item: <TopItemId raw=payload />, isPublic: true) }
+            SyntaxTopItemKind.Decl => {
+                val declaration = syntaxDecl(file: self.syntax, id: <DeclId raw=payload />)
+                val kind = match declaration.kind { DeclKind.Func => <ScopeBindingKind.Function /> _ => <ScopeBindingKind.Type /> }
+                try self.registerSyntaxModuleName(bindings: inout bindings, name: declaration.name, kind: kind, isPublic: isPublic)
+            }
+            SyntaxTopItemKind.Trait => { try self.registerSyntaxModuleName(bindings: inout bindings, name: syntaxTrait(file: self.syntax, id: <TraitId raw=payload />).name, kind: <ScopeBindingKind.Trait />, isPublic: isPublic) }
+            SyntaxTopItemKind.NewType => { try self.registerSyntaxModuleName(bindings: inout bindings, name: syntaxNewtype(file: self.syntax, id: <NewtypeId raw=payload />).name, kind: <ScopeBindingKind.Type />, isPublic: isPublic) }
+            SyntaxTopItemKind.GlobalVal => { try self.registerSyntaxModuleName(bindings: inout bindings, name: syntaxStmt(file: self.syntax, id: <StmtId raw=payload />).name, kind: <ScopeBindingKind.Value />, isPublic: isPublic) }
+            SyntaxTopItemKind.Extension => { try self.registerSyntaxModuleName(bindings: inout bindings, name: syntaxExtension(file: self.syntax, id: <ExtensionId raw=payload />).name, kind: <ScopeBindingKind.Extension />, isPublic: false) }
+            // Extension-name publication must come from its declaration's
+            // adopted visibility rule, never be inferred from a pub impl.
+            SyntaxTopItemKind.Impl => {}
+            SyntaxTopItemKind.Extern => {
+                val ext = syntaxExtern(file: self.syntax, id: <ExternId raw=payload />)
+                mut val index = 0U64
+                while index < syntaxExternFnCount(file: self.syntax, ext: ext) {
+                    val signature = syntaxSig(file: self.syntax, id: syntaxExternFn(file: self.syntax, ext: ext, index: index))
+                    try self.registerSyntaxModuleName(bindings: inout bindings, name: signature.name, kind: <ScopeBindingKind.Function />, isPublic: isPublic)
+                    index += 1U64
+                }
+                index = 0U64
+                while index < syntaxExternStructCount(file: self.syntax, ext: ext) {
+                    try self.registerSyntaxModuleName(bindings: inout bindings, name: syntaxExternStructNameSpan(file: self.syntax, ext: ext, index: index), kind: <ScopeBindingKind.Type />, isPublic: isPublic)
+                    index += 1U64
+                }
+            }
+            SyntaxTopItemKind.Import => {}
+            SyntaxTopItemKind.Directive => {}
+        }
+        return <Result.Ok value=() />
+    }
+
+    inout fn registerModuleUse(bindings: inout ModuleScopeBindings, origin: ImportOrigin, isPublic: Bool) -> Result[(), CompileDiagnostic] {
+        return self.moduleBindingResult(result: bindings.addImport(moduleId: origin.localModule, nameId: intern(c: inout self, start: origin.localStart, len: origin.localLength), targetModule: origin.targetModule, targetNameId: intern(c: inout self, start: origin.sourceStart, len: origin.sourceLength), isNamespace: origin.isNamespace, isPublic: isPublic, offset: origin.localStart))
+    }
+
+    inout fn admitSyntaxModuleBindings(roots: Array[SyntaxSlice]) -> Result[(), CompileDiagnostic] {
+        mut val bindings = <ModuleScopeBindings />
+        for group in roots {
+            mut val index = 0U64
+            while index < group.count {
+                try self.registerSyntaxModuleItem(bindings: inout bindings, item: syntaxFileTopLevel(file: self.syntax, index: group.start + index))
+                index += 1U64
+            }
+        }
+        mut val index = 0U64
+        while index < self.modules.importOriginCount() { try self.registerModuleUse(bindings: inout bindings, origin: self.modules.importOriginAt(index: index), isPublic: false) index += 1U64 }
+        index = 0U64
+        while index < self.modules.reExportOriginCount() { try self.registerModuleUse(bindings: inout bindings, origin: self.modules.reExportOriginAt(index: index), isPublic: true) index += 1U64 }
+        match bindings.finish() {
+            Result.Ok(value: val admitted) => { self.moduleScopeBindings = <Optional.Some v=admitted /> return <Result.Ok value=() /> }
+            Result.Err(error: val failure) => { return self.moduleBindingResult(result: <Result.Err error=failure />) }
+        }
+    }
+}

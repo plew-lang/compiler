@@ -1,0 +1,4 @@
+struct S {}
+extension Extra { pub impl S { fn first() {} } }
+extension Extra { pub impl S { fn second() {} } }
+fn main() {}

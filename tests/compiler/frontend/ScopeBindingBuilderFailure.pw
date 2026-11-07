@@ -1,0 +1,43 @@
+use ../../../src/ModuleScopeBindings only { ModuleScopeBindings, ScopeBindingKind, ScopeBindingFailure }
+use @Std/Io only { print }
+
+fn collision[T](result: Result[T, ScopeBindingFailure], first: U64, second: U64) -> Bool {
+    match result {
+        Result.Err(error: val failure) => {
+            match failure {
+                ScopeBindingFailure.Collision(firstOffset: val a, secondOffset: val b) => { return a == first && b == second }
+                _ => {}
+            }
+        }
+        _ => {}
+    }
+    return false
+}
+
+fn main() {
+    mut val bindings = <ModuleScopeBindings />
+    bindings.addDeclaration(moduleId: 0U64, nameId: 1U64, kind: <ScopeBindingKind.Type />, offset: 11U64, isPublic: false).unwrap()
+    match bindings.addDeclaration(moduleId: 0U64, nameId: 1U64, kind: <ScopeBindingKind.Value />, offset: 12U64, isPublic: false) {
+        Result.Err(error: _) => {}
+        _ => { print("0") return }
+    }
+    if !collision(result: bindings.finish(), first: 11U64, second: 12U64) || !collision(result: bindings.addDeclaration(moduleId: 0U64, nameId: 2U64, kind: <ScopeBindingKind.Value />, offset: 13U64, isPublic: false), first: 11U64, second: 12U64) || !collision(result: bindings.addImport(moduleId: 0U64, nameId: 3U64, targetModule: 1U64, targetNameId: 1U64, isNamespace: false, isPublic: false, offset: 14U64), first: 11U64, second: 12U64) { print("0") return }
+    mut val imported = <ModuleScopeBindings />
+    imported.addDeclaration(moduleId: 1U64, nameId: 1U64, kind: <ScopeBindingKind.Type />, offset: 21U64, isPublic: true).unwrap()
+    imported.addDeclaration(moduleId: 2U64, nameId: 1U64, kind: <ScopeBindingKind.Trait />, offset: 22U64, isPublic: true).unwrap()
+    imported.addImport(moduleId: 0U64, nameId: 2U64, targetModule: 1U64, targetNameId: 1U64, isNamespace: false, isPublic: false, offset: 23U64).unwrap()
+    imported.addImport(moduleId: 0U64, nameId: 2U64, targetModule: 2U64, targetNameId: 1U64, isNamespace: false, isPublic: false, offset: 24U64).unwrap()
+    mut val first = 0U64
+    mut val second = 0U64
+    match imported.finish() {
+        Result.Err(error: val failure) => {
+            match failure {
+                ScopeBindingFailure.Collision(firstOffset: val a, secondOffset: val b) => { first = a second = b }
+                _ => { print("0") return }
+            }
+        }
+        _ => { print("0") return }
+    }
+    if !((first == 23U64 && second == 24U64) || (first == 24U64 && second == 23U64)) || !collision(result: imported.finish(), first: first, second: second) || !collision(result: imported.addDeclaration(moduleId: 0U64, nameId: 5U64, kind: <ScopeBindingKind.Value />, offset: 25U64, isPublic: false), first: first, second: second) || !collision(result: imported.addImport(moduleId: 0U64, nameId: 6U64, targetModule: 3U64, targetNameId: 7U64, isNamespace: false, isPublic: false, offset: 26U64), first: first, second: second) { print("0") return }
+    print("1")
+}

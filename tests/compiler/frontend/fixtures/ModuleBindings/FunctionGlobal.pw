@@ -1,0 +1,3 @@
+fn duplicate() {}
+val duplicate = 1I64
+fn main() {}

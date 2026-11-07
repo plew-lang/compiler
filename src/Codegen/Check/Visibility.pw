@@ -36,24 +36,6 @@ pub impl Comp {
         return <ModuleBinding.Declaration moduleId=moduleId nameStart=nameStart nameLen=nameLen />
     }
 
-    inout fn sameModuleBinding(left: ModuleBinding, right: ModuleBinding) -> Bool {
-        match left {
-            ModuleBinding.Namespace(val moduleId) => {
-                match right { ModuleBinding.Namespace(moduleId: val other) => { return moduleId == other } _ => {} }
-            }
-            ModuleBinding.Declaration(val moduleId, val nameStart, val nameLen) => {
-                match right {
-                    ModuleBinding.Declaration(moduleId: val other, nameStart: val start, nameLen: val len) => {
-                        return moduleId == other && spansEqual(c: inout self, aStart: nameStart, aLen: nameLen, bStart: start, bLen: len)
-                    }
-                    _ => {}
-                }
-            }
-            ModuleBinding.Missing => {}
-        }
-        return false
-    }
-
     inout fn importedDeclIdentityFromSurface(surfaceMod: U64, start: U64, len: U64) -> Bind {
         val ty: Bind = self.typeDeclIdentityFromSurface(surfaceMod: surfaceMod, start: start, len: len)
         if ty.nameLen != 0U64 { return ty }
@@ -113,14 +95,6 @@ pub impl Comp {
         return false
     }
 
-    inout fn importOriginHasOnlyFunctions(origin: ImportOrigin) -> Bool {
-        if origin.isNamespace { return false }
-        if self.typeDeclIdentityFromSurface(surfaceMod: origin.targetModule, start: origin.sourceStart, len: origin.sourceLength).nameLen != 0U64 { return false }
-        mut val candidates: Array[U64] = []
-        self.appendFreeFunctionSurface(moduleId: origin.targetModule, nameId: intern(c: inout self, start: origin.sourceStart, len: origin.sourceLength), publicOnly: true, candidates: inout candidates)
-        return candidates.count() > 0U64
-    }
-
     // Every imported binding must exist on its selected module's public
     // surface. Re-export chains use the same query as qualified call resolution.
     inout fn checkImports() -> Result[(), CompileDiagnostic] {
@@ -143,27 +117,6 @@ pub impl Comp {
                     return <Result.Err error=self.diagnosticAt(offset: origin.localStart, msg: "name is not public in the specified namespace") />
                 }
                 _ => {}
-            }
-            i += 1U64
-        }
-        // Flat imports of free functions combine overload sets. Non-callable
-        // bindings still require a unique source (or an explicit alias).
-        i = 0U64
-        while i < self.modules.importOriginCount() {
-            val a: ImportOrigin = self.modules.importOriginAt(index: i)
-            mut val j: U64 = 0U64
-            while j < i {
-                val b: ImportOrigin = self.modules.importOriginAt(index: j)
-                if a.localModule == b.localModule {
-                    if spansEqual(c: inout self, aStart: a.localStart, aLen: a.localLength, bStart: b.localStart, bLen: b.localLength) {
-                        val left = self.moduleBindingFromOrigin(origin: a)
-                        val right = self.moduleBindingFromOrigin(origin: b)
-                        if !self.sameModuleBinding(left: left, right: right) && !(self.importOriginHasOnlyFunctions(origin: a) && self.importOriginHasOnlyFunctions(origin: b)) {
-                            return <Result.Err error=self.diagnosticAt(offset: a.localStart, msg: "duplicate flat import name from distinct modules; use `as` to preserve the import source (spec/15)") />
-                        }
-                    }
-                }
-                j += 1U64
             }
             i += 1U64
         }

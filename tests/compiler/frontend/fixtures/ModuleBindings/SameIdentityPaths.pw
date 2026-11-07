@@ -1,0 +1,3 @@
+use ./PublicType only { Item }
+use ./Barrel only { Item }
+fn main() {}
