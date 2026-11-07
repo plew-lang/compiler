@@ -9,7 +9,7 @@ use @Std/Process only { argAt }
 fn main() {
     val scenario = argAt(1I64)
     mut val compiler = <Comp />
-    analyzeFrontend(c: inout compiler, input: <FrontendInput.Text text="trait A[K] {{}} trait B[K] {{}} trait P[K] {{ type Item }} struct S {{}} impl S as P[I64] {{ type Item=I64 }} impl S as P[Bool] {{ type Item=Bool }} extension E {{ impl A[I64] as B[I64] {{}} }} extension F {{ impl B[I64] as A[I64] {{}} }} extension P {{ impl A[I64] as B[I64] {{}} }} fn identity[T](value: T) -> T {{ return value }} fn main() {{}}" path="ViewConsumers.pw" />, sources: <SourceAccess />).unwrap()
+    analyzeFrontend(c: inout compiler, input: <FrontendInput.Text text="trait A[K] {{}} trait B[K] {{}} trait P[K] {{ type Item }} struct S {{}} impl S as P[I64] {{ type Item=I64 }} impl S as P[Bool] {{ type Item=Bool }} extension E {{ impl A[I64] as B[I64] {{}} }} extension F {{ impl B[I64] as A[I64] {{}} }} extension P {{ impl A[I64] as B[I64] {{}} }} trait Zero {{}} trait OtherZero {{}} fn identity[T](value: T) -> T {{ return value }} fn main() {{}}" path="ViewConsumers.pw" />, sources: <SourceAccess />).unwrap()
     val integerName = compiler.internBytes(s: "I64")
     val integer = compiler.pushType(t: <TypeRef nameStart=integerName.nameStart nameLen=integerName.nameLen args=[] />)
     val booleanName = compiler.internBytes(s: "Bool")
@@ -23,6 +23,50 @@ fn main() {
     val base = compiler.pushType(t: <TypeRef nameStart=declaration.nameStart nameLen=declaration.nameLen args=[] hasDecl=true declOffset=declaration.defOffset />)
     val expected = compiler.typeRefWithViewSources(ref: base, sources: [expectedSource])
     val actual = compiler.typeRefWithViewSources(ref: base, sources: [actualSource])
+    if scenario == "recordOwner" || scenario == "recordOwnerControl" || scenario == "recordArguments" || scenario == "recordNoArgsOwner" || scenario == "recordExtension" || scenario == "recordExtensionOrderControl" || scenario == "recordBodyKeys" || scenario == "recordFieldControl" {
+        val field = compiler.internBytes(s: "field")
+        val otherField = compiler.internBytes(s: "otherField")
+        val record = compiler.pushType(t: <TypeRef nameStart=structName.nameStart nameLen=structName.nameLen args=[] isRecord=true recordFieldLabels=[field.nameId] recordFieldTerms=[integer] />)
+        val otherRecord = compiler.pushType(t: <TypeRef nameStart=structName.nameStart nameLen=structName.nameLen args=[] isRecord=true recordFieldLabels=[otherField.nameId] recordFieldTerms=[integer] />)
+        val otherName = compiler.internBytes(s: "A")
+        val otherOwner = compiler.decls.traitAt(index: compiler.decls.firstTraitNamed(nameId: otherName.nameId))
+        mut val leftSources = [expectedSource]
+        mut val rightSources = [<ResolvedViewSource surfaceId=otherOwner.nameId traitInstance=<TraitInstanceKey owner=otherOwner.nameStart positionalArgs=[integer] /> />]
+        if scenario == "recordOwnerControl" || scenario == "recordFieldControl" { rightSources = [expectedSource] }
+        if scenario == "recordArguments" { rightSources = [actualSource] }
+        if scenario == "recordNoArgsOwner" {
+            val zeroName = compiler.internBytes(s: "Zero")
+            val otherZeroName = compiler.internBytes(s: "OtherZero")
+            val zero = compiler.decls.traitAt(index: compiler.decls.firstTraitNamed(nameId: zeroName.nameId))
+            val otherZero = compiler.decls.traitAt(index: compiler.decls.firstTraitNamed(nameId: otherZeroName.nameId))
+            leftSources = [<ResolvedViewSource surfaceId=zero.nameId traitInstance=<TraitInstanceKey owner=zero.nameStart positionalArgs=[] /> />]
+            rightSources = [<ResolvedViewSource surfaceId=otherZero.nameId traitInstance=<TraitInstanceKey owner=otherZero.nameStart positionalArgs=[] /> />]
+        }
+        if scenario == "recordExtension" || scenario == "recordExtensionOrderControl" {
+            val firstExtension = <ResolvedViewSource surfaceId=compiler.internBytes(s: "E").nameId />
+            val secondExtension = <ResolvedViewSource surfaceId=compiler.internBytes(s: "F").nameId />
+            leftSources = [firstExtension]
+            rightSources = [secondExtension]
+            if scenario == "recordExtensionOrderControl" {
+                leftSources = [firstExtension, secondExtension]
+                rightSources = [secondExtension, firstExtension, firstExtension]
+            }
+        }
+        val left = compiler.typeRefWithViewSources(ref: record, sources: leftSources)
+        val right = compiler.typeRefWithViewSources(ref: (if scenario == "recordFieldControl" { give otherRecord } else { give record }), sources: rightSources)
+        if scenario == "recordBodyKeys" {
+            val name = compiler.internBytes(s: "identity")
+            val function = compiler.arena.firstFunctionNamed(nameId: name.nameId)
+            val parameters = [compiler.funcBindAt(binds: compiler.arena.functionAt(index: function).typeParams, index: 0U64)]
+            val first = compiler.internBodyInstance(fnIdx: function, environment: <InstanceEnvironment params=parameters args=[left] />)
+            val second = compiler.internBodyInstance(fnIdx: function, environment: <InstanceEnvironment params=parameters args=[right] />)
+            print(first != second)
+            return
+        }
+        val same = compiler.typeRefEq(a: left, b: right)
+        print(if scenario == "recordOwnerControl" || scenario == "recordExtensionOrderControl" { give same } else { give !same })
+        return
+    }
     if scenario == "existentialMirror" || scenario == "existentialControl" || scenario == "existentialArguments" || scenario == "existentialOwner" {
         val item = compiler.internBytes(s: "Item")
         val interface = compiler.pushType(t: <TypeRef nameStart=trait.nameStart nameLen=trait.nameLen args=[integer, integer] argLabels=[0U64, item.nameId] isAny=true hasDecl=true declOffset=trait.nameStart />)

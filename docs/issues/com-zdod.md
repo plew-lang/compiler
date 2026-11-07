@@ -270,3 +270,21 @@ pools. No fake inout access or whole Comp comparison loop is retained. Fresh
 validation and impact review remain mandatory. The earlier no-unresolved
 structural-findings review conclusion is withdrawn for these regressions.
 [Native RED and repair record](../../../evidence/rejection-domains/diagnostic-domain-implementation/semantic-trait-view-normal-regressions.json).
+
+
+## Record-Root Selector Identity
+
+Fresh neutral whole-scope review found that typeTermRefSameHead returned for
+record kind before comparing the record root own selector. This is not the
+deferred problem of a record/projection inside selector arguments or receiver
+mirror category repair: com-zdod must preserve these selector owners itself.
+Executed native controls show P[I64] versus another owner with I64, distinct
+zero-argument traits and extension sources comparing equal; actual body
+instance keys also merge. Four controls preserve same-owner equality, argument
+difference, extension order/duplicate equivalence and record-label inequality.
+The repair moves the existing shared source-head comparison ahead of kind
+early returns, without a separate record comparator. All other canonical
+record/projection category work remains open under com-bvc8.
+[Actual RED and review](../../../evidence/rejection-domains/diagnostic-domain-implementation/semantic-trait-view-record-identity-repair.json).
+Fresh build and GREEN remain pending; prior finite completion conclusions do
+not certify this newly found combination.

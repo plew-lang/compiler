@@ -518,6 +518,11 @@ pub impl Comp {
         if a == b { return true }
         val ta = self.arena.typeTermAt(index: a)
         val tb = self.arena.typeTermAt(index: b)
+        // Selector identity belongs to every type head, including records.
+        // All empty representations match without another pooled read.
+        if ta.viewExtId != 0U64 || ta.viewIds.len != 0U64 || ta.viewSources.len != 0U64 || tb.viewExtId != 0U64 || tb.viewIds.len != 0U64 || tb.viewSources.len != 0U64 {
+            if !(self.arena.typeViewSourceHeadsEqual(a: a, b: b)) { return false }
+        }
         if ta.isRecord || tb.isRecord { return ta.isRecord && tb.isRecord && ta.isSendable == tb.isSendable && ta.isDiverging == tb.isDiverging }
         if ta.hasDecl != tb.hasDecl { return false }
         if ta.hasDecl && tb.hasDecl {
@@ -528,11 +533,6 @@ pub impl Comp {
             return false
         }
         if ta.isAny != tb.isAny || ta.isSendable != tb.isSendable || ta.isDiverging != tb.isDiverging || ta.paramId != tb.paramId { return false }
-        // All three empty representations give a zero source count. Both
-        // empty sets therefore match without re-reading the same term rows.
-        if ta.viewExtId != 0U64 || ta.viewIds.len != 0U64 || ta.viewSources.len != 0U64 || tb.viewExtId != 0U64 || tb.viewIds.len != 0U64 || tb.viewSources.len != 0U64 {
-            if !(self.arena.typeViewSourceHeadsEqual(a: a, b: b)) { return false }
-        }
         if ta.assocTraitId != tb.assocTraitId || (ta.hasAssocTraitDecl && tb.hasAssocTraitDecl && ta.assocTraitDeclOffset != tb.assocTraitDeclOffset) || ta.assocNameId != tb.assocNameId { return false }
         return true
     }
