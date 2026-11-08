@@ -876,5 +876,13 @@ All inputs remain invariant. The normalization controls cover actual-only nested
 and view-containing production plans, missing equations, malformed prerequisite/
 receiver/trait arguments/output, reachable raw cycles versus plan admission,
 symbolic equality, missing output, and recovery/proof identity/stack cleanup.
-These are finite guarantees. Formal/final-candidate gates and whole-task
-obligations still remain; do not call com-amjl or met-si6j closed.
+These are finite guarantees. Formal run `20261108T154849-self-host-0d7495`
+reaches generation3 LLVM/runtime/compiler fixed point with6418 invariant inputs;
+its median is7.029968 seconds (samples7.582913/7.029968/6.976340).
+The measured fixed-point candidate passes the final16/public gates. Independent
+read-only reconciliation accepted formal artifacts, source and final gates.
+A balanced same-source five-run comparison gives before7.066202/after7.054865
+seconds, invariant inputs and identical LLVM across all ten runs. This does not
+replace the formal median or establish difficult repair; continue the required
+transport work while keeping the overall performance condition open.
+Whole-task obligations remain; do not call com-amjl or met-si6j closed.
