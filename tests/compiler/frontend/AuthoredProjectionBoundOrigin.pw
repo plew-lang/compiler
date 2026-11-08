@@ -3,13 +3,32 @@
 use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
 use ../../../src/SourceAccess only { SourceAccess }
 use ../../../src/SourceTypeUses only { SourceTypeUseRole }
-use @Plew/Syntax only { rangeEquals }
+use @Plew/Syntax only { rangeEquals, parseItem, TopItemAst }
+use @Std/Process only { argAt }
 use @Std/Io only { print }
 
 fn main() {
-    val source = "trait Project[Kind] {{ type Item }} fn inspect[T](left:T.Item, right:T.Item) -> T.Item where T:Project[I64] {{ val body:T.Item = left }} fn main() {{}}"
+    val scenario = argAt(1I64)
+    val valueMode = scenario == "value" || scenario == "valueDefault"
+    val defaultMode = scenario == "default" || scenario == "valueDefault"
+    val defaultParameter = if defaultMode { give ", count:I64 = {{ val defaultLocal:T.Item = 0I64 give 0I64 }}" } else { give "" }
+    val functionText = "fn inspect[T](left:T.Item, right:T.Item" + defaultParameter + ") -> T.Item where T:Project[I64] {{ val body:T.Item = left }}"
+    val header = "trait Project[Kind] {{ type Item }} "
+    val source = if valueMode { give header + "\n// " + functionText + "\nfn main() {{}}" } else { give header + functionText + " fn main() {{}}" }
     mut val compiler = <Comp />
     analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text text=source path="BoundOrigin.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
+    if valueMode {
+        mut val start = 0U64
+        while start + 10U64 <= compiler.arena.bytes.count() {
+            if rangeEquals(bytes: compiler.arena.bytes, start: start, len: 10U64, kw: "fn inspect") { break }
+            start += 1U64
+        }
+        match parseItem(source: functionText, start: start, end: start + functionText.bytes().count()) {
+            TopItemAst.Decl(d: val declaration) => { compiler.lowerFuncDecl(d: declaration).unwrap() }
+            _ => { panic("value bound-origin declaration setup failed") }
+        }
+        compiler.admitAuthoredFunctionViews().unwrap()
+    }
     val owner = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "inspect").nameId)
     val signature = compiler.sourceTypeUses.signatureFor(function: owner).unwrap()
     mut val site = 0U64
@@ -32,14 +51,17 @@ fn main() {
         index += 1U64
     }
     if count != 1U64 { panic("short projection re-lowered the original where argument") }
-    for parameter in signature.parameters {
-        val occurrence = compiler.sourceTypeUses.useAt(index: parameter - 1U64).unwrap()
+    mut val position = 0U64
+    while position < 2U64 {
+        val occurrence = compiler.sourceTypeUses.useAt(index: signature.parameters[position] - 1U64).unwrap()
         val recipe = compiler.sourceTypeUses.recipeAt(id: occurrence.recipe).unwrap()
         if recipe.children.count() != 2U64 || recipe.children[1U64] != boundRecipe { panic("short projection did not retain the bound recipe") }
+        position += 1U64
     }
     val result = compiler.sourceTypeUses.useAt(index: signature.result - 1U64).unwrap()
     if compiler.sourceTypeUses.recipeAt(id: result.recipe).unwrap().children[1U64] != boundRecipe { panic("result projection lost the bound recipe") }
     mut val bodySeen = false
+    mut val defaultSeen = false
     index = 0U64
     while index < compiler.sourceTypeUses.useCount() {
         val occurrence = compiler.sourceTypeUses.useAt(index: index).unwrap()
@@ -50,10 +72,17 @@ fn main() {
                     if compiler.sourceTypeUses.recipeAt(id: occurrence.recipe).unwrap().children[1U64] != boundRecipe { panic("body projection lost the declaration bound recipe") }
                 }
             }
+            SourceTypeUseRole.DefaultArgument => {
+                if compiler.arena.typeAt(index: occurrence.term).assocNameId != 0U64 {
+                    defaultSeen = true
+                    if compiler.sourceTypeUses.recipeAt(id: occurrence.recipe).unwrap().children[1U64] != boundRecipe { panic("default projection lost the declaration bound recipe") }
+                }
+            }
             _ => {}
         }
         index += 1U64
     }
+    if defaultMode && !defaultSeen { panic("default short projection was not exercised") }
     if !bodySeen { panic("body short projection was not exercised") }
     print("1")
 }

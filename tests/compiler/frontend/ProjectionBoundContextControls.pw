@@ -1,0 +1,84 @@
+// Focused source-bound preparation and frame-restoration controls.
+use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use ../../../src/SourceAccess only { SourceAccess }
+use ../../../src/Diag only { FailureDomain }
+use @Plew/Syntax only { DeclAst, TypeAst, parseItem, TopItemAst, rangeEquals }
+use @Std/Io only { print }
+use @Std/Process only { argAt }
+
+fn declaration(compiler~: Comp, text~: String) -> DeclAst {
+    mut val start = 0U64
+    while start + text.bytes().count() <= compiler.arena.bytes.count() {
+        if rangeEquals(bytes: compiler.arena.bytes, start: start, len: text.bytes().count(), kw: text) { break }
+        start += 1U64
+    }
+    if start + text.bytes().count() > compiler.arena.bytes.count() { panic("declaration source setup failed") }
+    match parseItem(source: text, start: start, end: start + text.bytes().count()) {
+        TopItemAst.Decl(d: val result) => { return result }
+        _ => { panic("declaration AST setup failed") }
+    }
+}
+
+fn main() {
+    val scenario = argAt(1I64)
+    val header = "trait Project[Kind] {{ type Item }} trait Other[Kind] {{ type Item }} trait Marker[Kind] {{}} trait Zero {{ type Item }} "
+    if scenario == "later" || scenario == "nonmember" {
+        val body = if scenario == "later" {
+            give "fn inspect[T,U](value:T.Item) where T:Project[U.Item], U:Other[I64] {{}}"
+        } else { give "fn inspect[T](value:T.Item) where T:Marker[T.Item], T:Project[I64] {{}}" }
+        mut val compiler = <Comp />
+        analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text text=header + body + " fn main() {{}}" path="BoundDependencies.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
+        if compiler.lowerProjectionDepth != 0U64 || compiler.sourceTypeUses.currentScope() != 0U64 { panic("successful bound preparation leaked a frame") }
+        print("1")
+        return
+    }
+    val bad = "fn bad[T](value:T.Item) where T:Project[T.Item] {{}}"
+    val empty = "fn empty[T](value:T.Item) {{}}"
+    val good = "fn good[T](value:T.Item) where T:Project[I64] {{}}"
+    val legacy = "fn legacy[T](value:T.Item) where T:Zero {{}}"
+    mut val compiler = <Comp />
+    val source = header + "\n// " + bad + "\n// " + empty + "\n// " + good + "\n// " + legacy + "\nfn main() {{}}"
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text text=source path="BoundRecovery.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
+    val goodDeclaration = declaration(compiler, good)
+    if scenario == "legacy" {
+        val parsed = declaration(compiler, legacy)
+        // The value-AST adapter explicitly supports the old name-only rows.
+        val raw = <DeclAst kind=parsed.kind name=parsed.name nameSpan=parsed.nameSpan typeParams=parsed.typeParams span=parsed.span isUnique=parsed.isUnique fields=parsed.fields hasDeinit=parsed.hasDeinit deinitBody=parsed.deinitBody variants=parsed.variants params=parsed.params hasRet=parsed.hasRet ret=parsed.ret isAsync=parsed.isAsync whereParams=parsed.whereParams whereTraits=parsed.whereTraits body=parsed.body />
+        compiler.lowerFuncDecl(d: raw).unwrap()
+        compiler.admitAuthoredFunctionViews().unwrap()
+        val owner = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "legacy").nameId)
+        val signature = compiler.sourceTypeUses.signatureFor(function: owner).unwrap()
+        mut val index = 0U64
+        while index < compiler.sourceTypeUses.useCount() {
+            val occurrence = compiler.sourceTypeUses.useAt(index: index).unwrap()
+            if occurrence.scope == signature.scope && occurrence.site == parsed.nameSpan.start { panic("legacy synthetic subject acquired an authored occurrence") }
+            index += 1U64
+        }
+        print("1")
+        return
+    }
+    // Deliberately retained old adapter arrays must not become the empty fn's
+    // implicit bounds. The new frame must also restore them on every Err.
+    compiler.lowerWhereTypes = goodDeclaration.whereTypes
+    compiler.lowerWhereTraitTypes = goodDeclaration.whereTraitTypes
+    match compiler.lowerFuncDecl(d: declaration(compiler, bad)) {
+        Result.Err(error: val diagnostic) => {
+            match diagnostic.failureDomain { FailureDomain.Limit => {} _ => { panic("recursive bound did not report typed Limit") } }
+        }
+        Result.Ok(value: _) => { panic("recursive bound preparation was accepted") }
+    }
+    if compiler.lowerProjectionDepth != 0U64 || compiler.sourceTypeUses.currentScope() != 0U64 || compiler.cur.typeParams.count() != 0U64 { panic("failed bound preparation leaked lexical state") }
+    match compiler.lowerFuncDecl(d: declaration(compiler, empty)) {
+        Result.Err(error: val diagnostic) => {
+            match diagnostic.failureDomain { FailureDomain.Source => {} _ => { panic("empty bound frame failed in another domain") } }
+            if !rangeEquals(bytes: diagnostic.message.bytes(), start: 0U64, len: "associated-type short projection has no unique trait source".bytes().count(), kw: "associated-type short projection has no unique trait source") { panic(diagnostic.message) }
+        }
+        Result.Ok(value: _) => { panic("empty bound frame borrowed a stale outer premise") }
+    }
+    if compiler.lowerProjectionDepth != 0U64 || compiler.sourceTypeUses.currentScope() != 0U64 || compiler.cur.typeParams.count() != 0U64 { panic("empty bound frame leaked lexical state") }
+    compiler.lowerFuncDecl(d: goodDeclaration).unwrap()
+    compiler.admitAuthoredFunctionViews().unwrap()
+    if compiler.lowerProjectionDepth != 0U64 || compiler.sourceTypeUses.currentScope() != 0U64 || compiler.cur.typeParams.count() != 0U64 { panic("recovered declaration leaked lexical state") }
+    if compiler.lowerWhereTypes.count() != goodDeclaration.whereTypes.count() { panic("source frame did not restore the adapter context") }
+    print("1")
+}

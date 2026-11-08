@@ -660,3 +660,29 @@ shared impl conditions across methods and separate member conditions;
 later-clause dependence, existing nonmember filtering and recursive Limit;
 failed-context/depth/role restoration; legacy rich-field omission and concatenated
 impl/member clause identity. The evidence record holds the detailed review.
+
+### Free Bound Preparation Checkpoint (WIP)
+
+[Finite evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/authored-free-bound-context.json)
+records original-clause reservation and once-only Declaration preparation for
+both free-function adapters. Short selection and FuncBound publication consume
+the same Ready canonical source and original argument recipes. Failed requests
+restore lexical state; an empty context masks stale legacy arrays. Generated
+declarations run after the originating frame has been restored. Legacy name-only
+subjects do not acquire fictitious source occurrences.
+
+Fresh build `20261108T033925-build-5cad03` passes with invariant inputs.
+`plewc-authored-bound-context` passes8 bound-context controls,21 signature
+controls,39 preservation controls and public check/run/AOT/native/dispatcher
+companions. Independent review accepts source structure and fresh8/21/public;
+remaining evidence reconciliation and formal run are pending. A diagnostic-runner
+key collision overwrote the no-argument result with the literal default case;
+the fresh8 run uses distinct keys and retains all planned cases.
+
+Standard gen fails26/rejects5 for both old and new candidates with byte-identical
+stdout/stderr; this is not gen GREEN. The current fixed-point/performance run
+is pending. This checkpoint does not close inherited impl/member clauses,
+raw requirements/extern owners, recursive recipe validation, nested saved-proof
+reader, production consumers, saved-only predicate interpretation or the two
+original graph/equality fixture repairs. Continue those existing obligations;
+no whole-task completion, main integration or seed/carrier promotion.

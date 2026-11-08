@@ -151,6 +151,7 @@ impl Comp {
     }
 
     inout fn uniqueProjectionSourceCore(t: TypeAst) -> Result[LoweredTypeViewRecipe, CompileDiagnostic] {
+        if self.hasProjectionBoundContext { return self.cachedValueProjectionSource(type: t) }
         mut val sources: Array[LoweredTypeViewRecipe] = []
         mut val index = 0U64
         while index < self.lowerWhereTypes.count() && index < self.lowerWhereTraitTypes.count() {
@@ -198,6 +199,7 @@ impl Comp {
     }
 
     inout fn uniqueSyntaxProjectionSourceCore(t: SyntaxType) -> Result[LoweredTypeViewRecipe, CompileDiagnostic] {
+        if self.hasProjectionBoundContext { return self.cachedSyntaxProjectionSource(type: t) }
         mut val sources: Array[LoweredTypeViewRecipe] = []
         mut val index = 0U64
         while index < self.lowerWhereSyntaxTypes.count() && index < self.lowerWhereSyntaxTraitTypes.count() {
@@ -445,11 +447,30 @@ pub impl Comp {
     }
 
     inout fn lowerSyntaxFuncDecl(d: SyntaxDecl) -> Result[(), CompileDiagnostic] {
+        val savedBounds = self.activeProjectionBounds
+        val savedBoundContext = self.hasProjectionBoundContext
+        val savedParameters = self.cur.typeParams
+        val savedReturn = self.cur.lowerRetTy
+        val savedValueSubjects = self.lowerWhereTypes
+        val savedValueTraits = self.lowerWhereTraitTypes
+        val savedSyntaxSubjects = self.lowerWhereSyntaxTypes
+        val savedSyntaxTraits = self.lowerWhereSyntaxTraitTypes
         val scope = self.sourceTypeUses.begin(kind: <SourceTypeScopeKind.FreeFunction />, anchor: d.name.start)
         val result = self.lowerSyntaxFuncDeclInSourceScope(d: d)
+        self.activeProjectionBounds = savedBounds
+        self.hasProjectionBoundContext = savedBoundContext
+        self.cur.typeParams = savedParameters
+        self.cur.lowerRetTy = savedReturn
+        self.lowerWhereTypes = savedValueSubjects
+        self.lowerWhereTraitTypes = savedValueTraits
+        self.lowerWhereSyntaxTypes = savedSyntaxSubjects
+        self.lowerWhereSyntaxTraitTypes = savedSyntaxTraits
         if !self.sourceTypeUses.finish(token: scope, succeeded: result.isOk()) {
             return <Result.Err error=self.diagnosticAt(offset: d.name.start, msg: "invalid authored type scope restoration", failureDomain: <FailureDomain.Internal />) />
         }
+        // Generated declarations run after the originating signature frame and
+        // its bound context have been restored, not under the free fn's scope.
+        if result.isOk() { self.drainDerives(typeStart: d.name.start, typeLen: d.name.end - d.name.start, isEnum: false, declStart: d.span.start, declEnd: d.span.end) }
         return result
     }
 
@@ -472,6 +493,7 @@ impl Comp {
         }
         self.lowerWhereSyntaxTypes = whereTypes
         self.lowerWhereSyntaxTraitTypes = whereTraits
+        try self.reserveSyntaxProjectionBounds(declaration: d)
         val params: Array[Param] = (try self.lowerSyntaxDeclParams(d: d))
         mut val retStart: U64 = 0U64
         mut val retLen: U64 = 0U64
@@ -493,7 +515,7 @@ impl Comp {
         try self.setAuthoredTypeUseRole(role: <SourceTypeUseRole.Declaration />, site: d.name.start)
         self.cur.lowerRetTy = savedRet
         val fnIdx: U64 = (try self.registerDeclaredFunc(f: <Func nameStart=d.name.start nameLen=d.name.end - d.name.start nameId=intern(c: inout self, start: d.name.start, len: d.name.end - d.name.start) typeParams=self.pushFuncBinds(binds: typeParams) params=self.pushFuncParams(params: params) hasRet=d.hasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=body hasRecv=false recvStart=0U64 recvLen=0U64 selfInout=false selfMove=false isAssoc=false isAsync=d.isAsync isDiverging=d.isDiverging isExposed=d.isExposed isExtern=false defOffset=d.name.start />))
-        try self.appendSyntaxFuncBounds(fnIdx: fnIdx, decl: d)
+        try self.appendPreparedFunctionBounds(function: fnIdx)
         try self.bindAuthoredFunctionScope(scope: self.sourceTypeUses.currentScope(), function: fnIdx, site: d.name.start)
         mut val parameterUses: Array[U64] = []
         for parameter in params { parameterUses.append(parameter.authoredTypeUse) }
@@ -503,7 +525,6 @@ impl Comp {
         self.cur.typeParams = savedTP
         self.lowerWhereSyntaxTypes = savedWT
         self.lowerWhereSyntaxTraitTypes = savedWTr
-        self.drainDerives(typeStart: d.name.start, typeLen: d.name.end - d.name.start, isEnum: false, declStart: d.span.start, declEnd: d.span.end)
         return <Result.Ok value=() />
     }
 }
@@ -567,11 +588,30 @@ pub impl Comp {
     }
 
     inout fn lowerFuncDecl(d: DeclAst) -> Result[(), CompileDiagnostic] {
+        val savedBounds = self.activeProjectionBounds
+        val savedBoundContext = self.hasProjectionBoundContext
+        val savedParameters = self.cur.typeParams
+        val savedReturn = self.cur.lowerRetTy
+        val savedValueSubjects = self.lowerWhereTypes
+        val savedValueTraits = self.lowerWhereTraitTypes
+        val savedSyntaxSubjects = self.lowerWhereSyntaxTypes
+        val savedSyntaxTraits = self.lowerWhereSyntaxTraitTypes
         val scope = self.sourceTypeUses.begin(kind: <SourceTypeScopeKind.FreeFunction />, anchor: d.nameSpan.start)
         val result = self.lowerFuncDeclInSourceScope(d: d)
+        self.activeProjectionBounds = savedBounds
+        self.hasProjectionBoundContext = savedBoundContext
+        self.cur.typeParams = savedParameters
+        self.cur.lowerRetTy = savedReturn
+        self.lowerWhereTypes = savedValueSubjects
+        self.lowerWhereTraitTypes = savedValueTraits
+        self.lowerWhereSyntaxTypes = savedSyntaxSubjects
+        self.lowerWhereSyntaxTraitTypes = savedSyntaxTraits
         if !self.sourceTypeUses.finish(token: scope, succeeded: result.isOk()) {
             return <Result.Err error=self.diagnosticAt(offset: d.nameSpan.start, msg: "invalid authored type scope restoration", failureDomain: <FailureDomain.Internal />) />
         }
+        // Generated declarations run after the originating signature frame and
+        // its bound context have been restored, not under the free fn's scope.
+        if result.isOk() { self.drainDerives(typeStart: d.nameSpan.start, typeLen: d.nameSpan.end - d.nameSpan.start, isEnum: false, declStart: d.span.start, declEnd: d.span.end) }
         return result
     }
 
@@ -590,6 +630,7 @@ impl Comp {
         self.cur.typeParams = typeParams
         self.lowerWhereTypes = d.whereTypes
         self.lowerWhereTraitTypes = (try self.valueProjectionTraitTypes(subjects: d.whereTypes, names: d.whereTraits, types: d.whereTraitTypes))
+        try self.reserveValueProjectionBounds(parameters: d.whereParams, traits: d.whereTraits, subjects: d.whereTypes, traitTypes: d.whereTraitTypes, anchor: nameStart)
         val normParams: Array[ParamAst] = (try self.normalizeParams(params: d.params))
         val params: Array[Param] = (try self.lowerParams(params: normParams))
         mut val retStart: U64 = 0
@@ -617,7 +658,7 @@ impl Comp {
         // lowered the parameters, return type, and body remains installed.
         // Restoring first loses T's ParamId and turns an unrelated global name
         // such as a user-written trait `T` into a false type-visibility error.
-        try self.appendFuncBounds(fnIdx: fnIdx, params: d.whereParams, traits: d.whereTraits, types: d.whereTypes, traitTypes: d.whereTraitTypes)
+        try self.appendPreparedFunctionBounds(function: fnIdx)
         try self.bindAuthoredFunctionScope(scope: self.sourceTypeUses.currentScope(), function: fnIdx, site: d.nameSpan.start)
         mut val parameterUses: Array[U64] = []
         for parameter in params { parameterUses.append(parameter.authoredTypeUse) }
@@ -629,7 +670,6 @@ impl Comp {
         self.lowerWhereTraitTypes = savedWTr
         // attach pending `@[...]` directives to this fn (a macro on a free function);
         // declStart/declEnd = the fn's source span for the gen harness slice.
-        self.drainDerives(typeStart: nameStart, typeLen: nameLen, isEnum: false, declStart: d.span.start, declEnd: d.span.end)
         return <Result.Ok value=() />
     }
 }
@@ -637,8 +677,16 @@ impl Comp {
 pub impl Comp {
 
     inout fn lowerValueTraitConstraint(traitType: TypeAst, fnIdx: U64 = 18446744073709551615U64) -> Result[TraitConstraint, CompileDiagnostic] {
+        val origin: Optional[U64] = if fnIdx < self.arena.functionCount() { give <Optional.Some v=self.arena.functionAt(index: fnIdx).defOffset /> } else { give <Optional.None /> }
+        return <Result.Ok value=(try self.lowerSourceValueTraitBound(traitType: traitType, origin: origin)).constraint />
+    }
+}
+
+impl Comp {
+    inout fn lowerSourceValueTraitBound(traitType: TypeAst, origin: Optional[U64]) -> Result[LoweredTraitConstraint, CompileDiagnostic] {
         val tn = self.lowerTypeName(name: traitType.name, span: traitType.nameSpan)
-        val decoded = try self.decodeValueTraitConstraintArguments(traitType: traitType, owner: 0U64, site: traitType.span.start)
+        val lowered = try self.lowerValueTraitConstraint(traitType: traitType, owner: 0U64, site: traitType.span.start)
+        val decoded = lowered.constraint
         val boundArgs = decoded.key.positionalArgs
         // Resolve the trait spelling at its authored use once.  An use
         // alias is a surface name, not the semantic trait identity stored
@@ -662,20 +710,23 @@ pub impl Comp {
             give if index < self.decls.traitOwnerCount() && (boundArgs.count() == 0U64 || self.decls.traitOwnerAt(index: index).arity == boundArgs.count()) { give selected } else { give 0U64 }
         } else { give self.traitOwnerAtUse(start: traitUseStart, len: traitUseLen, arity: boundArgs.count(), openArgs: boundArgs.count() == 0U64) }
         mut val resolvedOwner: U64 = owner
-        if resolvedOwner == 0U64 && self.modules.qualifiedUseIndex(offset: traitUseStart) >= self.modules.qualifiedUseCount() && fnIdx < self.arena.functionCount() {
-            resolvedOwner = self.traitOwnerInScopeById(mod: self.moduleOf(offset: self.arena.functionAt(index: fnIdx).defOffset), nameId: tn.nameId, arity: boundArgs.count())
+        if resolvedOwner == 0U64 && self.modules.qualifiedUseIndex(offset: traitUseStart) >= self.modules.qualifiedUseCount() && origin.isSome() {
+            resolvedOwner = self.traitOwnerInScopeById(mod: self.moduleOf(offset: origin.unwrap()), nameId: tn.nameId, arity: boundArgs.count())
         }
         // A bound with no written positional arguments is open, not
         // necessarily an arity-zero trait (`where T: Add` means an
         // unspecified `Add[Rhs]`).  Resolve its lexical declaration only
         // when that surface is unique; a same-spelled ambiguity remains a
         // source error rather than silently picking an arity.
-        if resolvedOwner == 0U64 && self.modules.qualifiedUseIndex(offset: traitUseStart) >= self.modules.qualifiedUseCount() && boundArgs.count() == 0U64 && fnIdx < self.arena.functionCount() {
-            resolvedOwner = self.traitOwnerInScopeOpenById(mod: self.moduleOf(offset: self.arena.functionAt(index: fnIdx).defOffset), nameId: tn.nameId)
+        if resolvedOwner == 0U64 && self.modules.qualifiedUseIndex(offset: traitUseStart) >= self.modules.qualifiedUseCount() && boundArgs.count() == 0U64 && origin.isSome() {
+            resolvedOwner = self.traitOwnerInScopeOpenById(mod: self.moduleOf(offset: origin.unwrap()), nameId: tn.nameId)
         }
-        return <Result.Ok value=<TraitConstraint key=<TraitInstanceKey owner=resolvedOwner positionalArgs=boundArgs /> positionalArgsOpen=decoded.positionalArgsOpen assocPredicates=decoded.assocPredicates /> />
+        return <Result.Ok value=<LoweredTraitConstraint constraint=<TraitConstraint key=<TraitInstanceKey owner=resolvedOwner positionalArgs=boundArgs /> positionalArgsOpen=decoded.positionalArgsOpen assocPredicates=decoded.assocPredicates /> arguments=lowered.arguments /> />
     }
 
+}
+
+pub impl Comp {
     inout fn appendFuncBounds(fnIdx: U64, params: Array[String], traits: Array[String], types: Array[TypeAst] = [], traitTypes: Array[TypeAst] = []) -> Result[(), CompileDiagnostic] {
         mut val i = 0U64
         while i < params.count() {
@@ -705,17 +756,28 @@ pub impl Comp {
     // impl and member readers differ only in how they enumerate their typed
     // pools; trait identity and associated-predicate construction live here.
     inout fn lowerSyntaxTraitConstraint(traitTy: TypeId, fnIdx: U64 = 18446744073709551615U64) -> Result[TraitConstraint, CompileDiagnostic] {
+        val origin: Optional[U64] = if fnIdx < self.arena.functionCount() { give <Optional.Some v=self.arena.functionAt(index: fnIdx).defOffset /> } else { give <Optional.None /> }
+        return <Result.Ok value=(try self.lowerSourceSyntaxTraitBound(traitTy: traitTy, origin: origin)).constraint />
+    }
+}
+
+impl Comp {
+    inout fn lowerSourceSyntaxTraitBound(traitTy: TypeId, origin: Optional[U64]) -> Result[LoweredTraitConstraint, CompileDiagnostic] {
         val traitType: SyntaxType = (try self.resolveSyntaxTypePath(t: syntaxType(file: self.syntax, id: traitTy)))
         val trait = traitType.name
-        val decoded = try self.decodeSyntaxTraitConstraintArguments(traitType: traitType, owner: 0U64, site: trait.start)
+        val lowered = try self.lowerSyntaxTraitConstraint(traitType: traitType, owner: 0U64, site: trait.start)
+        val decoded = lowered.constraint
         val args = decoded.key.positionalArgs
         val traitId: U64 = intern(c: inout self, start: trait.start, len: trait.end - trait.start)
         mut val owner: U64 = self.traitOwnerAtUse(start: trait.start, len: trait.end - trait.start, arity: args.count(), openArgs: args.count() == 0U64)
-        if owner == 0U64 && self.modules.qualifiedUseIndex(offset: trait.start) >= self.modules.qualifiedUseCount() && fnIdx < self.arena.functionCount() { owner = self.traitOwnerInScopeById(mod: self.moduleOf(offset: self.arena.functionAt(index: fnIdx).defOffset), nameId: traitId, arity: args.count()) }
-        if owner == 0U64 && self.modules.qualifiedUseIndex(offset: trait.start) >= self.modules.qualifiedUseCount() && args.count() == 0U64 && fnIdx < self.arena.functionCount() { owner = self.traitOwnerInScopeOpenById(mod: self.moduleOf(offset: self.arena.functionAt(index: fnIdx).defOffset), nameId: traitId) }
-        return <Result.Ok value=<TraitConstraint key=<TraitInstanceKey owner=owner positionalArgs=args /> positionalArgsOpen=decoded.positionalArgsOpen assocPredicates=decoded.assocPredicates /> />
+        if owner == 0U64 && self.modules.qualifiedUseIndex(offset: trait.start) >= self.modules.qualifiedUseCount() && origin.isSome() { owner = self.traitOwnerInScopeById(mod: self.moduleOf(offset: origin.unwrap()), nameId: traitId, arity: args.count()) }
+        if owner == 0U64 && self.modules.qualifiedUseIndex(offset: trait.start) >= self.modules.qualifiedUseCount() && args.count() == 0U64 && origin.isSome() { owner = self.traitOwnerInScopeOpenById(mod: self.moduleOf(offset: origin.unwrap()), nameId: traitId) }
+        return <Result.Ok value=<LoweredTraitConstraint constraint=<TraitConstraint key=<TraitInstanceKey owner=owner positionalArgs=args /> positionalArgsOpen=decoded.positionalArgsOpen assocPredicates=decoded.assocPredicates /> arguments=lowered.arguments /> />
     }
 
+}
+
+pub impl Comp {
     inout fn appendSyntaxBound(fnIdx: U64, param: Span, rawTrait: Span, ty: TypeId, traitTy: TypeId) -> Result[(), CompileDiagnostic] {
         val pty = (try self.lowerSyntaxType(id: ty)).ref
         val constraint = try self.lowerSyntaxTraitConstraint(traitTy: traitTy, fnIdx: fnIdx)

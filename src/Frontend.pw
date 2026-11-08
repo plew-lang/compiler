@@ -338,6 +338,34 @@ struct BoundTypeSourcePath {
     val member: Span
 }
 impl BoundTypeSourcePath { factory }
+enum ProjectionBoundSyntax {
+    Value(subject: TypeAst, traitType: TypeAst, parameter: Bind)
+    Syntax(subject: TypeId, traitType: TypeId, parameter: Span)
+}
+struct PreparedProjectionBound {
+    val source: ResolvedViewSource
+    val subject: U64
+    val constraint: TraitConstraint
+    val arguments: Array[U64]
+    val parameter: Bind
+}
+impl PreparedProjectionBound { factory }
+enum ProjectionBoundState {
+    Unlowered
+    Lowering
+    Ready(bound: PreparedProjectionBound)
+    Failed(diagnostic: CompileDiagnostic)
+}
+struct ProjectionBoundClause {
+    val scope: U64
+    val parameters: Array[U64]
+    val syntax: ProjectionBoundSyntax
+    val syntheticSubject: Bool = false
+    val head: Optional[ResolvedViewSource] = <Optional.None />
+    val state: ProjectionBoundState = <ProjectionBoundState.Unlowered />
+}
+impl ProjectionBoundClause { factory }
+
 struct LoweredTraitConstraint {
     val constraint: TraitConstraint
     val arguments: Array[U64]
@@ -357,6 +385,9 @@ impl LoweredTypeProjection { factory }
 
 
 pub struct Comp {
+    mut val projectionBoundClauses: Array[ProjectionBoundClause] = []
+    mut val activeProjectionBounds: Array[U64] = []
+    mut val hasProjectionBoundContext: Bool = false
     pub mut val moduleScopeBindings: Optional[AdmittedModuleScopeBindings] = <Optional.None />
     mut val semanticClosures: Array[SemanticClosure] = []
     mut val sourceFacts: SourceFactDirectory = <SourceFactDirectory />
