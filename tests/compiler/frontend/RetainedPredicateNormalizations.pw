@@ -8,7 +8,7 @@ use @Std/Process only { argAt }
 fn main() {
     val scenario = argAt(1I64)
     val nested = scenario == "nested" || scenario == "nestedMissing"
-    val viewed = scenario == "viewPlan" || scenario == "viewPlanMissing"
+    val viewed = scenario == "viewPlan" || scenario == "viewPlanMissing" || scenario == "viewChildContext"
     val itemType = if nested { give "Array[T#Parser.Output]" } else if viewed { give "T#View[T#Parser.Output]" } else { give "T#Parser.Output" }
     val expectedType = if nested { give "Array[I64]" } else if viewed { give "Source#View[I64]" } else { give "I64" }
     val viewCondition = if viewed { give ",T:View[T#Parser.Output]" } else { give "" }
@@ -60,9 +60,21 @@ fn main() {
     mut val actual = witness
     val missing = scenario == "missing" || scenario == "nestedMissing" || scenario == "viewPlanMissing"
     val malformed = scenario == "wrongProof" || scenario == "wrongReceiver" || scenario == "wrongArguments" || scenario == "wrongOutput" || scenario == "cycle"
-    if missing {
-        val equations: Array[ProjectionNormalizationStep] = []
-        val conditions = compiler.arena.publishWitnessConditionPlan(plan: <WitnessConditionPlan witness=plan.witness proofs=plan.proofs normalizations=equations />)
+    if missing || scenario == "viewChildContext" {
+        mut val proofs = plan.proofs
+        if scenario == "viewPlanMissing" || scenario == "viewChildContext" {
+            val child = compiler.selectedConstraintWitness(proof: compiler.thawStaticConformanceProof(id: proofs[0U64])).unwrap()
+            if child.conditions == 0U64 { panic("view child context control lost its retained plan") }
+            val childPlan = compiler.arena.witnessConditionPlanAt(index: child.conditions - 1U64)
+            if childPlan.normalizations.count() == 0U64 { panic("view child context control lost its output equations") }
+            if scenario == "viewPlanMissing" {
+                // Remove the dependency at both reachable owners. Removing
+                // only the outer copy leaves legitimate selected-child evidence.
+                val childConditions = compiler.arena.publishWitnessConditionPlan(plan: <WitnessConditionPlan witness=childPlan.witness proofs=childPlan.proofs normalizations=[] />)
+                proofs = [compiler.freezeStaticConformanceProof(proof: <StaticConformanceProof.ConcreteWitness witness=<WitnessMatch conformIdx=child.conformIdx selfRef=child.selfRef binds=child.binds conditions=childConditions /> />)]
+            }
+        }
+        val conditions = compiler.arena.publishWitnessConditionPlan(plan: <WitnessConditionPlan witness=plan.witness proofs=proofs normalizations=[] />)
         actual = <WitnessMatch conformIdx=witness.conformIdx selfRef=witness.selfRef binds=witness.binds conditions=conditions />
     }
     if malformed {

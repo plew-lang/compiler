@@ -1,0 +1,36 @@
+// A simultaneous replacement can introduce projections in both sides of an equation.
+use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use ../../../src/SourceAccess only { SourceAccess }
+use ../../../src/Ir only { InstanceEnvironment, TraitConstraint, TraitInstanceKey, ConformanceProofDemand, ProjectionNormalizationStep }
+use @Std/Io only { print }
+fn main() {
+    mut val compiler = <Comp />
+    val source = "trait Parser {{ type Output }} struct Token {{}} struct Wrapper[T] {{}} impl Token as Parser {{ type Output=I64 }} impl[T] Wrapper[T] as Parser {{ type Output=T }} fn original[T](value:Wrapper[T], output:Wrapper[T]#Parser.Output, parameter:T) {{}} fn replacement(value:Token, output:Token#Parser.Output, expected:Wrapper[I64]#Parser.Output) {{}} fn main() {{}}"
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text text=source path="EquationSubstitution.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
+    val original = compiler.arena.functionAt(index: compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "original").nameId))
+    val replacement = compiler.arena.functionAt(index: compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "replacement").nameId))
+    val parser = compiler.decls.traitAt(index: compiler.decls.firstTraitNamed(nameId: compiler.internBytes(s: "Parser").nameId))
+    val constraint = <TraitConstraint key=<TraitInstanceKey owner=parser.nameStart positionalArgs=[] /> assocPredicates=[] />
+    val wrapper = compiler.funcParamAt(params: original.params, index: 0U64).ty
+    val projection = compiler.funcParamAt(params: original.params, index: 1U64).ty
+    val parameter = compiler.funcParamAt(params: original.params, index: 2U64).ty
+    val token = compiler.funcParamAt(params: replacement.params, index: 0U64).ty
+    val argument = compiler.funcParamAt(params: replacement.params, index: 1U64).ty
+    val expected = compiler.funcParamAt(params: replacement.params, index: 2U64).ty
+    val tokenProof = compiler.viewedTraitConstraintProof(demand: <ConformanceProofDemand.SourceAdmission />, ref: token, constraint: constraint).unwrap()
+    val output = compiler.associatedOutputTermInProof(proof: tokenProof, traitOwner: parser.nameStart, assocId: compiler.internBytes(s: "Output").nameId).unwrap()
+    val wrapperProof = compiler.viewedTraitConstraintProof(demand: <ConformanceProofDemand.SourceAdmission />, ref: wrapper, constraint: constraint).unwrap()
+    val saved = [<ProjectionNormalizationStep source=argument proof=compiler.freezeStaticConformanceProof(proof: tokenProof) output=output />, <ProjectionNormalizationStep source=projection proof=compiler.freezeStaticConformanceProof(proof: wrapperProof) output=parameter />]
+    compiler.checkProjectionNormalizations(normalizations: saved, offset: 0U64).unwrap()
+    val environment = <InstanceEnvironment params=compiler.copyFuncBinds(binds: original.typeParams) args=[argument] />
+    val result = compiler.instantiateProjectionNormalizations(normalizations: saved, environment: environment, selfRef: 0U64, itemRef: 0U64).unwrap()
+    val equations = match result {
+        Optional.Some(v: val equations) => equations,
+        Optional.None => { panic("saved equation children were deferred before replay") },
+    }
+    if equations.count() != 2U64 { panic("equation substitution lost its dependencies") }
+    if !compiler.typeRefEq(a: equations[1U64].source, b: expected) || !compiler.typeRefEq(a: equations[1U64].output, b: output) { panic("equation substitution did not preserve its selected derivation") }
+    compiler.checkProjectionNormalizations(normalizations: equations, offset: 0U64).unwrap()
+    if compiler.activeConditionReplay.count() != 0U64 { panic("equation substitution leaked active state") }
+    print("1")
+}

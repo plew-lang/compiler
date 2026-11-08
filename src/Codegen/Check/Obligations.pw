@@ -327,10 +327,23 @@ pub impl Comp {
             if bound.subject == 0U64 || bound.constraint.key.owner != owner || !self.typeRefEq(a: self.typeRefWithoutOuterViews(ref: receiver), b: self.typeRefWithoutOuterViews(ref: bound.subject)) || !self.sameResolvedTypeRefs(a: projection.assocTraitArgs, b: bound.constraint.key.positionalArgs) {
                 return <Result.Err error=self.diagnosticAt(offset: offset, msg: "selected condition projection evidence has a different receiver or trait") />
             }
-            val output = try self.associatedOutputInProof(proof: proof, traitOwner: owner, assocId: projection.assocNameId)
+            val output = try self.associatedOutputTermInProof(proof: proof, traitOwner: owner, assocId: projection.assocNameId)
             val comparable = if output == 0U64 || self.typeRefEq(a: output, b: step.source) { give 0U64 } else { give output }
             if !self.typeRefEq(a: comparable, b: step.output) { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "selected condition projection evidence has a different output") /> }
         }
+        return <Result.Ok value=() />
+    }
+
+    // Compose only explicitly supplied, already admitted derivations. This
+    // neither substitutes terms nor searches for a missing prerequisite.
+    inout fn appendRetainedProjectionEquation(step: ProjectionNormalizationStep, normalizations: inout Array[ProjectionNormalizationStep]) -> Result[(), CompileDiagnostic] {
+        for previous in normalizations {
+            if self.typeRefEq(a: previous.source, b: step.source) {
+                if !self.typeRefEq(a: previous.output, b: step.output) { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "retained projection contexts have conflicting outputs") /> }
+                if self.sameStaticConformanceProof(a: self.thawStaticConformanceProof(id: previous.proof), b: self.thawStaticConformanceProof(id: step.proof)) { return <Result.Ok value=() /> }
+            }
+        }
+        normalizations.append(step)
         return <Result.Ok value=() />
     }
 

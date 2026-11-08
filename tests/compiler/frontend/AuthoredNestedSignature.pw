@@ -36,12 +36,16 @@ fn main() {
     val ordinarySource = "trait Project[Kind] {{ type Item }} struct Source {{}} impl Source as Project[I64] {{ type Item=I64 }} struct Box[T] {{}} struct Pair[A,B] {{}} fn inspect[T](value:" + shape + ") where T:Project[I64] {{}} fn concrete(value:Source) {{}} fn expected(value:" + expectedShape + ") {{}} fn main() {{}}"
     val source = if scenario == "once" { give "struct Box[T] {{}} fn inspect[T](value:T, wrapped:Box[T]) {{}} fn main() {{}}" }
       else if scenario == "selectorArgument" { give "trait Project[K] {{ type Item }} trait Select[K] {{ type Output }} struct Source {{}} impl Source as Project[I64] {{ type Item=I64 }} impl Source as Select[I64] {{ type Output=Bool }} struct Box[T] {{}} fn inspect[T](value:Box[T#Select[T#Project[I64].Item].Output]) where T:Project[I64], T:Select[T#Project[I64].Item] {{}} fn concrete(value:Source) {{}} fn expected(value:Box[Bool]) {{}} fn main() {{}}" }
+      else if scenario == "proofOutputDependency" { give "trait Project[K] {{ type Item }} trait Marker[K] {{}} struct Source {{}} impl Source as Project[I64] {{ type Item=I64 }} impl Source as Marker[I64] {{}} struct Holder[X] {{}} impl[X] Holder[X] as Project[I64] where X:Project[I64], X:Marker[X#Project[I64].Item] {{ type Item=X#Project[I64].Item }} struct Wrapper[X] {{}} impl[X] Wrapper[X] as Project[I64] {{ type Item=X }} struct Box[T] {{}} fn inspect[T](value:Box[Wrapper[Holder[T]#Project[I64].Item]#Project[I64].Item]) where T:Project[I64], T:Marker[T#Project[I64].Item] {{}} fn concrete(value:Source) {{}} fn expected(value:Box[I64]) {{}} fn main() {{}}" }
       else if scenario == "receiverArgument" { give "trait Project[K] {{ type Item }} struct Source {{}} impl Source as Project[I64] {{ type Item=I64 }} struct Holder[X] {{}} impl[X] Holder[X] as Project[I64] {{ type Item=X }} struct Box[T] {{}} fn inspect[T](value:Box[Holder[T#Project[I64].Item]#Project[I64].Item]) where T:Project[I64] {{}} fn concrete(value:Source) {{}} fn expected(value:Box[I64]) {{}} fn main() {{}}" }
       else if scenario == "receiverView" || scenario == "missingReceiverView" { give "trait Other {{}} trait Project[K] {{ type Item }} struct Source {{}} impl Source as Other {{}} impl Source as Project[I64] {{ type Item=I64 }} struct Box[T] {{}} fn inspect[T](value:Box[T#Other#Project[I64].Item]) where T:Other, T:Project[I64] {{}} fn concrete(value:Source) {{}} fn expected(value:Box[I64]) {{}} fn main() {{}}" }
       else if scenario == "result" { give "trait Project[K] {{ type Item }} struct Source {{}} impl Source as Project[I64] {{ type Item=I64 }} struct Box[T] {{}} fn inspect[T]() -> Box[T#Project[I64].Item] where T:Project[I64] {{}} fn concrete(value:Source) {{}} fn expected(value:Box[I64]) {{}} fn main() {{}}" }
       else { give ordinarySource }
     mut val compiler = <Comp />
-    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text text=source path="NestedSignature.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
+    match analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text text=source path="NestedSignature.pw" />, sources: <SourceAccess stdRoot=[] />) {
+        Result.Ok(value: _) => {}
+        Result.Err(error: val diagnostic) => { panic("signature setup: " + diagnostic.message) }
+    }
     val owner = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "inspect").nameId)
     if scenario == "once" {
         val function = compiler.arena.functionAt(index: owner)
@@ -61,7 +65,10 @@ fn main() {
         print("1")
         return
     }
-    val environment = compiler.environmentWithCallableConstraints(fnIdx: owner, environment: <InstanceEnvironment params=compiler.copyFuncBinds(binds: compiler.arena.functionAt(index: owner).typeParams) args=[receiver] />, evidence: <CallableConstraintEvidence.Declaration />).unwrap()
+    val environment = match compiler.environmentWithCallableConstraints(fnIdx: owner, environment: <InstanceEnvironment params=compiler.copyFuncBinds(binds: compiler.arena.functionAt(index: owner).typeParams) args=[receiver] />, evidence: <CallableConstraintEvidence.Declaration />) {
+        Result.Ok(value: val environment) => environment,
+        Result.Err(error: val diagnostic) => { panic("signature environment: " + diagnostic.message) },
+    }
     if scenario == "missingReceiverView" {
         val full = environment.constraints.unwrap()
         if compiler.arena.callableConstraintCount(evidence: full) != 2U64 { panic("receiver proof control setup changed") }
@@ -72,7 +79,10 @@ fn main() {
         return
     }
     val slot = if scenario == "result" { give <SourceSignatureSlot.Result /> } else { give <SourceSignatureSlot.Parameter index=0U64 /> }
-    val actual = compiler.readAdmittedSignatureRoot(function: owner, slot: slot, environment: environment).unwrap()
+    val actual = match compiler.readAdmittedSignatureRoot(function: owner, slot: slot, environment: environment) {
+        Result.Ok(value: val term) => term,
+        Result.Err(error: val diagnostic) => { panic("signature read: " + diagnostic.message) },
+    }
     if !compiler.typeRefEq(a: actual, b: expectedType) { panic("nested signature reader did not consume the retained associated output") }
     print("1")
 }

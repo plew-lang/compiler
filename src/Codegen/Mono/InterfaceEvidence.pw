@@ -1,18 +1,24 @@
 // One proof interpretation frontier. Static clients can obtain only concrete
 // results; an interface's universally scoped guarantee cannot become Ready.
 pub impl Comp {
-    inout fn instantiateConstraintProof(proof: StaticConformanceProof, receiverRef: U64, environment: InstanceEnvironment, selfRef: U64, itemRef: U64) -> Result[StaticProofInstantiation, CompileDiagnostic] {
-        match (try self.replayConstraintProof(proof: proof, receiver: receiverRef, environment: environment, selfRef: selfRef, itemRef: itemRef, context: <Optional.None />)) {
+    inout fn instantiateConstraintProof(proof: StaticConformanceProof, receiverRef: U64, environment: InstanceEnvironment, selfRef: U64, itemRef: U64, normalizations: Array[ProjectionNormalizationStep] = []) -> Result[StaticProofInstantiation, CompileDiagnostic] {
+        try self.checkProjectionNormalizations(normalizations: normalizations, offset: 0U64)
+        match (try self.replayConstraintProof(proof: proof, receiver: receiverRef, environment: environment, selfRef: selfRef, itemRef: itemRef, context: <Optional.None />, normalizations: normalizations)) {
             ConstraintProofReplay.Missing => { return <Result.Ok value=<StaticProofInstantiation.Missing /> /> }
             ConstraintProofReplay.Deferred => { return <Result.Ok value=<StaticProofInstantiation.Deferred /> /> }
             ConstraintProofReplay.Concrete(proof: val proof) => { return <Result.Ok value=<StaticProofInstantiation.Ready proof=proof /> /> }
             ConstraintProofReplay.Universal(proof: _) => { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "universal interface evidence cannot authorize a static callable") /> }
         }
     }
+
+    inout fn instantiateProjectionNormalizations(normalizations: Array[ProjectionNormalizationStep], environment: InstanceEnvironment, selfRef: U64, itemRef: U64) -> Result[Optional[Array[ProjectionNormalizationStep]], CompileDiagnostic] {
+        return self.replayProjectionEquations(saved: normalizations, environment: environment, selfRef: selfRef, itemRef: itemRef, context: <Optional.None />, inherited: [])
+    }
+
 }
 
 impl Comp {
-    inout fn instantiateSelectedSupertraitConstraint(proof: StaticConformanceProof, steps: Array[SupertraitRef], receiverRef: U64, environment: InstanceEnvironment, selfRef: U64, itemRef: U64) -> Result[StaticProofInstantiation, CompileDiagnostic] {
+    inout fn instantiateSelectedSupertraitConstraint(proof: StaticConformanceProof, steps: Array[SupertraitRef], receiverRef: U64, environment: InstanceEnvironment, selfRef: U64, itemRef: U64, normalizations: Array[ProjectionNormalizationStep] = []) -> Result[StaticProofInstantiation, CompileDiagnostic] {
         mut val current = proof
         for step in steps {
             val witness = match self.selectedConstraintWitness(proof: current) {
@@ -27,7 +33,7 @@ impl Comp {
                 Optional.None => { return <Result.Err error=self.diagnosticAt(offset: declaration.typeStart, msg: "supertrait edge has no retained declaration evidence") /> }
             }
             val selectedEnvironment = try self.selectedConstraintEnvironment(witness: witness, proof: current)
-            val state = try self.instantiateConstraintProof(proof: self.thawStaticConformanceProof(id: saved), receiverRef: receiverRef, environment: selectedEnvironment, selfRef: witness.selfRef, itemRef: 0U64)
+            val state = try self.instantiateConstraintProof(proof: self.thawStaticConformanceProof(id: saved), receiverRef: receiverRef, environment: selectedEnvironment, selfRef: witness.selfRef, itemRef: 0U64, normalizations: normalizations)
             match state {
                 StaticProofInstantiation.Ready(proof: val proof) => { current = proof }
                 _ => { return <Result.Ok value=state /> }
@@ -58,53 +64,132 @@ impl Comp {
         return <Result.Ok value=state />
     }
 
-    inout fn replaySelectedWitness(witness: WitnessMatch, receiverRef: U64, environment: InstanceEnvironment, selfRef: U64, itemRef: U64, context: Optional[InterfaceProofContext]) -> Result[SelectedWitnessInstantiation, CompileDiagnostic] {
-        mut val bindings: Array[WitnessBind] = []
-        for val binding in witness.binds {
-            val value = try self.groundTermForBody(ref: binding.term, environment: environment, selfRef: selfRef, itemRef: itemRef)
-            bindings.append(<WitnessBind binder=binding.binder paramId=binding.paramId term=value />)
-        }
-        mut val receiver = if witness.selfRef == 0U64 { give receiverRef } else { give try self.groundTermForBody(ref: witness.selfRef, environment: environment, selfRef: selfRef, itemRef: itemRef) }
-        receiver = self.selectedWitnessReceiver(declared: receiver, requested: receiverRef)
-        val grounded = <WitnessMatch conformIdx=witness.conformIdx binds=bindings selfRef=receiver />
-        if witness.conditions == 0U64 { return <Result.Ok value=<SelectedWitnessInstantiation.Ready witness=grounded /> /> }
-        if witness.conditions > self.arena.witnessConditionPlanCount() || witness.conformIdx == 0U64 || witness.conformIdx > self.decls.conformCount() { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "selected conformance has an invalid condition plan") /> }
-        val plan = self.arena.witnessConditionPlanAt(index: witness.conditions - 1U64)
-        val declaration = self.decls.conformAt(index: witness.conformIdx - 1U64)
-        if !self.sameWitnessSubstitution(a: witness, b: plan.witness) || plan.proofs.count() != declaration.bounds.len { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "selected conformance evidence does not satisfy its declaration conditions") /> }
-        mut val proofs: Array[U64] = []
-        mut val changed = !self.sameWitnessSubstitution(a: witness, b: grounded)
-        mut val normalizations: Array[ProjectionNormalizationStep] = []
-        for step in plan.normalizations {
-            val source = self.groundTermInEnvironment(ref: step.source, params: environment.params, values: environment.args, selfRef: selfRef, itemRef: itemRef)
+    inout fn replayProjectionEquations(saved: Array[ProjectionNormalizationStep], environment: InstanceEnvironment, selfRef: U64, itemRef: U64, context: Optional[InterfaceProofContext], inherited: Array[ProjectionNormalizationStep]) -> Result[Optional[Array[ProjectionNormalizationStep]], CompileDiagnostic] {
+        // Inherited context is already in this instance: never substitute it again.
+        mut val normalizations = inherited
+        for step in saved {
+            val substituted = self.groundTermInEnvironment(ref: step.source, params: environment.params, values: environment.args, selfRef: selfRef, itemRef: itemRef)
             mut val output = self.groundTermInEnvironment(ref: step.output, params: environment.params, values: environment.args, selfRef: selfRef, itemRef: itemRef)
+            if substituted == 0U64 || substituted >= self.arena.typeCount() || self.arena.typeAt(index: substituted).assocNameId == 0U64 { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "selected condition has invalid projection evidence") /> }
+            // Dependencies introduced by simultaneous substitution belong to the
+            // existing context. Replay children before interpreting this head.
+            mut val children: Array[U64] = []
+            mut val changed = false
+            for index in 0U64..<self.typeTermRefChildCount(ref: substituted) {
+                val child = self.typeTermRefChildRef(ref: substituted, index: index)
+                val normalized = try self.replayProjectionNormalizations(ref: child, normalizations: normalizations, offset: 0U64)
+                if child != normalized { changed = true }
+                children.append(normalized)
+            }
+            val source = if changed { give self.rebuildTypeTermChildren(ref: substituted, children: children) } else { give substituted }
             if source == 0U64 || source >= self.arena.typeCount() || self.arena.typeAt(index: source).assocNameId == 0U64 { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "selected condition has invalid projection evidence") /> }
             val receiver = self.typeTermProjectionReceiver(t: self.arena.typeAt(index: source))
             val original = self.thawStaticConformanceProof(id: step.proof)
-            match (try self.replayConstraintProof(proof: original, receiver: receiver, environment: environment, selfRef: selfRef, itemRef: itemRef, context: context)) {
+            match (try self.replayConstraintProof(proof: original, receiver: receiver, environment: environment, selfRef: selfRef, itemRef: itemRef, context: context, normalizations: normalizations)) {
                 ConstraintProofReplay.Missing => { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "selected condition has no concrete projection evidence") /> }
-                ConstraintProofReplay.Deferred => { return <Result.Ok value=<SelectedWitnessInstantiation.Deferred /> /> }
+                ConstraintProofReplay.Deferred => { return <Result.Ok value=<Optional.None /> /> }
                 ConstraintProofReplay.Concrete(proof: val proof) | ConstraintProofReplay.Universal(proof: val proof) => {
-                    if step.output == 0U64 {
-                        val projection = self.arena.typeAt(index: source)
-                        val owner = if projection.assocTraitDeclOffset != 0U64 { give projection.assocTraitDeclOffset } else { give projection.assocTraitStart }
-                        val associated = try self.associatedOutputInProof(proof: proof, traitOwner: owner, assocId: projection.assocNameId)
-                        if associated != 0U64 && !self.typeRefEq(a: associated, b: source) { output = associated }
+                    val projection = self.arena.typeAt(index: source)
+                    val owner = if projection.assocTraitDeclOffset != 0U64 { give projection.assocTraitDeclOffset } else { give projection.assocTraitStart }
+                    val associated = try self.associatedOutputTermInProof(proof: proof, traitOwner: owner, assocId: projection.assocNameId)
+                    val immediate = if associated != 0U64 && !self.typeRefEq(a: associated, b: source) { give associated } else { give 0U64 }
+                    if step.output != 0U64 {
+                        val expected = try self.replayProjectionNormalizations(ref: output, normalizations: normalizations, offset: 0U64)
+                        val actual = try self.replayProjectionNormalizations(ref: immediate, normalizations: normalizations, offset: 0U64)
+                        if !self.typeRefEq(a: expected, b: actual) { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "retained projection substitution has a different output") /> }
                     }
-                    val proofId = if self.sameStaticConformanceProof(a: original, b: proof) { give step.proof } else { changed = true give self.freezeStaticConformanceProof(proof: proof) }
-                    if source != step.source || output != step.output { changed = true }
-                    normalizations.append(<ProjectionNormalizationStep source=source proof=proofId output=output />)
+                    // Keep the immediate selected derivation, not its fully
+                    // normalized result: later readers still need its provenance.
+                    output = immediate
+                    val proofId = if self.sameStaticConformanceProof(a: original, b: proof) { give step.proof } else { give self.freezeStaticConformanceProof(proof: proof) }
+                    try self.appendRetainedProjectionEquation(step: <ProjectionNormalizationStep source=source proof=proofId output=output />, normalizations: inout normalizations)
                 }
             }
         }
         try self.checkProjectionNormalizations(normalizations: normalizations, offset: 0U64)
+        return <Result.Ok value=<Optional.Some v=normalizations /> />
+    }
+
+    // Terms have already crossed their one environment substitution frontier.
+    inout fn finishRetainedWitness(witness: WitnessMatch, receiverRef: U64, normalizations: Array[ProjectionNormalizationStep], retain: Bool = true, symbolic: Bool = false) -> Result[SelectedWitnessInstantiation, CompileDiagnostic] {
+        mut val bindings: Array[WitnessBind] = []
+        for binding in witness.binds {
+            val term = try self.replayProjectionNormalizations(ref: binding.term, normalizations: normalizations, offset: 0U64)
+            if !symbolic && (term == 0U64 || !self.arena.typeIsClosed(ref: term)) { return <Result.Ok value=<SelectedWitnessInstantiation.Deferred /> /> }
+            bindings.append(<WitnessBind binder=binding.binder paramId=binding.paramId term=term />)
+        }
+        val receiver = self.selectedWitnessReceiver(declared: (try self.replayProjectionNormalizations(ref: witness.selfRef, normalizations: normalizations, offset: 0U64)), requested: receiverRef)
+        if !symbolic && (receiver == 0U64 || !self.arena.typeIsClosed(ref: receiver)) { return <Result.Ok value=<SelectedWitnessInstantiation.Deferred /> /> }
+        val grounded = <WitnessMatch conformIdx=witness.conformIdx binds=bindings selfRef=receiver />
+        if !retain || normalizations.count() == 0U64 { return <Result.Ok value=<SelectedWitnessInstantiation.Ready witness=grounded /> /> }
+        // A closed binding may have consumed the whole context. Keep it only
+        // when an associated definition will still need it after this read.
+        mut val needed = false
+        val declaration = self.decls.conformAt(index: grounded.conformIdx - 1U64)
+        for index in 0U64..<declaration.assocBindingIds.count() {
+            val binding = self.decls.assocBindings[self.conformFuncIdAt(ids: declaration.assocBindingIds, index: index)]
+            val output = try self.groundWitnessTypeTerm(ref: binding.ty, params: <PatternBindInput.Conformance range=binding.typeParams />, matchResult: grounded)
+            if self.arena.typeContainsAssociatedProjection(ref: output) { needed = true }
+        }
+        if !needed { return <Result.Ok value=<SelectedWitnessInstantiation.Ready witness=grounded /> /> }
+        val conditionId = self.arena.publishWitnessConditionPlan(plan: <WitnessConditionPlan witness=grounded proofs=[] normalizations=normalizations />)
+        return <Result.Ok value=<SelectedWitnessInstantiation.Ready witness=<WitnessMatch conformIdx=grounded.conformIdx binds=grounded.binds selfRef=grounded.selfRef conditions=conditionId /> /> />
+    }
+
+    inout fn replaySelectedWitness(witness: WitnessMatch, receiverRef: U64, environment: InstanceEnvironment, selfRef: U64, itemRef: U64, context: Optional[InterfaceProofContext], inherited: Array[ProjectionNormalizationStep] = []) -> Result[SelectedWitnessInstantiation, CompileDiagnostic] {
+        if witness.conditions != 0U64 {
+            for active in self.activeConditionReplay { if active == witness.conditions { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "selected condition replay is cyclic", failureDomain: <FailureDomain.Internal />) /> } }
+            self.activeConditionReplay.append(witness.conditions)
+        }
+        val result = self.replaySelectedWitnessContext(witness: witness, receiverRef: receiverRef, environment: environment, selfRef: selfRef, itemRef: itemRef, context: context, inherited: inherited)
+        if witness.conditions != 0U64 { self.activeConditionReplay.removeLast() }
+        return result
+    }
+
+    inout fn replaySelectedWitnessContext(witness: WitnessMatch, receiverRef: U64, environment: InstanceEnvironment, selfRef: U64, itemRef: U64, context: Optional[InterfaceProofContext], inherited: Array[ProjectionNormalizationStep]) -> Result[SelectedWitnessInstantiation, CompileDiagnostic] {
+        if witness.conformIdx == 0U64 || witness.conformIdx > self.decls.conformCount() { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "selected conformance has an invalid owner") /> }
+        mut val bindings: Array[WitnessBind] = []
+        for binding in witness.binds {
+            val raw = self.groundTermInEnvironment(ref: binding.term, params: environment.params, values: environment.args, selfRef: selfRef, itemRef: itemRef)
+            bindings.append(<WitnessBind binder=binding.binder paramId=binding.paramId term=raw />)
+        }
+        val symbolic = match context {
+            Optional.Some(v: val scope) => { give match scope.interpretation { InterfaceRootInterpretation.Universal(root: _) => true, _ => false } }
+            Optional.None => false,
+        }
+        val rawReceiver = if witness.selfRef == 0U64 { give receiverRef } else { give self.groundTermInEnvironment(ref: witness.selfRef, params: environment.params, values: environment.args, selfRef: selfRef, itemRef: itemRef) }
+        val declaration = self.decls.conformAt(index: witness.conformIdx - 1U64)
+        if witness.conditions == 0U64 {
+            if declaration.bounds.len != 0U64 { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "selected conformance has no retained condition plan") /> }
+            return self.finishRetainedWitness(witness: <WitnessMatch conformIdx=witness.conformIdx binds=bindings selfRef=rawReceiver />, receiverRef: receiverRef, normalizations: inherited, symbolic: symbolic)
+        }
+        if witness.conditions > self.arena.witnessConditionPlanCount() { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "selected conformance has an invalid condition plan") /> }
+        val plan = self.arena.witnessConditionPlanAt(index: witness.conditions - 1U64)
+        if !self.sameWitnessSubstitution(a: witness, b: plan.witness) || plan.proofs.count() != declaration.bounds.len { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "selected conformance evidence does not satisfy its declaration conditions") /> }
+        mut val proofs: Array[U64] = []
+        mut val changed = true
+        val normalizations = match (try self.replayProjectionEquations(saved: plan.normalizations, environment: environment, selfRef: selfRef, itemRef: itemRef, context: context, inherited: inherited)) {
+            Optional.Some(v: val equations) => equations,
+            Optional.None => { return <Result.Ok value=<SelectedWitnessInstantiation.Deferred /> /> },
+        }
+        val finalized = try self.finishRetainedWitness(witness: <WitnessMatch conformIdx=witness.conformIdx binds=bindings selfRef=rawReceiver />, receiverRef: receiverRef, normalizations: normalizations, retain: false, symbolic: symbolic)
+        val grounded = match finalized {
+            SelectedWitnessInstantiation.Ready(witness: val grounded) => grounded,
+            SelectedWitnessInstantiation.Deferred => { return <Result.Ok value=<SelectedWitnessInstantiation.Deferred /> /> },
+        }
+        changed = !self.sameWitnessSubstitution(a: witness, b: grounded) || normalizations.count() != plan.normalizations.count()
+        if !changed {
+            for index in 0U64..<normalizations.count() {
+                if normalizations[index].source != plan.normalizations[index].source || normalizations[index].output != plan.normalizations[index].output || normalizations[index].proof != plan.normalizations[index].proof { changed = true }
+            }
+        }
         mut val index = 0U64
         while index < plan.proofs.count() {
             val clause = self.conformBoundAt(bounds: declaration.bounds, index: index)
             val rawSubject = try self.groundWitnessTypeTerm(ref: clause.subject, params: <PatternBindInput.Conformance range=declaration.typeParams />, matchResult: grounded)
             val subject = try self.replayProjectionNormalizations(ref: rawSubject, normalizations: normalizations, offset: clause.offset)
             val original = self.thawStaticConformanceProof(id: plan.proofs[index])
-            match (try self.replayConstraintProof(proof: original, receiver: subject, environment: environment, selfRef: selfRef, itemRef: itemRef, context: context)) {
+            match (try self.replayConstraintProof(proof: original, receiver: subject, environment: environment, selfRef: selfRef, itemRef: itemRef, context: context, normalizations: normalizations)) {
                 ConstraintProofReplay.Missing => { return <Result.Err error=self.diagnosticAt(offset: clause.offset, msg: "selected conformance evidence does not satisfy its declaration conditions") /> }
                 ConstraintProofReplay.Deferred => { return <Result.Ok value=<SelectedWitnessInstantiation.Deferred /> /> }
                 ConstraintProofReplay.Concrete(proof: val proof) | ConstraintProofReplay.Universal(proof: val proof) => {
@@ -119,7 +204,7 @@ impl Comp {
         return <Result.Ok value=<SelectedWitnessInstantiation.Ready witness=<WitnessMatch conformIdx=grounded.conformIdx binds=grounded.binds selfRef=grounded.selfRef conditions=conditionId /> /> />
     }
 
-    inout fn replayConstraintProof(proof: StaticConformanceProof, receiver: U64, environment: InstanceEnvironment, selfRef: U64, itemRef: U64, context: Optional[InterfaceProofContext]) -> Result[ConstraintProofReplay, CompileDiagnostic] {
+    inout fn replayConstraintProof(proof: StaticConformanceProof, receiver: U64, environment: InstanceEnvironment, selfRef: U64, itemRef: U64, context: Optional[InterfaceProofContext], normalizations: Array[ProjectionNormalizationStep] = []) -> Result[ConstraintProofReplay, CompileDiagnostic] {
         val root = try self.interfaceProofRoot(proof: proof)
         if root != 0U64 {
             val scope = match context {
@@ -127,7 +212,8 @@ impl Comp {
                 Optional.None => { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "interface evidence requires a universal call scope") /> },
             }
             if root != scope.sourceRoot { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "interface proof belongs to another selected operation") /> }
-            val replayed = try self.rebaseInterfaceProof(proof: proof, context: scope, selfRef: selfRef, itemRef: itemRef)
+            val scoped = <InterfaceProofContext sourceRoot=scope.sourceRoot interpretation=scope.interpretation environment=scope.environment normalizations=normalizations />
+            val replayed = try self.rebaseInterfaceProof(proof: proof, context: scoped, selfRef: selfRef, itemRef: itemRef)
             match scope.interpretation {
                 InterfaceRootInterpretation.Universal(root: _) => { return <Result.Ok value=<ConstraintProofReplay.Universal proof=replayed /> /> }
                 InterfaceRootInterpretation.Concrete(proof: _) => {
@@ -140,7 +226,7 @@ impl Comp {
         // Projection prerequisites have the same declaration authority as
         // condition children. Their use cannot turn saved Presence evidence
         // into a fresh member-dispatch query when its environment is missing.
-        val concrete = try self.instantiateConcreteConstraintProof(proof: proof, receiverRef: receiver, environment: environment, selfRef: selfRef, itemRef: itemRef)
+        val concrete = try self.instantiateConcreteConstraintProof(proof: proof, receiverRef: receiver, environment: environment, selfRef: selfRef, itemRef: itemRef, normalizations: normalizations)
         match concrete {
             StaticProofInstantiation.Missing => { return <Result.Ok value=<ConstraintProofReplay.Missing /> /> }
             StaticProofInstantiation.Deferred => { return <Result.Ok value=<ConstraintProofReplay.Deferred /> /> }
@@ -224,7 +310,7 @@ impl Comp {
 
     inout fn rebaseInterfaceWitness(witness: WitnessMatch, context: InterfaceProofContext, selfRef: U64, itemRef: U64) -> Result[WitnessMatch, CompileDiagnostic] {
         val receiver = self.groundTermInEnvironment(ref: witness.selfRef, params: context.environment.params, values: context.environment.args, selfRef: selfRef, itemRef: itemRef)
-        match (try self.replaySelectedWitness(witness: witness, receiverRef: receiver, environment: context.environment, selfRef: selfRef, itemRef: itemRef, context: <Optional.Some v=context />)) {
+        match (try self.replaySelectedWitness(witness: witness, receiverRef: receiver, environment: context.environment, selfRef: selfRef, itemRef: itemRef, context: <Optional.Some v=context />, inherited: context.normalizations)) {
             SelectedWitnessInstantiation.Ready(witness: val witness) => { return <Result.Ok value=witness /> }
             SelectedWitnessInstantiation.Deferred => { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "interface condition retains an unresolved trait edge") /> }
         }
@@ -427,7 +513,7 @@ impl Comp {
         for index in 0U64..<conditions.bounds.count() {
             val original = conditions.bounds[index]
             val bound = try self.groundCallableBound(bound: original, environment: environment, selfRef: evidence.sourceRef, itemRef: 0U64)
-            val proof = match (try self.replayConstraintProof(proof: self.thawStaticConformanceProof(id: conditions.proofs[index]), receiver: bound.subject, environment: environment, selfRef: evidence.sourceRef, itemRef: 0U64, context: <Optional.Some v=context />)) {
+            val proof = match (try self.replayConstraintProof(proof: self.thawStaticConformanceProof(id: conditions.proofs[index]), receiver: bound.subject, environment: environment, selfRef: evidence.sourceRef, itemRef: 0U64, context: <Optional.Some v=context />, normalizations: context.normalizations)) {
                 ConstraintProofReplay.Concrete(proof: val proof) => proof,
                 _ => { return <Result.Err error=self.diagnosticAt(offset: bound.offset, msg: "promised interface member has no concrete condition evidence") /> },
             }

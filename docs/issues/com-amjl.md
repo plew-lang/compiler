@@ -971,3 +971,53 @@ row/child contexts with their owners; do not search arena-wide equations, reappl
 the caller map to replaced terms, or introduce another solver. Missing context
 cannot fall back to query rescue. Existing scoped interface interpretation and
 legitimate first-concrete admission remain separate.
+
+### Shared Saved Equation Context (WIP)
+
+[RED/GREEN and preservation evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/retained-proof-equation-contexts.json)
+tracks the shared reader required by the Associated row migration. Witness binds
+and Self now cross one simultaneous substitution frontier and consume explicit
+saved equations before closedness checks. Equation replay normalizes canonical
+source children before interpreting its prerequisite, compares the substituted
+saved output against that proof's raw output through the same context, and keeps
+the immediate derivation. Inherited contexts are not substituted again. A
+separate active-plan stack rejects recursive replay and is restored on every
+Result path. Unconditional children retain context when later associated-output
+reads still need it; raw output derivation and semantic output replay remain
+separate APIs.
+
+The original child-only missing-context REDs and the Wrapper[T] -> T equation
+substitution RED are covered. Making the reader pure exposed an existing
+producer dependency: authored recipes returned their child terms without their
+proof equations. They now fold only canonical child contexts, transfer the exact
+selected proof's output dependencies, and retain immediate projection derivations
+alongside terms in the memo. The unchanged receiverArgument oracle and the new
+proofOutputDependency RED both pass. No source re-query repairs absent context.
+
+The internal viewPlanMissing mutation used to remove only an outer equation
+copy. Its selected child still owns valid output equations, which the semantic
+reader can now legitimately use. The positive viewChildContext preserves that
+case; the negative control removes the dependency at both reachable owners and
+continues to require individual and whole-plan rejection. Other malformed and
+missing-proof assertions are retained. This is an internal fixture correction,
+not a specification change or permission to recover missing evidence by query.
+
+Final build `20261108T173903-build-b00e5b` and candidate
+`bin/plewc-retained-recipe-proof-contexts` pass57 nested/retained controls,
+17 predicate/acquisition controls,20 public native fixtures, the authored-signature
+check/lazy/AOT/dispatcher controls and compiler source check with invariant inputs.
+The additional public mixed-path fixture fails equally on the old producer
+candidate; its invalid source-range premise is already owned by com-wfq2. This
+is not an all-green public suite. Independent source and fixture reviews accept
+these finite handoffs; final evidence reconciliation is recorded in the linked
+artifact rather than inferred from case counts.
+
+**Next remains the Associated row consumer.** Its integration control still
+fails because the old reader does not pass the saved row equations into the
+child proof. Wire the shared reader to the exact impl-owned row, validate the
+original clause/owner/trait instance/full expected bound, and remove caller-bound
+query grounding. Keep scoped interface interpretation and legitimate first
+concrete admission. Receiver and the other previously listed producer-to-final-
+consumer migrations, whole-task gates and performance remain open. No formal
+self-host result applies to this source; do not reuse ce5eb536's7.029968 seconds
+as its timing or infer repair difficulty from that earlier threshold crossing.

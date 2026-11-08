@@ -269,13 +269,13 @@ pub impl Comp {
                 val selected = try self.staticProofBound(proof: environment.proof, traitIdx: self.decls.traitIndexByOffset(offset: traitOwner))
                 if selected.subject != 0U64 && self.typeRefEq(a: selected.subject, b: receiver) && self.sameResolvedTypeRefs(a: selected.constraint.key.positionalArgs, b: traitArgs) {
                     selectedProof = environment.proof
-                    output = try self.associatedOutputInProof(proof: selectedProof, traitOwner: traitOwner, assocId: p.assocNameId)
+                    output = try self.associatedOutputTermInProof(proof: selectedProof, traitOwner: traitOwner, assocId: p.assocNameId)
                 }
             }
             if output == 0U64 {
                 val proof: StaticConformanceProof = (try self.traitPatternProof(demand: <ConformanceProofDemand.Existence />, baseRef: receiver, traitId: p.assocTraitId, traitOwner: traitOwner, traitArgs: <PatternTypeInput.Values values=traitArgs />, patternParams: <PatternBindInput.Values values=[] />, assumptions: assumptions))
                 selectedProof = proof
-                output = (try self.associatedOutputInProof(proof: proof, traitOwner: traitOwner, assocId: p.assocNameId))
+                output = (try self.associatedOutputTermInProof(proof: proof, traitOwner: traitOwner, assocId: p.assocNameId))
             }
             if recording && !self.proofIsMissing(proof: selectedProof) {
                 val recordedOutput = if output == 0U64 || output == projection { give 0U64 } else { give output }
@@ -1115,6 +1115,28 @@ pub impl Comp {
     // body. This is deliberately not a receiver-name lookup: `ConformId` and
     // its one directional substitution are the proof that owns the output.
     inout fn associatedOutputInProof(proof: StaticConformanceProof, traitOwner: U64, assocId: U64) -> Result[U64, CompileDiagnostic] {
+        val output = try self.associatedOutputTermInProof(proof: proof, traitOwner: traitOwner, assocId: assocId)
+        return self.replayProjectionNormalizations(ref: output, normalizations: (try self.retainedProofProjectionContext(proof: proof)), offset: 0U64)
+    }
+
+    // Read only the context owned by this selected, admitted proof. Callers
+    // composing output derivations must transport it alongside the raw output.
+    inout fn retainedProofProjectionContext(proof: StaticConformanceProof) -> Result[Array[ProjectionNormalizationStep], CompileDiagnostic] {
+        match self.selectedConstraintWitness(proof: proof) {
+            Optional.Some(v: val witness) => {
+                if witness.conditions != 0U64 {
+                    if witness.conditions > self.arena.witnessConditionPlanCount() { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "associated output has no retained condition context") /> }
+                    val plan = self.arena.witnessConditionPlanAt(index: witness.conditions - 1U64)
+                    if !self.sameWitnessSubstitution(a: witness, b: plan.witness) { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "associated output has a foreign retained context") /> }
+                    return <Result.Ok value=plan.normalizations />
+                }
+            }
+            Optional.None => {}
+        }
+        return <Result.Ok value=[] />
+    }
+
+    inout fn associatedOutputTermInProof(proof: StaticConformanceProof, traitOwner: U64, assocId: U64) -> Result[U64, CompileDiagnostic] {
         match proof {
             StaticConformanceProof.AssumedBound(val source) => {
                 if !self.declarationBoundIsValid(source: source) { return <Result.Ok value=0U64 /> }
@@ -1133,7 +1155,7 @@ pub impl Comp {
             }
             StaticConformanceProof.AssumedTraitPath(source: _, steps: _, edges: val edges) => {
                 if edges.count() == 0U64 { return <Result.Ok value=0U64 /> }
-                return <Result.Ok value=(try self.associatedOutputInProof(proof: <StaticConformanceProof.ConcreteWitness witness=edges[edges.count() - 1U64] />, traitOwner: traitOwner, assocId: assocId)) />
+                return <Result.Ok value=(try self.associatedOutputTermInProof(proof: <StaticConformanceProof.ConcreteWitness witness=edges[edges.count() - 1U64] />, traitOwner: traitOwner, assocId: assocId)) />
             }
             StaticConformanceProof.ConcreteWitness(val witness) => {
                 if witness.conformIdx == 0U64 { return <Result.Ok value=0U64 />}

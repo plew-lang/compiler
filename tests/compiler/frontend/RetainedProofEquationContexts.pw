@@ -1,14 +1,15 @@
 // Child proof binding terms consume saved equations, never a fresh query.
 use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
 use ../../../src/SourceAccess only { SourceAccess }
-use ../../../src/Ir only { InstanceEnvironment, TraitBound, ConformanceProofDemand, TraitConstraint, TraitInstanceKey, StaticConformanceProof, StaticProofInstantiation, PatternTypeInput, PatternBindInput, DeclarationBoundRef }
+use ../../../src/Ir only { InstanceEnvironment, TraitBound, ConformanceProofDemand, TraitConstraint, TraitInstanceKey, StaticConformanceProof, StaticProofInstantiation, PatternTypeInput, PatternBindInput, DeclarationBoundRef, ProjectionNormalizationStep, WitnessMatch, WitnessConditionPlan }
 use @Std/Io only { print }
 use @Std/Process only { argAt }
 fn main() {
     val scenario = argAt(1I64)
-    val actual = scenario == "actual" || scenario == "actualMissing"
-    val generic = scenario == "childMissing" || scenario == "nestedMissing"
-    val leafArgument = if scenario == "nestedMissing" { give "Leaf[T#Parser.Output]" } else { give "T#Parser.Output" }
+    val actual = false
+    val nested = scenario == "nested" || scenario == "nestedMissing"
+    val generic = scenario != "" && scenario != "retainedOutput"
+    val leafArgument = if nested { give "Leaf[T#Parser.Output]" } else { give "T#Parser.Output" }
     val key = if actual { give "I64" } else { give leafArgument }
     val leaf = if actual { give "Leaf[T]" } else { give "Leaf[" + leafArgument + "]" }
     val genericDeclarations = "trait Parser {{ type Output }} struct Token {{}} impl Token as Parser {{ type Output=I64 }} struct Leaf[T] {{}} struct Input[T] {{}} " + if actual {
@@ -16,9 +17,11 @@ fn main() {
     } else {
         give "impl[T] Leaf[T] as Required[T] {{ type Output=T }} impl[T] Input[T] as Source where T:Parser {{ type Item=" + leaf + " type Key=" + key + " }} "
     }
-    val declarations = if generic { give genericDeclarations } else { give "struct Leaf {{}} impl Leaf as Required[I64] {{ type Output=I64 }} struct Input {{}} impl Input as Source {{ type Item=Leaf type Key=I64 }} " }
+    val declarations = if scenario == "retainedOutput" {
+        give "trait Parser {{ type Output }} struct Token {{}} impl Token as Parser {{ type Output=I64 }} struct Leaf {{}} impl Leaf as Required[I64] {{ type Output=Token#Parser.Output }} struct Input {{}} impl Input as Source {{ type Item=Leaf type Key=I64 }} "
+    } else if generic { give genericDeclarations } else { give "struct Leaf {{}} impl Leaf as Required[I64] {{ type Output=I64 }} struct Input {{}} impl Input as Source {{ type Item=Leaf type Key=I64 }} " }
     val input = if generic { give "Input[Token]" } else { give "Input" }
-    val source = "trait Required[K] {{ type Output }} trait Source {{ type Key type Item:Required[Self#Source.Key,Output=Self#Source.Key] }} trait Container {{ type Item }} struct Box[T] {{}} impl[T] Box[T] as Container where T:Source {{ type Item=T#Source.Item }} " + declarations + "fn context(value:Box[" + input + "], item:" + if scenario == "nestedMissing" { give "Leaf[Leaf[I64]]" } else if generic { give "Leaf[I64]" } else { give "Leaf" } + ") {{}} fn main() {{}}"
+    val source = "trait Required[K] {{ type Output }} trait Source {{ type Key type Item:Required[Self#Source.Key,Output=Self#Source.Key] }} trait Container {{ type Item }} struct Box[T] {{}} impl[T] Box[T] as Container where T:Source {{ type Item=T#Source.Item }} " + declarations + "fn context(value:Box[" + input + "], item:" + if nested { give "Leaf[Leaf[I64]]" } else if generic { give "Leaf[I64]" } else { give "Leaf" } + ") {{}} fn boolean(value:Bool) {{}} fn main() {{}}"
     mut val compiler = <Comp />
     analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text text=source path="AssociatedProducer.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
     val sourceTrait = compiler.decls.traitAt(index: compiler.decls.firstTraitNamed(nameId: compiler.internBytes(s: "Source").nameId))
@@ -35,22 +38,59 @@ fn main() {
     val item = compiler.funcParamAt(params: compiler.arena.functionAt(index: context).params, index: 1U64).ty
     val environment = compiler.selectedConstraintEnvironment(witness: witness, proof: selected).unwrap()
     val proof = compiler.thawStaticConformanceProof(id: row.proof)
-    if generic {
-        match proof {
-            StaticConformanceProof.ConcreteWitness(witness: val child) => {
-                if child.conditions != 0U64 { panic("missing equation control must have no child conditions") }
+    if scenario == "associated" {
+        val container = compiler.decls.traitAt(index: compiler.decls.firstTraitNamed(nameId: compiler.internBytes(s: "Container").nameId))
+        val declaration = compiler.decls.conformAt(index: 0U64)
+        val binding = compiler.decls.assocBindings[compiler.conformFuncIdAt(ids: declaration.assocBindingIds, index: 0U64)]
+        val abstract = compiler.traitPatternProof(demand: <ConformanceProofDemand.Existence />, baseRef: binding.ty, traitId: 0U64, traitOwner: required.nameStart, traitArgs: <PatternTypeInput.Values values=[] />, patternParams: <PatternBindInput.Values values=[] />, traitArgsOpen: true, assumptions: compiler.conformanceDeclarationAssumptions(conformIndex: 0U64)).unwrap()
+        val selected = compiler.viewedTraitConstraintProof(demand: <ConformanceProofDemand.SourceAdmission />, ref: boxed, constraint: <TraitConstraint key=<TraitInstanceKey owner=container.nameStart positionalArgs=[] /> assocPredicates=[] />).unwrap()
+        val environment = compiler.selectedConstraintEnvironment(witness: compiler.selectedConstraintWitness(proof: selected).unwrap(), proof: selected).unwrap()
+        match compiler.instantiateConstraintProof(proof: abstract, receiverRef: item, environment: environment, selfRef: boxed, itemRef: 0U64).unwrap() {
+            StaticProofInstantiation.Ready(proof: val actual) => { compiler.checkStaticProofEvidence(proof: actual, offset: 0U64).unwrap() }
+            _ => { panic("associated clause did not transport its saved child equations") }
+        }
+        if compiler.activeConditionReplay.count() != 0U64 { panic("associated replay leaked active context") }
+        print("1")
+        return
+    }
+    match proof {
+        StaticConformanceProof.ConcreteWitness(witness: val child) => {
+            if child.conditions != 0U64 { panic("equation context control must have no child conditions") }
+            if generic {
                 mut val projected = false
                 for binding in child.binds { if compiler.arena.typeContainsAssociatedProjection(ref: binding.term) { projected = true } }
-                if !projected { panic("missing equation control lost its projected child binding") }
+                if !projected { panic("equation context control lost its projected child binding") }
             }
-            _ => { panic("missing equation control lost its selected child") }
         }
+        _ => { panic("equation context control lost its selected child") }
     }
-    val result = compiler.instantiateConstraintProof(proof: proof, receiverRef: item, environment: environment, selfRef: witness.selfRef, itemRef: 0U64)
-    if generic {
+    val equations = compiler.instantiateProjectionNormalizations(normalizations: row.normalizations, environment: environment, selfRef: witness.selfRef, itemRef: 0U64).unwrap().unwrap()
+    val missing = scenario == "childMissing" || scenario == "nestedMissing"
+    mut val equationInput: Array[ProjectionNormalizationStep] = if missing { give [] } else { give equations }
+    if scenario == "wrongOutput" || scenario == "foreignEquation" {
+        val step = equations[0U64]
+        val boolean = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "boolean").nameId)
+        val boolType = compiler.funcParamAt(params: compiler.arena.functionAt(index: boolean).params, index: 0U64).ty
+        val source = if scenario == "foreignEquation" { give compiler.rebuildProjectionTerm(t: compiler.arena.typeAt(index: step.source), receiver: receiver, traitArgs: []) } else { give step.source }
+        equationInput = [<ProjectionNormalizationStep source=source proof=step.proof output=if scenario == "wrongOutput" { give boolType } else { give step.output } />]
+    }
+    if scenario == "cycle" {
+        val step = equations[0U64]
+        val parser = compiler.selectedConstraintWitness(proof: compiler.thawStaticConformanceProof(id: step.proof)).unwrap()
+        val next = compiler.arena.witnessConditionPlanCount() + 1U64
+        val cyclic = <WitnessMatch conformIdx=parser.conformIdx binds=parser.binds selfRef=parser.selfRef conditions=next />
+        val child = compiler.freezeStaticConformanceProof(proof: <StaticConformanceProof.ConcreteWitness witness=cyclic />)
+        val condition = compiler.arena.publishWitnessConditionPlan(plan: <WitnessConditionPlan witness=cyclic proofs=[] normalizations=[<ProjectionNormalizationStep source=step.source proof=child output=step.output />] />)
+        if condition != next { panic("cyclic context setup lost its plan identity") }
+        if compiler.instantiateConstraintProof(proof: <StaticConformanceProof.ConcreteWitness witness=cyclic />, receiverRef: parser.selfRef, environment: <InstanceEnvironment />, selfRef: 0U64, itemRef: 0U64).isOk() { panic("reachable proof context cycle was not rejected") }
+    }
+    val result = compiler.instantiateConstraintProof(proof: proof, receiverRef: item, environment: environment, selfRef: witness.selfRef, itemRef: 0U64, normalizations: equationInput)
+    val malformed = scenario == "wrongOutput" || scenario == "foreignEquation"
+    if missing || malformed {
         match result {
             Result.Err(error: _) => {}
             Result.Ok(value: val state) => {
+                if malformed { panic("malformed equation context was not rejected") }
                 match state {
                     StaticProofInstantiation.Ready(proof: _) => { panic("child binding repaired its missing saved equation by query") }
                     _ => {}
@@ -60,10 +100,27 @@ fn main() {
     } else {
         match result.unwrap() {
             StaticProofInstantiation.Ready(proof: val actual) => { compiler.checkStaticProofEvidence(proof: actual, offset: 0U64).unwrap() }
-            _ => { panic("closed equation-free control did not replay") }
+            _ => { panic("valid explicit proof context did not replay") }
         }
     }
-    compiler.instantiateConstraintProof(proof: selected, receiverRef: receiver, environment: <InstanceEnvironment />, selfRef: 0U64, itemRef: 0U64).unwrap()
-    if compiler.activeConditionAdmission.count() != 0U64 || compiler.activeAssumptionAdmission.count() != 0U64 { panic("child equation context leaked admission state") }
+    val recovered = match compiler.instantiateConstraintProof(proof: proof, receiverRef: item, environment: environment, selfRef: witness.selfRef, itemRef: 0U64, normalizations: equations).unwrap() {
+        StaticProofInstantiation.Ready(proof: val actual) => actual,
+        _ => { panic("valid proof context did not recover") },
+    }
+    compiler.checkStaticProofEvidence(proof: recovered, offset: 0U64).unwrap()
+    val rawKey = compiler.groundTermInEnvironment(ref: row.bound.constraint.key.positionalArgs[0U64], params: environment.params, values: environment.args, selfRef: witness.selfRef)
+    val expected = compiler.replayProjectionNormalizations(ref: rawKey, normalizations: equations, offset: 0U64).unwrap()
+    val output = compiler.associatedOutputInProof(proof: recovered, traitOwner: required.nameStart, assocId: compiler.internBytes(s: "Output").nameId).unwrap()
+    if !compiler.typeRefEq(a: output, b: expected) { panic("returned proof lost its retained associated-output context") }
+    if scenario == "retainedOutput" {
+        val child = compiler.selectedConstraintWitness(proof: recovered).unwrap()
+        if child.conditions == 0U64 || compiler.arena.witnessConditionPlanAt(index: child.conditions - 1U64).normalizations.count() == 0U64 { panic("unconditional child dropped its output context") }
+    }
+    val reread = match compiler.instantiateConstraintProof(proof: recovered, receiverRef: item, environment: <InstanceEnvironment />, selfRef: 0U64, itemRef: 0U64).unwrap() {
+        StaticProofInstantiation.Ready(proof: val actual) => actual,
+        _ => { panic("returned proof could not replay without its former caller environment") },
+    }
+    if !compiler.sameStaticConformanceProof(a: recovered, b: reread) { panic("retained context changed on a second read") }
+    if compiler.activeConditionAdmission.count() != 0U64 || compiler.activeAssumptionAdmission.count() != 0U64 || compiler.activeConditionReplay.count() != 0U64 { panic("child equation context leaked admission state") }
     print("1")
 }

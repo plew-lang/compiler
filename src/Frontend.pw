@@ -262,6 +262,7 @@ struct InterfaceProofContext {
     val sourceRoot: U64
     val interpretation: InterfaceRootInterpretation
     val environment: InstanceEnvironment
+    val normalizations: Array[ProjectionNormalizationStep] = []
 }
 
 enum ConstraintProofReplay {
@@ -359,6 +360,8 @@ enum ProjectionBoundState {
 enum AuthoredRecipeEdge { Source ProjectionReceiver FunctionResult }
 struct AuthoredRecipeRead {
     val term: U64
+    // Selected derivations from this recipe's canonical child graph only.
+    val normalizations: Array[ProjectionNormalizationStep]
     // Folded selectors of this source constructor, before a caller replacement
     // can add its own views. Original selector identity stays in the recipe.
     val views: Array[ResolvedViewSource]
@@ -462,6 +465,8 @@ pub struct Comp {
     // Active conditional witnesses are query state, never proof assumptions.
     pub mut val activeProjectionProofs: Array[U64] = []
     pub mut val activeConditionAdmission: Array[U64] = []
+    // Replay and integrity admission are separate traversals of the proof DAG.
+    pub mut val activeConditionReplay: Array[U64] = []
     pub mut val activeAssumptionAdmission: Array[U64] = []
     pub mut val activeConformanceConditions: Array[WitnessMatch] = []
     // lowering-time where constraints for associated-type short projection
