@@ -423,3 +423,31 @@ unregistered raw signatures remain unbound. Independent static review accepted
 this finite identity increment. Premise authority, trait Self, failed ancestors,
 impl origins, common admission/proofs/consumers and fresh candidate gates remain
 uncompleted. See the same prefix evidence; formal6.703740 is earlier c7012d7f.
+
+### Registered Owner Fresh Candidate and Admission Sequence
+
+Source 4f6505d1 passed standard build `20261108T003517-build-f606f8`. Saved
+candidate `bin/plewc-authored-scope-owners` passed provenance native, short17 and
+preservation37; all recorded inputs remained unchanged. The source admission15
+probe still has the same eight invalid acceptances, valid4 and reject3. Formal
+6.703740 remains the earlier c7012d7f result, not a performance certification of
+this newer owner-binding source. Full suite and task completion remain open.
+
+Independent design review permits closing unused free-signature admission before
+remaining non-function migration. First retain explicit signature occurrence
+roles/IDs: a FreeFunction token currently also owns body and default-expression
+uses, which must not be eagerly admitted as unused signature work. Then make
+shared query output normalization explicit: conditional associated predicates
+currently reach selectedProofAssociatedTypesMatch -> typesCompatible ->
+normalizedValueType -> ambient groundTypeRef/cur.checkFn. A direct rigid query
+entry alone does not remove that dependency. Preserve extension/view state,
+validate original owner/ParamIds and premise roots, retain only Found proofs per
+receipt, and test ambient/default/body noninterference. This changes the finite
+implementation order, not the scope or language contract. Non-function origins
+and final proof-based consumers remain mandatory, without unchecked exemptions.
+
+The reviewed impl follow-up uses a common source owner record with explicit
+Nominal/TraitSubject receiver, actual conformance index only where registered,
+full span/module, binders, clauses and extension identity. Inherent impls must
+not acquire fake Func/Conform identities. Clause-pool sharing does not confer
+Conformance authority; repeated AST lowering is still to be removed.
