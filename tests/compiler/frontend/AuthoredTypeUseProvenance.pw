@@ -29,6 +29,7 @@ fn inspect(compiler~: inout Comp, function~: String, method: Bool, startIndex: U
                 continue
             }
             match scope.state { SourceTypeScopeState.Lowered => {} _ => { panic("successful lower did not finish scope") } }
+            if scope.function.unwrap() != owner { panic("source scope lost registered function identity") }
             if method {
                 match scope.kind { SourceTypeScopeKind.Method => {} _ => { panic("method origin lost") } }
                 val parent = compiler.sourceTypeUses.scopeAt(token: scope.parent).unwrap()
@@ -77,11 +78,18 @@ fn main() {
     store.record(term: 1U64, site: 30U64, parameters: parameters)
     parameters.append(<Bind nameStart=0U64 nameLen=0U64 fieldStart=0U64 fieldLen=0U64 paramId=8U64 />)
     store.record(term: 1U64, site: 40U64, parameters: parameters)
+    if store.bindFunction(token: outer, function: 1U64) { panic("foreign active scope bound") }
+    if !store.bindFunction(token: inner, function: 0U64) || store.bindFunction(token: inner, function: 2U64) { panic("function binding is not single-use or loses zero identity") }
     if store.finish(token: outer, succeeded: true) { panic("out-of-order scope finished") }
     if !store.finish(token: inner, succeeded: false) || store.currentScope() != outer { panic("failed child did not restore parent") }
     match store.scopeAt(token: inner).unwrap().state { SourceTypeScopeState.Failed => {} _ => { panic("failed scope became successful") } }
     if store.useAt(index: 0U64).unwrap().parameters.count() != 1U64 || store.useAt(index: 1U64).unwrap().parameters.count() != 2U64 { panic("parameter snapshot was mutated") }
     if !store.finish(token: outer, succeeded: true) || store.currentScope() != 0U64 || store.finish(token: outer, succeeded: true) { panic("scope restoration is not single-use") }
+    if store.bindFunction(token: inner, function: 0U64) || store.bindFunction(token: outer, function: 0U64) { panic("finished source scope rebound") }
+    if store.scopeAt(token: inner).unwrap().function.unwrap() != 0U64 { panic("scope finish lost registered identity") }
+    val requirementScope = store.begin(kind: <SourceTypeScopeKind.RequirementSignature />, anchor: 50U64, traitOwner: 60U64)
+    if store.bindFunction(token: requirementScope, function: 0U64) { panic("raw requirement laundered as function") }
+    if !store.finish(token: requirementScope, succeeded: true) { panic("requirement source scope leaked") }
     if store.scopeAt(token: 0U64).isSome() || store.scopeAt(token: 999U64).isSome() || store.useAt(index: 999U64).isSome() { panic("invalid receipt handle resolved") }
 
     val text = "trait Marker {{}}\nfn first[T](left: T, right: T) -> T where T: Marker {{ return left }}\nfn second[T](left: T, right: T) -> T where T: Marker {{ return right }}\nstruct Box[T] {{}}\nimpl[T] Box[T] {{ fn method[U](left: T, right: T, item: U) -> T {{ return left }} }}\ntrait Query[T] {{ fn ask[U](value: T, other: U) -> T fn other[U](value: T, other: U) -> T }}\nfn main() {{}}\n"

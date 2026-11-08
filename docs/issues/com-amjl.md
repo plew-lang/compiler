@@ -372,3 +372,21 @@ fixed-point/performance results follow below. [Evidence](../../../evidence/rejec
 Compiler c7012d7f passed standard build, fresh provenance native, short17 and preservation37 controls; all recorded inputs remained unchanged. Independent read-only reconciliation accepted those results. The same fifteen source admission probes retain eight invalid acceptances, four valid successes and three intended rejections. Formal run `20261108T000545-self-host-42d9af` reached generation-three LLVM/runtime fixed point, median 6.703740 seconds (7.383906 / 6.703740 / 6.703296). The saved candidate is `bin/plewc-authored-type-provenance-fixed-point`; no adoption or seed promotion. See the linked prefix evidence for hashes and input deltas.
 
 Next, bind receipts to actual registration identities: free/method/extern Function IDs and their exact declared bounds; real conformance identity and owned bounds; a separate inherent-impl owner; canonical trait owner plus requirement slot for raw signatures. Carry signature scope tokens explicitly in the lowering handoff, never by searching anchors or guessing functionCount. Bind raw trait Self to the exact full trait instance; existing translated Requirement evidence is not raw source authority. Origin-specific ownership and premise checks must reject foreign/sibling/rebound/failed scopes. Then admit unused source signatures through the shared solver using rigid explicit lexical terms: the current viewed wrapper's ambient resolveTy is not sufficient. This is the existing finite repair sequence, not a new solver or an additional whole-task dependency.
+
+### Registered Function Identity Prefix (WIP)
+
+Both free-function and method adapters now bind their scope to the actual
+registerDeclaredFunc result after owned bounds are appended. Method bounds also
+use that result; the prospective index remains only for the existing witness
+identity producer. SourceTypeUses preserves the optional function link across
+finish and rejects duplicate, foreign-active, completed or wrong-kind binding.
+The provenance internal test asserts actual registered identity in both adapters
+and checks zero index and those store boundaries. Current-source check, compile,
+link and native golden pass with 202 inputs unchanged; independent static review
+accepts the identity-preservation prefix. See the same prefix evidence.
+
+This is not premise admission: the shared binding helper checks function range
+and store state, not arbitrary foreign function authority or failed ancestors.
+Exact owner-premise validation and non-function origins remain mandatory. Fresh
+candidate gates for this newer source remain pending; formal 6.703740 seconds
+certifies c7012d7f, before this identity increment.

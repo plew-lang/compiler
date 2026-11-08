@@ -11,6 +11,9 @@ pub struct SourceTypeScope {
     pub val traitOwner: U64 = 0U64
     pub val parent: U64
     pub val state: SourceTypeScopeState
+    // Only registered free functions, methods and extern signatures have a
+    // function identity. Raw trait requirements and impls never borrow one.
+    pub val function: Optional[U64] = <Optional.None />
 }
 pub impl SourceTypeScope { factory }
 
@@ -47,6 +50,19 @@ pub impl SourceTypeUses {
         self.active = self.scopes.count()
         return self.active
     }
+    inout fn bindFunction(token: U64, function: U64) -> Bool {
+        if token == 0U64 || token != self.active || token > self.scopes.count() { return false }
+        val scope = self.scopes[token - 1U64]
+        match scope.state { SourceTypeScopeState.Lowering => {} _ => { return false } }
+        if scope.function.isSome() { return false }
+        match scope.kind {
+            SourceTypeScopeKind.FreeFunction | SourceTypeScopeKind.Method | SourceTypeScopeKind.ExternSignature => {}
+            SourceTypeScopeKind.Implementation | SourceTypeScopeKind.RequirementSignature => { return false }
+        }
+        self.scopes[token - 1U64] = <SourceTypeScope kind=scope.kind anchor=scope.anchor traitOwner=scope.traitOwner parent=scope.parent state=scope.state function=<Optional.Some v=function /> />
+        return true
+    }
+
     inout fn finish(token: U64, succeeded: Bool) -> Bool {
         if token == 0U64 || token != self.active || token > self.scopes.count() { return false }
         val scope = self.scopes[token - 1U64]
@@ -54,7 +70,7 @@ pub impl SourceTypeUses {
             SourceTypeScopeState.Lowering => {}
             SourceTypeScopeState.Lowered | SourceTypeScopeState.Failed => { return false }
         }
-        self.scopes[token - 1U64] = <SourceTypeScope kind=scope.kind anchor=scope.anchor traitOwner=scope.traitOwner parent=scope.parent state=(if succeeded { give <SourceTypeScopeState.Lowered /> } else { give <SourceTypeScopeState.Failed /> }) />
+        self.scopes[token - 1U64] = <SourceTypeScope kind=scope.kind anchor=scope.anchor traitOwner=scope.traitOwner parent=scope.parent state=(if succeeded { give <SourceTypeScopeState.Lowered /> } else { give <SourceTypeScopeState.Failed /> }) function=scope.function />
         self.active = scope.parent
         return true
     }

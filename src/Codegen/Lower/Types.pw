@@ -3,6 +3,13 @@
 
 
 impl Comp {
+    inout fn bindAuthoredFunctionScope(function: U64, site: U64) -> Result[(), CompileDiagnostic] {
+        if function >= self.arena.functionCount() || !self.sourceTypeUses.bindFunction(token: self.sourceTypeUses.currentScope(), function: function) {
+            return <Result.Err error=self.diagnosticAt(offset: site, msg: "invalid authored function scope binding", failureDomain: <FailureDomain.Internal />) />
+        }
+        return <Result.Ok value=() />
+    }
+
     inout fn recordAuthoredTypeUse(ref: U64, site: U64) {
         self.loweringTypeUses.append(ref)
         self.sourceTypeUses.record(term: ref, site: site, parameters: self.cur.typeParams)
