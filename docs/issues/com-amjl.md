@@ -675,13 +675,20 @@ Fresh build `20261108T033925-build-5cad03` passes with invariant inputs.
 `plewc-authored-bound-context` passes8 bound-context controls,21 signature
 controls,39 preservation controls and public check/run/AOT/native/dispatcher
 companions. Independent review accepts source structure and fresh8/21/public;
-remaining evidence reconciliation and formal run are pending. A diagnostic-runner
+preservation/gen differential and fixed-point fresh results are also independently reconciled. A diagnostic-runner
 key collision overwrote the no-argument result with the literal default case;
 the fresh8 run uses distinct keys and retains all planned cases.
 
 Standard gen fails26/rejects5 for both old and new candidates with byte-identical
-stdout/stderr; this is not gen GREEN. The current fixed-point/performance run
-is pending. This checkpoint does not close inherited impl/member clauses,
+stdout/stderr; this is not gen GREEN. Initial formal run03abe5 failed at an
+Optional local inference difference in the adopted carrier. Explicit Optional[U64]
+annotations in both wrappers repair carrier acceptance without changing semantics.
+Formal run59de22 for a49e6524 passes at generation3 with invariant inputs:
+7.472470/6.934775/6.918589 seconds, median6.934775. Saved fixed-point candidate
+SHAa6954297 passes final8/21/public; independent reviews reconcile all6408
+formal inputs, actual artifacts, source, median, candidate and final focused cases.
+The existing nested-reader harness still compiles/links then fails only its
+expected retained-output assertion (native134). This checkpoint does not close inherited impl/member clauses,
 raw requirements/extern owners, recursive recipe validation, nested saved-proof
 reader, production consumers, saved-only predicate interpretation or the two
 original graph/equality fixture repairs. Continue those existing obligations;
