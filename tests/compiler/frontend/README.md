@@ -418,3 +418,13 @@ The prepared context succeeds with the same retained prerequisite and output;
 Both cases recover through the valid context and leave the admission stack empty.
 Run the no-argument and `missing` scenarios with the manual procedure above.
 Associated row transport, Receiver migration and whole-task gates remain separate.
+
+`RetainedAssociatedClauses.pw` checks the conformance producer's saved complete
+pre-normalization bound, exact original clause/proof, and retained equations.
+Run no arguments, `generic`, `nested`, `actual`, and `actualMissing`. The latter
+two isolate projections appearing only in the selected child's actual output;
+the pure boundary must reject equation removal and recover with the saved row.
+Generic equations retain the impl's original ParamId. Closed clauses avoid
+unrelated equations; the compatibility proof API and empty/absent publication
+remain distinct. This representation increment preserves SourceAdmission inputs
+and does not certify migration of the associated consumer to saved-only replay.

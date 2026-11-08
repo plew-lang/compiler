@@ -1,0 +1,80 @@
+// The producer retains the original impl-owned obligation, proof and equations.
+// This representation test does not certify migration of the old consumer.
+use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use ../../../src/SourceAccess only { SourceAccess }
+use ../../../src/Ir only { TraitBound, ConformanceProofDemand, TraitConstraint, TraitInstanceKey, StaticConformanceProof, StaticProofInstantiation, PatternTypeInput, PatternBindInput, DeclarationBoundRef }
+use @Std/Io only { print }
+use @Std/Process only { argAt }
+fn main() {
+    val scenario = argAt(1I64)
+    val actual = scenario == "actual" || scenario == "actualMissing"
+    val generic = scenario == "generic" || scenario == "nested" || actual
+    val leafArgument = if scenario == "nested" { give "Leaf[T#Parser.Output]" } else { give "T#Parser.Output" }
+    val key = if actual { give "I64" } else { give leafArgument }
+    val leaf = if actual { give "Leaf[T]" } else { give "Leaf[" + leafArgument + "]" }
+    val genericDeclarations = "trait Parser {{ type Output }} struct Token {{}} impl Token as Parser {{ type Output=I64 }} struct Leaf[T] {{}} struct Input[T] {{}} " + if actual {
+        give "impl[T] Leaf[T] as Required[I64] where T:Parser[Output=I64] {{ type Output=T#Parser.Output }} impl[T] Input[T] as Source where T:Parser[Output=I64] {{ type Item=Leaf[T] type Key=I64 }} "
+    } else {
+        give "impl[T] Leaf[T] as Required[T] {{ type Output=T }} impl[T] Input[T] as Source where T:Parser {{ type Item=" + leaf + " type Key=" + key + " }} "
+    }
+    val declarations = if generic { give genericDeclarations } else { give "struct Leaf {{}} impl Leaf as Required[I64] {{ type Output=I64 }} struct Input {{}} impl Input as Source {{ type Item=Leaf type Key=I64 }} " }
+    val input = if generic { give "Input[Token]" } else { give "Input" }
+    val source = "trait Required[K] {{ type Output }} trait Source {{ type Key type Item:Required[Self#Source.Key,Output=Self#Source.Key] }} trait Container {{ type Item }} struct Box[T] {{}} impl[T] Box[T] as Container where T:Source {{ type Item=T#Source.Item }} " + declarations + "fn context(value:Box[" + input + "]) {{}} fn main() {{}}"
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text text=source path="AssociatedProducer.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
+    val sourceTrait = compiler.decls.traitAt(index: compiler.decls.firstTraitNamed(nameId: compiler.internBytes(s: "Source").nameId))
+    val required = compiler.decls.traitAt(index: compiler.decls.firstTraitNamed(nameId: compiler.internBytes(s: "Required").nameId))
+    val context = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "context").nameId)
+    val boxed = compiler.funcParamAt(params: compiler.arena.functionAt(index: context).params, index: 0U64).ty
+    val receiver = compiler.arena.typeAt(index: boxed).args[0U64]
+    val selected = compiler.viewedTraitConstraintProof(demand: <ConformanceProofDemand.SourceAdmission />, ref: receiver, constraint: <TraitConstraint key=<TraitInstanceKey owner=sourceTrait.nameStart positionalArgs=[] /> assocPredicates=[] />).unwrap()
+    val witness = compiler.selectedConstraintWitness(proof: selected).unwrap()
+    val declaration = compiler.decls.conformAt(index: witness.conformIdx - 1U64)
+    val clause = sourceTrait.assocBounds.start
+    if sourceTrait.assocBounds.len != 1U64 { panic("associated producer control requires one clause") }
+    val row = compiler.arena.conformanceAssociatedClause(conformance: witness.conformIdx - 1U64, clause: clause).unwrap()
+    if !compiler.arena.hasConformanceAssociatedEvidence(conformance: witness.conformIdx - 1U64) { panic("associated row has no publication") }
+    if row.clause != clause || row.bound.constraint.key.owner != required.nameStart || row.bound.constraint.positionalArgsOpen || row.bound.constraint.key.positionalArgs.count() != 1U64 || row.bound.constraint.assocPredicates.count() != 1U64 { panic("associated producer did not retain the complete original clause") }
+    mut val item = 0U64
+    mut val option = 0U64
+    for index in 0U64..<declaration.assocBindingIds.count() {
+        val binding = compiler.decls.assocBindings[compiler.conformFuncIdAt(ids: declaration.assocBindingIds, index: index)]
+        if binding.nameId == compiler.internBytes(s: "Item").nameId { item = binding.ty }
+        if binding.nameId == compiler.internBytes(s: "Key").nameId { option = binding.ty }
+    }
+    if item == 0U64 || option == 0U64 || !compiler.typeRefEq(a: row.bound.subject, b: item) || !compiler.typeRefEq(a: row.bound.constraint.key.positionalArgs[0U64], b: option) || !compiler.typeRefEq(a: row.bound.constraint.assocPredicates[0U64].value, b: option) || row.bound.constraint.assocPredicates[0U64].member != compiler.internBytes(s: "Output").nameId { panic("associated producer changed its impl-owned pre-normalization terms") }
+    if compiler.arena.conformanceAssociatedProof(conformance: witness.conformIdx - 1U64, clause: clause).unwrap() != row.proof { panic("compatibility reader changed the original selected proof") }
+    if compiler.arena.conformanceAssociatedClause(conformance: witness.conformIdx - 1U64, clause: clause + 100U64).isSome() { panic("associated row reader accepted a foreign clause") }
+    if scenario == "generic" || scenario == "nested" {
+        match compiler.thawStaticConformanceProof(id: row.proof) {
+            StaticConformanceProof.ConcreteWitness(witness: val child) => {
+                if child.conditions != 0U64 { panic("nested binding control unexpectedly has child conditions") }
+                mut val projection = false
+                for binding in child.binds { if compiler.arena.typeContainsAssociatedProjection(ref: binding.term) { projection = true } }
+                if !projection { panic("nested binding control lost its saved projection dependency") }
+            }
+            _ => { panic("nested binding control lost its original selected child") }
+        }
+    }
+    if generic {
+        if row.normalizations.count() == 0U64 { panic("associated producer lost its required equations") }
+        val parameter = compiler.conformBindAt(binds: declaration.typeParams, index: 0U64)
+        for step in row.normalizations {
+            val projection = compiler.arena.typeAt(index: step.source)
+            val root = compiler.typeTermProjectionReceiver(t: projection)
+            if compiler.arena.typeAt(index: root).paramId != parameter.paramId { panic("associated equation lost its original impl binder") }
+        }
+    } else if row.normalizations.count() != 0U64 { panic("closed projection-free clause acquired unrelated equations") }
+    if actual && (compiler.arena.typeContainsAssociatedProjection(ref: row.bound.subject) || compiler.arena.typeContainsAssociatedProjection(ref: option)) { panic("actual-output control contains an expected-side projection") }
+    val assumptions = compiler.conformanceDeclarationAssumptions(conformIndex: witness.conformIdx - 1U64)
+    compiler.checkProjectionNormalizations(normalizations: row.normalizations, offset: row.bound.offset, assumptions: assumptions).unwrap()
+    val expected = <TraitBound subject=compiler.replayProjectionNormalizations(ref: row.bound.subject, normalizations: row.normalizations, offset: row.bound.offset).unwrap() constraint=compiler.replayConstraintNormalizations(constraint: row.bound.constraint, normalizations: row.normalizations, offset: row.bound.offset).unwrap() offset=row.bound.offset />
+    compiler.checkRetainedWitnessClause(expected: expected, proof: compiler.thawStaticConformanceProof(id: row.proof), normalizations: row.normalizations, offset: row.bound.offset, assumptions: assumptions).unwrap()
+    if scenario == "actualMissing" {
+        if compiler.checkRetainedWitnessClause(expected: row.bound, proof: compiler.thawStaticConformanceProof(id: row.proof), normalizations: [], offset: row.bound.offset, assumptions: assumptions).isOk() { panic("associated output comparison repaired its missing saved equation") }
+        compiler.checkRetainedWitnessClause(expected: expected, proof: compiler.thawStaticConformanceProof(id: row.proof), normalizations: row.normalizations, offset: row.bound.offset, assumptions: assumptions).unwrap()
+    }
+    if !compiler.arena.hasConformanceAssociatedEvidence(conformance: 0U64) || compiler.arena.hasConformanceAssociatedEvidence(conformance: compiler.decls.conformCount() + 1U64) { panic("empty and absent associated publications were conflated") }
+    if compiler.activeConditionAdmission.count() != 0U64 || compiler.activeAssumptionAdmission.count() != 0U64 { panic("associated producer control leaked admission state") }
+    print("1")
+}

@@ -929,3 +929,45 @@ trait instance/member/subject/proof/equation, missing/duplicate row, cycles,
 Deferred versus concrete missing evidence, recovery and existing source usage.
 The independent read-only design review accepted this boundary and distinguished
 it from all-owner migration; it did not certify its implementation.
+
+
+### Associated Clause Producer Snapshot (WIP)
+
+[Saved representation and fresh validation](../../../evidence/rejection-domains/diagnostic-domain-implementation/associated-clause-snapshots.json)
+record the unchanged three-control baseline, fresh77 native cases, public modes/
+AOT/dispatcher and compiler source check. Build `20261108T164217-build-4f6770`
+and fresh results have invariant inputs and independently reconciled current
+source/test/golden/runner/candidate hashes. No new formal timing is claimed.
+
+The conformance-owned associated row now retains the full **pre-normalization**
+impl-translated `TraitBound`, original trait clause ID, selected proof and saved
+normalizations. SourceAdmission still receives exactly the former subject and
+constraint; recording happens only after that selection. Expected subject,
+positional arguments and predicates are recorded under exact conformance
+assumptions, with only mismatching actual-output terms acquired by the shared
+recorder. Equations and the complete pure boundary are checked before publication.
+The old proof API remains a compatibility reader of the new row; the associated
+consumer is deliberately not yet migrated.
+
+This is a representation refactor with preserved GREEN controls and snapshot
+assertions, not an invented old-source RED. An attempted direct private-helper
+probe failed visibility at compile time and is not evidence of a product bug.
+`RetainedAssociatedClauses` covers closed, generic, nested and actual-output-only
+obligations, original impl ParamIds, complete raw arguments/predicates, exact
+proof identity, equation-loss rejection by the existing pure comparator and
+recovery. Its nested selected child has no own condition plan but does have a
+projection in its binding, explicitly preserving the next reader dependency.
+The source fixture's empty/absent publication check is a local control, not a
+claim that raw publication ownership/duplicate sealing is complete (com-oir7).
+
+The next consumer increment must share equation instantiation/prerequisite
+replay with witness replay. Ground source/output simultaneously once in the
+selected impl environment. Pass that validated context to child bindings and
+Self as well as to the expected bound; `replaySelectedWitness` currently queries
+through `groundTermForBody` before processing its own plan, so merely changing
+the expected-bound check is insufficient. An unconditional child (`conditions=0`)
+must still consume its outer associated-row equations. Compose only the explicit
+row/child contexts with their owners; do not search arena-wide equations, reapply
+the caller map to replaced terms, or introduce another solver. Missing context
+cannot fall back to query rescue. Existing scoped interface interpretation and
+legitimate first-concrete admission remain separate.

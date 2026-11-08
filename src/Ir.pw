@@ -1747,7 +1747,10 @@ pub enum TraitProjectionEquality {
 // receiver evidence that makes its use valid. Rows are interned per arena.
 pub struct ConformanceAssociatedEvidence {
     pub val clause: U64
+    // The complete pre-normalization obligation in this impl's binder space.
+    pub val bound: TraitBound
     pub val proof: U64
+    pub val normalizations: Array[ProjectionNormalizationStep]
 }
 pub impl ConformanceAssociatedEvidence { factory }
 

@@ -1288,7 +1288,26 @@ pub impl Comp {
             if self.proofIsMissing(proof: proof) {
                 return <Result.Err error=self.diagnosticAt(offset: offset, msg: "associated type does not satisfy its declared trait constraint") />
             }
-            evidence.append(<ConformanceAssociatedEvidence clause=declaration.assocBounds.start + index proof=self.freezeStaticConformanceProof(proof: proof) />)
+            // Preserve the exact SourceAdmission inputs. Recording afterward
+            // cannot change the selected proof or replace its source provenance.
+            val original = <TraitBound subject=subject constraint=constraint offset=offset />
+            mut val normalizations: Array[ProjectionNormalizationStep] = []
+            try self.recordConditionTypeNormalization(ref: subject, assumptions: assumptions, normalizations: inout normalizations)
+            for argument in constraint.key.positionalArgs { try self.recordConditionTypeNormalization(ref: argument, assumptions: assumptions, normalizations: inout normalizations) }
+            mut val names: Array[U64] = []
+            mut val values: Array[U64] = []
+            for predicate in constraint.assocPredicates {
+                try self.recordConditionTypeNormalization(ref: predicate.value, assumptions: assumptions, normalizations: inout normalizations)
+                names.append(predicate.member)
+                values.append(predicate.value)
+            }
+            if !(try self.recordSelectedProofPredicateNormalizations(proof: proof, traitOwner: constraint.key.owner, names: names, values: values, assumptions: assumptions, normalizations: inout normalizations, offset: offset)) {
+                return <Result.Err error=self.diagnosticAt(offset: offset, msg: "associated constraint has incomplete retained output evidence", failureDomain: <FailureDomain.Internal />) />
+            }
+            try self.checkProjectionNormalizations(normalizations: normalizations, offset: offset, assumptions: assumptions)
+            val expected = <TraitBound subject=(try self.replayProjectionNormalizations(ref: subject, normalizations: normalizations, offset: offset)) constraint=(try self.replayConstraintNormalizations(constraint: constraint, normalizations: normalizations, offset: offset)) offset=offset />
+            try self.checkRetainedWitnessClause(expected: expected, proof: proof, normalizations: normalizations, offset: offset, assumptions: assumptions)
+            evidence.append(<ConformanceAssociatedEvidence clause=declaration.assocBounds.start + index bound=original proof=self.freezeStaticConformanceProof(proof: proof) normalizations=normalizations />)
             index += 1U64
         }
         if !self.arena.publishConformanceAssociatedEvidence(conformance: conformIndex, evidence: evidence) { return <Result.Err error=self.diagnosticAt(offset: conformance.defOffset, msg: "associated constraint evidence could not be published") /> }
