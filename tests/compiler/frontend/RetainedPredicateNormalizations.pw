@@ -7,7 +7,12 @@ use @Std/Process only { argAt }
 
 fn main() {
     val scenario = argAt(1I64)
-    val source = "trait Parser {{ type Output }} trait Carrier {{ type Item }} trait Root {{}} trait View[K] {{}} struct Source {{}} struct Holder[T] {{}} struct Box[T] {{}} impl Source as Parser {{ type Output=I64 }} impl[T] Holder[T] as Carrier where T:Parser {{ type Item=T#Parser.Output }} impl[T] Box[T] as Root where T:Carrier[Item=I64] {{}} fn boxed(value:Box[Holder[Source]]) {{}} fn holder(value:Holder[Source]) {{}} fn main() {{}}"
+    val nested = scenario == "nested" || scenario == "nestedMissing"
+    val viewed = scenario == "viewPlan" || scenario == "viewPlanMissing"
+    val itemType = if nested { give "Array[T#Parser.Output]" } else if viewed { give "T#View[T#Parser.Output]" } else { give "T#Parser.Output" }
+    val expectedType = if nested { give "Array[I64]" } else if viewed { give "Source#View[I64]" } else { give "I64" }
+    val viewCondition = if viewed { give ",T:View[T#Parser.Output]" } else { give "" }
+    val source = "trait Parser {{ type Output }} trait Carrier {{ type Item }} trait Root {{}} trait View[K] {{}} struct Source {{}} struct Holder[T] {{}} struct Box[T] {{}} impl Source as Parser {{ type Output=I64 }} impl Source as View[I64] {{}} impl[T] Holder[T] as Carrier where T:Parser" + viewCondition + " {{ type Item=" + itemType + " }} impl[T] Box[T] as Root where T:Carrier[Item=" + expectedType + "] {{}} fn boxed(value:Box[Holder[Source]]) {{}} fn holder(value:Holder[Source]) {{}} fn boolean(value:Bool) {{}} fn symbolic[T](value:T) where T:Carrier[Item=T] {{}} fn main() {{}}"
     mut val compiler = <Comp />
     analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text text=source path="RetainedPredicate.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
     val root = compiler.decls.traitAt(index: compiler.decls.firstTraitNamed(nameId: compiler.internBytes(s: "Root").nameId))
@@ -23,6 +28,19 @@ fn main() {
     val declaration = compiler.decls.conformAt(index: witness.conformIdx - 1U64)
     val plan = compiler.arena.witnessConditionPlanAt(index: witness.conditions - 1U64)
     if declaration.bounds.len != 1U64 || plan.proofs.count() != 1U64 { panic("predicate control lost its original clause") }
+    if scenario == "symbolic" {
+        val function = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "symbolic").nameId)
+        val bounds = compiler.sourceDeclarationCallBoundIndices(functionIndex: function)
+        if bounds.count() != 1U64 { panic("symbolic control lost its declaration bound") }
+        val value = compiler.funcParamAt(params: compiler.arena.functionAt(index: function).params, index: 0U64).ty
+        val symbolicProof = <StaticConformanceProof.AssumedBound source=<DeclarationBoundRef.Function index=bounds[0U64] /> />
+        val carrier = compiler.decls.traitAt(index: compiler.decls.firstTraitNamed(nameId: compiler.internBytes(s: "Carrier").nameId))
+        val item = compiler.internBytes(s: "Item").nameId
+        if !compiler.retainedProofAssociatedTypesMatch(proof: symbolicProof, traitOwner: carrier.nameStart, names: [item], values: [value], normalizations: []).unwrap() { panic("identical symbolic output was forced concrete") }
+        if compiler.retainedProofAssociatedTypesMatch(proof: symbolicProof, traitOwner: carrier.nameStart, names: [compiler.internBytes(s: "Absent").nameId], values: [value], normalizations: []).unwrap() { panic("missing symbolic output was accepted") }
+        print("1")
+        return
+    }
     if scenario == "view" {
         val carrier = compiler.decls.traitAt(index: compiler.decls.firstTraitNamed(nameId: compiler.internBytes(s: "Carrier").nameId))
         val view = compiler.decls.traitAt(index: compiler.decls.firstTraitNamed(nameId: compiler.internBytes(s: "View").nameId))
@@ -40,22 +58,45 @@ fn main() {
     }
     if scenario == "retained" && plan.normalizations.count() == 0U64 { panic("selected associated output normalization was not retained") }
     mut val actual = witness
-    if scenario == "missing" {
+    val missing = scenario == "missing" || scenario == "nestedMissing" || scenario == "viewPlanMissing"
+    val malformed = scenario == "wrongProof" || scenario == "wrongReceiver" || scenario == "wrongArguments" || scenario == "wrongOutput" || scenario == "cycle"
+    if missing {
         val equations: Array[ProjectionNormalizationStep] = []
         val conditions = compiler.arena.publishWitnessConditionPlan(plan: <WitnessConditionPlan witness=plan.witness proofs=plan.proofs normalizations=equations />)
         actual = <WitnessMatch conformIdx=witness.conformIdx selfRef=witness.selfRef binds=witness.binds conditions=conditions />
     }
+    if malformed {
+        if plan.normalizations.count() == 0U64 { panic("malformed control lost its actual-output equation") }
+        val step = plan.normalizations[0U64]
+        val boolean = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "boolean").nameId)
+        val boolType = compiler.funcParamAt(params: compiler.arena.functionAt(index: boolean).params, index: 0U64).ty
+        val source = if scenario == "wrongReceiver" {
+            give compiler.rebuildProjectionTerm(t: compiler.arena.typeAt(index: step.source), receiver: subject, traitArgs: [])
+        } else if scenario == "wrongArguments" {
+            give compiler.rebuildProjectionTerm(t: compiler.arena.typeAt(index: step.source), receiver: compiler.typeTermProjectionReceiver(t: compiler.arena.typeAt(index: step.source)), traitArgs: [step.output])
+        } else { give step.source }
+        val proof = if scenario == "wrongProof" { give plan.proofs[0U64] } else { give step.proof }
+        val output = if scenario == "wrongOutput" { give boolType } else if scenario == "cycle" { give step.source } else { give step.output }
+        val equation = <ProjectionNormalizationStep source=source proof=proof output=output />
+        if scenario == "cycle" {
+            match compiler.replayProjectionNormalizations(ref: step.source, normalizations: [equation], offset: 0U64) {
+                Result.Err(error: _) => {}
+                Result.Ok(value: _) => { panic("reachable saved-equation cycle was not rejected") }
+            }
+        }
+        val conditions = compiler.arena.publishWitnessConditionPlan(plan: <WitnessConditionPlan witness=plan.witness proofs=plan.proofs normalizations=[equation] />)
+        actual = <WitnessMatch conformIdx=witness.conformIdx selfRef=witness.selfRef binds=witness.binds conditions=conditions />
+    }
     val proof = <StaticConformanceProof.AssumedBound source=<DeclarationBoundRef.Conformance index=declaration.bounds.start /> />
     val result = compiler.instantiateConstraintProof(proof: proof, receiverRef: subject, environment: <InstanceEnvironment receiverRef=box proof=<StaticConformanceProof.ConcreteWitness witness=actual /> />, selfRef: box, itemRef: 0U64)
-    if scenario == "missing" {
+    if missing || malformed {
         match result {
             Result.Err(error: _) => {}
-            Result.Ok(value: val state) => {
-                match state {
-                    StaticProofInstantiation.Ready(proof: _) => { panic("missing actual-output equation was repaired by a fresh query") }
-                    _ => {}
-                }
-            }
+            Result.Ok(value: _) => { panic("missing or malformed actual-output evidence was not rejected") }
+        }
+        match compiler.checkWitnessConditionEvidence(witness: actual, offset: 0U64) {
+            Result.Err(error: _) => {}
+            Result.Ok(value: _) => { panic("whole-plan admission repaired missing or malformed output evidence") }
         }
     } else {
         match result.unwrap() {
@@ -66,5 +107,14 @@ fn main() {
         }
     }
     if compiler.activeConditionAdmission.count() != 0U64 { panic("predicate replay leaked its admission stack") }
+    compiler.checkWitnessConditionEvidence(witness: witness, offset: 0U64).unwrap()
+    val recovery = compiler.instantiateConstraintProof(proof: proof, receiverRef: subject, environment: <InstanceEnvironment receiverRef=box proof=selected />, selfRef: box, itemRef: 0U64).unwrap()
+    match recovery {
+        StaticProofInstantiation.Ready(proof: val forwarded) => {
+            if !compiler.sameStaticConformanceProof(a: forwarded, b: compiler.thawStaticConformanceProof(id: plan.proofs[0U64])) { panic("recovery changed its selected child proof") }
+        }
+        _ => { panic("valid predicate failed after a previous result") }
+    }
+    if compiler.activeConditionAdmission.count() != 0U64 { panic("predicate recovery leaked its admission stack") }
     print("1")
 }

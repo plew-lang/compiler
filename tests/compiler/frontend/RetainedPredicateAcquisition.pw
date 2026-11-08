@@ -1,0 +1,35 @@
+// An unrelated mismatch must not re-query an already equal predicate.
+use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use ../../../src/SourceAccess only { SourceAccess }
+use ../../../src/Ir only { TraitConstraint, TraitInstanceKey, ConformanceProofDemand, ProjectionNormalizationStep }
+use @Std/Io only { print }
+use @Std/Process only { argAt }
+
+fn main() {
+    val scenario = argAt(1I64)
+    mut val compiler = <Comp />
+    val source = "trait Parser {{ type Output }} trait Dual {{ type First type Second }} struct One {{}} struct Two {{}} struct Pair[A,B] {{}} impl One as Parser {{ type Output=I64 }} impl Two as Parser {{ type Output=I64 }} impl[A,B] Pair[A,B] as Dual where A:Parser,B:Parser {{ type First=A#Parser.Output type Second=B#Parser.Output }} fn concrete(value:Pair[One,Two]) {{}} fn main() {{}}"
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text text=source path="PredicateAcquisition.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
+    val dual = compiler.decls.traitAt(index: compiler.decls.firstTraitNamed(nameId: compiler.internBytes(s: "Dual").nameId))
+    val function = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "concrete").nameId)
+    val subject = compiler.funcParamAt(params: compiler.arena.functionAt(index: function).params, index: 0U64).ty
+    val proof = compiler.viewedTraitConstraintProof(demand: <ConformanceProofDemand.SourceAdmission />, ref: subject, constraint: <TraitConstraint key=<TraitInstanceKey owner=dual.nameStart positionalArgs=[] /> assocPredicates=[] />).unwrap()
+    val firstName = compiler.internBytes(s: "First").nameId
+    val secondName = compiler.internBytes(s: "Second").nameId
+    val first = compiler.associatedOutputInProof(proof: proof, traitOwner: dual.nameStart, assocId: firstName).unwrap()
+    val second = compiler.associatedOutputInProof(proof: proof, traitOwner: dual.nameStart, assocId: secondName).unwrap()
+    if !compiler.arena.typeContainsAssociatedProjection(ref: first) || !compiler.arena.typeContainsAssociatedProjection(ref: second) || compiler.typeRefEq(a: first, b: second) { panic("acquisition control lost its two distinct projections") }
+    mut val setup: Array[ProjectionNormalizationStep] = []
+    val concrete = compiler.recordConditionTypeNormalization(ref: second, assumptions: [], normalizations: inout setup).unwrap()
+    val expected = if scenario == "mixed" { give concrete } else { give second }
+    mut val equations: Array[ProjectionNormalizationStep] = []
+    if !compiler.recordSelectedProofPredicateNormalizations(proof: proof, traitOwner: dual.nameStart, names: [firstName,secondName], values: [first,expected], assumptions: [], normalizations: inout equations).unwrap() { panic("predicate acquisition did not preserve equality") }
+    for equation in equations {
+        if compiler.typeRefEq(a: equation.source, b: first) { panic("already equal predicate acquired unrelated query evidence") }
+    }
+    if scenario == "mixed" {
+        if equations.count() != 1U64 || !compiler.typeRefEq(a: equations[0U64].source, b: second) { panic("mismatch did not retain its own exact equation") }
+    } else if equations.count() != 0U64 { panic("equal predicates unexpectedly acquired equations") }
+    if !compiler.retainedProofAssociatedTypesMatch(proof: proof, traitOwner: dual.nameStart, names: [firstName,secondName], values: [first,expected], normalizations: equations).unwrap() { panic("recorded predicates did not replay") }
+    print("1")
+}

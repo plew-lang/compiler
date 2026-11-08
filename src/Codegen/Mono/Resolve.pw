@@ -310,6 +310,12 @@ pub impl Comp {
         return <Result.Ok value=proof />
     }
 
+    inout fn retainedAssociatedPredicateTermsMatch(expected: U64, actual: U64, normalizations: Array[ProjectionNormalizationStep], offset: U64) -> Result[Bool, CompileDiagnostic] {
+        val normalizedExpected = try self.replayProjectionNormalizations(ref: expected, normalizations: normalizations, offset: offset)
+        val normalizedActual = try self.replayProjectionNormalizations(ref: actual, normalizations: normalizations, offset: offset)
+        return <Result.Ok value=self.typeRefEq(a: normalizedExpected, b: normalizedActual) />
+    }
+
     // Interpret only the selected output and verified saved equations. This
     // comparator cannot acquire evidence or repair an incomplete frozen plan.
     inout fn retainedProofAssociatedTypesMatch(proof: StaticConformanceProof, traitOwner: U64, names: Array[U64], values: Array[U64], normalizations: Array[ProjectionNormalizationStep], offset: U64 = 0U64) -> Result[Bool, CompileDiagnostic] {
@@ -318,9 +324,7 @@ pub impl Comp {
         while index < names.count() {
             val output = try self.associatedOutputInProof(proof: proof, traitOwner: traitOwner, assocId: names[index])
             if output == 0U64 { return <Result.Ok value=false /> }
-            val expected = try self.replayProjectionNormalizations(ref: values[index], normalizations: normalizations, offset: offset)
-            val actual = try self.replayProjectionNormalizations(ref: output, normalizations: normalizations, offset: offset)
-            if !self.typeRefEq(a: expected, b: actual) { return <Result.Ok value=false /> }
+            if !(try self.retainedAssociatedPredicateTermsMatch(expected: values[index], actual: output, normalizations: normalizations, offset: offset)) { return <Result.Ok value=false /> }
             index += 1U64
         }
         return <Result.Ok value=true />
@@ -336,8 +340,10 @@ pub impl Comp {
         while index < names.count() {
             val output = try self.associatedOutputInProof(proof: proof, traitOwner: traitOwner, assocId: names[index])
             if output == 0U64 { return <Result.Ok value=false /> }
-            try self.recordConditionTypeNormalization(ref: values[index], assumptions: assumptions, normalizations: inout normalizations)
-            try self.recordConditionTypeNormalization(ref: output, assumptions: assumptions, normalizations: inout normalizations)
+            if !(try self.retainedAssociatedPredicateTermsMatch(expected: values[index], actual: output, normalizations: normalizations, offset: offset)) {
+                try self.recordConditionTypeNormalization(ref: values[index], assumptions: assumptions, normalizations: inout normalizations)
+                try self.recordConditionTypeNormalization(ref: output, assumptions: assumptions, normalizations: inout normalizations)
+            }
             index += 1U64
         }
         return self.retainedProofAssociatedTypesMatch(proof: proof, traitOwner: traitOwner, names: names, values: values, normalizations: normalizations, offset: offset)

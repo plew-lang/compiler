@@ -389,8 +389,22 @@ migration remain separate required work in com-amjl.
 
 `RetainedPredicateNormalizations.pw` checks selected associated outputs whose
 normalization is needed only on the actual side. Run without arguments and
-with `retained`, `missing`, and `view`; all match `.out` with exit0/empty stderr.
-The first two negative old-source controls detect missing producer equations
-and fresh-query rescue of a frozen plan. The `view` case is a semantic visitor
-control, not a claim of production plan view admission. Additional malformed,
-nested and non-interference cases remain under the owning WIP task.
+with `retained`, `missing`, `view`, `nested`, `nestedMissing`, `viewPlan`,
+`viewPlanMissing`, `symbolic`, `wrongProof`, `wrongReceiver`, `wrongArguments`,
+`wrongOutput`, and `cycle`. All exit0, match `.out`, and have empty stderr.
+Missing/malformed actual-output evidence is rejected by both whole-plan and
+clause admission. Normal recovery preserves the child proof and restores the
+admission stack. `view` is a semantic visitor control; `viewPlan` additionally
+covers an actual view-containing binding through producer publication and
+both consumers. The raw reachable cycle check is distinct from plan admission.
+
+`RetainedPredicateAcquisition.pw` runs without arguments and with `mixed`.
+Equal raw projections acquire no equations. If only Second mismatches, only
+its equation may be acquired; an already equal First is unaffected. This
+controls structural non-interference, not a demonstrated user-program output
+failure. Both cases exit0 and match `.out` with empty stderr.
+
+The existing `AuthoredNestedSignature` once/proofBinders cases and the internal
+`associated_condition_normalization_chain` fixture separately cover once-only
+substitution and multiple saved equations. These tests do not adopt chained
+projection surface syntax or certify the remaining proof consumers.

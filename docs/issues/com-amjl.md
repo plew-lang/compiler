@@ -862,8 +862,19 @@ Saved replay now folds canonical type children and rebuilds through the same
 term API as source recipes, including view selector arguments, before applying
 an equation to a projection head. The visitor control is distinct from source
 view admission. Three actual old-source REDs and one existing GREEN control
-become GREEN, as do10 preserved native fixtures. Source review found no confirmed
-contract violation but noted unnecessary acquisition for an already-equal
-predicate when another predicate mismatches. That mixed control and the planned
-nested/invalid/cycle/symbolic/recovery controls remain open, alongside all
-fresh/final gates and whole-task obligations. Do not call this increment closed.
+become GREEN. A subsequent mixed-predicate RED detects unnecessary equation
+acquisition for an already-equal predicate; it is a structural non-interference
+failure, not a demonstrated language-output error. Pure term-pair comparison
+is shared by the retained matcher and recording adapter, and only mismatching
+pairs acquire evidence; final whole-predicate replay still validates the result.
+
+The final build candidate passes14 normalization controls plus2 acquisition
+controls,10 preserved calls/newtype fixtures,14 existing once/binder readers plus
+structural/chain fixtures,25 prior Conformance/callable snapshot controls,
+public check/lazy/AOT/native/dispatcher, and the compiler's whole source check.
+All inputs remain invariant. The normalization controls cover actual-only nested
+and view-containing production plans, missing equations, malformed prerequisite/
+receiver/trait arguments/output, reachable raw cycles versus plan admission,
+symbolic equality, missing output, and recovery/proof identity/stack cleanup.
+These are finite guarantees. Formal/final-candidate gates and whole-task
+obligations still remain; do not call com-amjl or met-si6j closed.
