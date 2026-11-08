@@ -818,5 +818,13 @@ its two callers pass their original Conformance range directly instead of
 copying Bind arrays. This preserves binder identity/order and all checks. The
 same-source diagnostic (three pairs with reversed order) shows identical output
 but no demonstrated speedup. It is not a formal performance result. Fresh9/10/14
-controls pass; formal follow-up remains required. No next semantic migration or
-carrier promotion is authorized by these focused results alone.
+controls pass. The isolated formal follow-up (ae19e30b, run64fe3c) reached
+generation3 fixed point, but samples7.521118/7.553853/6.958024 gave median
+7.521118 seconds. The7-second gate remains unmet. A same-latest-source comparison
+of the pre-increment, first-increment and range-followup fixed-point compilers
+produced identical LLVM in all9 runs; timing varied and does not establish a
+reliable cause or an improvement. Do not label the regression unavoidable or
+the copy-removal successful. Local copy removal has not restored the gate;
+further semantic migration stops at the performance condition. Next work must
+resolve the measured cost/condition before returning to saved predicate replay.
+No task completion, main integration, seed or carrier promotion follows.
