@@ -321,3 +321,9 @@ projection consumption, other declaration owners, or the distinction between a
 known Unit associated output and missing output. Public companion fixtures
 `trait_view_admitted_signature`, `trait_view_unbounded_signature` and
 `trait_view_wrong_instance_signature` are discovered by the normal suite.
+
+`AuthoredNestedSignature.pw` is a manual pending-RED follow-up for the full nested
+signature reader (com-amjl). Its native equality assertion requires the retained
+projection inside `Box[T#Project[I64].Item]` to yield `Box[I64]`. A compile/link
+failure is not the intended RED. It is not discovered by the normal suite;
+current root-only-reader success does not satisfy this assertion.

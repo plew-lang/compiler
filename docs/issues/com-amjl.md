@@ -616,3 +616,12 @@ function parameter/result, projection receiver arguments, nested selector
 arguments and shorthand bound-derived arguments; reject missing/foreign/swapped
 edges and absent proofs without downstream source rediscovery. This is within
 the existing task; no new spec rule or task decomposition is adopted.
+
+`AuthoredNestedSignature.pw` is the first next-reader RED: a justified
+`Box[T#Project[I64].Item]` signature, instantiated with Source whose retained
+Project[I64] output is I64, must read as Box[I64]. The current root-only reader
+leaves the nested output unresolved. Fixed-point candidate compiles/links the
+harness successfully, then the native equality assertion alone exits134;
+inputs are invariant. This is a manual internal pending-RED fixture, not a
+new specification failure or an automatically green suite case. The source
+recipe/recursive reader implementation has not begun.

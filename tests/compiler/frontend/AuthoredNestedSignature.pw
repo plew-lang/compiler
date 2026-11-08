@@ -1,0 +1,21 @@
+// Retained nested projection output must be consumed through its source recipe.
+use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use ../../../src/SourceAccess only { SourceAccess }
+use ../../../src/SourceTypeAdmissions only { SourceSignatureSlot }
+use ../../../src/Ir only { InstanceEnvironment, CallableConstraintEvidence }
+use @Std/Io only { print }
+
+fn main() {
+    val source = "trait Project[Kind] {{ type Item }} struct Source {{}} impl Source as Project[I64] {{ type Item=I64 }} struct Box[T] {{}} fn inspect[T](value:Box[T#Project[I64].Item]) where T:Project[I64] {{}} fn concrete(value:Source) {{}} fn expected(value:Box[I64]) {{}} fn main() {{}}"
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text text=source path="NestedSignature.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
+    val owner = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "inspect").nameId)
+    val concrete = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "concrete").nameId)
+    val expected = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "expected").nameId)
+    val receiver = compiler.funcParamAt(params: compiler.arena.functionAt(index: concrete).params, index: 0U64).ty
+    val expectedType = compiler.funcParamAt(params: compiler.arena.functionAt(index: expected).params, index: 0U64).ty
+    val environment = compiler.environmentWithCallableConstraints(fnIdx: owner, environment: <InstanceEnvironment params=compiler.copyFuncBinds(binds: compiler.arena.functionAt(index: owner).typeParams) args=[receiver] />, evidence: <CallableConstraintEvidence.Declaration />).unwrap()
+    val actual = compiler.readAdmittedSignatureRoot(function: owner, slot: <SourceSignatureSlot.Parameter index=0U64 />, environment: environment).unwrap()
+    if !compiler.typeRefEq(a: actual, b: expectedType) { panic("nested signature reader did not consume the retained associated output") }
+    print("1")
+}
