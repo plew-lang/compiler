@@ -366,3 +366,9 @@ product REDs. The final native probe succeeds. Static independent review accepts
 this finite prefix after value impl/requirement and exact-site test additions.
 Fresh compiler controls, formal fixed-point/performance and task-wide admission
 remain pending. [Evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/authored-type-provenance-prefix.json).
+
+### Producer Prefix Fresh Gates and Next Owner Boundary
+
+Compiler c7012d7f passed standard build, fresh provenance native, short17 and preservation37 controls; all recorded inputs remained unchanged. Independent read-only reconciliation accepted those results. The same fifteen source admission probes retain eight invalid acceptances, four valid successes and three intended rejections. Formal run `20261108T000545-self-host-42d9af` reached generation-three LLVM/runtime fixed point, median 6.703740 seconds (7.383906 / 6.703740 / 6.703296). The saved candidate is `bin/plewc-authored-type-provenance-fixed-point`; no adoption or seed promotion. See the linked prefix evidence for hashes and input deltas.
+
+Next, bind receipts to actual registration identities: free/method/extern Function IDs and their exact declared bounds; real conformance identity and owned bounds; a separate inherent-impl owner; canonical trait owner plus requirement slot for raw signatures. Carry signature scope tokens explicitly in the lowering handoff, never by searching anchors or guessing functionCount. Bind raw trait Self to the exact full trait instance; existing translated Requirement evidence is not raw source authority. Origin-specific ownership and premise checks must reject foreign/sibling/rebound/failed scopes. Then admit unused source signatures through the shared solver using rigid explicit lexical terms: the current viewed wrapper's ambient resolveTy is not sufficient. This is the existing finite repair sequence, not a new solver or an additional whole-task dependency.
