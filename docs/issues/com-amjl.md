@@ -624,4 +624,39 @@ leaves the nested output unresolved. Fixed-point candidate compiles/links the
 harness successfully, then the native equality assertion alone exits134;
 inputs are invariant. This is a manual internal pending-RED fixture, not a
 new specification failure or an automatically green suite case. The source
-recipe/recursive reader implementation has not begun.
+recipe producer implementation is WIP; the recursive reader is not yet connected.
+
+### Nested Recipe Producer WIP and Bound-Origin RED
+
+[Producer controls and independent findings](../../../evidence/rejection-domains/diagnostic-domain-implementation/authored-type-recipes.json)
+record the current source work: immutable recipe nodes, explicit child edges
+through both PType adapters, record ordering, parallel view argument recipes,
+projection receiver/arguments, and direct canonical child checks. Local21 controls
+pass at the checked-prefix revision; subsequent strict missing-edge refusal and
+Unit-origin linkage require fresh validation. No new candidate or performance
+gate is claimed for this WIP; nested reader/production consumers remain open.
+
+Independent review confirms a pre-existing source-bound lowering responsibility
+problem exposed by recipe identity: unique*ProjectionSourceCore re-lowers the
+where AST at each use. Returning those new recipes is not forwarding the original
+bound occurrence. `AuthoredProjectionBoundOrigin.pw` compiles/links successfully
+and fails only the intended assertion: the where argument acquires Body role
+when a body uses T.Item. Its source position alone cannot restore its owner.
+This is within this task's exact lexical-origin requirement, not a new spec rule.
+
+Repair before consumer migration: reserve stable clause IDs in the original
+owner context, retain original ParamIds and syntax descriptors, materialize
+candidate arguments only after owner/member filtering, and complete owner clauses
+in Declaration role before parameter/default/result lowering. Repeated short
+uses and FuncBound publication must consume the same prepared subject/constraint/
+argument recipes. Impl clauses retain impl scope and are inherited by method IDs;
+member clauses remain separate. Raw requirements do not acquire function identity.
+Preserve the shared32-request Limit contract, Failed diagnostic retention and
+Err restoration; do not impersonate another owner by switching cur. Declaration
+validation may move earlier, so compare actual diagnostic ordering.
+
+Required additions: both adapters' repeated left/right/result/body/default;
+shared impl conditions across methods and separate member conditions;
+later-clause dependence, existing nonmember filtering and recursive Limit;
+failed-context/depth/role restoration; legacy rich-field omission and concatenated
+impl/member clause identity. The evidence record holds the detailed review.

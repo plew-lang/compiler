@@ -25,3 +25,5 @@ part ./Lower/Impl
 part ./Lower/TopLevel
 
 part ./Lower/SourceSelection
+
+part ./Lower/TypeRecipes

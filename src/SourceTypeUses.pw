@@ -25,6 +25,20 @@ pub struct SourceTypeScope {
 }
 pub impl SourceTypeScope { factory }
 
+// A derived node is structural provenance, never source admission authority.
+// Authored nodes instead identify exactly one immutable source occurrence.
+pub enum SourceTypeRecipeOrigin { Authored ProjectionReceiver BoundSelection ResultRepresentation }
+pub struct SourceTypeRecipe {
+    pub val term: U64
+    pub val children: Array[U64]
+    pub val labels: Array[U64]
+    pub val origin: SourceTypeRecipeOrigin
+    pub val occurrence: U64 = 0U64
+    // Representation changes retain provenance separately from semantic edges.
+    pub val sourceRecipe: U64 = 0U64
+}
+pub impl SourceTypeRecipe { factory }
+
 pub struct AuthoredTypeUse {
     pub val term: U64
     pub val site: U64
@@ -33,6 +47,7 @@ pub struct AuthoredTypeUse {
     pub val scope: U64
     pub val parameters: Array[Bind]
     pub val role: SourceTypeUseRole
+    pub val recipe: U64 = 0U64
 }
 pub impl AuthoredTypeUse { factory }
 
@@ -58,6 +73,7 @@ pub impl AuthoredFunctionSignature { factory }
 pub struct SourceTypeUses {
     mut val scopes: Array[SourceTypeScope] = []
     mut val uses: Array[AuthoredTypeUse] = []
+    mut val recipes: Array[SourceTypeRecipe] = []
     // Lowering context only; immutable receipts retain the role at creation.
     // One row per scope, appended by begin together with that scope.
     mut val roles: Array[SourceTypeUseRole] = []
@@ -191,12 +207,22 @@ pub impl SourceTypeUses {
         self.signatures.append(<AuthoredFunctionSignature function=function scope=token parameters=parameters result=result declarationUses=self.declarationUses[token - 1U64] />)
         return true
     }
-    inout fn record(term: U64, site: U64, parameters: Array[Bind]) -> U64 {
+    fn recipeCount() -> U64 { return self.recipes.count() }
+    fn recipeAt(id: U64) -> Optional[SourceTypeRecipe] {
+        if id == 0U64 || id > self.recipes.count() { return <Optional.None /> }
+        return <Optional.Some v=self.recipes[id - 1U64] />
+    }
+    inout fn deriveRecipe(term: U64, children: Array[U64], labels: Array[U64], origin: SourceTypeRecipeOrigin, sourceRecipe: U64 = 0U64) -> U64 {
+        self.recipes.append(<SourceTypeRecipe term=term children=children labels=labels origin=origin sourceRecipe=sourceRecipe />)
+        return self.recipes.count()
+    }
+    inout fn record(term: U64, site: U64, parameters: Array[Bind], children: Array[U64] = [], labels: Array[U64] = []) -> U64 {
         // Every occurrence is distinct, even when term interning returns an
         // existing ID or two scopes use the same printed parameter names.
         val role = self.currentRole()
-        self.uses.append(<AuthoredTypeUse term=term site=site scope=self.active parameters=parameters role=role />)
-        val id = self.uses.count()
+        val id = self.uses.count() + 1U64
+        self.recipes.append(<SourceTypeRecipe term=term children=children labels=labels origin=<SourceTypeRecipeOrigin.Authored /> occurrence=id />)
+        self.uses.append(<AuthoredTypeUse term=term site=site scope=self.active parameters=parameters role=role recipe=self.recipes.count() />)
         match role {
             SourceTypeUseRole.Declaration => { self.declarationUses[self.active - 1U64].append(id) }
             _ => {}

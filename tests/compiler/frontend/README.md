@@ -327,3 +327,9 @@ signature reader (com-amjl). Its native equality assertion requires the retained
 projection inside `Box[T#Project[I64].Item]` to yield `Box[I64]`. A compile/link
 failure is not the intended RED. It is not discovered by the normal suite;
 current root-only-reader success does not satisfy this assertion.
+
+`AuthoredProjectionBoundOrigin.pw` is a manual pending-RED producer check for
+com-amjl. One original where argument must remain Declaration-owned and its
+recipe must be shared by repeated parameter/result/body short projections.
+The maintained RED currently compiles/links, then reports the use-site Body role
+leak. This assertion is not a registered passing normal-suite case.

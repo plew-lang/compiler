@@ -27,18 +27,24 @@ impl Comp {
     }
 
     inout fn decodeValueTraitConstraintArguments(traitType: TypeAst, owner: U64, site: U64) -> Result[TraitConstraint, CompileDiagnostic] {
+        return <Result.Ok value=(try self.lowerValueTraitConstraint(traitType: traitType, owner: owner, site: site)).constraint />
+    }
+
+    inout fn lowerValueTraitConstraint(traitType: TypeAst, owner: U64, site: U64) -> Result[LoweredTraitConstraint, CompileDiagnostic] {
+        mut val recipes: Array[U64] = []
         mut val boundArgs: Array[U64] = []
         mut val boundAssocNames: Array[U64] = []
         mut val boundAssocValues: Array[U64] = []
         mut val ai: U64 = 0U64
         while ai < traitType.args.count() {
-            val boundRef: U64 = (try self.lowerType(t: (try self.normalizeProjectionType(t: traitType.args[ai])))).ref
+            val type = try self.lowerType(t: (try self.normalizeProjectionType(t: traitType.args[ai])))
+            val boundRef = type.ref
             mut val label: U64 = 0U64
             if ai < traitType.argLabels.count() && traitType.argLabels[ai].bytes().count() > 0U64 {
                 val labelBind: Bind = self.internBytes(s: traitType.argLabels[ai])
                 label = labelBind.nameId
             }
-            if label == 0U64 { boundArgs.append(boundRef) }
+            if label == 0U64 { boundArgs.append(boundRef) recipes.append((try self.authoredChildRecipe(type: type))) }
             else {
                 boundAssocNames.append(label)
                 boundAssocValues.append(boundRef)
@@ -51,21 +57,27 @@ impl Comp {
             predicates.append(<TraitAssocPredicate member=boundAssocNames[pi] value=boundAssocValues[pi] span=site />)
             pi += 1U64
         }
-        return <Result.Ok value=<TraitConstraint key=<TraitInstanceKey owner=owner positionalArgs=boundArgs /> positionalArgsOpen=boundArgs.count() == 0U64 assocPredicates=predicates /> />
+        return <Result.Ok value=<LoweredTraitConstraint constraint=<TraitConstraint key=<TraitInstanceKey owner=owner positionalArgs=boundArgs /> positionalArgsOpen=boundArgs.count() == 0U64 assocPredicates=predicates /> arguments=recipes /> />
     }
 
     inout fn decodeSyntaxTraitConstraintArguments(traitType: SyntaxType, owner: U64, site: U64) -> Result[TraitConstraint, CompileDiagnostic] {
+        return <Result.Ok value=(try self.lowerSyntaxTraitConstraint(traitType: traitType, owner: owner, site: site)).constraint />
+    }
+
+    inout fn lowerSyntaxTraitConstraint(traitType: SyntaxType, owner: U64, site: U64) -> Result[LoweredTraitConstraint, CompileDiagnostic] {
+        mut val recipes: Array[U64] = []
         mut val args: Array[U64] = []
         mut val assocNames: Array[U64] = []
         mut val assocValues: Array[U64] = []
         mut val ai: U64 = 0U64
         while ai < syntaxTypeArgCount(file: self.syntax, ty: traitType) {
-            val arg: U64 = (try self.lowerSyntaxType(id: syntaxTypeArg(file: self.syntax, ty: traitType, index: ai))).ref
+            val type = try self.lowerSyntaxType(id: syntaxTypeArg(file: self.syntax, ty: traitType, index: ai))
+            val arg = type.ref
             val label = if ai < traitType.argLabels.count { give syntaxTypeArgLabel(file: self.syntax, ty: traitType, index: ai) } else { give <Span start=0U64 end=0U64 /> }
             if label.end > label.start {
                 assocNames.append(intern(c: inout self, start: label.start, len: label.end - label.start))
                 assocValues.append(arg)
-            } else { args.append(arg) }
+            } else { args.append(arg) recipes.append((try self.authoredChildRecipe(type: type))) }
             ai += 1U64
         }
         mut val predicates: Array[TraitAssocPredicate] = []
@@ -74,7 +86,7 @@ impl Comp {
             predicates.append(<TraitAssocPredicate member=assocNames[ai] value=assocValues[ai] span=site />)
             ai += 1U64
         }
-        return <Result.Ok value=<TraitConstraint key=<TraitInstanceKey owner=owner positionalArgs=args /> positionalArgsOpen=args.count() == 0U64 assocPredicates=predicates /> />
+        return <Result.Ok value=<LoweredTraitConstraint constraint=<TraitConstraint key=<TraitInstanceKey owner=owner positionalArgs=args /> positionalArgsOpen=args.count() == 0U64 assocPredicates=predicates /> arguments=recipes /> />
     }
 
 }
@@ -112,15 +124,18 @@ pub impl Comp {
         return true
     }
 
-    inout fn chooseShortProjectionSource(sources: Array[ResolvedViewSource], member: U64, site: U64) -> Result[ResolvedViewSource, CompileDiagnostic] {
-        mut val candidates: Array[ResolvedViewSource] = []
+}
+
+impl Comp {
+    inout fn chooseShortProjectionSource(sources: Array[LoweredTypeViewRecipe], member: U64, site: U64) -> Result[LoweredTypeViewRecipe, CompileDiagnostic] {
+        mut val candidates: Array[LoweredTypeViewRecipe] = []
         for val source in sources {
-            val ownerIndex = self.decls.traitOwnerIndex(offset: source.traitInstance.owner)
+            val ownerIndex = self.decls.traitOwnerIndex(offset: source.source.traitInstance.owner)
             if ownerIndex >= self.decls.traitOwnerCount() { continue }
             val owner = self.decls.traitOwnerAt(index: ownerIndex)
-            if owner.arity != source.traitInstance.positionalArgs.count() || !self.traitOwnerHasAssocId(owner: owner.nameStart, assocId: member) { continue }
+            if owner.arity != source.source.traitInstance.positionalArgs.count() || !self.traitOwnerHasAssocId(owner: owner.nameStart, assocId: member) { continue }
             mut val present = false
-            for val candidate in candidates { if self.semanticViewSourceEq(a: candidate, b: source) { present = true } }
+            for val candidate in candidates { if self.semanticViewSourceEq(a: candidate.source, b: source.source) { present = true } }
             if !present { candidates.append(source) }
         }
         if candidates.count() == 1U64 { return <Result.Ok value=candidates[0U64] /> }
@@ -128,23 +143,23 @@ pub impl Comp {
         return <Result.Err error=self.diagnosticAt(offset: site, msg: message, failureDomain: <FailureDomain.Source />) />
     }
 
-    inout fn uniqueProjectionSource(t: TypeAst) -> Result[ResolvedViewSource, CompileDiagnostic] {
+    inout fn uniqueProjectionSource(t: TypeAst) -> Result[LoweredTypeViewRecipe, CompileDiagnostic] {
         try self.beginShortProjection(site: t.span.start)
         val result = self.uniqueProjectionSourceCore(t: t)
         self.lowerProjectionDepth -= 1U64
         return result
     }
 
-    inout fn uniqueProjectionSourceCore(t: TypeAst) -> Result[ResolvedViewSource, CompileDiagnostic] {
-        mut val sources: Array[ResolvedViewSource] = []
+    inout fn uniqueProjectionSourceCore(t: TypeAst) -> Result[LoweredTypeViewRecipe, CompileDiagnostic] {
+        mut val sources: Array[LoweredTypeViewRecipe] = []
         mut val index = 0U64
         while index < self.lowerWhereTypes.count() && index < self.lowerWhereTraitTypes.count() {
             if self.boundLhsMatchesType(lhs: self.lowerWhereTypes[index], t: t) {
                 val bound = try self.normalizeProjectionType(t: self.lowerWhereTraitTypes[index])
                 val source = if bound.nameSpan.end > bound.nameSpan.start { give (try self.bindViewSourceName(siteOffset: bound.span.start, name: bound.nameSpan)) } else { give (try self.lowerViewSource(siteOffset: bound.span.start, text: bound.name)) }
                 if self.traitOwnerHasAssocId(owner: source.traitInstance.owner, assocId: self.internBytes(s: t.projectionAssoc).nameId) {
-                    val constraint = try self.decodeValueTraitConstraintArguments(traitType: bound, owner: source.traitInstance.owner, site: bound.span.start)
-                    sources.append(source.withArguments(arguments: constraint.key.positionalArgs))
+                    val lowered = try self.lowerValueTraitConstraint(traitType: bound, owner: source.traitInstance.owner, site: bound.span.start)
+                    sources.append(<LoweredTypeViewRecipe source=source.withArguments(arguments: lowered.constraint.key.positionalArgs) arguments=lowered.arguments />)
                 }
             }
             index += 1U64
@@ -152,6 +167,9 @@ pub impl Comp {
         return self.chooseShortProjectionSource(sources: sources, member: self.internBytes(s: t.projectionAssoc).nameId, site: t.span.start)
     }
 
+}
+
+pub impl Comp {
     inout fn boundLhsMatchesSyntaxType(lhs: TypeId, t: SyntaxType) -> Bool {
         val l: SyntaxType = syntaxType(file: self.syntax, id: lhs)
         if l.projectionAssoc.end > l.projectionAssoc.start { return false }
@@ -169,15 +187,18 @@ pub impl Comp {
 
     // Both syntax adapters decode complete lexical constraints and use one
     // instance-level uniqueness decision. Raw syntax is not rewritten.
-    inout fn uniqueSyntaxProjectionSource(t: SyntaxType) -> Result[ResolvedViewSource, CompileDiagnostic] {
+}
+
+impl Comp {
+    inout fn uniqueSyntaxProjectionSource(t: SyntaxType) -> Result[LoweredTypeViewRecipe, CompileDiagnostic] {
         try self.beginShortProjection(site: t.span.start)
         val result = self.uniqueSyntaxProjectionSourceCore(t: t)
         self.lowerProjectionDepth -= 1U64
         return result
     }
 
-    inout fn uniqueSyntaxProjectionSourceCore(t: SyntaxType) -> Result[ResolvedViewSource, CompileDiagnostic] {
-        mut val sources: Array[ResolvedViewSource] = []
+    inout fn uniqueSyntaxProjectionSourceCore(t: SyntaxType) -> Result[LoweredTypeViewRecipe, CompileDiagnostic] {
+        mut val sources: Array[LoweredTypeViewRecipe] = []
         mut val index = 0U64
         while index < self.lowerWhereSyntaxTypes.count() && index < self.lowerWhereSyntaxTraitTypes.count() {
             if self.boundLhsMatchesSyntaxType(lhs: self.lowerWhereSyntaxTypes[index], t: t) {
@@ -185,8 +206,8 @@ pub impl Comp {
                 val source = try self.bindViewSourceName(siteOffset: bound.span.start, name: bound.name)
                 val member = intern(c: inout self, start: t.projectionAssoc.start, len: t.projectionAssoc.end - t.projectionAssoc.start)
                 if self.traitOwnerHasAssocId(owner: source.traitInstance.owner, assocId: member) {
-                    val constraint = try self.decodeSyntaxTraitConstraintArguments(traitType: bound, owner: source.traitInstance.owner, site: bound.span.start)
-                    sources.append(source.withArguments(arguments: constraint.key.positionalArgs))
+                    val lowered = try self.lowerSyntaxTraitConstraint(traitType: bound, owner: source.traitInstance.owner, site: bound.span.start)
+                    sources.append(<LoweredTypeViewRecipe source=source.withArguments(arguments: lowered.constraint.key.positionalArgs) arguments=lowered.arguments />)
                 }
             }
             index += 1U64
@@ -195,6 +216,9 @@ pub impl Comp {
         return self.chooseShortProjectionSource(sources: sources, member: member, site: t.span.start)
     }
 
+}
+
+pub impl Comp {
     inout fn normalizeProjectionType(t: TypeAst) -> Result[TypeAst, CompileDiagnostic] {
         if t.namePath.count() != 0U64 {
             mut val names: Array[Span] = []

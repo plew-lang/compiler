@@ -25,9 +25,15 @@ impl Comp {
         return <Result.Ok value=() />
     }
 
-    inout fn recordAuthoredTypeUse(ref: U64, site: U64) -> U64 {
+    inout fn recordAuthoredTypeUse(ref: U64, site: U64, children: Array[U64] = []) -> U64 {
         self.loweringTypeUses.append(ref)
-        val occurrence = self.sourceTypeUses.record(term: ref, site: site, parameters: self.cur.typeParams)
+        mut val labels: Array[U64] = []
+        mut val index = 0U64
+        while index < children.count() {
+            labels.append(self.typeTermRefIdentityChildLabel(ref: ref, index: index))
+            index += 1U64
+        }
+        val occurrence = self.sourceTypeUses.record(term: ref, site: site, parameters: self.cur.typeParams, children: children, labels: labels)
         if site != 0U64 && self.modules.sourceFileContaining(offset: site).isSome() && !self.authoredTypeUseSites.contains(key: ref) {
             self.authoredTypeUseSites[ref] = site
         }
@@ -522,7 +528,8 @@ pub impl Comp {
 
     inout fn lowerType(t: TypeAst) -> Result[PType, CompileDiagnostic] {
         val type = (try self.lowerTypeCore(t: (try self.normalizeProjectionType(t: t))))
-        val occurrence = self.recordAuthoredTypeUse(ref: type.ref, site: t.span.start)
+        try self.checkLoweredTypeRecipeChildren(ref: type.ref, children: type.authoredChildren, offset: t.span.start)
+        val occurrence = self.recordAuthoredTypeUse(ref: type.ref, site: t.span.start, children: type.authoredChildren)
         return <Result.Ok value=<PType start=type.start len=type.len isArray=type.isArray ref=type.ref authoredUse=occurrence /> />
     }
 
@@ -544,7 +551,12 @@ pub impl Comp {
                 ti += 1U64
             }
             val rref: U64 = (try self.recordTypeTerm(name: rnm, fieldNames: t.argLabels, fieldTerms: fieldTerms))
-            return <Result.Ok value=<PType start=rnm.nameStart len=rnm.nameLen isArray=false ref=rref /> />
+            mut val fieldNames: Array[Span] = []
+            for label in t.argLabels {
+                val name = self.internBytes(s: label)
+                fieldNames.append(<Span start=name.nameStart end=name.nameStart + name.nameLen />)
+            }
+            return <Result.Ok value=<PType start=rnm.nameStart len=rnm.nameLen isArray=false ref=rref authoredChildren=(try self.orderedRecordRecipes(names: fieldNames, types: fieldTys)) /> />
         }
         val nm: Bind = self.lowerTypeName(name: t.name, span: t.nameSpan)
         mut val args: Array[U64] = []
@@ -562,6 +574,7 @@ pub impl Comp {
         mut val viewExtId: U64 = 0
         mut val viewIds: Array[U64] = []
         mut val viewSources: Array[ResolvedViewSource] = []
+        mut val viewRecipes: Array[LoweredTypeViewRecipe] = []
         mut val projection: Optional[LoweredTypeProjection] = <Optional.None />
         // Every authored selector enters the source-set normal form, including
         // the one-source case. `viewExtId` remains a compatibility mirror while
@@ -577,11 +590,17 @@ pub impl Comp {
                 val head = syntaxSource.path[bound.head]
                 mut val arguments: Array[U64] = []
                 mut val hasLabels = false
-                for val argument in head.args { arguments.append((try self.lowerType(t: argument)).ref) }
+                mut val argumentRecipes: Array[U64] = []
+                for argument in head.args {
+                    val type = try self.lowerType(t: argument)
+                    arguments.append(type.ref)
+                    argumentRecipes.append((try self.authoredChildRecipe(type: type)))
+                }
                 for val label in head.argLabels { if label.bytes().count() > 0U64 { hasLabels = true } }
                 val source = try self.completeTypeViewSource(source: bound.source, arguments: arguments, hasLabels: hasLabels)
+                viewRecipes.append(<LoweredTypeViewRecipe source=source arguments=argumentRecipes />)
                 if bound.member.end > bound.member.start {
-                    projection = <Optional.Some v=<LoweredTypeProjection source=source member=<Bind nameStart=bound.member.start nameLen=bound.member.end - bound.member.start fieldStart=0U64 fieldLen=0U64 /> /> />
+                    projection = <Optional.Some v=<LoweredTypeProjection source=source member=<Bind nameStart=bound.member.start nameLen=bound.member.end - bound.member.start fieldStart=0U64 fieldLen=0U64 /> arguments=argumentRecipes /> />
                     continue
                 }
                 mut val present = false
@@ -624,15 +643,20 @@ pub impl Comp {
             } else { give (try self.lowerViewSource(siteOffset: t.span.start, text: t.projectionTrait)) }
             mut val arguments: Array[U64] = []
             mut val labelled = false
-            for val argument in t.projectionTraitArgs { arguments.append((try self.lowerType(t: argument)).ref) }
+            mut val argumentRecipes: Array[U64] = []
+            for argument in t.projectionTraitArgs {
+                val type = try self.lowerType(t: argument)
+                arguments.append(type.ref)
+                argumentRecipes.append((try self.authoredChildRecipe(type: type)))
+            }
             for val label in t.projectionTraitArgLabels { if label != "" { labelled = true } }
             val source = try self.completeTypeViewSource(source: selected, arguments: arguments, hasLabels: labelled)
             if source.traitInstance.owner == 0U64 { return <Result.Err error=self.diagnosticAt(offset: t.span.start, msg: "associated-type projection source must name a trait", failureDomain: <FailureDomain.Source />) /> }
-            projection = <Optional.Some v=<LoweredTypeProjection source=source member=self.lowerTypeName(name: t.projectionAssoc, span: t.projectionAssocSpan) /> />
+            projection = <Optional.Some v=<LoweredTypeProjection source=source member=self.lowerTypeName(name: t.projectionAssoc, span: t.projectionAssocSpan) arguments=argumentRecipes /> />
         }
         if !projection.isSome() && t.projectionAssoc.bytes().count() > 0U64 {
             val source = try self.uniqueProjectionSource(t: t)
-            projection = <Optional.Some v=<LoweredTypeProjection source=source member=self.lowerTypeName(name: t.projectionAssoc, span: t.projectionAssocSpan) /> />
+            projection = <Optional.Some v=<LoweredTypeProjection source=source.source member=self.lowerTypeName(name: t.projectionAssoc, span: t.projectionAssocSpan) arguments=source.arguments /> />
         }
         mut val assocTraitStart: U64 = 0U64
         mut val assocTraitLen: U64 = 0U64
@@ -692,7 +716,7 @@ pub impl Comp {
             if associated != 0U64 {
                 val viewed = self.typeRefWithAddedViewSources(ref: associated, additions: viewSources)
                 val resolved = self.arena.typeAt(index: viewed)
-                return <Result.Ok value=<PType start=resolved.nameStart len=resolved.nameLen isArray=false ref=viewed /> />
+                return <Result.Ok value=<PType start=resolved.nameStart len=resolved.nameLen isArray=false ref=viewed authoredChildren=(try self.lexicalAssociatedRecipeChildren(ref: viewed, sources: viewRecipes)) /> />
             }
         }
         mut val projectionReceiver: U64 = 0
@@ -712,7 +736,16 @@ pub impl Comp {
                 try self.recordArrayElem(ty: result)
             }
         }
-        return <Result.Ok value=result />
+        mut val children = try self.loweredArgumentRecipes(types: argPtys, terms: args)
+        if assocNameId != 0U64 {
+            try self.appendViewArgumentRecipes(ref: projectionReceiver, sources: viewRecipes, children: inout children)
+            val receiverRecipe = self.deriveTypeRecipeWithChildren(ref: projectionReceiver, children: children, origin: <SourceTypeRecipeOrigin.ProjectionReceiver />)
+            children = [receiverRecipe]
+            val selected = projection.unwrap()
+            if selected.arguments.count() != assocTraitArgs.count() { return <Result.Err error=self.diagnosticAt(offset: site, msg: "projection argument recipe count mismatch", failureDomain: <FailureDomain.Internal />) /> }
+            for recipe in selected.arguments { children.append(recipe) }
+        } else { try self.appendViewArgumentRecipes(ref: ref, sources: viewRecipes, children: inout children) }
+        return <Result.Ok value=<PType start=result.start len=result.len isArray=result.isArray ref=result.ref authoredChildren=children /> />
     }
 
     // SyntaxFile path for type lowering. It has the same semantic output as
@@ -722,7 +755,8 @@ pub impl Comp {
     // a normalized TypeAst.
     inout fn lowerSyntaxType(id: TypeId) -> Result[PType, CompileDiagnostic] {
         val type = (try self.lowerSyntaxTypeNode(t: syntaxType(file: self.syntax, id: id)))
-        val occurrence = self.recordAuthoredTypeUse(ref: type.ref, site: syntaxType(file: self.syntax, id: id).span.start)
+        try self.checkLoweredTypeRecipeChildren(ref: type.ref, children: type.authoredChildren, offset: syntaxType(file: self.syntax, id: id).span.start)
+        val occurrence = self.recordAuthoredTypeUse(ref: type.ref, site: syntaxType(file: self.syntax, id: id).span.start, children: type.authoredChildren)
         return <Result.Ok value=<PType start=type.start len=type.len isArray=type.isArray ref=type.ref authoredUse=occurrence /> />
     }
 
@@ -745,7 +779,7 @@ pub impl Comp {
                 ti += 1U64
             }
             val recordRef: U64 = (try self.recordTypeTermSpans(name: recordName, fieldNames: fieldNames, fieldTerms: fieldTerms))
-            return <Result.Ok value=<PType start=recordName.nameStart len=recordName.nameLen isArray=false ref=recordRef /> />
+            return <Result.Ok value=<PType start=recordName.nameStart len=recordName.nameLen isArray=false ref=recordRef authoredChildren=(try self.orderedRecordRecipes(names: fieldNames, types: fieldTys)) /> />
         }
 
         val nameLen: U64 = t.name.end - t.name.start
@@ -773,6 +807,7 @@ pub impl Comp {
         }
 
         mut val viewSources: Array[ResolvedViewSource] = []
+        mut val viewRecipes: Array[LoweredTypeViewRecipe] = []
         mut val projection: Optional[LoweredTypeProjection] = <Optional.None />
         mut val vi: U64 = 0U64
         while vi < t.viewSources.count {
@@ -792,15 +827,19 @@ pub impl Comp {
             mut val arguments: Array[U64] = []
             mut val hasLabels = false
             mut val argumentIndex = 0U64
+            mut val argumentRecipes: Array[U64] = []
             while argumentIndex < head.args.count {
-                arguments.append((try self.lowerSyntaxType(id: syntaxNameSegmentArg(file: self.syntax, segment: head, index: argumentIndex))).ref)
+                val type = try self.lowerSyntaxType(id: syntaxNameSegmentArg(file: self.syntax, segment: head, index: argumentIndex))
+                arguments.append(type.ref)
+                argumentRecipes.append((try self.authoredChildRecipe(type: type)))
                 val label = syntaxNameSegmentArgLabel(file: self.syntax, segment: head, index: argumentIndex)
                 if label.end > label.start { hasLabels = true }
                 argumentIndex += 1U64
             }
             val source = try self.completeTypeViewSource(source: bound.source, arguments: arguments, hasLabels: hasLabels)
+            viewRecipes.append(<LoweredTypeViewRecipe source=source arguments=argumentRecipes />)
             if bound.member.end > bound.member.start {
-                projection = <Optional.Some v=<LoweredTypeProjection source=source member=<Bind nameStart=bound.member.start nameLen=bound.member.end - bound.member.start fieldStart=0U64 fieldLen=0U64 /> /> />
+                projection = <Optional.Some v=<LoweredTypeProjection source=source member=<Bind nameStart=bound.member.start nameLen=bound.member.end - bound.member.start fieldStart=0U64 fieldLen=0U64 /> arguments=argumentRecipes /> />
                 vi += 1U64
                 continue
             }
@@ -842,8 +881,11 @@ pub impl Comp {
             val selected = try self.bindViewSourceName(siteOffset: t.span.start, name: t.projectionTrait)
             mut val arguments: Array[U64] = []
             mut val index = 0U64
+            mut val argumentRecipes: Array[U64] = []
             while index < syntaxTypeProjectionTraitArgCount(file: self.syntax, ty: t) {
-                arguments.append((try self.lowerSyntaxType(id: syntaxTypeProjectionTraitArg(file: self.syntax, ty: t, index: index))).ref)
+                val type = try self.lowerSyntaxType(id: syntaxTypeProjectionTraitArg(file: self.syntax, ty: t, index: index))
+                arguments.append(type.ref)
+                argumentRecipes.append((try self.authoredChildRecipe(type: type)))
                 index += 1U64
             }
             mut val labelled = false
@@ -855,11 +897,11 @@ pub impl Comp {
             }
             val source = try self.completeTypeViewSource(source: selected, arguments: arguments, hasLabels: labelled)
             if source.traitInstance.owner == 0U64 { return <Result.Err error=self.diagnosticAt(offset: t.span.start, msg: "associated-type projection source must name a trait", failureDomain: <FailureDomain.Source />) /> }
-            projection = <Optional.Some v=<LoweredTypeProjection source=source member=<Bind nameStart=t.projectionAssoc.start nameLen=t.projectionAssoc.end - t.projectionAssoc.start fieldStart=0U64 fieldLen=0U64 /> /> />
+            projection = <Optional.Some v=<LoweredTypeProjection source=source member=<Bind nameStart=t.projectionAssoc.start nameLen=t.projectionAssoc.end - t.projectionAssoc.start fieldStart=0U64 fieldLen=0U64 /> arguments=argumentRecipes /> />
         }
         if !projection.isSome() && !namespaceType && t.projectionAssoc.end > t.projectionAssoc.start {
             val source = try self.uniqueSyntaxProjectionSource(t: t)
-            projection = <Optional.Some v=<LoweredTypeProjection source=source member=<Bind nameStart=t.projectionAssoc.start nameLen=t.projectionAssoc.end - t.projectionAssoc.start fieldStart=0U64 fieldLen=0U64 /> /> />
+            projection = <Optional.Some v=<LoweredTypeProjection source=source.source member=<Bind nameStart=t.projectionAssoc.start nameLen=t.projectionAssoc.end - t.projectionAssoc.start fieldStart=0U64 fieldLen=0U64 /> arguments=source.arguments /> />
         }
         mut val assocTraitStart = 0U64
         mut val assocTraitLen = 0U64
@@ -906,7 +948,7 @@ pub impl Comp {
             if associated != 0U64 {
                 val viewed = self.typeRefWithAddedViewSources(ref: associated, additions: viewSources)
                 val resolved = self.arena.typeAt(index: viewed)
-                return <Result.Ok value=<PType start=resolved.nameStart len=resolved.nameLen isArray=false ref=viewed /> />
+                return <Result.Ok value=<PType start=resolved.nameStart len=resolved.nameLen isArray=false ref=viewed authoredChildren=(try self.lexicalAssociatedRecipeChildren(ref: viewed, sources: viewRecipes)) /> />
             }
         }
         mut val projectionReceiver: U64 = 0
@@ -926,7 +968,16 @@ pub impl Comp {
                 try self.recordArrayElem(ty: result)
             }
         }
-        return <Result.Ok value=result />
+        mut val children = try self.loweredArgumentRecipes(types: argPtys, terms: args)
+        if assocNameId != 0U64 {
+            try self.appendViewArgumentRecipes(ref: projectionReceiver, sources: viewRecipes, children: inout children)
+            val receiverRecipe = self.deriveTypeRecipeWithChildren(ref: projectionReceiver, children: children, origin: <SourceTypeRecipeOrigin.ProjectionReceiver />)
+            children = [receiverRecipe]
+            val selected = projection.unwrap()
+            if selected.arguments.count() != assocTraitArgs.count() { return <Result.Err error=self.diagnosticAt(offset: site, msg: "projection argument recipe count mismatch", failureDomain: <FailureDomain.Internal />) /> }
+            for recipe in selected.arguments { children.append(recipe) }
+        } else { try self.appendViewArgumentRecipes(ref: ref, sources: viewRecipes, children: inout children) }
+        return <Result.Ok value=<PType start=result.start len=result.len isArray=result.isArray ref=result.ref authoredChildren=children /> />
     }
 
     // Reserve the final contiguous argument range before recursive lowering.

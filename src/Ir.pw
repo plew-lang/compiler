@@ -72,6 +72,9 @@ pub struct PType {
     pub val ref: U64
     // One-based authored occurrence, not semantic type identity; zero is synthetic.
     pub val authoredUse: U64 = 0U64
+    // Transient lowering draft, in canonical semantic child order. Once an
+    // occurrence is recorded, its immutable recipe owns these edges instead.
+    pub val authoredChildren: Array[U64] = []
 
 }
 

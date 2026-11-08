@@ -1,0 +1,125 @@
+// Edges are handed forward while constructing a type. No term-to-occurrence
+// reverse lookup is permitted: equal semantic children can be distinct uses.
+impl Comp {
+    inout fn authoredChildRecipe(type: PType) -> Result[U64, CompileDiagnostic] {
+        if type.authoredUse == 0U64 || type.authoredUse > self.sourceTypeUses.useCount() {
+            return <Result.Err error=self.diagnosticAt(offset: type.start, msg: "lowered source child has no occurrence", failureDomain: <FailureDomain.Internal />) />
+        }
+        return <Result.Ok value=self.sourceTypeUses.useAt(index: type.authoredUse - 1U64).unwrap().recipe />
+    }
+
+    // A bound-supplied argument or synthesized receiver is not a fresh authored
+    // occurrence. Its structure is explicit, and never acquires source proof.
+    inout fn derivedTypeRecipe(ref: U64, origin: SourceTypeRecipeOrigin) -> U64 {
+        mut val children: Array[U64] = []
+        mut val labels: Array[U64] = []
+        mut val index = 0U64
+        while index < self.typeTermRefChildCount(ref: ref) {
+            children.append(self.derivedTypeRecipe(ref: self.typeTermRefChildRef(ref: ref, index: index), origin: origin))
+            labels.append(self.typeTermRefIdentityChildLabel(ref: ref, index: index))
+            index += 1U64
+        }
+        return self.sourceTypeUses.deriveRecipe(term: ref, children: children, labels: labels, origin: origin)
+    }
+
+    inout fn deriveTypeRecipeWithChildren(ref: U64, children: Array[U64], origin: SourceTypeRecipeOrigin) -> U64 {
+        mut val labels: Array[U64] = []
+        mut val index = 0U64
+        while index < children.count() {
+            labels.append(self.typeTermRefIdentityChildLabel(ref: ref, index: index))
+            index += 1U64
+        }
+        return self.sourceTypeUses.deriveRecipe(term: ref, children: children, labels: labels, origin: origin)
+    }
+
+    inout fn loweredArgumentRecipes(types: Array[PType], terms: Array[U64]) -> Result[Array[U64], CompileDiagnostic] {
+        if types.count() != terms.count() { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "source argument recipe count mismatch", failureDomain: <FailureDomain.Internal />) /> }
+        mut val recipes: Array[U64] = []
+        mut val index = 0U64
+        while index < types.count() {
+            val type = types[index]
+            if type.ref == terms[index] { recipes.append((try self.authoredChildRecipe(type: type))) }
+            else {
+                // Source Unit becomes the ordinary closed empty-record payload
+                // at a function result boundary. No caller substitution occurs.
+                if type.ref != 0U64 || self.semanticSourceResultTerm(ref: type.ref) != terms[index] || self.typeTermRefChildCount(ref: terms[index]) != 0U64 { return <Result.Err error=self.diagnosticAt(offset: type.start, msg: "source argument changed without a representation mapping", failureDomain: <FailureDomain.Internal />) /> }
+                recipes.append(self.sourceTypeUses.deriveRecipe(term: terms[index], children: [], labels: [], origin: <SourceTypeRecipeOrigin.ResultRepresentation />, sourceRecipe: (try self.authoredChildRecipe(type: type))))
+            }
+            index += 1U64
+        }
+        return <Result.Ok value=recipes />
+    }
+
+    inout fn orderedRecordRecipes(names: Array[Span], types: Array[PType]) -> Result[Array[U64], CompileDiagnostic] {
+        if names.count() != types.count() { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "source record recipe count mismatch", failureDomain: <FailureDomain.Internal />) /> }
+        mut val order: Array[U64] = []
+        mut val index = 0U64
+        while index < names.count() { order.append(index) index += 1U64 }
+        mut val first = 0U64
+        while first < order.count() {
+            mut val next = first + 1U64
+            while next < order.count() {
+                if self.sourceSpanGt(a: names[order[first]], b: names[order[next]]) {
+                    val saved = order[first]
+                    order[first] = order[next]
+                    order[next] = saved
+                }
+                next += 1U64
+            }
+            first += 1U64
+        }
+        mut val recipes: Array[U64] = []
+        for index in order { recipes.append((try self.authoredChildRecipe(type: types[index]))) }
+        return <Result.Ok value=recipes />
+    }
+
+    // Canonical selector normalization may reorder/deduplicate local entries.
+    // Transfer each constructor's parallel argument recipes along that same
+    // selected source identity; never search the global occurrence store.
+    inout fn appendViewArgumentRecipes(ref: U64, sources: Array[LoweredTypeViewRecipe], children: inout Array[U64]) -> Result[(), CompileDiagnostic] {
+        for selector in self.arena.typeViewSources(ref: ref) {
+            if selector.traitInstance.positionalArgs.count() != 0U64 {
+                mut val found = false
+                for source in sources {
+                    if !found && self.semanticViewSourceEq(a: source.source, b: selector) {
+                        if source.arguments.count() != selector.traitInstance.positionalArgs.count() { return <Result.Err error=self.diagnosticAt(offset: selector.writtenStart, msg: "view argument recipe count mismatch", failureDomain: <FailureDomain.Internal />) /> }
+                        for recipe in source.arguments { children.append(recipe) }
+                        found = true
+                    }
+                }
+                if !found { return <Result.Err error=self.diagnosticAt(offset: selector.writtenStart, msg: "view argument lost its lowering recipe", failureDomain: <FailureDomain.Internal />) /> }
+            }
+        }
+        return <Result.Ok value=() />
+    }
+}
+
+impl Comp {
+    inout fn lexicalAssociatedRecipeChildren(ref: U64, sources: Array[LoweredTypeViewRecipe]) -> Result[Array[U64], CompileDiagnostic] {
+        val type = self.arena.typeAt(index: ref)
+        if type.assocNameId == 0U64 { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "lexical associated recipe is not a projection", failureDomain: <FailureDomain.Internal />) /> }
+        val receiver = self.typeTermProjectionReceiver(t: type)
+        mut val receiverChildren: Array[U64] = []
+        for argument in self.arena.typeAt(index: receiver).args { receiverChildren.append(self.derivedTypeRecipe(ref: argument, origin: <SourceTypeRecipeOrigin.BoundSelection />)) }
+        try self.appendViewArgumentRecipes(ref: receiver, sources: sources, children: inout receiverChildren)
+        mut val children: Array[U64] = [self.deriveTypeRecipeWithChildren(ref: receiver, children: receiverChildren, origin: <SourceTypeRecipeOrigin.ProjectionReceiver />)]
+        for argument in type.assocTraitArgs { children.append(self.derivedTypeRecipe(ref: argument, origin: <SourceTypeRecipeOrigin.BoundSelection />)) }
+        return <Result.Ok value=children />
+    }
+}
+
+impl Comp {
+    inout fn checkLoweredTypeRecipeChildren(ref: U64, children: Array[U64], offset: U64) -> Result[(), CompileDiagnostic] {
+        if children.count() != self.typeTermRefChildCount(ref: ref) { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "source recipe does not cover canonical type children", failureDomain: <FailureDomain.Internal />) /> }
+        mut val index = 0U64
+        while index < children.count() {
+            val child = match self.sourceTypeUses.recipeAt(id: children[index]) {
+                Optional.Some(v: val child) => child,
+                Optional.None => { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "source recipe has an invalid child edge", failureDomain: <FailureDomain.Internal />) /> },
+            }
+            if !self.typeRefEq(a: child.term, b: self.typeTermRefChildRef(ref: ref, index: index)) { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "source recipe child does not match its canonical edge", failureDomain: <FailureDomain.Internal />) /> }
+            index += 1U64
+        }
+        return <Result.Ok value=() />
+    }
+}

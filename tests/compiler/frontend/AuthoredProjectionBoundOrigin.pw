@@ -1,0 +1,59 @@
+// A short projection forwards the declaration's bound argument occurrence.
+// Looking up the bound from a body must not author the where argument again.
+use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use ../../../src/SourceAccess only { SourceAccess }
+use ../../../src/SourceTypeUses only { SourceTypeUseRole }
+use @Plew/Syntax only { rangeEquals }
+use @Std/Io only { print }
+
+fn main() {
+    val source = "trait Project[Kind] {{ type Item }} fn inspect[T](left:T.Item, right:T.Item) -> T.Item where T:Project[I64] {{ val body:T.Item = left }} fn main() {{}}"
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text text=source path="BoundOrigin.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
+    val owner = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "inspect").nameId)
+    val signature = compiler.sourceTypeUses.signatureFor(function: owner).unwrap()
+    mut val site = 0U64
+    while site + 4U64 <= compiler.arena.bytes.count() {
+        if rangeEquals(bytes: compiler.arena.bytes, start: site, len: 4U64, kw: "I64]") { break }
+        site += 1U64
+    }
+    if site + 4U64 > compiler.arena.bytes.count() { panic("bound source coordinate setup failed") }
+    mut val count = 0U64
+    mut val boundRecipe = 0U64
+    mut val index = 0U64
+    while index < compiler.sourceTypeUses.useCount() {
+        val occurrence = compiler.sourceTypeUses.useAt(index: index).unwrap()
+        if occurrence.site == site {
+            count += 1U64
+            if occurrence.scope != signature.scope { panic("bound argument moved to a use-site scope") }
+            match occurrence.role { SourceTypeUseRole.Declaration => {} _ => { panic("bound argument moved to a use-site role") } }
+            boundRecipe = occurrence.recipe
+        }
+        index += 1U64
+    }
+    if count != 1U64 { panic("short projection re-lowered the original where argument") }
+    for parameter in signature.parameters {
+        val occurrence = compiler.sourceTypeUses.useAt(index: parameter - 1U64).unwrap()
+        val recipe = compiler.sourceTypeUses.recipeAt(id: occurrence.recipe).unwrap()
+        if recipe.children.count() != 2U64 || recipe.children[1U64] != boundRecipe { panic("short projection did not retain the bound recipe") }
+    }
+    val result = compiler.sourceTypeUses.useAt(index: signature.result - 1U64).unwrap()
+    if compiler.sourceTypeUses.recipeAt(id: result.recipe).unwrap().children[1U64] != boundRecipe { panic("result projection lost the bound recipe") }
+    mut val bodySeen = false
+    index = 0U64
+    while index < compiler.sourceTypeUses.useCount() {
+        val occurrence = compiler.sourceTypeUses.useAt(index: index).unwrap()
+        match occurrence.role {
+            SourceTypeUseRole.Body => {
+                if compiler.arena.typeAt(index: occurrence.term).assocNameId != 0U64 {
+                    bodySeen = true
+                    if compiler.sourceTypeUses.recipeAt(id: occurrence.recipe).unwrap().children[1U64] != boundRecipe { panic("body projection lost the declaration bound recipe") }
+                }
+            }
+            _ => {}
+        }
+        index += 1U64
+    }
+    if !bodySeen { panic("body short projection was not exercised") }
+    print("1")
+}
