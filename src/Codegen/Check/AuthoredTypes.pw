@@ -13,9 +13,8 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
-    // Read one retained root annotation, with the exact slot and caller-supplied
-    // substitution. Nested projection consumption is not implemented by this
-    // root reader; callers must not treat it as a whole-type normalization API.
+    // Read an exact retained annotation and its canonical child recipes.
+    // Every projection consumes the proof of its own authored occurrence.
     inout fn readAdmittedSignatureRoot(function: U64, slot: SourceSignatureSlot, environment: InstanceEnvironment) -> Result[U64, CompileDiagnostic] {
         val admitted = match self.authoredSignatureViews.get(key: function) {
             Optional.Some(v: val admitted) => admitted,
@@ -39,39 +38,97 @@ pub impl Comp {
         }
         if id == 0U64 { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "signature slot has no authored annotation", failureDomain: <FailureDomain.Input />) /> }
         val occurrence = try self.authoredSignatureOccurrence(signature: signature, id: id)
-        val original = self.arena.typeAt(index: occurrence.term)
-        // Receiver views and the projection source are independent premises.
-        // Interpret every retained receiver-view proof before reading an output.
-        val receiver = if original.assocNameId == 0U64 { give occurrence.term } else { give self.typeTermProjectionReceiver(t: original) }
-        for selector in self.arena.typeViewSources(ref: receiver) {
-            if selector.traitInstance.owner != 0U64 {
-                mut val found = false
-                for saved in admitted.proofs {
-                    if saved.occurrence == id && self.semanticViewSourceEq(a: saved.selector, b: selector) {
-                        try self.instantiateAuthoredViewProof(saved: saved, environment: environment, offset: occurrence.site)
-                        found = true
-                    }
-                }
-                if !found { return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "signature view has no saved proof", failureDomain: <FailureDomain.Internal />) /> }
-            }
-        }
-        if original.assocNameId == 0U64 {
-            return <Result.Ok value=self.groundTermInEnvironment(ref: occurrence.term, params: environment.params, values: environment.args, selfRef: environment.receiverRef) />
-        }
-        val owner = if original.assocTraitDeclOffset != 0U64 { give original.assocTraitDeclOffset } else { give original.assocTraitStart }
-        for saved in admitted.proofs {
-            if saved.occurrence == id && saved.selector.traitInstance.owner == owner && self.sameResolvedTypeRefs(a: saved.selector.traitInstance.positionalArgs, b: original.assocTraitArgs) {
-                val proof = try self.instantiateAuthoredViewProof(saved: saved, environment: environment, offset: occurrence.site)
-                val output = try self.associatedOutputInProof(proof: proof, traitOwner: owner, assocId: original.assocNameId)
-                if output != 0U64 { return <Result.Ok value=output /> }
-                return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "saved signature projection is not instantiated", failureDomain: <FailureDomain.Internal />) />
-            }
-        }
-        return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "signature projection has no saved view proof", failureDomain: <FailureDomain.Internal />) />
+        mut val memo: Dictionary[U64, AuthoredRecipeRead] = [:]
+        return <Result.Ok value=(try self.readAuthoredTypeRecipe(admitted: admitted, recipe: occurrence.recipe, environment: environment, memo: inout memo)).term />
     }
 }
 
 impl Comp {
+    // The memo belongs to one exact admitted signature and one environment.
+    // No semantic-term cache or source reverse lookup can confer evidence.
+    inout fn readAuthoredTypeRecipe(admitted: AuthoredSignatureViews, recipe: U64, environment: InstanceEnvironment, memo: inout Dictionary[U64, AuthoredRecipeRead]) -> Result[AuthoredRecipeRead, CompileDiagnostic] {
+        match memo.get(key: recipe) { Optional.Some(v: val read) => { return <Result.Ok value=read /> } Optional.None => {} }
+        val node = match self.sourceTypeUses.recipeAt(id: recipe) {
+            Optional.Some(v: val node) => node,
+            Optional.None => { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "signature reader lost its admitted recipe", failureDomain: <FailureDomain.Internal />) /> },
+        }
+        mut val children: Array[U64] = []
+        mut val reads: Array[AuthoredRecipeRead] = []
+        for child in node.children {
+            val read = try self.readAuthoredTypeRecipe(admitted: admitted, recipe: child, environment: environment, memo: inout memo)
+            children.append(read.term)
+            reads.append(read)
+        }
+        val original = self.arena.typeAt(index: node.term)
+        val rebuilt = self.rebuildTypeTermChildren(ref: node.term, children: children)
+        // Keep selector positions before normalization/replacement. Their
+        // original nodes select the saved proof; these terms only instantiate it.
+        mut val viewArguments: Array[U64] = []
+        val ordinary = if original.isRecord { give original.recordFieldTerms.count() } else { give original.args.count() + original.assocTraitArgs.count() }
+        if original.assocNameId == 0U64 {
+            mut val index = ordinary
+            while index < children.count() {
+                viewArguments.append(children[index])
+                index += 1U64
+            }
+        }
+        val sourceViews = if original.assocNameId == 0U64 { give self.viewSourcesWithArguments(ref: node.term, arguments: viewArguments) } else { give reads[0U64].views }
+        mut val term = rebuilt
+        if original.assocNameId == 0U64 {
+            match self.typeTermHeadReplacement(ref: node.term, params: environment.params, values: environment.args, selfRef: environment.receiverRef, itemRef: 0U64) {
+                Optional.Some(v: val replacement) => { term = self.typeRefWithAddedViewSources(ref: replacement, additions: sourceViews) }
+                Optional.None => {}
+            }
+        }
+        match node.origin {
+            SourceTypeRecipeOrigin.Authored => {
+                val occurrence = try self.authoredSignatureOccurrence(signature: admitted.signature, id: node.occurrence)
+                val originalReceiver = if original.assocNameId == 0U64 { give node.term } else { give self.typeTermProjectionReceiver(t: original) }
+                val receiver = if original.assocNameId == 0U64 { give term } else { give children[0U64] }
+                val selectors = self.arena.typeViewSources(ref: originalReceiver)
+                if selectors.count() != sourceViews.count() { return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "signature reader changed source selectors", failureDomain: <FailureDomain.Internal />) /> }
+                mut val index = 0U64
+                while index < selectors.count() {
+                    if selectors[index].traitInstance.owner != 0U64 {
+                        try self.readAuthoredOccurrenceProof(admitted: admitted, occurrence: node.occurrence, selector: selectors[index], receiver: receiver, arguments: sourceViews[index].traitInstance.positionalArgs, environment: environment, offset: occurrence.site)
+                    }
+                    index += 1U64
+                }
+                if original.assocNameId != 0U64 {
+                    val owner = if original.assocTraitDeclOffset != 0U64 { give original.assocTraitDeclOffset } else { give original.assocTraitStart }
+                    mut val arguments: Array[U64] = []
+                    index = 1U64
+                    while index < children.count() {
+                        arguments.append(children[index])
+                        index += 1U64
+                    }
+                    val selector = <ResolvedViewSource writtenStart=occurrence.site surfaceId=original.assocTraitId traitInstance=<TraitInstanceKey owner=owner positionalArgs=original.assocTraitArgs /> />
+                    val proof = try self.readAuthoredOccurrenceProof(admitted: admitted, occurrence: node.occurrence, selector: selector, receiver: receiver, arguments: arguments, environment: environment, offset: occurrence.site)
+                    term = try self.associatedOutputInProof(proof: proof, traitOwner: owner, assocId: original.assocNameId)
+                    if term == 0U64 { return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "saved signature projection is not instantiated", failureDomain: <FailureDomain.Internal />) /> }
+                }
+            }
+            SourceTypeRecipeOrigin.ResultRepresentation => {
+                val source = try self.readAuthoredTypeRecipe(admitted: admitted, recipe: node.sourceRecipe, environment: environment, memo: inout memo)
+                term = self.semanticSourceResultTerm(ref: source.term)
+            }
+            SourceTypeRecipeOrigin.ProjectionReceiver => {}
+            SourceTypeRecipeOrigin.BoundSelection => { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "signature reader encountered an unadmitted bound recipe", failureDomain: <FailureDomain.Internal />) /> }
+        }
+        val read = <AuthoredRecipeRead term=term views=sourceViews />
+        memo[recipe] = read
+        return <Result.Ok value=read />
+    }
+
+    inout fn readAuthoredOccurrenceProof(admitted: AuthoredSignatureViews, occurrence: U64, selector: ResolvedViewSource, receiver: U64, arguments: Array[U64], environment: InstanceEnvironment, offset: U64) -> Result[StaticConformanceProof, CompileDiagnostic] {
+        for saved in admitted.proofs {
+            if saved.occurrence == occurrence && self.semanticViewSourceEq(a: saved.selector, b: selector) {
+                return self.instantiateAuthoredViewProof(saved: saved, receiver: receiver, arguments: arguments, environment: environment, offset: offset)
+            }
+        }
+        return <Result.Err error=self.diagnosticAt(offset: offset, msg: "signature view has no saved proof", failureDomain: <FailureDomain.Internal />) />
+    }
+
     // Validate the saved constructor graph once per declaration. The semantic
     // visitor owns child shape and labels; recipes only retain the chosen edges.
     // false marks an active node, true a fully validated node of this owner.
@@ -145,13 +202,10 @@ impl Comp {
 
     // Both memberless views and projections must interpret their retained
     // premise. A value substitution alone never manufactures conformance.
-    inout fn instantiateAuthoredViewProof(saved: AuthoredTypeViewProof, environment: InstanceEnvironment, offset: U64) -> Result[StaticConformanceProof, CompileDiagnostic] {
-        val receiver = self.groundTermInEnvironment(ref: saved.receiver, params: environment.params, values: environment.args, selfRef: environment.receiverRef)
+    inout fn instantiateAuthoredViewProof(saved: AuthoredTypeViewProof, receiver: U64, arguments: Array[U64], environment: InstanceEnvironment, offset: U64) -> Result[StaticConformanceProof, CompileDiagnostic] {
         val state = try self.instantiateConstraintProof(proof: self.thawStaticConformanceProof(id: saved.proof), receiverRef: receiver, environment: environment, selfRef: environment.receiverRef, itemRef: 0U64)
         match state {
             StaticProofInstantiation.Ready(proof: val proof) => {
-                mut val arguments: Array[U64] = []
-                for argument in saved.selector.traitInstance.positionalArgs { arguments.append(self.groundTermInEnvironment(ref: argument, params: environment.params, values: environment.args, selfRef: environment.receiverRef)) }
                 try self.checkStaticProofEvidence(proof: proof, offset: offset)
                 try self.checkSelectedCallConstraintBoundary(expected: <TraitBound subject=receiver constraint=<TraitConstraint key=<TraitInstanceKey owner=saved.selector.traitInstance.owner positionalArgs=arguments /> assocPredicates=[] /> offset=offset />, proof: proof, offset: offset)
                 return <Result.Ok value=proof />

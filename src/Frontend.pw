@@ -357,6 +357,13 @@ enum ProjectionBoundState {
     Failed(diagnostic: CompileDiagnostic)
 }
 enum AuthoredRecipeEdge { Source ProjectionReceiver FunctionResult }
+struct AuthoredRecipeRead {
+    val term: U64
+    // Folded selectors of this source constructor, before a caller replacement
+    // can add its own views. Original selector identity stays in the recipe.
+    val views: Array[ResolvedViewSource]
+}
+impl AuthoredRecipeRead { factory }
 
 struct ProjectionBoundClause {
     val scope: U64

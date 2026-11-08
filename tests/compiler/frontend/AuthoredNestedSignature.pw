@@ -2,20 +2,77 @@
 use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
 use ../../../src/SourceAccess only { SourceAccess }
 use ../../../src/SourceTypeAdmissions only { SourceSignatureSlot }
-use ../../../src/Ir only { InstanceEnvironment, CallableConstraintEvidence }
+use ../../../src/Ir only { InstanceEnvironment, CallableConstraintEvidence, TypeRef }
 use @Std/Io only { print }
+use @Std/Process only { argAt }
 
 fn main() {
-    val source = "trait Project[Kind] {{ type Item }} struct Source {{}} impl Source as Project[I64] {{ type Item=I64 }} struct Box[T] {{}} fn inspect[T](value:Box[T#Project[I64].Item]) where T:Project[I64] {{}} fn concrete(value:Source) {{}} fn expected(value:Box[I64]) {{}} fn main() {{}}"
+    val scenario = argAt(1I64)
+    if scenario == "proofBinders" {
+        mut val compiler = <Comp />
+        compiler.arena.reserveTypeSentinel()
+        val container = compiler.internBytes(s: "Container")
+        for spelling in ["Self", "Item"] {
+            val name = compiler.internBytes(s: spelling)
+            val binder = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] />)
+            val replacement = compiler.pushType(t: <TypeRef nameStart=container.nameStart nameLen=container.nameLen args=[binder] />)
+            val actual = compiler.groundTermInEnvironment(ref: binder, params: [], values: [], selfRef: replacement, itemRef: replacement)
+            if !compiler.typeRefEq(a: actual, b: replacement) { panic("proof binder replacement was expanded recursively") }
+        }
+        print("1")
+        return
+    }
+    val shape = if scenario == "array" { give "Array[T#Project[I64].Item]" }
+      else if scenario == "record" { give "(right:Bool,left:T#Project[I64].Item)" }
+      else if scenario == "function" { give "fn(value:T#Project[I64].Item)->T#Project[I64].Item" }
+      else if scenario == "siblings" { give "Pair[T#Project[I64].Item,T#Project[I64].Item]" }
+      else if scenario == "short" { give "Box[T.Item]" }
+      else { give "Box[T#Project[I64].Item]" }
+    val expectedShape = if scenario == "array" { give "Array[I64]" }
+      else if scenario == "record" { give "(left:I64,right:Bool)" }
+      else if scenario == "function" { give "fn(value:I64)->I64" }
+      else if scenario == "siblings" { give "Pair[I64,I64]" }
+      else { give "Box[I64]" }
+    val ordinarySource = "trait Project[Kind] {{ type Item }} struct Source {{}} impl Source as Project[I64] {{ type Item=I64 }} struct Box[T] {{}} struct Pair[A,B] {{}} fn inspect[T](value:" + shape + ") where T:Project[I64] {{}} fn concrete(value:Source) {{}} fn expected(value:" + expectedShape + ") {{}} fn main() {{}}"
+    val source = if scenario == "once" { give "struct Box[T] {{}} fn inspect[T](value:T, wrapped:Box[T]) {{}} fn main() {{}}" }
+      else if scenario == "selectorArgument" { give "trait Project[K] {{ type Item }} trait Select[K] {{ type Output }} struct Source {{}} impl Source as Project[I64] {{ type Item=I64 }} impl Source as Select[I64] {{ type Output=Bool }} struct Box[T] {{}} fn inspect[T](value:Box[T#Select[T#Project[I64].Item].Output]) where T:Project[I64], T:Select[T#Project[I64].Item] {{}} fn concrete(value:Source) {{}} fn expected(value:Box[Bool]) {{}} fn main() {{}}" }
+      else if scenario == "receiverArgument" { give "trait Project[K] {{ type Item }} struct Source {{}} impl Source as Project[I64] {{ type Item=I64 }} struct Holder[X] {{}} impl[X] Holder[X] as Project[I64] {{ type Item=X }} struct Box[T] {{}} fn inspect[T](value:Box[Holder[T#Project[I64].Item]#Project[I64].Item]) where T:Project[I64] {{}} fn concrete(value:Source) {{}} fn expected(value:Box[I64]) {{}} fn main() {{}}" }
+      else if scenario == "receiverView" || scenario == "missingReceiverView" { give "trait Other {{}} trait Project[K] {{ type Item }} struct Source {{}} impl Source as Other {{}} impl Source as Project[I64] {{ type Item=I64 }} struct Box[T] {{}} fn inspect[T](value:Box[T#Other#Project[I64].Item]) where T:Other, T:Project[I64] {{}} fn concrete(value:Source) {{}} fn expected(value:Box[I64]) {{}} fn main() {{}}" }
+      else if scenario == "result" { give "trait Project[K] {{ type Item }} struct Source {{}} impl Source as Project[I64] {{ type Item=I64 }} struct Box[T] {{}} fn inspect[T]() -> Box[T#Project[I64].Item] where T:Project[I64] {{}} fn concrete(value:Source) {{}} fn expected(value:Box[I64]) {{}} fn main() {{}}" }
+      else { give ordinarySource }
     mut val compiler = <Comp />
     analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text text=source path="NestedSignature.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
     val owner = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "inspect").nameId)
+    if scenario == "once" {
+        val function = compiler.arena.functionAt(index: owner)
+        val replacement = compiler.funcParamAt(params: function.params, index: 1U64).ty
+        val actual = compiler.readAdmittedSignatureRoot(function: owner, slot: <SourceSignatureSlot.Parameter index=0U64 />, environment: <InstanceEnvironment params=compiler.copyFuncBinds(binds: function.typeParams) args=[replacement] />).unwrap()
+        if !compiler.typeRefEq(a: actual, b: replacement) { panic("caller replacement was subjected to the callee map again") }
+        print("1")
+        return
+    }
     val concrete = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "concrete").nameId)
     val expected = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "expected").nameId)
     val receiver = compiler.funcParamAt(params: compiler.arena.functionAt(index: concrete).params, index: 0U64).ty
     val expectedType = compiler.funcParamAt(params: compiler.arena.functionAt(index: expected).params, index: 0U64).ty
+    val base = <InstanceEnvironment params=compiler.copyFuncBinds(binds: compiler.arena.functionAt(index: owner).typeParams) args=[receiver] />
+    if scenario == "missing" {
+        if compiler.readAdmittedSignatureRoot(function: owner, slot: <SourceSignatureSlot.Parameter index=0U64 />, environment: base).isOk() { panic("nested projection accepted without retained instance evidence") }
+        print("1")
+        return
+    }
     val environment = compiler.environmentWithCallableConstraints(fnIdx: owner, environment: <InstanceEnvironment params=compiler.copyFuncBinds(binds: compiler.arena.functionAt(index: owner).typeParams) args=[receiver] />, evidence: <CallableConstraintEvidence.Declaration />).unwrap()
-    val actual = compiler.readAdmittedSignatureRoot(function: owner, slot: <SourceSignatureSlot.Parameter index=0U64 />, environment: environment).unwrap()
+    if scenario == "missingReceiverView" {
+        val full = environment.constraints.unwrap()
+        if compiler.arena.callableConstraintCount(evidence: full) != 2U64 { panic("receiver proof control setup changed") }
+        val projectOnly = compiler.arena.prepareDeclarationConstraints(function: owner, sources: [compiler.arena.callableConstraintSourceAt(evidence: full, index: 1U64)], proofs: [compiler.arena.callableConstraintProofAt(evidence: full, index: 1U64)])
+        val missing = <InstanceEnvironment params=environment.params args=environment.args constraints=<Optional.Some v=projectOnly /> />
+        if compiler.readAdmittedSignatureRoot(function: owner, slot: <SourceSignatureSlot.Parameter index=0U64 />, environment: missing).isOk() { panic("nested receiver view borrowed the projection selector proof") }
+        print("1")
+        return
+    }
+    val slot = if scenario == "result" { give <SourceSignatureSlot.Result /> } else { give <SourceSignatureSlot.Parameter index=0U64 /> }
+    val actual = compiler.readAdmittedSignatureRoot(function: owner, slot: slot, environment: environment).unwrap()
     if !compiler.typeRefEq(a: actual, b: expectedType) { panic("nested signature reader did not consume the retained associated output") }
     print("1")
 }

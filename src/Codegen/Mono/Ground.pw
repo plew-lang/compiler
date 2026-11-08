@@ -35,19 +35,18 @@ pub impl Comp {
             val grounded = self.groundTermInEnvironment(ref: underlying, params: params, values: values, selfRef: selfRef, itemRef: itemRef)
             return self.typeRefWithAddedViewSources(ref: grounded, additions: self.viewSourcesWithArguments(ref: ref, arguments: arguments))
         }
-        // Self and Item are proof-derived binders just like ParamId entries,
-        // except their values live on the selected receiver proof rather than
-        // in a method's generic argument vector. They may occur below a
-        // nominal constructor (`MapIter[Self, fn(Item)->B, B]`), so this must
-        // be part of the recursive term substitution rather than a root-only
-        // convenience in groundTermForBody.
-        if !t.hasDecl && t.assocNameId == 0U64 && t.paramId == 0U64 && t.args.len == 0U64 {
-            if selfRef != 0U64 && rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Self") {
-                return self.typeRefWithAddedViewSources(ref: selfRef, additions: self.arena.typeViewSources(ref: ref))
+        match self.typeTermHeadReplacement(ref: ref, params: params, values: values, selfRef: selfRef, itemRef: itemRef) {
+            Optional.Some(v: val replacement) => {
+                if replacement == ref { return ref }
+                // Self/Item already denote a selected proof value. Preserve
+                // their one-step replacement, including a symbolic caller head.
+                if t.paramId == 0U64 { return self.typeRefWithAddedViewSources(ref: replacement, additions: self.arena.typeViewSources(ref: ref)) }
+                // The replacement belongs to the caller; only proof-derived
+                // Self/Item bindings, never this ParamId map, may apply within it.
+                val grounded = self.groundTermInEnvironment(ref: replacement, params: [], values: [], selfRef: selfRef, itemRef: itemRef)
+                return self.typeRefWithAddedViewSources(ref: grounded, additions: self.arena.typeViewSources(ref: ref))
             }
-            if itemRef != 0U64 && rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Item") {
-                return self.typeRefWithAddedViewSources(ref: itemRef, additions: self.arena.typeViewSources(ref: ref))
-            }
+            Optional.None => {}
         }
         if t.isRecord {
             if t.recordFieldLabels.len != t.recordFieldTerms.len { return ref }
@@ -91,26 +90,6 @@ pub impl Comp {
             val original = self.arena.typeAt(index: ref)
             if !argumentsChanged { traitArgs = original.assocTraitArgs }
             return self.rebuildProjectionTerm(t: original, receiver: groundedReceiver, traitArgs: traitArgs)
-        }
-        // A binder replacement changes its head, never the source-set
-        // attached to this occurrence. Preserve it recursively, including
-        // projection receivers, trait arguments and record fields.
-        if t.paramId != 0U64 {
-            mut val pi: U64 = 0U64
-            while pi < params.count() && pi < values.count() {
-                if params[pi].paramId == t.paramId {
-                    val replacement: U64 = values[pi]
-                    if replacement != ref {
-                        // Substitution values belong to the caller's scope.
-                        // Reapplying this map would capture its binders and
-                        // infinitely expand recursive T -> Container[T].
-                        val grounded = self.groundTermInEnvironment(ref: replacement, params: [], values: [], selfRef: selfRef, itemRef: itemRef)
-                        return self.typeRefWithAddedViewSources(ref: grounded, additions: self.arena.typeViewSources(ref: ref))
-                    }
-                    return ref
-                }
-                pi += 1U64
-            }
         }
         mut val args: Array[U64] = []
         mut val assocArgs: Array[U64] = []
@@ -1606,5 +1585,26 @@ impl Comp {
             index += 1U64
         }
         return self.typeRefWithViewSources(ref: rebuilt, sources: self.viewSourcesWithArguments(ref: ref, arguments: viewArguments))
+    }
+}
+
+impl Comp {
+    // Head lookup only. Child traversal and replacement ownership belong to
+    // the caller, so retained-recipe readers cannot reapply a callee map.
+    fn typeTermHeadReplacement(ref: U64, params: Array[Bind], values: Array[U64], selfRef: U64, itemRef: U64) -> Optional[U64] {
+        val type = self.arena.typeTermAt(index: ref)
+        if type.assocNameId != 0U64 { return <Optional.None /> }
+        if !type.hasDecl && type.paramId == 0U64 && type.args.len == 0U64 {
+            if selfRef != 0U64 && rangeEquals(bytes: self.arena.bytes, start: type.nameStart, len: type.nameLen, kw: "Self") { return <Optional.Some v=selfRef /> }
+            if itemRef != 0U64 && rangeEquals(bytes: self.arena.bytes, start: type.nameStart, len: type.nameLen, kw: "Item") { return <Optional.Some v=itemRef /> }
+        }
+        if type.paramId != 0U64 {
+            mut val index = 0U64
+            while index < params.count() && index < values.count() {
+                if params[index].paramId == type.paramId { return <Optional.Some v=values[index] /> }
+                index += 1U64
+            }
+        }
+        return <Optional.None />
     }
 }

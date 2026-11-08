@@ -717,3 +717,35 @@ unmeasured; previous6.934775 seconds certifies a49e6524 only. The fresh candidat
 reconfirms the existing nested-reader RED: compile/link0 then expected native134.
 Continue nested retained-proof consumption and production handoffs after this
 finite gate; do not close the task from validator success.
+
+### Recursive Free-signature Recipe Reader (WIP)
+
+[RED/GREEN controls and independent findings](../../../evidence/rejection-domains/diagnostic-domain-implementation/authored-recursive-reader.json)
+retain the reader increment. The exact slot now traverses saved canonical child
+recipes with a per-signature/environment memo. Each Authored occurrence selects
+its own saved complete selector; folded children instantiate that selection.
+Source-constructor selectors remain separate from caller-added views. Shared
+head lookup does not traverse a replacement; caller replacements and associated
+outputs are not fed through the callee recipe again. Grounding retains its
+previous direct Self/Item replacement behavior, guarded by an actual crash RED
+and repaired control.
+
+The first seven cases failed their intended assertions before the reader change.
+The additional result/once/receiver-view/selector-argument/receiver-argument
+cases are GREEN controls, not invented REDs. Final candidate passes nested14,
+prior signature21, integrity14, bound8, public check/lazy/AOT/native/dispatcher,
+whole compiler source check, and the two existing explicit-grounding fixtures;
+all recorded inputs are invariant. Full suites, performance and whole-task
+completion are not implied by these focused results.
+
+**Next required boundary:** the reader itself does not query, but shared
+`instantiateConstraintProof -> instantiateConcreteConstraintProof` still calls
+`groundTermForBody` on original bound arguments/predicates, which can reach an
+Existence query. Nested argument GREEN does not prove saved-only replay. Remove
+that competing interpretation in the common retained-evidence frontier, preserve
+exact clause/environment identity and saved normalization, and add a missing
+nested-normalization control that cannot be rescued by existing conformance.
+Do not add a reader-specific solver or simply skip validation. Proof-output
+once-only coverage and production free-call/body signature consumers then remain
+required, alongside all non-free owner migrations already listed above. This
+increment and com-amjl/met-si6j remain open.
