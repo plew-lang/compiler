@@ -28,6 +28,7 @@ pub impl Comp {
         self.cur.branchBase = 0
         self.cur.locals = []
         self.cur.verifyMovedIdx = []
+        try self.admitAuthoredFunctionViews()
         try self.checkTypeViewSources()
         mut val gvi: U64 = 0
         while includeBodies && !self.genMode && gvi < self.arena.globals.count() {

@@ -25,12 +25,13 @@ impl Comp {
         return <Result.Ok value=() />
     }
 
-    inout fn recordAuthoredTypeUse(ref: U64, site: U64) {
+    inout fn recordAuthoredTypeUse(ref: U64, site: U64) -> U64 {
         self.loweringTypeUses.append(ref)
-        self.sourceTypeUses.record(term: ref, site: site, parameters: self.cur.typeParams)
+        val occurrence = self.sourceTypeUses.record(term: ref, site: site, parameters: self.cur.typeParams)
         if site != 0U64 && self.modules.sourceFileContaining(offset: site).isSome() && !self.authoredTypeUseSites.contains(key: ref) {
             self.authoredTypeUseSites[ref] = site
         }
+        return occurrence
     }
     inout fn bindTypeSourcePath(names: Array[Span], arities: Array[U64], siteOffset: U64, fallback: String = "") -> Result[BoundTypeSourcePath, CompileDiagnostic] {
         if names.count() == 0U64 || names.count() != arities.count() {
@@ -521,8 +522,8 @@ pub impl Comp {
 
     inout fn lowerType(t: TypeAst) -> Result[PType, CompileDiagnostic] {
         val type = (try self.lowerTypeCore(t: (try self.normalizeProjectionType(t: t))))
-        self.recordAuthoredTypeUse(ref: type.ref, site: t.span.start)
-        return <Result.Ok value=type />
+        val occurrence = self.recordAuthoredTypeUse(ref: type.ref, site: t.span.start)
+        return <Result.Ok value=<PType start=type.start len=type.len isArray=type.isArray ref=type.ref authoredUse=occurrence /> />
     }
 
     inout fn lowerTypeCore(t: TypeAst) -> Result[PType, CompileDiagnostic] {
@@ -721,8 +722,8 @@ pub impl Comp {
     // a normalized TypeAst.
     inout fn lowerSyntaxType(id: TypeId) -> Result[PType, CompileDiagnostic] {
         val type = (try self.lowerSyntaxTypeNode(t: syntaxType(file: self.syntax, id: id)))
-        self.recordAuthoredTypeUse(ref: type.ref, site: syntaxType(file: self.syntax, id: id).span.start)
-        return <Result.Ok value=type />
+        val occurrence = self.recordAuthoredTypeUse(ref: type.ref, site: syntaxType(file: self.syntax, id: id).span.start)
+        return <Result.Ok value=<PType start=type.start len=type.len isArray=type.isArray ref=type.ref authoredUse=occurrence /> />
     }
 
     inout fn lowerSyntaxTypeNode(t: SyntaxType) -> Result[PType, CompileDiagnostic] {

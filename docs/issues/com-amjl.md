@@ -538,3 +538,41 @@ files at048188e1, and the formal median. No main/carrier/seed promotion.
 Original15 source cases on this candidate still show eight invalid acceptances,
 four valid accepts and three valid rejections. This retained RED is the next
 signature-admission implementation baseline, not a completed task.
+
+### Free-Signature Admission Increment (WIP)
+
+[Saved RED/GREEN and independent review](../../../evidence/rejection-domains/diagnostic-domain-implementation/authored-signature-admission.json)
+cover explicit PType root receipts through Param and actual free-function slots,
+Declaration-only occurrence lists, exact lexical-instance SourceAdmission, and
+private publication only after the whole signature succeeds. The root reader
+consumes the exact occurrence's retained proof with explicit substitution and
+prepared callable constraints, without discovering missing source evidence.
+Both free-function lowering adapters retain distinct occurrences for repeated
+identical parameter/result terms. Default/body roles are excluded from this
+signature admission; they remain mandatory follow-up owners.
+
+Fresh candidate after build `20261108T022115-build-8512b9` passes the original
+15 source controls (all eight erroneous acceptances now reject), 19 internal
+signature controls, ten query controls and eight retained-evidence fixtures.
+The three additive public fixtures pass check, lazy execution, AOT/native and
+the production normal/reject dispatcher, including Source failure classification.
+These are finite gates, not full suite or task completion.
+
+Preservation testing finds one real new regression: `QualifiedTypePathEdges`
+`precedingTrait` (`S#Q#P[I64].Item`) is rejected because admission mixed the
+receiver's view selector with the projection's separately stored trait instance.
+The remaining38 of39 preservation cases pass. Preserve the existing oracle:
+spec09 distinguishes a view type from a projection, and the semantic projection
+retains receiver plus its own complete trait instance. Independent review
+confirms the distinction. The source repair counts only receiver selectors for
+the view normal form, preserves `S#Q` in P's query, and makes the root reader
+interpret receiver-view proofs before projection output. A new generic
+`receiverTrait` control plus the old failing case and previous19 controls pass
+locally (21 total). Build `20261108T023302-build-bd9d20` is in progress;
+latest fresh reconciliation and formal performance remain pending.
+
+Nested child-to-occurrence paths, production call/body consumer migration,
+non-free owners, and saved-only interpretation of all frozen associated predicates
+remain required. Known Unit versus missing output remains com-nei5; the root
+reader is not certified for that boundary. No task closure, seed/carrier
+promotion or main integration is claimed.

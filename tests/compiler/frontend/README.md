@@ -302,3 +302,22 @@ associated predicates use type equality rather than value conversion, and
 valid generic calls/boxing retain their declaration premises at admission.
 It does not certify source-view admission, all interface replay paths or
 query-free interpretation of every frozen proof.
+
+### Authored free-signature view admission (manual)
+
+`AuthoredSignatureAdmission.pw` checks declaration occurrence receipts, exact
+free-function signature slots, source trait-view admission and interpretation of
+retained root proofs. Compile/link it by the manual procedure above. Execute each
+of `unrelated`, `wrong`, `foreign`, `declaration`, `standaloneMissing`,
+`standaloneDirect`, `direct`, `resultMissing`, `nestedMissing`, `nested`,
+`concrete`, `slots`, `valueSlots`, `roles`, `inherited`, `extension`, `store`,
+`standaloneReader`, `receiverTrait`, plus a run without arguments. Each must exit 0, match the
+companion `.out` and have empty stderr. The standalone reader controls cover
+absent callable constraints, a nonconforming substituted receiver, a mismatched
+retained proof, and a valid prepared environment.
+
+This harness is not discovered by the normal suite. It does not certify nested
+projection consumption, other declaration owners, or the distinction between a
+known Unit associated output and missing output. Public companion fixtures
+`trait_view_admitted_signature`, `trait_view_unbounded_signature` and
+`trait_view_wrong_instance_signature` are discovered by the normal suite.

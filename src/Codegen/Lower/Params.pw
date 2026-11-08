@@ -104,7 +104,7 @@ pub impl Comp {
             tyIsArray = ty.isArray
             tyRef = ty.ref
         }
-        return <Param nameStart=name.nameStart nameLen=name.nameLen nameId=intern(c: inout self, start: name.nameStart, len: name.nameLen) tyStart=tyStart tyLen=tyLen tyNameId=intern(c: inout self, start: tyStart, len: tyLen) tyIsArray=tyIsArray ty=tyRef isInout=isInout isMove=isMove isBorrow=isBorrow noLabel=noLabel hasDefault=hasDefault defaultExpr=defaultExpr />
+        return <Param nameStart=name.nameStart nameLen=name.nameLen nameId=intern(c: inout self, start: name.nameStart, len: name.nameLen) tyStart=tyStart tyLen=tyLen tyNameId=intern(c: inout self, start: tyStart, len: tyLen) tyIsArray=tyIsArray ty=tyRef isInout=isInout isMove=isMove isBorrow=isBorrow noLabel=noLabel hasDefault=hasDefault defaultExpr=defaultExpr authoredTypeUse=(if hasType { give ty.authoredUse } else { give 0U64 }) />
     }
 
     inout fn lowerBinds(binds: Array[BindAst]) -> BindRange {

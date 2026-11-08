@@ -70,6 +70,9 @@ pub struct PType {
     // `Name[Arg, ...]` shape (nested, multi-arg) for generics. For `Array[E]`
     // the triple still names E with isArray=true, and ref is {Array, [E]}.
     pub val ref: U64
+    // One-based authored occurrence, not semantic type identity; zero is synthetic.
+    pub val authoredUse: U64 = 0U64
+
 }
 
 // A source selected by an authored `#Name`.  This is a semantic child of a
@@ -1167,6 +1170,8 @@ pub struct Param {
     // false = required.
     pub val hasDefault: Bool
     pub val defaultExpr: U64
+    pub val authoredTypeUse: U64 = 0U64
+
 }
 
 pub struct FieldDef {

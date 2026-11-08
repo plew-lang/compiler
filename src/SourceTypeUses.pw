@@ -44,6 +44,17 @@ pub struct LoweredSourceSignature {
 }
 pub impl LoweredSourceSignature { factory }
 
+// Source signature slots retain the exact root annotation occurrence. A type
+// term can occur in several slots/scopes without sharing admission authority.
+pub struct AuthoredFunctionSignature {
+    pub val function: U64
+    pub val scope: U64
+    pub val parameters: Array[U64]
+    pub val result: U64
+    pub val declarationUses: Array[U64]
+}
+pub impl AuthoredFunctionSignature { factory }
+
 pub struct SourceTypeUses {
     mut val scopes: Array[SourceTypeScope] = []
     mut val uses: Array[AuthoredTypeUse] = []
@@ -51,6 +62,9 @@ pub struct SourceTypeUses {
     // One row per scope, appended by begin together with that scope.
     mut val roles: Array[SourceTypeUseRole] = []
     mut val active: U64 = 0U64
+    mut val declarationUses: Array[Array[U64]] = []
+    mut val signatures: Array[AuthoredFunctionSignature] = []
+    mut val functionSignatures: Dictionary[U64, U64] = [:]
 }
 pub impl SourceTypeUses {
     factory
@@ -80,6 +94,7 @@ pub impl SourceTypeUses {
     inout fn begin(kind: SourceTypeScopeKind, anchor: U64, traitOwner: U64 = 0U64) -> U64 {
         self.scopes.append(<SourceTypeScope kind=kind anchor=anchor traitOwner=traitOwner parent=self.active state=<SourceTypeScopeState.Lowering /> />)
         self.roles.append(<SourceTypeUseRole.Declaration />)
+        self.declarationUses.append([])
         self.active = self.scopes.count()
         return self.active
     }
@@ -119,12 +134,73 @@ pub impl SourceTypeUses {
             SourceTypeScopeState.Lowered | SourceTypeScopeState.Failed => { return false }
         }
         self.scopes[token - 1U64] = <SourceTypeScope kind=scope.kind anchor=scope.anchor traitOwner=scope.traitOwner parent=scope.parent state=(if succeeded { give <SourceTypeScopeState.Lowered /> } else { give <SourceTypeScopeState.Failed /> }) function=scope.function requirement=scope.requirement />
+        match scope.function {
+            Optional.Some(v: val function) => {
+                match self.functionSignatures.get(key: function) {
+                    Optional.Some(v: val index) => {
+                        val signature = self.signatures[index]
+                        if signature.scope == token {
+                            self.signatures[index] = <AuthoredFunctionSignature function=function scope=token parameters=signature.parameters result=signature.result declarationUses=self.declarationUses[token - 1U64] />
+                        }
+                    }
+                    Optional.None => {}
+                }
+            }
+            Optional.None => {}
+        }
         self.active = scope.parent
         return true
     }
-    inout fn record(term: U64, site: U64, parameters: Array[Bind]) {
+    fn signatureCount() -> U64 { return self.signatures.count() }
+    fn signatureAt(index: U64) -> Optional[AuthoredFunctionSignature] {
+        if index >= self.signatures.count() { return <Optional.None /> }
+        return <Optional.Some v=self.signatures[index] />
+    }
+    fn signatureFor(function: U64) -> Optional[AuthoredFunctionSignature] {
+        match self.functionSignatures.get(key: function) {
+            Optional.Some(v: val index) => { return self.signatureAt(index: index) }
+            Optional.None => { return <Optional.None /> }
+        }
+    }
+    fn signatureUseBelongs(id: U64, scope: U64) -> Bool {
+        if id == 0U64 { return true }
+        if id > self.uses.count() { return false }
+        val occurrence = self.uses[id - 1U64]
+        if occurrence.scope != scope { return false }
+        match occurrence.role { SourceTypeUseRole.Declaration => { return true } _ => { return false } }
+    }
+    inout fn bindSignature(token: U64, function: U64, parameters: Array[U64], result: U64) -> Bool {
+        if token == 0U64 || token != self.active || token > self.scopes.count() || self.functionSignatures.contains(key: function) { return false }
+        val scope = self.scopes[token - 1U64]
+        match scope.kind { SourceTypeScopeKind.FreeFunction => {} _ => { return false } }
+        match scope.state { SourceTypeScopeState.Lowering => {} _ => { return false } }
+        if scope.function.unwrapOr(fallback: 18446744073709551615U64) != function { return false }
+        mut val index = 0U64
+        while index < parameters.count() {
+            val occurrence = parameters[index]
+            if !self.signatureUseBelongs(id: occurrence, scope: token) { return false }
+            if occurrence != 0U64 {
+                if occurrence == result { return false }
+                mut val previous = 0U64
+                while previous < index { if parameters[previous] == occurrence { return false } previous += 1U64 }
+            }
+            index += 1U64
+        }
+        if !self.signatureUseBelongs(id: result, scope: token) { return false }
+        self.functionSignatures[function] = self.signatures.count()
+        self.signatures.append(<AuthoredFunctionSignature function=function scope=token parameters=parameters result=result declarationUses=self.declarationUses[token - 1U64] />)
+        return true
+    }
+    inout fn record(term: U64, site: U64, parameters: Array[Bind]) -> U64 {
         // Every occurrence is distinct, even when term interning returns an
         // existing ID or two scopes use the same printed parameter names.
-        self.uses.append(<AuthoredTypeUse term=term site=site scope=self.active parameters=parameters role=self.currentRole() />)
+        val role = self.currentRole()
+        self.uses.append(<AuthoredTypeUse term=term site=site scope=self.active parameters=parameters role=role />)
+        val id = self.uses.count()
+        match role {
+            SourceTypeUseRole.Declaration => { self.declarationUses[self.active - 1U64].append(id) }
+            _ => {}
+        }
+        return id
     }
 }

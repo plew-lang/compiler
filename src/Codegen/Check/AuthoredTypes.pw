@@ -1,0 +1,186 @@
+// Declaration success must establish the exact trait-view premise while the
+// originating function's rigid binders are available. No body cursor is used.
+pub impl Comp {
+    inout fn admitAuthoredFunctionViews() -> Result[(), CompileDiagnostic] {
+        mut val index = 0U64
+        while index < self.sourceTypeUses.signatureCount() {
+            val signature = self.sourceTypeUses.signatureAt(index: index).unwrap()
+            if !self.authoredSignatureViews.contains(key: signature.function) {
+                try self.admitAuthoredFunctionViewSignature(signature: signature)
+            }
+            index += 1U64
+        }
+        return <Result.Ok value=() />
+    }
+
+    // Read one retained root annotation, with the exact slot and caller-supplied
+    // substitution. Nested projection consumption is not implemented by this
+    // root reader; callers must not treat it as a whole-type normalization API.
+    inout fn readAdmittedSignatureRoot(function: U64, slot: SourceSignatureSlot, environment: InstanceEnvironment) -> Result[U64, CompileDiagnostic] {
+        val admitted = match self.authoredSignatureViews.get(key: function) {
+            Optional.Some(v: val admitted) => admitted,
+            Optional.None => { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "authored signature has no admitted trait views", failureDomain: <FailureDomain.Internal />) /> },
+        }
+        val signature = admitted.signature
+        val parameters = self.arena.functionAt(index: function).typeParams
+        if environment.params.count() != parameters.len || environment.args.count() != parameters.len { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "signature reader requires its declaration substitution", failureDomain: <FailureDomain.Input />) /> }
+        mut val parameter = 0U64
+        while parameter < parameters.len {
+            if environment.params[parameter].paramId != self.funcBindAt(binds: parameters, index: parameter).paramId { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "signature reader has a foreign substitution binder", failureDomain: <FailureDomain.Input />) /> }
+            if environment.args[parameter] >= self.arena.typeCount() { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "signature reader has an invalid substitution term", failureDomain: <FailureDomain.Input />) /> }
+            parameter += 1U64
+        }
+        val id = match slot {
+            SourceSignatureSlot.Parameter(index: val index) => {
+                if index >= signature.parameters.count() { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "invalid authored signature parameter slot", failureDomain: <FailureDomain.Input />) /> }
+                give signature.parameters[index]
+            }
+            SourceSignatureSlot.Result => { give signature.result }
+        }
+        if id == 0U64 { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "signature slot has no authored annotation", failureDomain: <FailureDomain.Input />) /> }
+        val occurrence = try self.authoredSignatureOccurrence(signature: signature, id: id)
+        val original = self.arena.typeAt(index: occurrence.term)
+        // Receiver views and the projection source are independent premises.
+        // Interpret every retained receiver-view proof before reading an output.
+        val receiver = if original.assocNameId == 0U64 { give occurrence.term } else { give self.typeTermProjectionReceiver(t: original) }
+        for selector in self.arena.typeViewSources(ref: receiver) {
+            if selector.traitInstance.owner != 0U64 {
+                mut val found = false
+                for saved in admitted.proofs {
+                    if saved.occurrence == id && self.semanticViewSourceEq(a: saved.selector, b: selector) {
+                        try self.instantiateAuthoredViewProof(saved: saved, environment: environment, offset: occurrence.site)
+                        found = true
+                    }
+                }
+                if !found { return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "signature view has no saved proof", failureDomain: <FailureDomain.Internal />) /> }
+            }
+        }
+        if original.assocNameId == 0U64 {
+            return <Result.Ok value=self.groundTermInEnvironment(ref: occurrence.term, params: environment.params, values: environment.args, selfRef: environment.receiverRef) />
+        }
+        val owner = if original.assocTraitDeclOffset != 0U64 { give original.assocTraitDeclOffset } else { give original.assocTraitStart }
+        for saved in admitted.proofs {
+            if saved.occurrence == id && saved.selector.traitInstance.owner == owner && self.sameResolvedTypeRefs(a: saved.selector.traitInstance.positionalArgs, b: original.assocTraitArgs) {
+                val proof = try self.instantiateAuthoredViewProof(saved: saved, environment: environment, offset: occurrence.site)
+                val output = try self.associatedOutputInProof(proof: proof, traitOwner: owner, assocId: original.assocNameId)
+                if output != 0U64 { return <Result.Ok value=output /> }
+                return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "saved signature projection is not instantiated", failureDomain: <FailureDomain.Internal />) />
+            }
+        }
+        return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "signature projection has no saved view proof", failureDomain: <FailureDomain.Internal />) />
+    }
+}
+
+impl Comp {
+    // Both memberless views and projections must interpret their retained
+    // premise. A value substitution alone never manufactures conformance.
+    inout fn instantiateAuthoredViewProof(saved: AuthoredTypeViewProof, environment: InstanceEnvironment, offset: U64) -> Result[StaticConformanceProof, CompileDiagnostic] {
+        val receiver = self.groundTermInEnvironment(ref: saved.receiver, params: environment.params, values: environment.args, selfRef: environment.receiverRef)
+        val state = try self.instantiateConstraintProof(proof: self.thawStaticConformanceProof(id: saved.proof), receiverRef: receiver, environment: environment, selfRef: environment.receiverRef, itemRef: 0U64)
+        match state {
+            StaticProofInstantiation.Ready(proof: val proof) => {
+                mut val arguments: Array[U64] = []
+                for argument in saved.selector.traitInstance.positionalArgs { arguments.append(self.groundTermInEnvironment(ref: argument, params: environment.params, values: environment.args, selfRef: environment.receiverRef)) }
+                try self.checkStaticProofEvidence(proof: proof, offset: offset)
+                try self.checkSelectedCallConstraintBoundary(expected: <TraitBound subject=receiver constraint=<TraitConstraint key=<TraitInstanceKey owner=saved.selector.traitInstance.owner positionalArgs=arguments /> assocPredicates=[] /> offset=offset />, proof: proof, offset: offset)
+                return <Result.Ok value=proof />
+            }
+            _ => { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "saved signature view is not instantiated", failureDomain: <FailureDomain.Internal />) /> }
+        }
+    }
+
+    // Binder ownership is independent of whether an associated output is
+    // concrete yet. Deferred-obligation analysis additionally requires a caller
+    // dependency; that is not the contract of source type/view formation.
+    inout fn checkAuthoredTypeBinders(ref: U64, scope: DeclarationTypeScope, offset: U64) -> Result[(), CompileDiagnostic] {
+        if ref >= self.arena.typeTermCount() { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "authored annotation has an invalid type term", failureDomain: <FailureDomain.Internal />) /> }
+        if self.arena.typeIsClosed(ref: ref) { return <Result.Ok value=() /> }
+        val term = self.arena.typeTermAt(index: ref)
+        if term.paramId != 0U64 && term.assocNameId == 0U64 { try self.declarationParameterDependencies(parameter: term.paramId, scope: scope, offset: offset) }
+        mut val index = 0U64
+        while index < self.typeTermRefChildCount(ref: ref) {
+            try self.checkAuthoredTypeBinders(ref: self.typeTermRefChildRef(ref: ref, index: index), scope: scope, offset: offset)
+            index += 1U64
+        }
+        return <Result.Ok value=() />
+    }
+
+    inout fn authoredSignatureOccurrence(signature: AuthoredFunctionSignature, id: U64) -> Result[AuthoredTypeUse, CompileDiagnostic] {
+        if id == 0U64 || id > self.sourceTypeUses.useCount() { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "invalid authored type occurrence", failureDomain: <FailureDomain.Internal />) /> }
+        val occurrence = self.sourceTypeUses.useAt(index: id - 1U64).unwrap()
+        if occurrence.scope != signature.scope { return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "authored signature has a foreign type occurrence", failureDomain: <FailureDomain.Internal />) /> }
+        match occurrence.role {
+            SourceTypeUseRole.Declaration => {}
+            _ => { return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "authored signature has a nondeclaration type occurrence", failureDomain: <FailureDomain.Internal />) /> }
+        }
+        if occurrence.term >= self.arena.typeCount() { return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "authored signature has an invalid type term", failureDomain: <FailureDomain.Internal />) /> }
+        val parameters = self.arena.functionAt(index: signature.function).typeParams
+        if occurrence.parameters.count() != parameters.len { return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "authored signature changed its binder scope", failureDomain: <FailureDomain.Internal />) /> }
+        mut val index = 0U64
+        while index < parameters.len {
+            if occurrence.parameters[index].paramId != self.funcBindAt(binds: parameters, index: index).paramId { return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "authored signature has a foreign binder", failureDomain: <FailureDomain.Internal />) /> }
+            index += 1U64
+        }
+        return <Result.Ok value=occurrence />
+    }
+
+    inout fn admitAuthoredFunctionViewSignature(signature: AuthoredFunctionSignature) -> Result[(), CompileDiagnostic] {
+        val sourceScope = self.sourceTypeUses.scopeAt(token: signature.scope).unwrap()
+        match sourceScope.state { SourceTypeScopeState.Lowered => {} _ => { return <Result.Err error=self.diagnosticAt(offset: sourceScope.anchor, msg: "authored signature scope did not finish lowering", failureDomain: <FailureDomain.Internal />) /> } }
+        if signature.function >= self.arena.functionCount() || sourceScope.function.unwrapOr(fallback: 18446744073709551615U64) != signature.function { return <Result.Err error=self.diagnosticAt(offset: sourceScope.anchor, msg: "authored signature lost its function owner", failureDomain: <FailureDomain.Internal />) /> }
+        val function = self.arena.functionAt(index: signature.function)
+        if signature.parameters.count() != function.params.len { return <Result.Err error=self.diagnosticAt(offset: sourceScope.anchor, msg: "authored signature changed parameter slots", failureDomain: <FailureDomain.Internal />) /> }
+        mut val index = 0U64
+        while index < signature.parameters.count() {
+            val id = signature.parameters[index]
+            val parameter = self.funcParamAt(params: function.params, index: index)
+            if id != parameter.authoredTypeUse { return <Result.Err error=self.diagnosticAt(offset: sourceScope.anchor, msg: "authored signature changed parameter occurrence", failureDomain: <FailureDomain.Internal />) /> }
+            if id != 0U64 {
+                val occurrence = try self.authoredSignatureOccurrence(signature: signature, id: id)
+                if !self.typeRefEq(a: occurrence.term, b: parameter.ty) { return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "authored signature changed parameter type", failureDomain: <FailureDomain.Internal />) /> }
+            }
+            index += 1U64
+        }
+        if signature.result != 0U64 {
+            val occurrence = try self.authoredSignatureOccurrence(signature: signature, id: signature.result)
+            if !function.hasRet || !self.typeRefEq(a: occurrence.term, b: function.retTy) { return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "authored signature changed result type", failureDomain: <FailureDomain.Internal />) /> }
+        } else if function.hasRet { return <Result.Err error=self.diagnosticAt(offset: sourceScope.anchor, msg: "authored signature lost its result occurrence", failureDomain: <FailureDomain.Internal />) /> }
+        val scope = try self.declarationTypeScope(owner: signature.function)
+        val assumptions = try self.declarationScopeAssumptions(scope: scope)
+        mut val proofs: Array[AuthoredTypeViewProof] = []
+        for id in signature.declarationUses {
+            val occurrence = try self.authoredSignatureOccurrence(signature: signature, id: id)
+            try self.checkAuthoredTypeBinders(ref: occurrence.term, scope: scope, offset: occurrence.site)
+            val type = self.arena.typeAt(index: occurrence.term)
+            val receiver = if type.assocNameId == 0U64 { give occurrence.term } else { give self.typeTermProjectionReceiver(t: type) }
+            mut val selectors = self.arena.typeViewSources(ref: receiver)
+            // Only receiver views participate in the view normal form. The
+            // associated member's trait instance is a separate selection.
+            mut val traitSelectors = 0U64
+            for selector in selectors { if selector.traitInstance.owner != 0U64 { traitSelectors += 1U64 } }
+            if traitSelectors > 1U64 { return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "a type view may select at most one trait source (spec/09)", failureDomain: <FailureDomain.Source />) /> }
+            if type.assocNameId != 0U64 {
+                val owner = if type.assocTraitDeclOffset != 0U64 { give type.assocTraitDeclOffset } else { give type.assocTraitStart }
+                if owner == 0U64 || self.decls.traitIndexByOffset(offset: owner) >= self.decls.traitCount() { return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "authored projection has no canonical trait owner", failureDomain: <FailureDomain.Internal />) /> }
+                val projection = <ResolvedViewSource writtenStart=occurrence.site surfaceId=type.assocTraitId traitInstance=<TraitInstanceKey owner=owner positionalArgs=type.assocTraitArgs /> />
+                mut val present = false
+                for selector in selectors { if self.semanticViewSourceEq(a: selector, b: projection) { present = true } }
+                if !present { selectors.append(projection) }
+            }
+            for selector in selectors {
+                if selector.traitInstance.owner != 0U64 {
+                    if self.decls.traitIndexByOffset(offset: selector.traitInstance.owner) >= self.decls.traitCount() { return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "authored view has no canonical trait owner", failureDomain: <FailureDomain.Internal />) /> }
+                    val proof = match (try self.queryTraitPatternProof(demand: <ConformanceProofDemand.SourceAdmission />, baseRef: receiver, traitId: 0U64, traitOwner: selector.traitInstance.owner, traitArgs: <PatternTypeInput.Values values=selector.traitInstance.positionalArgs />, patternParams: <PatternBindInput.Values values=[] />, assumptions: assumptions)) {
+                        ConformanceProofResult.Found(proof: val proof) => proof,
+                        ConformanceProofResult.Missing => { return <Result.Err error=self.diagnosticAt(offset: selector.writtenStart, msg: "trait view requires a conformance for this receiver and exact trait instance (spec/09)", failureDomain: <FailureDomain.Source />) /> },
+                        ConformanceProofResult.Ambiguous(owner: _, demand: _, selectedSource: _) => { return <Result.Err error=self.diagnosticAt(offset: selector.writtenStart, msg: "trait view does not have a unique conformance path (spec/09)", failureDomain: <FailureDomain.Source />) /> },
+                    }
+                    try self.checkDeclarationCallProof(proof: proof, scope: scope, offset: occurrence.site)
+                    proofs.append(<AuthoredTypeViewProof occurrence=id receiver=receiver selector=selector proof=self.freezeStaticConformanceProof(proof: proof) />)
+                }
+            }
+        }
+        self.authoredSignatureViews[signature.function] = <AuthoredSignatureViews signature=signature proofs=proofs />
+        return <Result.Ok value=() />
+    }
+}

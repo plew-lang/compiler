@@ -26,3 +26,5 @@ part ./Check/CallConstraints
 part ./Check/InterfaceEvidence
 
 part ./Check/ModuleBindings
+
+part ./Check/AuthoredTypes

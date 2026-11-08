@@ -167,6 +167,18 @@ impl Comp {
 
 
 impl Comp {
+    inout fn declarationParameterDependencies(parameter: U64, scope: DeclarationTypeScope, offset: U64) -> Result[DeclarationTypeDependencies, CompileDiagnostic] {
+        mut val caller = parameter == scope.selfParameter && parameter != 0U64
+        mut val index = 0U64
+        while index < scope.parameters.count() {
+            if self.funcBindAt(binds: scope.parameters, index: index).paramId == parameter { caller = true }
+            index += 1U64
+        }
+        val interfaceScoped = !caller && scope.interfaceRoot != 0U64 && self.interfaceScopeParameter(scope: scope) == parameter
+        if !caller && !interfaceScoped { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "declaration obligation refers to a type parameter outside its lexical scope") /> }
+        return <Result.Ok value=<DeclarationTypeDependencies caller=caller interfaceScoped=interfaceScoped /> />
+    }
+
     inout fn declarationTypeDependencies(ref: U64, scope: DeclarationTypeScope, offset: U64) -> Result[DeclarationTypeDependencies, CompileDiagnostic] {
         if self.arena.typeIsClosed(ref: ref) { return <Result.Ok value=<DeclarationTypeDependencies /> /> }
         if ref >= self.arena.typeTermCount() { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "declaration obligation has an invalid type term") /> }
@@ -176,14 +188,9 @@ impl Comp {
         // A projection's receiver child owns its binder. The old flat mirror
         // on a projection is not a second parameter occurrence or authority.
         if term.paramId != 0U64 && term.assocNameId == 0U64 {
-            caller = term.paramId == scope.selfParameter
-            mut val index = 0U64
-            while index < scope.parameters.count() {
-                if self.funcBindAt(binds: scope.parameters, index: index).paramId == term.paramId { caller = true }
-                index += 1U64
-            }
-            if !caller && scope.interfaceRoot != 0U64 { interfaceScoped = self.interfaceScopeParameter(scope: scope) == term.paramId }
-            if !caller && !interfaceScoped { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "declaration obligation refers to a type parameter outside its lexical scope") /> }
+            val dependency = try self.declarationParameterDependencies(parameter: term.paramId, scope: scope, offset: offset)
+            caller = dependency.caller
+            interfaceScoped = dependency.interfaceScoped
         }
         mut val index = 0U64
         while index < self.typeTermRefChildCount(ref: ref) {

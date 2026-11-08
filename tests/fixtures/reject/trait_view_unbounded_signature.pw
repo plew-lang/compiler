@@ -1,0 +1,3 @@
+trait Project[Kind] { type Item }
+fn inspect[T](value: T#Project[I64].Item) {}
+fn main() {}

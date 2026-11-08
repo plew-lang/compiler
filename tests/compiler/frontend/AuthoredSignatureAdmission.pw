@@ -1,0 +1,180 @@
+// Source acceptance and retained signature slot identity. Not a whole-consumer
+// migration test: nested saved projection consumption remains separate.
+use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use ../../../src/SourceAccess only { SourceAccess }
+use ../../../src/Diag only { FailureDomain }
+use ../../../src/SourceTypeUses only { SourceTypeUseRole, SourceTypeUses, SourceTypeScopeKind }
+use ../../../src/SourceTypeAdmissions only { SourceSignatureSlot }
+use ../../../src/Ir only { InstanceEnvironment, CallableConstraintEvidence }
+use @Plew/Syntax only { parseItem, TopItemAst, rangeEquals }
+use @Std/Io only { print }
+use @Std/Process only { argAt }
+
+fn offset(compiler~: Comp, text~: String) -> U64 {
+    mut val index = 0U64
+    while index + text.bytes().count() <= compiler.arena.bytes.count() {
+        if rangeEquals(bytes: compiler.arena.bytes, start: index, len: text.bytes().count(), kw: text) { return index }
+        index += 1U64
+    }
+    panic("source marker absent")
+}
+
+fn main() {
+    val scenario = argAt(1I64)
+    if scenario == "store" {
+        mut val store = <SourceTypeUses />
+        val token = store.begin(kind: <SourceTypeScopeKind.FreeFunction />, anchor: 1U64)
+        val first = store.record(term: 1U64, site: 1U64, parameters: [])
+        val second = store.record(term: 1U64, site: 2U64, parameters: [])
+        val result = store.record(term: 1U64, site: 3U64, parameters: [])
+        store.setRole(token: token, role: <SourceTypeUseRole.Body />)
+        val body = store.record(term: 1U64, site: 4U64, parameters: [])
+        store.setRole(token: token, role: <SourceTypeUseRole.Declaration />)
+        if store.bindSignature(token: token, function: 7U64, parameters: [first,second], result: result) { panic("signature admitted an unbound function") }
+        if !store.bindFunction(token: token, function: 7U64) { panic("signature owner setup failed") }
+        if store.bindSignature(token: token, function: 7U64, parameters: [first,first], result: result) || store.bindSignature(token: token, function: 7U64, parameters: [first,second], result: first) || store.bindSignature(token: token, function: 7U64, parameters: [body], result: result) { panic("invalid occurrence became a signature slot") }
+        if !store.bindSignature(token: token, function: 7U64, parameters: [first,second], result: result) { panic("distinct signature occurrences rejected") }
+        val finalDeclaration = store.record(term: 1U64, site: 5U64, parameters: [])
+        if !store.finish(token: token, succeeded: true) { panic("signature frame did not finish") }
+        val signature = store.signatureFor(function: 7U64).unwrap()
+        if signature.declarationUses.count() != 4U64 || signature.declarationUses[3U64] != finalDeclaration { panic("signature did not capture the completed declaration frame") }
+        if store.bindSignature(token: token, function: 7U64, parameters: [], result: 0U64) { panic("finished signature was rewritten") }
+        print("1")
+        return
+    }
+    val valid = scenario == "direct" || scenario == "standaloneDirect" || scenario == "slots" || scenario == "valueSlots" || scenario == "concrete" || scenario == "nested" || scenario == "roles" || scenario == "inherited" || scenario == "extension" || scenario == "standaloneReader" || scenario == "receiverTrait"
+    val body = if scenario == "standaloneMissing" { give "fn inspect[T](value:T#Project[I64]) {{}}" }
+      else if scenario == "standaloneDirect" || scenario == "standaloneReader" { give "fn inspect[T](value:T#Project[I64]) where T:Project[I64] {{}}" }
+      else if scenario == "unrelated" { give "fn inspect[T](value:T#Project[I64].Item) where T:Other {{}}" }
+      else if scenario == "wrong" { give "fn inspect[T](value:T#Project[Bool].Item) where T:Project[I64] {{}}" }
+      else if scenario == "foreign" { give "fn inspect[T,U](value:T#Project[I64].Item) where U:Project[I64] {{}}" }
+      else if scenario == "declaration" { give "fn prior[T](value:T) where T:Project[I64] {{}} fn inspect[T](value:T#Project[I64].Item) {{}}" }
+      else if scenario == "roles" { give "fn inspect[T](value:T#Project[I64].Item, count:I64 = {{ val defaultLocal:I64 = 1I64 give defaultLocal }}) -> I64 where T:Project[I64] {{ val bodyLocal:T#Other = value return 0I64 }}" }
+      else if scenario == "inherited" { give "fn inspect[T](value:T#Project[I64].Item) where T:Child[I64] {{}}" }
+      else if scenario == "receiverTrait" { give "fn inspect[T](value:T#Other#Project[I64].Item) where T:Other, T:Project[I64] {{}}" }
+      else if scenario == "extension" { give "fn inspect(value:Value#Extra#Project[I64].Item) {{}}" }
+      else if scenario == "direct" { give "fn inspect[T](value:T#Project[I64].Item) where T:Project[I64] {{}}" }
+      else if scenario == "slots" || scenario == "valueSlots" { give "fn inspect[T](left:T#Project[I64].Item, right:T#Project[I64].Item) -> T#Project[I64].Item where T:Project[I64] {{}}" }
+      else if scenario == "concrete" { give "fn inspect(left:Value#Project[I64].Item) -> Value#Project[I64].Item {{}}" }
+      else if scenario == "nested" { give "fn inspect[T](value:Box[T#Project[I64].Item]) where T:Project[I64] {{}}" }
+      else if scenario == "nestedMissing" { give "fn inspect[T](value:Box[T#Project[I64].Item]) {{}}" }
+      else if scenario == "resultMissing" { give "fn inspect[T](value:T) -> T#Project[I64].Item {{}}" }
+      else { give "fn inspect[T](value:T#Project[I64].Item) {{}}" }
+    val preamble = "trait Project[Kind] {{ type Item }} trait Other {{}} struct Value {{}} impl Value as Other {{}} impl Value as Project[I64] {{ type Item=I64 }} struct Box[T] {{}} trait Child[Kind]:Project[Kind] {{}} extension Extra {{ pub impl Value {{ fn marker() {{}} }} }} fn concrete(value:Value) {{}} fn foreign[T](value:T) {{}} fn noise(value:Bool) {{}} "
+    mut val compiler = <Comp />
+    val source = if scenario == "valueSlots" { give preamble + "\n// " + body + "\nfn main() {{}}" } else { give preamble + body + " fn main() {{}}" }
+    val result = analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text text=source path="AuthoredSignatureAdmission.pw" />, sources: <SourceAccess stdRoot=[] />)
+    if scenario == "valueSlots" {
+        result.unwrap()
+        val start = offset(compiler, body)
+        match parseItem(source: body, start: start, end: start + body.bytes().count()) {
+            TopItemAst.Decl(d: val declaration) => {
+                match compiler.lowerFuncDecl(d: declaration) { Result.Ok(value: _) => {} Result.Err(error: val diagnostic) => { panic(diagnostic.message) } }
+            }
+            _ => { panic("value signature did not parse") }
+        }
+        match compiler.admitAuthoredFunctionViews() { Result.Ok(value: _) => {} Result.Err(error: val diagnostic) => { panic(diagnostic.message) } }
+    } else {
+        match result {
+            Result.Ok(value: _) => { if !valid { panic("unjustified authored signature was accepted") } }
+            Result.Err(error: val diagnostic) => {
+                if valid { panic(diagnostic.message) }
+                match diagnostic.failureDomain { FailureDomain.Source => {} _ => { panic("missing premise did not return Source failure") } }
+                if !rangeEquals(bytes: diagnostic.message.bytes(), start: 0U64, len: "trait view requires a conformance".bytes().count(), kw: "trait view requires a conformance") { panic(diagnostic.message) }
+                val rejectedOwner = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "inspect").nameId)
+                if compiler.readAdmittedSignatureRoot(function: rejectedOwner, slot: <SourceSignatureSlot.Parameter index=0U64 />, environment: <InstanceEnvironment />).isOk() { panic("failed declaration published signature evidence") }
+                print("1")
+                return
+            }
+        }
+    }
+    val owner = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "inspect").nameId)
+    val signature = compiler.sourceTypeUses.signatureFor(function: owner).unwrap()
+    if signature.function != owner || signature.parameters.count() == 0U64 { panic("signature lost actual owner or parameter slots") }
+    for id in signature.declarationUses {
+        val occurrence = compiler.sourceTypeUses.useAt(index: id - 1U64).unwrap()
+        if occurrence.scope != signature.scope { panic("signature borrowed a foreign occurrence") }
+        match occurrence.role { SourceTypeUseRole.Declaration => {} _ => { panic("default/body occurrence entered signature") } }
+    }
+    if scenario == "standaloneReader" {
+        val function = compiler.arena.functionAt(index: owner)
+        val concrete = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "concrete").nameId)
+        val noise = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "noise").nameId)
+        val value = compiler.funcParamAt(params: compiler.arena.functionAt(index: concrete).params, index: 0U64).ty
+        val boolean = compiler.funcParamAt(params: compiler.arena.functionAt(index: noise).params, index: 0U64).ty
+        val parameters = compiler.copyFuncBinds(binds: function.typeParams)
+        val environment = compiler.environmentWithCallableConstraints(fnIdx: owner, environment: <InstanceEnvironment params=parameters args=[value] />, evidence: <CallableConstraintEvidence.Declaration />).unwrap()
+        if compiler.readAdmittedSignatureRoot(function: owner, slot: <SourceSignatureSlot.Parameter index=0U64 />, environment: <InstanceEnvironment params=parameters args=[boolean] />).isOk() { panic("standalone view reader skipped retained proof interpretation") }
+        if compiler.readAdmittedSignatureRoot(function: owner, slot: <SourceSignatureSlot.Parameter index=0U64 />, environment: <InstanceEnvironment params=parameters args=[value] />).isOk() { panic("standalone view reader rediscovered a missing retained binding") }
+        if compiler.readAdmittedSignatureRoot(function: owner, slot: <SourceSignatureSlot.Parameter index=0U64 />, environment: <InstanceEnvironment params=parameters args=[boolean] constraints=environment.constraints />).isOk() { panic("standalone view reader accepted a foreign proof subject") }
+        val actual = compiler.readAdmittedSignatureRoot(function: owner, slot: <SourceSignatureSlot.Parameter index=0U64 />, environment: environment).unwrap()
+        val selectors = compiler.arena.typeViewSources(ref: actual)
+        if selectors.count() != 1U64 || selectors[0U64].traitInstance.positionalArgs.count() != 1U64 || !compiler.typeRefEq(a: compiler.typeRefWithoutOuterViews(ref: actual), b: value) { panic("standalone view reader lost the selected view") }
+        print("1")
+        return
+    }
+    if scenario == "receiverTrait" {
+        val concrete = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "concrete").nameId)
+        val value = compiler.funcParamAt(params: compiler.arena.functionAt(index: concrete).params, index: 0U64).ty
+        val parameters = compiler.copyFuncBinds(binds: compiler.arena.functionAt(index: owner).typeParams)
+        val environment = compiler.environmentWithCallableConstraints(fnIdx: owner, environment: <InstanceEnvironment params=parameters args=[value] />, evidence: <CallableConstraintEvidence.Declaration />).unwrap()
+        if compiler.readAdmittedSignatureRoot(function: owner, slot: <SourceSignatureSlot.Parameter index=0U64 />, environment: <InstanceEnvironment params=parameters args=[value] />).isOk() { panic("projection reader rediscovered absent receiver-view bindings") }
+        val full = environment.constraints.unwrap()
+        if compiler.arena.callableConstraintCount(evidence: full) != 2U64 { panic("receiver proof test requires two independent bounds") }
+        val projectSource = compiler.arena.callableConstraintSourceAt(evidence: full, index: 1U64)
+        val projectBound = compiler.declarationBound(source: projectSource)
+        if projectBound.constraint.key.positionalArgs.count() != 1U64 { panic("receiver proof test did not select Project[I64]") }
+        val projectOnly = compiler.arena.prepareDeclarationConstraints(function: owner, sources: [projectSource], proofs: [compiler.arena.callableConstraintProofAt(evidence: full, index: 1U64)])
+        if compiler.readAdmittedSignatureRoot(function: owner, slot: <SourceSignatureSlot.Parameter index=0U64 />, environment: <InstanceEnvironment params=parameters args=[value] constraints=<Optional.Some v=projectOnly /> />).isOk() { panic("projection reader skipped receiver-view evidence") }
+        val actual = compiler.readAdmittedSignatureRoot(function: owner, slot: <SourceSignatureSlot.Parameter index=0U64 />, environment: environment).unwrap()
+        val item = compiler.arena.typeAt(index: actual)
+        if item.nameLen != 3U64 || !rangeEquals(bytes: compiler.arena.bytes, start: item.nameStart, len: item.nameLen, kw: "I64") { panic("receiver trait changed the selected projection output") }
+        print("1")
+        return
+    }
+    if scenario == "roles" {
+        mut val defaultSeen = false
+        mut val bodySeen = false
+        mut val index = 0U64
+        while index < compiler.sourceTypeUses.useCount() {
+            val occurrence = compiler.sourceTypeUses.useAt(index: index).unwrap()
+            if occurrence.scope == signature.scope {
+                match occurrence.role {
+                    SourceTypeUseRole.DefaultArgument => { defaultSeen = true }
+                    SourceTypeUseRole.Body => { bodySeen = true }
+                    _ => {}
+                }
+            }
+            index += 1U64
+        }
+        if !defaultSeen || !bodySeen { panic("demand-role exclusion control was not exercised") }
+    }
+    if scenario == "slots" || scenario == "valueSlots" {
+        if signature.parameters[0U64] == signature.parameters[1U64] || signature.result == signature.parameters[0U64] || signature.result == signature.parameters[1U64] { panic("identical type terms collapsed signature occurrences") }
+        val first = compiler.sourceTypeUses.useAt(index: signature.parameters[0U64] - 1U64).unwrap()
+        val second = compiler.sourceTypeUses.useAt(index: signature.parameters[1U64] - 1U64).unwrap()
+        val returned = compiler.sourceTypeUses.useAt(index: signature.result - 1U64).unwrap()
+        if first.site >= second.site || second.site >= returned.site || !compiler.typeRefEq(a: first.term, b: second.term) || !compiler.typeRefEq(a: first.term, b: returned.term) { panic("signature slots lost exact occurrence order") }
+    }
+    if scenario == "concrete" || scenario == "slots" || scenario == "valueSlots" {
+        mut val environment = <InstanceEnvironment />
+        if scenario != "concrete" {
+            val concreteFunction = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "concrete").nameId)
+            val receiver = compiler.funcParamAt(params: compiler.arena.functionAt(index: concreteFunction).params, index: 0U64).ty
+            environment = compiler.environmentWithCallableConstraints(fnIdx: owner, environment: <InstanceEnvironment params=compiler.copyFuncBinds(binds: compiler.arena.functionAt(index: owner).typeParams) args=[receiver] />, evidence: <CallableConstraintEvidence.Declaration />).unwrap()
+            val foreign = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "foreign").nameId)
+            if compiler.readAdmittedSignatureRoot(function: owner, slot: <SourceSignatureSlot.Parameter index=0U64 />, environment: <InstanceEnvironment params=compiler.copyFuncBinds(binds: compiler.arena.functionAt(index: foreign).typeParams) args=[receiver] />).isOk() { panic("signature accepted a foreign substitution binder") }
+            if compiler.readAdmittedSignatureRoot(function: owner, slot: <SourceSignatureSlot.Parameter index=0U64 />, environment: <InstanceEnvironment />).isOk() { panic("uninstantiated source root was treated as a final projection") }
+        }
+        val noise = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "noise").nameId)
+        compiler.cur.checkFn = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "foreign").nameId)
+        compiler.cur.typeParams = compiler.copyFuncBinds(binds: compiler.arena.functionAt(index: owner).typeParams)
+        compiler.cur.typeArgs = [compiler.funcParamAt(params: compiler.arena.functionAt(index: noise).params, index: 0U64).ty]
+        val parameter = compiler.readAdmittedSignatureRoot(function: owner, slot: <SourceSignatureSlot.Parameter index=0U64 />, environment: environment).unwrap()
+        val returned = compiler.readAdmittedSignatureRoot(function: owner, slot: <SourceSignatureSlot.Result />, environment: environment).unwrap()
+        if !compiler.typeRefEq(a: parameter, b: returned) || compiler.arena.typeAt(index: parameter).assocNameId != 0U64 { panic("saved projection proof did not supply the output") }
+        if compiler.readAdmittedSignatureRoot(function: owner, slot: <SourceSignatureSlot.Parameter index=99U64 />, environment: environment).isOk() { panic("foreign signature slot was accepted") }
+    }
+    if compiler.readAdmittedSignatureRoot(function: 18446744073709551615U64, slot: <SourceSignatureSlot.Result />, environment: <InstanceEnvironment />).isOk() { panic("signature accepted an unknown owner") }
+    print("1")
+}

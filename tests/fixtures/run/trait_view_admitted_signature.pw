@@ -1,0 +1,6 @@
+use @Std/Io only { print }
+trait Project[Kind] { type Item }
+struct Value {}
+impl Value as Project[I64] { type Item = I64 }
+fn identity[T](receiver: T, value: T#Project[I64].Item) -> T#Project[I64].Item where T: Project[I64] { return value }
+fn main() { print(identity(receiver: <Value />, value: 42I64)) }
