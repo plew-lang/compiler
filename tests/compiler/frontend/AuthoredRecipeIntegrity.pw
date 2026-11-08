@@ -1,0 +1,92 @@
+// Raw provenance is not admission authority. A complete saved recipe must
+// agree with canonical children, labels and exact authored occurrences.
+use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use ../../../src/SourceAccess only { SourceAccess }
+use ../../../src/SourceTypeUses only { SourceTypeScopeKind, SourceTypeRecipeOrigin }
+use ../../../src/Diag only { FailureDomain }
+use ../../../src/Ir only { TypeRef }
+use @Std/Io only { print }
+use @Std/Process only { argAt }
+
+fn main() {
+    val scenario = argAt(1I64)
+    val valid = scenario == "valid" || scenario == "validRepresentation"
+    val representation = scenario == "representation" || scenario == "validRepresentation" || scenario == "representationSource" || scenario == "representationPosition" || scenario == "memoPosition"
+    val nested = if scenario == "nestedReceiver" { give " trait P {{ type Item }} trait Q {{ type Output }} struct Source {{}} struct Leaf {{}} impl Source as P {{ type Item=Leaf }} impl Leaf as Q {{ type Output=I64 }} fn inner(value:Source#P.Item) {{}} fn outer(value:Leaf#Q.Output) {{}}" } else { give "" }
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text text="struct Box[T] {{}} fn boxed(value:Box[I64]) {{}} fn integer(value:I64) {{}} fn boolean(value:Bool) {{}} fn callable(value:fn() -> ()) {{}} fn main() {{}}" + nested path="RecipeIntegrity.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
+    val boxed = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "boxed").nameId)
+    val integer = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "integer").nameId)
+    val boolean = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "boolean").nameId)
+    val entry = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "main").nameId)
+    val callable = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "callable").nameId)
+    mut val aggregate = compiler.funcParamAt(params: compiler.arena.functionAt(index: boxed).params, index: 0U64).ty
+    val element = compiler.funcParamAt(params: compiler.arena.functionAt(index: integer).params, index: 0U64).ty
+    val other = compiler.funcParamAt(params: compiler.arena.functionAt(index: boolean).params, index: 0U64).ty
+    // Reserve a distinct unadmitted owner without changing any source surface.
+    // This isolates raw recipe admission from ordinary source overload rules.
+    val function = compiler.registerDeclaredFunc(f: compiler.arena.functionAt(index: entry), registerSurface: false).unwrap()
+    val anchor = compiler.arena.functionAt(index: function).defOffset
+    mut val foreign = 0U64
+    if scenario == "foreign" {
+        val scope = compiler.sourceTypeUses.begin(kind: <SourceTypeScopeKind.FreeFunction />, anchor: anchor)
+        val occurrence = compiler.sourceTypeUses.record(term: element, site: anchor, parameters: [])
+        foreign = compiler.sourceTypeUses.useAt(index: occurrence - 1U64).unwrap().recipe
+        if !compiler.sourceTypeUses.finish(token: scope, succeeded: true) { panic("foreign recipe frame setup failed") }
+    }
+    val scope = compiler.sourceTypeUses.begin(kind: <SourceTypeScopeKind.FreeFunction />, anchor: anchor)
+    val occurrence = compiler.sourceTypeUses.record(term: (if representation && scenario != "representation" { give 0U64 } else if scenario == "term" { give other } else { give element }), site: anchor, parameters: [])
+    mut val child = compiler.sourceTypeUses.useAt(index: occurrence - 1U64).unwrap().recipe
+    if scenario == "forged" {
+        child = compiler.sourceTypeUses.deriveRecipe(term: element, children: [], labels: [], origin: <SourceTypeRecipeOrigin.Authored />)
+    }
+    if representation {
+        val payload = compiler.semanticSourceResultTerm(ref: 0U64)
+        if scenario == "representationPosition" {
+            val nominal = compiler.arena.typeAt(index: aggregate)
+            aggregate = compiler.pushType(t: <TypeRef nameStart=nominal.nameStart nameLen=nominal.nameLen args=[payload] hasDecl=nominal.hasDecl declOffset=nominal.declOffset />)
+        } else { aggregate = compiler.funcParamAt(params: compiler.arena.functionAt(index: callable).params, index: 0U64).ty }
+        if scenario == "representationSource" { child = compiler.sourceTypeUses.deriveRecipe(term: 0U64, children: [], labels: [], origin: <SourceTypeRecipeOrigin.BoundSelection />) }
+        child = compiler.sourceTypeUses.deriveRecipe(term: payload, children: [], labels: [], origin: <SourceTypeRecipeOrigin.ResultRepresentation />, sourceRecipe: child)
+    }
+    if scenario == "derived" { child = compiler.sourceTypeUses.deriveRecipe(term: element, children: [], labels: [], origin: <SourceTypeRecipeOrigin.BoundSelection />) }
+    if scenario == "receiver" { child = compiler.sourceTypeUses.deriveRecipe(term: element, children: [], labels: [], origin: <SourceTypeRecipeOrigin.ProjectionReceiver />) }
+    if scenario == "foreign" { child = foreign }
+    if scenario == "memoPosition" {
+        compiler.sourceTypeUses.record(term: aggregate, site: anchor, parameters: [], children: [child], labels: [0U64])
+        val nominal = compiler.arena.typeAt(index: compiler.funcParamAt(params: compiler.arena.functionAt(index: boxed).params, index: 0U64).ty)
+        aggregate = compiler.pushType(t: <TypeRef nameStart=nominal.nameStart nameLen=nominal.nameLen args=[compiler.sourceTypeUses.recipeAt(id: child).unwrap().term] hasDecl=nominal.hasDecl declOffset=nominal.declOffset />)
+    }
+    if scenario == "nestedReceiver" {
+        val inner = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "inner").nameId)
+        val outer = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "outer").nameId)
+        val innerType = compiler.funcParamAt(params: compiler.arena.functionAt(index: inner).params, index: 0U64).ty
+        val outerType = compiler.funcParamAt(params: compiler.arena.functionAt(index: outer).params, index: 0U64).ty
+        if compiler.arena.typeAt(index: innerType).assocNameId == 0U64 { panic("nested projection setup normalized away its source") }
+        val root = compiler.sourceTypeUses.signatureFor(function: inner).unwrap().parameters[0U64]
+        val original = compiler.sourceTypeUses.recipeAt(id: compiler.sourceTypeUses.useAt(index: root - 1U64).unwrap().recipe).unwrap()
+        child = compiler.sourceTypeUses.deriveRecipe(term: innerType, children: original.children, labels: original.labels, origin: <SourceTypeRecipeOrigin.ProjectionReceiver />)
+        aggregate = compiler.rebuildProjectionTerm(t: compiler.arena.typeAt(index: outerType), receiver: innerType, traitArgs: [])
+    }
+    val children: Array[U64] = if scenario == "shape" { give [] } else { give [child] }
+    val labels: Array[U64] = if scenario == "shape" { give [] } else if scenario == "label" { give [123U64] } else { give [0U64] }
+    compiler.sourceTypeUses.record(term: aggregate, site: anchor, parameters: [], children: children, labels: labels)
+    if !compiler.sourceTypeUses.bindFunction(token: scope, function: function) || !compiler.sourceTypeUses.bindSignature(token: scope, function: function, parameters: [], result: 0U64) || !compiler.sourceTypeUses.finish(token: scope, succeeded: true) { panic("recipe owner setup failed") }
+    match compiler.admitAuthoredFunctionViews() {
+        Result.Ok(value: _) => { if !valid { panic("malformed source recipe was admitted") } }
+        Result.Err(error: val diagnostic) => {
+            if valid { panic(diagnostic.message) }
+            match diagnostic.failureDomain { FailureDomain.Internal => {} _ => { panic("malformed recipe failed in another domain") } }
+            val expected: String = if scenario == "shape" { give "authored type recipe does not cover canonical children" }
+              else if scenario == "term" { give "authored type recipe child differs from canonical term" }
+              else if scenario == "label" { give "authored type recipe child has a foreign label" }
+              else if scenario == "forged" { give "authored type recipe has no exact source occurrence" }
+              else if scenario == "foreign" { give "authored signature has a foreign type occurrence" }
+              else if scenario == "representationSource" { give "result representation must retain an authored source" }
+              else if scenario == "derived" || scenario == "receiver" || scenario == "representationPosition" || scenario == "memoPosition" || scenario == "nestedReceiver" { give "authored type recipe has an invalid derived edge" }
+              else { give "authored type recipe has an invalid result representation" }
+            if diagnostic.message != expected { panic(diagnostic.message) }
+        }
+    }
+    print("1")
+}

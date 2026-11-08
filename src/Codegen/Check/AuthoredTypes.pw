@@ -72,6 +72,77 @@ pub impl Comp {
 }
 
 impl Comp {
+    // Validate the saved constructor graph once per declaration. The semantic
+    // visitor owns child shape and labels; recipes only retain the chosen edges.
+    // false marks an active node, true a fully validated node of this owner.
+    inout fn checkAuthoredTypeRecipe(signature: AuthoredFunctionSignature, recipe: U64, edge: AuthoredRecipeEdge, visited: inout Dictionary[U64, Bool], offset: U64) -> Result[(), CompileDiagnostic] {
+        val node = match self.sourceTypeUses.recipeAt(id: recipe) {
+            Optional.Some(v: val node) => node,
+            Optional.None => { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "authored type recipe has an invalid node", failureDomain: <FailureDomain.Internal />) /> },
+        }
+        if node.term >= self.arena.typeCount() { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "authored type recipe has an invalid term", failureDomain: <FailureDomain.Internal />) /> }
+        // Context is checked even for a memoized node: a previously validated
+        // receiver/result cannot be reused as an ordinary authored argument.
+        val permitted = match node.origin {
+            SourceTypeRecipeOrigin.Authored => true,
+            // A nested projection needs its own occurrence and retained proof;
+            // a synthetic receiver constructor cannot hide that source step.
+            SourceTypeRecipeOrigin.ProjectionReceiver => match edge { AuthoredRecipeEdge.ProjectionReceiver => self.arena.typeAt(index: node.term).assocNameId == 0U64, _ => false },
+            SourceTypeRecipeOrigin.ResultRepresentation => match edge { AuthoredRecipeEdge.FunctionResult => true, _ => false },
+            // Legacy lexical completion has no retained clause/binder origin.
+            // It cannot authorize a source edge. Non-free owner migration must
+            // forward the actual originating recipe before using this gate.
+            SourceTypeRecipeOrigin.BoundSelection => false,
+        }
+        if !permitted { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "authored type recipe has an invalid derived edge", failureDomain: <FailureDomain.Internal />) /> }
+        match visited.get(key: recipe) {
+            Optional.Some(v: val ready) => {
+                if ready { return <Result.Ok value=() /> }
+                return <Result.Err error=self.diagnosticAt(offset: offset, msg: "authored type recipe contains a cycle", failureDomain: <FailureDomain.Internal />) />
+            }
+            Optional.None => {}
+        }
+        visited[recipe] = false
+        match node.origin {
+            SourceTypeRecipeOrigin.Authored => {
+                if node.occurrence == 0U64 || node.sourceRecipe != 0U64 { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "authored type recipe has no exact source occurrence", failureDomain: <FailureDomain.Internal />) /> }
+                val occurrence = try self.authoredSignatureOccurrence(signature: signature, id: node.occurrence)
+                if occurrence.recipe != recipe || !self.typeRefEq(a: occurrence.term, b: node.term) { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "authored type recipe changed its source occurrence", failureDomain: <FailureDomain.Internal />) /> }
+            }
+            SourceTypeRecipeOrigin.ResultRepresentation => {
+                val source = self.sourceTypeUses.recipeAt(id: node.sourceRecipe)
+                if node.occurrence != 0U64 || source.isNone() { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "authored type recipe lost its result representation source", failureDomain: <FailureDomain.Internal />) /> }
+                match source.unwrap().origin {
+                    SourceTypeRecipeOrigin.Authored => {}
+                    _ => { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "result representation must retain an authored source", failureDomain: <FailureDomain.Internal />) /> }
+                }
+                if source.unwrap().term != 0U64 || !self.typeRefEq(a: node.term, b: self.semanticSourceResultTerm(ref: 0U64)) { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "authored type recipe has an invalid result representation", failureDomain: <FailureDomain.Internal />) /> }
+                try self.checkAuthoredTypeRecipe(signature: signature, recipe: node.sourceRecipe, edge: <AuthoredRecipeEdge.Source />, visited: inout visited, offset: offset)
+            }
+            SourceTypeRecipeOrigin.ProjectionReceiver | SourceTypeRecipeOrigin.BoundSelection => {
+                if node.occurrence != 0U64 || node.sourceRecipe != 0U64 { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "derived type recipe acquired source authority", failureDomain: <FailureDomain.Internal />) /> }
+            }
+        }
+        val count = self.typeTermRefChildCount(ref: node.term)
+        if node.children.count() != count || node.labels.count() != count { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "authored type recipe does not cover canonical children", failureDomain: <FailureDomain.Internal />) /> }
+        mut val index = 0U64
+        while index < count {
+            val child = match self.sourceTypeUses.recipeAt(id: node.children[index]) {
+                Optional.Some(v: val child) => child,
+                Optional.None => { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "authored type recipe has an invalid child", failureDomain: <FailureDomain.Internal />) /> },
+            }
+            if !self.typeRefEq(a: child.term, b: self.typeTermRefChildRef(ref: node.term, index: index)) { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "authored type recipe child differs from canonical term", failureDomain: <FailureDomain.Internal />) /> }
+            if node.labels[index] != self.typeTermRefIdentityChildLabel(ref: node.term, index: index) { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "authored type recipe child has a foreign label", failureDomain: <FailureDomain.Internal />) /> }
+            val childEdge = if self.arena.typeAt(index: node.term).assocNameId != 0U64 && index == 0U64 { give <AuthoredRecipeEdge.ProjectionReceiver /> }
+              else if self.isFnType(ref: node.term) && index == 0U64 { give <AuthoredRecipeEdge.FunctionResult /> }
+              else { give <AuthoredRecipeEdge.Source /> }
+            try self.checkAuthoredTypeRecipe(signature: signature, recipe: node.children[index], edge: childEdge, visited: inout visited, offset: offset)
+            index += 1U64
+        }
+        visited[recipe] = true
+        return <Result.Ok value=() />
+    }
+
     // Both memberless views and projections must interpret their retained
     // premise. A value substitution alone never manufactures conformance.
     inout fn instantiateAuthoredViewProof(saved: AuthoredTypeViewProof, environment: InstanceEnvironment, offset: U64) -> Result[StaticConformanceProof, CompileDiagnostic] {
@@ -148,8 +219,10 @@ impl Comp {
         val scope = try self.declarationTypeScope(owner: signature.function)
         val assumptions = try self.declarationScopeAssumptions(scope: scope)
         mut val proofs: Array[AuthoredTypeViewProof] = []
+        mut val recipes: Dictionary[U64, Bool] = [:]
         for id in signature.declarationUses {
             val occurrence = try self.authoredSignatureOccurrence(signature: signature, id: id)
+            try self.checkAuthoredTypeRecipe(signature: signature, recipe: occurrence.recipe, edge: <AuthoredRecipeEdge.Source />, visited: inout recipes, offset: occurrence.site)
             try self.checkAuthoredTypeBinders(ref: occurrence.term, scope: scope, offset: occurrence.site)
             val type = self.arena.typeAt(index: occurrence.term)
             val receiver = if type.assocNameId == 0U64 { give occurrence.term } else { give self.typeTermProjectionReceiver(t: type) }

@@ -356,6 +356,8 @@ enum ProjectionBoundState {
     Ready(bound: PreparedProjectionBound)
     Failed(diagnostic: CompileDiagnostic)
 }
+enum AuthoredRecipeEdge { Source ProjectionReceiver FunctionResult }
+
 struct ProjectionBoundClause {
     val scope: U64
     val parameters: Array[U64]

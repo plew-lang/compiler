@@ -693,3 +693,27 @@ raw requirements/extern owners, recursive recipe validation, nested saved-proof
 reader, production consumers, saved-only predicate interpretation or the two
 original graph/equality fixture repairs. Continue those existing obligations;
 no whole-task completion, main integration or seed/carrier promotion.
+
+### Recursive Recipe Admission WIP
+
+[REDs and independent findings](../../../evidence/rejection-domains/diagnostic-domain-implementation/authored-recipe-admission.json)
+track canonical child/label/term checks, exact authored backlinks and owner/binder
+validation. Derived tags alone do not establish authority: three actual REDs
+require parent-constructor position checks, including before memo hits. Another
+actual RED hides an inner projection in a synthetic receiver; require an authored
+occurrence/proof for that inner projection. Unit mapping is valid only on the
+function result edge and must retain its authored Unit source. The newly added
+internal positive fixture was corrected to that real constructor position;
+ordinary Box placement remains an explicit rejection case.
+
+Legacy BoundSelection without retained original clause/binder provenance is not
+admitted by this free-signature gate. The mandatory non-free/inherited-owner
+migration must supply original recipes before connecting its admission path;
+this restriction is not whole-producer completion. Build55ae26 and fresh14/21/8,
+public modes/dispatchers and whole compiler source --check pass with invariant
+inputs. Independent review reconciles the current free gate, exact case sets,
+all input maps and candidate SHA27187aad. Latest-source formal performance is
+unmeasured; previous6.934775 seconds certifies a49e6524 only. The fresh candidate
+reconfirms the existing nested-reader RED: compile/link0 then expected native134.
+Continue nested retained-proof consumption and production handoffs after this
+finite gate; do not close the task from validator success.
