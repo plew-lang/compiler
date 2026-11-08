@@ -408,3 +408,13 @@ The existing `AuthoredNestedSignature` once/proofBinders cases and the internal
 `associated_condition_normalization_chain` fixture separately cover once-only
 substitution and multiple saved equations. These tests do not adopt chained
 projection surface syntax or certify the remaining proof consumers.
+
+`RetainedProjectionPrerequisites.pw` checks saved-equation interpretation under an
+explicit caller environment. The equation first passes its own original-binder
+admission with the exact Function clause; this is an internal handoff control,
+not a production producer/admission test for its entire parent witness plan.
+The prepared context succeeds with the same retained prerequisite and output;
+`missing` rejects rather than selecting a new globally available conformance.
+Both cases recover through the valid context and leave the admission stack empty.
+Run the no-argument and `missing` scenarios with the manual procedure above.
+Associated row transport, Receiver migration and whole-task gates remain separate.

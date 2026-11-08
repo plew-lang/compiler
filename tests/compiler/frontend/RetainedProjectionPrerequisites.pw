@@ -1,0 +1,67 @@
+// An internally admitted equation replays under its explicit caller environment.
+// This is not a production-producer admission test for the entire parent plan.
+use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use ../../../src/SourceAccess only { SourceAccess }
+use ../../../src/Ir only { InstanceEnvironment, CallableConstraintEvidence, TraitConstraint, TraitInstanceKey, ConformanceProofDemand, StaticConformanceProof, StaticProofInstantiation, WitnessMatch, WitnessConditionPlan, ProjectionNormalizationStep }
+use @Std/Io only { print }
+use @Std/Process only { argAt }
+
+fn main() {
+    val scenario = argAt(1I64)
+    val source = "trait Parser {{ type Output }} trait Marker[K] {{}} trait Root {{}} struct Source {{}} struct Box[T] {{}} impl Source as Parser {{ type Output=I64 }} impl Source as Marker[I64] {{}} impl[T] Box[T] as Root where T:Parser, T:Marker[T#Parser.Output] {{}} fn inspect[T](value:T) where T:Parser {{}} fn concrete(value:Source) {{}} fn boxed(value:Box[Source]) {{}} fn main() {{}}"
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text text=source path="RetainedProjectionPrerequisite.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
+    val inspect = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "inspect").nameId)
+    val concrete = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "concrete").nameId)
+    val boxed = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "boxed").nameId)
+    val receiver = compiler.funcParamAt(params: compiler.arena.functionAt(index: concrete).params, index: 0U64).ty
+    val box = compiler.funcParamAt(params: compiler.arena.functionAt(index: boxed).params, index: 0U64).ty
+    val parameters = compiler.copyFuncBinds(binds: compiler.arena.functionAt(index: inspect).typeParams)
+    val prepared = compiler.environmentWithCallableConstraints(fnIdx: inspect, environment: <InstanceEnvironment params=parameters args=[receiver] />, evidence: <CallableConstraintEvidence.Declaration />).unwrap()
+    val clauses = prepared.constraints.unwrap()
+    if compiler.arena.callableConstraintCount(evidence: clauses) != 1U64 { panic("projection control requires its original callable clause") }
+    val clause = compiler.arena.callableConstraintSourceAt(evidence: clauses, index: 0U64)
+    val root = compiler.decls.traitAt(index: compiler.decls.firstTraitNamed(nameId: compiler.internBytes(s: "Root").nameId))
+    val selected = compiler.viewedTraitConstraintProof(demand: <ConformanceProofDemand.SourceAdmission />, ref: box, constraint: <TraitConstraint key=<TraitInstanceKey owner=root.nameStart positionalArgs=[] /> assocPredicates=[] />).unwrap()
+    val witness = match selected {
+        StaticConformanceProof.ConcreteWitness(witness: val witness) => witness,
+        _ => { panic("projection control requires a selected root witness") },
+    }
+    val plan = compiler.arena.witnessConditionPlanAt(index: witness.conditions - 1U64)
+    if plan.normalizations.count() != 1U64 { panic("projection control requires exactly one saved prerequisite") }
+    val original = plan.normalizations[0U64]
+    val prerequisite = compiler.freezeStaticConformanceProof(proof: <StaticConformanceProof.AssumedBound source=clause />)
+    val parameter = compiler.funcParamAt(params: compiler.arena.functionAt(index: inspect).params, index: 0U64).ty
+    val projection = compiler.rebuildProjectionTerm(t: compiler.arena.typeAt(index: original.source), receiver: parameter, traitArgs: [])
+    val equation = <ProjectionNormalizationStep source=projection proof=prerequisite output=0U64 />
+    compiler.checkProjectionNormalizations(normalizations: [equation], offset: 0U64, assumptions: [clause]).unwrap()
+    val conditions = compiler.arena.publishWitnessConditionPlan(plan: <WitnessConditionPlan witness=plan.witness proofs=plan.proofs normalizations=[equation] />)
+    val retained = <StaticConformanceProof.ConcreteWitness witness=<WitnessMatch conformIdx=witness.conformIdx binds=witness.binds selfRef=witness.selfRef conditions=conditions /> />
+    val environment = if scenario == "missing" { give <InstanceEnvironment params=parameters args=[receiver] /> } else { give prepared }
+    val result = compiler.instantiateConstraintProof(proof: retained, receiverRef: box, environment: environment, selfRef: 0U64, itemRef: 0U64)
+    if scenario == "missing" {
+        if result.isOk() { panic("saved projection prerequisite was reselected without its admitted callable context") }
+    } else {
+        match result.unwrap() {
+            StaticProofInstantiation.Ready(proof: val actual) => {
+                compiler.checkStaticProofEvidence(proof: actual, offset: 0U64).unwrap()
+                val replayed = match actual {
+                    StaticConformanceProof.ConcreteWitness(witness: val replayed) => replayed,
+                    _ => { panic("projection replay changed its root proof kind") },
+                }
+                val saved = compiler.arena.witnessConditionPlanAt(index: replayed.conditions - 1U64)
+                val step = saved.normalizations[0U64]
+                if !compiler.typeRefEq(a: step.source, b: original.source) || !compiler.typeRefEq(a: step.output, b: original.output) { panic("projection replay lost its source or retained output") }
+                if !compiler.sameStaticConformanceProof(a: compiler.thawStaticConformanceProof(id: step.proof), b: compiler.thawStaticConformanceProof(id: compiler.arena.callableConstraintProofAt(evidence: clauses, index: 0U64))) { panic("projection replay replaced its retained callable proof") }
+            }
+            _ => { panic("saved projection prerequisite did not replay its admitted callable context") }
+        }
+    }
+    if compiler.activeConditionAdmission.count() != 0U64 { panic("projection prerequisite replay leaked its admission stack") }
+    match compiler.instantiateConstraintProof(proof: retained, receiverRef: box, environment: prepared, selfRef: 0U64, itemRef: 0U64).unwrap() {
+        StaticProofInstantiation.Ready(proof: val actual) => { compiler.checkStaticProofEvidence(proof: actual, offset: 0U64).unwrap() }
+        _ => { panic("projection prerequisite recovery failed") }
+    }
+    if compiler.activeConditionAdmission.count() != 0U64 { panic("projection prerequisite recovery leaked its admission stack") }
+    print("1")
+}

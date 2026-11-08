@@ -886,3 +886,46 @@ seconds, invariant inputs and identical LLVM across all ten runs. This does not
 replace the formal median or establish difficult repair; continue the required
 transport work while keeping the overall performance condition open.
 Whole-task obligations remain; do not call com-amjl or met-si6j closed.
+
+### Saved Projection Prerequisite Replay (WIP)
+
+[Finite RED/GREEN and preservation evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/retained-projection-prerequisites.json)
+records the shared prerequisite frontier. `replayConstraintProof` no longer
+routes projection uses to fresh MemberDispatch queries. Projection prerequisites
+and condition children use the same exact declaration-evidence reader after the
+unchanged interface scope/Universal interpretation.
+
+The internal handoff test first admits one equation in its original Function
+binder domain, then replays it under an explicit prepared environment. It is not
+a claim that the entire parent witness plan came from the production producer.
+The corrected old-source RED has valid compile/link, a passing prepared-context
+control, and only the missing-context assertion fails. The initial mismatched
+source/proof setup is excluded from authoritative RED evidence. Final controls
+check exact retained proof, concrete source/output, rejection without repair,
+recovery and admission-stack restoration. This source change has no new formal
+self-host result; previous7.029968 seconds applies only to the previous source.
+Whole-task transport, performance and suite gates remain open.
+
+**Next: selected Associated clause transport.** `checkAssociatedBounds` already
+checks the impl-translated full subject/constraint, but publishes only clause and
+proof. Preserve that full impl-owned bound and its normalization dependencies
+(including actual child outputs) before replacing the reader. The source
+`AssociatedBoundEvidence` retains the authored projection/clause/prerequisite;
+the conformance-owned row retains its implementation derivation. They are not
+interchangeable owners. Read the exact row from the selected prerequisite's
+terminal conformance, validate original trait instance/member/clause, substitute
+impl terms once, replay saved prerequisite/child equations through this shared
+frontier, and check the complete subject/arguments/predicates without caller-side
+`groundCallableBound` or query-capable boundary rescue. Share equation grounding
+with witness replay instead of implementing another normalizer.
+
+Remove AssociatedType's generic caller argument/predicate preflight only when
+its saved transport replaces that authority. Nested projection receivers need
+retained dependencies too; structural substitution alone is not proof that they
+are concrete. Preserve legitimate first-concrete SourceAdmission and universal
+interface restrictions. Required controls include nested/actual-output equation
+loss, caller/impl binder distinction and once-only replacement, foreign owner/
+trait instance/member/subject/proof/equation, missing/duplicate row, cycles,
+Deferred versus concrete missing evidence, recovery and existing source usage.
+The independent read-only design review accepted this boundary and distinguished
+it from all-owner migration; it did not certify its implementation.

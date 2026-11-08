@@ -81,7 +81,7 @@ impl Comp {
             if source == 0U64 || source >= self.arena.typeCount() || self.arena.typeAt(index: source).assocNameId == 0U64 { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "selected condition has invalid projection evidence") /> }
             val receiver = self.typeTermProjectionReceiver(t: self.arena.typeAt(index: source))
             val original = self.thawStaticConformanceProof(id: step.proof)
-            match (try self.replayConstraintProof(proof: original, receiver: receiver, environment: environment, selfRef: selfRef, itemRef: itemRef, context: context, projection: true)) {
+            match (try self.replayConstraintProof(proof: original, receiver: receiver, environment: environment, selfRef: selfRef, itemRef: itemRef, context: context)) {
                 ConstraintProofReplay.Missing => { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "selected condition has no concrete projection evidence") /> }
                 ConstraintProofReplay.Deferred => { return <Result.Ok value=<SelectedWitnessInstantiation.Deferred /> /> }
                 ConstraintProofReplay.Concrete(proof: val proof) | ConstraintProofReplay.Universal(proof: val proof) => {
@@ -119,7 +119,7 @@ impl Comp {
         return <Result.Ok value=<SelectedWitnessInstantiation.Ready witness=<WitnessMatch conformIdx=grounded.conformIdx binds=grounded.binds selfRef=grounded.selfRef conditions=conditionId /> /> />
     }
 
-    inout fn replayConstraintProof(proof: StaticConformanceProof, receiver: U64, environment: InstanceEnvironment, selfRef: U64, itemRef: U64, context: Optional[InterfaceProofContext], projection: Bool = false) -> Result[ConstraintProofReplay, CompileDiagnostic] {
+    inout fn replayConstraintProof(proof: StaticConformanceProof, receiver: U64, environment: InstanceEnvironment, selfRef: U64, itemRef: U64, context: Optional[InterfaceProofContext]) -> Result[ConstraintProofReplay, CompileDiagnostic] {
         val root = try self.interfaceProofRoot(proof: proof)
         if root != 0U64 {
             val scope = match context {
@@ -137,11 +137,10 @@ impl Comp {
                 }
             }
         }
-        val concrete = if projection {
-            give try self.instantiateStaticMemberProof(proof: proof, receiverRef: receiver, environment: environment, selfRef: selfRef, itemRef: itemRef)
-        } else {
-            give try self.instantiateConcreteConstraintProof(proof: proof, receiverRef: receiver, environment: environment, selfRef: selfRef, itemRef: itemRef)
-        }
+        // Projection prerequisites have the same declaration authority as
+        // condition children. Their use cannot turn saved Presence evidence
+        // into a fresh member-dispatch query when its environment is missing.
+        val concrete = try self.instantiateConcreteConstraintProof(proof: proof, receiverRef: receiver, environment: environment, selfRef: selfRef, itemRef: itemRef)
         match concrete {
             StaticProofInstantiation.Missing => { return <Result.Ok value=<ConstraintProofReplay.Missing /> /> }
             StaticProofInstantiation.Deferred => { return <Result.Ok value=<ConstraintProofReplay.Deferred /> /> }
