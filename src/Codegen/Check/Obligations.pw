@@ -395,28 +395,39 @@ pub impl Comp {
         return <Result.Ok value=<TraitConstraint key=<TraitInstanceKey owner=constraint.key.owner positionalArgs=arguments /> positionalArgsOpen=constraint.positionalArgsOpen assocPredicates=predicates /> />
     }
 
+    // Interpret the original clause with the selected witness, not a caller map.
+    inout fn retainedWitnessClauseBound(witness: WitnessMatch, index: U64, normalizations: Array[ProjectionNormalizationStep], offset: U64) -> Result[TraitBound, CompileDiagnostic] {
+        if witness.conformIdx == 0U64 || witness.conformIdx > self.decls.conformCount() { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "conformance constraint has an invalid owner") /> }
+        val declaration = self.decls.conformAt(index: witness.conformIdx - 1U64)
+        if index >= declaration.bounds.len { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "conformance constraint belongs to another declaration") /> }
+        val clause = self.conformBoundAt(bounds: declaration.bounds, index: index)
+        val rawSubject = try self.groundWitnessTypeTerm(ref: clause.subject, params: <PatternBindInput.Conformance range=declaration.typeParams />, matchResult: witness)
+        val subject = try self.replayProjectionNormalizations(ref: rawSubject, normalizations: normalizations, offset: offset)
+        val rawConstraint = try self.groundTraitConstraintThroughWitness(constraint: clause.constraint, params: self.copyConformBinds(binds: declaration.typeParams), matchResult: witness)
+        val constraint = try self.replayConstraintNormalizations(constraint: rawConstraint, normalizations: normalizations, offset: offset)
+        return <Result.Ok value=<TraitBound subject=subject constraint=constraint offset=clause.offset /> />
+    }
+
+    inout fn checkRetainedWitnessClause(expected: TraitBound, proof: StaticConformanceProof, normalizations: Array[ProjectionNormalizationStep], offset: U64, assumptions: Array[DeclarationBoundRef] = []) -> Result[(), CompileDiagnostic] {
+        val traitIndex = self.decls.traitIndexByOffset(offset: expected.constraint.key.owner)
+        try self.checkStaticProofEvidence(proof: proof, offset: offset, assumptions: assumptions)
+        val bound = try self.staticProofBound(proof: proof, traitIdx: traitIndex)
+        val proofSubject = try self.replayProjectionNormalizations(ref: bound.subject, normalizations: normalizations, offset: offset)
+        val proofConstraint = try self.replayConstraintNormalizations(constraint: bound.constraint, normalizations: normalizations, offset: offset)
+        if bound.subject == 0U64 || !self.typeRefEq(a: self.typeRefWithoutOuterViews(ref: expected.subject), b: self.typeRefWithoutOuterViews(ref: proofSubject)) || bound.constraint.key.owner != expected.constraint.key.owner || (!expected.constraint.positionalArgsOpen && !self.sameResolvedTypeRefs(a: proofConstraint.key.positionalArgs, b: expected.constraint.key.positionalArgs)) { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "selected conformance evidence does not satisfy its declaration conditions") /> }
+        mut val names: Array[U64] = []
+        mut val values: Array[U64] = []
+        for predicate in expected.constraint.assocPredicates { names.append(predicate.member) values.append(predicate.value) }
+        if !(try self.selectedProofAssociatedTypesMatch(proof: proof, traitOwner: expected.constraint.key.owner, names: names, values: values, assumptions: assumptions, normalizations: normalizations, offset: offset)) { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "selected conformance evidence does not satisfy its declaration conditions") /> }
+        return <Result.Ok value=() />
+    }
+
     inout fn checkWitnessConditionChildren(witness: WitnessMatch, proofs: Array[U64], normalizations: Array[ProjectionNormalizationStep], offset: U64, assumptions: Array[DeclarationBoundRef] = []) -> Result[(), CompileDiagnostic] {
         try self.checkProjectionNormalizations(normalizations: normalizations, offset: offset, assumptions: assumptions)
-        val declaration = self.decls.conformAt(index: witness.conformIdx - 1U64)
-        val parameters = self.copyConformBinds(binds: declaration.typeParams)
         mut val index = 0U64
         while index < proofs.count() {
-            val clause = self.conformBoundAt(bounds: declaration.bounds, index: index)
-            val rawSubject = try self.groundWitnessTypeTerm(ref: clause.subject, params: <PatternBindInput.Conformance range=declaration.typeParams />, matchResult: witness)
-            val subject = try self.replayProjectionNormalizations(ref: rawSubject, normalizations: normalizations, offset: offset)
-            val rawConstraint = try self.groundTraitConstraintThroughWitness(constraint: clause.constraint, params: parameters, matchResult: witness)
-            val constraint = try self.replayConstraintNormalizations(constraint: rawConstraint, normalizations: normalizations, offset: offset)
-            val traitIndex = self.decls.traitIndexByOffset(offset: constraint.key.owner)
-            val proof = self.thawStaticConformanceProof(id: proofs[index])
-            try self.checkStaticProofEvidence(proof: proof, offset: offset, assumptions: assumptions)
-            val bound = try self.staticProofBound(proof: proof, traitIdx: traitIndex)
-            val proofSubject = try self.replayProjectionNormalizations(ref: bound.subject, normalizations: normalizations, offset: offset)
-            val proofConstraint = try self.replayConstraintNormalizations(constraint: bound.constraint, normalizations: normalizations, offset: offset)
-            if bound.subject == 0U64 || !self.typeRefEq(a: self.typeRefWithoutOuterViews(ref: subject), b: self.typeRefWithoutOuterViews(ref: proofSubject)) || bound.constraint.key.owner != constraint.key.owner || (!constraint.positionalArgsOpen && !self.sameResolvedTypeRefs(a: proofConstraint.key.positionalArgs, b: constraint.key.positionalArgs)) { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "selected conformance evidence does not satisfy its declaration conditions") /> }
-            mut val names: Array[U64] = []
-            mut val values: Array[U64] = []
-            for predicate in constraint.assocPredicates { names.append(predicate.member) values.append(predicate.value) }
-            if !(try self.selectedProofAssociatedTypesMatch(proof: proof, traitOwner: constraint.key.owner, names: names, values: values, assumptions: assumptions, normalizations: normalizations, offset: offset)) { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "selected conformance evidence does not satisfy its declaration conditions") /> }
+            val expected = try self.retainedWitnessClauseBound(witness: witness, index: index, normalizations: normalizations, offset: offset)
+            try self.checkRetainedWitnessClause(expected: expected, proof: self.thawStaticConformanceProof(id: proofs[index]), normalizations: normalizations, offset: offset, assumptions: assumptions)
             index += 1U64
         }
         return <Result.Ok value=() />

@@ -368,3 +368,20 @@ instance equality includes the saved full obligation and its original context.
 Raw Arena issuance remains a trusted internal construction boundary. These
 controls do not certify sealed issuance, all proof variants, deeper witness
 normalization replay, or production source-signature consumer migration.
+
+
+`RetainedConformanceClauses.pw` checks one retained conditional-conformance
+clause using the selected witness's own binders and saved normalization equations.
+Run without arguments and with `missingNormalization`, `wrongProof`,
+`wrongSubject`, `missingPlan`, `noCallerMap`, `foreignMap`, `wrongSubstitution`,
+and `cycle`; each exits 0, matches `.out`, and has empty stderr. Missing equations
+cannot become Ready. Malformed evidence must return Err. Every case checks
+admission-stack restoration and a subsequent valid read preserving the same
+child proof. The no/foreign caller-map cases prevent source-bound re-grounding
+from becoming an alternative authority.
+
+This reader consumes an already admitted root. It validates the requested child
+and shares clause interpretation with whole-plan admission; it does not reseal
+raw plan publication or revalidate every unrelated sibling on every read.
+Associated/Receiver replay, deeper predicate query removal and final consumer
+migration remain separate required work in com-amjl.

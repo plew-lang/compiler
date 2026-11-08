@@ -781,3 +781,31 @@ in the shared proof graph. Conformance/Associated/Receiver paths, deeper frozen
 witness normalization and predicate comparison, occurrence/owner migrations and
 production source-signature consumers remain mandatory. The snapshot does not
 make a fresh query into an acceptable repair for missing retained evidence.
+
+
+### Retained Conformance Clause Replay (WIP)
+
+The Conformance consumer now dispatches before caller-side original-bound
+preflight. It receives only the exact declaration clause, requested subject and
+selected witness. A shared interpreter substitutes the original impl clause
+through that witness once and replays its retained normalization equations.
+Whole-plan admission and individual clause reading share the same full proof
+boundary checks, including proof-side normalization; the existing whole-plan
+validation is preserved. The reader checks source range, plan substitution,
+child identity, complete expected constraint and requested clause subject.
+Missing equations cannot be repaired into Ready by a new conformance query.
+Admission cycles are rejected and stack state is restored on every result.
+
+[Finite evidence and independent review](../../../evidence/rejection-domains/diagnostic-domain-implementation/retained-conformance-clauses.json)
+retain four actual old-source REDs (missing equations, wrong proof/subject,
+and missing caller map), two existing GREEN controls, and nine final controls.
+The added foreign-map/substitution/cycle controls are GREEN checks, not claimed
+old-source REDs. Malformed evidence requires Err; missing normalization remains
+non-Ready. All controls also perform a valid recovery read and exact-proof check.
+
+The root/path is already admitted by the existing caller protocol; this reader
+does not certify raw publication sealing or revalidate unrelated sibling clauses
+on every read. Deep predicate normalization fallback, Associated/Receiver replay,
+non-free declaration ownership, production signature consumers, Unit distinction
+and final whole-task gates remain open. This finite handoff does not close
+com-amjl or met-si6j.

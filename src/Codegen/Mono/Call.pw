@@ -3879,11 +3879,7 @@ pub impl Comp {
         return self.withTraitSelfBinding(traitOwner: declaration.subjectTraitOwner, environment: environment, offset: declaration.defOffset)
     }
 
-    inout fn retainedConformanceConstraint(declared: U64, environment: InstanceEnvironment) -> Result[StaticProofInstantiation, CompileDiagnostic] {
-        val witness = match self.selectedConstraintWitness(proof: environment.proof) {
-            Optional.Some(v: val witness) => { give witness }
-            Optional.None => { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "conformance constraint has no retained witness environment") /> }
-        }
+    inout fn retainedConformanceConstraint(declared: U64, receiver: U64, witness: WitnessMatch) -> Result[StaticProofInstantiation, CompileDiagnostic] {
         if witness.conformIdx == 0U64 || witness.conformIdx > self.decls.conformCount() { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "conformance constraint has an invalid owner") /> }
         val declaration = self.decls.conformAt(index: witness.conformIdx - 1U64)
         if declared < declaration.bounds.start || declared - declaration.bounds.start >= declaration.bounds.len { return <Result.Err error=self.diagnosticAt(offset: declaration.typeStart, msg: "conformance constraint belongs to another declaration") /> }
@@ -3892,7 +3888,25 @@ pub impl Comp {
         if !self.sameWitnessSubstitution(a: witness, b: plan.witness) || plan.proofs.count() != declaration.bounds.len { return <Result.Err error=self.diagnosticAt(offset: declaration.typeStart, msg: "conformance constraint has a different substitution") /> }
         val proof = plan.proofs[declared - declaration.bounds.start]
         if !self.arena.hasStaticConformanceProof(id: proof) { return <Result.Err error=self.diagnosticAt(offset: declaration.typeStart, msg: "conformance constraint has no retained child evidence") /> }
-        return <Result.Ok value=<StaticProofInstantiation.Ready proof=self.thawStaticConformanceProof(id: proof) /> />
+        for active in self.activeConditionAdmission {
+            if active == witness.conditions { return <Result.Err error=self.diagnosticAt(offset: declaration.typeStart, msg: "selected conformance condition evidence is cyclic") /> }
+        }
+        self.activeConditionAdmission.append(witness.conditions)
+        val result = self.readRetainedConformanceClause(witness: witness, index: declared - declaration.bounds.start, receiver: receiver, proof: proof, normalizations: plan.normalizations, offset: declaration.typeStart)
+        self.activeConditionAdmission.removeLast()
+        return result
+    }
+
+    inout fn readRetainedConformanceClause(witness: WitnessMatch, index: U64, receiver: U64, proof: U64, normalizations: Array[ProjectionNormalizationStep], offset: U64) -> Result[StaticProofInstantiation, CompileDiagnostic] {
+        try self.checkProjectionNormalizations(normalizations: normalizations, offset: offset)
+        val expected = try self.retainedWitnessClauseBound(witness: witness, index: index, normalizations: normalizations, offset: offset)
+        if expected.subject == 0U64 || !self.arena.typeIsClosed(ref: expected.subject) { return <Result.Ok value=<StaticProofInstantiation.Deferred /> /> }
+        for argument in expected.constraint.key.positionalArgs { if argument == 0U64 || !self.arena.typeIsClosed(ref: argument) { return <Result.Ok value=<StaticProofInstantiation.Deferred /> /> } }
+        for predicate in expected.constraint.assocPredicates { if predicate.value == 0U64 || !self.arena.typeIsClosed(ref: predicate.value) { return <Result.Ok value=<StaticProofInstantiation.Deferred /> /> } }
+        if !self.typeRefEq(a: self.typeRefWithoutOuterViews(ref: receiver), b: self.typeRefWithoutOuterViews(ref: expected.subject)) { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "conformance constraint has a different subject") /> }
+        val retained = self.thawStaticConformanceProof(id: proof)
+        try self.checkRetainedWitnessClause(expected: expected, proof: retained, normalizations: normalizations, offset: offset)
+        return <Result.Ok value=<StaticProofInstantiation.Ready proof=retained /> />
     }
 
     // Follow authored supertrait edges from the retained root witness. No
@@ -4027,6 +4041,13 @@ impl Comp {
                     DeclarationBoundRef.Function(index: _) | DeclarationBoundRef.Requirement(index: _) => {
                         return self.readRetainedCallableConstraint(source: source, receiver: receiverRef, environment: environment)
                     }
+                    DeclarationBoundRef.Conformance(index: val declared) => {
+                        val witness = match self.selectedConstraintWitness(proof: environment.proof) {
+                            Optional.Some(v: val witness) => witness,
+                            Optional.None => { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "conformance constraint has no retained witness environment") /> },
+                        }
+                        return self.retainedConformanceConstraint(declared: declared, receiver: receiverRef, witness: witness)
+                    }
                     _ => {}
                 }
                 val bound = self.declarationBound(source: source)
@@ -4040,7 +4061,7 @@ impl Comp {
                 }
                 match source {
                     DeclarationBoundRef.Function(index: _) | DeclarationBoundRef.Requirement(index: _) => { panic("retained callable clause reached source grounding") }
-                    DeclarationBoundRef.Conformance(index: val declared) => { return self.retainedConformanceConstraint(declared: declared, environment: environment) }
+                    DeclarationBoundRef.Conformance(index: _) => { panic("retained conformance clause reached source grounding") }
                     DeclarationBoundRef.AssociatedType(index: val index) => { return self.instantiateAssociatedConstraint(index: index, receiverRef: receiverRef, environment: environment, selfRef: selfRef, itemRef: itemRef) }
                     DeclarationBoundRef.Interface(index: _) => { return <Result.Err error=self.diagnosticAt(offset: bound.offset, msg: "interface evidence requires a universal call scope") /> }
                     DeclarationBoundRef.MethodReceiver(index: _) | DeclarationBoundRef.TraitSubject(index: _) => { return self.instantiateReceiverConstraint(bound: bound, receiverRef: receiverRef, environment: environment, selfRef: selfRef, itemRef: itemRef) }

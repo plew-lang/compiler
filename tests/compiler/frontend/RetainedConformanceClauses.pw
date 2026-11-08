@@ -1,0 +1,81 @@
+// Conformance clauses replay the selected witness and its saved equations.
+use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use ../../../src/SourceAccess only { SourceAccess }
+use ../../../src/Ir only { InstanceEnvironment, TraitConstraint, TraitInstanceKey, ConformanceProofDemand, StaticConformanceProof, StaticProofInstantiation, DeclarationBoundRef, WitnessMatch, WitnessConditionPlan, ProjectionNormalizationStep }
+use @Std/Io only { print }
+use @Std/Process only { argAt }
+
+fn main() {
+    val scenario = argAt(1I64)
+    val source = "trait Parser {{ type Output }} trait Marker[K] {{ type Item }} trait Root {{}} struct Source {{}} struct Other {{}} struct Box[T] {{}} impl Source as Parser {{ type Output=I64 }} impl Other as Parser {{ type Output=I64 }} impl Source as Marker[I64] {{ type Item=I64 }} impl Other as Marker[I64] {{ type Item=I64 }} impl[T] Box[T] as Root where T:Parser, T:Marker[T#Parser.Output,Item=T#Parser.Output] {{}} fn boxed(value:Box[Source]) {{}} fn concrete(value:Source) {{}} fn other(value:Other) {{}} fn main() {{}}"
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text text=source path="RetainedConformance.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
+    val root = compiler.decls.traitAt(index: compiler.decls.firstTraitNamed(nameId: compiler.internBytes(s: "Root").nameId))
+    val boxed = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "boxed").nameId)
+    val concrete = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "concrete").nameId)
+    val other = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "other").nameId)
+    val receiver = compiler.funcParamAt(params: compiler.arena.functionAt(index: concrete).params, index: 0U64).ty
+    val foreign = compiler.funcParamAt(params: compiler.arena.functionAt(index: other).params, index: 0U64).ty
+    val box = compiler.funcParamAt(params: compiler.arena.functionAt(index: boxed).params, index: 0U64).ty
+    val selected = compiler.viewedTraitConstraintProof(demand: <ConformanceProofDemand.SourceAdmission />, ref: box, constraint: <TraitConstraint key=<TraitInstanceKey owner=root.nameStart positionalArgs=[] /> assocPredicates=[] />).unwrap()
+    val witness = match selected {
+        StaticConformanceProof.ConcreteWitness(witness: val witness) => witness,
+        _ => { panic("conformance control did not select a concrete root") },
+    }
+    val declaration = compiler.decls.conformAt(index: witness.conformIdx - 1U64)
+    val plan = compiler.arena.witnessConditionPlanAt(index: witness.conditions - 1U64)
+    if declaration.bounds.len != 2U64 || plan.proofs.count() != 2U64 || plan.normalizations.count() == 0U64 { panic("conformance control lost its original clauses or equations") }
+    mut val actual = witness
+    if scenario == "missingNormalization" || scenario == "wrongProof" || scenario == "wrongSubstitution" {
+        val proofs = if scenario == "wrongProof" { give [plan.proofs[0U64],plan.proofs[0U64]] } else { give plan.proofs }
+        val equations: Array[ProjectionNormalizationStep] = if scenario == "missingNormalization" { give [] } else { give plan.normalizations }
+        val origin = if scenario == "wrongSubstitution" { give <WitnessMatch conformIdx=witness.conformIdx selfRef=foreign binds=witness.binds /> } else { give plan.witness }
+        val conditions = compiler.arena.publishWitnessConditionPlan(plan: <WitnessConditionPlan witness=origin proofs=proofs normalizations=equations />)
+        actual = <WitnessMatch conformIdx=witness.conformIdx selfRef=witness.selfRef binds=witness.binds conditions=conditions />
+    }
+    if scenario == "missingPlan" { actual = <WitnessMatch conformIdx=witness.conformIdx selfRef=witness.selfRef binds=witness.binds /> }
+    val environment = if scenario == "noCallerMap" {
+        give <InstanceEnvironment receiverRef=box proof=<StaticConformanceProof.ConcreteWitness witness=actual /> />
+    } else { give <InstanceEnvironment params=compiler.copyConformBinds(binds: declaration.typeParams) args=[if scenario == "foreignMap" { give foreign } else { give receiver }] receiverRef=box proof=<StaticConformanceProof.ConcreteWitness witness=actual /> /> }
+    val subject = if scenario == "wrongSubject" { give foreign } else { give receiver }
+    val proof = <StaticConformanceProof.AssumedBound source=<DeclarationBoundRef.Conformance index=declaration.bounds.start + 1U64 /> />
+    if scenario == "cycle" { compiler.activeConditionAdmission.append(actual.conditions) }
+    val result = compiler.instantiateConstraintProof(proof: proof, receiverRef: subject, environment: environment, selfRef: box, itemRef: 0U64)
+    if scenario == "cycle" {
+        if compiler.activeConditionAdmission.count() != 1U64 { panic("cyclic read changed its caller admission stack") }
+        compiler.activeConditionAdmission.removeLast()
+    }
+    if compiler.activeConditionAdmission.count() != 0U64 { panic("conformance read leaked its admission stack") }
+    if scenario == "wrongProof" || scenario == "wrongSubject" || scenario == "missingPlan" || scenario == "wrongSubstitution" || scenario == "cycle" {
+        match result {
+            Result.Err(error: _) => {}
+            Result.Ok(value: _) => { panic("malformed conformance evidence was not rejected") }
+        }
+    } else if scenario == "missingNormalization" {
+        match result {
+            Result.Err(error: _) => {}
+            Result.Ok(value: val state) => {
+                match state {
+                    StaticProofInstantiation.Ready(proof: _) => { panic("conformance clause repaired or accepted missing/foreign retained evidence") }
+                    _ => {}
+                }
+            }
+        }
+    } else {
+        match result.unwrap() {
+            StaticProofInstantiation.Ready(proof: val forwarded) => {
+                if !compiler.sameStaticConformanceProof(a: forwarded, b: compiler.thawStaticConformanceProof(id: plan.proofs[1U64])) { panic("conformance clause changed its saved child proof") }
+            }
+            _ => { panic("valid conformance clause did not replay") }
+        }
+    }
+    val recovery = compiler.instantiateConstraintProof(proof: proof, receiverRef: receiver, environment: <InstanceEnvironment receiverRef=box proof=selected />, selfRef: box, itemRef: 0U64).unwrap()
+    match recovery {
+        StaticProofInstantiation.Ready(proof: val recovered) => {
+            if !compiler.sameStaticConformanceProof(a: recovered, b: compiler.thawStaticConformanceProof(id: plan.proofs[1U64])) { panic("recovery changed its saved child proof") }
+        }
+        _ => { panic("valid conformance read failed after a previous result") }
+    }
+    if compiler.activeConditionAdmission.count() != 0U64 { panic("recovery leaked its admission stack") }
+    print("1")
+}
