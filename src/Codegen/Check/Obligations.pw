@@ -403,7 +403,7 @@ pub impl Comp {
         val clause = self.conformBoundAt(bounds: declaration.bounds, index: index)
         val rawSubject = try self.groundWitnessTypeTerm(ref: clause.subject, params: <PatternBindInput.Conformance range=declaration.typeParams />, matchResult: witness)
         val subject = try self.replayProjectionNormalizations(ref: rawSubject, normalizations: normalizations, offset: offset)
-        val rawConstraint = try self.groundTraitConstraintThroughWitness(constraint: clause.constraint, params: self.copyConformBinds(binds: declaration.typeParams), matchResult: witness)
+        val rawConstraint = try self.groundTraitConstraintThroughWitness(constraint: clause.constraint, params: <PatternBindInput.Conformance range=declaration.typeParams />, matchResult: witness)
         val constraint = try self.replayConstraintNormalizations(constraint: rawConstraint, normalizations: normalizations, offset: offset)
         return <Result.Ok value=<TraitBound subject=subject constraint=constraint offset=clause.offset /> />
     }

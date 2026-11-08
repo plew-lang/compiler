@@ -809,3 +809,14 @@ on every read. Deep predicate normalization fallback, Associated/Receiver replay
 non-free declaration ownership, production signature consumers, Unit distinction
 and final whole-task gates remain open. This finite handoff does not close
 com-amjl or met-si6j.
+
+
+The first isolated fixed-point measurement for this increment (5770c323,
+run9ded4c) is 7.109542 seconds, above the7-second condition. A local follow-up
+changes witness constraint grounding to accept the existing PatternBindInput;
+its two callers pass their original Conformance range directly instead of
+copying Bind arrays. This preserves binder identity/order and all checks. The
+same-source diagnostic (three pairs with reversed order) shows identical output
+but no demonstrated speedup. It is not a formal performance result. Fresh9/10/14
+controls pass; formal follow-up remains required. No next semantic migration or
+carrier promotion is authorized by these focused results alone.

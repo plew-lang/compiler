@@ -218,7 +218,6 @@ pub impl Comp {
     }
 
     inout fn selectWitnessConditionEvidence(source: Conform, witness: WitnessMatch, assumptions: Array[DeclarationBoundRef]) -> Result[Optional[WitnessMatch], CompileDiagnostic] {
-        val parameters = self.copyConformBinds(binds: source.typeParams)
         mut val proofs: Array[U64] = []
         mut val normalizations: Array[ProjectionNormalizationStep] = []
         mut val index = 0U64
@@ -226,7 +225,7 @@ pub impl Comp {
             val bound = self.conformBoundAt(bounds: source.bounds, index: index)
             val rawSubject = try self.groundWitnessTypeTerm(ref: bound.subject, params: <PatternBindInput.Conformance range=source.typeParams />, matchResult: witness)
             val subject = try self.recordConditionTypeNormalization(ref: rawSubject, assumptions: assumptions, normalizations: inout normalizations)
-            val rawConstraint = try self.groundTraitConstraintThroughWitness(constraint: bound.constraint, params: parameters, matchResult: witness)
+            val rawConstraint = try self.groundTraitConstraintThroughWitness(constraint: bound.constraint, params: <PatternBindInput.Conformance range=source.typeParams />, matchResult: witness)
             mut val arguments: Array[U64] = []
             for argument in rawConstraint.key.positionalArgs { arguments.append(try self.recordConditionTypeNormalization(ref: argument, assumptions: assumptions, normalizations: inout normalizations)) }
             mut val predicates: Array[TraitAssocPredicate] = []

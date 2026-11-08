@@ -236,18 +236,18 @@ pub impl Comp {
     // a selected witness rather than by position in the caller's type-arg
     // array.  Ground the whole constraint under that same witness map so
     // positional inputs and associated-output predicates cannot diverge.
-    inout fn groundTraitConstraintThroughWitness(constraint: TraitConstraint, params: Array[Bind], matchResult: WitnessMatch) -> Result[TraitConstraint, CompileDiagnostic] {
+    inout fn groundTraitConstraintThroughWitness(constraint: TraitConstraint, params: PatternBindInput, matchResult: WitnessMatch) -> Result[TraitConstraint, CompileDiagnostic] {
         mut val positional: Array[U64] = []
         mut val i: U64 = 0U64
         while i < constraint.key.positionalArgs.count() {
-            positional.append((try self.groundWitnessTypeTerm(ref: constraint.key.positionalArgs[i], params: <PatternBindInput.Values values=params />, matchResult: matchResult)))
+            positional.append((try self.groundWitnessTypeTerm(ref: constraint.key.positionalArgs[i], params: params, matchResult: matchResult)))
             i += 1U64
         }
         mut val predicates: Array[TraitAssocPredicate] = []
         i = 0U64
         while i < constraint.assocPredicates.count() {
             val predicate: TraitAssocPredicate = constraint.assocPredicates[i]
-            predicates.append(<TraitAssocPredicate member=predicate.member value=(try self.groundWitnessTypeTerm(ref: predicate.value, params: <PatternBindInput.Values values=params />, matchResult: matchResult)) span=predicate.span />)
+            predicates.append(<TraitAssocPredicate member=predicate.member value=(try self.groundWitnessTypeTerm(ref: predicate.value, params: params, matchResult: matchResult)) span=predicate.span />)
             i += 1U64
         }
         return <Result.Ok value=<TraitConstraint key=<TraitInstanceKey owner=constraint.key.owner positionalArgs=positional /> positionalArgsOpen=constraint.positionalArgsOpen assocPredicates=predicates /> />
