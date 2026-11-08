@@ -1,6 +1,6 @@
 // Authored provenance, not type identity or conformance authority. A Lowered
 // scope completed syntax lowering only; it has not admitted any source proof.
-use ./Ir only { Bind }
+use ./Ir only { Bind, Func }
 
 pub enum SourceTypeScopeKind { FreeFunction Method Implementation RequirementSignature ExternSignature }
 pub enum SourceTypeScopeState { Lowering Lowered Failed }
@@ -27,6 +27,14 @@ pub struct AuthoredTypeUse {
 }
 pub impl AuthoredTypeUse { factory }
 
+// Signature lowering completes before either a trait slot or an extern
+// function is registered. Carry the originating token through that handoff.
+pub struct LoweredSourceSignature {
+    pub val function: Func
+    pub val scope: U64
+}
+pub impl LoweredSourceSignature { factory }
+
 pub struct SourceTypeUses {
     mut val scopes: Array[SourceTypeScope] = []
     mut val uses: Array[AuthoredTypeUse] = []
@@ -51,12 +59,17 @@ pub impl SourceTypeUses {
         return self.active
     }
     inout fn bindFunction(token: U64, function: U64) -> Bool {
-        if token == 0U64 || token != self.active || token > self.scopes.count() { return false }
+        if token == 0U64 || token > self.scopes.count() { return false }
         val scope = self.scopes[token - 1U64]
-        match scope.state { SourceTypeScopeState.Lowering => {} _ => { return false } }
         if scope.function.isSome() { return false }
         match scope.kind {
-            SourceTypeScopeKind.FreeFunction | SourceTypeScopeKind.Method | SourceTypeScopeKind.ExternSignature => {}
+            SourceTypeScopeKind.FreeFunction | SourceTypeScopeKind.Method => {
+                if token != self.active { return false }
+                match scope.state { SourceTypeScopeState.Lowering => {} _ => { return false } }
+            }
+            SourceTypeScopeKind.ExternSignature => {
+                match scope.state { SourceTypeScopeState.Lowered => {} _ => { return false } }
+            }
             SourceTypeScopeKind.Implementation | SourceTypeScopeKind.RequirementSignature => { return false }
         }
         self.scopes[token - 1U64] = <SourceTypeScope kind=scope.kind anchor=scope.anchor traitOwner=scope.traitOwner parent=scope.parent state=scope.state function=<Optional.Some v=function /> />

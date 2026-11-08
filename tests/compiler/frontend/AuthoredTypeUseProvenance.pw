@@ -52,6 +52,23 @@ fn inspect(compiler~: inout Comp, function~: String, method: Bool, startIndex: U
     if seen < 2U64 { panic("missing repeated type occurrences") }
 }
 
+fn expectExternBinding(compiler~: inout Comp, name~: String) {
+    val owner = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: name).nameId)
+    val function = compiler.arena.functionAt(index: owner)
+    if !function.isExtern { panic("extern registered as ordinary function") }
+    mut val token = 1U64
+    while token <= compiler.sourceTypeUses.scopeCount() {
+        val scope = compiler.sourceTypeUses.scopeAt(token: token).unwrap()
+        if scope.anchor == function.defOffset {
+            match scope.kind { SourceTypeScopeKind.ExternSignature => {} _ => { panic("extern identity bound to wrong origin") } }
+            if scope.function.unwrap() != owner { panic("extern identity lost across signature handoff") }
+            return
+        }
+        token += 1U64
+    }
+    panic("extern scope missing")
+}
+
 fn sourceOffset(compiler~: inout Comp, text~: String) -> U64 {
     mut val index = 0U64
     while index + text.bytes().count() <= compiler.arena.bytes.count() {
@@ -90,15 +107,21 @@ fn main() {
     val requirementScope = store.begin(kind: <SourceTypeScopeKind.RequirementSignature />, anchor: 50U64, traitOwner: 60U64)
     if store.bindFunction(token: requirementScope, function: 0U64) { panic("raw requirement laundered as function") }
     if !store.finish(token: requirementScope, succeeded: true) { panic("requirement source scope leaked") }
+    val externScope = store.begin(kind: <SourceTypeScopeKind.ExternSignature />, anchor: 70U64)
+    if store.bindFunction(token: externScope, function: 3U64) { panic("unfinished extern bound") }
+    if !store.finish(token: externScope, succeeded: true) || !store.bindFunction(token: externScope, function: 3U64) || store.bindFunction(token: externScope, function: 4U64) { panic("extern handoff not single-use") }
+    val failedExtern = store.begin(kind: <SourceTypeScopeKind.ExternSignature />, anchor: 80U64)
+    if !store.finish(token: failedExtern, succeeded: false) || store.bindFunction(token: failedExtern, function: 3U64) { panic("failed extern bound as registered function") }
     if store.scopeAt(token: 0U64).isSome() || store.scopeAt(token: 999U64).isSome() || store.useAt(index: 999U64).isSome() { panic("invalid receipt handle resolved") }
 
-    val text = "trait Marker {{}}\nfn first[T](left: T, right: T) -> T where T: Marker {{ return left }}\nfn second[T](left: T, right: T) -> T where T: Marker {{ return right }}\nstruct Box[T] {{}}\nimpl[T] Box[T] {{ fn method[U](left: T, right: T, item: U) -> T {{ return left }} }}\ntrait Query[T] {{ fn ask[U](value: T, other: U) -> T fn other[U](value: T, other: U) -> T }}\nfn main() {{}}\n"
+    val text = "trait Marker {{}}\nfn first[T](left: T, right: T) -> T where T: Marker {{ return left }}\nfn second[T](left: T, right: T) -> T where T: Marker {{ return right }}\nstruct Box[T] {{}}\nimpl[T] Box[T] {{ fn method[U](left: T, right: T, item: U) -> T {{ return left }} }}\ntrait Query[T] {{ fn ask[U](value: T, other: U) -> T fn other[U](value: T, other: U) -> T }}\nextern(c) {{ fn external(n~: I64) -> I64 }}\nfn main() {{}}\n"
     mut val compiler = <Comp />
     analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text text=text path="AuthoredTypeProvenance.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
     if compiler.sourceTypeUses.currentScope() != 0U64 { panic("declaration scope leaked") }
     inspect(inout compiler, "first", method: false)
     inspect(inout compiler, "second", method: false)
     inspect(inout compiler, "method", method: true)
+    expectExternBinding(inout compiler, "external")
     // Trait requirement scopes retain implicit Self, trait T and method U;
     // sibling requirements never share their own U identity or scope token.
     val query = compiler.decls.traitAt(index: compiler.decls.firstTraitNamed(nameId: compiler.internBytes(s: "Query").nameId))
@@ -144,11 +167,18 @@ fn main() {
     }
     val valueSignature = "fn valueFirst[T](left: T, right: T) -> T where T: Marker {{ return left }}"
     val valueImpl = "impl[T] Box[T] {{ fn valueMethod[U](left: T, right: T, item: U) -> T {{ return left }} }}"
+    val valueExtern = "extern(c) {{ fn valueExternal(n~: I64) -> I64 }}"
     val valueRequirement = "fn valueAsk[U](value: T, other: U) -> T {{}}"
     mut val valueCompiler = <Comp />
     // Generated value ASTs retain real coordinates in the loaded source file.
     // Commented fragments avoid registering a competing syntax declaration.
-    analyzeFrontendForRequests(c: inout valueCompiler, input: <FrontendInput.Text text="trait Marker {{}} struct Box[T] {{}} trait Query[T] {{}}\n// " + valueSignature + "\n// " + valueImpl + "\n// " + valueRequirement + "\nfn main() {{}}\n" path="ValueProvenance.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
+    analyzeFrontendForRequests(c: inout valueCompiler, input: <FrontendInput.Text text="trait Marker {{}} struct Box[T] {{}} trait Query[T] {{}}\n// " + valueSignature + "\n// " + valueImpl + "\n// " + valueRequirement + "\n// " + valueExtern + "\nfn main() {{}}\n" path="ValueProvenance.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
+    val externStart = sourceOffset(inout valueCompiler, valueExtern)
+    match parseItem(source: valueExtern, start: externStart, end: externStart + valueExtern.bytes().count()) {
+        TopItemAst.Extern(e: val declaration) => { valueCompiler.lowerExtern(e: declaration).unwrap() }
+        _ => { panic("value extern did not parse") }
+    }
+    expectExternBinding(inout valueCompiler, "valueExternal")
     val valueStart = sourceOffset(inout valueCompiler, valueSignature)
     match parseItem(source: valueSignature, start: valueStart, end: valueStart + valueSignature.bytes().count()) {
         TopItemAst.Decl(d: val declaration) => {
@@ -157,8 +187,9 @@ fn main() {
             expectSite(inout valueCompiler, anchor: declaration.nameSpan.start, site: declaration.params[0U64].ty.span.start)
             expectSite(inout valueCompiler, anchor: declaration.nameSpan.start, site: declaration.params[1U64].ty.span.start)
             val rawSignature = <SigAst name=declaration.name nameSpan=declaration.nameSpan typeParams=declaration.typeParams typeParamSpans=declaration.typeParamSpans params=declaration.params hasRet=declaration.hasRet ret=declaration.ret isAssoc=false whereParams=declaration.whereParams whereTypes=declaration.whereTypes whereTraits=declaration.whereTraits whereTraitTypes=declaration.whereTraitTypes />
-            match valueCompiler.lowerSigToFunc(sig: rawSignature, isExtern: true, isCExtern: false) { Result.Ok(value: _) => {} Result.Err(error: val diagnostic) => { panic("extern signature: " + diagnostic.message) } }
-            match valueCompiler.sourceTypeUses.scopeAt(token: valueCompiler.sourceTypeUses.scopeCount()).unwrap().kind { SourceTypeScopeKind.ExternSignature => {} _ => { panic("extern and requirement origins conflated") } }
+            val loweredSignature = valueCompiler.lowerSigToFunc(sig: rawSignature, isExtern: true, isCExtern: false).unwrap()
+            if loweredSignature.function.defOffset != declaration.nameSpan.start { panic("signature function changed") }
+            match valueCompiler.sourceTypeUses.scopeAt(token: loweredSignature.scope).unwrap().kind { SourceTypeScopeKind.ExternSignature => {} _ => { panic("extern and requirement origins conflated") } }
         }
         _ => { panic("value adapter setup did not parse declaration") }
     }
@@ -183,8 +214,8 @@ fn main() {
     match parseItem(source: valueRequirement, start: requirementStart, end: requirementStart + valueRequirement.bytes().count()) {
         TopItemAst.Decl(d: val declaration) => {
             val rawSignature = <SigAst name=declaration.name nameSpan=declaration.nameSpan typeParams=declaration.typeParams typeParamSpans=declaration.typeParamSpans params=declaration.params hasRet=declaration.hasRet ret=declaration.ret isAssoc=false />
-            valueCompiler.lowerSigToFunc(sig: rawSignature, isExtern: false, isCExtern: false).unwrap()
-            val scope = valueCompiler.sourceTypeUses.scopeAt(token: valueCompiler.sourceTypeUses.scopeCount()).unwrap()
+            val loweredRequirement = valueCompiler.lowerSigToFunc(sig: rawSignature, isExtern: false, isCExtern: false).unwrap()
+            val scope = valueCompiler.sourceTypeUses.scopeAt(token: loweredRequirement.scope).unwrap()
             if scope.traitOwner != valueQuery.nameStart { panic("value requirement lost trait origin") }
             match scope.kind { SourceTypeScopeKind.RequirementSignature => {} _ => { panic("value requirement origin lost") } }
             expectSite(inout valueCompiler, anchor: declaration.nameSpan.start, site: declaration.params[0U64].ty.span.start)

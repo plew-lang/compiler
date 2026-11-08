@@ -390,3 +390,19 @@ and store state, not arbitrary foreign function authority or failed ancestors.
 Exact owner-premise validation and non-function origins remain mandatory. Fresh
 candidate gates for this newer source remain pending; formal 6.703740 seconds
 certifies c7012d7f, before this identity increment.
+
+### Explicit Signature Handoff Prefix (WIP)
+
+Both signature adapters now return LoweredSourceSignature { function, scope }.
+Extern callers register that exact function then bind its returned token to the
+actual registration ID. Extern binding requires completed lowering; free/method
+binding still requires the active lowering scope. Failed, premature and duplicate
+extern binding is rejected. Raw requirement callers retain the function without
+pretending it is registered; requirement-slot binding remains next.
+
+Independent static review accepted the structure and requested the added failed
+extern store control. Current-source provenance check/compile/link/native passes
+with exact spans and real extern identities in both adapters. Short17 controls
+also pass after mechanical signature-return API migration, with expectations
+unchanged. The same evidence holds input deltas and the finite setup correction.
+No fresh compiler/formal gate for this newer source is claimed.

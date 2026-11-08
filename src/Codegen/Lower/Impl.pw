@@ -835,7 +835,7 @@ impl Comp {
         try self.appendSyntaxImplBounds(fnIdx: fnIdx, im: im)
         self.lowerAssociatedOwner = savedAssociatedOwner
         self.lowerAssociatedArgs = savedAssociatedArgs
-        try self.bindAuthoredFunctionScope(function: fnIdx, site: m.name.start)
+        try self.bindAuthoredFunctionScope(scope: self.sourceTypeUses.currentScope(), function: fnIdx, site: m.name.start)
         self.cur.typeParams = savedTP
         self.lowerWhereSyntaxTypes = savedWT
         self.lowerWhereSyntaxTraitTypes = savedWTr
@@ -1004,7 +1004,7 @@ impl Comp {
         try self.appendFuncBounds(fnIdx: fnIdx, params: im.whereParams, traits: im.whereTraits, types: im.whereTypes, traitTypes: im.whereTraitTypes)
         self.lowerAssociatedOwner = savedAssociatedOwner
         self.lowerAssociatedArgs = savedAssociatedArgs
-        try self.bindAuthoredFunctionScope(function: fnIdx, site: m.nameSpan.start)
+        try self.bindAuthoredFunctionScope(scope: self.sourceTypeUses.currentScope(), function: fnIdx, site: m.nameSpan.start)
         self.cur.typeParams = savedTP
         self.lowerWhereTypes = savedWT
         self.lowerWhereTraitTypes = savedWTr
@@ -1300,13 +1300,13 @@ pub impl Comp {
         return self.lowerConstructionType(nameStart: wrapper.nameStart, nameLen: wrapper.nameLen, args: arguments, siteOffset: offset)
     }
 
-    inout fn lowerSigToFunc(sig: SigAst, isExtern: Bool, isCExtern: Bool) -> Result[Func, CompileDiagnostic] {
+    inout fn lowerSigToFunc(sig: SigAst, isExtern: Bool, isCExtern: Bool) -> Result[LoweredSourceSignature, CompileDiagnostic] {
         val scope = self.sourceTypeUses.begin(kind: (if isExtern { give <SourceTypeScopeKind.ExternSignature /> } else { give <SourceTypeScopeKind.RequirementSignature /> }), anchor: sig.nameSpan.start, traitOwner: self.lowerAssociatedOwner)
         val result = self.lowerSigToFuncInSourceScope(sig: sig, isExtern: isExtern, isCExtern: isCExtern)
         if !self.sourceTypeUses.finish(token: scope, succeeded: result.isOk()) {
             return <Result.Err error=self.diagnosticAt(offset: sig.nameSpan.start, msg: "invalid authored type scope restoration", failureDomain: <FailureDomain.Internal />) />
         }
-        return result
+        return <Result.Ok value=<LoweredSourceSignature function=(try result) scope=scope /> />
     }
 
 }
@@ -1373,13 +1373,13 @@ impl Comp {
 
 pub impl Comp {
 
-    inout fn lowerSyntaxSigToFunc(sig: SyntaxSig, isExtern: Bool, isCExtern: Bool) -> Result[Func, CompileDiagnostic] {
+    inout fn lowerSyntaxSigToFunc(sig: SyntaxSig, isExtern: Bool, isCExtern: Bool) -> Result[LoweredSourceSignature, CompileDiagnostic] {
         val scope = self.sourceTypeUses.begin(kind: (if isExtern { give <SourceTypeScopeKind.ExternSignature /> } else { give <SourceTypeScopeKind.RequirementSignature /> }), anchor: sig.name.start, traitOwner: self.lowerAssociatedOwner)
         val result = self.lowerSyntaxSigToFuncInSourceScope(sig: sig, isExtern: isExtern, isCExtern: isCExtern)
         if !self.sourceTypeUses.finish(token: scope, succeeded: result.isOk()) {
             return <Result.Err error=self.diagnosticAt(offset: sig.name.start, msg: "invalid authored type scope restoration", failureDomain: <FailureDomain.Internal />) />
         }
-        return result
+        return <Result.Ok value=<LoweredSourceSignature function=(try result) scope=scope /> />
     }
 
 }
@@ -1515,8 +1515,8 @@ pub impl Comp {
         mut val ri: U64 = 0
         while ri < t.reqs.count() {
             val requirement = try self.lowerSigToFunc(sig: t.reqs[ri], isExtern: false, isCExtern: false)
-            try self.validateTraitRequirement(requirement: requirement)
-            reqs.append(requirement)
+            try self.validateTraitRequirement(requirement: requirement.function)
+            reqs.append(requirement.function)
             ri += 1
         }
         mut val associatedBounds: Array[TraitAssociatedBound] = []
@@ -1585,8 +1585,8 @@ pub impl Comp {
         while i < syntaxTraitReqCount(file: self.syntax, trait: t) {
             val requirement = syntaxSig(file: self.syntax, id: syntaxTraitReq(file: self.syntax, trait: t, index: i))
             val lowered = try self.lowerSyntaxSigToFunc(sig: requirement, isExtern: false, isCExtern: false)
-            try self.validateTraitRequirement(requirement: lowered)
-            reqs.append(lowered)
+            try self.validateTraitRequirement(requirement: lowered.function)
+            reqs.append(lowered.function)
             i += 1U64
         }
         mut val associatedBounds: Array[TraitAssociatedBound] = []

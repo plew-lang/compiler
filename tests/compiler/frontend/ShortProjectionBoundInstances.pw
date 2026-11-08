@@ -34,7 +34,7 @@ fn main() {
                     val signature = <SigAst name=ast.name nameSpan=ast.nameSpan typeParams=ast.typeParams typeParamSpans=ast.typeParamSpans params=ast.params hasRet=ast.hasRet ret=ast.ret isAssoc=false whereParams=ast.whereParams whereTypes=ast.whereTypes whereTraits=ast.whereTraits />
                     match compiler.lowerSigToFunc(sig: signature, isExtern: false, isCExtern: false) {
                         Result.Err(error: val diagnostic) => { emitDiagnostic(diagnostic: diagnostic) print("0") return }
-                        Result.Ok(value: val lowered) => { term = compiler.funcParamAt(params: lowered.params, index: 0U64).ty }
+                        Result.Ok(value: val lowered) => { term = compiler.funcParamAt(params: lowered.function.params, index: 0U64).ty }
                     }
                 } else {
                 compiler.cur.typeParams = [compiler.funcBindAt(binds: declaration.typeParams, index: 0U64)]
