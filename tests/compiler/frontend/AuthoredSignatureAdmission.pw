@@ -124,7 +124,7 @@ fn main() {
         val projectSource = compiler.arena.callableConstraintSourceAt(evidence: full, index: 1U64)
         val projectBound = compiler.declarationBound(source: projectSource)
         if projectBound.constraint.key.positionalArgs.count() != 1U64 { panic("receiver proof test did not select Project[I64]") }
-        val projectOnly = compiler.arena.prepareDeclarationConstraints(function: owner, sources: [projectSource], proofs: [compiler.arena.callableConstraintProofAt(evidence: full, index: 1U64)])
+        val projectOnly = compiler.arena.prepareDeclarationConstraints(function: owner, environment: environment, sources: [projectSource], bounds: [compiler.arena.callableConstraintBoundAt(evidence: full, index: 1U64)], proofs: [compiler.arena.callableConstraintProofAt(evidence: full, index: 1U64)])
         if compiler.readAdmittedSignatureRoot(function: owner, slot: <SourceSignatureSlot.Parameter index=0U64 />, environment: <InstanceEnvironment params=parameters args=[value] constraints=<Optional.Some v=projectOnly /> />).isOk() { panic("projection reader skipped receiver-view evidence") }
         val actual = compiler.readAdmittedSignatureRoot(function: owner, slot: <SourceSignatureSlot.Parameter index=0U64 />, environment: environment).unwrap()
         val item = compiler.arena.typeAt(index: actual)

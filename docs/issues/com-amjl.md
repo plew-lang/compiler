@@ -749,3 +749,35 @@ Do not add a reader-specific solver or simply skip validation. Proof-output
 once-only coverage and production free-call/body signature consumers then remain
 required, alongside all non-free owner migrations already listed above. This
 increment and com-amjl/met-si6j remain open.
+
+### Prepared Callable Bound Snapshots (WIP)
+
+[Controls and retained handoff](../../../evidence/rejection-domains/diagnostic-domain-implementation/retained-callable-bound-snapshots.json)
+record the common Function/Requirement reader migration. Preparation forwards
+the same full expected `TraitBound` that was validated, alongside its exact
+`DeclarationBoundRef` and frozen proof. An immutable publication environment
+retains ParamIds/arguments, receiver and provided-proof context, without a
+recursive constraints link. One row owns each source/bound/proof tuple; the
+previous parallel source/proof-only publication is removed.
+
+Consumption checks the originating environment, canonical source/function
+ownership, exact clause, receiver and the complete saved proof boundary. It
+returns the same frozen proof, without the former original-bound argument/
+predicate preflight or receiver-repair fallback. Instance equality includes
+both the originating context and saved complete obligations. Requirement
+ownership remains the original implementation, not a provided placement.
+Newtype's existing explicit target re-admission issues a fresh snapshot.
+
+The initial stale-argument/receiver/proof-context controls were actual REDs;
+valid and missing-set controls were already correct. Additional internal raw
+snapshot cases cover owner/clause/duplicate/empty, wrong full inputs/predicates,
+Deferred preservation for missing normalization, proof identity and cache
+identity. The prepared-empty sentinel still has no owner/environment and cannot
+authorize a clause. Raw Arena issuance is trusted and not claimed sealed here;
+that capability boundary remains com-oir7's responsibility.
+
+This removes the Function/Requirement source-bound preflight, not every query
+in the shared proof graph. Conformance/Associated/Receiver paths, deeper frozen
+witness normalization and predicate comparison, occurrence/owner migrations and
+production source-signature consumers remain mandatory. The snapshot does not
+make a fresh query into an acceptable repair for missing retained evidence.

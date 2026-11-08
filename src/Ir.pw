@@ -1992,10 +1992,18 @@ pub impl TraitProofState { factory }
 // Zero is the prepared empty set; absence in InstanceEnvironment is unprepared.
 pub struct PreparedCallableConstraints { val index: U64 }
 impl PreparedCallableConstraints { factory }
+struct CallableConstraintBinding {
+    val source: DeclarationBoundRef
+    val bound: TraitBound
+    val proof: U64
+}
+impl CallableConstraintBinding { factory }
 struct CallableConstraintBindings {
     val function: U64
-    val sources: Array[DeclarationBoundRef]
-    val proofs: Array[U64]
+    // No constraints link: the publication context cannot recursively contain
+    // the evidence being issued. Rows retain the admitted obligation itself.
+    val environment: InstanceEnvironment
+    val entries: Array[CallableConstraintBinding]
 }
 impl CallableConstraintBindings { factory }
 

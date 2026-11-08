@@ -65,7 +65,7 @@ fn main() {
     if scenario == "missingReceiverView" {
         val full = environment.constraints.unwrap()
         if compiler.arena.callableConstraintCount(evidence: full) != 2U64 { panic("receiver proof control setup changed") }
-        val projectOnly = compiler.arena.prepareDeclarationConstraints(function: owner, sources: [compiler.arena.callableConstraintSourceAt(evidence: full, index: 1U64)], proofs: [compiler.arena.callableConstraintProofAt(evidence: full, index: 1U64)])
+        val projectOnly = compiler.arena.prepareDeclarationConstraints(function: owner, environment: environment, sources: [compiler.arena.callableConstraintSourceAt(evidence: full, index: 1U64)], bounds: [compiler.arena.callableConstraintBoundAt(evidence: full, index: 1U64)], proofs: [compiler.arena.callableConstraintProofAt(evidence: full, index: 1U64)])
         val missing = <InstanceEnvironment params=environment.params args=environment.args constraints=<Optional.Some v=projectOnly /> />
         if compiler.readAdmittedSignatureRoot(function: owner, slot: <SourceSignatureSlot.Parameter index=0U64 />, environment: missing).isOk() { panic("nested receiver view borrowed the projection selector proof") }
         print("1")

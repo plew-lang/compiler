@@ -1,30 +1,43 @@
 // Construction takes admitted evidence; no API can replace an issued set.
 pub impl Arena {
-    inout fn prepareCallableConstraints(function: U64, indices: Array[U64], proofs: Array[U64]) -> PreparedCallableConstraints {
+    inout fn prepareCallableConstraints(function: U64, environment: InstanceEnvironment, indices: Array[U64], bounds: Array[TraitBound], proofs: Array[U64]) -> PreparedCallableConstraints {
         mut val sources: Array[DeclarationBoundRef] = []
         for index in indices { sources.append(<DeclarationBoundRef.Function index=index />) }
-        return self.prepareDeclarationConstraints(function: function, sources: sources, proofs: proofs)
+        return self.prepareDeclarationConstraints(function: function, environment: environment, sources: sources, bounds: bounds, proofs: proofs)
     }
-    inout fn prepareDeclarationConstraints(function: U64, sources: Array[DeclarationBoundRef], proofs: Array[U64]) -> PreparedCallableConstraints {
-        if sources.count() != proofs.count() { panic("callable constraint binding count mismatch") }
+    inout fn prepareDeclarationConstraints(function: U64, environment: InstanceEnvironment, sources: Array[DeclarationBoundRef], bounds: Array[TraitBound], proofs: Array[U64]) -> PreparedCallableConstraints {
+        if sources.count() != proofs.count() || sources.count() != bounds.count() { panic("callable constraint binding count mismatch") }
+        // Empty is a prepared set, not an authority for any source clause.
         if sources.count() == 0U64 { return <PreparedCallableConstraints index=0U64 /> }
-        for proof in proofs {
-            if !self.hasStaticConformanceProof(id: proof) { panic("callable constraint binding has no proof") }
+        if environment.params.count() != environment.args.count() { panic("callable constraint binding environment shape mismatch") }
+        mut val entries: Array[CallableConstraintBinding] = []
+        mut val index = 0U64
+        while index < sources.count() {
+            if !self.hasStaticConformanceProof(id: proofs[index]) { panic("callable constraint binding has no proof") }
+            entries.append(<CallableConstraintBinding source=sources[index] bound=bounds[index] proof=proofs[index] />)
+            index += 1U64
         }
-        self.callableConstraintBindings.append(<CallableConstraintBindings function=function sources=sources proofs=proofs />)
+        val context = <InstanceEnvironment params=environment.params args=environment.args receiverRef=environment.receiverRef proof=environment.proof />
+        self.callableConstraintBindings.append(<CallableConstraintBindings function=function environment=context entries=entries />)
         return <PreparedCallableConstraints index=self.callableConstraintBindings.count() />
     }
     fn callableConstraintCount(evidence: PreparedCallableConstraints) -> U64 {
         if evidence.index == 0U64 { return 0U64 }
-        return self.callableConstraintBindings[evidence.index - 1U64].sources.count()
+        return self.callableConstraintBindings[evidence.index - 1U64].entries.count()
     }
     fn callableConstraintFunction(evidence: PreparedCallableConstraints) -> U64 {
         return self.callableConstraintBindings[evidence.index - 1U64].function
     }
+    fn callableConstraintEnvironment(evidence: PreparedCallableConstraints) -> InstanceEnvironment {
+        return self.callableConstraintBindings[evidence.index - 1U64].environment
+    }
     fn callableConstraintSourceAt(evidence: PreparedCallableConstraints, index: U64) -> DeclarationBoundRef {
-        return self.callableConstraintBindings[evidence.index - 1U64].sources[index]
+        return self.callableConstraintBindings[evidence.index - 1U64].entries[index].source
+    }
+    fn callableConstraintBoundAt(evidence: PreparedCallableConstraints, index: U64) -> TraitBound {
+        return self.callableConstraintBindings[evidence.index - 1U64].entries[index].bound
     }
     fn callableConstraintProofAt(evidence: PreparedCallableConstraints, index: U64) -> U64 {
-        return self.callableConstraintBindings[evidence.index - 1U64].proofs[index]
+        return self.callableConstraintBindings[evidence.index - 1U64].entries[index].proof
     }
 }

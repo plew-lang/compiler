@@ -1640,6 +1640,7 @@ pub impl Comp {
         }
         mut val sources: Array[DeclarationBoundRef] = []
         mut val publicProofs: Array[U64] = []
+        mut val publicBounds: Array[TraitBound] = []
         for index in plan.requirements {
             val source = self.arena.requirementBoundEvidenceAt(index: index)
             if source.clause < requirement.signatureBounds.start || source.clause - requirement.signatureBounds.start >= requirement.signatureBounds.len {
@@ -1663,8 +1664,9 @@ pub impl Comp {
             try self.checkSelectedCallConstraintBoundary(expected: expected, proof: proofs[position], offset: source.bound.offset)
             sources.append(<DeclarationBoundRef.Requirement index=index />)
             publicProofs.append(self.freezeStaticConformanceProof(proof: proofs[position]))
+            publicBounds.append(expected)
         }
-        val bindings = self.arena.prepareDeclarationConstraints(function: implementation, sources: sources, proofs: publicProofs)
+        val bindings = self.arena.prepareDeclarationConstraints(function: implementation, environment: environment, sources: sources, bounds: publicBounds, proofs: publicProofs)
         val derivation = <InstanceEnvironment params=environment.params args=environment.args receiverRef=environment.receiverRef proof=environment.proof constraints=<Optional.Some v=bindings /> />
         mut val implementationBounds: Array[TraitBound] = []
         mut val implementationProofs: Array[StaticConformanceProof] = []
@@ -1716,13 +1718,15 @@ pub impl Comp {
     // against the callee declaration before acquiring its declaration identities.
     inout fn environmentWithCallableConstraints(fnIdx: U64, environment: InstanceEnvironment, evidence: CallableConstraintEvidence) -> Result[InstanceEnvironment, CompileDiagnostic] {
         mut val proofs: Array[U64] = []
+        mut val bounds: Array[TraitBound] = []
         match evidence {
             CallableConstraintEvidence.Requirement(plan: val plan, bounds: val bounds, proofs: val proofs) => {
                 val recorded = try self.instantiateRequirementCallConstraints(fnIdx: fnIdx, environment: environment, planIndex: plan, bounds: bounds, proofs: proofs)
                 return self.environmentWithCallableConstraints(fnIdx: fnIdx, environment: environment, evidence: recorded)
             }
             CallableConstraintEvidence.Declaration => {
-                for bound in (try self.groundCallableSignatureBounds(fnIdx: fnIdx, environment: environment)) {
+                bounds = try self.groundCallableSignatureBounds(fnIdx: fnIdx, environment: environment)
+                for bound in bounds {
                     val proof = try self.viewedTraitConstraintProof(demand: <ConformanceProofDemand.SourceAdmission />, ref: bound.subject, constraint: bound.constraint)
                     if self.proofIsMissing(proof: proof) {
                         return <Result.Err error=self.diagnosticAt(offset: bound.offset, msg: "type argument does not conform to the trait required by `where`") />
@@ -1730,12 +1734,13 @@ pub impl Comp {
                     proofs.append(self.freezeStaticConformanceProof(proof: proof))
                 }
             }
-            CallableConstraintEvidence.Recorded(bounds: _, proofs: val recorded) => {
+            CallableConstraintEvidence.Recorded(bounds: val recordedBounds, proofs: val recorded) => {
                 try self.checkCallableConstraintEvidence(fnIdx: fnIdx, environment: environment, evidence: evidence)
+                bounds = recordedBounds
                 for proof in recorded { proofs.append(self.freezeStaticConformanceProof(proof: proof)) }
             }
         }
-        val prepared = self.arena.prepareCallableConstraints(function: fnIdx, indices: self.sourceDeclarationCallBoundIndices(functionIndex: fnIdx), proofs: proofs)
+        val prepared = self.arena.prepareCallableConstraints(function: fnIdx, environment: environment, indices: self.sourceDeclarationCallBoundIndices(functionIndex: fnIdx), bounds: bounds, proofs: proofs)
         return <Result.Ok value=<InstanceEnvironment params=environment.params args=environment.args receiverRef=environment.receiverRef proof=environment.proof constraints=<Optional.Some v=prepared /> /> />
     }
 

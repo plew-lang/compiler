@@ -1,0 +1,79 @@
+// A prepared clause belongs to the environment that admitted its full bound.
+// Replaying it must not accept an unrelated substitution/proof context.
+use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use ../../../src/SourceAccess only { SourceAccess }
+use ../../../src/Ir only { InstanceEnvironment, CallableConstraintEvidence, StaticConformanceProof, StaticProofInstantiation, TraitBound, TraitConstraint, TraitInstanceKey, TraitAssocPredicate, DeclarationBoundRef }
+use @Std/Process only { argAt }
+use @Std/Io only { print }
+
+fn main() {
+    val scenario = argAt(1I64)
+    val source = "trait Project {{ type Output }} trait Marker[K] {{ type Item }} struct Source {{}} struct Other {{}} impl Source as Project {{ type Output=I64 }} impl Other as Project {{ type Output=I64 }} impl Source as Marker[I64] {{ type Item=Bool }} impl Other as Marker[I64] {{ type Item=Bool }} fn inspect[T](value:T) where T:Project, T:Marker[T#Project.Output] {{}} fn concrete(value:Source) {{}} fn other(value:Other) {{}} fn main() {{}}"
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text text=source path="RetainedSnapshots.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
+    val owner = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "inspect").nameId)
+    val concrete = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "concrete").nameId)
+    val other = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "other").nameId)
+    val receiver = compiler.funcParamAt(params: compiler.arena.functionAt(index: concrete).params, index: 0U64).ty
+    val foreign = compiler.funcParamAt(params: compiler.arena.functionAt(index: other).params, index: 0U64).ty
+    val parameters = compiler.copyFuncBinds(binds: compiler.arena.functionAt(index: owner).typeParams)
+    val environment = compiler.environmentWithCallableConstraints(fnIdx: owner, environment: <InstanceEnvironment params=parameters args=[receiver] />, evidence: <CallableConstraintEvidence.Declaration />).unwrap()
+    val evidence = environment.constraints.unwrap()
+    if compiler.arena.callableConstraintCount(evidence: evidence) != 2U64 { panic("snapshot control requires two original clauses") }
+    val selected = compiler.thawStaticConformanceProof(id: compiler.arena.callableConstraintProofAt(evidence: evidence, index: 1U64))
+    val clause = compiler.arena.callableConstraintSourceAt(evidence: evidence, index: 1U64)
+    val bound = compiler.arena.callableConstraintBoundAt(evidence: evidence, index: 1U64)
+    val proofId = compiler.arena.callableConstraintProofAt(evidence: evidence, index: 1U64)
+    val proof = <StaticConformanceProof.AssumedBound source=clause />
+    mut val prepared = evidence
+    if scenario == "foreignFunction" || scenario == "foreignClause" || scenario == "duplicate" || scenario == "empty" || scenario == "identity" || scenario == "predicate" || scenario == "wrongArgument" || scenario == "wrongPredicate" || scenario == "unresolvedArgument" || scenario == "unresolvedPredicate" {
+        val raw = compiler.declarationBound(source: clause)
+        val projection = compiler.groundTermInEnvironment(ref: raw.constraint.key.positionalArgs[0U64], params: parameters, values: [receiver])
+        if !compiler.arena.typeContainsAssociatedProjection(ref: projection) { panic("normalization control lost its original projection") }
+        val arguments = if scenario == "wrongArgument" { give [foreign] } else if scenario == "unresolvedArgument" { give [projection] } else { give bound.constraint.key.positionalArgs }
+        val item = compiler.internBytes(s: "Item").nameId
+        val output = compiler.associatedOutputInProof(proof: selected, traitOwner: bound.constraint.key.owner, assocId: item).unwrap()
+        val predicates = if scenario == "wrongPredicate" { give [<TraitAssocPredicate member=item value=receiver span=0U64 />] }
+          else if scenario == "unresolvedPredicate" { give [<TraitAssocPredicate member=item value=projection span=0U64 />] }
+          else if scenario == "identity" || scenario == "predicate" { give [<TraitAssocPredicate member=item value=output span=0U64 />] }
+          else { give bound.constraint.assocPredicates }
+        val changed = <TraitBound subject=bound.subject constraint=<TraitConstraint key=<TraitInstanceKey owner=bound.constraint.key.owner positionalArgs=arguments /> positionalArgsOpen=bound.constraint.positionalArgsOpen assocPredicates=predicates /> offset=bound.offset />
+        val function = if scenario == "foreignFunction" { give concrete } else { give owner }
+        val sources: Array[DeclarationBoundRef] = if scenario == "empty" { give [] } else if scenario == "duplicate" { give [clause,clause] } else { give [clause] }
+        val bounds: Array[TraitBound] = if scenario == "empty" { give [] } else if scenario == "duplicate" { give [changed,changed] } else { give [changed] }
+        val proofs: Array[U64] = if scenario == "empty" { give [] } else if scenario == "duplicate" { give [proofId,proofId] } else { give [proofId] }
+        prepared = compiler.arena.prepareDeclarationConstraints(function: function, environment: environment, sources: sources, bounds: bounds, proofs: proofs)
+        if scenario == "identity" {
+            val original = compiler.arena.prepareDeclarationConstraints(function: owner, environment: environment, sources: [clause], bounds: [bound], proofs: [proofId])
+            val first = <InstanceEnvironment params=parameters args=[receiver] constraints=<Optional.Some v=original /> />
+            val second = <InstanceEnvironment params=parameters args=[receiver] constraints=<Optional.Some v=prepared /> />
+            if compiler.sameInstanceEnvironment(a: first, b: second) { panic("instance identity discarded retained associated predicates") }
+            print("1")
+            return
+        }
+    }
+    val input = if scenario == "foreignArgument" { give <InstanceEnvironment params=parameters args=[foreign] constraints=environment.constraints /> }
+      else if scenario == "foreignReceiver" { give <InstanceEnvironment params=parameters args=[receiver] receiverRef=foreign constraints=environment.constraints /> }
+      else if scenario == "foreignProof" { give <InstanceEnvironment params=parameters args=[receiver] proof=selected constraints=environment.constraints /> }
+      else if scenario == "missing" { give <InstanceEnvironment params=parameters args=[receiver] /> }
+      else { give <InstanceEnvironment params=parameters args=[receiver] constraints=<Optional.Some v=prepared /> /> }
+    val requested = if scenario == "foreignClause" { give <StaticConformanceProof.AssumedBound source=compiler.arena.callableConstraintSourceAt(evidence: evidence, index: 0U64) /> } else { give proof }
+    val subject = if scenario == "wrongSubject" { give foreign } else { give receiver }
+    val result = compiler.instantiateConstraintProof(proof: requested, receiverRef: subject, environment: input, selfRef: input.receiverRef, itemRef: 0U64)
+    if scenario == "foreignArgument" || scenario == "foreignReceiver" || scenario == "foreignProof" || scenario == "missing" || scenario == "foreignFunction" || scenario == "foreignClause" || scenario == "duplicate" || scenario == "empty" || scenario == "wrongArgument" || scenario == "wrongPredicate" || scenario == "wrongSubject" {
+        if result.isOk() { panic("retained clause accepted a foreign or missing admission context") }
+    } else if scenario == "unresolvedArgument" || scenario == "unresolvedPredicate" {
+        match result.unwrap() {
+            StaticProofInstantiation.Deferred => {}
+            _ => { panic("retained clause repaired missing normalization instead of preserving deferral") }
+        }
+    } else {
+        match result.unwrap() {
+            StaticProofInstantiation.Ready(proof: val actual) => {
+                if !compiler.sameStaticConformanceProof(a: actual, b: selected) { panic("retained clause changed its selected proof") }
+            }
+            _ => { panic("retained clause did not replay its admitted nested-argument proof") }
+        }
+    }
+    print("1")
+}

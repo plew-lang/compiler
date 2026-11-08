@@ -351,3 +351,20 @@ These remain manual diagnostics, not automatically discovered normal-suite
 cases. The current free-signature increments do not certify other declaration
 owners or whole-task completion. Scope and reproducible evidence are linked
 from `docs/issues/com-amjl.md`.
+
+### Prepared callable clause snapshots (manual)
+
+`RetainedConstraintSnapshots.pw` checks the shared Function/Requirement clause
+reader's immutable bound and publication environment. Execute without arguments
+and with `foreignArgument`, `foreignReceiver`, `foreignProof`, `missing`,
+`foreignFunction`, `foreignClause`, `duplicate`, `empty`, `unresolvedArgument`,
+`unresolvedPredicate`, `wrongArgument`, `wrongPredicate`, `identity`,
+`wrongSubject`, and `predicate`. Each must exit 0, match `.out` and have empty
+stderr. The raw unresolved snapshots must remain Deferred even when existing
+conformance could normalize them; they are internal integrity controls, not
+successful source-admission examples. Valid replay preserves the same proof;
+instance equality includes the saved full obligation and its original context.
+
+Raw Arena issuance remains a trusted internal construction boundary. These
+controls do not certify sealed issuance, all proof variants, deeper witness
+normalization replay, or production source-signature consumer migration.

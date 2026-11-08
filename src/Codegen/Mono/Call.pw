@@ -901,9 +901,13 @@ pub impl Comp {
                         val count = self.arena.callableConstraintCount(evidence: left)
                         if count != self.arena.callableConstraintCount(evidence: right) { return false }
                         if count != 0U64 && self.arena.callableConstraintFunction(evidence: left) != self.arena.callableConstraintFunction(evidence: right) { return false }
+                        if count != 0U64 && !self.sameInstanceEnvironment(a: self.arena.callableConstraintEnvironment(evidence: left), b: self.arena.callableConstraintEnvironment(evidence: right)) { return false }
                         mut val index = 0U64
                         while index < count {
                             if !self.sameDeclarationBound(a: self.arena.callableConstraintSourceAt(evidence: left, index: index), b: self.arena.callableConstraintSourceAt(evidence: right, index: index)) { return false }
+                            val leftBound = self.arena.callableConstraintBoundAt(evidence: left, index: index)
+                            val rightBound = self.arena.callableConstraintBoundAt(evidence: right, index: index)
+                            if !self.typeRefEq(a: leftBound.subject, b: rightBound.subject) || !self.sameTraitConstraint(a: leftBound.constraint, b: rightBound.constraint) { return false }
                             val leftProof = self.thawStaticConformanceProof(id: self.arena.callableConstraintProofAt(evidence: left, index: index))
                             val rightProof = self.thawStaticConformanceProof(id: self.arena.callableConstraintProofAt(evidence: right, index: index))
                             if !self.sameStaticConformanceProof(a: leftProof, b: rightProof) { return false }
@@ -3966,6 +3970,51 @@ pub impl Comp {
 }
 
 impl Comp {
+    // A clause reader consumes the exact admitted instance, not a fresh
+    // interpretation of its original signature. Raw Arena issuance is trusted;
+    // source admission validates these rows before publication.
+    inout fn readRetainedCallableConstraint(source: DeclarationBoundRef, receiver: U64, environment: InstanceEnvironment) -> Result[StaticProofInstantiation, CompileDiagnostic] {
+        val evidence = match environment.constraints {
+            Optional.Some(v: val evidence) => evidence,
+            Optional.None => { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "call constraint has no retained declaration binding", failureDomain: <FailureDomain.Internal />) /> },
+        }
+        val count = self.arena.callableConstraintCount(evidence: evidence)
+        if count == 0U64 { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "empty call constraints cannot authorize a clause", failureDomain: <FailureDomain.Internal />) /> }
+        if environment.params.count() != environment.args.count() { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "call constraint has an invalid instance environment", failureDomain: <FailureDomain.Input />) /> }
+        val context = <InstanceEnvironment params=environment.params args=environment.args receiverRef=environment.receiverRef proof=environment.proof />
+        if !self.sameInstanceEnvironment(a: self.arena.callableConstraintEnvironment(evidence: evidence), b: context) { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "call constraint belongs to another instance environment", failureDomain: <FailureDomain.Internal />) /> }
+        val function = self.arena.callableConstraintFunction(evidence: evidence)
+        if function >= self.arena.functionCount() { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "call constraint has no function owner", failureDomain: <FailureDomain.Internal />) /> }
+        val owned = match source {
+            DeclarationBoundRef.Function(index: val index) => {
+                mut val found = false
+                for clause in self.sourceDeclarationCallBoundIndices(functionIndex: function) { if clause == index { found = true } }
+                give found
+            }
+            DeclarationBoundRef.Requirement(index: val index) => self.arena.requirementBoundEvidenceAt(index: index).implementation == function,
+            _ => false,
+        }
+        if !owned { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "call constraint belongs to another declaration owner", failureDomain: <FailureDomain.Internal />) /> }
+        mut val selected = count
+        mut val index = 0U64
+        while index < count {
+            if self.sameDeclarationBound(a: self.arena.callableConstraintSourceAt(evidence: evidence, index: index), b: source) {
+                if selected != count { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "call constraint has duplicate retained clauses", failureDomain: <FailureDomain.Internal />) /> }
+                selected = index
+            }
+            index += 1U64
+        }
+        if selected == count { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "call constraint has no retained declaration binding", failureDomain: <FailureDomain.Internal />) /> }
+        val bound = self.arena.callableConstraintBoundAt(evidence: evidence, index: selected)
+        if !self.typeRefEq(a: self.typeRefWithoutOuterViews(ref: bound.subject), b: self.typeRefWithoutOuterViews(ref: receiver)) { return <Result.Err error=self.diagnosticAt(offset: bound.offset, msg: "call constraint has a foreign receiver", failureDomain: <FailureDomain.Internal />) /> }
+        for argument in bound.constraint.key.positionalArgs { if argument == 0U64 || !self.arena.typeIsClosed(ref: argument) { return <Result.Ok value=<StaticProofInstantiation.Deferred /> /> } }
+        for predicate in bound.constraint.assocPredicates { if predicate.value == 0U64 || !self.arena.typeIsClosed(ref: predicate.value) { return <Result.Ok value=<StaticProofInstantiation.Deferred /> /> } }
+        val proof = self.thawStaticConformanceProof(id: self.arena.callableConstraintProofAt(evidence: evidence, index: selected))
+        try self.checkStaticProofEvidence(proof: proof, offset: bound.offset)
+        try self.checkSelectedCallConstraintBoundary(expected: bound, proof: proof, offset: bound.offset)
+        return <Result.Ok value=<StaticProofInstantiation.Ready proof=proof /> />
+    }
+
     inout fn instantiateConcreteConstraintProof(proof: StaticConformanceProof, receiverRef: U64, environment: InstanceEnvironment, selfRef: U64, itemRef: U64) -> Result[StaticProofInstantiation, CompileDiagnostic] {
         if receiverRef == 0U64 || !self.arena.typeIsClosed(ref: receiverRef) { return <Result.Ok value=<StaticProofInstantiation.Deferred /> /> }
         match proof {
@@ -3974,6 +4023,12 @@ impl Comp {
             }
             StaticConformanceProof.AssumedBound(source: val source) => {
                 if !self.declarationBoundIsValid(source: source) { return <Result.Ok value=<StaticProofInstantiation.Missing /> /> }
+                match source {
+                    DeclarationBoundRef.Function(index: _) | DeclarationBoundRef.Requirement(index: _) => {
+                        return self.readRetainedCallableConstraint(source: source, receiver: receiverRef, environment: environment)
+                    }
+                    _ => {}
+                }
                 val bound = self.declarationBound(source: source)
                 for argument in bound.constraint.key.positionalArgs {
                     val grounded = try self.groundTermForBody(ref: argument, environment: environment, selfRef: selfRef, itemRef: itemRef)
@@ -3984,30 +4039,7 @@ impl Comp {
                     if grounded == 0U64 || !self.arena.typeIsClosed(ref: grounded) { return <Result.Ok value=<StaticProofInstantiation.Deferred /> /> }
                 }
                 match source {
-                    DeclarationBoundRef.Function(index: _) | DeclarationBoundRef.Requirement(index: _) => {
-                        match environment.constraints {
-                            Optional.Some(v: val evidence) => {
-                                mut val index = 0U64
-                                while index < self.arena.callableConstraintCount(evidence: evidence) {
-                                    if self.sameDeclarationBound(a: self.arena.callableConstraintSourceAt(evidence: evidence, index: index), b: source) {
-                                        val selected = self.thawStaticConformanceProof(id: self.arena.callableConstraintProofAt(evidence: evidence, index: index))
-                                        match self.selectedConstraintWitness(proof: selected) {
-                                            Optional.Some(v: val witness) => {
-                                                if self.selectedWitnessReceiver(declared: witness.selfRef, requested: receiverRef) != witness.selfRef {
-                                                    return self.instantiateStaticMemberProof(proof: selected, receiverRef: receiverRef, environment: environment, selfRef: selfRef, itemRef: itemRef)
-                                                }
-                                            }
-                                            Optional.None => {}
-                                        }
-                                        return <Result.Ok value=<StaticProofInstantiation.Ready proof=selected /> />
-                                    }
-                                    index += 1U64
-                                }
-                            }
-                            Optional.None => {}
-                        }
-                        return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "call constraint has no retained declaration binding") />
-                    }
+                    DeclarationBoundRef.Function(index: _) | DeclarationBoundRef.Requirement(index: _) => { panic("retained callable clause reached source grounding") }
                     DeclarationBoundRef.Conformance(index: val declared) => { return self.retainedConformanceConstraint(declared: declared, environment: environment) }
                     DeclarationBoundRef.AssociatedType(index: val index) => { return self.instantiateAssociatedConstraint(index: index, receiverRef: receiverRef, environment: environment, selfRef: selfRef, itemRef: itemRef) }
                     DeclarationBoundRef.Interface(index: _) => { return <Result.Err error=self.diagnosticAt(offset: bound.offset, msg: "interface evidence requires a universal call scope") /> }
