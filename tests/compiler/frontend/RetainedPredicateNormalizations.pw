@@ -1,0 +1,70 @@
+// Selected associated outputs need their own saved normalization equations.
+use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use ../../../src/SourceAccess only { SourceAccess }
+use ../../../src/Ir only { InstanceEnvironment, TraitConstraint, TraitInstanceKey, ConformanceProofDemand, StaticConformanceProof, StaticProofInstantiation, DeclarationBoundRef, WitnessMatch, WitnessConditionPlan, ProjectionNormalizationStep, ResolvedViewSource }
+use @Std/Io only { print }
+use @Std/Process only { argAt }
+
+fn main() {
+    val scenario = argAt(1I64)
+    val source = "trait Parser {{ type Output }} trait Carrier {{ type Item }} trait Root {{}} trait View[K] {{}} struct Source {{}} struct Holder[T] {{}} struct Box[T] {{}} impl Source as Parser {{ type Output=I64 }} impl[T] Holder[T] as Carrier where T:Parser {{ type Item=T#Parser.Output }} impl[T] Box[T] as Root where T:Carrier[Item=I64] {{}} fn boxed(value:Box[Holder[Source]]) {{}} fn holder(value:Holder[Source]) {{}} fn main() {{}}"
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text text=source path="RetainedPredicate.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
+    val root = compiler.decls.traitAt(index: compiler.decls.firstTraitNamed(nameId: compiler.internBytes(s: "Root").nameId))
+    val boxed = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "boxed").nameId)
+    val holder = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "holder").nameId)
+    val subject = compiler.funcParamAt(params: compiler.arena.functionAt(index: holder).params, index: 0U64).ty
+    val box = compiler.funcParamAt(params: compiler.arena.functionAt(index: boxed).params, index: 0U64).ty
+    val selected = compiler.viewedTraitConstraintProof(demand: <ConformanceProofDemand.SourceAdmission />, ref: box, constraint: <TraitConstraint key=<TraitInstanceKey owner=root.nameStart positionalArgs=[] /> assocPredicates=[] />).unwrap()
+    val witness = match selected {
+        StaticConformanceProof.ConcreteWitness(witness: val witness) => witness,
+        _ => { panic("predicate control did not select a concrete root") },
+    }
+    val declaration = compiler.decls.conformAt(index: witness.conformIdx - 1U64)
+    val plan = compiler.arena.witnessConditionPlanAt(index: witness.conditions - 1U64)
+    if declaration.bounds.len != 1U64 || plan.proofs.count() != 1U64 { panic("predicate control lost its original clause") }
+    if scenario == "view" {
+        val carrier = compiler.decls.traitAt(index: compiler.decls.firstTraitNamed(nameId: compiler.internBytes(s: "Carrier").nameId))
+        val view = compiler.decls.traitAt(index: compiler.decls.firstTraitNamed(nameId: compiler.internBytes(s: "View").nameId))
+        val output = compiler.associatedOutputInProof(proof: compiler.thawStaticConformanceProof(id: plan.proofs[0U64]), traitOwner: carrier.nameStart, assocId: compiler.internBytes(s: "Item").nameId).unwrap()
+        val viewed = compiler.typeRefWithViewSources(ref: subject, sources: [<ResolvedViewSource traitInstance=<TraitInstanceKey owner=view.nameStart positionalArgs=[output] /> />])
+        mut val equations: Array[ProjectionNormalizationStep] = []
+        val normalized = compiler.recordConditionTypeNormalization(ref: viewed, assumptions: [], normalizations: inout equations).unwrap()
+        if equations.count() == 0U64 || compiler.typeRefEq(a: viewed, b: normalized) { panic("view control did not require an actual-output equation") }
+        compiler.checkProjectionNormalizations(normalizations: equations, offset: 0U64).unwrap()
+        val replayed = compiler.replayProjectionNormalizations(ref: viewed, normalizations: equations, offset: 0U64).unwrap()
+        if !compiler.typeRefEq(a: replayed, b: normalized) { panic("saved replay omitted the actual-output view argument") }
+        if compiler.typeRefEq(a: compiler.replayProjectionNormalizations(ref: viewed, normalizations: [], offset: 0U64).unwrap(), b: normalized) { panic("missing view equation was repaired") }
+        print("1")
+        return
+    }
+    if scenario == "retained" && plan.normalizations.count() == 0U64 { panic("selected associated output normalization was not retained") }
+    mut val actual = witness
+    if scenario == "missing" {
+        val equations: Array[ProjectionNormalizationStep] = []
+        val conditions = compiler.arena.publishWitnessConditionPlan(plan: <WitnessConditionPlan witness=plan.witness proofs=plan.proofs normalizations=equations />)
+        actual = <WitnessMatch conformIdx=witness.conformIdx selfRef=witness.selfRef binds=witness.binds conditions=conditions />
+    }
+    val proof = <StaticConformanceProof.AssumedBound source=<DeclarationBoundRef.Conformance index=declaration.bounds.start /> />
+    val result = compiler.instantiateConstraintProof(proof: proof, receiverRef: subject, environment: <InstanceEnvironment receiverRef=box proof=<StaticConformanceProof.ConcreteWitness witness=actual /> />, selfRef: box, itemRef: 0U64)
+    if scenario == "missing" {
+        match result {
+            Result.Err(error: _) => {}
+            Result.Ok(value: val state) => {
+                match state {
+                    StaticProofInstantiation.Ready(proof: _) => { panic("missing actual-output equation was repaired by a fresh query") }
+                    _ => {}
+                }
+            }
+        }
+    } else {
+        match result.unwrap() {
+            StaticProofInstantiation.Ready(proof: val forwarded) => {
+                if !compiler.sameStaticConformanceProof(a: forwarded, b: compiler.thawStaticConformanceProof(id: plan.proofs[0U64])) { panic("predicate replay changed its saved child proof") }
+            }
+            _ => { panic("valid actual-output predicate did not replay") }
+        }
+    }
+    if compiler.activeConditionAdmission.count() != 0U64 { panic("predicate replay leaked its admission stack") }
+    print("1")
+}

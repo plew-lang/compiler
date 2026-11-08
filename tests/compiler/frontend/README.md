@@ -385,3 +385,12 @@ and shares clause interpretation with whole-plan admission; it does not reseal
 raw plan publication or revalidate every unrelated sibling on every read.
 Associated/Receiver replay, deeper predicate query removal and final consumer
 migration remain separate required work in com-amjl.
+
+
+`RetainedPredicateNormalizations.pw` checks selected associated outputs whose
+normalization is needed only on the actual side. Run without arguments and
+with `retained`, `missing`, and `view`; all match `.out` with exit0/empty stderr.
+The first two negative old-source controls detect missing producer equations
+and fresh-query rescue of a frozen plan. The `view` case is a semantic visitor
+control, not a claim of production plan view admission. Additional malformed,
+nested and non-interference cases remain under the owning WIP task.

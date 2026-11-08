@@ -338,40 +338,18 @@ pub impl Comp {
     inout fn replayProjectionNormalizations(ref: U64, normalizations: Array[ProjectionNormalizationStep], offset: U64, active: Array[U64] = []) -> Result[U64, CompileDiagnostic] {
         if normalizations.count() == 0U64 || !self.arena.typeContainsAssociatedProjection(ref: ref) { return <Result.Ok value=ref /> }
         if ref == 0U64 || ref >= self.arena.typeCount() { return <Result.Ok value=ref /> }
-        val type = self.arena.typeAt(index: ref)
-        if type.isRecord {
-            mut val fields: Array[U64] = []
-            mut val changed = false
-            for field in type.recordFieldTerms {
-                val normalized = try self.replayProjectionNormalizations(ref: field, normalizations: normalizations, offset: offset, active: active)
-                if normalized != field { changed = true }
-                fields.append(normalized)
-            }
-            if changed { return <Result.Ok value=self.rebuildRecordTypeTerm(t: type, fieldTerms: fields) /> }
-            return <Result.Ok value=ref />
-        }
-        mut val arguments: Array[U64] = []
-        mut val traitArguments: Array[U64] = []
+        mut val children: Array[U64] = []
         mut val changed = false
-        if type.assocNameId == 0U64 {
-            for argument in type.args {
-                val normalized = try self.replayProjectionNormalizations(ref: argument, normalizations: normalizations, offset: offset, active: active)
-                if normalized != argument { changed = true }
-                arguments.append(normalized)
-            }
+        mut val index = 0U64
+        while index < self.typeTermRefChildCount(ref: ref) {
+            val child = self.typeTermRefChildRef(ref: ref, index: index)
+            val normalized = try self.replayProjectionNormalizations(ref: child, normalizations: normalizations, offset: offset, active: active)
+            if normalized != child { changed = true }
+            children.append(normalized)
+            index += 1U64
         }
-        for argument in type.assocTraitArgs {
-            val normalized = try self.replayProjectionNormalizations(ref: argument, normalizations: normalizations, offset: offset, active: active)
-            if normalized != argument { changed = true }
-            traitArguments.append(normalized)
-        }
-        if type.assocNameId == 0U64 {
-            if changed { return <Result.Ok value=self.rebuildTypeTerm(t: type, args: arguments, assocTraitArgs: traitArguments) /> }
-            return <Result.Ok value=ref />
-        }
-        val rawReceiver = self.typeTermProjectionReceiver(t: type)
-        val receiver = try self.replayProjectionNormalizations(ref: rawReceiver, normalizations: normalizations, offset: offset, active: active)
-        val projection = if changed || receiver != rawReceiver { give self.rebuildProjectionTerm(t: type, receiver: receiver, traitArgs: traitArguments) } else { give ref }
+        val projection = if changed { give self.rebuildTypeTermChildren(ref: ref, children: children) } else { give ref }
+        if self.arena.typeTermAt(index: projection).assocNameId == 0U64 { return <Result.Ok value=projection /> }
         for step in normalizations {
             if self.typeRefEq(a: projection, b: step.source) {
                 if step.output == 0U64 { return <Result.Ok value=projection /> }
@@ -418,7 +396,7 @@ pub impl Comp {
         mut val names: Array[U64] = []
         mut val values: Array[U64] = []
         for predicate in expected.constraint.assocPredicates { names.append(predicate.member) values.append(predicate.value) }
-        if !(try self.selectedProofAssociatedTypesMatch(proof: proof, traitOwner: expected.constraint.key.owner, names: names, values: values, assumptions: assumptions, normalizations: normalizations, offset: offset)) { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "selected conformance evidence does not satisfy its declaration conditions") /> }
+        if !(try self.retainedProofAssociatedTypesMatch(proof: proof, traitOwner: expected.constraint.key.owner, names: names, values: values, normalizations: normalizations, offset: offset)) { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "selected conformance evidence does not satisfy its declaration conditions") /> }
         return <Result.Ok value=() />
     }
 

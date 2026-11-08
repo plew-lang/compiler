@@ -236,7 +236,10 @@ pub impl Comp {
             for predicate in constraint.assocPredicates { names.append(predicate.member) values.append(predicate.value) }
             val answer = try self.queryTraitPatternProof(demand: <ConformanceProofDemand.SourceAdmission />, baseRef: subject, traitId: 0U64, traitOwner: constraint.key.owner, traitArgs: <PatternTypeInput.Values values=constraint.key.positionalArgs />, patternParams: <PatternBindInput.Values values=[] />, traitArgsOpen: constraint.positionalArgsOpen, assocNames: names, assocValues: values, assumptions: assumptions)
             match answer {
-                ConformanceProofResult.Found(proof: val proof) => { proofs.append(self.freezeStaticConformanceProof(proof: proof)) }
+                ConformanceProofResult.Found(proof: val proof) => {
+                    if !(try self.recordSelectedProofPredicateNormalizations(proof: proof, traitOwner: constraint.key.owner, names: names, values: values, assumptions: assumptions, normalizations: inout normalizations, offset: bound.offset)) { return <Result.Ok value=<Optional.None /> /> }
+                    proofs.append(self.freezeStaticConformanceProof(proof: proof))
+                }
                 ConformanceProofResult.Missing | ConformanceProofResult.Ambiguous(owner: _, demand: _, selectedSource: _) => { return <Result.Ok value=<Optional.None /> /> }
             }
             index += 1U64
@@ -307,29 +310,44 @@ pub impl Comp {
         return <Result.Ok value=proof />
     }
 
-    // Associated bindings constrain the selected proof's outputs, not which
-    // conformance is selected. Selection and frozen evidence admission share
-    // this reader so they cannot silently enforce different constraints.
-    inout fn selectedProofAssociatedTypesMatch(proof: StaticConformanceProof, traitOwner: U64, names: Array[U64], values: Array[U64], assumptions: Array[DeclarationBoundRef], normalizations: Array[ProjectionNormalizationStep] = [], offset: U64 = 0U64) -> Result[Bool, CompileDiagnostic] {
+    // Interpret only the selected output and verified saved equations. This
+    // comparator cannot acquire evidence or repair an incomplete frozen plan.
+    inout fn retainedProofAssociatedTypesMatch(proof: StaticConformanceProof, traitOwner: U64, names: Array[U64], values: Array[U64], normalizations: Array[ProjectionNormalizationStep], offset: U64 = 0U64) -> Result[Bool, CompileDiagnostic] {
         if names.count() != values.count() { return <Result.Ok value=false /> }
         mut val index = 0U64
         while index < names.count() {
             val output = try self.associatedOutputInProof(proof: proof, traitOwner: traitOwner, assocId: names[index])
             if output == 0U64 { return <Result.Ok value=false /> }
-            // Associated predicates are type equalities, not value conversions.
-            // Their terms belong to the supplied proof/request environment;
-            // body Self, current substitutions and implicit caller bounds must
-            // never be consulted to make an unrelated query applicable.
             val expected = try self.replayProjectionNormalizations(ref: values[index], normalizations: normalizations, offset: offset)
             val actual = try self.replayProjectionNormalizations(ref: output, normalizations: normalizations, offset: offset)
-            if !self.typeRefEq(a: expected, b: actual) {
-                val closedExpected = try self.closeBodyProjectionTerms(ref: expected, environment: <InstanceEnvironment />, selfRef: 0U64, itemRef: 0U64, assumptions: assumptions)
-                val closedActual = try self.closeBodyProjectionTerms(ref: actual, environment: <InstanceEnvironment />, selfRef: 0U64, itemRef: 0U64, assumptions: assumptions)
-                if !self.typeRefEq(a: closedExpected, b: closedActual) { return <Result.Ok value=false /> }
-            }
+            if !self.typeRefEq(a: expected, b: actual) { return <Result.Ok value=false /> }
             index += 1U64
         }
         return <Result.Ok value=true />
+    }
+
+    // Acquisition belongs to selection/preparation, never frozen admission.
+    // Re-read the original terms through the saved equations before accepting
+    // them, so recording and replay cannot establish different equalities.
+    inout fn recordSelectedProofPredicateNormalizations(proof: StaticConformanceProof, traitOwner: U64, names: Array[U64], values: Array[U64], assumptions: Array[DeclarationBoundRef], normalizations: inout Array[ProjectionNormalizationStep], offset: U64 = 0U64) -> Result[Bool, CompileDiagnostic] {
+        if names.count() != values.count() { return <Result.Ok value=false /> }
+        if try self.retainedProofAssociatedTypesMatch(proof: proof, traitOwner: traitOwner, names: names, values: values, normalizations: normalizations, offset: offset) { return <Result.Ok value=true /> }
+        mut val index = 0U64
+        while index < names.count() {
+            val output = try self.associatedOutputInProof(proof: proof, traitOwner: traitOwner, assocId: names[index])
+            if output == 0U64 { return <Result.Ok value=false /> }
+            try self.recordConditionTypeNormalization(ref: values[index], assumptions: assumptions, normalizations: inout normalizations)
+            try self.recordConditionTypeNormalization(ref: output, assumptions: assumptions, normalizations: inout normalizations)
+            index += 1U64
+        }
+        return self.retainedProofAssociatedTypesMatch(proof: proof, traitOwner: traitOwner, names: names, values: values, normalizations: normalizations, offset: offset)
+    }
+
+    // Query consumers acquire their own equations. Saved-plan consumers call
+    // the retained comparator directly after proof/equation admission.
+    inout fn selectedProofAssociatedTypesMatch(proof: StaticConformanceProof, traitOwner: U64, names: Array[U64], values: Array[U64], assumptions: Array[DeclarationBoundRef], normalizations: Array[ProjectionNormalizationStep] = [], offset: U64 = 0U64) -> Result[Bool, CompileDiagnostic] {
+        mut val recorded = normalizations
+        return self.recordSelectedProofPredicateNormalizations(proof: proof, traitOwner: traitOwner, names: names, values: values, assumptions: assumptions, normalizations: inout recorded, offset: offset)
     }
 
     // Resolve a receiver under explicit declaration assumptions and its view set to a

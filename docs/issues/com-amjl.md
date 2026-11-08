@@ -845,3 +845,25 @@ below7 seconds. Product source is unchanged from ae19e30b. The old failed
 performance measurements remain evidence; the new formal result is not a
 substitution of diagnostic timing. Resume the saved-predicate handoff described
 above; no whole-task closure or carrier promotion follows.
+
+
+### Saved Associated Predicate Normalization (WIP)
+
+[Initial RED/GREEN and candidate](../../../evidence/rejection-domains/diagnostic-domain-implementation/retained-predicate-normalizations.json)
+record the next finite handoff. A pure retained comparator reads selected
+associated outputs, replays saved equations and checks structural equality;
+it has no query or assumptions. Selection owns a recording adapter and
+Conformance's producer retains required actual-output equations after Found,
+before freezing its condition plan. Whole-plan/requested-clause validation
+share the pure comparator. Existing callable/boxing query adapters remain
+until their own saved transport migrates.
+
+Saved replay now folds canonical type children and rebuilds through the same
+term API as source recipes, including view selector arguments, before applying
+an equation to a projection head. The visitor control is distinct from source
+view admission. Three actual old-source REDs and one existing GREEN control
+become GREEN, as do10 preserved native fixtures. Source review found no confirmed
+contract violation but noted unnecessary acquisition for an already-equal
+predicate when another predicate mismatches. That mixed control and the planned
+nested/invalid/cycle/symbolic/recovery controls remain open, alongside all
+fresh/final gates and whole-task obligations. Do not call this increment closed.
