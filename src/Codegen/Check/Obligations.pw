@@ -347,6 +347,21 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
+    // Replay dependencies without consuming the projection head itself.
+    // Both equation prerequisites and associated-row readers share this fold.
+    inout fn replayProjectionChildren(ref: U64, normalizations: Array[ProjectionNormalizationStep], offset: U64) -> Result[U64, CompileDiagnostic] {
+        if normalizations.count() == 0U64 { return <Result.Ok value=ref /> }
+        mut val children: Array[U64] = []
+        mut val changed = false
+        for index in 0U64..<self.typeTermRefChildCount(ref: ref) {
+            val child = self.typeTermRefChildRef(ref: ref, index: index)
+            val normalized = try self.replayProjectionNormalizations(ref: child, normalizations: normalizations, offset: offset)
+            if child != normalized { changed = true }
+            children.append(normalized)
+        }
+        return <Result.Ok value=if changed { give self.rebuildTypeTermChildren(ref: ref, children: children) } else { give ref } />
+    }
+
     // Replay only the saved equations. No conformance/member query is allowed.
     inout fn replayProjectionNormalizations(ref: U64, normalizations: Array[ProjectionNormalizationStep], offset: U64, active: Array[U64] = []) -> Result[U64, CompileDiagnostic] {
         if normalizations.count() == 0U64 || !self.arena.typeContainsAssociatedProjection(ref: ref) { return <Result.Ok value=ref /> }

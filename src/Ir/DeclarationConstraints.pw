@@ -58,6 +58,11 @@ pub impl Arena {
     fn hasConformanceAssociatedEvidence(conformance: U64) -> Bool {
         return self.conformanceAssociatedHeads.getOr(key: conformance, fallback: 0U64) != 0U64
     }
+    fn conformanceAssociatedClauseCount(conformance: U64) -> U64 {
+        val row = self.conformanceAssociatedHeads.getOr(key: conformance, fallback: 0U64)
+        if row == 0U64 { return 0U64 }
+        return self.conformanceAssociatedProofs[row - 1U64].count()
+    }
     fn conformanceAssociatedClause(conformance: U64, clause: U64) -> Optional[ConformanceAssociatedEvidence] {
         val row = self.conformanceAssociatedHeads.getOr(key: conformance, fallback: 0U64)
         if row == 0U64 { return <Optional.None /> }

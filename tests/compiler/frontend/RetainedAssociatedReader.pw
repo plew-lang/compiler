@@ -1,0 +1,141 @@
+// An associated clause consumes its selected impl-owned row, never a caller query.
+use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use ../../../src/SourceAccess only { SourceAccess }
+use ../../../src/Ir only { InstanceEnvironment, TraitBound, ConformanceProofDemand, TraitConstraint, TraitInstanceKey, StaticConformanceProof, StaticProofInstantiation, PatternTypeInput, PatternBindInput, DeclarationBoundRef, ProjectionNormalizationStep, WitnessMatch, WitnessConditionPlan, ConformanceAssociatedEvidence, TraitAssocPredicate, AssociatedBoundEvidence }
+use @Std/Io only { print }
+use @Std/Process only { argAt }
+fn main() {
+    val scenario = argAt(1I64)
+    val actual = scenario == "actual"
+    val nested = scenario == "nested"
+    val generic = scenario != "" && scenario != "retainedOutput"
+    val leafArgument = if nested { give "Leaf[T#Parser.Output]" } else { give "T#Parser.Output" }
+    val key = if actual { give "I64" } else { give leafArgument }
+    val leaf = if actual { give "Leaf[T]" } else { give "Leaf[" + leafArgument + "]" }
+    val genericDeclarations = "trait Parser {{ type Output }} struct Token {{}} impl Token as Parser {{ type Output=I64 }} struct Leaf[T] {{}} struct Input[T] {{}} " + if actual {
+        give "impl[T] Leaf[T] as Required[I64] where T:Parser[Output=I64] {{ type Output=T#Parser.Output }} impl[T] Input[T] as Source where T:Parser[Output=I64] {{ type Item=Leaf[T] type Key=I64 }} "
+    } else {
+        give "impl[T] Leaf[T] as Required[T] {{ type Output=T }} impl[T] Input[T] as Source where T:Parser {{ type Item=" + leaf + " type Key=" + key + " }} "
+    }
+    val declarations = if scenario == "retainedOutput" {
+        give "trait Parser {{ type Output }} struct Token {{}} impl Token as Parser {{ type Output=I64 }} struct Leaf {{}} impl Leaf as Required[I64] {{ type Output=Token#Parser.Output }} struct Input {{}} impl Input as Source {{ type Item=Leaf type Key=I64 }} "
+    } else if generic { give genericDeclarations } else { give "struct Leaf {{}} impl Leaf as Required[I64] {{ type Output=I64 }} struct Input {{}} impl Input as Source {{ type Item=Leaf type Key=I64 }} " }
+    val input = if generic { give "Input[Token]" } else { give "Input" }
+    val source = "trait Required[K] {{ type Output }} trait Source {{ type Key type Item:Required[Self#Source.Key,Output=Self#Source.Key] }} trait Container {{ type Item }} struct Box[T] {{}} impl[T] Box[T] as Container where T:Source {{ type Item=T#Source.Item }} " + declarations + "fn context(value:Box[" + input + "], item:" + if actual { give "Leaf[Token]" } else if nested { give "Leaf[Leaf[I64]]" } else if generic { give "Leaf[I64]" } else { give "Leaf" } + ") {{}} fn boolean(value:Bool) {{}} trait Other {{ type Item }} fn foreign[T](value:T#Source.Key, other:T#Other.Item) where T:Source, T:Other {{}} fn main() {{}}"
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text text=source path="AssociatedProducer.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
+    val sourceTrait = compiler.decls.traitAt(index: compiler.decls.firstTraitNamed(nameId: compiler.internBytes(s: "Source").nameId))
+    val required = compiler.decls.traitAt(index: compiler.decls.firstTraitNamed(nameId: compiler.internBytes(s: "Required").nameId))
+    val context = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "context").nameId)
+    val boxed = compiler.funcParamAt(params: compiler.arena.functionAt(index: context).params, index: 0U64).ty
+    val receiver = compiler.arena.typeAt(index: boxed).args[0U64]
+    val selected = compiler.viewedTraitConstraintProof(demand: <ConformanceProofDemand.SourceAdmission />, ref: receiver, constraint: <TraitConstraint key=<TraitInstanceKey owner=sourceTrait.nameStart positionalArgs=[] /> assocPredicates=[] />).unwrap()
+    val witness = compiler.selectedConstraintWitness(proof: selected).unwrap()
+    val declaration = compiler.decls.conformAt(index: witness.conformIdx - 1U64)
+    val clause = sourceTrait.assocBounds.start
+    if sourceTrait.assocBounds.len != 1U64 { panic("associated producer control requires one clause") }
+    val row = compiler.arena.conformanceAssociatedClause(conformance: witness.conformIdx - 1U64, clause: clause).unwrap()
+    val item = compiler.funcParamAt(params: compiler.arena.functionAt(index: context).params, index: 1U64).ty
+    val environment = compiler.selectedConstraintEnvironment(witness: witness, proof: selected).unwrap()
+    val proof = compiler.thawStaticConformanceProof(id: row.proof)
+    val container = compiler.decls.traitAt(index: compiler.decls.firstTraitNamed(nameId: compiler.internBytes(s: "Container").nameId))
+    val boxDeclaration = compiler.decls.conformAt(index: 0U64)
+    val binding = compiler.decls.assocBindings[compiler.conformFuncIdAt(ids: boxDeclaration.assocBindingIds, index: 0U64)]
+    val abstract = compiler.traitPatternProof(demand: <ConformanceProofDemand.Existence />, baseRef: binding.ty, traitId: 0U64, traitOwner: required.nameStart, traitArgs: <PatternTypeInput.Values values=[] />, patternParams: <PatternBindInput.Values values=[] />, traitArgsOpen: true, assumptions: compiler.conformanceDeclarationAssumptions(conformIndex: 0U64)).unwrap()
+    val original = match abstract {
+        StaticConformanceProof.AssumedBound(source: val source) => match source {
+            DeclarationBoundRef.AssociatedType(index: val index) => compiler.arena.associatedBoundEvidenceAt(index: index),
+            _ => { panic("associated reader control requires its associated source") },
+        },
+        _ => { panic("associated reader control lost its original clause") },
+    }
+    val boxedProof = compiler.viewedTraitConstraintProof(demand: <ConformanceProofDemand.SourceAdmission />, ref: boxed, constraint: <TraitConstraint key=<TraitInstanceKey owner=container.nameStart positionalArgs=[] /> assocPredicates=[] />).unwrap()
+    val boxWitness = compiler.selectedConstraintWitness(proof: boxedProof).unwrap()
+    val recoveryEnvironment = compiler.selectedConstraintEnvironment(witness: boxWitness, proof: boxedProof).unwrap()
+    mut val callEnvironment = recoveryEnvironment
+    mut val callProof = abstract
+    mut val requested = item
+    val malformedSource = scenario == "wrongMember" || scenario == "wrongTrait" || scenario == "foreignClause" || scenario == "cycle"
+    val malformedRow = scenario == "missingTable" || scenario == "emptyTable" || scenario == "duplicateRow" || scenario == "foreignRow" || scenario == "missingEquation" || scenario == "wrongArgument" || scenario == "wrongPredicate" || scenario == "wrongProof" || scenario == "wrongEquation"
+    if scenario == "clone" || malformedRow {
+        val owner = compiler.decls.conformCount()
+        compiler.decls.registerConform(declaration)
+        val base = <WitnessMatch conformIdx=owner + 1U64 binds=witness.binds selfRef=witness.selfRef />
+        val plan = compiler.arena.witnessConditionPlanAt(index: witness.conditions - 1U64)
+        val condition = compiler.arena.publishWitnessConditionPlan(plan: <WitnessConditionPlan witness=base proofs=plan.proofs normalizations=plan.normalizations />)
+        val cloned = <StaticConformanceProof.ConcreteWitness witness=<WitnessMatch conformIdx=base.conformIdx binds=base.binds selfRef=base.selfRef conditions=condition /> />
+        mut val rows = [row]
+        if scenario == "emptyTable" { rows = [] }
+        if scenario == "duplicateRow" { rows = [row,row] }
+        if scenario == "foreignRow" { rows = [<ConformanceAssociatedEvidence clause=row.clause + 100U64 bound=row.bound proof=row.proof normalizations=row.normalizations />] }
+        if scenario == "missingEquation" { rows = [<ConformanceAssociatedEvidence clause=row.clause bound=row.bound proof=row.proof normalizations=[] />] }
+        val boolean = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "boolean").nameId)
+        val boolType = compiler.funcParamAt(params: compiler.arena.functionAt(index: boolean).params, index: 0U64).ty
+        if scenario == "wrongArgument" || scenario == "wrongPredicate" {
+            val constraint = <TraitConstraint key=<TraitInstanceKey owner=row.bound.constraint.key.owner positionalArgs=if scenario == "wrongArgument" { give [boolType] } else { give row.bound.constraint.key.positionalArgs } /> assocPredicates=if scenario == "wrongPredicate" { give [<TraitAssocPredicate member=row.bound.constraint.assocPredicates[0U64].member value=boolType span=0U64 />] } else { give row.bound.constraint.assocPredicates } />
+            rows = [<ConformanceAssociatedEvidence clause=row.clause bound=<TraitBound subject=row.bound.subject constraint=constraint offset=row.bound.offset /> proof=row.proof normalizations=row.normalizations />]
+        }
+        if scenario == "wrongProof" { rows = [<ConformanceAssociatedEvidence clause=row.clause bound=row.bound proof=row.normalizations[0U64].proof normalizations=row.normalizations />] }
+        if scenario == "wrongEquation" {
+            val step = row.normalizations[0U64]
+            rows = [<ConformanceAssociatedEvidence clause=row.clause bound=row.bound proof=row.proof normalizations=[<ProjectionNormalizationStep source=step.source proof=step.proof output=boolType />] />]
+        }
+        if scenario != "missingTable" && !compiler.arena.publishConformanceAssociatedEvidence(conformance: owner, evidence: rows) { panic("associated reader mutation was not published") }
+        val outer = compiler.arena.witnessConditionPlanAt(index: boxWitness.conditions - 1U64)
+        if outer.proofs.count() != 1U64 { panic("associated reader control needs one enclosing clause") }
+        val outerCondition = compiler.arena.publishWitnessConditionPlan(plan: <WitnessConditionPlan witness=outer.witness proofs=[compiler.freezeStaticConformanceProof(proof: cloned)] normalizations=outer.normalizations />)
+        val outerProof = <StaticConformanceProof.ConcreteWitness witness=<WitnessMatch conformIdx=boxWitness.conformIdx binds=boxWitness.binds selfRef=boxWitness.selfRef conditions=outerCondition /> />
+        callEnvironment = compiler.selectedConstraintEnvironment(witness: compiler.selectedConstraintWitness(proof: outerProof).unwrap(), proof: outerProof).unwrap()
+    }
+    if malformedSource {
+        mut val projection = original.projection
+        mut val clause = original.clause
+        mut val prerequisite = original.prerequisite
+        if scenario == "wrongMember" || scenario == "wrongTrait" {
+            val function = compiler.arena.functionAt(index: compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "foreign").nameId))
+            val template = compiler.funcParamAt(params: function.params, index: if scenario == "wrongMember" { give 0U64 } else { give 1U64 }).ty
+            projection = compiler.rebuildProjectionTerm(t: compiler.arena.typeAt(index: template), receiver: compiler.typeTermProjectionReceiver(t: compiler.arena.typeAt(index: original.projection)), traitArgs: [])
+        }
+        if scenario == "foreignClause" { clause += 100U64 }
+        if scenario == "cycle" { prerequisite = <StaticConformanceProof.AssumedBound source=<DeclarationBoundRef.AssociatedType index=compiler.arena.associatedBoundEvidenceCount() /> /> }
+        val index = compiler.arena.publishAssociatedBoundEvidence(evidence: <AssociatedBoundEvidence projection=projection clause=clause prerequisite=prerequisite bound=original.bound />)
+        callProof = <StaticConformanceProof.AssumedBound source=<DeclarationBoundRef.AssociatedType index=index /> />
+    }
+    if scenario == "wrongSubject" {
+        val boolean = compiler.arena.functionAt(index: compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "boolean").nameId))
+        requested = compiler.funcParamAt(params: boolean.params, index: 0U64).ty
+    }
+    val result = compiler.instantiateConstraintProof(proof: callProof, receiverRef: requested, environment: callEnvironment, selfRef: boxed, itemRef: 0U64)
+    if malformedRow || malformedSource || scenario == "wrongSubject" {
+        match result {
+            Result.Err(error: _) => {}
+            Result.Ok(value: val state) => {
+                if scenario != "missingEquation" { panic("malformed associated evidence did not return an error") }
+                match state { StaticProofInstantiation.Ready(proof: _) => { panic("missing or foreign associated evidence was accepted") } _ => {} }
+            }
+        }
+    } else {
+        match result {
+            Result.Ok(value: val state) => {
+                match state {
+                    StaticProofInstantiation.Ready(proof: val actual) => { compiler.checkStaticProofEvidence(proof: actual, offset: 0U64).unwrap() }
+                    _ => { panic("valid associated row did not replay") }
+                }
+            }
+            Result.Err(error: val diagnostic) => { panic("associated reader: " + diagnostic.message) }
+        }
+    }
+    if compiler.activeConditionReplay.count() != 0U64 || compiler.activeConditionAdmission.count() != 0U64 || compiler.activeAssumptionAdmission.count() != 0U64 { panic("associated reader leaked active state") }
+    match compiler.instantiateConstraintProof(proof: abstract, receiverRef: item, environment: recoveryEnvironment, selfRef: boxed, itemRef: 0U64).unwrap() {
+        StaticProofInstantiation.Ready(proof: val actual) => {
+            compiler.checkStaticProofEvidence(proof: actual, offset: 0U64).unwrap()
+            val raw = compiler.groundTermInEnvironment(ref: row.bound.constraint.key.positionalArgs[0U64], params: environment.params, values: environment.args, selfRef: witness.selfRef)
+            val equations = compiler.instantiateProjectionNormalizations(normalizations: row.normalizations, environment: environment, selfRef: witness.selfRef, itemRef: 0U64).unwrap().unwrap()
+            val expected = compiler.replayProjectionNormalizations(ref: raw, normalizations: equations, offset: 0U64).unwrap()
+            if !compiler.typeRefEq(a: compiler.associatedOutputInProof(proof: actual, traitOwner: required.nameStart, assocId: compiler.internBytes(s: "Output").nameId).unwrap(), b: expected) { panic("associated reader lost its returned output context") }
+        }
+        _ => { panic("associated reader did not recover") }
+    }
+    if compiler.activeConditionReplay.count() != 0U64 || compiler.activeConditionAdmission.count() != 0U64 || compiler.activeAssumptionAdmission.count() != 0U64 { panic("associated recovery leaked active state") }
+    print("1")
+}

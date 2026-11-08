@@ -410,8 +410,7 @@ pub impl Comp {
         val receiver = self.typeTermProjectionReceiver(t: projection)
         // The lowerer already canonicalizes the trait span. Declaration
         // identity mirrors may not yet be published during declaration checks.
-        mut val owner = projection.assocTraitDeclOffset
-        if !projection.hasAssocTraitDecl { owner = self.canonicalTraitOwner(start: projection.assocTraitStart, len: projection.assocTraitLen) }
+        val owner = self.associatedProjectionTraitOwner(projection: projection)
         val declarationIndex = self.decls.traitIndexByOffset(offset: owner)
         if declarationIndex >= self.decls.traitCount() { return <Result.Ok value=<ConformanceProofResult.Missing /> /> }
         val declaration = self.decls.traitAt(index: declarationIndex)
@@ -494,6 +493,11 @@ pub impl Comp {
         val facts = try self.projectedTraitAssumptions(baseRef: baseRef, declaration: declaration, prerequisite: prerequisite, assumptions: assumptions)
         val ignored = try self.searchTraitPatternProofFromFacts(demand: <ConformanceProofDemand.Existence />, baseRef: baseRef, traitId: traitId, traitOwner: traitOwner, traitArgs: <PatternTypeInput.Values values=[] />, patternParams: <PatternBindInput.Values values=[] />, traitArgsOpen: true, assumptions: facts, includeConcrete: false, enumerateInstances: true, candidates: inout result)
         return <Result.Ok value=result />
+    }
+
+    inout fn associatedProjectionTraitOwner(projection: TypeRef) -> U64 {
+        if projection.hasAssocTraitDecl { return projection.assocTraitDeclOffset }
+        return self.canonicalTraitOwner(start: projection.assocTraitStart, len: projection.assocTraitLen)
     }
 
     // Derive the clause from its retained receiver proof. Selection and later

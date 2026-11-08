@@ -1,0 +1,26 @@
+use @Std/Io only { print }
+trait Marker {}
+trait Family { type Child: Marker }
+trait Select { type Value: Marker }
+struct Selection[T] {}
+impl[T] Selection[T] as Select where T: Family { type Value = T#Family.Child }
+struct Wrapper[T] {}
+impl[T] Wrapper[T] as Marker where Selection[T]: Select, Selection[T]#Select.Value: Marker {}
+trait Source {
+    type Item: Family
+    fn inspect() -> I64 where Wrapper[Item]: Marker
+}
+struct Element {}
+impl Element as Marker {}
+struct Parent {}
+impl Parent as Family { type Child = Element }
+struct Holder {}
+impl Holder as Source {
+    type Item = Parent
+    fn inspect() -> I64 { return 45I64 }
+}
+fn read[T](value: any Source[Item=T]) -> I64 { return value.inspect() }
+fn main() {
+    val erased: any Source[Item=Parent] = <Holder />
+    print(read(value: erased))
+}

@@ -1021,3 +1021,45 @@ concrete admission. Receiver and the other previously listed producer-to-final-
 consumer migrations, whole-task gates and performance remain open. No formal
 self-host result applies to this source; do not reuse ce5eb536's7.029968 seconds
 as its timing or infer repair difficulty from that earlier threshold crossing.
+
+### Associated Row Reader WIP and Task-Ownership Stop
+
+The static associated reader now consumes the exact selected impl-owned row,
+substitutes its full bound/equations once and uses the shared saved-only proof
+frontier. Original clause/member/trait-instance checks, table count/presence,
+translation-invariant row shape, complete child boundary and requested subject
+are validated. Caller-side bound re-grounding/query rescue is removed. Static
+and interface entries share projection-child replay; only an explicit Universal
+context permits symbolic terms. No runtime Universal path is claimed verified.
+
+[Current WIP evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/retained-associated-row-reader.json)
+retains the prior integration RED, build `20261108T180709-build-146ca9`, fresh18
+row controls, preserved57/17 controls and compiler source check. Malformed
+row/source controls require Err; missingEquation alone permits nonReady. Valid
+clone is an internal retained-reader setup control, not a new SourceAdmission
+success. The existing21 public controls have20 native successes and the same
+mixed-path failure owned by com-wfq2. Two added interface probes fail on both
+old and fresh candidates before this reader, at requirement/source admission;
+keep them as pending producer-to-consumer cases inside this issue, not as
+Universal execution coverage or successful regression tests. Full non-free/
+interface producer admission and whole-task gates remain required.
+
+**Stop condition: task-ownership inconsistency.** Earlier sections assign raw
+Arena/proof/table issuance sealing to com-oir7. That assignment is incorrect:
+com-oir7's actual finite scope is `checkTypeViewSources` API authority narrowing,
+as this issue itself correctly states above. com-pmiz owns selected associated
+query adapters, and com-j2i7 includes proof freeze/thaw adapter narrowing; neither
+establishes that the whole raw table issuer boundary has an accepted sealing
+owner. Do not treat the previous cross-reference as proof of an assigned task.
+The new reader trusts producer-admitted immutable rows; it does not reject every
+self-consistent forged raw row. That trust boundary must not silently become a
+claim that another task will seal it.
+
+No new task/dependency or mandatory scope expansion is adopted at this stop.
+First reconcile the actual design guarantee and existing task scopes: determine
+whether raw issuance is intentionally trusted internal construction, a required
+restricted publication boundary owned here, or separately necessary work. Then
+correct the erroneous references/acceptance claims and resume implementation.
+This stop is a planning-record issue, not a proven language defect or a claim
+that self-compilation performance is unrepairable. No fresh formal timing,
+main/seed promotion or whole-task completion is claimed.

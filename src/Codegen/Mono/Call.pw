@@ -3970,13 +3970,18 @@ pub impl Comp {
 
     inout fn instantiateAssociatedConstraint(index: U64, receiverRef: U64, environment: InstanceEnvironment, selfRef: U64, itemRef: U64, normalizations: Array[ProjectionNormalizationStep] = []) -> Result[StaticProofInstantiation, CompileDiagnostic] {
         val evidence = self.arena.associatedBoundEvidenceAt(index: index)
-        val projection = self.arena.typeAt(index: evidence.projection)
-        val rawRoot = self.groundTermInEnvironment(ref: self.typeTermProjectionReceiver(t: projection), params: environment.params, values: environment.args, selfRef: selfRef, itemRef: itemRef)
-        val root = try self.replayProjectionNormalizations(ref: rawRoot, normalizations: normalizations, offset: evidence.bound.offset)
+        val instanceProjection = self.groundTermInEnvironment(ref: evidence.projection, params: environment.params, values: environment.args, selfRef: selfRef, itemRef: itemRef)
+        val projection = self.arena.typeAt(index: instanceProjection)
+        val root = try self.replayProjectionNormalizations(ref: self.typeTermProjectionReceiver(t: projection), normalizations: normalizations, offset: evidence.bound.offset)
         val prerequisite = try self.instantiateConstraintProof(proof: evidence.prerequisite, receiverRef: root, environment: environment, selfRef: selfRef, itemRef: itemRef, normalizations: normalizations)
         match prerequisite {
             StaticProofInstantiation.Ready(proof: val selected) => {
-                return self.instantiateSelectedAssociatedConstraint(index: index, selected: selected, receiverRef: receiverRef, environment: environment, selfRef: selfRef, itemRef: itemRef)
+                match (try self.replaySelectedAssociatedConstraint(index: index, selected: selected, projectionRef: instanceProjection, receiverRef: receiverRef, context: <Optional.None />, inherited: normalizations)) {
+                    ConstraintProofReplay.Concrete(proof: val proof) => { return <Result.Ok value=<StaticProofInstantiation.Ready proof=proof /> /> }
+                    ConstraintProofReplay.Deferred => { return <Result.Ok value=<StaticProofInstantiation.Deferred /> /> }
+                    ConstraintProofReplay.Missing => { return <Result.Ok value=<StaticProofInstantiation.Missing /> /> }
+                    ConstraintProofReplay.Universal(proof: _) => { return <Result.Err error=self.diagnosticAt(offset: evidence.bound.offset, msg: "universal associated evidence cannot authorize a static callable") /> }
+                }
             }
             _ => { return <Result.Ok value=prerequisite /> }
         }
