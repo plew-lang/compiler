@@ -1,0 +1,100 @@
+// Occurrence roles preserve declaration/default/body demand boundaries.
+use ../../../src/Frontend only { Comp, analyzeFrontendForRequests, FrontendInput }
+use ../../../src/SourceAccess only { SourceAccess }
+use ../../../src/SourceTypeUses only { SourceTypeUses, SourceTypeScopeKind, SourceTypeUseRole }
+use @Plew/Syntax only { rangeEquals, parseItem, TopItemAst }
+use @Std/Io only { print }
+
+fn roleId(role~: SourceTypeUseRole) -> U64 {
+    match role {
+        SourceTypeUseRole.Unowned => { return 0U64 }
+        SourceTypeUseRole.Declaration => { return 1U64 }
+        SourceTypeUseRole.DefaultArgument => { return 2U64 }
+        SourceTypeUseRole.Body => { return 3U64 }
+    }
+}
+fn offset(compiler~: Comp, text~: String) -> U64 {
+    mut val index = 0U64
+    while index + text.bytes().count() <= compiler.arena.bytes.count() {
+        if rangeEquals(bytes: compiler.arena.bytes, start: index, len: text.bytes().count(), kw: text) { return index }
+        index += 1U64
+    }
+    panic("source marker absent")
+}
+fn expectAt(compiler~: Comp, site: U64, role: SourceTypeUseRole) {
+    mut val found = false
+    mut val index = 0U64
+    while index < compiler.sourceTypeUses.useCount() {
+        val receipt = compiler.sourceTypeUses.useAt(index: index).unwrap()
+        if receipt.site == site {
+            if receipt.scope == 0U64 || roleId(receipt.role) != roleId(role) { panic("wrong occurrence demand role") }
+            found = true
+        }
+        index += 1U64
+    }
+    if !found { panic("missing typed occurrence") }
+}
+fn expect(compiler~: Comp, marker~: String, delta: U64, role: SourceTypeUseRole) {
+    expectAt(compiler, site: offset(compiler, marker) + delta, role: role)
+}
+fn inspectMethod(compiler~: Comp, source~: String) {
+    expect(compiler, "methodArgument: I64", delta: 16U64, role: <SourceTypeUseRole.Declaration />)
+    expect(compiler, "methodDefault: I64", delta: 15U64, role: <SourceTypeUseRole.DefaultArgument />)
+    expect(compiler, "methodBody: I64", delta: 12U64, role: <SourceTypeUseRole.Body />)
+    val start = offset(compiler, source)
+    match parseItem(source: source, start: start, end: start + source.bytes().count()) {
+        TopItemAst.Impl(im: val implementation) => { expectAt(compiler, site: implementation.members[0U64].ret.span.start, role: <SourceTypeUseRole.Declaration />) }
+        _ => { panic("method role source did not parse") }
+    }
+}
+fn inspect(compiler~: Comp) {
+    expect(compiler, "argument: I64", delta: 10U64, role: <SourceTypeUseRole.Declaration />)
+    expect(compiler, "-> I64", delta: 3U64, role: <SourceTypeUseRole.Declaration />)
+    expect(compiler, "defaultLocal: I64", delta: 14U64, role: <SourceTypeUseRole.DefaultArgument />)
+    expect(compiler, "nestedDefault: I64", delta: 15U64, role: <SourceTypeUseRole.DefaultArgument />)
+    expect(compiler, "bodyLocal: I64", delta: 11U64, role: <SourceTypeUseRole.Body />)
+    expect(compiler, "nestedBody: I64", delta: 12U64, role: <SourceTypeUseRole.Body />)
+    expect(compiler, "T: Marker", delta: 0U64, role: <SourceTypeUseRole.Declaration />)
+}
+fn main() {
+    mut val store = <SourceTypeUses />
+    val parent = store.begin(kind: <SourceTypeScopeKind.FreeFunction />, anchor: 1U64)
+    if !store.setRole(token: parent, role: <SourceTypeUseRole.DefaultArgument />) { panic("parent role not set") }
+    val child = store.begin(kind: <SourceTypeScopeKind.Method />, anchor: 2U64)
+    if roleId(store.currentRole()) != 1U64 || store.setRole(token: parent, role: <SourceTypeUseRole.Body />) || store.setRole(token: child, role: <SourceTypeUseRole.Unowned />) { panic("role escaped active frame") }
+    store.record(term: 1U64, site: 10U64, parameters: [])
+    if !store.setRole(token: child, role: <SourceTypeUseRole.Body />) { panic("child role not set") }
+    store.record(term: 1U64, site: 11U64, parameters: [])
+    if !store.finish(token: child, succeeded: false) || roleId(store.currentRole()) != 2U64 { panic("failed child did not restore parent role") }
+    store.record(term: 1U64, site: 12U64, parameters: [])
+    if !store.setRole(token: parent, role: <SourceTypeUseRole.Declaration />) { panic("declaration role not restored") }
+    store.record(term: 1U64, site: 13U64, parameters: [])
+    if !store.finish(token: parent, succeeded: true) || store.setRole(token: parent, role: <SourceTypeUseRole.Body />) || roleId(store.currentRole()) != 0U64 { panic("finished role remained active") }
+    store.record(term: 1U64, site: 14U64, parameters: [])
+    if roleId(store.useAt(index: 0U64).unwrap().role) != 1U64 || roleId(store.useAt(index: 1U64).unwrap().role) != 3U64 || roleId(store.useAt(index: 2U64).unwrap().role) != 2U64 || roleId(store.useAt(index: 3U64).unwrap().role) != 1U64 || roleId(store.useAt(index: 4U64).unwrap().role) != 0U64 { panic("occurrence role snapshot changed") }
+
+    val function = "fn source[T](argument: I64 = {{ val defaultLocal: I64 = {{ val nestedDefault: I64 = 1I64 give nestedDefault }} give defaultLocal }}, item: T) -> I64 where T: Marker {{ val bodyLocal: I64 = {{ val nestedBody: I64 = argument give nestedBody }} return bodyLocal }}"
+    val implementation = "impl[T] Box[T] {{ fn method(methodArgument: I64 = {{ val methodDefault: I64 = 2I64 give methodDefault }}) -> I64 {{ val methodBody: I64 = methodArgument return methodBody }} }}"
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text text="trait Marker {{}} struct Box[T] {{}}\n" + function + "\n" + implementation + "\nfn main() {{}}\n" path="SyntaxRoles.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
+    inspect(compiler)
+    inspectMethod(compiler, implementation)
+    if roleId(compiler.sourceTypeUses.currentRole()) != 0U64 { panic("syntax role leaked") }
+
+    mut val valueCompiler = <Comp />
+    analyzeFrontendForRequests(c: inout valueCompiler, input: <FrontendInput.Text text="trait Marker {{}} struct Box[T] {{}}\n// " + function + "\n// " + implementation + "\nfn main() {{}}\n" path="ValueRoles.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
+    val start = offset(valueCompiler, function)
+    match parseItem(source: function, start: start, end: start + function.bytes().count()) {
+        TopItemAst.Decl(d: val declaration) => { valueCompiler.lowerFuncDecl(d: declaration).unwrap() }
+        _ => { panic("value role source did not parse") }
+    }
+    val implStart = offset(valueCompiler, implementation)
+    match parseItem(source: implementation, start: implStart, end: implStart + implementation.bytes().count()) {
+        TopItemAst.Impl(im: val declaration) => { valueCompiler.lowerImpl(im: declaration).unwrap() }
+        _ => { panic("value method role source did not parse") }
+    }
+    inspect(valueCompiler)
+    inspectMethod(valueCompiler, implementation)
+    if roleId(valueCompiler.sourceTypeUses.currentRole()) != 0U64 { panic("value role leaked") }
+    print("1")
+}

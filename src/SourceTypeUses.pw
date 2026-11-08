@@ -4,6 +4,7 @@ use ./Ir only { Bind, Func }
 
 pub enum SourceTypeScopeKind { FreeFunction Method Implementation RequirementSignature ExternSignature }
 pub enum SourceTypeScopeState { Lowering Lowered Failed }
+pub enum SourceTypeUseRole { Unowned Declaration DefaultArgument Body }
 
 pub struct SourceRequirementOwner {
     pub val traitIndex: U64
@@ -31,6 +32,7 @@ pub struct AuthoredTypeUse {
     // premise or permission to recover authority from the ambient cursor.
     pub val scope: U64
     pub val parameters: Array[Bind]
+    pub val role: SourceTypeUseRole
 }
 pub impl AuthoredTypeUse { factory }
 
@@ -45,11 +47,26 @@ pub impl LoweredSourceSignature { factory }
 pub struct SourceTypeUses {
     mut val scopes: Array[SourceTypeScope] = []
     mut val uses: Array[AuthoredTypeUse] = []
+    // Lowering context only; immutable receipts retain the role at creation.
+    // One row per scope, appended by begin together with that scope.
+    mut val roles: Array[SourceTypeUseRole] = []
     mut val active: U64 = 0U64
 }
 pub impl SourceTypeUses {
     factory
     fn currentScope() -> U64 { return self.active }
+    fn currentRole() -> SourceTypeUseRole {
+        if self.active == 0U64 { return <SourceTypeUseRole.Unowned /> }
+        return self.roles[self.active - 1U64]
+    }
+    inout fn setRole(token: U64, role: SourceTypeUseRole) -> Bool {
+        if token == 0U64 || token != self.active || token > self.scopes.count() { return false }
+        match self.scopes[token - 1U64].state { SourceTypeScopeState.Lowering => {} _ => { return false } }
+        match role { SourceTypeUseRole.Unowned => { return false } _ => {} }
+        self.roles[token - 1U64] = role
+        return true
+    }
+
     fn scopeCount() -> U64 { return self.scopes.count() }
     fn useCount() -> U64 { return self.uses.count() }
     fn scopeAt(token: U64) -> Optional[SourceTypeScope] {
@@ -62,6 +79,7 @@ pub impl SourceTypeUses {
     }
     inout fn begin(kind: SourceTypeScopeKind, anchor: U64, traitOwner: U64 = 0U64) -> U64 {
         self.scopes.append(<SourceTypeScope kind=kind anchor=anchor traitOwner=traitOwner parent=self.active state=<SourceTypeScopeState.Lowering /> />)
+        self.roles.append(<SourceTypeUseRole.Declaration />)
         self.active = self.scopes.count()
         return self.active
     }
@@ -107,6 +125,6 @@ pub impl SourceTypeUses {
     inout fn record(term: U64, site: U64, parameters: Array[Bind]) {
         // Every occurrence is distinct, even when term interning returns an
         // existing ID or two scopes use the same printed parameter names.
-        self.uses.append(<AuthoredTypeUse term=term site=site scope=self.active parameters=parameters />)
+        self.uses.append(<AuthoredTypeUse term=term site=site scope=self.active parameters=parameters role=self.currentRole() />)
     }
 }

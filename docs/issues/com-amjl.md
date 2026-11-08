@@ -451,3 +451,24 @@ Nominal/TraitSubject receiver, actual conformance index only where registered,
 full span/module, binders, clauses and extension identity. Inherent impls must
 not acquire fake Func/Conform identities. Clause-pool sharing does not confer
 Conformance authority; repeated AST lowering is still to be removed.
+
+### Occurrence Demand Role Prefix (WIP)
+
+Authored occurrences now retain Declaration, DefaultArgument, Body or Unowned.
+The active role is scope-local lowering scratch; each immutable receipt snapshots
+its role. Child scopes start as declarations and finishing either exit restores
+the parent's frame. Shared value/syntax default lowering restores the caller role
+on both Results. Actual free/method body entries set Body, then restore Declaration
+for subsequent bounds. Unowned origins remain Unowned. This adds no source proof
+or implicit permission to inspect a body.
+
+AuthoredTypeUseRoles covers nested/Failed frame restoration, immutable snapshots,
+invalid role changes and exact source sites for both adapters' free/method
+parameter/result/default/body boundaries plus declaration where clauses. Together
+with provenance, check/compile/link/native2 pass with 204 inputs unchanged.
+Independent review reconciled hashes/results and replayed both natives. See the
+same prefix evidence. Fresh candidate gates for this newer source remain pending.
+Deinit/closure/field default and individual deferred generator/body identities
+remain outside this finite producer acceptance; roles alone are not request-owner
+identity. Next, use Declaration receipts for unused free signatures only, under
+the reviewed explicit-normalization query contract.

@@ -286,3 +286,9 @@ lower entry wrappers across both adapters, nested/error scope restoration and
 raw interning. It is not automatically discovered by the normal fixture suite.
 `Lowered` is a provenance-store state, not successful source/proof admission;
 common source-admission REDs and final-consumer tests remain required by com-amjl.
+
+`AuthoredTypeUseRoles.pw` is a manual native assertion companion to provenance.
+It verifies occurrence demand categories and nested/failure restoration, with
+exact signature/default/body sites for free functions and methods in both AST
+adapters. Its golden is `1\n`. It is not automatically discovered by the normal
+fixture runner and does not certify admission, all delayed owners or consumers.

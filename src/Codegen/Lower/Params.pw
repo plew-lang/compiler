@@ -1,6 +1,38 @@
 // Part of the lowering pass (root: _.pw): parameter and pattern-binding
 // lowering.
 
+impl Comp {
+    inout fn setAuthoredTypeUseRole(role: SourceTypeUseRole, site: U64) -> Result[(), CompileDiagnostic] {
+        val scope = self.sourceTypeUses.currentScope()
+        if scope != 0U64 && !self.sourceTypeUses.setRole(token: scope, role: role) {
+            return <Result.Err error=self.diagnosticAt(offset: site, msg: "invalid authored type use role", failureDomain: <FailureDomain.Internal />) />
+        }
+        return <Result.Ok value=() />
+    }
+    inout fn lowerDefaultExpr(e: ExprAst) -> Result[U64, CompileDiagnostic] {
+        val scope = self.sourceTypeUses.currentScope()
+        val role = self.sourceTypeUses.currentRole()
+        val site = exprAstSpan(e: e).start
+        try self.setAuthoredTypeUseRole(role: <SourceTypeUseRole.DefaultArgument />, site: site)
+        val result = self.lowerExpr(e: e)
+        if scope != 0U64 && !self.sourceTypeUses.setRole(token: scope, role: role) {
+            return <Result.Err error=self.diagnosticAt(offset: site, msg: "invalid default type use role restoration", failureDomain: <FailureDomain.Internal />) />
+        }
+        return result
+    }
+    inout fn lowerSyntaxDefaultExpr(id: ExprId) -> Result[U64, CompileDiagnostic] {
+        val scope = self.sourceTypeUses.currentScope()
+        val role = self.sourceTypeUses.currentRole()
+        val site = syntaxExpr(file: self.syntax, id: id).span.start
+        try self.setAuthoredTypeUseRole(role: <SourceTypeUseRole.DefaultArgument />, site: site)
+        val result = self.lowerSyntaxExpr(id: id)
+        if scope != 0U64 && !self.sourceTypeUses.setRole(token: scope, role: role) {
+            return <Result.Err error=self.diagnosticAt(offset: site, msg: "invalid default type use role restoration", failureDomain: <FailureDomain.Internal />) />
+        }
+        return result
+    }
+}
+
 pub impl Comp {
     inout fn lowerParams(params: Array[ParamAst]) -> Result[Array[Param], CompileDiagnostic] {
         mut val out: Array[Param] = []
@@ -21,7 +53,7 @@ pub impl Comp {
             mut val hasDefault: Bool = false
             mut val defaultExpr: U64 = 0
             if p.hasDefault {
-                defaultExpr = (try self.lowerExpr(e: p.defaultVal))
+                defaultExpr = (try self.lowerDefaultExpr(e: p.defaultVal))
                 hasDefault = true
             }
             out.append(self.appendLoweredParam(name: nm, hasType: hasType, ty: ty, isInout: p.isInout, isMove: p.isMove, isBorrow: p.isBorrow, noLabel: p.noLabel, hasDefault: hasDefault, defaultExpr: defaultExpr))
@@ -48,7 +80,7 @@ pub impl Comp {
             mut val hasDefault: Bool = false
             mut val defaultExpr: U64 = 0U64
             if p.hasDefault {
-                defaultExpr = (try self.lowerSyntaxExpr(id: p.defaultVal))
+                defaultExpr = (try self.lowerSyntaxDefaultExpr(id: p.defaultVal))
                 hasDefault = true
             }
             val name: Bind = <Bind nameStart=p.name.start nameLen=p.name.end - p.name.start fieldStart=p.name.start fieldLen=p.name.end - p.name.start />
