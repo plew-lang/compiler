@@ -568,11 +568,51 @@ confirms the distinction. The source repair counts only receiver selectors for
 the view normal form, preserves `S#Q` in P's query, and makes the root reader
 interpret receiver-view proofs before projection output. A new generic
 `receiverTrait` control plus the old failing case and previous19 controls pass
-locally (21 total). Build `20261108T023302-build-bd9d20` is in progress;
-latest fresh reconciliation and formal performance remain pending.
+locally (21 total). Build `20261108T023302-build-bd9d20` passed with
+invariant inputs. Its fresh candidate passes the strengthened21 controls,
+all39 preservation cases and all public companion modes/dispatchers. The
+Q-only missing/P-retained control fails the isolated reader-loop-omission
+mutation and succeeds unchanged with the repaired reader; independent review
+reconciles both, without calling the mutation an old-product RED.
+
+Formal run `20261108T024119-self-host-85aa7a` passes with gen2==gen3
+LLVM/runtime. Samples7.306906/6.881155/6.834871 give median6.881155 seconds.
+Saved candidate `plewc-authored-signature-fixed-point` SHA
+`3b07b06b908b5fc06a96842c6568e5c6ab62f402b3f44bf17bf09f3733374c44`
+is a WIP checkpoint, not the adopted carrier. The fixed-point candidate passes
+21 internal controls and all public companion modes/dispatchers with invariant
+inputs. Independent formal reconciliation verifies all6400 inputs, source
+revision, actual gen2/gen3 output hashes, saved candidate and formal median.
 
 Nested child-to-occurrence paths, production call/body consumer migration,
 non-free owners, and saved-only interpretation of all frozen associated predicates
 remain required. Known Unit versus missing output remains com-nei5; the root
 reader is not certified for that boundary. No task closure, seed/carrier
 promotion or main integration is claimed.
+
+### Next: Explicit Nested Type Recipes
+
+Independent implementation-design review derives the next handoff from existing
+contracts: each authored root retains canonical semantic-child edges selected
+while lowering both adapters. Authored nodes carry occurrence receipts; derived
+structural nodes carry term, children and origin, without invented source
+admission authority. Never reverse-search a receipt by term, spelling or site.
+
+Projection children are receiver first and complete trait arguments thereafter.
+Preserve source argument edges inside synthesized receivers; shorthand arguments
+retain selected-bound origin. Carry recipe edges through selector normalization
+and retain all original Declaration occurrences despite deduplication. Validate
+edge count, target term and labels against the common semantic visitor before
+publication; equality validates an already-selected edge, never chooses one.
+
+First save/replay recipes for nominal, record, function, view and projection
+children in both adapters. Then replace the root-only proof reader recursively
+and migrate selected free-call parameter/result plus body-signature consumers;
+remove their term-only query fallback. Caller replacements and proof-produced
+outputs are derived results, not callee recipe children to substitute again.
+
+Controls: nested siblings, repeated same-term occurrences, record order,
+function parameter/result, projection receiver arguments, nested selector
+arguments and shorthand bound-derived arguments; reject missing/foreign/swapped
+edges and absent proofs without downstream source rediscovery. This is within
+the existing task; no new spec rule or task decomposition is adopted.
