@@ -1512,11 +1512,13 @@ pub impl Comp {
         val savedAssociatedArgs = self.lowerAssociatedArgs
         self.setLowerAssociatedTrait(owner: nameStart, parameters: typeParams)
         mut val reqs: Array[Func] = []
+        mut val requirementScopes: Array[U64] = []
         mut val ri: U64 = 0
         while ri < t.reqs.count() {
             val requirement = try self.lowerSigToFunc(sig: t.reqs[ri], isExtern: false, isCExtern: false)
             try self.validateTraitRequirement(requirement: requirement.function)
             reqs.append(requirement.function)
+            requirementScopes.append(requirement.scope)
             ri += 1
         }
         mut val associatedBounds: Array[TraitAssociatedBound] = []
@@ -1535,7 +1537,12 @@ pub impl Comp {
         self.lowerAssociatedOwner = savedAssociatedOwner
         self.lowerAssociatedArgs = savedAssociatedArgs
         self.cur.typeParams = savedTP
-        self.decls.registerTrait(<TraitDef nameStart=nameStart nameLen=nameLen nameId=intern(c: inout self, start: nameStart, len: nameLen) selfParamId=selfParamId typeParams=self.pushTraitBinds(binds: typeParams) supertraits=self.pushTraitConstraints(constraints: supertraits) reqs=self.pushTraitReqs(reqs: reqs) assocTypes=self.pushTraitBinds(binds: assocTypes) assocBounds=self.pushTraitAssociatedBounds(bounds: associatedBounds) />)
+        val traitIndex = self.decls.registerTrait(<TraitDef nameStart=nameStart nameLen=nameLen nameId=intern(c: inout self, start: nameStart, len: nameLen) selfParamId=selfParamId typeParams=self.pushTraitBinds(binds: typeParams) supertraits=self.pushTraitConstraints(constraints: supertraits) reqs=self.pushTraitReqs(reqs: reqs) assocTypes=self.pushTraitBinds(binds: assocTypes) assocBounds=self.pushTraitAssociatedBounds(bounds: associatedBounds) />)
+        mut val requirementSlot = 0U64
+        while requirementSlot < requirementScopes.count() {
+            try self.bindAuthoredRequirementScope(scope: requirementScopes[requirementSlot], traitIndex: traitIndex, slot: requirementSlot, site: nameStart)
+            requirementSlot += 1U64
+        }
         // attach pending `@[...]` directives to this trait (a macro on a trait);
         // declStart/declEnd = the trait's source span for the gen harness slice.
         self.drainDerives(typeStart: nameStart, typeLen: nameLen, isEnum: false, declStart: t.span.start, declEnd: t.span.end)
@@ -1581,12 +1588,14 @@ pub impl Comp {
         val savedAssociatedArgs = self.lowerAssociatedArgs
         self.setLowerAssociatedTrait(owner: t.name.start, parameters: typeParams)
         mut val reqs: Array[Func] = []
+        mut val requirementScopes: Array[U64] = []
         i = 0U64
         while i < syntaxTraitReqCount(file: self.syntax, trait: t) {
             val requirement = syntaxSig(file: self.syntax, id: syntaxTraitReq(file: self.syntax, trait: t, index: i))
             val lowered = try self.lowerSyntaxSigToFunc(sig: requirement, isExtern: false, isCExtern: false)
             try self.validateTraitRequirement(requirement: lowered.function)
             reqs.append(lowered.function)
+            requirementScopes.append(lowered.scope)
             i += 1U64
         }
         mut val associatedBounds: Array[TraitAssociatedBound] = []
@@ -1614,7 +1623,12 @@ pub impl Comp {
         self.lowerAssociatedOwner = savedAssociatedOwner
         self.lowerAssociatedArgs = savedAssociatedArgs
         self.cur.typeParams = savedTP
-        self.decls.registerTrait(<TraitDef nameStart=t.name.start nameLen=t.name.end - t.name.start nameId=intern(c: inout self, start: t.name.start, len: t.name.end - t.name.start) selfParamId=selfParamId typeParams=self.pushTraitBinds(binds: typeParams) supertraits=self.pushTraitConstraints(constraints: supertraits) reqs=self.pushTraitReqs(reqs: reqs) assocTypes=self.pushTraitBinds(binds: assocTypes) assocBounds=self.pushTraitAssociatedBounds(bounds: associatedBounds) />)
+        val traitIndex = self.decls.registerTrait(<TraitDef nameStart=t.name.start nameLen=t.name.end - t.name.start nameId=intern(c: inout self, start: t.name.start, len: t.name.end - t.name.start) selfParamId=selfParamId typeParams=self.pushTraitBinds(binds: typeParams) supertraits=self.pushTraitConstraints(constraints: supertraits) reqs=self.pushTraitReqs(reqs: reqs) assocTypes=self.pushTraitBinds(binds: assocTypes) assocBounds=self.pushTraitAssociatedBounds(bounds: associatedBounds) />)
+        mut val requirementSlot = 0U64
+        while requirementSlot < requirementScopes.count() {
+            try self.bindAuthoredRequirementScope(scope: requirementScopes[requirementSlot], traitIndex: traitIndex, slot: requirementSlot, site: t.name.start)
+            requirementSlot += 1U64
+        }
         self.drainDerives(typeStart: t.name.start, typeLen: t.name.end - t.name.start, isEnum: false, declStart: t.span.start, declEnd: t.span.end)
         return <Result.Ok value=() />
     }

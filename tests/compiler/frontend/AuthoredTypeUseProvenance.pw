@@ -2,7 +2,7 @@
 // not replace the com-amjl source-admission REDs or certify retained proofs.
 use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
 use ../../../src/SourceAccess only { SourceAccess }
-use ../../../src/SourceTypeUses only { SourceTypeUses, SourceTypeScopeKind, SourceTypeScopeState }
+use ../../../src/SourceTypeUses only { SourceTypeUses, SourceTypeScopeKind, SourceTypeScopeState, SourceRequirementOwner }
 use ../../../src/Ir only { TypeRef, Bind }
 use @Plew/Syntax only { parseItem, TopItemAst, SigAst, rangeEquals }
 use @Std/Io only { print }
@@ -106,7 +106,14 @@ fn main() {
     if store.scopeAt(token: inner).unwrap().function.unwrap() != 0U64 { panic("scope finish lost registered identity") }
     val requirementScope = store.begin(kind: <SourceTypeScopeKind.RequirementSignature />, anchor: 50U64, traitOwner: 60U64)
     if store.bindFunction(token: requirementScope, function: 0U64) { panic("raw requirement laundered as function") }
+    if store.bindRequirement(token: requirementScope, traitOwner: 60U64, requirement: <SourceRequirementOwner traitIndex=0U64 slot=0U64 />) { panic("unfinished requirement bound") }
     if !store.finish(token: requirementScope, succeeded: true) { panic("requirement source scope leaked") }
+    if store.bindRequirement(token: requirementScope, traitOwner: 61U64, requirement: <SourceRequirementOwner traitIndex=0U64 slot=0U64 />) { panic("foreign trait owned requirement") }
+    if !store.bindRequirement(token: requirementScope, traitOwner: 60U64, requirement: <SourceRequirementOwner traitIndex=0U64 slot=0U64 />) || store.bindRequirement(token: requirementScope, traitOwner: 60U64, requirement: <SourceRequirementOwner traitIndex=1U64 slot=1U64 />) { panic("requirement binding not single-use") }
+    if store.scopeAt(token: requirementScope).unwrap().requirement.unwrap().traitIndex != 0U64 { panic("zero trait identity lost") }
+    val failedRequirement = store.begin(kind: <SourceTypeScopeKind.RequirementSignature />, anchor: 65U64, traitOwner: 60U64)
+    if !store.finish(token: failedRequirement, succeeded: false) || store.bindRequirement(token: failedRequirement, traitOwner: 60U64, requirement: <SourceRequirementOwner traitIndex=0U64 slot=0U64 />) { panic("failed requirement bound") }
+
     val externScope = store.begin(kind: <SourceTypeScopeKind.ExternSignature />, anchor: 70U64)
     if store.bindFunction(token: externScope, function: 3U64) { panic("unfinished extern bound") }
     if !store.finish(token: externScope, succeeded: true) || !store.bindFunction(token: externScope, function: 3U64) || store.bindFunction(token: externScope, function: 4U64) { panic("extern handoff not single-use") }
@@ -134,6 +141,9 @@ fn main() {
         match scope.kind {
             SourceTypeScopeKind.RequirementSignature => {
                 if scope.traitOwner != query.nameStart { panic("requirement lost trait origin") }
+                val owner = scope.requirement.unwrap()
+                if scope.function.isSome() || owner.traitIndex != compiler.decls.firstTraitNamed(nameId: query.nameId) || owner.slot != requirementScopes { panic("requirement owner or sibling slot conflated") }
+
                 mut val found = false
                 mut val useIndex = 0U64
                 while useIndex < compiler.sourceTypeUses.useCount() {
@@ -168,11 +178,33 @@ fn main() {
     val valueSignature = "fn valueFirst[T](left: T, right: T) -> T where T: Marker {{ return left }}"
     val valueImpl = "impl[T] Box[T] {{ fn valueMethod[U](left: T, right: T, item: U) -> T {{ return left }} }}"
     val valueExtern = "extern(c) {{ fn valueExternal(n~: I64) -> I64 }}"
+    val valueTrait = "trait ValueProtocol[T] {{ fn one[U](value: T, other: U) -> T fn two[U](value: T, other: U) -> T }}"
     val valueRequirement = "fn valueAsk[U](value: T, other: U) -> T {{}}"
     mut val valueCompiler = <Comp />
     // Generated value ASTs retain real coordinates in the loaded source file.
     // Commented fragments avoid registering a competing syntax declaration.
-    analyzeFrontendForRequests(c: inout valueCompiler, input: <FrontendInput.Text text="trait Marker {{}} struct Box[T] {{}} trait Query[T] {{}}\n// " + valueSignature + "\n// " + valueImpl + "\n// " + valueRequirement + "\n// " + valueExtern + "\nfn main() {{}}\n" path="ValueProvenance.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
+    analyzeFrontendForRequests(c: inout valueCompiler, input: <FrontendInput.Text text="trait Marker {{}} struct Box[T] {{}} trait Query[T] {{}}\n// " + valueSignature + "\n// " + valueImpl + "\n// " + valueRequirement + "\n// " + valueExtern + "\n// " + valueTrait + "\nfn main() {{}}\n" path="ValueProvenance.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
+    val traitStart = sourceOffset(inout valueCompiler, valueTrait)
+    match parseItem(source: valueTrait, start: traitStart, end: traitStart + valueTrait.bytes().count()) {
+        TopItemAst.Trait(t: val declaration) => {
+            valueCompiler.predeclareTrait(t: declaration)
+            valueCompiler.lowerTrait(t: declaration).unwrap()
+        }
+        _ => { panic("value trait did not parse") }
+    }
+    val valueTraitIndex = valueCompiler.decls.firstTraitNamed(nameId: valueCompiler.internBytes(s: "ValueProtocol").nameId)
+    mut val valueRequirementCount = 0U64
+    mut val valueScopeToken = 1U64
+    while valueScopeToken <= valueCompiler.sourceTypeUses.scopeCount() {
+        val origin = valueCompiler.sourceTypeUses.scopeAt(token: valueScopeToken).unwrap()
+        if origin.traitOwner == valueCompiler.decls.traitAt(index: valueTraitIndex).nameStart {
+            val owner = origin.requirement.unwrap()
+            if origin.function.isSome() || owner.traitIndex != valueTraitIndex || owner.slot != valueRequirementCount || origin.anchor != valueCompiler.traitReqAt(reqs: valueCompiler.decls.traitAt(index: valueTraitIndex).reqs, index: owner.slot).defOffset { panic("value requirement lost actual owner or slot") }
+            valueRequirementCount += 1U64
+        }
+        valueScopeToken += 1U64
+    }
+    if valueRequirementCount != 2U64 { panic("value requirement scopes missing") }
     val externStart = sourceOffset(inout valueCompiler, valueExtern)
     match parseItem(source: valueExtern, start: externStart, end: externStart + valueExtern.bytes().count()) {
         TopItemAst.Extern(e: val declaration) => { valueCompiler.lowerExtern(e: declaration).unwrap() }
@@ -217,6 +249,8 @@ fn main() {
             val loweredRequirement = valueCompiler.lowerSigToFunc(sig: rawSignature, isExtern: false, isCExtern: false).unwrap()
             val scope = valueCompiler.sourceTypeUses.scopeAt(token: loweredRequirement.scope).unwrap()
             if scope.traitOwner != valueQuery.nameStart { panic("value requirement lost trait origin") }
+            if scope.requirement.isSome() || scope.function.isSome() { panic("unregistered requirement acquired source owner") }
+
             match scope.kind { SourceTypeScopeKind.RequirementSignature => {} _ => { panic("value requirement origin lost") } }
             expectSite(inout valueCompiler, anchor: declaration.nameSpan.start, site: declaration.params[0U64].ty.span.start)
             val receipt = valueCompiler.sourceTypeUses.useAt(index: valueCompiler.sourceTypeUses.useCount() - 1U64).unwrap()

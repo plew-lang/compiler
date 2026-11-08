@@ -292,7 +292,8 @@ pub impl Decls {
         if entry != 0U64 { return entry - 1U64 }
         return self.traits.count()
     }
-    inout fn registerTrait(declaration~: TraitDef) {
+    inout fn registerTrait(declaration~: TraitDef) -> U64 {
+        val index = self.traits.count()
         val nameEntry = self.traits.count() + 1U64
         val nameTail = self.traitNameTails.getOr(key: declaration.nameId, fallback: 0U64)
         self.traitNameNext.append(0U64)
@@ -303,6 +304,7 @@ pub impl Decls {
             self.traitsByOffset[declaration.nameStart] = self.traits.count() + 1U64
         }
         self.traits.append(declaration)
+        return index
     }
     fn traitNameByOffset(offset: U64) -> Optional[DeclarationName] {
         val entry = self.traitsByOffset.getOr(key: offset, fallback: 0U64)

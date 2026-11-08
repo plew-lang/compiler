@@ -406,3 +406,20 @@ with exact spans and real extern identities in both adapters. Short17 controls
 also pass after mechanical signature-return API migration, with expectations
 unchanged. The same evidence holds input deltas and the finite setup correction.
 No fresh compiler/formal gate for this newer source is claimed.
+
+### Raw Requirement Identity Prefix (WIP)
+
+registerTrait returns its actual appended index. Both trait adapters retain each
+signature scope token and, after registration, bind it to that trait index and
+requirement slot. The private handoff validates trait/slot range and the actual
+requirement span; the store validates origin, completed lowering, canonical
+trait owner and single assignment. It does not manufacture a Function owner or
+reuse translated Requirement evidence for raw source authority.
+
+Current-source check/compile/link/native passes with 202 inputs unchanged. Both
+adapters verify exact sibling slots/owners/spans and absent function identity;
+store tests cover unfinished, Failed, foreign owner and duplicate binding, and
+unregistered raw signatures remain unbound. Independent static review accepted
+this finite identity increment. Premise authority, trait Self, failed ancestors,
+impl origins, common admission/proofs/consumers and fresh candidate gates remain
+uncompleted. See the same prefix evidence; formal6.703740 is earlier c7012d7f.

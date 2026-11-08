@@ -1,4 +1,4 @@
-use ./SourceTypeUses only { SourceTypeUses, SourceTypeScopeKind, LoweredSourceSignature }
+use ./SourceTypeUses only { SourceTypeUses, SourceTypeScopeKind, LoweredSourceSignature, SourceRequirementOwner }
 use ./ModuleScopeBindings only { ModuleScopeBindings, AdmittedModuleScopeBindings, ScopeBindingKind, ScopeBindingFailure, ScopeBinding }
 use @Plew/Syntax only { ExtensionId, syntaxExtension, NameSegmentAst, SyntaxSourceTypes, SyntaxSourceIndex, syntaxSourceApplication, syntaxSourceApplicationTypeArg, syntaxSourceApplicationTypeLabel, SourceApplicationAst, SourceTypesAst, SourceIndexAst }
 use ./Ir only { StructuralOverlap, StructuralOccurrence, StructuralBinding }
