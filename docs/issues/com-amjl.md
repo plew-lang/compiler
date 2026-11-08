@@ -527,3 +527,14 @@ premise scope. Owner/proof dependency admission is unchanged. Local ten native
 cases pass, with invariant inputs and independent static review; these do not
 replace final fresh gates. Re-run `20261108T012910-self-host-f609cd` is pending.
 The earlier 17-case fresh result predates this global-scope repair.
+
+Final finite gate: `20261108T012910-self-host-f609cd` passes with gen2==gen3
+LLVM/runtime; samples7.301216/6.912851/6.839355, median6.912851 seconds.
+Candidate `plewc-authored-rigid-query-fixed-point` SHA
+`994a1ef814bbb0b805ad67f74194a79f2d28f67f40a89a5bb13cd4b3eca217da`
+passes final ten query/boundary controls plus eight existing fixtures; inputs
+are invariant. Independent review reconciles all hashes/goldens, 175 source
+files at048188e1, and the formal median. No main/carrier/seed promotion.
+Original15 source cases on this candidate still show eight invalid acceptances,
+four valid accepts and three valid rejections. This retained RED is the next
+signature-admission implementation baseline, not a completed task.
