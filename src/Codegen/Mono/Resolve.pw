@@ -311,12 +311,23 @@ pub impl Comp {
     // Associated bindings constrain the selected proof's outputs, not which
     // conformance is selected. Selection and frozen evidence admission share
     // this reader so they cannot silently enforce different constraints.
-    inout fn selectedProofAssociatedTypesMatch(proof: StaticConformanceProof, traitOwner: U64, names: Array[U64], values: Array[U64]) -> Result[Bool, CompileDiagnostic] {
+    inout fn selectedProofAssociatedTypesMatch(proof: StaticConformanceProof, traitOwner: U64, names: Array[U64], values: Array[U64], assumptions: Array[DeclarationBoundRef], normalizations: Array[ProjectionNormalizationStep] = [], offset: U64 = 0U64) -> Result[Bool, CompileDiagnostic] {
         if names.count() != values.count() { return <Result.Ok value=false /> }
         mut val index = 0U64
         while index < names.count() {
             val output = try self.associatedOutputInProof(proof: proof, traitOwner: traitOwner, assocId: names[index])
-            if output == 0U64 || !(try self.typesCompatible(expected: values[index], inferred: output)) { return <Result.Ok value=false /> }
+            if output == 0U64 { return <Result.Ok value=false /> }
+            // Associated predicates are type equalities, not value conversions.
+            // Their terms belong to the supplied proof/request environment;
+            // body Self, current substitutions and implicit caller bounds must
+            // never be consulted to make an unrelated query applicable.
+            val expected = try self.replayProjectionNormalizations(ref: values[index], normalizations: normalizations, offset: offset)
+            val actual = try self.replayProjectionNormalizations(ref: output, normalizations: normalizations, offset: offset)
+            if !self.typeRefEq(a: expected, b: actual) {
+                val closedExpected = try self.closeBodyProjectionTerms(ref: expected, environment: <InstanceEnvironment />, selfRef: 0U64, itemRef: 0U64, assumptions: assumptions)
+                val closedActual = try self.closeBodyProjectionTerms(ref: actual, environment: <InstanceEnvironment />, selfRef: 0U64, itemRef: 0U64, assumptions: assumptions)
+                if !self.typeRefEq(a: closedExpected, b: closedActual) { return <Result.Ok value=false /> }
+            }
             index += 1U64
         }
         return <Result.Ok value=true />
@@ -552,10 +563,10 @@ pub impl Comp {
                             if !self.proofIsMissing(proof: completed) {
                                 if enumerateInstances { candidates.append(completed) }
                                 if !enumerateInstances && !demand.isExistence() && !traitArgsOpen && self.typeRefEq(a: bound.subject, b: baseRef) {
-                                    try self.collectTraitProof(selection: inout direct, candidate: completed, traitOwner: traitOwner, preferred: false, demand: demand, assocNames: assocNames, assocValues: assocValues)
+                                    try self.collectTraitProof(selection: inout direct, candidate: completed, traitOwner: traitOwner, preferred: false, demand: demand, assocNames: assocNames, assocValues: assocValues, assumptions: assumptions)
                                 }
-                                if !enumerateInstances && demand.isExistence() && (try self.selectedProofAssociatedTypesMatch(proof: completed, traitOwner: traitOwner, names: assocNames, values: assocValues)) { return <Result.Ok value=<ConformanceProofResult.Found proof=completed /> /> }
-                                if !enumerateInstances && !demand.isExistence() { try self.collectTraitProof(selection: inout selection, candidate: completed, traitOwner: traitOwner, preferred: preferredOwners.count() != 0U64 && self.traitProofStateMatchesSources(state: start, sourceOwners: preferredOwners), demand: demand, assocNames: assocNames, assocValues: assocValues) }
+                                if !enumerateInstances && demand.isExistence() && (try self.selectedProofAssociatedTypesMatch(proof: completed, traitOwner: traitOwner, names: assocNames, values: assocValues, assumptions: assumptions)) { return <Result.Ok value=<ConformanceProofResult.Found proof=completed /> /> }
+                                if !enumerateInstances && !demand.isExistence() { try self.collectTraitProof(selection: inout selection, candidate: completed, traitOwner: traitOwner, preferred: preferredOwners.count() != 0U64 && self.traitProofStateMatchesSources(state: start, sourceOwners: preferredOwners), demand: demand, assocNames: assocNames, assocValues: assocValues, assumptions: assumptions) }
                             }
                         }
                         if !self.traitProofStateSeen(states: seen, candidate: start) { seen.append(start) pending.append(start) }
@@ -579,8 +590,8 @@ pub impl Comp {
                         val completed = try self.completeTraitProofState(state: start, assumptions: assumptions)
                         if !self.proofIsMissing(proof: completed) {
                             if enumerateInstances { candidates.append(completed) }
-                            if !enumerateInstances && demand.isExistence() && (try self.selectedProofAssociatedTypesMatch(proof: completed, traitOwner: traitOwner, names: assocNames, values: assocValues)) { return <Result.Ok value=<ConformanceProofResult.Found proof=completed /> /> }
-                            if !enumerateInstances && !demand.isExistence() { try self.collectTraitProof(selection: inout selection, candidate: completed, traitOwner: traitOwner, preferred: preferredOwners.count() != 0U64 && self.traitProofStateMatchesSources(state: start, sourceOwners: preferredOwners), demand: demand, assocNames: assocNames, assocValues: assocValues) }
+                            if !enumerateInstances && demand.isExistence() && (try self.selectedProofAssociatedTypesMatch(proof: completed, traitOwner: traitOwner, names: assocNames, values: assocValues, assumptions: assumptions)) { return <Result.Ok value=<ConformanceProofResult.Found proof=completed /> /> }
+                            if !enumerateInstances && !demand.isExistence() { try self.collectTraitProof(selection: inout selection, candidate: completed, traitOwner: traitOwner, preferred: preferredOwners.count() != 0U64 && self.traitProofStateMatchesSources(state: start, sourceOwners: preferredOwners), demand: demand, assocNames: assocNames, assocValues: assocValues, assumptions: assumptions) }
                         }
                     }
                     if !(self.traitProofStateSeen(states: seen, candidate: start)) {
@@ -615,8 +626,8 @@ pub impl Comp {
                                         val completed = try self.completeTraitProofState(state: next, assumptions: assumptions)
                                         if !self.proofIsMissing(proof: completed) {
                                             if enumerateInstances { candidates.append(completed) }
-                                            if !enumerateInstances && demand.isExistence() && (try self.selectedProofAssociatedTypesMatch(proof: completed, traitOwner: traitOwner, names: assocNames, values: assocValues)) { return <Result.Ok value=<ConformanceProofResult.Found proof=completed /> /> }
-                                            if !enumerateInstances && !demand.isExistence() { try self.collectTraitProof(selection: inout selection, candidate: completed, traitOwner: traitOwner, preferred: preferredOwners.count() != 0U64 && self.traitProofStateMatchesSources(state: next, sourceOwners: preferredOwners), demand: demand, assocNames: assocNames, assocValues: assocValues) }
+                                            if !enumerateInstances && demand.isExistence() && (try self.selectedProofAssociatedTypesMatch(proof: completed, traitOwner: traitOwner, names: assocNames, values: assocValues, assumptions: assumptions)) { return <Result.Ok value=<ConformanceProofResult.Found proof=completed /> /> }
+                                            if !enumerateInstances && !demand.isExistence() { try self.collectTraitProof(selection: inout selection, candidate: completed, traitOwner: traitOwner, preferred: preferredOwners.count() != 0U64 && self.traitProofStateMatchesSources(state: next, sourceOwners: preferredOwners), demand: demand, assocNames: assocNames, assocValues: assocValues, assumptions: assumptions) }
                                         }
                                     }
                                     if !self.assumedTraitInstanceSeen(states: seen, candidate: next, bound: inherited) { seen.append(next) pending.append(next) }
@@ -650,8 +661,8 @@ pub impl Comp {
                             val completed = try self.completeTraitProofState(state: next, assumptions: assumptions)
                             if !self.proofIsMissing(proof: completed) {
                                 if enumerateInstances { candidates.append(completed) }
-                                if !enumerateInstances && demand.isExistence() && (try self.selectedProofAssociatedTypesMatch(proof: completed, traitOwner: traitOwner, names: assocNames, values: assocValues)) { return <Result.Ok value=<ConformanceProofResult.Found proof=completed /> /> }
-                                if !enumerateInstances && !demand.isExistence() { try self.collectTraitProof(selection: inout selection, candidate: completed, traitOwner: traitOwner, preferred: preferredOwners.count() != 0U64 && self.traitProofStateMatchesSources(state: next, sourceOwners: preferredOwners), demand: demand, assocNames: assocNames, assocValues: assocValues) }
+                                if !enumerateInstances && demand.isExistence() && (try self.selectedProofAssociatedTypesMatch(proof: completed, traitOwner: traitOwner, names: assocNames, values: assocValues, assumptions: assumptions)) { return <Result.Ok value=<ConformanceProofResult.Found proof=completed /> /> }
+                                if !enumerateInstances && !demand.isExistence() { try self.collectTraitProof(selection: inout selection, candidate: completed, traitOwner: traitOwner, preferred: preferredOwners.count() != 0U64 && self.traitProofStateMatchesSources(state: next, sourceOwners: preferredOwners), demand: demand, assocNames: assocNames, assocValues: assocValues, assumptions: assumptions) }
                             }
                         }
                         if !(self.traitProofStateSeen(states: seen, candidate: next)) {
@@ -711,8 +722,8 @@ impl Comp {
         return false
     }
 
-    inout fn collectTraitProof(selection: inout TraitProofSelection, candidate: StaticConformanceProof, traitOwner: U64, preferred: Bool, demand: ConformanceProofDemand, assocNames: Array[U64], assocValues: Array[U64]) -> Result[(), CompileDiagnostic] {
-        val compatible = try self.selectedProofAssociatedTypesMatch(proof: candidate, traitOwner: traitOwner, names: assocNames, values: assocValues)
+    inout fn collectTraitProof(selection: inout TraitProofSelection, candidate: StaticConformanceProof, traitOwner: U64, preferred: Bool, demand: ConformanceProofDemand, assocNames: Array[U64], assocValues: Array[U64], assumptions: Array[DeclarationBoundRef]) -> Result[(), CompileDiagnostic] {
+        val compatible = try self.selectedProofAssociatedTypesMatch(proof: candidate, traitOwner: traitOwner, names: assocNames, values: assocValues, assumptions: assumptions)
         match demand {
             ConformanceProofDemand.SourceAdmission => {
                 if self.proofIsMissing(proof: selection.selected) { selection.selected = candidate }

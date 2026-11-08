@@ -102,13 +102,37 @@ pub impl Comp {
 
     // Evidence admission is shared by local owner publication and whole-target
     // closure. Concrete instantiation and member constraints remain separate.
+    // Canonical declaration scope supplies the immutable premise environment.
+    // Interface contracts have no unrelated lexical function at numeric zero.
+    inout fn declarationScopeAssumptions(scope: DeclarationTypeScope) -> Result[Array[DeclarationBoundRef], CompileDiagnostic] {
+        mut val assumptions: Array[DeclarationBoundRef] = []
+        match scope.origin {
+            DeclarationScopeOrigin.Lexical => {
+                // Canonical global-initializer scopes have no function and
+                // no function premises. Scope/proof dependency admission still
+                // rejects a borrowed function root; never consult cur.checkFn.
+                if scope.owner < self.arena.functionCount() {
+                    assumptions = self.functionBoundAssumptions(fnIdx: scope.owner)
+                }
+            }
+            DeclarationScopeOrigin.InterfaceContract => {}
+        }
+        if scope.interfaceRoot != 0U64 {
+            val source = <DeclarationBoundRef.Interface index=scope.interfaceRoot - 1U64 />
+            assumptions.append(source)
+            try self.appendInterfaceAssociatedAssumptions(source: source, steps: [], assumptions: inout assumptions)
+        }
+        return <Result.Ok value=assumptions />
+    }
+
     inout fn checkDeclarationConversionEvidence(conversion: DeclarationConversion) -> Result[(), CompileDiagnostic] {
         if conversion.pendingSource.isSome() {
             return <Result.Err error=self.diagnosticAt(offset: conversion.site.originStart, msg: "source conversion requires a resolved value type") />
         }
         val proof = self.thawValueConversionProof(id: conversion.proof)
-        try self.checkConversionProofAtBoundary(proof: proof, source: conversion.source, target: conversion.target, offset: conversion.site.originStart)
         val scope = try self.declarationTypeScope(owner: conversion.site.ownerFnIdx)
+        val assumptions = try self.declarationScopeAssumptions(scope: scope)
+        try self.checkConversionProofAtBoundary(proof: proof, source: conversion.source, target: conversion.target, offset: conversion.site.originStart, assumptions: assumptions)
         // Identity has no endpoints of its own. Every row, including one
         // completed from a pending source, owns these terms in this scope.
         try self.declarationTypeDependency(ref: conversion.source, scope: scope, offset: conversion.site.originStart)
@@ -117,13 +141,15 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
-    inout fn checkConversionProofAtBoundary(proof: ValueConversionProof, source: U64, target: U64, offset: U64) -> Result[(), CompileDiagnostic] {
+    // Empty premises are for closed instance terms. Symbolic declaration
+    // readers must pass their retained scope, never the current body cursor.
+    inout fn checkConversionProofAtBoundary(proof: ValueConversionProof, source: U64, target: U64, offset: U64, assumptions: Array[DeclarationBoundRef] = []) -> Result[(), CompileDiagnostic] {
         if source == 0U64 { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "source conversion requires a resolved value type") /> }
         if source >= self.arena.typeCount() || target == 0U64 || target >= self.arena.typeCount() {
             return <Result.Err error=self.diagnosticAt(offset: offset, msg: "source conversion has an invalid type boundary") />
         }
         try self.checkConversionProofBoundary(proof: proof, source: source, target: target, offset: offset)
-        return self.checkConversionProofEvidence(proof: proof, offset: offset)
+        return self.checkConversionProofEvidence(proof: proof, offset: offset, assumptions: assumptions)
     }
 
     // A frozen plan cannot describe another conversion than the source row
@@ -146,7 +172,7 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
-    inout fn checkConversionProofEvidence(proof: ValueConversionProof, offset: U64) -> Result[(), CompileDiagnostic] {
+    inout fn checkConversionProofEvidence(proof: ValueConversionProof, offset: U64, assumptions: Array[DeclarationBoundRef] = []) -> Result[(), CompileDiagnostic] {
         match proof {
             ValueConversionProof.Missing => { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "source value does not satisfy the required conversion") /> }
             ValueConversionProof.ExistentialRetag(sourceRef: val source, targetRef: val target) => {
@@ -165,7 +191,7 @@ pub impl Comp {
                 }
                 // Interpret the selected proof; never select another conformance
                 // to repair a frozen plan, including traits with no members.
-                try self.checkStaticProofEvidence(proof: evidence, offset: offset)
+                try self.checkStaticProofEvidence(proof: evidence, offset: offset, assumptions: assumptions)
                 val bound = try self.staticProofBound(proof: evidence, traitIdx: traitIdx)
                 val required = self.existentialTraitConstraint(ref: target)
                 if bound.subject == 0U64 || bound.constraint.key.owner != required.key.owner || !self.sameResolvedTypeRefs(a: bound.constraint.key.positionalArgs, b: required.key.positionalArgs) {
@@ -174,13 +200,13 @@ pub impl Comp {
                 if !self.typeRefEq(a: self.typeRefWithoutOuterViews(ref: bound.subject), b: self.typeRefWithoutOuterViews(ref: source)) {
                     return <Result.Err error=self.diagnosticAt(offset: offset, msg: "existential box evidence does not match its source value type") />
                 }
-                if !(try self.selectedProofAssociatedTypesMatch(proof: evidence, traitOwner: required.key.owner, names: self.traitAssocArgNames(t: targetType), values: self.traitAssocArgValues(t: targetType))) {
+                if !(try self.selectedProofAssociatedTypesMatch(proof: evidence, traitOwner: required.key.owner, names: self.traitAssocArgNames(t: targetType), values: self.traitAssocArgValues(t: targetType), assumptions: assumptions, offset: offset)) {
                     return <Result.Err error=self.diagnosticAt(offset: offset, msg: "existential box evidence does not satisfy its target associated types") />
                 }
             }
             ValueConversionProof.ArrayRepack(sourceRef: val source, targetRef: val target, element: val element) => {
                 val boundary = try self.arrayConversionElementBoundary(sourceRef: source, targetRef: target, offset: offset)
-                try self.checkConversionProofAtBoundary(proof: element, source: boundary.sourceRef, target: boundary.targetRef, offset: offset)
+                try self.checkConversionProofAtBoundary(proof: element, source: boundary.sourceRef, target: boundary.targetRef, offset: offset, assumptions: assumptions)
             }
             ValueConversionProof.EnumRepack(sourceRef: val source, targetRef: val target, enumIdx: val enumIndex, argumentProofs: val arguments, payloads: val payloads) => {
                 val boundaries = try self.enumRepackPayloadBoundaries(sourceRef: source, targetRef: target, enumIdx: enumIndex)
@@ -189,7 +215,7 @@ pub impl Comp {
                 if arguments.count() != sourceType.args.count() { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "enum conversion type argument plan is incomplete") /> }
                 mut val index = 0U64
                 while index < arguments.count() {
-                    try self.checkConversionProofAtBoundary(proof: arguments[index], source: sourceType.args[index], target: targetType.args[index], offset: offset)
+                    try self.checkConversionProofAtBoundary(proof: arguments[index], source: sourceType.args[index], target: targetType.args[index], offset: offset, assumptions: assumptions)
                     index += 1U64
                 }
                 if payloads.count() != boundaries.count() { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "enum conversion payload plan is incomplete") /> }
@@ -200,7 +226,7 @@ pub impl Comp {
                     if !self.typeRefEq(a: payload.sourceRef, b: boundary.sourceRef) || !self.typeRefEq(a: payload.targetRef, b: boundary.targetRef) {
                         return <Result.Err error=self.diagnosticAt(offset: offset, msg: "enum conversion payload does not match its declaration field") />
                     }
-                    try self.checkConversionProofAtBoundary(proof: payload.conversion, source: boundary.sourceRef, target: boundary.targetRef, offset: offset)
+                    try self.checkConversionProofAtBoundary(proof: payload.conversion, source: boundary.sourceRef, target: boundary.targetRef, offset: offset, assumptions: assumptions)
                     index += 1U64
                 }
             }
@@ -209,7 +235,7 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
-    inout fn checkStaticProofEvidence(proof: StaticConformanceProof, offset: U64) -> Result[(), CompileDiagnostic] {
+    inout fn checkStaticProofEvidence(proof: StaticConformanceProof, offset: U64, assumptions: Array[DeclarationBoundRef] = []) -> Result[(), CompileDiagnostic] {
         match proof {
             StaticConformanceProof.TraitSelf(traitIdx: val owner, receiverRef: val receiver, traitArgs: val arguments) => {
                 // This proof denotes the selected interface's own lexical Self,
@@ -225,16 +251,16 @@ pub impl Comp {
             }
             StaticConformanceProof.ConcreteWitness(witness: val witness) => {
                 if !(try self.selectedNominalWitnessSubjectMatches(witness: witness)) { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "selected conformance evidence does not match its declaration subject") /> }
-                try self.checkWitnessConditionEvidence(witness: witness, offset: offset)
+                try self.checkWitnessConditionEvidence(witness: witness, offset: offset, assumptions: assumptions)
             }
             StaticConformanceProof.TraitPath(edges: val edges, terminalConformIdx: val terminal) => {
                 if edges.count() == 0U64 || edges[edges.count() - 1U64].conformIdx != terminal { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "selected conformance path has an invalid terminal") /> }
-                try self.checkStaticPathEvidence(edges: edges, root: self.missingTraitBound(), offset: offset)
+                try self.checkStaticPathEvidence(edges: edges, root: self.missingTraitBound(), offset: offset, assumptions: assumptions)
             }
             StaticConformanceProof.AssumedTraitPath(source: val source, steps: val steps, edges: val edges) => {
                 val root = self.assumedSupertraitBound(source: source, steps: steps)
                 if root.subject == 0U64 { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "selected conformance path has an invalid assumption root") /> }
-                try self.checkStaticPathEvidence(edges: edges, root: root, offset: offset)
+                try self.checkStaticPathEvidence(edges: edges, root: root, offset: offset, assumptions: assumptions)
             }
             _ => {}
         }
@@ -243,7 +269,7 @@ pub impl Comp {
 
     // Interpret the recorded predecessor chain, including its nominal or
     // authored-bound root. Intermediate projection is a separate reader.
-    inout fn checkStaticPathEvidence(edges: Array[WitnessMatch], root: TraitBound, offset: U64) -> Result[(), CompileDiagnostic] {
+    inout fn checkStaticPathEvidence(edges: Array[WitnessMatch], root: TraitBound, offset: U64, assumptions: Array[DeclarationBoundRef] = []) -> Result[(), CompileDiagnostic] {
         if edges.count() == 0U64 { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "selected conformance path has no edges") /> }
         mut val previous = root
         mut val index = 0U64
@@ -262,7 +288,7 @@ pub impl Comp {
                 }
                 if !self.sameResolvedTypeRefs(a: arguments, b: previous.constraint.key.positionalArgs) { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "selected conformance path does not match its predecessor") /> }
             }
-            try self.checkWitnessConditionEvidence(witness: witness, offset: offset)
+            try self.checkWitnessConditionEvidence(witness: witness, offset: offset, assumptions: assumptions)
             previous = try self.staticProofBound(proof: <StaticConformanceProof.ConcreteWitness witness=witness />, traitIdx: self.decls.traitIndexByOffset(offset: declaration.traitStart))
             if previous.subject == 0U64 { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "selected conformance path has an invalid edge output") /> }
             index += 1U64
@@ -270,7 +296,7 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
-    inout fn checkWitnessConditionEvidence(witness: WitnessMatch, offset: U64) -> Result[(), CompileDiagnostic] {
+    inout fn checkWitnessConditionEvidence(witness: WitnessMatch, offset: U64, assumptions: Array[DeclarationBoundRef] = []) -> Result[(), CompileDiagnostic] {
         if witness.conformIdx == 0U64 || witness.conformIdx > self.decls.conformCount() { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "selected conformance evidence does not satisfy its declaration conditions") /> }
         val declaration = self.decls.conformAt(index: witness.conformIdx - 1U64)
         if declaration.bounds.len == 0U64 && witness.conditions == 0U64 { return <Result.Ok value=() /> }
@@ -281,12 +307,12 @@ pub impl Comp {
             if active == witness.conditions { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "selected conformance condition evidence is cyclic") /> }
         }
         self.activeConditionAdmission.append(witness.conditions)
-        val result = self.checkWitnessConditionChildren(witness: witness, proofs: plan.proofs, normalizations: plan.normalizations, offset: offset)
+        val result = self.checkWitnessConditionChildren(witness: witness, proofs: plan.proofs, normalizations: plan.normalizations, offset: offset, assumptions: assumptions)
         self.activeConditionAdmission.removeLast()
         return result
     }
 
-    inout fn checkProjectionNormalizations(normalizations: Array[ProjectionNormalizationStep], offset: U64) -> Result[(), CompileDiagnostic] {
+    inout fn checkProjectionNormalizations(normalizations: Array[ProjectionNormalizationStep], offset: U64, assumptions: Array[DeclarationBoundRef] = []) -> Result[(), CompileDiagnostic] {
         for step in normalizations {
             if step.source == 0U64 || step.source >= self.arena.typeCount() || step.output >= self.arena.typeCount() {
                 return <Result.Err error=self.diagnosticAt(offset: offset, msg: "selected condition has invalid projection evidence") />
@@ -295,7 +321,7 @@ pub impl Comp {
             if projection.assocNameId == 0U64 { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "selected condition has invalid projection evidence") /> }
             val owner = if projection.assocTraitDeclOffset != 0U64 { give projection.assocTraitDeclOffset } else { give projection.assocTraitStart }
             val proof = self.thawStaticConformanceProof(id: step.proof)
-            try self.checkStaticProofEvidence(proof: proof, offset: offset)
+            try self.checkStaticProofEvidence(proof: proof, offset: offset, assumptions: assumptions)
             val bound = try self.staticProofBound(proof: proof, traitIdx: self.decls.traitIndexByOffset(offset: owner))
             val receiver = self.typeTermProjectionReceiver(t: projection)
             if bound.subject == 0U64 || bound.constraint.key.owner != owner || !self.typeRefEq(a: self.typeRefWithoutOuterViews(ref: receiver), b: self.typeRefWithoutOuterViews(ref: bound.subject)) || !self.sameResolvedTypeRefs(a: projection.assocTraitArgs, b: bound.constraint.key.positionalArgs) {
@@ -369,8 +395,8 @@ pub impl Comp {
         return <Result.Ok value=<TraitConstraint key=<TraitInstanceKey owner=constraint.key.owner positionalArgs=arguments /> positionalArgsOpen=constraint.positionalArgsOpen assocPredicates=predicates /> />
     }
 
-    inout fn checkWitnessConditionChildren(witness: WitnessMatch, proofs: Array[U64], normalizations: Array[ProjectionNormalizationStep], offset: U64) -> Result[(), CompileDiagnostic] {
-        try self.checkProjectionNormalizations(normalizations: normalizations, offset: offset)
+    inout fn checkWitnessConditionChildren(witness: WitnessMatch, proofs: Array[U64], normalizations: Array[ProjectionNormalizationStep], offset: U64, assumptions: Array[DeclarationBoundRef] = []) -> Result[(), CompileDiagnostic] {
+        try self.checkProjectionNormalizations(normalizations: normalizations, offset: offset, assumptions: assumptions)
         val declaration = self.decls.conformAt(index: witness.conformIdx - 1U64)
         val parameters = self.copyConformBinds(binds: declaration.typeParams)
         mut val index = 0U64
@@ -382,7 +408,7 @@ pub impl Comp {
             val constraint = try self.replayConstraintNormalizations(constraint: rawConstraint, normalizations: normalizations, offset: offset)
             val traitIndex = self.decls.traitIndexByOffset(offset: constraint.key.owner)
             val proof = self.thawStaticConformanceProof(id: proofs[index])
-            try self.checkStaticProofEvidence(proof: proof, offset: offset)
+            try self.checkStaticProofEvidence(proof: proof, offset: offset, assumptions: assumptions)
             val bound = try self.staticProofBound(proof: proof, traitIdx: traitIndex)
             val proofSubject = try self.replayProjectionNormalizations(ref: bound.subject, normalizations: normalizations, offset: offset)
             val proofConstraint = try self.replayConstraintNormalizations(constraint: bound.constraint, normalizations: normalizations, offset: offset)
@@ -390,7 +416,7 @@ pub impl Comp {
             mut val names: Array[U64] = []
             mut val values: Array[U64] = []
             for predicate in constraint.assocPredicates { names.append(predicate.member) values.append(predicate.value) }
-            if !(try self.selectedProofAssociatedTypesMatch(proof: proof, traitOwner: constraint.key.owner, names: names, values: values)) { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "selected conformance evidence does not satisfy its declaration conditions") /> }
+            if !(try self.selectedProofAssociatedTypesMatch(proof: proof, traitOwner: constraint.key.owner, names: names, values: values, assumptions: assumptions, normalizations: normalizations, offset: offset)) { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "selected conformance evidence does not satisfy its declaration conditions") /> }
             index += 1U64
         }
         return <Result.Ok value=() />
@@ -925,7 +951,7 @@ pub impl Comp {
     inout fn checkDeclarationCallProof(proof: StaticConformanceProof, scope: DeclarationTypeScope, offset: U64) -> Result[(), CompileDiagnostic] {
         // Integrity precedes dependency traversal: malformed conditional plans
         // must not be interpreted as authorizing premises or recurse forever.
-        try self.checkStaticProofEvidence(proof: proof, offset: offset)
+        try self.checkStaticProofEvidence(proof: proof, offset: offset, assumptions: (try self.declarationScopeAssumptions(scope: scope)))
         try self.declarationProofDependency(proof: proof, scope: scope, offset: offset)
         return <Result.Ok value=() />
     }
@@ -1164,7 +1190,7 @@ pub impl Comp {
 
     // Admission precedes this boundary reader: a malformed child must never
     // participate in proof-dependent projection or associated-type lookup.
-    inout fn selectedCallConstraintMatches(expected: TraitBound, proof: StaticConformanceProof) -> Result[Bool, CompileDiagnostic] {
+    inout fn selectedCallConstraintMatches(expected: TraitBound, proof: StaticConformanceProof, assumptions: Array[DeclarationBoundRef] = []) -> Result[Bool, CompileDiagnostic] {
         val traitIndex = self.decls.traitIndexByOffset(offset: expected.constraint.key.owner)
         val bound = try self.staticProofBound(proof: proof, traitIdx: traitIndex)
         if bound.subject == 0U64 || !self.typeRefEq(a: self.typeRefWithoutOuterViews(ref: expected.subject), b: self.typeRefWithoutOuterViews(ref: bound.subject)) || bound.constraint.key.owner != expected.constraint.key.owner || (!expected.constraint.positionalArgsOpen && !self.sameResolvedTypeRefs(a: bound.constraint.key.positionalArgs, b: expected.constraint.key.positionalArgs)) {
@@ -1173,14 +1199,14 @@ pub impl Comp {
         mut val names: Array[U64] = []
         mut val values: Array[U64] = []
         for predicate in expected.constraint.assocPredicates { names.append(predicate.member) values.append(predicate.value) }
-        if !(try self.selectedProofAssociatedTypesMatch(proof: proof, traitOwner: expected.constraint.key.owner, names: names, values: values)) {
+        if !(try self.selectedProofAssociatedTypesMatch(proof: proof, traitOwner: expected.constraint.key.owner, names: names, values: values, assumptions: assumptions)) {
             return <Result.Ok value=false />
         }
         return <Result.Ok value=true />
     }
 
-    inout fn checkSelectedCallConstraintBoundary(expected: TraitBound, proof: StaticConformanceProof, offset: U64) -> Result[(), CompileDiagnostic] {
-        if !(try self.selectedCallConstraintMatches(expected: expected, proof: proof)) {
+    inout fn checkSelectedCallConstraintBoundary(expected: TraitBound, proof: StaticConformanceProof, offset: U64, assumptions: Array[DeclarationBoundRef] = []) -> Result[(), CompileDiagnostic] {
+        if !(try self.selectedCallConstraintMatches(expected: expected, proof: proof, assumptions: assumptions)) {
             return <Result.Err error=self.diagnosticAt(offset: offset, msg: "selected call constraint evidence does not satisfy its signature") />
         }
         return <Result.Ok value=() />
@@ -1188,6 +1214,7 @@ pub impl Comp {
 
     inout fn checkSelectedCallConstraintPlan(template: CallTemplate, expected: Array[TraitBound], plan: SelectedCallConstraints) -> Result[(), CompileDiagnostic] {
         val scope = try self.callConstraintScope(template: template)
+        val assumptions = try self.declarationScopeAssumptions(scope: scope)
         if plan.owner != scope.owner || plan.bounds.count() != expected.count() || plan.proofs.count() != expected.count() {
             return <Result.Err error=self.diagnosticAt(offset: template.siteKey.originStart, msg: "selected call has incomplete constraint evidence") />
         }
@@ -1199,7 +1226,7 @@ pub impl Comp {
             }
             val proof = self.thawStaticConformanceProof(id: plan.proofs[index])
             try self.checkDeclarationCallProof(proof: proof, scope: scope, offset: template.siteKey.originStart)
-            try self.checkSelectedCallConstraintBoundary(expected: bound, proof: proof, offset: template.siteKey.originStart)
+            try self.checkSelectedCallConstraintBoundary(expected: bound, proof: proof, offset: template.siteKey.originStart, assumptions: assumptions)
             index += 1U64
         }
         return <Result.Ok value=() />
@@ -1219,12 +1246,7 @@ pub impl Comp {
         // must still have matched that exact empty signature above.
         if bounds.count() == 0U64 { return <Result.Ok value=() /> }
         val scope = try self.callConstraintScope(template: template)
-        mut val assumptions = self.functionBoundAssumptions(fnIdx: template.siteKey.ownerFnIdx)
-        if scope.interfaceRoot != 0U64 {
-            val source = <DeclarationBoundRef.Interface index=scope.interfaceRoot - 1U64 />
-            assumptions.append(source)
-            try self.appendInterfaceAssociatedAssumptions(source: source, steps: [], assumptions: inout assumptions)
-        }
+        val assumptions = try self.declarationScopeAssumptions(scope: scope)
         mut val proofs: Array[U64] = []
         for bound in bounds {
             val proof = try self.viewedTraitConstraintProof(demand: <ConformanceProofDemand.SourceAdmission />, ref: bound.subject, constraint: bound.constraint, assumptions: assumptions)
@@ -1244,7 +1266,7 @@ pub impl Comp {
                 return <Result.Err error=self.diagnosticAt(offset: bound.offset, msg: "type argument does not conform to the trait required by `where`") />
             }
             try self.checkDeclarationCallProof(proof: proof, scope: scope, offset: template.siteKey.originStart)
-            try self.checkSelectedCallConstraintBoundary(expected: bound, proof: proof, offset: template.siteKey.originStart)
+            try self.checkSelectedCallConstraintBoundary(expected: bound, proof: proof, offset: template.siteKey.originStart, assumptions: assumptions)
             proofs.append(self.freezeStaticConformanceProof(proof: proof))
         }
         if !self.recordBuildingCallConstraints(index: templateIndex, plan: <SelectedCallConstraints owner=scope.owner bounds=bounds proofs=proofs />) {
@@ -1590,7 +1612,7 @@ impl Comp {
 
     inout fn scopedAssociatedPrerequisite(index: U64, scope: DeclarationTypeScope, offset: U64) -> Result[DeclarationProofDependencies, CompileDiagnostic] {
         val proof = self.arena.associatedBoundEvidenceAt(index: index).prerequisite
-        try self.checkStaticProofEvidence(proof: proof, offset: offset)
+        try self.checkStaticProofEvidence(proof: proof, offset: offset, assumptions: (try self.declarationScopeAssumptions(scope: scope)))
         return self.scopedProofDependencies(proof: proof, scope: scope, offset: offset)
     }
 

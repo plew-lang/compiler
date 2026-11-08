@@ -337,10 +337,10 @@ impl Comp {
                 ConformanceProofResult.Found(proof: val proof) => proof,
                 ConformanceProofResult.Missing | ConformanceProofResult.Ambiguous(owner: _, demand: _, selectedSource: _) => { return <Result.Ok value=<Optional.None /> /> },
             }
-            try self.checkStaticProofEvidence(proof: proof, offset: bound.offset)
+            try self.checkStaticProofEvidence(proof: proof, offset: bound.offset, assumptions: assumptions)
             val dependencies = try self.scopedProofDependencies(proof: proof, scope: scope, offset: bound.offset)
             if dependencies.unguaranteedInterface { return <Result.Ok value=<Optional.None /> /> }
-            try self.checkSelectedCallConstraintBoundary(expected: bound, proof: proof, offset: bound.offset)
+            try self.checkSelectedCallConstraintBoundary(expected: bound, proof: proof, offset: bound.offset, assumptions: assumptions)
             proofs.append(self.freezeStaticConformanceProof(proof: proof))
         }
         return <Result.Ok value=<Optional.Some v=<ExistentialMethodConditions root=root bounds=bounds proofs=proofs /> /> />

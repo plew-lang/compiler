@@ -1,0 +1,79 @@
+// Source-oriented proof queries must not apply an unrelated body substitution.
+use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontendForRequests, analyzeFrontend }
+use ../../../src/SourceAccess only { SourceAccess }
+use ../../../src/Ir only { ConformanceProofDemand, ConformanceProofResult, DeclarationBoundRef, PatternTypeInput, PatternBindInput }
+use @Std/Io only { print }
+use @Std/Process only { argAt }
+
+fn found(answer~: ConformanceProofResult) -> Bool {
+    match answer {
+        ConformanceProofResult.Found(proof: _) => { return true }
+        ConformanceProofResult.Missing | ConformanceProofResult.Ambiguous(owner: _, demand: _, selectedSource: _) => { return false }
+    }
+}
+fn main() {
+    val scenario = argAt(1I64)
+    if scenario == "globalBoundary" {
+        mut val global = <Comp />
+        val source = "trait Has {{ type Item }} struct Leaf {{}} impl Leaf as Has {{ type Item=I64 }} val boxed: any Has[Item=I64] = <Leaf /> fn main() {{}}"
+        match analyzeFrontend(c: inout global, input: <FrontendInput.Text text=source path="QueryGlobalBoundary.pw" />, sources: <SourceAccess stdRoot=[] />) {
+            Result.Ok(value: _) => {}
+            Result.Err(error: val diagnostic) => { panic(diagnostic.message) }
+        }
+        print("1")
+        return
+    }
+    if scenario == "callBoundary" || scenario == "boxingBoundary" {
+        val declarations = "trait Has {{ type Item }} struct Leaf {{}} impl Leaf as Has {{ type Item=I64 }} struct Projected[T] {{}} impl[T] Projected[T] as Has where T:Has {{ type Item=T#Has.Item }} "
+        val body = if scenario == "callBoundary" {
+            give "fn accept[U](value:U) where U:Has[Item=I64] {{}} fn caller[T](value:Projected[T]) where T:Has[Item=I64] {{ accept(value:value) }} fn main() {{ caller(value:<Projected[Leaf] />) }}"
+        } else {
+            give "fn caller[T](value:Projected[T]) -> any Has[Item=I64] where T:Has[Item=I64] {{ return value }} fn main() {{ val boxed = caller(value:<Projected[Leaf] />) }}"
+        }
+        mut val boundary = <Comp />
+        match analyzeFrontend(c: inout boundary, input: <FrontendInput.Text text=declarations+body path="QueryBoundary.pw" />, sources: <SourceAccess stdRoot=[] />) {
+            Result.Ok(value: _) => {}
+            Result.Err(error: val diagnostic) => { panic(diagnostic.message) }
+        }
+        print("1")
+        return
+    }
+
+    mut val compiler = <Comp />
+    val source = "trait Has {{ type Item }} trait Mark {{}} struct Box[T] {{}} struct Projected[T] {{}} struct Value {{}} impl Value as Mark {{}} impl[T] Box[T] as Has {{ type Item = T }} impl[T] Box[T] as Mark where Box[T]: Has[Item=I64] {{}} impl[T] Projected[T] as Has where T: Has {{ type Item = T#Has.Item }} fn target[T](value: Box[T], concrete: Box[I64], goal: I64, projected: Projected[T], boxed: Box[Value], erased: any Mark) where T: Has[Item=I64] {{}} fn foreign[T](value: T) where T: Has[Item=Bool] {{}} fn main() {{}}"
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text text=source path="AuthoredQueryEnvironment.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
+    val functionIndex = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "target").nameId)
+    val function = compiler.arena.functionAt(index: functionIndex)
+    val symbolic = compiler.funcParamAt(params: function.params, index: 0U64).ty
+    val concrete = compiler.funcParamAt(params: function.params, index: 1U64).ty
+    val number = compiler.funcParamAt(params: function.params, index: 2U64).ty
+    val parameter = compiler.arena.typeAt(index: symbolic).args[0U64]
+    val owner = compiler.decls.traitAt(index: compiler.decls.firstTraitNamed(nameId: compiler.internBytes(s: (if scenario == "conditional" { give "Mark" } else { give "Has" })).nameId))
+    val member = compiler.internBytes(s: "Item").nameId
+    val projected = scenario == "projected" || scenario == "projectedNoPremise"
+    val receiver = if scenario == "concrete" { give concrete } else if projected { give compiler.funcParamAt(params: function.params, index: 3U64).ty } else if scenario == "conversion" { give compiler.funcParamAt(params: function.params, index: 4U64).ty } else { give symbolic }
+    val assumptions: Array[DeclarationBoundRef] = if scenario == "projected" { give compiler.functionBoundAssumptions(fnIdx: functionIndex) } else { give [] }
+    val names: Array[U64] = if scenario == "conditional" { give [] } else { give [member] }
+    val values: Array[U64] = if scenario == "conditional" { give [] } else if scenario == "matching" { give [parameter] } else if scenario == "conversion" { give [compiler.funcParamAt(params: function.params, index: 5U64).ty] } else { give [number] }
+    val expected = scenario == "matching" || scenario == "concrete" || scenario == "projected"
+    val initial = found(compiler.queryTraitPatternProof(demand: <ConformanceProofDemand.SourceAdmission />, baseRef: receiver, traitId: owner.nameId, traitOwner: owner.nameStart, traitArgs: <PatternTypeInput.Values values=[] />, patternParams: <PatternBindInput.Values values=[] />, assocNames: names, assocValues: values, assumptions: assumptions).unwrap())
+    if initial != expected { panic("initial rigid proof query has wrong result") }
+    compiler.cur.checkFn = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "foreign").nameId)
+    compiler.cur.typeParams = compiler.copyFuncBinds(binds: function.typeParams)
+    compiler.cur.typeArgs = [number]
+    val unrelated = found(compiler.queryTraitPatternProof(demand: <ConformanceProofDemand.SourceAdmission />, baseRef: receiver, traitId: owner.nameId, traitOwner: owner.nameStart, traitArgs: <PatternTypeInput.Values values=[] />, patternParams: <PatternBindInput.Values values=[] />, assocNames: names, assocValues: values, assumptions: assumptions).unwrap())
+    if unrelated != expected { panic("body substitution changed source proof query") }
+    if scenario == "projected" {
+        val answer = compiler.queryTraitPatternProof(demand: <ConformanceProofDemand.SourceAdmission />, baseRef: receiver, traitId: owner.nameId, traitOwner: owner.nameStart, traitArgs: <PatternTypeInput.Values values=[] />, patternParams: <PatternBindInput.Values values=[] />, assocNames: names, assocValues: values, assumptions: assumptions).unwrap()
+        match answer {
+            ConformanceProofResult.Found(proof: val proof) => {
+                val frozen = compiler.freezeStaticConformanceProof(proof: proof)
+                val saved = compiler.thawStaticConformanceProof(id: frozen)
+                compiler.checkStaticProofEvidence(proof: saved, offset: 0U64).unwrap()
+                if !compiler.selectedProofAssociatedTypesMatch(proof: saved, traitOwner: owner.nameStart, names: names, values: values, assumptions: assumptions).unwrap() { panic("saved proof lost lexical output equality") }
+            }
+            _ => { panic("saved projected proof unavailable") }
+        }
+    }
+    print("1")
+}

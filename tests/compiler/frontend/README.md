@@ -292,3 +292,13 @@ It verifies occurrence demand categories and nested/failure restoration, with
 exact signature/default/body sites for free functions and methods in both AST
 adapters. Its golden is `1\n`. It is not automatically discovered by the normal
 fixture runner and does not certify admission, all delayed owners or consumers.
+
+`AuthoredTraitQueryEnvironment.pw` is a manual native assertion test, using the
+procedure above and golden `1\n`. Run it once without arguments and with each
+of `conditional`, `matching`, `concrete`, `projected`, `projectedNoPremise`,
+`conversion`, `callBoundary`, `boxingBoundary`, and `globalBoundary`. It checks that an unrelated
+body cursor/substitution cannot change an explicitly scoped conformance query,
+associated predicates use type equality rather than value conversion, and
+valid generic calls/boxing retain their declaration premises at admission.
+It does not certify source-view admission, all interface replay paths or
+query-free interpretation of every frozen proof.

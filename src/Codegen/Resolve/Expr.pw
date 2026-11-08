@@ -172,12 +172,13 @@ pub impl Comp {
                 // Its selected source follows Direct; only a trait-subject body
                 // needs proof-driven placement onto a concrete provided copy.
                 if conformance.subjectTraitOwner == 0U64 { return <Result.Ok value=<StaticMemberResolution.Missing /> /> }
-                val candidates = try self.traitMemberInstanceProofs(baseRef: receiverRef, traitId: conformance.traitId, traitOwner: conformance.traitStart, assumptions: self.functionBoundAssumptions(fnIdx: self.cur.checkFn), includeConcrete: true)
+                val assumptions = self.functionBoundAssumptions(fnIdx: self.cur.checkFn)
+                val candidates = try self.traitMemberInstanceProofs(baseRef: receiverRef, traitId: conformance.traitId, traitOwner: conformance.traitStart, assumptions: assumptions, includeConcrete: true)
                 mut val selection = <TraitProofSelection />
                 for proof in candidates {
                     val witness = self.proofWitnessForTrait(proof: proof, traitIdx: traitIndex)
                     if witness.conformIdx != site.selectedConformance || !self.selectedWitnessReceiverMatches(witness: witness, receiverRef: receiverRef) { continue }
-                    try self.collectTraitProof(selection: inout selection, candidate: proof, traitOwner: conformance.traitStart, preferred: false, demand: <ConformanceProofDemand.MemberDispatch />, assocNames: [], assocValues: [])
+                    try self.collectTraitProof(selection: inout selection, candidate: proof, traitOwner: conformance.traitStart, preferred: false, demand: <ConformanceProofDemand.MemberDispatch />, assocNames: [], assocValues: [], assumptions: assumptions)
                 }
                 val answer = try self.finishTraitProofSelection(selection: inout selection, traitOwner: conformance.traitStart, demand: <ConformanceProofDemand.MemberDispatch />)
                 val proof = try self.requireConformanceProof(answer: answer)

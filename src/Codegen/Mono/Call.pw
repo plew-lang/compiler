@@ -341,7 +341,7 @@ impl Comp {
             val environment = try self.selectedConstraintEnvironment(witness: placementWitness)
             if !(try self.providedCopyReceiverMatches(function: f, receiverRef: receiverRef, placement: placementWitness, environment: environment, proof: proof)) { continue }
             // Reuse the established endpoint/path identity and ambiguity policy.
-            try self.collectTraitProof(selection: inout selection, candidate: proof, traitOwner: target.traitStart, preferred: false, demand: <ConformanceProofDemand.MemberDispatch />, assocNames: [], assocValues: [])
+            try self.collectTraitProof(selection: inout selection, candidate: proof, traitOwner: target.traitStart, preferred: false, demand: <ConformanceProofDemand.MemberDispatch />, assocNames: [], assocValues: [], assumptions: assumptions)
         }
         val result = try self.finishTraitProofSelection(selection: inout selection, traitOwner: target.traitStart, demand: <ConformanceProofDemand.MemberDispatch />)
         return self.requireConformanceProof(answer: result)

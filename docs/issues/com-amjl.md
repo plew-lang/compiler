@@ -472,3 +472,58 @@ Deinit/closure/field default and individual deferred generator/body identities
 remain outside this finite producer acceptance; roles alone are not request-owner
 identity. Next, use Declaration receipts for unused free signatures only, under
 the reviewed explicit-normalization query contract.
+
+## Explicit Query Premises and Declaration Readers (WIP)
+
+[Finite evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/rigid-trait-query-environment.json)
+records direct/conditional query REDs: unrelated current body substitutions
+changed associated-type equality. The query now uses structural type equality
+and projection closure under explicit premises, not value conversion or ambient
+body normalization. Canonical declaration scopes supply premises to retained
+call/conversion/static/conditional readers; interface contract admission forwards
+its own premises. Actual generic-call and boxing controls exposed a missing
+reader handoff during the repair; both are preserved as additions and repaired.
+Fresh candidate `plewc-authored-rigid-query` passes nine query/boundary cases and
+eight affected retained-evidence fixtures, with invariant inputs. Build run
+`20261108T011356-build-ee83dd` passed. Independent review replayed the saved nine
+native controls. Formal current-source performance is still pending.
+
+This is not final proof-interpretation closure: unmatched associated terms can
+still trigger an explicit-premise Existence query. Saved-equation-only readers
+and occurrence-specific view admission/final consumption remain required here.
+Original source admission's eight invalid acceptances are not repaired by this
+increment. Universal interface replay's omitted premise arrays are a static
+concern, not a confirmed supported-source regression: hidden nominal witnesses
+are an existing rejection boundary, and the supported sibling projection is
+reified earlier. Preserve the concern for the retained-proof consumer audit;
+do not claim a product RED from an unsupported setup. API narrowing stays with
+com-pmiz/com-oir7, and zero/missing output distinction with com-nei5.
+
+### Next Finite Signature Handoff
+
+Independent design review confirms unused free-signature admission can precede
+all nonfunction owners, but signature slots must retain receipt identity at
+lowering. Add a source-signature artifact keyed by the actual registered
+function: parameter slots in actual order, explicit result slot, and the separate
+Declaration receipt list. Type lowering returns the root receipt explicitly;
+synthetic types have no receipt. Do not recover it by term, spelling or location.
+A saved reader takes function + slot + explicit environment, validates that
+slot's receipt/scope/proof, and interprets the retained proof. A later migrated
+call/body consumer must not fall back to groundTermForBody's source re-query.
+
+Nested semantic child paths also need receipt links before nested projection
+consumption is certified. Root-only reader guarantees do not waive nested source
+admission. Test both adapters' parameter/result order, repeated identical terms,
+foreign owner/slot swaps, missing proof, scope exit, and exclusion of default/body
+roles. Reuse admitted callable constraints and InstanceEnvironment for proof
+instantiation. This is a concrete handoff within this task, not a new solver or
+a claim that provenance alone admits the eight remaining invalid sources.
+
+The first formal run `20261108T012121-self-host-ececa5` failed in generation2:
+the new premise projector erroneously required a function for a canonical
+global-initializer scope. A new `globalBoundary` addition reproduces that exact
+conversion refusal; it passes after preserving the existing no-function empty
+premise scope. Owner/proof dependency admission is unchanged. Local ten native
+cases pass, with invariant inputs and independent static review; these do not
+replace final fresh gates. Re-run `20261108T012910-self-host-f609cd` is pending.
+The earlier 17-case fresh result predates this global-scope repair.
