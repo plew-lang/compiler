@@ -322,14 +322,32 @@ known Unit associated output and missing output. Public companion fixtures
 `trait_view_admitted_signature`, `trait_view_unbounded_signature` and
 `trait_view_wrong_instance_signature` are discovered by the normal suite.
 
-`AuthoredNestedSignature.pw` is a manual pending-RED follow-up for the full nested
-signature reader (com-amjl). Its native equality assertion requires the retained
-projection inside `Box[T#Project[I64].Item]` to yield `Box[I64]`. A compile/link
-failure is not the intended RED. It is not discovered by the normal suite;
-current root-only-reader success does not satisfy this assertion.
+`AuthoredNestedSignature.pw` checks recursive reading of retained free-signature
+recipes. Execute without arguments and with `array`, `record`, `function`,
+`siblings`, `short`, `missing`, `once`, `result`, `receiverView`,
+`missingReceiverView`, `selectorArgument`, `receiverArgument`, and `proofBinders`.
+Each must exit 0, match its `.out` and have empty stderr. These cover nested
+projection outputs, exact result slots, independent receiver-view evidence,
+missing evidence and one-step caller/proof-binder substitutions. They do not
+establish absence of fresh queries deeper in shared proof replay, production
+consumer migration, or complete associated-output substitution coverage.
 
-`AuthoredProjectionBoundOrigin.pw` is a manual pending-RED producer check for
-com-amjl. One original where argument must remain Declaration-owned and its
-recipe must be shared by repeated parameter/result/body short projections.
-The maintained RED currently compiles/links, then reports the use-site Body role
-leak. This assertion is not a registered passing normal-suite case.
+`AuthoredProjectionBoundOrigin.pw` checks that one original where argument
+remains Declaration-owned and its recipe is shared by repeated
+parameter/result/body short projections. Execute without arguments and with
+`value`, `default`, and `valueDefault`. `ProjectionBoundContextControls.pw`
+checks later-clause dependencies, nonmember prefiltering, failed-context
+restoration, and legacy synthesized subjects; execute `later`, `nonmember`,
+`recovery`, and `legacy`. Each must exit 0, match its `.out` and have empty stderr.
+
+`AuthoredRecipeIntegrity.pw` checks the admitted constructor graph against the
+canonical child visitor. Execute `valid`, `shape`, `term`, `label`, `forged`,
+`foreign`, `representation`, `validRepresentation`, `representationSource`,
+`derived`, `receiver`, `representationPosition`, `memoPosition`, and
+`nestedReceiver`. Invalid metadata must be rejected in the Internal domain;
+the harness itself must exit 0, match its `.out` and have empty stderr.
+
+These remain manual diagnostics, not automatically discovered normal-suite
+cases. The current free-signature increments do not certify other declaration
+owners or whole-task completion. Scope and reproducible evidence are linked
+from `docs/issues/com-amjl.md`.
