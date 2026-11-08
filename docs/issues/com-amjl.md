@@ -820,11 +820,28 @@ same-source diagnostic (three pairs with reversed order) shows identical output
 but no demonstrated speedup. It is not a formal performance result. Fresh9/10/14
 controls pass. The isolated formal follow-up (ae19e30b, run64fe3c) reached
 generation3 fixed point, but samples7.521118/7.553853/6.958024 gave median
-7.521118 seconds. The7-second gate remains unmet. A same-latest-source comparison
+7.521118 seconds. The7-second gate remained unmet at that checkpoint. A same-latest-source comparison
 of the pre-increment, first-increment and range-followup fixed-point compilers
 produced identical LLVM in all9 runs; timing varied and does not establish a
 reliable cause or an improvement. Do not label the regression unavoidable or
-the copy-removal successful. Local copy removal has not restored the gate;
-further semantic migration stops at the performance condition. Next work must
-resolve the measured cost/condition before returning to saved predicate replay.
+the copy-removal successful. Local copy removal has not restored the gate. That single unsuccessful
+change does not establish that repair is difficult: the prior stop decision
+is withdrawn as premature. Investigate measurement variation and dominant cost
+with the7-second condition unchanged, before returning to saved predicate replay.
 No task completion, main integration, seed or carrier promotion follows.
+
+
+The stop was withdrawn as premature: one ineffective local change does not
+establish difficult repair. A balanced same-source comparison (5 samples for
+each of the3 fixed-point compilers) gives6.895844/6.882198/6.875783 seconds,
+with all15 LLVM outputs equal. Old slow samples concentrate their extra time
+before the first load:start event is received or between write events; these
+are parent observation times and do not isolate an OS cause. They do not
+establish a persistent Conformance regression.
+
+Formal recheck67e957 reaches generation3 fixed point with the same compiler
+artifact c080052..., samples7.586391/6.940820/6.898564 and median6.940820,
+below7 seconds. Product source is unchanged from ae19e30b. The old failed
+performance measurements remain evidence; the new formal result is not a
+substitution of diagnostic timing. Resume the saved-predicate handoff described
+above; no whole-task closure or carrier promotion follows.
