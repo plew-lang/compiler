@@ -364,8 +364,8 @@ and success/failure restore. First execution assumptions about TypeRef ID equali
 and replaying an already registered declaration were test setup errors, not
 product REDs. The final native probe succeeds. Static independent review accepts
 this finite prefix after value impl/requirement and exact-site test additions.
-Fresh compiler controls, formal fixed-point/performance and task-wide admission
-remain pending. [Evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/authored-type-provenance-prefix.json).
+Task-wide admission remains pending; fresh compiler and formal
+fixed-point/performance results follow below. [Evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/authored-type-provenance-prefix.json).
 
 ### Producer Prefix Fresh Gates and Next Owner Boundary
 
