@@ -106,12 +106,64 @@ receiver Read borrow. Neutral review independently matched all180source hashes,
 source delta, fixture, fixed carrier, manifests, outputs and exit status, with no
 required correction for this source-level increment.
 
-This is not fresh product validation after the self change. The earlier fresh
-369d candidate and full-source smoke certify080cb5ef only. Before W1b closure,
-execute actual shared-field overlap/disjoint/ambient preservation and remaining
-owner-bearing/escape/async/projection controls, then validate a fresh candidate.
-Next, compose nonboxed typed value fields with proven roots and keep unproved
-Deref/Index/accessor/boxed/global cases conservative under the adopted inventory.
+This original checkpoint was source-only. The subsequent field increment below
+adds fresh product and the named receiver preservation controls; it does not
+certify every owner/async/escape path or close W1b.
+
+## Typed Value-Field Increment (validated, W1b remains open)
+
+Signed checkpoint: `value-field-homes-validated-20261110`.
+[Exact field RED/GREEN, final build/fresh controls and neutral review](../../../evidence/performance-regression-history/value-passing-implementation/stable-value-fields.json).
+The Copy path composes the same proved root with typed nonboxed Field chains,
+retaining the operand/recipe and the normal type/ownership authorities. Move
+remains whole-place only. Deref, Index, boxed and unproved representation
+boundaries do not inherit this stability. Temporary recipe metadata is not a
+copyability proof; completed private result ownership must still cover the use.
+
+The exact final fixture against all180source files at e1a77646 executes the
+intended snapshot RED. Modified source checks five roots across real call and
+Struct aggregate consumers: immutable local, guaranteed input and copy-self
+omit two redundant snapshots each; mutable local and inout input retain two.
+It asserts exact selected target/home/projection, named root acquisition and
+real declaration ownership. A separate File/resource test using actual std
+proves real Deref and recursive boxed paths retain their evaluated snapshot.
+New-fixture environment/index mistakes were setup failures, not product RED.
+
+Standard build `20261109T193729-build-847561` passed with unchanged inputs.
+Saved fresh candidate SHA
+`8028679c1752770eebb68cd8ee6fb9c9aa02ae04cd5962687f283c771969b4fa`
+compiled/ran fields, boundaries, self, local and managed String controls with
+exact outputs and empty runtime stderr. The existing production normal dispatcher
+also passed run5/panic1/typed-source-reject1 controls: dynamic String backing and
+inout replacement, disjoint/read receiver use, shared-field overlap panic,
+global reentry rejection, evaluation order, borrowed field owner and boxed inout.
+Independent neutral review reconciled the final180source hashes, candidate,
+input manifests, actual outputs/artifacts and PASS list. Supplementary fresh
+full-source compilation succeeded; its traced time is not formal performance.
+No full-suite/ASan/fixed-point, ABI transport or W1b-wide acceptance is implied.
+
+## Remaining W1b Execution Boundary
+
+Retain the original finite inventory. Next cover global fallback, cell/borrowed/
+unproved roots, shadowing/loops, getter versus raw Index paths and completed
+recipe-result ownership. Reconcile later/default/reordered/normalized-inout and
+callback/deinit effects; returned/stored/captured owners and async inputs must
+retain their acquisitions. The existing callback rejection below remains open.
+
+Saved SemanticGlobalAddress supplies target/type/mutable, not initialized
+readiness for the current body. globalInitializerPrepared is source checking;
+collectGlobalDeps is syntactic. Existing process storage/main-before-init code
+is not a published per-body readiness contract. Under the accepted proposal,
+keep required immutable-global/field snapshots rather than inventing a new
+initialization analysis in W1b. Test that conservative path before reconciliation.
+
+Async parameters have ownsAtEntry=true and are excluded from synchronous entry
+forwarding. Existing Backend/Llvm/Async stores frame inputs and retains borrowed
+values/transfers moves before first resume and before public entry returns.
+The read-only investigation establishes that existing responsibility, not its
+execution certification. Immediate-completion and suspended managed-input/
+cleanup controls remain necessary. Source references and the independent
+findings are in the same field evidence record.
 
 ## Existing Callback Validation Gap
 

@@ -1972,6 +1972,8 @@ fn midLocalHasStableEvaluationValue(local: MidLocalDecl, facts: Optional[Prepare
         return !local.ownsAtEntry
     }
     // A dedicated anonymous result already completes its own evaluation.
+    // This is home stability, not proof that a pending recipe is copyable:
+    // the selected value/field still goes through type and ownership checks.
     if local.sourceNameStart == 0U64 { return true }
     if local.ownsAtEntry || local.typeRecipe != 0U64 { return false }
     match facts {
@@ -1986,6 +1988,19 @@ fn midLocalHasStableEvaluationValue(local: MidLocalDecl, facts: Optional[Prepare
     return false
 }
 
+// Only physical value fields inherit stable outer bytes from their root.
+// A dereference/index crosses another storage contract. A boxed field needs
+// its own stable-box proof; source immutability alone does not provide it.
+fn midEvaluationValueProjectionsAreStable(projections: Array[MidProjection]) -> Bool {
+    for projection in projections {
+        match projection {
+            MidProjection.Field(index: _, typeTerm: _, isBoxed: val boxed) => { if boxed { return false } }
+            _ => { return false }
+        }
+    }
+    return true
+}
+
 // A value operand must denote the value at this evaluation point, not a
 // source place that a later sibling expression may change. Anonymous whole
 // temporaries already own a completed evaluation; borrows retain their place.
@@ -1998,14 +2013,16 @@ fn midEvaluatedValue(c: inout Comp, state: inout MidBuildState, operand: MidOper
         MidOperand.Move(place: val place) => { give place }
         _ => { return operand }
     }
-    if source.rootTag == 1U64 && source.projections.count() == 0U64 && source.local < state.locals.count() {
+    if source.rootTag == 1U64 && source.local < state.locals.count() {
         val local = state.locals[source.local]
         match operand {
-            MidOperand.Copy(place: _) => { if midLocalHasStableEvaluationValue(local: local, facts: state.sourceFacts) { return operand } }
+            MidOperand.Copy(place: _) => {
+                if midLocalHasStableEvaluationValue(local: local, facts: state.sourceFacts) && midEvaluationValueProjectionsAreStable(projections: source.projections) { return operand }
+            }
             // Preserve the existing completed anonymous move-result treatment;
             // authored moves do not acquire an immutable-value guarantee.
             MidOperand.Move(place: _) => {
-                if local.sourceNameStart == 0U64 && !local.isParameter && !local.isBorrowed && !local.isInout && !local.isCaptureCell { return operand }
+                if source.projections.count() == 0U64 && local.sourceNameStart == 0U64 && !local.isParameter && !local.isBorrowed && !local.isInout && !local.isCaptureCell { return operand }
             }
             _ => {}
         }

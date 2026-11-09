@@ -63,6 +63,16 @@ borrowed/inout roots and unique ownership do not acquire this proof from an
 immutable handle. Broader root/projection and transport changes must establish
 their own interval and ownership obligations before extending this rule.
 
+A proven value root can also supply a chain of typed nonboxed value fields.
+Construction preserves that selected place and its recipe; the normal type and
+ownership validators still establish the final projection type and live root.
+Field mutability does not invalidate an immutable outer value. The projection
+walk does not inherit stability across Deref, Index, boxed storage or an unproved
+representation boundary. A completed getter/call result is a separate value
+home, not permission to omit the getter or borrow its original referent. Pending
+temporary recipes do not prove root copyability; selected field reads and owner
+availability remain explicit obligations.
+
 ## Control Flow and Expression Results
 
 A body consists of basic blocks with ordered statements and one terminator each. Only terminators introduce CFG successors. Builder-only open-block sentinels cannot reach a published executable body.

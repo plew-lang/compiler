@@ -1,0 +1,48 @@
+use @Std/Io only { print }
+
+struct Inner { pub mut val text: String }
+pub impl Inner { factory }
+struct Outer { pub mut val inner: Inner }
+pub impl Outer {
+    factory
+    fn copied(action: fn() -> I64) -> String {
+        return select(value: self.inner.text, extra: action())
+    }
+}
+struct Pair { pub val first: String pub val second: I64 }
+pub impl Pair { factory }
+mut val ambient = <Outer inner=<Inner text="seed" /> />
+fn select(value: String, extra: I64) -> String { return value }
+fn replace() -> I64 {
+    ambient.inner.text = "changed" + " backing"
+    return 0I64
+}
+fn fromValue(input: Outer) -> String {
+    val stable = input
+    val independent = stable
+    val aggregate = <Pair first=independent.inner.text second=replace() />
+    print(aggregate.first)
+    return select(value: stable.inner.text, extra: replace())
+}
+fn reset(input: inout Outer) -> I64 {
+    input.inner.text = "inout" + " replacement"
+    return 0I64
+}
+fn fromMutable(input: inout Outer) -> String {
+    return select(value: input.inner.text, extra: reset(input: inout input))
+}
+fn main() {
+    ambient.inner.text = "before" + " backing"
+    print(fromValue(input: ambient))
+    print(ambient.inner.text)
+    ambient.inner.text = "self" + " backing"
+    val held = ambient
+    print(held.copied(action: fn() -> I64 { return replace() }))
+    print(ambient.inner.text)
+    ambient.inner.text = "old" + " backing"
+    print(select(value: ambient.inner.text, extra: replace()))
+    print(ambient.inner.text)
+    mut val local = <Outer inner=<Inner text="mutable" + " backing" /> />
+    print(fromMutable(input: inout local))
+    print(local.inner.text)
+}

@@ -1,0 +1,142 @@
+// Field stability composes from the value root, independent of whether the
+// individual field is declared mut. No Deref/Index/boxed boundary is inferred.
+use @Std/Io only { print }
+use /Frontend only { Comp, FrontendInput, analyzeFrontendDeclarations }
+use /SourceAccess only { SourceAccess }
+use /Ir only { CallTemplateKind, identSelfTarget }
+use /Mid/Build only { MidFunctionTemplates, MidBuildError }
+use /Mid/Ir only { MidPlace, MidProjection, MidOperand, MidRvalue, MidStatement, MidTerminator, MidCallTarget }
+use /Mid/OwnershipAnalysis only { MidOwnershipRequests }
+use /Mid/Prepare only { MidParametricBody }
+
+fn checkFields(place: MidPlace, root: U64) {
+    if place.rootTag != 1U64 || place.local != root || place.projections.count() != 2U64 { panic("value field chain changed its source home") }
+    for projection in place.projections {
+        match projection {
+            MidProjection.Field(index: val index, typeTerm: val typeTerm, isBoxed: val boxed) => {
+                if index != 0U64 || typeTerm == 0U64 || boxed { panic("plain typed field chain precondition missing") }
+            }
+            _ => { panic("value field chain crossed another storage boundary") }
+        }
+    }
+}
+
+fn check(name: String, localRoot: Bool, snapshot: Bool, receiver: Bool = false) {
+    mut val compiler = <Comp />
+    match analyzeFrontendDeclarations(c: inout compiler, input: <FrontendInput.Text path="stable-fields.pw" text="struct Inner {{ pub mut val value: I64 }} struct Outer {{ pub mut val inner: Inner }} struct Pair {{ val first: I64 val second: I64 }} fn effect() -> I64 {{ return 0I64 }} fn sink(value: I64, extra: I64) {{}} fn fromLocal(input: Outer) {{ val local = input sink(value: local.inner.value, extra: effect()) val pair = <Pair first=local.inner.value second=effect() /> }} fn fromMutable(input: Outer) {{ mut val local = input sink(value: local.inner.value, extra: effect()) val pair = <Pair first=local.inner.value second=effect() /> }} fn fromInput(input: Outer) {{ sink(value: input.inner.value, extra: effect()) val pair = <Pair first=input.inner.value second=effect() /> }} fn fromInout(input: inout Outer) {{ sink(value: input.inner.value, extra: effect()) val pair = <Pair first=input.inner.value second=effect() /> }} impl Outer {{ fn fromSelf() {{ sink(value: self.inner.value, extra: effect()) val pair = <Pair first=self.inner.value second=effect() /> }} }}" />, sources: <SourceAccess />) {
+        Result.Ok(value: _) => {}
+        Result.Err(error: val diagnostic) => { print(diagnostic.message) panic("field source setup failed") }
+    }
+    val owner = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: name).nameId)
+    compiler.prepareLexicalBody(fnIdx: owner).unwrap()
+    val facts = compiler.preparedFunctionSemanticFacts(fnIdx: owner).unwrap()
+    mut val templates = <MidFunctionTemplates />
+    val built = templates.body(c: inout compiler, function: owner)
+    match built.error { MidBuildError.None => {} _ => { panic("field source build failed") } }
+    val root = if localRoot { give 1U64 } else { give 0U64 }
+    val local = built.body.locals[root]
+    if localRoot {
+        val binding = facts.bindingStorageFact(origin: local.sourceBinding, declarationTarget: local.sourceNameStart).unwrap()
+        if binding.isMutable != snapshot || local.isParameter { panic("field local mutability precondition missing") }
+    } else {
+        if !local.isParameter || local.ownsAtEntry || local.isInout != snapshot { panic("field input guarantee precondition missing") }
+        if receiver && local.sourceNameStart != identSelfTarget() { panic("field receiver not exercised") }
+    }
+    val sink = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "sink").nameId)
+    mut val snapshots = 0U64
+    mut val snapshotLocals: Array[U64] = []
+    mut val initializations = 0U64
+    for block in built.body.blocks {
+        for statement in block.statements {
+            match statement {
+                MidStatement.Assign(destination: val destination, value: val value) => {
+                    match value {
+                        MidRvalue.Use(operand: val operand) => {
+                            match operand {
+                                MidOperand.Copy(place: val source) => {
+                                    if source.rootTag == 1U64 && source.local == root && source.projections.count() != 0U64 {
+                                        checkFields(place: source, root: root)
+                                        if destination.rootTag != 1U64 || destination.projections.count() != 0U64 || built.body.locals[destination.local].sourceNameStart != 0U64 { panic("field snapshot has no dedicated home") }
+                                        snapshots += 1U64
+                                        snapshotLocals.append(destination.local)
+                                    }
+                                }
+                                _ => {}
+                            }
+                        }
+                        MidRvalue.StorageBoundary(stmtId: _, targetTerm: _, operand: val operand) => {
+                            if localRoot && destination.local == root {
+                                match operand { MidOperand.Copy(place: val source) => { if source.local != 0U64 || source.projections.count() != 0U64 { panic("authored field root copy changed") } initializations += 1U64 } _ => { panic("authored field root copy removed") } }
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+    if localRoot && initializations != 1U64 { panic("field root acquisition missing") }
+    if snapshots != (if snapshot { give 2U64 } else { give 0U64 }) { panic("stable value field got redundant evaluation snapshot") }
+    mut val calls = 0U64
+    mut val aggregates = 0U64
+    for block in built.body.blocks {
+        for statement in block.statements {
+            match statement {
+                MidStatement.Assign(destination: _, value: val value) => {
+                    match value {
+                        MidRvalue.Aggregate(exprId: _, kind: _, resultTerm: _, fieldCount: _, elements: val elements) => {
+                            if elements.count() != 2U64 { panic("field aggregate arity changed") }
+                            match elements[0U64].operand {
+                                MidOperand.Copy(place: val place) => {
+                                    if snapshot { if place.rootTag != 1U64 || place.local != snapshotLocals[1U64] || place.projections.count() != 0U64 { panic("mutable aggregate field snapshot not used") } }
+                                    else { checkFields(place: place, root: root) }
+                                }
+                                _ => { panic("aggregate field ownership changed") }
+                            }
+                            aggregates += 1U64
+                        }
+                        _ => {}
+                    }
+                }
+                _ => {}
+            }
+        }
+        match block.terminator {
+            MidTerminator.Call(callee: val callee, receiver: _, args: val args, destination: _, target: _) => {
+                if args.count() == 2U64 {
+                    match callee {
+                        MidCallTarget.Template(site: val site) => {
+                            match compiler.callTemplateAt(index: compiler.callTemplateIndex(siteKey: site)).kind {
+                                CallTemplateKind.Direct(callee: val target, receiver: _, args: _, calleeTypeArgs: _, proofId: _) => { if target != sink { panic("field selected target changed") } }
+                                _ => { panic("field target not direct") }
+                            }
+                        }
+                        _ => { panic("field target not parametric") }
+                    }
+                    match args[0U64] {
+                        MidOperand.Copy(place: val place) => {
+                            if snapshot { if place.rootTag != 1U64 || place.local != snapshotLocals[0U64] || place.projections.count() != 0U64 { panic("mutable field snapshot not used") } }
+                            else { checkFields(place: place, root: root) }
+                        }
+                        _ => { panic("field argument ownership changed") }
+                    }
+                    calls += 1U64
+                }
+            }
+            _ => {}
+        }
+    }
+    if calls != 1U64 || aggregates != 1U64 { panic("field consumers not exercised") }
+    mut val requests = <MidOwnershipRequests />
+    requests.request(c: inout compiler, body: <MidParametricBody.input canonical=built.canonical />).unwrap()
+}
+
+fn main() {
+    check(name: "fromMutable", localRoot: true, snapshot: true)
+    check(name: "fromInout", localRoot: false, snapshot: true)
+    check(name: "fromLocal", localRoot: true, snapshot: false)
+    check(name: "fromInput", localRoot: false, snapshot: false)
+    check(name: "fromSelf", localRoot: false, snapshot: false, receiver: true)
+    print("stable-value-fields-ok")
+}

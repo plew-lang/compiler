@@ -1,0 +1,85 @@
+// An immutable handle does not stabilize its referent. Recursive boxed value
+// fields also need their own proof, rather than inheriting outer-root bytes.
+use @Std/Io only { print }
+use /Frontend only { Comp, FrontendInput, analyzeFrontendDeclarations }
+use /SourceAccess only { SourceAccess, SourceResource }
+use /Diag only { emitDiagnostic }
+use /Mid/Build only { MidFunctionTemplates, MidBuildError }
+use /Mid/Ir only { MidProjection, MidOperand, MidRvalue, MidStatement, MidTerminator }
+use /Mid/OwnershipAnalysis only { MidOwnershipRequests }
+use /Mid/Prepare only { MidParametricBody }
+
+fn check(name: String, dereference: Bool) {
+    mut val compiler = <Comp />
+    val path = "plew:std/BoundaryProbe.pw"
+    val source = "use @Std/Core only {{ MutableRef }} struct Payload {{ pub mut val value: I64 }} struct Node {{ pub val next: Optional[Node] }} fn effect() -> I64 {{ return 0I64 }} fn sink(value: I64, extra: I64) {{}} fn consume[T](value: T, extra: I64) {{}} fn fromReference(input: MutableRef[Payload]) {{ val handle = input sink(value: handle->value, extra: effect()) }} fn fromBoxed(input: Node) {{ consume(value: input.next, extra: effect()) }}"
+    match analyzeFrontendDeclarations(c: inout compiler, input: <FrontendInput.File path=path />, sources: <SourceAccess stdRoot="std/".bytes() resources=[<SourceResource path=path.bytes() text=source />] />) {
+        Result.Ok(value: _) => {}
+        Result.Err(error: val diagnostic) => { emitDiagnostic(diagnostic: diagnostic) panic("value boundary source setup failed") }
+    }
+    val owner = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: name).nameId)
+    match compiler.prepareLexicalBody(fnIdx: owner) {
+        Result.Ok(value: _) => {}
+        Result.Err(error: val diagnostic) => { emitDiagnostic(diagnostic: diagnostic) panic("value boundary body setup failed") }
+    }
+    mut val templates = <MidFunctionTemplates />
+    val built = templates.body(c: inout compiler, function: owner)
+    match built.error { MidBuildError.None => {} _ => { panic("value boundary source build failed") } }
+    mut val snapshots: Array[U64] = []
+    for block in built.body.blocks {
+        for statement in block.statements {
+            match statement {
+                MidStatement.Assign(destination: val destination, value: val value) => {
+                    match value {
+                        MidRvalue.Use(operand: val operand) => {
+                            match operand {
+                                MidOperand.Copy(place: val place) => {
+                                    mut val hasDeref = false
+                                    mut val hasBoxed = false
+                                    for projection in place.projections {
+                                        match projection {
+                                            MidProjection.Deref(typeTerm: _) => { hasDeref = true }
+                                            MidProjection.Field(index: _, typeTerm: _, isBoxed: val boxed) => { if boxed { hasBoxed = true } }
+                                            _ => {}
+                                        }
+                                    }
+                                    if (dereference && hasDeref) || (!dereference && hasBoxed) {
+                                        if destination.rootTag != 1U64 || destination.projections.count() != 0U64 || built.body.locals[destination.local].sourceNameStart != 0U64 { panic("boundary snapshot is not dedicated") }
+                                        snapshots.append(destination.local)
+                                    }
+                                }
+                                _ => {}
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+    if snapshots.count() != 1U64 { panic("unsafe storage boundary lost evaluation snapshot") }
+    mut val calls = 0U64
+    for block in built.body.blocks {
+        match block.terminator {
+            MidTerminator.Call(callee: _, receiver: _, args: val args, destination: _, target: _) => {
+                if args.count() == 2U64 {
+                    match args[0U64] {
+                        MidOperand.Copy(place: val place) => { if place.rootTag != 1U64 || place.local != snapshots[0U64] || place.projections.count() != 0U64 { panic("boundary call ignored evaluated snapshot") } }
+                        _ => { panic("boundary call changed argument mode") }
+                    }
+                    calls += 1U64
+                }
+            }
+            _ => {}
+        }
+    }
+    if calls != 1U64 { panic("boundary call not exercised") }
+    mut val requests = <MidOwnershipRequests />
+    requests.request(c: inout compiler, body: <MidParametricBody.input canonical=built.canonical />).unwrap()
+}
+fn main() {
+    check(name: "fromReference", dereference: true)
+    check(name: "fromBoxed", dereference: false)
+    print("stable-value-boundaries-ok")
+}
