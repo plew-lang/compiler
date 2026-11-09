@@ -15,6 +15,14 @@ tags: [ownership, backend, mid]
 
 The concrete recommendation and finite storage/entry matrix are in
 [com-rv7l](com-rv7l.md#investigation-result-and-recommended-design).
+The deeper [Swift study](../../../evidence/performance-regression-history/swift-abi-deep/README.md)
+and its implementation work packages supersede a transport-only interpretation.
+Carry authored mutability/storage facts to Mid and settle redundant semantic
+snapshot selection before ownership/drop verification; late LLVM planning must
+not erase semantic owners. Use one root/interval/projection predicate rather
+than separate heuristics for let, self and temporary spellings. Include admitted
+immutable globals and static value-field composition when their existing root
+evidence is available; do not cross a reference/accessor boundary by inheritance.
 Its investigation closure is not ABI adoption: obtain the explicit decision
 required there before beginning product edits. Prototype the shared signature
 descriptor and typed Value/Home carrier, caller materialization/callee binding,
@@ -35,6 +43,22 @@ Preserve by-value semantics, evaluation/snapshot order, ARC and deinit boundarie
 ## Scenarios and TDD
 
 Derive concrete tests from the design matrix before implementation: stable read-only forwarding/recursion; mutation through later arguments or callbacks/shared aliases; temporary and returned owners; nested aggregate/CoW; direct and representative indirect entries in the prototype scope. New structural copy-removal assertions must fail for the intended reason on the fixed old candidate. Semantic controls may already be GREEN. Malformed/mismatched physical descriptors must not bypass applicable verification.
+
+## Proof Obligations from Independent Design Review
+
+- Validate origin facts against accepted SourceFacts through freeze and
+  instantiation. A tag alone is not proof: distinguish authored, synthetic,
+  borrowed and capture-cell storage; check initialization and readonly uses.
+  Missing/forged-origin controls must exercise the production checker.
+- Distinguish forwarding an already guaranteed self from acquiring the first
+  copy-self home from a shared place. Cover callback, later-argument and deinit
+  reentry with raw and optimized structural/semantic controls.
+- Freeze a finite inventory of actual common-helper call sites and assign each
+  role to the descriptor/carrier or an adapter. Measure real plan construction
+  counts; a list of function families alone is insufficient.
+- Include a Mid structural control retaining the authored named-local Copy while
+  omitting only a redundant evaluation temporary. Preserve the associated owner
+  and destruction operation rather than relying on byte transport.
 
 ## Measurement and Completion
 

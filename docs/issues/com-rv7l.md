@@ -51,11 +51,15 @@ This accepts the task plan only, not an ABI design, implementation or speedup.
 
 ## Investigation Result and Recommended Design
 
-Status: **proposal for decision, not an adopted ABI**. Source inspection uses
-compiler 601a6eb3 (product source f65fa24e); the pre-existing local manifest,
+Status: **investigated after deep review; proposal, not an adopted ABI**.
+The [deep Swift study](../../../evidence/performance-regression-history/swift-abi-deep/README.md)
+traces pinned SILGen/ownership/IRGen sources and fresh nontrivial-ownership
+controls. Source inspection uses compiler a0fe7c03 (product source f65fa24e);
+the pre-existing local manifest,
 binary and pycache changes are not part of this work. No product experiment or
-new timing is claimed. The saved [Swift/Plew probe](../../../evidence/performance-regression-history/value-self-abi-probe.json)
-is existing evidence, not a rerun. Implementation and measurement belong to
+new Plew timing is claimed. The saved [Swift/Plew probe](../../../evidence/performance-regression-history/value-self-abi-probe.json)
+is existing evidence, not a rerun; new Swift experiments are explicitly separate.
+Plew implementation and measurement belong to
 com-uiri after the decision gate below.
 
 ### Primary References and Interpretation
@@ -93,6 +97,8 @@ current code and the proposed owner, not evidence of an implemented change.
 
 | Current producer or consumer | Observation and responsibility in the proposal |
 | --- | --- |
+| SourceFacts.pw: storeBuildingSemanticBinding; Frontend.pw: SourceBindingFact | Current binding record lacks mutability/storage class. Extend this authored handoff; LLVM cannot consume a fact which was never preserved. Do not reread source spelling to recover it downstream. |
+| Mid/Build.pw: buildMidLetAdmitted, addMidLocal; Mid/Ir.pw: MidLocalDecl | Build sees declaration mutability, but current Mid locals do not retain it. Carry a compact authored storage-origin/mutability fact through freeze/instantiate and verification. Unknown synthetic storage is conservative, not implicitly immutable. |
 | Mid/Build.pw: midEvaluatedValue, midArgumentNeedsOwnedHome, midTemplateArgumentOperand | Already creates evaluation-time owners for earlier child values and ambient roots. Preserve those semantic operations; a physical address must not delay them to the call. Ordinary synchronous whole parameters have a reuse case; self is explicitly excluded from that particular shortcut. |
 | Mid/Build.pw: midCallReceiver, midSourceCallReceiver | Retains selected receiver passing and place provenance. Do not interpret every Borrow as a copyable value: unique read borrows and dependent shared places have different obligations. |
 | Mid/Instantiate.pw: canonicalBorrowOperand, canonicalReceiverWithPassing | Preserves guaranteed uses and owned temporary scope; this removes call-edge ARC acquisition, not physical copying. |
@@ -176,6 +182,7 @@ the address. Copies of contained references retain their ordinary identity.
 | Incoming GuaranteedIndirect ordinary parameter or copyable self | Its caller contract guarantees the outer home. Forward the same home for compatible read uses, including recursion. Do not expose its address as a source pointer. |
 | Completed anonymous value temporary | Reuse its dedicated home only if its Mid owner/scope covers the call and no move, replacement or write can intervene. Do not create another semantic owner just to pass its address. |
 | Ordinary whole copyable immutable local | Use its finalized immutable-binding fact directly, together with initialized home, live owner and no capture-cell/address alias capable of replacing its outer bytes. No general effect solver is needed to rediscover declared immutability. This does not freeze reference payloads or waive mode/lifetime checks. |
+| Immutable value global or static value-field projection | Compose the root's existing initialization/lifetime/stability evidence with the selected value layout. Do not cross a reference dereference or effectful accessor merely because the handle/field is declared immutable. Missing stable-box evidence keeps a boxed value projection on the snapshot path. |
 | Earlier value argument followed by an effectful argument/default | Use the evaluation-time snapshot already required by Mid; creating a pointer only at call emission must not reread the old source place. |
 | Mutable root, global, capture cell, reference dereference, indexed/accessor result | Do not infer stable value bytes from an immutable handle or a live cell. Preserve the selected getter/copy/borrow operation and timing. Copyable value inputs use a protected evaluated snapshot where necessary; a semantic borrow keeps its actual access/dependency contract and cannot be snapshotted to evade it. |
 | Ordinary local not covered by the finite proof | Snapshot at the required evaluation point; broader place/effect reuse is optional future work. |
@@ -184,12 +191,59 @@ the address. Copies of contained references retain their ordinary identity.
 | Async public entry | Home is valid only until entry returns; activation-input plan acquires/transfers owners into the frame before caller guarantee ends, even on synchronous first completion. Resume receives frame storage, never the caller's borrowed address. |
 | Foreign call or callback | Keep external ABI. An exposed adapter owns/protects any converted input through its private call. Unknown foreign effects are not purity or no-alias evidence. |
 
-No new whole-program effect solver is needed for these finite reuse proofs
-(incoming contracted home, dedicated completed temporary and ordinary immutable
-local under the storage conditions above). Ordinary same-call
+No new whole-program effect solver is needed for the declaration/ownership-derived
+root proofs and static projections described below. Ordinary same-call
 overlap and unknown-effect cases must still preserve the existing snapshot and
 access plan. If inspection cannot establish its required contract, the prototype
 must report the gap rather than guess a different source meaning.
+
+### Snapshot Selection Versus Physical Transport
+
+There are two connected changes, not one LLVM peephole:
+
+1. **Select the semantic evaluation home before ownership/drop verification.**
+   Source facts retain binding identity, declared mutability and origin under the
+   existing completion owner. Mid construction consumes them along with the
+   selected passing mode. Its existing evaluated-value operation creates a
+   snapshot when necessary; known-stable value sources may use their home without
+   authoring a redundant owning temporary. If a verified pre-drop transform is
+   used instead, it must preserve source destruction/CoW rules and have enabled/
+   disabled controls. It cannot remove authored copies merely because counts match.
+2. **Preserve that home through physical transport.** The representation plan
+   chooses typed Value/Home binding under the shared signature. It does not
+   invent acquisitions, delete Mid Copy/Drop or move their evaluation points.
+   A physical snapshot slot is not automatically an independent owner of nested
+   buffers. If ownership is needed, the Mid plan must already establish it.
+
+For ordinary immutable bindings, author the fact once at the accepted binding
+producer and carry it to Mid; do not run a new effect analysis to rediscover it.
+Current SourceBindingFact/MidLocalDecl need this explicit extension. Use a compact
+origin/state tag with an unproved default for synthetic roots, not a recursive
+AST/context payload. Authored required facts missing at a handoff are internal
+errors, whereas an explicitly unproved optimization case uses the correct
+snapshot path. A generated temporary, borrowed match binding and mutable capture
+cell must not inherit a source-local const guarantee from a missing flag.
+
+The storage predicate is compositional: valid initialized root + stability for
+the use interval + permitted projections + live owner + selected value mode.
+Root proof providers are guaranteed copyable inputs/self, owned immutable local
+bindings, initialized immutable value globals under the existing initialization
+plan, and completed dedicated value temporaries. No new global initialization
+analysis is introduced; absence of required initialization/lifetime evidence
+prevents reuse. A static struct-field projection can inherit a stable value
+root's guarantee through its selected layout. It need not itself be declared
+immutable if the root binding freezes the value. A boxed value-field additionally
+requires the existing stable-box/CoW owner relationship; without that evidence,
+use the snapshot path. Reference dereference, shared cells, borrowed payload
+places and effectful Index/getter operations do not inherit this guarantee.
+
+Known immutable roots are not permission for lifetime extension, address escape,
+or skipping an owned conversion. A mutable root can use the same transport if
+existing local/access facts prove interval stability. General CFG/alias discovery
+for mutable roots remains optional; no new whole-program solver is required.
+An unknown callback is relevant when it can reach/invalidate the proposed home,
+not a reason to re-snapshot an inaccessible immutable local. Do not infer absence
+of reachability from a handle's let declaration or single-thread execution.
 
 Storage planning belongs to verified Mid/representation preparation while typed
 places and scopes remain available; LLVM emission consumes it. Do not put a new
@@ -205,6 +259,12 @@ producer and rerun that preparation instead of inventing ownership in emission.
 
 ### Lifetime, Invalidation and Verification
 
+The proof describes one dynamic activation/initialization lifetime, not one
+cached value per source expression. Loop iterations may reuse a static slot only
+after its previous obligation ends; shadowing retains distinct binding identity.
+An immutable root with a mutable-declared field is still frozen by value-binding
+composition, but a read-only handle to shared mutable storage is not.
+
 Entry allocas belong to the function actually being emitted, including synthetic
 thunks. Store at the source-prescribed evaluation point, never hoist evaluation
 to the entry. A slot reused on loop iterations must not overwrite a value while
@@ -217,6 +277,13 @@ signature/environment/layout version. A change to body/CFG, ownership/access
 elaboration, layout, signature or target invalidates affected plans; build them
 after the relevant facts stabilize or explicitly regenerate after changes.
 Cache reuse does not turn a stale address or matching type into fresh evidence.
+
+Construct a storage plan once per executable body/signature/layout identity.
+Keep local root-state queries indexed and projection checks proportional to that
+path. Independent validation may scan relevant operations once per body; do not
+rescan the entire CFG, source or effect graph for each argument. Profile body
+plan builds, classified lanes, semantic snapshots and forwarded homes separately
+from wall time so preparation cost is visible without shipping permanent counters.
 
 Before executable publication, validate all logical/physical lane correspondences,
 typed Value/Home cases, type/alignment, scope/base dependencies, readonly binding
@@ -237,6 +304,7 @@ optional Mid transformations additionally require enabled/disabled comparisons.
 | Direct ordinary aggregate parameter and read-only method self | Leaf/forward/recursive calls, final machine-code transfer counts and observed values; no size threshold | Same on final candidate, scalar/empty/nested/enum/CoW controls |
 | Snapshot timing/aliases | Later argument/default mutation, mutable global/capture/cell callback; compare old/new values and cleanup | Full affected evaluation/receiver/access matrix, single evaluation and original writeback target |
 | Parameter copied to local/return/environment | Independent owned copy, exactly-once lifetime/cleanup, reference identity/CoW unchanged | Escape and destruction edges including user deinit and cleanup callbacks |
+| Declaration-derived storage and projection | Immutable local with mutable-declared fields; immutable admitted global; selected static value field; const reference handle with mutable referent as a negative contrast | Source-fact-to-Mid retention, loop reinitialization and shadowing, boxed-owner fallback, no inherited guarantee through dereference/getter |
 | Generic/default/via adapters | One concrete generic and default forwarding chain through common signature records | Every affected synthetic family, receiver/result specialization and adapter agreement |
 | Closure call and witness/existential call | Representative indirect entry for each; hidden environment/erased receiver stays distinct from home lanes | All affected direct/indirect paths including mixed guaranteed/inout/move lanes |
 | Async entry and resume | Temporary aggregate/String input, first completion and suspension; prove frame acquisition before home ends | Closure/copy-self and unique move controls where currently supported, no address escape |
@@ -246,6 +314,34 @@ optional Mid transformations additionally require enabled/disabled comparisons.
 | Malformed preparation | Wrong lane/role/type/index, missing/stale record, owner ending early, address escape | Production validator independently rejects each affected invariant; valid recovery |
 
 ### Bounded Prototype and Measurement Decision
+
+Execute four reviewable work packages within the prototype; each closes its
+producer-to-consumer guarantee before the next one is certified:
+
+1. **Storage facts and semantic home selection:** extend authored binding facts
+   and Mid roots, preserve them through both lowering adapters/freeze/instance
+   preparation, and verify known-stable versus required-snapshot decisions before
+   ownership/drop. Cover const value roots/fields, mutable-reference contrast,
+   shadowing/loops and missing/forged origin facts. No physical ABI changes yet.
+2. **Common physical descriptor and binding carrier:** deterministic convention
+   key, logical-to-physical lanes, typed Value/Home input and parameter binding,
+   validated body-local storage plan. Keep baseline transport until each caller
+   and definition consumes the same descriptor. Test role/type/index/context
+   mismatches without invoking the compiler as a black box when APIs suffice.
+3. **Actual transfer and all entry consumers:** implement guaranteed-home calls
+   and callee direct binding together, then migrate/adapt free/method/default/
+   closure/witness/glue/external and demanded JIT consumers. Async entry performs
+   its existing owned acquisition before return. Native raw/optimized controls
+   must cover both reused and snapshotted inputs; no direct-only rollout.
+4. **Proof, cost and go/no-go:** reconcile the matrix, inspect final byte transfers
+   independently of ARC, run matched comparisons and independent correctness/
+   performance review. Unproved cases are not passing coverage. The final
+   integration task retains full affected-surface/gate reconciliation.
+
+These are implementation units, not four competing ABI designs or a promise to
+copy Swift's whole optimization pipeline. Convert them into dependent child
+tasks before product edits if their scope requires separate execution; preserve
+the end-to-end prototype gate. No code is authorized before the adoption gate.
 
 Implement the common descriptor/typed carrier and the finite reuse proofs above,
 with all users of the common physical helpers either migrated or explicitly
@@ -296,38 +392,31 @@ unresolved performance acceptance and phase-three guarantees remain intact.
 
 ### Completion Reconciliation and Independent Review
 
-The [Swift mutability supplement](../../../evidence/performance-regression-history/swift-mutability/README.md)
-adds source and fresh native/SIL/LLVM/assembly evidence about let/var/self.
-It refines this still-unadopted proposal to include ordinary immutable locals
-with explicit storage/lifetime conditions. It neither adopts the ABI nor claims
-that all Swift let storage is physically forwarded without a copy.
+Investigation is complete after renewed independent source/experiment and Plew
+design reviews. The earlier finite study is superseded by this deeper evidence
+and refined proposal. Closure is **investigated**, not ABI adoption, product
+implementation, safety certification or a speedup claim. Reconciliation:
 
-Outcome: **investigated; recommendation awaits user adoption decision**.
-
-| Original obligation | Evidence in this task |
+| Obligation | Current deliverable and remaining certification |
 | --- | --- |
-| 1. Recheck producers and consumers | Rechecked map above; compiler src tree 23fb2885e3c354e1d73d268033fe5444afeda9a4 and native tree ec09e772869e6b129d1429dc114fa3e8bd3dee5e match f65fa24e; no product edits |
-| 2. Compare methods with Swift/Rust | Primary references and alternatives table; proposed indirect homes versus existing byval and broader effect analysis |
-| 3. Assign owners, evidence, fallback, binding and verification | Single signature authority, typed carrier, storage plan at executable-to-LLVM-ready admission, lifetime/invalidation/verification sections |
-| 4. Preserve snapshots and ownership | Finite storage-case table, explicit receiver/unique distinction, return/capture/async and unknown-effects obligations |
-| 5. Cover entry families | Entry/scenario matrix and updated com-uiri/com-ffar scope; unsupported entries retain coherent protocols |
-| Bounded prototype, measurement, review and next owners | Prototype/measurement decision and adoption gate; actual tk chain com-rv7l -> com-uiri -> com-ffar (prerequisite first), no cycle |
+| Swift declaration facts through lowering | Pinned SILGenLValue/SILGenApply, CopyToBorrow/CopyPropagation, access storage and IRGen study; explicit distinction from vendor-build identity |
+| Concrete semantics and physical transport | Trivial prior probe plus new Array-bearing Payload at six stages and native outputs in both modes; independent replay passed in both modes; 14 families across six stages |
+| Plew producer/consumer boundary | SourceFacts/SourceBindingFact -> MidLocalDecl -> snapshot selection -> verified physical plan -> caller/callee/adapters; source/native unchanged from f65fa24e |
+| Safety/proof scope | Compositional roots/projections, ownership/snapshot and transport separation, lifetime/invalidation, explicit async non-equivalence and conservative unsupported proofs |
+| Method choice and finite implementation | Alternatives, four work packages, typed descriptor/carriers, entry/scenario matrix and preserved approval gate |
+| Measurement and closure | Existing matched/formal procedure and cost accounting retained; no Swift timing used to claim Plew recovery; com-uiri/com-ffar own product validation |
 
-Fresh-context reviewers guaranteed_abi_design_safety_review and
-guaranteed_abi_design_feasibility_review independently checked the task against
-the source/contract boundary and Swift material. Both support investigation
-closure with no required fixes. Their unproved concerns remain explicitly owned
-by com-uiri: first receiver-home stability, synthetic/adapter migration size,
-semantic storage-validator implementation and total analysis/transfer cost.
-They are prototype proof obligations, not findings that the implementation has
-passed. The latest executable-to-ready planning paragraph and downstream updates
-were included in their review. Optional plan counters may aid cost explanation;
-pinning upstream main links may improve reproducibility. Neither is required
-for this investigation; source references include read date and mutability.
-
-All task-local links/headings and dependency acyclicity were checked; source and
-native diffs against f65fa24e are empty. Product tests, new Swift/Plew probe
-execution, timing and full-suite/fixed-point gates were not run because this is
-an investigation/document change. Their owners remain com-uiri/com-ffar. Closing
-this task does not certify those gates or resolve com-1hd3's performance issue.
-
+Two fresh-context reviewers checked compiler a0fe7c03 and the pending document
+changes. The Swift reviewer independently reran probe.py (exit 0), matched all
+16 expected output lines in both modes, all input/upstream/artifact hashes, and
+all saved function snippets after normalizing nondeterministic existential
+opening UUIDs. Source paths, ARC versus physical-copy observations and the async
+lifetime distinction agreed. Two broken relative links were corrected and the
+27 local links/anchors across the affected research/task documents were checked.
+The Plew reviewer independently confirmed the missing fact handoff, actual
+semantic/physical boundaries, common-helper consumers and work-package ordering;
+no required technical correction remained. Scope and limits are in the linked
+study. Three implementation proof obligations remain explicitly owned by
+com-uiri: trustworthy origins, initial receiver acquisition, and finite consumer
+inventory/plan construction counts. These are future product gates, not claims
+that a document has established product safety.
