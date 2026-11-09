@@ -773,8 +773,9 @@ valid and missing-set controls were already correct. Additional internal raw
 snapshot cases cover owner/clause/duplicate/empty, wrong full inputs/predicates,
 Deferred preservation for missing normalization, proof identity and cache
 identity. The prepared-empty sentinel still has no owner/environment and cannot
-authorize a clause. Raw Arena issuance is trusted and not claimed sealed here;
-that capability boundary remains com-oir7's responsibility.
+authorize a clause. Raw Arena issuance is trusted internal storage, not source
+admission authority; see the publication-boundary reconciliation below.
+com-oir7 owns only view-check API narrowing, not blanket issuer sealing.
 
 This removes the Function/Requirement source-bound preflight, not every query
 in the shared proof graph. Conformance/Associated/Receiver paths, deeper frozen
@@ -958,7 +959,8 @@ proof identity, equation-loss rejection by the existing pure comparator and
 recovery. Its nested selected child has no own condition plan but does have a
 projection in its binding, explicitly preserving the next reader dependency.
 The source fixture's empty/absent publication check is a local control, not a
-claim that raw publication ownership/duplicate sealing is complete (com-oir7).
+claim that every raw issuer is sealed. Storage immutability and source-success
+publication are separate guarantees; see the reconciliation below.
 
 The next consumer increment must share equation instantiation/prerequisite
 replay with witness replay. Ground source/output simultaneously once in the
@@ -1063,3 +1065,50 @@ correct the erroneous references/acceptance claims and resume implementation.
 This stop is a planning-record issue, not a proven language defect or a claim
 that self-compilation performance is unrepairable. No fresh formal timing,
 main/seed promotion or whole-task completion is claimed.
+
+### Publication Boundary Reconciliation
+
+The user authorized correcting the ownership record and resuming the bounded
+implementation, without automatically requiring blanket raw-factory sealing.
+Reconciliation uses product source at `a3fdb140`; this is a structural inspection,
+not a new execution gate or proof that all source admission is complete.
+
+[Checked-body storage](../design/checked-body-storage.md#adopted-choice-and-decision-boundary)
+requires the source-operation Building writer to be private and Prepared
+publication to follow successful owner admission. It does not turn every
+append-only proof/binding allocator into a source-success capability.
+[com-wqa0](com-wqa0.md#operation-and-constraint-api-reconciliation) already
+records this distinction; the current paths below independently confirm it.
+
+| Boundary | Actual production path and guarantee | Responsibility |
+| --- | --- | --- |
+| Source-operation success | `Check/CallConstraints.pw`: private admission creates the exact `AdmittedCallConstraints`; private publication constructs `PreparedCallConstraints`. `Resolve/Preparation.pw` finishes fallible body/global checks before publishing. `Resolve/Record.pw` and `Resolve/Global.pw` record the result through `finishSourceFacts`; the private Building store rejects completed owners. | Existing com-wqa0 source-operation guarantee; new authored projection admission remains com-amjl, not waived by that closed task. |
+| Callable instance binding | `Check/Bounds.pw`: `environmentWithCallableConstraints` checks Declaration/Recorded/Requirement evidence; `instantiateRequirementCallConstraints` checks exact public substitution and proof boundary before Arena binding. `Ir/InstanceConstraints.pw` appends immutable bindings and strips recursive constraints from their saved environment. `PreparedCallableConstraints` is not `PreparedCallConstraints`. | com-amjl owns saved-evidence correctness along its producer/reader paths; com-nhtx owns the exact callable/environment API narrowing. Raw allocation is not source-success authority. |
+| Conformance associated rows | Sole production `publishConformanceAssociatedEvidence` caller is `Check/Bounds.pw`: SourceAdmission selection, normalization validation and complete retained-witness boundary precede publication. `Ir/DeclarationConstraints.pw` rejects a second table, including after an empty first table. | com-amjl's associated producer-to-reader guarantee, including pending interface cases. No blanket sealing dependency inferred. |
+| Conformance method / supertrait rows | Sole production writers are `Check/Bounds.pw`, after requirement/implementation or supertrait checks and proof freezing. Arena method and supertrait stores reject replacement; they are not body-owner readiness. | Preserve declaration evidence guarantees; this inspection does not certify all declaration paths or broaden com-amjl into every API group. |
+| Associated assumptions / witness plans | `Mono/Resolve.pw` deduplicates associated assumptions; callers are projected facts, interface assumptions and interface rebasing. Witness plans are appended in selected/replayed witness paths. These immutable records can exist during checking and are not successful source-owner receipts. | com-amjl must validate exact prerequisite, scope and retained proof at actual consumers. com-pmiz/com-j2i7 retain their finite adapter scopes; neither is assigned all raw issuance. |
+
+Raw storage may retain an immutable prefix when a later semantic operation
+fails. Such a prefix must not authorize source success or repair absent saved
+evidence. Internal malformed-row tests deliberately use low-level construction;
+their rejection controls do not establish that arbitrary internal callers cannot
+forge a self-consistent row. Conversely, that testing facility alone is not an
+observed source-language bypass or evidence that every allocator must be sealed.
+
+The erroneous com-oir7 attributions above are corrected. No new issue or real
+dependency is needed for that correction; existing required com-amjl production
+admission/consumer work stays open. The previous stop is resolved for resumption,
+not for task closure. Next: use the two saved failing interface probes to repair
+the first failing declaration/admission owner, then verify retained rows through
+their actual interface consumer. Do not count either pre-reader failure as a
+reader RED, Universal execution coverage, or a completed producer-to-consumer
+guarantee.
+
+Independent read-only review `publication_boundary_reconciliation_review`
+accepted this documentation increment against `a3fdb140` plus the document
+diff. It independently checked checked-body storage, frontend handoffs, the
+private source-operation success tail, all listed production storage callers
+and the four finite API tasks. No confirmed contract violation or mandatory
+extra sealing task was found. Adopted: correct the ownership record, retain the
+unfinished interface producer/consumer guarantee, resume within com-amjl. This
+is not execution revalidation or task/phase completion.
