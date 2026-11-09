@@ -1,0 +1,43 @@
+// Invalid representation metadata must not become accepted source authority.
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use /SourceAccess only { SourceAccess }
+use /SourceTypeUses only { SourceTypeScopeKind, SourceTypeRecipeOrigin }
+use /Ir only { TypeRef }
+use /Diag only { FailureDomain }
+use @Std/Io only { print }
+
+fn check(scenario: U64) {
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text text="fn integer(value:I64) {{}} fn callable(value:fn() -> ()) {{}} fn main() {{}}" path="MappingIntegrity.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
+    val integer = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "integer").nameId)
+    val callable = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "callable").nameId)
+    val entry = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "main").nameId)
+    val element = compiler.funcParamAt(params: compiler.arena.functionAt(index: integer).params, index: 0U64).ty
+    val original = compiler.arena.typeAt(index: compiler.funcParamAt(params: compiler.arena.functionAt(index: callable).params, index: 0U64).ty)
+    val function = compiler.registerDeclaredFunc(f: compiler.arena.functionAt(index: entry), registerSurface: false).unwrap()
+    val anchor = compiler.arena.functionAt(index: function).defOffset
+    val scope = compiler.sourceTypeUses.begin(kind: <SourceTypeScopeKind.FreeFunction />, anchor: anchor)
+    val unit = compiler.pushType(t: <TypeRef nameStart=0U64 nameLen=0U64 args=[] />)
+    val source = if scenario == 3U64 { give element } else { give unit }
+    val occurrence = compiler.sourceTypeUses.record(term: source, site: anchor, parameters: [])
+    val sourceRecipe = compiler.sourceTypeUses.useAt(index: occurrence - 1U64).unwrap().recipe
+    val payload = if scenario == 1U64 { give element }
+        else if scenario == 2U64 { give compiler.pushType(t: <TypeRef nameStart=0U64 nameLen=0U64 args=[] isRecord=true recordFieldLabels=[compiler.internBytes(s: "value").nameId] recordFieldTerms=[element] />) }
+        else { give compiler.semanticSourceResultTerm(ref: unit) }
+    val child = compiler.sourceTypeUses.deriveRecipe(term: payload, children: [], labels: [], origin: <SourceTypeRecipeOrigin.ResultRepresentation />, sourceRecipe: sourceRecipe)
+    val aggregate = compiler.pushType(t: <TypeRef nameStart=original.nameStart nameLen=original.nameLen args=[payload] />)
+    compiler.sourceTypeUses.record(term: aggregate, site: anchor, parameters: [], children: [child], labels: [0U64])
+    if !compiler.sourceTypeUses.bindFunction(token: scope, function: function) || !compiler.sourceTypeUses.bindSignature(token: scope, function: function, parameters: [], result: 0U64) || !compiler.sourceTypeUses.finish(token: scope, succeeded: true) { panic("mapping owner setup failed") }
+    match compiler.admitAuthoredFunctionViews() {
+        Result.Ok(value: _) => { if scenario != 0U64 { panic("invalid representation mapping admitted") } }
+        Result.Err(error: val diagnostic) => {
+            if scenario == 0U64 { panic(diagnostic.message) }
+            match diagnostic.failureDomain { FailureDomain.Internal => {} _ => { panic("invalid mapping lost internal failure domain") } }
+            if diagnostic.message != "authored type recipe has an invalid result representation" { panic(diagnostic.message) }
+        }
+    }
+}
+fn main() {
+    for scenario in [0U64, 1U64, 2U64, 3U64] { check(scenario: scenario) }
+    print("1")
+}

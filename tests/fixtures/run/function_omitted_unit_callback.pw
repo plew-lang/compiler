@@ -1,0 +1,11 @@
+use @Std/Io only { print }
+
+fn invoke(action: fn()) { action() }
+fn explicit(action: fn() -> ()) { action() }
+fn number(action: fn() -> I64) -> I64 { return action() }
+fn main() {
+    val action: fn() = fn() { print("omitted") }
+    invoke(action: action)
+    explicit(action: fn() { print("explicit") })
+    print(number(action: fn() -> I64 { return 42I64 }))
+}

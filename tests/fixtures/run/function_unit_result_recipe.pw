@@ -1,0 +1,49 @@
+// A representation edge retains its exact nonzero authored Unit occurrence.
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests, TypeAst, Span }
+use /SourceAccess only { SourceAccess }
+use /SourceTypeUses only { SourceTypeScopeKind, SourceTypeRecipeOrigin }
+use /SourceTypeAdmissions only { SourceSignatureSlot }
+use /Ir only { InstanceEnvironment }
+use @Std/Io only { print }
+
+fn checkRecipe(compiler: inout Comp, occurrence: U64) {
+    val use = compiler.sourceTypeUses.useAt(index: occurrence - 1U64).unwrap()
+    val root = compiler.sourceTypeUses.recipeAt(id: use.recipe).unwrap()
+    if root.children.count() != 1U64 { panic("function result recipe shape changed") }
+    val result = compiler.sourceTypeUses.recipeAt(id: root.children[0U64]).unwrap()
+    match result.origin {
+        SourceTypeRecipeOrigin.ResultRepresentation => {}
+        _ => { panic("omitted result lost representation edge") }
+    }
+    val source = compiler.sourceTypeUses.recipeAt(id: result.sourceRecipe).unwrap()
+    match source.origin {
+        SourceTypeRecipeOrigin.Authored => {}
+        _ => { panic("omitted result lost authored provenance") }
+    }
+    if source.term == 0U64 || source.occurrence == 0U64 { panic("real omitted result replaced by zero sentinel") }
+    val original = compiler.sourceTypeUses.useAt(index: source.occurrence - 1U64).unwrap()
+    if original.recipe != result.sourceRecipe || original.term != source.term { panic("representation substituted another occurrence") }
+    val payload = compiler.arena.typeAt(index: result.term)
+    if !payload.isRecord || payload.recordFieldTerms.count() != 0U64 { panic("Unit result representation is not empty record") }
+}
+
+fn main() {
+    mut val compiler = <Comp />
+    match analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text path="UnitRecipe.pw" text="fn omitted(action: fn()) {{}} fn main() {{}}" />, sources: <SourceAccess stdRoot=[] />) {
+        Result.Err(error: val diagnostic) => { panic(diagnostic.message) }
+        Result.Ok(value: _) => {}
+    }
+    val function = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "omitted").nameId)
+    val signature = compiler.sourceTypeUses.signatureFor(function: function).unwrap()
+    checkRecipe(compiler: inout compiler, occurrence: signature.parameters[0U64])
+    val actual = compiler.readAdmittedSignatureRoot(function: function, slot: <SourceSignatureSlot.Parameter index=0U64 />, environment: <InstanceEnvironment params=[] args=[] />).unwrap()
+    val expected = compiler.funcParamAt(params: compiler.arena.functionAt(index: function).params, index: 0U64).ty
+    if !compiler.typeRefEq(a: actual, b: expected) { panic("admitted reader changed omitted function type") }
+    // The materialized TypeAst entrance uses the same representation owner.
+    val site = <Span start=compiler.arena.functionAt(index: function).defOffset end=compiler.arena.functionAt(index: function).defOffset />
+    val scope = compiler.sourceTypeUses.begin(kind: <SourceTypeScopeKind.FreeFunction />, anchor: site.start)
+    val legacy = compiler.lowerType(t: <TypeAst name="fn" args=[<TypeAst name="" args=[] span=site />] span=site />).unwrap()
+    checkRecipe(compiler: inout compiler, occurrence: legacy.authoredUse)
+    if !compiler.sourceTypeUses.finish(token: scope, succeeded: true) { panic("legacy result scope did not close") }
+    print("1")
+}

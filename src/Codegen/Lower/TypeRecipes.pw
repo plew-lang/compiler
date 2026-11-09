@@ -42,7 +42,7 @@ impl Comp {
             else {
                 // Source Unit becomes the ordinary closed empty-record payload
                 // at a function result boundary. No caller substitution occurs.
-                if type.ref != 0U64 || self.semanticSourceResultTerm(ref: type.ref) != terms[index] || self.typeTermRefChildCount(ref: terms[index]) != 0U64 { return <Result.Err error=self.diagnosticAt(offset: type.start, msg: "source argument changed without a representation mapping", failureDomain: <FailureDomain.Internal />) /> }
+                if !self.sourceResultRepresentationMatches(source: type.ref, payload: terms[index]) { return <Result.Err error=self.diagnosticAt(offset: type.start, msg: "source argument changed without a representation mapping", failureDomain: <FailureDomain.Internal />) /> }
                 recipes.append(self.sourceTypeUses.deriveRecipe(term: terms[index], children: [], labels: [], origin: <SourceTypeRecipeOrigin.ResultRepresentation />, sourceRecipe: (try self.authoredChildRecipe(type: type))))
             }
             index += 1U64

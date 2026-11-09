@@ -148,7 +148,7 @@ Retain the original finite inventory. Next cover global fallback, cell/borrowed/
 unproved roots, shadowing/loops, getter versus raw Index paths and completed
 recipe-result ownership. Reconcile later/default/reordered/normalized-inout and
 callback/deinit effects; returned/stored/captured owners and async inputs must
-retain their acquisitions. The existing callback rejection below remains open.
+retain their acquisitions. The callback prerequisite below is repaired; the rest of the inventory remains open.
 
 Saved SemanticGlobalAddress supplies target/type/mutable, not initialized
 readiness for the current body. globalInitializerPrepared is source checking;
@@ -165,10 +165,13 @@ execution certification. Immediate-completion and suspended managed-input/
 cleanup controls remain necessary. Source references and the independent
 findings are in the same field evidence record.
 
-## Existing Callback Validation Gap
+## Callback Prerequisite Repaired
 
-`run/value_snapshot_callback.pw` is rejected by the unchanged df968 carrier
-before linking: source argument changed without a representation mapping. It
-imports no compiler implementation, so loading the modified Mid builder is not
-the cause. Retain the callback obligation for fresh product investigation;
-passing another fixture is not substitute coverage. No existing test is changed.
+[met-zva3](met-zva3.md) repairs the independently confirmed omitted fn() Unit
+representation provenance defect. The unchanged value_snapshot_callback now
+compiles/links/runs with fresh candidate SHA
+12d8d8342640f67d639d8afa054541643d5138d6a34ddcaeffc0e314dc5c1724;
+exact output is 1,3,30,110,3 with empty stderr. This restores the original
+callback/snapshot/escaped-owner control rather than substituting another test.
+[Finite repair and independent artifact review](../../../evidence/performance-regression-history/value-passing-implementation/callback-unit-investigation/repair.json).
+All remaining W1b inventory rows still require explicit reconciliation.

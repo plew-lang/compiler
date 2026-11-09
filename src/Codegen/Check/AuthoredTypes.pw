@@ -193,7 +193,7 @@ impl Comp {
                     SourceTypeRecipeOrigin.Authored => {}
                     _ => { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "result representation must retain an authored source", failureDomain: <FailureDomain.Internal />) /> }
                 }
-                if source.unwrap().term != 0U64 || !self.typeRefEq(a: node.term, b: self.semanticSourceResultTerm(ref: 0U64)) { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "authored type recipe has an invalid result representation", failureDomain: <FailureDomain.Internal />) /> }
+                if !self.sourceResultRepresentationMatches(source: source.unwrap().term, payload: node.term) { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "authored type recipe has an invalid result representation", failureDomain: <FailureDomain.Internal />) /> }
                 try self.checkAuthoredTypeRecipe(signature: signature, recipe: node.sourceRecipe, edge: <AuthoredRecipeEdge.Source />, visited: inout visited, offset: offset)
             }
             SourceTypeRecipeOrigin.ProjectionReceiver | SourceTypeRecipeOrigin.BoundSelection => {

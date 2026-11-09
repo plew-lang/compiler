@@ -1,6 +1,6 @@
 ---
 id: met-zva3
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-11-09T19:53:23Z
@@ -62,3 +62,29 @@ wrong-edge and memoPosition assertions; its hand-made zero source positive is
 not a substitute for the real producer. Minimal controls only establish compile
 behavior. The unchanged callback must execute against its existing golden.
 [Saved investigation](../../../evidence/performance-regression-history/value-passing-implementation/callback-unit-investigation/investigation.json).
+
+## Resolution (resolved)
+
+The common bounds-checked sourceResultRepresentationMatches maps only Unit
+to its structural empty-record representation. Both Lower entrances and the
+authored recipe validator use it. Exact sourceRecipe, authored occurrence and
+signature owner, FunctionResult edge (before memo hits), and child coverage
+remain intact. No source semantics or physical ABI changed.
+
+function_omitted_unit_callback has fixed-carrier target RED;
+function_unit_result_recipe has exact runtime target RED then GREEN, retaining
+the real nonzero Unit occurrence, SyntaxType admission/reader replay and TypeAst
+lowering. function_unit_result_mapping_integrity checks valid mapping plus
+non-Unit source, nominal destination and nonempty record destination rejection.
+Standard build 20261109T200024-build-30c2ab passed with unchanged inputs. Saved
+fresh candidate SHA12d8d8342640f67d639d8afa054541643d5138d6a34ddcaeffc0e314dc5c1724
+passes these three fixtures and unchanged value_snapshot_callback with exact
+stdout and empty stderr. All14 existing AuthoredRecipeIntegrity scenarios also
+pass, preserving forged/foreign provenance, wrong edge and memoPosition checks.
+
+Independent unit_recipe_implementation_review verified source, actual candidate,
+input manifests, generated artifacts and raw outputs, approving finite closure.
+[Reproducible evidence](../../../evidence/performance-regression-history/value-passing-implementation/callback-unit-investigation/repair.json).
+TypeAst admission/reader duplication was optional; its actual Lower mapping is
+checked and SyntaxType exercises shared downstream admission/reader. No full
+suite/sanitizer/fixed-point/performance or W1b/com-ffar completion is claimed.

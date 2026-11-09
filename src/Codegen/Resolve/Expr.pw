@@ -741,6 +741,15 @@ pub impl Comp {
         return self.pushType(t: <TypeRef nameStart=0U64 nameLen=0U64 args=[] isRecord=true recordFieldLabels=[] recordFieldTerms=[] />)
     }
 
+    // A saved function-result representation is checked structurally: mapping
+    // an omitted Unit allocates a fresh term and does not preserve arena IDs.
+    // Its exact authored occurrence and permitted edge remain recipe duties.
+    inout fn sourceResultRepresentationMatches(source: U64, payload: U64) -> Bool {
+        if source >= self.arena.typeCount() || payload == 0U64 || payload >= self.arena.typeCount() { return false }
+        if !self.callableResultIsUnit(ref: source) || !self.arena.typeAt(index: payload).isRecord { return false }
+        return self.typeRefEq(a: payload, b: self.semanticSourceResultTerm(ref: source))
+    }
+
     inout fn semanticCallableReturnTerm(function: Func) -> U64 {
         if function.isAsync && !function.hasRet {
             // The payload is an ordinary source type, not a callable result
