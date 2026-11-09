@@ -1205,3 +1205,44 @@ execution and whole-task completion remain open. Next: trace the public
 interface contract's failing dependency caller and its actual context;
 retain associated binding occurrence/output derivations and source-call bound
 equations at their real declaration producers instead of loosening this reader.
+
+#### Retained abstract interface projection scope increment (WIP)
+
+[RED, scope controls, fresh105, public execution and build](../../../evidence/rejection-domains/diagnostic-domain-implementation/retained-interface-projection-scope.json)
+record a finite repair after 9b76346e. An interface's selected associated
+premise can retain an equation with output zero: the associated output is
+unknown, not missing. For Source.Item:Family with Item=Parent, this selected
+premise owns Parent.Child even without a free lexical parameter. It cannot be
+replaced with Parent's concrete Family witness to invent a known output.
+
+Private scoped type dependency checking now returns successful scope integrity
+separately from dependency flags. Exact retained abstract equations follow their
+saved prerequisite under the original scope. Constructors compose child
+scope results, including abstract outputs without caller dependencies. Raw
+unresolved leaves still require a binder or saved derivation. The shared equation
+validator verifies declared trait/member existence; zero is not scanned as an
+output type. No source query repairs absent evidence, and static Universal
+escape rejection remains separate.
+
+The actual File-graph frontend native RED reproduced the old rejection before
+the control fixture was expanded. Fresh six controls cover acceptance, foreign
+interface scope, omitted equation, nonexistent associated member, missing
+interface promise and a real method call. They check recovery and an empty
+active prerequisite stack. Build 20261109T063105-build-5eac06 and whole compiler
+source check pass with invariant inputs. All105 final native cases pass,
+including direct/nested Universal static rejection in interface_final_evidence.
+Contract-first independent review accepted the finite source change and
+reconciled all179 source hashes, all105 outcomes, immutable inputs and fresh
+candidate/build artifact identity.
+
+Both nested_contract and nested_conditions now pass check, AOT/native and lazy
+execution with their exact45 goldens. The simple interface_condition case still
+fails source-call bound comparison and remains mandatory. The first final run
+was interrupted by disk-full and is excluded; the complete retry is the accepted
+record. Only completed diagnostics' regenerable LLVM files were removed to
+recover space; result records, logs, sources and binaries were retained.
+
+No whole-task acceptance, new formal timing, fixed point, full suites or ASan is
+claimed. Main/seed/adopted carrier remain unchanged. Next: close the distinct
+source-call bound normalization producer/consumer path without new lookup at
+the reader, then resume remaining com-amjl guarantees.

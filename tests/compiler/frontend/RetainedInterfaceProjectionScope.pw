@@ -1,0 +1,78 @@
+// Unknown associated output retains its exact interface proof scope.
+use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontend }
+use ../../../src/SourceAccess only { SourceAccess }
+use ../../../src/Ir only { StaticConformanceProof, DeclarationBoundRef, DeclarationTypeScope, DeclarationScopeOrigin, FuncBindRange, WitnessMatch, WitnessConditionPlan, ProjectionNormalizationStep, TypeRef }
+use @Std/Process only { argAt }
+use @Std/Io only { print }
+fn root(compiler~: inout Comp, proof: StaticConformanceProof, depth: U64 = 0U64) -> U64 {
+    if depth > 32U64 { panic("interface scope control has cyclic provenance") }
+    match proof {
+        StaticConformanceProof.AssumedBound(source: val source) => {
+            match source {
+                DeclarationBoundRef.Interface(index: val index) => { return index + 1U64 }
+                DeclarationBoundRef.AssociatedType(index: val index) => { return root(inout compiler, proof: compiler.arena.associatedBoundEvidenceAt(index: index).prerequisite, depth: depth + 1U64) }
+                _ => {}
+            }
+        }
+        _ => {}
+    }
+    return 0U64
+}
+fn main() {
+    mut val compiler = <Comp />
+    val unavailable = argAt(3I64) == "unavailable"
+    match analyzeFrontend(c: inout compiler, input: <FrontendInput.File path=argAt(1I64) />, sources: <SourceAccess stdRoot=argAt(2I64).bytes() />) {
+        Result.Ok(value: _) => { if unavailable { panic("a missing interface promise authorized the member condition") } }
+        Result.Err(error: val error) => {
+            if !unavailable || error.message != "type argument does not conform to the trait required by `where`" { panic(error.message) }
+        }
+    }
+    if unavailable || argAt(3I64) == "frontendOnly" { print("ok") return }
+    val scenario = argAt(3I64)
+    val wrapper = compiler.internBytes(s: "Wrapper").nameId
+    mut val selected = compiler.arena.witnessConditionPlanCount()
+    mut val abstractStep = 0U64
+    for index in 0U64..<compiler.arena.witnessConditionPlanCount() {
+        val plan = compiler.arena.witnessConditionPlanAt(index: index)
+        if compiler.arena.typeAt(index: plan.witness.selfRef).nameId == wrapper {
+            for step in 0U64..<plan.normalizations.count() {
+                if plan.normalizations[step].output == 0U64 { selected = index abstractStep = step }
+            }
+        }
+    }
+    if selected == compiler.arena.witnessConditionPlanCount() { panic("interface scope control lost its abstract retained output") }
+    val plan = compiler.arena.witnessConditionPlanAt(index: selected)
+    val step = plan.normalizations[abstractStep]
+    val interface = root(inout compiler, proof: compiler.thawStaticConformanceProof(id: step.proof))
+    if interface == 0U64 { panic("abstract projection lost its exact interface root") }
+    val scope = <DeclarationTypeScope origin=<DeclarationScopeOrigin.InterfaceContract /> owner=0U64 parameters=<FuncBindRange start=0U64 len=0U64 /> interfaceRoot=interface />
+    val witness = <WitnessMatch conformIdx=plan.witness.conformIdx selfRef=plan.witness.selfRef binds=plan.witness.binds conditions=selected + 1U64 />
+    val proof = <StaticConformanceProof.ConcreteWitness witness=witness />
+    compiler.checkDeclarationCallProof(proof: proof, scope: scope, offset: 0U64).unwrap()
+    if scenario == "wrongScope" {
+        val wrong = <DeclarationTypeScope origin=<DeclarationScopeOrigin.InterfaceContract /> owner=0U64 parameters=<FuncBindRange start=0U64 len=0U64 /> />
+        match compiler.checkDeclarationCallProof(proof: proof, scope: wrong, offset: 0U64) {
+            Result.Ok(value: _) => { panic("abstract retained output escaped its interface scope") }
+            Result.Err(error: val error) => { if error.message != "interface assumption belongs to another selected operation" { panic(error.message) } }
+        }
+    } else if scenario == "missing" {
+        mut val equations: Array[ProjectionNormalizationStep] = []
+        for index in 0U64..<plan.normalizations.count() { if index != abstractStep { equations.append(plan.normalizations[index]) } }
+        val next = compiler.arena.witnessConditionPlanCount() + 1U64
+        val changed = <WitnessMatch conformIdx=witness.conformIdx selfRef=witness.selfRef binds=witness.binds conditions=next />
+        if compiler.arena.publishWitnessConditionPlan(plan: <WitnessConditionPlan witness=changed proofs=plan.proofs normalizations=equations />) != next { panic("missing abstract derivation control lost its plan") }
+        if compiler.checkDeclarationCallProof(proof: <StaticConformanceProof.ConcreteWitness witness=changed />, scope: scope, offset: 0U64).isOk() { panic("missing abstract projection derivation was accepted") }
+    } else if scenario == "unknownMember" {
+        val type = compiler.arena.typeAt(index: step.source)
+        val name = compiler.internTmpName(prefix: "NotAnAssociatedMember", n: 0U64)
+        val source = compiler.pushType(t: <TypeRef nameStart=type.nameStart nameLen=type.nameLen nameId=type.nameId hasDecl=type.hasDecl declOffset=type.declOffset paramId=type.paramId args=type.args projectionReceiver=type.projectionReceiver assocTraitStart=type.assocTraitStart assocTraitLen=type.assocTraitLen assocTraitId=type.assocTraitId hasAssocTraitDecl=type.hasAssocTraitDecl assocTraitDeclOffset=type.assocTraitDeclOffset assocTraitArgs=type.assocTraitArgs assocNameStart=name.nameStart assocNameLen=name.nameLen assocNameId=name.nameId />)
+        val changed = <ProjectionNormalizationStep source=source proof=step.proof output=0U64 />
+        match compiler.checkProjectionNormalizations(normalizations: [changed], offset: 0U64, assumptions: compiler.declarationScopeAssumptions(scope: scope).unwrap()) {
+            Result.Ok(value: _) => { panic("an abstract output authorized a nonexistent associated member") }
+            Result.Err(error: val error) => { if error.message != "selected condition projection evidence has no declared associated type" { panic(error.message) } }
+        }
+    }
+    if compiler.activeAssumptionAdmission.count() != 0U64 { panic("interface scope rejection leaked the active prerequisite stack") }
+    compiler.checkDeclarationCallProof(proof: proof, scope: scope, offset: 0U64).unwrap()
+    print("ok")
+}

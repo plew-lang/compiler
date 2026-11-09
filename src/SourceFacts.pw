@@ -453,7 +453,7 @@ impl Comp {
         } else {
             give match self.contextualLexicalScope(owner: owner, function: self.cur.checkFn) { Result.Ok(value: val scope) => scope Result.Err(error: _) => { return } }
         }
-        match self.declarationTypeDependencies(ref: fact.term, scope: scope, offset: self.exprOffset(id: exprId)) {
+        match self.scopedTypeDependencies(ref: fact.term, scope: scope, offset: self.exprOffset(id: exprId)) {
             Result.Ok(value: _) => {}
             // Still-incomplete construction is not a new source diagnostic.
             Result.Err(error: _) => { return }

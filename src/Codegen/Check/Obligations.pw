@@ -320,9 +320,17 @@ pub impl Comp {
             val projection = self.arena.typeAt(index: step.source)
             if projection.assocNameId == 0U64 { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "selected condition has invalid projection evidence") /> }
             val owner = if projection.assocTraitDeclOffset != 0U64 { give projection.assocTraitDeclOffset } else { give projection.assocTraitStart }
+            val traitIndex = self.decls.traitIndexByOffset(offset: owner)
+            if traitIndex >= self.decls.traitCount() { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "selected condition projection evidence has no declared trait") /> }
+            val declaration = self.decls.traitAt(index: traitIndex)
+            mut val declared = false
+            for index in 0U64..<declaration.assocTypes.count() {
+                if self.traitBindAt(binds: declaration.assocTypes, index: index).nameId == projection.assocNameId { declared = true }
+            }
+            if !declared { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "selected condition projection evidence has no declared associated type") /> }
             val proof = self.thawStaticConformanceProof(id: step.proof)
             try self.checkStaticProofEvidence(proof: proof, offset: offset, assumptions: assumptions)
-            val bound = try self.staticProofBound(proof: proof, traitIdx: self.decls.traitIndexByOffset(offset: owner))
+            val bound = try self.staticProofBound(proof: proof, traitIdx: traitIndex)
             val receiver = self.typeTermProjectionReceiver(t: projection)
             if bound.subject == 0U64 || bound.constraint.key.owner != owner || !self.typeRefEq(a: self.typeRefWithoutOuterViews(ref: receiver), b: self.typeRefWithoutOuterViews(ref: bound.subject)) || !self.sameResolvedTypeRefs(a: projection.assocTraitArgs, b: bound.constraint.key.positionalArgs) {
                 return <Result.Err error=self.diagnosticAt(offset: offset, msg: "selected condition projection evidence has a different receiver or trait") />
@@ -896,7 +904,7 @@ pub impl Comp {
     // Inspect canonical children, including projection receivers and record
     // fields. A foreign binder is not a legitimate reason to defer a check.
     inout fn declarationTypeDependency(ref: U64, scope: DeclarationTypeScope, offset: U64) -> Result[Bool, CompileDiagnostic] {
-        return <Result.Ok value=(try self.declarationTypeDependencies(ref: ref, scope: scope, offset: offset)).caller />
+        return <Result.Ok value=(try self.scopedTypeDependencies(ref: ref, scope: scope, offset: offset)).caller />
     }
 
 
@@ -1472,7 +1480,7 @@ pub impl Comp {
 
 impl Comp {
     inout fn retainedDeclarationTypeDependency(ref: U64, scope: DeclarationTypeScope, offset: U64, normalizations: Array[ProjectionNormalizationStep]) -> Result[Bool, CompileDiagnostic] {
-        return <Result.Ok value=(try self.declarationTypeDependencies(ref: ref, scope: scope, offset: offset, normalizations: normalizations)).caller />
+        return <Result.Ok value=(try self.scopedTypeDependencies(ref: ref, scope: scope, offset: offset, normalizations: normalizations)).caller />
     }
 
     inout fn retainedDeclarationBoundDependency(bound: TraitBound, scope: DeclarationTypeScope, offset: U64, normalizations: Array[ProjectionNormalizationStep]) -> Result[Bool, CompileDiagnostic] {
@@ -1569,11 +1577,11 @@ impl Comp {
         for step in (try self.retainedProofProjectionContext(proof: <StaticConformanceProof.ConcreteWitness witness=witness />)) {
             try self.appendRetainedProjectionEquation(step: step, normalizations: inout context)
         }
-        val dependency = try self.declarationTypeDependencies(ref: witness.selfRef, scope: scope, offset: offset, normalizations: context)
-        mut val dependencies = <DeclarationProofDependencies caller=dependency.caller unguaranteedInterface=dependency.interfaceScoped />
+        val dependency = try self.scopedTypeDependencies(ref: witness.selfRef, scope: scope, offset: offset, normalizations: context)
+        mut val dependencies = dependency
         for binding in witness.binds {
-            val dependency = try self.declarationTypeDependencies(ref: binding.term, scope: scope, offset: offset, normalizations: context)
-            dependencies = dependencies.merged(other: <DeclarationProofDependencies caller=dependency.caller unguaranteedInterface=dependency.interfaceScoped />)
+            val dependency = try self.scopedTypeDependencies(ref: binding.term, scope: scope, offset: offset, normalizations: context)
+            dependencies = dependencies.merged(other: dependency)
         }
         if witness.conditions != 0U64 {
             if witness.conditions > self.arena.witnessConditionPlanCount() { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "selected conformance has an invalid condition plan") /> }
@@ -1587,7 +1595,7 @@ impl Comp {
                 for argument in projection.assocTraitArgs {
                     if (try self.retainedDeclarationTypeDependency(ref: argument, scope: scope, offset: offset, normalizations: context)) { dependencies = dependencies.merged(other: <DeclarationProofDependencies caller=true />) }
                 }
-                if (try self.retainedDeclarationTypeDependency(ref: step.output, scope: scope, offset: offset, normalizations: context)) { dependencies = dependencies.merged(other: <DeclarationProofDependencies caller=true />) }
+                if step.output != 0U64 && (try self.retainedDeclarationTypeDependency(ref: step.output, scope: scope, offset: offset, normalizations: context)) { dependencies = dependencies.merged(other: <DeclarationProofDependencies caller=true />) }
                 dependencies = dependencies.merged(other: (try self.scopedProofDependencies(proof: self.thawStaticConformanceProof(id: step.proof), scope: scope, offset: offset, normalizations: context)))
             }
             for proof in self.arena.witnessConditionPlanAt(index: witness.conditions - 1U64).proofs {

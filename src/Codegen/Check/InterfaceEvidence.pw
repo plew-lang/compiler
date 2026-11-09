@@ -179,35 +179,45 @@ impl Comp {
         return <Result.Ok value=<DeclarationTypeDependencies caller=caller interfaceScoped=interfaceScoped /> />
     }
 
-    inout fn declarationTypeDependencies(ref: U64, scope: DeclarationTypeScope, offset: U64, normalizations: Array[ProjectionNormalizationStep] = []) -> Result[DeclarationTypeDependencies, CompileDiagnostic] {
-        // Only the admitted proof graph supplies equations. This reader never
-        // resolves a concrete-looking projection from the ambient caller.
+    // Success establishes scope integrity; dependency flags are not a proxy
+    // for that success. A retained projection can be well scoped even when
+    // its receiver is concrete and its associated output remains unknown.
+    inout fn scopedTypeDependencies(ref: U64, scope: DeclarationTypeScope, offset: U64, normalizations: Array[ProjectionNormalizationStep] = []) -> Result[DeclarationProofDependencies, CompileDiagnostic] {
         if normalizations.count() != 0U64 {
             val replayed = try self.replayProjectionNormalizations(ref: ref, normalizations: normalizations, offset: offset)
-            if replayed != ref { return self.declarationTypeDependencies(ref: replayed, scope: scope, offset: offset) }
+            if replayed != ref { return self.scopedTypeDependencies(ref: replayed, scope: scope, offset: offset, normalizations: normalizations) }
         }
-        if self.arena.typeIsClosed(ref: ref) { return <Result.Ok value=<DeclarationTypeDependencies /> /> }
+        if self.arena.typeIsClosed(ref: ref) { return <Result.Ok value=<DeclarationProofDependencies /> /> }
         if ref >= self.arena.typeTermCount() { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "declaration obligation has an invalid type term") /> }
         val term = self.arena.typeTermAt(index: ref)
-        mut val caller = false
-        mut val interfaceScoped = false
-        // A projection's receiver child owns its binder. The old flat mirror
-        // on a projection is not a second parameter occurrence or authority.
-        if term.paramId != 0U64 && term.assocNameId == 0U64 {
-            val dependency = try self.declarationParameterDependencies(parameter: term.paramId, scope: scope, offset: offset)
-            caller = dependency.caller
-            interfaceScoped = dependency.interfaceScoped
+        if term.assocNameId != 0U64 {
+            for step in normalizations {
+                // Zero records an admitted but abstract output, not absence of
+                // a derivation. Its exact selected prerequisite owns the scope.
+                if step.output == 0U64 && self.typeRefEq(a: step.source, b: ref) {
+                    return self.scopedProofDependencies(proof: self.thawStaticConformanceProof(id: step.proof), scope: scope, offset: offset, normalizations: normalizations)
+                }
+            }
         }
+        mut val dependencies = <DeclarationProofDependencies />
+        if term.paramId != 0U64 && term.assocNameId == 0U64 {
+            val parameter = try self.declarationParameterDependencies(parameter: term.paramId, scope: scope, offset: offset)
+            dependencies = <DeclarationProofDependencies caller=parameter.caller unguaranteedInterface=parameter.interfaceScoped />
+        }
+        val count = self.typeTermRefChildCount(ref: ref)
         mut val index = 0U64
-        while index < self.typeTermRefChildCount(ref: ref) {
-            val child = try self.declarationTypeDependencies(ref: self.typeTermRefChildRef(ref: ref, index: index), scope: scope, offset: offset)
-            if child.caller { caller = true }
-            if child.interfaceScoped { interfaceScoped = true }
+        while index < count {
+            dependencies = dependencies.merged(other: (try self.scopedTypeDependencies(ref: self.typeTermRefChildRef(ref: ref, index: index), scope: scope, offset: offset, normalizations: normalizations)))
             index += 1U64
         }
-        if !caller && !interfaceScoped { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "unresolved declaration type has no lexical parameter dependency") /> }
-        return <Result.Ok value=<DeclarationTypeDependencies caller=caller interfaceScoped=interfaceScoped /> />
+        // Ordinary constructors are well scoped when every child is. An
+        // unresolved leaf/projection still needs a binder or retained proof.
+        if !dependencies.caller && !dependencies.unguaranteedInterface && (term.assocNameId != 0U64 || count == 0U64) {
+            return <Result.Err error=self.diagnosticAt(offset: offset, msg: "unresolved declaration type has no lexical parameter dependency") />
+        }
+        return <Result.Ok value=dependencies />
     }
+
 }
 
 // Interface provenance is followed through authored associated constraints,
