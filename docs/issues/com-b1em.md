@@ -1,6 +1,6 @@
 ---
 id: com-b1em
-status: in_progress
+status: closed
 deps: [com-kd1s, met-zva3]
 links: []
 created: 2026-11-09T17:11:02Z
@@ -279,3 +279,32 @@ normal cleanup after immediate completion.
 [Evidence](../../../evidence/performance-regression-history/value-passing-implementation/reentry-and-immediate-async/validation.json).
 No product source changes. Final finite reconciliation/reruns remain open,
 including async_enum_param_arc and prior local/self/field/owner controls.
+
+## Resolution (resolved)
+
+Independent w1b_completion_review derived the contract from this task, com-rv7l
+and the Swift study, then reconciled source changes, actual paths and all finite
+requirements. No confirmed must-fix or guarantee gap remains.
+[Requirement-by-requirement final reconciliation](../../../evidence/performance-regression-history/value-passing-implementation/w1b-final-reconciliation/reconciliation.json).
+
+Original local/self/field RED180source trees match their stated baselines and
+all85 original artifacts match saved hashes. Final raw8 and production
+run7/panic1/typed-source-reject1 pass on the same saved12d8d834...c1724 candidate.
+Existing11 and A/B/C evidence are independently reconciled to current inputs,
+actual outputs/goldens, candidate and generated artifacts. All owned execution
+handles are terminal and collected. The shared root/projection proof preserves
+source meaning, baseline byval, initial receiver Read/Access, named acquisitions,
+conservative snapshots and normal ownership preparation/verification.
+
+Global readiness absence deliberately retains fallback, not a deferred required
+feature. Raw Index exclusion is source-audited separately from actual getter
+normalization. Private completed result stability is not whole-value copyability
+permission; real prepared types/ownership and runtime owner cleanup are checked.
+Legacy deinit fixtures are baseline regression diagnostics; new A/B/C use
+spec-conforming impl deinit controls. Unit-provenance prerequisite met-zva3 is
+separately resolved. No compiler-specific ARC exception, size threshold or
+verifier weakening was used.
+
+Close W1b only. Next com-9hny centralizes deterministic descriptors/typed carriers
+with baseline execution. W3 transport, W4 cost/go-no-go and com-ffar full gates
+remain open; no speedup, formal fixed-point or main/seed promotion is claimed.
