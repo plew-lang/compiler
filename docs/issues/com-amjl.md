@@ -1132,3 +1132,35 @@ these boundaries before changing them. Do not admit a normalized subject by
 guessing or weaken the foreign-binder gate. These six checks are diagnostic
 localization only: no product change, new direct reader RED, execution coverage
 or formal timing is claimed.
+
+#### Associated output context diagnosis
+
+[Instrumented six-case results and rejected attempt](../../../evidence/rejection-domains/diagnostic-domain-implementation/interface-admission-output-context.json)
+record the single-condition mismatch as authored `Wrapper[T].Value` versus
+selected-proof `T.Child`, with the same Marker owner and an interface root.
+The nested gate receives `Parent.Child` (no ParamId, one canonical receiver
+child) under an InterfaceContract scope. These are unresolved projection terms,
+not evidence of a foreign lexical parameter.
+
+Passing the exact witness's retained equations to its self/binding dependency
+scan alone changed neither failure. That attempted change was reverted rather
+than retained without a demonstrated benefit; all temporary diagnostic prints
+were removed. Both builds and six-case runs preserved their inputs. No formal
+timing or native GREEN is inferred from these diagnostics.
+
+`retained_associated_interface_nested_contract.pw` isolates contract use from
+the later dynamic method call: its source is byte-identical to the executed
+without-interface-call RED, and its output remains45. It is pending, not a
+passing regression. Existing tests and expectations are unchanged.
+
+Continue tracing the exact failing caller before changing dependency semantics.
+In particular, `declarationAssumptionDependency` scans an associated bound's
+output again in the consumer scope, while `associatedOutputTermInProof` obtains
+an impl output by structural substitution of `AssocBinding.ty`. The binding
+currently stores that type and its impl ParamIds but drops `PType.authoredUse`
+in both lowering adapters. This belongs to the already-required non-free
+occurrence/admission migration here. Preserve the binding's own provenance and
+derivation through its selected proof; do not delete the output check, infer
+closedness from an absent binder, or repair missing equations by caller lookup.
+The source-call comparison is a separate consumer of retained equations and
+must also be closed before these interface probes count as execution coverage.
