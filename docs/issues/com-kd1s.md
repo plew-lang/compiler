@@ -78,3 +78,32 @@ WIP: the production request path must require the expected authored origins
 before and after preparation, including mixed global-owner bodies; present-row
 validation alone cannot detect removal or select the expected local. No reuse
 optimization is enabled.
+
+## Next Production Enforcement Contract
+
+Neutral pre-implementation review at 5a0bbdad requires a two-step obligation.
+First, use accepted source rows as an allowed-origin index to validate every
+actually built local: if its declaration names an accepted binding, require the
+corresponding origin rather than trusting a tag. Then retain the realized local
+occurrences and compare them after instance/access/optimization/drop preparation.
+Do not require every SourceFacts row to have a local or reject duplicate source
+rows without proof: noncontinuing initialization and closed CFG paths can omit
+locals, later globals may never be lowered, and repeated default evaluation can
+have multiple occurrences. This verifies realized correspondence/retention, not
+source AST lowering completeness.
+
+Choose source owners in the same order as the production builder: closure
+signature -> same preparedClosureSemanticFacts; global sentinel -> each global
+reader (exclude the top-level global binding itself from local expectations);
+registered environment-drop/witness and adapterTargetBodyId branches -> explicit
+source-free expectation; otherwise -> preparedFunctionSemanticFacts(fnIdx), as
+buildParametricMidBody does. Default generators have independent source owners
+and must not be declared source-free just because they are synthesized. Provided
+bodies normalize via semanticBodyOwner; generic instances reuse their parametric
+source identity. Source lookup failure is an error, never an empty expectation.
+
+Required controls additionally include noncontinuing let, closed paths/later
+globals, repeated block-default evaluation, provided bodies, two instances,
+mixed global readers and each registered synthetic family. The existing neutral
+review located these boundaries in Build:2480,2754,3696,3766; Program:62–84; and
+Resolve/Expr:777–790. This is a reviewed implementation plan, not executed proof.
