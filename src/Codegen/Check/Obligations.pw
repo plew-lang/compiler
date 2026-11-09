@@ -423,17 +423,8 @@ pub impl Comp {
     }
 
     inout fn checkRetainedWitnessClause(expected: TraitBound, proof: StaticConformanceProof, normalizations: Array[ProjectionNormalizationStep], offset: U64, assumptions: Array[DeclarationBoundRef] = []) -> Result[(), CompileDiagnostic] {
-        val traitIndex = self.decls.traitIndexByOffset(offset: expected.constraint.key.owner)
         try self.checkStaticProofEvidence(proof: proof, offset: offset, assumptions: assumptions)
-        val bound = try self.staticProofBound(proof: proof, traitIdx: traitIndex)
-        val proofSubject = try self.replayProjectionNormalizations(ref: bound.subject, normalizations: normalizations, offset: offset)
-        val proofConstraint = try self.replayConstraintNormalizations(constraint: bound.constraint, normalizations: normalizations, offset: offset)
-        if bound.subject == 0U64 || !self.typeRefEq(a: self.typeRefWithoutOuterViews(ref: expected.subject), b: self.typeRefWithoutOuterViews(ref: proofSubject)) || bound.constraint.key.owner != expected.constraint.key.owner || (!expected.constraint.positionalArgsOpen && !self.sameResolvedTypeRefs(a: proofConstraint.key.positionalArgs, b: expected.constraint.key.positionalArgs)) { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "selected conformance evidence does not satisfy its declaration conditions") /> }
-        mut val names: Array[U64] = []
-        mut val values: Array[U64] = []
-        for predicate in expected.constraint.assocPredicates { names.append(predicate.member) values.append(predicate.value) }
-        if !(try self.retainedProofAssociatedTypesMatch(proof: proof, traitOwner: expected.constraint.key.owner, names: names, values: values, normalizations: normalizations, offset: offset)) { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "selected conformance evidence does not satisfy its declaration conditions") /> }
-        return <Result.Ok value=() />
+        return self.compareValidatedWitnessClause(expected: expected, proof: proof, normalizations: normalizations, offset: offset)
     }
 
     inout fn checkWitnessConditionChildren(witness: WitnessMatch, proofs: Array[U64], normalizations: Array[ProjectionNormalizationStep], offset: U64, assumptions: Array[DeclarationBoundRef] = []) -> Result[(), CompileDiagnostic] {
@@ -1254,7 +1245,7 @@ pub impl Comp {
             val proof = self.thawStaticConformanceProof(id: plan.proofs[index])
             try self.checkStaticProofEvidence(proof: proof, offset: template.siteKey.originStart, assumptions: assumptions)
             try self.requireDeclarationProofSupport(dependencies: (try self.scopedProofDependencies(proof: proof, scope: scope, offset: template.siteKey.originStart, normalizations: plan.normalizations)), offset: template.siteKey.originStart)
-            try self.checkRetainedWitnessClause(expected: (try self.replayBoundNormalizations(bound: bound, normalizations: plan.normalizations)), proof: proof, normalizations: plan.normalizations, offset: template.siteKey.originStart, assumptions: assumptions)
+            try self.compareValidatedWitnessClause(expected: (try self.replayBoundNormalizations(bound: bound, normalizations: plan.normalizations)), proof: proof, normalizations: plan.normalizations, offset: template.siteKey.originStart)
             index += 1U64
         }
         return <Result.Ok value=() />
@@ -1298,7 +1289,7 @@ pub impl Comp {
             for step in (try self.recordSelectedBoundNormalizations(bound: bound, proof: proof, assumptions: assumptions)) {
                 try self.appendRetainedProjectionEquation(step: step, normalizations: inout normalizations)
             }
-            try self.checkRetainedWitnessClause(expected: (try self.replayBoundNormalizations(bound: bound, normalizations: normalizations)), proof: proof, normalizations: normalizations, offset: template.siteKey.originStart, assumptions: assumptions)
+            try self.compareValidatedWitnessClause(expected: (try self.replayBoundNormalizations(bound: bound, normalizations: normalizations)), proof: proof, normalizations: normalizations, offset: template.siteKey.originStart)
             proofs.append(self.freezeStaticConformanceProof(proof: proof))
         }
         if !self.recordBuildingCallConstraints(index: templateIndex, plan: <SelectedCallConstraints owner=scope.owner bounds=bounds proofs=proofs normalizations=normalizations />) {
@@ -1577,6 +1568,22 @@ impl Comp {
     inout fn requireDeclarationProofSupport(dependencies: DeclarationProofDependencies, offset: U64) -> Result[Bool, CompileDiagnostic] {
         if dependencies.unguaranteedInterface { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "existential member condition is not guaranteed by its interface") /> }
         return <Result.Ok value=dependencies.caller />
+    }
+
+    // Callers have already checked full proof integrity under the original
+    // assumptions before scope traversal. This private comparison performs
+    // no admission/query and cannot recover missing projection evidence.
+    inout fn compareValidatedWitnessClause(expected: TraitBound, proof: StaticConformanceProof, normalizations: Array[ProjectionNormalizationStep], offset: U64) -> Result[(), CompileDiagnostic] {
+        val traitIndex = self.decls.traitIndexByOffset(offset: expected.constraint.key.owner)
+        val bound = try self.staticProofBound(proof: proof, traitIdx: traitIndex)
+        val proofSubject = try self.replayProjectionNormalizations(ref: bound.subject, normalizations: normalizations, offset: offset)
+        val proofConstraint = try self.replayConstraintNormalizations(constraint: bound.constraint, normalizations: normalizations, offset: offset)
+        if bound.subject == 0U64 || !self.typeRefEq(a: self.typeRefWithoutOuterViews(ref: expected.subject), b: self.typeRefWithoutOuterViews(ref: proofSubject)) || bound.constraint.key.owner != expected.constraint.key.owner || (!expected.constraint.positionalArgsOpen && !self.sameResolvedTypeRefs(a: proofConstraint.key.positionalArgs, b: expected.constraint.key.positionalArgs)) { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "selected conformance evidence does not satisfy its declaration conditions") /> }
+        mut val names: Array[U64] = []
+        mut val values: Array[U64] = []
+        for predicate in expected.constraint.assocPredicates { names.append(predicate.member) values.append(predicate.value) }
+        if !(try self.retainedProofAssociatedTypesMatch(proof: proof, traitOwner: expected.constraint.key.owner, names: names, values: values, normalizations: normalizations, offset: offset)) { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "selected conformance evidence does not satisfy its declaration conditions") /> }
+        return <Result.Ok value=() />
     }
 
     // Substitution is structural. A saved-plan consumer must not repair a

@@ -1320,7 +1320,22 @@ connections are already within this task's original scope, not new dependencies.
 [Formal measurement](../../../evidence/rejection-domains/diagnostic-domain-implementation/retained-source-interface-self-host.json)
 for b71d8507 reaches generation3 and identical LLVM/runtime over three runs.
 Median7.018803 seconds remains just above the7-second target; repair difficulty
-has not been established. The earlier disk-full attempt is excluded. Before
-further migration, inspect the locally duplicated integrity work in the new
-snapshot admission boundary without removing any check or weakening failure
-conditions. Full suites/ASan and task closure remain outstanding.
+has not been established. The earlier disk-full attempt is excluded.
+
+The finite single-integrity refactor is recorded in
+[its evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/retained-single-integrity.json).
+Three callers now perform full integrity once under original assumptions,
+then scope validation and the unchanged private comparison. The public full
+wrapper remains. Fresh10 controls, scope/dependency/static13 controls and public4
+check/AOT/lazy paths pass, including missing selected-proof rejection and recovery.
+Formal generation2 reaches a fixed point; median7.101924 seconds is still above
+target. Balanced same-current-source measurements using two formal candidates
+give old7.017907/new7.031171 seconds; identical LLVM, no measurable improvement
+established. The earlier formal-versus-dev comparison is not a regression estimate.
+No repair-difficulty claim or main/seed/carrier promotion is made.
+
+Next connect exact free annotation slots and saved proof environments to the
+production call/body signature endpoint. Preserve synthetic/non-free distinctions,
+async call versus body results, defaults and omitted Unit; missing saved evidence
+must fail rather than falling back to an ambient query. Full suites/ASan and task
+closure remain outstanding.

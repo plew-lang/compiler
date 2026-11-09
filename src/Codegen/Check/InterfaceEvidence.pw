@@ -368,7 +368,7 @@ impl Comp {
             }
             val dependencies = (try self.scopedProofDependencies(proof: proof, scope: scope, offset: bound.offset, normalizations: normalizations)).merged(other: (try self.scopedProjectionDependencies(equations: normalizations, context: normalizations, scope: scope, offset: bound.offset)))
             if dependencies.unguaranteedInterface { return <Result.Ok value=<Optional.None /> /> }
-            try self.checkRetainedWitnessClause(expected: (try self.replayBoundNormalizations(bound: bound, normalizations: normalizations)), proof: proof, normalizations: normalizations, offset: bound.offset, assumptions: assumptions)
+            try self.compareValidatedWitnessClause(expected: (try self.replayBoundNormalizations(bound: bound, normalizations: normalizations)), proof: proof, normalizations: normalizations, offset: bound.offset)
             proofs.append(self.freezeStaticConformanceProof(proof: proof))
         }
         return <Result.Ok value=<Optional.Some v=<ExistentialMethodConditions root=root bounds=bounds proofs=proofs normalizations=normalizations /> /> />
