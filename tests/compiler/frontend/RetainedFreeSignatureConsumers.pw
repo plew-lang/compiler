@@ -97,6 +97,10 @@ fn main() {
             compiler.admitAuthoredFunctionViews().unwrap()
             compiler.prepareFinalCallableSignature(bodyId: pending).unwrap()
             if !compiler.arena.bodySignature(bodyId: pending).ready { panic("empty signature could not recover after admission") }
+            val invalidEnvironment = <InstanceEnvironment args=[0U64] />
+            if compiler.groundedSelectedCalleeParameterTypes(callee: late, environment: invalidEnvironment).isOk() || compiler.groundedSelectedCalleeReturn(callee: late, environment: invalidEnvironment).isOk() { panic("empty signature accepted a foreign substitution") }
+            val validParameters = compiler.groundedSelectedCalleeParameterTypes(callee: late, environment: <InstanceEnvironment />).unwrap()
+            if validParameters.count() != 0U64 || compiler.groundedSelectedCalleeReturn(callee: late, environment: <InstanceEnvironment />).unwrap() != 0U64 { panic("empty signature did not recover after invalid environment") }
             print("ok")
             return
         }

@@ -341,12 +341,21 @@ impl Comp {
         val declaration = self.arena.functionAt(index: function)
         if !self.authoredSignatureViews.contains(key: function) { return <Result.Err error=self.diagnosticAt(offset: declaration.defOffset, msg: "authored signature has no admitted trait views", failureDomain: <FailureDomain.Internal />) /> }
         if source.parameters.count() != declaration.params.count() { return <Result.Err error=self.diagnosticAt(offset: declaration.defOffset, msg: "retained callable signature changed its parameter slots", failureDomain: <FailureDomain.Internal />) /> }
-        mut val parameters: Array[U64] = []
+        mut val slots: Array[SourceSignatureSlot] = []
         mut val index = 0U64
         while index < declaration.params.count() {
-            val parameter = self.funcParamAt(params: declaration.params, index: index)
-            if parameter.ty != 0U64 {
-                parameters.append((try self.readAdmittedSignatureRoot(function: function, slot: <SourceSignatureSlot.Parameter index=index />, environment: environment)))
+            if self.funcParamAt(params: declaration.params, index: index).ty != 0U64 { slots.append(<SourceSignatureSlot.Parameter index=index />) }
+            index += 1U64
+        }
+        if declaration.hasRet { slots.append(<SourceSignatureSlot.Result />) }
+        val terms = try self.readAdmittedSignatureRoots(function: function, slots: slots, environment: environment)
+        mut val parameters: Array[U64] = []
+        mut val termIndex = 0U64
+        index = 0U64
+        while index < declaration.params.count() {
+            if self.funcParamAt(params: declaration.params, index: index).ty != 0U64 {
+                parameters.append(terms[termIndex])
+                termIndex += 1U64
             } else {
                 parameters.append(0U64)
             }
@@ -354,7 +363,7 @@ impl Comp {
         }
         mut val result = 0U64
         if declaration.hasRet {
-            result = try self.readAdmittedSignatureRoot(function: function, slot: <SourceSignatureSlot.Result />, environment: environment)
+            result = terms[termIndex]
         } else if declaration.isAsync {
             result = self.semanticCallableReturnTerm(function: declaration)
             if result == 0U64 { return <Result.Err error=self.diagnosticAt(offset: declaration.defOffset, msg: "async declaration requires the ambient Promise declaration") /> }

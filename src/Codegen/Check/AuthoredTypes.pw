@@ -16,6 +16,15 @@ pub impl Comp {
     // Read an exact retained annotation and its canonical child recipes.
     // Every projection consumes the proof of its own authored occurrence.
     inout fn readAdmittedSignatureRoot(function: U64, slot: SourceSignatureSlot, environment: InstanceEnvironment) -> Result[U64, CompileDiagnostic] {
+        val terms = try self.readAdmittedSignatureRoots(function: function, slots: [slot], environment: environment)
+        return <Result.Ok value=terms[0U64] />
+    }
+}
+
+impl Comp {
+    // One read owns one declaration/environment validation and recipe memo.
+    // Roots retain their distinct authored occurrences, even for equal terms.
+    inout fn readAdmittedSignatureRoots(function: U64, slots: Array[SourceSignatureSlot], environment: InstanceEnvironment) -> Result[Array[U64], CompileDiagnostic] {
         val admitted = match self.authoredSignatureViews.get(key: function) {
             Optional.Some(v: val admitted) => admitted,
             Optional.None => { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "authored signature has no admitted trait views", failureDomain: <FailureDomain.Internal />) /> },
@@ -29,17 +38,21 @@ pub impl Comp {
             if environment.args[parameter] >= self.arena.typeCount() { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "signature reader has an invalid substitution term", failureDomain: <FailureDomain.Input />) /> }
             parameter += 1U64
         }
-        val id = match slot {
-            SourceSignatureSlot.Parameter(index: val index) => {
-                if index >= signature.parameters.count() { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "invalid authored signature parameter slot", failureDomain: <FailureDomain.Input />) /> }
-                give signature.parameters[index]
-            }
-            SourceSignatureSlot.Result => { give signature.result }
-        }
-        if id == 0U64 { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "signature slot has no authored annotation", failureDomain: <FailureDomain.Input />) /> }
-        val occurrence = try self.authoredSignatureOccurrence(signature: signature, id: id)
         mut val memo: Dictionary[U64, AuthoredRecipeRead] = [:]
-        return <Result.Ok value=(try self.readAuthoredTypeRecipe(admitted: admitted, recipe: occurrence.recipe, environment: environment, memo: inout memo)).term />
+        mut val terms: Array[U64] = []
+        for slot in slots {
+            val id = match slot {
+                SourceSignatureSlot.Parameter(index: val index) => {
+                    if index >= signature.parameters.count() { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "invalid authored signature parameter slot", failureDomain: <FailureDomain.Input />) /> }
+                    give signature.parameters[index]
+                }
+                SourceSignatureSlot.Result => { give signature.result }
+            }
+            if id == 0U64 { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "signature slot has no authored annotation", failureDomain: <FailureDomain.Input />) /> }
+            val occurrence = try self.authoredSignatureOccurrence(signature: signature, id: id)
+            terms.append((try self.readAuthoredTypeRecipe(admitted: admitted, recipe: occurrence.recipe, environment: environment, memo: inout memo)).term)
+        }
+        return <Result.Ok value=terms />
     }
 }
 

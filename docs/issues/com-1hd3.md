@@ -72,5 +72,28 @@ is included in passed build20261109T100909-build-632602. The retained
 public check/AOT/lazy plus the refusal control. Old and new candidates both compile
 and execute the existing helperboundary generator; its real free helper returns
 identical expected generated source. Formal recovery run20261109T101928-self-host-f3b5ef
-is active; final performance and independent closure reconciliation remain pending.
+reached generation2 fixed point, median7.701804s; speed recovery remains incomplete.
+The accepted product remains211472f5. Three grounder-side trials (closedness,
+visitor splitting, leaf identity) passed finite controls but did not demonstrate
+useful speed recovery, and were discarded. [Exact patches and dispositions](../../../evidence/rejection-domains/diagnostic-domain-implementation/retained-free-signature-discarded-trials.json)
+preserve their historical evidence. Restored product/formal-candidate controls
+pass13 internal,58 preservation, public check/AOT/lazy/refusal and actual gen.
+A final balanced same-source formal comparison measured old6.909565s/new7.667652s
+(five each). This is a diagnostic comparison, not a replacement formal median.
+
+Independent review identified a finite untried boundary: every signature slot
+repeats identical environment validation and creates a new recipe memo. The next
+implementation reads the exact requested slots together, validates the original
+environment once and shares only a recipe-ID memo within that signature/read.
+Distinct authored occurrence checks and saved proofs remain authoritative. Empty
+slot sets now validate the exact environment too; valid-source behavior is
+preserved, while malformed empty-signature contexts must be refused. Source
+review found no mandatory defect. Build20261109T111958-build-a2b67a passed;
+fresh13 (with actual old-source malformed-empty-environment RED and valid
+recovery), preservation58, public check/AOT/lazy/refusal and real gen passed.
+[Batch evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/retained-free-signature-batch.json)
+retains exact inputs and candidate. Controlled performance measurement and
+independent evidence reconciliation are pending. No difficult-repair or inherent-cost
+claim follows from the discarded grounder trials.
+
 This child remains in_progress. No full-suite/ASan or parent/goal closure is claimed.
