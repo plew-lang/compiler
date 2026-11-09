@@ -2402,7 +2402,7 @@ pub impl Comp {
                     }
                 }
                 try self.addLetLocal(nameStart: nameStart, nameLen: nameLen, tyStart: tyStart, tyLen: tyLen, tyIsArray: tyIsArray, ty: ty, init: init, mutable: mutable, owned: true)
-                self.storeBuildingSemanticBinding(stmtId: stmtId, typeTerm: self.cur.locals[self.cur.locals.count() - 1U64].ty, endedBinding: endedBinding)
+                self.storeBuildingSemanticBinding(stmtId: stmtId, declarationTarget: nameStart, isMutable: mutable, typeTerm: self.cur.locals[self.cur.locals.count() - 1U64].ty, endedBinding: endedBinding)
                 self.commitSourceTypeContext(exprId: init)
             }
             Stmt.Assign(val target, val value) => {

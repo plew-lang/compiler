@@ -1,0 +1,45 @@
+// Declaration mutability belongs to the sealed binding fact, not to later
+// syntax inspection or LLVM representation. The reader must retain exact
+// declaration identity across shadowing and unrelated owner preparation.
+use @Std/Io only { print }
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use /SourceAccess only { SourceAccess }
+use /Ir only { Stmt }
+
+fn main() {
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler,
+        input: <FrontendInput.Text path="storage-facts.pw" text="val fixedGlobal = 1I64\nmut val mutableGlobal = 2I64\nfn probe() {{ val value = 3I64 mut val value = 4I64 }}\nfn other() {{ val unrelated = 5I64 }}" />,
+        sources: <SourceAccess />).unwrap()
+    val owner = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "probe").nameId)
+    compiler.prepareLexicalBody(fnIdx: owner).unwrap()
+    val facts = compiler.preparedFunctionSemanticFacts(fnIdx: owner).unwrap()
+    val block = compiler.arena.functionAt(index: owner).body
+    mut val index = 0U64
+    while index < 2U64 {
+        val statement = compiler.blockStmtAt(blkId: block, index: index)
+        val fact = facts.binding(stmtId: statement).unwrap()
+        val target = match compiler.arena.stmts[statement] {
+            Stmt.Let(mutable: _, nameStart: val target, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, init: _) => target
+            _ => { panic("expected binding declaration") }
+        }
+        if fact.declarationTarget != target { panic("binding declaration identity lost") }
+        if fact.isMutable != (index == 1U64) { panic("binding mutability lost") }
+        index += 1U64
+    }
+    val other = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "other").nameId)
+    compiler.prepareLexicalBody(fnIdx: other).unwrap()
+    index = 0U64
+    while index < 2U64 {
+        val global = compiler.arena.globals[index]
+        compiler.prepareGlobalInitializer(target: global.nameStart).unwrap()
+        val globals = compiler.preparedGlobalSemanticFacts(target: global.nameStart).unwrap()
+        val fact = globals.binding(stmtId: global.letStmt).unwrap()
+        if fact.declarationTarget != global.nameStart || fact.isMutable != (index == 1U64) { panic("global binding storage fact lost") }
+        if facts.binding(stmtId: global.letStmt).isSome() { panic("foreign owner storage fact admitted") }
+        index += 1U64
+    }
+    val first = compiler.blockStmtAt(blkId: block, index: 0U64)
+    if facts.binding(stmtId: first).unwrap().isMutable { panic("sealed storage fact changed") }
+    print("binding-storage-facts-ok")
+}

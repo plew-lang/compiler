@@ -2705,6 +2705,10 @@ impl SourceValueBlockFact { factory }
 // One lexical binding decision, published with its successful source owner.
 pub struct SourceBindingFact {
     val owner: SemanticCompletionOwner
+    // Accepted declaration facts; downstream storage planning must not
+    // recover mutability or binding identity from source spelling.
+    pub val declarationTarget: U64
+    pub val isMutable: Bool
     pub val typeTerm: U64
     pub val endedBinding: U64
 }

@@ -1,10 +1,10 @@
 ---
 id: com-uiri
-status: open
-deps: [com-rv7l]
+status: in_progress
+deps: [com-rv7l, com-947r]
 links: []
 created: 2026-11-09T14:53:00Z
-type: task
+type: epic
 priority: 2
 assignee: Koji Murata
 tags: [ownership, backend, mid]
@@ -79,3 +79,20 @@ from this task before choosing further work.
 
 No blanket ABI rollout, new source feature, broad effect-analysis project, main/seed promotion or claim that com-1hd3 is repaired. Temporary implementation limitations must have an owned removal condition. Conservative snapshots required by unknown effects or other safety conditions are part of the valid design, not debt that must be removed.
 
+
+## Reviewed Execution Units
+
+The user goal to complete com-ffar authorizes executing the concrete proposal
+and its prerequisite prototype, while preserving explicit go/no-go before final
+integration. No source semantics change is authorized.
+
+- **W1a**: [com-kd1s](com-kd1s.md) — Retain and validate authored binding storage facts.
+- **W1b**: [com-b1em](com-b1em.md) — Select stable evaluated homes before ownership preparation.
+- **W2**: [com-9hny](com-9hny.md) — Centralize physical signature descriptors and typed value carriers.
+- **W3**: [com-h8b1](com-h8b1.md) — Connect guaranteed home transport through all entry consumers.
+- **W4**: [com-947r](com-947r.md) — Measure and review the complete value-passing prototype.
+
+Fresh-context neutral review at compiler 930db46a supported this split with
+W1a ending at the production authenticity checker, W1b independent of new
+transport, W2 preserving one descriptor authority, and W3 requiring a concrete
+call-site inventory/smaller coherent migration units before implementation.

@@ -42,3 +42,13 @@ After the optimization is accepted or explicitly rejected/deferred, follow [com-
 
 No general interprocedural effect-summary expansion, new borrow/lifetime feature or blanket API reshaping. If design/prototype discovers a necessary new meaning or heavy architecture choice, stop for the existing user decision procedure. No promise of a particular speedup before measurement.
 
+
+## Current Execution Authorization
+
+The user selected completion of this task as the thread goal on 2026-11-10,
+with Swift as reference, neutral review of small increments, no source semantics
+changes, and consultation on any uncertain judgment. This authorizes execution
+of the concrete com-rv7l recommendation and its prerequisite prototype. Final
+integration remains gated on the prototype's positive evidence-based decision;
+it does not authorize assuming that result, bypassing tests or main/seed promotion.
+The prerequisite epic now owns its reviewed, dependent implementation units.
