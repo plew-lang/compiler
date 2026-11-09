@@ -32,8 +32,8 @@ reuse existing sealed readers rather than create a duplicate semantic fact table
 Fresh-context review first suggested one reader receipt per body, but actual
 buildParametricMidGlobalInit combines nested lets from multiple global owners in
 one canonical body. That alternative is rejected: global block expressions stay
-in scope. A local opaque receipt of session/reader/binding-row identities is the
-current implementation recommendation; it can reference the existing sealed
+in scope. A local raw origin of session/reader/binding-row identities is the
+current implementation; it can reference the existing sealed
 row without retaining the entire frontend payload in Mid. Owner checks should
 be cached per reader within a body verification, not repeated per local.
 
@@ -61,3 +61,20 @@ limited increment and independently matched build/candidate/input hashes, all
 four actual compile/link/run paths and exact goldens there.
 This does not close this task: receipt/origin retention, missing/foreign/forged
 production checks and remaining root-family controls are still required.
+
+## Origin Propagation Increment
+
+SourceBindingOrigin is shared pure-IR raw data (the existing Frontend→Mid/Ir
+dependency forbids placing the type in Frontend). Public record construction is
+not authority: only current-session/source-owner/declaration validation can
+establish it. The all-zero state is unproved; partial-zero/foreign/outside rows
+are errors. Accepted Let rows reach Mid locals/freeze/instance, and the normal
+verifier checks all present origins with one reader acquisition per distinct
+reader in a body. Existing unproved hand-built IR retains its old contract.
+[Evidence and neutral review](../../../evidence/performance-regression-history/value-passing-implementation/binding-origins-increment.json)
+cover an actual authored body, a matching raw control, five malformed groups,
+declaration indexing and unchanged synthetic/instance controls. This remains
+WIP: the production request path must require the expected authored origins
+before and after preparation, including mixed global-owner bodies; present-row
+validation alone cannot detect removal or select the expected local. No reuse
+optimization is enabled.

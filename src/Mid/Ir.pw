@@ -8,7 +8,7 @@
 // Copy / Move / Drop operations on places; raw retain/release is not an IR
 // escape hatch.
 
-use ../Ir only { CallSiteKey, MatchSource, SemanticClosureCaptureMode }
+use ../Ir only { CallSiteKey, MatchSource, SemanticClosureCaptureMode, SourceBindingOrigin }
 
 // Canonical Mid storage is deliberately separate from the builder vocabulary
 // below.  A Mid body is read by instantiation, drop elaboration, verification,
@@ -739,6 +739,9 @@ pub struct MidLocalDecl {
     // Build-only evaluation identity; consumed by Access after instantiation.
     pub val preparedExpr: U64 = 0U64
     pub val sourceNameStart: U64 = 0U64
+    // References the accepted binding row; not a standalone const proof.
+    // Synthetic, parameter and borrowed roots retain an unproved origin.
+    pub val sourceBinding: SourceBindingOrigin = <SourceBindingOrigin />
 }
 pub impl MidLocalDecl { factory }
 

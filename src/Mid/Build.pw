@@ -1,3 +1,4 @@
+use ../Ir only { SourceBindingOrigin }
 use ../SourceCompletion only { CompletionTransfer }
 use ../Ir only { SourceExitTarget, SourceTransferFact }
 use ../Diag only { CompileDiagnostic }
@@ -359,9 +360,9 @@ pub fn emptyMidBody(sourceFunction: U64) -> MidBody {
 // from the same resolver record later read at each identifier use. The caller
 // supplies the already-recorded TypeTerm; this builder never calls a type
 // recovery query or lexical name lookup.
-pub fn addMidLocal(state: inout MidBuildState, declarationTarget: U64, typeTerm: U64, isUnique: Bool, isParameter: Bool, ownsAtEntry: Bool, isInout: Bool = false, isBorrowed: Bool = false, isCaptureCell: Bool = false, typeRecipe: U64 = 0U64) -> U64 {
+pub fn addMidLocal(state: inout MidBuildState, declarationTarget: U64, typeTerm: U64, isUnique: Bool, isParameter: Bool, ownsAtEntry: Bool, isInout: Bool = false, isBorrowed: Bool = false, isCaptureCell: Bool = false, typeRecipe: U64 = 0U64, sourceBinding: SourceBindingOrigin = <SourceBindingOrigin />) -> U64 {
     val local: U64 = state.locals.count()
-    state.locals.append(<MidLocalDecl typeTerm=typeTerm typeRecipe=typeRecipe sourceScope=state.currentScope isUnique=isUnique isParameter=isParameter isBorrowed=isBorrowed isInout=isInout isCaptureCell=isCaptureCell ownsAtEntry=ownsAtEntry isDropFlag=false isReturnPlace=false sourceNameStart=declarationTarget />)
+    state.locals.append(<MidLocalDecl typeTerm=typeTerm typeRecipe=typeRecipe sourceScope=state.currentScope isUnique=isUnique isParameter=isParameter isBorrowed=isBorrowed isInout=isInout isCaptureCell=isCaptureCell ownsAtEntry=ownsAtEntry isDropFlag=false isReturnPlace=false sourceNameStart=declarationTarget sourceBinding=sourceBinding />)
     state.bindings.append(<MidSourceBinding declarationTarget=declarationTarget local=local scope=state.currentScope />)
     return local
 }
@@ -2472,6 +2473,11 @@ fn buildMidLetAdmitted(c: inout Comp, state: inout MidBuildState, stmtId: U64, c
                 Optional.Some(v: val binding) => { give binding }
                 Optional.None => { return <MidBuildError.MissingSemanticType /> }
             }
+            if binding.declarationTarget != nameStart { return <MidBuildError.InvalidStatement /> }
+            val origin = match facts.bindingStorage(stmtId: stmtId) {
+                Optional.Some(v: val origin) => origin
+                Optional.None => { return <MidBuildError.MissingSemanticType /> }
+            }
             val term = binding.typeTerm
             val isUnique = c.arena.typeTermIsUnique(ref: term)
             // A binding is created only if its initializer produces a value.
@@ -2479,7 +2485,7 @@ fn buildMidLetAdmitted(c: inout Comp, state: inout MidBuildState, stmtId: U64, c
             // type only after the initializer's normal continuation exists.
             mut val destinationLocal = state.locals.count()
             if term != 0U64 {
-                destinationLocal = addMidLocal(state: inout state, declarationTarget: nameStart, typeTerm: term, isUnique: isUnique, isParameter: false, ownsAtEntry: false, isCaptureCell: midBindingNeedsCaptureCell(sourceFacts: state.sourceFacts, sourceFunction: state.sourceFunction, bindingTarget: nameStart))
+                destinationLocal = addMidLocal(state: inout state, declarationTarget: nameStart, typeTerm: term, isUnique: isUnique, isParameter: false, ownsAtEntry: false, isCaptureCell: midBindingNeedsCaptureCell(sourceFacts: state.sourceFacts, sourceFunction: state.sourceFunction, bindingTarget: nameStart), sourceBinding: origin)
             }
             val destination: MidPlace = <MidPlace local=destinationLocal typeTerm=term />
             // The named destination belongs to the enclosing lexical scope;

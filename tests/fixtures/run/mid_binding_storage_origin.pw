@@ -1,0 +1,93 @@
+// Raw origins are references to sealed rows, not optimization authority.
+// Verify actual authored origins and malformed replacements through production
+// validation. Synthetic unproved roots must keep the old low-level contract.
+use @Std/Io only { print }
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use /SourceAccess only { SourceAccess }
+use /Mid/Verify only { verifyDeclarationMidOwnership }
+use /Ir only { SourceBindingOrigin, InstanceEnvironment }
+use /Mid only { buildParametricMidBody, MidBuildError, MidLocalDecl, MidBody, MidBlock, MidScope, MidTerminator, MidCanonicalBody, MidVerifyError, verifyCanonicalMidBody, instantiateCanonicalMidBody, MidInstantiateError }
+
+fn main() {
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler,
+        input: <FrontendInput.Text path="binding-origins.pw" text="fn probe(value: I64) {{ val fixed = value mut val mutable = value }} fn other() {{ val foreign = 1I64 }}" />,
+        sources: <SourceAccess />).unwrap()
+    val owner = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "probe").nameId)
+    val other = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "other").nameId)
+    compiler.prepareLexicalBody(fnIdx: owner).unwrap()
+    compiler.prepareLexicalBody(fnIdx: other).unwrap()
+    val built = buildParametricMidBody(c: inout compiler, fnIdx: owner)
+    match built.error { MidBuildError.None => {} _ => { panic("binding origin source failed") } }
+    match verifyDeclarationMidOwnership(c: inout compiler, canonical: built.canonical).error {
+        MidVerifyError.None => {}
+        _ => { panic("production origin verification rejected the actual authored body") }
+    }
+    mut val authored = 0U64
+    for local in built.body.locals {
+        if !local.sourceBinding.isUnproved() {
+            val reader = compiler.preparedBindingStorageSource(origin: local.sourceBinding, sourceFunction: owner).unwrap()
+            val fact = reader.bindingStorageFact(origin: local.sourceBinding, declarationTarget: local.sourceNameStart).unwrap()
+            if fact.isMutable != (authored == 1U64) { panic("binding storage origin selected wrong row") }
+            val indexed = reader.bindingStorageForDeclaration(declarationTarget: local.sourceNameStart).unwrap()
+            if indexed.session != local.sourceBinding.session || indexed.readerIndex != local.sourceBinding.readerIndex || indexed.bindingIndex != local.sourceBinding.bindingIndex { panic("binding declaration index selected wrong row") }
+            authored += 1U64
+        }
+    }
+    if authored != 2U64 { panic("authored binding origin missing") }
+    val canonical = compiler.mid.bodies[built.canonical.body - 1U64]
+    val snapshot = compiler.mid
+    if canonical.locals.len != built.body.locals.count() { panic("binding origin freeze changed locals") }
+    mut val index = 0U64
+    while index < canonical.locals.len {
+        val local = compiler.mid.locals[canonical.locals.start + index]
+        val source = built.body.locals[index]
+        if local.sourceBinding.session != source.sourceBinding.session || local.sourceBinding.readerIndex != source.sourceBinding.readerIndex || local.sourceBinding.bindingIndex != source.sourceBinding.bindingIndex { panic("binding origin lost at freeze") }
+        index += 1U64
+    }
+    val declaration = built.body.locals[1U64]
+    val origin = declaration.sourceBinding
+    val wrongSession = <SourceBindingOrigin session=origin.session + 1U64 readerIndex=origin.readerIndex bindingIndex=origin.bindingIndex />
+    val partial = <SourceBindingOrigin session=origin.session readerIndex=0U64 bindingIndex=origin.bindingIndex />
+    val outside = <SourceBindingOrigin session=origin.session readerIndex=18446744073709551615U64 bindingIndex=origin.bindingIndex />
+    for invalid in [wrongSession, partial, outside] {
+        if compiler.preparedBindingStorageSource(origin: invalid, sourceFunction: owner).isOk() { panic("invalid storage origin reader admitted") }
+    }
+    if compiler.preparedBindingStorageSource(origin: origin, sourceFunction: other).isOk() { panic("foreign storage origin admitted") }
+    val reader = compiler.preparedBindingStorageSource(origin: origin, sourceFunction: owner).unwrap()
+    if reader.bindingStorageFact(origin: origin, declarationTarget: declaration.sourceNameStart + 1U64).isSome() { panic("wrong binding declaration admitted") }
+    if reader.bindingStorageFact(origin: <SourceBindingOrigin session=origin.session readerIndex=origin.readerIndex bindingIndex=18446744073709551615U64 />, declarationTarget: declaration.sourceNameStart).isSome() { panic("outside binding row admitted") }
+    val otherFacts = compiler.preparedFunctionSemanticFacts(fnIdx: other).unwrap()
+    val foreignStatement = compiler.blockStmtAt(blkId: compiler.arena.functionAt(index: other).body, index: 0U64)
+    val foreign = otherFacts.bindingStorage(stmtId: foreignStatement).unwrap()
+    val block = compiler.arena.functionAt(index: owner).body
+    val sibling = compiler.preparedFunctionSemanticFacts(fnIdx: owner).unwrap().bindingStorage(stmtId: compiler.blockStmtAt(blkId: block, index: 1U64)).unwrap()
+    // Well-formed but source-inconsistent locals reach the real verifier.
+    for invalid in [wrongSession, partial, outside, foreign, sibling] {
+        val malformed = compiler.mid.store(body: <MidBody sourceFunction=owner locals=[<MidLocalDecl typeTerm=declaration.typeTerm sourceScope=0U64 isUnique=false isParameter=false sourceNameStart=declaration.sourceNameStart sourceBinding=invalid />] scopes=[<MidScope firstLocal=0U64 localCount=1U64 />] blocks=[<MidBlock terminator=<MidTerminator.Return /> />] />)
+        match verifyCanonicalMidBody(c: inout compiler, canonical: malformed).error {
+            MidVerifyError.InvalidBindingOrigin => {}
+            _ => { panic("production origin verification admitted a forged origin") }
+        }
+    }
+    val valid = compiler.mid.store(body: <MidBody sourceFunction=owner locals=[<MidLocalDecl typeTerm=declaration.typeTerm sourceScope=0U64 isUnique=false isParameter=false sourceNameStart=declaration.sourceNameStart sourceBinding=origin />] scopes=[<MidScope firstLocal=0U64 localCount=1U64 />] blocks=[<MidBlock terminator=<MidTerminator.Return /> />] />)
+    match verifyCanonicalMidBody(c: inout compiler, canonical: valid).error {
+        MidVerifyError.None => {}
+        _ => { panic("production origin verification rejected a matching origin") }
+    }
+    // Metadata must survive the real local-instantiation path. These blocks
+    // deliberately omit source statements; this is not executable Mid evidence.
+    val source = compiler.mid.store(body: <MidBody sourceFunction=owner locals=built.body.locals scopes=built.body.scopes blocks=[<MidBlock terminator=<MidTerminator.Return /> />] />)
+    val bodyId = compiler.internBodyInstance(fnIdx: owner, environment: <InstanceEnvironment params=[] args=[] />)
+    val instantiated = instantiateCanonicalMidBody(c: inout compiler, body: source, bodyId: bodyId)
+    match instantiated.error { MidInstantiateError.None => {} _ => { panic("binding origin instantiation failed") } }
+    val output = compiler.mid.bodies[instantiated.body.body - 1U64]
+    index = 0U64
+    while index < canonical.locals.len {
+        val before = snapshot.locals[canonical.locals.start + index].sourceBinding
+        val after = compiler.mid.locals[output.locals.start + index].sourceBinding
+        if before.session != after.session || before.readerIndex != after.readerIndex || before.bindingIndex != after.bindingIndex { panic("binding origin instantiation changed identity") }
+        index += 1U64
+    }
+    print("mid-binding-storage-origin-ok")
+}

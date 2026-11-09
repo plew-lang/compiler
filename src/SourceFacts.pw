@@ -63,9 +63,14 @@ impl SourceBodyData {
     }
     inout fn putBinding(stmtId: U64, fact: SourceBindingFact) {
         match self.bindingKeys.get(key: stmtId) {
-            Optional.Some(v: val index) => { self.bindings.set(i: index, value: fact) }
+            Optional.Some(v: val index) => {
+                self.bindingDeclarations.remove(key: self.bindings[index].declarationTarget)
+                self.bindings.set(i: index, value: fact)
+                self.bindingDeclarations[fact.declarationTarget] = index
+            }
             Optional.None => {
                 self.bindingKeys[stmtId] = self.bindings.count()
+                self.bindingDeclarations[fact.declarationTarget] = self.bindings.count()
                 self.bindings.append(fact)
             }
         }
@@ -823,6 +828,22 @@ impl Comp {
 
 pub impl Comp {
     fn sourceFactSession() -> U64 { return self.sourceFacts.session }
+    // Acquire the existing sealed reader once per distinct origin reader in a
+    // body verification. Never infer synthetic origin from a lookup failure.
+    inout fn preparedBindingStorageSource(origin: SourceBindingOrigin, sourceFunction: U64) -> Result[PreparedSemanticFacts, CompileDiagnostic] {
+        if origin.session != self.sourceFacts.session || origin.readerIndex == 0U64 || origin.readerIndex > self.sourceFacts.readers.count() || origin.bindingIndex == 0U64 {
+            return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: binding storage origin has an invalid source domain") />
+        }
+        val facts = self.sourceFacts.readers[origin.readerIndex - 1U64]
+        mut val globalTarget: Optional[U64] = <Optional.None />
+        match facts.owner {
+            SemanticCompletionOwner.Global(target: val target) => { globalTarget = <Optional.Some v=target /> }
+            _ => {}
+        }
+        try self.requireSourceFactsForFunction(facts: facts, sourceFunction: sourceFunction, globalInitializerTarget: globalTarget)
+        return <Result.Ok value=facts />
+    }
+
     inout fn requireSourceFactsSession(facts: PreparedSemanticFacts) -> Result[(), CompileDiagnostic] {
         if !facts.belongsToSession(session: self.sourceFacts.session) {
             return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: semantic facts belong to another compiler session") />

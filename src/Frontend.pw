@@ -1,3 +1,4 @@
+use ./Ir only { SourceBindingOrigin }
 use ./SourceTypeUses only { SourceTypeRecipe, SourceTypeRecipeOrigin, SourceTypeUses, SourceTypeScopeKind, SourceTypeScopeState, SourceTypeUseRole, AuthoredTypeUse, AuthoredFunctionSignature, LoweredSourceSignature, SourceRequirementOwner }
 use ./SourceTypeAdmissions only { AuthoredTypeViewProof, AuthoredSignatureViews, SourceSignatureSlot }
 use ./ModuleScopeBindings only { ModuleScopeBindings, AdmittedModuleScopeBindings, ScopeBindingKind, ScopeBindingFailure, ScopeBinding }
@@ -2581,6 +2582,8 @@ struct SourceBodyData {
     mut val globalAddresses: Dictionary[U64, SemanticGlobalAddress] = [:]
     mut val bindings: Array[SourceBindingFact] = []
     mut val bindingKeys: Dictionary[U64, U64] = [:]
+    // Navigation to the same sealed rows, not another mutability authority.
+    mut val bindingDeclarations: Dictionary[U64, U64] = [:]
     mut val statements: Array[SemanticExpressionCompletion] = []
     mut val statementKeys: Dictionary[U64, U64] = [:]
     mut val transfers: Array[SourceTransferFact] = []
@@ -2733,6 +2736,25 @@ pub impl PreparedSemanticFacts {
     fn globalAddress(exprId: U64) -> Optional[SemanticGlobalAddress] { return self.payload->globalAddresses.get(key: exprId) }
     fn bindingNeedsCaptureCell(sourceFunction: U64, bindingTarget: U64) -> Bool { return sourceBindingNeedsCaptureCell(closures: self.payload->closurePlans, sourceFunction: sourceFunction, bindingTarget: bindingTarget) }
     fn binding(stmtId: U64) -> Optional[SourceBindingFact] { return readSourceRow(rows: self.payload->bindings, keys: self.payload->bindingKeys, key: stmtId) }
+    fn bindingStorage(stmtId: U64) -> Optional[SourceBindingOrigin] {
+        match self.payload->bindingKeys.get(key: stmtId) {
+            Optional.Some(v: val index) => { return <Optional.Some v=<SourceBindingOrigin session=self.session readerIndex=self.readerIndex + 1U64 bindingIndex=index + 1U64 /> /> }
+            Optional.None => { return <Optional.None /> }
+        }
+    }
+    fn bindingStorageForDeclaration(declarationTarget: U64) -> Optional[SourceBindingOrigin] {
+        match self.payload->bindingDeclarations.get(key: declarationTarget) {
+            Optional.Some(v: val index) => { return <Optional.Some v=<SourceBindingOrigin session=self.session readerIndex=self.readerIndex + 1U64 bindingIndex=index + 1U64 /> /> }
+            Optional.None => { return <Optional.None /> }
+        }
+    }
+    fn bindingStorageFact(origin: SourceBindingOrigin, declarationTarget: U64) -> Optional[SourceBindingFact] {
+        if origin.session != self.session || origin.readerIndex != self.readerIndex + 1U64 || origin.bindingIndex == 0U64 || origin.bindingIndex > self.payload->bindings.count() { return <Optional.None /> }
+        val fact = self.payload->bindings[origin.bindingIndex - 1U64]
+        if fact.declarationTarget != declarationTarget || !semanticCompletionOwnersEqual(recorded: fact.owner, prepared: self.owner) { return <Optional.None /> }
+        return <Optional.Some v=fact />
+    }
+
     fn transfer(stmtId: U64) -> Optional[SourceTransferFact] {
         match readSourceRow(rows: self.payload->transfers, keys: self.payload->transferKeys, key: stmtId) {
             Optional.Some(v: val fact) => {

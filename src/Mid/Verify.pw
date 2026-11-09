@@ -3,7 +3,7 @@ use ./AccessScopes only { canonicalMidAccessScopesValid }
 // Structural and ownership verification for Mid IR. This consumes only Mid
 // dataflow, never source AST or LLVM state. Every backend entry calls it before lowering executable canonical bodies.
 
-use ../Frontend only { Comp }
+use ../Frontend only { Comp, PreparedSemanticFacts }
 use ../Ir only { Global, MatchSource, SemanticMatchKind, SemanticMatchPayload }
 use ./Ir only { MidCanonicalArena, canonicalMidPlaceIsWhole, MidBodyNode, MidBlockNode, MidPlaceNode, MidProjectionNode, MidOperandNode, MidRvalueNode, MidClosureCaptureNode, MidStatementNode, MidTerminatorNode, MidCanonicalBody, MidBody, MidOwnership }
 use ./Types only { canonicalMidStatementTypesMatch, canonicalMidTerminatorTypesMatch }
@@ -21,6 +21,7 @@ impl MidVerificationStage {
 pub enum MidVerifyError {
     None
     InvalidTarget
+    InvalidBindingOrigin
     TypeMismatch
     ConflictingReceiverAccess
     ConflictingBorrowAccess
@@ -811,6 +812,40 @@ fn verifyCanonicalMidFlagOwnership(arena: MidCanonicalArena, body: MidBodyNode) 
     return <MidVerification />
 }
 
+// Existing origins are checked even for low-level hand-built IR. Absent
+// origins remain unproved here; production requests separately require all
+// expected authored origins. One reader/owner acquisition per body and reader.
+fn verifyCanonicalMidBindingOrigins(c: inout Comp, body: MidBodyNode) -> MidVerification {
+    mut val readers: Dictionary[U64, PreparedSemanticFacts] = [:]
+    mut val index = 0U64
+    while index < body.locals.len {
+        val local = c.mid.locals[body.locals.start + index]
+        val origin = local.sourceBinding
+        if !origin.isUnproved() {
+            if local.isParameter || local.isBorrowed || local.isInout || local.isDropFlag || local.isReturnPlace || local.sourceNameStart == 0U64 {
+                return <MidVerification error=<MidVerifyError.InvalidBindingOrigin /> local=index />
+            }
+            val facts = match readers.get(key: origin.readerIndex) {
+                Optional.Some(v: val facts) => {
+                    if !facts.belongsToSession(session: origin.session) { return <MidVerification error=<MidVerifyError.InvalidBindingOrigin /> local=index /> }
+                    give facts
+                }
+                Optional.None => {
+                    val facts = match c.preparedBindingStorageSource(origin: origin, sourceFunction: body.sourceFunction) {
+                        Result.Ok(value: val facts) => facts
+                        Result.Err(error: _) => { return <MidVerification error=<MidVerifyError.InvalidBindingOrigin /> local=index /> }
+                    }
+                    readers[origin.readerIndex] = facts
+                    give facts
+                }
+            }
+            if facts.bindingStorageFact(origin: origin, declarationTarget: local.sourceNameStart).isNone() { return <MidVerification error=<MidVerifyError.InvalidBindingOrigin /> local=index /> }
+        }
+        index += 1U64
+    }
+    return <MidVerification />
+}
+
 fn verifyCanonicalMidBodyStage(c: inout Comp, canonical: MidCanonicalBody, stage: MidVerificationStage) -> MidVerification {
     val executable = stage.isExecutable()
     if canonical.body == 0U64 || canonical.body > c.mid.bodies.count() { return <MidVerification error=<MidVerifyError.InvalidTarget /> /> }
@@ -818,6 +853,8 @@ fn verifyCanonicalMidBodyStage(c: inout Comp, canonical: MidCanonicalBody, stage
     val flags: MidVerification = verifyCanonicalMidFlagInitialization(arena: c.mid, canonical: canonical)
     match flags.error { MidVerifyError.None => {} _ => { return flags } }
     val body: MidBodyNode = c.mid.bodies[canonical.body - 1U64]
+    val origins = verifyCanonicalMidBindingOrigins(c: inout c, body: body)
+    match origins.error { MidVerifyError.None => {} _ => { return origins } }
     val analysis = analyzeCanonicalMidOwnershipFlow(arena: c.mid, canonical: canonical)
     val incoming = analysis.incoming
     val reachable = analysis.reachable

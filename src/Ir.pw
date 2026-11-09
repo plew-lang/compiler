@@ -544,6 +544,20 @@ pub enum SemanticExpressionTypeState {
     NoNormalValue
 }
 
+// Unverified navigation to an existing sealed source binding row. These raw
+// IDs are not storage-stability authority; consumers must validate their
+// session, source owner and declaration against SourceFacts. Indices are
+// one-based. Only the all-zero representation denotes an unproved origin.
+pub struct SourceBindingOrigin {
+    pub val session: U64 = 0U64
+    pub val readerIndex: U64 = 0U64
+    pub val bindingIndex: U64 = 0U64
+}
+pub impl SourceBindingOrigin {
+    factory
+    fn isUnproved() -> Bool { return self.session == 0U64 && self.readerIndex == 0U64 && self.bindingIndex == 0U64 }
+}
+
 pub enum SemanticCompletionOwner {
     Function(index: U64)
     Global(target: U64)
