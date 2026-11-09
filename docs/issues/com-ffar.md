@@ -13,6 +13,13 @@ tags: [ownership, backend, mid]
 
 ## Entry Condition and Guarantee
 
+Use the [com-rv7l design and entry matrix](com-rv7l.md#investigation-result-and-recommended-design)
+and the actual com-uiri decision, not the broad com-nkoa effect-precision scope.
+All changed common-helper users, adapter-supplied parameter bindings, indirect
+calls and requested JIT definitions must agree on the deterministic physical
+signature protocol. Caller-specific inability to reuse storage selects a
+snapshot, never a different unannounced callee ABI.
+
 Proceed only after the design approval and positive prototype decision. Update this ticket to the exact accepted lane and entry scope before implementation. A completed prototype ticket alone is not adoption permission.
 
 Integrate the selected private physical ABI through its common descriptor/classification owner, call emission, declaration/definition, callee binding and every affected adapter/publication consumer. Remove competing lane decisions. Retain conservative snapshots where required; no arbitrary aggregate-size threshold or compiler-specific ARC suppression. Synchronize adopted design contracts; source language meaning remains unchanged.

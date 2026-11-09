@@ -13,6 +13,17 @@ tags: [ownership, backend, mid]
 
 ## Guarantee and Work
 
+The concrete recommendation and finite storage/entry matrix are in
+[com-rv7l](com-rv7l.md#investigation-result-and-recommended-design).
+Its investigation closure is not ABI adoption: obtain the explicit decision
+required there before beginning product edits. Prototype the shared signature
+descriptor and typed Value/Home carrier, caller materialization/callee binding,
+and forwarding of contracted incoming homes or completed dedicated temporaries.
+Preserve semantic borrows and consuming/inout lanes. Reconcile every common
+helper user through that protocol or an explicit adapter; do not ship a
+direct-call-only ABI. Split implementation units before coding if this migration
+cannot remain reviewable, retaining one end-to-end acceptance boundary.
+
 After the preceding design decision and any required approval, implement only its bounded prototype. Read [implementation and performance checks](../../../agents/development-workflow.md#実装と性能の確認事項). Record the chosen revision, evidence predicates, ABI lane owner, included entries and fallback boundary before editing product code.
 
 Preserve by-value semantics, evaluation/snapshot order, ARC and deinit boundaries, source-place stability, escape/async acquisition and consistent caller/callee signatures. Natural methods and value APIs remain intact. Do not infer safety merely from immutable bindings or single-thread execution.
