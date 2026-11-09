@@ -14,7 +14,7 @@ tags: [frontend, generics, verification]
 
 ## Guarantee and Finite Work
 
-Registered free-function annotations must reach selected-call ABI types and BodySignature through exact saved parameter/result slots and the original constraints-bearing InstanceEnvironment. readAdmittedSignatureRoot currently has no production caller; groundedSelectedCalleeReturn/ParameterTypes and recordFinalCallableSignature independently ground declaration terms.
+Registered free-function annotations must reach selected-call ABI types and BodySignature through exact saved parameter/result slots and the original constraints-bearing InstanceEnvironment. The original defect was that readAdmittedSignatureRoot had no production caller while groundedSelectedCalleeReturn/ParameterTypes and recordFinalCallableSignature independently grounded declaration terms. The implementation below replaces that competing path for registered free signatures.
 
 Implement one shared signature-consumption endpoint, consume it at actual call/body publication, preserve body-type result recording/layout scans, and remove the competing source re-query for this registered free path. A missing admitted slot/recipe/proof is Err, never a fallback. Keep synthetic/default helpers and non-free signatures explicitly separate. Preserve async Promise versus logical body result and explicit/omitted Unit without re-substituting caller replacements or proof outputs.
 
@@ -75,12 +75,55 @@ pipeline (five each), insufficient recovery. Source/profile observations suggest
 machine-code/inlining changes in an existing substitution hot path, but neither
 the complete cause nor an unavoidable design cost is established.
 
-Independent review found no clearly low-effort additional repair that preserves
-evidence. The next investigation must correlate generated machine code with
-actual call frequency, array/proof processing and reader work. Apply the user's
-performance stop condition: median exceeds7s and recovery now needs investigation
-beyond the tested local repairs. Do not resume a sibling to bypass this failure.
+No clearly low-effort recovery was identified in the local trials. This is not
+proof that repair is difficult; the cause and recovery difficulty remain
+unresolved. Continue performance investigation rather than deriving the stop
+condition solely from failed local trials. A separate guaranteed-indirect ABI
+work item is proposed, not implemented. Do not close this child or bypass its
+unresolved acceptance by advancing a sibling.
 
 [Final fixed-point, matched timing and fresh candidate controls](../../../evidence/rejection-domains/diagnostic-domain-implementation/retained-free-signature-batch-final.json)
 record the final candidate. This child remains in_progress; parent/goal, full
 suites/ASan/G2 and main/seed/adopted-carrier promotion remain uncertified.
+
+## Interruption Checkpoint and Return Procedure
+
+This child can be set aside without discarding or completing it. The semantic
+implementation is committed/pushed at **f65fa24e**; later compiler commits through
+**e6323fe8** only change records. The saved final evidence identifies all179
+product source hashes and candidate **bin/plewc-retained-free-signature-batch-fixed**
+(SHA f4c81f5a0ca9a49d3c98ebc933566f76f63c0ec56b541518c11a391a7ccfb879).
+Rechecked all179source hashes and the candidate hash on2026-11-09. All owned
+validation handles have terminal results. No partially applied product trial
+remains; discarded trial patches and reasons are in the linked evidence.
+
+Return in this order:
+
+1. Read this contract and the final checkpoint. Preserve the current retained
+   signature implementation and all proof/occurrence refusal guarantees.
+2. If source, dependencies, tests or execution inputs changed while set aside,
+   run the13 internal signature controls,
+   the58 preserved controls and public check/AOT/lazy/refusal/gen controls against
+   the new candidate. Earlier results do not certify changed inputs. Test paths,
+   scenario sets are retained in the durable checkpoint chain; use the
+   [internal fixture execution procedure](../../tests/compiler/frontend/README.md)
+   to compile/link/run them. Scratch runners are conveniences, not the sole
+   restart authority.
+3. Compare old/new compilers on the same latest source under the same pipeline,
+   and perform the formal fixed-point/performance measurement. ABI improvement
+   alone does not prove the original signature regression resolved. If the target
+   remains unmet, investigate the residual cause; do not infer difficulty merely
+   from the7-second threshold or count of unsuccessful trials.
+4. Reconcile this child's complete scenario/consumer contract and obtain the
+   independent completion review before closing it. Only then choose the next
+   amjl child (currently com-erlx is the suggested next boundary).
+
+The compiler's unstaged Plew.toml local Syntax path override, generated bin/plewc
+and existing pycache directories are not uncommitted semantic implementation.
+Do not stage or promote them. Recheck the actual manifest/dependency inputs on
+return. Whole-suite/ASan/G2, parent closure and main/seed/adopted-carrier promotion
+remain separate. No new ABI task or priority/dependency change is implied here.
+
+The final checkpoint JSON retains the historical stop assessment. The current
+difficulty assessment and return procedure in this task supersede that judgment;
+the measurements and scoped test results themselves remain valid for their inputs.
