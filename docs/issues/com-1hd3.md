@@ -2,7 +2,7 @@
 id: com-1hd3
 status: in_progress
 deps: []
-links: []
+links: [com-nkoa, com-rv7l]
 created: 2026-11-09T08:54:16Z
 type: task
 priority: 1

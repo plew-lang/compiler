@@ -2,7 +2,7 @@
 id: com-nkoa
 status: open
 deps: []
-links: []
+links: [com-1hd3, com-rv7l]
 created: 2026-10-13T01:03:13Z
 type: task
 priority: 4
@@ -45,3 +45,10 @@ callable entries. Distinguish language borrow from internal guaranteed value
 passing. Do not simply remove byval or infer unknown effects as absent. This
 observation refines this optional investigation; it changes no adopted ABI,
 priority, dependencies or existing-feature acceptance requirement.
+
+The bounded physical-ABI follow-up is tracked separately in
+[com-rv7l](com-rv7l.md) (methods and safety design), then
+[com-uiri](com-uiri.md) (prototype and matched measurement), then
+[com-ffar](com-ffar.md) (conditional integration and final validation).
+This broader effect-precision task is not their prerequisite. Those tickets do
+not adopt an ABI or claim that com-1hd3's performance regression is explained.
