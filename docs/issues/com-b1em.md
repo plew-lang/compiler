@@ -92,6 +92,27 @@ shared-field overlap rejection/panic versus disjoint success. No new semantic
 judgment is required to preserve that existing contract. Follow with the other
 finite inventory rows; this is not full receiver or full W1b certification.
 
+## Synchronous Whole-Self Source Checkpoint
+
+Signed checkpoint: `self-forwarding-source-checkpoint-20261110`.
+[Source-level RED/GREEN and neutral review](../../../evidence/performance-regression-history/value-passing-implementation/stable-self-evaluation.json).
+The same parameter producer now includes whole synchronous copy-self by removing
+only the old name exclusion. Unique/inout/borrowed/cell/owned-entry barriers and
+initial receiver acquisition are unchanged. Exact baseline080cb5ef source executes
+the targeted snapshot-count RED; modified source executes self and local controls
+GREEN. The self test checks actual target/home and Copy mode, inout snapshot1,
+copy-self snapshot0, declaration ownership, and the separate caller's original
+receiver Read borrow. Neutral review independently matched all180source hashes,
+source delta, fixture, fixed carrier, manifests, outputs and exit status, with no
+required correction for this source-level increment.
+
+This is not fresh product validation after the self change. The earlier fresh
+369d candidate and full-source smoke certify080cb5ef only. Before W1b closure,
+execute actual shared-field overlap/disjoint/ambient preservation and remaining
+owner-bearing/escape/async/projection controls, then validate a fresh candidate.
+Next, compose nonboxed typed value fields with proven roots and keep unproved
+Deref/Index/accessor/boxed/global cases conservative under the adopted inventory.
+
 ## Existing Callback Validation Gap
 
 `run/value_snapshot_callback.pw` is rejected by the unchanged df968 carrier

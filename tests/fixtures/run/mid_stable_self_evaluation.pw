@@ -1,0 +1,115 @@
+// Whole synchronous copy-self forwards a guaranteed value. Initial receiver
+// acquisition remains a semantic Read borrow, not a snapshot to evade access.
+use @Std/Io only { print }
+use /Frontend only { Comp, FrontendInput, analyzeFrontendDeclarations }
+use /SourceAccess only { SourceAccess }
+use /Ir only { identSelfTarget, CallTemplateKind }
+use /Mid/Build only { MidFunctionTemplates, MidBuildError }
+use /Mid/Ir only { MidOperand, MidRvalue, MidStatement, MidTerminator, MidCallTarget, MidCallReceiver, MidBorrowCapability }
+use /Mid/OwnershipAnalysis only { MidOwnershipRequests }
+use /Mid/Prepare only { MidParametricBody }
+
+fn check(name: String, snapshot: Bool) {
+    mut val compiler = <Comp />
+    analyzeFrontendDeclarations(c: inout compiler, input: <FrontendInput.Text path="stable-self.pw" text="struct Payload {{ val number: I64 }} fn effect() -> I64 {{ return 0I64 }} fn sink(value: Payload, extra: I64) {{}} impl Payload {{ fn forward() {{ sink(value: self, extra: effect()) }} inout fn changing() {{ sink(value: self, extra: effect()) }} }} fn invoke(value: Payload) {{ value.forward() }}" />, sources: <SourceAccess />).unwrap()
+    val owner = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: name).nameId)
+    compiler.prepareLexicalBody(fnIdx: owner).unwrap()
+    mut val templates = <MidFunctionTemplates />
+    val built = templates.body(c: inout compiler, function: owner)
+    match built.error { MidBuildError.None => {} _ => { panic("self source build failed") } }
+    val root = built.body.locals[0U64]
+    if !root.isParameter || root.ownsAtEntry || root.isInout != snapshot || root.isBorrowed || root.isUnique || root.isCaptureCell || root.sourceNameStart != identSelfTarget() { panic("self root precondition missing") }
+    mut val snapshots = 0U64
+    mut val snapshotLocal = built.body.locals.count()
+    for block in built.body.blocks {
+        for statement in block.statements {
+            match statement {
+                MidStatement.Assign(destination: val destination, value: val value) => {
+                    match value {
+                        MidRvalue.Use(operand: val operand) => {
+                            match operand {
+                                MidOperand.Copy(place: val source) => {
+                                    if source.rootTag == 1U64 && source.local == 0U64 && source.projections.count() == 0U64 {
+                                        if destination.rootTag != 1U64 || destination.projections.count() != 0U64 || built.body.locals[destination.local].sourceNameStart != 0U64 { panic("self snapshot is not a dedicated home") }
+                                        snapshots += 1U64
+                                        snapshotLocal = destination.local
+                                    }
+                                }
+                                _ => {}
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+    if snapshots != (if snapshot { give 1U64 } else { give 0U64 }) { panic("whole synchronous self got redundant evaluation snapshot") }
+    val sink = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "sink").nameId)
+    mut val calls = 0U64
+    for block in built.body.blocks {
+        match block.terminator {
+            MidTerminator.Call(callee: val callee, receiver: _, args: val args, destination: _, target: _) => {
+                if args.count() == 2U64 {
+                    match callee {
+                        MidCallTarget.Template(site: val site) => {
+                            match compiler.callTemplateAt(index: compiler.callTemplateIndex(siteKey: site)).kind {
+                                CallTemplateKind.Direct(callee: val target, receiver: _, args: _, calleeTypeArgs: _, proofId: _) => { if target != sink { panic("wrong self forwarding target") } }
+                                _ => { panic("self forwarding target not direct") }
+                            }
+                        }
+                        _ => { panic("self forwarding call not parametric") }
+                    }
+                    match args[0U64] {
+                        MidOperand.Copy(place: val place) => {
+                            val expected = if snapshot { give snapshotLocal } else { give 0U64 }
+                            if place.rootTag != 1U64 || place.local != expected || place.projections.count() != 0U64 { panic("self forwarding home mismatch") }
+                        }
+                        _ => { panic("self forwarding argument changed ownership mode") }
+                    }
+                    calls += 1U64
+                }
+            }
+            _ => {}
+        }
+    }
+    if calls != 1U64 { panic("self forwarding call not exercised") }
+    mut val requests = <MidOwnershipRequests />
+    requests.request(c: inout compiler, body: <MidParametricBody.input canonical=built.canonical />).unwrap()
+    // The caller's original receiver operation remains Read borrow. Its
+    // overlap/access checks must not be legalized by inserting a value copy.
+    val caller = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "invoke").nameId)
+    compiler.prepareLexicalBody(fnIdx: caller).unwrap()
+    val invoked = templates.body(c: inout compiler, function: caller)
+    match invoked.error { MidBuildError.None => {} _ => { panic("initial receiver build failed") } }
+    mut val readReceivers = 0U64
+    for block in invoked.body.blocks {
+        match block.terminator {
+            MidTerminator.Call(callee: _, receiver: val receiver, args: _, destination: _, target: _) => {
+                match receiver {
+                    MidCallReceiver.Value(operand: val operand) => {
+                        match operand {
+                            MidOperand.Borrow(place: val place, capability: val capability) => {
+                                match capability {
+                                    MidBorrowCapability.Read => { if place.rootTag != 1U64 || place.local != 0U64 || place.projections.count() != 0U64 { panic("initial receiver changed place") } readReceivers += 1U64 }
+                                    _ => { panic("initial receiver changed capability") }
+                                }
+                            }
+                            _ => { panic("initial receiver replaced its semantic borrow") }
+                        }
+                    }
+                    _ => { panic("initial receiver missing") }
+                }
+            }
+            _ => {}
+        }
+    }
+    if readReceivers != 1U64 { panic("initial read receiver not exercised") }
+}
+
+fn main() {
+    check(name: "changing", snapshot: true)
+    check(name: "forward", snapshot: false)
+    print("stable-self-evaluation-ok")
+}

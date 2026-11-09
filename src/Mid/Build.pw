@@ -1966,9 +1966,10 @@ fn midImmediateTemplateArgument(expressions: Array[Expr], argument: CallTemplate
 fn midLocalHasStableEvaluationValue(local: MidLocalDecl, facts: Optional[PreparedSemanticFacts]) -> Bool {
     if local.isUnique || local.isBorrowed || local.isInout || local.isCaptureCell || local.isDropFlag || local.isReturnPlace { return false }
     if local.isParameter {
-        // Receiver acquisition is reviewed separately from ordinary guaranteed
-        // input forwarding. Async inputs are owned, not this synchronous lane.
-        return !local.ownsAtEntry && local.sourceNameStart != identSelfTarget()
+        // Ordinary inputs and copy-self have a synchronous entry guarantee.
+        // The caller's selected receiver Read borrow/Access remains unchanged;
+        // this is only body-local forwarding. Async inputs own their snapshots.
+        return !local.ownsAtEntry
     }
     // A dedicated anonymous result already completes its own evaluation.
     if local.sourceNameStart == 0U64 { return true }
