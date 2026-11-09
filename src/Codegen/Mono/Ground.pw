@@ -1571,7 +1571,15 @@ impl Comp {
     // calls this only after every child is validated. No source text or
     // ambient binder/proof state participates in structural reconstruction.
     inout fn rebuildTypeTermChildren(ref: U64, children: Array[U64]) -> U64 {
+        if ref >= self.arena.typeTermCount() { panic("semantic child rebuild has no type node") }
         if children.count() != self.typeTermRefChildCount(ref: ref) { panic("semantic child rebuild shape mismatch") }
+        // Identity folds preserve the existing node, including all provenance.
+        // Do not grow the type arena for unchanged signature recipe children.
+        mut val changed = false
+        for index in 0U64..<children.count() {
+            if children[index] != self.typeTermRefChildRef(ref: ref, index: index) { changed = true break }
+        }
+        if !changed { return ref }
         val type = self.arena.typeAt(index: ref)
         mut val index = 0U64
         mut val arguments: Array[U64] = []

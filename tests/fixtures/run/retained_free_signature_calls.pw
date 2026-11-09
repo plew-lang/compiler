@@ -1,0 +1,40 @@
+use @Std/Io only { print }
+use @Std/Async only { sleep }
+
+trait Project[K] { type Item }
+struct Source {}
+impl Source as Project[I64] { type Item = I64 }
+struct Box[T] { val value: T }
+
+fn relay[T](source: T, left: Box[T#Project[I64].Item], right: Box[T#Project[I64].Item]) -> Box[T#Project[I64].Item] where T: Project[I64] {
+    return left
+}
+
+fn defaulted[T](source: T, value: Box[T#Project[I64].Item], count: I64 = 1I64) -> Box[T#Project[I64].Item] where T: Project[I64] {
+    return value
+}
+
+async fn deferred(value: I64) -> Promise[I64] {
+    await sleep(ms: 1I64)
+    return value
+}
+
+fn omittedUnit() {}
+fn explicitUnit() -> () { return () }
+fn acceptUnit(value: ()) {}
+async fn completion() {}
+
+async fn main() {
+    val first = relay(source: <Source />, left: <Box value=42I64 />, right: <Box value=99I64 />)
+    print(first.value)
+    val second = defaulted(source: <Source />, value: first)
+    print(second.value)
+    val third = await deferred(value: second.value)
+    print(third)
+    val omitted = omittedUnit()
+    val explicit = explicitUnit()
+    val finished = await completion()
+    acceptUnit(value: omitted)
+    acceptUnit(value: explicit)
+    acceptUnit(value: finished)
+}

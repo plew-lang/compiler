@@ -16,7 +16,7 @@ This epic groups the remaining implementation of the original com-amjl contract.
 It remains in progress. Child tasks own finite repairs through their actual final
 consumers; the epic owns the original guarantee map and final reconciliation.
 Splitting work does not complete a repair, waive a guarantee or certify a suite.
-Product work is paused at compiler1841797d; task decomposition does not resume it.
+The preserved product baseline is compiler1841797d. Resume implementation one child at a time, starting with com-1hd3.
 
 ## Contract and Closure
 

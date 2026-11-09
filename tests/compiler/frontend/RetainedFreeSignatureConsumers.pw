@@ -1,0 +1,181 @@
+// Actual call/body signature consumers must not rediscover absent saved evidence.
+use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontend, analyzeFrontendForRequests }
+use ../../../src/SourceAccess only { SourceAccess }
+use ../../../src/SourceTypeAdmissions only { SourceSignatureSlot }
+use ../../../src/Ir only { InstanceEnvironment, CallableConstraintEvidence, StaticConformanceProof, WitnessMatch, WitnessBind, DeclarationBoundRef }
+use @Std/Io only { print }
+use @Std/Process only { argAt }
+use @Plew/Syntax only { parseItem, TopItemAst, rangeEquals }
+
+fn sourceOffset(compiler~: Comp, text~: String) -> U64 {
+    mut val index = 0U64
+    while index + text.bytes().count() <= compiler.arena.bytes.count() {
+        if rangeEquals(bytes: compiler.arena.bytes, start: index, len: text.bytes().count(), kw: text) { return index }
+        index += 1U64
+    }
+    panic("source marker absent")
+}
+
+fn checkFinalCalls() {
+    mut val compiler = <Comp />
+    analyzeFrontend(c: inout compiler, input: <FrontendInput.File path=argAt(2I64) />, sources: <SourceAccess stdRoot=argAt(3I64).bytes() />).unwrap()
+    mut val functions: Array[U64] = []
+    mut val hits: Array[U64] = []
+    for name in ["relay", "defaulted", "deferred", "omittedUnit", "explicitUnit", "acceptUnit", "completion"] {
+        val function = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: name).nameId)
+        if function >= compiler.arena.functionCount() { panic("actual-call control lost its declaration") }
+        functions.append(function)
+        hits.append(0U64)
+    }
+    for index in 0U64..<compiler.arena.finalCalleeCount() {
+        val call = compiler.arena.finalCalleeAt(index: index)
+        for selected in 0U64..<functions.count() {
+            if call.callee == functions[selected] {
+                if call.calleeBodyId == 0U64 { panic("actual free call did not retain its body identity") }
+                val signature = compiler.arena.bodySignature(bodyId: call.calleeBodyId)
+                if !signature.ready || call.parameterTypeRefs.count() != signature.parameterTypes.count() { panic("actual call lost its prepared signature") }
+                val function = compiler.arena.functionAt(index: call.callee)
+                for parameter in 0U64..<signature.parameterTypes.count() {
+                    val concrete = signature.parameterTypes[parameter]
+                    if !compiler.typeRefEq(a: compiler.arena.finalCalleeParameterTypeAt(types: call.parameterTypeRefs, index: parameter), b: concrete) { panic("actual call reinterpreted a parameter") }
+                    val source = compiler.funcParamAt(params: function.params, index: parameter).ty
+                    if source != 0U64 && !compiler.arena.typeIsClosed(ref: source) {
+                        val saved = compiler.arena.bodyTypeTermResult(bodyId: call.calleeBodyId, typeTerm: source)
+                        if saved.bodyId == 0U64 || !compiler.typeRefEq(a: saved.resultType, b: concrete) { panic("body publication lost a parameter type-result mapping") }
+                    }
+                }
+                if !compiler.typeRefEq(a: call.resultTypeRef, b: compiler.semanticSourceResultTerm(ref: signature.resultType)) { panic("actual call reinterpreted its result") }
+                if function.isAsync {
+                    val promise = compiler.arena.typeAt(index: signature.resultType)
+                    if promise.args.count() != 1U64 || !compiler.typeRefEq(a: promise.args[0U64], b: compiler.semanticSourceResultTerm(ref: signature.bodyResultType)) { panic("async call/body result distinction was lost") }
+                }
+                hits[selected] += 1U64
+            }
+        }
+    }
+    for count in hits { if count == 0U64 { panic("actual-call control did not exercise every signature form") } }
+}
+
+fn main() {
+    val scenario = argAt(1I64)
+    if scenario == "finalCalls" { checkFinalCalls() print("ok") return }
+    // A late legacy declaration uses only the projection's primitive result:
+    // nominal declaration identities have already been sealed by this loader.
+    val shape = if scenario == "valueAdapter" { give "T#Project[I64].Item" } else { give "Box[T#Project[I64].Item]" }
+    val declaration = "fn inspect[T](left:" + shape + ", right:" + shape + ") -> " + shape + " where T:Project[I64] {{ return left }}"
+    val source = "trait Project[K] {{ type Item }} struct Source {{}} impl Source as Project[I64] {{ type Item=I64 }} struct Generic[X] {{}} impl[X] Generic[X] as Project[I64] {{ type Item=X }} struct Box[T] {{}} " + (if scenario == "valueAdapter" { give "\n// " + declaration + "\n" } else { give declaration }) + " fn concrete(value:Source) {{}} fn wrongConcrete(value:Generic[I64]) {{}} fn expected(value:Box[I64]) {{}} fn integer(value:I64) {{}} fn noise(value:Bool) {{}} fn foreign[U](value:U) {{}} fn main() {{}}\n// fn late() {{}}\n"
+    mut val compiler = <Comp />
+    match analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text text=source path="RetainedFreeSignatureConsumers.pw" />, sources: <SourceAccess stdRoot=[] />) {
+        Result.Ok(value: _) => {}
+        Result.Err(error: val error) => { panic("signature setup: " + error.message) }
+    }
+    if scenario == "stableChildren" {
+        val count = compiler.arena.typeCount()
+        for name in ["concrete", "expected", "integer"] {
+            val function = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: name).nameId)
+            val source = compiler.funcParamAt(params: compiler.arena.functionAt(index: function).params, index: 0U64).ty
+            val read = compiler.readAdmittedSignatureRoot(function: function, slot: <SourceSignatureSlot.Parameter index=0U64 />, environment: <InstanceEnvironment />).unwrap()
+            if read != source { panic("unchanged semantic children allocated a replacement type") }
+        }
+        if compiler.arena.typeCount() != count { panic("unchanged semantic folds grew the type arena") }
+        print("ok")
+        return
+    }
+    if scenario == "valueAdapter" || scenario == "unadmitted" {
+        val text = if scenario == "unadmitted" { give "fn late() {{}}" } else { give declaration }
+        val offset = sourceOffset(compiler, text)
+        match parseItem(source: text, start: offset, end: offset + text.bytes().count()) {
+            TopItemAst.Decl(d: val item) => { compiler.lowerFuncDecl(d: item).unwrap() }
+            _ => { panic("value adapter declaration did not parse") }
+        }
+        if scenario == "unadmitted" {
+            val late = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "late").nameId)
+            if compiler.sourceTypeUses.signatureFor(function: late).isNone() { panic("unadmitted control lost its registered signature") }
+            if compiler.groundedSelectedCalleeParameterTypes(callee: late, environment: <InstanceEnvironment />).isOk() || compiler.groundedSelectedCalleeReturn(callee: late, environment: <InstanceEnvironment />).isOk() { panic("source registry alone admitted an empty signature") }
+            val pending = compiler.internBodyInstance(fnIdx: late, environment: <InstanceEnvironment />)
+            if compiler.prepareFinalCallableSignature(bodyId: pending).isOk() { panic("body publication bypassed empty signature admission") }
+            compiler.admitAuthoredFunctionViews().unwrap()
+            compiler.prepareFinalCallableSignature(bodyId: pending).unwrap()
+            if !compiler.arena.bodySignature(bodyId: pending).ready { panic("empty signature could not recover after admission") }
+            print("ok")
+            return
+        }
+        compiler.admitAuthoredFunctionViews().unwrap()
+    }
+    val owner = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "inspect").nameId)
+    val concrete = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: if scenario == "wrongOutput" { give "wrongConcrete" } else { give "concrete" }).nameId)
+    val expected = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: if scenario == "valueAdapter" { give "integer" } else { give "expected" }).nameId)
+    val receiver = compiler.funcParamAt(params: compiler.arena.functionAt(index: concrete).params, index: 0U64).ty
+    val expectedType = compiler.funcParamAt(params: compiler.arena.functionAt(index: expected).params, index: 0U64).ty
+    val base = <InstanceEnvironment params=compiler.copyFuncBinds(binds: compiler.arena.functionAt(index: owner).typeParams) args=[receiver] />
+    val admitted = compiler.environmentWithCallableConstraints(fnIdx: owner, environment: base, evidence: <CallableConstraintEvidence.Declaration />).unwrap()
+    val saved = compiler.readAdmittedSignatureRoot(function: owner, slot: <SourceSignatureSlot.Parameter index=0U64 />, environment: admitted).unwrap()
+    if !compiler.typeRefEq(a: saved, b: expectedType) { panic("saved recipe setup lost the expected concrete type") }
+    if compiler.readAdmittedSignatureRoot(function: owner, slot: <SourceSignatureSlot.Parameter index=0U64 />, environment: base).isOk() { panic("missing-evidence setup is not missing") }
+    if scenario == "missingParameter" {
+        if compiler.groundedSelectedCalleeParameterTypes(callee: owner, environment: base).isOk() { panic("call parameter consumer rediscovered missing saved evidence") }
+    } else if scenario == "missingResult" {
+        if compiler.groundedSelectedCalleeReturn(callee: owner, environment: base).isOk() { panic("call result consumer rediscovered missing saved evidence") }
+    } else if scenario == "missingBody" {
+        val invalidBody = compiler.internBodyInstance(fnIdx: owner, environment: base)
+        if compiler.prepareFinalCallableSignature(bodyId: invalidBody).isOk() { panic("body signature consumer rediscovered missing saved evidence") }
+        if compiler.arena.bodySignature(bodyId: invalidBody).ready { panic("failed signature was published") }
+    } else if scenario == "cachedMissing" {
+        val invalidBody = compiler.internBodyInstance(fnIdx: owner, environment: base)
+        for index in 0U64..<compiler.arena.functionAt(index: owner).params.count() {
+            compiler.recordBodyTypeTermResult(bodyId: invalidBody, source: compiler.funcParamAt(params: compiler.arena.functionAt(index: owner).params, index: index).ty, result: expectedType)
+        }
+        compiler.recordBodyTypeTermResult(bodyId: invalidBody, source: compiler.arena.functionAt(index: owner).retTy, result: expectedType)
+        if compiler.arena.bodyTypeTermResult(bodyId: invalidBody, typeTerm: compiler.arena.functionAt(index: owner).retTy).bodyId == 0U64 { panic("cached rejection control did not populate a type result") }
+        if compiler.prepareFinalCallableSignature(bodyId: invalidBody).isOk() { panic("cached type results replaced missing signature evidence") }
+        if compiler.arena.bodySignature(bodyId: invalidBody).ready { panic("cached results published a failed signature") }
+    } else if scenario == "foreignBinder" || scenario == "foreignArgument" || scenario == "missingProof" || scenario == "wrongOutput" {
+        mut val changed = admitted
+        if scenario == "foreignBinder" {
+            val foreign = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "foreign").nameId)
+            changed = <InstanceEnvironment params=compiler.copyFuncBinds(binds: compiler.arena.functionAt(index: foreign).typeParams) args=base.args constraints=admitted.constraints />
+        } else {
+            val noise = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "noise").nameId)
+            val boolean = compiler.funcParamAt(params: compiler.arena.functionAt(index: noise).params, index: 0U64).ty
+            if scenario == "foreignArgument" {
+                changed = <InstanceEnvironment params=base.params args=[boolean] constraints=admitted.constraints />
+            } else {
+                val full = admitted.constraints.unwrap()
+                if compiler.arena.callableConstraintCount(evidence: full) != 1U64 { panic("malformed proof control requires one original clause") }
+                // The store rejects a Missing node before a consumer can see
+                // it. Keep a real node whose required declaration is absent.
+                mut val proof = compiler.freezeStaticConformanceProof(proof: <StaticConformanceProof.AssumedBound source=<DeclarationBoundRef.Function index=18446744073709551615U64 /> />)
+                if scenario == "wrongOutput" {
+                    val original = compiler.thawStaticConformanceProof(id: compiler.arena.callableConstraintProofAt(evidence: full, index: 0U64))
+                    match original {
+                        StaticConformanceProof.ConcreteWitness(witness: val witness) => {
+                            if witness.binds.count() != 1U64 { panic("wrong-output control did not select a generic witness") }
+                            val binding = witness.binds[0U64]
+                            val wrong = <StaticConformanceProof.ConcreteWitness witness=<WitnessMatch selfRef=witness.selfRef conformIdx=witness.conformIdx binds=[<WitnessBind binder=binding.binder paramId=binding.paramId term=boolean />] conditions=witness.conditions /> />
+                            val bound = compiler.arena.callableConstraintBoundAt(evidence: full, index: 0U64)
+                            val member = compiler.internBytes(s: "Item").nameId
+                            if !compiler.typeRefEq(a: compiler.associatedOutputInProof(proof: wrong, traitOwner: bound.constraint.key.owner, assocId: member).unwrap(), b: boolean) { panic("wrong-output proof did not change the associated result") }
+                            proof = compiler.freezeStaticConformanceProof(proof: wrong)
+                        }
+                        _ => { panic("wrong-output control has no concrete witness") }
+                    }
+                }
+                val malformed = compiler.arena.prepareDeclarationConstraints(function: owner, environment: admitted, sources: [compiler.arena.callableConstraintSourceAt(evidence: full, index: 0U64)], bounds: [compiler.arena.callableConstraintBoundAt(evidence: full, index: 0U64)], proofs: [proof])
+                changed = <InstanceEnvironment params=base.params args=base.args constraints=<Optional.Some v=malformed /> />
+            }
+        }
+        if compiler.groundedSelectedCalleeParameterTypes(callee: owner, environment: changed).isOk() { panic("call parameter consumer accepted foreign or malformed evidence") }
+        if compiler.groundedSelectedCalleeReturn(callee: owner, environment: changed).isOk() { panic("call result consumer accepted foreign or malformed evidence") }
+        val invalidBody = compiler.internBodyInstance(fnIdx: owner, environment: changed)
+        if compiler.prepareFinalCallableSignature(bodyId: invalidBody).isOk() { panic("body signature consumer accepted foreign or malformed evidence") }
+        if compiler.arena.bodySignature(bodyId: invalidBody).ready { panic("malformed evidence published a signature") }
+    }
+    val parameters = compiler.groundedSelectedCalleeParameterTypes(callee: owner, environment: admitted).unwrap()
+    val result = compiler.groundedSelectedCalleeReturn(callee: owner, environment: admitted).unwrap()
+    if parameters.count() != 2U64 || !compiler.typeRefEq(a: parameters[0U64], b: expectedType) || !compiler.typeRefEq(a: parameters[1U64], b: expectedType) || !compiler.typeRefEq(a: result, b: expectedType) { panic("call consumers changed the saved signature") }
+    val body = compiler.enqueueFinalBody(fnIdx: owner, args: [receiver], recvInstRef: 0U64).unwrap()
+    val signature = compiler.arena.bodySignature(bodyId: body)
+    if !signature.ready || signature.parameterTypes.count() != 2U64 || !compiler.typeRefEq(a: signature.parameterTypes[0U64], b: expectedType) || !compiler.typeRefEq(a: signature.parameterTypes[1U64], b: expectedType) || !compiler.typeRefEq(a: signature.resultType, b: expectedType) { panic("body publication differs from the saved signature") }
+    if compiler.activeAssumptionAdmission.count() != 0U64 { panic("signature rejection leaked prerequisite state") }
+    print("ok")
+}

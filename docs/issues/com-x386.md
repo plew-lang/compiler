@@ -43,3 +43,16 @@ Finding references: TEXT-OUTPUT-STATUS-LOSS, io-status output.
 Inspect the pinned finding and current owner preconditions before implementation. Establish meaningful RED for the exact defect and preserved positive/boundary controls, then repair producer through final consumer and remove competing interpretation. Verify all returned exits/publication obligations in scope, run affected gates, obtain independent review, and record revisions/results. Do not close from added checks or audit assignment. No mass panic conversion, surviving-host recovery, changed public CLI code/format or unspecified syntax policy is authorized by this ticket; request any required decision before adoption.
 
 Actual accepted admission connections are recorded in [dependency adoption](../../../evidence/compiler-failure-audit/dependency-adoption.json), after scope/cycle review. Product repair and gates remain outstanding.
+
+## Additional capacity-associated observation
+
+During com-1hd3 validation, the identity-fold candidate twice returned0 with an
+empty required LLVM file; clang then failed with missing main. After removing
+6GiB of terminal, regenerable optimized scratch LLVM (original inputs/results
+retained), the same candidate/source/runner produced and linked valid LLVM and
+all13 native cases passed. [Saved raw results, input hashes and cleanup manifest](../../../evidence/rejection-domains/diagnostic-domain-implementation/retained-free-signature-identity-fold.json)
+retain both failures. Free space was approximately166MiB before cleanup; no syscall
+errno trace identifies the exact failed operation. This is additional evidence
+for this existing output-status task, not a completed disk-failure reproduction,
+new semantic rejection, or com-1hd3 prerequisite. The output failure must remain
+a failed validation rather than being hidden by compiler exit0.

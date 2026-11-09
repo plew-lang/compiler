@@ -276,6 +276,10 @@ pub impl Comp {
     // under their own incidental environment.
     inout fn groundedSelectedCalleeReturn(callee: U64, environment: InstanceEnvironment) -> Result[U64, CompileDiagnostic] {
         if callee >= self.arena.functionCount() { return <Result.Ok value=0U64 />}
+        match (try self.readRetainedFreeCallableSignature(function: callee, environment: environment)) {
+            Optional.Some(v: val signature) => { return <Result.Ok value=signature.resultType /> }
+            Optional.None => {}
+        }
         val f: Func = self.arena.functionAt(index: callee)
         if f.isAsync && !f.hasRet {
             val result = self.semanticCallableReturnTerm(function: f)
@@ -295,6 +299,10 @@ pub impl Comp {
     inout fn groundedSelectedCalleeParameterTypes(callee: U64, environment: InstanceEnvironment) -> Result[Array[U64], CompileDiagnostic] {
         mut val out: Array[U64] = []
         if callee >= self.arena.functionCount() { return <Result.Ok value=out />}
+        match (try self.readRetainedFreeCallableSignature(function: callee, environment: environment)) {
+            Optional.Some(v: val signature) => { return <Result.Ok value=signature.parameterTypes /> }
+            Optional.None => {}
+        }
         val f: Func = self.arena.functionAt(index: callee)
         val itemRef: U64 = (try self.bodyProvidedItemTerm(f: f, environment: environment))
         mut val i: U64 = 0U64
@@ -322,6 +330,47 @@ pub impl Comp {
 }
 
 impl Comp {
+    // None identifies an unmigrated/synthetic declaration, never failed
+    // admission of a registered source signature. Saved slots are interpreted
+    // before any body-type cache or ambient grounding can confer authority.
+    inout fn readRetainedFreeCallableSignature(function: U64, environment: InstanceEnvironment) -> Result[Optional[BodySignature], CompileDiagnostic] {
+        val source = match self.sourceTypeUses.signatureFor(function: function) {
+            Optional.Some(v: val source) => source,
+            Optional.None => { return <Result.Ok value=<Optional.None /> /> },
+        }
+        val declaration = self.arena.functionAt(index: function)
+        if !self.authoredSignatureViews.contains(key: function) { return <Result.Err error=self.diagnosticAt(offset: declaration.defOffset, msg: "authored signature has no admitted trait views", failureDomain: <FailureDomain.Internal />) /> }
+        if source.parameters.count() != declaration.params.count() { return <Result.Err error=self.diagnosticAt(offset: declaration.defOffset, msg: "retained callable signature changed its parameter slots", failureDomain: <FailureDomain.Internal />) /> }
+        mut val parameters: Array[U64] = []
+        mut val index = 0U64
+        while index < declaration.params.count() {
+            val parameter = self.funcParamAt(params: declaration.params, index: index)
+            if parameter.ty != 0U64 {
+                parameters.append((try self.readAdmittedSignatureRoot(function: function, slot: <SourceSignatureSlot.Parameter index=index />, environment: environment)))
+            } else {
+                parameters.append(0U64)
+            }
+            index += 1U64
+        }
+        mut val result = 0U64
+        if declaration.hasRet {
+            result = try self.readAdmittedSignatureRoot(function: function, slot: <SourceSignatureSlot.Result />, environment: environment)
+        } else if declaration.isAsync {
+            result = self.semanticCallableReturnTerm(function: declaration)
+            if result == 0U64 { return <Result.Err error=self.diagnosticAt(offset: declaration.defOffset, msg: "async declaration requires the ambient Promise declaration") /> }
+        }
+        mut val bodyResult = result
+        if declaration.isAsync {
+            bodyResult = 0U64
+            if declaration.hasRet {
+                bodyResult = result
+                val returned = self.arena.typeAt(index: result)
+                if rangeEquals(bytes: self.arena.bytes, start: returned.nameStart, len: returned.nameLen, kw: "Promise") && returned.args.count() == 1U64 { bodyResult = returned.args[0U64] }
+            }
+        }
+        return <Result.Ok value=<Optional.Some v=<BodySignature ready=true parameterTypes=parameters parameterPassings=self.selectedArgumentPassings(callee: function) resultType=result bodyResultType=bodyResult /> /> />
+    }
+
     // A candidate already names both source and placement declarations.
     // Filter complete proof paths by those exact edges before choosing any
     // path; an arbitrary existence proof can belong to another copy.
@@ -4397,6 +4446,24 @@ pub impl Comp {
 
     inout fn recordFinalCallableSignature(bodyId: U64, instance: BodyInstance, function: Func) -> Result[(), CompileDiagnostic] {
         val f = function
+        match (try self.readRetainedFreeCallableSignature(function: instance.fnIdx, environment: instance.environment)) {
+            Optional.Some(v: val signature) => {
+                mut val index = 0U64
+                while index < f.params.count() {
+                    self.recordBodyTypeTermResult(bodyId: bodyId, source: self.funcParamAt(params: f.params, index: index).ty, result: signature.parameterTypes[index])
+                    try self.scanType(ref: signature.parameterTypes[index])
+                    index += 1U64
+                }
+                if f.hasRet || f.isAsync {
+                    self.recordBodyTypeTermResult(bodyId: bodyId, source: self.semanticCallableReturnTerm(function: f), result: signature.resultType)
+                    try self.scanType(ref: signature.resultType)
+                }
+                if f.isAsync { self.recordBodyTypeTermResult(bodyId: bodyId, source: self.declaredBodyReturnTerm(fnIdx: instance.fnIdx), result: signature.bodyResultType) }
+                self.arena.setBodySignature(bodyId: bodyId, parameters: signature.parameterTypes, passings: signature.parameterPassings, result: signature.resultType, bodyResult: signature.bodyResultType)
+                return <Result.Ok value=() />
+            }
+            Optional.None => {}
+        }
         // A body instance owns every concrete layout named by its ABI, even
         // when the source body never reads that parameter or return value.
         // This is deliberately beside the final semantic call closure: the
