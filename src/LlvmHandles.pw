@@ -3,6 +3,7 @@
 pub extern(c) {
     type LLVMContextRef
     type LLVMModuleRef
+    type LLVMTypeRef
     type PlewProgramArgumentsRef
     type PlewLlvmJitRef
 }

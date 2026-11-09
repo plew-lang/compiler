@@ -25,10 +25,10 @@ pub impl LlvmCtx {
     // Ensure the per-instance drop witness `void @pwdrop<reg>(structVal)` is declared,
     // and return its dropWit* slot. The body is emitted later (emitDropWitnessBodies).
     // `reg` is a genStruct* slot (caller resolved it).
-    inout fn structDropWitness(c: inout Comp, reg: U64) -> U64 {
+    inout fn structDropWitness(c: inout Comp, reg: U64) -> Result[U64, CompileDiagnostic] {
         val found: U64 = self.dropWitSlot(reg: reg)
         if found < self.dropWitReg.count() {
-            return found
+            return <Result.Ok value=found />
         }
         mut val ptys: Array[LLVMTypeRef] = []
         ptys.append(self.genStructTys[reg])
@@ -37,11 +37,11 @@ pub impl LlvmCtx {
         appendBytes(into: inout nm, from: "pwdrop".bytes())
         appendU64Dec(into: inout nm, n: reg)
         nm.append(0)
-        val fv: LLVMValueRef = self.declareValueFunction(name: arrayCPtr(nm), signature: fty)
+        val fv: LLVMValueRef = (try self.declareLegacyValueFunction(name: arrayCPtr(nm), signature: fty, family: <LlvmLegacyConvention.StructDrop />))
         self.dropWitReg.append(reg)
         self.dropWitVal.append(fv)
         self.dropWitTy.append(fty)
-        return self.dropWitReg.count() - 1U64
+        return <Result.Ok value=self.dropWitReg.count() - 1U64 />
     }
 
     // Destroy a struct VALUE `v` of struct `sidx` (spec/03): run its own `deinit` body
@@ -50,7 +50,7 @@ pub impl LlvmCtx {
     // ONCE per type instead of inlined at every drop site (collapsing the IR).
     inout fn emitDeinitValue(c: inout Comp, v: LLVMValueRef, ref: U64) -> Result[(), CompileDiagnostic] {
         val reg = (try self.requireStructLayoutSlot(c: inout c, typeRef: ref))
-        val slot = self.structDropWitness(c: inout c, reg: reg)
+        val slot = try self.structDropWitness(c: inout c, reg: reg)
         val arguments: Array[LLVMValueRef] = [v]
         (try self.callValueFunction(signature: self.dropWitTy[slot], function: self.dropWitVal[slot], arguments: arguments))
         return <Result.Ok value=() />

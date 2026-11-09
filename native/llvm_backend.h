@@ -22,6 +22,9 @@ int plew_llvm_emit_object(LLVMModuleRef module, const char *output,
 // are owned LLVM messages (LLVMDisposeMessage); empty means failure. Native
 // layout uses exactly the object backend's CPU/features/target-machine policy.
 char *plew_llvm_native_data_layout(const char *cpu);
+// Context-local identity only, never a session/body or persistent cache key.
+uint64_t plew_llvm_module_identity(LLVMModuleRef module);
+uint64_t plew_llvm_context_identity(LLVMContextRef context);
 
 // Single-threaded native execution session. It owns code, not a second Plew
 // runtime. Hosts explicitly supply symbols from the existing runtime instance.

@@ -64,9 +64,35 @@ Internal SessionJit/SessionModule diagnostics now perform their missing program
 entry registration step; archived old-source reproduction and preserved native
 assertions distinguish that repair from a product regression.
 
-This closes only checkpoint 1's target precondition. Logical role descriptors,
-typed Value/Home carriers, Ready binding/storage plans and W2 cost reconciliation
-remain open. The record explicitly excludes full gates, formal performance,
+This target record closes only checkpoint 1's target precondition. The role
+planner increment is recorded below; typed Value/Home carriers, Ready
+binding/storage plans and W2 cost reconciliation remain open. The record explicitly excludes full gates, formal performance,
 main/seed promotion and overall W2/com-ffar completion.
 
 
+
+## Role Planner Checkpoint
+
+[Role planner evidence](../../../evidence/performance-regression-history/value-passing-implementation/w2-protocol/role-planner.json)
+records the normal declaration structural RED, native same-module stale-target
+readmission RED/GREEN, finalized BodySignature role/mode/type handoff and the
+representation-only planner. Normal free/method declarations use its stored
+plan. Other private entries explicitly identify their legacy family; they do
+not claim completed semantic roles. The leaf owns omission/direct/byval, exact
+target/context/revision validation, physical indices and represented alignment.
+Baseline result and snapshot behavior remain unchanged.
+
+Standard build `20261109T215505-build-b5b229` passed with immutable inputs. Fresh
+candidate `bin/plewc-value-abi-role-planner-20261110` (SHA in evidence) passes
+the live-LLVM planner and malformed controls, raw/optimized byval controls,
+split globals, separately requested closure/witness and exposed entries,
+SessionJit, C callback/host/async execution, and eight lazy CLI golden controls
+including unique/default lifetime cases. Initial disk-full failures and a
+runner's missing semantic-progress events are explicitly separated from product
+RED; the runner now reports actual bounded command stages and those controls
+were rerun successfully. Neutral source review fixed two stale-target gaps;
+final evidence reconciliation independently accepted checkpoint 1.
+
+This is checkpoint 1 only. Direct call/read paths still use stored descriptor
+compatibility adapters, not typed Value/Home inputs. Checkpoints 2–6, actual
+address forwarding, benefit/go-no-go and final task gates remain open.

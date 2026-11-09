@@ -29,19 +29,13 @@ pub impl LlvmCtx {
                         self.traceCodegenName(c: inout c, start: f.nameStart, len: f.nameLen)
                         eprint(text: "\n")
                     }
-                    mut val ptys: Array[LLVMTypeRef] = []
-                    val parameterCount = c.arena.bodySignature(bodyId: bodyId).parameterTypes.count()
-                    mut val pi: U64 = 0
-                    while pi < parameterCount {
-                        ptys.append((try self.bodyParameterLlvmTy(c: inout c, bodyId: bodyId, index: pi)))
-                        pi += 1
-                    }
-                    val fty: LLVMTypeRef = LLVMFunctionType((try self.bodyReturnLlvmTy(c: inout c, bodyId: bodyId)), arrayCPtr(ptys), ptys.count(), 0I32)
+                    val abiId = (try self.bodyValueAbi(c: inout c, bodyId: bodyId))
+                    val fty = self.valueAbis[abiId - 1U64].logicalSignature
                     mut val nm: Array[U8] = []
                     appendBytes(into: inout nm, from: "gf".bytes())
                     appendU64Dec(into: inout nm, n: bodyId)
                     nm.append(0)
-                    val fv: LLVMValueRef = self.declareBodyFunction(name: arrayCPtr(nm), signature: fty, bodyId: bodyId)
+                    val fv: LLVMValueRef = (try self.declarePlannedBodyFunction(name: arrayCPtr(nm), abiId: abiId, bodyId: bodyId))
                     if f.isExposed && !c.genMode {
                         try self.emitExposedEntry(c: inout c, bodyId: bodyId, target: fv, signature: fty)
                     }

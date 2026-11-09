@@ -86,7 +86,7 @@ pub impl LlvmCtx {
         }
         val reg = (try self.requireEnumLayoutSlot(c: inout c, typeRef: ref))
         if (try self.enumNeedsDeinit(c: inout c, typeRef: self.genEnumRefs[reg])) {
-            val slot = self.enumReleaseWitness(c: inout c, reg: reg)
+            val slot = try self.enumReleaseWitness(c: inout c, reg: reg)
             val arguments: Array[LLVMValueRef] = [v]
             (try self.callValueFunction(signature: self.enumRelWitTy[slot], function: self.enumRelWitVal[slot], arguments: arguments))
         }
@@ -209,10 +209,10 @@ pub impl LlvmCtx {
         }
         return self.enumRelWitReg.count()
     }
-    inout fn enumReleaseWitness(c: inout Comp, reg: U64) -> U64 {
+    inout fn enumReleaseWitness(c: inout Comp, reg: U64) -> Result[U64, CompileDiagnostic] {
         val found: U64 = self.enumRelWitSlot(reg: reg)
         if found < self.enumRelWitReg.count() {
-            return found
+            return <Result.Ok value=found />
         }
         mut val ptys: Array[LLVMTypeRef] = []
         ptys.append(self.genEnumTys[reg])
@@ -221,11 +221,11 @@ pub impl LlvmCtx {
         appendBytes(into: inout nm, from: "pwenumrel".bytes())
         appendU64Dec(into: inout nm, n: reg)
         nm.append(0)
-        val fv: LLVMValueRef = self.declareValueFunction(name: arrayCPtr(nm), signature: fty)
+        val fv: LLVMValueRef = (try self.declareLegacyValueFunction(name: arrayCPtr(nm), signature: fty, family: <LlvmLegacyConvention.EnumRelease />))
         self.enumRelWitReg.append(reg)
         self.enumRelWitVal.append(fv)
         self.enumRelWitTy.append(fty)
-        return self.enumRelWitReg.count() - 1U64
+        return <Result.Ok value=self.enumRelWitReg.count() - 1U64 />
     }
     inout fn emitEnumReleaseWitnessBodies(c: inout Comp) -> Result[(), CompileDiagnostic] {
         while self.enumRelWitDone < self.enumRelWitReg.count() {
@@ -251,10 +251,10 @@ pub impl LlvmCtx {
         }
         return self.enumRetWitReg.count()
     }
-    inout fn enumRetainWitness(c: inout Comp, reg: U64) -> U64 {
+    inout fn enumRetainWitness(c: inout Comp, reg: U64) -> Result[U64, CompileDiagnostic] {
         val found: U64 = self.enumRetWitSlot(reg: reg)
         if found < self.enumRetWitReg.count() {
-            return found
+            return <Result.Ok value=found />
         }
         mut val ptys: Array[LLVMTypeRef] = []
         ptys.append(self.genEnumTys[reg])
@@ -263,11 +263,11 @@ pub impl LlvmCtx {
         appendBytes(into: inout nm, from: "pwenumret".bytes())
         appendU64Dec(into: inout nm, n: reg)
         nm.append(0)
-        val fv: LLVMValueRef = self.declareValueFunction(name: arrayCPtr(nm), signature: fty)
+        val fv: LLVMValueRef = (try self.declareLegacyValueFunction(name: arrayCPtr(nm), signature: fty, family: <LlvmLegacyConvention.EnumRetain />))
         self.enumRetWitReg.append(reg)
         self.enumRetWitVal.append(fv)
         self.enumRetWitTy.append(fty)
-        return self.enumRetWitReg.count() - 1U64
+        return <Result.Ok value=self.enumRetWitReg.count() - 1U64 />
     }
     inout fn emitEnumRetainWitnessBodies(c: inout Comp) -> Result[(), CompileDiagnostic] {
         while self.enumRetWitDone < self.enumRetWitReg.count() {
@@ -292,7 +292,7 @@ pub impl LlvmCtx {
         }
         val reg = (try self.requireEnumLayoutSlot(c: inout c, typeRef: ref))
         if (try self.enumNeedsDeinit(c: inout c, typeRef: self.genEnumRefs[reg])) {
-            val slot = self.enumRetainWitness(c: inout c, reg: reg)
+            val slot = try self.enumRetainWitness(c: inout c, reg: reg)
             val arguments: Array[LLVMValueRef] = [v]
             (try self.callValueFunction(signature: self.enumRetWitTy[slot], function: self.enumRetWitVal[slot], arguments: arguments))
         }

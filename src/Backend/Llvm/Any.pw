@@ -52,7 +52,7 @@ pub impl LlvmCtx {
         appendBytes(into: inout nm, from: "_".bytes())
         appendU64Dec(into: inout nm, n: resolutionIndex)
         nm.append(0)
-        val fv: LLVMValueRef = self.declareBodyFunction(name: arrayCPtr(nm), signature: fty, bodyId: member.adapterBodyId)
+        val fv: LLVMValueRef = (try self.declareLegacyBodyFunction(name: arrayCPtr(nm), signature: fty, bodyId: member.adapterBodyId, family: <LlvmLegacyConvention.Witness />))
         self.existentialWitnesses.append(<LlvmExistentialWitness resolution=resolutionIndex member=idx function=fv />)
         return <Result.Ok value=fv />
     }
@@ -108,7 +108,7 @@ pub impl LlvmCtx {
         appendBytes(into: inout nm, from: "pfvtcopy".bytes())
         appendU64Dec(into: inout nm, n: sidx)
         nm.append(0)
-        val fv: LLVMValueRef = self.declareValueFunction(name: arrayCPtr(nm), signature: fty)
+        val fv: LLVMValueRef = (try self.declareLegacyValueFunction(name: arrayCPtr(nm), signature: fty, family: <LlvmLegacyConvention.ExistentialCopy />))
         val savedBB: LLVMBasicBlockRef = LLVMGetInsertBlock(self.b)
         val entryCString = <CString.copied text="entry" />
         val entry: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, fv, entryCString.ptr)
@@ -136,7 +136,7 @@ pub impl LlvmCtx {
         appendBytes(into: inout nm, from: "pfvtdrop".bytes())
         appendU64Dec(into: inout nm, n: sidx)
         nm.append(0)
-        val fv: LLVMValueRef = self.declareValueFunction(name: arrayCPtr(nm), signature: fty)
+        val fv: LLVMValueRef = (try self.declareLegacyValueFunction(name: arrayCPtr(nm), signature: fty, family: <LlvmLegacyConvention.ExistentialDrop />))
         val savedBB: LLVMBasicBlockRef = LLVMGetInsertBlock(self.b)
         val savedFn: LLVMValueRef = self.curFn
         val entryCString = <CString.copied text="entry" />
@@ -180,7 +180,7 @@ pub impl LlvmCtx {
         val dty: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(ptys), 1U64, 0I32)
         mut val av: Array[LLVMValueRef] = []
         av.append(cell)
-        (try self.callValueFunction(signature: dty, function: dropFn, arguments: av))
+        (try self.callValueFunction(signature: dty, function: dropFn, arguments: av, legacyIndirect: <Optional.Some v=<LlvmLegacyConvention.ExistentialDrop /> />))
         try self.rawbufFree(c: inout c, cell: cell)
         LLVMBuildBr(self.b, contBB)
         LLVMPositionBuilderAtEnd(self.b, contBB)
@@ -229,7 +229,7 @@ pub impl LlvmCtx {
         val fty: LLVMTypeRef = LLVMFunctionType(self.ptrty, arrayCPtr(ptys), 1U64, 0I32)
         mut val av: Array[LLVMValueRef] = []
         av.append(dataPtr)
-        val newData: LLVMValueRef = (try self.callValueFunction(signature: fty, function: copyFn, arguments: av))
+        val newData: LLVMValueRef = (try self.callValueFunction(signature: fty, function: copyFn, arguments: av, legacyIndirect: <Optional.Some v=<LlvmLegacyConvention.ExistentialCopy /> />))
         mut val agg: LLVMValueRef = LLVMGetUndef(self.anyTy)
         agg = LLVMBuildInsertValue(self.b, agg, newData, 0U64, anon())
         agg = LLVMBuildInsertValue(self.b, agg, vtPtr, 1U64, anon())

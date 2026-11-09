@@ -1,0 +1,275 @@
+// The representation-only owner of private logical/physical correspondence.
+// Inputs are completed contracts; this module cannot inspect source or Comp.
+use ../LlvmHandles only { LLVMModuleRef, LLVMContextRef, LLVMTypeRef }
+use ../Diag only { CompileDiagnostic, DiagnosticLocation, FailureDomain }
+use @Std/Ffi only { stringFromCString, arrayCPtr }
+
+extern(c) {
+    type LLVMTargetDataRef
+    fn plew_llvm_module_identity(module~: LLVMModuleRef) -> U64
+    fn plew_llvm_context_identity(context~: LLVMContextRef) -> U64
+    fn LLVMGetModuleContext(module~: LLVMModuleRef) -> LLVMContextRef
+    fn LLVMGetTypeContext(type~: LLVMTypeRef) -> LLVMContextRef
+    fn LLVMGetTarget(module~: LLVMModuleRef) -> CPtr[U8]
+    fn LLVMGetDataLayoutStr(module~: LLVMModuleRef) -> CPtr[U8]
+    fn LLVMGetModuleDataLayout(module~: LLVMModuleRef) -> LLVMTargetDataRef
+    fn LLVMABIAlignmentOfType(layout~: LLVMTargetDataRef, type~: LLVMTypeRef) -> U32
+    fn LLVMTypeIsSized(type~: LLVMTypeRef) -> I32
+    fn LLVMGetTypeKind(type~: LLVMTypeRef) -> U32
+    fn LLVMIsOpaqueStruct(type~: LLVMTypeRef) -> I32
+    fn LLVMCountStructElementTypes(type~: LLVMTypeRef) -> U32
+    fn LLVMStructGetTypeAtIndex(type~: LLVMTypeRef, index~: U32) -> LLVMTypeRef
+    fn LLVMGetArrayLength2(type~: LLVMTypeRef) -> U64
+    fn LLVMGetElementType(type~: LLVMTypeRef) -> LLVMTypeRef
+    fn LLVMFunctionType(result~: LLVMTypeRef, parameters~: CPtr[LLVMTypeRef], count~: U64, variadic~: I32) -> LLVMTypeRef
+    fn LLVMPointerTypeInContext(context~: LLVMContextRef, addressSpace~: U32) -> LLVMTypeRef
+    fn plew_pointer_equal(first~: LLVMTypeRef, second~: LLVMTypeRef) -> I32
+}
+
+pub enum LlvmLegacyConvention {
+    Closure
+    Witness
+    AsyncEntry
+    AsyncResume
+    EnvironmentDrop
+    ExistentialCopy
+    ExistentialDrop
+    StructRetain
+    StructDrop
+    EnumRetain
+    EnumRelease
+}
+pub impl LlvmLegacyConvention {
+    fn key() -> U64 {
+        return match self {
+            LlvmLegacyConvention.Closure => { give 1U64 }
+            LlvmLegacyConvention.Witness => { give 2U64 }
+            LlvmLegacyConvention.AsyncEntry => { give 3U64 }
+            LlvmLegacyConvention.AsyncResume => { give 4U64 }
+            LlvmLegacyConvention.EnvironmentDrop => { give 5U64 }
+            LlvmLegacyConvention.ExistentialCopy => { give 6U64 }
+            LlvmLegacyConvention.ExistentialDrop => { give 7U64 }
+            LlvmLegacyConvention.StructRetain => { give 8U64 }
+            LlvmLegacyConvention.StructDrop => { give 9U64 }
+            LlvmLegacyConvention.EnumRetain => { give 10U64 }
+            LlvmLegacyConvention.EnumRelease => { give 11U64 }
+        }
+    }
+}
+pub enum LlvmValueConvention { Body Legacy(family: LlvmLegacyConvention) }
+pub impl LlvmValueConvention {
+    fn key() -> U64 {
+        return match self {
+            LlvmValueConvention.Body => { give 0U64 }
+            LlvmValueConvention.Legacy(family: val family) => { give family.key() }
+        }
+    }
+}
+pub enum LlvmParameterRole { Receiver Ordinary(index: U64) Legacy(index: U64) }
+pub impl LlvmParameterRole {
+    fn same(role: LlvmParameterRole) -> Bool {
+        match self {
+            LlvmParameterRole.Receiver => { return match role { LlvmParameterRole.Receiver => { give true } _ => { give false } } }
+            LlvmParameterRole.Ordinary(index: val index) => { return match role { LlvmParameterRole.Ordinary(index: val other) => { give index == other } _ => { give false } } }
+            LlvmParameterRole.Legacy(index: val index) => { return match role { LlvmParameterRole.Legacy(index: val other) => { give index == other } _ => { give false } } }
+        }
+    }
+}
+pub enum LlvmParameterMode { Borrow Inout Move Legacy }
+pub impl LlvmParameterMode {
+    fn key() -> U64 {
+        return match self {
+            LlvmParameterMode.Borrow => { give 1U64 }
+            LlvmParameterMode.Inout => { give 2U64 }
+            LlvmParameterMode.Move => { give 3U64 }
+            LlvmParameterMode.Legacy => { give 0U64 }
+        }
+    }
+}
+pub enum LlvmValuePassing { Omitted Direct Indirect }
+pub impl LlvmValuePassing {
+    fn key() -> U64 {
+        return match self {
+            LlvmValuePassing.Omitted => { give 0U64 }
+            LlvmValuePassing.Direct => { give 1U64 }
+            LlvmValuePassing.Indirect => { give 2U64 }
+        }
+    }
+}
+pub enum LlvmResultProtocol { Void UnchangedValue }
+pub impl LlvmResultProtocol {
+    fn key() -> U64 { return match self { LlvmResultProtocol.Void => { give 0U64 } LlvmResultProtocol.UnchangedValue => { give 1U64 } } }
+}
+
+// Raw input/record vocabulary is constructible. Admission is plan/validate,
+// not possession of a record or a context-local numeric ID.
+pub struct LlvmLogicalParameter {
+    pub val type: LLVMTypeRef
+    pub val semanticType: U64
+    pub val role: LlvmParameterRole
+    pub val mode: LlvmParameterMode
+}
+pub impl LlvmLogicalParameter { factory }
+pub struct LlvmLogicalSignature {
+    pub val convention: LlvmValueConvention
+    pub val parameters: Array[LlvmLogicalParameter]
+    pub val result: LLVMTypeRef
+    pub val resultTerm: U64
+}
+pub impl LlvmLogicalSignature { factory }
+pub struct LlvmValueParameter {
+    pub val type: LLVMTypeRef
+    pub val semanticType: U64
+    pub val role: LlvmParameterRole
+    pub val mode: LlvmParameterMode
+    pub val physicalIndex: U64
+    pub val passing: LlvmValuePassing
+    // Alignment of the represented value/byval bytes. For an inout lane it is
+    // the pointer value alignment, not a proof of its semantic pointee alignment.
+    pub val valueAlignment: U64
+}
+pub impl LlvmValueParameter { factory }
+pub struct LlvmPhysicalSignature {
+    pub val parameters: Array[LlvmValueParameter]
+    pub val logicalSignature: LLVMTypeRef
+    pub val functionType: LLVMTypeRef
+    pub val moduleIdentity: U64
+    pub val contextIdentity: U64
+    pub val revision: U64
+    pub val targetTriple: String
+    pub val dataLayout: String
+    pub val convention: LlvmValueConvention
+    pub val resultTerm: U64
+    pub val resultProtocol: LlvmResultProtocol
+}
+pub impl LlvmPhysicalSignature { factory }
+
+fn signatureFailure(message: String) -> CompileDiagnostic {
+    return <CompileDiagnostic failureDomain=<FailureDomain.Internal /> location=<DiagnosticLocation.Line line=0I64 /> message="internal error: physical signature: " + message />
+}
+
+pub struct LlvmSignatureScope {
+    val module: LLVMModuleRef
+    val context: LLVMContextRef
+    pub val moduleIdentity: U64
+    pub val contextIdentity: U64
+    val triple: String
+    val layout: String
+}
+pub impl LlvmSignatureScope {
+    assoc fn admitted(module: LLVMModuleRef) -> Result[LlvmSignatureScope, CompileDiagnostic] {
+        val triple = stringFromCString(LLVMGetTarget(module))
+        val layout = stringFromCString(LLVMGetDataLayoutStr(module))
+        if triple == "" || layout == "" { return <Result.Err error=signatureFailure(message: "module target/layout is not admitted") /> }
+        val context = LLVMGetModuleContext(module)
+        return <Result.Ok value=<LlvmSignatureScope module=module context=context moduleIdentity=plew_llvm_module_identity(module) contextIdentity=plew_llvm_context_identity(context) triple=triple layout=layout /> />
+    }
+
+    fn validateScope() -> Result[(), CompileDiagnostic] {
+        if plew_llvm_module_identity(self.module) != self.moduleIdentity || plew_llvm_context_identity(LLVMGetModuleContext(self.module)) != self.contextIdentity || stringFromCString(LLVMGetTarget(self.module)) != self.triple || stringFromCString(LLVMGetDataLayoutStr(self.module)) != self.layout {
+            return <Result.Err error=signatureFailure(message: "foreign or stale module/context/target") />
+        }
+        return <Result.Ok value=() />
+    }
+
+    fn ownsType(type: LLVMTypeRef) -> Bool {
+        return plew_llvm_context_identity(LLVMGetTypeContext(type)) == self.contextIdentity
+    }
+
+    fn validateLogical(signature: LlvmLogicalSignature) -> Result[(), CompileDiagnostic] {
+        try self.validateScope()
+        if !self.ownsType(type: signature.result) { return <Result.Err error=signatureFailure(message: "foreign result context") /> }
+        val resultVoid = LLVMGetTypeKind(signature.result) == 0U32
+        if !resultVoid && LLVMTypeIsSized(signature.result) == 0I32 { return <Result.Err error=signatureFailure(message: "incomplete result layout") /> }
+        val normal = signature.convention.key() == 0U64
+        if normal && resultVoid != (signature.resultTerm == 0U64) { return <Result.Err error=signatureFailure(message: "body result protocol mismatch") /> }
+        mut val ordinary = 0U64
+        mut val index = 0U64
+        while index < signature.parameters.count() {
+            val parameter = signature.parameters[index]
+            if !self.ownsType(type: parameter.type) { return <Result.Err error=signatureFailure(message: "foreign parameter context") /> }
+            if LLVMTypeIsSized(parameter.type) == 0I32 { return <Result.Err error=signatureFailure(message: "incomplete parameter layout") /> }
+            if normal {
+                if parameter.semanticType == 0U64 || parameter.mode.key() == 0U64 { return <Result.Err error=signatureFailure(message: "body parameter lacks a semantic contract") /> }
+                match parameter.role {
+                    LlvmParameterRole.Receiver => { if index != 0U64 { return <Result.Err error=signatureFailure(message: "receiver must be first") /> } }
+                    LlvmParameterRole.Ordinary(index: val position) => {
+                        if position != ordinary { return <Result.Err error=signatureFailure(message: "ordinary parameter index mismatch") /> }
+                        ordinary += 1U64
+                    }
+                    LlvmParameterRole.Legacy(index: _) => { return <Result.Err error=signatureFailure(message: "legacy role in body convention") /> }
+                }
+                match parameter.mode {
+                    LlvmParameterMode.Inout => { if LLVMGetTypeKind(parameter.type) != 12U32 { return <Result.Err error=signatureFailure(message: "inout requires pointer representation") /> } }
+                    _ => {}
+                }
+            } else {
+                if parameter.semanticType != 0U64 || parameter.mode.key() != 0U64 || !parameter.role.same(role: <LlvmParameterRole.Legacy index=index />) { return <Result.Err error=signatureFailure(message: "legacy convention has an unannounced semantic role") /> }
+            }
+            index += 1U64
+        }
+        return <Result.Ok value=() />
+    }
+
+    fn plan(signature: LlvmLogicalSignature) -> Result[LlvmPhysicalSignature, CompileDiagnostic] {
+        try self.validateLogical(signature: signature)
+        mut val parameters: Array[LlvmValueParameter] = []
+        mut val logical: Array[LLVMTypeRef] = []
+        mut val physical: Array[LLVMTypeRef] = []
+        val layout = LLVMGetModuleDataLayout(self.module)
+        for parameter in signature.parameters {
+            val passing = physicalPassing(type: parameter.type)
+            mut val alignment = 0U64
+            if passing.key() != 0U64 { alignment = LLVMABIAlignmentOfType(layout, parameter.type) as U64 }
+            parameters.append(<LlvmValueParameter type=parameter.type semanticType=parameter.semanticType role=parameter.role mode=parameter.mode physicalIndex=physical.count() passing=passing valueAlignment=alignment />)
+            logical.append(parameter.type)
+            match passing {
+                LlvmValuePassing.Omitted => {}
+                LlvmValuePassing.Direct => { physical.append(parameter.type) }
+                LlvmValuePassing.Indirect => { physical.append(LLVMPointerTypeInContext(self.context, 0U32)) }
+            }
+        }
+        val resultProtocol = if LLVMGetTypeKind(signature.result) == 0U32 { give <LlvmResultProtocol.Void /> } else { give <LlvmResultProtocol.UnchangedValue /> }
+        return <Result.Ok value=<LlvmPhysicalSignature parameters=parameters logicalSignature=LLVMFunctionType(signature.result, arrayCPtr(logical), logical.count(), 0I32) functionType=LLVMFunctionType(signature.result, arrayCPtr(physical), physical.count(), 0I32) moduleIdentity=self.moduleIdentity contextIdentity=self.contextIdentity revision=1U64 targetTriple=self.triple dataLayout=self.layout convention=signature.convention resultTerm=signature.resultTerm resultProtocol=resultProtocol /> />
+    }
+
+    fn validate(signature: LlvmLogicalSignature, plan: LlvmPhysicalSignature) -> Result[(), CompileDiagnostic] {
+        // Scope rejection precedes inspecting any foreign plan's native types.
+        if plan.moduleIdentity != self.moduleIdentity || plan.contextIdentity != self.contextIdentity || plan.revision != 1U64 || plan.targetTriple != self.triple || plan.dataLayout != self.layout { return <Result.Err error=signatureFailure(message: "plan scope or protocol revision mismatch") /> }
+        val expected = (try self.plan(signature: signature))
+        if plan.convention.key() != expected.convention.key() || plan.resultTerm != expected.resultTerm || plan.resultProtocol.key() != expected.resultProtocol.key() || plew_pointer_equal(plan.logicalSignature, expected.logicalSignature) == 0I32 || plew_pointer_equal(plan.functionType, expected.functionType) == 0I32 || plan.parameters.count() != expected.parameters.count() { return <Result.Err error=signatureFailure(message: "plan convention/result/signature mismatch") /> }
+        mut val index = 0U64
+        while index < expected.parameters.count() {
+            val parameter = plan.parameters[index]
+            val wanted = expected.parameters[index]
+            if parameter.semanticType != wanted.semanticType || !parameter.role.same(role: wanted.role) || parameter.mode.key() != wanted.mode.key() || parameter.physicalIndex != wanted.physicalIndex || parameter.passing.key() != wanted.passing.key() || parameter.valueAlignment != wanted.valueAlignment || plew_pointer_equal(parameter.type, wanted.type) == 0I32 { return <Result.Err error=signatureFailure(message: "plan lane role/type/index/transport/alignment mismatch") /> }
+            index += 1U64
+        }
+        return <Result.Ok value=() />
+    }
+}
+
+// Shared by ordinary LLVM loads/stores and physical omission. Opaque types are
+// not empty; planning additionally requires completed/sized types above.
+pub fn llvmTypeHasStorage(valueType~: LLVMTypeRef) -> Bool {
+    val kind = LLVMGetTypeKind(valueType)
+    if kind == 10U32 {
+        if LLVMIsOpaqueStruct(valueType) != 0I32 { return true }
+        val count = LLVMCountStructElementTypes(valueType)
+        mut val index = 0U32
+        while index < count {
+            if llvmTypeHasStorage(LLVMStructGetTypeAtIndex(valueType, index)) { return true }
+            index += 1U32
+        }
+        return false
+    }
+    if kind == 11U32 { return LLVMGetArrayLength2(valueType) != 0U64 && llvmTypeHasStorage(LLVMGetElementType(valueType)) }
+    return true
+}
+
+fn physicalPassing(type: LLVMTypeRef) -> LlvmValuePassing {
+    if !llvmTypeHasStorage(type) { return <LlvmValuePassing.Omitted /> }
+    val kind = LLVMGetTypeKind(type)
+    if kind == 10U32 || kind == 11U32 { return <LlvmValuePassing.Indirect /> }
+    return <LlvmValuePassing.Direct />
+}

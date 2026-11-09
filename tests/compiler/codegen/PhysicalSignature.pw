@@ -1,0 +1,108 @@
+// Test the production representation leaf without importing Comp or Backend.
+use ../../../src/Backend/PhysicalSignature only { LlvmSignatureScope, LlvmLogicalSignature, LlvmLogicalParameter, LlvmParameterRole, LlvmParameterMode, LlvmValueConvention, LlvmLegacyConvention, LlvmPhysicalSignature, LlvmValueParameter, LlvmValuePassing }
+use ../../../src/LlvmHandles only { LLVMContextRef, LLVMModuleRef, LLVMTypeRef }
+use @Std/Io only { write }
+extern(c) {
+    fn LLVMContextCreate() -> LLVMContextRef
+    fn LLVMContextDispose(context~: LLVMContextRef)
+    fn LLVMDisposeModule(module~: LLVMModuleRef)
+    fn plew_test_signature_module(context~: LLVMContextRef) -> LLVMModuleRef
+    fn plew_test_signature_blank_module(context~: LLVMContextRef) -> LLVMModuleRef
+    fn plew_test_signature_type(context~: LLVMContextRef, kind~: U32) -> LLVMTypeRef
+    fn plew_test_signature_change_layout(module~: LLVMModuleRef)
+    fn LLVMCountParamTypes(type~: LLVMTypeRef) -> U32
+}
+fn parameter(type: LLVMTypeRef, semantic: U64, role: LlvmParameterRole, mode: LlvmParameterMode) -> LlvmLogicalParameter {
+    return <LlvmLogicalParameter type=type semanticType=semantic role=role mode=mode />
+}
+fn body(parameters: Array[LlvmLogicalParameter], result: LLVMTypeRef) -> LlvmLogicalSignature {
+    return <LlvmLogicalSignature convention=<LlvmValueConvention.Body /> parameters=parameters result=result resultTerm=0U64 />
+}
+fn changed(plan: LlvmPhysicalSignature, parameters: Array[LlvmValueParameter], revision: U64 = 1U64) -> LlvmPhysicalSignature {
+    return <LlvmPhysicalSignature parameters=parameters logicalSignature=plan.logicalSignature functionType=plan.functionType moduleIdentity=plan.moduleIdentity contextIdentity=plan.contextIdentity revision=revision targetTriple=plan.targetTriple dataLayout=plan.dataLayout convention=plan.convention resultTerm=plan.resultTerm resultProtocol=plan.resultProtocol />
+}
+fn main() {
+    val context = LLVMContextCreate()
+    val foreignContext = LLVMContextCreate()
+    val blank = plew_test_signature_blank_module(context)
+    if LlvmSignatureScope.admitted(module: blank).isOk() { panic "missing target admitted" }
+    LLVMDisposeModule(blank)
+    val module = plew_test_signature_module(context)
+    val otherModule = plew_test_signature_module(context)
+    val foreignModule = plew_test_signature_module(foreignContext)
+    val scope = LlvmSignatureScope.admitted(module: module).unwrap()
+    val otherScope = LlvmSignatureScope.admitted(module: otherModule).unwrap()
+    val foreignScope = LlvmSignatureScope.admitted(module: foreignModule).unwrap()
+    val voidType = plew_test_signature_type(context, 0U32)
+    val scalar = plew_test_signature_type(context, 1U32)
+    val empty = plew_test_signature_type(context, 2U32)
+    val aggregate = plew_test_signature_type(context, 3U32)
+    val pointer = plew_test_signature_type(context, 4U32)
+    val incomplete = plew_test_signature_type(context, 5U32)
+    val foreignScalar = plew_test_signature_type(foreignContext, 1U32)
+    val receiver = parameter(type: aggregate, semantic: 11U64, role: <LlvmParameterRole.Receiver />, mode: <LlvmParameterMode.Borrow />)
+    val omitted = parameter(type: empty, semantic: 12U64, role: <LlvmParameterRole.Ordinary index=0U64 />, mode: <LlvmParameterMode.Move />)
+    val direct = parameter(type: scalar, semantic: 13U64, role: <LlvmParameterRole.Ordinary index=1U64 />, mode: <LlvmParameterMode.Borrow />)
+    val inoutLane = parameter(type: pointer, semantic: 12U64, role: <LlvmParameterRole.Ordinary index=2U64 />, mode: <LlvmParameterMode.Inout />)
+    val signature = body(parameters: [receiver, omitted, direct, inoutLane], result: voidType)
+    val plan = scope.plan(signature: signature).unwrap()
+    scope.validate(signature: signature, plan: plan).unwrap()
+    if plan.parameters.count() != 4U64 || LLVMCountParamTypes(plan.functionType) != 3U32 { panic "physical lane count" }
+    if plan.parameters[0].passing.key() != 2U64 || plan.parameters[0].valueAlignment != 8U64 { panic "aggregate byval alignment" }
+    if plan.parameters[1].passing.key() != 0U64 || plan.parameters[1].valueAlignment != 0U64 || plan.parameters[1].physicalIndex != 1U64 { panic "empty omission" }
+    if plan.parameters[2].passing.key() != 1U64 || plan.parameters[2].physicalIndex != 1U64 { panic "ordinary after omission" }
+    if plan.parameters[3].passing.key() != 1U64 || plan.parameters[3].physicalIndex != 2U64 { panic "inout empty semantic value must retain pointer" }
+    if plan.resultProtocol.key() != 0U64 { panic "void result" }
+    val valueSignature = <LlvmLogicalSignature convention=<LlvmValueConvention.Body /> parameters=[] result=aggregate resultTerm=11U64 />
+    if scope.plan(signature: valueSignature).unwrap().resultProtocol.key() != 1U64 { panic "unchanged aggregate return" }
+    if otherScope.validate(signature: signature, plan: plan).isOk() { panic "foreign module accepted" }
+    if foreignScope.validate(signature: signature, plan: plan).isOk() { panic "foreign context accepted" }
+    if scope.validate(signature: signature, plan: changed(plan: plan, parameters: plan.parameters, revision: 2U64)).isOk() { panic "foreign revision accepted" }
+    // Equal native types must not erase semantic type, role or ownership mode.
+    val pointerBorrow = parameter(type: pointer, semantic: 20U64, role: <LlvmParameterRole.Ordinary index=0U64 />, mode: <LlvmParameterMode.Borrow />)
+    val pointerInout = parameter(type: pointer, semantic: 20U64, role: pointerBorrow.role, mode: <LlvmParameterMode.Inout />)
+    val pointerSignature = body(parameters: [pointerBorrow], result: voidType)
+    val pointerPlan = scope.plan(signature: pointerSignature).unwrap()
+    if scope.validate(signature: body(parameters: [pointerInout], result: voidType), plan: pointerPlan).isOk() { panic "equal pointer with inout mode accepted" }
+    if scope.plan(signature: <LlvmLogicalSignature convention=<LlvmValueConvention.Body /> parameters=[] result=voidType resultTerm=11U64 />).isOk() { panic "void result with semantic value accepted" }
+    if scope.plan(signature: <LlvmLogicalSignature convention=<LlvmValueConvention.Body /> parameters=[] result=scalar resultTerm=0U64 />).isOk() { panic "value result without semantic value accepted" }
+    if scope.plan(signature: <LlvmLogicalSignature convention=<LlvmValueConvention.Body /> parameters=[] result=foreignScalar resultTerm=11U64 />).isOk() { panic "foreign result accepted" }
+    val plain = parameter(type: aggregate, semantic: 11U64, role: <LlvmParameterRole.Ordinary index=0U64 />, mode: <LlvmParameterMode.Borrow />)
+    val plainSignature = body(parameters: [plain], result: voidType)
+    val plainPlan = scope.plan(signature: plainSignature).unwrap()
+    val receiverSignature = body(parameters: [receiver], result: voidType)
+    if scope.validate(signature: receiverSignature, plan: plainPlan).isOk() { panic "equal type different role accepted" }
+    val moved = parameter(type: aggregate, semantic: 11U64, role: plain.role, mode: <LlvmParameterMode.Move />)
+    if scope.validate(signature: body(parameters: [moved], result: voidType), plan: plainPlan).isOk() { panic "different ownership accepted" }
+    val differentSemantic = parameter(type: aggregate, semantic: 99U64, role: plain.role, mode: plain.mode)
+    if scope.validate(signature: body(parameters: [differentSemantic], result: voidType), plan: plainPlan).isOk() { panic "different semantic type accepted" }
+    val malformedIndex = parameter(type: aggregate, semantic: 11U64, role: <LlvmParameterRole.Ordinary index=1U64 />, mode: plain.mode)
+    if scope.plan(signature: body(parameters: [malformedIndex], result: voidType)).isOk() { panic "nonsequential index accepted" }
+    if scope.plan(signature: body(parameters: [plain, receiver], result: voidType)).isOk() { panic "late receiver accepted" }
+    val foreign = parameter(type: foreignScalar, semantic: 11U64, role: plain.role, mode: plain.mode)
+    if scope.plan(signature: body(parameters: [foreign], result: voidType)).isOk() { panic "foreign native type accepted" }
+    val opaque = parameter(type: incomplete, semantic: 11U64, role: plain.role, mode: plain.mode)
+    if scope.plan(signature: body(parameters: [opaque], result: voidType)).isOk() { panic "unsized type accepted" }
+    val badInout = parameter(type: aggregate, semantic: 11U64, role: plain.role, mode: <LlvmParameterMode.Inout />)
+    if scope.plan(signature: body(parameters: [badInout], result: voidType)).isOk() { panic "value represented inout accepted" }
+    val lane = plainPlan.parameters[0]
+    val badLane = <LlvmValueParameter type=lane.type semanticType=lane.semanticType role=lane.role mode=lane.mode physicalIndex=9U64 passing=lane.passing valueAlignment=lane.valueAlignment />
+    if scope.validate(signature: plainSignature, plan: changed(plan: plainPlan, parameters: [badLane])).isOk() { panic "corrupt physical index accepted" }
+    val badAlignment = <LlvmValueParameter type=lane.type semanticType=lane.semanticType role=lane.role mode=lane.mode physicalIndex=lane.physicalIndex passing=lane.passing valueAlignment=1U64 />
+    if scope.validate(signature: plainSignature, plan: changed(plan: plainPlan, parameters: [badAlignment])).isOk() { panic "corrupt alignment accepted" }
+    val badTransport = <LlvmValueParameter type=lane.type semanticType=lane.semanticType role=lane.role mode=lane.mode physicalIndex=lane.physicalIndex passing=<LlvmValuePassing.Direct /> valueAlignment=lane.valueAlignment />
+    if scope.validate(signature: plainSignature, plan: changed(plan: plainPlan, parameters: [badTransport])).isOk() { panic "corrupt transport accepted" }
+    val legacy = <LlvmLogicalSignature convention=<LlvmValueConvention.Legacy family=<LlvmLegacyConvention.Closure /> /> parameters=[parameter(type: aggregate, semantic: 0U64, role: <LlvmParameterRole.Legacy index=0U64 />, mode: <LlvmParameterMode.Legacy />)] result=voidType resultTerm=0U64 />
+    scope.validate(signature: legacy, plan: scope.plan(signature: legacy).unwrap()).unwrap()
+    if scope.plan(signature: <LlvmLogicalSignature convention=legacy.convention parameters=[plain] result=voidType resultTerm=0U64 />).isOk() { panic "legacy claims semantic role" }
+    plew_test_signature_change_layout(module)
+    val readmitted = LlvmSignatureScope.admitted(module: module).unwrap()
+    if readmitted.validate(signature: plainSignature, plan: plainPlan).isOk() { panic "readmitted stale target plan accepted" }
+    if scope.plan(signature: signature).isOk() { panic "stale target scope accepted" }
+    LLVMDisposeModule(module)
+    LLVMDisposeModule(otherModule)
+    LLVMDisposeModule(foreignModule)
+    LLVMContextDispose(context)
+    LLVMContextDispose(foreignContext)
+    write(s: "ok\n")
+}

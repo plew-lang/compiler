@@ -3,7 +3,8 @@ use ./Ir only { ConversionProofNode, FrozenEnumPayloadConversion }
 use @Std/Core only { bitCastU64 }
 use ./Diag only { eprintU64 }
 use ./Mid/Diagnostics only { emitMidCoverageVerify }
-use ./LlvmHandles only { LLVMContextRef, LLVMModuleRef, PlewLlvmJitRef, PlewProgramArgumentsRef }
+use ./LlvmHandles only { LLVMContextRef, LLVMModuleRef, LLVMTypeRef, PlewLlvmJitRef, PlewProgramArgumentsRef }
+use ./Backend/PhysicalSignature only { LlvmSignatureScope, LlvmLogicalSignature, LlvmLogicalParameter, LlvmParameterRole, LlvmParameterMode, LlvmLegacyConvention, LlvmValueConvention, LlvmValuePassing, LlvmValueParameter, LlvmResultProtocol, llvmTypeHasStorage }
 use ./Mid/Ambient only { MidAmbientProgram, MidAmbientBodyPlan, MidAmbientStorage }
 use ./Mid/Program only { MidExecutableProgram }
 use ./PreparedProgram only { PreparedProgram, programPreparationDiagnostic }
@@ -148,24 +149,19 @@ struct LlvmExistentialWitness {
 }
 pub impl LlvmExistentialWitness { factory }
 
-enum LlvmValuePassing {
-    Omitted
-    Direct
-    Indirect
-}
-struct LlvmValueParameter {
-    pub val type: LLVMTypeRef
-    pub val physicalIndex: U64
-    pub val passing: LlvmValuePassing
-}
-pub impl LlvmValueParameter { factory }
-
 // Logical value types stay separate from the private physical call signature.
 struct LlvmValueAbi {
     pub val parameterStart: U64
     pub val parameterCount: U64
     pub val logicalSignature: LLVMTypeRef
     pub val functionType: LLVMTypeRef
+    pub val moduleIdentity: U64
+    pub val contextIdentity: U64
+    pub val revision: U64
+    pub val convention: LlvmValueConvention
+    pub val resultTerm: U64
+    pub val resultProtocol: LlvmResultProtocol
+    pub val ownerBody: U64
 }
 pub impl LlvmValueAbi { factory }
 
@@ -221,6 +217,7 @@ struct LlvmCtx {
     pub mut val valueAbis: Array[LlvmValueAbi] = []
     pub mut val valueAbiFunctions: Dictionary[U64, U64] = [:]
     pub mut val valueAbiParameters: Array[LlvmValueParameter] = []
+    mut val valueAbiScope: Optional[LlvmSignatureScope] = <Optional.None />
 
     // A diagnostic-only scalar table.  These three columns have identical
     // length and are appended solely by `recordMidCoverage`; avoiding a rich
@@ -478,7 +475,6 @@ pub impl LlvmCtx { factory }
 // Opaque handles are void* ABI-identical to the real LLVM `…Opaque *` typedefs,
 // so no <llvm-c/*.h> include is needed — the compiler self-emits the prototypes.
 extern(c) {
-    type LLVMTypeRef
     type LLVMValueRef
     type LLVMBasicBlockRef
     type LLVMBuilderRef
@@ -542,6 +538,7 @@ extern(c) {
     fn LLVMFunctionType(ret~: LLVMTypeRef, params~: CPtr[LLVMTypeRef], count~: U64, isVarArg~: I32) -> LLVMTypeRef
 
     fn LLVMIsAFunction(value~: LLVMValueRef) -> U64
+    fn LLVMIsFunctionVarArg(functionType~: LLVMTypeRef) -> I32
     fn LLVMCountParamTypes(functionType~: LLVMTypeRef) -> U64
     fn LLVMGetParamTypes(functionType~: LLVMTypeRef, parameters~: CPtr[LLVMTypeRef])
     fn LLVMGetReturnType(functionType~: LLVMTypeRef) -> LLVMTypeRef
@@ -1612,25 +1609,6 @@ fn anon() -> CPtr[U8] { return plew_llvm_empty_name() }
 // Physical memory operations have no work for a zero-sized aggregate. Keep
 // evaluation, allocation and ownership at their callers; only omit the memory
 // access itself. This also avoids forming a spurious access range for ASan.
-fn llvmTypeHasStorage(valueType~: LLVMTypeRef) -> Bool {
-    val kind: U32 = LLVMGetTypeKind(valueType)
-    if kind == 10U32 {
-        // An opaque declaration is not a completed zero-sized layout.
-        if LLVMIsOpaqueStruct(valueType) != 0I32 { return true }
-        val count: U32 = LLVMCountStructElementTypes(valueType)
-        mut val index: U32 = 0U32
-        while index < count {
-            if llvmTypeHasStorage(LLVMStructGetTypeAtIndex(valueType, index)) { return true }
-            index += 1U32
-        }
-        return false
-    }
-    if kind == 11U32 {
-        return LLVMGetArrayLength2(valueType) != 0U64 && llvmTypeHasStorage(LLVMGetElementType(valueType))
-    }
-    return true
-}
-
 fn llvmLoad(builder~: LLVMBuilderRef, valueType~: LLVMTypeRef, address~: LLVMValueRef, name~: CPtr[U8]) -> LLVMValueRef {
     if !llvmTypeHasStorage(valueType) { return LLVMConstNull(valueType) }
     return LLVMBuildLoad2(builder, valueType, address, name)
@@ -1640,9 +1618,6 @@ fn llvmStore(builder~: LLVMBuilderRef, value~: LLVMValueRef, address~: LLVMValue
     if llvmTypeHasStorage(LLVMTypeOf(value)) { LLVMBuildStore(builder, value, address) }
 }
 
-fn llvmValueAbiPassing(type~: LLVMTypeRef) -> LlvmValuePassing {
-    if !llvmTypeHasStorage(type) { return <LlvmValuePassing.Omitted /> }
-    val kind = LLVMGetTypeKind(type)
-    if kind == 10U32 || kind == 11U32 { return <LlvmValuePassing.Indirect /> }
-    return <LlvmValuePassing.Direct />
+fn valueAbiFailure(message: String) -> CompileDiagnostic {
+    return <CompileDiagnostic failureDomain=<FailureDomain.Internal /> location=<DiagnosticLocation.Line line=0I64 /> message="internal error: private value ABI: " + message />
 }

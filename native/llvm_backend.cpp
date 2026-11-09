@@ -165,6 +165,14 @@ extern "C" char *plew_llvm_native_data_layout(const char *cpu) {
   return description;
 }
 
+extern "C" uint64_t plew_llvm_module_identity(LLVMModuleRef module) {
+  return static_cast<uint64_t>(reinterpret_cast<uintptr_t>(module));
+}
+
+extern "C" uint64_t plew_llvm_context_identity(LLVMContextRef context) {
+  return static_cast<uint64_t>(reinterpret_cast<uintptr_t>(context));
+}
+
 extern "C" char *plew_llvm_jit_target_triple(const PlewLlvmJit *jit) {
   return LLVMCreateMessage(jit && jit->engine
       ? jit->engine->getTargetTriple().str().c_str() : "");

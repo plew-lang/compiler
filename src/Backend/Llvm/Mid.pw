@@ -1756,7 +1756,7 @@ pub impl LlvmCtx {
         mut val resultType: LLVMTypeRef = self.voidty
         if !unit { resultType = (try self.llvmTypeOfRef(c: inout c, ref: selected.resultTypeRef)) }
         val signature: LLVMTypeRef = LLVMFunctionType(resultType, arrayCPtr(types), types.count(), 0I32)
-        val result: LLVMValueRef = (try self.callValueFunction(signature: signature, function: function, arguments: values))
+        val result: LLVMValueRef = (try self.callValueFunction(signature: signature, function: function, arguments: values, legacyIndirect: <Optional.Some v=<LlvmLegacyConvention.Closure /> />))
         if !unit { llvmStore(self.b, result, (try self.midCanonicalPlacePtr(c: inout c, body: body, place: c.mid.places[term.destination - 1U64]))) }
         return <Result.Ok value=true />
     }
@@ -1869,7 +1869,7 @@ pub impl LlvmCtx {
                 mut val resultType: LLVMTypeRef = self.voidty
                 if selected.resultTypeRef != 0U64 { resultType = (try self.llvmTypeOfRef(c: inout c, ref: selected.resultTypeRef)) }
                 val signature: LLVMTypeRef = LLVMFunctionType(resultType, arrayCPtr(types), types.count(), 0I32)
-                val result: LLVMValueRef = (try self.callValueFunction(signature: signature, function: function, arguments: values))
+                val result: LLVMValueRef = (try self.callValueFunction(signature: signature, function: function, arguments: values, legacyIndirect: <Optional.Some v=<LlvmLegacyConvention.Witness /> />))
                 if selected.resultTypeRef != 0U64 { llvmStore(self.b, result, (try self.midCanonicalPlacePtr(c: inout c, body: body, place: c.mid.places[term.destination - 1U64], forWrite: true))) }
                 return <Result.Ok value=true />
             }

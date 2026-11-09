@@ -539,7 +539,7 @@ pub impl LlvmCtx {
     // must call different witnesses rather than trigger an inline cycle guard.
     inout fn emitStructRetain(c: inout Comp, v: LLVMValueRef, ref: U64) -> Result[(), CompileDiagnostic] {
         val reg = (try self.requireStructLayoutSlot(c: inout c, typeRef: ref))
-        val slot = self.structRetainWitness(c: inout c, reg: reg)
+        val slot = try self.structRetainWitness(c: inout c, reg: reg)
         val arguments: Array[LLVMValueRef] = [v]
         (try self.callValueFunction(signature: self.retWitTy[slot], function: self.retWitVal[slot], arguments: arguments))
         return <Result.Ok value=() />
@@ -575,9 +575,9 @@ pub impl LlvmCtx {
         return self.retWitReg.count()
     }
 
-    inout fn structRetainWitness(c: inout Comp, reg: U64) -> U64 {
+    inout fn structRetainWitness(c: inout Comp, reg: U64) -> Result[U64, CompileDiagnostic] {
         val found: U64 = self.retWitSlot(reg: reg)
-        if found < self.retWitReg.count() { return found }
+        if found < self.retWitReg.count() { return <Result.Ok value=found /> }
         mut val ptys: Array[LLVMTypeRef] = []
         ptys.append(self.genStructTys[reg])
         val fty: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(ptys), 1U64, 0I32)
@@ -585,11 +585,11 @@ pub impl LlvmCtx {
         appendBytes(into: inout nm, from: "pwretain".bytes())
         appendU64Dec(into: inout nm, n: reg)
         nm.append(0)
-        val fv: LLVMValueRef = self.declareValueFunction(name: arrayCPtr(nm), signature: fty)
+        val fv: LLVMValueRef = (try self.declareLegacyValueFunction(name: arrayCPtr(nm), signature: fty, family: <LlvmLegacyConvention.StructRetain />))
         self.retWitReg.append(reg)
         self.retWitVal.append(fv)
         self.retWitTy.append(fty)
-        return self.retWitReg.count() - 1U64
+        return <Result.Ok value=self.retWitReg.count() - 1U64 />
     }
 
     // Each witness consumes its frozen instance. Calls to nested witnesses

@@ -10,31 +10,82 @@ pub impl LlvmCtx {
         return self.valueAbiByvalKind
     }
 
-    inout fn valueAbi(signature~: LLVMTypeRef) -> U64 {
-        val count = LLVMCountParamTypes(signature)
-        mut val parameters: Array[LLVMTypeRef] = []
-        mut val index = 0U64
-        while index < count {
-            parameters.append(self.voidty)
-            index += 1U64
+    inout fn prepareValueAbiScope() -> Result[LlvmSignatureScope, CompileDiagnostic] {
+        match self.valueAbiScope {
+            Optional.Some(v: val scope) => { return <Result.Ok value=scope /> }
+            Optional.None => {}
         }
-        if count != 0U64 { LLVMGetParamTypes(signature, arrayCPtr(parameters)) }
-        mut val physical: Array[LLVMTypeRef] = []
+        val scope = (try LlvmSignatureScope.admitted(module: self.mod))
+        self.valueAbiScope = <Optional.Some v=scope />
+        return <Result.Ok value=scope />
+    }
+
+    inout fn saveValueAbi(signature: LlvmLogicalSignature, ownerBody: U64) -> Result[U64, CompileDiagnostic] {
+        val scope = (try self.prepareValueAbiScope())
+        val plan = (try scope.plan(signature: signature))
         val start = self.valueAbiParameters.count()
+        for parameter in plan.parameters { self.valueAbiParameters.append(parameter) }
+        self.valueAbis.append(<LlvmValueAbi parameterStart=start parameterCount=plan.parameters.count() logicalSignature=plan.logicalSignature functionType=plan.functionType moduleIdentity=plan.moduleIdentity contextIdentity=plan.contextIdentity revision=plan.revision convention=plan.convention resultTerm=plan.resultTerm resultProtocol=plan.resultProtocol ownerBody=ownerBody />)
+        return <Result.Ok value=self.valueAbis.count() />
+    }
+
+    // Explicit temporary boundary: opaque legacy lanes do not claim source
+    // roles/ownership. All physical classification still belongs to one planner.
+    inout fn legacyValueAbi(signature: LLVMTypeRef, family: LlvmLegacyConvention, ownerBody: U64 = 0U64) -> Result[U64, CompileDiagnostic] {
+        val scope = (try self.prepareValueAbiScope())
+        if !scope.ownsType(type: signature) || LLVMGetTypeKind(signature) != 9U32 {
+            return <Result.Err error=valueAbiFailure(message: "legacy signature has a foreign context or is not a function") />
+        }
+        if LLVMIsFunctionVarArg(signature) != 0I32 { return <Result.Err error=valueAbiFailure(message: "private legacy convention cannot be variadic") /> }
+        val count = LLVMCountParamTypes(signature)
+        mut val types: Array[LLVMTypeRef] = []
+        mut val index = 0U64
+        while index < count { types.append(self.voidty) index += 1U64 }
+        if count != 0U64 { LLVMGetParamTypes(signature, arrayCPtr(types)) }
+        mut val parameters: Array[LlvmLogicalParameter] = []
         index = 0U64
         while index < count {
-            val type = parameters[index]
-            val passing = llvmValueAbiPassing(type)
-            self.valueAbiParameters.append(<LlvmValueParameter type=type physicalIndex=physical.count() passing=passing />)
-            match passing {
-                LlvmValuePassing.Omitted => {}
-                LlvmValuePassing.Direct => { physical.append(type) }
-                LlvmValuePassing.Indirect => { physical.append(self.ptrty) }
-            }
+            parameters.append(<LlvmLogicalParameter type=types[index] semanticType=0U64 role=<LlvmParameterRole.Legacy index=index /> mode=<LlvmParameterMode.Legacy /> />)
             index += 1U64
         }
-        self.valueAbis.append(<LlvmValueAbi parameterStart=start parameterCount=count logicalSignature=signature functionType=LLVMFunctionType(LLVMGetReturnType(signature), arrayCPtr(physical), physical.count(), 0I32) />)
-        return self.valueAbis.count()
+        return self.saveValueAbi(signature: <LlvmLogicalSignature convention=<LlvmValueConvention.Legacy family=family /> parameters=parameters result=LLVMGetReturnType(signature) resultTerm=0U64 />, ownerBody: ownerBody)
+    }
+
+    // Only finalized callable facts decide the normal logical roles and modes.
+    // The representation leaf sees no Comp, AST, witness search or source name.
+    inout fn bodyValueAbi(c: inout Comp, bodyId: U64) -> Result[U64, CompileDiagnostic] {
+        if bodyId == 0U64 || bodyId > c.arena.bodyInstanceCount() || !c.arena.bodyIsCallable(bodyId: bodyId) { return <Result.Err error=valueAbiFailure(message: "normal convention lacks a callable body") /> }
+        val body = c.arena.bodyInstanceAt(index: bodyId - 1U64)
+        if body.fnIdx >= c.arena.functionCount() { return <Result.Err error=valueAbiFailure(message: "normal convention has an invalid function") /> }
+        val declaration = c.arena.functionAt(index: body.fnIdx)
+        val signature = c.arena.bodySignature(bodyId: bodyId)
+        if !signature.ready || signature.closureSignatureId != 0U64 || signature.parameterTypes.count() != signature.parameterPassings.count() || declaration.isAsync || declaration.isExtern || c.nameIsMain(f: declaration) || declaration.hasRecv != (signature.receiverType != 0U64) { return <Result.Err error=valueAbiFailure(message: "normal body signature is incomplete or belongs to another entry convention") /> }
+        mut val parameters: Array[LlvmLogicalParameter] = []
+        if signature.receiverType != 0U64 {
+            val mode = match signature.receiverPassing {
+                CallReceiverPassing.Borrow => { give <LlvmParameterMode.Borrow /> }
+                CallReceiverPassing.Move => { give <LlvmParameterMode.Move /> }
+                CallReceiverPassing.Inout => { give <LlvmParameterMode.Inout /> }
+                CallReceiverPassing.None => { return <Result.Err error=valueAbiFailure(message: "receiver has no passing mode") /> }
+            }
+            val type = if mode.key() == 2U64 { give self.ptrty } else { give (try self.llvmTypeOfRef(c: inout c, ref: signature.receiverType)) }
+            parameters.append(<LlvmLogicalParameter type=type semanticType=signature.receiverType role=<LlvmParameterRole.Receiver /> mode=mode />)
+        } else {
+            match signature.receiverPassing { CallReceiverPassing.None => {} _ => { return <Result.Err error=valueAbiFailure(message: "free signature carries a receiver mode") /> } }
+        }
+        mut val index = 0U64
+        while index < signature.parameterTypes.count() {
+            val mode = match signature.parameterPassings[index] {
+                CallArgumentPassing.Borrow => { give <LlvmParameterMode.Borrow /> }
+                CallArgumentPassing.Move => { give <LlvmParameterMode.Move /> }
+                CallArgumentPassing.Inout => { give <LlvmParameterMode.Inout /> }
+            }
+            val type = if mode.key() == 2U64 { give self.ptrty } else { give (try self.llvmTypeOfRef(c: inout c, ref: signature.parameterTypes[index])) }
+            parameters.append(<LlvmLogicalParameter type=type semanticType=signature.parameterTypes[index] role=<LlvmParameterRole.Ordinary index=index /> mode=mode />)
+            index += 1U64
+        }
+        val result = if signature.resultType == 0U64 { give self.voidty } else { give (try self.llvmTypeOfRef(c: inout c, ref: signature.resultType)) }
+        return self.saveValueAbi(signature: <LlvmLogicalSignature convention=<LlvmValueConvention.Body /> parameters=parameters result=result resultTerm=signature.resultType />, ownerBody: bodyId)
     }
 
     inout fn declareProgramCallables(c: inout Comp) -> Result[(), CompileDiagnostic] {
@@ -104,11 +155,17 @@ pub impl LlvmCtx {
 
     // Body symbols can be resolved across requested modules. Local ARC/layout
     // glue keeps ordinary internal linkage and uses the same physical ABI.
-    inout fn declareBodyFunction(name: CPtr[U8], signature: LLVMTypeRef, bodyId: U64) -> LLVMValueRef {
-        val function = self.declareValueFunction(name: name, signature: signature)
+    inout fn declareLegacyBodyFunction(name: CPtr[U8], signature: LLVMTypeRef, bodyId: U64, family: LlvmLegacyConvention) -> Result[LLVMValueRef, CompileDiagnostic] {
+        val abiId = (try self.legacyValueAbi(signature: signature, family: family, ownerBody: bodyId))
+        return self.declarePlannedBodyFunction(name: name, abiId: abiId, bodyId: bodyId)
+    }
+
+    inout fn declarePlannedBodyFunction(name: CPtr[U8], abiId: U64, bodyId: U64) -> Result[LLVMValueRef, CompileDiagnostic] {
+        if abiId == 0U64 || abiId > self.valueAbis.count() || self.valueAbis[abiId - 1U64].ownerBody != bodyId { return <Result.Err error=valueAbiFailure(message: "declaration body/descriptor mismatch") /> }
+        val function = (try self.declarePlannedValueFunction(name: name, abiId: abiId))
         if !self.wholeProgram() { LLVMSetLinkage(function, 0U32) }
         self.attachBodyIdentity(function: function, bodyId: bodyId)
-        return function
+        return <Result.Ok value=function />
     }
 
     // Frozen semantic identity travels with the declaration, independently of
@@ -130,9 +187,17 @@ pub impl LlvmCtx {
         LLVMGlobalSetMetadata(function, LLVMGetMDKindIDInContext(self.ctx, name.ptr, 9U32), LLVMMDNodeInContext2(self.ctx, arrayCPtr(operands), 0U64))
     }
 
-    inout fn declareValueFunction(name: CPtr[U8], signature: LLVMTypeRef) -> LLVMValueRef {
-        val abiId = self.valueAbi(signature)
+    inout fn declareLegacyValueFunction(name: CPtr[U8], signature: LLVMTypeRef, family: LlvmLegacyConvention) -> Result[LLVMValueRef, CompileDiagnostic] {
+        val abiId = (try self.legacyValueAbi(signature: signature, family: family))
+        return self.declarePlannedValueFunction(name: name, abiId: abiId)
+    }
+
+    inout fn declarePlannedValueFunction(name: CPtr[U8], abiId: U64) -> Result[LLVMValueRef, CompileDiagnostic] {
+        if abiId == 0U64 || abiId > self.valueAbis.count() { return <Result.Err error=valueAbiFailure(message: "declaration descriptor is missing") /> }
         val abi = self.valueAbis[abiId - 1U64]
+        val scope = (try self.prepareValueAbiScope())
+        if abi.moduleIdentity != scope.moduleIdentity || abi.contextIdentity != scope.contextIdentity || abi.revision != 1U64 { return <Result.Err error=valueAbiFailure(message: "declaration descriptor has foreign scope/revision") /> }
+        try scope.validateScope()
         // Generated symbols must never collide with a source-level external
         // name. Dots cannot occur in a Plew function identifier. Keep this
         // namespace stable across separately requested LLVM modules as well.
@@ -154,7 +219,7 @@ pub impl LlvmCtx {
             }
             index += 1U64
         }
-        return function
+        return <Result.Ok value=function />
     }
 
     // Use the actual builder's function: physical thunks may be emitted while
@@ -168,7 +233,7 @@ pub impl LlvmCtx {
         return slot
     }
 
-    inout fn callValueFunction(signature: LLVMTypeRef, function: LLVMValueRef, arguments: Array[LLVMValueRef]) -> Result[LLVMValueRef, CompileDiagnostic] {
+    inout fn callValueFunction(signature: LLVMTypeRef, function: LLVMValueRef, arguments: Array[LLVMValueRef], legacyIndirect: Optional[LlvmLegacyConvention] = <Optional.None />) -> Result[LLVMValueRef, CompileDiagnostic] {
         val handle = LLVMIsAFunction(function)
         mut val abiId = 0U64
         if handle != 0U64 {
@@ -176,7 +241,13 @@ pub impl LlvmCtx {
             if abiId == 0U64 {
                 return <Result.Err error=<CompileDiagnostic location=<DiagnosticLocation.Line line=0I64 /> message="internal error: private call lacks a declared value ABI" /> />
             }
-        } else { abiId = self.valueAbi(signature) }
+        } else {
+            val family = match legacyIndirect {
+                Optional.Some(v: val family) => { give family }
+                Optional.None => { return <Result.Err error=valueAbiFailure(message: "indirect call lacks an explicit completed or legacy convention") /> }
+            }
+            abiId = (try self.legacyValueAbi(signature: signature, family: family))
+        }
         val abi = self.valueAbis[abiId - 1U64]
         if plew_pointer_equal(abi.logicalSignature, signature) == 0I32 {
             return <Result.Err error=<CompileDiagnostic location=<DiagnosticLocation.Line line=0I64 /> message="internal error: private call logical signature mismatch" /> />

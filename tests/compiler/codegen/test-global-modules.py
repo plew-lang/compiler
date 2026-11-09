@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import re
 import subprocess
+import sys
 
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--requested', action='store_true', help='split each executable body into its own module')
@@ -31,6 +32,7 @@ target_headers = set()
 
 
 def capture(command, name):
+    print("[trace-phase] global-modules:" + name, file=sys.stderr, flush=True)
     with (evidence / name).open('wb') as out, (evidence / (name + '.log')).open('wb') as err:
         subprocess.run(list(map(str, command)), cwd=root, stdout=out, stderr=err,
                        timeout=60, check=True)
