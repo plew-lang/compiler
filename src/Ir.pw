@@ -2407,6 +2407,8 @@ pub struct CallResolution {
     // free call; association/operator calls retain their subject type here.
     // Backend consumes this rather than reconstructing it from the shared AST.
     pub val recvTypeRef: U64 = 0U64
+    // Canonical callee lane, distinct from the source receiver/view term.
+    pub val receiverSignatureTypeRef: U64 = 0U64
     // The fully-grounded value type observed at the source call site.  This is
     // deliberately not necessarily the ABI return type of `callee`: an
     // operator witness may return its carrier (`Ordering`) while the source

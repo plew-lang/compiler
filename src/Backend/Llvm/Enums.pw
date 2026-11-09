@@ -88,7 +88,7 @@ pub impl LlvmCtx {
         if (try self.enumNeedsDeinit(c: inout c, typeRef: self.genEnumRefs[reg])) {
             val slot = try self.enumReleaseWitness(c: inout c, reg: reg)
             val arguments: Array[LLVMValueRef] = [v]
-            (try self.callValueFunction(signature: self.enumRelWitTy[slot], function: self.enumRelWitVal[slot], arguments: arguments))
+            (try self.callLegacyValueFunction(signature: self.enumRelWitTy[slot], function: self.enumRelWitVal[slot], arguments: arguments))
         }
         return <Result.Ok value=true />
     }
@@ -234,7 +234,7 @@ pub impl LlvmCtx {
             val fv: LLVMValueRef = self.enumRelWitVal[s]
             self.curFn = fv
             self.beginFnBody(fv: fv)
-            try self.emitEnumRelease(c: inout c, v: (try self.valueParameter(function: fv, index: 0U64)), eid: self.genEnumDefs[reg], ety: self.genEnumTys[reg], typeRef: self.genEnumRefs[reg])
+            try self.emitEnumRelease(c: inout c, v: (try self.legacyValueParameter(function: fv, index: 0U64)), eid: self.genEnumDefs[reg], ety: self.genEnumTys[reg], typeRef: self.genEnumRefs[reg])
             LLVMBuildRetVoid(self.b)
             self.enumRelWitDone += 1
         }
@@ -276,7 +276,7 @@ pub impl LlvmCtx {
             val fv: LLVMValueRef = self.enumRetWitVal[s]
             self.curFn = fv
             self.beginFnBody(fv: fv)
-            try self.emitEnumRetain(c: inout c, v: (try self.valueParameter(function: fv, index: 0U64)), eid: self.genEnumDefs[reg], ety: self.genEnumTys[reg], typeRef: self.genEnumRefs[reg])
+            try self.emitEnumRetain(c: inout c, v: (try self.legacyValueParameter(function: fv, index: 0U64)), eid: self.genEnumDefs[reg], ety: self.genEnumTys[reg], typeRef: self.genEnumRefs[reg])
             LLVMBuildRetVoid(self.b)
             self.enumRetWitDone += 1
         }
@@ -294,7 +294,7 @@ pub impl LlvmCtx {
         if (try self.enumNeedsDeinit(c: inout c, typeRef: self.genEnumRefs[reg])) {
             val slot = try self.enumRetainWitness(c: inout c, reg: reg)
             val arguments: Array[LLVMValueRef] = [v]
-            (try self.callValueFunction(signature: self.enumRetWitTy[slot], function: self.enumRetWitVal[slot], arguments: arguments))
+            (try self.callLegacyValueFunction(signature: self.enumRetWitTy[slot], function: self.enumRetWitVal[slot], arguments: arguments))
         }
         return <Result.Ok value=true />
     }

@@ -1,0 +1,24 @@
+// Receiver, omitted empty lanes, scalar, inout and aggregate arguments must
+// retain logical correspondence after physical omission/byval lowering.
+use @Std/Io only { print }
+struct Empty {}
+pub impl Empty { factory }
+struct Bundle {
+    pub val first: I64
+    pub val items: Array[I64]
+}
+pub impl Bundle {
+    factory
+    fn combine(before: Empty, scalar: I64, counter: inout I64, payload: Bundle, after: Empty) -> I64 {
+        counter += self.first
+        return scalar + self.items[0] + counter + payload.first
+    }
+}
+fn identity[T](value: T) -> T { return value }
+fn main() {
+    val bundle = <Bundle first=2I64 items=[7I64] />
+    mut val counter = 10I64
+    print(bundle.combine(before: <Empty />, scalar: 3I64, counter: inout counter, payload: identity(value: bundle), after: <Empty />))
+    print(counter)
+    print(bundle.items[0])
+}

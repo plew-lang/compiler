@@ -1756,7 +1756,7 @@ pub impl LlvmCtx {
         mut val resultType: LLVMTypeRef = self.voidty
         if !unit { resultType = (try self.llvmTypeOfRef(c: inout c, ref: selected.resultTypeRef)) }
         val signature: LLVMTypeRef = LLVMFunctionType(resultType, arrayCPtr(types), types.count(), 0I32)
-        val result: LLVMValueRef = (try self.callValueFunction(signature: signature, function: function, arguments: values, legacyIndirect: <Optional.Some v=<LlvmLegacyConvention.Closure /> />))
+        val result: LLVMValueRef = (try self.callLegacyValueFunction(signature: signature, function: function, arguments: values, legacyIndirect: <Optional.Some v=<LlvmLegacyConvention.Closure /> />))
         if !unit { llvmStore(self.b, result, (try self.midCanonicalPlacePtr(c: inout c, body: body, place: c.mid.places[term.destination - 1U64]))) }
         return <Result.Ok value=true />
     }
@@ -1869,7 +1869,7 @@ pub impl LlvmCtx {
                 mut val resultType: LLVMTypeRef = self.voidty
                 if selected.resultTypeRef != 0U64 { resultType = (try self.llvmTypeOfRef(c: inout c, ref: selected.resultTypeRef)) }
                 val signature: LLVMTypeRef = LLVMFunctionType(resultType, arrayCPtr(types), types.count(), 0I32)
-                val result: LLVMValueRef = (try self.callValueFunction(signature: signature, function: function, arguments: values, legacyIndirect: <Optional.Some v=<LlvmLegacyConvention.Witness /> />))
+                val result: LLVMValueRef = (try self.callLegacyValueFunction(signature: signature, function: function, arguments: values, legacyIndirect: <Optional.Some v=<LlvmLegacyConvention.Witness /> />))
                 if selected.resultTypeRef != 0U64 { llvmStore(self.b, result, (try self.midCanonicalPlacePtr(c: inout c, body: body, place: c.mid.places[term.destination - 1U64], forWrite: true))) }
                 return <Result.Ok value=true />
             }
@@ -2090,6 +2090,7 @@ pub impl LlvmCtx {
             }
         }
         mut val values: Array[LLVMValueRef] = []
+        mut val typedValues: Array[LlvmValueInput] = []
         val receiver: MidCallReceiverNode = c.mid.callReceivers[term.callReceiver - 1U64]
         if receiver.tag == 2U64 {
             val operand: MidOperandNode = c.mid.operands[receiver.operand - 1U64]
@@ -2104,6 +2105,16 @@ pub impl LlvmCtx {
                 CallReceiverPassing.None => {}
                 _ => { return <Result.Ok value=false /> }
             }
+        }
+        if !callee.isExtern && !callee.isAsync && receiver.tag == 2U64 {
+            val value = values[0U64]
+            val mode = match selected.receiverPassing {
+                CallReceiverPassing.Borrow => { give <LlvmParameterMode.Borrow /> }
+                CallReceiverPassing.Inout => { give <LlvmParameterMode.Inout /> }
+                CallReceiverPassing.Move => { give <LlvmParameterMode.Move /> }
+                CallReceiverPassing.None => { return <Result.Err error=valueAbiFailure(message: "typed receiver has no passing mode") /> }
+            }
+            typedValues.append(<LlvmValueInput lane=<LlvmLogicalParameter type=LLVMTypeOf(value) semanticType=selected.receiverSignatureTypeRef role=<LlvmParameterRole.Receiver /> mode=mode /> index=0U64 carrier=<LlvmValueCarrier.Value value=value /> />)
         }
         mut val cWritebacks: Array[LlvmCInout] = []
         mut val argumentI: U64 = 0U64
@@ -2127,15 +2138,23 @@ pub impl LlvmCtx {
             }
             if callee.isExtern { value = (try self.scalarToC(c: inout c, ref: parameterRef, value: value)) }
             values.append(value)
+            if !callee.isExtern && !callee.isAsync {
+                val mode = match c.arena.finalCalleeArgumentPassingAt(passings: selected.argumentPassings, index: argumentI) {
+                    CallArgumentPassing.Borrow => { give <LlvmParameterMode.Borrow /> }
+                    CallArgumentPassing.Inout => { give <LlvmParameterMode.Inout /> }
+                    CallArgumentPassing.Move => { give <LlvmParameterMode.Move /> }
+                }
+                typedValues.append(<LlvmValueInput lane=<LlvmLogicalParameter type=LLVMTypeOf(value) semanticType=parameterRef role=<LlvmParameterRole.Ordinary index=argumentI /> mode=mode /> index=typedValues.count() carrier=<LlvmValueCarrier.Value value=value /> />)
+            }
             argumentI = argumentI + 1U64
         }
         mut val result: LLVMValueRef = LLVMConstInt(self.i64ty, 0U64, 0I32)
         if callee.isAsync {
             val slot: U64 = self.asyncEntrySlot(fi: selected.callee)
-            result = (try self.callValueFunction(signature: self.asyncEntryTy[slot], function: self.asyncEntryVal[slot], arguments: values))
+            result = (try self.callLegacyValueFunction(signature: self.asyncEntryTy[slot], function: self.asyncEntryVal[slot], arguments: values))
         } else if callee.isExtern { result = LLVMBuildCall2(self.b, self.declTy[externalSlot], self.declFn[externalSlot], arrayCPtr(values), values.count(), anon()) }
-        else if useMethod { result = (try self.callValueFunction(signature: self.genMethTy[methodSlot], function: self.genMethVal[methodSlot], arguments: values)) }
-        else { result = (try self.callValueFunction(signature: self.genFnTy[freeSlot], function: self.genFnVal[freeSlot], arguments: values)) }
+        else if useMethod { result = (try self.callBodyValueFunction(function: self.genMethVal[methodSlot], bodyId: selected.calleeBodyId, inputs: (try self.bodyInputScope(bodyId: selected.calleeBodyId, signature: self.genMethTy[methodSlot])), arguments: typedValues)) }
+        else { result = (try self.callBodyValueFunction(function: self.genFnVal[freeSlot], bodyId: selected.calleeBodyId, inputs: (try self.bodyInputScope(bodyId: selected.calleeBodyId, signature: self.genFnTy[freeSlot])), arguments: typedValues)) }
         if callee.isExtern {
             try self.completeCInouts(c: inout c, writebacks: cWritebacks)
             argumentI = 0U64
@@ -2473,6 +2492,14 @@ pub impl LlvmCtx {
 
     inout fn midPrepareCanonicalLocals(c: inout Comp, body: MidBodyNode, abiParameterStart: U64 = 0U64, abiParameterValues: Array[LLVMValueRef] = [], storage: Array[LLVMValueRef] = [], initializeParameters: Bool = true) -> Result[Bool, CompileDiagnostic] {
         if storage.count() != 0U64 && storage.count() != body.locals.len { return <Result.Ok value=false /> }
+        val abiId = self.valueAbiFunctions.getOr(key: LLVMIsAFunction(self.curFn), fallback: 0U64)
+        val normal = abiId != 0U64 && self.valueAbis[abiId - 1U64].convention.key() == 0U64
+        if normal {
+            val abi = self.valueAbis[abiId - 1U64]
+            if abi.ownerBody != body.bodyInstance || body.bodyInstance == 0U64 || abiParameterStart != 0U64 || abiParameterValues.count() != 0U64 { return <Result.Err error=valueAbiFailure(message: "normal binding cannot use a raw adapter override") /> }
+            val scope = (try self.prepareValueAbiScope())
+            try scope.validateInputs(scope: (try self.bodyInputScope(bodyId: body.bodyInstance, signature: abi.logicalSignature)), bodyIdentity: abi.ownerBody, signature: abi.logicalSignature)
+        }
         self.nLocals = 0U64
         self.locStart = []
         self.locLen = []
@@ -2498,7 +2525,11 @@ pub impl LlvmCtx {
             else { slot = self.entryAlloca(ty: ty) }
             if declaration.isParameter && initializeParameters {
                 val abiIndex: U64 = abiParameterStart + local
-                val value = if abiParameterValues.count() != 0U64 { give abiParameterValues[local] } else { give (try self.valueParameter(function: self.curFn, index: abiIndex)) }
+                val value = if normal {
+                    val mode = if declaration.isInout { give <LlvmParameterMode.Inout /> } else if declaration.ownsAtEntry { give <LlvmParameterMode.Move /> } else { give <LlvmParameterMode.Borrow /> }
+                    val input = (try self.normalBodyParameter(function: self.curFn, bodyId: body.bodyInstance, index: local, type: if declaration.isInout { give self.ptrty } else { give ty }, mode: mode))
+                    give self.valueInputValue(input: input)
+                } else if abiParameterValues.count() != 0U64 { give abiParameterValues[local] } else { give (try self.legacyValueParameter(function: self.curFn, index: abiIndex)) }
                 if declaration.isInout { slot = value }
                 else { llvmStore(self.b, value, slot) }
             }

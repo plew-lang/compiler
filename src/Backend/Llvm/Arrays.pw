@@ -541,7 +541,7 @@ pub impl LlvmCtx {
         val reg = (try self.requireStructLayoutSlot(c: inout c, typeRef: ref))
         val slot = try self.structRetainWitness(c: inout c, reg: reg)
         val arguments: Array[LLVMValueRef] = [v]
-        (try self.callValueFunction(signature: self.retWitTy[slot], function: self.retWitVal[slot], arguments: arguments))
+        (try self.callLegacyValueFunction(signature: self.retWitTy[slot], function: self.retWitVal[slot], arguments: arguments))
         return <Result.Ok value=() />
     }
 
@@ -601,7 +601,7 @@ pub impl LlvmCtx {
             val fv: LLVMValueRef = self.retWitVal[slot]
             self.curFn = fv
             self.beginFnBody(fv: fv)
-            try self.emitRetainWitnessWalk(c: inout c, v: (try self.valueParameter(function: fv, index: 0U64)), typeRef: self.genStructRefs[reg])
+            try self.emitRetainWitnessWalk(c: inout c, v: (try self.legacyValueParameter(function: fv, index: 0U64)), typeRef: self.genStructRefs[reg])
             LLVMBuildRetVoid(self.b)
             self.retWitDone += 1U64
         }

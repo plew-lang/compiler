@@ -77,7 +77,7 @@ pub impl LlvmCtx {
                 MidLlvmPrepared.None => { return <Result.Err error=c.diagnosticAt(offset: offset, msg: "LLVM backend: closure environment drop could not be prepared as Mid IR") /> }
                 MidLlvmPrepared.Ready(canonical: _, abiParameterCount: _) => {
                     self.beginFnBody(fv: queued.function)
-                    val environment = (try self.valueParameter(function: queued.function, index: 0U64))
+                    val environment = (try self.legacyValueParameter(function: queued.function, index: 0U64))
                     val environmentType = (try self.closureEnvTy(c: inout c, caps: closure.captures))
                     mut val parameters: Array[LLVMValueRef] = []
                     mut val index = 0U64
@@ -128,7 +128,7 @@ pub impl LlvmCtx {
         val dty: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(ptys), 1U64, 0I32)
         mut val av: Array[LLVMValueRef] = []
         av.append(env)
-        (try self.callValueFunction(signature: dty, function: dropFn, arguments: av, legacyIndirect: <Optional.Some v=<LlvmLegacyConvention.EnvironmentDrop /> />))
+        (try self.callLegacyValueFunction(signature: dty, function: dropFn, arguments: av, legacyIndirect: <Optional.Some v=<LlvmLegacyConvention.EnvironmentDrop /> />))
         LLVMBuildBr(self.b, tailBB)
         LLVMPositionBuilderAtEnd(self.b, tailBB)
         try self.rawbufFree(c: inout c, cell: env)
@@ -212,7 +212,7 @@ pub impl LlvmCtx {
         if parameterCount > body.locals.len || closure.captures.count() > body.locals.len - parameterCount { return <Result.Ok value=false /> }
         if closure.captures.count() == 0U64 { return <Result.Ok value=true /> }
         val environmentType: LLVMTypeRef = (try self.closureEnvTy(c: inout c, caps: closure.captures))
-        val environment: LLVMValueRef = (try self.valueParameter(function: self.curFn, index: 0U64))
+        val environment: LLVMValueRef = (try self.legacyValueParameter(function: self.curFn, index: 0U64))
         mut val captureI: U64 = 0U64
         while captureI < closure.captures.count() {
             val capture: CaptureEntry = closure.captures[captureI]

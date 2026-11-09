@@ -188,7 +188,7 @@ pub impl LlvmCtx {
         val signature = c.arena.bodySignature(bodyId: body.bodyInstance)
         mut val pi: U64 = 0
         while pi < signature.parameterTypes.count() {
-            val pv: LLVMValueRef = (try self.valueParameter(function: entryFn, index: pi))
+            val pv: LLVMValueRef = (try self.legacyValueParameter(function: entryFn, index: pi))
             llvmStore(self.b, pv, LLVMBuildStructGEP2(self.b, frameTy, frame, activation.localSlots[pi], anon()))
             match signature.parameterPassings[pi] {
                 CallArgumentPassing.Borrow => { try self.valueArc(c: inout c, v: pv, typeRef: signature.parameterTypes[pi], retain: true) }
@@ -214,7 +214,7 @@ pub impl LlvmCtx {
         mut val cty: Array[LLVMTypeRef] = []
         cty.append(self.ptrty)
         val resumeFnTy: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(cty), 1U64, 0I32)
-        val ignore: LLVMValueRef = (try self.callValueFunction(signature: resumeFnTy, function: resumeFn, arguments: cargs))
+        val ignore: LLVMValueRef = (try self.callLegacyValueFunction(signature: resumeFnTy, function: resumeFn, arguments: cargs))
         if isMain {
             try self.asyncLoopRun(c: inout c)
             LLVMBuildRet(self.b, LLVMConstInt(self.i32ty, 0U64, 0I32))

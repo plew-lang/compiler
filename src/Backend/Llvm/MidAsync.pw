@@ -126,7 +126,7 @@ pub impl LlvmCtx {
         self.curFn = self.asyncResumeFn[slot]
         self.curResumeFn = self.curFn
         self.curFrameTy = activation.type
-        self.curFrameBase = (try self.valueParameter(function: self.curFn, index: 0U64))
+        self.curFrameBase = (try self.legacyValueParameter(function: self.curFn, index: 0U64))
         self.curIsMain = false
         self.curRetVoid = true
         self.beginFnBody(fv: self.curFn)

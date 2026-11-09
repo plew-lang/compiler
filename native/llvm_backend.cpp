@@ -173,6 +173,39 @@ extern "C" uint64_t plew_llvm_context_identity(LLVMContextRef context) {
   return static_cast<uint64_t>(reinterpret_cast<uintptr_t>(context));
 }
 
+// These inspect live LLVM objects only. They do not establish source lifetime,
+// alias, or ownership facts; those belong to the verified Mid storage plan.
+extern "C" int plew_llvm_value_scope_matches(LLVMValueRef value, LLVMValueRef function) {
+    if (!value || !function || !LLVMIsAFunction(function)) return 0;
+    if (LLVMGetTypeContext(LLVMTypeOf(value)) != LLVMGetTypeContext(LLVMTypeOf(function))) return 0;
+    if (LLVMIsAInstruction(value)) {
+        auto block = LLVMGetInstructionParent(value);
+        return block && LLVMGetBasicBlockParent(block) == function;
+    }
+    if (LLVMIsAArgument(value)) return LLVMGetParamParent(value) == function;
+    if (LLVMIsAGlobalValue(value)) return LLVMGetGlobalParent(value) == LLVMGetGlobalParent(function);
+    if (!LLVMIsAConstant(value)) return 0;
+    // Constant expressions/aggregate constants can hide references to globals
+    // from a different module even when their LLVMContext and type coincide.
+    for (unsigned index = 0; index < LLVMGetNumOperands(value); ++index)
+        if (!plew_llvm_value_scope_matches(LLVMGetOperand(value, index), function)) return 0;
+    return 1;
+}
+extern "C" int plew_llvm_home_type_matches(LLVMValueRef address, LLVMTypeRef type) {
+    if (!address || !type) return 0;
+    if (LLVMIsAAllocaInst(address)) return LLVMGetAllocatedType(address) == type;
+    if (LLVMIsAArgument(address)) {
+        auto function = LLVMGetParamParent(address);
+        auto kind = LLVMGetEnumAttributeKindForName("byval", 5);
+        for (unsigned index = 0; index < LLVMCountParams(function); ++index) {
+            if (LLVMGetParam(function, index) != address) continue;
+            auto attribute = LLVMGetEnumAttributeAtIndex(function, index + 1, kind);
+            return attribute && LLVMIsTypeAttribute(attribute) && LLVMGetTypeAttributeValue(attribute) == type;
+        }
+    }
+    return 0;
+}
+
 extern "C" char *plew_llvm_jit_target_triple(const PlewLlvmJit *jit) {
   return LLVMCreateMessage(jit && jit->engine
       ? jit->engine->getTargetTriple().str().c_str() : "");

@@ -124,7 +124,7 @@ pub impl LlvmCtx {
             }
             index += 1U64
         }
-        val result = (try self.callValueFunction(signature: signature, function: target, arguments: arguments))
+        val result = (try self.callLegacyValueFunction(signature: signature, function: target, arguments: arguments, bodyAdapter: <Optional.Some v=<LlvmBodyCompatibility.ExposedEntry bodyId=bodyId /> />))
         try self.completeCInouts(c: inout c, writebacks: writebacks)
         if declaration.hasRet {
             val externalResult = (try self.scalarToC(c: inout c, ref: prepared.resultType, value: result))

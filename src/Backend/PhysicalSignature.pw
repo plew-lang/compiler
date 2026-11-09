@@ -1,10 +1,15 @@
 // The representation-only owner of private logical/physical correspondence.
 // Inputs are completed contracts; this module cannot inspect source or Comp.
-use ../LlvmHandles only { LLVMModuleRef, LLVMContextRef, LLVMTypeRef }
+use ../LlvmHandles only { LLVMModuleRef, LLVMContextRef, LLVMTypeRef, LLVMValueRef }
 use ../Diag only { CompileDiagnostic, DiagnosticLocation, FailureDomain }
 use @Std/Ffi only { stringFromCString, arrayCPtr }
 
 extern(c) {
+    fn plew_llvm_value_scope_matches(value~: LLVMValueRef, function~: LLVMValueRef) -> I32
+    fn plew_llvm_home_type_matches(address~: LLVMValueRef, type~: LLVMTypeRef) -> I32
+    fn LLVMTypeOf(value~: LLVMValueRef) -> LLVMTypeRef
+    fn LLVMIsAFunction(value~: LLVMValueRef) -> U64
+    fn LLVMGetGlobalParent(function~: LLVMValueRef) -> LLVMModuleRef
     type LLVMTargetDataRef
     fn plew_llvm_module_identity(module~: LLVMModuleRef) -> U64
     fn plew_llvm_context_identity(context~: LLVMContextRef) -> U64
@@ -101,6 +106,23 @@ pub impl LlvmResultProtocol {
     fn key() -> U64 { return match self { LlvmResultProtocol.Void => { give 0U64 } LlvmResultProtocol.UnchangedValue => { give 1U64 } } }
 }
 
+// One common scope header per call/binding, not repeated in every lane.
+pub struct LlvmInputScope {
+    pub val moduleIdentity: U64
+    pub val contextIdentity: U64
+    pub val revision: U64
+    pub val bodyIdentity: U64
+    pub val signature: LLVMTypeRef
+}
+pub impl LlvmInputScope { factory }
+pub enum LlvmValueCarrier { Value(value: LLVMValueRef) Home(address: LLVMValueRef) }
+pub struct LlvmValueInput {
+    pub val lane: LlvmLogicalParameter
+    pub val index: U64
+    pub val carrier: LlvmValueCarrier
+}
+pub impl LlvmValueInput { factory }
+
 // Raw input/record vocabulary is constructible. Admission is plan/validate,
 // not possession of a record or a context-local numeric ID.
 pub struct LlvmLogicalParameter {
@@ -169,6 +191,34 @@ pub impl LlvmSignatureScope {
         if plew_llvm_module_identity(self.module) != self.moduleIdentity || plew_llvm_context_identity(LLVMGetModuleContext(self.module)) != self.contextIdentity || stringFromCString(LLVMGetTarget(self.module)) != self.triple || stringFromCString(LLVMGetDataLayoutStr(self.module)) != self.layout {
             return <Result.Err error=signatureFailure(message: "foreign or stale module/context/target") />
         }
+        return <Result.Ok value=() />
+    }
+
+    fn validateInputs(scope: LlvmInputScope, bodyIdentity: U64, signature: LLVMTypeRef) -> Result[(), CompileDiagnostic] {
+        try self.validateScope()
+        if scope.moduleIdentity != self.moduleIdentity || scope.contextIdentity != self.contextIdentity || scope.revision != 1U64 || scope.bodyIdentity != bodyIdentity || plew_pointer_equal(scope.signature, signature) == 0I32 { return <Result.Err error=signatureFailure(message: "input body/scope/signature mismatch") /> }
+        return <Result.Ok value=() />
+    }
+
+    fn validateInput(parameter: LlvmValueParameter, input: LlvmValueInput, index: U64, function: LLVMValueRef) -> Result[(), CompileDiagnostic] {
+        if input.index != index { return <Result.Err error=signatureFailure(message: "typed input index mismatch") /> }
+        if parameter.semanticType != input.lane.semanticType { return <Result.Err error=signatureFailure(message: "typed input canonical semantic term mismatch") /> }
+        if !parameter.role.same(role: input.lane.role) { return <Result.Err error=signatureFailure(message: "typed input role mismatch") /> }
+        if parameter.mode.key() != input.lane.mode.key() { return <Result.Err error=signatureFailure(message: "typed input ownership mode mismatch") /> }
+        if plew_pointer_equal(parameter.type, input.lane.type) == 0I32 { return <Result.Err error=signatureFailure(message: "typed input represented type mismatch") /> }
+        if LLVMIsAFunction(function) == 0U64 { return <Result.Err error=signatureFailure(message: "input scope is not a function") /> }
+        if plew_llvm_module_identity(LLVMGetGlobalParent(function)) != self.moduleIdentity { return <Result.Err error=signatureFailure(message: "input function belongs to another module") /> }
+        val value = match input.carrier {
+            LlvmValueCarrier.Value(value: val value) => {
+                if plew_pointer_equal(LLVMTypeOf(value), parameter.type) == 0I32 { return <Result.Err error=signatureFailure(message: "actual input value type mismatch") /> }
+                give value
+            }
+            LlvmValueCarrier.Home(address: val address) => {
+                if parameter.mode.key() == 2U64 || parameter.passing.key() == 1U64 || LLVMGetTypeKind(LLVMTypeOf(address)) != 12U32 || plew_llvm_home_type_matches(address, parameter.type) == 0I32 { return <Result.Err error=signatureFailure(message: "input is not a typed aggregate home") /> }
+                give address
+            }
+        }
+        if !self.ownsType(type: LLVMTypeOf(value)) || plew_llvm_value_scope_matches(value, function) == 0I32 { return <Result.Err error=signatureFailure(message: "input value has foreign context/function provenance") /> }
         return <Result.Ok value=() />
     }
 

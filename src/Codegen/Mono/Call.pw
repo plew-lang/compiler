@@ -1573,12 +1573,12 @@ pub impl Comp {
         return true
     }
 
-    inout fn appendFinalCallee(exprId: U64, callee: U64, siteIsStmt: Bool, slot: U64, recvTypeRef: U64, resultTypeRef: U64, arguments: Array[CallTemplateArgument] = [], argumentSourceTypes: Array[U64] = [], calleeTypeArgs: Array[U64] = [], parameterTypeRefs: Array[U64] = [], argumentConversions: Array[ValueConversionProof] = [], receiverPassing: CallReceiverPassing = <CallReceiverPassing.None />, argumentPassings: Array[CallArgumentPassing] = [], resultProjection: CallResultProjection = <CallResultProjection.Identity />, target: CallTarget = <CallTarget.Direct />, calleeBodyId: U64 = 0U64, generatedSite: CallSiteKey = <CallSiteKey />, interfaceEvidence: U64 = 0U64) -> Result[(), CompileDiagnostic] {
+    inout fn appendFinalCallee(exprId: U64, callee: U64, siteIsStmt: Bool, slot: U64, recvTypeRef: U64, resultTypeRef: U64, arguments: Array[CallTemplateArgument] = [], argumentSourceTypes: Array[U64] = [], calleeTypeArgs: Array[U64] = [], parameterTypeRefs: Array[U64] = [], argumentConversions: Array[ValueConversionProof] = [], receiverPassing: CallReceiverPassing = <CallReceiverPassing.None />, argumentPassings: Array[CallArgumentPassing] = [], resultProjection: CallResultProjection = <CallResultProjection.Identity />, target: CallTarget = <CallTarget.Direct />, calleeBodyId: U64 = 0U64, generatedSite: CallSiteKey = <CallSiteKey />, interfaceEvidence: U64 = 0U64, receiverSignatureTypeRef: U64 = 0U64) -> Result[(), CompileDiagnostic] {
         val bodyId: U64 = self.currentBodyInstanceId()
         mut val siteKey: CallSiteKey = generatedSite
         if siteKey.originKind == 0U64 { siteKey = (try self.currentCallSiteKey(exprId: exprId, siteIsStmt: siteIsStmt, slot: slot)) }
         val evaluationArguments = self.prepareFinalCalleeArguments(arguments: arguments, parameterTypes: parameterTypeRefs, sourceTypes: argumentSourceTypes)
-        val row = <CallResolution bodyId=bodyId calleeBodyId=calleeBodyId siteKey=siteKey exprId=exprId siteIsStmt=siteIsStmt slot=slot callee=callee receiverPassing=receiverPassing recvTypeRef=recvTypeRef resultTypeRef=resultTypeRef resultProjection=resultProjection target=target interfaceEvidence=interfaceEvidence />
+        val row = <CallResolution bodyId=bodyId calleeBodyId=calleeBodyId siteKey=siteKey exprId=exprId siteIsStmt=siteIsStmt slot=slot callee=callee receiverPassing=receiverPassing recvTypeRef=recvTypeRef receiverSignatureTypeRef=receiverSignatureTypeRef resultTypeRef=resultTypeRef resultProjection=resultProjection target=target interfaceEvidence=interfaceEvidence />
         try self.checkFinalInterfaceEvidence(resolution: row)
         try self.checkFinalClosureCallEvidence(resolution: row)
         if !self.arena.publishFinalCallee(row: row, typeArguments: calleeTypeArgs, parameterTypes: parameterTypeRefs, conversions: argumentConversions, passings: argumentPassings, arguments: <Optional.Some v=evaluationArguments />) {
@@ -3373,7 +3373,7 @@ pub impl Comp {
             }
             return <Result.Ok value=() />
         }
-        try self.appendFinalCallee(exprId: exprId, callee: callee, siteIsStmt: siteIsStmt, slot: slot, recvTypeRef: recvRef, resultTypeRef: result, arguments: argumentSources, argumentSourceTypes: sourceTypes, calleeTypeArgs: calleeArgs, parameterTypeRefs: params, argumentConversions: conversions, receiverPassing: receiverPassing, argumentPassings: argumentPassings, resultProjection: resultProjection, target: target, calleeBodyId: calleeBodyId)
+        try self.appendFinalCallee(exprId: exprId, callee: callee, siteIsStmt: siteIsStmt, slot: slot, recvTypeRef: recvRef, resultTypeRef: result, arguments: argumentSources, argumentSourceTypes: sourceTypes, calleeTypeArgs: calleeArgs, parameterTypeRefs: params, argumentConversions: conversions, receiverPassing: receiverPassing, argumentPassings: argumentPassings, resultProjection: resultProjection, target: target, calleeBodyId: calleeBodyId, receiverSignatureTypeRef: signature.receiverType)
         // A call result can be the sole reachable occurrence of a generic
         // layout (for example `val token: Token[String] = marker()`).  This
         // belongs to the completed CallResolution, not to an Expr.Method-only
@@ -4384,7 +4384,7 @@ pub impl Comp {
             try self.scanType(ref: signature.parameterTypes[parameter])
             parameter += 1U64
         }
-        try self.appendFinalCallee(exprId: 0U64, callee: target.fnIdx, siteIsStmt: false, slot: 0U64, recvTypeRef: target.environment.receiverRef, resultTypeRef: signature.resultType, calleeTypeArgs: self.signatureTypeArguments(f: self.arena.functionAt(index: target.fnIdx), environment: target.environment), parameterTypeRefs: signature.parameterTypes, argumentConversions: conversions, receiverPassing: member.receiverPassing, argumentPassings: member.argumentPassings, calleeBodyId: member.bodyId, generatedSite: <CallSiteKey ownerFnIdx=target.fnIdx originKind=2U64 originSerial=bodyId />)
+        try self.appendFinalCallee(exprId: 0U64, callee: target.fnIdx, siteIsStmt: false, slot: 0U64, recvTypeRef: target.environment.receiverRef, resultTypeRef: signature.resultType, calleeTypeArgs: self.signatureTypeArguments(f: self.arena.functionAt(index: target.fnIdx), environment: target.environment), parameterTypeRefs: signature.parameterTypes, argumentConversions: conversions, receiverPassing: member.receiverPassing, argumentPassings: member.argumentPassings, calleeBodyId: member.bodyId, generatedSite: <CallSiteKey ownerFnIdx=target.fnIdx originKind=2U64 originSerial=bodyId />, receiverSignatureTypeRef: signature.receiverType)
         mut val members = resolution.members
         members[memberIndex] = <FinalExistentialMember bodyId=member.bodyId adapterBodyId=bodyId callResolution=self.arena.finalCalleeCount() receiverPassing=member.receiverPassing parameterTypes=member.parameterTypes argumentPassings=member.argumentPassings resultType=member.resultType sourceResultType=member.sourceResultType resultConversion=member.resultConversion />
         self.arena.finalExistentials[resolutionIndex] = <FinalExistentialResolution sourceRef=resolution.sourceRef targetRef=resolution.targetRef traitIdx=resolution.traitIdx proof=resolution.proof members=members />
@@ -4689,6 +4689,7 @@ pub impl Comp {
             if !self.arena.bodySignature(bodyId: e.calleeBodyId).ready || !self.finalCallBodyEnvironmentMatches(callee: e.callee, receiver: e.recvTypeRef, arguments: self.copyFinalCalleeTypeArgs(args: e.calleeTypeArgs), bodyId: e.calleeBodyId) {
                 return <Result.Ok value=false />
             }
+            if e.receiverSignatureTypeRef != self.arena.bodySignature(bodyId: e.calleeBodyId).receiverType { return <Result.Ok value=false /> }
             val instance = self.arena.bodyInstanceAt(index: e.calleeBodyId - 1U64)
             if !self.bodySignatureReceiverMatches(function: f, environment: instance.environment, signature: self.arena.bodySignature(bodyId: e.calleeBodyId)) { return <Result.Ok value=false /> }
         } else if f.hasRecv || f.isAssoc {

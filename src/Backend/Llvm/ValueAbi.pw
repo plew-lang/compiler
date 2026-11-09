@@ -233,7 +233,7 @@ pub impl LlvmCtx {
         return slot
     }
 
-    inout fn callValueFunction(signature: LLVMTypeRef, function: LLVMValueRef, arguments: Array[LLVMValueRef], legacyIndirect: Optional[LlvmLegacyConvention] = <Optional.None />) -> Result[LLVMValueRef, CompileDiagnostic] {
+    inout fn callLegacyValueFunction(signature: LLVMTypeRef, function: LLVMValueRef, arguments: Array[LLVMValueRef], legacyIndirect: Optional[LlvmLegacyConvention] = <Optional.None />, bodyAdapter: Optional[LlvmBodyCompatibility] = <Optional.None />) -> Result[LLVMValueRef, CompileDiagnostic] {
         val handle = LLVMIsAFunction(function)
         mut val abiId = 0U64
         if handle != 0U64 {
@@ -249,12 +249,28 @@ pub impl LlvmCtx {
             abiId = (try self.legacyValueAbi(signature: signature, family: family))
         }
         val abi = self.valueAbis[abiId - 1U64]
+        if abi.convention.key() == 0U64 {
+            val bodyId = match bodyAdapter {
+                Optional.Some(v: val adapter) => { give match adapter { LlvmBodyCompatibility.ExposedEntry(bodyId: val bodyId) => { give bodyId } LlvmBodyCompatibility.Destruction(bodyId: val bodyId) => { give bodyId } } }
+                Optional.None => { return <Result.Err error=valueAbiFailure(message: "normal body requires typed inputs or an explicit compatibility adapter") /> }
+            }
+            if bodyId == 0U64 || bodyId != abi.ownerBody { return <Result.Err error=valueAbiFailure(message: "compatibility adapter body mismatch") /> }
+        } else {
+            match bodyAdapter { Optional.Some(v: _) => { return <Result.Err error=valueAbiFailure(message: "body adapter cannot select a legacy convention") /> } Optional.None => {} }
+        }
         if plew_pointer_equal(abi.logicalSignature, signature) == 0I32 {
             return <Result.Err error=<CompileDiagnostic location=<DiagnosticLocation.Line line=0I64 /> message="internal error: private call logical signature mismatch" /> />
         }
         if abi.parameterCount != arguments.count() {
             return <Result.Err error=<CompileDiagnostic location=<DiagnosticLocation.Line line=0I64 /> message="internal error: private value ABI argument count mismatch" /> />
         }
+        return self.emitPlannedValueCall(abiId: abiId, function: function, arguments: arguments)
+    }
+
+    // Both admitted normal inputs and explicit compatibility adapters use this
+    // single physical emitter. W2 retains the existing byval snapshot here.
+    inout fn emitPlannedValueCall(abiId: U64, function: LLVMValueRef, arguments: Array[LLVMValueRef]) -> Result[LLVMValueRef, CompileDiagnostic] {
+        val abi = self.valueAbis[abiId - 1U64]
         mut val values: Array[LLVMValueRef] = []
         mut val index = 0U64
         while index < arguments.count() {
@@ -286,13 +302,68 @@ pub impl LlvmCtx {
         return <Result.Ok value=call />
     }
 
-    inout fn valueParameter(function: LLVMValueRef, index: U64) -> Result[LLVMValueRef, CompileDiagnostic] {
+    inout fn bodyInputScope(bodyId: U64, signature: LLVMTypeRef) -> Result[LlvmInputScope, CompileDiagnostic] {
+        val scope = (try self.prepareValueAbiScope())
+        return <Result.Ok value=<LlvmInputScope moduleIdentity=scope.moduleIdentity contextIdentity=scope.contextIdentity revision=1U64 bodyIdentity=bodyId signature=signature /> />
+    }
+
+    inout fn callBodyValueFunction(function: LLVMValueRef, bodyId: U64, inputs: LlvmInputScope, arguments: Array[LlvmValueInput]) -> Result[LLVMValueRef, CompileDiagnostic] {
+        val handle = LLVMIsAFunction(function)
+        val abiId = self.valueAbiFunctions.getOr(key: handle, fallback: 0U64)
+        if handle == 0U64 || abiId == 0U64 { return <Result.Err error=valueAbiFailure(message: "normal call lacks a declared body descriptor") /> }
+        val abi = self.valueAbis[abiId - 1U64]
+        if abi.convention.key() != 0U64 || bodyId == 0U64 || abi.ownerBody != bodyId || abi.parameterCount != arguments.count() { return <Result.Err error=valueAbiFailure(message: "normal call body/convention/count mismatch") /> }
+        val scope = (try self.prepareValueAbiScope())
+        try scope.validateInputs(scope: inputs, bodyIdentity: abi.ownerBody, signature: abi.logicalSignature)
+        val caller = LLVMGetBasicBlockParent(LLVMGetInsertBlock(self.b))
+        mut val values: Array[LLVMValueRef] = []
+        mut val index = 0U64
+        while index < arguments.count() {
+            val input = arguments[index]
+            val parameter = self.valueAbiParameters[abi.parameterStart + index]
+            try scope.validateInput(parameter: parameter, input: input, index: index, function: caller)
+            values.append(self.valueInputValue(input: input))
+            index += 1U64
+        }
+        return self.emitPlannedValueCall(abiId: abiId, function: function, arguments: values)
+    }
+
+    fn valueInputValue(input: LlvmValueInput) -> LLVMValueRef {
+        return match input.carrier {
+            LlvmValueCarrier.Value(value: val value) => { give value }
+            LlvmValueCarrier.Home(address: val address) => { give llvmLoad(self.b, input.lane.type, address, anon()) }
+        }
+    }
+
+    // The verified normal Mid parameter prefix supplies local role and passing.
+    // Its semantic correspondence permits distinct but structurally equal local
+    // TypeRef IDs; only the stored canonical signature term crosses this edge.
+    inout fn normalBodyParameter(function: LLVMValueRef, bodyId: U64, index: U64, type: LLVMTypeRef, mode: LlvmParameterMode) -> Result[LlvmValueInput, CompileDiagnostic] {
+        val handle = LLVMIsAFunction(function)
+        val abiId = self.valueAbiFunctions.getOr(key: handle, fallback: 0U64)
+        if handle == 0U64 || abiId == 0U64 { return <Result.Err error=valueAbiFailure(message: "normal parameter lacks a descriptor") /> }
+        val abi = self.valueAbis[abiId - 1U64]
+        if abi.convention.key() != 0U64 || bodyId == 0U64 || abi.ownerBody != bodyId || index >= abi.parameterCount { return <Result.Err error=valueAbiFailure(message: "normal parameter body/convention/index mismatch") /> }
+        val parameter = self.valueAbiParameters[abi.parameterStart + index]
+        val carrier = match parameter.passing {
+            LlvmValuePassing.Omitted => { give <LlvmValueCarrier.Value value=LLVMGetUndef(parameter.type) /> }
+            LlvmValuePassing.Direct => { give <LlvmValueCarrier.Value value=LLVMGetParam(function, parameter.physicalIndex) /> }
+            LlvmValuePassing.Indirect => { give <LlvmValueCarrier.Home address=LLVMGetParam(function, parameter.physicalIndex) /> }
+        }
+        val input = <LlvmValueInput lane=<LlvmLogicalParameter type=type semanticType=parameter.semanticType role=parameter.role mode=mode /> index=index carrier=carrier />
+        val scope = (try self.prepareValueAbiScope())
+        try scope.validateInput(parameter: parameter, input: input, index: index, function: function)
+        return <Result.Ok value=input />
+    }
+
+    inout fn legacyValueParameter(function: LLVMValueRef, index: U64) -> Result[LLVMValueRef, CompileDiagnostic] {
         val handle = LLVMGetNamedFunction(self.mod, LLVMGetValueName(function))
         val abiId = self.valueAbiFunctions.getOr(key: handle, fallback: 0U64)
         if abiId == 0U64 {
             return <Result.Err error=<CompileDiagnostic location=<DiagnosticLocation.Line line=0I64 /> message="internal error: private value ABI parameter lacks declaration" /> />
         }
         val abi = self.valueAbis[abiId - 1U64]
+        if abi.convention.key() == 0U64 { return <Result.Err error=valueAbiFailure(message: "normal parameter cannot use raw compatibility binding") /> }
         if index >= abi.parameterCount {
             return <Result.Err error=<CompileDiagnostic location=<DiagnosticLocation.Line line=0I64 /> message="internal error: private value ABI parameter index out of range" /> />
         }

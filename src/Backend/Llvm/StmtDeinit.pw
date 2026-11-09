@@ -52,7 +52,7 @@ pub impl LlvmCtx {
         val reg = (try self.requireStructLayoutSlot(c: inout c, typeRef: ref))
         val slot = try self.structDropWitness(c: inout c, reg: reg)
         val arguments: Array[LLVMValueRef] = [v]
-        (try self.callValueFunction(signature: self.dropWitTy[slot], function: self.dropWitVal[slot], arguments: arguments))
+        (try self.callLegacyValueFunction(signature: self.dropWitTy[slot], function: self.dropWitVal[slot], arguments: arguments))
         return <Result.Ok value=() />
     }
 
@@ -109,7 +109,7 @@ pub impl LlvmCtx {
                 return <Result.Err error=c.diagnosticAt(offset: declaration.defOffset, msg: "internal error: finalized destructor has no executable body") />
             }
             val arguments: Array[LLVMValueRef] = [v]
-            (try self.callValueFunction(signature: self.genMethTy[slot], function: self.genMethVal[slot], arguments: arguments))
+            (try self.callLegacyValueFunction(signature: self.genMethTy[slot], function: self.genMethVal[slot], arguments: arguments, bodyAdapter: <Optional.Some v=<LlvmBodyCompatibility.Destruction bodyId=contract.deinitCall.bodyId /> />))
         }
         mut val field = 0U64
         while field < contract.fieldTypes.count() {
@@ -135,7 +135,7 @@ pub impl LlvmCtx {
             val fv: LLVMValueRef = self.dropWitVal[s]
             self.curFn = fv
             self.beginFnBody(fv: fv)
-            try self.emitDropWitnessWalk(c: inout c, v: (try self.valueParameter(function: fv, index: 0U64)), sidx: self.genStructDefs[reg], typeRef: self.genStructRefs[reg])
+            try self.emitDropWitnessWalk(c: inout c, v: (try self.legacyValueParameter(function: fv, index: 0U64)), sidx: self.genStructDefs[reg], typeRef: self.genStructRefs[reg])
             LLVMBuildRetVoid(self.b)
             self.dropWitDone += 1
         }

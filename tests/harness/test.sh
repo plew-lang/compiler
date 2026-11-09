@@ -269,6 +269,11 @@ fi
 # Mid must retain the semantic reason when an assignment target is not a
 # physical place. This gate is source-structural while fresh candidates cannot
 # yet collect the resulting coverage rows.
+if python3 -B ./tests/compiler/architecture/test-typed-value-roundtrip.py; then
+    pass=$((pass + 1))
+else
+    fail=$((fail + 1)); failed="$failed typed-value-roundtrip"
+fi
 if python3 -B ./tests/compiler/architecture/test-physical-signature-owner.py; then
     :
 else

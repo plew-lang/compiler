@@ -75,7 +75,7 @@ pub impl LlvmCtx {
                     self.beginFnBody(fv: witness.function)
                     // The only erased ABI adaptation: a read receiver is a
                     // borrowed load from its box; inout keeps the same address.
-                    mut val receiver = (try self.valueParameter(function: witness.function, index: 0U64))
+                    mut val receiver = (try self.legacyValueParameter(function: witness.function, index: 0U64))
                     match member.receiverPassing {
                         CallReceiverPassing.Inout => {}
                         _ => { receiver = llvmLoad(self.b, (try self.llvmTypeOfRef(c: inout c, ref: body.environment.receiverRef)), receiver, anon()) }
@@ -83,7 +83,7 @@ pub impl LlvmCtx {
                     mut val parameters: Array[LLVMValueRef] = [receiver]
                     mut val index = 0U64
                     while index < member.parameterTypes.count() {
-                        parameters.append((try self.valueParameter(function: witness.function, index: index + 1U64)))
+                        parameters.append((try self.legacyValueParameter(function: witness.function, index: index + 1U64)))
                         index += 1U64
                     }
                     if !(try self.genLlvmPreparedMidBody(c: inout c, prepared: prepared, abiParameterValues: parameters)) {
@@ -113,7 +113,7 @@ pub impl LlvmCtx {
         val entryCString = <CString.copied text="entry" />
         val entry: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, fv, entryCString.ptr)
         LLVMPositionBuilderAtEnd(self.b, entry)
-        val srcVal: LLVMValueRef = llvmLoad(self.b, concreteTy, (try self.valueParameter(function: fv, index: 0U64)), anon())
+        val srcVal: LLVMValueRef = llvmLoad(self.b, concreteTy, (try self.legacyValueParameter(function: fv, index: 0U64)), anon())
         try self.emitStructRetain(c: inout c, v: srcVal, ref: sourceRef)
         val cell: LLVMValueRef = (try self.rawbufAlloc(c: inout c, elemSize: LLVMSizeOf(concreteTy), cap: LLVMConstInt(self.i64ty, 1U64, 0I32)))
         llvmStore(self.b, srcVal, cell)
@@ -144,7 +144,7 @@ pub impl LlvmCtx {
         LLVMPositionBuilderAtEnd(self.b, entry)
         self.curFn = fv
         if (try c.finalNeedsRelease(typeRef: instRef)) {
-            val v: LLVMValueRef = llvmLoad(self.b, concreteTy, (try self.valueParameter(function: fv, index: 0U64)), anon())
+            val v: LLVMValueRef = llvmLoad(self.b, concreteTy, (try self.legacyValueParameter(function: fv, index: 0U64)), anon())
             try self.valueArc(c: inout c, v: v, typeRef: instRef, retain: false)
         }
         LLVMBuildRetVoid(self.b)
@@ -180,7 +180,7 @@ pub impl LlvmCtx {
         val dty: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(ptys), 1U64, 0I32)
         mut val av: Array[LLVMValueRef] = []
         av.append(cell)
-        (try self.callValueFunction(signature: dty, function: dropFn, arguments: av, legacyIndirect: <Optional.Some v=<LlvmLegacyConvention.ExistentialDrop /> />))
+        (try self.callLegacyValueFunction(signature: dty, function: dropFn, arguments: av, legacyIndirect: <Optional.Some v=<LlvmLegacyConvention.ExistentialDrop /> />))
         try self.rawbufFree(c: inout c, cell: cell)
         LLVMBuildBr(self.b, contBB)
         LLVMPositionBuilderAtEnd(self.b, contBB)
@@ -229,7 +229,7 @@ pub impl LlvmCtx {
         val fty: LLVMTypeRef = LLVMFunctionType(self.ptrty, arrayCPtr(ptys), 1U64, 0I32)
         mut val av: Array[LLVMValueRef] = []
         av.append(dataPtr)
-        val newData: LLVMValueRef = (try self.callValueFunction(signature: fty, function: copyFn, arguments: av, legacyIndirect: <Optional.Some v=<LlvmLegacyConvention.ExistentialCopy /> />))
+        val newData: LLVMValueRef = (try self.callLegacyValueFunction(signature: fty, function: copyFn, arguments: av, legacyIndirect: <Optional.Some v=<LlvmLegacyConvention.ExistentialCopy /> />))
         mut val agg: LLVMValueRef = LLVMGetUndef(self.anyTy)
         agg = LLVMBuildInsertValue(self.b, agg, newData, 0U64, anon())
         agg = LLVMBuildInsertValue(self.b, agg, vtPtr, 1U64, anon())

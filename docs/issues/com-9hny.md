@@ -123,3 +123,38 @@ local-index/signature-lane mapping. This prerequisite is not completion of
 checkpoint 2: normal typed Value/Home call and binding consumers must still use
 that correspondence and the stored physical descriptor. Ready storage/synthetic
 maps, all-entry migration, preparation cost and final gates remain open.
+
+
+## Typed Normal Roundtrip Checkpoint
+
+W2 checkpoint 2 now connects normal declaration, direct call and verified
+parameter binding through typed Value/Home inputs. The shared representation
+leaf checks canonical semantic term, role, passing, logical index, native type
+and native function/module/context provenance. A Home is a typed alloca or
+incoming byval aggregate address, distinct from an inout pointer Value.
+Baseline call staging and callee local copying remain; this is not W3 forwarding.
+
+The [checkpoint evidence](../../../evidence/performance-regression-history/value-passing-implementation/w2-protocol/typed-normal-roundtrip.json)
+records the structural old-path RED, native constant-provenance RED/GREEN,
+newtype publisher handoff RED/GREEN, final standard build, fresh CLI12,
+internal5, raw/optimized ABI, native leaf, C expose/callback and a mixed
+receiver/empty/scalar/inout/aggregate control. Canonical receiver identity now
+travels through all three normal-body publishers and the sole row store;
+source receiver/view identity remains separate. Raw normal-body calls require
+one of the finite ExposedEntry/Destruction compatibility adapters and matching
+body identity; raw normal parameter binding/overrides are rejected.
+
+Neutral review checked 188 input/source hashes, 130 artifacts, the 183
+source/native build inputs and all 6499 recorded build inputs. It independently
+reran architecture checks, baseline/fresh mixed CLI, fresh newtype CLI and the
+native leaf harness, then rechecked hashes. The finite checkpoint is accepted.
+Malformed private root compatibility guards are source/structure reviewed,
+not independently executed malformed root API tests. This limitation is not
+relabelled as runtime coverage.
+
+Checkpoints 3–6 remain open: retained Ready binding/storage plans and adapter
+conversion, indirect/glue/async/C migration, whole-protocol reconciliation and
+preparation cost. The current Home byval-argument index lookup uses a parameter
+scan; account for its asymptotics and target-scope checking at the W2 cost
+boundary. Prototype adoption, W3/W4, formal timing/fixed point, final suites,
+ASan/LSan and promotion remain unproven. No task is closed by this checkpoint.

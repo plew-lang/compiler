@@ -1,8 +1,12 @@
 // Test the production representation leaf without importing Comp or Backend.
-use ../../../src/Backend/PhysicalSignature only { LlvmSignatureScope, LlvmLogicalSignature, LlvmLogicalParameter, LlvmParameterRole, LlvmParameterMode, LlvmValueConvention, LlvmLegacyConvention, LlvmPhysicalSignature, LlvmValueParameter, LlvmValuePassing }
-use ../../../src/LlvmHandles only { LLVMContextRef, LLVMModuleRef, LLVMTypeRef }
+use ../../../src/Backend/PhysicalSignature only { LlvmSignatureScope, LlvmLogicalSignature, LlvmLogicalParameter, LlvmParameterRole, LlvmParameterMode, LlvmValueConvention, LlvmLegacyConvention, LlvmPhysicalSignature, LlvmValueParameter, LlvmValuePassing, LlvmInputScope, LlvmValueInput, LlvmValueCarrier }
+use ../../../src/LlvmHandles only { LLVMContextRef, LLVMModuleRef, LLVMTypeRef, LLVMValueRef }
 use @Std/Io only { write }
 extern(c) {
+    fn plew_test_signature_function(module~: LLVMModuleRef, aggregate~: LLVMTypeRef) -> LLVMValueRef
+    fn plew_test_signature_value(function~: LLVMValueRef, type~: LLVMTypeRef, kind~: U32) -> LLVMValueRef
+    fn plew_test_signature_constant(module~: LLVMModuleRef, kind~: U32) -> LLVMValueRef
+    fn LLVMTypeOf(value~: LLVMValueRef) -> LLVMTypeRef
     fn LLVMContextCreate() -> LLVMContextRef
     fn LLVMContextDispose(context~: LLVMContextRef)
     fn LLVMDisposeModule(module~: LLVMModuleRef)
@@ -95,6 +99,51 @@ fn main() {
     val legacy = <LlvmLogicalSignature convention=<LlvmValueConvention.Legacy family=<LlvmLegacyConvention.Closure /> /> parameters=[parameter(type: aggregate, semantic: 0U64, role: <LlvmParameterRole.Legacy index=0U64 />, mode: <LlvmParameterMode.Legacy />)] result=voidType resultTerm=0U64 />
     scope.validate(signature: legacy, plan: scope.plan(signature: legacy).unwrap()).unwrap()
     if scope.plan(signature: <LlvmLogicalSignature convention=legacy.convention parameters=[plain] result=voidType resultTerm=0U64 />).isOk() { panic "legacy claims semantic role" }
+    // Typed call/binding inputs: actual live native values, not metadata only.
+    val function = plew_test_signature_function(module, aggregate)
+    val otherFunction = plew_test_signature_function(module, aggregate)
+    val foreignFunction = plew_test_signature_function(foreignModule, plew_test_signature_type(foreignContext, 3U32))
+    val otherModuleFunction = plew_test_signature_function(otherModule, aggregate)
+    val inputs = <LlvmInputScope moduleIdentity=plan.moduleIdentity contextIdentity=plan.contextIdentity revision=1U64 bodyIdentity=7U64 signature=plan.logicalSignature />
+    scope.validateInputs(scope: inputs, bodyIdentity: 7U64, signature: plan.logicalSignature).unwrap()
+    if scope.validateInputs(scope: inputs, bodyIdentity: 8U64, signature: plan.logicalSignature).isOk() { panic "wrong input body accepted" }
+    if scope.validateInputs(scope: inputs, bodyIdentity: 7U64, signature: pointerPlan.logicalSignature).isOk() { panic "wrong input signature accepted" }
+    if otherScope.validateInputs(scope: inputs, bodyIdentity: 7U64, signature: plan.logicalSignature).isOk() { panic "wrong input module accepted" }
+    if foreignScope.validateInputs(scope: inputs, bodyIdentity: 7U64, signature: plan.logicalSignature).isOk() { panic "wrong input context accepted" }
+    val staleInputs = <LlvmInputScope moduleIdentity=inputs.moduleIdentity contextIdentity=inputs.contextIdentity revision=2U64 bodyIdentity=inputs.bodyIdentity signature=inputs.signature />
+    if scope.validateInputs(scope: staleInputs, bodyIdentity: 7U64, signature: plan.logicalSignature).isOk() { panic "wrong input revision accepted" }
+    val home = plew_test_signature_value(function, aggregate, 0U32)
+    val scalarValue = plew_test_signature_value(function, scalar, 1U32)
+    val pointerValue = plew_test_signature_value(function, pointer, 2U32)
+    val aggregateValue = plew_test_signature_value(function, aggregate, 3U32)
+    val alloca = plew_test_signature_value(function, aggregate, 4U32)
+    val receiverInput = <LlvmValueInput lane=receiver index=0U64 carrier=<LlvmValueCarrier.Home address=home /> />
+    scope.validateInput(parameter: plan.parameters[0], input: receiverInput, index: 0U64, function: function).unwrap()
+    scope.validateInput(parameter: plan.parameters[0], input: <LlvmValueInput lane=receiver index=0U64 carrier=<LlvmValueCarrier.Home address=alloca /> />, index: 0U64, function: function).unwrap()
+    scope.validateInput(parameter: plan.parameters[0], input: <LlvmValueInput lane=receiver index=0U64 carrier=<LlvmValueCarrier.Value value=aggregateValue /> />, index: 0U64, function: function).unwrap()
+    scope.validateInput(parameter: plan.parameters[1], input: <LlvmValueInput lane=omitted index=1U64 carrier=<LlvmValueCarrier.Value value=plew_test_signature_value(function, empty, 3U32) /> />, index: 1U64, function: function).unwrap()
+    scope.validateInput(parameter: plan.parameters[2], input: <LlvmValueInput lane=direct index=2U64 carrier=<LlvmValueCarrier.Value value=scalarValue /> />, index: 2U64, function: function).unwrap()
+    scope.validateInput(parameter: plan.parameters[3], input: <LlvmValueInput lane=inoutLane index=3U64 carrier=<LlvmValueCarrier.Value value=pointerValue /> />, index: 3U64, function: function).unwrap()
+    if scope.validateInput(parameter: plan.parameters[0], input: receiverInput, index: 1U64, function: function).isOk() { panic "wrong input index accepted" }
+    if scope.validateInput(parameter: plainPlan.parameters[0], input: receiverInput, index: 0U64, function: function).isOk() { panic "wrong input role accepted" }
+    if scope.validateInput(parameter: plan.parameters[0], input: <LlvmValueInput lane=parameter(type: aggregate, semantic: 99U64, role: receiver.role, mode: receiver.mode) index=0U64 carrier=receiverInput.carrier />, index: 0U64, function: function).isOk() { panic "wrong input semantic type accepted" }
+    if scope.validateInput(parameter: plan.parameters[0], input: <LlvmValueInput lane=parameter(type: aggregate, semantic: 11U64, role: receiver.role, mode: <LlvmParameterMode.Move />) index=0U64 carrier=receiverInput.carrier />, index: 0U64, function: function).isOk() { panic "wrong input mode accepted" }
+    if scope.validateInput(parameter: plan.parameters[0], input: <LlvmValueInput lane=receiver index=0U64 carrier=<LlvmValueCarrier.Value value=scalarValue /> />, index: 0U64, function: function).isOk() { panic "actual native type mismatch accepted" }
+    if scope.validateInput(parameter: plan.parameters[0], input: <LlvmValueInput lane=receiver index=0U64 carrier=<LlvmValueCarrier.Home address=pointerValue /> />, index: 0U64, function: function).isOk() { panic "unqualified opaque pointer home accepted" }
+    if scope.validateInput(parameter: plan.parameters[3], input: <LlvmValueInput lane=inoutLane index=3U64 carrier=<LlvmValueCarrier.Home address=home /> />, index: 3U64, function: function).isOk() { panic "inout confused with a home" }
+    if scope.validateInput(parameter: plan.parameters[0], input: receiverInput, index: 0U64, function: otherFunction).isOk() { panic "foreign function input accepted" }
+    if scope.validateInput(parameter: plan.parameters[0], input: receiverInput, index: 0U64, function: otherModuleFunction).isOk() { panic "foreign module input accepted" }
+    if scope.validateInput(parameter: plan.parameters[0], input: <LlvmValueInput lane=receiver index=0U64 carrier=<LlvmValueCarrier.Value value=plew_test_signature_value(foreignFunction, plew_test_signature_type(foreignContext, 3U32), 3U32) /> />, index: 0U64, function: function).isOk() { panic "actual foreign context accepted" }
+    mut val constantKind = 0U32
+    while constantKind < 3U32 {
+        val sameModuleValue = plew_test_signature_constant(module, constantKind)
+        val foreignModuleValue = plew_test_signature_constant(otherModule, constantKind)
+        val constantLane = parameter(type: LLVMTypeOf(sameModuleValue), semantic: 30U64, role: <LlvmParameterRole.Ordinary index=0U64 />, mode: <LlvmParameterMode.Borrow />)
+        val constantPlan = scope.plan(signature: body(parameters: [constantLane], result: voidType)).unwrap()
+        scope.validateInput(parameter: constantPlan.parameters[0], input: <LlvmValueInput lane=constantLane index=0U64 carrier=<LlvmValueCarrier.Value value=sameModuleValue /> />, index: 0U64, function: function).unwrap()
+        if scope.validateInput(parameter: constantPlan.parameters[0], input: <LlvmValueInput lane=constantLane index=0U64 carrier=<LlvmValueCarrier.Value value=foreignModuleValue /> />, index: 0U64, function: function).isOk() { panic "foreign module constant reference accepted" }
+        constantKind += 1U32
+    }
     plew_test_signature_change_layout(module)
     val readmitted = LlvmSignatureScope.admitted(module: module).unwrap()
     if readmitted.validate(signature: plainSignature, plan: plainPlan).isOk() { panic "readmitted stale target plan accepted" }

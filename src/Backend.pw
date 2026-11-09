@@ -3,8 +3,8 @@ use ./Ir only { ConversionProofNode, FrozenEnumPayloadConversion }
 use @Std/Core only { bitCastU64 }
 use ./Diag only { eprintU64 }
 use ./Mid/Diagnostics only { emitMidCoverageVerify }
-use ./LlvmHandles only { LLVMContextRef, LLVMModuleRef, LLVMTypeRef, PlewLlvmJitRef, PlewProgramArgumentsRef }
-use ./Backend/PhysicalSignature only { LlvmSignatureScope, LlvmLogicalSignature, LlvmLogicalParameter, LlvmParameterRole, LlvmParameterMode, LlvmLegacyConvention, LlvmValueConvention, LlvmValuePassing, LlvmValueParameter, LlvmResultProtocol, llvmTypeHasStorage }
+use ./LlvmHandles only { LLVMContextRef, LLVMModuleRef, LLVMTypeRef, LLVMValueRef, PlewLlvmJitRef, PlewProgramArgumentsRef }
+use ./Backend/PhysicalSignature only { LlvmSignatureScope, LlvmLogicalSignature, LlvmLogicalParameter, LlvmParameterRole, LlvmParameterMode, LlvmLegacyConvention, LlvmValueConvention, LlvmValuePassing, LlvmValueParameter, LlvmResultProtocol, LlvmValueCarrier, LlvmValueInput, LlvmInputScope, llvmTypeHasStorage }
 use ./Mid/Ambient only { MidAmbientProgram, MidAmbientBodyPlan, MidAmbientStorage }
 use ./Mid/Program only { MidExecutableProgram }
 use ./PreparedProgram only { PreparedProgram, programPreparationDiagnostic }
@@ -150,6 +150,9 @@ struct LlvmExistentialWitness {
 pub impl LlvmExistentialWitness { factory }
 
 // Logical value types stay separate from the private physical call signature.
+// Temporary raw adapters are enumerated until W2 checkpoints 4/5 migrate them.
+enum LlvmBodyCompatibility { ExposedEntry(bodyId: U64) Destruction(bodyId: U64) }
+
 struct LlvmValueAbi {
     pub val parameterStart: U64
     pub val parameterCount: U64
@@ -475,7 +478,6 @@ pub impl LlvmCtx { factory }
 // Opaque handles are void* ABI-identical to the real LLVM `…Opaque *` typedefs,
 // so no <llvm-c/*.h> include is needed — the compiler self-emits the prototypes.
 extern(c) {
-    type LLVMValueRef
     type LLVMBasicBlockRef
     type LLVMBuilderRef
     type LLVMMetadataRef
