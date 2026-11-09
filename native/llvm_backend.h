@@ -25,6 +25,7 @@ char *plew_llvm_native_data_layout(const char *cpu);
 // Context-local identity only, never a session/body or persistent cache key.
 uint64_t plew_llvm_module_identity(LLVMModuleRef module);
 uint64_t plew_llvm_context_identity(LLVMContextRef context);
+int plew_llvm_function_matches(LLVMModuleRef module, LLVMValueRef function, LLVMTypeRef signature);
 int plew_llvm_value_scope_matches(LLVMValueRef value, LLVMValueRef function);
 int plew_llvm_home_type_matches(LLVMValueRef address, LLVMTypeRef type);
 

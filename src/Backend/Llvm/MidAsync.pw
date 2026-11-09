@@ -55,7 +55,7 @@ pub impl LlvmCtx {
             if declaration.isParameter || plan.storedLocals[local] {
                 slots.append(types.count())
                 if declaration.isCaptureCell { types.append(self.ptrty) }
-                else { types.append((try self.midCanonicalLocalTy(c: inout c, body: body, local: local))) }
+                else { types.append((try self.lowerMidLocalType(c: inout c, body: body, local: local))) }
             } else { slots.append(0U64) }
             local += 1U64
         }
@@ -146,7 +146,7 @@ pub impl LlvmCtx {
         val state = llvmLoad(self.b, self.i32ty, LLVMBuildStructGEP2(self.b, self.curFrameTy, self.curFrameBase, 0U64, anon()), anon())
         self.curAsyncSwitch = LLVMBuildSwitch(self.b, state, start, 8U32)
         LLVMPositionBuilderAtEnd(self.b, start)
-        if !(try self.genLlvmPreparedMidBody(c: inout c, prepared: <MidLlvmPrepared.Ready canonical=canonical abiParameterCount=parameters />, localsPrepared: true, asyncBody: true)) { return <Result.Err error=c.diagnosticAt(offset: 0U64, msg: "async Mid LLVM emission failed") /> }
+        if !(try self.genLlvmPreparedMidBody(c: inout c, prepared: <MidLlvmPrepared.Ready canonical=canonical abiParameterCount=parameters localAdmission=<LlvmBodyLocalAdmission.Legacy convention=<LlvmLegacyConvention.AsyncResume /> /> />, localsPrepared: true, asyncBody: true)) { return <Result.Err error=c.diagnosticAt(offset: 0U64, msg: "async Mid LLVM emission failed") /> }
         return <Result.Ok value=() />
     }
 }

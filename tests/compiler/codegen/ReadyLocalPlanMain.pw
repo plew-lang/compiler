@@ -1,0 +1,83 @@
+// Appended to an exact Backend.pw source snapshot for private API controls.
+// No production declaration is rewritten or exposed for tests.
+use ./Frontend only { analyzeFrontendDeclarations, FrontendInput }
+use ./SourceAccess only { SourceAccess }
+extern(c) { fn LLVMGetAllocatedType(value~: LLVMValueRef) -> LLVMTypeRef }
+fn requireInternal[T](result: Result[T, CompileDiagnostic]) {
+    match result {
+        Result.Ok(value: _) => { panic "malformed private local admission accepted" }
+        Result.Err(error: val error) => { match error.failureDomain { FailureDomain.Internal => {} _ => { panic "wrong private local admission failure domain" } } }
+    }
+}
+fn main() {
+    val context = LLVMContextCreate()
+    val name = <CString.copied text="ready-private-controls" />
+    val module = LLVMModuleCreateWithNameInContext(name.ptr, context)
+    val otherModule = LLVMModuleCreateWithNameInContext(name.ptr, context)
+    val triple = LLVMGetDefaultTargetTriple()
+    val cpu = <CString.copied text="generic" />
+    val layout = plew_llvm_native_data_layout(cpu.ptr)
+    LLVMSetTarget(module, triple)
+    LLVMSetDataLayout(module, layout)
+    LLVMSetTarget(otherModule, triple)
+    LLVMSetDataLayout(otherModule, layout)
+    LLVMDisposeMessage(triple)
+    LLVMDisposeMessage(layout)
+    val builder = LLVMCreateBuilderInContext(context)
+    mut val backend = llvmContext(ctx: context, m: module, builder: builder)
+    mut val compiler = <Comp />
+    analyzeFrontendDeclarations(c: inout compiler, input: <FrontendInput.Text text="fn control() {{}}" path="ready-private.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
+    val globalOwner = 18446744073709551615U64
+    val bodyId = compiler.arena.registerBodyInstance(<BodyInstance fnIdx=globalOwner environment=<InstanceEnvironment /> />)
+    val canonical = compiler.mid.store(body: <MidBody bodyInstance=bodyId sourceFunction=globalOwner locals=[<MidLocalDecl typeTerm=0U64 sourceScope=0U64 isUnique=false isParameter=false isDropFlag=true />] blocks=[<MidBlock terminator=<MidTerminator.Return /> />] />)
+    if !compiler.mid.isWellFormed(body: canonical) { panic "malformed private test setup" }
+    val body = compiler.mid.bodies[canonical.body - 1U64]
+    val parameters: Array[LLVMTypeRef] = []
+    val signature = LLVMFunctionType(backend.voidty, arrayCPtr(parameters), 0U64, 0I32)
+    val function = LLVMAddFunction(module, name.ptr, signature)
+    backend.curFn = function
+    val admission = backend.prepareBodyLocalPlan(c: inout compiler, canonical: canonical, parameterCount: 0U64).unwrap()
+    val ready = <MidLlvmPrepared.Ready canonical=canonical abiParameterCount=0U64 localAdmission=admission />
+    backend.beginFnBody(fv: function)
+    if !backend.genLlvmPreparedMidBody(c: inout compiler, prepared: ready).unwrap() { panic "valid private local plan rejected" }
+    if backend.nLocals != 1U64 || LLVMGetIntTypeWidth(backend.locTy[0U64]) != 1U32 || plew_pointer_equal(LLVMGetAllocatedType(backend.locPtr[0U64]), backend.locTy[0U64]) == 0I32 { panic "retained local representation did not reach allocation" }
+    requireInternal(result: backend.genLlvmPreparedMidBody(c: inout compiler, prepared: <MidLlvmPrepared.Ready canonical=<MidCanonicalBody body=0U64 /> abiParameterCount=0U64 localAdmission=admission />))
+    requireInternal(result: backend.genLlvmPreparedMidBody(c: inout compiler, prepared: <MidLlvmPrepared.Ready canonical=<MidCanonicalBody body=compiler.mid.bodies.count() + 1U64 /> abiParameterCount=0U64 localAdmission=admission />))
+    requireInternal(result: backend.genLlvmPreparedMidBody(c: inout compiler, prepared: ready, localsPrepared: true))
+    requireInternal(result: backend.genLlvmPreparedMidBody(c: inout compiler, prepared: ready, abiParameterStart: 1U64))
+    requireInternal(result: backend.genLlvmPreparedMidBody(c: inout compiler, prepared: ready, abiParameterValues: [LLVMConstInt(backend.i64ty, 0U64, 0I32)]))
+    requireInternal(result: backend.genLlvmPreparedMidBody(c: inout compiler, prepared: ready, closureBodyId: 1U64))
+    requireInternal(result: backend.genLlvmPreparedMidBody(c: inout compiler, prepared: ready, asyncBody: true))
+    requireInternal(result: backend.midPrepareCanonicalLocals(c: inout compiler, body: body, initializeParameters: false))
+    val controlName = compiler.internBytes(s: "control")
+    val control = compiler.arena.firstFunctionNamed(nameId: controlName.nameId)
+    if control >= compiler.arena.functionCount() { panic "missing private control declaration" }
+    val otherBodyId = compiler.arena.registerBodyInstance(<BodyInstance fnIdx=control environment=<InstanceEnvironment /> />)
+    compiler.arena.setBodySignature(bodyId: otherBodyId, parameters: [], passings: [], result: 0U64, receiverPassing: <CallReceiverPassing.None />)
+    val otherBody = compiler.mid.store(body: <MidBody bodyInstance=otherBodyId sourceFunction=control locals=[<MidLocalDecl typeTerm=0U64 sourceScope=0U64 isUnique=false isParameter=false isDropFlag=true />] blocks=[<MidBlock terminator=<MidTerminator.Return /> />] />)
+    requireInternal(result: backend.validateBodyLocalAdmission(canonical: canonical, body: compiler.mid.bodies[otherBody.body - 1U64]))
+    val otherCanonical = compiler.mid.store(body: <MidBody bodyInstance=bodyId sourceFunction=globalOwner blocks=[<MidBlock terminator=<MidTerminator.Return /> />] />)
+    requireInternal(result: backend.genLlvmPreparedMidBody(c: inout compiler, prepared: <MidLlvmPrepared.Ready canonical=otherCanonical abiParameterCount=0U64 localAdmission=admission />))
+    requireInternal(result: backend.genLlvmPreparedMidBody(c: inout compiler, prepared: <MidLlvmPrepared.Ready canonical=canonical abiParameterCount=0U64 localAdmission=<LlvmBodyLocalAdmission.Planned planId=backend.bodyLocalPlans.count() + 1U64 /> />))
+    val otherFunction = LLVMAddFunction(otherModule, name.ptr, signature)
+    backend.curFn = otherFunction
+    requireInternal(result: backend.prepareBodyLocalPlan(c: inout compiler, canonical: canonical, parameterCount: 0U64))
+    requireInternal(result: backend.genLlvmPreparedMidBody(c: inout compiler, prepared: ready))
+    val wrongFunction = LLVMAddFunction(module, name.ptr, backend.mainFunctionType())
+    backend.curFn = wrongFunction
+    requireInternal(result: backend.prepareBodyLocalPlan(c: inout compiler, canonical: canonical, parameterCount: 0U64))
+    requireInternal(result: backend.genLlvmPreparedMidBody(c: inout compiler, prepared: ready))
+    backend.curFn = function
+    // Exercise the real raw compatibility guards; no malformed LLVM is emitted.
+    val abi = backend.saveValueAbi(signature: <LlvmLogicalSignature convention=<LlvmValueConvention.Body /> parameters=[] result=backend.voidty resultTerm=0U64 />, ownerBody: bodyId)
+    val normalAbi = abi.unwrap()
+    val normalFunction = backend.declarePlannedBodyFunction(name: name.ptr, abiId: normalAbi, bodyId: bodyId).unwrap()
+    requireInternal(result: backend.callLegacyValueFunction(signature: signature, function: normalFunction, arguments: []))
+    requireInternal(result: backend.callLegacyValueFunction(signature: signature, function: normalFunction, arguments: [], bodyAdapter: <Optional.Some v=<LlvmBodyCompatibility.ExposedEntry bodyId=bodyId + 1U64 /> />))
+    requireInternal(result: backend.legacyValueParameter(function: normalFunction, index: 0U64))
+    LLVMDisposeBuilder(builder)
+    LLVMDisposeModule(otherModule)
+    LLVMDisposeModule(module)
+    LLVMContextDispose(context)
+    write(s: "ok\n")
+}

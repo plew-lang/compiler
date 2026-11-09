@@ -1,0 +1,13 @@
+// Async frame admission must not read a previous normal body's emission plan.
+use @Std/Io only { print }
+use @Std/Async only { sleep }
+fn next(value: I64) -> I64 { return value + 1I64 }
+async fn delayed(value: I64) -> Promise[I64] {
+    val adjusted = next(value: value)
+    await sleep(ms: 1)
+    return next(value: adjusted)
+}
+async fn main() {
+    val result = await delayed(value: 20I64)
+    print(result)
+}

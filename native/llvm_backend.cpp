@@ -175,6 +175,10 @@ extern "C" uint64_t plew_llvm_context_identity(LLVMContextRef context) {
 
 // These inspect live LLVM objects only. They do not establish source lifetime,
 // alias, or ownership facts; those belong to the verified Mid storage plan.
+extern "C" int plew_llvm_function_matches(LLVMModuleRef module, LLVMValueRef function, LLVMTypeRef signature) {
+    return module && function && signature && LLVMIsAFunction(function) &&
+           LLVMGetGlobalParent(function) == module && LLVMGlobalGetValueType(function) == signature;
+}
 extern "C" int plew_llvm_value_scope_matches(LLVMValueRef value, LLVMValueRef function) {
     if (!value || !function || !LLVMIsAFunction(function)) return 0;
     if (LLVMGetTypeContext(LLVMTypeOf(value)) != LLVMGetTypeContext(LLVMTypeOf(function))) return 0;

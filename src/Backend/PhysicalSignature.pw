@@ -5,6 +5,7 @@ use ../Diag only { CompileDiagnostic, DiagnosticLocation, FailureDomain }
 use @Std/Ffi only { stringFromCString, arrayCPtr }
 
 extern(c) {
+    fn plew_llvm_function_matches(module~: LLVMModuleRef, function~: LLVMValueRef, signature~: LLVMTypeRef) -> I32
     fn plew_llvm_value_scope_matches(value~: LLVMValueRef, function~: LLVMValueRef) -> I32
     fn plew_llvm_home_type_matches(address~: LLVMValueRef, type~: LLVMTypeRef) -> I32
     fn LLVMTypeOf(value~: LLVMValueRef) -> LLVMTypeRef
@@ -191,6 +192,11 @@ pub impl LlvmSignatureScope {
         if plew_llvm_module_identity(self.module) != self.moduleIdentity || plew_llvm_context_identity(LLVMGetModuleContext(self.module)) != self.contextIdentity || stringFromCString(LLVMGetTarget(self.module)) != self.triple || stringFromCString(LLVMGetDataLayoutStr(self.module)) != self.layout {
             return <Result.Err error=signatureFailure(message: "foreign or stale module/context/target") />
         }
+        return <Result.Ok value=() />
+    }
+
+    fn validateFunction(function: LLVMValueRef, signature: LLVMTypeRef) -> Result[(), CompileDiagnostic] {
+        if !self.ownsType(type: signature) || plew_llvm_function_matches(self.module, function, signature) == 0I32 { return <Result.Err error=signatureFailure(message: "foreign entry or native signature mismatch") /> }
         return <Result.Ok value=() />
     }
 

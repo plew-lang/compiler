@@ -104,6 +104,10 @@ fn main() {
     val otherFunction = plew_test_signature_function(module, aggregate)
     val foreignFunction = plew_test_signature_function(foreignModule, plew_test_signature_type(foreignContext, 3U32))
     val otherModuleFunction = plew_test_signature_function(otherModule, aggregate)
+    scope.validateFunction(function: function, signature: plan.functionType).unwrap()
+    if scope.validateFunction(function: function, signature: pointerPlan.functionType).isOk() { panic "wrong native entry signature accepted" }
+    if scope.validateFunction(function: otherModuleFunction, signature: plan.functionType).isOk() { panic "foreign native entry module accepted" }
+    if scope.validateFunction(function: foreignFunction, signature: plan.functionType).isOk() { panic "foreign native entry context accepted" }
     val inputs = <LlvmInputScope moduleIdentity=plan.moduleIdentity contextIdentity=plan.contextIdentity revision=1U64 bodyIdentity=7U64 signature=plan.logicalSignature />
     scope.validateInputs(scope: inputs, bodyIdentity: 7U64, signature: plan.logicalSignature).unwrap()
     if scope.validateInputs(scope: inputs, bodyIdentity: 8U64, signature: plan.logicalSignature).isOk() { panic "wrong input body accepted" }

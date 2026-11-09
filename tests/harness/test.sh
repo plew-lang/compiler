@@ -269,6 +269,16 @@ fi
 # Mid must retain the semantic reason when an assignment target is not a
 # physical place. This gate is source-structural while fresh candidates cannot
 # yet collect the resulting coverage rows.
+if python3 -B ./tests/compiler/architecture/test-ready-local-plan.py; then
+    :
+else
+    fail=$((fail + 1)); failed="$failed ready-local-plan-owner"
+fi
+if PLEWC="$PLEWC" LLVM_CONFIG="$LC" python3 -B ./tests/compiler/codegen/test-ready-local-plan.py; then
+    :
+else
+    fail=$((fail + 1)); failed="$failed ready-local-plan-private"
+fi
 if python3 -B ./tests/compiler/architecture/test-typed-value-roundtrip.py; then
     pass=$((pass + 1))
 else

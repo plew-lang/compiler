@@ -71,7 +71,7 @@ pub impl LlvmCtx {
             val prepared = (try self.prepareSyntheticMidBody(c: inout c, bodyId: member.adapterBodyId, fnIdx: body.fnIdx, parameterCount: member.parameterTypes.count() + 1U64))
             match prepared {
                 MidLlvmPrepared.None => { return <Result.Err error=c.diagnosticAt(offset: c.arena.functionAt(index: body.fnIdx).nameStart, msg: "LLVM backend: existential witness could not be prepared as Mid IR") /> }
-                MidLlvmPrepared.Ready(canonical: _, abiParameterCount: _) => {
+                MidLlvmPrepared.Ready(canonical: _, abiParameterCount: _, localAdmission: _) => {
                     self.beginFnBody(fv: witness.function)
                     // The only erased ABI adaptation: a read receiver is a
                     // borrowed load from its box; inout keeps the same address.
@@ -360,7 +360,7 @@ pub impl LlvmCtx {
         }
         val preparedMid = (try self.prepareCanonicalForLlvm(c: inout c, bodyId: bodyId, fnIdx: fi, parameterCount: abiParameterCount))
         val midReady = match preparedMid {
-            MidLlvmPrepared.Ready(canonical: _, abiParameterCount: _) => { give true }
+            MidLlvmPrepared.Ready(canonical: _, abiParameterCount: _, localAdmission: _) => { give true }
             _ => { give false }
         }
         if !midReady {

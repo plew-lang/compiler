@@ -74,8 +74,32 @@ pub enum MidLlvmPreflight {
 // travels with the body rather than being supplied again by emission callers.
 enum MidLlvmPrepared {
     None
-    Ready(canonical: MidCanonicalBody, abiParameterCount: U64)
+    Ready(canonical: MidCanonicalBody, abiParameterCount: U64, localAdmission: LlvmBodyLocalAdmission)
 }
+
+// Local representation is retained once at admission. Legacy here is an
+// explicit not-yet-migrated physical-to-local adapter, not a normal fallback.
+enum LlvmBodyLocalAdmission { Planned(planId: U64) Legacy(convention: LlvmLegacyConvention) }
+enum LlvmBodyLocalEntry { Normal(abiId: U64) ProgramMain GlobalInitializer }
+struct LlvmPreparedLocal {
+    pub val type: LLVMTypeRef
+    pub val storageType: LLVMTypeRef
+    pub val mode: LlvmParameterMode
+}
+pub impl LlvmPreparedLocal { factory }
+struct LlvmBodyLocalPlan {
+    pub val canonicalBody: U64
+    pub val bodyIdentity: U64
+    pub val function: U64
+    pub val signature: LLVMTypeRef
+    pub val moduleIdentity: U64
+    pub val contextIdentity: U64
+    pub val localStart: U64
+    pub val localCount: U64
+    pub val revision: U64
+    pub val entry: LlvmBodyLocalEntry
+}
+pub impl LlvmBodyLocalPlan { factory }
 
 // These are frontend/ABI admission facts, separate from a Mid or LLVM
 // preflight failure.  A body can report more than one reason; coverage uses
@@ -221,6 +245,9 @@ struct LlvmCtx {
     pub mut val valueAbiFunctions: Dictionary[U64, U64] = [:]
     pub mut val valueAbiParameters: Array[LlvmValueParameter] = []
     mut val valueAbiScope: Optional[LlvmSignatureScope] = <Optional.None />
+    mut val bodyLocalPlans: Array[LlvmBodyLocalPlan] = []
+    mut val preparedLocals: Array[LlvmPreparedLocal] = []
+    mut val bodyLocalAdmission: Optional[LlvmBodyLocalAdmission] = <Optional.None />
 
     // A diagnostic-only scalar table.  These three columns have identical
     // length and are appended solely by `recordMidCoverage`; avoiding a rich

@@ -158,3 +158,43 @@ preparation cost. The current Home byval-argument index lookup uses a parameter
 scan; account for its asymptotics and target-scope checking at the W2 cost
 boundary. Prototype adoption, W3/W4, formal timing/fixed point, final suites,
 ASan/LSan and promotion remain unproven. No task is closed by this checkpoint.
+
+## Retained Ready Plan Execution
+
+The neutral read-only plan review at `ce9dc79c` selected four bounded increments
+inside checkpoint 3, each closing its actual admission-to-emission consumers:
+
+1. Normal/main/global Ready retains exact entry and body-local LLVM value type,
+   storage type and parameter mode in flat typed pools. Local allocation,
+   normal binding and subsequent local type reads consume the retained rows.
+2. Closure ordinary/capture bindings and environment-drop expansion retain
+   explicit field-to-local mappings and boxed/value storage distinctions.
+3. Witness bindings retain the selected erased receiver load/address conversion
+   and ordinary lane mapping.
+4. Async frame/resume uses the same retained local representation, followed by
+   removal of raw offset/vector/storage overrides and Ready construction bypasses.
+
+A legacy physical lane remains explicitly legacy while its body-local adapter
+is migrated; it must not falsely claim a completed semantic lane. Physical
+indirect/glue calls and async/C/publication transport migration remain under
+checkpoints 4/5. The stored plan must reach final allocation/binding and later
+local reads; adding unconsumed metadata cannot complete an increment.
+
+The first normal/main/global increment is independently accepted; the other
+three remain open. [Retained local-plan evidence](../../../evidence/performance-regression-history/value-passing-implementation/w2-protocol/ready-normal-local-plan.json)
+records source review repairs for emission-plan leakage into async admission,
+missing native entry checks, override bypass and malformed canonical bounds.
+A test-only exact source snapshot plus appended Backend main exercises real
+private producer/consumer APIs without exposing them or rewriting their bodies.
+It checks a live retained local alloca and Internal rejection of malformed
+body/canonical/entry/override inputs. Standard build, fresh CLI14/internal5,
+raw/optimized ABI, split globals, C expose/callback and native controls passed.
+Neutral review reconciled 470 distinct path/hash references, including all 191
+source/control inputs with the build and 183 snapshot inputs; it independently
+reran the private native harness and mixed/async CLI controls. No new source
+semantic decision was introduced.
+
+Ready's remaining parameter-count field belongs to unmigrated legacy binding
+adapters; it does not select Planned binding. Remove this compatibility data
+with the remaining raw overrides at the whole-checkpoint boundary. Preparation
+cost and actual guaranteed-address forwarding remain unproven.
