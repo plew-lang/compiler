@@ -1112,3 +1112,23 @@ and the four finite API tasks. No confirmed contract violation or mandatory
 extra sealing task was found. Adopted: correct the ownership record, retain the
 unfinished interface producer/consumer guarantee, resume within com-amjl. This
 is not execution revalidation or task/phase completion.
+
+#### Resumed interface admission localization
+
+[Six fixed-input check probes](../../../evidence/rejection-domains/diagnostic-domain-implementation/interface-admission-localization.json)
+reuse the saved associated-row candidate against unchanged product source.
+The single-condition original fails at the selected-call evidence boundary;
+replacing only `value.inspect()` with `45I64` succeeds. The nested-condition
+original and that replacement both fail with the lexical-dependency diagnostic,
+while declaration-only versions of both inputs succeed. Thus the latter is
+triggered by using the existential contract, not unconditional declaration-only
+processing. The two failures must not be collapsed into a single reader defect.
+
+Next source anchors are `Check/Obligations.pw`'s
+`checkSelectedCallConstraintBoundary` / `prepareCallTemplateConstraints` and
+`Check/InterfaceEvidence.pw`'s `declarationTypeDependencies`, together with
+`scopedWitnessDependencies`. Trace exact authored subject/proof and scope at
+these boundaries before changing them. Do not admit a normalized subject by
+guessing or weaken the foreign-binder gate. These six checks are diagnostic
+localization only: no product change, new direct reader RED, execution coverage
+or formal timing is claimed.
