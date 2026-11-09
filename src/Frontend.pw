@@ -2583,7 +2583,6 @@ struct SourceBodyData {
     mut val bindings: Array[SourceBindingFact] = []
     mut val bindingKeys: Dictionary[U64, U64] = [:]
     // Navigation to the same sealed rows, not another mutability authority.
-    mut val bindingDeclarations: Dictionary[U64, U64] = [:]
     mut val statements: Array[SemanticExpressionCompletion] = []
     mut val statementKeys: Dictionary[U64, U64] = [:]
     mut val transfers: Array[SourceTransferFact] = []
@@ -2719,6 +2718,44 @@ pub struct SourceBindingFact {
 }
 impl SourceBindingFact { factory }
 
+// Navigation only: a declaration may have several accepted lowering rows
+// (for example a shared or-pattern body). Keep each reader's exact row order.
+// Mutability and types remain authoritative only in the sealed SourceFacts.
+pub struct SourceBindingStorageIndex {
+    val session: U64
+    mut val declarations: Dictionary[U64, Bool] = [:]
+    mut val readerRows: Dictionary[U64, Array[U64]] = [:]
+}
+impl SourceBindingStorageIndex { factory }
+pub impl SourceBindingStorageIndex {
+    factory empty(session: U64) { return <SourceBindingStorageIndex session=session /> }
+    fn count() -> U64 { return self.declarations.count() }
+    fn requiresOrigin(declarationTarget: U64) -> Bool { return self.declarations.contains(key: declarationTarget) }
+    fn contains(origin: SourceBindingOrigin, declarationTarget: U64) -> Bool {
+        if origin.session != self.session || origin.readerIndex == 0U64 || origin.bindingIndex == 0U64 || !self.requiresOrigin(declarationTarget: declarationTarget) { return false }
+        match self.readerRows.get(key: origin.readerIndex) {
+            Optional.None => { return false }
+            Optional.Some(v: val rows) => { return origin.bindingIndex <= rows.count() && rows[origin.bindingIndex - 1U64] == declarationTarget }
+        }
+    }
+}
+impl SourceBindingStorageIndex {
+    inout fn append(facts: PreparedSemanticFacts, excludingDeclaration: U64) -> Result[(), CompileDiagnostic] {
+        if facts.session != self.session { return <Result.Err error=<CompileDiagnostic location=<DiagnosticLocation.Line line=0I64 /> message="internal error: foreign source binding storage index" /> /> }
+        val reader = facts.readerIndex + 1U64
+        val stored = self.readerRows.contains(key: reader)
+        mut val rows: Array[U64] = []
+        for binding in facts.payload->bindings {
+            if !stored { rows.append(binding.declarationTarget) }
+            if binding.declarationTarget != excludingDeclaration { self.declarations[binding.declarationTarget] = true }
+        }
+        // Register once per reader, not once per row through a CoW dictionary.
+        // Excluded globals still occupy their original binding row positions.
+        if !stored { self.readerRows[reader] = rows }
+        return <Result.Ok value=() />
+    }
+}
+
 // This component seals source types, bindings, regions and aggregate plans;
 // it is not a whole CheckedBody or permission to execute an instance.
 pub struct PreparedSemanticFacts {
@@ -2738,31 +2775,11 @@ pub impl PreparedSemanticFacts {
     fn globalAddress(exprId: U64) -> Optional[SemanticGlobalAddress] { return self.payload->globalAddresses.get(key: exprId) }
     fn bindingNeedsCaptureCell(sourceFunction: U64, bindingTarget: U64) -> Bool { return sourceBindingNeedsCaptureCell(closures: self.payload->closurePlans, sourceFunction: sourceFunction, bindingTarget: bindingTarget) }
     fn binding(stmtId: U64) -> Optional[SourceBindingFact] { return readSourceRow(rows: self.payload->bindings, keys: self.payload->bindingKeys, key: stmtId) }
-    fn appendBindingStorageOrigins(into: inout Dictionary[U64, SourceBindingOrigin], excludingDeclaration: U64 = 0U64) -> Result[(), CompileDiagnostic] {
-        mut val index = 0U64
-        while index < self.payload->bindings.count() {
-            val fact = self.payload->bindings[index]
-            if fact.declarationTarget != excludingDeclaration {
-                val origin = <SourceBindingOrigin session=self.session readerIndex=self.readerIndex + 1U64 bindingIndex=index + 1U64 />
-                match into.get(key: fact.declarationTarget) {
-                    Optional.Some(v: val previous) => {
-                        if !previous.matches(origin: origin) { return <Result.Err error=<CompileDiagnostic location=<DiagnosticLocation.Line line=0I64 /> message="internal error: conflicting source binding storage origins" /> /> }
-                    }
-                    Optional.None => { into[fact.declarationTarget] = origin }
-                }
-            }
-            index += 1U64
-        }
-        return <Result.Ok value=() />
+    fn appendBindingStorageOrigins(into: inout SourceBindingStorageIndex, excludingDeclaration: U64 = 0U64) -> Result[(), CompileDiagnostic] {
+        return into.append(facts: self, excludingDeclaration: excludingDeclaration)
     }
     fn bindingStorage(stmtId: U64) -> Optional[SourceBindingOrigin] {
         match self.payload->bindingKeys.get(key: stmtId) {
-            Optional.Some(v: val index) => { return <Optional.Some v=<SourceBindingOrigin session=self.session readerIndex=self.readerIndex + 1U64 bindingIndex=index + 1U64 /> /> }
-            Optional.None => { return <Optional.None /> }
-        }
-    }
-    fn bindingStorageForDeclaration(declarationTarget: U64) -> Optional[SourceBindingOrigin] {
-        match self.payload->bindingDeclarations.get(key: declarationTarget) {
             Optional.Some(v: val index) => { return <Optional.Some v=<SourceBindingOrigin session=self.session readerIndex=self.readerIndex + 1U64 bindingIndex=index + 1U64 /> /> }
             Optional.None => { return <Optional.None /> }
         }

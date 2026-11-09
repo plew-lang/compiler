@@ -1,9 +1,8 @@
 // Source rows need not all become locals: a closed continuation may omit them.
 // Preparing origin expectations must not force a later global initializer.
 use @Std/Io only { print }
-use /Frontend only { Comp, FrontendInput, analyzeFrontendDeclarations, finalizeFrontendExecutables }
+use /Frontend only { Comp, FrontendInput, analyzeFrontendDeclarations, finalizeFrontendExecutables, SourceBindingStorageIndex }
 use /SourceAccess only { SourceAccess }
-use /Ir only { SourceBindingOrigin }
 use /Mid/Build only { MidFunctionTemplates, MidBuildError }
 use /Mid/Program only { MidExecutableRequests }
 
@@ -19,7 +18,7 @@ fn main() {
     val mainBody = compiler.mid.bodies[main.canonical.body - 1U64]
     val mainFunction = compiler.arena.bodyInstanceAt(index: instance - 1U64).fnIdx
     val facts = compiler.preparedFunctionSemanticFacts(fnIdx: mainFunction).unwrap()
-    mut val allowed: Dictionary[U64, SourceBindingOrigin] = [:]
+    mut val allowed = <SourceBindingStorageIndex.empty session=compiler.sourceFactSession() />
     facts.appendBindingStorageOrigins(into: inout allowed).unwrap()
     mut val authored = 0U64
     mut val index = 0U64

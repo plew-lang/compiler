@@ -22,6 +22,13 @@ reuse their sealed readers; composite global initialization uses published
 global readers; registered source-free adapters remain explicit. Source lookup
 failure cannot silently become source-free admission.
 
+A source declaration target need not identify one binding row. Shared or-pattern
+bodies can be lowered once per alternative, retaining the same source declaration
+but producing distinct accepted statement rows. Required declarations and allowed
+reader/row identities are therefore separate navigation sets; keep every row's
+original position rather than selecting a last or canonical row. This navigation
+index stores no alternative mutability or type decision.
+
 At this production boundary, each realized authored local must match its
 accepted declaration and origin. Preparation retains the immutable built local
 prefix and verifies its declaration/origin correspondence after transformations;

@@ -1,7 +1,6 @@
 // Required source origins at the production build/preparation boundary.
 // These indexes project sealed facts, not a second source or type authority.
-use ../Frontend only { Comp }
-use ../Ir only { SourceBindingOrigin }
+use ../Frontend only { Comp, SourceBindingStorageIndex }
 use ../Diag only { CompileDiagnostic, DiagnosticLocation }
 use ./Build only { MidBodySource }
 use ./Ir only { MidCanonicalArena, MidCanonicalBody }
@@ -11,7 +10,7 @@ pub struct MidSourceBindings {
     val session: U64
     val bodyId: U64
     val sourceFunction: U64
-    val origins: Dictionary[U64, SourceBindingOrigin]
+    val origins: SourceBindingStorageIndex
 }
 impl MidSourceBindings { factory }
 
@@ -32,7 +31,7 @@ pub impl MidSourceBindings {
     assoc fn forAdmission(c: inout Comp, bodyId: U64, admission: MidBodySource) -> Result[MidSourceBindings, CompileDiagnostic] {
         if bodyId == 0U64 || bodyId > c.arena.bodyInstanceCount() { return <Result.Err error=<CompileDiagnostic location=<DiagnosticLocation.Line line=0I64 /> message="internal error: binding origins require a registered body" /> /> }
         val function = c.arena.bodyInstanceAt(index: bodyId - 1U64).fnIdx
-        mut val origins: Dictionary[U64, SourceBindingOrigin] = [:]
+        mut val origins = <SourceBindingStorageIndex.empty session=c.sourceFactSession() />
         match admission {
             MidBodySource.Unknown => { return <Result.Err error=<CompileDiagnostic location=<DiagnosticLocation.Line line=0I64 /> message="internal error: successful Mid build lacks source admission" /> /> }
             MidBodySource.Authored(facts: val facts) => {
@@ -57,14 +56,9 @@ pub impl MidSourceBindings {
         mut val index = 0U64
         while index < built.locals.len {
             val local = arena.locals[built.locals.start + index]
-            match self.origins.get(key: local.sourceNameStart) {
-                Optional.Some(v: val expected) => {
-                    if !expected.matches(origin: local.sourceBinding) || local.isParameter || local.isBorrowed || local.isInout || local.isDropFlag || local.isReturnPlace { return <Result.Err error=<MidVerification error=<MidVerifyError.InvalidBindingOrigin /> local=index /> /> }
-                }
-                Optional.None => {
-                    if !local.sourceBinding.isUnproved() { return <Result.Err error=<MidVerification error=<MidVerifyError.InvalidBindingOrigin /> local=index /> /> }
-                }
-            }
+            if self.origins.requiresOrigin(declarationTarget: local.sourceNameStart) {
+                if !self.origins.contains(origin: local.sourceBinding, declarationTarget: local.sourceNameStart) || local.isParameter || local.isBorrowed || local.isInout || local.isDropFlag || local.isReturnPlace { return <Result.Err error=<MidVerification error=<MidVerifyError.InvalidBindingOrigin /> local=index /> /> }
+            } else if !local.sourceBinding.isUnproved() { return <Result.Err error=<MidVerification error=<MidVerifyError.InvalidBindingOrigin /> local=index /> /> }
             index += 1U64
         }
         // The immutable input already stores each actual lowering occurrence.

@@ -1,0 +1,153 @@
+// One authored or-arm body is lowered once per alternative. Its declaration
+// target is shared, while each accepted statement retains a distinct row.
+use @Std/Io only { print }
+use /Frontend only { Comp, FrontendInput, analyzeFrontendDeclarations, finalizeFrontendExecutables, SourceBindingStorageIndex }
+use /SourceAccess only { SourceAccess }
+use /Ir only { SourceBindingOrigin }
+use /Mid/Build only { MidFunctionTemplates, MidBuildError }
+use /Mid/Program only { MidExecutableRequests, MidProgramError }
+use /Mid/Prepare only { MidPreparationError }
+use /Mid/Verify only { MidVerifyError }
+use /Mid/Ir only { MidLocalDecl, MidBodyNode, MidRange, MidCanonicalBody }
+use /Mid/Bindings only { MidSourceBindings }
+
+fn scenario(corruption: U64) {
+    mut val compiler = <Comp />
+    analyzeFrontendDeclarations(c: inout compiler, input: <FrontendInput.Text path="shared-arm-origins.pw"
+        text="enum Choice {{ A B }} fn main() {{ val choice = <Choice.A /> match choice {{ Choice.A | Choice.B => {{ val local = 1I64 mut val other = 2I64 }} }} }}" />, sources: <SourceAccess />).unwrap()
+    finalizeFrontendExecutables(c: inout compiler).unwrap()
+    val instance = compiler.monoWork.bodyAt(index: 0U64)
+    val function = compiler.arena.bodyInstanceAt(index: instance - 1U64).fnIdx
+    val facts = compiler.preparedFunctionSemanticFacts(fnIdx: function).unwrap()
+    mut val seen: Dictionary[U64, SourceBindingOrigin] = [:]
+    mut val repeatedTarget = 0U64
+    mut val firstRow = <SourceBindingOrigin />
+    mut val secondRow = <SourceBindingOrigin />
+    mut val foreignTarget = 0U64
+    mut val foreignRow = <SourceBindingOrigin />
+    mut val statement = 0U64
+    while statement < compiler.arena.stmts.count() {
+        match facts.binding(stmtId: statement) {
+            Optional.None => {}
+            Optional.Some(v: val binding) => {
+                val origin = facts.bindingStorage(stmtId: statement).unwrap()
+                match seen.get(key: binding.declarationTarget) {
+                    Optional.Some(v: val before) => {
+                        if !before.matches(origin: origin) {
+                            repeatedTarget = binding.declarationTarget
+                            firstRow = before
+                            secondRow = origin
+                        }
+                    }
+                    Optional.None => {
+                        seen[binding.declarationTarget] = origin
+                        if foreignTarget == 0U64 { foreignTarget = binding.declarationTarget foreignRow = origin }
+                    }
+                }
+            }
+        }
+        statement += 1U64
+    }
+    if repeatedTarget == 0U64 || firstRow.matches(origin: secondRow) || foreignTarget == repeatedTarget { panic("shared-arm source row precondition missing") }
+    mut val allowed = <SourceBindingStorageIndex.empty session=compiler.sourceFactSession() />
+    facts.appendBindingStorageOrigins(into: inout allowed).unwrap()
+    if !allowed.contains(origin: firstRow, declarationTarget: repeatedTarget) || !allowed.contains(origin: secondRow, declarationTarget: repeatedTarget) { panic("shared-arm index discarded a row") }
+    if allowed.contains(origin: foreignRow, declarationTarget: repeatedTarget) { panic("shared-arm index accepted another declaration") }
+    val foreignSession = <SourceBindingOrigin session=firstRow.session + 1U64 readerIndex=firstRow.readerIndex bindingIndex=firstRow.bindingIndex />
+    val outside = <SourceBindingOrigin session=firstRow.session readerIndex=firstRow.readerIndex bindingIndex=18446744073709551615U64 />
+    if allowed.contains(origin: foreignSession, declarationTarget: repeatedTarget) || allowed.contains(origin: outside, declarationTarget: repeatedTarget) { panic("shared-arm index accepted invalid coordinates") }
+    mut val foreignIndex = <SourceBindingStorageIndex.empty session=compiler.sourceFactSession() + 1U64 />
+    if facts.appendBindingStorageOrigins(into: inout foreignIndex).isOk() { panic("shared-arm rows entered another session") }
+    mut val templates = <MidFunctionTemplates />
+    val built = templates.body(c: inout compiler, function: function)
+    match built.error { MidBuildError.None => {} _ => { panic("shared-arm source build failed") } }
+    val body = compiler.mid.bodies[built.canonical.body - 1U64]
+    mut val realized = 0U64
+    mut val firstRealized = false
+    mut val secondRealized = false
+    mut val index = 0U64
+    while index < body.locals.len {
+        val local = compiler.mid.locals[body.locals.start + index]
+        if !local.sourceBinding.isUnproved() {
+            facts.bindingStorageFact(origin: local.sourceBinding, declarationTarget: local.sourceNameStart).unwrap()
+        }
+        if local.sourceNameStart == repeatedTarget {
+            realized += 1U64
+            if firstRow.matches(origin: local.sourceBinding) { firstRealized = true }
+            if secondRow.matches(origin: local.sourceBinding) { secondRealized = true }
+            if corruption != 0U64 && realized == 1U64 {
+                val replacement = if corruption == 1U64 { give <SourceBindingOrigin /> } else { give foreignRow }
+                compiler.mid.locals.set(i: body.locals.start + index, value: <MidLocalDecl
+                    typeTerm=local.typeTerm typeRecipe=local.typeRecipe sourceScope=local.sourceScope
+                    isUnique=local.isUnique isParameter=local.isParameter isBorrowed=local.isBorrowed
+                    isInout=local.isInout isCaptureCell=local.isCaptureCell ownsAtEntry=local.ownsAtEntry
+                    isDropFlag=local.isDropFlag isReturnPlace=local.isReturnPlace preparedExpr=local.preparedExpr
+                    sourceNameStart=local.sourceNameStart sourceBinding=replacement />)
+            }
+        }
+        index += 1U64
+    }
+    if realized != 2U64 || !firstRealized || !secondRealized { panic("shared-arm lowering lost a source occurrence") }
+    mut val requests = <MidExecutableRequests />
+    match requests.request(c: inout compiler, templates: inout templates, bodyId: instance) {
+        Result.Ok(value: val executable) => {
+            if corruption != 0U64 { panic("shared-arm missing or foreign origin accepted") }
+            val output = compiler.mid.bodies[executable.canonical.body - 1U64]
+            index = 0U64
+            while index < body.locals.len {
+                val before = compiler.mid.locals[body.locals.start + index]
+                val after = compiler.mid.locals[output.locals.start + index]
+                if before.sourceNameStart != after.sourceNameStart || !before.sourceBinding.matches(origin: after.sourceBinding) { panic("shared-arm exact row was not retained") }
+                index += 1U64
+            }
+            val sources = MidSourceBindings.forAdmission(c: inout compiler, bodyId: instance, admission: built.sourceAdmission).unwrap()
+            val retained = sources.checkBuilt(arena: compiler.mid, session: compiler.sourceFactSession(), body: built.canonical).unwrap()
+            val changedStart = compiler.mid.locals.count()
+            mut val changed = false
+            index = 0U64
+            while index < output.locals.len {
+                val local = compiler.mid.locals[output.locals.start + index]
+                if !changed && local.sourceNameStart == repeatedTarget {
+                    val replacement = if firstRow.matches(origin: local.sourceBinding) { give secondRow } else { give firstRow }
+                    // Both rows remain accepted for this declaration, but a
+                    // prepared occurrence cannot silently change which it uses.
+                    if !allowed.contains(origin: replacement, declarationTarget: repeatedTarget) { panic("same-target row-swap precondition missing") }
+                    compiler.mid.locals.append(<MidLocalDecl typeTerm=local.typeTerm typeRecipe=local.typeRecipe sourceScope=local.sourceScope
+                        isUnique=local.isUnique isParameter=local.isParameter isBorrowed=local.isBorrowed isInout=local.isInout
+                        isCaptureCell=local.isCaptureCell ownsAtEntry=local.ownsAtEntry isDropFlag=local.isDropFlag isReturnPlace=local.isReturnPlace
+                        preparedExpr=local.preparedExpr sourceNameStart=local.sourceNameStart sourceBinding=replacement />)
+                    changed = true
+                } else { compiler.mid.locals.append(local) }
+                index += 1U64
+            }
+            if !changed { panic("same-target row swap not exercised") }
+            compiler.mid.bodies.append(<MidBodyNode bodyInstance=output.bodyInstance sourceFunction=output.sourceFunction
+                locals=<MidRange start=changedStart len=output.locals.len /> scopes=output.scopes blocks=output.blocks entry=output.entry />)
+            match retained.checkOutput(arena: compiler.mid, session: compiler.sourceFactSession(), body: <MidCanonicalBody body=compiler.mid.bodies.count() />).error {
+                MidVerifyError.InvalidBindingOrigin => {}
+                _ => { panic("retained prefix accepted a different row for the same declaration") }
+            }
+        }
+        Result.Err(error: val error) => {
+            if corruption == 0U64 { panic("production admission rejected valid shared-arm bindings") }
+            match error {
+                MidProgramError.Preparation(bodyId: _, error: val error) => {
+                    match error {
+                        MidPreparationError.VerificationFailed(body: _, verification: val verification) => {
+                            match verification.error { MidVerifyError.InvalidBindingOrigin => {} _ => { panic("wrong shared-arm verification reason") } }
+                        }
+                        _ => { panic("wrong shared-arm preparation failure") }
+                    }
+                }
+                _ => { panic("shared-arm corruption did not reach origin verifier") }
+            }
+        }
+    }
+}
+
+fn main() {
+    scenario(corruption: 0U64)
+    scenario(corruption: 1U64)
+    scenario(corruption: 2U64)
+    print("shared-arm-binding-origins-ok")
+}

@@ -2,7 +2,7 @@
 // Verify actual authored origins and malformed replacements through production
 // validation. Synthetic unproved roots must keep the old low-level contract.
 use @Std/Io only { print }
-use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests, SourceBindingStorageIndex }
 use /SourceAccess only { SourceAccess }
 use /Mid/Verify only { verifyDeclarationMidOwnership }
 use /Ir only { SourceBindingOrigin, InstanceEnvironment }
@@ -29,8 +29,9 @@ fn main() {
             val reader = compiler.preparedBindingStorageSource(origin: local.sourceBinding, sourceFunction: owner).unwrap()
             val fact = reader.bindingStorageFact(origin: local.sourceBinding, declarationTarget: local.sourceNameStart).unwrap()
             if fact.isMutable != (authored == 1U64) { panic("binding storage origin selected wrong row") }
-            val indexed = reader.bindingStorageForDeclaration(declarationTarget: local.sourceNameStart).unwrap()
-            if indexed.session != local.sourceBinding.session || indexed.readerIndex != local.sourceBinding.readerIndex || indexed.bindingIndex != local.sourceBinding.bindingIndex { panic("binding declaration index selected wrong row") }
+            mut val indexed = <SourceBindingStorageIndex.empty session=compiler.sourceFactSession() />
+            reader.appendBindingStorageOrigins(into: inout indexed).unwrap()
+            if !indexed.contains(origin: local.sourceBinding, declarationTarget: local.sourceNameStart) { panic("binding declaration index lost the actual row") }
             authored += 1U64
         }
     }

@@ -1,6 +1,6 @@
 ---
 id: com-kd1s
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-11-09T17:11:02Z
@@ -59,8 +59,8 @@ build and four raw-O0 runtime GREEN controls are recorded in the
 A fresh-context neutral source review found no contract violation in this
 limited increment and independently matched build/candidate/input hashes, all
 four actual compile/link/run paths and exact goldens there.
-This does not close this task: receipt/origin retention, missing/foreign/forged
-production checks and remaining root-family controls are still required.
+The record increment alone does not establish origin retention or production
+missing/foreign/forged checks; the following evidence covers those obligations.
 
 ## Origin Propagation Increment
 
@@ -73,13 +73,11 @@ verifier checks all present origins with one reader acquisition per distinct
 reader in a body. Existing unproved hand-built IR retains its old contract.
 [Evidence and neutral review](../../../evidence/performance-regression-history/value-passing-implementation/binding-origins-increment.json)
 cover an actual authored body, a matching raw control, five malformed groups,
-declaration indexing and unchanged synthetic/instance controls. This remains
-WIP: the production request path must require the expected authored origins
-before and after preparation, including mixed global-owner bodies; present-row
-validation alone cannot detect removal or select the expected local. No reuse
-optimization is enabled.
+declaration indexing and unchanged synthetic/instance controls. Present-row validation alone cannot detect removal or select the expected local.
+The production boundary below supplies that additional obligation, including
+mixed global-owner bodies. No reuse optimization is enabled.
 
-## Next Production Enforcement Contract
+## Production Enforcement Contract
 
 Neutral pre-implementation review at 5a0bbdad requires a two-step obligation.
 First, use accepted source rows as an allowed-origin index to validate every
@@ -120,11 +118,32 @@ and neutral reviews are in the
 The complete-source build also caught a missing diagnostic enum consumer; its
 separate structural RED/GREEN and adapter repair are recorded there.
 
-Standard fresh build `20261109T181351-build-866cc9` passed with unchanged inputs.
-However, fresh candidate `535c4c602f8ccfeac91c744c5056741f36cccd1b8a406dd84e061b3662b199d7`
-rejects the large imported program with conflicting source binding storage
-origins. The small inner-source controls do not discharge this failure. Investigate
-the declaration-target uniqueness assumption against actual source/lowered
-statement identities; do not merely overwrite accepted origins or discard the
-check. Resolve it and rerun fresh-candidate controls before closure. No stable-home
-selection or ABI transport is enabled, and W1a remains in progress.
+The first fresh candidate exposed a valid shared or-pattern body lowered once
+per alternative: one declaration target has multiple accepted statement rows.
+The corrected navigation index separates required target membership from every
+reader's exact row/target positions, preserving excluded global row positions.
+It stores no competing mutability/type authority. The unused last-row inverse
+API is removed. Each actual local must select an allowed row, and subsequent
+preparation must retain that exact chosen row.
+
+## Closure
+
+Reason: resolved. Revision: signed tag
+`binding-storage-origins-validated-20261110` (the repair and this closure).
+[Shared-row repair and final evidence](../../../evidence/performance-regression-history/value-passing-implementation/binding-origin-shared-rows.json)
+records the actual RED, six selected native GREEN controls, final source/input
+manifests and the independent neutral review. The last fresh build
+`20261109T183909-build-3169c7` passed with unchanged inputs. Its saved candidate
+`df968a2f0f5c200c31a131fb04f6eb9822bbcfc19c4ebee068c90222751ac6e9`
+compiled the full compiler source successfully and compiled/executed four fresh
+controls covering owner families, shared-arm row identity, missing-origin
+rejection/diagnostic handoff and exact post-preparation retention. All four have
+exact goldens, empty runtime stderr and unchanged inputs.
+
+The final neutral completion review independently reconciled the task contract,
+source, build/candidate hashes, all selected artifacts and input manifests. No
+W1a implementation or required-case gap remains. This closes declaration-fact
+retention/authenticity only: W1b initialization/stability and semantic home
+selection, W2/W3 ABI transport, W4 measurements, full suites/ASan/formal fixed
+point and the com-ffar acceptance remain open. No source semantics, main, seed,
+or adopted carrier is changed by this closure.
