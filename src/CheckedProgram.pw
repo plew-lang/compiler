@@ -2,9 +2,9 @@
 // No public factory or mutable arena accessor can attach it to another input.
 use ./Frontend only { Comp, FrontendInput, FrontendOptions, analyzeFrontendForRequests, completeFrontendDeclarations, finalizeFrontendExecutableRequests, FinalBodyRequests, FinalDependencies, FinalizationPublication }
 use ./Ir only { StaticConformanceProof, BodyOrigin, InstanceEnvironment }
-use ./Backend only { LlvmLoweringResult, lowerRequestedLlvm, lowerGlobalStorageLlvm, lowerCallableDeclarationsLlvm }
+use ./Backend only { LlvmLoweringResult, LlvmTargetDescription, lowerRequestedLlvm, lowerGlobalStorageLlvm, lowerCallableDeclarationsLlvm }
 use ./SourceAccess only { SourceAccess }
-use ./Diag only { CompileDiagnostic, DiagnosticLocation }
+use ./Diag only { CompileDiagnostic, DiagnosticLocation, FailureDomain }
 use ./DeclarationProgram only { prepareDeclarationProgramWithRequests, prepareDeclarationRoot, DeclarationBodyRequests, declarationProgramDiagnostic }
 use ./Mid/Build only { MidFunctionTemplates }
 use ./Mid/DeclarationAccess only { DeclarationAccessAnalysis, DeclarationAccessNode }
@@ -45,6 +45,7 @@ pub struct MidAccessPreparation {
 // escapes; later requests cannot reload edited files or borrow another arena.
 pub unique struct CompilerSession {
     mut val compiler: Comp
+    mut val llvmTarget: Optional[LlvmTargetDescription] = <Optional.None />
     mut val finalizationStarted: Bool = false
     mut val finalBodies: FinalBodyRequests = <FinalBodyRequests />
     mut val finalDependencies: FinalDependencies = <FinalDependencies />
@@ -66,6 +67,30 @@ pub unique enum CompilerSessionResult {
 
 pub impl CompilerSession {
     inout fn takeDiagnostics() -> Array[CompileDiagnostic] { return self.compiler.takeDiagnostics() }
+
+    // The execution host installs its actual JIT description before publication.
+    // Once chosen (including native-only module diagnostics), it cannot change.
+    inout fn configureLlvmTarget(target: LlvmTargetDescription) -> Result[(), CompileDiagnostic] {
+        match self.llvmTarget {
+            Optional.Some(v: val selected) => {
+                if !selected.matches(target: target) {
+                    return <Result.Err error=<CompileDiagnostic failureDomain=<FailureDomain.Internal /> location=<DiagnosticLocation.Line line=0I64 /> message="LLVM backend: session target cannot change after selection" /> />
+                }
+            }
+            Optional.None => { self.llvmTarget = <Optional.Some v=target /> }
+        }
+        return <Result.Ok value=() />
+    }
+
+    inout fn targetForLowering() -> Result[LlvmTargetDescription, CompileDiagnostic] {
+        match self.llvmTarget {
+            Optional.Some(v: val target) => { return <Result.Ok value=target /> }
+            Optional.None => {}
+        }
+        val target = (try LlvmTargetDescription.native())
+        self.llvmTarget = <Optional.Some v=target />
+        return <Result.Ok value=target />
+    }
 
     assoc fn open(input: FrontendInput, sources: SourceAccess,
                   options: FrontendOptions = <FrontendOptions />) -> CompilerSessionResult {
@@ -157,7 +182,11 @@ pub impl CompilerSession {
                 return <LlvmLoweringResult.Failure diagnostic=diagnostic />
             }
         }
-        match lowerCallableDeclarationsLlvm(c: inout self.compiler) {
+        val target = match self.targetForLowering() {
+            Result.Ok(value: val target) => { give target }
+            Result.Err(error: val diagnostic) => { return <LlvmLoweringResult.Failure diagnostic=diagnostic /> }
+        }
+        match lowerCallableDeclarationsLlvm(c: inout self.compiler, target: <Optional.Some v=target />) {
             LlvmLoweringResult.Success(module: val module) => { return <LlvmLoweringResult.Success module=move module /> }
             LlvmLoweringResult.Failure(diagnostic: val diagnostic) => {
                 self.executionFailure = <Optional.Some v=diagnostic />
@@ -173,7 +202,11 @@ pub impl CompilerSession {
             Result.Ok(value: val prepared) => { give prepared }
             Result.Err(error: val diagnostic) => { return <LlvmLoweringResult.Failure diagnostic=diagnostic /> }
         }
-        match lowerRequestedLlvm(c: inout self.compiler, program: prepared.program, ambient: prepared.ambient, bodyId: bodyId) {
+        val target = match self.targetForLowering() {
+            Result.Ok(value: val target) => { give target }
+            Result.Err(error: val diagnostic) => { return <LlvmLoweringResult.Failure diagnostic=diagnostic /> }
+        }
+        match lowerRequestedLlvm(c: inout self.compiler, program: prepared.program, ambient: prepared.ambient, bodyId: bodyId, target: <Optional.Some v=target />) {
             LlvmLoweringResult.Success(module: val module) => { return <LlvmLoweringResult.Success module=move module /> }
             LlvmLoweringResult.Failure(diagnostic: val diagnostic) => {
                 self.executionFailure = <Optional.Some v=diagnostic />
@@ -189,7 +222,11 @@ pub impl CompilerSession {
             Result.Ok(value: _) => {}
             Result.Err(error: val diagnostic) => { return <LlvmLoweringResult.Failure diagnostic=diagnostic /> }
         }
-        match lowerGlobalStorageLlvm(c: inout self.compiler) {
+        val target = match self.targetForLowering() {
+            Result.Ok(value: val target) => { give target }
+            Result.Err(error: val diagnostic) => { return <LlvmLoweringResult.Failure diagnostic=diagnostic /> }
+        }
+        match lowerGlobalStorageLlvm(c: inout self.compiler, target: <Optional.Some v=target />) {
             LlvmLoweringResult.Success(module: val module) => { return <LlvmLoweringResult.Success module=move module /> }
             LlvmLoweringResult.Failure(diagnostic: val diagnostic) => {
                 self.executionFailure = <Optional.Some v=diagnostic />

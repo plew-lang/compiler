@@ -21,6 +21,7 @@ fn main() {
                 LlvmJitCreation.Failure => { panic "JIT creation failed" }
                 LlvmJitCreation.Success(jit: val created) => {
                     mut val jit = move created
+                    shared->configureLlvmTarget(target: jit.targetDescription().unwrap()).unwrap()
                     match shared->lowerDeclarations() {
                         LlvmLoweringResult.Failure(diagnostic: val diagnostic) => { panic diagnostic.message }
                         LlvmLoweringResult.Success(module: val module) => {

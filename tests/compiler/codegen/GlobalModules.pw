@@ -3,7 +3,7 @@
 use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontend }
 use ../../../src/SourceAccess only { SourceAccess }
 use ../../../src/PreparedProgram only { PreparedProgram }
-use ../../../src/Backend only { lowerGlobalStorageLlvm, lowerPreparedLlvm, LlvmLoweringResult, LlvmGlobalStorage, LlvmBodyEmission }
+use ../../../src/Backend only { lowerGlobalStorageLlvm, lowerCallableDeclarationsLlvm, lowerPreparedLlvm, LlvmLoweringResult, LlvmGlobalStorage, LlvmBodyEmission }
 use @Std/Io only { print }
 use @Std/Process only { argAt }
 
@@ -24,7 +24,12 @@ fn main() {
         }
         return
     }
-    if argAt(2I64) == "storage" {
+    if argAt(2I64) == "declarations" {
+        match lowerCallableDeclarationsLlvm(c: inout compiler) {
+            LlvmLoweringResult.Success(module: val module) => { module.writeText(c: inout compiler) }
+            LlvmLoweringResult.Failure(diagnostic: val diagnostic) => { panic diagnostic.message }
+        }
+    } else if argAt(2I64) == "storage" {
         match lowerGlobalStorageLlvm(c: inout compiler) {
             LlvmLoweringResult.Success(module: val module) => { module.writeText(c: inout compiler) }
             LlvmLoweringResult.Failure(diagnostic: val diagnostic) => { panic diagnostic.message }

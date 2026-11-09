@@ -12,6 +12,10 @@ fn main() {
         CompilerSessionResult.Failure(diagnostic: val diagnostic) => { panic diagnostic.message }
         CompilerSessionResult.Success(session: val opened) => {
             mut val session = move opened
+            match session.lowerDeclarations() {
+                LlvmLoweringResult.Success(module: val module) => {}
+                LlvmLoweringResult.Failure(diagnostic: val diagnostic) => { panic diagnostic.message }
+            }
             val main = session.prepareFunction(function: 0U64).unwrap()
             match session.lowerBody(bodyId: main.bodyId) {
                 LlvmLoweringResult.Success(module: val module) => { write(s: module.text()) }

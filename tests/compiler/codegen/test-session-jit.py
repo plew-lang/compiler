@@ -21,6 +21,8 @@ if not (libdir / 'libLLVM.dylib').exists():
     libdir = Path(query('--libdir'))
 evidence = root / 'tmp/lazy-build/session-jit' / ('asan' if options.asan else 'normal')
 evidence.mkdir(parents=True, exist_ok=True)
+for previous in ['summary.txt']:
+    (evidence / previous).unlink(missing_ok=True)
 
 def capture(command, name, environment=None):
     with (evidence / name).open('wb') as out, (evidence / (name + '.log')).open('wb') as err:

@@ -52,4 +52,21 @@ These are incremental checkpoints within W2, not separately completed tasks.
 Actual guaranteed-address forwarding and its optimization benefit belong to W3;
 W2 cannot close with an unused descriptor or an unconsumed storage plan.
 
+## Target Prerequisite Checkpoint
+
+The [target handoff evidence](../../../evidence/performance-regression-history/value-passing-implementation/w2-protocol/target-handoff.json)
+records the actual RED, source/native target-description handoff, successful
+standard build, native and fresh candidate controls, and neutral review.
+Object CPU and actual LLJIT descriptions now reach all three module creation
+paths before layout-sensitive planning; session selection is fixed and final
+native admission still checks exact agreement. Baseline byval remains intact.
+Internal SessionJit/SessionModule diagnostics now perform their missing program
+entry registration step; archived old-source reproduction and preserved native
+assertions distinguish that repair from a product regression.
+
+This closes only checkpoint 1's target precondition. Logical role descriptors,
+typed Value/Home carriers, Ready binding/storage plans and W2 cost reconciliation
+remain open. The record explicitly excludes full gates, formal performance,
+main/seed promotion and overall W2/com-ffar completion.
+
 

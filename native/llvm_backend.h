@@ -18,6 +18,11 @@ void plew_llvm_initialize_worker(int trace);
 int plew_llvm_emit_object(LLVMModuleRef module, const char *output,
                           const char *cpu, int trace);
 
+// Immutable target descriptions for representation planning. Returned strings
+// are owned LLVM messages (LLVMDisposeMessage); empty means failure. Native
+// layout uses exactly the object backend's CPU/features/target-machine policy.
+char *plew_llvm_native_data_layout(const char *cpu);
+
 // Single-threaded native execution session. It owns code, not a second Plew
 // runtime. Hosts explicitly supply symbols from the existing runtime instance.
 // Immutable empty instruction name, borrowed for the process lifetime.
@@ -30,6 +35,8 @@ int plew_compiler_jit_main(PlewLlvmJit *jit, PlewProgramArguments *arguments);
 int plew_compiler_trace_run(void);
 
 PlewLlvmJit *plew_llvm_jit_create(void);
+char *plew_llvm_jit_target_triple(const PlewLlvmJit *jit);
+char *plew_llvm_jit_data_layout(const PlewLlvmJit *jit);
 // Per-instance diagnostic observation only; no JIT policy or LLVM flags change.
 void plew_llvm_jit_set_trace(PlewLlvmJit *jit, int enabled);
 void plew_llvm_jit_destroy(PlewLlvmJit *jit);

@@ -17,6 +17,19 @@ Recursive layout construction needs separate declaration and completion states. 
 
 Target identity is part of a physical result's validity. The LLVM module has its intended target triple before layout-sensitive optimization, and layout/ABI queries use the corresponding target configuration. Host defaults, a previous module's layout, or target-independent guesses cannot determine field offsets for a different native target. The target/backend boundary obtains the DataLayout from the selected target machine and ensures its agreement with the module before layout-dependent use; object/JIT admission must reject incompatible layouts. The exact point of DataLayout attachment and every earlier layout-dependent consumer remain part of the implementation audit, not guaranteed by setting a triple alone. Host-generation and application-target configurations remain distinct.
 
+Representation receives an immutable triple/DataLayout description before type
+registration or callable planning. Native object compilation obtains it using
+the same CPU/features and target-machine policy as final object output; textual
+IR selects the native generic target explicitly. Demand execution obtains the
+description from its actual LLJIT instance, installs it before publication, and
+retains it in the compiler session for declarations, global storage and every
+requested body. Re-selecting the same description is harmless; changing it in a
+session is an internal contract failure. Representation receives neither the
+JIT handle nor target-machine authority. Final native admission still checks
+exact agreement. A standalone low-level lowering request may select its native
+default, but requested application bodies must reuse their session's selection,
+not recreate a target machine or recover alignment from an empty layout.
+
 Internal type names, body symbols, and numeric IDs serve different purposes. A symbol names a linkable entry; a body ID identifies its semantic origin/instance; an LLVM type describes its representation. None substitutes for the others. Physical caches belong to their LLVM context/module and target, even when semantic facts live longer in the compilation session.
 
 Recursive value representation may introduce automatic boxing while preserving

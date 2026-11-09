@@ -49,6 +49,14 @@ pub fn executeProgram(input: FrontendInput, sources: SourceAccess,
             match LlvmJit.create(tracePhases: options.tracePhases) {
                 LlvmJitCreation.Failure => { eprint(text: "plew: JIT creation failed\n") return 1I32 }
                 LlvmJitCreation.Success(jit: val created) => {
+                    val target = match created.targetDescription() {
+                        Result.Ok(value: val target) => { give target }
+                        Result.Err(error: val diagnostic) => { emitCompilerFailure(diagnostic: diagnostic) return 1I32 }
+                    }
+                    match shared->configureLlvmTarget(target: target) {
+                        Result.Ok(value: _) => {}
+                        Result.Err(error: val diagnostic) => { emitCompilerFailure(diagnostic: diagnostic) return 1I32 }
+                    }
                     val execution: MutableRef[ProcessExecution] = <MutableRef value=<ProcessExecution jit=move created arguments=<ProgramArguments.copied arguments=arguments /> registration=move registration /> />
                     processExecution = <Optional.Some v=execution />
                     val declarations = shared->lowerDeclarations()

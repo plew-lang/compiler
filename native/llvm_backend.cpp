@@ -92,6 +92,30 @@ struct MessageDisposer {
 };
 using Message = std::unique_ptr<char, MessageDisposer>;
 
+using TargetMachine = std::unique_ptr<LLVMOpaqueTargetMachine,
+                                    decltype(&LLVMDisposeTargetMachine)>;
+
+TargetMachine nativeTargetMachine(const char *triple, const char *cpu) {
+  TargetMachine machine(nullptr, LLVMDisposeTargetMachine);
+  if (LLVMInitializeNativeTarget() || LLVMInitializeNativeAsmPrinter()) {
+    std::fprintf(stderr, "plew: native LLVM target unavailable\n");
+    return machine;
+  }
+  LLVMTargetRef target = nullptr;
+  char *error = nullptr;
+  if (LLVMGetTargetFromTriple(triple, &target, &error)) {
+    Message message(error);
+    std::fprintf(stderr, "plew: LLVM target unavailable: %s\n", error);
+    return machine;
+  }
+  machine.reset(LLVMCreateTargetMachine(target, triple, cpu, "",
+                                      LLVMCodeGenLevelDefault, LLVMRelocPIC,
+                                      LLVMCodeModelDefault));
+  if (!machine)
+    std::fprintf(stderr, "plew: cannot create LLVM target machine\n");
+  return machine;
+}
+
 bool compatibleDataLayout(LLVMModuleRef module, llvm::StringRef expected) {
   llvm::StringRef actual(LLVMGetDataLayoutStr(module));
   return actual.empty() || actual == expected;
@@ -129,6 +153,26 @@ bool optimize(LLVMModuleRef module, LLVMTargetMachineRef machine,
 extern "C" const unsigned char *plew_llvm_empty_name(void) {
   static const unsigned char empty[] = "";
   return empty;
+}
+
+extern "C" char *plew_llvm_native_data_layout(const char *cpu) {
+  Message triple(LLVMGetDefaultTargetTriple());
+  auto machine = nativeTargetMachine(triple.get(), cpu);
+  if (!machine) return LLVMCreateMessage("");
+  auto layout = LLVMCreateTargetDataLayout(machine.get());
+  char *description = LLVMCopyStringRepOfTargetData(layout);
+  LLVMDisposeTargetData(layout);
+  return description;
+}
+
+extern "C" char *plew_llvm_jit_target_triple(const PlewLlvmJit *jit) {
+  return LLVMCreateMessage(jit && jit->engine
+      ? jit->engine->getTargetTriple().str().c_str() : "");
+}
+
+extern "C" char *plew_llvm_jit_data_layout(const PlewLlvmJit *jit) {
+  return LLVMCreateMessage(jit && jit->engine
+      ? jit->engine->getDataLayout().getStringRepresentation().c_str() : "");
 }
 
 extern "C" void plew_llvm_jit_set_trace(PlewLlvmJit *jit, int enabled) {
@@ -570,10 +614,6 @@ extern "C" void plew_llvm_initialize_worker(int trace) {
 
 extern "C" int plew_llvm_emit_object(LLVMModuleRef module, const char *output,
                                      const char *cpu, int trace) {
-  if (LLVMInitializeNativeTarget() || LLVMInitializeNativeAsmPrinter()) {
-    std::fprintf(stderr, "plew: native LLVM target unavailable\n");
-    return 1;
-  }
   Message triple(LLVMGetDefaultTargetTriple());
   const char *moduleTriple = LLVMGetTarget(module);
   if (moduleTriple[0] && std::strcmp(moduleTriple, triple.get()) != 0) {
@@ -581,22 +621,8 @@ extern "C" int plew_llvm_emit_object(LLVMModuleRef module, const char *output,
                  triple.get(), moduleTriple);
     return 1;
   }
-  LLVMTargetRef target = nullptr;
-  char *error = nullptr;
-  if (LLVMGetTargetFromTriple(triple.get(), &target, &error)) {
-    Message message(error);
-    std::fprintf(stderr, "plew: LLVM target unavailable: %s\n", error);
-    return 1;
-  }
-  auto machine = std::unique_ptr<LLVMOpaqueTargetMachine,
-                                decltype(&LLVMDisposeTargetMachine)>(
-      LLVMCreateTargetMachine(target, triple.get(), cpu, "",
-                              LLVMCodeGenLevelDefault, LLVMRelocPIC,
-                              LLVMCodeModelDefault), LLVMDisposeTargetMachine);
-  if (!machine) {
-    std::fprintf(stderr, "plew: cannot create LLVM target machine\n");
-    return 1;
-  }
+  auto machine = nativeTargetMachine(triple.get(), cpu);
+  if (!machine) return 1;
   LLVMSetTarget(module, triple.get());
   auto layout = LLVMCreateTargetDataLayout(machine.get());
   Message layoutText(LLVMCopyStringRepOfTargetData(layout));
@@ -632,6 +658,7 @@ extern "C" int plew_llvm_emit_object(LLVMModuleRef module, const char *output,
     return 1;
 
   LLVMMemoryBufferRef buffer = nullptr;
+  char *error = nullptr;
   if (LLVMTargetMachineEmitToMemoryBuffer(machine.get(), module, LLVMObjectFile,
                                          &error, &buffer)) {
     Message message(error);

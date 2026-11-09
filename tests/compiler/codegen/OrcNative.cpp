@@ -116,6 +116,47 @@ static void checkLayouts(const char *objectPath) {
   std::remove(objectPath);
 }
 
+static void checkTargetDescriptions(const char *objectPath) {
+  char *generic = plew_llvm_native_data_layout("");
+  assert(generic[0] && nativeLayout() == generic);
+  char *cpu = LLVMGetHostCPUName();
+  char *selected = plew_llvm_native_data_layout(cpu);
+  assert(selected[0]);
+  auto context = LLVMContextCreate();
+  auto module = layoutModule(context, selected);
+  assert(plew_llvm_emit_object(module, objectPath, cpu, 0) == 0);
+  assert(std::strcmp(LLVMGetDataLayoutStr(module), selected) == 0);
+  LLVMDisposeModule(module);
+  LLVMContextDispose(context);
+  LLVMDisposeMessage(cpu);
+  LLVMDisposeMessage(selected);
+  LLVMDisposeMessage(generic);
+
+  auto jit = plew_llvm_jit_create();
+  assert(jit);
+  char *triple = plew_llvm_jit_target_triple(jit);
+  char *layout = plew_llvm_jit_data_layout(jit);
+  assert(triple[0] && layout[0]);
+  context = LLVMContextCreate();
+  module = layoutModule(context, layout);
+  LLVMSetTarget(module, triple);
+  assert(plew_llvm_jit_add(jit, module, context) == 0);
+  auto address = plew_llvm_jit_lookup(jit, "layoutValue");
+  assert(address);
+  auto execute = reinterpret_cast<int64_t (*)()>(static_cast<uintptr_t>(address));
+  assert(execute() == 7);
+  plew_llvm_jit_destroy(jit);
+  // The description is copied/owned, not borrowed from the destroyed engine.
+  assert(triple[0] && layout[0]);
+  LLVMDisposeMessage(triple);
+  LLVMDisposeMessage(layout);
+  triple = plew_llvm_jit_target_triple(nullptr);
+  layout = plew_llvm_jit_data_layout(nullptr);
+  assert(!triple[0] && !layout[0]);
+  LLVMDisposeMessage(triple);
+  LLVMDisposeMessage(layout);
+}
+
 static void addStorage(PlewLlvmJit *jit) {
   auto context = LLVMContextCreate();
   auto module = LLVMModuleCreateWithNameInContext("storage", context);
@@ -200,6 +241,7 @@ static void checkMemoryIntrinsics() {
 int main(int argc, char **argv) {
   assert(argc == 2);
   checkLayouts(argv[1]);
+  checkTargetDescriptions(argv[1]);
   checkMemoryIntrinsics();
   auto jit = plew_llvm_jit_create();
   assert(jit);

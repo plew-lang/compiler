@@ -18,6 +18,15 @@ fn main() {
                 LlvmJitCreation.Failure => { panic "JIT creation failed" }
                 LlvmJitCreation.Success(jit: val created) => {
                     mut val jit = move created
+                    val target = jit.targetDescription().unwrap()
+                    session.configureLlvmTarget(target: target).unwrap()
+                    // Program entry identity is registered independently of
+                    // preparing an ordinary callable. This diagnostic adds the
+                    // body directly, so the declaration module is just dropped.
+                    match session.lowerDeclarations() {
+                        LlvmLoweringResult.Success(module: val module) => {}
+                        LlvmLoweringResult.Failure(diagnostic: val diagnostic) => { panic diagnostic.message }
+                    }
                     if jit.define(name: "plew_set_args", address: plew_test_args_address(), callable: true) != 0I32 { panic "host symbol failed" }
                     match session.lowerBody(bodyId: main.bodyId) {
                         LlvmLoweringResult.Failure(diagnostic: val diagnostic) => { panic diagnostic.message }
@@ -25,6 +34,7 @@ fn main() {
                             if jit.add(module: move module) != 0I32 { panic "module transfer failed" }
                         }
                     }
+                    session.configureLlvmTarget(target: target).unwrap()
                     val address = jit.lookup(name: "main")
                     if address == 0U64 { panic "main missing" }
                     if plew_test_call_main(address) != 0I32 { panic "main failed" }

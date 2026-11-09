@@ -5,7 +5,7 @@ use ./Frontend only { Comp, FrontendInput, FrontendOptions, analyzeFrontend }
 use ./FrontendDriver only { frontendRequest, configuredSourceAccess }
 use ./CompilerExecution only { executeProgram }
 use ./CheckedProgram only { CheckedProgram, ProgramCheckResult, prepareCheckedProgram, ExecutableCompilationResult }
-use ./Backend only { emitLlvmRuntime, lowerLlvm, lowerPreparedLlvm, nativeCpu, LlvmModule, LlvmLoweringResult }
+use ./Backend only { emitLlvmRuntime, lowerLlvm, lowerPreparedLlvm, nativeCpu, LlvmModule, LlvmLoweringResult, LlvmTargetDescription }
 use ./SourceAccess only { SourceAccess }
 use ./Diag only { CompileDiagnostic, emitDiagnostics }
 
@@ -80,7 +80,7 @@ unique enum CompilationResult {
     Failure(diagnostic: CompileDiagnostic)
 }
 
-fn compileSource(sources: SourceAccess, firstArgument: I64, emitText: Bool = false) -> CompilationResult {
+fn compileSource(sources: SourceAccess, firstArgument: I64, emitText: Bool = false, cpu: String = "") -> CompilationResult {
     val request = frontendRequest(sources: sources, firstArgument: firstArgument)
     // Generation checks a synthesized harness, not the user's whole target.
     if request.options.genMode {
@@ -89,7 +89,11 @@ fn compileSource(sources: SourceAccess, firstArgument: I64, emitText: Bool = fal
             Result.Ok(value: _) => {}
             Result.Err(error: val diagnostic) => { return <CompilationResult.Failure diagnostic=diagnostic /> }
         }
-        val lowered = lowerLlvm(c: inout compiler)
+        val target = match LlvmTargetDescription.native(cpu: cpu) {
+            Result.Ok(value: val target) => { give target }
+            Result.Err(error: val diagnostic) => { return <CompilationResult.Failure diagnostic=diagnostic /> }
+        }
+        val lowered = lowerLlvm(c: inout compiler, target: <Optional.Some v=target />)
         return finishCompilation(c: inout compiler, lowered: move lowered, emitText: emitText)
     }
     match CheckedProgram.check(input: request.input, sources: request.sources, options: request.options) {
@@ -101,7 +105,11 @@ fn compileSource(sources: SourceAccess, firstArgument: I64, emitText: Bool = fal
                 ExecutableCompilationResult.Failure(diagnostic: val diagnostic) => { return <CompilationResult.Failure diagnostic=diagnostic /> }
                 ExecutableCompilationResult.Success(compilation: val compilation) => {
                     mut val executable = move compilation
-                    val lowered = lowerPreparedLlvm(c: inout executable.compiler, prepared: executable.prepared)
+                    val target = match LlvmTargetDescription.native(cpu: cpu) {
+                        Result.Ok(value: val target) => { give target }
+                        Result.Err(error: val diagnostic) => { return <CompilationResult.Failure diagnostic=diagnostic /> }
+                    }
+                    val lowered = lowerPreparedLlvm(c: inout executable.compiler, prepared: executable.prepared, target: <Optional.Some v=target />)
                     return finishCompilation(c: inout executable.compiler, lowered: move lowered, emitText: emitText)
                 }
             }
@@ -123,7 +131,7 @@ fn finishCompilation(c: inout Comp, lowered: move LlvmLoweringResult, emitText: 
 // Object mode keeps lowering and native optimization in one process. A failed
 // native output returns normally so the owned LLVM context is still reclaimed.
 pub fn compileObject(sources: SourceAccess, firstArgument: I64, output: String, cpu: String) -> I32 {
-    match compileSource(sources: sources, firstArgument: firstArgument) {
+    match compileSource(sources: sources, firstArgument: firstArgument, cpu: cpu) {
         CompilationResult.Success(compilation: val value) => {
             mut val compilation = move value
             val trace = compilation.trace

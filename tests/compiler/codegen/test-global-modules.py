@@ -27,10 +27,20 @@ if options.exposed:
 evidence.mkdir(parents=True, exist_ok=True)
 
 
+target_headers = set()
+
+
 def capture(command, name):
     with (evidence / name).open('wb') as out, (evidence / (name + '.log')).open('wb') as err:
         subprocess.run(list(map(str, command)), cwd=root, stdout=out, stderr=err,
                        timeout=60, check=True)
+    if name.endswith('.ll'):
+        text = (evidence / name).read_text()
+        triple = re.search(r'^target triple = "([^"]+)"$', text, re.M)
+        layout = re.search(r'^target datalayout = "([^"]+)"$', text, re.M)
+        assert triple and layout, (name, 'module lacks an early target description')
+        target_headers.add((triple[1], layout[1]))
+        assert len(target_headers) == 1, 'split modules selected different targets/layouts'
 
 
 capture([compiler, root / 'tests/compiler/codegen/GlobalModules.pw'], 'harness.ll')
@@ -45,11 +55,13 @@ print('PASS global module harness build', flush=True)
 results = []
 for name in ([] if options.requested else ['global_var', 'global_generic_init', 'global_forward_ref']):
     source = root / 'tests/fixtures/run' / (name + '.pw')
-    for mode in ['storage', 'body']:
+    for mode in ['storage', 'body', 'declarations']:
         capture([evidence / 'harness', source, mode, str(root / 'std') + '/'],
                 name + '.' + mode + '.ll')
     storage = (evidence / (name + '.storage.ll')).read_text()
     body = (evidence / (name + '.body.ll')).read_text()
+    declarations = (evidence / (name + '.declarations.ll')).read_text()
+    assert not re.search(r'^define ', declarations, re.M), 'declaration module must contain no executable body'
     assert not re.search(r'^define ', storage, re.M), 'storage module must contain no executable body'
     definitions = re.findall(r'^(@plew\.g\.\d+) = global ', storage, re.M)
     references = re.findall(r'^(@plew\.g\.\d+) = external global ', body, re.M)
