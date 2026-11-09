@@ -52,6 +52,17 @@ Nested expressions are lowered into ordered operations and temporaries. Source b
 
 An earlier child value must survive the effects of later children. When later evaluation can change the observed storage, construction captures the earlier Copy/Move value in an owned temporary at its evaluation point; it must not leave a recipe that reads the original place after those effects. Already materialized values can be reused under their lifetime contract. Borrow/inout operands remain capabilities rather than being silently converted into snapshots. Eliding a temporary requires proof that the later evaluation cannot change the value; unknown effects are not that proof. Aggregate children follow source evaluation order independently of their destination field indices.
 
+For a whole copyable authored immutable local, the builder can keep the original
+value home instead of creating another evaluation owner. It consumes the accepted
+binding row through its retained origin, including owner and type identity; an
+unproved or synthetic named root is not an immutable declaration. This does not
+mark a slot initialized: the existing declaration/executable ownership checks
+still require the source value to be available at every read. Lexical owner
+cleanup and authored StorageBoundary copies remain unchanged. Mutable cells,
+borrowed/inout roots and unique ownership do not acquire this proof from an
+immutable handle. Broader root/projection and transport changes must establish
+their own interval and ownership obligations before extending this rule.
+
 ## Control Flow and Expression Results
 
 A body consists of basic blocks with ordered statements and one terminator each. Only terminators introduce CFG successors. Builder-only open-block sentinels cannot reach a published executable body.

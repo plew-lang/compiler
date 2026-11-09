@@ -1,0 +1,205 @@
+// Accepted immutable bindings may feed evaluated arguments without an extra
+// owning snapshot. Authored named copies remain independent owners.
+use @Std/Io only { print }
+use /Frontend only { Comp, FrontendInput, analyzeFrontendDeclarations }
+use /SourceAccess only { SourceAccess }
+use /Ir only { CallTemplateKind }
+use /Mid/Build only { MidFunctionTemplates, MidBuildError }
+use /Mid/Ir only { MidOperand, MidRvalue, MidStatement, MidTerminator, MidCallTarget, MidAggregateKind, MidBody, MidBlock }
+use /Mid/OwnershipAnalysis only { MidOwnershipRequests }
+use /Mid/Prepare only { MidParametricBody }
+use /Mid/Verify only { MidVerifyError, MidVerification }
+
+fn failVerification(verification: MidVerification) {
+    print(verification.block)
+    print(verification.local)
+    match verification.error {
+        MidVerifyError.None => { panic("ownership None") }
+        MidVerifyError.InvalidTarget => { panic("ownership InvalidTarget") }
+        MidVerifyError.InvalidBindingOrigin => { panic("ownership InvalidBindingOrigin") }
+        MidVerifyError.TypeMismatch => { panic("ownership TypeMismatch") }
+        MidVerifyError.ConflictingReceiverAccess => { panic("ownership ConflictingReceiverAccess") }
+        MidVerifyError.ConflictingBorrowAccess => { panic("ownership ConflictingBorrowAccess") }
+        MidVerifyError.PartialMove => { panic("ownership PartialMove") }
+        MidVerifyError.MoveUnavailable => { panic("ownership MoveUnavailable") }
+        MidVerifyError.DropUnavailable => { panic("ownership DropUnavailable") }
+        MidVerifyError.MissingOwnershipContract => { panic("ownership MissingOwnershipContract") }
+        MidVerifyError.UniqueCopy => { panic("ownership UniqueCopy") }
+        MidVerifyError.OutstandingOwnership => { panic("ownership OutstandingOwnership") }
+        MidVerifyError.LiveInitialization => { panic("ownership LiveInitialization") }
+        MidVerifyError.InvalidDropFlag => { panic("ownership InvalidDropFlag") }
+        MidVerifyError.UninitializedDropFlag => { panic("ownership UninitializedDropFlag") }
+        MidVerifyError.UnelaboratedScopeExit => { panic("ownership UnelaboratedScopeExit") }
+        MidVerifyError.UnelaboratedBindingEnd => { panic("ownership UnelaboratedBindingEnd") }
+        MidVerifyError.UnelaboratedAccess => { panic("ownership UnelaboratedAccess") }
+        MidVerifyError.UninstantiatedReturnBoundary => { panic("ownership UninstantiatedReturnBoundary") }
+        MidVerifyError.UninstantiatedStorageBoundary => { panic("ownership UninstantiatedStorageBoundary") }
+        MidVerifyError.UninstantiatedCastBoundary => { panic("ownership UninstantiatedCastBoundary") }
+    }
+}
+
+fn check(name: String, snapshot: Bool) {
+    mut val compiler = <Comp />
+    match analyzeFrontendDeclarations(c: inout compiler, input: <FrontendInput.Text path="stable-local.pw" text="fn effect() -> I64 {{ return 0I64 }} fn text(input: String) -> String {{ return input }} struct Pair {{ val first: String val second: String }} fn sink(value: String, extra: I64) {{}} fn stable(input: String) {{ val first = input val local = first sink(value: local, extra: effect()) val values = <Pair first=local second=text(input: local) /> }} fn mutable(input: String) {{ val first = input mut val local = first sink(value: local, extra: effect()) val values = <Pair first=local second=text(input: local) /> }}" />, sources: <SourceAccess />) {
+        Result.Ok(value: _) => {}
+        Result.Err(error: val diagnostic) => { print(diagnostic.message) panic("stable-local frontend setup failed") }
+    }
+    val owner = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: name).nameId)
+    match compiler.prepareLexicalBody(fnIdx: owner) {
+        Result.Ok(value: _) => {}
+        Result.Err(error: val diagnostic) => { print(diagnostic.message) panic("stable-local body setup failed") }
+    }
+    val facts = compiler.preparedFunctionSemanticFacts(fnIdx: owner).unwrap()
+    mut val templates = <MidFunctionTemplates />
+    val built = templates.body(c: inout compiler, function: owner)
+    match built.error { MidBuildError.None => {} _ => { panic("stable-local source build failed") } }
+    mut val named: Array[U64] = []
+    mut val index = 0U64
+    while index < built.body.locals.count() {
+        val local = built.body.locals[index]
+        if !local.sourceBinding.isUnproved() {
+            val fact = facts.bindingStorageFact(origin: local.sourceBinding, declarationTarget: local.sourceNameStart).unwrap()
+            if fact.isMutable != (snapshot && named.count() == 1U64) { panic("stable-local mutability precondition failed") }
+            named.append(index)
+        }
+        index += 1U64
+    }
+    if named.count() != 3U64 { panic("stable-local source bindings missing") }
+    mut val initialized = 0U64
+    mut val calls = 0U64
+    mut val snapshots = 0U64
+    mut val snapshotLocals: Array[U64] = []
+    val sink = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "sink").nameId)
+    for block in built.body.blocks {
+        for statement in block.statements {
+            match statement {
+                MidStatement.Assign(destination: val destination, value: val value) => {
+                    match value {
+                        MidRvalue.StorageBoundary(stmtId: _, targetTerm: _, operand: val operand) => {
+                            match operand {
+                                MidOperand.Copy(place: val place) => {
+                                    if destination.local == named[0U64] && place.local == 0U64 { initialized += 1U64 }
+                                    if destination.local == named[1U64] && place.local == named[0U64] { initialized += 1U64 }
+                                }
+                                _ => {}
+                            }
+                        }
+                        MidRvalue.Use(operand: val operand) => {
+                            match operand {
+                                MidOperand.Copy(place: val place) => {
+                                    if place.rootTag == 1U64 && place.local == named[1U64] && place.projections.count() == 0U64 {
+                                        if destination.rootTag != 1U64 || destination.projections.count() != 0U64 || destination.local >= built.body.locals.count() { panic("invalid evaluation snapshot destination") }
+                                        val temporary = built.body.locals[destination.local]
+                                        if temporary.sourceNameStart != 0U64 || temporary.isParameter || temporary.isBorrowed || temporary.isCaptureCell { panic("evaluation snapshot is not a dedicated owner") }
+                                        snapshots += 1U64
+                                        snapshotLocals.append(destination.local)
+                                    }
+                                }
+                                _ => {}
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+    if snapshots != (if snapshot { give 2U64 } else { give 0U64 }) { panic("redundant evaluation owner count mismatch") }
+    mut val aggregates = 0U64
+    for block in built.body.blocks {
+        for statement in block.statements {
+            match statement {
+                MidStatement.Assign(destination: _, value: val value) => {
+                    match value {
+                        MidRvalue.Aggregate(exprId: _, kind: val kind, resultTerm: _, fieldCount: _, elements: val elements) => {
+                            match kind { MidAggregateKind.Struct => {} _ => { panic("unexpected aggregate kind") } }
+                            if elements.count() != 2U64 { panic("stable-local aggregate arity changed") }
+                            aggregates += 1U64
+                            match elements[0U64].operand {
+                                MidOperand.Copy(place: val place) => {
+                                    if place.rootTag != 1U64 || place.projections.count() != 0U64 { panic("aggregate element changed place shape") }
+                                    if snapshot && place.local != snapshotLocals[1U64] { panic("mutable aggregate element lost snapshot") }
+                                    if !snapshot && place.local != named[1U64] { panic("immutable aggregate element gained snapshot") }
+                                }
+                                _ => { panic("aggregate element is not a value copy") }
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                _ => {}
+            }
+        }
+        match block.terminator {
+            MidTerminator.Call(callee: val callee, receiver: _, args: val args, destination: _, target: _) => {
+                if args.count() == 2U64 {
+                    match callee {
+                        MidCallTarget.Template(site: val site) => {
+                            val template = compiler.callTemplateAt(index: compiler.callTemplateIndex(siteKey: site))
+                            match template.kind {
+                                CallTemplateKind.Direct(callee: val target, receiver: _, args: _, calleeTypeArgs: _, proofId: _) => { if target != sink { panic("wrong stable-local target") } }
+                                _ => { panic("stable-local target not direct") }
+                            }
+                        }
+                        _ => { panic("stable-local target not parametric") }
+                    }
+                    calls += 1U64
+                    match args[0U64] {
+                        MidOperand.Copy(place: val place) => {
+                            if place.rootTag != 1U64 || place.projections.count() != 0U64 { panic("stable-local argument changed place shape") }
+                            if snapshot && place.local != snapshotLocals[0U64] { panic("mutable local lost evaluation snapshot") }
+                            if !snapshot && place.local != named[1U64] { panic("immutable local gained redundant evaluation snapshot") }
+                        }
+                        _ => { panic("stable-local argument is not a value copy") }
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    if initialized != 2U64 { panic("authored named copies were removed") }
+    if calls != 1U64 || aggregates != 1U64 { panic("stable-local consumers not exercised") }
+    mut val requests = <MidOwnershipRequests />
+    val verified = match requests.request(c: inout compiler, body: <MidParametricBody.input canonical=built.canonical />) {
+        Result.Ok(value: val value) => value
+        Result.Err(error: val verification) => { print("declaration") failVerification(verification: verification) return }
+    }
+    match requests.destructionBody(c: inout compiler, body: verified) {
+        Result.Ok(value: _) => {}
+        Result.Err(error: val verification) => { print("destruction") failVerification(verification: verification) return }
+    }
+    // Keep authentic declaration facts, but omit the owning initialization.
+    // Immutability must never bypass initialized-availability verification.
+    mut val blocks: Array[MidBlock] = []
+    mut val removed = 0U64
+    for block in built.body.blocks {
+        mut val statements: Array[MidStatement] = []
+        for statement in block.statements {
+            mut val keep = true
+            match statement {
+                MidStatement.Assign(destination: val destination, value: _) => {
+                    if destination.rootTag == 1U64 && destination.local == named[1U64] && destination.projections.count() == 0U64 { keep = false removed += 1U64 }
+                }
+                _ => {}
+            }
+            if keep { statements.append(statement) }
+        }
+        blocks.append(<MidBlock statements=statements terminator=block.terminator />)
+    }
+    if removed != 1U64 { panic("missing-initialization control not constructed") }
+    val invalid = compiler.mid.store(body: <MidBody sourceFunction=owner locals=built.body.locals scopes=built.body.scopes blocks=blocks callArgumentProjections=built.body.callArgumentProjections entry=built.body.entry />)
+    match requests.request(c: inout compiler, body: <MidParametricBody.input canonical=invalid />) {
+        Result.Ok(value: _) => { panic("immutable fact admitted uninitialized owner") }
+        Result.Err(error: val verification) => {
+            match verification.error { MidVerifyError.MoveUnavailable => {} _ => { panic("missing owner rejected for an unrelated reason") } }
+            if verification.local != named[1U64] { panic("missing owner identified another local") }
+        }
+    }
+}
+
+fn main() {
+    check(name: "mutable", snapshot: true)
+    check(name: "stable", snapshot: false)
+    print("stable-local-evaluation-ok")
+}

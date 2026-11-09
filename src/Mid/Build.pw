@@ -1959,6 +1959,32 @@ fn midImmediateTemplateArgument(expressions: Array[Expr], argument: CallTemplate
     }
 }
 
+// Stability of the outer value is separate from initialized availability.
+// Accepted immutable locals cannot be replaced through a source alias. Their
+// existing lexical owner and the ordinary ownership verifier still govern each
+// use; this fact neither initializes a slot nor acquires another owner.
+fn midLocalHasStableEvaluationValue(local: MidLocalDecl, facts: Optional[PreparedSemanticFacts]) -> Bool {
+    if local.isUnique || local.isBorrowed || local.isInout || local.isCaptureCell || local.isDropFlag || local.isReturnPlace { return false }
+    if local.isParameter {
+        // Receiver acquisition is reviewed separately from ordinary guaranteed
+        // input forwarding. Async inputs are owned, not this synchronous lane.
+        return !local.ownsAtEntry && local.sourceNameStart != identSelfTarget()
+    }
+    // A dedicated anonymous result already completes its own evaluation.
+    if local.sourceNameStart == 0U64 { return true }
+    if local.ownsAtEntry || local.typeRecipe != 0U64 { return false }
+    match facts {
+        Optional.Some(v: val reader) => {
+            match reader.bindingStorageFact(origin: local.sourceBinding, declarationTarget: local.sourceNameStart) {
+                Optional.Some(v: val binding) => { return !binding.isMutable && binding.typeTerm == local.typeTerm }
+                Optional.None => {}
+            }
+        }
+        Optional.None => {}
+    }
+    return false
+}
+
 // A value operand must denote the value at this evaluation point, not a
 // source place that a later sibling expression may change. Anonymous whole
 // temporaries already own a completed evaluation; borrows retain their place.
@@ -1973,14 +1999,15 @@ fn midEvaluatedValue(c: inout Comp, state: inout MidBuildState, operand: MidOper
     }
     if source.rootTag == 1U64 && source.projections.count() == 0U64 && source.local < state.locals.count() {
         val local = state.locals[source.local]
-        // An ordinary synchronous value parameter is immutable and caller-
-        // guaranteed for this whole call. It cannot be replaced or moved out.
-        // This concerns the whole value only, never a dereferenced subobject,
-        // receiver borrow, inout capability or shared capture cell.
-        if local.isParameter && !local.ownsAtEntry && !local.isInout && !local.isBorrowed && !local.isCaptureCell && local.sourceNameStart != identSelfTarget() {
-            match operand { MidOperand.Copy(place: _) => { return operand } _ => {} }
+        match operand {
+            MidOperand.Copy(place: _) => { if midLocalHasStableEvaluationValue(local: local, facts: state.sourceFacts) { return operand } }
+            // Preserve the existing completed anonymous move-result treatment;
+            // authored moves do not acquire an immutable-value guarantee.
+            MidOperand.Move(place: _) => {
+                if local.sourceNameStart == 0U64 && !local.isParameter && !local.isBorrowed && !local.isInout && !local.isCaptureCell { return operand }
+            }
+            _ => {}
         }
-        if local.sourceNameStart == 0U64 && !local.isParameter && !local.isBorrowed && !local.isInout && !local.isCaptureCell { return operand }
     }
     val ownsUnique = midTermIsUnique(c: inout c, term: source.typeTerm)
     val local = addMidTemporary(state: inout state, typeTerm: source.typeTerm, isUnique: ownsUnique, typeRecipe: source.typeRecipe)
