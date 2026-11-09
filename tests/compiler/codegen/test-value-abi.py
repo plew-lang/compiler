@@ -12,6 +12,7 @@ result = subprocess.run([str(compiler), '--require-mid', str(root / 'tests/fixtu
 if result.returncode:
     raise SystemExit(result.stderr)
 llvm = result.stdout
+assert re.search(r'^target datalayout = "[^"]+"$', llvm, re.M), 'private ABI planning requires an admitted target data layout before LLVM emission'
 attributes = lambda text: re.findall(r'\bbyval\(([^)]+)\)', text)
 definitions = {}
 empty_types = re.findall(r'^(%[\w.]+) = type \{\s*\}', llvm, re.M)
