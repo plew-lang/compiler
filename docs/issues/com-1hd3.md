@@ -33,67 +33,53 @@ No new specification or general solver/SCC/unique/opening feature, API-wide auth
 
 ## Current Finite Implementation and Evidence
 
-[Saved RED/GREEN, fresh controls and limits](../../../evidence/rejection-domains/diagnostic-domain-implementation/retained-free-signature-consumers.json)
-record the old-source call-parameter/result/body consumers recovering absent
-constraints (three targeted native REDs), followed by the shared private retained
-signature endpoint. Registered free signatures require admission even when empty;
-non-free/synthetic declarations stay on their separate existing path. Actual body
-publication reads saved slots before type caches, records type-result mappings
-and scans layouts. Async logical result extraction preserves the existing Promise
-shape; supported default/Unit behavior is unchanged.
+Compiler **f65fa24e** connects saved free signature slots to actual selected-call
+and body signatures before caches or ambient grounding can confer authority.
+Non-free/synthetic declarations keep their separate path. Actual publication
+retains type-result mappings and layout scans; async Promise/body results and
+omitted/explicit Unit retain their existing representation.
 
-Build20261109T092204-build-8c4823 passes. Its saved candidate passes final12 internal
-cases and56 existing signature/recipe/bound/async controls, with invariant inputs.
-The new public program passes check, AOT/native and lazy, as does its old-candidate
-baseline. Internal finalCalls requires seven actual signature forms and compares
-call/body parameter/result types, saved type-result mappings and async payloads.
-The independent review accepts source responsibilities, build/public results and
-final12, including exact current179source/candidate correspondence. Preservation56 and its raw/input reconciliation are also accepted; final aggregate and mode reconciliation remain pending.
+[Original consumer RED/GREEN](../../../evidence/rejection-domains/diagnostic-domain-implementation/retained-free-signature-consumers.json),
+[unchanged-child identity fold](../../../evidence/rejection-domains/diagnostic-domain-implementation/retained-free-signature-identity-fold.json)
+and [signature-wide reader](../../../evidence/rejection-domains/diagnostic-domain-implementation/retained-free-signature-batch.json)
+retain exact sources, candidates, scenarios and mode limits. The reader validates
+one original declaration/environment, then interprets all requested slots with
+one recipe-ID memo. Every slot still checks its authored occurrence and saved
+proof; equal semantic terms do not confer authority. Empty slots also require
+the exact environment. This added refusal has an actual old-source native RED,
+followed by rejection and valid recovery in the final13 controls.
 
-The late legacy adapter control uses direct primitive projection after manual
-lowering; the ordinary Syntax/public paths retain nested Box coverage. Its former
-nominal Box setup omitted the loader's already-sealed identity phase and is not a
-product RED. wrongOutput also has witness Self/bind inconsistency, so no output-only
-isolation is claimed. missingProof is an existing node referencing an absent clause;
-the trusted store's rejection of a Missing node is not consumer coverage. Initial
-unsupported aggregate/generic async test setups were corrected within existing
-limits, not treated as regressions or newly supported features.
+Build20261109T111958-build-a2b67a passed. Fresh13 internal,58 preservation,
+public check/AOT/lazy and refusal, plus old/new actual helperboundary generator
+execution and exact generated source passed. Independent review reconciled all
+seven raw result hashes, input deltas,179source/build/candidate identities,
+assertions and source responsibilities. A manual legacy adapter uses a primitive
+projection; ordinary/public paths retain nested Box coverage. The wrongOutput
+control also has witness Self/bind inconsistency, so output-only isolation is not
+claimed. Unsupported generic/aggregate async setups are not passing coverage.
 
-Formal self-host20261109T094105-self-host-d01361 reached generation3 fixed point,
-median7.999618s. Balanced same-source formal candidates (five each) measured old
-6.937475s/new7.906643s; this is a confirmed regression, not repair difficulty.
-An additional primitive/nominal/nested saved-reader allocation control has a real
-native RED (stable-red2: unchanged children allocate a new type). The common
-semantic child fold is being changed to preserve an unchanged node after comparing
-all canonical child IDs; proof/occurrence checks remain in the reader. Build20261109T100329-build-eeb617 passed; independent review accepted the fold and
-recommended preserving the old out-of-range-ref rejection. That explicit guard
-is included in passed build20261109T100909-build-632602. The retained
-[regression/fold evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/retained-free-signature-identity-fold.json) distinguishes both source snapshots. The final identity candidate passes fresh13 (including stableChildren), existing56,
-public check/AOT/lazy plus the refusal control. Old and new candidates both compile
-and execute the existing helperboundary generator; its real free helper returns
-identical expected generated source. Formal recovery run20261109T101928-self-host-f3b5ef
-reached generation2 fixed point, median7.701804s; speed recovery remains incomplete.
-The accepted product remains211472f5. Three grounder-side trials (closedness,
-visitor splitting, leaf identity) passed finite controls but did not demonstrate
-useful speed recovery, and were discarded. [Exact patches and dispositions](../../../evidence/rejection-domains/diagnostic-domain-implementation/retained-free-signature-discarded-trials.json)
-preserve their historical evidence. Restored product/formal-candidate controls
-pass13 internal,58 preservation, public check/AOT/lazy/refusal and actual gen.
-A final balanced same-source formal comparison measured old6.909565s/new7.667652s
-(five each). This is a diagnostic comparison, not a replacement formal median.
+## Performance Stop and Resume Boundary
 
-Independent review identified a finite untried boundary: every signature slot
-repeats identical environment validation and creates a new recipe memo. The next
-implementation reads the exact requested slots together, validates the original
-environment once and shares only a recipe-ID memo within that signature/read.
-Distinct authored occurrence checks and saved proofs remain authoritative. Empty
-slot sets now validate the exact environment too; valid-source behavior is
-preserved, while malformed empty-signature contexts must be refused. Source
-review found no mandatory defect. Build20261109T111958-build-a2b67a passed;
-fresh13 (with actual old-source malformed-empty-environment RED and valid
-recovery), preservation58, public check/AOT/lazy/refusal and real gen passed.
-[Batch evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/retained-free-signature-batch.json)
-retains exact inputs and candidate. Controlled performance measurement and
-independent evidence reconciliation are pending. No difficult-repair or inherent-cost
-claim follows from the discarded grounder trials.
+The final formal run **20261109T113003-self-host-195aa0** reaches generation2
+fixed point. Samples8.307254/7.743194/7.720560s give median **7.743194s**.
+Balanced final formal candidates on the same current source (five each) measure
+old7.038477s/new7.716668s; all ten LLVM outputs match. The earlier exact restored
+checkpoint is [preserved](../../../evidence/rejection-domains/diagnostic-domain-implementation/retained-free-signature-restored-checkpoint.json).
+The diagnostic comparison does not replace the formal median.
 
-This child remains in_progress. No full-suite/ASan or parent/goal closure is claimed.
+The shared identity fold only partially recovered the introduced regression.
+Three grounder-side trials were [discarded with exact patches](../../../evidence/rejection-domains/diagnostic-domain-implementation/retained-free-signature-discarded-trials.json).
+Signature-wide batching measured7.846359s/7.810533s in the same development
+pipeline (five each), insufficient recovery. Source/profile observations suggest
+machine-code/inlining changes in an existing substitution hot path, but neither
+the complete cause nor an unavoidable design cost is established.
+
+Independent review found no clearly low-effort additional repair that preserves
+evidence. The next investigation must correlate generated machine code with
+actual call frequency, array/proof processing and reader work. Apply the user's
+performance stop condition: median exceeds7s and recovery now needs investigation
+beyond the tested local repairs. Do not resume a sibling to bypass this failure.
+
+[Final fixed-point, matched timing and fresh candidate controls](../../../evidence/rejection-domains/diagnostic-domain-implementation/retained-free-signature-batch-final.json)
+record the final candidate. This child remains in_progress; parent/goal, full
+suites/ASan/G2 and main/seed/adopted-carrier promotion remain uncertified.

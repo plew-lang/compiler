@@ -76,8 +76,8 @@ completion claim follows from task count or review receipt alone.
 
 Final whole-program fixed-point/performance/full-suite/ASan gates remain G2a/G2b
 under [met-si6j](met-si6j.md), not repeated as mandatory gates for every child.
-Main/seed/carrier promotion is excluded. The current formal median is7.101924s;
-7 seconds remains unmet, and repair difficulty has not been established.
+Main/seed/carrier promotion is excluded. The current candidate and performance stop are recorded by [com-1hd3](com-1hd3.md#performance-stop-and-resume-boundary).
+Do not advance siblings to bypass that unresolved regression.
 
 ## Guarantee Allocation and Execution Order
 
