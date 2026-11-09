@@ -175,3 +175,41 @@ exact output is 1,3,30,110,3 with empty stderr. This restores the original
 callback/snapshot/escaped-owner control rather than substituting another test.
 [Finite repair and independent artifact review](../../../evidence/performance-regression-history/value-passing-implementation/callback-unit-investigation/repair.json).
 All remaining W1b inventory rows still require explicit reconciliation.
+
+## Reviewed Remaining Execution Plan
+
+Neutral read-only w1b_remaining_matrix_review reconciled the finite inventory
+after met-zva3. Finish these three increments, then reconcile every original row;
+new global readiness, ABI transport and full entry audits are not W1b additions.
+
+1. Root boundaries/binding identity: actual immutable global whole/field with
+   later effects in calls and aggregates; mutable global/capture-cell snapshots
+   and actual final uses; shadowed immutable/mutable declarations have distinct
+   targets/origins and only the stable one reuses storage; managed loop values
+   reinitialize/use/clean up per dynamic iteration. Existing inout/unique controls
+   plus actual produced roles cover exclusion. Unproved named roots must fall
+   back by source structure; do not add a public test API or accept a production
+   body missing W1a origin (that remains InvalidBindingOrigin). No-effect
+   immutable-global single calls need no newly invented mandatory snapshot.
+2. Completed getter/recipe results: selected getter executes once, its parent
+   uses PriorCallResult/completed home rather than raw Index, and typed nonboxed
+   fields preserve result ownership through real prepared use. Keep pending
+   recipes (including a unique owner) from serving as copyability proof. Raw
+   Index exclusion may be source-structural because production source Index is
+   normalized to a getter. Reuse index_evaluation_local_array_replace,
+   index_evaluation_inout_index and mid_access_getter_key_cfg_lowering for runtime
+   counterparts; they alone do not prove the new field-home structure.
+3. Runtime gaps: deinit during later argument/default evaluation changes an
+   ambient/cell/reference value after its earlier snapshot; assert old callee
+   value, changed ambient value and one cleanup. Add immediate-completion async
+   managed input/move-resource/result cleanup; reuse suspended async controls.
+   Trace owned entry/frame stores/retain-transfer/Promise-before-resume without
+   adding a new async ownership mechanism.
+
+Final finite reuse: mid_value_evaluation_order, default_eval_order,
+value_snapshot_callback, arg_convention_guaranteed_arc,
+stable_field_owner_evaluation, async_entry_ownership, async_enum_param_arc and
+the adopted receiver run/panic/reject cases. Relate existing return/store/capture
+execution to actual prepared owner acquisition instead of multiplying fixtures.
+The selected existing11 production controls already pass exact stdout on fresh
+12d8d834...c1724; these executions do not close the above gaps or W1b.
