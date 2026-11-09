@@ -1,7 +1,7 @@
 ---
 id: com-b1em
 status: in_progress
-deps: [com-kd1s]
+deps: [com-kd1s, met-zva3]
 links: []
 created: 2026-11-09T17:11:02Z
 type: task
