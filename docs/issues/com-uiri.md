@@ -18,7 +18,11 @@ The concrete recommendation and finite storage/entry matrix are in
 Its investigation closure is not ABI adoption: obtain the explicit decision
 required there before beginning product edits. Prototype the shared signature
 descriptor and typed Value/Home carrier, caller materialization/callee binding,
-and forwarding of contracted incoming homes or completed dedicated temporaries.
+and forwarding of contracted incoming homes, completed dedicated temporaries or
+ordinary immutable locals under the finite storage proof in that proposal.
+Use declared mutability as an existing fact, not a new effect-analysis query.
+Include immutable-local direct forwarding and a constant shared handle with a
+mutable referent as distinct controls; the latter cannot prove referent stability.
 Preserve semantic borrows and consuming/inout lanes. Reconcile every common
 helper user through that protocol or an explicit adapter; do not ship a
 direct-call-only ABI. Split implementation units before coding if this migration

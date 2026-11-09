@@ -175,6 +175,7 @@ the address. Copies of contained references retain their ordinary identity.
 | --- | --- |
 | Incoming GuaranteedIndirect ordinary parameter or copyable self | Its caller contract guarantees the outer home. Forward the same home for compatible read uses, including recursion. Do not expose its address as a source pointer. |
 | Completed anonymous value temporary | Reuse its dedicated home only if its Mid owner/scope covers the call and no move, replacement or write can intervene. Do not create another semantic owner just to pass its address. |
+| Ordinary whole copyable immutable local | Use its finalized immutable-binding fact directly, together with initialized home, live owner and no capture-cell/address alias capable of replacing its outer bytes. No general effect solver is needed to rediscover declared immutability. This does not freeze reference payloads or waive mode/lifetime checks. |
 | Earlier value argument followed by an effectful argument/default | Use the evaluation-time snapshot already required by Mid; creating a pointer only at call emission must not reread the old source place. |
 | Mutable root, global, capture cell, reference dereference, indexed/accessor result | Do not infer stable value bytes from an immutable handle or a live cell. Preserve the selected getter/copy/borrow operation and timing. Copyable value inputs use a protected evaluated snapshot where necessary; a semantic borrow keeps its actual access/dependency contract and cannot be snapshotted to evade it. |
 | Ordinary local not covered by the finite proof | Snapshot at the required evaluation point; broader place/effect reuse is optional future work. |
@@ -183,8 +184,9 @@ the address. Copies of contained references retain their ordinary identity.
 | Async public entry | Home is valid only until entry returns; activation-input plan acquires/transfers owners into the frame before caller guarantee ends, even on synchronous first completion. Resume receives frame storage, never the caller's borrowed address. |
 | Foreign call or callback | Keep external ABI. An exposed adapter owns/protects any converted input through its private call. Unknown foreign effects are not purity or no-alias evidence. |
 
-No new whole-program effect solver is needed for these two initial reuse proofs
-(incoming contracted home and dedicated completed temporary). Ordinary same-call
+No new whole-program effect solver is needed for these finite reuse proofs
+(incoming contracted home, dedicated completed temporary and ordinary immutable
+local under the storage conditions above). Ordinary same-call
 overlap and unknown-effect cases must still preserve the existing snapshot and
 access plan. If inspection cannot establish its required contract, the prototype
 must report the gap rather than guess a different source meaning.
@@ -245,7 +247,7 @@ optional Mid transformations additionally require enabled/disabled comparisons.
 
 ### Bounded Prototype and Measurement Decision
 
-Implement the common descriptor/typed carrier and the two finite reuse proofs,
+Implement the common descriptor/typed carrier and the finite reuse proofs above,
 with all users of the common physical helpers either migrated or explicitly
 adapted. This is not permission to ship a direct-call-only ABI and leave indirect
 calls inconsistent. The prototype matrix is a finite correctness feasibility
@@ -293,6 +295,12 @@ and follow com-1hd3's recorded return procedure. Its source/candidate checkpoint
 unresolved performance acceptance and phase-three guarantees remain intact.
 
 ### Completion Reconciliation and Independent Review
+
+The [Swift mutability supplement](../../../evidence/performance-regression-history/swift-mutability/README.md)
+adds source and fresh native/SIL/LLVM/assembly evidence about let/var/self.
+It refines this still-unadopted proposal to include ordinary immutable locals
+with explicit storage/lifetime conditions. It neither adopts the ABI nor claims
+that all Swift let storage is physically forwarded without a copy.
 
 Outcome: **investigated; recommendation awaits user adoption decision**.
 
