@@ -1,0 +1,35 @@
+use @Std/Io only { print }
+struct Payload { pub mut val text: String }
+pub impl Payload { factory }
+unique struct Marker { pub val text: String }
+pub impl Marker { factory }
+impl Marker { deinit { print("drop " + self.text) } }
+fn backing(text: String) -> String { return text + " backing" }
+fn show(value: Payload, extra: I64) { print(value.text) }
+fn change(target: inout Payload) -> I64 {
+    target.text = backing(text: "changed")
+    return 0I64
+}
+fn main() {
+    val local = <Payload text=backing(text: "outer") />
+    if true {
+        mut val local = <Payload text=backing(text: "inner") />
+        show(value: local, extra: change(target: inout local))
+        show(value: local, extra: 0I64)
+    }
+    show(value: local, extra: 0I64)
+    mut val history: Array[String] = []
+    mut val round = 0I64
+    while round < 2I64 {
+        val text = if round == 0I64 { give "zero" } else { give "one" }
+        val local = <Payload text=backing(text: text) />
+        val marker = <Marker text=local.text />
+        show(value: local, extra: 0I64)
+        history.append(local.text)
+        round += 1I64
+        print("last " + marker.text)
+    }
+    print(history[0U64])
+    print(history[1U64])
+    show(value: local, extra: 0I64)
+}

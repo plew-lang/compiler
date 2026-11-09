@@ -1,0 +1,186 @@
+// Required evaluation snapshots must retain their root-specific boundaries.
+use @Std/Io only { print }
+use /Frontend only { Comp, FrontendInput, analyzeFrontendDeclarations }
+use /SourceAccess only { SourceAccess, SourceResource }
+use /Diag only { emitDiagnostic }
+use /Ir only { CallTemplateKind }
+use /Mid/Build only { MidFunctionTemplates, MidBuildError }
+use /Mid/Ir only { MidOperand, MidRvalue, MidStatement, MidTerminator, MidCallTarget }
+use /Mid/OwnershipAnalysis only { MidOwnershipRequests }
+use /Mid/Prepare only { MidParametricBody }
+
+fn check(name: String, global: Bool, mutable: Bool, shadow: Bool = false) {
+    mut val compiler = <Comp />
+    val path = "plew:std/RootProbe.pw"
+    val source = "struct Payload {{ pub mut val value: I64 }} struct Pair {{ val first: I64 val second: I64 }} val fixed = <Payload value=1I64 /> mut val changing = <Payload value=2I64 /> fn effect() -> I64 {{ return 0I64 }} fn run(action: fn()) -> I64 {{ action() return 0I64 }} fn sink(value: Payload, extra: I64) {{}} fn stableGlobal() {{ sink(value: fixed, extra: effect()) val pair = <Pair first=fixed.value second=effect() /> }} fn mutableGlobal() {{ sink(value: changing, extra: effect()) val pair = <Pair first=changing.value second=effect() /> }} fn captured(input: Payload) {{ mut val local = input val action = fn() {{ local.value = 9I64 }} sink(value: local, extra: run(action: action)) val pair = <Pair first=local.value second=run(action: action) /> }} fn shadowed(input: Payload) {{ val local = input if true {{ mut val local = input sink(value: local, extra: effect()) }} sink(value: local, extra: effect()) }}"
+    match analyzeFrontendDeclarations(c: inout compiler, input: <FrontendInput.File path=path />, sources: <SourceAccess stdRoot="std/".bytes() resources=[<SourceResource path=path.bytes() text=source />] />) {
+        Result.Err(error: val diagnostic) => { emitDiagnostic(diagnostic: diagnostic) panic("root declaration setup failed") }
+        Result.Ok(value: _) => {}
+    }
+    val owner = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: name).nameId)
+    match compiler.prepareLexicalBody(fnIdx: owner) {
+        Result.Err(error: val diagnostic) => { emitDiagnostic(diagnostic: diagnostic) panic("root body setup failed") }
+        Result.Ok(value: _) => {}
+    }
+    val facts = compiler.preparedFunctionSemanticFacts(fnIdx: owner).unwrap()
+    mut val templates = <MidFunctionTemplates />
+    val built = templates.body(c: inout compiler, function: owner)
+    match built.error { MidBuildError.None => {} _ => { panic("root source build failed") } }
+    mut val roots: Array[U64] = []
+    mut val index = 0U64
+    while index < built.body.locals.count() {
+        val local = built.body.locals[index]
+        if !local.isParameter && local.sourceNameStart != 0U64 {
+            val binding = facts.bindingStorageFact(origin: local.sourceBinding, declarationTarget: local.sourceNameStart).unwrap()
+            if !global && binding.typeTerm == built.body.locals[0U64].typeTerm {
+                if binding.isMutable != (if shadow { give roots.count() == 1U64 } else { give true }) { panic("binding mutability identity changed") }
+                if local.isCaptureCell != !shadow { panic("capture-cell role not exercised") }
+                roots.append(index)
+            }
+        }
+        index += 1U64
+    }
+    if !global && roots.count() != (if shadow { give 2U64 } else { give 1U64 }) { panic("root declarations not distinct") }
+    if shadow {
+        val first = built.body.locals[roots[0U64]]
+        val second = built.body.locals[roots[1U64]]
+        if first.sourceNameStart == second.sourceNameStart || first.sourceBinding.matches(origin: second.sourceBinding) { panic("shadowed declarations share identity") }
+    }
+    mut val snapshots: Array[U64] = []
+    for block in built.body.blocks {
+        for statement in block.statements {
+            match statement {
+                MidStatement.Assign(destination: val destination, value: val value) => { match value {
+                    MidRvalue.Use(operand: val operand) => { match operand {
+                        MidOperand.Copy(place: val place) => {
+                            val selected = if global { give place.rootTag == 2U64 }
+                                else { give place.rootTag == 1U64 && place.local == roots[roots.count() - 1U64] }
+                            if selected {
+                                if global && place.globalMutable != mutable { panic("global mutability identity changed") }
+                                if destination.rootTag != 1U64 || destination.projections.count() != 0U64 || built.body.locals[destination.local].sourceNameStart != 0U64 { panic("root snapshot lacks a dedicated home") }
+                                snapshots.append(destination.local)
+                            }
+                        }
+                        _ => {}
+                    } }
+                    _ => {}
+                } }
+                _ => {}
+            }
+        }
+    }
+    if snapshots.count() != (if shadow { give 1U64 } else { give 2U64 }) { print(name) print(snapshots.count()) panic("root snapshot count mismatch") }
+    val sink = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "sink").nameId)
+    mut val calls = 0U64
+    mut val aggregates = 0U64
+    for block in built.body.blocks {
+        for statement in block.statements {
+            match statement {
+                MidStatement.Assign(destination: _, value: val value) => { match value {
+                    MidRvalue.Aggregate(exprId: _, kind: _, resultTerm: _, fieldCount: _, elements: val elements) => {
+                        if elements.count() == 2U64 {
+                            match elements[0U64].operand {
+                                MidOperand.Copy(place: val place) => { if place.rootTag != 1U64 || place.local != snapshots[1U64] || place.projections.count() != 0U64 { panic("aggregate bypasses selected root snapshot") } }
+                                _ => { panic("aggregate root ownership changed") }
+                            }
+                            aggregates += 1U64
+                        }
+                    }
+                    _ => {}
+                } }
+                _ => {}
+            }
+        }
+        match block.terminator {
+            MidTerminator.Call(callee: val callee, receiver: _, args: val args, destination: _, target: _) => {
+                mut val selected = false
+                match callee {
+                    MidCallTarget.Template(site: val site) => { match compiler.callTemplateAt(index: compiler.callTemplateIndex(siteKey: site)).kind {
+                        CallTemplateKind.Direct(callee: val target, receiver: _, args: _, calleeTypeArgs: _, proofId: _) => { selected = target == sink }
+                        _ => {}
+                    } }
+                    _ => {}
+                }
+                if selected {
+                    match args[0U64] {
+                        MidOperand.Copy(place: val place) => {
+                            val expected = if shadow && calls == 1U64 { give roots[0U64] } else { give snapshots[0U64] }
+                            if place.rootTag != 1U64 || place.local != expected || place.projections.count() != 0U64 { panic("call bypasses selected root home") }
+                        }
+                        _ => { panic("call root ownership changed") }
+                    }
+                    calls += 1U64
+                }
+            }
+            _ => {}
+        }
+    }
+    if calls != (if shadow { give 2U64 } else { give 1U64 }) || aggregates != (if shadow { give 0U64 } else { give 1U64 }) { panic("root consumers not exercised") }
+    mut val requests = <MidOwnershipRequests />
+    requests.request(c: inout compiler, body: <MidParametricBody.input canonical=built.canonical />).unwrap()
+}
+fn checkLoop() {
+    mut val compiler = <Comp />
+    analyzeFrontendDeclarations(c: inout compiler, input: <FrontendInput.Text path="LoopRoot.pw" text="fn effect() -> I64 {{ return 0I64 }} fn sink(value: String, extra: I64) {{}} fn repeated(input: String, flag: Bool) {{ mut val keep = flag while keep {{ val local = input sink(value: local, extra: effect()) keep = false }} }}" />, sources: <SourceAccess />).unwrap()
+    val owner = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "repeated").nameId)
+    compiler.prepareLexicalBody(fnIdx: owner).unwrap()
+    val facts = compiler.preparedFunctionSemanticFacts(fnIdx: owner).unwrap()
+    mut val templates = <MidFunctionTemplates />
+    val built = templates.body(c: inout compiler, function: owner)
+    match built.error { MidBuildError.None => {} _ => { panic("loop source build failed") } }
+    mut val root = built.body.locals.count()
+    mut val index = 0U64
+    while index < built.body.locals.count() {
+        val local = built.body.locals[index]
+        if !local.isParameter && local.sourceNameStart != 0U64 && local.typeTerm == built.body.locals[0U64].typeTerm {
+            if root != built.body.locals.count() { panic("loop binding duplicated its static slot") }
+            val binding = facts.bindingStorageFact(origin: local.sourceBinding, declarationTarget: local.sourceNameStart).unwrap()
+            if binding.isMutable { panic("loop binding lost immutable contract") }
+            root = index
+        }
+        index += 1U64
+    }
+    if root == built.body.locals.count() { panic("loop root not exercised") }
+    mut val acquisitions = 0U64
+    mut val calls = 0U64
+    for block in built.body.blocks {
+        for statement in block.statements {
+            match statement {
+                MidStatement.Assign(destination: val destination, value: val value) => {
+                    match value {
+                        MidRvalue.StorageBoundary(stmtId: _, targetTerm: _, operand: val operand) => {
+                            if destination.local == root {
+                                match operand { MidOperand.Copy(place: val place) => { if place.rootTag != 1U64 || place.local != 0U64 { panic("loop root acquisition changed source") } } _ => { panic("loop owner acquisition removed") } }
+                                acquisitions += 1U64
+                            }
+                        }
+                        MidRvalue.Use(operand: val operand) => { match operand { MidOperand.Copy(place: val place) => { if place.rootTag == 1U64 && place.local == root { panic("loop root gained redundant snapshot") } } _ => {} } }
+                        _ => {}
+                    }
+                }
+                _ => {}
+            }
+        }
+        match block.terminator {
+            MidTerminator.Call(callee: _, receiver: _, args: val args, destination: _, target: _) => {
+                if args.count() == 2U64 {
+                    match args[0U64] { MidOperand.Copy(place: val place) => { if place.rootTag != 1U64 || place.local != root { panic("loop call lost binding home") } } _ => { panic("loop call ownership changed") } }
+                    calls += 1U64
+                }
+            }
+            _ => {}
+        }
+    }
+    if acquisitions != 1U64 || calls != 1U64 { panic("loop consumer/acquisition not exercised") }
+    mut val requests = <MidOwnershipRequests />
+    requests.request(c: inout compiler, body: <MidParametricBody.input canonical=built.canonical />).unwrap()
+}
+
+fn main() {
+    check(name: "stableGlobal", global: true, mutable: false)
+    check(name: "mutableGlobal", global: true, mutable: true)
+    check(name: "captured", global: false, mutable: true)
+    check(name: "shadowed", global: false, mutable: true, shadow: true)
+    checkLoop()
+    print("stable-root-boundaries-ok")
+}

@@ -213,3 +213,28 @@ the adopted receiver run/panic/reject cases. Relate existing return/store/captur
 execution to actual prepared owner acquisition instead of multiplying fixtures.
 The selected existing11 production controls already pass exact stdout on fresh
 12d8d834...c1724; these executions do not close the above gaps or W1b.
+
+## Remaining Increment A (validated)
+
+The product source is unchanged from 3212fe3a. New
+mid_stable_root_boundaries checks actual immutable/mutable global snapshots,
+capture-cell role and snapshots, distinct shadow binding targets/origins with
+only stable-root reuse, loop static binding acquisition and direct call home.
+Both global/cell call and aggregate consumers use the selected dedicated homes.
+All real bodies pass declaration ownership requests. The companion
+stable_binding_incarnations executes distinct dynamic managed loop values,
+retained history, shadowed original values and once-per-iteration Marker cleanup
+through normal preparation. Declaration ownership alone is not execution proof.
+
+Final unified run value-abi-root-increment-final uses candidate
+12d8d8342640f67d639d8afa054541643d5138d6a34ddcaeffc0e314dc5c1724;
+both compile/link/run0, exact stdout, empty runtime stderr, unchanged inputs.
+Neutral w1b_root_boundaries_review independently matched all219 input SHAs,
+actual outputs/current goldens, final source and candidate, approving A only.
+[Exact evidence and source guard audit](../../../evidence/performance-regression-history/value-passing-implementation/stable-root-boundaries/validation.json).
+Unproved named roots conservatively return false in the common predicate;
+missing required production origins remain InvalidBindingOrigin. Existing
+inout/unique/borrowed role controls and the early guards remain unchanged.
+New test syntax/index setup errors were corrected, not counted as product RED.
+This is existing-contract coverage, not a new product optimization or timing
+claim. Next execute increments B and C, then full finite reconciliation.
