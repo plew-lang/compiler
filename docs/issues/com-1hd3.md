@@ -67,7 +67,8 @@ old7.038477s/new7.716668s; all ten LLVM outputs match. The earlier exact restore
 checkpoint is [preserved](../../../evidence/rejection-domains/diagnostic-domain-implementation/retained-free-signature-restored-checkpoint.json).
 The diagnostic comparison does not replace the formal median.
 
-The shared identity fold only partially recovered the introduced regression.
+The shared identity fold removed redundant node allocation, but the introduced
+performance regression remains.
 Three grounder-side trials were [discarded with exact patches](../../../evidence/rejection-domains/diagnostic-domain-implementation/retained-free-signature-discarded-trials.json).
 Signature-wide batching measured7.846359s/7.810533s in the same development
 pipeline (five each), insufficient recovery. Source/profile observations suggest
