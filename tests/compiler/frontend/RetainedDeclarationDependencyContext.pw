@@ -1,0 +1,83 @@
+// A declaration dependency reader consumes the complete retained equation graph.
+use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use ../../../src/SourceAccess only { SourceAccess }
+use ../../../src/Ir only { StaticConformanceProof, ConformanceProofDemand, TraitConstraint, TraitInstanceKey, DeclarationBoundRef, DeclarationTypeScope, DeclarationScopeOrigin, FuncBindRange, TypeRef, WitnessBind, WitnessMatch, WitnessConditionPlan, ProjectionNormalizationStep }
+use @Std/Io only { print }
+use @Std/Process only { argAt }
+fn main() {
+    mut val compiler = <Comp />
+    val source = "trait Marker {{}}\ntrait Family {{ type Child: Marker }}\ntrait Select {{ type Value: Marker }}\nstruct Selection[T] {{}}\nimpl[T] Selection[T] as Select where T: Family {{ type Value = T#Family.Child }}\nstruct Inner[T] {{}} impl[T] Inner[T] as Marker {{}} struct Wrapper[T] {{}}\nimpl[T] Wrapper[T] as Marker where Selection[T]: Select, Inner[Selection[T]#Select.Value]: Marker {{}}\ntrait Source {{\n    type Item: Family\n    fn inspect() -> I64 where Wrapper[Item]: Marker\n}}\nstruct Element {{}}\nimpl Element as Marker {{}}\nstruct Parent {{}}\nimpl Parent as Family {{ type Child = Element }}\nstruct Holder {{}}\nimpl Holder as Source {{\n    type Item = Parent\n    fn inspect() -> I64 {{ return 45I64 }}\n}}\nfn context(value:Wrapper[Parent]) {{}} fn foreign[T](value:T, wrapped:Wrapper[T]) where T:Family {{}} fn main() {{}}"
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text text=source path="Dependency.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
+    val marker = compiler.decls.traitAt(index: compiler.decls.firstTraitNamed(nameId: compiler.internBytes(s: "Marker").nameId))
+    val context = compiler.arena.functionAt(index: compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "context").nameId))
+    val receiver = compiler.funcParamAt(params: context.params, index: 0U64).ty
+    val proof = compiler.viewedTraitConstraintProof(demand: <ConformanceProofDemand.SourceAdmission />, ref: receiver, constraint: <TraitConstraint key=<TraitInstanceKey owner=marker.nameStart positionalArgs=[] /> assocPredicates=[] />).unwrap()
+    val scope = <DeclarationTypeScope origin=<DeclarationScopeOrigin.InterfaceContract /> owner=0U64 parameters=<FuncBindRange start=0U64 len=0U64 /> />
+    if compiler.checkDeclarationCallProof(proof: proof, scope: scope, offset: 0U64).isErr() { panic("saved witness equations were lost during declaration dependency analysis") }
+    val scenario = argAt(1I64)
+    if scenario != "" {
+        val witness = compiler.selectedConstraintWitness(proof: proof).unwrap()
+        val plan = compiler.arena.witnessConditionPlanAt(index: witness.conditions - 1U64)
+        if plan.normalizations.count() != 2U64 || plan.normalizations[0U64].output != plan.normalizations[1U64].source { panic("expected a two-step retained projection chain") }
+        if scenario == "foreignBinder" {
+            val foreign = compiler.arena.functionAt(index: compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "foreign").nameId))
+            val term = compiler.funcParamAt(params: foreign.params, index: 0U64).ty
+            if compiler.declarationTypeDependency(ref: term, scope: scope, offset: 0U64).isOk() { panic("declaration dependency analysis authorized a foreign lexical binder") }
+            print("ok")
+            return
+        }
+        if scenario == "foreignProofScope" {
+            val owner = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "foreign").nameId)
+            val function = compiler.arena.functionAt(index: owner)
+            val receiver = compiler.funcParamAt(params: function.params, index: 1U64).ty
+            val proof = compiler.viewedTraitConstraintProof(demand: <ConformanceProofDemand.SourceAdmission />, ref: receiver, constraint: <TraitConstraint key=<TraitInstanceKey owner=marker.nameStart positionalArgs=[] /> assocPredicates=[] />, assumptions: compiler.functionBoundAssumptions(fnIdx: owner)).unwrap()
+            val selected = compiler.selectedConstraintWitness(proof: proof).unwrap()
+            if selected.conditions == 0U64 || compiler.arena.witnessConditionPlanAt(index: selected.conditions - 1U64).normalizations.count() == 0U64 { panic("foreign scope control lost its retained projection context") }
+            val lexical = <DeclarationTypeScope owner=owner parameters=function.typeParams />
+            if compiler.checkDeclarationCallProof(proof: proof, scope: lexical, offset: 0U64).isErr() { panic("valid caller-owned projection context was rejected") }
+            match compiler.checkDeclarationCallProof(proof: proof, scope: scope, offset: 0U64) {
+                Result.Ok(value: _) => { panic("retained projection context hid a foreign owner") }
+                Result.Err(error: val error) => {
+                    if error.message != "declaration obligation refers to a type parameter outside its lexical scope" { panic(error.message) }
+                }
+            }
+            if compiler.activeAssumptionAdmission.count() != 0U64 { panic("foreign scope rejection leaked its active assumption stack") }
+            if compiler.checkDeclarationCallProof(proof: proof, scope: lexical, offset: 0U64).isErr() { panic("foreign scope rejection damaged the actual owner's evidence") }
+            print("ok")
+            return
+        }
+        if scenario == "childBinding" {
+            val child = compiler.selectedConstraintWitness(proof: compiler.thawStaticConformanceProof(id: plan.proofs[1U64])).unwrap()
+            if child.conditions != 0U64 || child.binds.count() != 1U64 { panic("expected an unconditional selected child with one binding") }
+            val projection = plan.normalizations[0U64].output
+            val original = compiler.arena.typeAt(index: child.selfRef)
+            val receiver = compiler.pushType(t: <TypeRef nameStart=original.nameStart nameLen=original.nameLen nameId=original.nameId hasDecl=original.hasDecl declOffset=original.declOffset args=[projection] />)
+            if !compiler.arena.typeContainsAssociatedProjection(ref: receiver) { panic("child binding control lost its raw projection") }
+            val binding = child.binds[0U64]
+            val raw = <WitnessMatch conformIdx=child.conformIdx selfRef=receiver binds=[<WitnessBind binder=binding.binder paramId=binding.paramId term=projection />] />
+            mut val children = plan.proofs
+            children.set(i: 1U64, value: compiler.freezeStaticConformanceProof(proof: <StaticConformanceProof.ConcreteWitness witness=raw />))
+            val next = compiler.arena.witnessConditionPlanCount() + 1U64
+            val parent = <WitnessMatch conformIdx=witness.conformIdx selfRef=witness.selfRef binds=witness.binds conditions=next />
+            val stored = compiler.arena.publishWitnessConditionPlan(plan: <WitnessConditionPlan witness=parent proofs=children normalizations=plan.normalizations />)
+            if stored != next { panic("child binding control lost its parent context") }
+            compiler.checkStaticProofEvidence(proof: <StaticConformanceProof.ConcreteWitness witness=parent />, offset: 0U64).unwrap()
+            if compiler.checkDeclarationCallProof(proof: <StaticConformanceProof.ConcreteWitness witness=parent />, scope: scope, offset: 0U64).isErr() { panic("parent projection context did not reach the selected child binding") }
+            print("ok")
+            return
+        }
+        mut val equations = [plan.normalizations[0U64]]
+        if scenario == "wrongOutput" {
+            val step = plan.normalizations[1U64]
+            equations.append(<ProjectionNormalizationStep source=step.source proof=step.proof output=receiver />)
+        }
+        val next = compiler.arena.witnessConditionPlanCount() + 1U64
+        val changed = <WitnessMatch conformIdx=witness.conformIdx binds=witness.binds selfRef=witness.selfRef conditions=next />
+        val stored = compiler.arena.publishWitnessConditionPlan(plan: <WitnessConditionPlan witness=changed proofs=plan.proofs normalizations=equations />)
+        if stored != next { panic("missing output equation control lost its plan") }
+        if compiler.checkDeclarationCallProof(proof: <StaticConformanceProof.ConcreteWitness witness=changed />, scope: scope, offset: 0U64).isOk() { panic("invalid retained projection context authorized a declaration") }
+        if compiler.activeAssumptionAdmission.count() != 0U64 { panic("failed dependency analysis leaked its active assumption stack") }
+        if compiler.checkDeclarationCallProof(proof: proof, scope: scope, offset: 0U64).isErr() { panic("failed dependency analysis damaged valid retained evidence") }
+    }
+    print("ok")
+}

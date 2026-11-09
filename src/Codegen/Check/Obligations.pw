@@ -1471,13 +1471,24 @@ pub impl Comp {
 }
 
 impl Comp {
-    inout fn declarationConstraintDependency(constraint: TraitConstraint, scope: DeclarationTypeScope, offset: U64) -> Result[Bool, CompileDiagnostic] {
+    inout fn retainedDeclarationTypeDependency(ref: U64, scope: DeclarationTypeScope, offset: U64, normalizations: Array[ProjectionNormalizationStep]) -> Result[Bool, CompileDiagnostic] {
+        return <Result.Ok value=(try self.declarationTypeDependencies(ref: ref, scope: scope, offset: offset, normalizations: normalizations)).caller />
+    }
+
+    inout fn retainedDeclarationBoundDependency(bound: TraitBound, scope: DeclarationTypeScope, offset: U64, normalizations: Array[ProjectionNormalizationStep]) -> Result[Bool, CompileDiagnostic] {
+        if bound.subject == 0U64 || bound.constraint.key.owner == 0U64 { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "deferred declaration obligation has no valid trait bound") /> }
+        val subject = try self.retainedDeclarationTypeDependency(ref: bound.subject, scope: scope, offset: offset, normalizations: normalizations)
+        val arguments = try self.declarationConstraintDependency(constraint: bound.constraint, scope: scope, offset: offset, normalizations: normalizations)
+        return <Result.Ok value=subject || arguments />
+    }
+
+    inout fn declarationConstraintDependency(constraint: TraitConstraint, scope: DeclarationTypeScope, offset: U64, normalizations: Array[ProjectionNormalizationStep] = []) -> Result[Bool, CompileDiagnostic] {
         mut val dependent = false
         for argument in constraint.key.positionalArgs {
-            if (try self.declarationTypeDependency(ref: argument, scope: scope, offset: offset)) { dependent = true }
+            if (try self.retainedDeclarationTypeDependency(ref: argument, scope: scope, offset: offset, normalizations: normalizations)) { dependent = true }
         }
         for predicate in constraint.assocPredicates {
-            if (try self.declarationTypeDependency(ref: predicate.value, scope: scope, offset: offset)) { dependent = true }
+            if (try self.retainedDeclarationTypeDependency(ref: predicate.value, scope: scope, offset: offset, normalizations: normalizations)) { dependent = true }
         }
         return <Result.Ok value=dependent />
     }
@@ -1485,21 +1496,21 @@ impl Comp {
     // An admitted associated-clause proof owns its projection. Its unresolved
     // output is not an unbound source type: follow the retained prerequisite
     // and canonical free inputs instead of reinferring the projected subject.
-    inout fn declarationAssumptionDependency(source: DeclarationBoundRef, prerequisiteDependent: Bool, bound: TraitBound, scope: DeclarationTypeScope, offset: U64) -> Result[Bool, CompileDiagnostic] {
+    inout fn declarationAssumptionDependency(source: DeclarationBoundRef, prerequisiteDependent: Bool, bound: TraitBound, scope: DeclarationTypeScope, offset: U64, normalizations: Array[ProjectionNormalizationStep] = []) -> Result[Bool, CompileDiagnostic] {
         match source {
             DeclarationBoundRef.AssociatedType(index: val index) => {
                 val saved = self.arena.associatedBoundEvidenceAt(index: index)
                 val projection = self.arena.typeAt(index: saved.projection)
                 mut val dependent = prerequisiteDependent
-                if (try self.declarationTypeDependency(ref: self.typeTermProjectionReceiver(t: projection), scope: scope, offset: offset)) { dependent = true }
-                for argument in projection.assocTraitArgs { if (try self.declarationTypeDependency(ref: argument, scope: scope, offset: offset)) { dependent = true } }
+                if (try self.retainedDeclarationTypeDependency(ref: self.typeTermProjectionReceiver(t: projection), scope: scope, offset: offset, normalizations: normalizations)) { dependent = true }
+                for argument in projection.assocTraitArgs { if (try self.retainedDeclarationTypeDependency(ref: argument, scope: scope, offset: offset, normalizations: normalizations)) { dependent = true } }
                 if !self.typeRefEq(a: bound.subject, b: saved.projection) {
-                    if (try self.declarationTypeDependency(ref: bound.subject, scope: scope, offset: offset)) { dependent = true }
+                    if (try self.retainedDeclarationTypeDependency(ref: bound.subject, scope: scope, offset: offset, normalizations: normalizations)) { dependent = true }
                 }
-                if (try self.declarationConstraintDependency(constraint: bound.constraint, scope: scope, offset: offset)) { dependent = true }
+                if (try self.declarationConstraintDependency(constraint: bound.constraint, scope: scope, offset: offset, normalizations: normalizations)) { dependent = true }
                 return <Result.Ok value=dependent />
             }
-            _ => { return self.declarationBoundDependency(bound: bound, scope: scope, offset: offset) }
+            _ => { return self.retainedDeclarationBoundDependency(bound: bound, scope: scope, offset: offset, normalizations: normalizations) }
         }
     }
 }
@@ -1553,11 +1564,15 @@ impl Comp {
         return <Result.Ok value=dependencies.caller />
     }
 
-    inout fn scopedWitnessDependencies(witness: WitnessMatch, scope: DeclarationTypeScope, offset: U64) -> Result[DeclarationProofDependencies, CompileDiagnostic] {
-        val dependency = try self.declarationTypeDependencies(ref: witness.selfRef, scope: scope, offset: offset)
+    inout fn scopedWitnessDependencies(witness: WitnessMatch, scope: DeclarationTypeScope, offset: U64, normalizations: Array[ProjectionNormalizationStep] = []) -> Result[DeclarationProofDependencies, CompileDiagnostic] {
+        mut val context = normalizations
+        for step in (try self.retainedProofProjectionContext(proof: <StaticConformanceProof.ConcreteWitness witness=witness />)) {
+            try self.appendRetainedProjectionEquation(step: step, normalizations: inout context)
+        }
+        val dependency = try self.declarationTypeDependencies(ref: witness.selfRef, scope: scope, offset: offset, normalizations: context)
         mut val dependencies = <DeclarationProofDependencies caller=dependency.caller unguaranteedInterface=dependency.interfaceScoped />
         for binding in witness.binds {
-            val dependency = try self.declarationTypeDependencies(ref: binding.term, scope: scope, offset: offset)
+            val dependency = try self.declarationTypeDependencies(ref: binding.term, scope: scope, offset: offset, normalizations: context)
             dependencies = dependencies.merged(other: <DeclarationProofDependencies caller=dependency.caller unguaranteedInterface=dependency.interfaceScoped />)
         }
         if witness.conditions != 0U64 {
@@ -1568,21 +1583,21 @@ impl Comp {
                 // Integrity has admitted the projection equation. Its free
                 // dependencies are the receiver, trait arguments and output;
                 // the proved projection itself is not an unresolved obligation.
-                if (try self.declarationTypeDependency(ref: self.typeTermProjectionReceiver(t: projection), scope: scope, offset: offset)) { dependencies = dependencies.merged(other: <DeclarationProofDependencies caller=true />) }
+                if (try self.retainedDeclarationTypeDependency(ref: self.typeTermProjectionReceiver(t: projection), scope: scope, offset: offset, normalizations: context)) { dependencies = dependencies.merged(other: <DeclarationProofDependencies caller=true />) }
                 for argument in projection.assocTraitArgs {
-                    if (try self.declarationTypeDependency(ref: argument, scope: scope, offset: offset)) { dependencies = dependencies.merged(other: <DeclarationProofDependencies caller=true />) }
+                    if (try self.retainedDeclarationTypeDependency(ref: argument, scope: scope, offset: offset, normalizations: context)) { dependencies = dependencies.merged(other: <DeclarationProofDependencies caller=true />) }
                 }
-                if (try self.declarationTypeDependency(ref: step.output, scope: scope, offset: offset)) { dependencies = dependencies.merged(other: <DeclarationProofDependencies caller=true />) }
-                dependencies = dependencies.merged(other: (try self.scopedProofDependencies(proof: self.thawStaticConformanceProof(id: step.proof), scope: scope, offset: offset)))
+                if (try self.retainedDeclarationTypeDependency(ref: step.output, scope: scope, offset: offset, normalizations: context)) { dependencies = dependencies.merged(other: <DeclarationProofDependencies caller=true />) }
+                dependencies = dependencies.merged(other: (try self.scopedProofDependencies(proof: self.thawStaticConformanceProof(id: step.proof), scope: scope, offset: offset, normalizations: context)))
             }
             for proof in self.arena.witnessConditionPlanAt(index: witness.conditions - 1U64).proofs {
-                dependencies = dependencies.merged(other: (try self.scopedProofDependencies(proof: self.thawStaticConformanceProof(id: proof), scope: scope, offset: offset)))
+                dependencies = dependencies.merged(other: (try self.scopedProofDependencies(proof: self.thawStaticConformanceProof(id: proof), scope: scope, offset: offset, normalizations: context)))
             }
         }
         return <Result.Ok value=dependencies />
     }
 
-    inout fn scopedAssumptionDependencies(source: DeclarationBoundRef, scope: DeclarationTypeScope, offset: U64) -> Result[DeclarationProofDependencies, CompileDiagnostic] {
+    inout fn scopedAssumptionDependencies(source: DeclarationBoundRef, scope: DeclarationTypeScope, offset: U64, normalizations: Array[ProjectionNormalizationStep] = []) -> Result[DeclarationProofDependencies, CompileDiagnostic] {
         if !self.declarationBoundIsValid(source: source) { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "deferred declaration obligation has no valid trait bound") /> }
         match scope.origin {
             DeclarationScopeOrigin.InterfaceContract => {
@@ -1605,7 +1620,7 @@ impl Comp {
                     if active == index { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "declaration assumption prerequisite is cyclic") /> }
                 }
                 self.activeAssumptionAdmission.append(index)
-                val result = self.scopedAssociatedPrerequisite(index: index, scope: scope, offset: offset)
+                val result = self.scopedAssociatedPrerequisite(index: index, scope: scope, offset: offset, normalizations: normalizations)
                 self.activeAssumptionAdmission.removeLast()
                 val dependent = try result
                 val evidence = self.arena.associatedBoundEvidenceAt(index: index)
@@ -1627,40 +1642,40 @@ impl Comp {
         return <Result.Ok value=<DeclarationProofDependencies /> />
     }
 
-    inout fn scopedAssociatedPrerequisite(index: U64, scope: DeclarationTypeScope, offset: U64) -> Result[DeclarationProofDependencies, CompileDiagnostic] {
+    inout fn scopedAssociatedPrerequisite(index: U64, scope: DeclarationTypeScope, offset: U64, normalizations: Array[ProjectionNormalizationStep] = []) -> Result[DeclarationProofDependencies, CompileDiagnostic] {
         val proof = self.arena.associatedBoundEvidenceAt(index: index).prerequisite
         try self.checkStaticProofEvidence(proof: proof, offset: offset, assumptions: (try self.declarationScopeAssumptions(scope: scope)))
-        return self.scopedProofDependencies(proof: proof, scope: scope, offset: offset)
+        return self.scopedProofDependencies(proof: proof, scope: scope, offset: offset, normalizations: normalizations)
     }
 
-    inout fn scopedProofDependencies(proof: StaticConformanceProof, scope: DeclarationTypeScope, offset: U64) -> Result[DeclarationProofDependencies, CompileDiagnostic] {
+    inout fn scopedProofDependencies(proof: StaticConformanceProof, scope: DeclarationTypeScope, offset: U64, normalizations: Array[ProjectionNormalizationStep] = []) -> Result[DeclarationProofDependencies, CompileDiagnostic] {
         mut val dependencies = <DeclarationProofDependencies />
         match proof {
             StaticConformanceProof.Missing => {}
-            StaticConformanceProof.ConcreteWitness(witness: val witness) => { return self.scopedWitnessDependencies(witness: witness, scope: scope, offset: offset) }
+            StaticConformanceProof.ConcreteWitness(witness: val witness) => { return self.scopedWitnessDependencies(witness: witness, scope: scope, offset: offset, normalizations: normalizations) }
             StaticConformanceProof.TraitPath(edges: val edges, terminalConformIdx: _) => {
-                for edge in edges { dependencies = dependencies.merged(other: (try self.scopedWitnessDependencies(witness: edge, scope: scope, offset: offset))) }
+                for edge in edges { dependencies = dependencies.merged(other: (try self.scopedWitnessDependencies(witness: edge, scope: scope, offset: offset, normalizations: normalizations))) }
             }
             StaticConformanceProof.AssumedBound(source: val source) => {
-                val prerequisite = try self.scopedAssumptionDependencies(source: source, scope: scope, offset: offset)
-                val caller = try self.declarationAssumptionDependency(source: source, prerequisiteDependent: prerequisite.caller, bound: self.declarationBound(source: source), scope: scope, offset: offset)
+                val prerequisite = try self.scopedAssumptionDependencies(source: source, scope: scope, offset: offset, normalizations: normalizations)
+                val caller = try self.declarationAssumptionDependency(source: source, prerequisiteDependent: prerequisite.caller, bound: self.declarationBound(source: source), scope: scope, offset: offset, normalizations: normalizations)
                 return <Result.Ok value=prerequisite.merged(other: <DeclarationProofDependencies caller=caller />) />
             }
             StaticConformanceProof.AssumedSupertraitPath(source: val source, steps: val steps) => {
-                val prerequisite = try self.scopedAssumptionDependencies(source: source, scope: scope, offset: offset)
-                val caller = try self.declarationAssumptionDependency(source: source, prerequisiteDependent: prerequisite.caller, bound: self.assumedSupertraitBound(source: source, steps: steps), scope: scope, offset: offset)
+                val prerequisite = try self.scopedAssumptionDependencies(source: source, scope: scope, offset: offset, normalizations: normalizations)
+                val caller = try self.declarationAssumptionDependency(source: source, prerequisiteDependent: prerequisite.caller, bound: self.assumedSupertraitBound(source: source, steps: steps), scope: scope, offset: offset, normalizations: normalizations)
                 return <Result.Ok value=prerequisite.merged(other: <DeclarationProofDependencies caller=caller />) />
             }
             StaticConformanceProof.AssumedTraitPath(source: val source, steps: val steps, edges: val edges) => {
-                val prerequisite = try self.scopedAssumptionDependencies(source: source, scope: scope, offset: offset)
+                val prerequisite = try self.scopedAssumptionDependencies(source: source, scope: scope, offset: offset, normalizations: normalizations)
                 val bound = self.assumedSupertraitBound(source: source, steps: steps)
-                val caller = try self.declarationAssumptionDependency(source: source, prerequisiteDependent: prerequisite.caller, bound: bound, scope: scope, offset: offset)
+                val caller = try self.declarationAssumptionDependency(source: source, prerequisiteDependent: prerequisite.caller, bound: bound, scope: scope, offset: offset, normalizations: normalizations)
                 dependencies = prerequisite.merged(other: <DeclarationProofDependencies caller=caller unguaranteedInterface=(try self.interfaceAssumptionIsUniversal(source: source, subject: bound.subject)) />)
-                for edge in edges { dependencies = dependencies.merged(other: (try self.scopedWitnessDependencies(witness: edge, scope: scope, offset: offset))) }
+                for edge in edges { dependencies = dependencies.merged(other: (try self.scopedWitnessDependencies(witness: edge, scope: scope, offset: offset, normalizations: normalizations))) }
             }
             StaticConformanceProof.TraitSelf(traitIdx: _, receiverRef: val receiver, traitArgs: val arguments) => {
-                mut val caller = try self.declarationTypeDependency(ref: receiver, scope: scope, offset: offset)
-                for argument in arguments { if (try self.declarationTypeDependency(ref: argument, scope: scope, offset: offset)) { caller = true } }
+                mut val caller = try self.retainedDeclarationTypeDependency(ref: receiver, scope: scope, offset: offset, normalizations: normalizations)
+                for argument in arguments { if (try self.retainedDeclarationTypeDependency(ref: argument, scope: scope, offset: offset, normalizations: normalizations)) { caller = true } }
                 dependencies = <DeclarationProofDependencies caller=caller />
             }
         }

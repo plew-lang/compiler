@@ -179,7 +179,13 @@ impl Comp {
         return <Result.Ok value=<DeclarationTypeDependencies caller=caller interfaceScoped=interfaceScoped /> />
     }
 
-    inout fn declarationTypeDependencies(ref: U64, scope: DeclarationTypeScope, offset: U64) -> Result[DeclarationTypeDependencies, CompileDiagnostic] {
+    inout fn declarationTypeDependencies(ref: U64, scope: DeclarationTypeScope, offset: U64, normalizations: Array[ProjectionNormalizationStep] = []) -> Result[DeclarationTypeDependencies, CompileDiagnostic] {
+        // Only the admitted proof graph supplies equations. This reader never
+        // resolves a concrete-looking projection from the ambient caller.
+        if normalizations.count() != 0U64 {
+            val replayed = try self.replayProjectionNormalizations(ref: ref, normalizations: normalizations, offset: offset)
+            if replayed != ref { return self.declarationTypeDependencies(ref: replayed, scope: scope, offset: offset) }
+        }
         if self.arena.typeIsClosed(ref: ref) { return <Result.Ok value=<DeclarationTypeDependencies /> /> }
         if ref >= self.arena.typeTermCount() { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "declaration obligation has an invalid type term") /> }
         val term = self.arena.typeTermAt(index: ref)

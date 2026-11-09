@@ -1164,3 +1164,44 @@ derivation through its selected proof; do not delete the output check, infer
 closedness from an absent binder, or repair missing equations by caller lookup.
 The source-call comparison is a separate consumer of retained equations and
 must also be closed before these interface probes count as execution coverage.
+
+#### Retained declaration dependency context increment (WIP)
+
+[RED, scope controls, mutation sensitivity and fixed-input gates](../../../evidence/rejection-domains/diagnostic-domain-implementation/retained-declaration-dependency-context.json)
+close a finite dependency-reader defect, not the outstanding public interface
+admission failures. An already admitted two-step projection chain was scanned
+as unresolved source syntax. Private dependency readers now compose the exact
+witness's retained equations with their inherited context and pass it through
+condition children, equation prerequisites and associated prerequisites. Type,
+bound argument and predicate dependencies replay that context before the final
+binder check. Original equation receivers/arguments/outputs and proof premises
+still contribute scope dependencies. No source query repairs absent equations.
+Public declaration dependency APIs keep their original signatures; the extra
+context is private to the admitted traversal. Empty context skips replay.
+
+`RetainedDeclarationDependencyContext` has an actual old-source native RED at
+the targeted assertion, followed by six GREEN controls: valid chained output,
+missing output equation, wrong output equation, foreign binder, valid owner
+versus foreign proof scope with recovery, and a raw projection in an
+unconditional child's self/binding. The child control first passes pure proof
+integrity. Removing only the two parent-to-child context arguments preserves
+the other five controls and fails that control with its exact targeted panic;
+the mutation was reverted and six GREEN controls rerun. Missing/wrong equation
+controls retain the original proof graph and verify failure followed by valid
+recovery, including an empty active assumption stack.
+
+Independent contract-first read-only review `declaration_dependency_context_review`
+accepted the finite source/fixture increment and reconciled the sensitivity
+result plus source restoration. Its additional scope control was adopted.
+Limits: the foreign proof also exposes T in its self type, so it does not
+isolate equation-output-only scope traversal; child self/binding sensitivity
+is combined rather than separately certified. No broader guarantee is inferred.
+
+Build `20261109T055354-build-fcc21d`, fresh six controls, preserved57/18/17
+internal controls and whole compiler source check pass with invariant inputs.
+The final public six-case localization retains its same three pre-reader
+failures. Formal performance/fixed point, full suites, ASan, source-interface
+execution and whole-task completion remain open. Next: trace the public
+interface contract's failing dependency caller and its actual context;
+retain associated binding occurrence/output derivations and source-call bound
+equations at their real declaration producers instead of loosening this reader.
