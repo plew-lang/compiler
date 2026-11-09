@@ -1,0 +1,51 @@
+// Source rows need not all become locals: a closed continuation may omit them.
+// Preparing origin expectations must not force a later global initializer.
+use @Std/Io only { print }
+use /Frontend only { Comp, FrontendInput, analyzeFrontendDeclarations, finalizeFrontendExecutables }
+use /SourceAccess only { SourceAccess }
+use /Ir only { SourceBindingOrigin }
+use /Mid/Build only { MidFunctionTemplates, MidBuildError }
+use /Mid/Program only { MidExecutableRequests }
+
+fn main() {
+    mut val compiler = <Comp />
+    match analyzeFrontendDeclarations(c: inout compiler, input: <FrontendInput.Text path="closed-origins.pw"
+        text="val first: I64 = {{ val initial = 1I64 while true {{}} give initial }} val later: I64 = {{ val skipped = 2I64 give skipped }} fn main() {{ val abandoned = {{ while true {{}} give 1I64 }} val unreachable = 2I64 }}" />, sources: <SourceAccess />) { Result.Ok(value: _) => {} Result.Err(error: val diagnostic) => { print(diagnostic.message) panic("closed-path declaration setup failed") } }
+    match finalizeFrontendExecutables(c: inout compiler) { Result.Ok(value: _) => {} Result.Err(error: val diagnostic) => { print(diagnostic.message) panic("closed-path finalization failed") } }
+    val instance = compiler.monoWork.bodyAt(index: 0U64)
+    mut val templates = <MidFunctionTemplates />
+    mut val requests = <MidExecutableRequests />
+    val main = requests.request(c: inout compiler, templates: inout templates, bodyId: instance).unwrap()
+    val mainBody = compiler.mid.bodies[main.canonical.body - 1U64]
+    val mainFunction = compiler.arena.bodyInstanceAt(index: instance - 1U64).fnIdx
+    val facts = compiler.preparedFunctionSemanticFacts(fnIdx: mainFunction).unwrap()
+    mut val allowed: Dictionary[U64, SourceBindingOrigin] = [:]
+    facts.appendBindingStorageOrigins(into: inout allowed).unwrap()
+    mut val authored = 0U64
+    mut val index = 0U64
+    while index < mainBody.locals.len {
+        if !compiler.mid.locals[mainBody.locals.start + index].sourceBinding.isUnproved() { authored += 1U64 }
+        index += 1U64
+    }
+    if allowed.count() != 2U64 || authored >= allowed.count() { panic("closed path did not omit a recorded local") }
+    val globalBuilt = templates.globalInitializer(c: inout compiler)
+    match globalBuilt.error { MidBuildError.None => {} _ => { panic("global source build failed") } }
+    val globalBody = compiler.mid.bodies[globalBuilt.canonical.body - 1U64]
+    mut val globalAuthored = 0U64
+    index = 0U64
+    while index < globalBody.locals.len {
+        if !compiler.mid.locals[globalBody.locals.start + index].sourceBinding.isUnproved() { globalAuthored += 1U64 }
+        index += 1U64
+    }
+    if globalAuthored != 1U64 { panic("global build did not stop before later initializer") }
+    // Find its registered global instance without manufacturing a signature.
+    mut val globalInstance = 0U64
+    index = 1U64
+    while index <= compiler.arena.bodyInstanceCount() {
+        if compiler.arena.bodyInstanceAt(index: index - 1U64).fnIdx == 18446744073709551615U64 { globalInstance = index }
+        index += 1U64
+    }
+    if globalInstance == 0U64 { panic("global instance missing") }
+    requests.request(c: inout compiler, templates: inout templates, bodyId: globalInstance).unwrap()
+    print("binding-origin-closed-paths-ok")
+}

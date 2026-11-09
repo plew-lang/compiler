@@ -43,6 +43,7 @@ fn midVerifyCoverageDetail(reason: MidVerifyError) -> U64 {
     match reason {
         MidVerifyError.None => { return 0U64 }
         MidVerifyError.InvalidTarget => { return 1U64 }
+        MidVerifyError.InvalidBindingOrigin => { return 19U64 }
         MidVerifyError.TypeMismatch => { return 15U64 }
         MidVerifyError.ConflictingReceiverAccess => { return 16U64 }
         MidVerifyError.ConflictingBorrowAccess => { return 17U64 }
@@ -98,6 +99,7 @@ pub fn emitMidCoverageVerify(detail: U64) {
         6U64 => { eprint(text: "scope-exit") } 7U64 => { eprint(text: "access") }
         8U64 => { eprint(text: "return-boundary") }
         15U64 => { eprint(text: "type-mismatch") }
+        19U64 => { eprint(text: "invalid-binding-origin") }
         18U64 => { eprint(text: "unique-copy") } _ => { eprint(text: "unknown") }
     }
 }

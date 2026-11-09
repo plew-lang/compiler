@@ -2645,6 +2645,8 @@ struct SourceFactDirectory {
     mut val closureBuilders: Dictionary[U64, SourceBodyBuilder] = [:]
     val session: U64 = allocateSourceFactSession()
     mut val readers: Array[PreparedSemanticFacts] = []
+    // Navigation to published global owners only; not another fact store.
+    mut val globalReaders: Array[U64] = []
     mut val functions: Array[Optional[SourceBodyState]] = []
     mut val globals: Dictionary[U64, SourceBodyState] = [:]
     mut val closures: Dictionary[U64, SourceBodyState] = [:]
@@ -2736,6 +2738,23 @@ pub impl PreparedSemanticFacts {
     fn globalAddress(exprId: U64) -> Optional[SemanticGlobalAddress] { return self.payload->globalAddresses.get(key: exprId) }
     fn bindingNeedsCaptureCell(sourceFunction: U64, bindingTarget: U64) -> Bool { return sourceBindingNeedsCaptureCell(closures: self.payload->closurePlans, sourceFunction: sourceFunction, bindingTarget: bindingTarget) }
     fn binding(stmtId: U64) -> Optional[SourceBindingFact] { return readSourceRow(rows: self.payload->bindings, keys: self.payload->bindingKeys, key: stmtId) }
+    fn appendBindingStorageOrigins(into: inout Dictionary[U64, SourceBindingOrigin], excludingDeclaration: U64 = 0U64) -> Result[(), CompileDiagnostic] {
+        mut val index = 0U64
+        while index < self.payload->bindings.count() {
+            val fact = self.payload->bindings[index]
+            if fact.declarationTarget != excludingDeclaration {
+                val origin = <SourceBindingOrigin session=self.session readerIndex=self.readerIndex + 1U64 bindingIndex=index + 1U64 />
+                match into.get(key: fact.declarationTarget) {
+                    Optional.Some(v: val previous) => {
+                        if !previous.matches(origin: origin) { return <Result.Err error=<CompileDiagnostic location=<DiagnosticLocation.Line line=0I64 /> message="internal error: conflicting source binding storage origins" /> /> }
+                    }
+                    Optional.None => { into[fact.declarationTarget] = origin }
+                }
+            }
+            index += 1U64
+        }
+        return <Result.Ok value=() />
+    }
     fn bindingStorage(stmtId: U64) -> Optional[SourceBindingOrigin] {
         match self.payload->bindingKeys.get(key: stmtId) {
             Optional.Some(v: val index) => { return <Optional.Some v=<SourceBindingOrigin session=self.session readerIndex=self.readerIndex + 1U64 bindingIndex=index + 1U64 /> /> }

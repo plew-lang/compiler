@@ -14,6 +14,23 @@ Construction consumes a checked body owner with stable bindings, expression type
 
 Parametric construction may retain explicit type recipes and selected call templates whose environment-dependent application belongs to instantiation. Such a recipe names the decision to apply; it is not permission to repeat name lookup. Missing required facts are an internal failure, not a request to infer again from syntax.
 
+Authored local storage origins reference the accepted binding row in its source
+session and owner; raw numeric IDs or an all-zero synthetic origin are not
+immutability proofs. The successful builder hands its actual source admission
+to executable preparation, including cache hits. Ordinary and closure bodies
+reuse their sealed readers; composite global initialization uses published
+global readers; registered source-free adapters remain explicit. Source lookup
+failure cannot silently become source-free admission.
+
+At this production boundary, each realized authored local must match its
+accepted declaration and origin. Preparation retains the immutable built local
+prefix and verifies its declaration/origin correspondence after transformations;
+new temporary locals remain unproved. This does not require every checked source
+row to become a local: closed continuations can omit rows, and repeated lowering
+can realize multiple occurrences. Present-origin validation also checks source
+session/owner/row identity. Hand-built unproved IR used through lower-level pass
+APIs does not acquire an authored storage guarantee.
+
 Each published body identifies one immutable canonical body in its arena. IDs are meaningful only in the corresponding compilation/arena domain. Stage wrappers describe preparation guarantees for that body; they do not establish that the entire source program has been checked, that every reachable body is prepared, or that arbitrary IDs from another arena are valid.
 
 ## Places, Operands, and Explicit Evaluation

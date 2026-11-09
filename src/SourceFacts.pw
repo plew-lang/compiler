@@ -272,6 +272,7 @@ impl SourceFactDirectory {
         val payload: Ref[SourceBodyData] = <Ref value=data />
         val reader = self.readers.count()
         self.readers.append(<PreparedSemanticFacts readerIndex=reader session=self.session owner=owner payload=payload />)
+        match owner { SemanticCompletionOwner.Global(target: _) => { self.globalReaders.append(reader) } _ => {} }
         self.setState(owner: owner, state: <SourceBodyState.Succeeded reader=reader />)
         self.countRequest(owner: owner)
     }
@@ -828,6 +829,20 @@ impl Comp {
 
 pub impl Comp {
     fn sourceFactSession() -> U64 { return self.sourceFacts.session }
+    // Global lowering can stop before later initializers. Project only already
+    // published owners; this query neither prepares nor evaluates a source body.
+    fn publishedGlobalBindingStorageOrigins() -> Result[Dictionary[U64, SourceBindingOrigin], CompileDiagnostic] {
+        mut val origins: Dictionary[U64, SourceBindingOrigin] = [:]
+        for reader in self.sourceFacts.globalReaders {
+            val facts = self.sourceFacts.readers[reader]
+            match facts.owner {
+                SemanticCompletionOwner.Global(target: val target) => { try facts.appendBindingStorageOrigins(into: inout origins, excludingDeclaration: target) }
+                _ => { return <Result.Err error=<CompileDiagnostic location=<DiagnosticLocation.Line line=0I64 /> message="internal error: global source reader index has a foreign owner" /> /> }
+            }
+        }
+        return <Result.Ok value=origins />
+    }
+
     // Acquire the existing sealed reader once per distinct origin reader in a
     // body verification. Never infer synthetic origin from a lookup failure.
     inout fn preparedBindingStorageSource(origin: SourceBindingOrigin, sourceFunction: U64) -> Result[PreparedSemanticFacts, CompileDiagnostic] {

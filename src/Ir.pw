@@ -556,6 +556,7 @@ pub struct SourceBindingOrigin {
 pub impl SourceBindingOrigin {
     factory
     fn isUnproved() -> Bool { return self.session == 0U64 && self.readerIndex == 0U64 && self.bindingIndex == 0U64 }
+    fn matches(origin: Self) -> Bool { return self.session == origin.session && self.readerIndex == origin.readerIndex && self.bindingIndex == origin.bindingIndex }
 }
 
 pub enum SemanticCompletionOwner {

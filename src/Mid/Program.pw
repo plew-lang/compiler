@@ -1,3 +1,5 @@
+use ./Verify only { MidVerifyError }
+use ./Bindings only { MidSourceBindings }
 // Prepare the frontend's closed body worklist before any LLVM body exists.
 // BodyInstance identity, rather than emission order, indexes the result.
 use ../Frontend only { Comp, tracePhaseProgress }
@@ -81,8 +83,23 @@ impl MidExecutableRequests {
             MidBuildError.None => {}
             _ => { return <Result.Err error=<MidProgramError.Build bodyId=bodyId error=built.error /> /> }
         }
+        val sources = match MidSourceBindings.forAdmission(c: inout c, bodyId: bodyId, admission: built.sourceAdmission) {
+            Result.Ok(value: val sources) => sources
+            Result.Err(error: val diagnostic) => { return <Result.Err error=<MidProgramError.Build bodyId=bodyId error=<MidBuildError.Frontend diagnostic=diagnostic /> /> /> }
+        }
+        val retained = match sources.checkBuilt(arena: c.mid, session: c.sourceFactSession(), body: built.canonical) {
+            Result.Ok(value: val retained) => retained
+            Result.Err(error: val verification) => { return <Result.Err error=<MidProgramError.Preparation bodyId=bodyId error=<MidPreparationError.VerificationFailed body=built.canonical verification=verification /> /> /> }
+        }
         match MidExecutableBody.prepare(c: inout c, body: <MidParametricBody.input canonical=built.canonical />, bodyId: bodyId) {
-            Result.Ok(value: val executable) => { return <Result.Ok value=executable /> }
+            Result.Ok(value: val executable) => {
+                val verification = retained.checkOutput(arena: c.mid, session: c.sourceFactSession(), body: executable.canonical)
+                match verification.error {
+                    MidVerifyError.None => {}
+                    _ => { return <Result.Err error=<MidProgramError.Preparation bodyId=bodyId error=<MidPreparationError.VerificationFailed body=executable.canonical verification=verification /> /> /> }
+                }
+                return <Result.Ok value=executable />
+            }
             Result.Err(error: val error) => { return <Result.Err error=<MidProgramError.Preparation bodyId=bodyId error=error /> /> }
         }
     }

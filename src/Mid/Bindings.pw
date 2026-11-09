@@ -1,0 +1,95 @@
+// Required source origins at the production build/preparation boundary.
+// These indexes project sealed facts, not a second source or type authority.
+use ../Frontend only { Comp }
+use ../Ir only { SourceBindingOrigin }
+use ../Diag only { CompileDiagnostic, DiagnosticLocation }
+use ./Build only { MidBodySource }
+use ./Ir only { MidCanonicalArena, MidCanonicalBody }
+use ./Verify only { MidVerification, MidVerifyError }
+
+pub struct MidSourceBindings {
+    val session: U64
+    val bodyId: U64
+    val sourceFunction: U64
+    val origins: Dictionary[U64, SourceBindingOrigin]
+}
+impl MidSourceBindings { factory }
+
+pub struct MidRetainedSourceBindings {
+    val session: U64
+    val bodyId: U64
+    val source: MidCanonicalBody
+}
+impl MidRetainedSourceBindings { factory }
+
+fn bindingLocalsAvailable(arena: MidCanonicalArena, body: MidCanonicalBody) -> Bool {
+    if body.body == 0U64 || body.body > arena.bodies.count() { return false }
+    val locals = arena.bodies[body.body - 1U64].locals
+    return locals.start <= arena.locals.count() && locals.len <= arena.locals.count() - locals.start
+}
+
+pub impl MidSourceBindings {
+    assoc fn forAdmission(c: inout Comp, bodyId: U64, admission: MidBodySource) -> Result[MidSourceBindings, CompileDiagnostic] {
+        if bodyId == 0U64 || bodyId > c.arena.bodyInstanceCount() { return <Result.Err error=<CompileDiagnostic location=<DiagnosticLocation.Line line=0I64 /> message="internal error: binding origins require a registered body" /> /> }
+        val function = c.arena.bodyInstanceAt(index: bodyId - 1U64).fnIdx
+        mut val origins: Dictionary[U64, SourceBindingOrigin] = [:]
+        match admission {
+            MidBodySource.Unknown => { return <Result.Err error=<CompileDiagnostic location=<DiagnosticLocation.Line line=0I64 /> message="internal error: successful Mid build lacks source admission" /> /> }
+            MidBodySource.Authored(facts: val facts) => {
+                try c.requireSourceFactsForFunction(facts: facts, sourceFunction: function)
+                try facts.appendBindingStorageOrigins(into: inout origins)
+            }
+            MidBodySource.GlobalComposite => {
+                if function != 18446744073709551615U64 { return <Result.Err error=<CompileDiagnostic location=<DiagnosticLocation.Line line=0I64 /> message="internal error: global binding origins have a non-global body" /> /> }
+                origins = (try c.publishedGlobalBindingStorageOrigins())
+            }
+            // Only the successful registered source-free builders publish this
+            // case. No failed source lookup is converted into Synthetic.
+            MidBodySource.Synthetic => {}
+        }
+        return <Result.Ok value=<MidSourceBindings session=c.sourceFactSession() bodyId=bodyId sourceFunction=function origins=origins /> />
+    }
+
+    fn checkBuilt(arena: MidCanonicalArena, session: U64, body: MidCanonicalBody) -> Result[MidRetainedSourceBindings, MidVerification] {
+        if session != self.session || !bindingLocalsAvailable(arena: arena, body: body) { return <Result.Err error=<MidVerification error=<MidVerifyError.InvalidBindingOrigin /> /> /> }
+        val built = arena.bodies[body.body - 1U64]
+        if built.sourceFunction != self.sourceFunction { return <Result.Err error=<MidVerification error=<MidVerifyError.InvalidBindingOrigin /> /> /> }
+        mut val index = 0U64
+        while index < built.locals.len {
+            val local = arena.locals[built.locals.start + index]
+            match self.origins.get(key: local.sourceNameStart) {
+                Optional.Some(v: val expected) => {
+                    if !expected.matches(origin: local.sourceBinding) || local.isParameter || local.isBorrowed || local.isInout || local.isDropFlag || local.isReturnPlace { return <Result.Err error=<MidVerification error=<MidVerifyError.InvalidBindingOrigin /> local=index /> /> }
+                }
+                Optional.None => {
+                    if !local.sourceBinding.isUnproved() { return <Result.Err error=<MidVerification error=<MidVerifyError.InvalidBindingOrigin /> local=index /> /> }
+                }
+            }
+            index += 1U64
+        }
+        // The immutable input already stores each actual lowering occurrence.
+        // Do not copy it or demand every source row have a realized local.
+        return <Result.Ok value=<MidRetainedSourceBindings session=session bodyId=self.bodyId source=body /> />
+    }
+}
+
+pub impl MidRetainedSourceBindings {
+    fn checkOutput(arena: MidCanonicalArena, session: U64, body: MidCanonicalBody) -> MidVerification {
+        if session != self.session || !bindingLocalsAvailable(arena: arena, body: self.source) || !bindingLocalsAvailable(arena: arena, body: body) { return <MidVerification error=<MidVerifyError.InvalidBindingOrigin /> /> }
+        val source = arena.bodies[self.source.body - 1U64]
+        val output = arena.bodies[body.body - 1U64]
+        if output.bodyInstance != self.bodyId || output.sourceFunction != source.sourceFunction || output.locals.len < source.locals.len { return <MidVerification error=<MidVerifyError.InvalidBindingOrigin /> /> }
+        mut val index = 0U64
+        while index < source.locals.len {
+            val before = arena.locals[source.locals.start + index]
+            val after = arena.locals[output.locals.start + index]
+            if before.sourceNameStart != after.sourceNameStart || !before.sourceBinding.matches(origin: after.sourceBinding) { return <MidVerification error=<MidVerifyError.InvalidBindingOrigin /> local=index /> }
+            index += 1U64
+        }
+        while index < output.locals.len {
+            if !arena.locals[output.locals.start + index].sourceBinding.isUnproved() { return <MidVerification error=<MidVerifyError.InvalidBindingOrigin /> local=index /> }
+            index += 1U64
+        }
+        return <MidVerification />
+    }
+}

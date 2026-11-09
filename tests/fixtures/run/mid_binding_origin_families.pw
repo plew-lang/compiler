@@ -1,0 +1,104 @@
+// Exercise the production source-admission handoff across real body owners.
+use @Std/Io only { print }
+use /Frontend only { Comp, FrontendInput, analyzeFrontendDeclarations, finalizeFrontendExecutables }
+use /SourceAccess only { SourceAccess }
+use /Ir only { BodyOrigin }
+use /Mid/Build only { MidFunctionTemplates }
+use /Mid/Program only { MidExecutableRequests, MidExecutableProgram }
+
+fn main() {
+    mut val compiler = <Comp />
+    analyzeFrontendDeclarations(c: inout compiler, input: <FrontendInput.Text path="origin-families.pw" text="val first: I64 = {{ val local = 1I64 give local }} val second: I64 = {{ mut val local = 2I64 give local }} val globalDefaultOne = withDefault() val globalDefaultTwo = withDefault() trait Reader {{ fn read() -> I64 }} pub impl Reader {{ fn provided() -> I64 {{ val local = self.read() return local }} }} struct Value {{}} newtype Wrapped = Value impl Value as Reader {{ fn read() -> I64 {{ val local = 3I64 return local }} }} fn identity[T](value: T) -> T {{ val local = value return local }} fn withDefault(value: I64 = {{ val local = 4I64 give local }}) -> I64 {{ return value }} fn repeat(flag: Bool) {{ while flag {{ val local = 5I64 }} }} fn main() {{   mut val captured = 1I64   val callback = fn() -> I64 {{ val local = captured return local }}   val fixed = 2I64   val reader = fn() -> I64 {{ val local = fixed return local }}   val one = identity(value: 1I64)   val two = identity(value: true)   val value = <Value />   val provided = value.provided()   val wrapped = value as Wrapped val wrappedResult = wrapped.read() val erased: any Reader = value   val result = erased.read()   val firstDefault = withDefault()   val secondDefault = withDefault()   val fromCell = callback()   val fromValue = reader()   repeat(flag: false) }}" />, sources: <SourceAccess />).unwrap()
+    finalizeFrontendExecutables(c: inout compiler).unwrap()
+    val defaultOwner = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "withDefault").nameId)
+    val defaultGenerator = compiler.defaultArgumentGenerator(ownerFnIdx: defaultOwner, parameterIndex: 0U64)
+    if defaultGenerator == compiler.arena.functionCount() { panic("default generator not registered") }
+    mut val templates = <MidFunctionTemplates />
+    mut val requests = <MidExecutableRequests />
+    val program = MidExecutableProgram.prepareWithRequests(c: inout compiler, templates: inout templates, requests: inout requests).unwrap()
+    mut val genericLocals = 0U64
+    mut val providedLocals = 0U64
+    mut val closureLocals = 0U64
+    mut val cells = 0U64
+    mut val borrowed = 0U64
+    mut val writableCaptures = 0U64
+    mut val loopLocals = 0U64
+    mut val defaultLocals = 0U64
+    mut val witnesses = 0U64
+    mut val environmentDrops = 0U64
+    mut val adapters = 0U64
+    mut val globalReaders: Dictionary[U64, Bool] = [:]
+    mut val index = 1U64
+    while index <= compiler.arena.bodyInstanceCount() {
+        match program.body(bodyId: index) {
+            Optional.None => {}
+            Optional.Some(v: val executable) => {
+                val instance = compiler.arena.bodyInstanceAt(index: index - 1U64)
+                val body = compiler.mid.bodies[executable.canonical.body - 1U64]
+                val closure = compiler.arena.bodySignature(bodyId: index).closureSignatureId != 0U64
+                mut val authored = 0U64
+                mut val localIndex = 0U64
+                while localIndex < body.locals.len {
+                    val local = compiler.mid.locals[body.locals.start + localIndex]
+                    if !local.sourceBinding.isUnproved() {
+                        authored += 1U64
+                        val reader = compiler.preparedBindingStorageSource(origin: local.sourceBinding, sourceFunction: body.sourceFunction).unwrap()
+                        reader.bindingStorageFact(origin: local.sourceBinding, declarationTarget: local.sourceNameStart).unwrap()
+                        if body.sourceFunction == 18446744073709551615U64 { globalReaders[local.sourceBinding.readerIndex] = true }
+                    }
+                    if local.isParameter || local.isBorrowed || local.isInout || local.isDropFlag || local.isReturnPlace {
+                        if !local.sourceBinding.isUnproved() { panic("non-binding root gained authored proof") }
+                    }
+                    if local.isCaptureCell { cells += 1U64 }
+                    if closure && local.isBorrowed { borrowed += 1U64 }
+                    if closure && local.isInout && local.isCaptureCell { writableCaptures += 1U64 }
+                    localIndex += 1U64
+                }
+                if closure { closureLocals += authored }
+                if body.sourceFunction < compiler.arena.functionCount() {
+                    val function = compiler.arena.functionAt(index: body.sourceFunction)
+                    if function.nameId == compiler.internBytes(s: "identity").nameId {
+                        if authored != 1U64 { panic("generic instance lost local proof") }
+                        genericLocals += 1U64
+                    }
+                    if function.nameId == compiler.internBytes(s: "repeat").nameId {
+                        if authored != 1U64 { panic("loop binding origin not retained") }
+                        loopLocals += authored
+                    }
+                    if function.isProvided { providedLocals += authored }
+                    if instance.adapterTargetBodyId != 0U64 {
+                        if authored != 0U64 { panic("adapter gained local proof") }
+                        adapters += 1U64
+                    }
+                    if body.sourceFunction == defaultGenerator {
+                        if authored != 1U64 || function.isProvided { panic("default generator lost independent local") }
+                        defaultLocals += authored
+                    }
+                }
+                match compiler.arena.bodyOrigin(bodyId: index) {
+                    BodyOrigin.Callable => {}
+                    BodyOrigin.ExistentialWitness(resolution: _, member: _) => {
+                        if authored != 0U64 { panic("witness gained local proof") }
+                        witnesses += 1U64
+                    }
+                    BodyOrigin.ClosureEnvironmentDrop(closureBodyId: _) => {
+                        if authored != 0U64 { panic("environment drop gained local proof") }
+                        environmentDrops += 1U64
+                    }
+                }
+            }
+        }
+        index += 1U64
+    }
+    if genericLocals != 2U64 { panic("two generic instances not exercised") }
+    if providedLocals == 0U64 { panic("provided local not exercised") }
+    if closureLocals != 2U64 { panic("closure local proof not exercised") }
+    if borrowed != 1U64 || writableCaptures != 1U64 { panic("capture root modes not exercised") }
+    if loopLocals != 1U64 { panic("loop binding not exercised") }
+    if cells == 0U64 { panic("capture cell not exercised") }
+    if defaultLocals != 1U64 { panic("block default local not exercised") }
+    if globalReaders.count() != 2U64 { panic("mixed global readers not exercised") }
+    if adapters == 0U64 { panic("newtype adapter not exercised") }
+    if witnesses == 0U64 || environmentDrops == 0U64 { panic("synthetic bodies not exercised") }
+    print("binding-origin-families-ok")
+}

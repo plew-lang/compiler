@@ -107,3 +107,24 @@ globals, repeated block-default evaluation, provided bodies, two instances,
 mixed global readers and each registered synthetic family. The existing neutral
 review located these boundaries in Build:2480,2754,3696,3766; Program:62–84; and
 Resolve/Expr:777–790. This is a reviewed implementation plan, not executed proof.
+
+
+## Production Increment and Fresh-Candidate Gap
+
+The builder now publishes explicit source admission on every successful new/cache
+path. Production requests validate realized locals against accepted origins and
+retain their declaration/origin prefix through preparation. Runtime missing-origin
+RED, seven executed owner/retention/closed-path controls, full source manifests
+and neutral reviews are in the
+[production increment](../../../evidence/performance-regression-history/value-passing-implementation/binding-production-enforcement.json).
+The complete-source build also caught a missing diagnostic enum consumer; its
+separate structural RED/GREEN and adapter repair are recorded there.
+
+Standard fresh build `20261109T181351-build-866cc9` passed with unchanged inputs.
+However, fresh candidate `535c4c602f8ccfeac91c744c5056741f36cccd1b8a406dd84e061b3662b199d7`
+rejects the large imported program with conflicting source binding storage
+origins. The small inner-source controls do not discharge this failure. Investigate
+the declaration-target uniqueness assumption against actual source/lowered
+statement identities; do not merely overwrite accepted origins or discard the
+check. Resolve it and rerun fresh-candidate controls before closure. No stable-home
+selection or ABI transport is enabled, and W1a remains in progress.

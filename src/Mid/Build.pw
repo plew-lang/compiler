@@ -145,11 +145,21 @@ pub enum MidBuildError {
     UnsupportedCallTemplate
 }
 
+// Successful builders report the source admission they actually consumed.
+// This transient handoff never enters the canonical arena or ABI.
+pub enum MidBodySource {
+    Unknown
+    Authored(facts: PreparedSemanticFacts)
+    GlobalComposite
+    Synthetic
+}
+
 pub struct MidBodyBuild {
     pub val body: MidBody
     // The canonical snapshot is the authoritative post-build representation.
     // `body` remains only until the downstream passes are migrated one by one.
     pub val canonical: MidCanonicalBody = <MidCanonicalBody body=0U64 />
+    pub val sourceAdmission: MidBodySource = <MidBodySource.Unknown />
     pub val error: MidBuildError = <MidBuildError.None />
 }
 pub impl MidBodyBuild { factory }
@@ -3528,7 +3538,7 @@ pub fn buildParametricMidBody(c: inout Comp, fnIdx: U64) -> MidBodyBuild {
         // before any downstream pass sees either representation.
         return <MidBodyBuild body=body canonical=canonical error=<MidBuildError.InvalidBlock /> />
     }
-    return <MidBodyBuild body=body canonical=canonical />
+    return <MidBodyBuild body=body canonical=canonical sourceAdmission=<MidBodySource.Authored facts=facts /> />
 }
 
 // A closure body has the same parametric-to-grounded Mid path as a Func body,
@@ -3609,7 +3619,7 @@ fn buildParametricMidClosureBody(c: inout Comp, closure: SemanticClosure) -> Mid
     if !c.mid.isWellFormed(body: canonical) {
         return <MidBodyBuild body=body canonical=canonical error=<MidBuildError.InvalidBlock /> />
     }
-    return <MidBodyBuild body=body canonical=canonical />
+    return <MidBodyBuild body=body canonical=canonical sourceAdmission=<MidBodySource.Authored facts=facts /> />
 }
 
 // The semantic closure index is frontend-owned.  This adjacent Mid registry
@@ -3638,7 +3648,11 @@ fn ensurePreparedParametricMidClosureBody(c: inout Comp, closure: SemanticClosur
             if !c.mid.isWellFormed(body: canonical) {
                 return <MidBodyBuild body=emptyMidBody(sourceFunction: closure.bodyKey) canonical=canonical error=<MidBuildError.InvalidBlock /> />
             }
-            return <MidBodyBuild body=emptyMidBody(sourceFunction: closure.bodyKey) canonical=canonical />
+            val facts = match c.preparedClosureSemanticFacts(closure: closure) {
+                Result.Ok(value: val facts) => facts
+                Result.Err(error: val diagnostic) => { return <MidBodyBuild body=emptyMidBody(sourceFunction: closure.bodyKey) error=<MidBuildError.Frontend diagnostic=diagnostic /> /> }
+            }
+            return <MidBodyBuild body=emptyMidBody(sourceFunction: closure.bodyKey) canonical=canonical sourceAdmission=<MidBodySource.Authored facts=facts /> />
         }
         i += 1U64
     }
@@ -3709,7 +3723,7 @@ pub fn buildParametricMidGlobalInit(c: inout Comp) -> MidBodyBuild {
     val body: MidBody = <MidBody sourceFunction=globalOwner locals=state.locals scopes=state.scopes blocks=state.blocks callArgumentProjections=state.callArgumentProjections entry=0U64 />
     val canonical: MidCanonicalBody = c.mid.store(body: body)
     if !c.mid.isWellFormed(body: canonical) { return <MidBodyBuild body=body canonical=canonical error=<MidBuildError.InvalidBlock /> /> }
-    return <MidBodyBuild body=body canonical=canonical />
+    return <MidBodyBuild body=body canonical=canonical sourceAdmission=<MidBodySource.GlobalComposite /> />
 }
 
 // A concrete adapter is built from frozen signatures, with no source AST walk.
@@ -3737,7 +3751,7 @@ pub impl MidFunctionTemplates {
     factory
     inout fn globalInitializer(c: inout Comp) -> MidBodyBuild {
         if self.globalBody != 0U64 {
-            return <MidBodyBuild body=emptyMidBody(sourceFunction: 18446744073709551615U64) canonical=<MidCanonicalBody body=self.globalBody /> />
+            return <MidBodyBuild body=emptyMidBody(sourceFunction: 18446744073709551615U64) canonical=<MidCanonicalBody body=self.globalBody /> sourceAdmission=<MidBodySource.GlobalComposite /> />
         }
         val built = buildParametricMidGlobalInit(c: inout c)
         match built.error {
@@ -3749,7 +3763,11 @@ pub impl MidFunctionTemplates {
     inout fn body(c: inout Comp, function: U64) -> MidBodyBuild {
         if function >= c.arena.functionCount() { return buildParametricMidBody(c: inout c, fnIdx: function) }
         if function < self.bodies.count() && self.bodies[function] != 0U64 {
-            return <MidBodyBuild body=emptyMidBody(sourceFunction: function) canonical=<MidCanonicalBody body=self.bodies[function] /> />
+            val facts = match c.preparedFunctionSemanticFacts(fnIdx: function) {
+                Result.Ok(value: val facts) => facts
+                Result.Err(error: val diagnostic) => { return <MidBodyBuild body=emptyMidBody(sourceFunction: function) error=<MidBuildError.Frontend diagnostic=diagnostic /> /> }
+            }
+            return <MidBodyBuild body=emptyMidBody(sourceFunction: function) canonical=<MidCanonicalBody body=self.bodies[function] /> sourceAdmission=<MidBodySource.Authored facts=facts /> />
         }
         val built = buildParametricMidBody(c: inout c, fnIdx: function)
         match built.error {
@@ -3812,7 +3830,7 @@ pub fn buildMidBodyForInstance(c: inout Comp, fnIdx: U64, bodyId: U64, templates
     val body = <MidBody bodyInstance=bodyId sourceFunction=fnIdx locals=locals scopes=[<MidScope firstLocal=0U64 localCount=cleanupCount />] blocks=[<MidBlock terminator=<MidTerminator.Call callee=<MidCallTarget.Resolved resolution=instance.adapterCallResolutionId - 1U64 /> receiver=receiver args=args destination=destination target=1U64 /> />, <MidBlock statements=[<MidStatement.ScopeExit scope=0U64 />] terminator=exit />] entry=0U64 />
     val canonical = c.mid.store(body: body)
     if !c.mid.isWellFormed(body: canonical) { return <MidBodyBuild body=body canonical=canonical error=<MidBuildError.InvalidBlock /> /> }
-    return <MidBodyBuild body=body canonical=canonical />
+    return <MidBodyBuild body=body canonical=canonical sourceAdmission=<MidBodySource.Synthetic /> />
 }
 
 // Witness bodies have no lexical AST. Their call, ABI and result conversion
@@ -3867,7 +3885,7 @@ fn buildMidExistentialWitness(c: inout Comp, bodyId: U64, resolutionIndex: U64, 
     val body = <MidBody bodyInstance=bodyId sourceFunction=function locals=locals scopes=[<MidScope firstLocal=0U64 localCount=cleanupCount />] blocks=[<MidBlock terminator=<MidTerminator.Call callee=<MidCallTarget.Resolved resolution=member.callResolution - 1U64 /> receiver=receiver args=arguments destination=result target=1U64 /> />, <MidBlock statements=statements terminator=exit />] entry=0U64 />
     val canonical = c.mid.store(body: body)
     if !c.mid.isWellFormed(body: canonical) { return <MidBodyBuild body=body canonical=canonical error=<MidBuildError.InvalidBlock /> /> }
-    return <MidBodyBuild body=body canonical=canonical />
+    return <MidBodyBuild body=body canonical=canonical sourceAdmission=<MidBodySource.Synthetic /> />
 }
 
 // The environment transfers its capture owners to this body at its last release.
@@ -3890,7 +3908,7 @@ fn buildMidClosureEnvironmentDrop(c: inout Comp, bodyId: U64, closureBodyId: U64
     val body = <MidBody bodyInstance=bodyId sourceFunction=instance.fnIdx locals=locals scopes=[<MidScope firstLocal=0U64 localCount=locals.count() />] blocks=[<MidBlock statements=[<MidStatement.ScopeExit scope=0U64 />] terminator=<MidTerminator.Return /> />] entry=0U64 />
     val canonical = c.mid.store(body: body)
     if !c.mid.isWellFormed(body: canonical) { return <MidBodyBuild body=body canonical=canonical error=<MidBuildError.InvalidBlock /> /> }
-    return <MidBodyBuild body=body canonical=canonical />
+    return <MidBodyBuild body=body canonical=canonical sourceAdmission=<MidBodySource.Synthetic /> />
 }
 
 // Only a successful source snapshot supplies semantic expression facts. A

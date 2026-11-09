@@ -1,0 +1,96 @@
+// The expected prefix is the actual immutable builder snapshot, not all source
+// rows. Later passes may append unproved locals but cannot erase that prefix.
+use @Std/Io only { print }
+use /Frontend only { Comp, FrontendInput, analyzeFrontendDeclarations, finalizeFrontendExecutables }
+use /SourceAccess only { SourceAccess }
+use /Ir only { SourceBindingOrigin }
+use /Mid/Build only { MidFunctionTemplates, MidBuildError }
+use /Mid/Bindings only { MidSourceBindings }
+use /Mid/Prepare only { MidParametricBody, MidExecutableBody }
+use /Mid/Ir only { MidLocalDecl, MidBodyNode, MidRange, MidCanonicalBody, MidCanonicalArena }
+use /Mid/Verify only { MidVerifyError }
+
+fn replaced(local: MidLocalDecl, origin: SourceBindingOrigin, name: U64) -> MidLocalDecl {
+    return <MidLocalDecl typeTerm=local.typeTerm typeRecipe=local.typeRecipe
+        sourceScope=local.sourceScope isUnique=local.isUnique isParameter=local.isParameter
+        isBorrowed=local.isBorrowed isInout=local.isInout isCaptureCell=local.isCaptureCell
+        ownsAtEntry=local.ownsAtEntry isDropFlag=local.isDropFlag isReturnPlace=local.isReturnPlace
+        preparedExpr=local.preparedExpr sourceNameStart=name sourceBinding=origin />
+}
+
+fn output(arena: inout MidCanonicalArena, body: MidCanonicalBody, authored: U64, mode: U64) -> MidCanonicalBody {
+    val source = arena.bodies[body.body - 1U64]
+    val start = arena.locals.count()
+    mut val index = 0U64
+    while index < source.locals.len {
+        val local = arena.locals[source.locals.start + index]
+        if index == authored && mode == 1U64 {
+            arena.locals.append(replaced(local: local, origin: <SourceBindingOrigin />, name: local.sourceNameStart))
+        } else if index == authored && mode == 2U64 {
+            arena.locals.append(replaced(local: local, origin: local.sourceBinding, name: 0U64))
+        } else { arena.locals.append(local) }
+        index += 1U64
+    }
+    mut val count = source.locals.len
+    if mode == 3U64 { count -= 1U64 }
+    if mode == 4U64 || mode == 5U64 {
+        val local = arena.locals[source.locals.start + authored]
+        val origin = if mode == 4U64 { give local.sourceBinding } else { give <SourceBindingOrigin /> }
+        arena.locals.append(replaced(local: local, origin: origin, name: 0U64))
+        count += 1U64
+    }
+    arena.bodies.append(<MidBodyNode bodyInstance=source.bodyInstance sourceFunction=source.sourceFunction
+        locals=<MidRange start=start len=count /> scopes=source.scopes blocks=source.blocks entry=source.entry />)
+    return <MidCanonicalBody body=arena.bodies.count() />
+}
+
+fn main() {
+    mut val compiler = <Comp />
+    analyzeFrontendDeclarations(c: inout compiler, input: <FrontendInput.Text path="retention.pw"
+        text="fn main() {{ val first = 1I64 mut val second = 2I64 }}" />, sources: <SourceAccess />).unwrap()
+    finalizeFrontendExecutables(c: inout compiler).unwrap()
+    val instance = compiler.monoWork.bodyAt(index: 0U64)
+    val function = compiler.arena.bodyInstanceAt(index: instance - 1U64).fnIdx
+    mut val templates = <MidFunctionTemplates />
+    val built = templates.body(c: inout compiler, function: function)
+    match built.error { MidBuildError.None => {} _ => { panic("retention source failed") } }
+    val sources = MidSourceBindings.forAdmission(c: inout compiler, bodyId: instance, admission: built.sourceAdmission).unwrap()
+    val retained = sources.checkBuilt(arena: compiler.mid, session: compiler.sourceFactSession(), body: built.canonical).unwrap()
+    val snapshot = compiler.mid
+    val executable = MidExecutableBody.prepare(c: inout compiler, body: <MidParametricBody.input canonical=built.canonical />, bodyId: instance).unwrap()
+    match retained.checkOutput(arena: compiler.mid, session: compiler.sourceFactSession(), body: executable.canonical).error {
+        MidVerifyError.None => {}
+        _ => { panic("real production passes lost source bindings") }
+    }
+    val body = compiler.mid.bodies[executable.canonical.body - 1U64]
+    mut val authored = 18446744073709551615U64
+    mut val index = 0U64
+    while index < body.locals.len {
+        if !compiler.mid.locals[body.locals.start + index].sourceBinding.isUnproved() { authored = index }
+        index += 1U64
+    }
+    if authored == 18446744073709551615U64 { panic("retention test has no authored occurrence") }
+    for mode in [0U64, 1U64, 2U64, 3U64, 4U64, 5U64] {
+        val changed = output(arena: inout compiler.mid, body: executable.canonical, authored: authored, mode: mode)
+        val verification = retained.checkOutput(arena: compiler.mid, session: compiler.sourceFactSession(), body: changed)
+        if mode == 0U64 || mode == 5U64 {
+            match verification.error { MidVerifyError.None => {} _ => { panic("unchanged prefix or unproved suffix rejected") } }
+        } else {
+            match verification.error { MidVerifyError.InvalidBindingOrigin => {} _ => { panic("altered output binding origin accepted") } }
+        }
+    }
+    match retained.checkOutput(arena: compiler.mid, session: compiler.sourceFactSession() + 1U64, body: executable.canonical).error {
+        MidVerifyError.InvalidBindingOrigin => {}
+        _ => { panic("foreign output session accepted") }
+    }
+    // New canonical outputs must leave the accepted input snapshot intact.
+    val original = snapshot.bodies[built.canonical.body - 1U64]
+    index = 0U64
+    while index < original.locals.len {
+        val before = snapshot.locals[original.locals.start + index]
+        val after = compiler.mid.locals[original.locals.start + index]
+        if before.sourceNameStart != after.sourceNameStart || !before.sourceBinding.matches(origin: after.sourceBinding) { panic("accepted input snapshot changed") }
+        index += 1U64
+    }
+    print("binding-origin-retention-ok")
+}

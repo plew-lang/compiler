@@ -1,0 +1,78 @@
+// A production request must reject a missing authored origin before publishing
+// executable Mid, even when raw ownership/CFG checks still pass.
+use @Std/Io only { print }
+use /Frontend only { Comp, FrontendInput, analyzeFrontendDeclarations, finalizeFrontendExecutables }
+use /SourceAccess only { SourceAccess }
+use /Ir only { SourceBindingOrigin }
+use /Mid/Build only { MidFunctionTemplates, MidBuildError }
+use /Mid/Program only { MidExecutableRequests, MidProgramError }
+use /Mid/Prepare only { MidPreparationError }
+use /Mid/Verify only { MidVerifyError }
+use /Mid/Diagnostics only { midPreparationDiagnostic }
+use /Mid/Ir only { MidLocalDecl }
+
+fn scenario(removeOrigin: Bool) {
+    mut val compiler = <Comp />
+    analyzeFrontendDeclarations(c: inout compiler,
+        input: <FrontendInput.Text path="required-origin.pw" text="fn main() {{ val item = 1I64 }}" />,
+        sources: <SourceAccess />).unwrap()
+    finalizeFrontendExecutables(c: inout compiler).unwrap()
+    val instance = compiler.monoWork.bodyAt(index: 0U64)
+    val function = compiler.arena.bodyInstanceAt(index: instance - 1U64).fnIdx
+    mut val templates = <MidFunctionTemplates />
+    val built = templates.body(c: inout compiler, function: function)
+    match built.error { MidBuildError.None => {} _ => { panic("required-origin source failed") } }
+    val body = compiler.mid.bodies[built.canonical.body - 1U64]
+    mut val index = 0U64
+    mut val authored = 0U64
+    while index < body.locals.len {
+        val local = compiler.mid.locals[body.locals.start + index]
+        if !local.sourceBinding.isUnproved() {
+            authored += 1U64
+            if removeOrigin {
+                compiler.mid.locals.set(i: body.locals.start + index, value: <MidLocalDecl
+                    typeTerm=local.typeTerm typeRecipe=local.typeRecipe sourceScope=local.sourceScope
+                    isUnique=local.isUnique isParameter=local.isParameter isBorrowed=local.isBorrowed
+                    isInout=local.isInout isCaptureCell=local.isCaptureCell ownsAtEntry=local.ownsAtEntry
+                    isDropFlag=local.isDropFlag isReturnPlace=local.isReturnPlace
+                    preparedExpr=local.preparedExpr sourceNameStart=local.sourceNameStart
+                    sourceBinding=<SourceBindingOrigin /> />)
+            }
+        }
+        index += 1U64
+    }
+    if authored != 1U64 { panic("required-origin test did not find its authored local") }
+    mut val requests = <MidExecutableRequests />
+    match requests.request(c: inout compiler, templates: inout templates, bodyId: instance) {
+        Result.Ok(value: _) => {
+            if removeOrigin { panic("production request accepted missing authored origin") }
+        }
+        Result.Err(error: val failure) => {
+            if !removeOrigin { panic("production request rejected intact authored origin") }
+            match failure {
+                MidProgramError.Preparation(bodyId: val failed, error: val error) => {
+                    if failed != instance { panic("origin failure lost body identity") }
+                    match error {
+                        MidPreparationError.VerificationFailed(body: _, verification: val verification) => {
+                            match verification.error {
+                                MidVerifyError.InvalidBindingOrigin => {
+                                    if midPreparationDiagnostic(c: inout compiler, fnIdx: function, failure: error).isSome() { panic("binding-origin invariant became a source diagnostic") }
+                                }
+                                _ => { panic("wrong missing-origin verification reason") }
+                            }
+                        }
+                        _ => { panic("missing origin failed at wrong stage") }
+                    }
+                }
+                _ => { panic("missing origin lost verification domain") }
+            }
+        }
+    }
+}
+
+fn main() {
+    scenario(removeOrigin: false)
+    print("valid-origin-ok")
+    scenario(removeOrigin: true)
+    print("missing-origin-rejected")
+}
