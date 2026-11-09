@@ -1,0 +1,146 @@
+// Completed call/getter homes keep their recipe and owner through preparation.
+use @Std/Io only { print }
+use /Frontend only { Comp, FrontendInput, analyzeFrontendDeclarations, finalizeFrontendExecutables }
+use /SourceAccess only { SourceAccess }
+use /Ir only { CallTemplateKind }
+use /Mid/Build only { MidFunctionTemplates, MidBuildError }
+use /Mid/Ir only { MidPlace, MidPlaceNode, MidProjection, MidOperand, MidRvalue, MidStatement, MidTerminator, MidCallTarget }
+use /Mid/Program only { MidExecutableRequests }
+
+fn fieldRoot(place: MidPlace) -> U64 {
+    if place.rootTag != 1U64 || place.projections.count() != 1U64 { panic("completed result lost typed field home") }
+    match place.projections[0U64] {
+        MidProjection.Field(index: val index, typeTerm: _, isBoxed: val boxed) => { if index != 0U64 || boxed { panic("result field crossed a storage boundary") } }
+        _ => { panic("completed result reopened an Index or dereference") }
+    }
+    return place.local
+}
+
+fn checkPreparedField(compiler: inout Comp, place: MidPlaceNode, leafType: U64) {
+    if place.typeRecipe != 0U64 || !compiler.typeRefEq(a: place.typeTerm, b: leafType) { panic("prepared field lost its concrete value type") }
+    for index in 0U64..<place.projections.len {
+        val projection = compiler.mid.projections[place.projections.start + index]
+        if projection.tag != 1U64 || projection.isBoxed || projection.index != 0U64 || !compiler.typeRefEq(a: projection.typeTerm, b: leafType) { panic("prepared field changed representation boundary") }
+    }
+}
+
+fn check(name: String, uniqueOwner: Bool, aggregate: Bool) {
+    mut val compiler = <Comp />
+    analyzeFrontendDeclarations(c: inout compiler, input: <FrontendInput.File path="tests/fixtures/run/stable_result_home_evaluation.pw" />, sources: <SourceAccess stdRoot="std/".bytes() />).unwrap()
+    finalizeFrontendExecutables(c: inout compiler).unwrap()
+    val owner = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: name).nameId)
+    val consume = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "consume").nameId)
+    mut val templates = <MidFunctionTemplates />
+    val built = templates.body(c: inout compiler, function: owner)
+    match built.error { MidBuildError.None => {} _ => { panic("result-home body build failed") } }
+    mut val selected: Array[MidPlace] = []
+    for block in built.body.blocks {
+        match block.terminator {
+            MidTerminator.Call(callee: val callee, receiver: _, args: val args, destination: _, target: _) => {
+                mut val isConsume = false
+                match callee { MidCallTarget.Template(site: val site) => { match compiler.callTemplateAt(index: compiler.callTemplateIndex(siteKey: site)).kind { CallTemplateKind.Direct(callee: val target, receiver: _, args: _, calleeTypeArgs: _, proofId: _) => { isConsume = target == consume } _ => {} } } _ => {} }
+                if isConsume { match args[0U64] { MidOperand.Copy(place: val place) => { selected.append(place) } _ => { panic("field read changed its ownership mode") } } }
+            }
+            _ => {}
+        }
+    }
+    if selected.count() != 1U64 { panic("result call consumer not exercised") }
+    if aggregate {
+        for block in built.body.blocks {
+            for statement in block.statements {
+                match statement {
+                    MidStatement.Assign(destination: _, value: val value) => { match value {
+                        MidRvalue.Aggregate(exprId: _, kind: _, resultTerm: _, fieldCount: _, elements: val elements) => {
+                            if elements.count() == 2U64 { match elements[0U64].operand { MidOperand.Copy(place: val place) => { selected.append(place) } _ => { panic("aggregate field ownership changed") } } }
+                        }
+                        _ => {}
+                    } }
+                    _ => {}
+                }
+            }
+        }
+    }
+    if selected.count() != (if aggregate { give 2U64 } else { give 1U64 }) { panic("result aggregate consumer not exercised") }
+    mut val roots: Array[U64] = []
+    for place in selected {
+        mut val origin = place
+        mut val snapshots = 0U64
+        if place.projections.count() == 0U64 {
+            for block in built.body.blocks {
+                for statement in block.statements {
+                    match statement {
+                        MidStatement.Assign(destination: val destination, value: val value) => {
+                            if destination.rootTag == 1U64 && destination.local == place.local { match value { MidRvalue.Use(operand: val operand) => { match operand { MidOperand.Copy(place: val source) => { origin = source snapshots += 1U64 } _ => {} } } _ => {} } }
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            if snapshots != 1U64 { panic("conservative field snapshot lost its original home") }
+        }
+        val root = fieldRoot(place: origin)
+        val local = built.body.locals[root]
+        if local.sourceNameStart != 0U64 || local.typeTerm != 0U64 || local.typeRecipe == 0U64 { panic("completed result recipe not exercised") }
+        if snapshots != (if local.isUnique { give 1U64 } else { give 0U64 }) { panic("unique role and stable result selection disagree") }
+        mut val producers = 0U64
+        for block in built.body.blocks {
+            match block.terminator {
+                MidTerminator.Call(callee: _, receiver: _, args: _, destination: val destination, target: _) => {
+                    if destination.rootTag == 1U64 && destination.local == root {
+                        if destination.projections.count() != 0U64 || destination.typeRecipe != local.typeRecipe { panic("field owner is not the completed producer result") }
+                        producers += 1U64
+                    }
+                }
+                _ => {}
+            }
+        }
+        if producers != 1U64 { panic("completed producer evaluated more than once") }
+        roots.append(root)
+    }
+    if aggregate && roots[0U64] == roots[1U64] { panic("separate call/getter occurrences reused a result") }
+    mut val instance = 0U64
+    for bodyId in 1U64..<(compiler.arena.bodyInstanceCount() + 1U64) { if compiler.arena.bodyInstanceAt(index: bodyId - 1U64).fnIdx == owner { instance = bodyId } }
+    if instance == 0U64 { panic("real result-home instance missing") }
+    mut val requests = <MidExecutableRequests />
+    val executable = requests.request(c: inout compiler, templates: inout templates, bodyId: instance).unwrap()
+    val prepared = compiler.mid.bodies[executable.canonical.body - 1U64]
+    for root in roots {
+        val local = compiler.mid.locals[prepared.locals.start + root]
+        if local.typeTerm == 0U64 || local.typeRecipe != 0U64 || compiler.arena.typeTermIsUnique(ref: local.typeTerm) != uniqueOwner { panic("prepared result type/ownership did not resolve its recipe") }
+    }
+    val leafType = compiler.funcParamAt(params: compiler.arena.functionAt(index: consume).params, index: 0U64).ty
+    mut val preparedReads = 0U64
+    for blockIndex in 0U64..<prepared.blocks.len {
+        val block = compiler.mid.blocks[prepared.blocks.start + blockIndex]
+        val term = compiler.mid.terminators[block.terminator - 1U64]
+        if term.tag == 4U64 && term.args.len == 2U64 {
+            val operand = compiler.mid.operands[compiler.mid.callArguments[term.args.start] - 1U64]
+            if operand.place != 0U64 {
+                val place = compiler.mid.places[operand.place - 1U64]
+                if place.rootTag == 1U64 && place.local == selected[0U64].local { checkPreparedField(compiler: inout compiler, place: place, leafType: leafType) preparedReads += 1U64 }
+            }
+        }
+        for statementIndex in 0U64..<block.statements.len {
+            val statement = compiler.mid.statements[block.statements.start + statementIndex]
+            if statement.value != 0U64 {
+                val value = compiler.mid.rvalues[statement.value - 1U64]
+                if value.tag == 3U64 && value.elements.len == 2U64 {
+                    val element = compiler.mid.aggregateElements[value.elements.start]
+                    val operand = compiler.mid.operands[element.operand - 1U64]
+                    if operand.place != 0U64 {
+                        val place = compiler.mid.places[operand.place - 1U64]
+                        if place.rootTag == 1U64 && place.local == selected[1U64].local { checkPreparedField(compiler: inout compiler, place: place, leafType: leafType) preparedReads += 1U64 }
+                    }
+                }
+            }
+        }
+    }
+    if preparedReads != selected.count() { panic("executable consumers changed completed result homes") }
+}
+fn main() {
+    check(name: "genericRead", uniqueOwner: false, aggregate: true)
+    check(name: "getterRead", uniqueOwner: false, aggregate: true)
+    check(name: "uniqueRead", uniqueOwner: true, aggregate: false)
+    check(name: "genericUniqueRead", uniqueOwner: true, aggregate: false)
+    print("stable-result-homes-ok")
+}

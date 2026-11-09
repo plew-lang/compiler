@@ -238,3 +238,24 @@ inout/unique/borrowed role controls and the early guards remain unchanged.
 New test syntax/index setup errors were corrected, not counted as product RED.
 This is existing-contract coverage, not a new product optimization or timing
 claim. Next execute increments B and C, then full finite reconciliation.
+
+## Remaining Increment B (validated)
+
+mid_stable_result_homes uses real File source, finalized real BodyInstance and
+MidExecutableRequests normal pipeline. It asserts completed generic/getter
+producer homes through call/aggregate consumers, exactly one producer per
+occurrence, pending recipes, concrete prepared owner/String field/projection
+types and executable uses. Known/generic unique-owner field reads retain
+marked-role snapshots and verify actual prepared unique type without inferring
+copyability from metadata. stable_result_home_evaluation checks getter/producer
+counts, old values across replacement, stored values and unique deinit once.
+Field-only raw Index exclusion and normalized PriorCallResult materialization
+are separate source assertions; no invalid synthetic body or new API.
+
+Final value-abi-result-homes-final: both compile/link/run0, exact stdout, empty
+stderr, inputs unchanged, same saved12d8d834...c1724 candidate. Independent
+w1b_result_homes_review matched all219 current/before/after input SHAs, actual
+outputs/goldens, candidate and IR/binary artifacts, approving B only.
+[Evidence](../../../evidence/performance-regression-history/value-passing-implementation/stable-result-homes/validation.json).
+No product source change or timing claim. C and whole-inventory reconciliation
+remain open, followed by W2-W4/com-ffar.

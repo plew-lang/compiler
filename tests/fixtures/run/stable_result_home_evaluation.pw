@@ -1,0 +1,59 @@
+use @Std/Io only { print }
+use @Std/Core only { Index }
+struct Box[T] { pub val value: T }
+pub impl Box { factory }
+struct Pair { pub val first: String pub val second: String }
+pub impl Pair { factory }
+struct Payload { pub val value: String }
+pub impl Payload { factory }
+struct Table { pub mut val row: Payload }
+pub impl Table { factory }
+pub impl Table as Index[U64] {
+    type Output = Payload
+    fn index(key: U64) -> Payload { print("get") return self.row }
+}
+unique struct Owner { pub val value: String }
+pub impl Owner { factory }
+impl Owner { deinit { print("drop " + self.value) } }
+fn backing(text: String) -> String { return text + " backing" }
+fn made[T](value: T) -> Box[T] { print("make") return <Box[T] value=value /> }
+fn owned(value: String) -> Owner { print("owned") return <Owner value=value /> }
+fn ownedGeneric[T](item: T, value: String) -> Owner { print("owned generic") return <Owner value=value /> }
+fn effect() -> I64 { print("effect") return 0I64 }
+fn effectText() -> String { print("effect text") return "suffix" }
+fn consume(value: String, extra: I64) { print(value) }
+fn replace(target: inout Table) -> I64 {
+    print("replace")
+    target.row = <Payload value=backing(text: "replacement") />
+    return 0I64
+}
+fn replaceText(target: inout Table) -> String {
+    print("replace text")
+    target.row = <Payload value=backing(text: "later") />
+    return "suffix"
+}
+fn genericRead(input: String) {
+    consume(value: made(value: input).value, extra: effect())
+    val pair = <Pair first=made(value: input).value second=effectText() />
+    print(pair.first)
+}
+fn getterRead(target: inout Table) {
+    consume(value: target[0U64].value, extra: replace(target: inout target))
+    val pair = <Pair first=target[0U64].value second=replaceText(target: inout target) />
+    print(pair.first)
+}
+fn uniqueRead(input: String) {
+    consume(value: owned(value: input).value, extra: effect())
+}
+fn genericUniqueRead(input: String) {
+    consume(value: ownedGeneric(item: 1I64, value: input).value, extra: effect())
+}
+fn main() {
+    genericRead(input: backing(text: "generic"))
+    mut val table = <Table row=<Payload value=backing(text: "getter") /> />
+    getterRead(target: inout table)
+    print(table.row.value)
+    uniqueRead(input: backing(text: "unique"))
+    genericUniqueRead(input: backing(text: "generic unique"))
+    print("done")
+}

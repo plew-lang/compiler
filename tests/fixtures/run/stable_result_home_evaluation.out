@@ -1,0 +1,22 @@
+make
+effect
+generic backing
+make
+effect text
+generic backing
+get
+replace
+getter backing
+get
+replace text
+replacement backing
+later backing
+owned
+effect
+unique backing
+drop unique backing
+owned generic
+effect
+generic unique backing
+drop generic unique backing
+done
