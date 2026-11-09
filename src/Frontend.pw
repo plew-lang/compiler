@@ -249,6 +249,7 @@ struct ExistentialMethodConditions {
     val root: U64
     val bounds: Array[TraitBound]
     val proofs: Array[U64]
+    val normalizations: Array[ProjectionNormalizationStep] = []
 }
 
 struct InterfaceRequirementKey { val traitIndex: U64 val slot: U64 }

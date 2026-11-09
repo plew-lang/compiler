@@ -2043,6 +2043,7 @@ pub struct SelectedCallConstraints {
     pub val owner: U64
     pub val bounds: Array[TraitBound]
     pub val proofs: Array[U64]
+    pub val normalizations: Array[ProjectionNormalizationStep] = []
 }
 pub impl SelectedCallConstraints { factory }
 

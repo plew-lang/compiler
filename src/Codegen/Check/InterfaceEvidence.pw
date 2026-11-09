@@ -143,22 +143,23 @@ impl Comp {
 
     inout fn sourceInterfaceSignatureBounds(template: CallTemplate, root: U64, traitIndex: U64, slot: U64) -> Result[Array[TraitBound], CompileDiagnostic] {
         val source = try self.requireSourceInterfaceRoot(root: root, site: template.siteKey, receiver: template.receiverTypeTerm, traitIndex: traitIndex)
-        return self.interfaceSignatureBounds(root: root, bound: source.bound, traitIndex: traitIndex, slot: slot, offset: template.siteKey.originStart)
+        return self.interfaceSignatureBounds(bound: source.bound, traitIndex: traitIndex, slot: slot, offset: template.siteKey.originStart)
     }
 
-    inout fn interfaceSignatureBounds(root: U64, bound: TraitBound, traitIndex: U64, slot: U64, offset: U64) -> Result[Array[TraitBound], CompileDiagnostic] {
+    inout fn interfaceSignatureBounds(bound: TraitBound, traitIndex: U64, slot: U64, offset: U64) -> Result[Array[TraitBound], CompileDiagnostic] {
         val trait = self.decls.traitAt(index: traitIndex)
         if slot == 0U64 || slot > trait.reqs.count() {
             return <Result.Err error=self.diagnosticAt(offset: offset, msg: "selected interface has no retained requirement") />
         }
         val requirement = self.traitReqAt(reqs: trait.reqs, index: slot - 1U64)
-        val proof = <StaticConformanceProof.AssumedBound source=<DeclarationBoundRef.Interface index=root - 1U64 /> />
-        val signature = <SourceCallSignature.Trait bound=bound traitIndex=traitIndex environment=<InstanceEnvironment receiverRef=bound.subject proof=proof /> />
+        // Substitute the selected interface contract only. Ambient concrete
+        // projection closure would replace an opaque interface premise before
+        // its own assumptions and retained derivations can be interpreted.
         mut val bounds: Array[TraitBound] = []
         mut val index = 0U64
         while index < requirement.signatureBounds.len {
             val clause = self.conformBoundAt(bounds: requirement.signatureBounds, index: index)
-            bounds.append(<TraitBound subject=(try self.sourceCallSignatureParameter(ref: clause.subject, signature: signature)) constraint=(try self.sourceCallSignatureConstraint(constraint: clause.constraint, signature: signature)) offset=clause.offset />)
+            bounds.append(<TraitBound subject=self.traitBoundTypeTerm(ref: clause.subject, bound: bound, traitIndex: traitIndex) constraint=self.traitConstraintInBound(constraint: clause.constraint, bound: bound, traitIndex: traitIndex) offset=clause.offset />)
             index += 1U64
         }
         return <Result.Ok value=bounds />
@@ -350,22 +351,26 @@ impl Comp {
         if declaration.signatureBounds.len == 0U64 { return <Result.Ok value=<Optional.Some v=<ExistentialMethodConditions root=0U64 bounds=[] proofs=[] /> /> /> }
         val root = try self.createInterfaceContractRoot(target: target, traitIndex: traitIndex, slot: requirement + 1U64)
         val scope = <DeclarationTypeScope origin=<DeclarationScopeOrigin.InterfaceContract /> owner=0U64 parameters=<FuncBindRange start=0U64 len=0U64 /> interfaceRoot=root />
-        val bounds = try self.interfaceSignatureBounds(root: root, bound: self.interfaceEvidenceBound(index: root - 1U64), traitIndex: traitIndex, slot: requirement + 1U64, offset: declaration.nameStart)
+        val bounds = try self.interfaceSignatureBounds(bound: self.interfaceEvidenceBound(index: root - 1U64), traitIndex: traitIndex, slot: requirement + 1U64, offset: declaration.nameStart)
         val source = <DeclarationBoundRef.Interface index=root - 1U64 />
         mut val assumptions: Array[DeclarationBoundRef] = [source]
         try self.appendInterfaceAssociatedAssumptions(source: source, steps: [], assumptions: inout assumptions)
         mut val proofs: Array[U64] = []
+        mut val normalizations: Array[ProjectionNormalizationStep] = []
         for bound in bounds {
             val proof = match (try self.queryViewedTraitConstraint(demand: <ConformanceProofDemand.SourceAdmission />, ref: bound.subject, constraint: bound.constraint, assumptions: assumptions)) {
                 ConformanceProofResult.Found(proof: val proof) => proof,
                 ConformanceProofResult.Missing | ConformanceProofResult.Ambiguous(owner: _, demand: _, selectedSource: _) => { return <Result.Ok value=<Optional.None /> /> },
             }
             try self.checkStaticProofEvidence(proof: proof, offset: bound.offset, assumptions: assumptions)
-            val dependencies = try self.scopedProofDependencies(proof: proof, scope: scope, offset: bound.offset)
+            for step in (try self.recordSelectedBoundNormalizations(bound: bound, proof: proof, assumptions: assumptions)) {
+                try self.appendRetainedProjectionEquation(step: step, normalizations: inout normalizations)
+            }
+            val dependencies = (try self.scopedProofDependencies(proof: proof, scope: scope, offset: bound.offset, normalizations: normalizations)).merged(other: (try self.scopedProjectionDependencies(equations: normalizations, context: normalizations, scope: scope, offset: bound.offset)))
             if dependencies.unguaranteedInterface { return <Result.Ok value=<Optional.None /> /> }
-            try self.checkSelectedCallConstraintBoundary(expected: bound, proof: proof, offset: bound.offset, assumptions: assumptions)
+            try self.checkRetainedWitnessClause(expected: (try self.replayBoundNormalizations(bound: bound, normalizations: normalizations)), proof: proof, normalizations: normalizations, offset: bound.offset, assumptions: assumptions)
             proofs.append(self.freezeStaticConformanceProof(proof: proof))
         }
-        return <Result.Ok value=<Optional.Some v=<ExistentialMethodConditions root=root bounds=bounds proofs=proofs /> /> />
+        return <Result.Ok value=<Optional.Some v=<ExistentialMethodConditions root=root bounds=bounds proofs=proofs normalizations=normalizations /> /> />
     }
 }

@@ -1000,7 +1000,12 @@ pub impl Comp {
 
     inout fn queryViewedTraitProof(demand: ConformanceProofDemand, ref: U64, traitStart: U64, traitLen: U64, traitArgs: Array[U64] = [], traitArgsOpen: Bool = false, assocNames: Array[U64] = [], assocValues: Array[U64] = [], assumptions: Array[DeclarationBoundRef] = []) -> Result[ConformanceProofResult, CompileDiagnostic] {
         if ref == 0U64 || ref >= self.arena.typeCount() || traitStart == 0U64 || self.traitNameLenByOwner(owner: traitStart) != traitLen { return <Result.Ok value=<ConformanceProofResult.Missing /> /> }
-        val resolved = (try self.resolveTy(tyRef: ref))
+        // Projection closure belongs to this query's explicit premises, not
+        // the body cursor. Otherwise an opaque interface promise can silently
+        // be replaced by a concrete implementation of its fixed receiver.
+        val resolved = if self.arena.typeAt(index: ref).assocNameId != 0U64 {
+            give try self.closeBodyProjectionTerms(ref: ref, environment: <InstanceEnvironment />, selfRef: 0U64, itemRef: 0U64, assumptions: assumptions)
+        } else { give try self.resolveTy(tyRef: ref) }
         val proof = (try self.queryTraitPatternProof(demand: demand, baseRef: resolved, traitId: 0U64, traitOwner: traitStart, traitArgs: <PatternTypeInput.Values values=traitArgs />, patternParams: <PatternBindInput.Values values=[] />, traitArgsOpen: traitArgsOpen, assocNames: assocNames, assocValues: assocValues, assumptions: assumptions))
         return <Result.Ok value=proof />
     }
@@ -1291,21 +1296,8 @@ pub impl Comp {
             // Preserve the exact SourceAdmission inputs. Recording afterward
             // cannot change the selected proof or replace its source provenance.
             val original = <TraitBound subject=subject constraint=constraint offset=offset />
-            mut val normalizations: Array[ProjectionNormalizationStep] = []
-            try self.recordConditionTypeNormalization(ref: subject, assumptions: assumptions, normalizations: inout normalizations)
-            for argument in constraint.key.positionalArgs { try self.recordConditionTypeNormalization(ref: argument, assumptions: assumptions, normalizations: inout normalizations) }
-            mut val names: Array[U64] = []
-            mut val values: Array[U64] = []
-            for predicate in constraint.assocPredicates {
-                try self.recordConditionTypeNormalization(ref: predicate.value, assumptions: assumptions, normalizations: inout normalizations)
-                names.append(predicate.member)
-                values.append(predicate.value)
-            }
-            if !(try self.recordSelectedProofPredicateNormalizations(proof: proof, traitOwner: constraint.key.owner, names: names, values: values, assumptions: assumptions, normalizations: inout normalizations, offset: offset)) {
-                return <Result.Err error=self.diagnosticAt(offset: offset, msg: "associated constraint has incomplete retained output evidence", failureDomain: <FailureDomain.Internal />) />
-            }
-            try self.checkProjectionNormalizations(normalizations: normalizations, offset: offset, assumptions: assumptions)
-            val expected = <TraitBound subject=(try self.replayProjectionNormalizations(ref: subject, normalizations: normalizations, offset: offset)) constraint=(try self.replayConstraintNormalizations(constraint: constraint, normalizations: normalizations, offset: offset)) offset=offset />
+            val normalizations = try self.recordSelectedBoundNormalizations(bound: original, proof: proof, assumptions: assumptions)
+            val expected = try self.replayBoundNormalizations(bound: original, normalizations: normalizations)
             try self.checkRetainedWitnessClause(expected: expected, proof: proof, normalizations: normalizations, offset: offset, assumptions: assumptions)
             evidence.append(<ConformanceAssociatedEvidence clause=declaration.assocBounds.start + index bound=original proof=self.freezeStaticConformanceProof(proof: proof) normalizations=normalizations />)
             index += 1U64

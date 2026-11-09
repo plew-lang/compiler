@@ -4129,15 +4129,25 @@ pub impl Comp {
             Optional.None => { return <Result.Err error=self.diagnosticAt(offset: template.siteKey.originStart, msg: "selected call constraint owner is not prepared") /> }
             Optional.Some(v: val snapshot) => {
                 val plan = snapshot.constraints()
+                val normalizations: Array[ProjectionNormalizationStep] = if plan.normalizations.count() == 0U64 { give [] } else {
+                    give match (try self.instantiateProjectionNormalizations(normalizations: plan.normalizations, environment: environment, selfRef: selfRef, itemRef: itemRef)) {
+                        Optional.Some(v: val normalizations) => normalizations
+                        Optional.None => { return <Result.Err error=self.diagnosticAt(offset: template.siteKey.originStart, msg: "executable call retains unresolved projection evidence") /> }
+                    }
+                }
                 mut val bounds: Array[TraitBound] = []
                 mut val proofs: Array[StaticConformanceProof] = []
                 mut val position = 0U64
                 while position < plan.bounds.count() {
                     val source = plan.bounds[position]
-                    val grounded = try self.groundCallableBound(bound: source, environment: environment, selfRef: selfRef, itemRef: itemRef)
+                    // Substitute structurally, then replay the concrete form
+                    // of the source owner's saved equations. First-concrete
+                    // selection still checks the authored source path below.
+                    val substituted = self.substituteRetainedBound(bound: source, environment: environment, selfRef: selfRef, itemRef: itemRef)
+                    val grounded = try self.replayBoundNormalizations(bound: substituted, normalizations: normalizations)
                     val proof = self.thawStaticConformanceProof(id: plan.proofs[position])
                     try self.checkFirstConcreteSourcePath(bound: source, proof: proof, receiverRef: grounded.subject, environment: environment, selfRef: selfRef, itemRef: itemRef)
-                    val state = try self.instantiateConstraintProof(proof: proof, receiverRef: grounded.subject, environment: environment, selfRef: selfRef, itemRef: itemRef)
+                    val state = try self.instantiateConstraintProof(proof: proof, receiverRef: grounded.subject, environment: environment, selfRef: selfRef, itemRef: itemRef, normalizations: normalizations)
                     match state {
                         StaticProofInstantiation.Ready(proof: val concrete) => {
                             // Preserve the selected obligation, including its

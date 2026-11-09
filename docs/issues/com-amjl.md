@@ -1246,3 +1246,46 @@ No whole-task acceptance, new formal timing, fixed point, full suites or ASan is
 claimed. Main/seed/adopted carrier remain unchanged. Next: close the distinct
 source-call bound normalization producer/consumer path without new lookup at
 the reader, then resume remaining com-amjl guarantees.
+
+#### Source and interface normalization snapshots (WIP)
+
+[RED, predicate-only sensitivity, fresh113 and public execution](../../../evidence/rejection-domains/diagnostic-domain-implementation/retained-source-interface-normalizations.json)
+close the previously failing simple interface call and a second contract-to-table
+defect exposed by the added predicate-only control. Source-call snapshots retain
+original bounds, exact proofs and the equations connecting them. Source and
+associated-clause producers share equation recording; saved consumers use pure
+bound replay and structural substitution. Empty equation context never selects
+a query comparator to repair missing evidence. First-concrete admission still
+checks the original authored source path.
+
+Interface contract formation likewise retains equations. Its signature helper
+only substitutes the selected trait contract; it no longer invokes body closure.
+The common projected conformance query interprets its explicit assumptions
+instead of resolving its projection through the ambient body cursor. Concrete
+boxing replays the contract equations under the exact validated root and box
+proof, then passes that same context to proof replay and saved-only comparison.
+It cannot obtain Concrete evidence through the static Universal adapter.
+
+The initial predicate-only program exposed a null dispatch slot: check/emit
+succeeded but both native/lazy execution exited139. Diagnosis found contract
+predicate closure to Element competing with the opaque interface fact
+Parent.Child. Pure signature substitution alone exposed that the query head
+also used ambient resolveTy; both responsibility crossings are removed.
+Temporary diagnostic wrappers/prints are fully reverted. The final public
+predicate program and all three earlier interface programs pass check, AOT/native
+and lazy execution with exact45 goldens; the missing-promise control retains its
+where diagnostic. Build20261109T072410-build-b5d46c and source check pass.
+
+The final internal source and fresh candidate each pass113 controls. New8
+controls include missing/wrong output/wrong proof and recovery. Predicate-only
+missing explicitly asserts matching proof/expected subjects, so it cannot pass
+by detecting an unrelated subject mismatch. Restoring only the empty-context
+query fallback yields seven successes and that one targeted panic. Exact patch
+reconstruction, byte restoration and restored8 are retained. Independent review
+accepted the source responsibilities and checked the final build/fresh/public
+hashes and outcomes; final evidence reconciliation is retained in the artifact.
+
+This is a finite increment, not closure of com-amjl/met-si6j. Formal performance
+and fixed point are next; full suites/ASan remain outstanding. Reconcile every
+original source-entry/retained-fact/final-consumer guarantee and remaining
+associated binding occurrence/output derivations before task closure.

@@ -1,0 +1,53 @@
+// A prepared source call retains the equations connecting authored and proof bounds.
+use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontend }
+use ../../../src/SourceAccess only { SourceAccess }
+use ../../../src/Ir only { SelectedCallConstraints, ProjectionNormalizationStep }
+use @Std/Process only { argAt }
+use @Std/Io only { print }
+fn main() {
+    mut val compiler = <Comp />
+    match analyzeFrontend(c: inout compiler, input: <FrontendInput.File path=argAt(1I64) />, sources: <SourceAccess stdRoot=argAt(2I64).bytes() />) {
+        Result.Ok(value: _) => {}
+        Result.Err(error: val error) => { panic(error.message) }
+    }
+    val scenario = argAt(3I64)
+    mut val checked = false
+    for index in 0U64..<compiler.callTemplateCount() {
+        match compiler.preparedCallConstraints(index: index) {
+            Optional.None => {}
+            Optional.Some(v: val snapshot) => {
+                val plan = snapshot.constraints()
+                if plan.normalizations.count() != 0U64 {
+                    val template = compiler.callTemplateAt(index: index)
+                    compiler.checkSelectedCallConstraintPlan(template: template, expected: plan.bounds, plan: plan).unwrap()
+                    mut val equations = plan.normalizations
+                    if scenario == "missing" || scenario == "predicateMissing" { equations = [] }
+                    if scenario == "predicateMissing" {
+                        if plan.bounds.count() != 1U64 || plan.bounds[0U64].constraint.assocPredicates.count() == 0U64 { panic("predicate-only control has no associated predicate") }
+                        val bound = plan.bounds[0U64]
+                        val proof = compiler.thawStaticConformanceProof(id: plan.proofs[0U64])
+                        val selected = compiler.staticProofBound(proof: proof, traitIdx: compiler.decls.traitIndexByOffset(offset: bound.constraint.key.owner)).unwrap()
+                        if !compiler.typeRefEq(a: bound.subject, b: selected.subject) { panic("predicate-only control depends on a subject mismatch") }
+                    }
+                    if scenario == "wrongOutput" {
+                        val step = equations[0U64]
+                        equations[0U64] = <ProjectionNormalizationStep source=step.source proof=step.proof output=step.source />
+                    }
+                    if scenario == "wrongProof" {
+                        val step = equations[0U64]
+                        equations[0U64] = <ProjectionNormalizationStep source=step.source proof=0U64 output=step.output />
+                    }
+                    if scenario != "" {
+                        val changed = <SelectedCallConstraints owner=plan.owner bounds=plan.bounds proofs=plan.proofs normalizations=equations />
+                        if compiler.checkSelectedCallConstraintPlan(template: template, expected: plan.bounds, plan: changed).isOk() { panic("source call accepted missing or altered projection evidence") }
+                    }
+                    if compiler.activeAssumptionAdmission.count() != 0U64 { panic("source call rejection leaked the active prerequisite stack") }
+                    compiler.checkSelectedCallConstraintPlan(template: template, expected: plan.bounds, plan: plan).unwrap()
+                    checked = true
+                }
+            }
+        }
+    }
+    if !checked { panic("source call lost its prepared normalization evidence") }
+    print("ok")
+}

@@ -532,7 +532,7 @@ impl Comp {
     inout fn concreteInterfaceConditions(conditions: ExistentialMethodConditions, evidence: ExistentialBoxEvidence, requirement: U64) -> Result[CallableConstraintEvidence, CompileDiagnostic] {
         if conditions.bounds.count() != conditions.proofs.count() { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "interface contract has incomplete public evidence") /> }
         if conditions.bounds.count() == 0U64 {
-            if conditions.root != 0U64 { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "empty interface contract unexpectedly owns a proof scope") /> }
+            if conditions.root != 0U64 || conditions.normalizations.count() != 0U64 { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "empty interface contract unexpectedly owns a proof scope") /> }
             return <Result.Ok value=<CallableConstraintEvidence.Recorded bounds=[] proofs=[] /> />
         }
         if conditions.root == 0U64 || !self.interfaceEvidenceIsValid(index: conditions.root - 1U64) { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "interface contract has no admitted root") /> }
@@ -544,17 +544,23 @@ impl Comp {
         try self.checkConversionProofEvidence(proof: <ValueConversionProof.ExistentialBox sourceRef=evidence.sourceRef targetRef=evidence.targetRef traitIdx=evidence.traitIdx proof=evidence.proof />, offset: contract.bound.offset)
         val binder = self.arena.typeAt(index: contract.bound.subject)
         val environment = <InstanceEnvironment params=[<Bind nameStart=binder.nameStart nameLen=binder.nameLen nameId=binder.nameId paramId=binder.paramId fieldStart=0U64 fieldLen=0U64 />] args=[evidence.sourceRef] receiverRef=evidence.sourceRef proof=evidence.proof />
-        val context = <InterfaceProofContext sourceRoot=conditions.root interpretation=<InterfaceRootInterpretation.Concrete proof=evidence.proof /> environment=environment />
+        val rootContext = <InterfaceProofContext sourceRoot=conditions.root interpretation=<InterfaceRootInterpretation.Concrete proof=evidence.proof /> environment=environment />
+        val normalizations = match (try self.replayProjectionEquations(saved: conditions.normalizations, environment: environment, selfRef: evidence.sourceRef, itemRef: 0U64, context: <Optional.Some v=rootContext />, inherited: [])) {
+            Optional.Some(v: val normalizations) => normalizations
+            Optional.None => { return <Result.Err error=self.diagnosticAt(offset: contract.bound.offset, msg: "interface contract retains unresolved projection evidence") /> }
+        }
+        val context = <InterfaceProofContext sourceRoot=conditions.root interpretation=rootContext.interpretation environment=environment normalizations=normalizations />
         mut val bounds: Array[TraitBound] = []
         mut val proofs: Array[StaticConformanceProof] = []
         for index in 0U64..<conditions.bounds.count() {
             val original = conditions.bounds[index]
-            val bound = try self.groundCallableBound(bound: original, environment: environment, selfRef: evidence.sourceRef, itemRef: 0U64)
+            val substituted = self.substituteRetainedBound(bound: original, environment: environment, selfRef: evidence.sourceRef, itemRef: 0U64)
+            val bound = try self.replayBoundNormalizations(bound: substituted, normalizations: context.normalizations)
             val proof = match (try self.replayConstraintProof(proof: self.thawStaticConformanceProof(id: conditions.proofs[index]), receiver: bound.subject, environment: environment, selfRef: evidence.sourceRef, itemRef: 0U64, context: <Optional.Some v=context />, normalizations: context.normalizations)) {
                 ConstraintProofReplay.Concrete(proof: val proof) => proof,
                 _ => { return <Result.Err error=self.diagnosticAt(offset: bound.offset, msg: "promised interface member has no concrete condition evidence") /> },
             }
-            try self.checkSelectedCallConstraintBoundary(expected: bound, proof: proof, offset: bound.offset)
+            try self.checkRetainedWitnessClause(expected: bound, proof: proof, normalizations: context.normalizations, offset: bound.offset)
             bounds.append(bound)
             proofs.append(proof)
         }

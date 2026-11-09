@@ -1243,6 +1243,8 @@ pub impl Comp {
         if plan.owner != scope.owner || plan.bounds.count() != expected.count() || plan.proofs.count() != expected.count() {
             return <Result.Err error=self.diagnosticAt(offset: template.siteKey.originStart, msg: "selected call has incomplete constraint evidence") />
         }
+        try self.checkProjectionNormalizations(normalizations: plan.normalizations, offset: template.siteKey.originStart, assumptions: assumptions)
+        try self.requireDeclarationProofSupport(dependencies: (try self.scopedProjectionDependencies(equations: plan.normalizations, context: plan.normalizations, scope: scope, offset: template.siteKey.originStart)), offset: template.siteKey.originStart)
         mut val index = 0U64
         while index < expected.count() {
             val bound = expected[index]
@@ -1250,8 +1252,9 @@ pub impl Comp {
                 return <Result.Err error=self.diagnosticAt(offset: template.siteKey.originStart, msg: "selected call constraint evidence has a different substitution") />
             }
             val proof = self.thawStaticConformanceProof(id: plan.proofs[index])
-            try self.checkDeclarationCallProof(proof: proof, scope: scope, offset: template.siteKey.originStart)
-            try self.checkSelectedCallConstraintBoundary(expected: bound, proof: proof, offset: template.siteKey.originStart, assumptions: assumptions)
+            try self.checkStaticProofEvidence(proof: proof, offset: template.siteKey.originStart, assumptions: assumptions)
+            try self.requireDeclarationProofSupport(dependencies: (try self.scopedProofDependencies(proof: proof, scope: scope, offset: template.siteKey.originStart, normalizations: plan.normalizations)), offset: template.siteKey.originStart)
+            try self.checkRetainedWitnessClause(expected: (try self.replayBoundNormalizations(bound: bound, normalizations: plan.normalizations)), proof: proof, normalizations: plan.normalizations, offset: template.siteKey.originStart, assumptions: assumptions)
             index += 1U64
         }
         return <Result.Ok value=() />
@@ -1273,6 +1276,7 @@ pub impl Comp {
         val scope = try self.callConstraintScope(template: template)
         val assumptions = try self.declarationScopeAssumptions(scope: scope)
         mut val proofs: Array[U64] = []
+        mut val normalizations: Array[ProjectionNormalizationStep] = []
         for bound in bounds {
             val proof = try self.viewedTraitConstraintProof(demand: <ConformanceProofDemand.SourceAdmission />, ref: bound.subject, constraint: bound.constraint, assumptions: assumptions)
             if self.proofIsMissing(proof: proof) {
@@ -1291,10 +1295,13 @@ pub impl Comp {
                 return <Result.Err error=self.diagnosticAt(offset: bound.offset, msg: "type argument does not conform to the trait required by `where`") />
             }
             try self.checkDeclarationCallProof(proof: proof, scope: scope, offset: template.siteKey.originStart)
-            try self.checkSelectedCallConstraintBoundary(expected: bound, proof: proof, offset: template.siteKey.originStart, assumptions: assumptions)
+            for step in (try self.recordSelectedBoundNormalizations(bound: bound, proof: proof, assumptions: assumptions)) {
+                try self.appendRetainedProjectionEquation(step: step, normalizations: inout normalizations)
+            }
+            try self.checkRetainedWitnessClause(expected: (try self.replayBoundNormalizations(bound: bound, normalizations: normalizations)), proof: proof, normalizations: normalizations, offset: template.siteKey.originStart, assumptions: assumptions)
             proofs.append(self.freezeStaticConformanceProof(proof: proof))
         }
-        if !self.recordBuildingCallConstraints(index: templateIndex, plan: <SelectedCallConstraints owner=scope.owner bounds=bounds proofs=proofs />) {
+        if !self.recordBuildingCallConstraints(index: templateIndex, plan: <SelectedCallConstraints owner=scope.owner bounds=bounds proofs=proofs normalizations=normalizations />) {
             return <Result.Err error=self.diagnosticAt(offset: template.siteKey.originStart, msg: "cannot replace prepared call constraint evidence") />
         }
         return <Result.Ok value=() />
@@ -1572,6 +1579,58 @@ impl Comp {
         return <Result.Ok value=dependencies.caller />
     }
 
+    // Substitution is structural. A saved-plan consumer must not repair a
+    // missing projection equation by closing through ambient conformance.
+    inout fn substituteRetainedBound(bound: TraitBound, environment: InstanceEnvironment, selfRef: U64, itemRef: U64) -> TraitBound {
+        val subject = self.groundTermInEnvironment(ref: bound.subject, params: environment.params, values: environment.args, selfRef: selfRef, itemRef: itemRef)
+        mut val arguments: Array[U64] = []
+        for argument in bound.constraint.key.positionalArgs { arguments.append(self.groundTermInEnvironment(ref: argument, params: environment.params, values: environment.args, selfRef: selfRef, itemRef: itemRef)) }
+        mut val predicates: Array[TraitAssocPredicate] = []
+        for predicate in bound.constraint.assocPredicates { predicates.append(<TraitAssocPredicate member=predicate.member value=self.groundTermInEnvironment(ref: predicate.value, params: environment.params, values: environment.args, selfRef: selfRef, itemRef: itemRef) span=predicate.span />) }
+        return <TraitBound subject=subject constraint=<TraitConstraint key=<TraitInstanceKey owner=bound.constraint.key.owner positionalArgs=arguments /> positionalArgsOpen=bound.constraint.positionalArgsOpen assocPredicates=predicates /> offset=bound.offset />
+    }
+
+    inout fn replayBoundNormalizations(bound: TraitBound, normalizations: Array[ProjectionNormalizationStep]) -> Result[TraitBound, CompileDiagnostic] {
+        if normalizations.count() == 0U64 { return <Result.Ok value=bound /> }
+        return <Result.Ok value=<TraitBound subject=(try self.replayProjectionNormalizations(ref: bound.subject, normalizations: normalizations, offset: bound.offset)) constraint=(try self.replayConstraintNormalizations(constraint: bound.constraint, normalizations: normalizations, offset: bound.offset)) offset=bound.offset /> />
+    }
+
+    // Source admission records the exact query's equations once. Saved-plan
+    // consumers use replayBoundNormalizations/checkRetainedWitnessClause only.
+    inout fn recordSelectedBoundNormalizations(bound: TraitBound, proof: StaticConformanceProof, assumptions: Array[DeclarationBoundRef]) -> Result[Array[ProjectionNormalizationStep], CompileDiagnostic] {
+        mut val normalizations: Array[ProjectionNormalizationStep] = []
+        try self.recordConditionTypeNormalization(ref: bound.subject, assumptions: assumptions, normalizations: inout normalizations)
+        for argument in bound.constraint.key.positionalArgs { try self.recordConditionTypeNormalization(ref: argument, assumptions: assumptions, normalizations: inout normalizations) }
+        mut val names: Array[U64] = []
+        mut val values: Array[U64] = []
+        for predicate in bound.constraint.assocPredicates {
+            try self.recordConditionTypeNormalization(ref: predicate.value, assumptions: assumptions, normalizations: inout normalizations)
+            names.append(predicate.member)
+            values.append(predicate.value)
+        }
+        if !(try self.recordSelectedProofPredicateNormalizations(proof: proof, traitOwner: bound.constraint.key.owner, names: names, values: values, assumptions: assumptions, normalizations: inout normalizations, offset: bound.offset)) { return <Result.Err error=self.diagnosticAt(offset: bound.offset, msg: "selected bound has incomplete retained output evidence", failureDomain: <FailureDomain.Internal />) /> }
+        try self.checkProjectionNormalizations(normalizations: normalizations, offset: bound.offset, assumptions: assumptions)
+        return <Result.Ok value=normalizations />
+    }
+
+    inout fn scopedProjectionDependencies(equations: Array[ProjectionNormalizationStep], context: Array[ProjectionNormalizationStep], scope: DeclarationTypeScope, offset: U64) -> Result[DeclarationProofDependencies, CompileDiagnostic] {
+        mut val dependencies = <DeclarationProofDependencies />
+        for step in equations {
+            if step.source == 0U64 || step.source >= self.arena.typeCount() || self.arena.typeAt(index: step.source).assocNameId == 0U64 { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "selected condition has invalid projection evidence") /> }
+            val projection = self.arena.typeAt(index: step.source)
+            // Integrity has admitted the projection equation. Its free
+            // dependencies are the receiver, trait arguments and output;
+            // the proved projection itself is not an unresolved obligation.
+            if (try self.retainedDeclarationTypeDependency(ref: self.typeTermProjectionReceiver(t: projection), scope: scope, offset: offset, normalizations: context)) { dependencies = dependencies.merged(other: <DeclarationProofDependencies caller=true />) }
+            for argument in projection.assocTraitArgs {
+                if (try self.retainedDeclarationTypeDependency(ref: argument, scope: scope, offset: offset, normalizations: context)) { dependencies = dependencies.merged(other: <DeclarationProofDependencies caller=true />) }
+            }
+            if step.output != 0U64 && (try self.retainedDeclarationTypeDependency(ref: step.output, scope: scope, offset: offset, normalizations: context)) { dependencies = dependencies.merged(other: <DeclarationProofDependencies caller=true />) }
+            dependencies = dependencies.merged(other: (try self.scopedProofDependencies(proof: self.thawStaticConformanceProof(id: step.proof), scope: scope, offset: offset, normalizations: context)))
+        }
+        return <Result.Ok value=dependencies />
+    }
+
     inout fn scopedWitnessDependencies(witness: WitnessMatch, scope: DeclarationTypeScope, offset: U64, normalizations: Array[ProjectionNormalizationStep] = []) -> Result[DeclarationProofDependencies, CompileDiagnostic] {
         mut val context = normalizations
         for step in (try self.retainedProofProjectionContext(proof: <StaticConformanceProof.ConcreteWitness witness=witness />)) {
@@ -1585,19 +1644,7 @@ impl Comp {
         }
         if witness.conditions != 0U64 {
             if witness.conditions > self.arena.witnessConditionPlanCount() { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "selected conformance has an invalid condition plan") /> }
-            for step in self.arena.witnessConditionPlanAt(index: witness.conditions - 1U64).normalizations {
-                if step.source == 0U64 || step.source >= self.arena.typeCount() || self.arena.typeAt(index: step.source).assocNameId == 0U64 { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "selected condition has invalid projection evidence") /> }
-                val projection = self.arena.typeAt(index: step.source)
-                // Integrity has admitted the projection equation. Its free
-                // dependencies are the receiver, trait arguments and output;
-                // the proved projection itself is not an unresolved obligation.
-                if (try self.retainedDeclarationTypeDependency(ref: self.typeTermProjectionReceiver(t: projection), scope: scope, offset: offset, normalizations: context)) { dependencies = dependencies.merged(other: <DeclarationProofDependencies caller=true />) }
-                for argument in projection.assocTraitArgs {
-                    if (try self.retainedDeclarationTypeDependency(ref: argument, scope: scope, offset: offset, normalizations: context)) { dependencies = dependencies.merged(other: <DeclarationProofDependencies caller=true />) }
-                }
-                if step.output != 0U64 && (try self.retainedDeclarationTypeDependency(ref: step.output, scope: scope, offset: offset, normalizations: context)) { dependencies = dependencies.merged(other: <DeclarationProofDependencies caller=true />) }
-                dependencies = dependencies.merged(other: (try self.scopedProofDependencies(proof: self.thawStaticConformanceProof(id: step.proof), scope: scope, offset: offset, normalizations: context)))
-            }
+            dependencies = dependencies.merged(other: (try self.scopedProjectionDependencies(equations: self.arena.witnessConditionPlanAt(index: witness.conditions - 1U64).normalizations, context: context, scope: scope, offset: offset)))
             for proof in self.arena.witnessConditionPlanAt(index: witness.conditions - 1U64).proofs {
                 dependencies = dependencies.merged(other: (try self.scopedProofDependencies(proof: self.thawStaticConformanceProof(id: proof), scope: scope, offset: offset, normalizations: context)))
             }
