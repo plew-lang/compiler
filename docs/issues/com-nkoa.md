@@ -26,3 +26,22 @@ Define the proof that permits each removed check/copy, retain effect closure/pub
 [com-604k](com-604k.md), scope record [com-esri](com-esri.md): **Outside: optional optimization**.
 
 More precise effect summaries/interprocedural borrowing is optional. Required effect closure, conservative unknown targets and current access safety remain included.
+
+## Physical Guaranteed-Value ABI Observation
+
+[Source and Swift comparison](../../../evidence/performance-regression-history/value-self-abi.md)
+and [probe artifacts](../../../evidence/performance-regression-history/value-self-abi-probe.json)
+record a finite current observation: selected guaranteed Borrow removes call-edge
+ARC acquisition, but copyable aggregate self is still lowered as an aggregate
+value through the common byval ABI. A32-array/256-byte read-only recursive
+probe retains whole-self transfers after the standard LLVM pipeline and clangO2.
+Swift6.2.3 -O forwards a stable self address for the corresponding UInt8/UInt
+probe, even with method inlining disabled. No throughput ratio or compiler-wide
+contribution is established.
+
+Any future guaranteed indirect ABI must retain required evaluation snapshots,
+source-place stability, escape/async acquisition and consistency across all
+callable entries. Distinguish language borrow from internal guaranteed value
+passing. Do not simply remove byval or infer unknown effects as absent. This
+observation refines this optional investigation; it changes no adopted ABI,
+priority, dependencies or existing-feature acceptance requirement.
