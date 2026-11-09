@@ -1,0 +1,16 @@
+drop explicit backing
+before explicit backing
+explicit backing
+1
+drop default backing
+before default backing
+default backing
+2
+drop aggregate backing
+before aggregate backing
+aggregate backing
+3
+drop stable effect backing
+stable backing
+stable backing
+4

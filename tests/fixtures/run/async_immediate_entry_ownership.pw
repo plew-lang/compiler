@@ -1,0 +1,22 @@
+use @Std/Io only { print }
+unique struct Resource { pub val number: I64 }
+pub impl Resource { factory }
+impl Resource {
+    deinit { print("drop resource") print(self.number) }
+}
+fn backing(text: String) -> String { return text + " backing" }
+async fn instant(resource: move Resource, text: String) -> Promise[I64] {
+    print("body " + text)
+    print(resource.number)
+    return resource.number
+}
+async fn main() {
+    val original = backing(text: "immediate")
+    val resource = <Resource number=7I64 />
+    val pending = instant(resource: move resource, text: original)
+    print("returned")
+    print(original)
+    val result = await pending
+    print(result)
+    print("done")
+}

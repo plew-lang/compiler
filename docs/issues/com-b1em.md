@@ -259,3 +259,23 @@ outputs/goldens, candidate and IR/binary artifacts, approving B only.
 [Evidence](../../../evidence/performance-regression-history/value-passing-implementation/stable-result-homes/validation.json).
 No product source change or timing claim. C and whole-inventory reconciliation
 remain open, followed by W2-W4/com-ffar.
+
+## Remaining Increment C (validated)
+
+value_snapshot_deinit_reentry checks user deinit during later explicit/default/
+aggregate evaluation: old snapshot values, changed global values, exact cleanup
+count and stable immutable-local counterpart. async_immediate_entry_ownership
+checks noawait completion with managed String input, moved Resource, cleanup
+before entry returns, original after-use and later await of returned Promise.
+It uses supported scalar result payload; Promise[String] rejection remains
+unchanged baseline unsupported behavior, not product RED or new support.
+
+Final value-abi-reentry-async-final: both compile/link/run0, exact stdout, empty
+stderr, unchanged inputs with candidate12d8d834...c1724. Neutral
+w1b_reentry_async_review matched all219 current/before/after input SHAs, actual
+outputs/goldens/candidate/artifacts. Source and generated IR confirm frame stores,
+Borrow retain / Move transfer, caller Promise share before first resume, and
+normal cleanup after immediate completion.
+[Evidence](../../../evidence/performance-regression-history/value-passing-implementation/reentry-and-immediate-async/validation.json).
+No product source changes. Final finite reconciliation/reruns remain open,
+including async_enum_param_arc and prior local/self/field/owner controls.

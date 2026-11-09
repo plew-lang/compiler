@@ -1,0 +1,45 @@
+use @Std/Io only { print }
+mut val current: String = "initial"
+mut val dropped = 0I64
+unique struct Reenter { pub val replacement: String }
+pub impl Reenter { factory }
+impl Reenter {
+    deinit {
+        print("drop " + self.replacement)
+        current = self.replacement
+        dropped += 1I64
+    }
+}
+struct Pair { pub val first: String pub val second: String }
+pub impl Pair { factory }
+fn backing(text: String) -> String { return text + " backing" }
+fn later(replacement: String) -> I64 {
+    val token = <Reenter replacement=backing(text: replacement) />
+    return 0I64
+}
+fn laterDefault() -> I64 { return later(replacement: "default") }
+fn laterText() -> String {
+    val token = <Reenter replacement=backing(text: "aggregate") />
+    return "suffix"
+}
+fn consume(value: String, extra: I64) { print(value) }
+fn consumeDefault(value: String, extra: I64 = laterDefault()) { print(value) }
+fn main() {
+    current = backing(text: "before explicit")
+    consume(value: current, extra: later(replacement: "explicit"))
+    print(current)
+    print(dropped)
+    current = backing(text: "before default")
+    consumeDefault(value: current)
+    print(current)
+    print(dropped)
+    current = backing(text: "before aggregate")
+    val pair = <Pair first=current second=laterText() />
+    print(pair.first)
+    print(current)
+    print(dropped)
+    val stable = backing(text: "stable")
+    consume(value: stable, extra: later(replacement: "stable effect"))
+    print(stable)
+    print(dropped)
+}
