@@ -1289,3 +1289,38 @@ This is a finite increment, not closure of com-amjl/met-si6j. Formal performance
 and fixed point are next; full suites/ASan remain outstanding. Reconcile every
 original source-entry/retained-fact/final-consumer guarantee and remaining
 associated binding occurrence/output derivations before task closure.
+
+#### Remaining original-contract connections after b71d8507
+
+A fresh contract-first read-only inspection confirms these are current source
+connections, rather than obsolete historical Next notes:
+
+- `readAdmittedSignatureRoot` has no production caller. Connect the free
+  annotation reader to selected callee parameter/result and final body signature
+  consumers; those still use `groundTermForBody`/`groundAndRecordBodyType`.
+- `SourceTypeUses.bindSignature` admits only FreeFunction. Non-free declarations,
+  body annotations and defaults still need their original owner/premises carried
+  into common source admission.
+- Impl/member where clauses retain concatenation/re-lowering paths instead of
+  the free declaration's once-only clause/recipe handoff.
+- Associated bindings retain `PType.ref` without its authored occurrence/recipe;
+  connect that original right-hand side to selected output derivation.
+- Outside the free receipt gate, type/value view validation still calls
+  `resolveViewSourceKey`, whose lexical shortcut does not receive complete
+  positional trait arguments. A structural responsibility gap is confirmed;
+  public wrong-instance acceptance in those paths has not been newly executed.
+- The two originally authorized success-fixture setups still require correction
+  while retaining their original graph/equality assertions.
+
+The next substantial increment should connect the existing free reader to real
+call/body signature consumption; do not expand it to every owner at once.
+Source/interface condition snapshots repaired above remain accepted. These
+connections are already within this task's original scope, not new dependencies.
+
+[Formal measurement](../../../evidence/rejection-domains/diagnostic-domain-implementation/retained-source-interface-self-host.json)
+for b71d8507 reaches generation3 and identical LLVM/runtime over three runs.
+Median7.018803 seconds remains just above the7-second target; repair difficulty
+has not been established. The earlier disk-full attempt is excluded. Before
+further migration, inspect the locally duplicated integrity work in the new
+snapshot admission boundary without removing any check or weakening failure
+conditions. Full suites/ASan and task closure remain outstanding.
