@@ -4,7 +4,7 @@
 use @Std/Io only { eprint }
 use ../Diag only { eprintU64 }
 use ../Frontend only { Comp }
-use ../Ir only { InstanceEnvironment, CallReceiverPassing }
+use ../Ir only { InstanceEnvironment, CallReceiverPassing, CallArgumentPassing }
 use @Plew/Syntax only { rangeEquals }
 use ./Ir only { MidCanonicalArena, MidBodyNode, MidPlaceNode, MidRvalueNode, MidStatementNode, MidTerminatorNode }
 
@@ -242,6 +242,59 @@ pub fn canonicalMidTerminatorTypesMatch(c: inout Comp, body: MidBodyNode, term: 
         if term.tag == 5U64 { return signature.bodyResultType == 0U64 }
         if term.value == 0U64 { return false }
         return midTypesEqual(c: inout c, left: midOperandType(arena: c.mid, operandId: term.value), right: signature.bodyResultType)
+    }
+    return true
+}
+
+// The source builder and instantiator preserve a contiguous declaration-order
+// parameter prefix. Verify its semantic correspondence before a backend may
+// map those local indices to completed signature lanes. Equivalent TypeRefs
+// need not have the same storage ID. Async/closure/synthetic inputs have their
+// own explicit adapter contracts and do not use this normal correspondence.
+pub fn canonicalMidBodyParameterTypesMatch(c: inout Comp, body: MidBodyNode) -> Bool {
+    if body.bodyInstance == 0U64 { return true }
+    if body.bodyInstance > c.arena.bodyInstanceCount() { return false }
+    if !c.arena.bodyIsCallable(bodyId: body.bodyInstance) { return true }
+    val instance = c.arena.bodyInstanceAt(index: body.bodyInstance - 1U64)
+    val signature = c.arena.bodySignature(bodyId: body.bodyInstance)
+    if !signature.ready { return false }
+    // Closure keys and the global initializer sentinel are not Func indices.
+    if signature.closureSignatureId != 0U64 || instance.fnIdx == 18446744073709551615U64 { return true }
+    if instance.fnIdx >= c.arena.functionCount() { return false }
+    val declaration = c.arena.functionAt(index: instance.fnIdx)
+    if declaration.isAsync { return true }
+    if declaration.isExtern || declaration.hasRecv != (signature.receiverType != 0U64) || signature.parameterTypes.count() != signature.parameterPassings.count() { return false }
+    if signature.receiverType == 0U64 { match signature.receiverPassing { CallReceiverPassing.None => {} _ => { return false } } }
+    val receiverCount = if signature.receiverType == 0U64 { give 0U64 } else { give 1U64 }
+    val count = receiverCount + signature.parameterTypes.count()
+    if count > body.locals.len { return false }
+    mut val index = 0U64
+    while index < body.locals.len {
+        val local = c.mid.locals[body.locals.start + index]
+        if local.isParameter != (index < count) { return false }
+        if index < count {
+            mut val expected = signature.receiverType
+            mut val inoutInput = false
+            mut val moveInput = false
+            if index < receiverCount {
+                match signature.receiverPassing {
+                    CallReceiverPassing.None => { return false }
+                    CallReceiverPassing.Inout => { inoutInput = true }
+                    CallReceiverPassing.Move => { moveInput = true }
+                    CallReceiverPassing.Borrow => {}
+                }
+            } else {
+                val parameter = index - receiverCount
+                expected = signature.parameterTypes[parameter]
+                match signature.parameterPassings[parameter] {
+                    CallArgumentPassing.Inout => { inoutInput = true }
+                    CallArgumentPassing.Move => { moveInput = true }
+                    CallArgumentPassing.Borrow => {}
+                }
+            }
+            if expected == 0U64 || local.typeRecipe != 0U64 || !midTypesEqual(c: inout c, left: local.typeTerm, right: expected) || local.isInout != inoutInput || local.ownsAtEntry != moveInput { return false }
+        }
+        index += 1U64
     }
     return true
 }

@@ -96,3 +96,30 @@ final evidence reconciliation independently accepted checkpoint 1.
 This is checkpoint 1 only. Direct call/read paths still use stored descriptor
 compatibility adapters, not typed Value/Home inputs. Checkpoints 2–6, actual
 address forwarding, benefit/go-no-go and final task gates remain open.
+
+## Normal Semantic Correspondence Prerequisite
+
+[Normal correspondence evidence](../../../evidence/performance-regression-history/value-passing-implementation/w2-protocol/normal-correspondence.json)
+records the first checkpoint 2 prerequisite. Executable Mid verification now
+checks a normal synchronous callable's contiguous parameter-local prefix against
+its completed BodySignature, using semantic equality rather than raw TypeRef IDs,
+and checks Inout/Move flags. Closure, global initializer and synthetic/async entry
+contracts remain separate. No per-local duplicate role field, AST re-grounding
+or backend semantic equality search is introduced.
+
+A real I64-signature/U64-local native RED and an isolated baseline diagnostic
+show the original missing correspondence; the final native fixture checks 19
+cases. The existing return-type fixture now supplies its previously missing
+function declaration; its original return operands/types/assertions remain.
+Standard build `20261109T222955-build-05022c` passed with immutable inputs. Fresh
+`bin/plewc-value-abi-normal-correspondence-20261110` passes the new fixture and
+four existing Mid controls, 12 lazy CLI golden controls (including newtype and
+mutable captures), and raw/optimized byval controls. Neutral source review fixed
+closure/global keys being mistaken for Func indices; final source/build/input/
+artifact/RED/GREEN reconciliation independently accepted this prerequisite.
+
+The verified immutable MidExecutableBody snapshot will qualify the normal
+local-index/signature-lane mapping. This prerequisite is not completion of
+checkpoint 2: normal typed Value/Home call and binding consumers must still use
+that correspondence and the stored physical descriptor. Ready storage/synthetic
+maps, all-entry migration, preparation cost and final gates remain open.

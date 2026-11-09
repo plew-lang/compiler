@@ -1,0 +1,99 @@
+// Parameter bindings must agree with their body's completed semantic signature,
+// not merely share an LLVM width or occupy the expected number of local slots.
+use @Std/Io only { print }
+use @Std/Core only { assert }
+use /Frontend only { Comp, FrontendInput, analyzeFrontendDeclarations }
+use /SourceAccess only { SourceAccess }
+use /Ir only { BodyInstance, InstanceEnvironment, CallArgumentPassing, CallReceiverPassing, ClosureSignature, TypeRef }
+use /Mid only { MidBody, MidBlock, MidTerminator, MidLocalDecl, MidVerifyError, verifyExecutableCanonicalMidBody }
+
+fn check(mode: U64) {
+    mut val compiler = <Comp />
+    analyzeFrontendDeclarations(c: inout compiler, input: <FrontendInput.Text text="fn accept(item: I64) {{}}" path="parameters.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
+    val function = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "accept").nameId)
+    assert(function < compiler.arena.functionCount())
+    val integerName = compiler.internBytes(s: "I64")
+    val integer = compiler.simpleTypeRef(nameStart: integerName.nameStart, nameLen: integerName.nameLen)
+    val unsignedName = compiler.internBytes(s: "U64")
+    val unsigned = compiler.simpleTypeRef(nameStart: unsignedName.nameStart, nameLen: unsignedName.nameLen)
+    val duplicate = compiler.pushType(t: <TypeRef nameStart=integerName.nameStart nameLen=integerName.nameLen args=[] />)
+    assert(integer != duplicate)
+    assert(compiler.typeRefEq(a: integer, b: duplicate))
+    compiler.enqueueFinalDestruction(typeRef: integer).unwrap()
+    compiler.enqueueFinalDestruction(typeRef: unsigned).unwrap()
+    compiler.enqueueFinalDestruction(typeRef: duplicate).unwrap()
+    val instance = compiler.arena.registerBodyInstance(<BodyInstance fnIdx=function environment=<InstanceEnvironment /> />)
+    compiler.arena.setBodySignature(bodyId: instance, parameters: [integer], passings: [<CallArgumentPassing.Borrow />], result: 0U64, receiverPassing: if mode == 8U64 { give <CallReceiverPassing.Borrow /> } else { give <CallReceiverPassing.None /> })
+    val localType = if mode == 2U64 { give unsigned } else if mode == 1U64 { give duplicate } else { give integer }
+    val declaration = compiler.arena.functionAt(index: function)
+    val parameter = compiler.funcParamAt(params: declaration.params, index: 0U64)
+    val local = <MidLocalDecl typeTerm=localType sourceScope=0U64 isUnique=false isParameter=true isInout=mode == 3U64 ownsAtEntry=mode == 4U64 sourceNameStart=parameter.nameStart />
+    mut val locals: Array[MidLocalDecl] = [local]
+    if mode == 5U64 { locals = [] }
+    if mode == 6U64 { locals = [local, local] }
+    if mode == 7U64 { locals = [<MidLocalDecl typeTerm=integer sourceScope=0U64 isUnique=false isParameter=false />, local] }
+    val terminator = if mode == 4U64 { give <MidTerminator.Unreachable /> } else { give <MidTerminator.Return /> }
+    val body = compiler.mid.store(body: <MidBody bodyInstance=instance sourceFunction=function locals=locals blocks=[<MidBlock terminator=terminator />] />)
+    assert(compiler.mid.isWellFormed(body: body))
+    match verifyExecutableCanonicalMidBody(c: inout compiler, canonical: body).error {
+        MidVerifyError.None => { if mode >= 2U64 { print(mode) panic "invalid parameter correspondence accepted" } }
+        MidVerifyError.TypeMismatch => { assert(mode >= 2U64) }
+        _ => { panic "unexpected parameter correspondence failure" }
+    }
+}
+fn normalLanes(mode: U64, wrong: Bool) {
+    mut val compiler = <Comp />
+    val source = "struct Item {{}} impl Item {{ fn combine(item: U64) {{}} }} fn access(item: inout I64) {{}} unique struct Token {{}} fn consume(item: move Token) {{}} fn empty() {{}}"
+    analyzeFrontendDeclarations(c: inout compiler, input: <FrontendInput.Text text=source path="normal-lanes.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
+    val name = if mode == 0U64 { give "combine" } else if mode == 1U64 { give "access" } else if mode == 2U64 { give "consume" } else { give "empty" }
+    val function = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: name).nameId)
+    assert(function < compiler.arena.functionCount())
+    val typeName = compiler.internBytes(s: if mode == 0U64 { give "U64" } else if mode == 2U64 { give "Token" } else { give "I64" })
+    val type = compiler.simpleTypeRef(nameStart: typeName.nameStart, nameLen: typeName.nameLen)
+    val receiverName = compiler.internBytes(s: "Item")
+    val receiver = compiler.simpleTypeRef(nameStart: receiverName.nameStart, nameLen: receiverName.nameLen)
+    val instance = compiler.arena.registerBodyInstance(<BodyInstance fnIdx=function environment=<InstanceEnvironment /> />)
+    mut val parameters: Array[U64] = [type]
+    mut val passings: Array[CallArgumentPassing] = [if mode == 1U64 { give <CallArgumentPassing.Inout /> } else if mode == 2U64 { give <CallArgumentPassing.Move /> } else { give <CallArgumentPassing.Borrow /> }]
+    if mode == 3U64 { parameters = [] passings = [] }
+    if mode == 4U64 { passings = [] }
+    compiler.arena.setBodySignature(bodyId: instance, parameters: parameters, passings: passings, result: 0U64, receiverType: if mode == 0U64 { give receiver } else { give 0U64 }, receiverPassing: if mode == 0U64 { give <CallReceiverPassing.Borrow /> } else { give <CallReceiverPassing.None /> })
+    mut val locals: Array[MidLocalDecl] = []
+    if mode == 0U64 { locals.append(<MidLocalDecl typeTerm=if wrong { give type } else { give receiver } sourceScope=0U64 isUnique=false isParameter=true />) }
+    if mode != 3U64 {
+        locals.append(<MidLocalDecl typeTerm=if mode == 0U64 && wrong { give receiver } else { give type } sourceScope=0U64 isUnique=mode == 2U64 isParameter=true isInout=mode == 1U64 && !wrong ownsAtEntry=mode == 2U64 && !wrong />)
+    }
+    val body = compiler.mid.store(body: <MidBody bodyInstance=instance sourceFunction=function locals=locals blocks=[<MidBlock terminator=<MidTerminator.Unreachable /> />] />)
+    assert(compiler.mid.isWellFormed(body: body))
+    match verifyExecutableCanonicalMidBody(c: inout compiler, canonical: body).error {
+        MidVerifyError.None => { assert(!wrong && mode != 4U64) }
+        MidVerifyError.TypeMismatch => { assert(wrong || mode == 4U64) }
+        _ => { panic "unexpected normal lane error" }
+    }
+}
+fn nonNormalEntries() {
+    mut val compiler = <Comp />
+    compiler.arena.reserveTypeSentinel()
+    val global = compiler.arena.registerBodyInstance(<BodyInstance fnIdx=18446744073709551615U64 environment=<InstanceEnvironment /> />)
+    compiler.arena.setBodySignature(bodyId: global, parameters: [], passings: [], result: 0U64)
+    val globalBody = compiler.mid.store(body: <MidBody bodyInstance=global sourceFunction=18446744073709551615U64 blocks=[<MidBlock terminator=<MidTerminator.Return /> />] />)
+    match verifyExecutableCanonicalMidBody(c: inout compiler, canonical: globalBody).error { MidVerifyError.None => {} _ => { panic "global initializer misclassified as a normal function" } }
+    val closure = compiler.arena.registerBodyInstance(<BodyInstance fnIdx=9223372036854775808U64 environment=<InstanceEnvironment /> />)
+    compiler.arena.setClosureSignature(bodyId: closure, parameters: [], passings: [], result: 0U64, closure: <ClosureSignature />)
+    val closureBody = compiler.mid.store(body: <MidBody bodyInstance=closure sourceFunction=9223372036854775808U64 blocks=[<MidBlock terminator=<MidTerminator.Return /> />] />)
+    match verifyExecutableCanonicalMidBody(c: inout compiler, canonical: closureBody).error { MidVerifyError.None => {} _ => { panic "closure key misclassified as a function index" } }
+}
+fn main() {
+    mut val mode = 0U64
+    while mode <= 8U64 { check(mode: mode) mode += 1U64 }
+    normalLanes(mode: 0U64, wrong: false)
+    normalLanes(mode: 0U64, wrong: true)
+    normalLanes(mode: 1U64, wrong: false)
+    normalLanes(mode: 1U64, wrong: true)
+    normalLanes(mode: 2U64, wrong: false)
+    normalLanes(mode: 2U64, wrong: true)
+    normalLanes(mode: 3U64, wrong: false)
+    normalLanes(mode: 4U64, wrong: false)
+    nonNormalEntries()
+    print("ok")
+}

@@ -1,7 +1,8 @@
 // Explicit type inconsistencies must fail even when ownership is balanced.
 use @Std/Io only { print }
 use @Std/Core only { assert }
-use /Frontend only { Comp }
+use /Frontend only { Comp, FrontendInput, analyzeFrontendDeclarations }
+use /SourceAccess only { SourceAccess }
 use /Ir only { TypeRef, CallResolution, CallResolutionParameterTypeRange, BodyInstance, InstanceEnvironment, ValueConversionProof }
 use /Mid only { MidCastKind, MidCallTarget, MidCallReceiver, MidBody, MidBlock, MidStatement, MidTerminator, MidPlace, MidLocalDecl, MidOperand, MidRvalue, MidConstant, MidVerifyError, verifyExecutableCanonicalMidBody }
 use /Mid/Types only { midViewTypesMatch }
@@ -38,7 +39,11 @@ fn check(mode: U64) {
 }
 fn callAndReturn(mode: U64) {
     mut val c: Comp = <Comp />
-    c.arena.reserveTypeSentinel()
+    if mode >= 3U64 {
+        // Return validation needs a real callable owner, not an out-of-range
+        // function ID. The constructed return/type mismatch below is unchanged.
+        analyzeFrontendDeclarations(c: inout c, input: <FrontendInput.Text text="fn returned() -> I64 {{ return 0I64 }}" path="return-types.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
+    } else { c.arena.reserveTypeSentinel() }
     val integerName = c.internBytes(s: "I64")
     val integer = c.simpleTypeRef(nameStart: integerName.nameStart, nameLen: integerName.nameLen)
     val booleanName = c.internBytes(s: "Bool")

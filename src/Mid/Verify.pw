@@ -6,7 +6,7 @@ use ./AccessScopes only { canonicalMidAccessScopesValid }
 use ../Frontend only { Comp, PreparedSemanticFacts }
 use ../Ir only { Global, MatchSource, SemanticMatchKind, SemanticMatchPayload }
 use ./Ir only { MidCanonicalArena, canonicalMidPlaceIsWhole, MidBodyNode, MidBlockNode, MidPlaceNode, MidProjectionNode, MidOperandNode, MidRvalueNode, MidClosureCaptureNode, MidStatementNode, MidTerminatorNode, MidCanonicalBody, MidBody, MidOwnership }
-use ./Types only { canonicalMidStatementTypesMatch, canonicalMidTerminatorTypesMatch }
+use ./Types only { canonicalMidStatementTypesMatch, canonicalMidTerminatorTypesMatch, canonicalMidBodyParameterTypesMatch }
 use ./Drop only { analyzeCanonicalMidOwnershipFlow }
 
 // Verification phases have different representation contracts. Declaration
@@ -853,6 +853,7 @@ fn verifyCanonicalMidBodyStage(c: inout Comp, canonical: MidCanonicalBody, stage
     val flags: MidVerification = verifyCanonicalMidFlagInitialization(arena: c.mid, canonical: canonical)
     match flags.error { MidVerifyError.None => {} _ => { return flags } }
     val body: MidBodyNode = c.mid.bodies[canonical.body - 1U64]
+    if executable && !canonicalMidBodyParameterTypesMatch(c: inout c, body: body) { return <MidVerification error=<MidVerifyError.TypeMismatch /> /> }
     val origins = verifyCanonicalMidBindingOrigins(c: inout c, body: body)
     match origins.error { MidVerifyError.None => {} _ => { return origins } }
     val analysis = analyzeCanonicalMidOwnershipFlow(arena: c.mid, canonical: canonical)
