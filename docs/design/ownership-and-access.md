@@ -18,6 +18,21 @@ Plew's current unique model does not support arbitrary partial moves. Whole-valu
 
 Ordinary value parameters may use a guaranteed physical ABI while retaining by-value source semantics. That implementation borrowing does not make their source values aliases of the caller's mutable storage. Conversely, an explicit semantic borrow must retain its storage provenance even if both kinds of operand share a physical representation.
 
+For ordinary call values, binding/ownership preparation distinguishes authored
+immutability, initialized ownership and storage identity. An immutable shared
+handle does not freeze its referent, and a mutable binding cannot become stable
+merely because one callee reads it. A reusable value home must preserve the value
+at its original evaluation point through later arguments/defaults, callbacks and
+the call. Otherwise retain the evaluated snapshot with the ownership required
+by the selected passing contract.
+
+Semantic Copy establishes an owner and any required CoW share. Eliminating a
+redundant Copy belongs to ownership-aware Mid construction/optimization before
+executable verification. Reusing physical bytes at the LLVM boundary neither
+acquires that owner again nor removes its destruction edge. This preserves
+escaping values, deinit reentry, unique/inout restrictions and async acquisition
+independently of the [physical transport](representation-and-abi.md#logical-calls-and-private-physical-signatures).
+
 ### Async Activation Inputs
 
 The async entry boundary preserves the public call's guaranteed ordinary inputs,

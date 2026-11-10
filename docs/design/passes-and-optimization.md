@@ -64,6 +64,25 @@ The backend's omission of physical no-op destruction is a different optimization
 
 ## Proof Obligations for Broader Copy Elimination
 
+### Authored Stability and Backend Handoff
+
+Binding preparation authors immutable/owned/temporary storage facts at their
+semantic owner. Canonical Mid retains the accepted local origin and stability
+class through instantiation; executable ownership/access verification still
+checks initialization, lifetime and permitted use. Native addresses do not
+create these facts, and the backend does not rediscover them by scanning ASTs
+or guessing from a binding ID.
+
+Ready lowering projects verified facts once into the indexed transport plan
+specified by [the physical ABI](representation-and-abi.md#logical-calls-and-private-physical-signatures).
+Final readers consume that plan rather than rediscovering semantic stability
+or rescanning the body for each argument. Unproved cases keep conservative
+snapshots. This mandatory fact handoff is
+distinct from optional copy propagation and from LLVM scalarization: neither
+optimization may be required for the unoptimized transport to remain correct.
+
+### General Propagation
+
 The local transfer subset is not a proof for general propagation. A definition dominating a use is insufficient when a value defined outside a loop would be consumed on repeated iterations. Each consuming execution needs a valid fresh ownership definition. Propagating a place instead of its copied value must prove that intervening writes, borrows, captures and aliases cannot change the required snapshot.
 
 Removing an owner must preserve the destruction boundary of complete-expression temporaries, named bindings and explicit binding ends. A destination destroyed sooner is not an equivalent owner merely because reference counts eventually balance. Guaranteed by-value parameters are not consuming parameters; converting every call Copy to Move violates this distinction. Destination integration must preserve ReturnBoundary type and source-site provenance as well as alias and lifetime constraints.
