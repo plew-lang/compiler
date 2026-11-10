@@ -356,6 +356,18 @@ pub impl LlvmCtx {
         return <Result.Ok value=input />
     }
 
+    // This row was admitted against the exact function and native signature.
+    // No function-name lookup or physical classification is repeated here.
+    inout fn preparedLegacyParameter(parameterIndex: U64) -> Result[LLVMValueRef, CompileDiagnostic] {
+        if parameterIndex >= self.valueAbiParameters.count() { return <Result.Err error=valueAbiFailure(message: "prepared parameter index out of range") /> }
+        val parameter = self.valueAbiParameters[parameterIndex]
+        return <Result.Ok value=match parameter.passing {
+            LlvmValuePassing.Omitted => { give LLVMGetUndef(parameter.type) }
+            LlvmValuePassing.Direct => { give LLVMGetParam(self.curFn, parameter.physicalIndex) }
+            LlvmValuePassing.Indirect => { give llvmLoad(self.b, parameter.type, LLVMGetParam(self.curFn, parameter.physicalIndex), anon()) }
+        } />
+    }
+
     inout fn legacyValueParameter(function: LLVMValueRef, index: U64) -> Result[LLVMValueRef, CompileDiagnostic] {
         val handle = LLVMGetNamedFunction(self.mod, LLVMGetValueName(function))
         val abiId = self.valueAbiFunctions.getOr(key: handle, fallback: 0U64)

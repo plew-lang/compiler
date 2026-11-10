@@ -194,7 +194,7 @@ pub impl LlvmCtx {
 
     // Admission is the only place that matches frozen capture/parameter facts
     // to Mid locals. Emission consumes these physical conversions verbatim.
-    inout fn prepareClosureLocalBindings(c: inout Comp, body: MidBodyNode, parameterCount: U64, abiId: U64, environmentDrop: Bool) -> Result[LlvmClosureLocalBindings, CompileDiagnostic] {
+    inout fn prepareClosureLocalBindings(c: inout Comp, body: MidBodyNode, parameterCount: U64, abiId: U64, environmentDrop: Bool) -> Result[LlvmEntryLocalBindings, CompileDiagnostic] {
         if abiId == 0U64 || abiId > self.valueAbis.count() || body.bodyInstance == 0U64 || body.bodyInstance > c.arena.bodyInstanceCount() { return <Result.Err error=valueAbiFailure(message: "closure local admission identity out of range") /> }
         try self.validateClosureLocalEntry(abiId: abiId, plannedAbi: abiId, bodyId: body.bodyInstance, environmentDrop: environmentDrop)
         val closureBodyId = if environmentDrop {
@@ -260,7 +260,7 @@ pub impl LlvmCtx {
             bindings.set(i: localIndex, value: <LlvmLocalBinding.Environment field=index + 1U64 type=type />)
             index += 1U64
         }
-        return <Result.Ok value=<LlvmClosureLocalBindings environmentType=LLVMStructTypeInContext(self.ctx, arrayCPtr(fields), fields.count(), 0I32) bindings=bindings types=types /> />
+        return <Result.Ok value=<LlvmEntryLocalBindings environmentType=<Optional.Some v=LLVMStructTypeInContext(self.ctx, arrayCPtr(fields), fields.count(), 0I32) /> bindings=bindings types=types /> />
     }
 
     inout fn validateClosureLocalEntry(abiId: U64, plannedAbi: U64, bodyId: U64, environmentDrop: Bool) -> Result[(), CompileDiagnostic] {
@@ -271,18 +271,6 @@ pub impl LlvmCtx {
         }
         if !valid { return <Result.Err error=valueAbiFailure(message: "closure local entry convention mismatch") /> }
         return <Result.Ok value=() />
-    }
-
-    // This row was admitted against the exact function and native signature.
-    // No function-name lookup or physical classification is repeated here.
-    inout fn preparedLegacyParameter(parameterIndex: U64) -> Result[LLVMValueRef, CompileDiagnostic] {
-        if parameterIndex >= self.valueAbiParameters.count() { return <Result.Err error=valueAbiFailure(message: "prepared parameter index out of range") /> }
-        val parameter = self.valueAbiParameters[parameterIndex]
-        return <Result.Ok value=match parameter.passing {
-            LlvmValuePassing.Omitted => { give LLVMGetUndef(parameter.type) }
-            LlvmValuePassing.Direct => { give LLVMGetParam(self.curFn, parameter.physicalIndex) }
-            LlvmValuePassing.Indirect => { give llvmLoad(self.b, parameter.type, LLVMGetParam(self.curFn, parameter.physicalIndex), anon()) }
-        } />
     }
 
     inout fn emitClosures(c: inout Comp) -> Result[(), CompileDiagnostic] {

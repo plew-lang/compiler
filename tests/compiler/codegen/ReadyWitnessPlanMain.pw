@@ -1,0 +1,138 @@
+// Exact Backend.pw snapshot append; private representation admission controls.
+// This fixture constructs finalized boundary records, not a source conformance
+// proof. Source selection and cleanup execute in existing existential fixtures.
+use ./Frontend only { analyzeFrontendDeclarations, FrontendInput }
+use ./SourceAccess only { SourceAccess }
+use ./Ir only { FinalExistentialResolution, FinalExistentialMember, StaticConformanceProof }
+extern(c) {
+    fn LLVMGetAllocatedType(value~: LLVMValueRef) -> LLVMTypeRef
+    fn LLVMGetNextInstruction(value~: U64) -> U64
+    fn LLVMIsAStoreInst(value~: U64) -> U64
+    fn LLVMGetOperand(value~: U64, index~: U32) -> LLVMValueRef
+    fn LLVMIsAAllocaInst(value~: LLVMValueRef) -> U64
+    fn LLVMIsALoadInst(value~: LLVMValueRef) -> U64
+    fn LLVMIsAArgument(value~: LLVMValueRef) -> U64
+}
+fn requireWitnessOk[T](result: Result[T, CompileDiagnostic], stage: String, mode: U64) -> T {
+    match result {
+        Result.Ok(value: val value) => { return value }
+        Result.Err(error: val error) => {
+            eprint(text: "witness-plan mode=") eprintU64(n: mode)
+            eprint(text: " stage=") eprint(text: stage)
+            eprint(text: ": ") eprint(text: error.message) eprint(text: "\n")
+            panic "private witness setup or valid-path API failed"
+        }
+    }
+}
+fn requireWitnessInternal[T](result: Result[T, CompileDiagnostic], mode: U64) {
+    match result {
+        Result.Ok(value: _) => { eprintU64(n: mode) panic "malformed witness local plan accepted" }
+        Result.Err(error: val error) => { match error.failureDomain { FailureDomain.Internal => {} _ => { panic "wrong witness local plan failure domain" } } }
+    }
+}
+fn witnessPlanControl(mode: U64) {
+    val context = LLVMContextCreate()
+    val name = <CString.copied text="ready-witness-controls" />
+    val module = LLVMModuleCreateWithNameInContext(name.ptr, context)
+    val triple = LLVMGetDefaultTargetTriple()
+    val cpu = <CString.copied text="generic" />
+    val layout = plew_llvm_native_data_layout(cpu.ptr)
+    LLVMSetTarget(module, triple) LLVMSetDataLayout(module, layout)
+    LLVMDisposeMessage(triple) LLVMDisposeMessage(layout)
+    val builder = LLVMCreateBuilderInContext(context)
+    mut val backend = llvmContext(ctx: context, m: module, builder: builder)
+    mut val compiler = <Comp />
+    requireWitnessOk(result: analyzeFrontendDeclarations(c: inout compiler, input: <FrontendInput.Text text="fn control(item: I64) {{}}" path="ready-witness.pw" />, sources: <SourceAccess stdRoot=[] />), stage: "frontend declarations", mode: mode)
+    val functionIndex = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "control").nameId)
+    if functionIndex >= compiler.arena.functionCount() { panic "missing witness setup declaration" }
+    val integerName = compiler.internBytes(s: "I64")
+    val integer = compiler.simpleTypeRef(nameStart: integerName.nameStart, nameLen: integerName.nameLen)
+    val unsignedName = compiler.internBytes(s: "U64")
+    val unsigned = compiler.simpleTypeRef(nameStart: unsignedName.nameStart, nameLen: unsignedName.nameLen)
+    val pointerName = compiler.internBytes(s: "CPtr")
+    val pointer = compiler.pushType(t: <TypeRef nameStart=pointerName.nameStart nameLen=pointerName.nameLen args=[integer] />)
+    requireWitnessOk(result: compiler.enqueueFinalDestruction(typeRef: integer), stage: "finalize I64", mode: mode)
+    requireWitnessOk(result: compiler.enqueueFinalDestruction(typeRef: unsigned), stage: "finalize U64", mode: mode)
+    requireWitnessOk(result: compiler.enqueueFinalDestruction(typeRef: pointer), stage: "finalize CPtr", mode: mode)
+    val pointerReceiver = mode == 2U64 || mode == 3U64
+    val aliasesAddress = mode == 1U64 || mode == 3U64
+    val receiverType = if pointerReceiver { give pointer } else { give integer }
+    val receiverLlvm = if pointerReceiver { give backend.ptrty } else { give backend.i64ty }
+    val consumes = mode == 20U64
+    val receiverPassing = if consumes { give <CallReceiverPassing.Move /> } else if aliasesAddress { give <CallReceiverPassing.Inout /> } else { give <CallReceiverPassing.Borrow /> }
+    val argumentPassing = if consumes { give <CallArgumentPassing.Move /> } else if aliasesAddress { give <CallArgumentPassing.Inout /> } else { give <CallArgumentPassing.Borrow /> }
+    val environment = <InstanceEnvironment receiverRef=receiverType />
+    // The selected concrete target environment owns receiver representation.
+    // Mode18 corrupts that read authority while source/adapter/local stay I64;
+    // corrupting only the unused adapter environment would not test this map.
+    val targetId = compiler.arena.registerBodyInstance(<BodyInstance fnIdx=functionIndex environment=if mode == 18U64 { give <InstanceEnvironment receiverRef=unsigned /> } else { give environment } />)
+    compiler.arena.setBodySignature(bodyId: targetId, parameters: [integer], passings: [argumentPassing], result: 0U64, receiverType: receiverType, receiverPassing: receiverPassing)
+    val origin = if mode == 4U64 { give <BodyOrigin.Callable /> } else { give <BodyOrigin.ExistentialWitness resolution=if mode == 5U64 { give 1U64 } else { give 0U64 } member=if mode == 6U64 { give 1U64 } else { give 0U64 } /> }
+    val adapterId = compiler.arena.registerBodyInstance(<BodyInstance fnIdx=functionIndex environment=environment />, origin: origin)
+    compiler.arena.setBodySignature(bodyId: adapterId, parameters: [integer], passings: [argumentPassing], result: 0U64, receiverType: if mode == 10U64 { give unsigned } else { give receiverType }, receiverPassing: receiverPassing)
+    compiler.arena.finalExistentials.append(<FinalExistentialResolution sourceRef=receiverType targetRef=receiverType traitIdx=0U64 proof=<StaticConformanceProof.Missing /> members=[<FinalExistentialMember bodyId=if mode == 8U64 { give compiler.arena.bodyInstanceCount() + 1U64 } else { give targetId } adapterBodyId=if mode == 7U64 { give targetId } else { give adapterId } receiverPassing=receiverPassing parameterTypes=[integer] argumentPassings=[argumentPassing] resultType=0U64 sourceResultType=0U64 />] />)
+    val parameters: Array[LLVMTypeRef] = [backend.ptrty, if aliasesAddress || mode == 17U64 { give backend.ptrty } else { give backend.i64ty }]
+    val signature = LLVMFunctionType(backend.voidty, arrayCPtr(parameters), 2U64, 0I32)
+    val function = requireWitnessOk(result: backend.declareLegacyBodyFunction(name: name.ptr, signature: signature, bodyId: adapterId, family: <LlvmLegacyConvention.Witness />), stage: "declare witness", mode: mode)
+    mut val locals: Array[MidLocalDecl] = [<MidLocalDecl typeTerm=if mode == 9U64 { give unsigned } else { give receiverType } sourceScope=0U64 isUnique=false isParameter=true isInout=aliasesAddress isCaptureCell=mode == 11U64 ownsAtEntry=consumes || mode == 16U64 />, <MidLocalDecl typeTerm=if mode == 12U64 { give unsigned } else { give integer } sourceScope=0U64 isUnique=false isParameter=true isInout=aliasesAddress || mode == 13U64 isBorrowed=mode == 14U64 ownsAtEntry=consumes />]
+    if mode == 15U64 { locals.append(<MidLocalDecl typeTerm=integer sourceScope=0U64 isUnique=false isParameter=true />) }
+    // A nonparameter local confirms prefix checking does not truncate the body.
+    locals.append(<MidLocalDecl typeTerm=integer sourceScope=0U64 isUnique=false isParameter=false />)
+    val canonical = compiler.mid.store(body: <MidBody bodyInstance=adapterId sourceFunction=functionIndex locals=locals blocks=[<MidBlock terminator=<MidTerminator.Return /> />] />)
+    if !compiler.mid.isWellFormed(body: canonical) { panic "malformed witness fixture body" }
+    backend.curFn = function backend.curRetVoid = true
+    val admissionResult = backend.prepareBodyLocalPlan(c: inout compiler, canonical: canonical, parameterCount: if mode == 19U64 { give 1U64 } else { give 2U64 })
+    if mode >= 4U64 && mode != 20U64 {
+        requireWitnessInternal(result: admissionResult, mode: mode)
+    } else {
+        val admission = requireWitnessOk(result: admissionResult, stage: "valid Ready admission", mode: mode)
+        val planId = match admission { LlvmBodyLocalAdmission.Planned(planId: val planId) => { give planId } _ => { panic "witness escaped retained admission" } }
+        val plan = backend.bodyLocalPlans[planId - 1U64]
+        val abiId = match plan.entry { LlvmBodyLocalEntry.Witness(abiId: val abiId) => { give abiId } _ => { panic "wrong retained witness entry" } }
+        val abi = backend.valueAbis[abiId - 1U64]
+        match backend.preparedLocals[plan.localStart].binding {
+            LlvmLocalBinding.ErasedReceiver(parameterIndex: val parameterIndex, type: val type, alias: val alias) => {
+                if parameterIndex != abi.parameterStart || alias != aliasesAddress || plew_pointer_equal(type, receiverLlvm) == 0I32 { panic "wrong saved erased receiver conversion" }
+            }
+            _ => { panic "missing erased receiver binding" }
+        }
+        match backend.preparedLocals[plan.localStart + 1U64].binding {
+            LlvmLocalBinding.Parameter(parameterIndex: val parameterIndex, alias: val alias) => { if parameterIndex != abi.parameterStart + 1U64 || alias != aliasesAddress { panic "wrong saved ordinary witness lane" } }
+            _ => { panic "missing ordinary witness binding" }
+        }
+        val ready = <MidLlvmPrepared.Ready canonical=canonical abiParameterCount=2U64 localAdmission=admission />
+        backend.beginFnBody(fv: function)
+        if !requireWitnessOk(result: backend.genLlvmPreparedMidBody(c: inout compiler, prepared: ready), stage: "valid Ready emission", mode: mode) { panic "valid witness emission failed" }
+        if aliasesAddress {
+            if LLVMIsAArgument(backend.locPtr[0U64]) != LLVMIsAArgument(LLVMGetParam(function, 0U64)) || LLVMIsAArgument(backend.locPtr[0U64]) == 0U64 { panic "KeepAddress lost exact receiver address" }
+            if LLVMIsAArgument(backend.locPtr[1U64]) != LLVMIsAArgument(LLVMGetParam(function, 1U64)) || LLVMIsAArgument(backend.locPtr[1U64]) == 0U64 { panic "ordinary inout lost exact address" }
+        } else {
+            val holder = LLVMIsAAllocaInst(backend.locPtr[0U64])
+            if holder == 0U64 || plew_pointer_equal(LLVMGetAllocatedType(backend.locPtr[0U64]), receiverLlvm) == 0I32 { panic "LoadValue lacks retained receiver holder" }
+            mut val receiverStores = 0U64
+            mut val instruction = LLVMGetFirstInstruction(LLVMGetInsertBlock(backend.b))
+            while instruction != 0U64 {
+                if LLVMIsAStoreInst(instruction) != 0U64 && LLVMIsAAllocaInst(LLVMGetOperand(instruction, 1U32)) == holder {
+                    val loaded = LLVMIsALoadInst(LLVMGetOperand(instruction, 0U32))
+                    if loaded == 0U64 || LLVMIsAArgument(LLVMGetOperand(loaded, 0U32)) != LLVMIsAArgument(LLVMGetParam(function, 0U64)) { panic "LoadValue did not dereference the erased receiver" }
+                    receiverStores += 1U64
+                }
+                instruction = LLVMGetNextInstruction(instruction)
+            }
+            if receiverStores != 1U64 { panic "LoadValue did not reach actual receiver store" }
+        }
+        val body = compiler.mid.bodies[canonical.body - 1U64]
+        if plew_pointer_equal(requireWitnessOk(result: backend.midCanonicalLocalTy(c: inout compiler, body: body, local: 0U64), stage: "later receiver type read", mode: mode), receiverLlvm) == 0I32 { panic "later local reader lost retained receiver type" }
+        requireWitnessInternal(result: backend.genLlvmPreparedMidBody(c: inout compiler, prepared: ready, abiParameterValues: [LLVMConstNull(backend.ptrty), LLVMConstInt(backend.i64ty, 0U64, 0I32)]), mode: mode)
+        requireWitnessInternal(result: backend.genLlvmPreparedMidBody(c: inout compiler, prepared: ready, localsPrepared: true), mode: mode)
+        val otherName = <CString.copied text="other-witness-entry" />
+        backend.curFn = requireWitnessOk(result: backend.declareLegacyBodyFunction(name: otherName.ptr, signature: signature, bodyId: targetId, family: <LlvmLegacyConvention.Witness />), stage: "declare foreign witness", mode: mode)
+        requireWitnessInternal(result: backend.genLlvmPreparedMidBody(c: inout compiler, prepared: ready), mode: mode)
+    }
+    LLVMDisposeBuilder(builder) LLVMDisposeModule(module) LLVMContextDispose(context)
+}
+fn main() {
+    mut val mode = 0U64
+    while mode <= 20U64 { witnessPlanControl(mode: mode) mode += 1U64 }
+    write(s: "ok\n")
+}

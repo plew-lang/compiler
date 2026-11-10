@@ -57,6 +57,68 @@ pub impl LlvmCtx {
         return <Result.Ok value=fv />
     }
 
+    // The erased entry and concrete receiver are distinct identities. Validate
+    // each against its selected authority before retaining their conversion.
+    inout fn prepareWitnessLocalBindings(c: inout Comp, body: MidBodyNode, parameterCount: U64, abiId: U64) -> Result[LlvmEntryLocalBindings, CompileDiagnostic] {
+        if body.bodyInstance == 0U64 || body.bodyInstance > c.arena.bodyInstanceCount() { return <Result.Err error=valueAbiFailure(message: "witness local body identity out of range") /> }
+        try self.validateWitnessLocalEntry(abiId: abiId, plannedAbi: abiId, bodyId: body.bodyInstance)
+        val origin = match c.arena.bodyOrigin(bodyId: body.bodyInstance) {
+            BodyOrigin.ExistentialWitness(resolution: val resolution, member: val member) => { give (resolution: resolution, member: member) }
+            _ => { return <Result.Err error=valueAbiFailure(message: "witness local admission lacks a witness origin") /> }
+        }
+        if origin.resolution >= c.arena.finalExistentials.count() { return <Result.Err error=valueAbiFailure(message: "witness resolution out of range") /> }
+        val resolution = c.arena.finalExistentials[origin.resolution]
+        if origin.member >= resolution.members.count() { return <Result.Err error=valueAbiFailure(message: "witness member out of range") /> }
+        val member = resolution.members[origin.member]
+        if member.adapterBodyId != body.bodyInstance || member.bodyId == 0U64 || member.bodyId > c.arena.bodyInstanceCount() { return <Result.Err error=valueAbiFailure(message: "witness adapter/target identity mismatch") /> }
+        val target = c.arena.bodyInstanceAt(index: member.bodyId - 1U64)
+        val signature = c.arena.bodySignature(bodyId: body.bodyInstance)
+        val receiverType = target.environment.receiverRef
+        val receiverMode = (try witnessReceiverMode(passing: member.receiverPassing))
+        if !signature.ready || !c.arena.bodySignature(bodyId: member.bodyId).ready || resolution.sourceRef == 0U64 || resolution.sourceRef >= c.arena.typeCount() || receiverType == 0U64 || receiverType >= c.arena.typeCount() || body.sourceFunction != target.fnIdx || !c.typeRefEq(a: signature.receiverType, b: resolution.sourceRef) || (try witnessReceiverMode(passing: signature.receiverPassing)).key() != receiverMode.key() { return <Result.Err error=valueAbiFailure(message: "witness receiver signature mismatch") /> }
+        val abi = self.valueAbis[abiId - 1U64]
+        if parameterCount != member.parameterTypes.count() + 1U64 || member.argumentPassings.count() != member.parameterTypes.count() || signature.parameterTypes.count() != member.parameterTypes.count() || signature.parameterPassings.count() != member.parameterTypes.count() || abi.parameterCount != parameterCount || parameterCount > body.locals.len { return <Result.Err error=valueAbiFailure(message: "witness parameter shape mismatch") /> }
+        if abi.parameterStart >= self.valueAbiParameters.count() || plew_pointer_equal(self.valueAbiParameters[abi.parameterStart].type, self.ptrty) == 0I32 { return <Result.Err error=valueAbiFailure(message: "erased receiver lane is not a pointer") /> }
+        mut val bindings: Array[LlvmLocalBinding] = []
+        mut val types: Array[LLVMTypeRef] = []
+        mut val index = 0U64
+        while index < body.locals.len {
+            val local = c.mid.locals[body.locals.start + index]
+            if local.isParameter != (index < parameterCount) { return <Result.Err error=valueAbiFailure(message: "witness has an unmapped parameter local") /> }
+            types.append((try self.lowerMidLocalType(c: inout c, body: body, local: index)))
+            bindings.append(<LlvmLocalBinding.None />)
+            if index < parameterCount {
+                val mode = if index == 0U64 { give receiverMode } else {
+                    val passing = member.argumentPassings[index - 1U64]
+                    give match passing { CallArgumentPassing.Borrow => { give <LlvmParameterMode.Borrow /> } CallArgumentPassing.Move => { give <LlvmParameterMode.Move /> } CallArgumentPassing.Inout => { give <LlvmParameterMode.Inout /> } }
+                }
+                val aliasesAddress = match mode { LlvmParameterMode.Inout => { give true } _ => { give false } }
+                val consumes = match mode { LlvmParameterMode.Move => { give true } _ => { give false } }
+                val expected = if index == 0U64 { give receiverType } else { give member.parameterTypes[index - 1U64] }
+                if local.isCaptureCell || local.isBorrowed || local.isInout != aliasesAddress || local.ownsAtEntry != consumes || !c.typeRefEq(a: local.typeTerm, b: expected) { return <Result.Err error=valueAbiFailure(message: "witness local parameter correspondence mismatch") /> }
+                if index == 0U64 {
+                    bindings.set(i: index, value: <LlvmLocalBinding.ErasedReceiver parameterIndex=abi.parameterStart type=types[index] alias=aliasesAddress />)
+                } else {
+                    val declaredMode = match signature.parameterPassings[index - 1U64] { CallArgumentPassing.Borrow => { give <LlvmParameterMode.Borrow /> } CallArgumentPassing.Move => { give <LlvmParameterMode.Move /> } CallArgumentPassing.Inout => { give <LlvmParameterMode.Inout /> } }
+                    if declaredMode.key() != mode.key() || !c.typeRefEq(a: signature.parameterTypes[index - 1U64], b: expected) { return <Result.Err error=valueAbiFailure(message: "witness ordinary signature mismatch") /> }
+                    val parameterIndex = abi.parameterStart + index
+                    val type = if aliasesAddress { give self.ptrty } else { give types[index] }
+                    if parameterIndex >= self.valueAbiParameters.count() || plew_pointer_equal(self.valueAbiParameters[parameterIndex].type, type) == 0I32 { return <Result.Err error=valueAbiFailure(message: "witness ordinary representation mismatch") /> }
+                    bindings.set(i: index, value: <LlvmLocalBinding.Parameter parameterIndex=parameterIndex alias=aliasesAddress />)
+                }
+            }
+            index += 1U64
+        }
+        return <Result.Ok value=<LlvmEntryLocalBindings bindings=bindings types=types /> />
+    }
+
+    inout fn validateWitnessLocalEntry(abiId: U64, plannedAbi: U64, bodyId: U64) -> Result[(), CompileDiagnostic] {
+        if abiId == 0U64 || abiId > self.valueAbis.count() || abiId != plannedAbi || self.valueAbis[abiId - 1U64].ownerBody != bodyId { return <Result.Err error=valueAbiFailure(message: "witness local entry descriptor mismatch") /> }
+        val valid = match self.valueAbis[abiId - 1U64].convention { LlvmValueConvention.Legacy(family: val family) => { give match family { LlvmLegacyConvention.Witness => { give true } _ => { give false } } } _ => { give false } }
+        if !valid { return <Result.Err error=valueAbiFailure(message: "witness local entry convention mismatch") /> }
+        return <Result.Ok value=() />
+    }
+
     inout fn emitExistentialWitnesses(c: inout Comp) -> Result[(), CompileDiagnostic] {
         while self.existentialWitnessesEmitted < self.existentialWitnesses.count() {
             val witness = self.existentialWitnesses[self.existentialWitnessesEmitted]
@@ -73,20 +135,7 @@ pub impl LlvmCtx {
                 MidLlvmPrepared.None => { return <Result.Err error=c.diagnosticAt(offset: c.arena.functionAt(index: body.fnIdx).nameStart, msg: "LLVM backend: existential witness could not be prepared as Mid IR") /> }
                 MidLlvmPrepared.Ready(canonical: _, abiParameterCount: _, localAdmission: _) => {
                     self.beginFnBody(fv: witness.function)
-                    // The only erased ABI adaptation: a read receiver is a
-                    // borrowed load from its box; inout keeps the same address.
-                    mut val receiver = (try self.legacyValueParameter(function: witness.function, index: 0U64))
-                    match member.receiverPassing {
-                        CallReceiverPassing.Inout => {}
-                        _ => { receiver = llvmLoad(self.b, (try self.llvmTypeOfRef(c: inout c, ref: body.environment.receiverRef)), receiver, anon()) }
-                    }
-                    mut val parameters: Array[LLVMValueRef] = [receiver]
-                    mut val index = 0U64
-                    while index < member.parameterTypes.count() {
-                        parameters.append((try self.legacyValueParameter(function: witness.function, index: index + 1U64)))
-                        index += 1U64
-                    }
-                    if !(try self.genLlvmPreparedMidBody(c: inout c, prepared: prepared, abiParameterValues: parameters)) {
+                    if !(try self.genLlvmPreparedMidBody(c: inout c, prepared: prepared)) {
                         return <Result.Err error=c.diagnosticAt(offset: c.arena.functionAt(index: body.fnIdx).nameStart, msg: "LLVM backend: prepared existential Mid body failed to emit") />
                     }
                 }

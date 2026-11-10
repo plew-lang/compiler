@@ -247,3 +247,72 @@ architecture controls and baseline structural RED. The finite second increment
 is accepted. A source ordinary-inout probe fails identically during program Mid
 preparation on baseline/fresh candidates; it is not a successful inout execution
 claim and remains explicit for whole-W2 entry reconciliation.
+
+## Retained Witness Inputs
+
+Checkpoint 3's third increment retains the selected witness receiver conversion
+and ordinary ABI-pool-to-local mappings. BodyOrigin identifies the exact
+FinalExistential member and selected target. The adapter signature's sourceRef
+and the selected target environment's concrete receiver are checked separately;
+the unused adapter environment is not a new semantic authority. Borrow/Move
+receivers load their concrete value from the erased address, including pointer
+representations; Inout keeps the address. Normal ordinary inputs retain baseline
+omitted/direct/byval reads. Allocation, binding and later local type reads use
+the Ready plan; witness emission no longer supplies an untyped input vector or
+reselects the receiver representation. Physical Witness lanes remain Legacy
+until their later physical-protocol migration.
+
+The [witness evidence](../../../evidence/performance-regression-history/value-passing-implementation/w2-protocol/ready-witness-local-plan.json) records structural baseline RED, immutable standard build
+`20261110T003314-build-65ae1d`, fresh CLI32/internal5, six unique Mid witness-body
+controls, raw/optimized ABI and C expose/callback success. The private exact
+source snapshot exercises Borrow/Inout for scalar and CPtr representations,
+Move inputs, actual receiver loads/stores or argument address identity, ordinary
+bindings, 16 malformed admission cases and native-entry/override rejection.
+Its manually supplied physical input contracts are not source conformance
+proofs; source selection/calls/cleanup are independently covered by the real
+source controls. Neutral source review fixed a passing-mode numeric-key error
+using enum patterns and corrected a test that corrupted an unused environment.
+No source semantics or ARC acquisition/cleanup changed.
+
+Neutral final review accepted this finite third increment after independently
+recalculating 572 distinct hash references: source183/control85/artifact119/
+snapshot183. All product source and control hashes match the successful build's
+6518 inputs. It replayed the native controls (including Move), representative
+source CLI, architecture and baseline RED. Async/W2, preparation cost and final
+gates are not included in this acceptance.
+
+## Remaining Async Activation and Checkpoint-3 Exit
+
+The neutral read-only plan review selected the following final increment. It is
+an execution plan, not implemented or accepted work:
+
+- Retain EntryAlloca versus FrameField storage per local from the existing Mid
+  async frame/liveness plan, preserving logical T versus capture-cell ptr storage.
+- Admit the exact canonical/body/frame layout and separately identified native
+  entry and resume signatures. Same body identity is not same entry function.
+  Async main's native C entry is explicit as well.
+- Retain entry ABI-row-to-frame-field mappings and existing acquisition modes.
+  Async Borrow inputs acquire the frame's owned share; Move transfers ownership.
+  Do not apply normal synchronous Borrow-local ownership rules to async inputs.
+- Resume binds retained frame addresses or entry allocas without reinitializing
+  source parameters. The common Ready emitter must perform frame GEP/local
+  binding before the resume state switch so addresses dominate callback re-entry,
+  then emit the existing dispatch/start prologue and common CFG. Preserve current
+  ambient allocation order, Promise-retain-before-resume and no frame reread after
+  synchronous completion.
+- Remove Ready's compatibility parameter count, hand-built AsyncResume Ready,
+  raw offset/value/storage vectors, localsPrepared/initializeParameters and
+  external asyncBody/closureBodyId overrides. Derive the emission mode from the
+  admitted entry. Reconcile every Ready producer/consumer and reject or remove
+  the remaining body-local Legacy fallback; physical Legacy conventions stay
+  explicit until checkpoint 5.
+- Exercise actual frame field/alloca types, parameter mappings/acquisition,
+  malformed frame/body/function/field/mode identities, immediate completion and
+  real suspension/callback dominance. Recheck existing frame/body-contract,
+  async entry ownership, enum/capture, repeated/shared await, async main/global/
+  process-argument controls and prior normal/closure/witness controls.
+
+This work uses the existing frame, ownership and runtime contracts, with no new
+lifetime or event-loop semantics. Checkpoint 3 cannot close merely because its
+first three entry increments passed. W2 preparation cost, checkpoints 4–6,
+W3/W4 and final com-ffar gates remain open.

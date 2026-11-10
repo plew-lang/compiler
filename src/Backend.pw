@@ -69,6 +69,15 @@ pub enum MidLlvmPreflight {
     Terminator
 }
 
+fn witnessReceiverMode(passing: CallReceiverPassing) -> Result[LlvmParameterMode, CompileDiagnostic] {
+    return <Result.Ok value=match passing {
+        CallReceiverPassing.Borrow => { give <LlvmParameterMode.Borrow /> }
+        CallReceiverPassing.Move => { give <LlvmParameterMode.Move /> }
+        CallReceiverPassing.Inout => { give <LlvmParameterMode.Inout /> }
+        CallReceiverPassing.None => { return <Result.Err error=valueAbiFailure(message: "witness receiver mode is absent") /> }
+    } />
+}
+
 // Backend-local admission result. Ready is constructed only after ownership
 // verification and LLVM capability checks on this frozen body. Its ABI prefix
 // travels with the body rather than being supplied again by emission callers.
@@ -80,20 +89,21 @@ enum MidLlvmPrepared {
 // Local representation is retained once at admission. Legacy here is an
 // explicit not-yet-migrated physical-to-local adapter, not a normal fallback.
 enum LlvmBodyLocalAdmission { Planned(planId: U64) Legacy(convention: LlvmLegacyConvention) }
-enum LlvmBodyLocalEntry { Normal(abiId: U64) Closure(abiId: U64) EnvironmentDrop(abiId: U64) ProgramMain GlobalInitializer }
+enum LlvmBodyLocalEntry { Normal(abiId: U64) Closure(abiId: U64) EnvironmentDrop(abiId: U64) Witness(abiId: U64) ProgramMain GlobalInitializer }
 // A prepared physical-to-local conversion. Parameter indices address the
 // immutable ABI pool, not source or native positional indices.
 enum LlvmLocalBinding {
     None
     Parameter(parameterIndex: U64, alias: Bool)
     Environment(field: U64, type: LLVMTypeRef)
+    ErasedReceiver(parameterIndex: U64, type: LLVMTypeRef, alias: Bool)
 }
-struct LlvmClosureLocalBindings {
-    pub val environmentType: LLVMTypeRef
+struct LlvmEntryLocalBindings {
+    pub val environmentType: Optional[LLVMTypeRef] = <Optional.None />
     pub val bindings: Array[LlvmLocalBinding]
     pub val types: Array[LLVMTypeRef]
 }
-pub impl LlvmClosureLocalBindings { factory }
+pub impl LlvmEntryLocalBindings { factory }
 struct LlvmPreparedLocal {
     pub val type: LLVMTypeRef
     pub val storageType: LLVMTypeRef
