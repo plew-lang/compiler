@@ -310,6 +310,11 @@ else
     fail=$((fail + 1)); failed="$failed ready-async-plan-private"
 fi
 
+if python3 -B ./tests/compiler/architecture/test-completed-c-private-protocol.py; then
+    pass=$((pass + 1))
+else
+    fail=$((fail + 1)); failed="$failed completed-c-private-protocol"
+fi
 if python3 -B ./tests/compiler/architecture/test-completed-async-protocol.py; then
     pass=$((pass + 1))
 else

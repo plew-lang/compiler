@@ -444,3 +444,60 @@ callback, SessionJit/SessionModule and request/initializer controls; do not add
 new C ABI support. Checkpoint 6 owns all-consumer/remaining-Legacy reconciliation
 and preparation cost. W3/W4, full gates, formal performance/fixed-point and
 main/seed/adopted carrier promotion remain open.
+
+### Current C-to-Private Increment
+
+This finite increment is accepted in [typed C-to-private evidence](../../../evidence/performance-regression-history/value-passing-implementation/w2-protocol/typed-c-entry-protocol.json)
+and [neutral review](../../../evidence/performance-regression-history/value-passing-implementation/w2-protocol/typed-c-entry-review.json).
+Build `20261110T055017-build-ed3489` and both controls/private gates pass with
+immutable inputs. Candidate `bin/plewc-value-abi-typed-c-entry-20261110` passes
+CLI66, Expose C O0/O2/attribute comparison, callback with requested exposed body,
+SessionJit and optimized ReadyLocal native controls. All 185 product and 379
+control inputs match the build. Neutral review independently reconciles 1131
+hash references/1111 distinct paths, with no required corrections. This closes
+only this C adapter migration, not program/publication or W2.
+
+Neutral planning separates C conversion from subsequent program/publication
+migration. Convert existing scalar/opaque/Inout C inputs first, then construct
+indexed Ordinary lanes from the frozen BodySignature and invoke the same typed
+Body consumer as ordinary calls. Preserve C integer-extension attributes, F32
+conversion, Inout writeback and result conversion. Remove ExposedEntry/raw Body
+permission entirely; no new C surface or managed/aggregate C support.
+
+Finite completion: structural RED for the missing typed handoff; existing
+Expose C O0/O2 scalar/narrow/F32/Inout/pointer controls, callback and requested
+exposed entries; common native wrong-body/type/mode/index/provenance and raw
+bypass rejection. Update the ReadyLocal malformed owner control to the typed
+API without losing its rejection assertion. Build and compare frozen inputs,
+replay affected source/private controls and obtain neutral evidence review.
+Program/main/global and publication remain the next separate increment.
+
+### Next Program and Publication Increment
+
+Neutral planning selects a cached body/scope-owned ProgramMain descriptor
+(native argc/argv lanes, semantic terms zero, explicit native program-status
+result) and GlobalInitializer descriptor (no parameters/native void). Connect
+declaration, synchronous/async main, global definition/call, native argument
+reading and Ready admission/retained validation. Source parameter count remains
+zero. Remove unregistered-ABI inference and competing consumer signature
+construction. Preserve names, external linkage, process arguments, global
+initialization order and Definition/Reference storage. Program publishers attach
+body identity rather than incorrectly registering source entries as host symbols.
+
+Requested publication also needs a context-independent native ABI receipt:
+source declarations/definitions go through one checked registration path before
+reuse, symbol replacement or module insertion. Retain structural result/parameter
+types, varargs, calling convention and return/parameter attributes including typed
+byval payloads. Type names, sizes and LLVM context pointer equality do not prove
+ABI agreement. Existing raw native defer is an explicit separate boundary; it
+cannot permit metadata-bearing source entries to bypass comparison. Build/cache
+receipts at module publication, not per call. No new JIT/runtime architecture.
+
+Finite controls: main/global valid roundtrip and wrong body/convention/native
+lane/index/type/scope/missing descriptor; process args, sync/async main and global
+order/storage; equal ABI across contexts and result/parameter/varargs/CC/narrow
+attribute/byval-structure mismatches; same-body async/exposed siblings, dependency
+re-registration, missing requested definition and host fallback refusal.
+Reuse ReadyLocal/ReadyAsync, global-modules, SessionJit/SessionModule and existing
+request/initializer/callback controls. Checkpoint6 retains full inventory and
+preparation-cost reconciliation; this increment does not itself close W2.

@@ -114,6 +114,12 @@ parameter terms to the frozen signature without rewriting verified Mid locals.
 Entry calls, parameter decoding and resume binding consume these same completed
 records; raw async compatibility adapters cannot bypass them.
 
+C-to-private entries complete C scalar/Inout conversion first, then supply
+typed Ordinary inputs under the frozen BodySignature to the ordinary Body
+consumer. C integer attributes, result conversion and Inout writeback remain
+the C adapter's responsibility. A raw Body call permission is unnecessary and
+cannot substitute native pointer equality for this correspondence.
+
 A byval byte snapshot is a physical copying mechanism, not an additional semantic Copy or an implicit ARC retain. Its source/destination lifetime and ownership follow the already selected passing contract; the callee cannot independently destroy a caller-guaranteed share simply because LLVM supplied private bytes.
 
 ABI attributes must match on definitions/declarations and call sites. A `byval` parameter describes an independent snapshot; passing an unprotected address into mutable caller storage is not a substitute. Temporary storage belongs to the function actually being emitted, including when emitting a thunk inside another generation context. Allocate its slot in that function's entry and store the evaluated value at the original call position, preserving evaluation order and avoiding loop-driven stack growth.

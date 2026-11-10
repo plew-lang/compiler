@@ -113,18 +113,19 @@ pub impl LlvmCtx {
         self.curFn = entry
         self.beginFnBody(fv: entry)
         mut val writebacks: Array[LlvmCInout] = []
-        mut val arguments: Array[LLVMValueRef] = []
+        mut val arguments: Array[LlvmValueInput] = []
         index = 0U64
         while index < prepared.parameterTypes.count() {
             val argument = LLVMGetParam(entry, index)
             try self.attachCIntegerExtension(c: inout c, function: entry, index: index + 1U64, ref: prepared.parameterTypes[index], physical: LLVMTypeOf(argument), callSite: false)
-            match prepared.parameterPassings[index] {
-                CallArgumentPassing.Inout => { arguments.append((try self.prepareCInout(c: inout c, ref: prepared.parameterTypes[index], pointer: argument, toC: false, writebacks: inout writebacks))) }
-                _ => { arguments.append((try self.scalarFromC(c: inout c, ref: prepared.parameterTypes[index], value: argument))) }
+            val converted = match prepared.parameterPassings[index] {
+                CallArgumentPassing.Inout => { give (try self.prepareCInout(c: inout c, ref: prepared.parameterTypes[index], pointer: argument, toC: false, writebacks: inout writebacks)) }
+                _ => { give (try self.scalarFromC(c: inout c, ref: prepared.parameterTypes[index], value: argument)) }
             }
+            arguments.append(<LlvmValueInput lane=<LlvmLogicalParameter type=LLVMTypeOf(converted) semanticType=prepared.parameterTypes[index] role=<LlvmParameterRole.Ordinary index=index /> mode=argumentValueMode(passing: prepared.parameterPassings[index]) /> index=index carrier=<LlvmValueCarrier.Value value=converted /> />)
             index += 1U64
         }
-        val result = (try self.callLegacyValueFunction(signature: signature, function: target, arguments: arguments, bodyAdapter: <Optional.Some v=<LlvmBodyCompatibility.ExposedEntry bodyId=bodyId /> />))
+        val result = (try self.callBodyValueFunction(function: target, bodyId: bodyId, inputs: (try self.bodyInputScope(bodyId: bodyId, signature: signature)), arguments: arguments))
         try self.completeCInouts(c: inout c, writebacks: writebacks)
         if declaration.hasRet {
             val externalResult = (try self.scalarToC(c: inout c, ref: prepared.resultType, value: result))

@@ -341,7 +341,7 @@ pub impl LlvmCtx {
         return slot
     }
 
-    inout fn callLegacyValueFunction(signature: LLVMTypeRef, function: LLVMValueRef, arguments: Array[LLVMValueRef], legacyIndirect: Optional[LlvmLegacyConvention] = <Optional.None />, bodyAdapter: Optional[LlvmBodyCompatibility] = <Optional.None />) -> Result[LLVMValueRef, CompileDiagnostic] {
+    inout fn callLegacyValueFunction(signature: LLVMTypeRef, function: LLVMValueRef, arguments: Array[LLVMValueRef], legacyIndirect: Optional[LlvmLegacyConvention] = <Optional.None />) -> Result[LLVMValueRef, CompileDiagnostic] {
         val handle = LLVMIsAFunction(function)
         mut val abiId = 0U64
         if handle != 0U64 {
@@ -359,14 +359,9 @@ pub impl LlvmCtx {
         }
         val abi = self.valueAbis[abiId - 1U64]
         if abi.convention.key() == 0U64 {
-            val bodyId = match bodyAdapter {
-                Optional.Some(v: val adapter) => { give match adapter { LlvmBodyCompatibility.ExposedEntry(bodyId: val bodyId) => { give bodyId } } }
-                Optional.None => { return <Result.Err error=valueAbiFailure(message: "normal body requires typed inputs or an explicit compatibility adapter") /> }
-            }
-            if bodyId == 0U64 || bodyId != abi.ownerBody { return <Result.Err error=valueAbiFailure(message: "compatibility adapter body mismatch") /> }
+            return <Result.Err error=valueAbiFailure(message: "normal body requires typed inputs") />
         } else {
             match abi.convention { LlvmValueConvention.Closure => { return <Result.Err error=valueAbiFailure(message: "completed closure requires typed inputs") /> } LlvmValueConvention.Witness(targetType: _, traitIndex: _, slot: _) => { return <Result.Err error=valueAbiFailure(message: "completed witness requires typed inputs") /> } LlvmValueConvention.AsyncEntry => { return <Result.Err error=valueAbiFailure(message: "completed async entry requires typed inputs") /> } LlvmValueConvention.AsyncResume => { return <Result.Err error=valueAbiFailure(message: "completed async resume requires typed inputs") /> } LlvmValueConvention.OwnershipGlue(operation: _) => { return <Result.Err error=valueAbiFailure(message: "completed glue requires typed inputs") /> } LlvmValueConvention.Legacy(family: _) => {} LlvmValueConvention.Body => {} }
-            match bodyAdapter { Optional.Some(v: _) => { return <Result.Err error=valueAbiFailure(message: "body adapter cannot select a legacy convention") /> } Optional.None => {} }
         }
         if plew_pointer_equal(abi.logicalSignature, signature) == 0I32 {
             return <Result.Err error=<CompileDiagnostic location=<DiagnosticLocation.Line line=0I64 /> message="internal error: private call logical signature mismatch" /> />
@@ -377,8 +372,8 @@ pub impl LlvmCtx {
         return self.emitPlannedValueCall(abiId: abiId, function: function, arguments: arguments)
     }
 
-    // Both admitted normal inputs and explicit compatibility adapters use this
-    // single physical emitter. W2 retains the existing byval snapshot here.
+    // Admitted typed calls and explicitly legacy entries share this physical
+    // emitter. W2 retains the existing byval snapshot here.
     inout fn emitPlannedValueCall(abiId: U64, function: LLVMValueRef, arguments: Array[LLVMValueRef]) -> Result[LLVMValueRef, CompileDiagnostic] {
         val abi = self.valueAbis[abiId - 1U64]
         mut val values: Array[LLVMValueRef] = []

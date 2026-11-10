@@ -67,8 +67,34 @@ fn main() {
     val normalAbi = abi.unwrap()
     val normalFunction = backend.declarePlannedBodyFunction(name: name.ptr, abiId: normalAbi, bodyId: bodyId).unwrap()
     requireInternal(result: backend.callLegacyValueFunction(signature: signature, function: normalFunction, arguments: []))
-    requireInternal(result: backend.callLegacyValueFunction(signature: signature, function: normalFunction, arguments: [], bodyAdapter: <Optional.Some v=<LlvmBodyCompatibility.ExposedEntry bodyId=bodyId + 1U64 /> />))
+    requireInternal(result: backend.callBodyValueFunction(function: normalFunction, bodyId: bodyId + 1U64, inputs: backend.bodyInputScope(bodyId: bodyId, signature: signature).unwrap(), arguments: []))
     requireInternal(result: backend.legacyValueParameter(function: normalFunction, index: 0U64))
+    // A native C entry supplies converted values; only the shared Body consumer
+    // may admit them. Equal native types do not establish source correspondence.
+    val lane = <LlvmLogicalParameter type=backend.i64ty semanticType=11U64 role=<LlvmParameterRole.Ordinary index=0U64 /> mode=<LlvmParameterMode.Borrow /> />
+    val convertedAbi = backend.saveValueAbi(signature: <LlvmLogicalSignature convention=<LlvmValueConvention.Body /> parameters=[lane] result=backend.voidty resultTerm=0U64 />, ownerBody: otherBodyId).unwrap()
+    val convertedName = <CString.copied text="converted-private-target" />
+    val convertedTarget = backend.declarePlannedBodyFunction(name: convertedName.ptr, abiId: convertedAbi, bodyId: otherBodyId).unwrap()
+    val convertedSignature = backend.valueAbis[convertedAbi - 1U64].logicalSignature
+    val inputScope = backend.bodyInputScope(bodyId: otherBodyId, signature: convertedSignature).unwrap()
+    val entryName = <CString.copied text="native-converted-entry" />
+    val entry = LLVMAddFunction(module, entryName.ptr, convertedSignature)
+    val foreignEntry = LLVMAddFunction(otherModule, entryName.ptr, convertedSignature)
+    backend.curFn = entry
+    backend.beginFnBody(fv: entry)
+    val input = <LlvmValueInput lane=lane index=0U64 carrier=<LlvmValueCarrier.Value value=LLVMGetParam(entry, 0U64) /> />
+    backend.callBodyValueFunction(function: convertedTarget, bodyId: otherBodyId, inputs: inputScope, arguments: [input]).unwrap()
+    mut val malformed = 0U64
+    while malformed < 4U64 {
+        val bad = <LlvmValueInput lane=<LlvmLogicalParameter type=lane.type semanticType=if malformed == 0U64 { give 12U64 } else { give lane.semanticType } role=if malformed == 1U64 { give <LlvmParameterRole.Receiver /> } else { give lane.role } mode=if malformed == 2U64 { give <LlvmParameterMode.Move /> } else { give lane.mode } /> index=if malformed == 3U64 { give 1U64 } else { give 0U64 } carrier=input.carrier />
+        requireInternal(result: backend.callBodyValueFunction(function: convertedTarget, bodyId: otherBodyId, inputs: inputScope, arguments: [bad]))
+        malformed += 1U64
+    }
+    requireInternal(result: backend.callBodyValueFunction(function: convertedTarget, bodyId: bodyId, inputs: inputScope, arguments: [input]))
+    requireInternal(result: backend.callBodyValueFunction(function: convertedTarget, bodyId: otherBodyId, inputs: backend.bodyInputScope(bodyId: bodyId, signature: convertedSignature).unwrap(), arguments: [input]))
+    requireInternal(result: backend.callBodyValueFunction(function: convertedTarget, bodyId: otherBodyId, inputs: inputScope, arguments: [<LlvmValueInput lane=lane index=0U64 carrier=<LlvmValueCarrier.Value value=LLVMGetParam(foreignEntry, 0U64) /> />]))
+    requireInternal(result: backend.callLegacyValueFunction(signature: convertedSignature, function: convertedTarget, arguments: [LLVMGetParam(entry, 0U64)]))
+    LLVMBuildRetVoid(builder)
     LLVMDisposeBuilder(builder)
     LLVMDisposeModule(otherModule)
     LLVMDisposeModule(module)
