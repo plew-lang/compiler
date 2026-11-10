@@ -62,22 +62,40 @@ pub impl LlvmLegacyConvention {
         }
     }
 }
-pub enum LlvmValueConvention { Body Closure Legacy(family: LlvmLegacyConvention) }
+pub enum LlvmValueConvention { Body Closure Witness(targetType: U64, traitIndex: U64, slot: U64) Legacy(family: LlvmLegacyConvention) }
 pub impl LlvmValueConvention {
     fn key() -> U64 {
         return match self {
             LlvmValueConvention.Body => { give 0U64 }
             LlvmValueConvention.Closure => { give 12U64 }
+            LlvmValueConvention.Witness(targetType: _, traitIndex: _, slot: _) => { give 13U64 }
             LlvmValueConvention.Legacy(family: val family) => { give family.key() }
         }
     }
+    fn matchesWitness(targetType: U64, traitIndex: U64, slot: U64) -> Bool {
+        return match self {
+            LlvmValueConvention.Witness(targetType: val selectedTarget, traitIndex: val selectedTrait, slot: val selectedSlot) => { give targetType == selectedTarget && traitIndex == selectedTrait && slot == selectedSlot }
+            _ => { give false }
+        }
+    }
+    fn same(convention: LlvmValueConvention) -> Bool {
+        match self {
+            LlvmValueConvention.Body => { return match convention { LlvmValueConvention.Body => { give true } _ => { give false } } }
+            LlvmValueConvention.Closure => { return match convention { LlvmValueConvention.Closure => { give true } _ => { give false } } }
+            LlvmValueConvention.Witness(targetType: val targetType, traitIndex: val traitIndex, slot: val slot) => {
+                return convention.matchesWitness(targetType: targetType, traitIndex: traitIndex, slot: slot)
+            }
+            LlvmValueConvention.Legacy(family: val family) => { return match convention { LlvmValueConvention.Legacy(family: val other) => { give family.key() == other.key() } _ => { give false } } }
+        }
+    }
 }
-pub enum LlvmParameterRole { Receiver Environment Ordinary(index: U64) Legacy(index: U64) }
+pub enum LlvmParameterRole { Receiver Environment ErasedReceiver Ordinary(index: U64) Legacy(index: U64) }
 pub impl LlvmParameterRole {
     fn same(role: LlvmParameterRole) -> Bool {
         match self {
             LlvmParameterRole.Receiver => { return match role { LlvmParameterRole.Receiver => { give true } _ => { give false } } }
             LlvmParameterRole.Environment => { return match role { LlvmParameterRole.Environment => { give true } _ => { give false } } }
+            LlvmParameterRole.ErasedReceiver => { return match role { LlvmParameterRole.ErasedReceiver => { give true } _ => { give false } } }
             LlvmParameterRole.Ordinary(index: val index) => { return match role { LlvmParameterRole.Ordinary(index: val other) => { give index == other } _ => { give false } } }
             LlvmParameterRole.Legacy(index: val index) => { return match role { LlvmParameterRole.Legacy(index: val other) => { give index == other } _ => { give false } } }
         }
@@ -271,6 +289,10 @@ pub impl LlvmSignatureScope {
                 if signature.parameters.count() == 0U64 { return <Result.Err error=signatureFailure(message: "closure requires a leading environment") /> }
                 if resultVoid != (signature.resultTerm == 0U64) { return <Result.Err error=signatureFailure(message: "closure result protocol mismatch") /> }
             }
+            LlvmValueConvention.Witness(targetType: val targetType, traitIndex: _, slot: val slot) => {
+                if targetType == 0U64 || slot == 0U64 || signature.parameters.count() == 0U64 { return <Result.Err error=signatureFailure(message: "witness requires a selected target/slot and leading erased receiver") /> }
+                if resultVoid != (signature.resultTerm == 0U64) { return <Result.Err error=signatureFailure(message: "witness result protocol mismatch") /> }
+            }
             LlvmValueConvention.Legacy(family: _) => {}
         }
         mut val ordinary = 0U64
@@ -289,6 +311,7 @@ pub impl LlvmSignatureScope {
                             ordinary += 1U64
                         }
                         LlvmParameterRole.Environment => { return <Result.Err error=signatureFailure(message: "environment role in body convention") /> }
+                        LlvmParameterRole.ErasedReceiver => { return <Result.Err error=signatureFailure(message: "erased receiver role in body convention") /> }
                         LlvmParameterRole.Legacy(index: _) => { return <Result.Err error=signatureFailure(message: "legacy role in body convention") /> }
                     }
                     match parameter.mode {
@@ -303,6 +326,19 @@ pub impl LlvmSignatureScope {
                     } else {
                         if parameter.semanticType == 0U64 || !parameter.role.same(role: <LlvmParameterRole.Ordinary index=ordinary />) { return <Result.Err error=signatureFailure(message: "closure ordinary semantic role/index mismatch") /> }
                         ordinary += 1U64
+                    }
+                }
+                LlvmValueConvention.Witness(targetType: val targetType, traitIndex: _, slot: _) => {
+                    if parameter.mode.key() == 0U64 { return <Result.Err error=signatureFailure(message: "witness parameter lacks an ownership mode") /> }
+                    if index == 0U64 {
+                        if !parameter.role.same(role: <LlvmParameterRole.ErasedReceiver />) || parameter.semanticType != targetType || LLVMGetTypeKind(parameter.type) != 12U32 { return <Result.Err error=signatureFailure(message: "witness requires a leading erased receiver pointer for its target") /> }
+                    } else {
+                        if parameter.semanticType == 0U64 || !parameter.role.same(role: <LlvmParameterRole.Ordinary index=ordinary />) { return <Result.Err error=signatureFailure(message: "witness ordinary semantic role/index mismatch") /> }
+                        ordinary += 1U64
+                    }
+                    match parameter.mode {
+                        LlvmParameterMode.Inout => { if LLVMGetTypeKind(parameter.type) != 12U32 { return <Result.Err error=signatureFailure(message: "witness inout requires pointer representation") /> } }
+                        _ => {}
                     }
                 }
                 LlvmValueConvention.Legacy(family: _) => {
@@ -340,7 +376,7 @@ pub impl LlvmSignatureScope {
         // Scope rejection precedes inspecting any foreign plan's native types.
         if plan.moduleIdentity != self.moduleIdentity || plan.contextIdentity != self.contextIdentity || plan.revision != 1U64 || plan.targetTriple != self.triple || plan.dataLayout != self.layout { return <Result.Err error=signatureFailure(message: "plan scope or protocol revision mismatch") /> }
         val expected = (try self.plan(signature: signature))
-        if plan.convention.key() != expected.convention.key() || plan.resultTerm != expected.resultTerm || plan.resultProtocol.key() != expected.resultProtocol.key() || plew_pointer_equal(plan.logicalSignature, expected.logicalSignature) == 0I32 || plew_pointer_equal(plan.functionType, expected.functionType) == 0I32 || plan.parameters.count() != expected.parameters.count() { return <Result.Err error=signatureFailure(message: "plan convention/result/signature mismatch") /> }
+        if !plan.convention.same(convention: expected.convention) || plan.resultTerm != expected.resultTerm || plan.resultProtocol.key() != expected.resultProtocol.key() || plew_pointer_equal(plan.logicalSignature, expected.logicalSignature) == 0I32 || plew_pointer_equal(plan.functionType, expected.functionType) == 0I32 || plan.parameters.count() != expected.parameters.count() { return <Result.Err error=signatureFailure(message: "plan convention/result/signature mismatch") /> }
         mut val index = 0U64
         while index < expected.parameters.count() {
             val parameter = plan.parameters[index]

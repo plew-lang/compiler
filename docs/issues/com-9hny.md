@@ -343,13 +343,64 @@ Legacy without polluting completed Borrow templates. [com-xkcb](com-xkcb.md)
 owns the existing function-type ownership-mode gap; it is not automatically an
 optimization prerequisite. No new source restriction or support is claimed.
 
-**Next:** existential receiver/ordinary calls, then ownership glue, as separately
-reviewable increments within checkpoint 4. A public existential endpoint, rather
-than a concrete implementation body, must own the dynamic signature; receiver
-conversion still consumes the frozen concrete adapter. Ordinary Borrow/Inout/
-Move paths must be preserved; existing unsupported Move receiver/async dispatch
-must not be confused with physical-fixture acceptance. Pin concrete endpoint
-identity, template/declaration correspondence and typed fat-value consumer APIs
-before edits. Checkpoints 5/6, W2 preparation cost and whole-consumer reconciliation,
-W3/W4 and com-ffar final gates remain open. No formal timing, fixed-point,
-full ASan, main/seed or adopted carrier promotion is claimed.
+### Completed Witness Increment
+
+[Witness evidence](../../../evidence/performance-regression-history/value-passing-implementation/w2-protocol/typed-witness-protocol.json)
+records the completed public endpoint `(any target, trait, slot)` through frozen
+member/selected-call producers, shared template/declaration lanes, typed fat
+consumer and Ready receiver/ordinary binding. The receiver's concrete conversion
+stays in its frozen adapter. Cache hits avoid logical-vector construction;
+retired raw Witness indirect calls and raw completed parameter readers reject.
+Byval/local copies, CoW acquisition and source support boundaries stay unchanged.
+
+Standard build `20261110T035711-build-ece0be`, fresh CLI56/internal8, raw/optimized
+ABI and source controls, C boundaries, physical native, and both affected Ready
+Witness/Closure harnesses pass with immutable inputs. All 183 product inputs
+match the build. Native Witness keeps the previous 21 Ready cases, adds six
+malformed declarations and 23 malformed call/binding guards, and checks cache
+sharing, typed Value/Home, Inout/Move and cold/warm Unit results. Native Move
+receiver is not source dispatch support. Independent source/native review accepted this finite increment: 1225 distinct
+path/hash records match, all four final gates are immutable, and both private
+harnesses plus raw/optimized source executables replayed successfully.
+
+Execution found a real Unit regression in the initial Witness candidate. A
+selected source Unit term and the frozen member's no-payload result must use the
+existing common `callableResultSlot`, rather than compare unlike result slots or
+invent an empty-record return ABI. Warm/cold native and source lazy/raw/optimized
+controls cover the correction; named empty structs keep their result. Initial
+scratch controls accidentally selected the retained red alias; those terminated
+runs are excluded from acceptance. The final fixed alias is distinct.
+
+### Next Ownership Glue Increment
+
+Neutral read-only planning reviewed all seven remaining ownership families:
+EnvironmentDrop, ExistentialCopy/Drop, StructRetain/Drop and EnumRetain/Release.
+Existing explicit Legacy families identify the boundary but do not complete its
+semantic roles and typed carriers. Also migrate the drop walk's existing frozen
+user-deinit call, currently `BodyCompatibility.Destruction`, to normal typed Body
+inputs. This is a finite checkpoint 4 increment, not a new source capability.
+
+Use a common completed operation convention with full operation identity.
+Concrete struct/enum operations retain their canonical instance term and explicit
+Borrow (retain) or Move (drop/release) payload role. Erased copy/drop/environment
+operations use explicit storage roles and Value(ptr), not aggregate Home; payload
+consumption must not claim allocation-free ownership. Dynamic endpoint identity
+is the operation, since callers cannot know the concrete boxed type/capture body.
+Declarations retain their frozen destruction/capture adapter correspondence.
+Extract function and payload from the same checked fat owner in the consumer.
+Cache scoped operation/type templates before building vectors. Do not infer
+copyability, destruction selection, capture ownership or free rights from ptr.
+
+Before edits, pin structural RED and preserved source controls. Native tests
+cover all seven declaration/call/parameter paths, aggregate Value/Home/zero-size,
+semantic distinction at equal LLVM representation, malformed operation/type/
+role/mode/index/scope/provenance, raw bypass and call-count-independent planning.
+Source controls cover closure value/cell final release, existential CoW split,
+nested/generic retain/drop, deinit-before-field order and zero-size deinit.
+Preserve RC/null guards, allocation free, vtable layout and recursive witness
+worklist/drain order. Retire these seven raw glue families and raw Destruction
+Body calls; async and existing unsupported closure modes remain separate.
+
+Checkpoints 5/6, W2 preparation cost and whole-consumer reconciliation, W3/W4
+and com-ffar final gates remain open. No formal timing, fixed-point, full ASan,
+main/seed or adopted carrier promotion is claimed.

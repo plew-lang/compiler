@@ -25,6 +25,12 @@ fn body(parameters: Array[LlvmLogicalParameter], result: LLVMTypeRef) -> LlvmLog
 fn closure(parameters: Array[LlvmLogicalParameter], result: LLVMTypeRef, resultTerm: U64 = 0U64) -> LlvmLogicalSignature {
     return <LlvmLogicalSignature convention=<LlvmValueConvention.Closure /> parameters=parameters result=result resultTerm=resultTerm />
 }
+fn witness(parameters: Array[LlvmLogicalParameter], result: LLVMTypeRef, targetType: U64 = 20U64, traitIndex: U64 = 0U64, slot: U64 = 1U64, resultTerm: U64 = 0U64) -> LlvmLogicalSignature {
+    return <LlvmLogicalSignature convention=<LlvmValueConvention.Witness targetType=targetType traitIndex=traitIndex slot=slot /> parameters=parameters result=result resultTerm=resultTerm />
+}
+fn changedConvention(plan: LlvmPhysicalSignature, convention: LlvmValueConvention) -> LlvmPhysicalSignature {
+    return <LlvmPhysicalSignature parameters=plan.parameters logicalSignature=plan.logicalSignature functionType=plan.functionType moduleIdentity=plan.moduleIdentity contextIdentity=plan.contextIdentity revision=plan.revision targetTriple=plan.targetTriple dataLayout=plan.dataLayout convention=convention resultTerm=plan.resultTerm resultProtocol=plan.resultProtocol />
+}
 fn changed(plan: LlvmPhysicalSignature, parameters: Array[LlvmValueParameter], revision: U64 = 1U64) -> LlvmPhysicalSignature {
     return <LlvmPhysicalSignature parameters=parameters logicalSignature=plan.logicalSignature functionType=plan.functionType moduleIdentity=plan.moduleIdentity contextIdentity=plan.contextIdentity revision=revision targetTriple=plan.targetTriple dataLayout=plan.dataLayout convention=plan.convention resultTerm=plan.resultTerm resultProtocol=plan.resultProtocol />
 }
@@ -141,6 +147,62 @@ fn main() {
     val changedClosureTerm = parameter(type: pointer, semantic: 99U64, role: pointerBorrow.role, mode: pointerBorrow.mode)
     if scope.validate(signature: closure(parameters: [environment, changedClosureTerm], result: voidType), plan: closurePtrPlan).isOk() { panic "same ptr closure semantic substitution accepted" }
     if scope.validate(signature: closure(parameters: closureSignature.parameters, result: aggregate, resultTerm: 99U64), plan: closurePlan).isOk() { panic "closure semantic result substitution accepted" }
+    // Witness payload identity is distinct from its ptr-shaped erased receiver.
+    val erasedReceiver = parameter(type: pointer, semantic: 20U64, role: <LlvmParameterRole.ErasedReceiver />, mode: <LlvmParameterMode.Borrow />)
+    val witnessSignature = witness(parameters: [erasedReceiver], result: voidType)
+    val witnessPlan = scope.plan(signature: witnessSignature).unwrap()
+    scope.validate(signature: witnessSignature, plan: witnessPlan).unwrap()
+    if witnessPlan.convention.key() != 13U64 || LLVMCountParamTypes(witnessPlan.functionType) != 1U32 || witnessPlan.parameters[0].passing.key() != 1U64 { panic "witness receiver representation" }
+    val modes: Array[LlvmParameterMode] = [<LlvmParameterMode.Borrow />, <LlvmParameterMode.Inout />, <LlvmParameterMode.Move />]
+    for mode in modes {
+        val witnessReceiver = parameter(type: pointer, semantic: 20U64, role: erasedReceiver.role, mode: mode)
+        val ordinaryPointer = parameter(type: pointer, semantic: 21U64, role: <LlvmParameterRole.Ordinary index=0U64 />, mode: mode)
+        val witnessModeSignature = witness(parameters: [witnessReceiver, ordinaryPointer, closureAggregate], result: aggregate, resultTerm: 11U64)
+        val witnessModePlan = scope.plan(signature: witnessModeSignature).unwrap()
+        scope.validate(signature: witnessModeSignature, plan: witnessModePlan).unwrap()
+        if witnessModePlan.parameters[0].physicalIndex != 0U64 || witnessModePlan.parameters[1].physicalIndex != 1U64 || witnessModePlan.parameters[2].passing.key() != 2U64 || LLVMCountParamTypes(witnessModePlan.functionType) != 3U32 || witnessModePlan.resultProtocol.key() != 1U64 { panic "witness mode mapping" }
+    }
+    val witnessOmittedSignature = witness(parameters: [erasedReceiver, closureEmpty, closureAggregate], result: voidType)
+    val witnessOmittedPlan = scope.plan(signature: witnessOmittedSignature).unwrap()
+    if witnessOmittedPlan.parameters[1].passing.key() != 0U64 || witnessOmittedPlan.parameters[2].passing.key() != 2U64 || witnessOmittedPlan.parameters[2].physicalIndex != 1U64 || LLVMCountParamTypes(witnessOmittedPlan.functionType) != 2U32 { panic "witness omission and byval" }
+    scope.validate(signature: witnessOmittedSignature, plan: witnessOmittedPlan).unwrap()
+    if scope.plan(signature: witness(parameters: [], result: voidType)).isOk() { panic "missing witness receiver accepted" }
+    if scope.plan(signature: witness(parameters: [environment], result: voidType)).isOk() { panic "environment replaces erased receiver" }
+    if scope.plan(signature: witness(parameters: [pointerBorrow], result: voidType)).isOk() { panic "ordinary ptr replaces erased receiver" }
+    if scope.plan(signature: witness(parameters: [erasedReceiver, erasedReceiver], result: voidType)).isOk() { panic "duplicate witness receiver accepted" }
+    if scope.plan(signature: witness(parameters: [pointerBorrow, erasedReceiver], result: voidType)).isOk() { panic "late witness receiver accepted" }
+    if scope.plan(signature: witness(parameters: [erasedReceiver, environment], result: voidType)).isOk() { panic "witness environment ordinary accepted" }
+    if scope.plan(signature: body(parameters: [erasedReceiver], result: voidType)).isOk() { panic "body erased receiver accepted" }
+    if scope.plan(signature: closure(parameters: [erasedReceiver], result: voidType)).isOk() { panic "erased receiver replaces environment" }
+    if scope.plan(signature: closure(parameters: [environment, erasedReceiver], result: voidType)).isOk() { panic "closure erased ordinary accepted" }
+    if scope.plan(signature: witness(parameters: [parameter(type: scalar, semantic: 20U64, role: erasedReceiver.role, mode: erasedReceiver.mode)], result: voidType)).isOk() { panic "nonpointer erased receiver accepted" }
+    if scope.plan(signature: witness(parameters: [parameter(type: pointer, semantic: 21U64, role: erasedReceiver.role, mode: erasedReceiver.mode)], result: voidType)).isOk() { panic "wrong witness target term accepted" }
+    if scope.plan(signature: witness(parameters: [parameter(type: pointer, semantic: 0U64, role: erasedReceiver.role, mode: erasedReceiver.mode)], result: voidType, targetType: 0U64)).isOk() { panic "zero witness target accepted" }
+    if scope.plan(signature: witness(parameters: [erasedReceiver], result: voidType, slot: 0U64)).isOk() { panic "zero witness slot accepted" }
+    if scope.plan(signature: witness(parameters: [parameter(type: pointer, semantic: 20U64, role: erasedReceiver.role, mode: <LlvmParameterMode.Legacy />)], result: voidType)).isOk() { panic "legacy witness receiver accepted" }
+    if scope.plan(signature: witness(parameters: [erasedReceiver, parameter(type: pointer, semantic: 21U64, role: pointerBorrow.role, mode: <LlvmParameterMode.Legacy />)], result: voidType)).isOk() { panic "legacy witness ordinary accepted" }
+    if scope.plan(signature: witness(parameters: [erasedReceiver, parameter(type: pointer, semantic: 0U64, role: pointerBorrow.role, mode: pointerBorrow.mode)], result: voidType)).isOk() { panic "zero witness ordinary term accepted" }
+    if scope.plan(signature: witness(parameters: [erasedReceiver, badInout], result: voidType)).isOk() { panic "nonpointer witness inout accepted" }
+    if scope.plan(signature: witness(parameters: [erasedReceiver, malformedIndex], result: voidType)).isOk() { panic "witness ordinary index accepted" }
+    if scope.plan(signature: witness(parameters: [erasedReceiver, receiver], result: voidType)).isOk() { panic "witness ordinary receiver accepted" }
+    if scope.plan(signature: witness(parameters: [erasedReceiver, legacy.parameters[0]], result: voidType)).isOk() { panic "witness legacy role accepted" }
+    if scope.plan(signature: witness(parameters: [erasedReceiver], result: voidType, resultTerm: 20U64)).isOk() { panic "witness void semantic result accepted" }
+    if scope.plan(signature: witness(parameters: [erasedReceiver], result: aggregate)).isOk() { panic "witness missing semantic result accepted" }
+    if !witnessPlan.convention.matchesWitness(targetType: 20U64, traitIndex: 0U64, slot: 1U64) { panic "matching witness scalars rejected" }
+    if witnessPlan.convention.matchesWitness(targetType: 21U64, traitIndex: 0U64, slot: 1U64) { panic "different witness target scalar accepted" }
+    if witnessPlan.convention.matchesWitness(targetType: 20U64, traitIndex: 1U64, slot: 1U64) { panic "different witness trait scalar accepted" }
+    if witnessPlan.convention.matchesWitness(targetType: 20U64, traitIndex: 0U64, slot: 2U64) { panic "different witness slot scalar accepted" }
+    val nonWitnessConventions: Array[LlvmValueConvention] = [<LlvmValueConvention.Body />, <LlvmValueConvention.Closure />, <LlvmValueConvention.Legacy family=<LlvmLegacyConvention.Witness /> />]
+    for convention in nonWitnessConventions {
+        if convention.matchesWitness(targetType: 20U64, traitIndex: 0U64, slot: 1U64) { panic "non-witness scalar match accepted" }
+    }
+    val differentWitnessConventions: Array[LlvmValueConvention] = [<LlvmValueConvention.Witness targetType=21U64 traitIndex=0U64 slot=1U64 />, <LlvmValueConvention.Witness targetType=20U64 traitIndex=1U64 slot=1U64 />, <LlvmValueConvention.Witness targetType=20U64 traitIndex=0U64 slot=2U64 />]
+    for convention in differentWitnessConventions {
+        if witnessPlan.convention.same(convention: convention) { panic "witness identity payload erased" }
+        if scope.validate(signature: witnessSignature, plan: changedConvention(plan: witnessPlan, convention: convention)).isOk() { panic "same native witness different payload accepted" }
+    }
+    if !witnessPlan.convention.same(convention: witnessSignature.convention) || witnessPlan.convention.same(convention: zeroClosure.convention) { panic "witness convention identity" }
+    if (<LlvmValueConvention.Legacy family=<LlvmLegacyConvention.Closure /> />).same(convention: <LlvmValueConvention.Legacy family=<LlvmLegacyConvention.Witness /> />) { panic "legacy family identity erased" }
     val callableInputs = <LlvmCallableInputScope moduleIdentity=closurePlan.moduleIdentity contextIdentity=closurePlan.contextIdentity revision=1U64 callableIdentity=17U64 signature=closurePlan.logicalSignature />
     scope.validateCallableInputs(scope: callableInputs, callableIdentity: 17U64, signature: closurePlan.logicalSignature).unwrap()
     if scope.validateCallableInputs(scope: callableInputs, callableIdentity: 18U64, signature: closurePlan.logicalSignature).isOk() { panic "wrong callable identity accepted" }

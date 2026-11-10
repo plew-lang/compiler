@@ -61,6 +61,27 @@ that proof. Explicit compatibility for entries not yet migrated does not claim
 that their source function modes are fully supported; known gaps belong in
 [implementation issues](../issues/com-xkcb.md).
 
+Completed existential requirement templates belong to a public endpoint:
+finalized any target type, trait identity and requirement slot. Concrete witness
+declarations share that template's lane range with their own adapter body
+identities. The ErasedReceiver pointer lane retains the public target and passing
+mode; Ready separately retains the frozen concrete receiver load/address
+conversion. An opaque native pointer does not identify either semantic type.
+Frozen member and final-call producers perform cache lookup before building
+logical parameter vectors, and backend lowering does not rerun requirement
+resolution. Calls retain the typed fat any value; the checked consumer extracts
+data/vtable and uses the descriptor's slot. Ordinary Borrow/Inout/Move inputs
+use typed Value/Home carriers. Completed indirect parameter readers share the
+physical decoder, and retired raw Witness calls/parameter bindings cannot
+bypass it. Existing CoW receiver privatization, result conversion and ownership
+glue remain separate contracts.
+
+Callable result slots use the frontend's common result normalization: a source
+Unit expression has no callable payload slot. A selected call and its frozen
+requirement member must use that same normalization before comparing or planning
+the result. This does not erase named empty structs or authorize backend-specific
+semantic normalization.
+
 A byval byte snapshot is a physical copying mechanism, not an additional semantic Copy or an implicit ARC retain. Its source/destination lifetime and ownership follow the already selected passing contract; the callee cannot independently destroy a caller-guaranteed share simply because LLVM supplied private bytes.
 
 ABI attributes must match on definitions/declarations and call sites. A `byval` parameter describes an independent snapshot; passing an unprotected address into mutable caller storage is not a substitute. Temporary storage belongs to the function actually being emitted, including when emitting a thunk inside another generation context. Allocate its slot in that function's entry and store the evaluated value at the original call position, preserving evaluation order and avoiding loop-driven stack growth.

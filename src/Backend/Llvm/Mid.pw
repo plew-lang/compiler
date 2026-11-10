@@ -1829,8 +1829,7 @@ pub impl LlvmCtx {
         val term: MidTerminatorNode = c.mid.terminators[terminatorId - 1U64]
         val selected: CallResolution = c.arena.finalCalleeAt(index: c.mid.callTargets[term.callTarget - 1U64].resolution)
         match selected.target {
-            CallTarget.ExistentialRequirement(traitIdx: val traitIndex, slot: val slot) => {
-                val requirement: Func = c.traitReqAt(reqs: c.decls.traitAt(index: traitIndex).reqs, index: slot - 1U64)
+            CallTarget.ExistentialRequirement(traitIdx: _, slot: _) => {
                 val receiver: MidCallReceiverNode = c.mid.callReceivers[term.callReceiver - 1U64]
                 mut val fat: LLVMValueRef = LLVMGetUndef(self.anyTy)
                 match selected.receiverPassing {
@@ -1842,41 +1841,36 @@ pub impl LlvmCtx {
                     CallReceiverPassing.Borrow => { fat = (try self.midCanonicalEmitOperand(c: inout c, body: body, operandId: receiver.operand)) }
                     _ => { return <Result.Ok value=false /> }
                 }
-                val table: LLVMValueRef = LLVMBuildExtractValue(self.b, fat, 1U64, anon())
-                val indices: Array[LLVMValueRef] = [LLVMConstInt(self.i64ty, slot + 1U64, 0I32)]
-                val entry: LLVMValueRef = LLVMBuildGEP2(self.b, self.ptrty, table, arrayCPtr(indices), 1U64, anon())
-                val function: LLVMValueRef = llvmLoad(self.b, self.ptrty, entry, anon())
-                mut val values: Array[LLVMValueRef] = [LLVMBuildExtractValue(self.b, fat, 0U64, anon())]
-                mut val types: Array[LLVMTypeRef] = [self.ptrty]
+                val callee = (try self.witnessCallee(c: inout c, selected: selected, fat: fat))
+                val abi = self.valueAbis[callee.template - 1U64]
+                mut val values: Array[LlvmValueInput] = []
                 mut val index: U64 = 0U64
                 while index < term.args.len {
-                    val operandId: U64 = c.mid.callArguments[term.args.start + index]
-                    val parameter: U64 = c.arena.finalCalleeParameterTypeAt(types: selected.parameterTypeRefs, index: index)
-                    mut val parameterType: LLVMTypeRef = (try self.llvmTypeOfRef(c: inout c, ref: parameter))
-                    mut val value: LLVMValueRef = LLVMConstNull(self.ptrty)
-                    match c.arena.finalCalleeArgumentPassingAt(passings: selected.argumentPassings, index: index) {
+                    val operandId = c.mid.callArguments[term.args.start + index]
+                    val parameter = c.arena.finalCalleeParameterTypeAt(types: selected.parameterTypeRefs, index: index)
+                    val passing = c.arena.finalCalleeArgumentPassingAt(passings: selected.argumentPassings, index: index)
+                    val mode = argumentValueMode(passing: passing)
+                    val lane = self.valueAbiParameters[abi.parameterStart + index + 1U64]
+                    if !c.typeRefEq(a: parameter, b: lane.semanticType) || mode.key() != lane.mode.key() { return <Result.Err error=valueAbiFailure(message: "witness selected parameter/template mismatch") /> }
+                    mut val value = LLVMConstNull(self.ptrty)
+                    match passing {
                         CallArgumentPassing.Inout => {
-                            parameterType = self.ptrty
-                            val operand: MidOperandNode = c.mid.operands[operandId - 1U64]
+                            val operand = c.mid.operands[operandId - 1U64]
                             value = (try self.midCanonicalPlacePtr(c: inout c, body: body, place: c.mid.places[operand.place - 1U64], forWrite: true))
                         }
                         _ => {
                             value = (try self.midCanonicalEmitOperand(c: inout c, body: body, operandId: operandId))
                             if LLVMGetTypeKind(LLVMTypeOf(value)) == 8U32 {
-                                val parameterTerm: TypeRef = c.arena.typeAt(index: parameter)
-                                value = self.coerceInt(v: value, target: parameterType, unsigned: isUnsignedName(c: inout c, start: parameterTerm.nameStart, len: parameterTerm.nameLen))
+                                val parameterTerm = c.arena.typeAt(index: parameter)
+                                value = self.coerceInt(v: value, target: lane.type, unsigned: isUnsignedName(c: inout c, start: parameterTerm.nameStart, len: parameterTerm.nameLen))
                             }
                         }
                     }
-                    values.append(value)
-                    types.append(parameterType)
+                    values.append(<LlvmValueInput lane=<LlvmLogicalParameter type=lane.type semanticType=lane.semanticType role=<LlvmParameterRole.Ordinary index=index /> mode=mode /> index=index + 1U64 carrier=<LlvmValueCarrier.Value value=value /> />)
                     index += 1U64
                 }
-                mut val resultType: LLVMTypeRef = self.voidty
-                if selected.resultTypeRef != 0U64 { resultType = (try self.llvmTypeOfRef(c: inout c, ref: selected.resultTypeRef)) }
-                val signature: LLVMTypeRef = LLVMFunctionType(resultType, arrayCPtr(types), types.count(), 0I32)
-                val result: LLVMValueRef = (try self.callLegacyValueFunction(signature: signature, function: function, arguments: values, legacyIndirect: <Optional.Some v=<LlvmLegacyConvention.Witness /> />))
-                if selected.resultTypeRef != 0U64 { llvmStore(self.b, result, (try self.midCanonicalPlacePtr(c: inout c, body: body, place: c.mid.places[term.destination - 1U64], forWrite: true))) }
+                val result = (try self.callWitnessValueFunction(callee: callee, arguments: values))
+                if abi.resultTerm != 0U64 { llvmStore(self.b, result, (try self.midCanonicalPlacePtr(c: inout c, body: body, place: c.mid.places[term.destination - 1U64], forWrite: true))) }
                 return <Result.Ok value=true />
             }
             _ => { return <Result.Ok value=false /> }
@@ -2546,6 +2540,8 @@ pub impl LlvmCtx {
                     val entryAbi = self.valueAbiFunctions.getOr(key: LLVMIsAFunction(self.curFn), fallback: 0U64)
                     val value = if entryAbi != 0U64 && self.valueAbis[entryAbi - 1U64].convention.key() == 12U64 {
                         give self.valueInputValue(input: (try self.closureBodyParameter(function: self.curFn, bodyId: body.bodyInstance, index: parameterIndex - self.valueAbis[entryAbi - 1U64].parameterStart)))
+                    } else if entryAbi != 0U64 && self.valueAbis[entryAbi - 1U64].convention.key() == 13U64 {
+                        give self.valueInputValue(input: (try self.witnessBodyParameter(function: self.curFn, bodyId: body.bodyInstance, index: parameterIndex - self.valueAbis[entryAbi - 1U64].parameterStart)))
                     } else { give (try self.preparedLegacyParameter(parameterIndex: parameterIndex)) }
                     if alias { slot = value } else { llvmStore(self.b, value, slot) }
                 }
@@ -2558,7 +2554,8 @@ pub impl LlvmCtx {
                     llvmStore(self.b, llvmLoad(self.b, fieldType, address, anon()), slot)
                 }
                 LlvmLocalBinding.ErasedReceiver(parameterIndex: val parameterIndex, type: val type, alias: val alias) => {
-                    val address = (try self.preparedLegacyParameter(parameterIndex: parameterIndex))
+                    val witnessAbi = match plan.entry { LlvmBodyLocalEntry.Witness(abiId: val id) => { give id } _ => { return <Result.Err error=valueAbiFailure(message: "erased receiver binding on a different entry") /> } }
+                    val address = self.valueInputValue(input: (try self.witnessBodyParameter(function: self.curFn, bodyId: body.bodyInstance, index: parameterIndex - self.valueAbis[witnessAbi - 1U64].parameterStart)))
                     if alias { slot = address }
                     else { llvmStore(self.b, llvmLoad(self.b, type, address, anon()), slot) }
                 }
@@ -2824,10 +2821,10 @@ pub impl LlvmCtx {
                 LlvmValueConvention.Legacy(family: val family) => { give match family {
                     LlvmLegacyConvention.Closure => { give <LlvmBodyLocalEntry.Closure abiId=abiId /> }
                     LlvmLegacyConvention.EnvironmentDrop => { give <LlvmBodyLocalEntry.EnvironmentDrop abiId=abiId /> }
-                    LlvmLegacyConvention.Witness => { give <LlvmBodyLocalEntry.Witness abiId=abiId /> }
                     _ => { return <Result.Err error=valueAbiFailure(message: "entry has no retained local adapter") /> }
                 } }
                 LlvmValueConvention.Closure => { give <LlvmBodyLocalEntry.Closure abiId=abiId /> }
+                LlvmValueConvention.Witness(targetType: _, traitIndex: _, slot: _) => { give <LlvmBodyLocalEntry.Witness abiId=abiId /> }
                 LlvmValueConvention.Body => {
                     if parameterCount != abi.parameterCount { return <Result.Err error=valueAbiFailure(message: "local plan normal body/parameter mismatch") /> }
                     give <LlvmBodyLocalEntry.Normal abiId=abiId />

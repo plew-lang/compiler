@@ -21,6 +21,140 @@
 
 pub impl LlvmCtx {
 
+    // Public endpoint lookup precedes any logical-vector construction. The
+    // convention owns target/trait/slot, not the concrete adapter body.
+    inout fn cachedWitnessValueAbi(targetType: U64, traitIndex: U64, slot: U64) -> Result[U64, CompileDiagnostic] {
+        val scope = (try self.prepareValueAbiScope())
+        try scope.validateScope()
+        if slot == 0U64 { return <Result.Err error=valueAbiFailure(message: "witness slot is not one-based") /> }
+        val slots = self.witnessValueAbis.getOr(key: targetType, fallback: [])
+        if slot > slots.count() || slots[slot - 1U64] == 0U64 { return <Result.Ok value=0U64 /> }
+        val abiId = slots[slot - 1U64]
+        if abiId > self.valueAbis.count() { return <Result.Err error=valueAbiFailure(message: "cached witness descriptor out of range") /> }
+        val abi = self.valueAbis[abiId - 1U64]
+        if abi.ownerBody != 0U64 || !abi.convention.matchesWitness(targetType: targetType, traitIndex: traitIndex, slot: slot) || abi.moduleIdentity != scope.moduleIdentity || abi.contextIdentity != scope.contextIdentity || abi.revision != 1U64 { return <Result.Err error=valueAbiFailure(message: "cached witness endpoint/scope mismatch") /> }
+        return <Result.Ok value=abiId />
+    }
+
+    inout fn saveWitnessValueAbi(c: inout Comp, targetType: U64, traitIndex: U64, slot: U64, signature: ExistentialRequirementSignature) -> Result[U64, CompileDiagnostic] {
+        if targetType == 0U64 || targetType >= c.arena.typeCount() || !c.arena.typeAt(index: targetType).isAny || traitIndex >= c.decls.traitCount() || slot == 0U64 || slot > c.decls.traitAt(index: traitIndex).reqs.count() || signature.parameterTypes.count() != signature.argumentPassings.count() { return <Result.Err error=valueAbiFailure(message: "witness public signature is incomplete") /> }
+        mut val parameters: Array[LlvmLogicalParameter] = [<LlvmLogicalParameter type=self.ptrty semanticType=targetType role=<LlvmParameterRole.ErasedReceiver /> mode=(try witnessReceiverMode(passing: signature.receiverPassing)) />]
+        mut val index = 0U64
+        while index < signature.parameterTypes.count() {
+            val mode = argumentValueMode(passing: signature.argumentPassings[index])
+            val type = if mode.key() == 2U64 { give self.ptrty } else { give (try self.llvmTypeOfRef(c: inout c, ref: signature.parameterTypes[index])) }
+            parameters.append(<LlvmLogicalParameter type=type semanticType=signature.parameterTypes[index] role=<LlvmParameterRole.Ordinary index=index /> mode=mode />)
+            index += 1U64
+        }
+        val result = if signature.resultType == 0U64 { give self.voidty } else { give (try self.llvmTypeOfRef(c: inout c, ref: signature.resultType)) }
+        mut val slots = self.witnessValueAbis.getOr(key: targetType, fallback: [])
+        while slots.count() < c.decls.traitAt(index: traitIndex).reqs.count() { slots.append(0U64) }
+        if slots[slot - 1U64] != 0U64 { return <Result.Err error=valueAbiFailure(message: "witness template published twice") /> }
+        val template = (try self.saveValueAbi(signature: <LlvmLogicalSignature convention=<LlvmValueConvention.Witness targetType=targetType traitIndex=traitIndex slot=slot /> parameters=parameters result=result resultTerm=signature.resultType />, ownerBody: 0U64))
+        slots.set(i: slot - 1U64, value: template)
+        self.witnessValueAbis[targetType] = slots
+        return <Result.Ok value=template />
+    }
+
+    inout fn witnessTemplateForMember(c: inout Comp, resolutionIndex: U64, memberIndex: U64) -> Result[U64, CompileDiagnostic] {
+        if resolutionIndex >= c.arena.finalExistentials.count() { return <Result.Err error=valueAbiFailure(message: "witness resolution out of range") /> }
+        val resolution = c.arena.finalExistentials[resolutionIndex]
+        if memberIndex >= resolution.members.count() { return <Result.Err error=valueAbiFailure(message: "witness member out of range") /> }
+        val cached = (try self.cachedWitnessValueAbi(targetType: resolution.targetRef, traitIndex: resolution.traitIdx, slot: memberIndex + 1U64))
+        if cached != 0U64 { return <Result.Ok value=cached /> }
+        val member = resolution.members[memberIndex]
+        val parameterTypes: Array[U64] = member.parameterTypes
+        return self.saveWitnessValueAbi(c: inout c, targetType: resolution.targetRef, traitIndex: resolution.traitIdx, slot: memberIndex + 1U64, signature: <ExistentialRequirementSignature receiverPassing=member.receiverPassing parameterTypes=parameterTypes argumentPassings=member.argumentPassings resultType=member.resultType />)
+    }
+
+    inout fn witnessTemplateForCall(c: inout Comp, selected: CallResolution) -> Result[U64, CompileDiagnostic] {
+        val endpoint = match selected.target { CallTarget.ExistentialRequirement(traitIdx: val traitIndex, slot: val slot) => { give (traitIndex: traitIndex, slot: slot) } _ => { return <Result.Err error=valueAbiFailure(message: "witness call has a different target family") /> } }
+        val cached = (try self.cachedWitnessValueAbi(targetType: selected.recvTypeRef, traitIndex: endpoint.traitIndex, slot: endpoint.slot))
+        if cached != 0U64 { return <Result.Ok value=cached /> }
+        if selected.parameterTypeRefs.len != selected.argumentPassings.len { return <Result.Err error=valueAbiFailure(message: "witness call signature shape mismatch") /> }
+        mut val parameters: Array[U64] = []
+        mut val passings: Array[CallArgumentPassing] = []
+        mut val index = 0U64
+        while index < selected.parameterTypeRefs.len {
+            parameters.append(c.arena.finalCalleeParameterTypeAt(types: selected.parameterTypeRefs, index: index))
+            passings.append(c.arena.finalCalleeArgumentPassingAt(passings: selected.argumentPassings, index: index))
+            index += 1U64
+        }
+        // Calls retain the source expression's Unit term; member facts retain
+        // the callable payload slot. Use the existing normalization before
+        // caching so cold/warm endpoints agree on void without losing Unit.
+        return self.saveWitnessValueAbi(c: inout c, targetType: selected.recvTypeRef, traitIndex: endpoint.traitIndex, slot: endpoint.slot, signature: <ExistentialRequirementSignature receiverPassing=selected.receiverPassing parameterTypes=parameters argumentPassings=passings resultType=c.callableResultSlot(ref: selected.resultTypeRef) />)
+    }
+
+    inout fn witnessBodyValueAbi(c: inout Comp, resolutionIndex: U64, memberIndex: U64, template: U64) -> Result[U64, CompileDiagnostic] {
+        if resolutionIndex >= c.arena.finalExistentials.count() || template == 0U64 || template > self.valueAbis.count() { return <Result.Err error=valueAbiFailure(message: "witness declaration identity out of range") /> }
+        val resolution = c.arena.finalExistentials[resolutionIndex]
+        if memberIndex >= resolution.members.count() { return <Result.Err error=valueAbiFailure(message: "witness declaration member out of range") /> }
+        if (try self.cachedWitnessValueAbi(targetType: resolution.targetRef, traitIndex: resolution.traitIdx, slot: memberIndex + 1U64)) != template { return <Result.Err error=valueAbiFailure(message: "witness declaration/template endpoint mismatch") /> }
+        val member = resolution.members[memberIndex]
+        if member.adapterBodyId == 0U64 || member.adapterBodyId > c.arena.bodyInstanceCount() || member.bodyId == 0U64 || member.bodyId > c.arena.bodyInstanceCount() { return <Result.Err error=valueAbiFailure(message: "witness declaration body out of range") /> }
+        val validOrigin = match c.arena.bodyOrigin(bodyId: member.adapterBodyId) { BodyOrigin.ExistentialWitness(resolution: val owner, member: val position) => { give owner == resolutionIndex && position == memberIndex } _ => { give false } }
+        if !validOrigin { return <Result.Err error=valueAbiFailure(message: "witness declaration body origin mismatch") /> }
+        val signature = c.arena.bodySignature(bodyId: member.adapterBodyId)
+        val plan = self.valueAbis[template - 1U64]
+        if !signature.ready || !c.typeRefEq(a: signature.receiverType, b: resolution.sourceRef) || (try witnessReceiverMode(passing: signature.receiverPassing)).key() != (try witnessReceiverMode(passing: member.receiverPassing)).key() || plan.parameterCount != member.parameterTypes.count() + 1U64 || signature.parameterTypes.count() != member.parameterTypes.count() || signature.parameterPassings.count() != member.parameterTypes.count() || member.argumentPassings.count() != member.parameterTypes.count() || !c.typeRefEq(a: signature.resultType, b: plan.resultTerm) || !c.typeRefEq(a: member.resultType, b: plan.resultTerm) { return <Result.Err error=valueAbiFailure(message: "witness declaration/signature correspondence mismatch") /> }
+        if plan.parameterStart > self.valueAbiParameters.count() || plan.parameterCount > self.valueAbiParameters.count() - plan.parameterStart { return <Result.Err error=valueAbiFailure(message: "witness declaration lane range mismatch") /> }
+        if self.valueAbiParameters[plan.parameterStart].mode.key() != (try witnessReceiverMode(passing: member.receiverPassing)).key() { return <Result.Err error=valueAbiFailure(message: "witness declaration receiver mode mismatch") /> }
+        mut val index = 0U64
+        while index < member.parameterTypes.count() {
+            val lane = self.valueAbiParameters[plan.parameterStart + index + 1U64]
+            if !c.typeRefEq(a: lane.semanticType, b: member.parameterTypes[index]) || !c.typeRefEq(a: signature.parameterTypes[index], b: lane.semanticType) || lane.mode.key() != argumentValueMode(passing: member.argumentPassings[index]).key() || lane.mode.key() != argumentValueMode(passing: signature.parameterPassings[index]).key() { return <Result.Err error=valueAbiFailure(message: "witness declaration ordinary correspondence mismatch") /> }
+            index += 1U64
+        }
+        self.valueAbis.append(<LlvmValueAbi parameterStart=plan.parameterStart parameterCount=plan.parameterCount logicalSignature=plan.logicalSignature functionType=plan.functionType moduleIdentity=plan.moduleIdentity contextIdentity=plan.contextIdentity revision=plan.revision convention=plan.convention resultTerm=plan.resultTerm resultProtocol=plan.resultProtocol ownerBody=member.adapterBodyId />)
+        return <Result.Ok value=self.valueAbis.count() />
+    }
+
+    inout fn witnessCallee(c: inout Comp, selected: CallResolution, fat: LLVMValueRef) -> Result[LlvmWitnessCallee, CompileDiagnostic] {
+        val template = (try self.witnessTemplateForCall(c: inout c, selected: selected))
+        val abi = self.valueAbis[template - 1U64]
+        if abi.parameterCount != selected.parameterTypeRefs.len + 1U64 || selected.argumentPassings.len != selected.parameterTypeRefs.len || !c.typeRefEq(a: abi.resultTerm, b: c.callableResultSlot(ref: selected.resultTypeRef)) || self.valueAbiParameters[abi.parameterStart].mode.key() != (try witnessReceiverMode(passing: selected.receiverPassing)).key() { return <Result.Err error=valueAbiFailure(message: "witness selected receiver/result/shape mismatch") /> }
+        val scope = (try self.prepareValueAbiScope())
+        return <Result.Ok value=<LlvmWitnessCallee template=template inputs=<LlvmCallableInputScope moduleIdentity=scope.moduleIdentity contextIdentity=scope.contextIdentity revision=1U64 callableIdentity=template signature=abi.logicalSignature /> fat=fat /> />
+    }
+
+    inout fn callWitnessValueFunction(callee: LlvmWitnessCallee, arguments: Array[LlvmValueInput]) -> Result[LLVMValueRef, CompileDiagnostic] {
+        if callee.template == 0U64 || callee.template > self.valueAbis.count() { return <Result.Err error=valueAbiFailure(message: "witness call template out of range") /> }
+        val abi = self.valueAbis[callee.template - 1U64]
+        val endpoint = match abi.convention { LlvmValueConvention.Witness(targetType: val target, traitIndex: val traitIndex, slot: val slot) => { give (targetType: target, traitIndex: traitIndex, slot: slot) } _ => { return <Result.Err error=valueAbiFailure(message: "witness call convention mismatch") /> } }
+        if (try self.cachedWitnessValueAbi(targetType: endpoint.targetType, traitIndex: endpoint.traitIndex, slot: endpoint.slot)) != callee.template || abi.parameterCount != arguments.count() + 1U64 { return <Result.Err error=valueAbiFailure(message: "witness call template/count mismatch") /> }
+        if abi.parameterStart > self.valueAbiParameters.count() || abi.parameterCount > self.valueAbiParameters.count() - abi.parameterStart { return <Result.Err error=valueAbiFailure(message: "witness call lane range mismatch") /> }
+        val scope = (try self.prepareValueAbiScope())
+        try scope.validateCallableInputs(scope: callee.inputs, callableIdentity: callee.template, signature: abi.logicalSignature)
+        val caller = LLVMGetBasicBlockParent(LLVMGetInsertBlock(self.b))
+        try scope.validateValue(value: callee.fat, type: self.anyTy, function: caller)
+        val data = LLVMBuildExtractValue(self.b, callee.fat, 0U64, anon())
+        val table = LLVMBuildExtractValue(self.b, callee.fat, 1U64, anon())
+        val indices: Array[LLVMValueRef] = [LLVMConstInt(self.i64ty, endpoint.slot + 1U64, 0I32)]
+        val entry = LLVMBuildGEP2(self.b, self.ptrty, table, arrayCPtr(indices), 1U64, anon())
+        val function = llvmLoad(self.b, self.ptrty, entry, anon())
+        val receiver = self.valueAbiParameters[abi.parameterStart]
+        try scope.validateInput(parameter: receiver, input: <LlvmValueInput lane=<LlvmLogicalParameter type=receiver.type semanticType=receiver.semanticType role=<LlvmParameterRole.ErasedReceiver /> mode=receiver.mode /> index=0U64 carrier=<LlvmValueCarrier.Value value=data /> />, index: 0U64, function: caller)
+        mut val values: Array[LLVMValueRef] = [data]
+        mut val index = 0U64
+        while index < arguments.count() {
+            val input = arguments[index]
+            try scope.validateInput(parameter: self.valueAbiParameters[abi.parameterStart + index + 1U64], input: input, index: index + 1U64, function: caller)
+            values.append(self.valueInputValue(input: input))
+            index += 1U64
+        }
+        return self.emitPlannedValueCall(abiId: callee.template, function: function, arguments: values)
+    }
+
+    inout fn witnessBodyParameter(function: LLVMValueRef, bodyId: U64, index: U64) -> Result[LlvmValueInput, CompileDiagnostic] {
+        val abiId = self.valueAbiFunctions.getOr(key: LLVMIsAFunction(function), fallback: 0U64)
+        if abiId == 0U64 || abiId > self.valueAbis.count() { return <Result.Err error=valueAbiFailure(message: "witness parameter lacks descriptor") /> }
+        val abi = self.valueAbis[abiId - 1U64]
+        if abi.ownerBody != bodyId || bodyId == 0U64 || index >= abi.parameterCount { return <Result.Err error=valueAbiFailure(message: "witness parameter body/index mismatch") /> }
+        match abi.convention { LlvmValueConvention.Witness(targetType: _, traitIndex: _, slot: _) => {} _ => { return <Result.Err error=valueAbiFailure(message: "witness parameter convention mismatch") /> } }
+        return self.preparedValueParameter(function: function, abiId: abiId, index: index)
+    }
+
     // Register the physical erased ABI. The semantic body is emitted later
     // from verified Mid, never while another body owns the local environment.
     inout fn buildAnyThunk(c: inout Comp, resolutionIndex: U64, sidx: U64, idx: U64) -> Result[LLVMValueRef, CompileDiagnostic] {
@@ -31,19 +165,8 @@ pub impl LlvmCtx {
                 return <Result.Ok value=witness.function />
             }
         }
-        // The erased ABI is a frontend fact. Only physical types are selected here.
-        mut val ptys: Array[LLVMTypeRef] = [self.ptrty]
-        mut val pi = 0U64
-        while pi < member.parameterTypes.count() {
-            match member.argumentPassings[pi] {
-                CallArgumentPassing.Inout => { ptys.append(self.ptrty) }
-                _ => { ptys.append((try self.llvmTypeOfRef(c: inout c, ref: member.parameterTypes[pi]))) }
-            }
-            pi += 1U64
-        }
-        mut val rty = self.voidty
-        if member.resultType != 0U64 { rty = (try self.llvmTypeOfRef(c: inout c, ref: member.resultType)) }
-        val fty: LLVMTypeRef = LLVMFunctionType(rty, arrayCPtr(ptys), ptys.count(), 0I32)
+        val template = (try self.witnessTemplateForMember(c: inout c, resolutionIndex: resolutionIndex, memberIndex: idx))
+        val abiId = (try self.witnessBodyValueAbi(c: inout c, resolutionIndex: resolutionIndex, memberIndex: idx, template: template))
         mut val nm: Array[U8] = []
         appendBytes(into: inout nm, from: "pfvt".bytes())
         appendU64Dec(into: inout nm, n: sidx)
@@ -52,7 +175,7 @@ pub impl LlvmCtx {
         appendBytes(into: inout nm, from: "_".bytes())
         appendU64Dec(into: inout nm, n: resolutionIndex)
         nm.append(0)
-        val fv: LLVMValueRef = (try self.declareLegacyBodyFunction(name: arrayCPtr(nm), signature: fty, bodyId: member.adapterBodyId, family: <LlvmLegacyConvention.Witness />))
+        val fv: LLVMValueRef = (try self.declarePlannedBodyFunction(name: arrayCPtr(nm), abiId: abiId, bodyId: member.adapterBodyId))
         self.existentialWitnesses.append(<LlvmExistentialWitness resolution=resolutionIndex member=idx function=fv />)
         return <Result.Ok value=fv />
     }
@@ -77,8 +200,11 @@ pub impl LlvmCtx {
         val receiverMode = (try witnessReceiverMode(passing: member.receiverPassing))
         if !signature.ready || !c.arena.bodySignature(bodyId: member.bodyId).ready || resolution.sourceRef == 0U64 || resolution.sourceRef >= c.arena.typeCount() || receiverType == 0U64 || receiverType >= c.arena.typeCount() || body.sourceFunction != target.fnIdx || !c.typeRefEq(a: signature.receiverType, b: resolution.sourceRef) || (try witnessReceiverMode(passing: signature.receiverPassing)).key() != receiverMode.key() { return <Result.Err error=valueAbiFailure(message: "witness receiver signature mismatch") /> }
         val abi = self.valueAbis[abiId - 1U64]
+        if !abi.convention.matchesWitness(targetType: resolution.targetRef, traitIndex: resolution.traitIdx, slot: origin.member + 1U64) { return <Result.Err error=valueAbiFailure(message: "witness Ready public endpoint mismatch") /> }
         if parameterCount != member.parameterTypes.count() + 1U64 || member.argumentPassings.count() != member.parameterTypes.count() || signature.parameterTypes.count() != member.parameterTypes.count() || signature.parameterPassings.count() != member.parameterTypes.count() || abi.parameterCount != parameterCount || parameterCount > body.locals.len { return <Result.Err error=valueAbiFailure(message: "witness parameter shape mismatch") /> }
         if abi.parameterStart >= self.valueAbiParameters.count() || plew_pointer_equal(self.valueAbiParameters[abi.parameterStart].type, self.ptrty) == 0I32 { return <Result.Err error=valueAbiFailure(message: "erased receiver lane is not a pointer") /> }
+        val receiverLane = self.valueAbiParameters[abi.parameterStart]
+        if receiverLane.semanticType != resolution.targetRef || !receiverLane.role.same(role: <LlvmParameterRole.ErasedReceiver />) || receiverLane.mode.key() != receiverMode.key() || receiverLane.passing.key() != 1U64 || receiverLane.physicalIndex != 0U64 { return <Result.Err error=valueAbiFailure(message: "witness Ready erased receiver lane mismatch") /> }
         mut val bindings: Array[LlvmLocalBinding] = []
         mut val types: Array[LLVMTypeRef] = []
         mut val index = 0U64
@@ -104,6 +230,8 @@ pub impl LlvmCtx {
                     val parameterIndex = abi.parameterStart + index
                     val type = if aliasesAddress { give self.ptrty } else { give types[index] }
                     if parameterIndex >= self.valueAbiParameters.count() || plew_pointer_equal(self.valueAbiParameters[parameterIndex].type, type) == 0I32 { return <Result.Err error=valueAbiFailure(message: "witness ordinary representation mismatch") /> }
+                    val lane = self.valueAbiParameters[parameterIndex]
+                    if !c.typeRefEq(a: lane.semanticType, b: expected) || lane.mode.key() != mode.key() || !lane.role.same(role: <LlvmParameterRole.Ordinary index=index - 1U64 />) { return <Result.Err error=valueAbiFailure(message: "witness Ready ordinary lane mismatch") /> }
                     bindings.set(i: index, value: <LlvmLocalBinding.Parameter parameterIndex=parameterIndex alias=aliasesAddress />)
                 }
             }
@@ -114,7 +242,7 @@ pub impl LlvmCtx {
 
     inout fn validateWitnessLocalEntry(abiId: U64, plannedAbi: U64, bodyId: U64) -> Result[(), CompileDiagnostic] {
         if abiId == 0U64 || abiId > self.valueAbis.count() || abiId != plannedAbi || self.valueAbis[abiId - 1U64].ownerBody != bodyId { return <Result.Err error=valueAbiFailure(message: "witness local entry descriptor mismatch") /> }
-        val valid = match self.valueAbis[abiId - 1U64].convention { LlvmValueConvention.Legacy(family: val family) => { give match family { LlvmLegacyConvention.Witness => { give true } _ => { give false } } } _ => { give false } }
+        val valid = match self.valueAbis[abiId - 1U64].convention { LlvmValueConvention.Witness(targetType: _, traitIndex: _, slot: _) => { give true } _ => { give false } }
         if !valid { return <Result.Err error=valueAbiFailure(message: "witness local entry convention mismatch") /> }
         return <Result.Ok value=() />
     }

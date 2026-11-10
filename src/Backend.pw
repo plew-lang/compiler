@@ -20,7 +20,7 @@ use @Std/Process only { argCount, argAt, exit }
 use @Std/Ffi only { CString, cString, cFree, stringFromCString, arrayCPtr }
 use @Std/Core only { stringFromBytesUnchecked, truncU8, truncU32 }
 use @Plew/Syntax only { Kind, Tok, Lexer, lex, kindCode, rangeEquals, P, ExprAst, StmtAst, BlockAst, PatternAst, MatchArmAst, ArgAst, MakeFieldAst, BindAst, TypeAst, ParamAst, Span, DeclAst, DeclKind, FieldAst, VariantAst, ImplAst, MemberAst, MemberKind, SigAst, TraitAst, ExternAst, ImportAst, DirectiveAst, DeriveReqAst, TopItemAst, emptyExpr }
-use ./Ir only { PType, TypeRef, ArcClass, CaptureEntry, SemanticClosure, SemanticClosureCaptureMode, Local, TypeInfo, MakeFieldOrigin, MakeField, MakeFieldRange, Bind, BindRange, Arg, ArgRange, ExprRange, MatchArm, MatchArmRange, FuncParamRange, PatInfo, IdentBinding, Block, Param, FieldDef, StructDef, Variant, TraitDef, DeriveReq, AssocBinding, ChainSite, DestructureSite, Conform, ViaWitness, FuncBound, FnInst, BodyInstance, BodyOrigin, InstanceEnvironment, CallResolution, CallTarget, CallResultProjection, CallReceiverPassing, CallArgumentPassing, RuntimeIntrinsic, IoIntrinsic, ProcessIntrinsic, CoreStringIntrinsic, FfiIntrinsic, NumericIntrinsic, NumericConversionIntrinsic, NumericWidth, IntegerOperation, FloatWidth, FloatOperation, BoolOperation, NumericOverflow, BufferIntrinsic, ValueConversionProof, EnumPayloadConversion, EnumDef, Func, Global, NewtypeDef, Arena, Decls, Modules, MonoWork, TypeCache, Interner, ParseScratch, Cursor, Expr, Stmt, appendBytes, identUnfilledCode, identValueCode, identFnCode, identNoTarget }
+use ./Ir only { PType, TypeRef, ArcClass, CaptureEntry, SemanticClosure, SemanticClosureCaptureMode, Local, TypeInfo, MakeFieldOrigin, MakeField, MakeFieldRange, Bind, BindRange, Arg, ArgRange, ExprRange, MatchArm, MatchArmRange, FuncParamRange, PatInfo, IdentBinding, Block, Param, FieldDef, StructDef, Variant, TraitDef, DeriveReq, AssocBinding, ChainSite, DestructureSite, Conform, ViaWitness, FuncBound, FnInst, BodyInstance, BodyOrigin, InstanceEnvironment, CallResolution, ExistentialRequirementSignature, CallTarget, CallResultProjection, CallReceiverPassing, CallArgumentPassing, RuntimeIntrinsic, IoIntrinsic, ProcessIntrinsic, CoreStringIntrinsic, FfiIntrinsic, NumericIntrinsic, NumericConversionIntrinsic, NumericWidth, IntegerOperation, FloatWidth, FloatOperation, BoolOperation, NumericOverflow, BufferIntrinsic, ValueConversionProof, EnumPayloadConversion, EnumDef, Func, Global, NewtypeDef, Arena, Decls, Modules, MonoWork, TypeCache, Interner, ParseScratch, Cursor, Expr, Stmt, appendBytes, identUnfilledCode, identValueCode, identFnCode, identNoTarget }
 use ./Frontend only { Comp, intern, spansEqual, tracePhase, tracePhaseCount, tracePhaseProgress }
 // Import the Mid vocabulary at the backend boundary now.  Lowering is migrated
 // body-by-body; keeping this edge one-way prevents Mid from becoming another
@@ -76,6 +76,14 @@ fn witnessReceiverMode(passing: CallReceiverPassing) -> Result[LlvmParameterMode
         CallReceiverPassing.Inout => { give <LlvmParameterMode.Inout /> }
         CallReceiverPassing.None => { return <Result.Err error=valueAbiFailure(message: "witness receiver mode is absent") /> }
     } />
+}
+
+fn argumentValueMode(passing: CallArgumentPassing) -> LlvmParameterMode {
+    return match passing {
+        CallArgumentPassing.Borrow => { give <LlvmParameterMode.Borrow /> }
+        CallArgumentPassing.Inout => { give <LlvmParameterMode.Inout /> }
+        CallArgumentPassing.Move => { give <LlvmParameterMode.Move /> }
+    }
 }
 
 // Backend-local admission result. Ready is constructed only after ownership
@@ -230,6 +238,13 @@ struct LlvmClosureCallee {
 }
 impl LlvmClosureCallee { factory }
 
+struct LlvmWitnessCallee {
+    val template: U64
+    val inputs: LlvmCallableInputScope
+    val fat: LLVMValueRef
+}
+impl LlvmWitnessCallee { factory }
+
 struct LlvmAmbientScope {
     pub val group: Optional[LLVMValueRef] = <Optional.None />
     pub val records: Array[LLVMValueRef] = []
@@ -290,6 +305,7 @@ struct LlvmCtx {
     mut val cIntegerPolicy: Optional[LlvmCIntegerPolicy] = <Optional.None />
     pub mut val valueAbiByvalKind: U32 = 0U32
     pub mut val valueAbis: Array[LlvmValueAbi] = []
+    mut val witnessValueAbis: Dictionary[U64, Array[U64]] = [:]
     mut val closureValueAbis: Dictionary[U64, U64] = [:]
     pub mut val valueAbiFunctions: Dictionary[U64, U64] = [:]
     pub mut val valueAbiParameters: Array[LlvmValueParameter] = []

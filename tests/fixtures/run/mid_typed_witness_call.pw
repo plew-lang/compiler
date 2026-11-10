@@ -1,0 +1,43 @@
+use @Std/Io only { print }
+
+// Dynamic witness inputs preserve a consumed unique ordinary argument, borrowed
+// aggregate bytes, and an omitted zero-sized lane. Token prints once in the
+// implementation and once at its owning scope exit. Both aggregate and empty
+// results pass back through the public erased requirement signature.
+unique struct Token {
+    pub val value: I64
+    deinit { print(self.value) }
+}
+pub impl Token { factory }
+struct Packet { pub val text: String pub val value: I64 }
+pub impl Packet { factory }
+struct Empty {}
+pub impl Empty { factory }
+trait Dispatch {
+    fn take(token: move Token, packet: Packet, empty: Empty) -> Packet
+    fn empty(value: Empty) -> Empty
+    fn event(value: I64)
+}
+struct Worker {}
+pub impl Worker { factory }
+pub impl Worker as Dispatch {
+    fn take(token: move Token, packet: Packet, empty: Empty) -> Packet {
+        print(token.value)
+        return <Packet text=packet.text value=packet.value + token.value />
+    }
+    fn empty(value: Empty) -> Empty { return value }
+    fn event(value: I64) { print(value) }
+}
+// This endpoint is first prepared from a dynamic call in its own module.
+fn cold(worker: any Dispatch) { worker.event(value: 9I64) }
+fn main() {
+    val worker: any Dispatch = <Worker />
+    val token = <Token value=7I64 />
+    val packet = worker.take(token: move token, packet: <Packet text="packet" value=5I64 />, empty: <Empty />)
+    print(packet.text)
+    print(packet.value)
+    val empty = worker.empty(value: <Empty />)
+    print("empty")
+    worker.event(value: 8I64)
+    cold(worker: worker)
+}

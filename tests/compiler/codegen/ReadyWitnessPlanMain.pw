@@ -3,7 +3,7 @@
 // proof. Source selection and cleanup execute in existing existential fixtures.
 use ./Frontend only { analyzeFrontendDeclarations, FrontendInput }
 use ./SourceAccess only { SourceAccess }
-use ./Ir only { FinalExistentialResolution, FinalExistentialMember, StaticConformanceProof }
+use ./Ir only { FinalExistentialResolution, FinalExistentialMember, StaticConformanceProof, CallSiteKey }
 extern(c) {
     fn LLVMGetAllocatedType(value~: LLVMValueRef) -> LLVMTypeRef
     fn LLVMGetNextInstruction(value~: U64) -> U64
@@ -12,6 +12,12 @@ extern(c) {
     fn LLVMIsAAllocaInst(value~: LLVMValueRef) -> U64
     fn LLVMIsALoadInst(value~: LLVMValueRef) -> U64
     fn LLVMIsAArgument(value~: LLVMValueRef) -> U64
+    fn LLVMIsAExtractValueInst(value~: LLVMValueRef) -> U64
+    fn LLVMIsAInsertValueInst(value~: LLVMValueRef) -> U64
+    fn LLVMIsAGetElementPtrInst(value~: LLVMValueRef) -> U64
+    fn LLVMGetCalledValue(value~: LLVMValueRef) -> LLVMValueRef
+    fn LLVMGetArgOperand(value~: LLVMValueRef, index~: U32) -> LLVMValueRef
+    fn LLVMConstIntGetZExtValue(value~: LLVMValueRef) -> U64
 }
 fn requireWitnessOk[T](result: Result[T, CompileDiagnostic], stage: String, mode: U64) -> T {
     match result {
@@ -42,9 +48,11 @@ fn witnessPlanControl(mode: U64) {
     val builder = LLVMCreateBuilderInContext(context)
     mut val backend = llvmContext(ctx: context, m: module, builder: builder)
     mut val compiler = <Comp />
-    requireWitnessOk(result: analyzeFrontendDeclarations(c: inout compiler, input: <FrontendInput.Text text="fn control(item: I64) {{}}" path="ready-witness.pw" />, sources: <SourceAccess stdRoot=[] />), stage: "frontend declarations", mode: mode)
+    requireWitnessOk(result: analyzeFrontendDeclarations(c: inout compiler, input: <FrontendInput.Text text="trait Interface {{ fn run(item: I64) }} fn control(item: I64) {{}}" path="ready-witness.pw" />, sources: <SourceAccess stdRoot=[] />), stage: "frontend declarations", mode: mode)
     val functionIndex = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "control").nameId)
     if functionIndex >= compiler.arena.functionCount() { panic "missing witness setup declaration" }
+    val interface = compiler.decls.traitAt(index: 0U64)
+    val publicType = compiler.pushType(t: <TypeRef nameStart=interface.nameStart nameLen=interface.nameLen nameId=interface.nameId args=[] isAny=true hasDecl=true declOffset=interface.nameStart />)
     val integerName = compiler.internBytes(s: "I64")
     val integer = compiler.simpleTypeRef(nameStart: integerName.nameStart, nameLen: integerName.nameLen)
     val unsignedName = compiler.internBytes(s: "U64")
@@ -70,10 +78,26 @@ fn witnessPlanControl(mode: U64) {
     val origin = if mode == 4U64 { give <BodyOrigin.Callable /> } else { give <BodyOrigin.ExistentialWitness resolution=if mode == 5U64 { give 1U64 } else { give 0U64 } member=if mode == 6U64 { give 1U64 } else { give 0U64 } /> }
     val adapterId = compiler.arena.registerBodyInstance(<BodyInstance fnIdx=functionIndex environment=environment />, origin: origin)
     compiler.arena.setBodySignature(bodyId: adapterId, parameters: [integer], passings: [argumentPassing], result: 0U64, receiverType: if mode == 10U64 { give unsigned } else { give receiverType }, receiverPassing: receiverPassing)
-    compiler.arena.finalExistentials.append(<FinalExistentialResolution sourceRef=receiverType targetRef=receiverType traitIdx=0U64 proof=<StaticConformanceProof.Missing /> members=[<FinalExistentialMember bodyId=if mode == 8U64 { give compiler.arena.bodyInstanceCount() + 1U64 } else { give targetId } adapterBodyId=if mode == 7U64 { give targetId } else { give adapterId } receiverPassing=receiverPassing parameterTypes=[integer] argumentPassings=[argumentPassing] resultType=0U64 sourceResultType=0U64 />] />)
-    val parameters: Array[LLVMTypeRef] = [backend.ptrty, if aliasesAddress || mode == 17U64 { give backend.ptrty } else { give backend.i64ty }]
-    val signature = LLVMFunctionType(backend.voidty, arrayCPtr(parameters), 2U64, 0I32)
-    val function = requireWitnessOk(result: backend.declareLegacyBodyFunction(name: name.ptr, signature: signature, bodyId: adapterId, family: <LlvmLegacyConvention.Witness />), stage: "declare witness", mode: mode)
+    compiler.arena.finalExistentials.append(<FinalExistentialResolution sourceRef=receiverType targetRef=publicType traitIdx=0U64 proof=<StaticConformanceProof.Missing /> members=[<FinalExistentialMember bodyId=if mode == 8U64 { give compiler.arena.bodyInstanceCount() + 1U64 } else { give targetId } adapterBodyId=if mode == 7U64 { give targetId } else { give adapterId } receiverPassing=receiverPassing parameterTypes=[integer] argumentPassings=[argumentPassing] resultType=0U64 sourceResultType=0U64 />] />)
+    val template = requireWitnessOk(result: backend.witnessTemplateForMember(c: inout compiler, resolutionIndex: 0U64, memberIndex: 0U64), stage: "witness template", mode: mode)
+    val declaration = backend.witnessBodyValueAbi(c: inout compiler, resolutionIndex: 0U64, memberIndex: 0U64, template: template)
+    // These original malformed frozen authorities now fail at declaration,
+    // before Ready admission. They are explicit rejection assertions, not setup
+    // failures; release the live fixture objects on this early exit as well.
+    if mode == 4U64 || mode == 5U64 || mode == 6U64 || mode == 7U64 || mode == 8U64 || mode == 10U64 {
+        requireWitnessInternal(result: declaration, mode: mode)
+        LLVMDisposeBuilder(builder) LLVMDisposeModule(module) LLVMContextDispose(context)
+        return
+    }
+    val declarationAbi = requireWitnessOk(result: declaration, stage: "witness body descriptor", mode: mode)
+    val function = requireWitnessOk(result: backend.declarePlannedBodyFunction(name: name.ptr, abiId: declarationAbi, bodyId: adapterId), stage: "declare witness", mode: mode)
+    if mode == 17U64 {
+        // Keep the valid descriptor header and real LLVM function signature;
+        // corrupt only the ordinary row's representation before Ready consumes it.
+        val parameterIndex = backend.valueAbis[declarationAbi - 1U64].parameterStart + 1U64
+        val parameter = backend.valueAbiParameters[parameterIndex]
+        backend.valueAbiParameters.set(i: parameterIndex, value: <LlvmValueParameter type=backend.ptrty semanticType=parameter.semanticType role=parameter.role mode=parameter.mode physicalIndex=parameter.physicalIndex passing=parameter.passing valueAlignment=parameter.valueAlignment />)
+    }
     mut val locals: Array[MidLocalDecl] = [<MidLocalDecl typeTerm=if mode == 9U64 { give unsigned } else { give receiverType } sourceScope=0U64 isUnique=false isParameter=true isInout=aliasesAddress isCaptureCell=mode == 11U64 ownsAtEntry=consumes || mode == 16U64 />, <MidLocalDecl typeTerm=if mode == 12U64 { give unsigned } else { give integer } sourceScope=0U64 isUnique=false isParameter=true isInout=aliasesAddress || mode == 13U64 isBorrowed=mode == 14U64 ownsAtEntry=consumes />]
     if mode == 15U64 { locals.append(<MidLocalDecl typeTerm=integer sourceScope=0U64 isUnique=false isParameter=true />) }
     // A nonparameter local confirms prefix checking does not truncate the body.
@@ -124,13 +148,177 @@ fn witnessPlanControl(mode: U64) {
         val body = compiler.mid.bodies[canonical.body - 1U64]
         if plew_pointer_equal(requireWitnessOk(result: backend.midCanonicalLocalTy(body: body, local: 0U64), stage: "later receiver type read", mode: mode), receiverLlvm) == 0I32 { panic "later local reader lost retained receiver type" }
         val otherName = <CString.copied text="other-witness-entry" />
-        backend.curFn = requireWitnessOk(result: backend.declareLegacyBodyFunction(name: otherName.ptr, signature: signature, bodyId: targetId, family: <LlvmLegacyConvention.Witness />), stage: "declare foreign witness", mode: mode)
+        backend.curFn = requireWitnessOk(result: backend.declarePlannedValueFunction(name: otherName.ptr, abiId: declarationAbi), stage: "declare foreign witness", mode: mode)
         requireWitnessInternal(result: backend.genLlvmPreparedMidBody(c: inout compiler, prepared: ready), mode: mode)
     }
+    LLVMDisposeBuilder(builder) LLVMDisposeModule(module) LLVMContextDispose(context)
+}
+// Build a frozen call-pool record without pretending this private fixture
+// establishes source conformance. The source fixture proves real Move dispatch.
+fn witnessSelected(compiler: inout Comp, target: U64, slot: U64, parameters: Array[U64], passings: Array[CallArgumentPassing], receiver: CallReceiverPassing = <CallReceiverPassing.Borrow />, result: U64 = 0U64) -> CallResolution {
+    val index = compiler.arena.finalCalleeCount()
+    if !compiler.arena.publishFinalCallee(row: <CallResolution bodyId=0U64 siteKey=<CallSiteKey originKind=2U64 originSerial=index + 1U64 /> exprId=0U64 callee=0U64 recvTypeRef=target receiverPassing=receiver resultTypeRef=result target=<CallTarget.ExistentialRequirement traitIdx=0U64 slot=slot /> />, parameterTypes: parameters, passings: passings) { panic "private witness call publication failed" }
+    return compiler.arena.finalCalleeAt(index: index)
+}
+fn witnessCallControl() {
+    val context = LLVMContextCreate()
+    val name = <CString.copied text="completed-witness-call-controls" />
+    val module = LLVMModuleCreateWithNameInContext(name.ptr, context)
+    val triple = LLVMGetDefaultTargetTriple()
+    val cpu = <CString.copied text="generic" />
+    val layout = plew_llvm_native_data_layout(cpu.ptr)
+    LLVMSetTarget(module, triple) LLVMSetDataLayout(module, layout)
+    LLVMDisposeMessage(triple) LLVMDisposeMessage(layout)
+    val builder = LLVMCreateBuilderInContext(context)
+    mut val backend = llvmContext(ctx: context, m: module, builder: builder)
+    mut val compiler = <Comp />
+    requireWitnessOk(result: analyzeFrontendDeclarations(c: inout compiler, input: <FrontendInput.Text text="trait Interface {{ fn first(item: I64, record: (payload: I64)) fn second(item: U64, record: (payload: I64)) inout fn mutate(item: inout I64) fn consume(item: move I64) }} fn control() {{}}" path="witness-call.pw" />, sources: <SourceAccess stdRoot=[] />), stage: "call frontend", mode: 0U64)
+    val interface = compiler.decls.traitAt(index: 0U64)
+    val publicType = compiler.pushType(t: <TypeRef nameStart=interface.nameStart nameLen=interface.nameLen nameId=interface.nameId args=[] isAny=true hasDecl=true declOffset=interface.nameStart />)
+    val integerName = compiler.internBytes(s: "I64")
+    val integer = compiler.simpleTypeRef(nameStart: integerName.nameStart, nameLen: integerName.nameLen)
+    val unsignedName = compiler.internBytes(s: "U64")
+    val unsigned = compiler.simpleTypeRef(nameStart: unsignedName.nameStart, nameLen: unsignedName.nameLen)
+    val field = compiler.internBytes(s: "payload")
+    val aggregate = compiler.pushType(t: <TypeRef nameStart=0U64 nameLen=0U64 args=[] isRecord=true recordFieldLabels=[field.nameId] recordFieldTerms=[integer] />)
+    requireWitnessOk(result: compiler.collectRecordedType(ref: aggregate), stage: "collect call record layout", mode: 0U64)
+    requireWitnessOk(result: compiler.enqueueFinalDestruction(typeRef: integer), stage: "call I64 representation", mode: 0U64)
+    requireWitnessOk(result: compiler.enqueueFinalDestruction(typeRef: unsigned), stage: "call U64 representation", mode: 0U64)
+    requireWitnessOk(result: compiler.enqueueFinalDestruction(typeRef: aggregate), stage: "call record representation", mode: 0U64)
+    requireWitnessOk(result: backend.registerFinalLayoutNames(c: inout compiler), stage: "call layout names", mode: 0U64)
+    requireWitnessOk(result: backend.registerFinalStructBodies(c: inout compiler), stage: "call layout bodies", mode: 0U64)
+    val functionIndex = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "control").nameId)
+    val environment = <InstanceEnvironment receiverRef=integer />
+    val targetId = compiler.arena.registerBodyInstance(<BodyInstance fnIdx=functionIndex environment=environment />)
+    compiler.arena.setBodySignature(bodyId: targetId, parameters: [integer, aggregate], passings: [<CallArgumentPassing.Borrow />, <CallArgumentPassing.Borrow />], result: 0U64, receiverType: integer, receiverPassing: <CallReceiverPassing.Borrow />)
+    val adapterId = compiler.arena.registerBodyInstance(<BodyInstance fnIdx=functionIndex environment=environment />, origin: <BodyOrigin.ExistentialWitness resolution=0U64 member=0U64 />)
+    val otherAdapterId = compiler.arena.registerBodyInstance(<BodyInstance fnIdx=functionIndex environment=environment />, origin: <BodyOrigin.ExistentialWitness resolution=1U64 member=0U64 />)
+    compiler.arena.setBodySignature(bodyId: adapterId, parameters: [integer, aggregate], passings: [<CallArgumentPassing.Borrow />, <CallArgumentPassing.Borrow />], result: 0U64, receiverType: integer, receiverPassing: <CallReceiverPassing.Borrow />)
+    compiler.arena.setBodySignature(bodyId: otherAdapterId, parameters: [integer, aggregate], passings: [<CallArgumentPassing.Borrow />, <CallArgumentPassing.Borrow />], result: 0U64, receiverType: integer, receiverPassing: <CallReceiverPassing.Borrow />)
+    val member = <FinalExistentialMember bodyId=targetId adapterBodyId=adapterId parameterTypes=[integer, aggregate] argumentPassings=[<CallArgumentPassing.Borrow />, <CallArgumentPassing.Borrow />] />
+    val otherMember = <FinalExistentialMember bodyId=targetId adapterBodyId=otherAdapterId parameterTypes=[integer, aggregate] argumentPassings=[<CallArgumentPassing.Borrow />, <CallArgumentPassing.Borrow />] />
+    compiler.arena.finalExistentials.append(<FinalExistentialResolution sourceRef=integer targetRef=publicType traitIdx=0U64 proof=<StaticConformanceProof.Missing /> members=[member] />)
+    compiler.arena.finalExistentials.append(<FinalExistentialResolution sourceRef=integer targetRef=publicType traitIdx=0U64 proof=<StaticConformanceProof.Missing /> members=[otherMember] />)
+    val template = requireWitnessOk(result: backend.witnessTemplateForMember(c: inout compiler, resolutionIndex: 0U64, memberIndex: 0U64), stage: "member template", mode: 0U64)
+    val plan = backend.valueAbis[template - 1U64]
+    val selected = witnessSelected(compiler: inout compiler, target: publicType, slot: 1U64, parameters: [integer, aggregate], passings: [<CallArgumentPassing.Borrow />, <CallArgumentPassing.Borrow />])
+    val count = backend.valueAbis.count()
+    val lanes = backend.valueAbiParameters.count()
+    mut val repeat = 0U64
+    while repeat < 4U64 {
+        if requireWitnessOk(result: backend.witnessTemplateForCall(c: inout compiler, selected: selected), stage: "cached call template", mode: repeat) != template || requireWitnessOk(result: backend.witnessTemplateForMember(c: inout compiler, resolutionIndex: 1U64, memberIndex: 0U64), stage: "cached member template", mode: repeat) != template { panic "witness template not shared" }
+        repeat += 1U64
+    }
+    if backend.valueAbis.count() != count || backend.valueAbiParameters.count() != lanes { panic "witness cache hit appends plans" }
+    val declaration = requireWitnessOk(result: backend.witnessBodyValueAbi(c: inout compiler, resolutionIndex: 0U64, memberIndex: 0U64, template: template), stage: "first declaration clone", mode: 0U64)
+    val otherDeclaration = requireWitnessOk(result: backend.witnessBodyValueAbi(c: inout compiler, resolutionIndex: 1U64, memberIndex: 0U64, template: template), stage: "second declaration clone", mode: 0U64)
+    if declaration == otherDeclaration || backend.valueAbis[declaration - 1U64].ownerBody != adapterId || backend.valueAbis[otherDeclaration - 1U64].ownerBody != otherAdapterId || backend.valueAbis[declaration - 1U64].parameterStart != plan.parameterStart || backend.valueAbis[otherDeclaration - 1U64].parameterStart != plan.parameterStart || backend.valueAbiParameters.count() != lanes { panic "witness clones copied lanes or lost body identity" }
+    val function = requireWitnessOk(result: backend.declarePlannedBodyFunction(name: name.ptr, abiId: declaration, bodyId: adapterId), stage: "call witness declaration", mode: 0U64)
+    val second = witnessSelected(compiler: inout compiler, target: publicType, slot: 2U64, parameters: [unsigned, aggregate], passings: [<CallArgumentPassing.Borrow />, <CallArgumentPassing.Borrow />])
+    val secondTemplate = requireWitnessOk(result: backend.witnessTemplateForCall(c: inout compiler, selected: second), stage: "second slot", mode: 0U64)
+    if secondTemplate == template || plew_pointer_equal(backend.valueAbis[secondTemplate - 1U64].logicalSignature, plan.logicalSignature) == 0I32 { panic "slot semantic fixture does not share LLVM signature" }
+    // Additional declaration negatives isolate the shared public contract,
+    // separately from the existing malformed-origin/local Ready cases.
+    mut val declarationMode = 0U64
+    while declarationMode < 6U64 {
+        val malformedMember = <FinalExistentialMember bodyId=targetId adapterBodyId=adapterId receiverPassing=if declarationMode == 2U64 { give <CallReceiverPassing.Inout /> } else { give <CallReceiverPassing.Borrow /> } parameterTypes=[if declarationMode == 0U64 { give unsigned } else { give integer }, aggregate] argumentPassings=[if declarationMode == 1U64 { give <CallArgumentPassing.Move /> } else { give <CallArgumentPassing.Borrow /> }, <CallArgumentPassing.Borrow />] resultType=if declarationMode == 3U64 { give integer } else { give 0U64 } />
+        compiler.arena.finalExistentials.set(i: 0U64, value: <FinalExistentialResolution sourceRef=integer targetRef=publicType traitIdx=0U64 proof=<StaticConformanceProof.Missing /> members=[malformedMember] />)
+        if declarationMode == 4U64 { compiler.arena.setBodySignature(bodyId: adapterId, parameters: [unsigned, aggregate], passings: [<CallArgumentPassing.Borrow />, <CallArgumentPassing.Borrow />], result: 0U64, receiverType: integer, receiverPassing: <CallReceiverPassing.Borrow />) }
+        requireWitnessInternal(result: backend.witnessBodyValueAbi(c: inout compiler, resolutionIndex: 0U64, memberIndex: 0U64, template: if declarationMode == 5U64 { give secondTemplate } else { give template }), mode: declarationMode + 40U64)
+        compiler.arena.setBodySignature(bodyId: adapterId, parameters: [integer, aggregate], passings: [<CallArgumentPassing.Borrow />, <CallArgumentPassing.Borrow />], result: 0U64, receiverType: integer, receiverPassing: <CallReceiverPassing.Borrow />)
+        declarationMode += 1U64
+    }
+    compiler.arena.finalExistentials.set(i: 0U64, value: <FinalExistentialResolution sourceRef=integer targetRef=publicType traitIdx=0U64 proof=<StaticConformanceProof.Missing /> members=[member] />)
+    // A source Unit record and the frozen member's no-result slot are the
+    // same represented result. Cold planning must never publish a {} return.
+    val unit = compiler.pushType(t: <TypeRef nameStart=0U64 nameLen=0U64 args=[] isRecord=true recordFieldLabels=[] recordFieldTerms=[] />)
+    val mutate = witnessSelected(compiler: inout compiler, target: publicType, slot: 3U64, parameters: [integer], passings: [<CallArgumentPassing.Inout />], receiver: <CallReceiverPassing.Inout />, result: unit)
+    val consume = witnessSelected(compiler: inout compiler, target: publicType, slot: 4U64, parameters: [integer], passings: [<CallArgumentPassing.Move />])
+    val mutateTemplate = requireWitnessOk(result: backend.witnessTemplateForCall(c: inout compiler, selected: mutate), stage: "cold unit inout template", mode: 0U64)
+    val mutatePlan = backend.valueAbis[mutateTemplate - 1U64]
+    if mutatePlan.resultTerm != 0U64 || LLVMGetTypeKind(LLVMGetReturnType(mutatePlan.functionType)) != 0U32 || mutatePlan.resultProtocol.key() != 0U64 { panic "cold source unit was not normalized to void" }
+    requireWitnessOk(result: backend.witnessTemplateForCall(c: inout compiler, selected: consume), stage: "move ordinary template", mode: 0U64)
+    val callerName = <CString.copied text="witness-caller" />
+    val callerParameters: Array[LLVMTypeRef] = []
+    val callerType = LLVMFunctionType(backend.voidty, arrayCPtr(callerParameters), 0U64, 0I32)
+    val caller = LLVMAddFunction(module, callerName.ptr, callerType)
+    backend.curFn = caller backend.beginFnBody(fv: caller)
+    val data = LLVMBuildAlloca(builder, backend.i64ty, anon())
+    val table = LLVMBuildAlloca(builder, LLVMArrayType2(backend.ptrty, 6U64), anon())
+    mut val fat = LLVMBuildInsertValue(builder, LLVMGetUndef(backend.anyTy), data, 0U64, anon())
+    fat = LLVMBuildInsertValue(builder, fat, table, 1U64, anon())
+    val callee = requireWitnessOk(result: backend.witnessCallee(c: inout compiler, selected: selected, fat: fat), stage: "typed any callee", mode: 0U64)
+    val warmUnit = witnessSelected(compiler: inout compiler, target: publicType, slot: 1U64, parameters: [integer, aggregate], passings: [<CallArgumentPassing.Borrow />, <CallArgumentPassing.Borrow />], result: unit)
+    val warmCallee = requireWitnessOk(result: backend.witnessCallee(c: inout compiler, selected: warmUnit, fat: fat), stage: "warm source unit correspondence", mode: 0U64)
+    if warmCallee.template != template { panic "warm source unit created a second signature" }
+    val lane = backend.valueAbiParameters[plan.parameterStart + 1U64]
+    val recordLane = backend.valueAbiParameters[plan.parameterStart + 2U64]
+    val scalar = LLVMConstInt(backend.i64ty, 7U64, 0I32)
+    val input = <LlvmValueInput lane=<LlvmLogicalParameter type=lane.type semanticType=integer role=<LlvmParameterRole.Ordinary index=0U64 /> mode=<LlvmParameterMode.Borrow /> /> index=1U64 carrier=<LlvmValueCarrier.Value value=scalar /> />
+    val recordValue = LLVMGetUndef(recordLane.type)
+    val recordHome = LLVMBuildAlloca(builder, recordLane.type, anon())
+    llvmStore(builder, recordValue, recordHome)
+    val recordInput = <LlvmValueInput lane=<LlvmLogicalParameter type=recordLane.type semanticType=aggregate role=<LlvmParameterRole.Ordinary index=1U64 /> mode=<LlvmParameterMode.Borrow /> /> index=2U64 carrier=<LlvmValueCarrier.Value value=recordValue /> />
+    val homeInput = <LlvmValueInput lane=recordInput.lane index=2U64 carrier=<LlvmValueCarrier.Home address=recordHome /> />
+    val beforeCalls = backend.valueAbis.count()
+    val beforeLanes = backend.valueAbiParameters.count()
+    repeat = 0U64
+    while repeat < 4U64 {
+        val call = requireWitnessOk(result: backend.callWitnessValueFunction(callee: callee, arguments: [input, if repeat == 0U64 { give recordInput } else { give homeInput }]), stage: "Value/Home witness call", mode: repeat)
+        val loaded = LLVMIsALoadInst(LLVMGetCalledValue(call))
+        if loaded == 0U64 { panic "witness callee did not load selected slot" }
+        val entry = LLVMIsAGetElementPtrInst(LLVMGetOperand(loaded, 0U32))
+        if entry == 0U64 || LLVMConstIntGetZExtValue(LLVMGetOperand(entry, 1U32)) != 2U64 { panic "witness selected wrong vtable slot" }
+        val extractedTable = LLVMIsAExtractValueInst(LLVMGetOperand(entry, 0U32))
+        val extractedData = LLVMIsAExtractValueInst(LLVMGetArgOperand(call, 0U32))
+        if extractedTable == 0U64 || extractedData == 0U64 || extractedTable == extractedData || LLVMIsAInsertValueInst(LLVMGetOperand(extractedTable, 0U32)) != LLVMIsAInsertValueInst(fat) || LLVMIsAInsertValueInst(LLVMGetOperand(extractedData, 0U32)) != LLVMIsAInsertValueInst(fat) { panic "witness data/table did not come from one fat value" }
+        repeat += 1U64
+    }
+    val mutateCallee = requireWitnessOk(result: backend.witnessCallee(c: inout compiler, selected: mutate, fat: fat), stage: "inout callee", mode: 0U64)
+    val inoutInput = <LlvmValueInput lane=<LlvmLogicalParameter type=backend.ptrty semanticType=integer role=<LlvmParameterRole.Ordinary index=0U64 /> mode=<LlvmParameterMode.Inout /> /> index=1U64 carrier=<LlvmValueCarrier.Value value=data /> />
+    requireWitnessOk(result: backend.callWitnessValueFunction(callee: mutateCallee, arguments: [inoutInput]), stage: "inout address call", mode: 0U64)
+    val consumeCallee = requireWitnessOk(result: backend.witnessCallee(c: inout compiler, selected: consume, fat: fat), stage: "move callee", mode: 0U64)
+    val moveInput = <LlvmValueInput lane=<LlvmLogicalParameter type=lane.type semanticType=integer role=<LlvmParameterRole.Ordinary index=0U64 /> mode=<LlvmParameterMode.Move /> /> index=1U64 carrier=input.carrier />
+    requireWitnessOk(result: backend.callWitnessValueFunction(callee: consumeCallee, arguments: [moveInput]), stage: "move ordinary call", mode: 0U64)
+    if backend.valueAbis.count() != beforeCalls || backend.valueAbiParameters.count() != beforeLanes { panic "witness calls append plans" }
+    mut val mode = 0U64
+    while mode < 5U64 {
+        val malformed = <LlvmValueInput lane=<LlvmLogicalParameter type=lane.type semanticType=if mode == 0U64 { give unsigned } else { give integer } role=if mode == 2U64 { give <LlvmParameterRole.ErasedReceiver /> } else if mode == 4U64 { give <LlvmParameterRole.Ordinary index=1U64 /> } else { give <LlvmParameterRole.Ordinary index=0U64 /> } mode=if mode == 3U64 { give <LlvmParameterMode.Move /> } else { give <LlvmParameterMode.Borrow /> } /> index=if mode == 1U64 { give 0U64 } else { give 1U64 } carrier=input.carrier />
+        requireWitnessInternal(result: backend.callWitnessValueFunction(callee: callee, arguments: [malformed, homeInput]), mode: mode)
+        mode += 1U64
+    }
+    // Isolate the same-pointer ErasedReceiver/Ordinary role check on inout.
+    requireWitnessInternal(result: backend.callWitnessValueFunction(callee: mutateCallee, arguments: [<LlvmValueInput lane=<LlvmLogicalParameter type=backend.ptrty semanticType=integer role=<LlvmParameterRole.ErasedReceiver /> mode=<LlvmParameterMode.Inout /> /> index=1U64 carrier=inoutInput.carrier />]), mode: 5U64)
+    mode = 0U64
+    while mode < 6U64 {
+        val inputs = <LlvmCallableInputScope moduleIdentity=callee.inputs.moduleIdentity + if mode == 2U64 { give 1U64 } else { give 0U64 } contextIdentity=callee.inputs.contextIdentity + if mode == 3U64 { give 1U64 } else { give 0U64 } revision=if mode == 4U64 { give 2U64 } else { give 1U64 } callableIdentity=if mode == 0U64 { give secondTemplate } else { give template } signature=if mode == 1U64 { give callerType } else { give callee.inputs.signature } />
+        requireWitnessInternal(result: backend.callWitnessValueFunction(callee: <LlvmWitnessCallee template=if mode == 5U64 { give secondTemplate } else { give template } inputs=inputs fat=fat />, arguments: [input, homeInput]), mode: mode + 10U64)
+        mode += 1U64
+    }
+    requireWitnessInternal(result: backend.callWitnessValueFunction(callee: <LlvmWitnessCallee template=template inputs=callee.inputs fat=scalar />, arguments: [input, homeInput]), mode: 20U64)
+    requireWitnessInternal(result: backend.callWitnessValueFunction(callee: callee, arguments: [input]), mode: 21U64)
+    requireWitnessInternal(result: backend.cachedWitnessValueAbi(targetType: publicType, traitIndex: 1U64, slot: 1U64), mode: 22U64)
+    requireWitnessInternal(result: backend.cachedWitnessValueAbi(targetType: publicType, traitIndex: 0U64, slot: 0U64), mode: 23U64)
+    val otherName = <CString.copied text="other-witness-caller" />
+    val otherCaller = LLVMAddFunction(module, otherName.ptr, callerType)
+    backend.curFn = otherCaller backend.beginFnBody(fv: otherCaller)
+    val foreignHome = LLVMBuildAlloca(builder, backend.i64ty, anon())
+    val foreignValue = llvmLoad(builder, backend.i64ty, foreignHome, anon())
+    LLVMPositionBuilderAtEnd(builder, LLVMGetEntryBasicBlock(caller))
+    requireWitnessInternal(result: backend.callWitnessValueFunction(callee: callee, arguments: [<LlvmValueInput lane=input.lane index=1U64 carrier=<LlvmValueCarrier.Value value=foreignValue /> />, homeInput]), mode: 24U64)
+    LLVMPositionBuilderAtEnd(builder, LLVMGetEntryBasicBlock(otherCaller))
+    requireWitnessInternal(result: backend.callWitnessValueFunction(callee: callee, arguments: [input, recordInput]), mode: 25U64)
+    backend.curFn = function
+    requireWitnessInternal(result: backend.preparedLegacyParameter(parameterIndex: plan.parameterStart), mode: 26U64)
+    requireWitnessInternal(result: backend.legacyValueParameter(function: function, index: 0U64), mode: 27U64)
+    requireWitnessInternal(result: backend.callLegacyValueFunction(signature: plan.logicalSignature, function: function, arguments: [data, scalar, recordValue]), mode: 28U64)
+    requireWitnessInternal(result: backend.witnessBodyParameter(function: function, bodyId: otherAdapterId, index: 0U64), mode: 29U64)
+    requireWitnessInternal(result: backend.witnessBodyParameter(function: function, bodyId: adapterId, index: 3U64), mode: 30U64)
     LLVMDisposeBuilder(builder) LLVMDisposeModule(module) LLVMContextDispose(context)
 }
 fn main() {
     mut val mode = 0U64
     while mode <= 20U64 { witnessPlanControl(mode: mode) mode += 1U64 }
+    witnessCallControl()
     write(s: "ok\n")
 }
