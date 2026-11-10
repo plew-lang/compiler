@@ -32,6 +32,7 @@ pub impl LlvmCtx {
     // Explicit temporary boundary: opaque legacy lanes do not claim source
     // roles/ownership. All physical classification still belongs to one planner.
     inout fn legacyValueAbi(signature: LLVMTypeRef, family: LlvmLegacyConvention, ownerBody: U64 = 0U64) -> Result[U64, CompileDiagnostic] {
+        if family.key() >= 5U64 { return <Result.Err error=valueAbiFailure(message: "ownership glue requires a completed operation descriptor") /> }
         val scope = (try self.prepareValueAbiScope())
         if !scope.ownsType(type: signature) || LLVMGetTypeKind(signature) != 9U32 {
             return <Result.Err error=valueAbiFailure(message: "legacy signature has a foreign context or is not a function") />
@@ -359,12 +360,12 @@ pub impl LlvmCtx {
         val abi = self.valueAbis[abiId - 1U64]
         if abi.convention.key() == 0U64 {
             val bodyId = match bodyAdapter {
-                Optional.Some(v: val adapter) => { give match adapter { LlvmBodyCompatibility.ExposedEntry(bodyId: val bodyId) => { give bodyId } LlvmBodyCompatibility.Destruction(bodyId: val bodyId) => { give bodyId } } }
+                Optional.Some(v: val adapter) => { give match adapter { LlvmBodyCompatibility.ExposedEntry(bodyId: val bodyId) => { give bodyId } } }
                 Optional.None => { return <Result.Err error=valueAbiFailure(message: "normal body requires typed inputs or an explicit compatibility adapter") /> }
             }
             if bodyId == 0U64 || bodyId != abi.ownerBody { return <Result.Err error=valueAbiFailure(message: "compatibility adapter body mismatch") /> }
         } else {
-            match abi.convention { LlvmValueConvention.Closure => { return <Result.Err error=valueAbiFailure(message: "completed closure requires typed inputs") /> } LlvmValueConvention.Witness(targetType: _, traitIndex: _, slot: _) => { return <Result.Err error=valueAbiFailure(message: "completed witness requires typed inputs") /> } LlvmValueConvention.Legacy(family: _) => {} LlvmValueConvention.Body => {} }
+            match abi.convention { LlvmValueConvention.Closure => { return <Result.Err error=valueAbiFailure(message: "completed closure requires typed inputs") /> } LlvmValueConvention.Witness(targetType: _, traitIndex: _, slot: _) => { return <Result.Err error=valueAbiFailure(message: "completed witness requires typed inputs") /> } LlvmValueConvention.OwnershipGlue(operation: _) => { return <Result.Err error=valueAbiFailure(message: "completed glue requires typed inputs") /> } LlvmValueConvention.Legacy(family: _) => {} LlvmValueConvention.Body => {} }
             match bodyAdapter { Optional.Some(v: _) => { return <Result.Err error=valueAbiFailure(message: "body adapter cannot select a legacy convention") /> } Optional.None => {} }
         }
         if plew_pointer_equal(abi.logicalSignature, signature) == 0I32 {
@@ -472,7 +473,7 @@ pub impl LlvmCtx {
         val abiId = self.valueAbiFunctions.getOr(key: LLVMIsAFunction(self.curFn), fallback: 0U64)
         if abiId == 0U64 || abiId > self.valueAbis.count() { return <Result.Err error=valueAbiFailure(message: "raw parameter entry descriptor missing") /> }
         val abi = self.valueAbis[abiId - 1U64]
-        match abi.convention { LlvmValueConvention.Legacy(family: _) => {} LlvmValueConvention.Closure => { return <Result.Err error=valueAbiFailure(message: "completed closure cannot use raw prepared binding") /> } LlvmValueConvention.Witness(targetType: _, traitIndex: _, slot: _) => { return <Result.Err error=valueAbiFailure(message: "completed witness cannot use raw prepared binding") /> } LlvmValueConvention.Body => { return <Result.Err error=valueAbiFailure(message: "normal body cannot use raw prepared binding") /> } }
+        match abi.convention { LlvmValueConvention.Legacy(family: _) => {} LlvmValueConvention.OwnershipGlue(operation: _) => { return <Result.Err error=valueAbiFailure(message: "completed glue cannot use raw binding") /> } LlvmValueConvention.Closure => { return <Result.Err error=valueAbiFailure(message: "completed closure cannot use raw prepared binding") /> } LlvmValueConvention.Witness(targetType: _, traitIndex: _, slot: _) => { return <Result.Err error=valueAbiFailure(message: "completed witness cannot use raw prepared binding") /> } LlvmValueConvention.Body => { return <Result.Err error=valueAbiFailure(message: "normal body cannot use raw prepared binding") /> } }
         if parameterIndex < abi.parameterStart || parameterIndex - abi.parameterStart >= abi.parameterCount { return <Result.Err error=valueAbiFailure(message: "raw parameter belongs to a different entry") /> }
         val parameter = self.valueAbiParameters[parameterIndex]
         return <Result.Ok value=match parameter.passing {
@@ -489,7 +490,7 @@ pub impl LlvmCtx {
             return <Result.Err error=<CompileDiagnostic location=<DiagnosticLocation.Line line=0I64 /> message="internal error: private value ABI parameter lacks declaration" /> />
         }
         val abi = self.valueAbis[abiId - 1U64]
-        match abi.convention { LlvmValueConvention.Legacy(family: _) => {} LlvmValueConvention.Closure => { return <Result.Err error=valueAbiFailure(message: "completed closure cannot use raw compatibility binding") /> } LlvmValueConvention.Witness(targetType: _, traitIndex: _, slot: _) => { return <Result.Err error=valueAbiFailure(message: "completed witness cannot use raw compatibility binding") /> } LlvmValueConvention.Body => { return <Result.Err error=valueAbiFailure(message: "normal parameter cannot use raw compatibility binding") /> } }
+        match abi.convention { LlvmValueConvention.Legacy(family: _) => {} LlvmValueConvention.OwnershipGlue(operation: _) => { return <Result.Err error=valueAbiFailure(message: "completed glue cannot use raw binding") /> } LlvmValueConvention.Closure => { return <Result.Err error=valueAbiFailure(message: "completed closure cannot use raw compatibility binding") /> } LlvmValueConvention.Witness(targetType: _, traitIndex: _, slot: _) => { return <Result.Err error=valueAbiFailure(message: "completed witness cannot use raw compatibility binding") /> } LlvmValueConvention.Body => { return <Result.Err error=valueAbiFailure(message: "normal parameter cannot use raw compatibility binding") /> } }
         if index >= abi.parameterCount {
             return <Result.Err error=<CompileDiagnostic location=<DiagnosticLocation.Line line=0I64 /> message="internal error: private value ABI parameter index out of range" /> />
         }

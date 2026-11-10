@@ -87,8 +87,8 @@ pub impl LlvmCtx {
         val reg = (try self.requireEnumLayoutSlot(c: inout c, typeRef: ref))
         if (try self.enumNeedsDeinit(c: inout c, typeRef: self.genEnumRefs[reg])) {
             val slot = try self.enumReleaseWitness(c: inout c, reg: reg)
-            val arguments: Array[LLVMValueRef] = [v]
-            (try self.callLegacyValueFunction(signature: self.enumRelWitTy[slot], function: self.enumRelWitVal[slot], arguments: arguments))
+            val input = (try self.glueValueInput(c: inout c, operation: <LlvmGlueOperation.EnumRelease />, typeRef: self.genEnumRefs[reg], carrier: <LlvmValueCarrier.Value value=v />))
+            (try self.callGlueValueFunction(function: self.enumRelWitVal[slot], operation: <LlvmGlueOperation.EnumRelease />, input: input))
         }
         return <Result.Ok value=true />
     }
@@ -214,17 +214,13 @@ pub impl LlvmCtx {
         if found < self.enumRelWitReg.count() {
             return <Result.Ok value=found />
         }
-        mut val ptys: Array[LLVMTypeRef] = []
-        ptys.append(self.genEnumTys[reg])
-        val fty: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(ptys), 1U64, 0I32)
         mut val nm: Array[U8] = []
         appendBytes(into: inout nm, from: "pwenumrel".bytes())
         appendU64Dec(into: inout nm, n: reg)
         nm.append(0)
-        val fv: LLVMValueRef = (try self.declareLegacyValueFunction(name: arrayCPtr(nm), signature: fty, family: <LlvmLegacyConvention.EnumRelease />))
+        val fv: LLVMValueRef = (try self.declareGlueValueFunction(c: inout c, name: arrayCPtr(nm), operation: <LlvmGlueOperation.EnumRelease />, typeRef: self.genEnumRefs[reg]))
         self.enumRelWitReg.append(reg)
         self.enumRelWitVal.append(fv)
-        self.enumRelWitTy.append(fty)
         return <Result.Ok value=self.enumRelWitReg.count() - 1U64 />
     }
     inout fn emitEnumReleaseWitnessBodies(c: inout Comp) -> Result[(), CompileDiagnostic] {
@@ -234,7 +230,7 @@ pub impl LlvmCtx {
             val fv: LLVMValueRef = self.enumRelWitVal[s]
             self.curFn = fv
             self.beginFnBody(fv: fv)
-            try self.emitEnumRelease(c: inout c, v: (try self.legacyValueParameter(function: fv, index: 0U64)), eid: self.genEnumDefs[reg], ety: self.genEnumTys[reg], typeRef: self.genEnumRefs[reg])
+            try self.emitEnumRelease(c: inout c, v: self.valueInputValue(input: (try self.glueValueParameter(function: fv, operation: <LlvmGlueOperation.EnumRelease />, typeRef: self.genEnumRefs[reg]))), eid: self.genEnumDefs[reg], ety: self.genEnumTys[reg], typeRef: self.genEnumRefs[reg])
             LLVMBuildRetVoid(self.b)
             self.enumRelWitDone += 1
         }
@@ -256,17 +252,13 @@ pub impl LlvmCtx {
         if found < self.enumRetWitReg.count() {
             return <Result.Ok value=found />
         }
-        mut val ptys: Array[LLVMTypeRef] = []
-        ptys.append(self.genEnumTys[reg])
-        val fty: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(ptys), 1U64, 0I32)
         mut val nm: Array[U8] = []
         appendBytes(into: inout nm, from: "pwenumret".bytes())
         appendU64Dec(into: inout nm, n: reg)
         nm.append(0)
-        val fv: LLVMValueRef = (try self.declareLegacyValueFunction(name: arrayCPtr(nm), signature: fty, family: <LlvmLegacyConvention.EnumRetain />))
+        val fv: LLVMValueRef = (try self.declareGlueValueFunction(c: inout c, name: arrayCPtr(nm), operation: <LlvmGlueOperation.EnumRetain />, typeRef: self.genEnumRefs[reg]))
         self.enumRetWitReg.append(reg)
         self.enumRetWitVal.append(fv)
-        self.enumRetWitTy.append(fty)
         return <Result.Ok value=self.enumRetWitReg.count() - 1U64 />
     }
     inout fn emitEnumRetainWitnessBodies(c: inout Comp) -> Result[(), CompileDiagnostic] {
@@ -276,7 +268,7 @@ pub impl LlvmCtx {
             val fv: LLVMValueRef = self.enumRetWitVal[s]
             self.curFn = fv
             self.beginFnBody(fv: fv)
-            try self.emitEnumRetain(c: inout c, v: (try self.legacyValueParameter(function: fv, index: 0U64)), eid: self.genEnumDefs[reg], ety: self.genEnumTys[reg], typeRef: self.genEnumRefs[reg])
+            try self.emitEnumRetain(c: inout c, v: self.valueInputValue(input: (try self.glueValueParameter(function: fv, operation: <LlvmGlueOperation.EnumRetain />, typeRef: self.genEnumRefs[reg]))), eid: self.genEnumDefs[reg], ety: self.genEnumTys[reg], typeRef: self.genEnumRefs[reg])
             LLVMBuildRetVoid(self.b)
             self.enumRetWitDone += 1
         }
@@ -293,8 +285,8 @@ pub impl LlvmCtx {
         val reg = (try self.requireEnumLayoutSlot(c: inout c, typeRef: ref))
         if (try self.enumNeedsDeinit(c: inout c, typeRef: self.genEnumRefs[reg])) {
             val slot = try self.enumRetainWitness(c: inout c, reg: reg)
-            val arguments: Array[LLVMValueRef] = [v]
-            (try self.callLegacyValueFunction(signature: self.enumRetWitTy[slot], function: self.enumRetWitVal[slot], arguments: arguments))
+            val input = (try self.glueValueInput(c: inout c, operation: <LlvmGlueOperation.EnumRetain />, typeRef: self.genEnumRefs[reg], carrier: <LlvmValueCarrier.Value value=v />))
+            (try self.callGlueValueFunction(function: self.enumRetWitVal[slot], operation: <LlvmGlueOperation.EnumRetain />, input: input))
         }
         return <Result.Ok value=true />
     }

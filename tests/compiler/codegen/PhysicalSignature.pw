@@ -1,5 +1,5 @@
 // Test the production representation leaf without importing Comp or Backend.
-use ../../../src/Backend/PhysicalSignature only { LlvmSignatureScope, LlvmLogicalSignature, LlvmLogicalParameter, LlvmParameterRole, LlvmParameterMode, LlvmValueConvention, LlvmLegacyConvention, LlvmPhysicalSignature, LlvmValueParameter, LlvmValuePassing, LlvmInputScope, LlvmCallableInputScope, LlvmValueInput, LlvmValueCarrier }
+use ../../../src/Backend/PhysicalSignature only { LlvmSignatureScope, LlvmLogicalSignature, LlvmLogicalParameter, LlvmParameterRole, LlvmParameterMode, LlvmValueConvention, LlvmLegacyConvention, LlvmGlueOperation, LlvmPhysicalSignature, LlvmValueParameter, LlvmValuePassing, LlvmInputScope, LlvmCallableInputScope, LlvmValueInput, LlvmValueCarrier }
 use ../../../src/LlvmHandles only { LLVMContextRef, LLVMModuleRef, LLVMTypeRef, LLVMValueRef }
 use @Std/Io only { write }
 extern(c) {
@@ -149,6 +149,35 @@ fn main() {
     if scope.validate(signature: closure(parameters: closureSignature.parameters, result: aggregate, resultTerm: 99U64), plan: closurePlan).isOk() { panic "closure semantic result substitution accepted" }
     // Witness payload identity is distinct from its ptr-shaped erased receiver.
     val erasedReceiver = parameter(type: pointer, semantic: 20U64, role: <LlvmParameterRole.ErasedReceiver />, mode: <LlvmParameterMode.Borrow />)
+    val glueOperations: Array[LlvmGlueOperation] = [<LlvmGlueOperation.EnvironmentDrop />, <LlvmGlueOperation.ExistentialCopy />, <LlvmGlueOperation.ExistentialDrop />, <LlvmGlueOperation.StructRetain />, <LlvmGlueOperation.StructDrop />, <LlvmGlueOperation.EnumRetain />, <LlvmGlueOperation.EnumRelease />]
+    for operation in glueOperations {
+        val mode = if operation.borrowsPayload() { give <LlvmParameterMode.Borrow /> } else { give <LlvmParameterMode.Move /> }
+        val role = if operation.erased() { give <LlvmParameterRole.GlueStorage /> } else { give <LlvmParameterRole.GlueValue /> }
+        val type = if operation.erased() { give pointer } else { give aggregate }
+        val semantic = if operation.erased() { give 0U64 } else { give 30U64 }
+        val result = if operation.key() == 2U64 { give pointer } else { give voidType }
+        val lane = parameter(type: type, semantic: semantic, role: role, mode: mode)
+        val signature = <LlvmLogicalSignature convention=<LlvmValueConvention.OwnershipGlue operation=operation /> parameters=[lane] result=result resultTerm=0U64 />
+        val plan = scope.plan(signature: signature).unwrap()
+        scope.validate(signature: signature, plan: plan).unwrap()
+        if !plan.convention.matchesGlue(operation: operation) || plan.parameters[0].passing.key() != if operation.erased() { give 1U64 } else { give 2U64 } { panic "glue operation representation mismatch" }
+        mut val malformed = 0U64
+        while malformed < 6U64 {
+            val badLane = parameter(type: type, semantic: if malformed == 0U64 { give if semantic == 0U64 { give 30U64 } else { give 0U64 } } else { give semantic }, role: if malformed == 1U64 { give <LlvmParameterRole.Ordinary index=0U64 /> } else { give role }, mode: if malformed == 2U64 { give <LlvmParameterMode.Inout /> } else { give mode })
+            val bad = <LlvmLogicalSignature convention=signature.convention parameters=if malformed == 3U64 { give [] } else { give [badLane] } result=if malformed == 4U64 { give if operation.key() == 2U64 { give voidType } else { give pointer } } else { give result } resultTerm=if malformed == 5U64 { give 30U64 } else { give 0U64 } />
+            if scope.plan(signature: bad).isOk() { panic "malformed ownership glue accepted" }
+            malformed += 1U64
+        }
+        if !operation.erased() {
+            val zero = <LlvmLogicalSignature convention=signature.convention parameters=[parameter(type: empty, semantic: 31U64, role: role, mode: mode)] result=voidType resultTerm=0U64 />
+            if scope.plan(signature: zero).unwrap().parameters[0].passing.key() != 0U64 { panic "zero-size glue not omitted" }
+            if scope.validate(signature: <LlvmLogicalSignature convention=signature.convention parameters=[parameter(type: type, semantic: 31U64, role: role, mode: mode)] result=result resultTerm=0U64 />, plan: plan).isOk() { panic "glue semantic substitution accepted" }
+        }
+        for other in glueOperations {
+            if (operation.key() == other.key()) != plan.convention.matchesGlue(operation: other) { panic "glue operation identity erased" }
+            if operation.key() != other.key() && scope.validate(signature: signature, plan: changedConvention(plan: plan, convention: <LlvmValueConvention.OwnershipGlue operation=other />)).isOk() { panic "different glue operation substituted" }
+        }
+    }
     val witnessSignature = witness(parameters: [erasedReceiver], result: voidType)
     val witnessPlan = scope.plan(signature: witnessSignature).unwrap()
     scope.validate(signature: witnessSignature, plan: witnessPlan).unwrap()

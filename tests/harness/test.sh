@@ -310,6 +310,16 @@ else
     fail=$((fail + 1)); failed="$failed ready-async-plan-private"
 fi
 
+if python3 -B ./tests/compiler/architecture/test-completed-glue-protocol.py; then
+    pass=$((pass + 1))
+else
+    fail=$((fail + 1)); failed="$failed completed-glue-protocol"
+fi
+if PLEWC="$PLEWC" LLVM_CONFIG="$LC" python3 -B ./tests/compiler/codegen/test-ownership-glue.py; then
+    pass=$((pass + 1))
+else
+    fail=$((fail + 1)); failed="$failed ownership-glue-private"
+fi
 if python3 -B ./tests/compiler/architecture/test-completed-witness-protocol.py; then
     pass=$((pass + 1))
 else

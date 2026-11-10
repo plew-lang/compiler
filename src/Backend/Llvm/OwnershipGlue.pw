@@ -1,0 +1,110 @@
+// Completed payload operations. Allocation release/free remains with the caller;
+// a consuming storage lane grants payload destruction, not ownership of ptr.
+pub impl LlvmCtx {
+    inout fn glueValueAbi(c: inout Comp, operation: LlvmGlueOperation, typeRef: U64 = 0U64) -> Result[U64, CompileDiagnostic] {
+        val scope = (try self.prepareValueAbiScope())
+        try scope.validateScope()
+        if operation.erased() != (typeRef == 0U64) { return <Result.Err error=valueAbiFailure(message: "glue operation/type contract mismatch") /> }
+        val slots = self.glueValueAbis.getOr(key: typeRef, fallback: [])
+        val key = operation.key() - 1U64
+        if key < slots.count() && slots[key] != 0U64 {
+            val cached = slots[key]
+            if cached > self.valueAbis.count() { return <Result.Err error=valueAbiFailure(message: "glue cached descriptor out of range") /> }
+            val plan = self.valueAbis[cached - 1U64]
+            if !plan.convention.matchesGlue(operation: operation) || plan.moduleIdentity != scope.moduleIdentity || plan.contextIdentity != scope.contextIdentity || plan.revision != 1U64 || plan.ownerBody != 0U64 { return <Result.Err error=valueAbiFailure(message: "glue cached endpoint scope mismatch") /> }
+            return <Result.Ok value=cached />
+        }
+        if typeRef != 0U64 {
+            val destruction = c.finalDestructionIndex(typeRef: typeRef)
+            if destruction == 0U64 || !c.arena.finalDestructions[destruction - 1U64].ready { return <Result.Err error=valueAbiFailure(message: "concrete glue lacks a finalized destruction contract") /> }
+        }
+        val type = if typeRef == 0U64 { give self.ptrty } else { give (try self.llvmTypeOfRef(c: inout c, ref: typeRef)) }
+        val mode = if operation.borrowsPayload() { give <LlvmParameterMode.Borrow /> } else { give <LlvmParameterMode.Move /> }
+        val role = if operation.erased() { give <LlvmParameterRole.GlueStorage /> } else { give <LlvmParameterRole.GlueValue /> }
+        val template = (try self.saveValueAbi(signature: <LlvmLogicalSignature convention=<LlvmValueConvention.OwnershipGlue operation=operation /> parameters=[<LlvmLogicalParameter type=type semanticType=typeRef role=role mode=mode />] result=if operation.key() == 2U64 { give self.ptrty } else { give self.voidty } resultTerm=0U64 />, ownerBody: 0U64))
+        mut val updated = slots
+        while updated.count() < 7U64 { updated.append(0U64) }
+        updated.set(i: key, value: template)
+        self.glueValueAbis[typeRef] = updated
+        return <Result.Ok value=template />
+    }
+
+    inout fn declareGlueValueFunction(c: inout Comp, name: CPtr[U8], operation: LlvmGlueOperation, typeRef: U64 = 0U64) -> Result[LLVMValueRef, CompileDiagnostic] {
+        return self.declarePlannedValueFunction(name: name, abiId: (try self.glueValueAbi(c: inout c, operation: operation, typeRef: typeRef)))
+    }
+
+    // The finalized closure contract owns capture identity and destruction order.
+    inout fn declareGlueEnvironmentDrop(c: inout Comp, name: CPtr[U8], closureBodyId: U64, bodyId: U64) -> Result[LLVMValueRef, CompileDiagnostic] {
+        if closureBodyId == 0U64 || closureBodyId > c.arena.bodyInstanceCount() || bodyId == 0U64 || bodyId > c.arena.bodyInstanceCount() || c.arena.closureSignature(bodyId: closureBodyId).environmentDropBodyId != bodyId { return <Result.Err error=valueAbiFailure(message: "environment glue has no frozen capture owner") /> }
+        match c.arena.bodyOrigin(bodyId: bodyId) { BodyOrigin.ClosureEnvironmentDrop(closureBodyId: val owner) => { if owner != closureBodyId { return <Result.Err error=valueAbiFailure(message: "environment glue origin mismatch") /> } } _ => { return <Result.Err error=valueAbiFailure(message: "environment glue origin missing") /> } }
+        val template = (try self.glueValueAbi(c: inout c, operation: <LlvmGlueOperation.EnvironmentDrop />))
+        val plan = self.valueAbis[template - 1U64]
+        self.valueAbis.append(<LlvmValueAbi parameterStart=plan.parameterStart parameterCount=plan.parameterCount logicalSignature=plan.logicalSignature functionType=plan.functionType moduleIdentity=plan.moduleIdentity contextIdentity=plan.contextIdentity revision=plan.revision convention=plan.convention resultTerm=plan.resultTerm resultProtocol=plan.resultProtocol ownerBody=bodyId />)
+        return self.declarePlannedBodyFunction(name: name, abiId: self.valueAbis.count(), bodyId: bodyId)
+    }
+
+    // Producers retain their semantic instance; they cannot infer it from LLVM.
+    inout fn glueValueInput(c: inout Comp, operation: LlvmGlueOperation, typeRef: U64, carrier: LlvmValueCarrier) -> Result[LlvmValueInput, CompileDiagnostic] {
+        val template = (try self.glueValueAbi(c: inout c, operation: operation, typeRef: typeRef))
+        val lane = self.valueAbiParameters[self.valueAbis[template - 1U64].parameterStart]
+        return <Result.Ok value=<LlvmValueInput lane=<LlvmLogicalParameter type=lane.type semanticType=typeRef role=lane.role mode=lane.mode /> index=0U64 carrier=carrier /> />
+    }
+
+    inout fn callGlueValueFunction(function: LLVMValueRef, operation: LlvmGlueOperation, input: LlvmValueInput) -> Result[LLVMValueRef, CompileDiagnostic] {
+        val abiId = self.valueAbiFunctions.getOr(key: LLVMIsAFunction(function), fallback: 0U64)
+        if abiId == 0U64 || abiId > self.valueAbis.count() { return <Result.Err error=valueAbiFailure(message: "glue call requires a declared endpoint") /> }
+        val abi = self.valueAbis[abiId - 1U64]
+        if !abi.convention.matchesGlue(operation: operation) || abi.parameterCount != 1U64 { return <Result.Err error=valueAbiFailure(message: "glue call operation mismatch") /> }
+        val scope = (try self.prepareValueAbiScope())
+        try scope.validateScope()
+        try scope.validateFunction(function: function, signature: abi.functionType)
+        if abi.moduleIdentity != scope.moduleIdentity || abi.contextIdentity != scope.contextIdentity || abi.revision != 1U64 || abi.parameterStart >= self.valueAbiParameters.count() { return <Result.Err error=valueAbiFailure(message: "glue call descriptor scope/range mismatch") /> }
+        try scope.validateInput(parameter: self.valueAbiParameters[abi.parameterStart], input: input, index: 0U64, function: LLVMGetBasicBlockParent(LLVMGetInsertBlock(self.b)))
+        return self.emitPlannedValueCall(abiId: abiId, function: function, arguments: [self.valueInputValue(input: input)])
+    }
+
+    inout fn glueValueParameter(function: LLVMValueRef, operation: LlvmGlueOperation, typeRef: U64 = 0U64, bodyId: U64 = 0U64) -> Result[LlvmValueInput, CompileDiagnostic] {
+        val abiId = self.valueAbiFunctions.getOr(key: LLVMIsAFunction(function), fallback: 0U64)
+        if abiId == 0U64 || abiId > self.valueAbis.count() { return <Result.Err error=valueAbiFailure(message: "glue parameter descriptor missing") /> }
+        val abi = self.valueAbis[abiId - 1U64]
+        if !abi.convention.matchesGlue(operation: operation) || abi.ownerBody != bodyId || abi.parameterCount != 1U64 || abi.parameterStart >= self.valueAbiParameters.count() || self.valueAbiParameters[abi.parameterStart].semanticType != typeRef { return <Result.Err error=valueAbiFailure(message: "glue parameter operation/type/owner mismatch") /> }
+        return self.preparedValueParameter(function: function, abiId: abiId, index: 0U64)
+    }
+
+    // Dynamic erased endpoints cannot know the concrete type. Their producer is
+    // the same typed fat owner which contains both storage and function table.
+    inout fn prepareErasedGlueCallee(c: inout Comp, operation: LlvmGlueOperation, fat: LLVMValueRef) -> Result[LlvmErasedGlueCallee, CompileDiagnostic] {
+        if !operation.erased() { return <Result.Err error=valueAbiFailure(message: "concrete glue cannot use erased dispatch") /> }
+        val template = (try self.glueValueAbi(c: inout c, operation: operation))
+        val abi = self.valueAbis[template - 1U64]
+        val scope = (try self.prepareValueAbiScope())
+        val caller = LLVMGetBasicBlockParent(LLVMGetInsertBlock(self.b))
+        try scope.validateValue(value: fat, type: if operation.key() == 1U64 { give self.closureTy } else { give self.anyTy }, function: caller)
+        val storage = LLVMBuildExtractValue(self.b, fat, if operation.key() == 1U64 { give 1U64 } else { give 0U64 }, anon())
+        val table = if operation.key() == 1U64 { give storage } else { give LLVMBuildExtractValue(self.b, fat, 1U64, anon()) }
+        val slot = if operation.key() == 3U64 {
+            val indices = [LLVMConstInt(self.i64ty, 1U64, 0I32)]
+            give LLVMBuildGEP2(self.b, self.ptrty, table, arrayCPtr(indices), 1U64, anon())
+        } else { give table }
+        val function = llvmLoad(self.b, self.ptrty, slot, anon())
+        return <Result.Ok value=<LlvmErasedGlueCallee template=template inputs=<LlvmCallableInputScope moduleIdentity=scope.moduleIdentity contextIdentity=scope.contextIdentity revision=1U64 callableIdentity=template signature=abi.logicalSignature /> fat=fat function=function storage=storage /> />
+    }
+
+    inout fn callErasedGlueValueFunction(callee: LlvmErasedGlueCallee, operation: LlvmGlueOperation) -> Result[LLVMValueRef, CompileDiagnostic] {
+        if !operation.erased() || callee.template == 0U64 || callee.template > self.valueAbis.count() { return <Result.Err error=valueAbiFailure(message: "erased glue callee identity out of range") /> }
+        val abi = self.valueAbis[callee.template - 1U64]
+        val slots = self.glueValueAbis.getOr(key: 0U64, fallback: [])
+        if !abi.convention.matchesGlue(operation: operation) || abi.ownerBody != 0U64 || abi.parameterCount != 1U64 || abi.parameterStart >= self.valueAbiParameters.count() || slots.count() != 7U64 || slots[operation.key() - 1U64] != callee.template { return <Result.Err error=valueAbiFailure(message: "erased glue callee operation/template mismatch") /> }
+        val scope = (try self.prepareValueAbiScope())
+        try scope.validateScope()
+        if abi.moduleIdentity != scope.moduleIdentity || abi.contextIdentity != scope.contextIdentity || abi.revision != 1U64 { return <Result.Err error=valueAbiFailure(message: "erased glue template scope mismatch") /> }
+        try scope.validateCallableInputs(scope: callee.inputs, callableIdentity: callee.template, signature: abi.logicalSignature)
+        val caller = LLVMGetBasicBlockParent(LLVMGetInsertBlock(self.b))
+        try scope.validateValue(value: callee.fat, type: if operation.key() == 1U64 { give self.closureTy } else { give self.anyTy }, function: caller)
+        try scope.validateValue(value: callee.function, type: self.ptrty, function: caller)
+        val parameter = self.valueAbiParameters[abi.parameterStart]
+        val input = <LlvmValueInput lane=<LlvmLogicalParameter type=self.ptrty semanticType=0U64 role=<LlvmParameterRole.GlueStorage /> mode=parameter.mode /> index=0U64 carrier=<LlvmValueCarrier.Value value=callee.storage /> />
+        try scope.validateInput(parameter: parameter, input: input, index: 0U64, function: caller)
+        return self.emitPlannedValueCall(abiId: callee.template, function: callee.function, arguments: [callee.storage])
+    }
+}

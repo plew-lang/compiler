@@ -2,6 +2,7 @@
 // layout/call contracts. Parts own physical lowering and runtime ABI support.
 
 part ./Llvm/ValueAbi
+part ./Llvm/OwnershipGlue
 part ./Llvm/Types
 part ./Llvm/Enums
 part ./Llvm/GenericStruct

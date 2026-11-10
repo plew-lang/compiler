@@ -2549,7 +2549,7 @@ pub impl LlvmCtx {
                     val closureAbi = match plan.entry { LlvmBodyLocalEntry.Closure(abiId: val id) => { give id } LlvmBodyLocalEntry.EnvironmentDrop(abiId: val id) => { give id } _ => { return <Result.Err error=valueAbiFailure(message: "environment binding on a non-closure entry") /> } }
                     val environment = if self.valueAbis[closureAbi - 1U64].convention.key() == 12U64 {
                         give self.valueInputValue(input: (try self.closureBodyParameter(function: self.curFn, bodyId: body.bodyInstance, index: 0U64)))
-                    } else { give (try self.preparedLegacyParameter(parameterIndex: self.valueAbis[closureAbi - 1U64].parameterStart)) }
+                    } else { give self.valueInputValue(input: (try self.glueValueParameter(function: self.curFn, operation: <LlvmGlueOperation.EnvironmentDrop />, bodyId: body.bodyInstance))) }
                     val address = LLVMBuildStructGEP2(self.b, plan.environmentType.unwrap(), environment, field, anon())
                     llvmStore(self.b, llvmLoad(self.b, fieldType, address, anon()), slot)
                 }
@@ -2820,9 +2820,12 @@ pub impl LlvmCtx {
             give match abi.convention {
                 LlvmValueConvention.Legacy(family: val family) => { give match family {
                     LlvmLegacyConvention.Closure => { give <LlvmBodyLocalEntry.Closure abiId=abiId /> }
-                    LlvmLegacyConvention.EnvironmentDrop => { give <LlvmBodyLocalEntry.EnvironmentDrop abiId=abiId /> }
                     _ => { return <Result.Err error=valueAbiFailure(message: "entry has no retained local adapter") /> }
                 } }
+                LlvmValueConvention.OwnershipGlue(operation: val operation) => {
+                    if operation.key() != 1U64 { return <Result.Err error=valueAbiFailure(message: "only environment glue has a Ready source body") /> }
+                    give <LlvmBodyLocalEntry.EnvironmentDrop abiId=abiId />
+                }
                 LlvmValueConvention.Closure => { give <LlvmBodyLocalEntry.Closure abiId=abiId /> }
                 LlvmValueConvention.Witness(targetType: _, traitIndex: _, slot: _) => { give <LlvmBodyLocalEntry.Witness abiId=abiId /> }
                 LlvmValueConvention.Body => {

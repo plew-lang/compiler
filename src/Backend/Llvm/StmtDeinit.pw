@@ -30,17 +30,13 @@ pub impl LlvmCtx {
         if found < self.dropWitReg.count() {
             return <Result.Ok value=found />
         }
-        mut val ptys: Array[LLVMTypeRef] = []
-        ptys.append(self.genStructTys[reg])
-        val fty: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(ptys), 1U64, 0I32)
         mut val nm: Array[U8] = []
         appendBytes(into: inout nm, from: "pwdrop".bytes())
         appendU64Dec(into: inout nm, n: reg)
         nm.append(0)
-        val fv: LLVMValueRef = (try self.declareLegacyValueFunction(name: arrayCPtr(nm), signature: fty, family: <LlvmLegacyConvention.StructDrop />))
+        val fv: LLVMValueRef = (try self.declareGlueValueFunction(c: inout c, name: arrayCPtr(nm), operation: <LlvmGlueOperation.StructDrop />, typeRef: self.genStructRefs[reg]))
         self.dropWitReg.append(reg)
         self.dropWitVal.append(fv)
-        self.dropWitTy.append(fty)
         return <Result.Ok value=self.dropWitReg.count() - 1U64 />
     }
 
@@ -51,8 +47,8 @@ pub impl LlvmCtx {
     inout fn emitDeinitValue(c: inout Comp, v: LLVMValueRef, ref: U64) -> Result[(), CompileDiagnostic] {
         val reg = (try self.requireStructLayoutSlot(c: inout c, typeRef: ref))
         val slot = try self.structDropWitness(c: inout c, reg: reg)
-        val arguments: Array[LLVMValueRef] = [v]
-        (try self.callLegacyValueFunction(signature: self.dropWitTy[slot], function: self.dropWitVal[slot], arguments: arguments))
+        val input = (try self.glueValueInput(c: inout c, operation: <LlvmGlueOperation.StructDrop />, typeRef: self.genStructRefs[reg], carrier: <LlvmValueCarrier.Value value=v />))
+        (try self.callGlueValueFunction(function: self.dropWitVal[slot], operation: <LlvmGlueOperation.StructDrop />, input: input))
         return <Result.Ok value=() />
     }
 
@@ -108,8 +104,9 @@ pub impl LlvmCtx {
             if slot >= self.genMethBody.count() {
                 return <Result.Err error=c.diagnosticAt(offset: declaration.defOffset, msg: "internal error: finalized destructor has no executable body") />
             }
-            val arguments: Array[LLVMValueRef] = [v]
-            (try self.callLegacyValueFunction(signature: self.genMethTy[slot], function: self.genMethVal[slot], arguments: arguments, bodyAdapter: <Optional.Some v=<LlvmBodyCompatibility.Destruction bodyId=contract.deinitCall.bodyId /> />))
+            match contract.deinitCall.receiverPassing { CallReceiverPassing.Borrow => {} _ => { return <Result.Err error=valueAbiFailure(message: "frozen destructor must borrow its receiver") /> } }
+            val input = <LlvmValueInput lane=<LlvmLogicalParameter type=LLVMTypeOf(v) semanticType=contract.deinitCall.receiverType role=<LlvmParameterRole.Receiver /> mode=<LlvmParameterMode.Borrow /> /> index=0U64 carrier=<LlvmValueCarrier.Value value=v /> />
+            (try self.callBodyValueFunction(function: self.genMethVal[slot], bodyId: contract.deinitCall.bodyId, inputs: (try self.bodyInputScope(bodyId: contract.deinitCall.bodyId, signature: self.genMethTy[slot])), arguments: [input]))
         }
         mut val field = 0U64
         while field < contract.fieldTypes.count() {
@@ -135,7 +132,7 @@ pub impl LlvmCtx {
             val fv: LLVMValueRef = self.dropWitVal[s]
             self.curFn = fv
             self.beginFnBody(fv: fv)
-            try self.emitDropWitnessWalk(c: inout c, v: (try self.legacyValueParameter(function: fv, index: 0U64)), sidx: self.genStructDefs[reg], typeRef: self.genStructRefs[reg])
+            try self.emitDropWitnessWalk(c: inout c, v: self.valueInputValue(input: (try self.glueValueParameter(function: fv, operation: <LlvmGlueOperation.StructDrop />, typeRef: self.genStructRefs[reg]))), sidx: self.genStructDefs[reg], typeRef: self.genStructRefs[reg])
             LLVMBuildRetVoid(self.b)
             self.dropWitDone += 1
         }

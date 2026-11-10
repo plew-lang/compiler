@@ -76,9 +76,7 @@ fn closurePlanControl(mode: U64) {
     val closureFunction = requireClosureOk(result: backend.declarePlannedBodyFunction(name: name.ptr, abiId: closureAbi, bodyId: closureId), stage: "declare closure", mode: mode)
     backend.closures.append(<LlvmClosure bodyId=closureId semanticIndex=0U64 functionTypeTerm=functionType function=closureFunction captures=[<CaptureEntry closureId=0U64 nameStart=valueBinding nameLen=0U64 tyStart=integerName.nameStart tyLen=integerName.nameLen isArray=false ty=integer boxed=false />, <CaptureEntry closureId=0U64 nameStart=cellBinding nameLen=0U64 tyStart=integerName.nameStart tyLen=integerName.nameLen isArray=false ty=integer boxed=true />] />)
     val dropName = <CString.copied text="ready-drop-controls" />
-    val dropParameters: Array[LLVMTypeRef] = [backend.ptrty]
-    val dropSignature = LLVMFunctionType(backend.voidty, arrayCPtr(dropParameters), 1U64, 0I32)
-    val dropFunction = requireClosureOk(result: backend.declareLegacyBodyFunction(name: dropName.ptr, signature: dropSignature, bodyId: dropId, family: <LlvmLegacyConvention.EnvironmentDrop />), stage: "declare environment drop", mode: mode)
+    val dropFunction = requireClosureOk(result: backend.declareGlueEnvironmentDrop(c: inout compiler, name: dropName.ptr, closureBodyId: closureId, bodyId: dropId), stage: "declare environment drop", mode: mode)
     mut val locals: Array[MidLocalDecl] = []
     if !drop {
         locals.append(<MidLocalDecl typeTerm=if mode == 4U64 { give unsigned } else { give integer } sourceScope=0U64 isUnique=false isParameter=true isInout=mode == 5U64 isCaptureCell=mode == 9U64 isBorrowed=mode == 10U64 />)

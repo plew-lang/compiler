@@ -62,15 +62,36 @@ pub impl LlvmLegacyConvention {
         }
     }
 }
-pub enum LlvmValueConvention { Body Closure Witness(targetType: U64, traitIndex: U64, slot: U64) Legacy(family: LlvmLegacyConvention) }
+// A payload operation does not own the environment/box allocation itself.
+pub enum LlvmGlueOperation { EnvironmentDrop ExistentialCopy ExistentialDrop StructRetain StructDrop EnumRetain EnumRelease }
+pub impl LlvmGlueOperation {
+    fn key() -> U64 {
+        return match self {
+            LlvmGlueOperation.EnvironmentDrop => { give 1U64 }
+            LlvmGlueOperation.ExistentialCopy => { give 2U64 }
+            LlvmGlueOperation.ExistentialDrop => { give 3U64 }
+            LlvmGlueOperation.StructRetain => { give 4U64 }
+            LlvmGlueOperation.StructDrop => { give 5U64 }
+            LlvmGlueOperation.EnumRetain => { give 6U64 }
+            LlvmGlueOperation.EnumRelease => { give 7U64 }
+        }
+    }
+    fn erased() -> Bool { return self.key() <= 3U64 }
+    fn borrowsPayload() -> Bool { return self.key() == 2U64 || self.key() == 4U64 || self.key() == 6U64 }
+}
+pub enum LlvmValueConvention { Body Closure Witness(targetType: U64, traitIndex: U64, slot: U64) OwnershipGlue(operation: LlvmGlueOperation) Legacy(family: LlvmLegacyConvention) }
 pub impl LlvmValueConvention {
     fn key() -> U64 {
         return match self {
             LlvmValueConvention.Body => { give 0U64 }
             LlvmValueConvention.Closure => { give 12U64 }
             LlvmValueConvention.Witness(targetType: _, traitIndex: _, slot: _) => { give 13U64 }
+            LlvmValueConvention.OwnershipGlue(operation: _) => { give 14U64 }
             LlvmValueConvention.Legacy(family: val family) => { give family.key() }
         }
+    }
+    fn matchesGlue(operation: LlvmGlueOperation) -> Bool {
+        return match self { LlvmValueConvention.OwnershipGlue(operation: val selected) => { give operation.key() == selected.key() } _ => { give false } }
     }
     fn matchesWitness(targetType: U64, traitIndex: U64, slot: U64) -> Bool {
         return match self {
@@ -85,16 +106,19 @@ pub impl LlvmValueConvention {
             LlvmValueConvention.Witness(targetType: val targetType, traitIndex: val traitIndex, slot: val slot) => {
                 return convention.matchesWitness(targetType: targetType, traitIndex: traitIndex, slot: slot)
             }
+            LlvmValueConvention.OwnershipGlue(operation: val operation) => { return convention.matchesGlue(operation: operation) }
             LlvmValueConvention.Legacy(family: val family) => { return match convention { LlvmValueConvention.Legacy(family: val other) => { give family.key() == other.key() } _ => { give false } } }
         }
     }
 }
-pub enum LlvmParameterRole { Receiver Environment ErasedReceiver Ordinary(index: U64) Legacy(index: U64) }
+pub enum LlvmParameterRole { Receiver Environment ErasedReceiver GlueValue GlueStorage Ordinary(index: U64) Legacy(index: U64) }
 pub impl LlvmParameterRole {
     fn same(role: LlvmParameterRole) -> Bool {
         match self {
             LlvmParameterRole.Receiver => { return match role { LlvmParameterRole.Receiver => { give true } _ => { give false } } }
             LlvmParameterRole.Environment => { return match role { LlvmParameterRole.Environment => { give true } _ => { give false } } }
+            LlvmParameterRole.GlueValue => { return match role { LlvmParameterRole.GlueValue => { give true } _ => { give false } } }
+            LlvmParameterRole.GlueStorage => { return match role { LlvmParameterRole.GlueStorage => { give true } _ => { give false } } }
             LlvmParameterRole.ErasedReceiver => { return match role { LlvmParameterRole.ErasedReceiver => { give true } _ => { give false } } }
             LlvmParameterRole.Ordinary(index: val index) => { return match role { LlvmParameterRole.Ordinary(index: val other) => { give index == other } _ => { give false } } }
             LlvmParameterRole.Legacy(index: val index) => { return match role { LlvmParameterRole.Legacy(index: val other) => { give index == other } _ => { give false } } }
@@ -293,6 +317,9 @@ pub impl LlvmSignatureScope {
                 if targetType == 0U64 || slot == 0U64 || signature.parameters.count() == 0U64 { return <Result.Err error=signatureFailure(message: "witness requires a selected target/slot and leading erased receiver") /> }
                 if resultVoid != (signature.resultTerm == 0U64) { return <Result.Err error=signatureFailure(message: "witness result protocol mismatch") /> }
             }
+            LlvmValueConvention.OwnershipGlue(operation: val operation) => {
+                if signature.parameters.count() != 1U64 || signature.resultTerm != 0U64 || resultVoid != (operation.key() != 2U64) || (!resultVoid && LLVMGetTypeKind(signature.result) != 12U32) { return <Result.Err error=signatureFailure(message: "ownership glue result/count contract mismatch") /> }
+            }
             LlvmValueConvention.Legacy(family: _) => {}
         }
         mut val ordinary = 0U64
@@ -312,6 +339,8 @@ pub impl LlvmSignatureScope {
                         }
                         LlvmParameterRole.Environment => { return <Result.Err error=signatureFailure(message: "environment role in body convention") /> }
                         LlvmParameterRole.ErasedReceiver => { return <Result.Err error=signatureFailure(message: "erased receiver role in body convention") /> }
+                        LlvmParameterRole.GlueValue => { return <Result.Err error=signatureFailure(message: "glue value role in body convention") /> }
+                        LlvmParameterRole.GlueStorage => { return <Result.Err error=signatureFailure(message: "glue storage role in body convention") /> }
                         LlvmParameterRole.Legacy(index: _) => { return <Result.Err error=signatureFailure(message: "legacy role in body convention") /> }
                     }
                     match parameter.mode {
@@ -340,6 +369,13 @@ pub impl LlvmSignatureScope {
                         LlvmParameterMode.Inout => { if LLVMGetTypeKind(parameter.type) != 12U32 { return <Result.Err error=signatureFailure(message: "witness inout requires pointer representation") /> } }
                         _ => {}
                     }
+                }
+                LlvmValueConvention.OwnershipGlue(operation: val operation) => {
+                    val expectedMode = if operation.borrowsPayload() { give 1U64 } else { give 3U64 }
+                    if parameter.mode.key() != expectedMode { return <Result.Err error=signatureFailure(message: "ownership glue payload mode mismatch") /> }
+                    if operation.erased() {
+                        if parameter.semanticType != 0U64 || !parameter.role.same(role: <LlvmParameterRole.GlueStorage />) || LLVMGetTypeKind(parameter.type) != 12U32 { return <Result.Err error=signatureFailure(message: "erased glue storage contract mismatch") /> }
+                    } else if parameter.semanticType == 0U64 || !parameter.role.same(role: <LlvmParameterRole.GlueValue />) { return <Result.Err error=signatureFailure(message: "concrete glue value contract mismatch") /> }
                 }
                 LlvmValueConvention.Legacy(family: _) => {
                     if parameter.semanticType != 0U64 || parameter.mode.key() != 0U64 || !parameter.role.same(role: <LlvmParameterRole.Legacy index=index />) { return <Result.Err error=signatureFailure(message: "legacy convention has an unannounced semantic role") /> }

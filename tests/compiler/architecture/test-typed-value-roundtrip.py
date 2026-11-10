@@ -25,8 +25,11 @@ for path in (root/'src/Backend/Llvm').glob('*.pw'):
  for line in path.read_text().splitlines():
   if 'bodyAdapter: <Optional.Some' in line:
    adapters.append(path.name)
-assert sorted(adapters)==['ProvidedFns.pw','StmtDeinit.pw'], adapters
-print('PASS raw normal-body compatibility is limited to exposed/destruction adapters')
+assert sorted(adapters)==['ProvidedFns.pw'], adapters
+destruction=(root/'src/Backend/Llvm/StmtDeinit.pw').read_text()
+assert 'callBodyValueFunction(' in destruction
+assert 'LlvmBodyCompatibility.Destruction' not in destruction
+print('PASS user deinit consumes typed Body inputs; only exposed compatibility remains')
 
 # Every normal-body publisher must carry the target signature receiver, even
 # generated newtype/witness adapters whose source receiver is a different term.

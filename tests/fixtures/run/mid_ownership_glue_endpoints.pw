@@ -1,0 +1,35 @@
+use @Std/Io only { print }
+use @Std/Core only { MutableRef }
+
+unique struct Empty {}
+pub impl Empty { factory }
+impl Empty { deinit { print(77I64) } }
+
+unique struct Resource { pub val id: I64 }
+pub impl Resource { factory }
+impl Resource { deinit { print(self.id) } }
+
+struct Node { pub val next: Link pub val owner: MutableRef[Resource] }
+pub impl Node { factory }
+enum Link { End More(value: Node) }
+
+fn empty() {
+    val value = <Empty />
+    print(0I64)
+}
+
+fn recursive() {
+    val root = <Node next=<Link.More value=<Node next=<Link.End /> owner=<MutableRef value=<Resource id=2I64 /> /> /> /> owner=<MutableRef value=<Resource id=1I64 /> /> />
+    val alias = root
+    print(alias.owner->id)
+    match alias.next {
+        Link.End => {}
+        Link.More(value: val inner) => { print(inner.owner->id) }
+    }
+}
+
+fn main() {
+    empty()
+    recursive()
+    print(9I64)
+}

@@ -371,36 +371,62 @@ controls cover the correction; named empty structs keep their result. Initial
 scratch controls accidentally selected the retained red alias; those terminated
 runs are excluded from acceptance. The final fixed alias is distinct.
 
-### Next Ownership Glue Increment
+### Completed Ownership Glue Increment
 
-Neutral read-only planning reviewed all seven remaining ownership families:
-EnvironmentDrop, ExistentialCopy/Drop, StructRetain/Drop and EnumRetain/Release.
-Existing explicit Legacy families identify the boundary but do not complete its
-semantic roles and typed carriers. Also migrate the drop walk's existing frozen
-user-deinit call, currently `BodyCompatibility.Destruction`, to normal typed Body
-inputs. This is a finite checkpoint 4 increment, not a new source capability.
+[Ownership glue evidence](../../../evidence/performance-regression-history/value-passing-implementation/w2-protocol/typed-glue-protocol.json)
+closes checkpoint 4's remaining finite boundary. All seven operations connect
+scoped operation/type templates to declarations, typed Value/Home calls and
+physical parameter decoding. Ready EnvironmentDrop retains its frozen capture
+adapter; the dynamic consumer prepares one same-fat function/storage pair for
+null guard and call. Payload consumption does not own the allocation: caller
+RC/null/free control, destruction order, byval/local copies and recursive drain
+order remain unchanged. Frozen user deinit now calls normal typed Body inputs;
+raw Destruction compatibility and all seven raw glue families are retired.
+The four competing struct/enum signature arrays are removed.
 
-Use a common completed operation convention with full operation identity.
-Concrete struct/enum operations retain their canonical instance term and explicit
-Borrow (retain) or Move (drop/release) payload role. Erased copy/drop/environment
-operations use explicit storage roles and Value(ptr), not aggregate Home; payload
-consumption must not claim allocation-free ownership. Dynamic endpoint identity
-is the operation, since callers cannot know the concrete boxed type/capture body.
-Declarations retain their frozen destruction/capture adapter correspondence.
-Extract function and payload from the same checked fat owner in the consumer.
-Cache scoped operation/type templates before building vectors. Do not infer
-copyability, destruction selection, capture ownership or free rights from ptr.
+Build `20261110T043117-build-0e540f` passed. Product184 matches it; the only later
+change adds private native scope/provenance controls. CLI65/internal8, ABI/C,
+Witness and recursive/zero-size source raw/optimized, physical native and both
+affected Glue/Closure harnesses pass. Neutral source review removed a duplicate
+EnvironmentDrop function load and repaired a new undef-folding fixture. Final
+independent review reconciles 1252 hash references (1237 distinct), all five
+gates, exact CLI/internal outputs, six native replays and three lossless log
+archives. Seven operation roundtrips, 35 malformed typed inputs, 14 raw parameter
+rejections and additional scoped/provenance guards are covered. Record payloads
+under enum operations test the physical protocol; real enum/generic/recursive
+ownership executes separately in source controls. This closes checkpoint 4 only.
 
-Before edits, pin structural RED and preserved source controls. Native tests
-cover all seven declaration/call/parameter paths, aggregate Value/Home/zero-size,
-semantic distinction at equal LLVM representation, malformed operation/type/
-role/mode/index/scope/provenance, raw bypass and call-count-independent planning.
-Source controls cover closure value/cell final release, existential CoW split,
-nested/generic retain/drop, deinit-before-field order and zero-size deinit.
-Preserve RC/null guards, allocation free, vtable layout and recursive witness
-worklist/drain order. Retire these seven raw glue families and raw Destruction
-Body calls; async and existing unsupported closure modes remain separate.
+### Next Completed Async Increment
 
-Checkpoints 5/6, W2 preparation cost and whole-consumer reconciliation, W3/W4
-and com-ffar final gates remain open. No formal timing, fixed-point, full ASan,
-main/seed or adopted carrier promotion is claimed.
+Neutral planning selects the complete private async entry -> activation frame
+-> resume roundtrip as the next finite checkpoint 5 increment. Finalized
+BodySignature.parameterTypes/parameterPassings/resultType already owns ordinary
+inputs and the Promise result; bodyResultType owns the async body payload.
+Entry/resume need distinct completed conventions: ordinary Borrow/Move plus
+Promise result versus a source-term-free Frame lane plus native void. Bind that
+frame lane to activation/body identity; never treat equal ptr representations
+as equal semantic values. Do not reconstruct/search Promise source types.
+
+Connect Async.declareAsyncFns, Mid's async-call branch, Async.genLlvmAsyncFunc's
+frame input acquisition and first resume, Mid's resume frame reader, and
+MidAsync admission/validation to common planner and typed readers/calls. Build
+frame layout at current Ready admission, not premature declaration. Retire raw
+AsyncEntry/AsyncResume call and parameter paths while preserving existing
+Borrow acquisition, Move transfer, frame layout/drop order and Promise
+retain-before-first-resume. Keep unsupported source modes unchanged.
+
+Preserve all existing ReadyAsync mapping/acquisition/GEP assertions and add
+entry/resume confusion, equal-ptr distinct body/frame, ordinary semantic type/
+mode/index, Promise versus body result, provenance and raw bypass controls.
+Use empty/scalar/aggregate/enum/omitted inputs, Borrow/Move, immediate and
+suspended completion; validate raw/optimized and lazy requested execution.
+
+Subsequent finite increments convert C-to-private values to typed Body inputs
+(retiring ExposedEntry compatibility), make program main/global initializer
+native boundaries explicit, and reconcile requested publication with body-ID
+siblings. Preserve C conversions/attributes/writeback, program args/results,
+global initialization order and missing-body refusal. Reuse existing expose/
+callback, SessionJit/SessionModule and request/initializer controls; do not add
+new C ABI support. Checkpoint 6 owns all-consumer/remaining-Legacy reconciliation
+and preparation cost. W3/W4, full gates, formal performance/fixed-point and
+main/seed/adopted carrier promotion remain open.

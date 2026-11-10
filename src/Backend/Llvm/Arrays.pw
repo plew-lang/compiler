@@ -540,8 +540,8 @@ pub impl LlvmCtx {
     inout fn emitStructRetain(c: inout Comp, v: LLVMValueRef, ref: U64) -> Result[(), CompileDiagnostic] {
         val reg = (try self.requireStructLayoutSlot(c: inout c, typeRef: ref))
         val slot = try self.structRetainWitness(c: inout c, reg: reg)
-        val arguments: Array[LLVMValueRef] = [v]
-        (try self.callLegacyValueFunction(signature: self.retWitTy[slot], function: self.retWitVal[slot], arguments: arguments))
+        val input = (try self.glueValueInput(c: inout c, operation: <LlvmGlueOperation.StructRetain />, typeRef: self.genStructRefs[reg], carrier: <LlvmValueCarrier.Value value=v />))
+        (try self.callGlueValueFunction(function: self.retWitVal[slot], operation: <LlvmGlueOperation.StructRetain />, input: input))
         return <Result.Ok value=() />
     }
 
@@ -578,17 +578,13 @@ pub impl LlvmCtx {
     inout fn structRetainWitness(c: inout Comp, reg: U64) -> Result[U64, CompileDiagnostic] {
         val found: U64 = self.retWitSlot(reg: reg)
         if found < self.retWitReg.count() { return <Result.Ok value=found /> }
-        mut val ptys: Array[LLVMTypeRef] = []
-        ptys.append(self.genStructTys[reg])
-        val fty: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(ptys), 1U64, 0I32)
         mut val nm: Array[U8] = []
         appendBytes(into: inout nm, from: "pwretain".bytes())
         appendU64Dec(into: inout nm, n: reg)
         nm.append(0)
-        val fv: LLVMValueRef = (try self.declareLegacyValueFunction(name: arrayCPtr(nm), signature: fty, family: <LlvmLegacyConvention.StructRetain />))
+        val fv: LLVMValueRef = (try self.declareGlueValueFunction(c: inout c, name: arrayCPtr(nm), operation: <LlvmGlueOperation.StructRetain />, typeRef: self.genStructRefs[reg]))
         self.retWitReg.append(reg)
         self.retWitVal.append(fv)
-        self.retWitTy.append(fty)
         return <Result.Ok value=self.retWitReg.count() - 1U64 />
     }
 
@@ -601,7 +597,7 @@ pub impl LlvmCtx {
             val fv: LLVMValueRef = self.retWitVal[slot]
             self.curFn = fv
             self.beginFnBody(fv: fv)
-            try self.emitRetainWitnessWalk(c: inout c, v: (try self.legacyValueParameter(function: fv, index: 0U64)), typeRef: self.genStructRefs[reg])
+            try self.emitRetainWitnessWalk(c: inout c, v: self.valueInputValue(input: (try self.glueValueParameter(function: fv, operation: <LlvmGlueOperation.StructRetain />, typeRef: self.genStructRefs[reg]))), typeRef: self.genStructRefs[reg])
             LLVMBuildRetVoid(self.b)
             self.retWitDone += 1U64
         }

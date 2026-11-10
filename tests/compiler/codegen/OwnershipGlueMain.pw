@@ -1,0 +1,143 @@
+// Append to an unchanged Backend snapshot; source cleanup executes separately.
+use ./Frontend only { analyzeFrontendDeclarations, FrontendInput }
+use ./SourceAccess only { SourceAccess }
+extern(c) {
+    fn LLVMGetCalledValue(value~: LLVMValueRef) -> LLVMValueRef
+    fn LLVMGetArgOperand(value~: LLVMValueRef, index~: U32) -> LLVMValueRef
+    fn LLVMGetOperand(value~: U64, index~: U32) -> LLVMValueRef
+    fn LLVMIsAExtractValueInst(value~: LLVMValueRef) -> U64
+    fn LLVMIsALoadInst(value~: LLVMValueRef) -> U64
+}
+fn glueOk[T](result: Result[T, CompileDiagnostic]) -> T {
+    match result { Result.Ok(value: val value) => { return value } Result.Err(error: val error) => { eprint(text: error.message) panic "valid glue protocol rejected" } }
+}
+fn glueInternal[T](result: Result[T, CompileDiagnostic]) {
+    match result { Result.Ok(value: _) => { panic "malformed glue accepted" } Result.Err(error: val error) => { match error.failureDomain { FailureDomain.Internal => {} _ => { panic "wrong glue failure domain" } } } }
+}
+fn main() {
+    val context = LLVMContextCreate()
+    val name = <CString.copied text="ownership-glue-control" />
+    val module = LLVMModuleCreateWithNameInContext(name.ptr, context)
+    val triple = LLVMGetDefaultTargetTriple()
+    val cpu = <CString.copied text="generic" />
+    val layout = plew_llvm_native_data_layout(cpu.ptr)
+    LLVMSetTarget(module, triple) LLVMSetDataLayout(module, layout)
+    LLVMDisposeMessage(triple) LLVMDisposeMessage(layout)
+    val builder = LLVMCreateBuilderInContext(context)
+    mut val backend = llvmContext(ctx: context, m: module, builder: builder)
+    mut val compiler = <Comp />
+    glueOk(result: analyzeFrontendDeclarations(c: inout compiler, input: <FrontendInput.Text text="fn control() {{}}" path="glue-control.pw" />, sources: <SourceAccess stdRoot=[] />))
+    val integerName = compiler.internBytes(s: "I64")
+    val integer = compiler.simpleTypeRef(nameStart: integerName.nameStart, nameLen: integerName.nameLen)
+    val field = compiler.internBytes(s: "payload")
+    val aggregate = compiler.pushType(t: <TypeRef nameStart=0U64 nameLen=0U64 args=[] isRecord=true recordFieldLabels=[field.nameId] recordFieldTerms=[integer] />)
+    val empty = compiler.pushType(t: <TypeRef nameStart=0U64 nameLen=0U64 args=[] isRecord=true recordFieldLabels=[] recordFieldTerms=[] />)
+    glueOk(result: compiler.collectRecordedType(ref: aggregate))
+    glueOk(result: compiler.collectRecordedType(ref: empty))
+    glueOk(result: compiler.enqueueFinalDestruction(typeRef: aggregate))
+    glueOk(result: compiler.enqueueFinalDestruction(typeRef: empty))
+    glueOk(result: backend.registerFinalLayoutNames(c: inout compiler))
+    glueOk(result: backend.registerFinalStructBodies(c: inout compiler))
+    val parameters: Array[LLVMTypeRef] = []
+    val callerType = LLVMFunctionType(backend.voidty, arrayCPtr(parameters), 0U64, 0I32)
+    val callerName = <CString.copied text="glue-caller" />
+    val caller = LLVMAddFunction(module, callerName.ptr, callerType)
+    backend.curFn = caller backend.beginFnBody(fv: caller)
+    val callerBlock = LLVMGetInsertBlock(builder)
+    val operations: Array[LlvmGlueOperation] = [<LlvmGlueOperation.EnvironmentDrop />, <LlvmGlueOperation.ExistentialCopy />, <LlvmGlueOperation.ExistentialDrop />, <LlvmGlueOperation.StructRetain />, <LlvmGlueOperation.StructDrop />, <LlvmGlueOperation.EnumRetain />, <LlvmGlueOperation.EnumRelease />]
+    for operation in operations {
+        val term = if operation.erased() { give 0U64 } else { give aggregate }
+        val template = glueOk(result: backend.glueValueAbi(c: inout compiler, operation: operation, typeRef: term))
+        val abi = backend.valueAbis[template - 1U64]
+        val descriptors = backend.valueAbis.count()
+        val rows = backend.valueAbiParameters.count()
+        val functionName = <CString.copied text="glue-control" />
+        val function = glueOk(result: backend.declareGlueValueFunction(c: inout compiler, name: functionName.ptr, operation: operation, typeRef: term))
+        backend.curFn = function backend.beginFnBody(fv: function)
+        val bound = glueOk(result: backend.glueValueParameter(function: function, operation: operation, typeRef: term))
+        if bound.lane.semanticType != term || bound.index != 0U64 { panic "glue binding lost logical lane" }
+        if operation.key() == 2U64 { LLVMBuildRet(builder, backend.valueInputValue(input: bound)) } else { LLVMBuildRetVoid(builder) }
+        glueInternal(result: backend.preparedLegacyParameter(parameterIndex: abi.parameterStart))
+        glueInternal(result: backend.legacyValueParameter(function: function, index: 0U64))
+        backend.curFn = caller LLVMPositionBuilderAtEnd(builder, callerBlock)
+        val value = LLVMGetUndef(bound.lane.type)
+        val input = glueOk(result: backend.glueValueInput(c: inout compiler, operation: operation, typeRef: term, carrier: <LlvmValueCarrier.Value value=value />))
+        glueOk(result: backend.callGlueValueFunction(function: function, operation: operation, input: input))
+        if !operation.erased() {
+            val home = LLVMBuildAlloca(builder, bound.lane.type, anon()) llvmStore(builder, value, home)
+            glueOk(result: backend.callGlueValueFunction(function: function, operation: operation, input: <LlvmValueInput lane=input.lane index=0U64 carrier=<LlvmValueCarrier.Home address=home /> />))
+        }
+        mut val repeat = 0U64
+        while repeat < 4U64 {
+            if glueOk(result: backend.glueValueAbi(c: inout compiler, operation: operation, typeRef: term)) != template { panic "glue cache missed" }
+            glueOk(result: backend.callGlueValueFunction(function: function, operation: operation, input: input))
+            repeat += 1U64
+        }
+        if backend.valueAbis.count() != descriptors || backend.valueAbiParameters.count() != rows { panic "glue call rebuilt physical plans" }
+        glueInternal(result: backend.callLegacyValueFunction(signature: abi.logicalSignature, function: function, arguments: [value]))
+        glueInternal(result: backend.callGlueValueFunction(function: function, operation: if operation.key() == 1U64 { give <LlvmGlueOperation.ExistentialDrop /> } else { give <LlvmGlueOperation.EnvironmentDrop /> }, input: input))
+        glueInternal(result: backend.glueValueParameter(function: function, operation: operation, typeRef: term, bodyId: 1U64))
+        mut val malformed = 0U64
+        while malformed < 5U64 {
+            val bad = <LlvmValueInput lane=<LlvmLogicalParameter type=input.lane.type semanticType=if malformed == 0U64 { give integer } else { give term } role=if malformed == 1U64 { give <LlvmParameterRole.Environment /> } else { give input.lane.role } mode=if malformed == 2U64 { give <LlvmParameterMode.Inout /> } else { give input.lane.mode } /> index=if malformed == 3U64 { give 1U64 } else { give 0U64 } carrier=if malformed == 4U64 { give <LlvmValueCarrier.Value value=LLVMConstInt(backend.i32ty, 1U64, 0I32) /> } else { give input.carrier } />
+            glueInternal(result: backend.callGlueValueFunction(function: function, operation: operation, input: bad))
+            malformed += 1U64
+        }
+        if operation.erased() {
+            val fatType = if operation.key() == 1U64 { give backend.closureTy } else { give backend.anyTy }
+            val fatHome = LLVMBuildAlloca(builder, fatType, anon())
+            llvmStore(builder, LLVMGetUndef(fatType), fatHome)
+            val fat = llvmLoad(builder, fatType, fatHome, anon())
+            val callee = glueOk(result: backend.prepareErasedGlueCallee(c: inout compiler, operation: operation, fat: fat))
+            val call = glueOk(result: backend.callErasedGlueValueFunction(callee: callee, operation: operation))
+            glueInternal(result: backend.callErasedGlueValueFunction(callee: callee, operation: if operation.key() == 1U64 { give <LlvmGlueOperation.ExistentialDrop /> } else { give <LlvmGlueOperation.EnvironmentDrop /> }))
+            val storage = LLVMGetArgOperand(call, 0U32)
+            if LLVMIsAExtractValueInst(storage) == 0U64 || LLVMIsALoadInst(LLVMGetOperand(LLVMIsAExtractValueInst(storage), 0U32)) != LLVMIsALoadInst(fat) || plew_pointer_equal(LLVMTypeOf(LLVMGetCalledValue(call)), backend.ptrty) == 0I32 { panic "erased glue lost fat-owner extraction" }
+            glueInternal(result: backend.prepareErasedGlueCallee(c: inout compiler, operation: operation, fat: LLVMConstInt(backend.i32ty, 0U64, 0I32)))
+        } else {
+            glueInternal(result: backend.prepareErasedGlueCallee(c: inout compiler, operation: operation, fat: LLVMGetUndef(backend.anyTy)))
+            val zero = glueOk(result: backend.glueValueAbi(c: inout compiler, operation: operation, typeRef: empty))
+            if backend.valueAbiParameters[backend.valueAbis[zero - 1U64].parameterStart].passing.key() != 0U64 { panic "zero-size glue not omitted" }
+        }
+        glueInternal(result: backend.glueValueAbi(c: inout compiler, operation: operation, typeRef: if operation.erased() { give aggregate } else { give 0U64 }))
+    }
+    // Native representation alone cannot admit an input from another function.
+    val aggregateType = glueOk(result: backend.llvmTypeOfRef(c: inout compiler, ref: aggregate))
+    val functionName = <CString.copied text="glue-scope" />
+    val function = glueOk(result: backend.declareGlueValueFunction(c: inout compiler, name: functionName.ptr, operation: <LlvmGlueOperation.StructRetain />, typeRef: aggregate))
+    val foreignName = <CString.copied text="glue-foreign-caller" />
+    val foreign = LLVMAddFunction(module, foreignName.ptr, callerType)
+    backend.curFn = foreign backend.beginFnBody(fv: foreign)
+    val foreignHome = LLVMBuildAlloca(builder, aggregateType, anon())
+    llvmStore(builder, LLVMGetUndef(aggregateType), foreignHome)
+    val foreignValue = llvmLoad(builder, aggregateType, foreignHome, anon())
+    val foreignFatHome = LLVMBuildAlloca(builder, backend.anyTy, anon())
+    llvmStore(builder, LLVMGetUndef(backend.anyTy), foreignFatHome)
+    val foreignFat = llvmLoad(builder, backend.anyTy, foreignFatHome, anon())
+    LLVMBuildRetVoid(builder)
+    backend.curFn = caller LLVMPositionBuilderAtEnd(builder, callerBlock)
+    for carrier in [<LlvmValueCarrier.Value value=foreignValue />, <LlvmValueCarrier.Home address=foreignHome />] {
+        val input = glueOk(result: backend.glueValueInput(c: inout compiler, operation: <LlvmGlueOperation.StructRetain />, typeRef: aggregate, carrier: carrier))
+        glueInternal(result: backend.callGlueValueFunction(function: function, operation: <LlvmGlueOperation.StructRetain />, input: input))
+    }
+    glueInternal(result: backend.prepareErasedGlueCallee(c: inout compiler, operation: <LlvmGlueOperation.ExistentialDrop />, fat: foreignFat))
+    val fatHome = LLVMBuildAlloca(builder, backend.anyTy, anon())
+    llvmStore(builder, LLVMGetUndef(backend.anyTy), fatHome)
+    val fat = llvmLoad(builder, backend.anyTy, fatHome, anon())
+    val callee = glueOk(result: backend.prepareErasedGlueCallee(c: inout compiler, operation: <LlvmGlueOperation.ExistentialDrop />, fat: fat))
+    mut val scopeMode = 0U64
+    while scopeMode < 5U64 {
+        val scope = <LlvmCallableInputScope moduleIdentity=callee.inputs.moduleIdentity + if scopeMode == 0U64 { give 1U64 } else { give 0U64 } contextIdentity=callee.inputs.contextIdentity + if scopeMode == 1U64 { give 1U64 } else { give 0U64 } revision=if scopeMode == 2U64 { give 2U64 } else { give 1U64 } callableIdentity=callee.inputs.callableIdentity + if scopeMode == 3U64 { give 1U64 } else { give 0U64 } signature=if scopeMode == 4U64 { give callerType } else { give callee.inputs.signature } />
+        glueInternal(result: backend.callErasedGlueValueFunction(callee: <LlvmErasedGlueCallee template=callee.template inputs=scope fat=callee.fat function=callee.function storage=callee.storage />, operation: <LlvmGlueOperation.ExistentialDrop />))
+        scopeMode += 1U64
+    }
+    LLVMPositionBuilderAtEnd(builder, LLVMGetEntryBasicBlock(foreign))
+    glueInternal(result: backend.callErasedGlueValueFunction(callee: callee, operation: <LlvmGlueOperation.ExistentialDrop />))
+    backend.curFn = caller LLVMPositionBuilderAtEnd(builder, callerBlock)
+    glueInternal(result: backend.declareGlueEnvironmentDrop(c: inout compiler, name: functionName.ptr, closureBodyId: 0U64, bodyId: 0U64))
+    val legacy: Array[LlvmLegacyConvention] = [<LlvmLegacyConvention.EnvironmentDrop />, <LlvmLegacyConvention.ExistentialCopy />, <LlvmLegacyConvention.ExistentialDrop />, <LlvmLegacyConvention.StructRetain />, <LlvmLegacyConvention.StructDrop />, <LlvmLegacyConvention.EnumRetain />, <LlvmLegacyConvention.EnumRelease />]
+    for family in legacy { glueInternal(result: backend.legacyValueAbi(signature: callerType, family: family)) }
+    LLVMBuildRetVoid(builder)
+    LLVMDisposeBuilder(builder) LLVMDisposeModule(module) LLVMContextDispose(context)
+    write(s: "ok\n")
+}

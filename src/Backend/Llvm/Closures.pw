@@ -50,13 +50,11 @@ pub impl LlvmCtx {
             if self.closureEnvironmentDrops[index].bodyId == bodyId { return <Result.Ok value=self.closureEnvironmentDrops[index].function /> }
             index += 1U64
         }
-        val parameters: Array[LLVMTypeRef] = [self.ptrty]
-        val type = LLVMFunctionType(self.voidty, arrayCPtr(parameters), 1U64, 0I32)
         mut val name: Array[U8] = []
         appendBytes(into: inout name, from: "pwclodrop".bytes())
         appendU64Dec(into: inout name, n: bodyId)
         name.append(0U8)
-        val function = (try self.declareLegacyBodyFunction(name: arrayCPtr(name), signature: type, bodyId: bodyId, family: <LlvmLegacyConvention.EnvironmentDrop />))
+        val function = (try self.declareGlueEnvironmentDrop(c: inout c, name: arrayCPtr(name), closureBodyId: closure.bodyId, bodyId: bodyId))
         self.closureEnvironmentDrops.append(<LlvmClosureEnvironmentDrop closureSlot=closureSlot bodyId=bodyId function=function />)
         return <Result.Ok value=function />
     }
@@ -109,16 +107,11 @@ pub impl LlvmCtx {
         val contBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, contBBCString.ptr)
         LLVMBuildCondBr(self.b, doDestroy, freeBB, contBB)
         LLVMPositionBuilderAtEnd(self.b, freeBB)
-        val dropFn: LLVMValueRef = llvmLoad(self.b, self.ptrty, env, anon())
-        val haveDrop: LLVMValueRef = LLVMBuildICmp(self.b, llvmIntNe(), dropFn, LLVMConstNull(self.ptrty), anon())
+        val callee = (try self.prepareErasedGlueCallee(c: inout c, operation: <LlvmGlueOperation.EnvironmentDrop />, fat: fat))
+        val haveDrop: LLVMValueRef = LLVMBuildICmp(self.b, llvmIntNe(), callee.function, LLVMConstNull(self.ptrty), anon())
         LLVMBuildCondBr(self.b, haveDrop, callBB, tailBB)
         LLVMPositionBuilderAtEnd(self.b, callBB)
-        mut val ptys: Array[LLVMTypeRef] = []
-        ptys.append(self.ptrty)
-        val dty: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(ptys), 1U64, 0I32)
-        mut val av: Array[LLVMValueRef] = []
-        av.append(env)
-        (try self.callLegacyValueFunction(signature: dty, function: dropFn, arguments: av, legacyIndirect: <Optional.Some v=<LlvmLegacyConvention.EnvironmentDrop /> />))
+        (try self.callErasedGlueValueFunction(callee: callee, operation: <LlvmGlueOperation.EnvironmentDrop />))
         LLVMBuildBr(self.b, tailBB)
         LLVMPositionBuilderAtEnd(self.b, tailBB)
         try self.rawbufFree(c: inout c, cell: env)
@@ -227,6 +220,10 @@ pub impl LlvmCtx {
             if LLVMIsAFunction(closure.function) != LLVMIsAFunction(self.curFn) || abi.parameterCount != parameterCount + 1U64 || parameterCount > body.locals.len || frozen.captures.count() > body.locals.len - parameterCount { return <Result.Err error=valueAbiFailure(message: "closure local mapping mismatch") /> }
         }
         if abi.parameterStart >= self.valueAbiParameters.count() || plew_pointer_equal(self.valueAbiParameters[abi.parameterStart].type, self.ptrty) == 0I32 { return <Result.Err error=valueAbiFailure(message: "closure environment lane is not a pointer") /> }
+        if environmentDrop {
+            val lane = self.valueAbiParameters[abi.parameterStart]
+            if lane.semanticType != 0U64 || !lane.role.same(role: <LlvmParameterRole.GlueStorage />) || lane.mode.key() != 3U64 { return <Result.Err error=valueAbiFailure(message: "environment drop payload lane mismatch") /> }
+        }
         mut val bindings: Array[LlvmLocalBinding] = []
         mut val types: Array[LLVMTypeRef] = []
         mut val index = 0U64
@@ -282,7 +279,8 @@ pub impl LlvmCtx {
         if abiId == 0U64 || abiId > self.valueAbis.count() || abiId != plannedAbi || self.valueAbis[abiId - 1U64].ownerBody != bodyId { return <Result.Err error=valueAbiFailure(message: "closure local entry descriptor mismatch") /> }
         val valid = match self.valueAbis[abiId - 1U64].convention {
             LlvmValueConvention.Closure => { give !environmentDrop }
-            LlvmValueConvention.Legacy(family: val family) => { give match family { LlvmLegacyConvention.Closure => { give !environmentDrop } LlvmLegacyConvention.EnvironmentDrop => { give environmentDrop } _ => { give false } } }
+            LlvmValueConvention.OwnershipGlue(operation: val operation) => { give environmentDrop && operation.key() == 1U64 }
+            LlvmValueConvention.Legacy(family: val family) => { give match family { LlvmLegacyConvention.Closure => { give !environmentDrop } _ => { give false } } }
             _ => { give false }
         }
         if !valid { return <Result.Err error=valueAbiFailure(message: "closure local entry convention mismatch") /> }

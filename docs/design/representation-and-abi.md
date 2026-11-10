@@ -82,6 +82,22 @@ requirement member must use that same normalization before comparing or planning
 the result. This does not erase named empty structs or authorize backend-specific
 semantic normalization.
 
+Completed ownership glue records its exact operation separately from source
+callables. Struct/enum retain and release lanes carry the finalized instance
+term and explicit borrowed/consumed payload contract. Erased environment/box
+storage lanes carry payload access rights, not allocation ownership: their
+caller still performs the final free. Copy returns a new box pointer. No opaque
+pointer establishes the concrete type, copyability or destruction selection.
+Those remain with frozen destruction/capture adapters at declaration. Scoped
+operation/type templates serve declaration, typed call and parameter decoding;
+dynamic calls retain one checked fat owner and prepare its storage/function
+pair once, including when a null-drop guard intervenes. A prepared pair's scope
+and provenance are validated at consumption; it is not a public raw-pointer
+override interface. Source semantic correspondence still belongs to verified
+Mid and finalized producer contracts. User deinit consumes its frozen receiver
+through the ordinary typed Body protocol. The payload protocol does not change
+RC final-owner tests, null guards, destruction order or recursive witness drains.
+
 A byval byte snapshot is a physical copying mechanism, not an additional semantic Copy or an implicit ARC retain. Its source/destination lifetime and ownership follow the already selected passing contract; the callee cannot independently destroy a caller-guaranteed share simply because LLVM supplied private bytes.
 
 ABI attributes must match on definitions/declarations and call sites. A `byval` parameter describes an independent snapshot; passing an unprotected address into mutable caller storage is not a substitute. Temporary storage belongs to the function actually being emitted, including when emitting a thunk inside another generation context. Allocate its slot in that function's entry and store the evaluated value at the original call position, preserving evaluation order and avoiding loop-driven stack growth.

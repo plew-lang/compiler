@@ -278,19 +278,16 @@ pub impl LlvmCtx {
     // concrete value: nested buffers remain CoW-shared until their own writes.
     inout fn buildAnyCopyThunk(c: inout Comp, sourceRef: U64, sidx: U64) -> Result[LLVMValueRef, CompileDiagnostic] {
         val concreteTy: LLVMTypeRef = (try self.llvmTypeOfRef(c: inout c, ref: sourceRef))
-        mut val ptys: Array[LLVMTypeRef] = []
-        ptys.append(self.ptrty)
-        val fty: LLVMTypeRef = LLVMFunctionType(self.ptrty, arrayCPtr(ptys), 1U64, 0I32)
         mut val nm: Array[U8] = []
         appendBytes(into: inout nm, from: "pfvtcopy".bytes())
         appendU64Dec(into: inout nm, n: sidx)
         nm.append(0)
-        val fv: LLVMValueRef = (try self.declareLegacyValueFunction(name: arrayCPtr(nm), signature: fty, family: <LlvmLegacyConvention.ExistentialCopy />))
+        val fv: LLVMValueRef = (try self.declareGlueValueFunction(c: inout c, name: arrayCPtr(nm), operation: <LlvmGlueOperation.ExistentialCopy />))
         val savedBB: LLVMBasicBlockRef = LLVMGetInsertBlock(self.b)
         val entryCString = <CString.copied text="entry" />
         val entry: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, fv, entryCString.ptr)
         LLVMPositionBuilderAtEnd(self.b, entry)
-        val srcVal: LLVMValueRef = llvmLoad(self.b, concreteTy, (try self.legacyValueParameter(function: fv, index: 0U64)), anon())
+        val srcVal: LLVMValueRef = llvmLoad(self.b, concreteTy, self.valueInputValue(input: (try self.glueValueParameter(function: fv, operation: <LlvmGlueOperation.ExistentialCopy />))), anon())
         try self.emitStructRetain(c: inout c, v: srcVal, ref: sourceRef)
         val cell: LLVMValueRef = (try self.rawbufAlloc(c: inout c, elemSize: LLVMSizeOf(concreteTy), cap: LLVMConstInt(self.i64ty, 1U64, 0I32)))
         llvmStore(self.b, srcVal, cell)
@@ -306,14 +303,11 @@ pub impl LlvmCtx {
     inout fn buildAnyDropThunk(c: inout Comp, sourceRef: U64, sidx: U64) -> Result[LLVMValueRef, CompileDiagnostic] {
         val concreteTy: LLVMTypeRef = (try self.llvmTypeOfRef(c: inout c, ref: sourceRef))
         val instRef: U64 = sourceRef
-        mut val ptys: Array[LLVMTypeRef] = []
-        ptys.append(self.ptrty)
-        val fty: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(ptys), 1U64, 0I32)
         mut val nm: Array[U8] = []
         appendBytes(into: inout nm, from: "pfvtdrop".bytes())
         appendU64Dec(into: inout nm, n: sidx)
         nm.append(0)
-        val fv: LLVMValueRef = (try self.declareLegacyValueFunction(name: arrayCPtr(nm), signature: fty, family: <LlvmLegacyConvention.ExistentialDrop />))
+        val fv: LLVMValueRef = (try self.declareGlueValueFunction(c: inout c, name: arrayCPtr(nm), operation: <LlvmGlueOperation.ExistentialDrop />))
         val savedBB: LLVMBasicBlockRef = LLVMGetInsertBlock(self.b)
         val savedFn: LLVMValueRef = self.curFn
         val entryCString = <CString.copied text="entry" />
@@ -321,7 +315,7 @@ pub impl LlvmCtx {
         LLVMPositionBuilderAtEnd(self.b, entry)
         self.curFn = fv
         if (try c.finalNeedsRelease(typeRef: instRef)) {
-            val v: LLVMValueRef = llvmLoad(self.b, concreteTy, (try self.legacyValueParameter(function: fv, index: 0U64)), anon())
+            val v: LLVMValueRef = llvmLoad(self.b, concreteTy, self.valueInputValue(input: (try self.glueValueParameter(function: fv, operation: <LlvmGlueOperation.ExistentialDrop />))), anon())
             try self.valueArc(c: inout c, v: v, typeRef: instRef, retain: false)
         }
         LLVMBuildRetVoid(self.b)
@@ -337,7 +331,6 @@ pub impl LlvmCtx {
     // emitBoxedFieldRelease's dec-then-cascade shape.
     inout fn emitAnyRelease(c: inout Comp, fat: LLVMValueRef) -> Result[(), CompileDiagnostic] {
         val cell: LLVMValueRef = LLVMBuildExtractValue(self.b, fat, 0U64, anon())
-        val vt: LLVMValueRef = LLVMBuildExtractValue(self.b, fat, 1U64, anon())
         val rc: LLVMValueRef = (try self.rawbufRelease(c: inout c, cell: cell))
         val isZero: LLVMValueRef = LLVMBuildICmp(self.b, llvmIntEq(), rc, LLVMConstInt(self.i64ty, 0U64, 0I32), anon())
         val nonNull: LLVMValueRef = LLVMBuildICmp(self.b, llvmIntNe(), cell, LLVMConstNull(self.ptrty), anon())
@@ -348,16 +341,7 @@ pub impl LlvmCtx {
         val contBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, contBBCString.ptr)
         LLVMBuildCondBr(self.b, doDestroy, freeBB, contBB)
         LLVMPositionBuilderAtEnd(self.b, freeBB)
-        mut val gepIdx: Array[LLVMValueRef] = []
-        gepIdx.append(LLVMConstInt(self.i64ty, 1U64, 0I32))
-        val slotPtr: LLVMValueRef = LLVMBuildGEP2(self.b, self.ptrty, vt, arrayCPtr(gepIdx), 1U64, anon())
-        val dropFn: LLVMValueRef = llvmLoad(self.b, self.ptrty, slotPtr, anon())
-        mut val ptys: Array[LLVMTypeRef] = []
-        ptys.append(self.ptrty)
-        val dty: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(ptys), 1U64, 0I32)
-        mut val av: Array[LLVMValueRef] = []
-        av.append(cell)
-        (try self.callLegacyValueFunction(signature: dty, function: dropFn, arguments: av, legacyIndirect: <Optional.Some v=<LlvmLegacyConvention.ExistentialDrop /> />))
+        (try self.callErasedGlueValueFunction(callee: (try self.prepareErasedGlueCallee(c: inout c, operation: <LlvmGlueOperation.ExistentialDrop />, fat: fat)), operation: <LlvmGlueOperation.ExistentialDrop />))
         try self.rawbufFree(c: inout c, cell: cell)
         LLVMBuildBr(self.b, contBB)
         LLVMPositionBuilderAtEnd(self.b, contBB)
@@ -398,15 +382,8 @@ pub impl LlvmCtx {
     // vtable }`. Used by privatizeAnyBox (the CoW split) — plain place->owner copies
     // CoW-share the box instead (copyAnyIfPlace).
     inout fn copyAnyValue(c: inout Comp, fat: LLVMValueRef) -> Result[LLVMValueRef, CompileDiagnostic] {
-        val dataPtr: LLVMValueRef = LLVMBuildExtractValue(self.b, fat, 0U64, anon())
-        val vtPtr: LLVMValueRef = LLVMBuildExtractValue(self.b, fat, 1U64, anon())
-        val copyFn: LLVMValueRef = llvmLoad(self.b, self.ptrty, vtPtr, anon())
-        mut val ptys: Array[LLVMTypeRef] = []
-        ptys.append(self.ptrty)
-        val fty: LLVMTypeRef = LLVMFunctionType(self.ptrty, arrayCPtr(ptys), 1U64, 0I32)
-        mut val av: Array[LLVMValueRef] = []
-        av.append(dataPtr)
-        val newData: LLVMValueRef = (try self.callLegacyValueFunction(signature: fty, function: copyFn, arguments: av, legacyIndirect: <Optional.Some v=<LlvmLegacyConvention.ExistentialCopy /> />))
+        val newData = (try self.callErasedGlueValueFunction(callee: (try self.prepareErasedGlueCallee(c: inout c, operation: <LlvmGlueOperation.ExistentialCopy />, fat: fat)), operation: <LlvmGlueOperation.ExistentialCopy />))
+        val vtPtr = LLVMBuildExtractValue(self.b, fat, 1U64, anon())
         mut val agg: LLVMValueRef = LLVMGetUndef(self.anyTy)
         agg = LLVMBuildInsertValue(self.b, agg, newData, 0U64, anon())
         agg = LLVMBuildInsertValue(self.b, agg, vtPtr, 1U64, anon())
