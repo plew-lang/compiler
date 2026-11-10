@@ -48,6 +48,35 @@ class ProgressEvents:
             self.last_sent = now
 
 
+class CompactTraceLog:
+    """Sample only recognized LLVM detail; never decide execution progress."""
+    def __init__(self, stream, interval=10):
+        self.stream = stream
+        self.interval = interval
+        self.last = float('-inf')
+        self.latest = None
+        self.lines = 0
+
+    def flush(self, now):
+        if self.latest is not None:
+            self.stream.write(f'[trace-log llvm-lines={self.lines}] '.encode() + self.latest)
+            self.stream.flush()
+            self.latest = None
+            self.last = now
+
+    def write(self, data, now, llvm_detail=False):
+        if llvm_detail:
+            self.lines += 1
+            self.latest = data
+            if now - self.last >= self.interval:
+                self.flush(now)
+        else:
+            # Preserve diagnostics in order, including bytes and missing newline.
+            self.flush(now)
+            self.stream.write(data)
+            self.stream.flush()
+
+
 def run(command, log_path=None, traced=False, idle_seconds=60, grace_seconds=1):
     identifier = uuid.uuid4().hex
     notifications = ProgressEvents(identifier, interval=min(1.0, idle_seconds / 4))
@@ -56,6 +85,8 @@ def run(command, log_path=None, traced=False, idle_seconds=60, grace_seconds=1):
     handlers = {}
     selector = selectors.DefaultSelector()
     log = None
+    compact_log = None
+    continued_line = False
     state = 'error'
     code = None
     error = None
@@ -70,12 +101,17 @@ def run(command, log_path=None, traced=False, idle_seconds=60, grace_seconds=1):
     for number in (signal.SIGINT, signal.SIGTERM):
         handlers[number] = signal.signal(number, cancel)
     try:
+        log_mode = os.environ.get('PLEW_TRACE_LOG', 'compact') if traced else 'full'
+        if log_mode not in ('compact', 'full'):
+            raise ValueError('PLEW_TRACE_LOG must be compact or full')
         if log_path is not None:
             log_path = Path(log_path)
             log_path.parent.mkdir(parents=True, exist_ok=True)
             log = log_path.open('wb')
+            if traced and log_mode == 'compact':
+                compact_log = CompactTraceLog(log)
         process = subprocess.Popen(command, stderr=subprocess.PIPE, start_new_session=True)
-        event(identifier, 'start', pid=process.pid, command=command[0])
+        event(identifier, 'start', pid=process.pid, command=command[0], trace_log_mode=log_mode if traced else None)
         selector.register(process.stderr, selectors.EVENT_READ)
         last = report = time.monotonic()
         state = 'running'
@@ -95,7 +131,7 @@ def run(command, log_path=None, traced=False, idle_seconds=60, grace_seconds=1):
                 if not data:
                     selector.unregister(key.fileobj)
                     continue
-                if log:
+                if log and compact_log is None:
                     log.write(data)
                     log.flush()
                 if not traced:
@@ -105,6 +141,14 @@ def run(command, log_path=None, traced=False, idle_seconds=60, grace_seconds=1):
                 lines = pending.split(b'\n')
                 pending = lines.pop()
                 for line in lines:
+                    if continued_line:
+                        if compact_log:
+                            compact_log.write(line + b'\n', now)
+                        if traced:
+                            sys.stderr.buffer.write(line + b'\n')
+                            sys.stderr.buffer.flush()
+                        continued_line = False
+                        continue
                     phase = line.startswith(b'[trace-phase]')
                     llvm = line.startswith((b'Running pass:', b'Running analysis:', b'Invalidating analysis:')) or (line.startswith(b'[') and b" Executing Pass '" in line)
                     nested = re.match(rb'\[trace-command log=(.+) events=(\d+)\]', line) if line.startswith(b'[trace-command ') else None
@@ -119,11 +163,20 @@ def run(command, log_path=None, traced=False, idle_seconds=60, grace_seconds=1):
                     if phase:
                         last_phase = line
                     llvm_detail = line.startswith(b'Clearing all analysis results for:') or (line.startswith(b'[') and any(marker in line for marker in (b" Freeing Pass '", b" Made Modification '")))
+                    if compact_log:
+                        compact_log.write(line + b'\n', now, llvm_detail=llvm or llvm_detail)
                     if traced and ((not phase and not llvm and not llvm_detail) or now - report >= 10):
                         print(f'[trace-command log={log_path} events={count}] {line.decode(errors="replace")}', file=sys.stderr, flush=True)
                         report = now
                 if len(pending) > 1024 * 1024:
+                    # An oversized unknown line is a diagnostic, not progress.
+                    if compact_log:
+                        compact_log.write(pending, now)
+                    if traced:
+                        sys.stderr.buffer.write(pending)
+                        sys.stderr.buffer.flush()
                     pending = b''
+                    continued_line = True
         code = process.wait()
         if stop_at is not None:
             # Wrappers below us receive TERM too and get time to reap their own groups.
@@ -133,6 +186,8 @@ def run(command, log_path=None, traced=False, idle_seconds=60, grace_seconds=1):
             signal_group(process, signal.SIGKILL)
         else:
             state = 'exited'
+        if pending and compact_log:
+            compact_log.write(pending, time.monotonic())
         if pending and traced:
             print(pending.decode(errors='replace'), file=sys.stderr)
     except BaseException as failure:
@@ -149,6 +204,8 @@ def run(command, log_path=None, traced=False, idle_seconds=60, grace_seconds=1):
                 error = f'{error or "cleanup"}: child did not exit'
         if process is not None and process.stderr:
             process.stderr.close()
+        if compact_log:
+            compact_log.flush(time.monotonic())
         if log:
             log.close()
         selector.close()
