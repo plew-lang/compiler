@@ -1,6 +1,6 @@
 ---
 id: com-h8b1
-status: in_progress
+status: closed
 deps: [com-9hny]
 links: []
 created: 2026-11-09T17:11:02Z
@@ -85,3 +85,9 @@ This is a source checkpoint, not W3 completion. Next complete sealed local/tempo
 [Current evidence](../../../evidence/performance-regression-history/value-passing-implementation/w3-transport/stable-home-checkpoint.json) retains source/candidates, the sealed fact-to-Ready-to-final-call path, view representation prerequisite repair, internal fixture setup corrections, executed controls and limits. Final receipt validation remains authoritative; whole guaranteed inputs use their existing entry/lane proof rather than duplicate receipts. The write-root projection accepts only operand/place arrays and local count, with no compiler/backend state.
 
 The initial W3 matched slowdown is not hidden: balanced four-sample medians on identical latest source are W1b7.849121/W2 8.032050/initial W3 8.395335/lean W3 7.929704 seconds. Source cleanup recovers its added cost but does not establish overall W1b self-compile improvement. The first native probe loses its boundary under whole-module optimization, so it proves no runtime benefit. Final normal suite and retained-boundary native/runtime/cost/fixed-point acceptance remain open. W2's valid view-call regression is reopened, not transferred out of the completion guarantee. No adoption or promotion.
+
+## Finite transport closure
+
+Closed for product fd8987e5 and final fixed-point candidate f92a897e32b316664b3b1a43d7014059604cbd6e86e5f884c729ae9e7d3596f7. Final CLI72, mode12, all12 entry/control groups, view raw/optimized24, native transfer structure and formal third-generation fixed point pass. Owned immutable/evaluation-temporary/nonboxed static-field homes and contracted incoming homes are certified. Globals without an admitted readiness provider, boxed/index/deref/cell/async-frame paths retain conservative snapshots/acquisition; do not count them as home-reuse implementations.
+
+[Final candidate evidence](../../../evidence/performance-regression-history/value-passing-implementation/w4-measurement/final-candidate/checkpoint.json) and [independent W2/W3 completion review](../../../evidence/performance-regression-history/value-passing-implementation/w4-measurement/final-candidate/w2-w3-completion-review.json) retain exact scope, candidate/input reconciliation, executed assertions and limits. Baseline failures remain explicit under their original owners; they are not passing coverage. W4 safety/adoption, com-ffar completion, main/seed/carrier promotion and original com-1hd3 recovery are separate and unrecognized by this closure.

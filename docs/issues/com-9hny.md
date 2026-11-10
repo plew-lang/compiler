@@ -1,6 +1,6 @@
 ---
 id: com-9hny
-status: open
+status: closed
 deps: [com-b1em]
 links: [com-xkcb]
 created: 2026-11-09T17:11:02Z
@@ -610,3 +610,9 @@ program/publication has fresh final-candidate gates; preparation is measured;
 final matrix and hashes are independently reconciled. No W2 blocker is moved
 into W3. W3 owns actual forwarding, W4 measured benefit/adoption, com-ffar final
 required gates. Close resolved W2 only.
+
+## Renewed closure after view representation repair
+
+The typed protocol and zero-cost outer-view representation repair are closed for product fd8987e5 and final fixed-point candidate f92a897e32b316664b3b1a43d7014059604cbd6e86e5f884c729ae9e7d3596f7. Final view12 raw/optimized24 and the final12 entry controls pass. The full normal private/physical/glue/publication controls are retained; its only later product-source delta is an explicit Optional local annotation, independently reviewed as meaning/control/ABI unchanged. Native malformed edge/Ready controls remain mandatory and preserved. No source compatibility check was weakened.
+
+[Final candidate evidence](../../../evidence/performance-regression-history/value-passing-implementation/w4-measurement/final-candidate/checkpoint.json) and [independent W2/W3 completion review](../../../evidence/performance-regression-history/value-passing-implementation/w4-measurement/final-candidate/w2-w3-completion-review.json) retain exact scope, candidate/input reconciliation, executed assertions and limits. Baseline failures remain explicit under their original owners; they are not passing coverage. W4 safety/adoption, com-ffar completion, main/seed/carrier promotion and original com-1hd3 recovery are separate and unrecognized by this closure.
