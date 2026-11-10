@@ -19,10 +19,13 @@ assert 'LLVMBuildGEP2' not in call,'typed fat consumer owns vtable slot extracti
 assert 'witnessTemplateForMember' in decl and 'witnessBodyValueAbi' in decl
 assert 'declareLegacyBodyFunction' not in decl and 'LLVMFunctionType' not in decl
 assert 'witnessBodyParameter' in bind,'Ready witness inputs must consume completed descriptor'
-for name in ['callLegacyValueFunction','legacyValueParameter','preparedLegacyParameter']:
+for name in ['preparedLegacyParameter']:
  assert 'LlvmValueConvention.Witness' in method(abi,name),name+' must reject completed witness bypass'
 for name in ['witnessTemplateForCall','witnessTemplateForMember']:
  body=method(any,name)
  assert body.index('cachedWitnessValueAbi')<body.index('Array['),'cache hit must precede vector materialization'
  assert 'existentialRequirementSignature(' not in body,'backend cannot re-resolve public signature'
 print('PASS completed public witness endpoint declaration/call/Ready and no raw reclassification')
+
+for name in ['callLegacyValueFunction','legacyValueParameter']:
+ assert 'fn '+name+'(' not in abi, name+' raw bypass must be absent'

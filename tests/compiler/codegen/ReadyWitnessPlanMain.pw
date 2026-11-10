@@ -310,8 +310,6 @@ fn witnessCallControl() {
     requireWitnessInternal(result: backend.callWitnessValueFunction(callee: callee, arguments: [input, recordInput]), mode: 25U64)
     backend.curFn = function
     requireWitnessInternal(result: backend.preparedLegacyParameter(parameterIndex: plan.parameterStart), mode: 26U64)
-    requireWitnessInternal(result: backend.legacyValueParameter(function: function, index: 0U64), mode: 27U64)
-    requireWitnessInternal(result: backend.callLegacyValueFunction(signature: plan.logicalSignature, function: function, arguments: [data, scalar, recordValue]), mode: 28U64)
     requireWitnessInternal(result: backend.witnessBodyParameter(function: function, bodyId: otherAdapterId, index: 0U64), mode: 29U64)
     requireWitnessInternal(result: backend.witnessBodyParameter(function: function, bodyId: adapterId, index: 3U64), mode: 30U64)
     LLVMDisposeBuilder(builder) LLVMDisposeModule(module) LLVMContextDispose(context)

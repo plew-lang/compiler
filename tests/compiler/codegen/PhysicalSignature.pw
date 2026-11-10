@@ -109,6 +109,11 @@ fn main() {
     if scope.validate(signature: plainSignature, plan: changed(plan: plainPlan, parameters: [badTransport])).isOk() { panic "corrupt transport accepted" }
     val legacy = <LlvmLogicalSignature convention=<LlvmValueConvention.Legacy family=<LlvmLegacyConvention.Closure /> /> parameters=[parameter(type: aggregate, semantic: 0U64, role: <LlvmParameterRole.Legacy index=0U64 />, mode: <LlvmParameterMode.Legacy />)] result=voidType resultTerm=0U64 />
     scope.validate(signature: legacy, plan: scope.plan(signature: legacy).unwrap()).unwrap()
+    val retired: Array[LlvmLegacyConvention] = [<LlvmLegacyConvention.Witness />, <LlvmLegacyConvention.AsyncEntry />, <LlvmLegacyConvention.AsyncResume />, <LlvmLegacyConvention.EnvironmentDrop />, <LlvmLegacyConvention.ExistentialCopy />, <LlvmLegacyConvention.ExistentialDrop />, <LlvmLegacyConvention.StructRetain />, <LlvmLegacyConvention.StructDrop />, <LlvmLegacyConvention.EnumRetain />, <LlvmLegacyConvention.EnumRelease />]
+    for family in retired {
+        if scope.plan(signature: <LlvmLogicalSignature convention=<LlvmValueConvention.Legacy family=family /> parameters=legacy.parameters result=voidType resultTerm=0U64 />).isOk() { panic "retired legacy family accepted" }
+    }
+
     if scope.plan(signature: <LlvmLogicalSignature convention=legacy.convention parameters=[plain] result=voidType resultTerm=0U64 />).isOk() { panic "legacy claims semantic role" }
     // Completed closure signatures retain an explicit environment, including
     // when there are no ordinary lanes or their native ptr types are equal.

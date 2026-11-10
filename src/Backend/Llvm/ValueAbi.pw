@@ -29,10 +29,10 @@ pub impl LlvmCtx {
         return <Result.Ok value=self.valueAbis.count() />
     }
 
-    // Explicit temporary boundary: opaque legacy lanes do not claim source
-    // roles/ownership. All physical classification still belongs to one planner.
+    // Only unsupported ordinary closure modes retain this declaration boundary.
+    // It preserves existing lazy construction without granting a raw call API.
     inout fn legacyValueAbi(signature: LLVMTypeRef, family: LlvmLegacyConvention, ownerBody: U64 = 0U64) -> Result[U64, CompileDiagnostic] {
-        if family.key() >= 3U64 { return <Result.Err error=valueAbiFailure(message: "async and ownership glue require completed descriptors") /> }
+        if family.key() != 1U64 { return <Result.Err error=valueAbiFailure(message: "only unsupported closure declarations retain a legacy descriptor") /> }
         val scope = (try self.prepareValueAbiScope())
         if !scope.ownsType(type: signature) || LLVMGetTypeKind(signature) != 9U32 {
             return <Result.Err error=valueAbiFailure(message: "legacy signature has a foreign context or is not a function") />
@@ -295,10 +295,6 @@ pub impl LlvmCtx {
         LLVMGlobalSetMetadata(function, LLVMGetMDKindIDInContext(self.ctx, name.ptr, 9U32), LLVMMDNodeInContext2(self.ctx, arrayCPtr(operands), 0U64))
     }
 
-    inout fn declareLegacyValueFunction(name: CPtr[U8], signature: LLVMTypeRef, family: LlvmLegacyConvention) -> Result[LLVMValueRef, CompileDiagnostic] {
-        val abiId = (try self.legacyValueAbi(signature: signature, family: family))
-        return self.declarePlannedValueFunction(name: name, abiId: abiId)
-    }
 
     inout fn declarePlannedValueFunction(name: CPtr[U8], abiId: U64) -> Result[LLVMValueRef, CompileDiagnostic] {
         if abiId == 0U64 || abiId > self.valueAbis.count() { return <Result.Err error=valueAbiFailure(message: "declaration descriptor is missing") /> }
@@ -341,36 +337,6 @@ pub impl LlvmCtx {
         return slot
     }
 
-    inout fn callLegacyValueFunction(signature: LLVMTypeRef, function: LLVMValueRef, arguments: Array[LLVMValueRef], legacyIndirect: Optional[LlvmLegacyConvention] = <Optional.None />) -> Result[LLVMValueRef, CompileDiagnostic] {
-        val handle = LLVMIsAFunction(function)
-        mut val abiId = 0U64
-        if handle != 0U64 {
-            abiId = self.valueAbiFunctions.getOr(key: handle, fallback: 0U64)
-            if abiId == 0U64 {
-                return <Result.Err error=<CompileDiagnostic location=<DiagnosticLocation.Line line=0I64 /> message="internal error: private call lacks a declared value ABI" /> />
-            }
-        } else {
-            val family = match legacyIndirect {
-                Optional.Some(v: val family) => { give family }
-                Optional.None => { return <Result.Err error=valueAbiFailure(message: "indirect call lacks an explicit completed or legacy convention") /> }
-            }
-            match family { LlvmLegacyConvention.Closure => { return <Result.Err error=valueAbiFailure(message: "ordinary indirect closure requires a completed callable descriptor") /> } LlvmLegacyConvention.Witness => { return <Result.Err error=valueAbiFailure(message: "indirect witness requires a completed endpoint descriptor") /> } _ => {} }
-            abiId = (try self.legacyValueAbi(signature: signature, family: family))
-        }
-        val abi = self.valueAbis[abiId - 1U64]
-        if abi.convention.key() == 0U64 {
-            return <Result.Err error=valueAbiFailure(message: "normal body requires typed inputs") />
-        } else {
-            match abi.convention { LlvmValueConvention.Closure => { return <Result.Err error=valueAbiFailure(message: "completed closure requires typed inputs") /> } LlvmValueConvention.Witness(targetType: _, traitIndex: _, slot: _) => { return <Result.Err error=valueAbiFailure(message: "completed witness requires typed inputs") /> } LlvmValueConvention.ProgramMain => { return <Result.Err error=valueAbiFailure(message: "program main requires its native entry boundary") /> } LlvmValueConvention.GlobalInitializer => { return <Result.Err error=valueAbiFailure(message: "global initializer requires typed inputs") /> } LlvmValueConvention.AsyncEntry => { return <Result.Err error=valueAbiFailure(message: "completed async entry requires typed inputs") /> } LlvmValueConvention.AsyncResume => { return <Result.Err error=valueAbiFailure(message: "completed async resume requires typed inputs") /> } LlvmValueConvention.OwnershipGlue(operation: _) => { return <Result.Err error=valueAbiFailure(message: "completed glue requires typed inputs") /> } LlvmValueConvention.Legacy(family: _) => {} LlvmValueConvention.Body => {} }
-        }
-        if plew_pointer_equal(abi.logicalSignature, signature) == 0I32 {
-            return <Result.Err error=<CompileDiagnostic location=<DiagnosticLocation.Line line=0I64 /> message="internal error: private call logical signature mismatch" /> />
-        }
-        if abi.parameterCount != arguments.count() {
-            return <Result.Err error=<CompileDiagnostic location=<DiagnosticLocation.Line line=0I64 /> message="internal error: private value ABI argument count mismatch" /> />
-        }
-        return self.emitPlannedValueCall(abiId: abiId, function: function, arguments: arguments)
-    }
 
     // Admitted typed calls and explicitly legacy entries share this physical
     // emitter. W2 retains the existing byval snapshot here.
@@ -473,7 +439,7 @@ pub impl LlvmCtx {
         val abiId = self.valueAbiFunctions.getOr(key: LLVMIsAFunction(self.curFn), fallback: 0U64)
         if abiId == 0U64 || abiId > self.valueAbis.count() { return <Result.Err error=valueAbiFailure(message: "raw parameter entry descriptor missing") /> }
         val abi = self.valueAbis[abiId - 1U64]
-        match abi.convention { LlvmValueConvention.Legacy(family: _) => {} LlvmValueConvention.ProgramMain => { return <Result.Err error=valueAbiFailure(message: "program main requires typed binding") /> } LlvmValueConvention.GlobalInitializer => { return <Result.Err error=valueAbiFailure(message: "global initializer requires typed binding") /> } LlvmValueConvention.AsyncEntry => { return <Result.Err error=valueAbiFailure(message: "completed async entry cannot use raw binding") /> } LlvmValueConvention.AsyncResume => { return <Result.Err error=valueAbiFailure(message: "completed async resume cannot use raw binding") /> } LlvmValueConvention.OwnershipGlue(operation: _) => { return <Result.Err error=valueAbiFailure(message: "completed glue cannot use raw binding") /> } LlvmValueConvention.Closure => { return <Result.Err error=valueAbiFailure(message: "completed closure cannot use raw prepared binding") /> } LlvmValueConvention.Witness(targetType: _, traitIndex: _, slot: _) => { return <Result.Err error=valueAbiFailure(message: "completed witness cannot use raw prepared binding") /> } LlvmValueConvention.Body => { return <Result.Err error=valueAbiFailure(message: "normal body cannot use raw prepared binding") /> } }
+        match abi.convention { LlvmValueConvention.Legacy(family: val family) => { if family.key() != 1U64 { return <Result.Err error=valueAbiFailure(message: "legacy parameter requires the unsupported closure convention") /> } } LlvmValueConvention.ProgramMain => { return <Result.Err error=valueAbiFailure(message: "program main requires typed binding") /> } LlvmValueConvention.GlobalInitializer => { return <Result.Err error=valueAbiFailure(message: "global initializer requires typed binding") /> } LlvmValueConvention.AsyncEntry => { return <Result.Err error=valueAbiFailure(message: "completed async entry cannot use raw binding") /> } LlvmValueConvention.AsyncResume => { return <Result.Err error=valueAbiFailure(message: "completed async resume cannot use raw binding") /> } LlvmValueConvention.OwnershipGlue(operation: _) => { return <Result.Err error=valueAbiFailure(message: "completed glue cannot use raw binding") /> } LlvmValueConvention.Closure => { return <Result.Err error=valueAbiFailure(message: "completed closure cannot use raw prepared binding") /> } LlvmValueConvention.Witness(targetType: _, traitIndex: _, slot: _) => { return <Result.Err error=valueAbiFailure(message: "completed witness cannot use raw prepared binding") /> } LlvmValueConvention.Body => { return <Result.Err error=valueAbiFailure(message: "normal body cannot use raw prepared binding") /> } }
         if parameterIndex < abi.parameterStart || parameterIndex - abi.parameterStart >= abi.parameterCount { return <Result.Err error=valueAbiFailure(message: "raw parameter belongs to a different entry") /> }
         val parameter = self.valueAbiParameters[parameterIndex]
         return <Result.Ok value=match parameter.passing {
@@ -483,22 +449,4 @@ pub impl LlvmCtx {
         } />
     }
 
-    inout fn legacyValueParameter(function: LLVMValueRef, index: U64) -> Result[LLVMValueRef, CompileDiagnostic] {
-        val handle = LLVMGetNamedFunction(self.mod, LLVMGetValueName(function))
-        val abiId = self.valueAbiFunctions.getOr(key: handle, fallback: 0U64)
-        if abiId == 0U64 {
-            return <Result.Err error=<CompileDiagnostic location=<DiagnosticLocation.Line line=0I64 /> message="internal error: private value ABI parameter lacks declaration" /> />
-        }
-        val abi = self.valueAbis[abiId - 1U64]
-        match abi.convention { LlvmValueConvention.Legacy(family: _) => {} LlvmValueConvention.ProgramMain => { return <Result.Err error=valueAbiFailure(message: "program main requires typed binding") /> } LlvmValueConvention.GlobalInitializer => { return <Result.Err error=valueAbiFailure(message: "global initializer requires typed binding") /> } LlvmValueConvention.AsyncEntry => { return <Result.Err error=valueAbiFailure(message: "completed async entry cannot use raw binding") /> } LlvmValueConvention.AsyncResume => { return <Result.Err error=valueAbiFailure(message: "completed async resume cannot use raw binding") /> } LlvmValueConvention.OwnershipGlue(operation: _) => { return <Result.Err error=valueAbiFailure(message: "completed glue cannot use raw binding") /> } LlvmValueConvention.Closure => { return <Result.Err error=valueAbiFailure(message: "completed closure cannot use raw compatibility binding") /> } LlvmValueConvention.Witness(targetType: _, traitIndex: _, slot: _) => { return <Result.Err error=valueAbiFailure(message: "completed witness cannot use raw compatibility binding") /> } LlvmValueConvention.Body => { return <Result.Err error=valueAbiFailure(message: "normal parameter cannot use raw compatibility binding") /> } }
-        if index >= abi.parameterCount {
-            return <Result.Err error=<CompileDiagnostic location=<DiagnosticLocation.Line line=0I64 /> message="internal error: private value ABI parameter index out of range" /> />
-        }
-        val parameter = self.valueAbiParameters[abi.parameterStart + index]
-        match parameter.passing {
-            LlvmValuePassing.Omitted => { return <Result.Ok value=LLVMGetUndef(parameter.type) /> }
-            LlvmValuePassing.Direct => { return <Result.Ok value=LLVMGetParam(function, parameter.physicalIndex) /> }
-            LlvmValuePassing.Indirect => { return <Result.Ok value=llvmLoad(self.b, parameter.type, LLVMGetParam(function, parameter.physicalIndex), anon()) /> }
-        }
-    }
 }

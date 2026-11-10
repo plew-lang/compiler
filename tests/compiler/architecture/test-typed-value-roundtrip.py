@@ -18,8 +18,9 @@ assert 'normalBodyParameter(' in binding, 'normal binding does not consume typed
 print('PASS normal typed call/binding round trip has no raw compatibility fallback')
 
 abi=(root/'src/Backend/Llvm/ValueAbi.pw').read_text()
-assert 'normal body requires typed inputs' in abi
-assert 'normal parameter cannot use raw compatibility binding' in abi
+assert 'fn callLegacyValueFunction(' not in abi
+assert 'fn legacyValueParameter(' not in abi
+assert 'normal body cannot use raw prepared binding' in abi
 adapters=[]
 for path in (root/'src/Backend/Llvm').glob('*.pw'):
  for line in path.read_text().splitlines():

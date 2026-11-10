@@ -1,6 +1,6 @@
 ---
 id: com-9hny
-status: in_progress
+status: closed
 deps: [com-b1em]
 links: [com-xkcb]
 created: 2026-11-09T17:11:02Z
@@ -549,3 +549,38 @@ this boundary in this order:
    malformed inputs, final readers, source/control hashes and raw/optimized
    controls, then obtain independent source/evidence review. W3/W4 and final
    com-ffar gates remain separate.
+
+## Resolution: W2 Complete
+
+[Final protocol/cost evidence](../../../evidence/performance-regression-history/value-passing-implementation/w2-protocol/completed-protocol-reconciliation.json)
+and [independent acceptance](../../../evidence/performance-regression-history/value-passing-implementation/w2-protocol/completed-protocol-review.json)
+reconcile the whole W2 guarantee. The180 original sites map to completed
+consumers, removed paths, explicit native boundaries or unsupported closure
+declarations. Dead raw call/declaration/parameter APIs are absent; builder,
+representation admission and live prepared reader reject all retired families.
+Retired enum values remain only as malformed-family rejection identities.
+
+Build `20261110T070300-build-b770c5`, product186 and ten immutable final gates
+pass. Five retained private harnesses, CLI66, unsupported closure12,
+raw/optimized ABI and fresh C/global/requested/host controls succeed. One
+post-build internal architecture assertion migrated from a deleted API message
+to API absence plus live-reader refusal; final architecture15 pass. Independent
+review reconciled4465 hash references and replayed all five harnesses.
+
+Diagnostic-only snapshot measurements record9393 descriptors/17390 lanes and
+7803 local plans for compiler source. Plan/save times are nested; common local
+admission excludes async-specific preparation. Repeating source calls1→16
+leaves descriptors65/lanes95/local plans49 unchanged. Closure/witness owner
+clones share lane pools. Row counts and whole-child peak RSS are reported;
+RSS is not isolated metadata bytes. Noninstrumented balanced same-source3-pair
+medians: W1b7.884978s, W2 7.963224s (delta0.078246s). This is preparation
+comparison, not formal self-host or statistically established regression. No
+copy reduction/speedup is claimed. Diagnostic setup failures and verified
+terminal-log compression are separated from product RED.
+
+The embedded inventory's review-time unresolved list is historical: native
+boundaries are assigned to existing controls/unchanged boundary source;
+program/publication has fresh final-candidate gates; preparation is measured;
+final matrix and hashes are independently reconciled. No W2 blocker is moved
+into W3. W3 owns actual forwarding, W4 measured benefit/adoption, com-ffar final
+required gates. Close resolved W2 only.

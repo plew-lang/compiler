@@ -315,6 +315,11 @@ if LLVM_CONFIG="$LC" python3 -B ./tests/compiler/codegen/test-source-entry-abi.p
 else
     fail=$((fail + 1)); failed="$failed source-entry-abi"
 fi
+if python3 -B ./tests/compiler/architecture/test-retired-value-abi.py; then
+    pass=$((pass + 1))
+else
+    fail=$((fail + 1)); failed="$failed retired-value-abi"
+fi
 if python3 -B ./tests/compiler/architecture/test-completed-program-protocol.py; then
     pass=$((pass + 1))
 else

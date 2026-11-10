@@ -40,7 +40,6 @@ fn main() {
     requireInternal(result: backend.programNativeAbi(function: function, bodyId: bodyId, main: true))
     requireInternal(result: backend.programNativeAbi(function: function, bodyId: bodyId + 1U64, main: false))
     requireInternal(result: backend.programValueParameter(function: function, bodyId: bodyId, index: 0U64))
-    requireInternal(result: backend.callLegacyValueFunction(signature: signature, function: function, arguments: []))
     val unregistered = LLVMAddFunction(module, name.ptr, signature)
     backend.curFn = unregistered
     requireInternal(result: backend.prepareBodyLocalPlan(c: inout compiler, canonical: canonical, parameterCount: 0U64))
@@ -76,9 +75,7 @@ fn main() {
     val abi = backend.saveValueAbi(signature: <LlvmLogicalSignature convention=<LlvmValueConvention.Body /> parameters=[] result=backend.voidty resultTerm=0U64 />, ownerBody: bodyId)
     val normalAbi = abi.unwrap()
     val normalFunction = backend.declarePlannedBodyFunction(name: name.ptr, abiId: normalAbi, bodyId: bodyId).unwrap()
-    requireInternal(result: backend.callLegacyValueFunction(signature: signature, function: normalFunction, arguments: []))
     requireInternal(result: backend.callBodyValueFunction(function: normalFunction, bodyId: bodyId + 1U64, inputs: backend.bodyInputScope(bodyId: bodyId, signature: signature).unwrap(), arguments: []))
-    requireInternal(result: backend.legacyValueParameter(function: normalFunction, index: 0U64))
     // A native C entry supplies converted values; only the shared Body consumer
     // may admit them. Equal native types do not establish source correspondence.
     val lane = <LlvmLogicalParameter type=backend.i64ty semanticType=11U64 role=<LlvmParameterRole.Ordinary index=0U64 /> mode=<LlvmParameterMode.Borrow /> />
@@ -103,7 +100,6 @@ fn main() {
     requireInternal(result: backend.callBodyValueFunction(function: convertedTarget, bodyId: bodyId, inputs: inputScope, arguments: [input]))
     requireInternal(result: backend.callBodyValueFunction(function: convertedTarget, bodyId: otherBodyId, inputs: backend.bodyInputScope(bodyId: bodyId, signature: convertedSignature).unwrap(), arguments: [input]))
     requireInternal(result: backend.callBodyValueFunction(function: convertedTarget, bodyId: otherBodyId, inputs: inputScope, arguments: [<LlvmValueInput lane=lane index=0U64 carrier=<LlvmValueCarrier.Value value=LLVMGetParam(foreignEntry, 0U64) /> />]))
-    requireInternal(result: backend.callLegacyValueFunction(signature: convertedSignature, function: convertedTarget, arguments: [LLVMGetParam(entry, 0U64)]))
     LLVMBuildRetVoid(builder)
     val mainName = compiler.internBytes(s: "main")
     val mainIndex = compiler.arena.firstFunctionNamed(nameId: mainName.nameId)

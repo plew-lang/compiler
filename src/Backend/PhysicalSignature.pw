@@ -345,7 +345,7 @@ pub impl LlvmSignatureScope {
             LlvmValueConvention.OwnershipGlue(operation: val operation) => {
                 if signature.parameters.count() != 1U64 || signature.resultTerm != 0U64 || resultVoid != (operation.key() != 2U64) || (!resultVoid && LLVMGetTypeKind(signature.result) != 12U32) { return <Result.Err error=signatureFailure(message: "ownership glue result/count contract mismatch") /> }
             }
-            LlvmValueConvention.Legacy(family: _) => {}
+            LlvmValueConvention.Legacy(family: val family) => { if family.key() != 1U64 { return <Result.Err error=signatureFailure(message: "only the unsupported closure may use a legacy signature") /> } }
         }
         mut val ordinary = 0U64
         mut val index = 0U64

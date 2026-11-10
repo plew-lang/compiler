@@ -104,7 +104,7 @@ fn asyncPlanControl(mode: U64) {
     val resumeParameters: Array[LLVMTypeRef] = [if mode == 7U64 { give backend.i64ty } else { give backend.ptrty }]
     val resumeSignature = LLVMFunctionType(backend.voidty, arrayCPtr(resumeParameters), 1U64, 0I32)
     val resumeOwner = if mode == 6U64 { give otherBodyId } else { give bodyId }
-    val resumeAbiResult = if mode == 16U64 { give backend.legacyValueAbi(signature: resumeSignature, family: <LlvmLegacyConvention.Witness />, ownerBody: bodyId) }
+    val resumeAbiResult = if mode == 16U64 { give backend.legacyValueAbi(signature: resumeSignature, family: <LlvmLegacyConvention.Closure />, ownerBody: bodyId) }
         else if mode == 0U64 || mode == 1U64 || mode == 2U64 || mode == 21U64 { give backend.asyncBodyValueAbi(c: inout compiler, bodyId: bodyId, resume: true) }
         else { give backend.saveValueAbi(signature: <LlvmLogicalSignature convention=<LlvmValueConvention.AsyncResume /> parameters=[<LlvmLogicalParameter type=resumeParameters[0U64] semanticType=0U64 role=<LlvmParameterRole.Frame bodyId=if mode == 33U64 { give otherBodyId } else { give resumeOwner } /> mode=<LlvmParameterMode.Move /> />] result=backend.voidty resultTerm=0U64 />, ownerBody: resumeOwner) }
     if mode == 7U64 {
@@ -188,8 +188,6 @@ fn asyncPlanControl(mode: U64) {
             requireAsyncInternal(result: backend.callAsyncEntryValueFunction(function: resume, bodyId: bodyId, arguments: [input]), mode: 45U64)
             requireAsyncInternal(result: backend.asyncValueParameter(function: entryFunction, bodyId: otherBodyId, resume: false, index: 0U64), mode: 46U64)
             requireAsyncInternal(result: backend.preparedLegacyParameter(parameterIndex: entryPlan.parameterStart), mode: 47U64)
-            requireAsyncInternal(result: backend.legacyValueParameter(function: entryFunction, index: 0U64), mode: 48U64)
-            requireAsyncInternal(result: backend.callLegacyValueFunction(signature: entryPlan.logicalSignature, function: entryFunction, arguments: [backend.valueInputValue(input: input)]), mode: 49U64)
             val frame = requireAsyncOk(result: backend.asyncFrameAlloc(c: inout compiler, activationId: activationId), stage: "typed frame allocation", mode: mode)
             requireAsyncOk(result: backend.callAsyncResumeValueFunction(activationId: activationId, frame: frame), stage: "typed first resume", mode: mode)
             requireAsyncInternal(result: backend.callAsyncResumeValueFunction(activationId: activationId, frame: <LlvmAsyncFrameInput activationId=activationId + 1U64 value=frame.value />), mode: 50U64)
@@ -200,8 +198,6 @@ fn asyncPlanControl(mode: U64) {
             requireAsyncInternal(result: backend.callTypedBodyValueFunction(function: resume, bodyId: bodyId, inputs: requireAsyncOk(result: backend.bodyInputScope(bodyId: bodyId, signature: resumePlan.logicalSignature), stage: "resume input scope", mode: mode), arguments: [wrongFrame], conventionKey: 16U64), mode: 52U64)
             requireAsyncInternal(result: backend.asyncValueParameter(function: resume, bodyId: otherBodyId, resume: true, index: 0U64), mode: 53U64)
             requireAsyncInternal(result: backend.asyncValueParameter(function: resume, bodyId: bodyId, resume: true, index: 1U64), mode: 54U64)
-            requireAsyncInternal(result: backend.legacyValueParameter(function: resume, index: 0U64), mode: 55U64)
-            requireAsyncInternal(result: backend.callLegacyValueFunction(signature: resumePlan.logicalSignature, function: resume, arguments: [frame.value]), mode: 56U64)
             requireAsyncInternal(result: backend.legacyValueAbi(signature: entryPlan.logicalSignature, family: <LlvmLegacyConvention.AsyncEntry />), mode: 57U64)
             requireAsyncInternal(result: backend.legacyValueAbi(signature: resumePlan.logicalSignature, family: <LlvmLegacyConvention.AsyncResume />), mode: 58U64)
             LLVMBuildRet(builder, LLVMConstNull(backend.ptrty))

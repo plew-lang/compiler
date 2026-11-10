@@ -58,7 +58,6 @@ fn main() {
         if bound.lane.semanticType != term || bound.index != 0U64 { panic "glue binding lost logical lane" }
         if operation.key() == 2U64 { LLVMBuildRet(builder, backend.valueInputValue(input: bound)) } else { LLVMBuildRetVoid(builder) }
         glueInternal(result: backend.preparedLegacyParameter(parameterIndex: abi.parameterStart))
-        glueInternal(result: backend.legacyValueParameter(function: function, index: 0U64))
         backend.curFn = caller LLVMPositionBuilderAtEnd(builder, callerBlock)
         val value = LLVMGetUndef(bound.lane.type)
         val input = glueOk(result: backend.glueValueInput(c: inout compiler, operation: operation, typeRef: term, carrier: <LlvmValueCarrier.Value value=value />))
@@ -74,7 +73,6 @@ fn main() {
             repeat += 1U64
         }
         if backend.valueAbis.count() != descriptors || backend.valueAbiParameters.count() != rows { panic "glue call rebuilt physical plans" }
-        glueInternal(result: backend.callLegacyValueFunction(signature: abi.logicalSignature, function: function, arguments: [value]))
         glueInternal(result: backend.callGlueValueFunction(function: function, operation: if operation.key() == 1U64 { give <LlvmGlueOperation.ExistentialDrop /> } else { give <LlvmGlueOperation.EnvironmentDrop /> }, input: input))
         glueInternal(result: backend.glueValueParameter(function: function, operation: operation, typeRef: term, bodyId: 1U64))
         mut val malformed = 0U64

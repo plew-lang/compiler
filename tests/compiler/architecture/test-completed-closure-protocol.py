@@ -37,6 +37,9 @@ assert 'closureValueAbis.getOr' in method(abi, 'closureValueAbi'), 'one physical
 callee = method(abi, 'callClosureValueFunction')
 assert 'validateCallableInputs' in callee and 'validateInput' in callee
 assert callee.count('LLVMBuildExtractValue') == 2, 'function/env must be extracted together after fat closure admission'
-for name in ['callLegacyValueFunction', 'legacyValueParameter', 'preparedLegacyParameter']:
+for name in ['preparedLegacyParameter']:
     assert 'LlvmValueConvention.Closure' in method(abi, name), name + ' must reject completed closure raw bypass'
 print('PASS completed closure declaration/call/binding ownership and no raw reclassification')
+
+for name in ['callLegacyValueFunction','legacyValueParameter']:
+ assert 'fn '+name+'(' not in abi, name+' raw bypass must be absent'
