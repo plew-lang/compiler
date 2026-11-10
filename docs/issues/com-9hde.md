@@ -12,6 +12,49 @@ tags: [frontend, generics, verification]
 ---
 # Parse and lower complete trait-instance views in type and value syntax
 
+## Current fixture migration obligations
+
+The optimization's full normal run20261110T100035-test-cad4b5 and fixed W1b
+baseline expose remaining fixture consumers of this ticket's adopted contracts.
+Do not count a comment-only correction ticket as their behavioral repair owner.
+[Finite failure records](../../../evidence/performance-regression-history/value-passing-implementation/w4-measurement/additional-source-failures.json)
+and [re-export baseline](../../../evidence/performance-regression-history/value-passing-implementation/w4-measurement/part-reexport-baseline.json)
+retain executions, not new optimization regressions:
+
+- syntax_expression_provenance_spans must exercise the current SourceSelection
+  representation rather than skip assertions through an obsolete ExtMethod arm;
+  syntax_file_direct_top_level_forms must account for the independent Extension
+  root while retaining all original per-declaration assertions.
+- syntax_lower_func_decl must perform real module-binding admission before
+  direct lowering, retaining its signature/default/body assertions.
+- generic_view_source_backend must retain its generic view/backend control with
+  distinct trait/extension bindings. view_source_kind_collision's old positive
+  is invalid under the adopted collision rule; preserve actual collision
+  rejection and distinct-binding controls instead.
+- part/trait_owner_reexport_generic still spells incomplete `value#Convert`
+  despite its `Convert[String]` bound. Migrate to the complete selected view,
+  preserving re-export/generic owner identity and output10. met-fvzp owns only
+  its comment correction, not this executable migration.
+
+Valid associated path/precedence/explicit Self regressions are separately
+reopened under com-9clj; fixing fixture premises must not hide them.
+
+The same [all-failure comparison](../../../evidence/performance-regression-history/value-passing-implementation/w4-measurement/normal-rejection-baselines.json)
+also preserves stale negative consumers of the adopted binding/view contracts:
+duplicate_type_name now reports the shared module-binding collision;
+assoc_type_projection_parameterized_trait_omitted and
+assoc_type_projection_source_not_conform reject at view formation rather than
+late projection. Retain their precise Source reasons at the canonical owner.
+trait_subject_arity_confer currently hits an earlier same-name collision; give
+its unrelated declarations distinct names before testing the original missing
+where proof. Do not replace its original guarantee with a collision assertion.
+The namespace_import_cycle, namespace_reexport_cycle and
+namespace_self_import_cycle goldens still demand `circular import:` while the
+canonical loader reports `module use graph contains a cycle (spec/15)`; retain
+the actual cycle controls while migrating those reason consumers.
+extension_private_method and the two accepted cross-module extension identity
+negatives remain met-bejv's existing source/oracle repair, not this migration.
+
 Contract: [spec09](../../../spec/spec/02-type-system/09-extensions.md) method-source selection and complete trait-instance views; [Types and Evidence](../design/types-and-evidence.md) sections2-4 and [Name Lookup](../design/name-lookup.md) section5. A selector means canonical trait owner plus every positional argument; no argument omission even with one conformance. Memberless views and associated projections are distinct. Extension sets remain separate from the single complete trait selector; unrelated base members remain visible under the existing rules.
 
 Evidence: [executed investigation](../../../evidence/rejection-domains/diagnostic-domain-implementation/trait-view-instance-state.json), source8a2ab6c6, exact Syntax8c89204230c3d865ea95a03382c3fd213731e1de. Sixteen check inputs and five JIT/five AOT executions were independently reviewed. The carrier has experimental cycle Source annotations unrelated to selection; it is not an adopted final candidate. Initial direct-requirement declaration overlap is excluded as a view control; wrong-instance refusal is not validated by failures that also reject matching calls.

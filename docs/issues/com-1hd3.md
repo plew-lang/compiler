@@ -12,6 +12,18 @@ tags: [frontend, generics, verification]
 ---
 # Connect retained free signatures to call and body descriptors
 
+## Internal completion fixture consumer
+
+The full normal run20261110T100035-test-cad4b5 rejects
+function_completion_type_identity at its removed `sameFuncSelector` call.
+Fixed W1b and lean both reproduce this obsolete internal API consumer on current
+source. Preserve its finite function completion/parameter/result identity
+assertions while migrating to the canonical comparison API; do not expose a
+compatibility helper or replace the assertion with unconditional success.
+com-lm8j mentions this fixture for optional prose only and does not repair its
+executable consumer. This is an explicit original signature-work follow-up,
+not a value-ABI optimization regression or a passing normal case.
+
 ## Guarantee and Finite Work
 
 Registered free-function annotations must reach selected-call ABI types and BodySignature through exact saved parameter/result slots and the original constraints-bearing InstanceEnvironment. The original defect was that readAdmittedSignatureRoot had no production caller while groundedSelectedCalleeReturn/ParameterTypes and recordFinalCallableSignature independently grounded declaration terms. The implementation below replaces that competing path for registered free signatures.

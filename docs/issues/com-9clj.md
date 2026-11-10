@@ -1,6 +1,6 @@
 ---
 id: com-9clj
-status: closed
+status: open
 deps: []
 links: []
 created: 2026-10-25T00:44:22Z
@@ -40,3 +40,20 @@ Independent completion review required source_provided_path_conditions. Fresh52a
 ## Outcome
 
 Resolved for the finite nondefault bare trait-subject associated witness family at4fa816d5, candidate803550d6. Independent body_receiver_completion_review verified the producer-to-final-consumer closure,306 focused inputs,27 native/5reject success, whole sourcecheck, F1run6 fifteen groups/301 unchanged inputs and9 receipt references. The meta receipt associated-witness-producer-repair.json is authoritative. Default forwarding remains required com-3qne; namespace-helper inheritance, Self.namespace and extension-associated production are not certified. No final G2, main, seed or carrier promotion.
+
+## Reopened: current source regression controls
+
+The W3 full normal run20261110T100035-test-cad4b5 found that
+trait_subject_associated_paths, trait_subject_associated_precedence and
+trait_subject_associated_self_parameter are rejected. Independent comparison
+reproduces each rejection with fixed W1b and lean on identical current source.
+These are valid path/precedence/explicit Self controls within this ticket's
+previously certified nondefault bare family, not new namespace-helper or default
+forwarding features. No responsible regression commit is established.
+
+[Finite source review and executions](../../../evidence/performance-regression-history/value-passing-implementation/w4-measurement/additional-source-failures.json)
+retain exact diagnostics and limits. Re-establish the saved producer-to-reader
+guarantee and all three source controls before reclosure, including the prior
+ambiguity/identity negatives. Parent com-072n is reopened through its existing
+dependency. This original phase-three regression is not attributed to the new
+value ABI and is not silently counted as passing optimization coverage.

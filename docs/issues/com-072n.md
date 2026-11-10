@@ -1,6 +1,6 @@
 ---
 id: com-072n
-status: closed
+status: open
 deps: [com-i20o, com-9p68, com-9clj]
 links: []
 created: 2026-10-24T20:09:24Z
@@ -11,6 +11,11 @@ parent: met-si6j
 tags: [validation, phase3, regression]
 ---
 # Repair provided member receiver declaration identity
+
+Current completion is reopened because its required child com-9clj has three
+valid associated path/precedence/explicit Self regressions on current source.
+See that child's finite baseline evidence and renewed exit conditions; the
+earlier child closure is historical evidence, not current aggregate completion.
 
 
 ## Boundary and Exit
