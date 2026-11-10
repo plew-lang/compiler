@@ -44,4 +44,13 @@ Source/evidence independent review identified an untraced mode boundary and
 finite tests, all addressed. Speed improvement was not measured or promised.
 
 [Retained evidence and limits](../../../evidence/compact-trace-logging/README.md).
-No full compiler rebuild, formal fixed point, whole-suite or promotion claim.
+No formal fixed point, whole-suite or promotion claim.
+
+## Requested Real-Build Follow-Up
+
+The same input carrier, unchanged product/dependencies and LLVM rebuilt under
+compact logging in run20261110T142828-build-e389b7: passed/exit0/input unchanged.
+Total400.307606seconds versus413.680391seconds in the prior full-log build;
+compile worker390.299667 versus403.500362seconds. Separate-time single samples
+do not establish speedup causality. Actual log storage371,199,943→684,889bytes,
+and the generated compiler SHA is identical. [Comparison and scope](../../../evidence/compact-trace-logging/build-comparison.json).
