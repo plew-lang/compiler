@@ -1,6 +1,6 @@
 ---
 id: met-tv4h
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-11-10T22:51:00Z
@@ -63,3 +63,31 @@ source/native input invariance. Original LLVM verifier/target/layout rejection
 controls are executed, not inferred from parser rejection. Forty supervisor/unit
 checks pass with existing timeout/cancellation/reaping/diagnostic assertions.
 Measured standard build and final independent candidate review remain required.
+
+## Outcome and closure
+
+Resolved for the scoped native object path in95dab522. The standard measured
+build20261110T230220-build-873ce3 completes in246.570621s versus the prior
+same-source compact-retention build400.307606s (one run each, different times).
+Build helpers match; carrier/native differ. The compiler object SHA cb3f46eec…
+exactly matches the previous normal object, and final fresh candidate raw LLVM
+and runtime agree. Its same-source warm/three-pair control is old7.935486s versus
+new7.900756s with8 identical LLVM outputs; no significant speed gain is claimed.
+
+Full compiler-scale IR/shared, O2 and codegen progress is observed through real
+callbacks/checkpoints, with47/28/111 intermediate lines and no LLVM detail rows.
+All scoped GREEN/prepare/build/final/throughput gates preserve immutable inputs.
+The final candidate is bin/plewc-light-progress-built-20261111, SHA
+9cd0658f7b5d165cff06fa23d07c56ffbb704aaf92379fbd7a122f09b8020df6.
+
+[Decisive evidence and operating limits](../../../evidence/native-llvm-progress/README.md).
+[Independent final review](../../../evidence/native-llvm-progress/final-review.json)
+accepts this scope; its only confirmed test-environment issue was fixed and
+exercised under the formerly failing ambient env. Source/observation lifetime,
+pipeline preservation, verifier/failure paths, repeated request state, watchdog
+controls, fresh candidate and measurements are independently reconciled.
+
+This is not full-suite, sanitizer-runtime/LSan, distribution, formal new fixed
+point, main/seed or adopted-carrier certification. External text-IR LLVM tools
+keep their prior monitoring. A single silent long operation can still time out.
+No heartbeat/deadline relaxation or language-semantic workaround was introduced.
