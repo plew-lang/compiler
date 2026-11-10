@@ -1,6 +1,6 @@
 ---
 id: met-vd0b
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-11-10T16:16:17Z
@@ -36,3 +36,28 @@ Scenarios/deliverables:
   or change normal defaults, source, seed, main or adopted carrier.
 - Independent neutral review reconciles recipe, assertions and evidence. No
   artificial RED, full-suite/sanitizer/bootstrap or compiler adoption claim.
+
+## Outcome
+
+Investigated. Same-worker supervised wall is off225.811s, null459.035s,
+pipe460.249s. Producer plus null-write path adds233.224s, of which machine/object
+stage accounts for221.046s; child system CPU rises from1.948s to201.194s.
+Null→pipe wall is only+1.214s on these one-run samples, but combined child CPU
+rises about23.289s, so downstream work is not zero. All3 objects are byte-identical
+(SHA9d772888…),315616 legacy observer completions agree, both IR stages and machine
+stage complete. Tiny controls and both frozen-input gates pass with exit0.
+
+[Recipe, exact results and limitations](../../../evidence/llvm-trace-cost/README.md).
+The opportunity is eliminating per-pass detail generation/writing while retaining
+lightweight real progress. Storage compaction alone cannot do that. Added common
+observers also appear in detailed trace, so this difference is not a production
+build speedup or a subtractable amount from the previous400s build. Observer
+cost, fixed-order/thermal effects and pure formatting/syscall/parser costs are
+not isolated. IR stages use boundaries here, not complete per-pass progress.
+No production settings/source, main/seed/carrier were changed.
+
+Closure reason: investigated. Independent neutral review rechecked all input/log
+receipts,6 object outputs, stage timings/counts and statuses; no confirmed contract
+violation or required unresolved check remains. The review supports the bounded
+attribution and explicitly retains the nonzero downstream CPU and scope limits.
+[Final review](../../../evidence/llvm-trace-cost/final-review.json).
