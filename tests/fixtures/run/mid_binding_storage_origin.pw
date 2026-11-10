@@ -28,6 +28,7 @@ fn main() {
         if !local.sourceBinding.isUnproved() {
             val reader = compiler.preparedBindingStorageSource(origin: local.sourceBinding, sourceFunction: owner).unwrap()
             val fact = reader.bindingStorageFact(origin: local.sourceBinding, declarationTarget: local.sourceNameStart).unwrap()
+            if local.homeStability.key() != (if fact.isMutable { give 0U64 } else { give 1U64 }) { panic("sealed binding stability was not retained") }
             if fact.isMutable != (authored == 1U64) { panic("binding storage origin selected wrong row") }
             mut val indexed = <SourceBindingStorageIndex.empty session=compiler.sourceFactSession() />
             reader.appendBindingStorageOrigins(into: inout indexed).unwrap()
@@ -43,6 +44,7 @@ fn main() {
     while index < canonical.locals.len {
         val local = compiler.mid.locals[canonical.locals.start + index]
         val source = built.body.locals[index]
+        if local.homeStability.key() != source.homeStability.key() { panic("binding stability lost at freeze") }
         if local.sourceBinding.session != source.sourceBinding.session || local.sourceBinding.readerIndex != source.sourceBinding.readerIndex || local.sourceBinding.bindingIndex != source.sourceBinding.bindingIndex { panic("binding origin lost at freeze") }
         index += 1U64
     }
@@ -71,6 +73,12 @@ fn main() {
             _ => { panic("production origin verification admitted a forged origin") }
         }
     }
+    val mutable = built.body.locals[2U64]
+    val forged = compiler.mid.store(body: <MidBody sourceFunction=owner locals=[<MidLocalDecl typeTerm=mutable.typeTerm sourceScope=0U64 isUnique=false isParameter=false sourceNameStart=mutable.sourceNameStart sourceBinding=mutable.sourceBinding homeStability=declaration.homeStability />] scopes=[<MidScope firstLocal=0U64 localCount=1U64 />] blocks=[<MidBlock terminator=<MidTerminator.Return /> />] />)
+    match verifyCanonicalMidBody(c: inout compiler, canonical: forged).error {
+        MidVerifyError.InvalidBindingOrigin => {}
+        _ => { panic("mutable binding accepted an immutable home proof") }
+    }
     val valid = compiler.mid.store(body: <MidBody sourceFunction=owner locals=[<MidLocalDecl typeTerm=declaration.typeTerm sourceScope=0U64 isUnique=false isParameter=false sourceNameStart=declaration.sourceNameStart sourceBinding=origin />] scopes=[<MidScope firstLocal=0U64 localCount=1U64 />] blocks=[<MidBlock terminator=<MidTerminator.Return /> />] />)
     match verifyCanonicalMidBody(c: inout compiler, canonical: valid).error {
         MidVerifyError.None => {}
@@ -85,6 +93,7 @@ fn main() {
     val output = compiler.mid.bodies[instantiated.body.body - 1U64]
     index = 0U64
     while index < canonical.locals.len {
+        if snapshot.locals[canonical.locals.start + index].homeStability.key() != compiler.mid.locals[output.locals.start + index].homeStability.key() { panic("binding stability lost at instantiation") }
         val before = snapshot.locals[canonical.locals.start + index].sourceBinding
         val after = compiler.mid.locals[output.locals.start + index].sourceBinding
         if before.session != after.session || before.readerIndex != after.readerIndex || before.bindingIndex != after.bindingIndex { panic("binding origin instantiation changed identity") }

@@ -387,11 +387,12 @@ pub impl LlvmCtx {
                 }
                 LlvmValuePassing.GuaranteedIndirect => {
                     val incoming = match carrier {
+                        LlvmValueCarrier.StableHome(address: val address, planId: val planId, useId: val useId, operation: val operation) => { try self.validateStableHome(address: address, planId: planId, useId: useId, operation: operation, type: parameter.type, role: parameter.role) give true }
                         LlvmValueCarrier.Home(address: val address) => { give plew_llvm_guaranteed_parameter_matches(address, parameter.type, parameter.valueAlignment) != 0I32 }
                         _ => { give false }
                     }
                     if incoming {
-                        match carrier { LlvmValueCarrier.Home(address: val address) => { values.append(address) } _ => {} }
+                        match carrier { LlvmValueCarrier.Home(address: val address) => { values.append(address) } LlvmValueCarrier.StableHome(address: val address, planId: _, useId: _, operation: _) => { values.append(address) } _ => {} }
                     } else {
                         val slot = self.valueAbiSlot(parameter.type)
                         LLVMSetAlignment(slot, truncU32(n: parameter.valueAlignment))
@@ -450,6 +451,7 @@ pub impl LlvmCtx {
         return match carrier {
             LlvmValueCarrier.Value(value: val value) => { give value }
             LlvmValueCarrier.Home(address: val address) => { give llvmLoad(self.b, type, address, anon()) }
+            LlvmValueCarrier.StableHome(address: val address, planId: _, useId: _, operation: _) => { give llvmLoad(self.b, type, address, anon()) }
         }
     }
 

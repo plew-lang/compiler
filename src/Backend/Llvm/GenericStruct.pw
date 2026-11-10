@@ -13,13 +13,24 @@ pub impl LlvmCtx {
         self.genStructDefs.append(structIndex)
     }
 
-    // Finalized contract identities index physical slots directly. Newtypes
-    // follow their explicit representation edge, never a declaration lookup.
+    // Follow only the finalized representation edge. Views and newtypes retain
+    // their semantic/destruction identities; no type re-resolution occurs here.
     inout fn physicalLayoutContract(c: inout Comp, typeRef: U64) -> Result[U64, CompileDiagnostic] {
-        val identity = (try c.checkedFinalDestruction(typeRef: typeRef))
-        val contract = c.arena.finalDestructions[identity - 1U64]
-        if contract.underlying != 0U64 { return self.physicalLayoutContract(c: inout c, typeRef: contract.underlying) }
-        return <Result.Ok value=identity />
+        mut val identity = (try c.checkedFinalDestruction(typeRef: typeRef))
+        mut val remaining = c.arena.finalDestructions.count()
+        while remaining != 0U64 {
+            if identity == 0U64 || identity > c.arena.finalDestructions.count() {
+                return <Result.Err error=c.diagnosticAt(offset: 0U64, msg: "internal error: native representation edge is out of range", failureDomain: <FailureDomain.Internal />) />
+            }
+            val contract = c.arena.finalDestructions[identity - 1U64]
+            if !contract.ready {
+                return <Result.Err error=c.diagnosticAt(offset: 0U64, msg: "internal error: native representation edge is unfinished", failureDomain: <FailureDomain.Internal />) />
+            }
+            if contract.representation == identity { return <Result.Ok value=identity /> }
+            identity = contract.representation
+            remaining -= 1U64
+        }
+        return <Result.Err error=c.diagnosticAt(offset: 0U64, msg: "internal error: cyclic native representation edges", failureDomain: <FailureDomain.Internal />) />
     }
 
     inout fn requireStructLayoutSlot(c: inout Comp, typeRef: U64) -> Result[U64, CompileDiagnostic] {
@@ -49,7 +60,12 @@ pub impl LlvmCtx {
             if !contract.ready {
                 return <Result.Err error=c.diagnosticAt(offset: 0U64, msg: "internal error: LLVM layout registration requires a finalized type contract") />
             }
-            if contract.underlying == 0U64 {
+            // Only representatives own native names. Referents may be later
+            // in the collection; all names are published before struct bodies.
+            if contract.representation == 0U64 || contract.representation > c.arena.finalDestructions.count() {
+                return <Result.Err error=c.diagnosticAt(offset: 0U64, msg: "internal error: finalized type has an invalid native representation edge", failureDomain: <FailureDomain.Internal />) />
+            }
+            if contract.representation == index + 1U64 {
                 if contract.structLayout != 0U64 {
                     mut val name: Array[U8] = []
                     appendBytes(into: inout name, from: "st".bytes())

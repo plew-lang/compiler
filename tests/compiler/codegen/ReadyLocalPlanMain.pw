@@ -2,6 +2,7 @@
 // No production declaration is rewritten or exposed for tests.
 use ./Frontend only { analyzeFrontendDeclarations, FrontendInput }
 use ./SourceAccess only { SourceAccess }
+use ./Ir only { FinalDestruction }
 extern(c) { fn LLVMGetAllocatedType(value~: LLVMValueRef) -> LLVMTypeRef }
 fn requireInternal[T](result: Result[T, CompileDiagnostic]) {
     match result {
@@ -151,6 +152,23 @@ fn guaranteedLocalControl() {
     compiler.collectRecordedType(ref: aggregate).unwrap()
     compiler.enqueueFinalDestruction(typeRef: integer).unwrap()
     compiler.enqueueFinalDestruction(typeRef: aggregate).unwrap()
+    // Native representation is finalized independently of semantic ownership.
+    val integerContract = compiler.checkedFinalDestruction(typeRef: integer).unwrap()
+    val aggregateContract = compiler.checkedFinalDestruction(typeRef: aggregate).unwrap()
+    val savedInteger = compiler.arena.finalDestructions[integerContract - 1U64]
+    val savedAggregate = compiler.arena.finalDestructions[aggregateContract - 1U64]
+    if backend.physicalLayoutContract(c: inout compiler, typeRef: integer).unwrap() != integerContract { panic "plain representation lost self identity" }
+    compiler.arena.finalDestructions[integerContract - 1U64] = <FinalDestruction typeRef=integer ready=true />
+    requireInternal(result: backend.physicalLayoutContract(c: inout compiler, typeRef: integer))
+    compiler.arena.finalDestructions[integerContract - 1U64] = <FinalDestruction typeRef=integer ready=true representation=compiler.arena.finalDestructions.count() + 1U64 />
+    requireInternal(result: backend.physicalLayoutContract(c: inout compiler, typeRef: integer))
+    compiler.arena.finalDestructions[integerContract - 1U64] = <FinalDestruction typeRef=integer ready=true representation=aggregateContract />
+    compiler.arena.finalDestructions[aggregateContract - 1U64] = <FinalDestruction typeRef=aggregate ready=true representation=integerContract />
+    requireInternal(result: backend.physicalLayoutContract(c: inout compiler, typeRef: integer))
+    compiler.arena.finalDestructions[aggregateContract - 1U64] = <FinalDestruction typeRef=aggregate representation=aggregateContract />
+    requireInternal(result: backend.physicalLayoutContract(c: inout compiler, typeRef: integer))
+    compiler.arena.finalDestructions[integerContract - 1U64] = savedInteger
+    compiler.arena.finalDestructions[aggregateContract - 1U64] = savedAggregate
     backend.registerFinalLayoutNames(c: inout compiler).unwrap()
     backend.registerFinalStructBodies(c: inout compiler).unwrap()
     val functionIndex = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "control").nameId)
@@ -185,6 +203,28 @@ fn guaranteedLocalControl() {
     if LLVMIsAAllocaInst(LLVMGetArgOperand(snapshot, 0U32)) == 0U64 || LLVMIsAAllocaInst(LLVMGetArgOperand(snapshot, 0U32)) == LLVMIsAAllocaInst(unproved) { panic "unproved home bypassed snapshot" }
     val malformed = <LlvmValueInput lane=<LlvmLogicalParameter type=lane.type semanticType=lane.semanticType role=lane.role mode=lane.mode /> index=0U64 carrier=input.carrier />
     requireInternal(result: backend.callBodyValueFunction(function: function, bodyId: bodyId, inputs: scope, arguments: [malformed, secondInput]))
+    // These manual receipts isolate final physical rejection independently
+    // from production Executable-token admission and source lifetime checks.
+    val operation = 1U64
+    backend.stableHomeUses.append(<LlvmStableHomeUse operation=operation operand=1U64 sourceIndex=1U64 place=1U64 local=0U64 scope=0U64 semanticType=aggregate rootType=lane.type type=lane.type fields=[] />)
+    val firstUse = backend.stableHomeUses.count()
+    backend.stableHomeUses.append(<LlvmStableHomeUse operation=operation operand=2U64 sourceIndex=2U64 place=2U64 local=1U64 scope=0U64 semanticType=aggregate rootType=lane.type type=lane.type fields=[] />)
+    val secondUse = backend.stableHomeUses.count()
+    backend.bodyLocalPlans.set(i: planId - 1U64, value: <LlvmBodyLocalPlan canonicalBody=localPlan.canonicalBody bodyIdentity=localPlan.bodyIdentity function=localPlan.function signature=localPlan.signature moduleIdentity=localPlan.moduleIdentity contextIdentity=localPlan.contextIdentity localStart=localPlan.localStart localCount=localPlan.localCount revision=localPlan.revision entry=localPlan.entry environmentType=localPlan.environmentType stableUses=[operation: [0U64, firstUse, secondUse]] />)
+    backend.activeMidOperation = operation
+    val firstCarrier = <LlvmValueCarrier.StableHome address=backend.locPtr[0U64] planId=planId useId=firstUse operation=operation />
+    val secondCarrier = <LlvmValueCarrier.StableHome address=backend.locPtr[1U64] planId=planId useId=secondUse operation=operation />
+    val firstStable = <LlvmValueInput lane=input.lane index=0U64 carrier=firstCarrier />
+    val secondStable = <LlvmValueInput lane=secondInput.lane index=1U64 carrier=secondCarrier />
+    backend.callBodyValueFunction(function: function, bodyId: bodyId, inputs: scope, arguments: [firstStable, secondStable]).unwrap()
+    requireInternal(result: backend.callBodyValueFunction(function: function, bodyId: bodyId, inputs: scope, arguments: [<LlvmValueInput lane=input.lane index=0U64 carrier=secondCarrier />, <LlvmValueInput lane=secondInput.lane index=1U64 carrier=firstCarrier />]))
+    for invalid in [<LlvmValueCarrier.StableHome address=backend.locPtr[0U64] planId=planId + 1U64 useId=firstUse operation=operation />, <LlvmValueCarrier.StableHome address=backend.locPtr[0U64] planId=planId useId=firstUse operation=operation + 1U64 />, <LlvmValueCarrier.StableHome address=backend.locPtr[1U64] planId=planId useId=firstUse operation=operation />] {
+        requireInternal(result: backend.callBodyValueFunction(function: function, bodyId: bodyId, inputs: scope, arguments: [<LlvmValueInput lane=input.lane index=0U64 carrier=invalid />, secondStable]))
+    }
+    backend.preparedLocals.set(i: localPlan.localStart, value: <LlvmPreparedLocal semanticType=local.semanticType type=local.type storageType=local.storageType storage=local.storage mode=local.mode binding=local.binding sourceScope=1U64 />)
+    requireInternal(result: backend.callBodyValueFunction(function: function, bodyId: bodyId, inputs: scope, arguments: [firstStable, secondStable]))
+    backend.preparedLocals.set(i: localPlan.localStart, value: local)
+    backend.activeMidOperation = 0U64
     backend.preparedLocals.set(i: localPlan.localStart, value: <LlvmPreparedLocal semanticType=local.semanticType type=local.type storageType=local.storageType storage=<LlvmLocalStorage.GuaranteedParameter parameterIndex=abi.parameterStart + 1U64 semanticType=lane.semanticType /> mode=local.mode binding=local.binding />)
     requireInternal(result: backend.genLlvmPreparedMidBody(c: inout compiler, prepared: <MidLlvmPrepared.Ready canonical=canonical localAdmission=admission />))
     backend.preparedLocals.set(i: localPlan.localStart, value: <LlvmPreparedLocal semanticType=integer type=local.type storageType=local.storageType storage=local.storage mode=local.mode binding=local.binding />)

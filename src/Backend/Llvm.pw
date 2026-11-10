@@ -33,3 +33,5 @@ part ./Llvm/AsyncAbi
 part ./Llvm/MidAsync
 
 part ./Llvm/Ambient
+
+part ./Llvm/StableHomes

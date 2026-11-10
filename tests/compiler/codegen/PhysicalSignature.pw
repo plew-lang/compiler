@@ -3,6 +3,7 @@ use ../../../src/Backend/PhysicalSignature only { LlvmSignatureScope, LlvmLogica
 use ../../../src/LlvmHandles only { LLVMContextRef, LLVMModuleRef, LLVMTypeRef, LLVMValueRef }
 use @Std/Io only { write }
 extern(c) {
+    fn plew_test_projected_homes()
     fn plew_test_signature_byref_function(module~: LLVMModuleRef, aggregate~: LLVMTypeRef, alignment~: U64) -> LLVMValueRef
     fn plew_test_signature_function(module~: LLVMModuleRef, aggregate~: LLVMTypeRef) -> LLVMValueRef
     fn plew_test_signature_value(function~: LLVMValueRef, type~: LLVMTypeRef, kind~: U32) -> LLVMValueRef
@@ -38,6 +39,7 @@ fn changed(plan: LlvmPhysicalSignature, parameters: Array[LlvmValueParameter], r
     return <LlvmPhysicalSignature parameters=parameters logicalSignature=plan.logicalSignature functionType=plan.functionType moduleIdentity=plan.moduleIdentity contextIdentity=plan.contextIdentity revision=revision targetTriple=plan.targetTriple dataLayout=plan.dataLayout convention=plan.convention resultTerm=plan.resultTerm resultProtocol=plan.resultProtocol />
 }
 fn main() {
+    plew_test_projected_homes()
     val context = LLVMContextCreate()
     val foreignContext = LLVMContextCreate()
     val blank = plew_test_signature_blank_module(context)

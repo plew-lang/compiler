@@ -1,0 +1,115 @@
+// Ready projects accepted storage facts once. This is neither an AST reader nor
+// an alias/CFG solver. Executable Mid already verifies initialization, ownership,
+// access intervals and scope. Physical provenance is checked again at final receipt.
+pub impl LlvmCtx {
+    inout fn prepareStableHomeUse(c: inout Comp, body: MidBodyNode, localStart: U64, operation: U64, operandId: U64, sourceIndex: U64, writes: Dictionary[U64, Bool]) -> Result[U64, CompileDiagnostic] {
+        if operandId == 0U64 || operandId > c.mid.operands.count() { return <Result.Ok value=0U64 /> }
+        val operand = c.mid.operands[operandId - 1U64]
+        if operand.tag != 3U64 || operand.capability != 1U64 || operand.borrowsStorage || operand.place == 0U64 || operand.place > c.mid.places.count() { return <Result.Ok value=0U64 /> }
+        val place = c.mid.places[operand.place - 1U64]
+        if place.rootTag != 1U64 || place.local >= body.locals.len || writes.getOr(key: place.local, fallback: false) { return <Result.Ok value=0U64 /> }
+        val declaration = c.mid.locals[body.locals.start + place.local]
+        val local = self.preparedLocals[localStart + place.local]
+        val incoming = match local.storage { LlvmLocalStorage.GuaranteedParameter(parameterIndex: _, semanticType: _) => { give true } _ => { give false } }
+        if !incoming && local.homeStability == 0U64 { return <Result.Ok value=0U64 /> }
+        // Whole guaranteed inputs already carry the entry/lane proof. Keep
+        // their existing direct forwarder instead of allocating a second receipt.
+        if incoming && place.projections.len == 0U64 { return <Result.Ok value=0U64 /> }
+        if declaration.isUnique || declaration.isBorrowed || declaration.isInout || declaration.isCaptureCell || declaration.isDropFlag || declaration.isReturnPlace || c.arena.typeTermIsUnique(ref: declaration.typeTerm) { return <Result.Ok value=0U64 /> }
+        mut val type = local.type
+        mut val fields: Array[U64] = []
+        mut val index = 0U64
+        while index < place.projections.len {
+            val projection = c.mid.projections[place.projections.start + index]
+            if projection.tag != 1U64 || projection.isBoxed { return <Result.Ok value=0U64 /> }
+            if LLVMGetTypeKind(type) != 10U32 || LLVMIsOpaqueStruct(type) != 0I32 || projection.index >= 4294967296U64 || truncU32(n: projection.index) >= LLVMCountStructElementTypes(type) { return <Result.Err error=valueAbiFailure(message: "stable field has an invalid parent layout/index") /> }
+            val child = (try self.llvmTypeOfRef(c: inout c, ref: projection.typeTerm))
+            if plew_pointer_equal(LLVMStructGetTypeAtIndex(type, truncU32(n: projection.index)), child) == 0I32 { return <Result.Err error=valueAbiFailure(message: "stable field child layout mismatch") /> }
+            type = child
+            fields.append(projection.index)
+            index += 1U64
+        }
+        if (LLVMGetTypeKind(type) != 10U32 && LLVMGetTypeKind(type) != 11U32) || !llvmTypeHasStorage(type) { return <Result.Ok value=0U64 /> }
+        if plew_pointer_equal(type, (try self.llvmTypeOfRef(c: inout c, ref: place.typeTerm))) == 0I32 { return <Result.Err error=valueAbiFailure(message: "stable use final layout mismatch") /> }
+        self.stableHomeUses.append(<LlvmStableHomeUse operation=operation operand=operandId sourceIndex=sourceIndex place=operand.place local=place.local scope=declaration.sourceScope semanticType=place.typeTerm rootType=local.type type=type fields=fields />)
+        return <Result.Ok value=self.stableHomeUses.count() />
+    }
+
+    inout fn prepareStableHomeUses(c: inout Comp, body: MidBodyNode, localStart: U64) -> Result[Dictionary[U64, Array[U64]], CompileDiagnostic] {
+        mut val operations: Dictionary[U64, Array[U64]] = [:]
+        mut val blockIndex = 0U64
+        while blockIndex < body.blocks.len {
+            val operation = c.mid.blocks[body.blocks.start + blockIndex].terminator
+            val term = c.mid.terminators[operation - 1U64]
+            if term.tag == 4U64 {
+                mut val receiver = 0U64
+                if term.callReceiver != 0U64 {
+                    val selected = c.mid.callReceivers[term.callReceiver - 1U64]
+                    if selected.tag == 2U64 { receiver = selected.operand }
+                }
+                mut val writes: Dictionary[U64, Bool] = [:]
+                collectCallWriteRoot(operands: c.mid.operands, places: c.mid.places, localCount: body.locals.len, operandId: receiver, writes: inout writes)
+                mut val index = 0U64
+                while index < term.args.len {
+                    collectCallWriteRoot(operands: c.mid.operands, places: c.mid.places, localCount: body.locals.len, operandId: c.mid.callArguments[term.args.start + index], writes: inout writes)
+                    index += 1U64
+                }
+                val first = (try self.prepareStableHomeUse(c: inout c, body: body, localStart: localStart, operation: operation, operandId: receiver, sourceIndex: 0U64, writes: writes))
+                mut val uses: Array[U64] = [first]
+                mut val found = first != 0U64
+                index = 0U64
+                while index < term.args.len {
+                    val useId = (try self.prepareStableHomeUse(c: inout c, body: body, localStart: localStart, operation: operation, operandId: c.mid.callArguments[term.args.start + index], sourceIndex: index + 1U64, writes: writes))
+                    uses.append(useId)
+                    found = found || useId != 0U64
+                    index += 1U64
+                }
+                if found { operations[operation] = uses }
+            }
+            blockIndex += 1U64
+        }
+        return <Result.Ok value=operations />
+    }
+
+    inout fn stableCallHome(c: inout Comp, body: MidBodyNode, operation: U64, sourceIndex: U64, operandId: U64, type: LLVMTypeRef) -> Result[Optional[LlvmValueCarrier], CompileDiagnostic] {
+        val planId = match self.bodyLocalAdmission { Optional.Some(v: val admission) => { give match admission { LlvmBodyLocalAdmission.Planned(planId: val saved) => { give saved } } } Optional.None => { return <Result.Err error=valueAbiFailure(message: "stable input lacks Ready admission") /> } }
+        if planId == 0U64 || planId > self.bodyLocalPlans.count() { return <Result.Err error=valueAbiFailure(message: "stable input plan is out of range") /> }
+        val plan = self.bodyLocalPlans[planId - 1U64]
+        if plan.bodyIdentity != body.bodyInstance || plan.localCount != body.locals.len || operation != self.activeMidOperation { return <Result.Err error=valueAbiFailure(message: "stable input body/operation mismatch") /> }
+        val uses = match plan.stableUses.get(key: operation) { Optional.Some(v: val uses) => { give uses } Optional.None => { return <Result.Ok value=<Optional.None /> /> } }
+        if sourceIndex >= uses.count() { return <Result.Err error=valueAbiFailure(message: "stable input source position mismatch") /> }
+        val useId = uses[sourceIndex]
+        if useId == 0U64 { return <Result.Ok value=<Optional.None /> /> }
+        if useId > self.stableHomeUses.count() { return <Result.Err error=valueAbiFailure(message: "stable use is out of range") /> }
+        val receipt = self.stableHomeUses[useId - 1U64]
+        if receipt.operation != operation || receipt.sourceIndex != sourceIndex || receipt.operand != operandId || operandId == 0U64 || operandId > c.mid.operands.count() { return <Result.Err error=valueAbiFailure(message: "stable input occurrence mismatch") /> }
+        val operand = c.mid.operands[operandId - 1U64]
+        if operand.tag != 3U64 || operand.capability != 1U64 || operand.borrowsStorage || operand.place != receipt.place || operand.place == 0U64 || operand.place > c.mid.places.count() { return <Result.Err error=valueAbiFailure(message: "stable input operand mismatch") /> }
+        val place = c.mid.places[operand.place - 1U64]
+        if place.rootTag != 1U64 || place.local != receipt.local || place.typeTerm != receipt.semanticType || plew_pointer_equal(type, receipt.type) == 0I32 { return <Result.Err error=valueAbiFailure(message: "stable input root/type mismatch") /> }
+        val address = (try self.midCanonicalPlacePtr(c: inout c, body: body, place: place))
+        // The final call consumer validates this receipt once, before using it.
+        return <Result.Ok value=<Optional.Some v=<LlvmValueCarrier.StableHome address=address planId=planId useId=useId operation=operation /> /> />
+    }
+
+    fn validateStableHome(address: LLVMValueRef, planId: U64, useId: U64, operation: U64, type: LLVMTypeRef, role: LlvmParameterRole) -> Result[(), CompileDiagnostic] {
+        if planId == 0U64 || planId > self.bodyLocalPlans.count() || useId == 0U64 || useId > self.stableHomeUses.count() { return <Result.Err error=valueAbiFailure(message: "stable receipt identity out of range") /> }
+        val selected = match self.bodyLocalAdmission { Optional.Some(v: val admission) => { give match admission { LlvmBodyLocalAdmission.Planned(planId: val saved) => { give saved } } } Optional.None => { give 0U64 } }
+        val plan = self.bodyLocalPlans[planId - 1U64]
+        val receipt = self.stableHomeUses[useId - 1U64]
+        val sourceIndex = match role {
+            LlvmParameterRole.Receiver => { give 0U64 }
+            LlvmParameterRole.Ordinary(index: val index) => { give index + 1U64 }
+            _ => { return <Result.Err error=valueAbiFailure(message: "stable receipt has no source argument role") /> }
+        }
+        if receipt.sourceIndex != sourceIndex { return <Result.Err error=valueAbiFailure(message: "stable receipt belongs to another argument") /> }
+        if selected != planId || plan.function != LLVMIsAFunction(LLVMGetBasicBlockParent(LLVMGetInsertBlock(self.b))) || operation == 0U64 || operation != self.activeMidOperation || receipt.operation != operation { return <Result.Err error=valueAbiFailure(message: "stable receipt belongs to another body/operation") /> }
+        val uses = match plan.stableUses.get(key: operation) { Optional.Some(v: val uses) => { give uses } Optional.None => { return <Result.Err error=valueAbiFailure(message: "stable operation has no admitted uses") /> } }
+        if receipt.sourceIndex >= uses.count() || uses[receipt.sourceIndex] != useId || receipt.local >= plan.localCount || receipt.local >= self.locPtr.count() || plan.localStart + receipt.local >= self.preparedLocals.count() { return <Result.Err error=valueAbiFailure(message: "stable receipt use/root mismatch") /> }
+        val local = self.preparedLocals[plan.localStart + receipt.local]
+        val incoming = match local.storage { LlvmLocalStorage.GuaranteedParameter(parameterIndex: _, semanticType: _) => { give true } _ => { give false } }
+        if (!incoming && local.homeStability == 0U64) || local.sourceScope != receipt.scope || plew_pointer_equal(local.type, receipt.rootType) == 0I32 || plew_pointer_equal(type, receipt.type) == 0I32 { return <Result.Err error=valueAbiFailure(message: "stable receipt storage/scope/layout mismatch") /> }
+        if plew_llvm_projected_home_matches(address, self.locPtr[receipt.local], receipt.rootType, arrayCPtr(receipt.fields), receipt.fields.count(), receipt.type) == 0I32 { return <Result.Err error=valueAbiFailure(message: "stable receipt native root/projection mismatch") /> }
+        return <Result.Ok value=() />
+    }
+}

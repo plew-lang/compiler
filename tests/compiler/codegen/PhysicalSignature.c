@@ -80,3 +80,41 @@ LLVMValueRef plew_test_signature_byref_function(LLVMModuleRef module, LLVMTypeRe
     LLVMDisposeBuilder(builder);
     return function;
 }
+
+void plew_test_projected_homes(void) {
+    LLVMContextRef context = LLVMContextCreate();
+    LLVMModuleRef module = plew_test_signature_module(context);
+    LLVMTypeRef integer = LLVMInt64TypeInContext(context);
+    LLVMTypeRef pairFields[] = { integer, integer };
+    LLVMTypeRef pair = LLVMStructTypeInContext(context, pairFields, 2, 0);
+    LLVMTypeRef fields[] = { pair, pair };
+    LLVMTypeRef holder = LLVMStructTypeInContext(context, fields, 2, 0);
+    LLVMValueRef function = LLVMAddFunction(module, "projection-controls", LLVMFunctionType(LLVMVoidTypeInContext(context), 0, 0, 0));
+    LLVMBuilderRef builder = LLVMCreateBuilderInContext(context);
+    LLVMPositionBuilderAtEnd(builder, LLVMAppendBasicBlockInContext(context, function, "entry"));
+    LLVMValueRef root = LLVMBuildAlloca(builder, holder, "root");
+    LLVMSetAlignment(root, 8);
+    LLVMValueRef other = LLVMBuildAlloca(builder, holder, "other");
+    LLVMValueRef field = LLVMBuildStructGEP2(builder, holder, root, 1, "field");
+    LLVMValueRef nested = LLVMBuildStructGEP2(builder, pair, field, 0, "nested");
+    const uint64_t indices[] = { 1, 0 };
+    const uint64_t wrong[] = { 0, 0 };
+    assert(plew_llvm_home_type_matches(field, pair));
+    assert(plew_llvm_home_alignment(field) == 8);
+    assert(plew_llvm_projected_home_matches(field, root, holder, indices, 1, pair));
+    assert(plew_llvm_projected_home_matches(nested, root, holder, indices, 2, integer));
+    assert(!plew_llvm_projected_home_matches(nested, other, holder, indices, 2, integer));
+    assert(!plew_llvm_projected_home_matches(nested, root, holder, wrong, 2, integer));
+    assert(!plew_llvm_projected_home_matches(nested, root, holder, indices, 1, integer));
+    assert(!plew_llvm_projected_home_matches(nested, root, pair, indices, 2, integer));
+    assert(!plew_llvm_projected_home_matches(nested, root, holder, indices, 2, pair));
+    LLVMValueRef offset = LLVMConstInt(integer, 1, 0);
+    LLVMValueRef stepped = LLVMBuildGEP2(builder, holder, root, &offset, 1, "stepped");
+    assert(!plew_llvm_home_type_matches(stepped, holder));
+    LLVMSetAlignment(root, 1);
+    assert(plew_llvm_home_alignment(field) == 1);
+    LLVMBuildRetVoid(builder);
+    LLVMDisposeBuilder(builder);
+    LLVMDisposeModule(module);
+    LLVMContextDispose(context);
+}

@@ -821,6 +821,12 @@ fn verifyCanonicalMidBindingOrigins(c: inout Comp, body: MidBodyNode) -> MidVeri
     while index < body.locals.len {
         val local = c.mid.locals[body.locals.start + index]
         val origin = local.sourceBinding
+        val stability = local.homeStability.key()
+        if stability != 0U64 {
+            if local.isUnique || local.isParameter || local.isBorrowed || local.isInout || local.isCaptureCell || local.ownsAtEntry || local.isDropFlag || local.isReturnPlace { return <MidVerification error=<MidVerifyError.InvalidBindingOrigin /> local=index /> }
+            if stability == 1U64 && origin.isUnproved() { return <MidVerification error=<MidVerifyError.InvalidBindingOrigin /> local=index /> }
+            if stability == 2U64 && (local.sourceNameStart != 0U64 || !origin.isUnproved()) { return <MidVerification error=<MidVerifyError.InvalidBindingOrigin /> local=index /> }
+        }
         if !origin.isUnproved() {
             if local.isParameter || local.isBorrowed || local.isInout || local.isDropFlag || local.isReturnPlace || local.sourceNameStart == 0U64 {
                 return <MidVerification error=<MidVerifyError.InvalidBindingOrigin /> local=index />
@@ -839,7 +845,10 @@ fn verifyCanonicalMidBindingOrigins(c: inout Comp, body: MidBodyNode) -> MidVeri
                     give facts
                 }
             }
-            if facts.bindingStorageFact(origin: origin, declarationTarget: local.sourceNameStart).isNone() { return <MidVerification error=<MidVerifyError.InvalidBindingOrigin /> local=index /> }
+            match facts.bindingStorageFact(origin: origin, declarationTarget: local.sourceNameStart) {
+                Optional.Some(v: val binding) => { if stability == 1U64 && binding.isMutable { return <MidVerification error=<MidVerifyError.InvalidBindingOrigin /> local=index /> } }
+                Optional.None => { return <MidVerification error=<MidVerifyError.InvalidBindingOrigin /> local=index /> }
+            }
         }
         index += 1U64
     }

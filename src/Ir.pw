@@ -4009,6 +4009,9 @@ pub struct DestructionDependencies {
 pub impl DestructionDependencies { factory }
 
 pub struct FinalDestruction {
+    // One-based native representation contract. Self for a representation owner;
+    // zero only while collecting. Semantic/destruction identity stays separate.
+    pub val representation: U64 = 0U64
     // Nominal copyability is independent of whether releasing does any work.
     pub val isUnique: Bool = false
     pub val needsRelease: Bool = false

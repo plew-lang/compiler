@@ -143,3 +143,34 @@ with tempfile.TemporaryDirectory(prefix='plew-guaranteed-transport-') as directo
                         '-o', str(executable)], check=True, timeout=55)
         assert subprocess.check_output([str(executable)], timeout=55) == fixture.with_suffix('.out').read_bytes(), material
 print('PASS guaranteed transport: raw forwarding/recursion/indirect entries and raw/optimized async roundtrip')
+
+
+fixture = root / 'tests/fixtures/run/mid_guaranteed_stable_homes.pw'
+raw = subprocess.check_output([str(compiler), '--require-mid', str(fixture)], text=True, timeout=55)
+pair_types = [name for name, body in re.findall(r'^(%[\w.]+) = type \{ ([^\n]+) \}', raw, re.M)
+              if body == 'i64, i64']
+checked = False
+for aggregate in pair_types:
+    for function in re.findall(r'^define internal [^\n]+\{\n.*?^}', raw, re.M | re.S):
+        calls = re.findall(r'call i64 @[\w.]+\(ptr byref\(' + re.escape(aggregate) + r'\) align \d+ (%[\w.]+)\)', function)
+        if len(calls) != 3:
+            continue
+        # The three remaining homes are the authored local, its construction
+        # result, and the dedicated third argument. No call staging slots.
+        assert len(re.findall(r'alloca ' + re.escape(aggregate) + r'\b', function)) <= 3
+        assert len(re.findall(r'load ' + re.escape(aggregate) + r'\b', function)) <= 2
+        assert any(re.search(re.escape(address) + r' = getelementptr inbounds', function) for address in calls), 'static field home was not reused'
+        checked = True
+assert checked, 'fixture must exercise stable local, field and evaluation temporary'
+with tempfile.TemporaryDirectory(prefix='plew-stable-homes-') as directory:
+    directory = Path(directory)
+    source, optimized = directory / 'raw.ll', directory / 'optimized.ll'
+    source.write_text(raw)
+    (directory / 'runtime.c').write_bytes(subprocess.check_output([str(compiler), '--runtime'], timeout=55))
+    subprocess.run(llvm_link.optimization_command(config, source, optimized), check=True,
+                   stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, timeout=55)
+    for material in (source, optimized):
+        executable = directory / material.stem
+        subprocess.run([llvm_link.selected_clang(config), '-w', '-O0', str(material), str(directory / 'runtime.c'), '-o', str(executable)], check=True, timeout=55)
+        assert subprocess.check_output([str(executable)], timeout=55) == fixture.with_suffix('.out').read_bytes(), material
+print('PASS stable local/temporary/field homes: raw staging reduction and raw/optimized execution')

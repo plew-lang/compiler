@@ -897,7 +897,7 @@ fn appendCanonicalInstantiatedLocals(c: inout Comp, bodyId: U64, error: inout Mi
         if sourceLocal.typeRecipe == 0U64 && !sourceLocal.isParameter && sourceLocal.sourceNameStart == 0U64 {
             if resultTypes[localI] != 0U64 { typeTerm = resultTypes[localI] }
         }
-        c.mid.locals.append(<MidLocalDecl typeTerm=typeTerm sourceScope=sourceLocal.sourceScope isUnique=sourceLocal.isUnique isParameter=sourceLocal.isParameter isBorrowed=sourceLocal.isBorrowed isInout=sourceLocal.isInout isCaptureCell=sourceLocal.isCaptureCell ownsAtEntry=sourceLocal.ownsAtEntry isDropFlag=sourceLocal.isDropFlag isReturnPlace=sourceLocal.isReturnPlace sourceNameStart=sourceLocal.sourceNameStart preparedExpr=sourceLocal.preparedExpr sourceBinding=sourceLocal.sourceBinding />)
+        c.mid.locals.append(<MidLocalDecl typeTerm=typeTerm sourceScope=sourceLocal.sourceScope isUnique=sourceLocal.isUnique isParameter=sourceLocal.isParameter isBorrowed=sourceLocal.isBorrowed isInout=sourceLocal.isInout isCaptureCell=sourceLocal.isCaptureCell ownsAtEntry=sourceLocal.ownsAtEntry isDropFlag=sourceLocal.isDropFlag isReturnPlace=sourceLocal.isReturnPlace sourceNameStart=sourceLocal.sourceNameStart preparedExpr=sourceLocal.preparedExpr sourceBinding=sourceLocal.sourceBinding homeStability=sourceLocal.homeStability />)
         localI = localI + 1U64
     }
     return <MidRange start=localStart len=localCount />

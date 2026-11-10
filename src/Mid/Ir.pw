@@ -702,6 +702,13 @@ pub impl MidBlock { factory }
 // `sourceScope` is a lexical-scope side-table identity, not a block nesting
 // shortcut.  Drop elaboration uses it to preserve source-order destruction
 // while operating exclusively on flat CFG edges.
+// Stability of outer value bytes, not initialized availability or ownership.
+// Only the authored binding/temporary producers issue these retained facts.
+pub enum MidValueHomeStability { Unproved OwnedImmutable EvaluationTemporary }
+pub impl MidValueHomeStability {
+    fn key() -> U64 { return match self { MidValueHomeStability.Unproved => { give 0U64 } MidValueHomeStability.OwnedImmutable => { give 1U64 } MidValueHomeStability.EvaluationTemporary => { give 2U64 } } }
+}
+
 pub struct MidLocalDecl {
     // Parametric TypeTerm; instantiateCanonicalMidBody replaces it with a ground TypeRef
     // without re-resolving source spelling.
@@ -742,6 +749,7 @@ pub struct MidLocalDecl {
     // References the accepted binding row; not a standalone const proof.
     // Synthetic, parameter and borrowed roots retain an unproved origin.
     pub val sourceBinding: SourceBindingOrigin = <SourceBindingOrigin />
+    pub val homeStability: MidValueHomeStability = <MidValueHomeStability.Unproved />
 }
 pub impl MidLocalDecl { factory }
 

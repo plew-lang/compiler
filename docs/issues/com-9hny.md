@@ -1,6 +1,6 @@
 ---
 id: com-9hny
-status: closed
+status: open
 deps: [com-b1em]
 links: [com-xkcb]
 created: 2026-11-09T17:11:02Z
@@ -11,6 +11,32 @@ parent: com-uiri
 tags: [ownership, backend, mid]
 ---
 # Centralize physical signature descriptors and typed value carriers
+
+## Reopened: Zero-Cost View Representation
+
+The first full normal suite with W3's fresh optimized candidate exposed valid
+view calls rejected by the typed physical boundary. Fixed W2 reconciled also
+rejects controls that fixed pre-W2 W1b accepts, initially six:
+`call_argument_borrow_lifetime`, `call_argument_default_lifetime`,
+`extension_super_chain`, `extension_trait_path_provided`,
+`extension_trait_provenance_select`, and `extension_trait_subject`.
+Earlier targeted acceptance did not cover this whole guarantee; W2 is reopened.
+
+Investigate and repair finalized physical representation identity, keeping
+semantic/view/destruction identities separate. An outer zero-cost view must
+share its base's native representation without a same-size cast, suppressed
+type check, backend source re-resolution or merging unrelated nominal types.
+Publish recursive representation names before bodies. Preserve nested generic
+view identity, newtype representation edges, empty and managed-value behavior.
+Reconcile these six raw/optimized exact controls, existing typed native/Ready
+negative controls and final suite findings before renewed independent closure.
+The finite classification grew to twelve such view controls. Raw/optimized
+execution of all twelve now matches the existing goldens. Native negative edge
+controls additionally exposed Source/Internal misclassification; retain the
+strict domain assertion and correct the producer diagnostic, not the test.
+Raw evidence starts at meta `tmp/validation/20261110T085645-test-538952` and
+`tmp/value-abi-w3/full-suite-failure-baselines.json`; retain a permanent summary
+after the finite repair. W3/W4 and the parent remain incomplete.
 
 ## Guarantee and Scope
 

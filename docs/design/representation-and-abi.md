@@ -13,6 +13,17 @@ Representation lowering maps completed semantic types and ownership contracts to
 
 Physical lowering consumes finalized layouts, instantiated types, selected conversion/destruction contracts, and logical callable signatures. Aggregate fields and enum payloads retain their selected indices, types, and boxing relationships. A backend cannot recover these from source names or reselect an implementation because two layouts happen to match.
 
+Finalization retains a native-representation identity separately from semantic
+and destruction identity. An outer zero-cost view refers to its base's
+representation; a newtype follows its explicit underlying representation edge.
+Nested generic arguments keep their semantic identities. Distinct nominal types
+are never merged merely because field shapes or byte sizes match. Every ready
+contract has a valid edge to a ready representative, terminating at itself;
+missing, unfinished or cyclic edges are internal failures. LLVM registers only
+representatives, publishing all names before constructing recursive bodies.
+Local storage, projections and all callable lanes consume that same identity;
+call-site casts cannot repair inconsistent representation selection.
+
 Recursive layout construction needs separate declaration and completion states. Publishing a named LLVM type can break a recursive registration dependency; it does not establish that its body/layout is complete. An opaque declaration must not be interpreted as an empty zero-sized type. All layout-dependent use requires a completed contract or an explicit opaque-pointer representation.
 
 Target identity is part of a physical result's validity. The LLVM module has its intended target triple before layout-sensitive optimization, and layout/ABI queries use the corresponding target configuration. Host defaults, a previous module's layout, or target-independent guesses cannot determine field offsets for a different native target. The target/backend boundary obtains the DataLayout from the selected target machine and ensures its agreement with the module before layout-dependent use; object/JIT admission must reject incompatible layouts. The exact point of DataLayout attachment and every earlier layout-dependent consumer remain part of the implementation audit, not guaranteed by setting a triple alone. Host-generation and application-target configurations remain distinct.

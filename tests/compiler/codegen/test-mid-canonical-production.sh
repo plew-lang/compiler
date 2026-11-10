@@ -291,7 +291,7 @@ PYLAYOUT
 python3 - <<'PYPHYSICAL'
 from pathlib import Path
 source = Path('src/Backend/Llvm/GenericAny.pw').read_text().split('inout fn llvmTypeOfRef(', 1)[1].split('inout fn extendToI64(', 1)[0]
-for required in ['try c.checkedFinalDestruction(', 'contract.underlying', 'contract.structLayout', 'contract.isOpaquePointer']:
+for required in ['try self.physicalLayoutContract(', 'contract.structLayout', 'contract.isOpaquePointer']:
     assert required in source
 for forbidden in ['genericStructIndex(', 'genericEnumIndex(', 'recordStructIndex(', 'c.cur.typeParams', 'c.genMode']:
     assert forbidden not in source

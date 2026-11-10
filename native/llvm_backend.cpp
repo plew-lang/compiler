@@ -15,6 +15,7 @@
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/DerivedTypes.h>
+#include <llvm/ADT/SmallVector.h>
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/Argument.h>
 #include <llvm/IR/Metadata.h>
@@ -199,30 +200,61 @@ extern "C" int plew_llvm_value_scope_matches(LLVMValueRef value, LLVMValueRef fu
         if (!plew_llvm_value_scope_matches(LLVMGetOperand(value, index), function)) return 0;
     return 1;
 }
-// Typed ABI homes retain their pointee contract after opaque-pointer lowering.
-// byref is published only for guaranteed copyable lanes; it adds no copy.
+// Typed home provenance is independent of semantic interval stability. Accept
+// only whole allocations/typed inputs and constant, non-boxed struct fields.
+struct PlewHomeLayout { llvm::Type *type = nullptr; uint64_t alignment = 0; };
+static PlewHomeLayout plewHomeLayout(llvm::Value *value) {
+    llvm::SmallVector<llvm::GetElementPtrInst *, 4> fields;
+    while (auto *field = llvm::dyn_cast<llvm::GetElementPtrInst>(value)) {
+        if (field->getNumIndices() != 2) return {};
+        auto *parent = llvm::dyn_cast<llvm::StructType>(field->getSourceElementType());
+        auto *zero = llvm::dyn_cast<llvm::ConstantInt>(field->getOperand(1));
+        auto *index = llvm::dyn_cast<llvm::ConstantInt>(field->getOperand(2));
+        if (!parent || parent->isOpaque() || !zero || !zero->isZero() || !index || index->getValue().uge(parent->getNumElements())) return {};
+        fields.push_back(field);
+        value = field->getPointerOperand();
+    }
+    PlewHomeLayout result;
+    if (auto *allocation = llvm::dyn_cast<llvm::AllocaInst>(value)) result = { allocation->getAllocatedType(), allocation->getAlign().value() };
+    if (auto *argument = llvm::dyn_cast<llvm::Argument>(value)) {
+        if (argument->hasByValAttr()) result.type = argument->getParamByValType();
+        else if (argument->hasByRefAttr()) result.type = argument->getParamByRefType();
+        if (auto alignment = argument->getParamAlign()) result.alignment = alignment->value();
+        else if (argument->hasByValAttr()) result.alignment = argument->getParent()->getParent()->getDataLayout().getABITypeAlign(result.type).value();
+    }
+    if (!result.type) return {};
+    for (auto iterator = fields.rbegin(); iterator != fields.rend(); ++iterator) {
+        auto *field = *iterator;
+        if (field->getSourceElementType() != result.type) return {};
+        auto *parent = llvm::cast<llvm::StructType>(result.type);
+        const auto index = llvm::cast<llvm::ConstantInt>(field->getOperand(2))->getZExtValue();
+        const auto offset = field->getModule()->getDataLayout().getStructLayout(parent)->getElementOffset(index);
+        if (result.alignment) result.alignment = llvm::commonAlignment(llvm::Align(result.alignment), offset).value();
+        result.type = parent->getElementType(index);
+    }
+    return result;
+}
 extern "C" int plew_llvm_home_type_matches(LLVMValueRef address, LLVMTypeRef type) {
-    if (!address || !type) return 0;
-    auto *value = llvm::unwrap(address);
-    auto *wanted = llvm::unwrap(type);
-    if (auto *allocation = llvm::dyn_cast<llvm::AllocaInst>(value))
-        return allocation->getAllocatedType() == wanted;
-    if (auto *argument = llvm::dyn_cast<llvm::Argument>(value))
-        return (argument->hasByValAttr() && argument->getParamByValType() == wanted) ||
-               (argument->hasByRefAttr() && argument->getParamByRefType() == wanted);
-    return 0;
+    return address && type && plewHomeLayout(llvm::unwrap(address)).type == llvm::unwrap(type);
 }
 extern "C" uint64_t plew_llvm_home_alignment(LLVMValueRef address) {
-    if (!address) return 0;
-    auto *value = llvm::unwrap(address);
-    if (auto *allocation = llvm::dyn_cast<llvm::AllocaInst>(value))
-        return allocation->getAlign().value();
-    if (auto *argument = llvm::dyn_cast<llvm::Argument>(value)) {
-        if (auto alignment = argument->getParamAlign()) return alignment->value();
-        if (argument->hasByValAttr())
-            return argument->getParent()->getParent()->getDataLayout().getABITypeAlign(argument->getParamByValType()).value();
+    return address ? plewHomeLayout(llvm::unwrap(address)).alignment : 0;
+}
+// Validate an exact admitted root/layout/index chain in linear depth, separate
+// from the semantic stability and operation/argument receipt.
+extern "C" int plew_llvm_projected_home_matches(LLVMValueRef address, LLVMValueRef root, LLVMTypeRef rootType,
+                                                const uint64_t *indices, uint64_t count, LLVMTypeRef resultType) {
+    if (!address || !root || !rootType || !resultType || (count && !indices)) return 0;
+    if (plewHomeLayout(llvm::unwrap(address)).type != llvm::unwrap(resultType)) return 0;
+    auto *current = llvm::unwrap(address);
+    for (uint64_t remaining = count; remaining; --remaining) {
+        auto *field = llvm::dyn_cast<llvm::GetElementPtrInst>(current);
+        if (!field) return 0; // the layout pass above validated each node
+        auto *index = llvm::cast<llvm::ConstantInt>(field->getOperand(2));
+        if (index->getValue() != indices[remaining - 1]) return 0;
+        current = field->getPointerOperand();
     }
-    return 0;
+    return current == llvm::unwrap(root) && plewHomeLayout(current).type == llvm::unwrap(rootType);
 }
 extern "C" int plew_llvm_guaranteed_parameter_matches(LLVMValueRef address, LLVMTypeRef type, uint64_t alignment) {
     if (!address || !type || !alignment) return 0;

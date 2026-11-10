@@ -44,7 +44,7 @@ pub impl Comp {
                     return <Result.Err error=self.diagnosticAt(offset: self.arena.typeTermAt(index: contract.typeRef).nameStart, msg: "internal error: destructor requires a finalized borrowed receiver and a nullary Unit body") />
                 }
                 val finalized = <FinalDestructorCall bodyId=call.bodyId receiverType=call.receiverType receiverPassing=call.receiverPassing ready=true />
-                self.arena.finalDestructions[index] = <FinalDestruction typeRef=contract.typeRef isUnique=contract.isUnique ownershipClass=contract.ownershipClass ready=contract.ready needsRelease=contract.needsRelease deinitCall=finalized structLayout=contract.structLayout isOpaquePointer=contract.isOpaquePointer underlying=contract.underlying fieldTypes=contract.fieldTypes fieldBoxed=contract.fieldBoxed fieldNeedsRelease=contract.fieldNeedsRelease variantFieldStarts=contract.variantFieldStarts />
+                self.arena.finalDestructions[index] = <FinalDestruction representation=contract.representation typeRef=contract.typeRef isUnique=contract.isUnique ownershipClass=contract.ownershipClass ready=contract.ready needsRelease=contract.needsRelease deinitCall=finalized structLayout=contract.structLayout isOpaquePointer=contract.isOpaquePointer underlying=contract.underlying fieldTypes=contract.fieldTypes fieldBoxed=contract.fieldBoxed fieldNeedsRelease=contract.fieldNeedsRelease variantFieldStarts=contract.variantFieldStarts />
             }
             index += 1U64
         }
@@ -173,7 +173,7 @@ pub impl Comp {
                 releases.append(contract.fieldBoxed[field] || (try self.collectedFinalReleaseEffect(typeRef: contract.fieldTypes[field], start: start, needs: needs)))
                 field += 1U64
             }
-            self.arena.finalDestructions[start + index] = <FinalDestruction typeRef=contract.typeRef isUnique=contract.isUnique ownershipClass=contract.ownershipClass ready=true needsRelease=needs[index] deinitCall=contract.deinitCall structLayout=contract.structLayout isOpaquePointer=contract.isOpaquePointer underlying=contract.underlying fieldTypes=contract.fieldTypes fieldBoxed=contract.fieldBoxed fieldNeedsRelease=releases variantFieldStarts=contract.variantFieldStarts />
+            self.arena.finalDestructions[start + index] = <FinalDestruction representation=contract.representation typeRef=contract.typeRef isUnique=contract.isUnique ownershipClass=contract.ownershipClass ready=true needsRelease=needs[index] deinitCall=contract.deinitCall structLayout=contract.structLayout isOpaquePointer=contract.isOpaquePointer underlying=contract.underlying fieldTypes=contract.fieldTypes fieldBoxed=contract.fieldBoxed fieldNeedsRelease=releases variantFieldStarts=contract.variantFieldStarts />
             index += 1U64
         }
         return <Result.Ok value=() />
@@ -373,7 +373,20 @@ pub impl Comp {
             try self.collectFinalDestruction(typeRef: shape.fieldTypes[field])
             field += 1U64
         }
-        self.arena.finalDestructions[contract - 1U64] = <FinalDestruction typeRef=typeRef isUnique=self.arena.typeTermIsUnique(ref: typeRef) ownershipClass=ownershipClass deinitCall=<FinalDestructorCall bodyId=destructor receiverType=typeRef receiverPassing=<CallReceiverPassing.Borrow /> /> structLayout=structLayout isOpaquePointer=shape.isOpaquePointer underlying=shape.underlying fieldTypes=shape.fieldTypes fieldBoxed=shape.fieldBoxed variantFieldStarts=shape.variantFieldStarts />
+        // Outer views select source members, never a distinct native value.
+        // Publish the edge after recursive collection; no placeholder layout is read.
+        mut val representation = contract
+        val bare = self.typeRefWithoutOuterViews(ref: typeRef)
+        if bare != typeRef {
+            try self.collectFinalDestruction(typeRef: bare)
+            representation = self.finalDestructionIndex(typeRef: bare)
+        } else if shape.underlying != 0U64 {
+            representation = self.finalDestructionIndex(typeRef: shape.underlying)
+        }
+        if representation == 0U64 {
+            return <Result.Err error=self.diagnosticAt(offset: type.nameStart, msg: "internal error: finalized type has no native representation contract", failureDomain: <FailureDomain.Internal />) />
+        }
+        self.arena.finalDestructions[contract - 1U64] = <FinalDestruction representation=representation typeRef=typeRef isUnique=self.arena.typeTermIsUnique(ref: typeRef) ownershipClass=ownershipClass deinitCall=<FinalDestructorCall bodyId=destructor receiverType=typeRef receiverPassing=<CallReceiverPassing.Borrow /> /> structLayout=structLayout isOpaquePointer=shape.isOpaquePointer underlying=shape.underlying fieldTypes=shape.fieldTypes fieldBoxed=shape.fieldBoxed variantFieldStarts=shape.variantFieldStarts />
         return <Result.Ok value=() />
     }
 }

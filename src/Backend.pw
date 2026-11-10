@@ -120,8 +120,25 @@ struct LlvmPreparedLocal {
     pub val storage: LlvmLocalStorage = <LlvmLocalStorage.EntryAlloca />
     pub val mode: LlvmParameterMode
     pub val binding: LlvmLocalBinding = <LlvmLocalBinding.None />
+    pub val homeStability: U64 = 0U64
+    pub val sourceScope: U64 = 0U64
 }
 pub impl LlvmPreparedLocal { factory }
+// One admitted call use. The enclosing plan owns the executable body/function
+// and operation index; the row retains exact source storage and native layout.
+struct LlvmStableHomeUse {
+    pub val operation: U64
+    pub val operand: U64
+    pub val sourceIndex: U64
+    pub val place: U64
+    pub val local: U64
+    pub val scope: U64
+    pub val semanticType: U64
+    pub val rootType: LLVMTypeRef
+    pub val type: LLVMTypeRef
+    pub val fields: Array[U64]
+}
+pub impl LlvmStableHomeUse { factory }
 struct LlvmBodyLocalPlan {
     pub val canonicalBody: U64
     pub val bodyIdentity: U64
@@ -132,6 +149,7 @@ struct LlvmBodyLocalPlan {
     pub val localStart: U64
     pub val localCount: U64
     pub val revision: U64
+    pub val stableUses: Dictionary[U64, Array[U64]] = [:]
     pub val entry: LlvmBodyLocalEntry
     pub val environmentType: Optional[LLVMTypeRef] = <Optional.None />
 }
@@ -329,6 +347,8 @@ struct LlvmCtx {
     mut val valueAbiScope: Optional[LlvmSignatureScope] = <Optional.None />
     mut val bodyLocalPlans: Array[LlvmBodyLocalPlan] = []
     mut val preparedLocals: Array[LlvmPreparedLocal] = []
+    mut val stableHomeUses: Array[LlvmStableHomeUse] = []
+    mut val activeMidOperation: U64 = 0U64
     mut val asyncActivations: Array[LlvmAsyncActivation] = []
     mut val asyncActivationInputs: Array[LlvmAsyncActivationInput] = []
     mut val bodyLocalAdmission: Optional[LlvmBodyLocalAdmission] = <Optional.None />
@@ -1726,10 +1746,25 @@ fn llvmStore(builder~: LLVMBuilderRef, value~: LLVMValueRef, address~: LLVMValue
     if llvmTypeHasStorage(LLVMTypeOf(value)) { LLVMBuildStore(builder, value, address) }
 }
 
+// Pure operand-root projection. No backend state or compiler-wide authority is
+// needed to collect the locals written by one already selected call.
+fn collectCallWriteRoot(operands: Array[MidOperandNode], places: Array[MidPlaceNode], localCount: U64, operandId: U64, writes: inout Dictionary[U64, Bool]) {
+    if operandId == 0U64 || operandId > operands.count() { return }
+    val operand = operands[operandId - 1U64]
+    if operand.tag != 2U64 && operand.tag != 4U64 { return }
+    if operand.place == 0U64 || operand.place > places.count() { return }
+    val place = places[operand.place - 1U64]
+    if place.rootTag == 1U64 && place.local < localCount { writes[place.local] = true }
+}
+
 fn valueAbiFailure(message: String) -> CompileDiagnostic {
     return <CompileDiagnostic failureDomain=<FailureDomain.Internal /> location=<DiagnosticLocation.Line line=0I64 /> message="internal error: private value ABI: " + message />
 }
 
 extern(c) {
     fn plew_llvm_guaranteed_parameter_matches(address~: LLVMValueRef, type~: LLVMTypeRef, alignment~: U64) -> I32
+}
+
+extern(c) {
+    fn plew_llvm_projected_home_matches(address~: LLVMValueRef, root~: LLVMValueRef, rootType~: LLVMTypeRef, indices~: CPtr[U64], count~: U64, resultType~: LLVMTypeRef) -> I32
 }

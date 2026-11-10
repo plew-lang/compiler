@@ -3,7 +3,8 @@ use /Mid/Optimize only { MidCopyCosts }
 // A builder handle alone is insufficient; failures keep their stage and cause.
 use @Std/Io only { print }
 use @Std/Core only { assert }
-use /Frontend only { Comp }
+use /Frontend only { Comp, FrontendInput, analyzeFrontendDeclarations }
+use /SourceAccess only { SourceAccess }
 use /Ir only { BodyInstance, InstanceEnvironment }
 use /Mid only { MidBody, MidBlock, MidTerminator, MidParametricBody, MidInstantiatedBody, MidAccessResolvedBody, MidDropElaboratedBody, MidExecutableBody, MidPreparationError, MidInstantiateError, MidVerifyError }
 
@@ -34,6 +35,10 @@ fn typedStages(compiler: inout Comp, input: MidParametricBody, instance: U64) ->
 
 fn main() {
     mut val compiler: Comp = <Comp />
+    // A callable instance refers to an actual declaration, even with no lanes.
+    analyzeFrontendDeclarations(c: inout compiler, input: <FrontendInput.Text text="fn control() {{}}" path="preparation.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
+    val function = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "control").nameId)
+    assert(function < compiler.arena.functionCount())
     val body = compiler.mid.store(body: <MidBody blocks=[<MidBlock terminator=<MidTerminator.Return /> />] />)
     match MidExecutableBody.prepare(c: inout compiler, body: <MidParametricBody.input canonical=body />, bodyId: 0U64) {
         Result.Err(error: val failure) => {
@@ -49,7 +54,7 @@ fn main() {
         }
         _ => { assert(false) }
     }
-    val instance = compiler.arena.registerBodyInstance(<BodyInstance fnIdx=0U64 environment=<InstanceEnvironment /> />)
+    val instance = compiler.arena.registerBodyInstance(<BodyInstance fnIdx=function environment=<InstanceEnvironment /> />)
     compiler.arena.setBodySignature(bodyId: instance, parameters: [], passings: [], result: 0U64)
     match MidExecutableBody.prepare(c: inout compiler, body: <MidParametricBody.input canonical=body />, bodyId: instance) {
         Result.Ok(value: val executable) => {

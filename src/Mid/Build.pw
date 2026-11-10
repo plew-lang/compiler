@@ -11,7 +11,7 @@ use ../Ir only { BodyOrigin, CallReceiverPassing, CallArgumentPassing, ForTypeRe
 use ../Diag only { eprintU64, CompileDiagnostic }
 use @Std/Io only { eprint }
 use ../Ops only { opAnd, opOr }
-use ./Ir only { midLocalIsOwnedTemporary, MidEnumDestination, MidRange, MidCanonicalBody, MidClosureBody, MidProjection, MidPlace, MidBorrowCapability, MidConstant, MidOperand, MidCallArgument, MidAggregateKind, MidAggregateElement, MidClosureCapture, MidRvalue, MidCallTarget, MidCallReceiver, MidStatement, MidTerminator, MidLocalDecl, MidScope, MidBlock, MidBody }
+use ./Ir only { midLocalIsOwnedTemporary, MidEnumDestination, MidRange, MidCanonicalBody, MidClosureBody, MidProjection, MidPlace, MidBorrowCapability, MidConstant, MidOperand, MidCallArgument, MidAggregateKind, MidAggregateElement, MidClosureCapture, MidRvalue, MidCallTarget, MidCallReceiver, MidStatement, MidTerminator, MidLocalDecl, MidValueHomeStability, MidScope, MidBlock, MidBody }
 
 // A successful give transfers its value to the enclosing expression owner.
 enum MidBlockResult {
@@ -372,7 +372,19 @@ pub fn emptyMidBody(sourceFunction: U64) -> MidBody {
 // recovery query or lexical name lookup.
 pub fn addMidLocal(state: inout MidBuildState, declarationTarget: U64, typeTerm: U64, isUnique: Bool, isParameter: Bool, ownsAtEntry: Bool, isInout: Bool = false, isBorrowed: Bool = false, isCaptureCell: Bool = false, typeRecipe: U64 = 0U64, sourceBinding: SourceBindingOrigin = <SourceBindingOrigin />) -> U64 {
     val local: U64 = state.locals.count()
-    state.locals.append(<MidLocalDecl typeTerm=typeTerm typeRecipe=typeRecipe sourceScope=state.currentScope isUnique=isUnique isParameter=isParameter isBorrowed=isBorrowed isInout=isInout isCaptureCell=isCaptureCell ownsAtEntry=ownsAtEntry isDropFlag=false isReturnPlace=false sourceNameStart=declarationTarget sourceBinding=sourceBinding />)
+    mut val stability = <MidValueHomeStability.Unproved />
+    if !isUnique && !isParameter && !ownsAtEntry && !isInout && !isBorrowed && !isCaptureCell && typeRecipe == 0U64 {
+        match state.sourceFacts {
+            Optional.Some(v: val facts) => {
+                match facts.bindingStorageFact(origin: sourceBinding, declarationTarget: declarationTarget) {
+                    Optional.Some(v: val binding) => { if !binding.isMutable && binding.typeTerm == typeTerm { stability = <MidValueHomeStability.OwnedImmutable /> } }
+                    Optional.None => {}
+                }
+            }
+            Optional.None => {}
+        }
+    }
+    state.locals.append(<MidLocalDecl typeTerm=typeTerm typeRecipe=typeRecipe sourceScope=state.currentScope isUnique=isUnique isParameter=isParameter isBorrowed=isBorrowed isInout=isInout isCaptureCell=isCaptureCell ownsAtEntry=ownsAtEntry isDropFlag=false isReturnPlace=false sourceNameStart=declarationTarget sourceBinding=sourceBinding homeStability=stability />)
     state.bindings.append(<MidSourceBinding declarationTarget=declarationTarget local=local scope=state.currentScope />)
     return local
 }
@@ -382,7 +394,7 @@ pub fn addMidLocal(state: inout MidBuildState, declarationTarget: U64, typeTerm:
 // the evaluation as Move, and drop elaboration must account for the transfer.
 fn addMidTemporary(state: inout MidBuildState, typeTerm: U64, isUnique: Bool = false, typeRecipe: U64 = 0U64, preparedExpr: U64 = 0U64) -> U64 {
     val local: U64 = state.locals.count()
-    state.locals.append(<MidLocalDecl typeTerm=typeTerm typeRecipe=typeRecipe sourceScope=state.currentScope isUnique=isUnique isParameter=false ownsAtEntry=false isDropFlag=false isReturnPlace=false sourceNameStart=0U64 preparedExpr=preparedExpr />)
+    state.locals.append(<MidLocalDecl typeTerm=typeTerm typeRecipe=typeRecipe sourceScope=state.currentScope isUnique=isUnique isParameter=false ownsAtEntry=false isDropFlag=false isReturnPlace=false sourceNameStart=0U64 preparedExpr=preparedExpr homeStability=if isUnique { give <MidValueHomeStability.Unproved /> } else { give <MidValueHomeStability.EvaluationTemporary /> } />)
     return local
 }
 
@@ -1183,7 +1195,7 @@ fn materializeMidCallValue(c: inout Comp, state: inout MidBuildState, exprId: U6
     // A callee can close the continuation after its Call was emitted. That
     // destination still requires its recipe; an exit in the inputs does not.
     if reached {
-        state.locals.set(i: local, value: <MidLocalDecl typeTerm=sourceTerm typeRecipe=recipe sourceScope=scope isUnique=ownsUnique isParameter=false ownsAtEntry=false isDropFlag=false isReturnPlace=false sourceNameStart=0U64 />)
+        state.locals.set(i: local, value: <MidLocalDecl typeTerm=sourceTerm typeRecipe=recipe sourceScope=scope isUnique=ownsUnique isParameter=false ownsAtEntry=false isDropFlag=false isReturnPlace=false sourceNameStart=0U64 homeStability=if ownsUnique { give <MidValueHomeStability.Unproved /> } else { give <MidValueHomeStability.EvaluationTemporary /> } />)
     }
     if !midCurrentBlockIsOpen(state: state) {
         return <MidOperandBuild.NoContinuation />
@@ -1963,7 +1975,7 @@ fn midImmediateTemplateArgument(expressions: Array[Expr], argument: CallTemplate
 // Accepted immutable locals cannot be replaced through a source alias. Their
 // existing lexical owner and the ordinary ownership verifier still govern each
 // use; this fact neither initializes a slot nor acquires another owner.
-fn midLocalHasStableEvaluationValue(local: MidLocalDecl, facts: Optional[PreparedSemanticFacts]) -> Bool {
+fn midLocalHasStableEvaluationValue(local: MidLocalDecl) -> Bool {
     if local.isUnique || local.isBorrowed || local.isInout || local.isCaptureCell || local.isDropFlag || local.isReturnPlace { return false }
     if local.isParameter {
         // Ordinary inputs and copy-self have a synchronous entry guarantee.
@@ -1971,21 +1983,7 @@ fn midLocalHasStableEvaluationValue(local: MidLocalDecl, facts: Optional[Prepare
         // this is only body-local forwarding. Async inputs own their snapshots.
         return !local.ownsAtEntry
     }
-    // A dedicated anonymous result already completes its own evaluation.
-    // This is home stability, not proof that a pending recipe is copyable:
-    // the selected value/field still goes through type and ownership checks.
-    if local.sourceNameStart == 0U64 { return true }
-    if local.ownsAtEntry || local.typeRecipe != 0U64 { return false }
-    match facts {
-        Optional.Some(v: val reader) => {
-            match reader.bindingStorageFact(origin: local.sourceBinding, declarationTarget: local.sourceNameStart) {
-                Optional.Some(v: val binding) => { return !binding.isMutable && binding.typeTerm == local.typeTerm }
-                Optional.None => {}
-            }
-        }
-        Optional.None => {}
-    }
-    return false
+    return local.homeStability.key() != 0U64
 }
 
 // Only physical value fields inherit stable outer bytes from their root.
@@ -2017,7 +2015,7 @@ fn midEvaluatedValue(c: inout Comp, state: inout MidBuildState, operand: MidOper
         val local = state.locals[source.local]
         match operand {
             MidOperand.Copy(place: _) => {
-                if midLocalHasStableEvaluationValue(local: local, facts: state.sourceFacts) && midEvaluationValueProjectionsAreStable(projections: source.projections) { return operand }
+                if midLocalHasStableEvaluationValue(local: local) && midEvaluationValueProjectionsAreStable(projections: source.projections) { return operand }
             }
             // Preserve the existing completed anonymous move-result treatment;
             // authored moves do not acquire an immutable-value guarantee.

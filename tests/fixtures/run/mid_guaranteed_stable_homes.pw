@@ -1,0 +1,15 @@
+use @Std/Io only { print }
+struct Pair {
+    pub val first: I64
+    pub val second: I64
+}
+pub impl Pair { factory }
+struct Holder { pub val value: Pair }
+pub impl Holder { factory }
+fn inspect(value: Pair) -> I64 { return value.first + value.second }
+fn exercise() -> I64 {
+    val value = <Pair first=1I64 second=2I64 />
+    val holder = <Holder value=value />
+    return inspect(value: value) + inspect(value: holder.value) + inspect(value: <Pair first=1I64 second=2I64 />)
+}
+fn main() { print(exercise()) }

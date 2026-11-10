@@ -1754,7 +1754,7 @@ pub impl LlvmCtx {
             val parameterRef = c.arena.finalCalleeParameterTypeAt(types: selected.parameterTypeRefs, index: index)
             val lane = self.valueAbiParameters[abi.parameterStart + index + 1U64]
             if !c.typeRefEq(a: parameterRef, b: lane.semanticType) { return <Result.Err error=valueAbiFailure(message: "closure selected parameter/template mismatch") /> }
-            values.append((try self.midCanonicalCallInput(c: inout c, body: body, operandId: c.mid.callArguments[term.args.start + index], lane: lane, index: index + 1U64, semanticType: parameterRef, mode: <LlvmParameterMode.Borrow />, role: <LlvmParameterRole.Ordinary index=index />)))
+            values.append((try self.midCanonicalCallInput(c: inout c, body: body, operation: terminatorId, sourceIndex: index + 1U64, operandId: c.mid.callArguments[term.args.start + index], lane: lane, index: index + 1U64, semanticType: parameterRef, mode: <LlvmParameterMode.Borrow />, role: <LlvmParameterRole.Ordinary index=index />)))
             index += 1U64
         }
         val unit = c.functionTypeReturnsUnit(ref: functionType)
@@ -1849,7 +1849,7 @@ pub impl LlvmCtx {
                     val mode = argumentValueMode(passing: passing)
                     val lane = self.valueAbiParameters[abi.parameterStart + index + 1U64]
                     if !c.typeRefEq(a: parameter, b: lane.semanticType) || mode.key() != lane.mode.key() { return <Result.Err error=valueAbiFailure(message: "witness selected parameter/template mismatch") /> }
-                    values.append((try self.midCanonicalCallInput(c: inout c, body: body, operandId: operandId, lane: lane, index: index + 1U64, semanticType: parameter, mode: mode, role: <LlvmParameterRole.Ordinary index=index />)))
+                    values.append((try self.midCanonicalCallInput(c: inout c, body: body, operation: terminatorId, sourceIndex: index + 1U64, operandId: operandId, lane: lane, index: index + 1U64, semanticType: parameter, mode: mode, role: <LlvmParameterRole.Ordinary index=index />)))
                     index += 1U64
                 }
                 val result = (try self.callWitnessValueFunction(callee: callee, arguments: values))
@@ -2014,6 +2014,14 @@ pub impl LlvmCtx {
     }
 
     inout fn midCanonicalEmitCallUnchecked(c: inout Comp, body: MidBodyNode, terminatorId: U64) -> Result[Bool, CompileDiagnostic] {
+        val prior = self.activeMidOperation
+        self.activeMidOperation = terminatorId
+        val result = self.midCanonicalEmitResolvedCall(c: inout c, body: body, terminatorId: terminatorId)
+        self.activeMidOperation = prior
+        return result
+    }
+
+    inout fn midCanonicalEmitResolvedCall(c: inout Comp, body: MidBodyNode, terminatorId: U64) -> Result[Bool, CompileDiagnostic] {
         match (try self.midCanonicalCellControlPreflight(c: inout c, body: body, terminatorId: terminatorId)) { MidCallPreflight.None => { return self.midCanonicalEmitCellControl(c: inout c, body: body, terminatorId: terminatorId) } MidCallPreflight.Target => {} _ => { return <Result.Ok value=false /> } }
         match (try self.midCanonicalStrongCellPreflight(c: inout c, body: body, terminatorId: terminatorId)) { MidCallPreflight.None => { return self.midCanonicalEmitStrongCell(c: inout c, body: body, terminatorId: terminatorId) } MidCallPreflight.Target => {} _ => { return <Result.Ok value=false /> } }
         match (try self.midCanonicalClosureCallPreflight(c: inout c, body: body, terminatorId: terminatorId)) {
@@ -2099,7 +2107,7 @@ pub impl LlvmCtx {
             } else {
                 val abi = self.valueAbis[privateAbiId - 1U64]
                 if abi.parameterCount == 0U64 { return <Result.Err error=valueAbiFailure(message: "receiver lacks a completed lane") /> }
-                typedValues.append((try self.midCanonicalCallInput(c: inout c, body: body, operandId: receiver.operand, lane: self.valueAbiParameters[abi.parameterStart], index: 0U64, semanticType: selected.receiverSignatureTypeRef, mode: mode, role: <LlvmParameterRole.Receiver />)))
+                typedValues.append((try self.midCanonicalCallInput(c: inout c, body: body, operation: terminatorId, sourceIndex: 0U64, operandId: receiver.operand, lane: self.valueAbiParameters[abi.parameterStart], index: 0U64, semanticType: selected.receiverSignatureTypeRef, mode: mode, role: <LlvmParameterRole.Receiver />)))
             }
         } else {
             match selected.receiverPassing { CallReceiverPassing.None => {} _ => { return <Result.Ok value=false /> } }
@@ -2129,7 +2137,7 @@ pub impl LlvmCtx {
                 val abi = self.valueAbis[privateAbiId - 1U64]
                 val index = typedValues.count()
                 if index >= abi.parameterCount { return <Result.Err error=valueAbiFailure(message: "call argument range mismatch") /> }
-                typedValues.append((try self.midCanonicalCallInput(c: inout c, body: body, operandId: operandId, lane: self.valueAbiParameters[abi.parameterStart + index], index: index, semanticType: parameterRef, mode: argumentValueMode(passing: passing), role: <LlvmParameterRole.Ordinary index=argumentI />)))
+                typedValues.append((try self.midCanonicalCallInput(c: inout c, body: body, operation: terminatorId, sourceIndex: argumentI + 1U64, operandId: operandId, lane: self.valueAbiParameters[abi.parameterStart + index], index: index, semanticType: parameterRef, mode: argumentValueMode(passing: passing), role: <LlvmParameterRole.Ordinary index=argumentI />)))
             }
             argumentI += 1U64
         }
@@ -2817,7 +2825,7 @@ pub impl LlvmCtx {
     // shares prepareMidExecutable, then computes its own frame before emission.
     // One pass over verified local declarations. This is representation
     // admission, never a second semantic type checker or ownership analysis.
-    inout fn prepareBodyLocalPlan(c: inout Comp, canonical: MidCanonicalBody, parameterCount: U64) -> Result[LlvmBodyLocalAdmission, CompileDiagnostic] {
+    inout fn prepareBodyLocalPlan(c: inout Comp, canonical: MidCanonicalBody, parameterCount: U64, executable: Optional[MidExecutableBody] = <Optional.None />) -> Result[LlvmBodyLocalAdmission, CompileDiagnostic] {
         if canonical.body == 0U64 || canonical.body > c.mid.bodies.count() { return <Result.Err error=valueAbiFailure(message: "local admission canonical body is out of range") /> }
         val body = c.mid.bodies[canonical.body - 1U64]
         val function = LLVMIsAFunction(self.curFn)
@@ -2893,10 +2901,17 @@ pub impl LlvmCtx {
                     storage = <LlvmLocalStorage.GuaranteedParameter parameterIndex=parameterIndex semanticType=parameter.semanticType />
                 }
             }
-            self.preparedLocals.append(<LlvmPreparedLocal semanticType=declaration.typeTerm type=type storageType=storageType storage=storage mode=mode binding=binding />)
+            self.preparedLocals.append(<LlvmPreparedLocal semanticType=declaration.typeTerm type=type storageType=storageType storage=storage mode=mode binding=binding homeStability=declaration.homeStability.key() sourceScope=declaration.sourceScope />)
             index += 1U64
         }
-        self.bodyLocalPlans.append(<LlvmBodyLocalPlan canonicalBody=canonical.body bodyIdentity=body.bodyInstance function=function signature=signature moduleIdentity=scope.moduleIdentity contextIdentity=scope.contextIdentity localStart=start localCount=body.locals.len revision=1U64 entry=entry environmentType=match entryBindings { Optional.Some(v: val bindings) => { give bindings.environmentType } Optional.None => { give <Optional[LLVMTypeRef].None /> } } />)
+        val stableUses = match executable {
+            Optional.Some(v: val verified) => {
+                if verified.canonical.body != canonical.body { return <Result.Err error=valueAbiFailure(message: "stable home admission lacks this executable body") /> }
+                give (try self.prepareStableHomeUses(c: inout c, body: body, localStart: start))
+            }
+            Optional.None => { give [:] }
+        }
+        self.bodyLocalPlans.append(<LlvmBodyLocalPlan canonicalBody=canonical.body bodyIdentity=body.bodyInstance function=function signature=signature moduleIdentity=scope.moduleIdentity contextIdentity=scope.contextIdentity localStart=start localCount=body.locals.len revision=1U64 stableUses=stableUses entry=entry environmentType=match entryBindings { Optional.Some(v: val bindings) => { give bindings.environmentType } Optional.None => { give <Optional[LLVMTypeRef].None /> } } />)
         return <Result.Ok value=<LlvmBodyLocalAdmission.Planned planId=self.bodyLocalPlans.count() /> />
     }
 
@@ -2939,7 +2954,7 @@ pub impl LlvmCtx {
             Optional.Some(v: val executable) => {
                 val preflight = (try self.midVerifiedLlvmPreflight(c: inout c, canonical: executable.canonical, abiParameterCount: parameterCount))
                 match preflight {
-                    MidLlvmPreflight.Ready => { return <Result.Ok value=<MidLlvmPrepared.Ready canonical=executable.canonical localAdmission=(try self.prepareBodyLocalPlan(c: inout c, canonical: executable.canonical, parameterCount: parameterCount)) /> /> }
+                    MidLlvmPreflight.Ready => { return <Result.Ok value=<MidLlvmPrepared.Ready canonical=executable.canonical localAdmission=(try self.prepareBodyLocalPlan(c: inout c, canonical: executable.canonical, parameterCount: parameterCount, executable: <Optional.Some v=executable />)) /> /> }
                     _ => { self.recordMidPreflight(c: inout c, bodyId: bodyId, fnIdx: fnIdx, reason: preflight) }
                 }
             }
@@ -2951,11 +2966,17 @@ pub impl LlvmCtx {
 }
 
 pub impl LlvmCtx {
-    inout fn midCanonicalCallInput(c: inout Comp, body: MidBodyNode, operandId: U64, lane: LlvmValueParameter, index: U64, semanticType: U64, mode: LlvmParameterMode, role: LlvmParameterRole) -> Result[LlvmValueInput, CompileDiagnostic] {
+    inout fn midCanonicalCallInput(c: inout Comp, body: MidBodyNode, operation: U64, sourceIndex: U64, operandId: U64, lane: LlvmValueParameter, index: U64, semanticType: U64, mode: LlvmParameterMode, role: LlvmParameterRole) -> Result[LlvmValueInput, CompileDiagnostic] {
         if !role.same(role: lane.role) || mode.key() != lane.mode.key() || !c.typeRefEq(a: semanticType, b: lane.semanticType) { return <Result.Err error=valueAbiFailure(message: "selected call input differs from completed lane") /> }
         if operandId == 0U64 || operandId > c.mid.operands.count() { return <Result.Err error=valueAbiFailure(message: "call operand is out of range") /> }
         val operand = c.mid.operands[operandId - 1U64]
         if mode.key() == 2U64 && (operand.place == 0U64 || operand.place > c.mid.places.count()) { return <Result.Err error=valueAbiFailure(message: "inout operand lacks a place") /> }
+        if lane.passing.key() == 3U64 {
+            match (try self.stableCallHome(c: inout c, body: body, operation: operation, sourceIndex: sourceIndex, operandId: operandId, type: lane.type)) {
+                Optional.Some(v: val carrier) => { return <Result.Ok value=<LlvmValueInput lane=<LlvmLogicalParameter type=lane.type semanticType=lane.semanticType copyable=lane.copyable role=role mode=mode /> index=index carrier=carrier /> /> }
+                Optional.None => {}
+            }
+        }
         mut val home = <Optional[LLVMValueRef].None />
         if lane.passing.key() == 3U64 && operand.tag == 3U64 && !operand.borrowsStorage && operand.capability == 1U64 && operand.place != 0U64 && operand.place <= c.mid.places.count() {
             val place = c.mid.places[operand.place - 1U64]
