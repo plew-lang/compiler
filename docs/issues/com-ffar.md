@@ -1,6 +1,6 @@
 ---
 id: com-ffar
-status: open
+status: closed
 deps: [com-uiri]
 links: []
 created: 2026-11-09T14:53:00Z
@@ -52,3 +52,41 @@ of the concrete com-rv7l recommendation and its prerequisite prototype. Final
 integration remains gated on the prototype's positive evidence-based decision;
 it does not authorize assuming that result, bypassing tests or main/seed promotion.
 The prerequisite epic now owns its reviewed, dependent implementation units.
+
+## Accepted Integration Scope and Outcome
+
+The positive [W4 decision](com-947r.md#final-candidate-decision) adopts copyable
+aggregate Borrow lanes as guaranteed-indirect typed byref homes, independently
+of caller-specific reuse. The common descriptor and typed Value/Home protocol
+cover body, closure, witness, glue, async acquisition, external-C adapters,
+SourceEntry/main/initializer, requested/publication and lazy execution consumers.
+Verified local immutable/evaluation-temporary/static-field homes can forward;
+unsupported or unproved roots snapshot under the same ABI. Exact entry/lane
+proofs forward incoming homes. Competing per-entry classifications were removed.
+There is no arbitrary aggregate-size cutoff, new source feature or special ARC
+suppression. Semantic Copy/drop and async acquisition remain independently
+verified. Adopted contracts are synchronized in representation-and-abi,
+ownership-and-access and passes-and-optimization.
+
+[Final evidence](../../../evidence/performance-regression-history/value-passing-implementation/w4-measurement/final-candidate/checkpoint.json)
+retains the guarantee reconciliation, RED/GREEN/structure controls, finite
+normal/gen/deps/ASan/LSan scope, actual CLI/JIT paths, formal generation3 fixed
+point and balanced same-source comparisons. Independent reviews distinguish
+applicable passing coverage from baseline failures and optional future work.
+The retained-boundary benchmark improves; self-compilation does not measurably
+improve (7.879058/7.919201 seconds matched, formal median8.139814 seconds).
+The optimization is accepted for its demonstrated bounded benefit and measured
+costs, not as a repair of the interrupted signature task's performance regression.
+
+Main, seed and adopted carrier remain unchanged. Full normal and standard full
+ASan are not certified. Original failure owners and com-1hd3 remain open. Next
+work returns through its documented changed-input validation/performance
+procedure; old signature checkpoints cannot certify the changed ABI candidate.
+
+## Closure
+
+Closed as resolved after the independent
+[final integration reconciliation](../../../evidence/performance-regression-history/value-passing-implementation/w4-measurement/final-candidate/final-integration-closure-review.json).
+Product fd8987e5 and adopted design758af159 are the accepted boundary; no required
+in-scope correction or execution remains. Main/seed/adopted-carrier promotion,
+full-suite GREEN and original com-1hd3 recovery are not certified.

@@ -1,6 +1,6 @@
 ---
 id: com-uiri
-status: in_progress
+status: closed
 deps: [com-rv7l, com-947r]
 links: []
 created: 2026-11-09T14:53:00Z
@@ -96,3 +96,21 @@ Fresh-context neutral review at compiler 930db46a supported this split with
 W1a ending at the production authenticity checker, W1b independent of new
 transport, W2 preserving one descriptor authority, and W3 requiring a concrete
 call-site inventory/smaller coherent migration units before implementation.
+
+## Accepted Prototype Outcome
+
+W1a/W1b/W2/W3/W4 are complete within the reviewed finite design. The prototype
+received an evidence-based GO: one deterministic typed physical protocol reaches
+all affected entries, with exact local-home proofs and conservative snapshots.
+The actual final machine-code/runtime benefit, preparation/size costs, final
+fixed point and scoped safety acceptance are reconciled in
+[W4](com-947r.md#final-candidate-decision). This accepts the prototype, not the
+original com-1hd3 performance recovery, full-suite GREEN or main/seed promotion.
+
+## Closure
+
+Closed as resolved after the independent
+[final integration reconciliation](../../../evidence/performance-regression-history/value-passing-implementation/w4-measurement/final-candidate/final-integration-closure-review.json).
+Product fd8987e5 and adopted design758af159 are the accepted boundary; no required
+in-scope correction or execution remains. Main/seed/adopted-carrier promotion,
+full-suite GREEN and original com-1hd3 recovery are not certified.
