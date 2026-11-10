@@ -1,0 +1,30 @@
+use @Std/Io only { print }
+use @Std/Async only { sleep }
+
+struct Empty {}
+pub impl Empty { factory }
+struct Packet {
+    pub val text: String
+    pub val count: I64
+}
+pub impl Packet { factory }
+
+fn makeEmpty() -> Empty {
+    print(1I64)
+    return <Empty />
+}
+fn makePacket() -> Packet {
+    print(2I64)
+    return <Packet text="frame" count=7I64 />
+}
+async fn later(empty: Empty, packet: Packet) -> Promise[I64] {
+    print(packet.text)
+    await sleep(ms: 1)
+    return packet.count
+}
+async fn main() {
+    val work = later(empty: makeEmpty(), packet: makePacket())
+    print(3I64)
+    val count = await work
+    print(count)
+}

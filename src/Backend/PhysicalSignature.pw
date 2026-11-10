@@ -79,11 +79,13 @@ pub impl LlvmGlueOperation {
     fn erased() -> Bool { return self.key() <= 3U64 }
     fn borrowsPayload() -> Bool { return self.key() == 2U64 || self.key() == 4U64 || self.key() == 6U64 }
 }
-pub enum LlvmValueConvention { Body Closure Witness(targetType: U64, traitIndex: U64, slot: U64) OwnershipGlue(operation: LlvmGlueOperation) Legacy(family: LlvmLegacyConvention) }
+pub enum LlvmValueConvention { Body Closure Witness(targetType: U64, traitIndex: U64, slot: U64) OwnershipGlue(operation: LlvmGlueOperation) AsyncEntry AsyncResume Legacy(family: LlvmLegacyConvention) }
 pub impl LlvmValueConvention {
     fn key() -> U64 {
         return match self {
             LlvmValueConvention.Body => { give 0U64 }
+            LlvmValueConvention.AsyncEntry => { give 15U64 }
+            LlvmValueConvention.AsyncResume => { give 16U64 }
             LlvmValueConvention.Closure => { give 12U64 }
             LlvmValueConvention.Witness(targetType: _, traitIndex: _, slot: _) => { give 13U64 }
             LlvmValueConvention.OwnershipGlue(operation: _) => { give 14U64 }
@@ -101,6 +103,8 @@ pub impl LlvmValueConvention {
     }
     fn same(convention: LlvmValueConvention) -> Bool {
         match self {
+            LlvmValueConvention.AsyncEntry => { return match convention { LlvmValueConvention.AsyncEntry => { give true } _ => { give false } } }
+            LlvmValueConvention.AsyncResume => { return match convention { LlvmValueConvention.AsyncResume => { give true } _ => { give false } } }
             LlvmValueConvention.Body => { return match convention { LlvmValueConvention.Body => { give true } _ => { give false } } }
             LlvmValueConvention.Closure => { return match convention { LlvmValueConvention.Closure => { give true } _ => { give false } } }
             LlvmValueConvention.Witness(targetType: val targetType, traitIndex: val traitIndex, slot: val slot) => {
@@ -111,12 +115,13 @@ pub impl LlvmValueConvention {
         }
     }
 }
-pub enum LlvmParameterRole { Receiver Environment ErasedReceiver GlueValue GlueStorage Ordinary(index: U64) Legacy(index: U64) }
+pub enum LlvmParameterRole { Receiver Environment ErasedReceiver GlueValue GlueStorage Frame(bodyId: U64) Ordinary(index: U64) Legacy(index: U64) }
 pub impl LlvmParameterRole {
     fn same(role: LlvmParameterRole) -> Bool {
         match self {
             LlvmParameterRole.Receiver => { return match role { LlvmParameterRole.Receiver => { give true } _ => { give false } } }
             LlvmParameterRole.Environment => { return match role { LlvmParameterRole.Environment => { give true } _ => { give false } } }
+            LlvmParameterRole.Frame(bodyId: val bodyId) => { return match role { LlvmParameterRole.Frame(bodyId: val other) => { give bodyId == other } _ => { give false } } }
             LlvmParameterRole.GlueValue => { return match role { LlvmParameterRole.GlueValue => { give true } _ => { give false } } }
             LlvmParameterRole.GlueStorage => { return match role { LlvmParameterRole.GlueStorage => { give true } _ => { give false } } }
             LlvmParameterRole.ErasedReceiver => { return match role { LlvmParameterRole.ErasedReceiver => { give true } _ => { give false } } }
@@ -306,6 +311,12 @@ pub impl LlvmSignatureScope {
         val resultVoid = LLVMGetTypeKind(signature.result) == 0U32
         if !resultVoid && LLVMTypeIsSized(signature.result) == 0I32 { return <Result.Err error=signatureFailure(message: "incomplete result layout") /> }
         match signature.convention {
+            LlvmValueConvention.AsyncEntry => {
+                if resultVoid || signature.resultTerm == 0U64 || LLVMGetTypeKind(signature.result) != 12U32 { return <Result.Err error=signatureFailure(message: "async entry must retain its semantic Promise result") /> }
+            }
+            LlvmValueConvention.AsyncResume => {
+                if !resultVoid || signature.resultTerm != 0U64 || signature.parameters.count() != 1U64 { return <Result.Err error=signatureFailure(message: "async resume must have one frame and native void result") /> }
+            }
             LlvmValueConvention.Body => {
                 if resultVoid != (signature.resultTerm == 0U64) { return <Result.Err error=signatureFailure(message: "body result protocol mismatch") /> }
             }
@@ -329,6 +340,14 @@ pub impl LlvmSignatureScope {
             if !self.ownsType(type: parameter.type) { return <Result.Err error=signatureFailure(message: "foreign parameter context") /> }
             if LLVMTypeIsSized(parameter.type) == 0I32 { return <Result.Err error=signatureFailure(message: "incomplete parameter layout") /> }
             match signature.convention {
+                LlvmValueConvention.AsyncEntry => {
+                    if parameter.semanticType == 0U64 || (parameter.mode.key() != 1U64 && parameter.mode.key() != 3U64) || !parameter.role.same(role: <LlvmParameterRole.Ordinary index=ordinary />) { return <Result.Err error=signatureFailure(message: "async entry ordinary type/mode/index mismatch") /> }
+                    ordinary += 1U64
+                }
+                LlvmValueConvention.AsyncResume => {
+                    val owner = match parameter.role { LlvmParameterRole.Frame(bodyId: val bodyId) => { give bodyId } _ => { give 0U64 } }
+                    if owner == 0U64 || parameter.semanticType != 0U64 || parameter.mode.key() != 3U64 || LLVMGetTypeKind(parameter.type) != 12U32 { return <Result.Err error=signatureFailure(message: "async resume frame execution-transfer contract mismatch") /> }
+                }
                 LlvmValueConvention.Body => {
                     if parameter.semanticType == 0U64 || parameter.mode.key() == 0U64 { return <Result.Err error=signatureFailure(message: "body parameter lacks a semantic contract") /> }
                     match parameter.role {
@@ -339,6 +358,7 @@ pub impl LlvmSignatureScope {
                         }
                         LlvmParameterRole.Environment => { return <Result.Err error=signatureFailure(message: "environment role in body convention") /> }
                         LlvmParameterRole.ErasedReceiver => { return <Result.Err error=signatureFailure(message: "erased receiver role in body convention") /> }
+                        LlvmParameterRole.Frame(bodyId: _) => { return <Result.Err error=signatureFailure(message: "frame role in body convention") /> }
                         LlvmParameterRole.GlueValue => { return <Result.Err error=signatureFailure(message: "glue value role in body convention") /> }
                         LlvmParameterRole.GlueStorage => { return <Result.Err error=signatureFailure(message: "glue storage role in body convention") /> }
                         LlvmParameterRole.Legacy(index: _) => { return <Result.Err error=signatureFailure(message: "legacy role in body convention") /> }

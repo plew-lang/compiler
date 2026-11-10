@@ -47,7 +47,8 @@ assert 'midCanonicalLocalTy(' not in method(async_mid, 'admitMidAsyncActivation'
 assert 'lowerMidLocalType(' not in method(async_mid, 'genLlvmMidAsyncResume'), 'resume re-lowers admitted local types'
 assert 'LlvmBodyLocalAdmission.Legacy' not in mid, 'Ready retains an unchecked local fallback'
 
-assert 'plew_pointer_equal(abi.logicalSignature, expected)' in method(async_mid, 'admitMidAsyncActivation'), 'async admission confuses logical signature with byval native signature'
+assert 'lane.semanticType != rows[index].semanticType' in method(async_mid, 'admitMidAsyncActivation'), 'async admission loses completed semantic lane correspondence'
+assert 'LLVMFunctionType(self.ptrty, arrayCPtr(parameters)' not in method(async_mid, 'admitMidAsyncActivation'), 'async admission reconstructs a competing physical signature'
 
 assert 'asyncBody:' not in method(mid, 'genLlvmPreparedMidBody').split('->', 1)[0], 'common emitter accepts external async-mode override'
 

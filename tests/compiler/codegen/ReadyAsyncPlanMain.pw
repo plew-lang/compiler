@@ -55,6 +55,12 @@ fn asyncPlanControl(mode: U64) {
     val unsigned = compiler.simpleTypeRef(nameStart: unsignedName.nameStart, nameLen: unsignedName.nameLen)
     requireAsyncOk(result: compiler.enqueueFinalDestruction(typeRef: integer), stage: "finalize I64", mode: mode)
     requireAsyncOk(result: compiler.enqueueFinalDestruction(typeRef: unsigned), stage: "finalize U64", mode: mode)
+    val promise = compiler.semanticCallableReturnTerm(function: compiler.arena.functionAt(index: compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "control").nameId)))
+    if promise == 0U64 { panic "missing fixture Promise declaration" }
+    compiler.inCollection = true
+    requireAsyncOk(result: compiler.collectRecordLayout(ref: compiler.arena.typeAt(index: promise).args[0U64]), stage: "complete Unit payload layout", mode: mode)
+    compiler.inCollection = false
+    requireAsyncOk(result: compiler.enqueueFinalDestruction(typeRef: promise), stage: "finalize Promise result", mode: mode)
     val bodyId = compiler.arena.registerBodyInstance(<BodyInstance fnIdx=functionIndex environment=<InstanceEnvironment /> />)
     val otherBodyId = compiler.arena.registerBodyInstance(<BodyInstance fnIdx=functionIndex environment=<InstanceEnvironment /> />)
     val localInteger = if mode == 21U64 {
@@ -67,7 +73,7 @@ fn asyncPlanControl(mode: U64) {
     val passing = if mode == 12U64 { give <CallArgumentPassing.Inout /> } else if consumes { give <CallArgumentPassing.Move /> } else { give <CallArgumentPassing.Borrow /> }
     val terms: Array[U64] = if isMain { give [] } else { give [integer] }
     val passings: Array[CallArgumentPassing] = if isMain { give [] } else { give [passing] }
-    compiler.arena.setBodySignature(bodyId: bodyId, parameters: terms, passings: passings, result: 0U64, receiverType: if mode == 13U64 { give integer } else { give 0U64 }, receiverPassing: if mode == 13U64 { give <CallReceiverPassing.Borrow /> } else { give <CallReceiverPassing.None /> })
+    compiler.arena.setBodySignature(bodyId: bodyId, parameters: terms, passings: passings, result: promise, receiverType: if mode == 13U64 { give integer } else { give 0U64 }, receiverPassing: if mode == 13U64 { give <CallReceiverPassing.Borrow /> } else { give <CallReceiverPassing.None /> }, bodyResult: 0U64)
     mut val locals: Array[MidLocalDecl] = []
     if !isMain { locals.append(<MidLocalDecl typeTerm=if mode == 10U64 { give unsigned } else { give localInteger } sourceScope=0U64 isUnique=false isParameter=true isBorrowed=mode == 28U64 ownsAtEntry=mode != 11U64 isInout=mode == 12U64 />) }
     if mode == 14U64 { locals.append(<MidLocalDecl typeTerm=integer sourceScope=0U64 isUnique=false isParameter=true ownsAtEntry=true />) }
@@ -79,16 +85,42 @@ fn asyncPlanControl(mode: U64) {
     if !compiler.mid.isWellFormed(body: canonical) { panic "malformed async fixture shape" }
     val entryParameters: Array[LLVMTypeRef] = if isMain { give [] } else { give [if mode == 9U64 { give backend.ptrty } else { give backend.i64ty }] }
     val entrySignature = if isMain && mode != 18U64 { give backend.mainFunctionType() } else { give LLVMFunctionType(if isMain { give backend.voidty } else { give backend.ptrty }, arrayCPtr(entryParameters), entryParameters.count(), 0I32) }
-    val entryFunction = if isMain { give LLVMAddFunction(module, name.ptr, entrySignature) } else { give requireAsyncOk(result: backend.declareLegacyBodyFunction(name: name.ptr, signature: entrySignature, bodyId: if mode == 8U64 { give otherBodyId } else { give bodyId }, family: if mode == 15U64 { give <LlvmLegacyConvention.Closure /> } else { give <LlvmLegacyConvention.AsyncEntry /> }), stage: "declare async entry", mode: mode) }
+    val entryAbiResult: Result[U64, CompileDiagnostic] = if isMain { give <Result.Ok value=0U64 /> }
+        else if mode == 15U64 { give backend.legacyValueAbi(signature: entrySignature, family: <LlvmLegacyConvention.Closure />, ownerBody: bodyId) }
+        else if mode == 0U64 || mode == 1U64 || mode == 21U64 { give backend.asyncBodyValueAbi(c: inout compiler, bodyId: bodyId, resume: false) }
+        else {
+            give backend.saveValueAbi(signature: <LlvmLogicalSignature convention=<LlvmValueConvention.AsyncEntry /> parameters=[<LlvmLogicalParameter type=entryParameters[0U64] semanticType=if mode == 32U64 { give unsigned } else { give integer } role=<LlvmParameterRole.Ordinary index=0U64 /> mode=if mode == 12U64 { give <LlvmParameterMode.Inout /> } else if mode == 31U64 { give <LlvmParameterMode.Move /> } else { give <LlvmParameterMode.Borrow /> } />] result=backend.ptrty resultTerm=if mode == 29U64 { give integer } else { give promise } />, ownerBody: if mode == 8U64 { give otherBodyId } else { give bodyId })
+        }
+    if mode == 12U64 {
+        requireAsyncInternal(result: entryAbiResult, mode: mode)
+        LLVMDisposeBuilder(builder) LLVMDisposeModule(otherModule) LLVMDisposeModule(module) LLVMContextDispose(context)
+        return
+    }
+    val entryAbi = requireAsyncOk(result: entryAbiResult, stage: "entry descriptor", mode: mode)
+    val entryFunction = if isMain { give LLVMAddFunction(module, name.ptr, entrySignature) } else { give requireAsyncOk(result: backend.declarePlannedBodyFunction(name: name.ptr, abiId: entryAbi, bodyId: if mode == 8U64 { give otherBodyId } else { give bodyId }), stage: "declare async entry", mode: mode) }
     backend.attachBodyIdentity(function: entryFunction, bodyId: bodyId)
     val entry = if isMain { give <LlvmAsyncEntry.Main function=entryFunction /> } else { give <LlvmAsyncEntry.Private function=entryFunction abiId=backend.valueAbiFunctions.getOr(key: LLVMIsAFunction(entryFunction), fallback: 0U64) /> }
     val resumeName = <CString.copied text="ready-async-resume" />
     val resumeParameters: Array[LLVMTypeRef] = [if mode == 7U64 { give backend.i64ty } else { give backend.ptrty }]
     val resumeSignature = LLVMFunctionType(backend.voidty, arrayCPtr(resumeParameters), 1U64, 0I32)
-    val resumeFunction = requireAsyncOk(result: backend.declareLegacyBodyFunction(name: resumeName.ptr, signature: resumeSignature, bodyId: if mode == 6U64 { give otherBodyId } else { give bodyId }, family: if mode == 16U64 { give <LlvmLegacyConvention.Witness /> } else { give <LlvmLegacyConvention.AsyncResume /> }), stage: "declare resume", mode: mode)
+    val resumeOwner = if mode == 6U64 { give otherBodyId } else { give bodyId }
+    val resumeAbiResult = if mode == 16U64 { give backend.legacyValueAbi(signature: resumeSignature, family: <LlvmLegacyConvention.Witness />, ownerBody: bodyId) }
+        else if mode == 0U64 || mode == 1U64 || mode == 2U64 || mode == 21U64 { give backend.asyncBodyValueAbi(c: inout compiler, bodyId: bodyId, resume: true) }
+        else { give backend.saveValueAbi(signature: <LlvmLogicalSignature convention=<LlvmValueConvention.AsyncResume /> parameters=[<LlvmLogicalParameter type=resumeParameters[0U64] semanticType=0U64 role=<LlvmParameterRole.Frame bodyId=if mode == 33U64 { give otherBodyId } else { give resumeOwner } /> mode=<LlvmParameterMode.Move /> />] result=backend.voidty resultTerm=0U64 />, ownerBody: resumeOwner) }
+    if mode == 7U64 {
+        requireAsyncInternal(result: resumeAbiResult, mode: mode)
+        LLVMDisposeBuilder(builder) LLVMDisposeModule(otherModule) LLVMDisposeModule(module) LLVMContextDispose(context)
+        return
+    }
+    val resumeAbi = requireAsyncOk(result: resumeAbiResult, stage: "resume descriptor", mode: mode)
+    if mode == 30U64 {
+        val plan = backend.valueAbis[resumeAbi - 1U64]
+        backend.valueAbis.set(i: resumeAbi - 1U64, value: <LlvmValueAbi parameterStart=plan.parameterStart parameterCount=plan.parameterCount logicalSignature=plan.logicalSignature functionType=plan.functionType moduleIdentity=plan.moduleIdentity contextIdentity=plan.contextIdentity revision=plan.revision convention=plan.convention resultTerm=plan.resultTerm bodyResultTerm=integer resultProtocol=plan.resultProtocol ownerBody=plan.ownerBody />)
+    }
+    val resumeFunction = requireAsyncOk(result: backend.declarePlannedBodyFunction(name: resumeName.ptr, abiId: resumeAbi, bodyId: resumeOwner), stage: "declare resume", mode: mode)
     val resume = if mode == 17U64 { give LLVMAddFunction(otherModule, resumeName.ptr, resumeSignature) } else { give resumeFunction }
     val admissionResult = backend.admitMidAsyncActivation(c: inout compiler, canonical: if mode == 3U64 { give <MidCanonicalBody body=0U64 /> } else { give canonical }, entry: entry, resume: resume)
-    if (mode >= 3U64 && mode <= 20U64) || mode == 28U64 {
+    if (mode >= 3U64 && mode <= 20U64) || mode == 28U64 || mode >= 29U64 {
         requireAsyncInternal(result: admissionResult, mode: mode)
     } else {
         val activationId = requireAsyncOk(result: admissionResult, stage: "valid activation admission", mode: mode)
@@ -107,7 +139,8 @@ fn asyncPlanControl(mode: U64) {
         if !isMain {
             val input = backend.asyncActivationInputs[activation.inputStart]
             val abiId = backend.valueAbiFunctions.getOr(key: LLVMIsAFunction(entryFunction), fallback: 0U64)
-            if input.parameterIndex != backend.valueAbis[abiId - 1U64].parameterStart || input.local != 0U64 || backend.preparedLocals[plan.localStart].semanticType != localInteger || input.acquireShare == consumes { panic "Borrow acquisition / Move transfer mapping lost" }
+            if input.parameterIndex != backend.valueAbis[abiId - 1U64].parameterStart || input.local != 0U64 || backend.preparedLocals[plan.localStart].semanticType != integer || input.acquireShare == consumes { panic "Borrow acquisition / Move transfer mapping lost" }
+            if compiler.mid.locals[compiler.mid.bodies[canonical.body - 1U64].locals.start].typeTerm != localInteger || !compiler.typeRefEq(a: localInteger, b: integer) { panic "canonical parameter binding changed verified source local" }
             match backend.preparedLocals[plan.localStart].storage { LlvmLocalStorage.FrameField(field: val field) => { if field != 2U64 { panic "entry parameter lacks exact frame field" } } _ => { panic "entry parameter was not retained in frame" } }
         }
         match backend.preparedLocals[plan.localStart + ordinaryLocal].storage { LlvmLocalStorage.EntryAlloca => {} _ => { panic "dead ordinary local unnecessarily frame-bound" } }
@@ -125,7 +158,7 @@ fn asyncPlanControl(mode: U64) {
                 val fields: Array[LLVMTypeRef] = [backend.i64ty, backend.ptrty, backend.i64ty]
                 LLVMStructSetBody(activation.type, arrayCPtr(fields), fields.count(), 0I32)
             } else if mode == 27U64 {
-                val replacement = requireAsyncOk(result: backend.declareLegacyBodyFunction(name: resumeName.ptr, signature: resumeSignature, bodyId: bodyId, family: <LlvmLegacyConvention.AsyncResume />), stage: "different resume setup", mode: mode)
+                val replacement = requireAsyncOk(result: backend.declarePlannedBodyFunction(name: resumeName.ptr, abiId: resumeAbi, bodyId: bodyId), stage: "different resume setup", mode: mode)
                 // LLVM uniquifies the name and preserves the same body/signature.
                 if LLVMIsAFunction(replacement) == LLVMIsAFunction(resume) { panic "different resume setup reused function" }
                 backend.asyncActivations.set(i: activationId - 1U64, value: <LlvmAsyncActivation type=activation.type prepared=activation.prepared entry=activation.entry resume=replacement resumeAbi=backend.valueAbiFunctions.getOr(key: LLVMIsAFunction(replacement), fallback: 0U64) inputStart=activation.inputStart inputCount=activation.inputCount />)
@@ -133,6 +166,45 @@ fn asyncPlanControl(mode: U64) {
             requireAsyncInternal(result: backend.validateMidAsyncActivation(activationId: activationId, planId: planId), mode: mode)
             LLVMDisposeBuilder(builder) LLVMDisposeModule(otherModule) LLVMDisposeModule(module) LLVMContextDispose(context)
             return
+        }
+        if mode == 0U64 {
+            backend.curFn = entryFunction backend.beginFnBody(fv: entryFunction)
+            val entryPlan = backend.valueAbis[entryAbi - 1U64]
+            if entryPlan.resultTerm != promise || entryPlan.bodyResultTerm != 0U64 || backend.valueAbis[resumeAbi - 1U64].resultTerm != 0U64 { panic "Promise and body/native result contracts conflated" }
+            val count = backend.valueAbis.count()
+            val lanes = backend.valueAbiParameters.count()
+            if requireAsyncOk(result: backend.asyncBodyValueAbi(c: inout compiler, bodyId: bodyId, resume: false), stage: "cached entry", mode: mode) != entryAbi || requireAsyncOk(result: backend.asyncBodyValueAbi(c: inout compiler, bodyId: bodyId, resume: true), stage: "cached resume", mode: mode) != resumeAbi { panic "async declaration cache missed" }
+            val input = requireAsyncOk(result: backend.asyncValueParameter(function: entryFunction, bodyId: bodyId, resume: false, index: 0U64), stage: "typed entry input", mode: mode)
+            requireAsyncOk(result: backend.callAsyncEntryValueFunction(function: entryFunction, bodyId: bodyId, arguments: [input]), stage: "typed entry call", mode: mode)
+            if backend.valueAbis.count() != count || backend.valueAbiParameters.count() != lanes { panic "async call rebuilt physical descriptor" }
+            mut val bad = 0U64
+            while bad < 4U64 {
+                val malformed = <LlvmValueInput lane=<LlvmLogicalParameter type=input.lane.type semanticType=if bad == 0U64 { give unsigned } else { give input.lane.semanticType } role=if bad == 1U64 { give <LlvmParameterRole.Receiver /> } else { give input.lane.role } mode=if bad == 2U64 { give <LlvmParameterMode.Move /> } else { give input.lane.mode } /> index=if bad == 3U64 { give 1U64 } else { give 0U64 } carrier=input.carrier />
+                requireAsyncInternal(result: backend.callAsyncEntryValueFunction(function: entryFunction, bodyId: bodyId, arguments: [malformed]), mode: bad + 40U64)
+                bad += 1U64
+            }
+            val foreign = LLVMAddFunction(otherModule, name.ptr, entrySignature)
+            requireAsyncInternal(result: backend.callAsyncEntryValueFunction(function: entryFunction, bodyId: bodyId, arguments: [<LlvmValueInput lane=input.lane index=0U64 carrier=<LlvmValueCarrier.Value value=LLVMGetParam(foreign, 0U64) /> />]), mode: 44U64)
+            requireAsyncInternal(result: backend.callAsyncEntryValueFunction(function: resume, bodyId: bodyId, arguments: [input]), mode: 45U64)
+            requireAsyncInternal(result: backend.asyncValueParameter(function: entryFunction, bodyId: otherBodyId, resume: false, index: 0U64), mode: 46U64)
+            requireAsyncInternal(result: backend.preparedLegacyParameter(parameterIndex: entryPlan.parameterStart), mode: 47U64)
+            requireAsyncInternal(result: backend.legacyValueParameter(function: entryFunction, index: 0U64), mode: 48U64)
+            requireAsyncInternal(result: backend.callLegacyValueFunction(signature: entryPlan.logicalSignature, function: entryFunction, arguments: [backend.valueInputValue(input: input)]), mode: 49U64)
+            val frame = requireAsyncOk(result: backend.asyncFrameAlloc(c: inout compiler, activationId: activationId), stage: "typed frame allocation", mode: mode)
+            requireAsyncOk(result: backend.callAsyncResumeValueFunction(activationId: activationId, frame: frame), stage: "typed first resume", mode: mode)
+            requireAsyncInternal(result: backend.callAsyncResumeValueFunction(activationId: activationId, frame: <LlvmAsyncFrameInput activationId=activationId + 1U64 value=frame.value />), mode: 50U64)
+            requireAsyncInternal(result: backend.callAsyncResumeValueFunction(activationId: activationId, frame: <LlvmAsyncFrameInput activationId=activationId value=LLVMConstInt(backend.i64ty, 0U64, 0I32) />), mode: 51U64)
+            requireAsyncInternal(result: backend.callAsyncResumeValueFunction(activationId: activationId, frame: <LlvmAsyncFrameInput activationId=activationId value=LLVMGetParam(resume, 0U64) />), mode: 59U64)
+            val resumePlan = backend.valueAbis[resumeAbi - 1U64]
+            val wrongFrame = <LlvmValueInput lane=<LlvmLogicalParameter type=backend.ptrty semanticType=0U64 role=<LlvmParameterRole.Frame bodyId=otherBodyId /> mode=<LlvmParameterMode.Move /> /> index=0U64 carrier=<LlvmValueCarrier.Value value=frame.value /> />
+            requireAsyncInternal(result: backend.callTypedBodyValueFunction(function: resume, bodyId: bodyId, inputs: requireAsyncOk(result: backend.bodyInputScope(bodyId: bodyId, signature: resumePlan.logicalSignature), stage: "resume input scope", mode: mode), arguments: [wrongFrame], conventionKey: 16U64), mode: 52U64)
+            requireAsyncInternal(result: backend.asyncValueParameter(function: resume, bodyId: otherBodyId, resume: true, index: 0U64), mode: 53U64)
+            requireAsyncInternal(result: backend.asyncValueParameter(function: resume, bodyId: bodyId, resume: true, index: 1U64), mode: 54U64)
+            requireAsyncInternal(result: backend.legacyValueParameter(function: resume, index: 0U64), mode: 55U64)
+            requireAsyncInternal(result: backend.callLegacyValueFunction(signature: resumePlan.logicalSignature, function: resume, arguments: [frame.value]), mode: 56U64)
+            requireAsyncInternal(result: backend.legacyValueAbi(signature: entryPlan.logicalSignature, family: <LlvmLegacyConvention.AsyncEntry />), mode: 57U64)
+            requireAsyncInternal(result: backend.legacyValueAbi(signature: resumePlan.logicalSignature, family: <LlvmLegacyConvention.AsyncResume />), mode: 58U64)
+            LLVMBuildRet(builder, LLVMConstNull(backend.ptrty))
         }
         requireAsyncOk(result: backend.genLlvmMidAsyncResume(c: inout compiler, activationId: activationId), stage: "real async Ready consumer", mode: mode)
         if !isMain {
@@ -157,6 +229,6 @@ fn main() {
     while mode <= 18U64 { asyncPlanControl(mode: mode) mode += 1U64 }
     asyncPlanControl(mode: 20U64)
     mode = 21U64
-    while mode <= 28U64 { asyncPlanControl(mode: mode) mode += 1U64 }
+    while mode <= 33U64 { asyncPlanControl(mode: mode) mode += 1U64 }
     write(s: "ok\n")
 }

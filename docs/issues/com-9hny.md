@@ -398,6 +398,20 @@ ownership executes separately in source controls. This closes checkpoint 4 only.
 
 ### Next Completed Async Increment
 
+This finite increment is accepted in [completed async evidence](../../../evidence/performance-regression-history/value-passing-implementation/w2-protocol/typed-async-protocol.json)
+and [neutral review](../../../evidence/performance-regression-history/value-passing-implementation/w2-protocol/typed-async-review.json).
+Build `20261110T051952-build-e6638f` passed with immutable inputs. Candidate
+`bin/plewc-value-abi-typed-async-20261110` passes CLI66/internal8, raw/optimized
+ABI/C and witness/glue/async controls, physical native and optimized private
+Async admission/binding controls. All 185 product inputs match the build; the
+only later control edit repairs the new private fixture's Unit layout setup.
+Neutral review checked 1269 hash references (1247 distinct paths), replayed the
+private harness and raw/optimized async binaries, and found no required changes.
+Promise/body/native results remain distinct; Frame/Move transfers execution
+responsibility without new ARC. Existing malformed/Ready/GEP assertions remain,
+including canonical term versus unchanged duplicate-ID Mid local and foreign
+caller frame rejection. It does not close checkpoint 5 or W2.
+
 Neutral planning selects the complete private async entry -> activation frame
 -> resume roundtrip as the next finite checkpoint 5 increment. Finalized
 BodySignature.parameterTypes/parameterPassings/resultType already owns ordinary

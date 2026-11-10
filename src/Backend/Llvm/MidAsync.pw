@@ -34,11 +34,11 @@ pub impl LlvmCtx {
         val scope = (try self.prepareValueAbiScope())
         try scope.validateScope()
         val resumeAbi = (try self.asyncNativeAbi(function: resume, bodyId: body.bodyInstance, resume: true))
+        if !c.typeRefEq(a: self.valueAbis[resumeAbi - 1U64].bodyResultTerm, b: c.callableResultSlot(ref: signature.bodyResultType)) { return <Result.Err error=valueAbiFailure(message: "async resume body-result correspondence mismatch") /> }
         val framePlan = planCanonicalMidAsyncFrame(c: c, canonical: canonical)
         if !framePlan.valid || framePlan.storedLocals.count() != body.locals.len { return <Result.Err error=valueAbiFailure(message: "async frame plan is invalid") /> }
         mut val fields: Array[LLVMTypeRef] = [self.i32ty, self.ptrty]
         mut val rows: Array[LlvmPreparedLocal] = []
-        mut val parameters: Array[LLVMTypeRef] = []
         mut val index = 0U64
         while index < body.locals.len {
             val declaration = c.mid.locals[body.locals.start + index]
@@ -59,14 +59,13 @@ pub impl LlvmCtx {
                     }
                     CallArgumentPassing.Move => { give <LlvmParameterMode.Move /> }
                 }
-                parameters.append(type)
             }
             val storage = if declaration.isParameter || framePlan.storedLocals[index] {
                 val field = fields.count()
                 fields.append(storageType)
                 give <LlvmLocalStorage.FrameField field=field />
             } else { give <LlvmLocalStorage.EntryAlloca /> }
-            rows.append(<LlvmPreparedLocal semanticType=declaration.typeTerm type=type storageType=storageType storage=storage mode=mode />)
+            rows.append(<LlvmPreparedLocal semanticType=if declaration.isParameter { give signature.parameterTypes[index] } else { give declaration.typeTerm } type=type storageType=storageType storage=storage mode=mode />)
             index += 1U64
         }
         mut val entryAbi = 0U64
@@ -81,13 +80,11 @@ pub impl LlvmCtx {
                 if entryAbi != abiId { return <Result.Err error=valueAbiFailure(message: "async entry descriptor mismatch") /> }
                 val abi = self.valueAbis[entryAbi - 1U64]
                 if abi.parameterCount != parameterCount { return <Result.Err error=valueAbiFailure(message: "async entry parameter count mismatch") /> }
-                val expected = LLVMFunctionType(self.ptrty, arrayCPtr(parameters), parameters.count(), 0I32)
-                // The descriptor owns the byval-transformed native signature.
-                // Compare source-local types to its logical side, not that ABI.
-                if plew_pointer_equal(abi.logicalSignature, expected) == 0I32 { return <Result.Err error=valueAbiFailure(message: "async entry logical signature mismatch") /> }
+                if !c.typeRefEq(a: abi.resultTerm, b: signature.resultType) || !c.typeRefEq(a: abi.bodyResultTerm, b: c.callableResultSlot(ref: signature.bodyResultType)) { return <Result.Err error=valueAbiFailure(message: "async entry Promise/body-result correspondence mismatch") /> }
                 index = 0U64
                 while index < parameterCount {
-                    if plew_pointer_equal(self.valueAbiParameters[abi.parameterStart + index].type, rows[index].type) == 0I32 { return <Result.Err error=valueAbiFailure(message: "async entry parameter representation mismatch") /> }
+                    val lane = self.valueAbiParameters[abi.parameterStart + index]
+                    if lane.semanticType != rows[index].semanticType || !lane.role.same(role: <LlvmParameterRole.Ordinary index=index />) || lane.mode.key() != rows[index].mode.key() || plew_pointer_equal(lane.type, rows[index].type) == 0I32 { return <Result.Err error=valueAbiFailure(message: "async entry parameter representation mismatch") /> }
                     index += 1U64
                 }
             }
@@ -123,16 +120,16 @@ pub impl LlvmCtx {
         val abiId = self.valueAbiFunctions.getOr(key: native, fallback: 0U64)
         if native == 0U64 || abiId == 0U64 || abiId > self.valueAbis.count() { return <Result.Err error=valueAbiFailure(message: "async native entry lacks descriptor") /> }
         val abi = self.valueAbis[abiId - 1U64]
-        val valid = match abi.convention { LlvmValueConvention.Legacy(family: val family) => { give match family { LlvmLegacyConvention.AsyncResume => { give resume } LlvmLegacyConvention.AsyncEntry => { give !resume } _ => { give false } } } _ => { give false } }
+        val valid = match abi.convention { LlvmValueConvention.AsyncEntry => { give !resume } LlvmValueConvention.AsyncResume => { give resume } _ => { give false } }
         val scope = (try self.prepareValueAbiScope())
         try scope.validateScope()
-        if !valid || abi.ownerBody != bodyId || abi.moduleIdentity != scope.moduleIdentity || abi.contextIdentity != scope.contextIdentity || abi.revision != 1U64 || abi.parameterStart > self.valueAbiParameters.count() || abi.parameterCount > self.valueAbiParameters.count() - abi.parameterStart { return <Result.Err error=valueAbiFailure(message: "async native descriptor owner/convention mismatch") /> }
+        if !valid || bodyId == 0U64 || abi.ownerBody != bodyId || abi.moduleIdentity != scope.moduleIdentity || abi.contextIdentity != scope.contextIdentity || abi.revision != 1U64 || abi.parameterStart > self.valueAbiParameters.count() || abi.parameterCount > self.valueAbiParameters.count() - abi.parameterStart { return <Result.Err error=valueAbiFailure(message: "async native descriptor owner/convention mismatch") /> }
         try scope.validateFunction(function: function, signature: abi.functionType)
         if resume {
-            val parameters: Array[LLVMTypeRef] = [self.ptrty]
-            try scope.validateFunction(function: function, signature: LLVMFunctionType(self.voidty, arrayCPtr(parameters), 1U64, 0I32))
-            if abi.parameterCount != 1U64 || plew_pointer_equal(self.valueAbiParameters[abi.parameterStart].type, self.ptrty) == 0I32 { return <Result.Err error=valueAbiFailure(message: "async resume frame input mismatch") /> }
-        }
+            if abi.parameterCount != 1U64 || abi.resultTerm != 0U64 || LLVMGetTypeKind(LLVMGetReturnType(abi.logicalSignature)) != 0U32 { return <Result.Err error=valueAbiFailure(message: "async resume frame/result mismatch") /> }
+            val frame = self.valueAbiParameters[abi.parameterStart]
+            if frame.semanticType != 0U64 || !frame.role.same(role: <LlvmParameterRole.Frame bodyId=bodyId />) || frame.mode.key() != 3U64 || frame.passing.key() != 1U64 || plew_pointer_equal(frame.type, self.ptrty) == 0I32 { return <Result.Err error=valueAbiFailure(message: "async resume frame input mismatch") /> }
+        } else if abi.resultTerm == 0U64 || LLVMGetTypeKind(LLVMGetReturnType(abi.logicalSignature)) != 12U32 { return <Result.Err error=valueAbiFailure(message: "async entry lost its semantic Promise result") /> }
         return <Result.Ok value=abiId />
     }
 
@@ -176,13 +173,15 @@ pub impl LlvmCtx {
             LlvmAsyncEntry.Private(function: val native, abiId: val abiId) => {
                 if (try self.asyncNativeAbi(function: native, bodyId: plan.bodyIdentity, resume: false)) != abiId { return <Result.Err error=valueAbiFailure(message: "async activation entry changed") /> }
                 val abi = self.valueAbis[abiId - 1U64]
+                if abi.bodyResultTerm != self.valueAbis[resumeAbi - 1U64].bodyResultTerm { return <Result.Err error=valueAbiFailure(message: "async retained Promise/body-result relationship changed") /> }
                 if abi.parameterCount != activation.inputCount || activation.inputCount > plan.localCount { return <Result.Err error=valueAbiFailure(message: "async activation input count mismatch") /> }
                 index = 0U64
                 while index < activation.inputCount {
                     val input = self.asyncActivationInputs[activation.inputStart + index]
                     val local = self.preparedLocals[plan.localStart + index]
                     val acquire = match local.mode { LlvmParameterMode.Borrow => { give true } LlvmParameterMode.Move => { give false } _ => { return <Result.Err error=valueAbiFailure(message: "async input has invalid acquisition mode") /> } }
-                    if input.local != index || input.parameterIndex != abi.parameterStart + index || input.acquireShare != acquire || plew_pointer_equal(local.type, self.valueAbiParameters[input.parameterIndex].type) == 0I32 { return <Result.Err error=valueAbiFailure(message: "async retained input mapping mismatch") /> }
+                    val lane = self.valueAbiParameters[abi.parameterStart + index]
+                    if input.local != index || input.parameterIndex != abi.parameterStart + index || input.acquireShare != acquire || local.semanticType != lane.semanticType || local.mode.key() != lane.mode.key() || !lane.role.same(role: <LlvmParameterRole.Ordinary index=index />) || plew_pointer_equal(local.type, lane.type) == 0I32 { return <Result.Err error=valueAbiFailure(message: "async retained input mapping mismatch") /> }
                     index += 1U64
                 }
             }

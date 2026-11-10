@@ -98,6 +98,22 @@ Mid and finalized producer contracts. User deinit consumes its frozen receiver
 through the ordinary typed Body protocol. The payload protocol does not change
 RC final-owner tests, null guards, destruction order or recursive witness drains.
 
+Completed async entry and resume descriptors are distinct. Entry retains the
+frozen Promise result term and ordinary parameter passing modes; the async body
+payload term is recorded separately. Resume returns native void and accepts one
+Frame(body identity)/Move pointer with no source type term. This Move transfers
+exclusive responsibility for executing the activation, not an additional source
+move or ARC operation. Completion releases the frame; suspension hands execution
+to the runtime continuation. The caller does not access the frame after first
+resume. Allocation produces a private activation-identified frame carrier; the
+first-resume consumer checks its activation, native scope and caller provenance.
+Runtime callback invocation remains the explicit native boundary, not proof
+that an arbitrary pointer may safely resume an activation more than once.
+Ready admission proves semantic correspondence once and canonicalizes retained
+parameter terms to the frozen signature without rewriting verified Mid locals.
+Entry calls, parameter decoding and resume binding consume these same completed
+records; raw async compatibility adapters cannot bypass them.
+
 A byval byte snapshot is a physical copying mechanism, not an additional semantic Copy or an implicit ARC retain. Its source/destination lifetime and ownership follow the already selected passing contract; the callee cannot independently destroy a caller-guaranteed share simply because LLVM supplied private bytes.
 
 ABI attributes must match on definitions/declarations and call sites. A `byval` parameter describes an independent snapshot; passing an unprotected address into mutable caller storage is not a substitute. Temporary storage belongs to the function actually being emitted, including when emitting a thunk inside another generation context. Allocate its slot in that function's entry and store the evaluated value at the original call position, preserving evaluation order and avoiding loop-driven stack growth.

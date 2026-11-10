@@ -1,0 +1,77 @@
+// Completed async ABI: public Promise result, body payload and resume transport
+// are distinct. Frame/Move transfers execution responsibility; it inserts no ARC.
+pub impl LlvmCtx {
+    inout fn asyncBodyValueAbi(c: inout Comp, bodyId: U64, resume: Bool) -> Result[U64, CompileDiagnostic] {
+        val scope = (try self.prepareValueAbiScope())
+        try scope.validateScope()
+        val slots = self.asyncValueAbis.getOr(key: bodyId, fallback: [])
+        val position = if resume { give 1U64 } else { give 0U64 }
+        if position < slots.count() && slots[position] != 0U64 { return <Result.Ok value=slots[position] /> }
+        if bodyId == 0U64 || bodyId > c.arena.bodyInstanceCount() || !c.arena.bodyIsCallable(bodyId: bodyId) { return <Result.Err error=valueAbiFailure(message: "async signature body is out of range") /> }
+        val instance = c.arena.bodyInstanceAt(index: bodyId - 1U64)
+        if instance.fnIdx >= c.arena.functionCount() { return <Result.Err error=valueAbiFailure(message: "async signature declaration is out of range") /> }
+        val function = c.arena.functionAt(index: instance.fnIdx)
+        val signature = c.arena.bodySignature(bodyId: bodyId)
+        val noReceiver = match signature.receiverPassing { CallReceiverPassing.None => { give true } _ => { give false } }
+        if !noReceiver || !function.isAsync || function.hasRecv || function.typeParams.count() != 0U64 || !signature.ready || signature.receiverType != 0U64 || signature.parameterTypes.count() != signature.parameterPassings.count() { return <Result.Err error=valueAbiFailure(message: "async signature requires a completed supported free body") /> }
+        mut val parameters: Array[LlvmLogicalParameter] = []
+        mut val result = self.voidty
+        mut val resultTerm = 0U64
+        if resume {
+            parameters.append(<LlvmLogicalParameter type=self.ptrty semanticType=0U64 role=<LlvmParameterRole.Frame bodyId=bodyId /> mode=<LlvmParameterMode.Move /> />)
+        } else {
+            if c.nameIsMain(f: function) || signature.resultType == 0U64 { return <Result.Err error=valueAbiFailure(message: "private async entry requires its frozen Promise result") /> }
+            resultTerm = signature.resultType
+            result = (try self.llvmTypeOfRef(c: inout c, ref: resultTerm))
+            if plew_pointer_equal(result, self.ptrty) == 0I32 { return <Result.Err error=valueAbiFailure(message: "async Promise result representation mismatch") /> }
+            mut val index = 0U64
+            while index < signature.parameterTypes.count() {
+                val passing = signature.parameterPassings[index]
+                match passing {
+                    CallArgumentPassing.Inout => { return <Result.Err error=c.diagnosticAt(offset: function.nameStart, msg: "async entry does not support inout parameters") /> }
+                    CallArgumentPassing.Borrow => {
+                        val contract = (try c.checkedFinalDestruction(typeRef: signature.parameterTypes[index]))
+                        if contract != 0U64 && c.arena.finalDestructions[contract - 1U64].isUnique { return <Result.Err error=c.diagnosticAt(offset: function.nameStart, msg: "async entry cannot copy a borrowed unique parameter") /> }
+                    }
+                    CallArgumentPassing.Move => {}
+                }
+                parameters.append(<LlvmLogicalParameter type=(try self.llvmTypeOfRef(c: inout c, ref: signature.parameterTypes[index])) semanticType=signature.parameterTypes[index] role=<LlvmParameterRole.Ordinary index=index /> mode=argumentValueMode(passing: passing) />)
+                index += 1U64
+            }
+        }
+        val template = (try self.saveValueAbi(signature: <LlvmLogicalSignature convention=if resume { give <LlvmValueConvention.AsyncResume /> } else { give <LlvmValueConvention.AsyncEntry /> } parameters=parameters result=result resultTerm=resultTerm />, ownerBody: bodyId))
+        val plan = self.valueAbis[template - 1U64]
+        self.valueAbis.set(i: template - 1U64, value: <LlvmValueAbi parameterStart=plan.parameterStart parameterCount=plan.parameterCount logicalSignature=plan.logicalSignature functionType=plan.functionType moduleIdentity=plan.moduleIdentity contextIdentity=plan.contextIdentity revision=plan.revision convention=plan.convention resultTerm=plan.resultTerm bodyResultTerm=c.callableResultSlot(ref: signature.bodyResultType) resultProtocol=plan.resultProtocol ownerBody=bodyId />)
+        mut val updated = slots
+        while updated.count() < 2U64 { updated.append(0U64) }
+        updated.set(i: position, value: template)
+        self.asyncValueAbis[bodyId] = updated
+        return <Result.Ok value=template />
+    }
+
+    inout fn asyncValueParameter(function: LLVMValueRef, bodyId: U64, resume: Bool, index: U64) -> Result[LlvmValueInput, CompileDiagnostic] {
+        val abiId = (try self.asyncNativeAbi(function: function, bodyId: bodyId, resume: resume))
+        return self.preparedValueParameter(function: function, abiId: abiId, index: index)
+    }
+
+    inout fn callAsyncEntryValueFunction(function: LLVMValueRef, bodyId: U64, arguments: Array[LlvmValueInput]) -> Result[LLVMValueRef, CompileDiagnostic] {
+        val abiId = (try self.asyncNativeAbi(function: function, bodyId: bodyId, resume: false))
+        val abi = self.valueAbis[abiId - 1U64]
+        return self.callTypedBodyValueFunction(function: function, bodyId: bodyId, inputs: (try self.bodyInputScope(bodyId: bodyId, signature: abi.logicalSignature)), arguments: arguments, conventionKey: 15U64)
+    }
+
+    inout fn callAsyncResumeValueFunction(activationId: U64, frame: LlvmAsyncFrameInput) -> Result[LLVMValueRef, CompileDiagnostic] {
+        if activationId == 0U64 || activationId > self.asyncActivations.count() || frame.activationId != activationId { return <Result.Err error=valueAbiFailure(message: "resume frame belongs to a different activation") /> }
+        val activation = self.asyncActivations[activationId - 1U64]
+        val planId = match activation.prepared { MidLlvmPrepared.Ready(canonical: _, localAdmission: val admission) => { give match admission { LlvmBodyLocalAdmission.Planned(planId: val saved) => { give saved } } } _ => { return <Result.Err error=valueAbiFailure(message: "resume frame has no Ready activation") /> } }
+        if planId == 0U64 || planId > self.bodyLocalPlans.count() { return <Result.Err error=valueAbiFailure(message: "resume frame local plan out of range") /> }
+        val plan = self.bodyLocalPlans[planId - 1U64]
+        val savedActivation = match plan.entry { LlvmBodyLocalEntry.AsyncResume(activationId: val saved) => { give saved } _ => { give 0U64 } }
+        if savedActivation != activationId || plan.function != LLVMIsAFunction(activation.resume) { return <Result.Err error=valueAbiFailure(message: "resume frame selected another body/activation") /> }
+        val bodyId = plan.bodyIdentity
+        if (try self.asyncNativeAbi(function: activation.resume, bodyId: bodyId, resume: true)) != activation.resumeAbi { return <Result.Err error=valueAbiFailure(message: "resume frame descriptor changed") /> }
+        val abi = self.valueAbis[activation.resumeAbi - 1U64]
+        val input = <LlvmValueInput lane=<LlvmLogicalParameter type=self.ptrty semanticType=0U64 role=<LlvmParameterRole.Frame bodyId=bodyId /> mode=<LlvmParameterMode.Move /> /> index=0U64 carrier=<LlvmValueCarrier.Value value=frame.value /> />
+        return self.callTypedBodyValueFunction(function: activation.resume, bodyId: bodyId, inputs: (try self.bodyInputScope(bodyId: bodyId, signature: abi.logicalSignature)), arguments: [input], conventionKey: 16U64)
+    }
+}

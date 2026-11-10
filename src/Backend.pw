@@ -231,6 +231,7 @@ struct LlvmValueAbi {
     pub val contextIdentity: U64
     pub val revision: U64
     pub val convention: LlvmValueConvention
+    pub val bodyResultTerm: U64 = 0U64
     pub val resultTerm: U64
     pub val resultProtocol: LlvmResultProtocol
     pub val ownerBody: U64
@@ -263,6 +264,9 @@ pub impl LlvmAmbientScope { factory }
 
 // One prepared activation layout is shared by its entry and resume emission.
 // It exists only after the requested canonical body has passed Mid preparation.
+// Execution responsibility, not a source value or an implicit ARC owner.
+struct LlvmAsyncFrameInput { val activationId: U64 val value: LLVMValueRef }
+impl LlvmAsyncFrameInput { factory }
 enum LlvmAsyncEntry { Main(function: LLVMValueRef) Private(function: LLVMValueRef, abiId: U64) }
 struct LlvmAsyncActivationInput {
     val parameterIndex: U64
@@ -313,6 +317,7 @@ struct LlvmCtx {
     pub val midProgram: MidExecutableProgram = <MidExecutableProgram.empty />
     mut val cIntegerPolicy: Optional[LlvmCIntegerPolicy] = <Optional.None />
     pub mut val valueAbiByvalKind: U32 = 0U32
+    mut val asyncValueAbis: Dictionary[U64, Array[U64]] = [:]
     mut val glueValueAbis: Dictionary[U64, Array[U64]] = [:]
     pub mut val valueAbis: Array[LlvmValueAbi] = []
     mut val witnessValueAbis: Dictionary[U64, Array[U64]] = [:]
@@ -555,7 +560,6 @@ struct LlvmCtx {
     // method symbol. `main` keeps the C `i32 main()` shape and has no entry here.
     pub mut val asyncEntryIdx: Array[U64]
     pub mut val asyncEntryVal: Array[LLVMValueRef]
-    pub mut val asyncEntryTy: Array[LLVMTypeRef]
     // loop break/continue target blocks (a stack — innermost loop on top), so a
     // `break` branches to the enclosing loop's end and `continue` to its
     // header/step. Pushed by while/for codegen, popped at the loop's end. The
@@ -1090,7 +1094,7 @@ fn llvmContext(ctx: LLVMContextRef, m: LLVMModuleRef, builder: LLVMBuilderRef,
         curFrameBase=LLVMConstNull(ptrty) curFrameTy=i64ty
         curResumeFn=LLVMConstInt(LLVMInt32TypeInContext(ctx), 0U64, 0I32)
         curAsyncSwitch=LLVMConstInt(LLVMInt32TypeInContext(ctx), 0U64, 0I32)
-        asyncFnIdx=[] asyncResumeFn=[] asyncEntryIdx=[] asyncEntryVal=[] asyncEntryTy=[] loopBreakBB=[] loopContBB=[] loopUnwindMark=[] loopDepth=0 />
+        asyncFnIdx=[] asyncResumeFn=[] asyncEntryIdx=[] asyncEntryVal=[] loopBreakBB=[] loopContBB=[] loopUnwindMark=[] loopDepth=0 />
 
 }
 

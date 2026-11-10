@@ -2089,6 +2089,11 @@ pub impl LlvmCtx {
                 if freeSlot >= self.genFnK.count() { return <Result.Ok value=false /> }
             }
         }
+        mut val asyncAbiId = 0U64
+        if callee.isAsync {
+            asyncAbiId = (try self.asyncNativeAbi(function: self.asyncEntryVal[self.asyncEntrySlot(fi: selected.callee)], bodyId: selected.calleeBodyId, resume: false))
+            if !c.typeRefEq(a: self.valueAbis[asyncAbiId - 1U64].resultTerm, b: selected.resultTypeRef) { return <Result.Err error=valueAbiFailure(message: "async call lost its frozen Promise result") /> }
+        }
         mut val values: Array[LLVMValueRef] = []
         mut val typedValues: Array[LlvmValueInput] = []
         val receiver: MidCallReceiverNode = c.mid.callReceivers[term.callReceiver - 1U64]
@@ -2137,21 +2142,28 @@ pub impl LlvmCtx {
                 }
             }
             if callee.isExtern { value = (try self.scalarToC(c: inout c, ref: parameterRef, value: value)) }
-            values.append(value)
-            if !callee.isExtern && !callee.isAsync {
+            if !callee.isAsync { values.append(value) }
+            if !callee.isExtern {
                 val mode = match c.arena.finalCalleeArgumentPassingAt(passings: selected.argumentPassings, index: argumentI) {
                     CallArgumentPassing.Borrow => { give <LlvmParameterMode.Borrow /> }
                     CallArgumentPassing.Inout => { give <LlvmParameterMode.Inout /> }
                     CallArgumentPassing.Move => { give <LlvmParameterMode.Move /> }
                 }
-                typedValues.append(<LlvmValueInput lane=<LlvmLogicalParameter type=LLVMTypeOf(value) semanticType=parameterRef role=<LlvmParameterRole.Ordinary index=argumentI /> mode=mode /> index=typedValues.count() carrier=<LlvmValueCarrier.Value value=value /> />)
+                val semanticTerm = if callee.isAsync {
+                    val abi = self.valueAbis[asyncAbiId - 1U64]
+                    if argumentI >= abi.parameterCount { return <Result.Err error=valueAbiFailure(message: "async call argument range mismatch") /> }
+                    val lane = self.valueAbiParameters[abi.parameterStart + argumentI]
+                    if !c.typeRefEq(a: parameterRef, b: lane.semanticType) || mode.key() != lane.mode.key() { return <Result.Err error=valueAbiFailure(message: "async call argument contract mismatch") /> }
+                    give lane.semanticType
+                } else { give parameterRef }
+                typedValues.append(<LlvmValueInput lane=<LlvmLogicalParameter type=LLVMTypeOf(value) semanticType=semanticTerm role=<LlvmParameterRole.Ordinary index=argumentI /> mode=mode /> index=typedValues.count() carrier=<LlvmValueCarrier.Value value=value /> />)
             }
             argumentI = argumentI + 1U64
         }
         mut val result: LLVMValueRef = LLVMConstInt(self.i64ty, 0U64, 0I32)
         if callee.isAsync {
             val slot: U64 = self.asyncEntrySlot(fi: selected.callee)
-            result = (try self.callLegacyValueFunction(signature: self.asyncEntryTy[slot], function: self.asyncEntryVal[slot], arguments: values))
+            result = (try self.callAsyncEntryValueFunction(function: self.asyncEntryVal[slot], bodyId: selected.calleeBodyId, arguments: typedValues))
         } else if callee.isExtern { result = LLVMBuildCall2(self.b, self.declTy[externalSlot], self.declFn[externalSlot], arrayCPtr(values), values.count(), anon()) }
         else if useMethod { result = (try self.callBodyValueFunction(function: self.genMethVal[methodSlot], bodyId: selected.calleeBodyId, inputs: (try self.bodyInputScope(bodyId: selected.calleeBodyId, signature: self.genMethTy[methodSlot])), arguments: typedValues)) }
         else { result = (try self.callBodyValueFunction(function: self.genFnVal[freeSlot], bodyId: selected.calleeBodyId, inputs: (try self.bodyInputScope(bodyId: selected.calleeBodyId, signature: self.genFnTy[freeSlot])), arguments: typedValues)) }
@@ -2729,7 +2741,7 @@ impl LlvmCtx {
                 val activation = self.asyncActivations[activationId - 1U64]
                 self.curFrameTy = activation.type
                 self.curResumeFn = activation.resume
-                self.curFrameBase = (try self.preparedLegacyParameter(parameterIndex: self.valueAbis[activation.resumeAbi - 1U64].parameterStart))
+                self.curFrameBase = self.valueInputValue(input: (try self.asyncValueParameter(function: activation.resume, bodyId: body.bodyInstance, resume: true, index: 0U64)))
                 give true
             }
             _ => { give false }
@@ -2822,6 +2834,8 @@ pub impl LlvmCtx {
                     LlvmLegacyConvention.Closure => { give <LlvmBodyLocalEntry.Closure abiId=abiId /> }
                     _ => { return <Result.Err error=valueAbiFailure(message: "entry has no retained local adapter") /> }
                 } }
+                LlvmValueConvention.AsyncEntry => { return <Result.Err error=valueAbiFailure(message: "async entry requires activation admission") /> }
+                LlvmValueConvention.AsyncResume => { return <Result.Err error=valueAbiFailure(message: "async resume requires activation admission") /> }
                 LlvmValueConvention.OwnershipGlue(operation: val operation) => {
                     if operation.key() != 1U64 { return <Result.Err error=valueAbiFailure(message: "only environment glue has a Ready source body") /> }
                     give <LlvmBodyLocalEntry.EnvironmentDrop abiId=abiId />

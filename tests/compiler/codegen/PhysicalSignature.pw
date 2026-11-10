@@ -178,6 +178,27 @@ fn main() {
             if operation.key() != other.key() && scope.validate(signature: signature, plan: changedConvention(plan: plan, convention: <LlvmValueConvention.OwnershipGlue operation=other />)).isOk() { panic "different glue operation substituted" }
         }
     }
+    val asyncEntry = <LlvmLogicalSignature convention=<LlvmValueConvention.AsyncEntry /> parameters=[parameter(type: aggregate, semantic: 40U64, role: <LlvmParameterRole.Ordinary index=0U64 />, mode: <LlvmParameterMode.Borrow />), parameter(type: empty, semantic: 41U64, role: <LlvmParameterRole.Ordinary index=1U64 />, mode: <LlvmParameterMode.Move />)] result=pointer resultTerm=50U64 />
+    val asyncPlan = scope.plan(signature: asyncEntry).unwrap()
+    if asyncPlan.parameters[0].passing.key() != 2U64 || asyncPlan.parameters[1].passing.key() != 0U64 || asyncPlan.resultTerm != 50U64 { panic "async entry lost aggregate/omitted/Promise mapping" }
+    val frameLane = parameter(type: pointer, semantic: 0U64, role: <LlvmParameterRole.Frame bodyId=60U64 />, mode: <LlvmParameterMode.Move />)
+    val asyncResume = <LlvmLogicalSignature convention=<LlvmValueConvention.AsyncResume /> parameters=[frameLane] result=voidType resultTerm=0U64 />
+    val resumePlan = scope.plan(signature: asyncResume).unwrap()
+    if resumePlan.parameters[0].passing.key() != 1U64 || resumePlan.resultTerm != 0U64 || resumePlan.convention.same(convention: asyncPlan.convention) { panic "async resume conflates entry/Frame/native result" }
+    val otherFrame = parameter(type: pointer, semantic: 0U64, role: <LlvmParameterRole.Frame bodyId=61U64 />, mode: <LlvmParameterMode.Move />)
+    if scope.validate(signature: <LlvmLogicalSignature convention=asyncResume.convention parameters=[otherFrame] result=voidType resultTerm=0U64 />, plan: resumePlan).isOk() { panic "equal-ptr distinct frame identity accepted" }
+    mut val asyncMalformed = 0U64
+    while asyncMalformed < 5U64 {
+        val lane = parameter(type: aggregate, semantic: if asyncMalformed == 0U64 { give 0U64 } else { give 40U64 }, role: if asyncMalformed == 1U64 { give <LlvmParameterRole.Frame bodyId=60U64 /> } else { give <LlvmParameterRole.Ordinary index=0U64 /> }, mode: if asyncMalformed == 2U64 { give <LlvmParameterMode.Inout /> } else { give <LlvmParameterMode.Borrow /> })
+        if scope.plan(signature: <LlvmLogicalSignature convention=asyncEntry.convention parameters=[lane] result=if asyncMalformed == 3U64 { give voidType } else { give pointer } resultTerm=if asyncMalformed == 4U64 { give 0U64 } else { give 50U64 } />).isOk() { panic "malformed async entry accepted" }
+        asyncMalformed += 1U64
+    }
+    asyncMalformed = 0U64
+    while asyncMalformed < 7U64 {
+        val lane = parameter(type: if asyncMalformed == 0U64 { give scalar } else { give pointer }, semantic: if asyncMalformed == 1U64 { give 40U64 } else { give 0U64 }, role: if asyncMalformed == 2U64 { give <LlvmParameterRole.Frame bodyId=0U64 /> } else { give frameLane.role }, mode: if asyncMalformed == 3U64 { give <LlvmParameterMode.Borrow /> } else { give frameLane.mode })
+        if scope.plan(signature: <LlvmLogicalSignature convention=asyncResume.convention parameters=if asyncMalformed == 4U64 { give [] } else { give [lane] } result=if asyncMalformed == 5U64 { give pointer } else { give voidType } resultTerm=if asyncMalformed == 6U64 { give 50U64 } else { give 0U64 } />).isOk() { panic "malformed async Frame/result accepted" }
+        asyncMalformed += 1U64
+    }
     val witnessSignature = witness(parameters: [erasedReceiver], result: voidType)
     val witnessPlan = scope.plan(signature: witnessSignature).unwrap()
     scope.validate(signature: witnessSignature, plan: witnessPlan).unwrap()
