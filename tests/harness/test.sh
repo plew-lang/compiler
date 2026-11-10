@@ -279,6 +279,16 @@ if PLEWC="$PLEWC" LLVM_CONFIG="$LC" python3 -B ./tests/compiler/codegen/test-rea
 else
     fail=$((fail + 1)); failed="$failed ready-local-plan-private"
 fi
+if python3 -B ./tests/compiler/architecture/test-ready-closure-plan.py; then
+    pass=$((pass + 1))
+else
+    fail=$((fail + 1)); failed="$failed ready-closure-plan-owner"
+fi
+if PLEWC="$PLEWC" LLVM_CONFIG="$LC" python3 -B ./tests/compiler/codegen/test-ready-closure-plan.py; then
+    pass=$((pass + 1))
+else
+    fail=$((fail + 1)); failed="$failed ready-closure-plan-private"
+fi
 if python3 -B ./tests/compiler/architecture/test-typed-value-roundtrip.py; then
     pass=$((pass + 1))
 else

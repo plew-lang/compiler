@@ -1,0 +1,25 @@
+// Retained environment bindings coexist with omitted and byval ordinary lanes.
+use @Std/Io only { print }
+struct Empty {}
+pub impl Empty { factory }
+struct Payload { pub val values: Array[I64] }
+pub impl Payload { factory }
+fn exchanger[T](initial: T) -> fn(empty: Empty, next: T, step: I64) -> T {
+    mut val current = initial
+    val offset = 10I64
+    return fn(empty: Empty, next: T, step: I64) -> T {
+        val previous = current
+        current = next
+        print(offset + step)
+        return previous
+    }
+}
+fn main() {
+    val exchange = exchanger(initial: <Payload values=[1I64] />)
+    val first = exchange(empty: <Empty />, next: <Payload values=[2I64] />, step: 1I64)
+    print(first.values[0])
+    val second = exchange(empty: <Empty />, next: <Payload values=[3I64] />, step: 2I64)
+    print(second.values[0])
+    val plain = fn(before: Empty, value: I64, after: Empty) -> I64 { return value }
+    print(plain(before: <Empty />, value: 7I64, after: <Empty />))
+}

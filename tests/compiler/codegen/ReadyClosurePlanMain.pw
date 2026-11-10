@@ -1,0 +1,166 @@
+// Appended to an exact Backend.pw snapshot; exercises private production APIs.
+// Capture semantics: docs/design/mid-entry-audit.md, Closures and Synthetic Ownership Bodies.
+use ./Frontend only { analyzeFrontendDeclarations, FrontendInput }
+use ./SourceAccess only { SourceAccess }
+use ./Ir only { ClosureSignature, SemanticClosureCapture }
+extern(c) {
+    fn LLVMGetAllocatedType(value~: LLVMValueRef) -> LLVMTypeRef
+    fn LLVMGetNextInstruction(value~: U64) -> U64
+    fn LLVMIsAStoreInst(value~: U64) -> U64
+    fn LLVMGetOperand(value~: U64, index~: U32) -> LLVMValueRef
+    fn LLVMIsAAllocaInst(value~: LLVMValueRef) -> U64
+}
+fn requireClosureOk[T](result: Result[T, CompileDiagnostic], stage: String, mode: U64) -> T {
+    match result {
+        Result.Ok(value: val value) => { return value }
+        Result.Err(error: val error) => {
+            eprint(text: "closure-plan mode=")
+            eprintU64(n: mode)
+            eprint(text: " stage=")
+            eprint(text: stage)
+            eprint(text: ": ")
+            eprint(text: error.message)
+            eprint(text: "\n")
+            panic "private closure setup or valid-path API failed"
+        }
+    }
+}
+fn requireClosureInternal[T](result: Result[T, CompileDiagnostic]) {
+    match result {
+        Result.Ok(value: _) => { panic "malformed closure local plan accepted" }
+        Result.Err(error: val error) => { match error.failureDomain { FailureDomain.Internal => {} _ => { panic "wrong closure local plan failure domain" } } }
+    }
+}
+// Each rejection starts from an otherwise valid live LLVM entry. No malformed
+// LLVM is emitted, and fixture/setup failure cannot satisfy a rejection.
+fn closurePlanControl(mode: U64) {
+    val context = LLVMContextCreate()
+    val name = <CString.copied text="ready-closure-controls" />
+    val module = LLVMModuleCreateWithNameInContext(name.ptr, context)
+    val triple = LLVMGetDefaultTargetTriple()
+    val cpu = <CString.copied text="generic" />
+    val layout = plew_llvm_native_data_layout(cpu.ptr)
+    LLVMSetTarget(module, triple)
+    LLVMSetDataLayout(module, layout)
+    LLVMDisposeMessage(triple)
+    LLVMDisposeMessage(layout)
+    val builder = LLVMCreateBuilderInContext(context)
+    mut val backend = llvmContext(ctx: context, m: module, builder: builder)
+    mut val compiler = <Comp />
+    requireClosureOk(result: analyzeFrontendDeclarations(c: inout compiler, input: <FrontendInput.Text text="fn control() {{}}" path="ready-closure.pw" />, sources: <SourceAccess stdRoot=[] />), stage: "frontend declarations", mode: mode)
+    val integerName = compiler.internBytes(s: "I64")
+    val integer = compiler.simpleTypeRef(nameStart: integerName.nameStart, nameLen: integerName.nameLen)
+    val unsignedName = compiler.internBytes(s: "U64")
+    val unsigned = compiler.simpleTypeRef(nameStart: unsignedName.nameStart, nameLen: unsignedName.nameLen)
+    // llvmTypeOfRef requires the frontend's finalized representation contract,
+    // including builtin scalars. Declarations-only setup has not published it.
+    requireClosureOk(result: compiler.enqueueFinalDestruction(typeRef: integer), stage: "finalize I64 representation", mode: mode)
+    requireClosureOk(result: compiler.enqueueFinalDestruction(typeRef: unsigned), stage: "finalize U64 representation", mode: mode)
+    val unit = compiler.pushType(t: <TypeRef nameStart=0U64 nameLen=0U64 args=[] isRecord=true recordFieldLabels=[] recordFieldTerms=[] />)
+    val functionName = compiler.internBytes(s: "fn")
+    val functionType = compiler.pushType(t: <TypeRef nameStart=functionName.nameStart nameLen=functionName.nameLen args=[unit, integer] />)
+    val valueBinding = compiler.internBytes(s: "savedValue").nameStart
+    val cellBinding = compiler.internBytes(s: "savedCell").nameStart
+    val closureKey = 9223372036854775808U64
+    val closureId = compiler.arena.registerBodyInstance(<BodyInstance fnIdx=closureKey environment=<InstanceEnvironment /> />)
+    val dropId = compiler.arena.registerBodyInstance(<BodyInstance fnIdx=closureKey + 1U64 environment=<InstanceEnvironment /> />, origin: <BodyOrigin.ClosureEnvironmentDrop closureBodyId=closureId />)
+    compiler.arena.setClosureSignature(bodyId: closureId, parameters: [integer], passings: [<CallArgumentPassing.Borrow />], result: 0U64, closure: <ClosureSignature functionTypeTerm=functionType environmentDropBodyId=dropId captures=[<SemanticClosureCapture bindingTarget=valueBinding typeTerm=integer mode=<SemanticClosureCaptureMode.ValueCopy /> />, <SemanticClosureCapture bindingTarget=cellBinding typeTerm=integer mode=<SemanticClosureCaptureMode.CellBorrow /> />] />)
+    compiler.arena.setBodySignature(bodyId: dropId, parameters: [integer, integer], passings: [<CallArgumentPassing.Move />, <CallArgumentPassing.Move />], result: 0U64)
+    val drop = mode == 7U64 || mode == 8U64
+    val parameters: Array[LLVMTypeRef] = [backend.ptrty, backend.i64ty]
+    val closureSignature = LLVMFunctionType(backend.voidty, arrayCPtr(parameters), 2U64, 0I32)
+    val closureFunction = requireClosureOk(result: backend.declareLegacyBodyFunction(name: name.ptr, signature: closureSignature, bodyId: closureId, family: <LlvmLegacyConvention.Closure />), stage: "declare closure", mode: mode)
+    backend.closures.append(<LlvmClosure bodyId=closureId semanticIndex=0U64 functionTypeTerm=functionType function=closureFunction captures=[<CaptureEntry closureId=0U64 nameStart=valueBinding nameLen=0U64 tyStart=integerName.nameStart tyLen=integerName.nameLen isArray=false ty=integer boxed=false />, <CaptureEntry closureId=0U64 nameStart=cellBinding nameLen=0U64 tyStart=integerName.nameStart tyLen=integerName.nameLen isArray=false ty=integer boxed=true />] />)
+    val dropName = <CString.copied text="ready-drop-controls" />
+    val dropParameters: Array[LLVMTypeRef] = [backend.ptrty]
+    val dropSignature = LLVMFunctionType(backend.voidty, arrayCPtr(dropParameters), 1U64, 0I32)
+    val dropFunction = requireClosureOk(result: backend.declareLegacyBodyFunction(name: dropName.ptr, signature: dropSignature, bodyId: dropId, family: <LlvmLegacyConvention.EnvironmentDrop />), stage: "declare environment drop", mode: mode)
+    mut val locals: Array[MidLocalDecl] = []
+    if !drop {
+        locals.append(<MidLocalDecl typeTerm=if mode == 4U64 { give unsigned } else { give integer } sourceScope=0U64 isUnique=false isParameter=true isInout=mode == 5U64 isCaptureCell=mode == 9U64 isBorrowed=mode == 10U64 />)
+        locals.append(<MidLocalDecl typeTerm=integer sourceScope=0U64 isUnique=false isParameter=false isBorrowed=true ownsAtEntry=mode == 3U64 sourceNameStart=if mode == 1U64 { give cellBinding } else { give valueBinding } />)
+        locals.append(<MidLocalDecl typeTerm=integer sourceScope=0U64 isUnique=false isParameter=false isInout=true isCaptureCell=mode != 2U64 sourceNameStart=cellBinding />)
+        if mode == 11U64 { locals.append(<MidLocalDecl typeTerm=integer sourceScope=0U64 isUnique=false isParameter=true />) }
+    } else {
+        locals.append(<MidLocalDecl typeTerm=integer sourceScope=0U64 isUnique=false isParameter=true ownsAtEntry=mode != 8U64 />)
+        locals.append(<MidLocalDecl typeTerm=integer sourceScope=0U64 isUnique=false isParameter=true isCaptureCell=true ownsAtEntry=true />)
+    }
+    val bodyId = if drop { give dropId } else { give closureId }
+    val canonical = compiler.mid.store(body: <MidBody bodyInstance=bodyId sourceFunction=if drop { give closureKey + 1U64 } else { give closureKey } locals=locals blocks=[<MidBlock terminator=<MidTerminator.Return /> />] />)
+    if !compiler.mid.isWellFormed(body: canonical) { panic "malformed closure plan test setup" }
+    backend.curFn = if drop { give dropFunction } else { give closureFunction }
+    backend.curRetVoid = true
+    val count = if drop { give 2U64 } else if mode == 6U64 { give 0U64 } else { give 1U64 }
+    val admissionResult = backend.prepareBodyLocalPlan(c: inout compiler, canonical: canonical, parameterCount: count)
+    if mode != 0U64 && mode != 7U64 {
+        requireClosureInternal(result: admissionResult)
+    } else {
+        val admission = requireClosureOk(result: admissionResult, stage: "valid Ready admission", mode: mode)
+        val planId = match admission { LlvmBodyLocalAdmission.Planned(planId: val planId) => { give planId } _ => { panic "closure escaped retained admission" } }
+        val plan = backend.bodyLocalPlans[planId - 1U64]
+        match plan.entry {
+            LlvmBodyLocalEntry.Closure(abiId: _) => { if drop { panic "drop given ordinary closure plan" } }
+            LlvmBodyLocalEntry.EnvironmentDrop(abiId: _) => { if !drop { panic "closure given drop plan" } }
+            _ => { panic "wrong retained entry" }
+        }
+        if plan.environmentType.isNone() { panic "environment layout not retained" }
+        val captureBase = if drop { give 0U64 } else { give 1U64 }
+        mut val index = 0U64
+        while index < 2U64 {
+            val local = backend.preparedLocals[plan.localStart + captureBase + index]
+            match local.binding {
+                LlvmLocalBinding.Environment(field: val field, type: val type) => {
+                    if field != index + 1U64 || plew_pointer_equal(type, if index == 0U64 { give backend.i64ty } else { give backend.ptrty }) == 0I32 { panic "wrong saved field-to-local mapping" }
+                }
+                _ => { panic "capture lacks saved environment binding" }
+            }
+            index += 1U64
+        }
+        if !drop {
+            match backend.preparedLocals[plan.localStart].binding {
+                LlvmLocalBinding.Parameter(parameterIndex: val parameterIndex, alias: val alias) => {
+                    val abiId = backend.valueAbiFunctions.getOr(key: LLVMIsAFunction(closureFunction), fallback: 0U64)
+                    if alias || parameterIndex != backend.valueAbis[abiId - 1U64].parameterStart + 1U64 { panic "ordinary input lost leading environment lane" }
+                }
+                _ => { panic "ordinary parameter lacks saved lane" }
+            }
+        }
+        val ready = <MidLlvmPrepared.Ready canonical=canonical abiParameterCount=count localAdmission=admission />
+        backend.beginFnBody(fv: backend.curFn)
+        if !requireClosureOk(result: backend.genLlvmPreparedMidBody(c: inout compiler, prepared: ready), stage: "valid Ready emission", mode: mode) { panic "valid retained closure failed emission" }
+        if backend.nLocals != locals.count() { panic "local count changed" }
+        if plew_pointer_equal(LLVMGetAllocatedType(backend.locPtr[captureBase]), backend.i64ty) == 0I32 { panic "value capture allocation lost retained type" }
+        if plew_pointer_equal(LLVMGetAllocatedType(backend.locPtr[captureBase + 1U64]), backend.ptrty) == 0I32 { panic "cell capture is not a pointer holder" }
+        // Check real emitted stores, not only metadata and allocation. Each
+        // capture must be loaded from its saved environment field and stored
+        // exactly once into the corresponding distinct local holder.
+        index = 0U64
+        while index < 2U64 {
+            if LLVMIsAAllocaInst(backend.locPtr[captureBase + index]) == 0U64 { panic "capture holder is not an alloca" }
+            mut val stores = 0U64
+            mut val instruction = LLVMGetFirstInstruction(LLVMGetInsertBlock(backend.b))
+            while instruction != 0U64 {
+                if LLVMIsAStoreInst(instruction) != 0U64 && LLVMIsAAllocaInst(LLVMGetOperand(instruction, 1U32)) == LLVMIsAAllocaInst(backend.locPtr[captureBase + index]) { stores += 1U64 }
+                instruction = LLVMGetNextInstruction(instruction)
+            }
+            if stores != 1U64 { panic "saved capture binding did not reach actual local store" }
+            index += 1U64
+        }
+        val body = compiler.mid.bodies[canonical.body - 1U64]
+        if plew_pointer_equal(requireClosureOk(result: backend.midCanonicalLocalTy(c: inout compiler, body: body, local: captureBase + 1U64), stage: "later local type read", mode: mode), backend.i64ty) == 0I32 { panic "cell logical type lost after binding" }
+        requireClosureInternal(result: backend.genLlvmPreparedMidBody(c: inout compiler, prepared: ready, abiParameterStart: 1U64))
+        requireClosureInternal(result: backend.genLlvmPreparedMidBody(c: inout compiler, prepared: ready, abiParameterValues: [LLVMConstInt(backend.i64ty, 0U64, 0I32)]))
+        requireClosureInternal(result: backend.genLlvmPreparedMidBody(c: inout compiler, prepared: ready, closureBodyId: closureId))
+        requireClosureInternal(result: backend.genLlvmPreparedMidBody(c: inout compiler, prepared: ready, localsPrepared: true))
+        backend.curFn = if drop { give closureFunction } else { give dropFunction }
+        requireClosureInternal(result: backend.genLlvmPreparedMidBody(c: inout compiler, prepared: ready))
+    }
+    LLVMDisposeBuilder(builder)
+    LLVMDisposeModule(module)
+    LLVMContextDispose(context)
+}
+fn main() {
+    mut val mode = 0U64
+    while mode <= 11U64 { closurePlanControl(mode: mode) mode += 1U64 }
+    write(s: "ok\n")
+}

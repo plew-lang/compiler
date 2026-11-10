@@ -80,11 +80,25 @@ enum MidLlvmPrepared {
 // Local representation is retained once at admission. Legacy here is an
 // explicit not-yet-migrated physical-to-local adapter, not a normal fallback.
 enum LlvmBodyLocalAdmission { Planned(planId: U64) Legacy(convention: LlvmLegacyConvention) }
-enum LlvmBodyLocalEntry { Normal(abiId: U64) ProgramMain GlobalInitializer }
+enum LlvmBodyLocalEntry { Normal(abiId: U64) Closure(abiId: U64) EnvironmentDrop(abiId: U64) ProgramMain GlobalInitializer }
+// A prepared physical-to-local conversion. Parameter indices address the
+// immutable ABI pool, not source or native positional indices.
+enum LlvmLocalBinding {
+    None
+    Parameter(parameterIndex: U64, alias: Bool)
+    Environment(field: U64, type: LLVMTypeRef)
+}
+struct LlvmClosureLocalBindings {
+    pub val environmentType: LLVMTypeRef
+    pub val bindings: Array[LlvmLocalBinding]
+    pub val types: Array[LLVMTypeRef]
+}
+pub impl LlvmClosureLocalBindings { factory }
 struct LlvmPreparedLocal {
     pub val type: LLVMTypeRef
     pub val storageType: LLVMTypeRef
     pub val mode: LlvmParameterMode
+    pub val binding: LlvmLocalBinding = <LlvmLocalBinding.None />
 }
 pub impl LlvmPreparedLocal { factory }
 struct LlvmBodyLocalPlan {
@@ -98,6 +112,7 @@ struct LlvmBodyLocalPlan {
     pub val localCount: U64
     pub val revision: U64
     pub val entry: LlvmBodyLocalEntry
+    pub val environmentType: Optional[LLVMTypeRef] = <Optional.None />
 }
 pub impl LlvmBodyLocalPlan { factory }
 

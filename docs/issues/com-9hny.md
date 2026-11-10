@@ -198,3 +198,52 @@ Ready's remaining parameter-count field belongs to unmigrated legacy binding
 adapters; it does not select Planned binding. Remove this compatibility data
 with the remaining raw overrides at the whole-checkpoint boundary. Preparation
 cost and actual guaranteed-address forwarding remain unproven.
+
+## Retained Closure and Environment-Drop Bindings
+
+Checkpoint 3's second increment retains Closure/EnvironmentDrop local adapters.
+Admission checks the frozen closure captures and body parameter types/passings
+against Mid local identities and flags, then saves existing ABI-pool parameter
+rows and explicit environment-field-to-local conversions. Ready keeps their
+native environment type with the local type/storage/mode rows. Allocation,
+actual input stores/address aliases and subsequent local readers consume those
+rows. Emission no longer reconstructs capture correspondence/layout, passes a
+leading raw parameter offset or expands an environment into an untyped vector.
+Physical signatures remain explicitly Legacy for these families until their
+later W2 migration; no completed semantic roles are invented for them.
+
+A cell capture is a pointer stored in a local pointer holder, not a source
+inout address alias. Captures are borrowed during closure activation, while
+the separate environment-drop body owns its capture inputs and retains Mid's
+existing cleanup order. Byval loads/local copies and ARC behavior are unchanged.
+Swift's [SIL conventions](https://github.com/swiftlang/swift/blob/main/docs/SIL/SIL.md)
+and [generics implementation discussion](https://download.swift.org/docs/assets/generics.pdf)
+also distinguish logical captures from context-pointer unpacking. Plew retains
+its existing explicit environment ABI rather than importing another language's
+capture ownership or escape rules.
+
+The [second-increment evidence](../../../evidence/performance-regression-history/value-passing-implementation/w2-protocol/ready-closure-local-plan.json) records the baseline structural RED, standard
+build `20261110T000458-build-b27084` with immutable inputs, fresh CLI22/internal5,
+environment Mid coverage for seven fixtures, raw/optimized value ABI and C
+expose/callback controls. An exact source snapshot plus appended test main
+executes real private admission/emission APIs, checking value/cell allocations
+and actual stores, malformed correspondence, native entry and override guards.
+Test setup repairs publish required scalar representation contracts and use
+correct opaque-handle identities; they are not product RED or relaxed checks.
+The final test main differs from the product build's control input, while all
+183 product source/native inputs still match that build. The final snapshot
+and its executed test-main hash identify the actual tested inputs.
+
+Witness and async/frame local adapters, whole-checkpoint raw override/count
+removal, physical indirect/glue/async/C/publication migrations, preparation cost,
+W3/W4 and final com-ffar gates remain open. The transient closure types/bindings
+arrays and their flat-pool transfer must be included in W2's preparation-cost
+reconciliation; this increment makes no performance claim.
+
+Neutral review independently reconciled 542 distinct path/hash references,
+183 source/native inputs against all 6513 build inputs, 65 controls, 109 artifacts
+and 183 snapshot inputs. It replayed the native harness, fresh mixed lazy CLI,
+architecture controls and baseline structural RED. The finite second increment
+is accepted. A source ordinary-inout probe fails identically during program Mid
+preparation on baseline/fresh candidates; it is not a successful inout execution
+claim and remains explicit for whole-W2 entry reconciliation.

@@ -2551,15 +2551,32 @@ pub impl LlvmCtx {
             else if planned.isSome() { slot = self.entryAlloca(ty: planned.unwrap().storageType) }
             else if declaration.isCaptureCell { slot = self.entryAlloca(ty: self.ptrty) }
             else { slot = self.entryAlloca(ty: ty) }
-            if declaration.isParameter && initializeParameters {
-                val abiIndex: U64 = abiParameterStart + local
-                val value = if normal {
-                    val mode = planned.unwrap().mode
-                    val input = (try self.normalBodyParameter(function: self.curFn, bodyId: body.bodyInstance, index: local, type: if declaration.isInout { give self.ptrty } else { give ty }, mode: mode))
-                    give self.valueInputValue(input: input)
-                } else if abiParameterValues.count() != 0U64 { give abiParameterValues[local] } else { give (try self.legacyValueParameter(function: self.curFn, index: abiIndex)) }
-                if declaration.isInout { slot = value }
-                else { llvmStore(self.b, value, slot) }
+            val binding = match planned { Optional.Some(v: val row) => { give row.binding } Optional.None => { give <LlvmLocalBinding.None /> } }
+            match binding {
+                LlvmLocalBinding.Parameter(parameterIndex: val parameterIndex, alias: val alias) => {
+                    val value = (try self.preparedLegacyParameter(parameterIndex: parameterIndex))
+                    if alias { slot = value } else { llvmStore(self.b, value, slot) }
+                }
+                LlvmLocalBinding.Environment(field: val field, type: val fieldType) => {
+                    val planId = match self.bodyLocalAdmission { Optional.Some(v: val admission) => { give match admission { LlvmBodyLocalAdmission.Planned(planId: val planId) => { give planId } _ => { return <Result.Err error=valueAbiFailure(message: "environment binding lacks a plan") /> } } } _ => { return <Result.Err error=valueAbiFailure(message: "environment binding lacks admission") /> } }
+                    val plan = self.bodyLocalPlans[planId - 1U64]
+                    val closureAbi = match plan.entry { LlvmBodyLocalEntry.Closure(abiId: val id) => { give id } LlvmBodyLocalEntry.EnvironmentDrop(abiId: val id) => { give id } _ => { return <Result.Err error=valueAbiFailure(message: "environment binding on a non-closure entry") /> } }
+                    val environment = (try self.preparedLegacyParameter(parameterIndex: self.valueAbis[closureAbi - 1U64].parameterStart))
+                    val address = LLVMBuildStructGEP2(self.b, plan.environmentType.unwrap(), environment, field, anon())
+                    llvmStore(self.b, llvmLoad(self.b, fieldType, address, anon()), slot)
+                }
+                LlvmLocalBinding.None => {
+                    if declaration.isParameter && initializeParameters {
+                        val abiIndex: U64 = abiParameterStart + local
+                        val value = if normal {
+                            val mode = planned.unwrap().mode
+                            val input = (try self.normalBodyParameter(function: self.curFn, bodyId: body.bodyInstance, index: local, type: if declaration.isInout { give self.ptrty } else { give ty }, mode: mode))
+                            give self.valueInputValue(input: input)
+                        } else if abiParameterValues.count() != 0U64 { give abiParameterValues[local] } else { give (try self.legacyValueParameter(function: self.curFn, index: abiIndex)) }
+                        if declaration.isInout { slot = value }
+                        else { llvmStore(self.b, value, slot) }
+                    }
+                }
             }
             self.pushLocalR(nameStart: declaration.sourceNameStart, nameLen: 0U64, ptr: slot, ty: ty, kind: 0U64, structIdx: c.arena.structCount(), isArr: false, elemTy: self.i64ty, elemKind: 0U64, typeRef: declaration.typeTerm)
             self.setLocalOwned(owned: declaration.ownsAtEntry)
@@ -2722,7 +2739,7 @@ impl LlvmCtx {
         self.ambientScopes = noAmbientScopes
         self.ambientPermit = <Optional.None />
         if !localsPrepared && !(try self.midPrepareCanonicalLocals(c: inout c, body: body, abiParameterStart: abiParameterStart, abiParameterValues: abiParameterValues)) { return <Result.Ok value=false /> }
-        if closureBodyId != 0U64 && !(try self.bindMidClosureCaptures(c: inout c, body: body, bodyId: closureBodyId)) { return <Result.Ok value=false /> }
+        if closureBodyId != 0U64 { return <Result.Err error=valueAbiFailure(message: "closure binding must use its retained local plan") /> }
         try self.midAmbientAllocateScopes(c: inout c, body: body)
         mut val blocks: Array[LLVMBasicBlockRef] = []
         mut val blockI: U64 = 0U64
@@ -2796,12 +2813,18 @@ pub impl LlvmCtx {
         val abiId = self.valueAbiFunctions.getOr(key: function, fallback: 0U64)
         val entry = if abiId != 0U64 {
             val abi = self.valueAbis[abiId - 1U64]
-            match abi.convention {
-                LlvmValueConvention.Legacy(family: val family) => { return <Result.Ok value=<LlvmBodyLocalAdmission.Legacy convention=family /> /> }
-                LlvmValueConvention.Body => {}
+            if abi.ownerBody != body.bodyInstance { return <Result.Err error=valueAbiFailure(message: "local plan descriptor/body mismatch") /> }
+            give match abi.convention {
+                LlvmValueConvention.Legacy(family: val family) => { give match family {
+                    LlvmLegacyConvention.Closure => { give <LlvmBodyLocalEntry.Closure abiId=abiId /> }
+                    LlvmLegacyConvention.EnvironmentDrop => { give <LlvmBodyLocalEntry.EnvironmentDrop abiId=abiId /> }
+                    _ => { return <Result.Ok value=<LlvmBodyLocalAdmission.Legacy convention=family /> /> }
+                } }
+                LlvmValueConvention.Body => {
+                    if parameterCount != abi.parameterCount { return <Result.Err error=valueAbiFailure(message: "local plan normal body/parameter mismatch") /> }
+                    give <LlvmBodyLocalEntry.Normal abiId=abiId />
+                }
             }
-            if abi.ownerBody != body.bodyInstance || parameterCount != abi.parameterCount { return <Result.Err error=valueAbiFailure(message: "local plan normal body/parameter mismatch") /> }
-            give <LlvmBodyLocalEntry.Normal abiId=abiId />
         } else if body.sourceFunction == 18446744073709551615U64 {
             if parameterCount != 0U64 { return <Result.Err error=valueAbiFailure(message: "global initializer has source parameters") /> }
             give <LlvmBodyLocalEntry.GlobalInitializer />
@@ -2813,21 +2836,29 @@ pub impl LlvmCtx {
         try scope.validateScope()
         val signature = match entry {
             LlvmBodyLocalEntry.Normal(abiId: val normalAbi) => { give self.valueAbis[normalAbi - 1U64].functionType }
+            LlvmBodyLocalEntry.Closure(abiId: val closureAbi) => { give self.valueAbis[closureAbi - 1U64].functionType }
+            LlvmBodyLocalEntry.EnvironmentDrop(abiId: val dropAbi) => { give self.valueAbis[dropAbi - 1U64].functionType }
             LlvmBodyLocalEntry.ProgramMain => { give self.mainFunctionType() }
             LlvmBodyLocalEntry.GlobalInitializer => { val parameters: Array[LLVMTypeRef] = [] give LLVMFunctionType(self.voidty, arrayCPtr(parameters), 0U64, 0I32) }
         }
         try scope.validateFunction(function: self.curFn, signature: signature)
+        val closureBindings = match entry {
+            LlvmBodyLocalEntry.Closure(abiId: val closureAbi) => { give <Optional.Some v=(try self.prepareClosureLocalBindings(c: inout c, body: body, parameterCount: parameterCount, abiId: closureAbi, environmentDrop: false)) /> }
+            LlvmBodyLocalEntry.EnvironmentDrop(abiId: val dropAbi) => { give <Optional.Some v=(try self.prepareClosureLocalBindings(c: inout c, body: body, parameterCount: parameterCount, abiId: dropAbi, environmentDrop: true)) /> }
+            _ => { give <Optional[LlvmClosureLocalBindings].None /> }
+        }
         val start = self.preparedLocals.count()
         mut val index = 0U64
         while index < body.locals.len {
             val declaration = c.mid.locals[body.locals.start + index]
-            val type = (try self.lowerMidLocalType(c: inout c, body: body, local: index))
+            val type = match closureBindings { Optional.Some(v: val bindings) => { give bindings.types[index] } Optional.None => { give (try self.lowerMidLocalType(c: inout c, body: body, local: index)) } }
             val storageType = if declaration.isCaptureCell { give self.ptrty } else { give type }
             val mode = if !declaration.isParameter { give <LlvmParameterMode.Legacy /> } else if declaration.isInout { give <LlvmParameterMode.Inout /> } else if declaration.ownsAtEntry { give <LlvmParameterMode.Move /> } else { give <LlvmParameterMode.Borrow /> }
-            self.preparedLocals.append(<LlvmPreparedLocal type=type storageType=storageType mode=mode />)
+            val binding = match closureBindings { Optional.Some(v: val bindings) => { give bindings.bindings[index] } Optional.None => { give <LlvmLocalBinding.None /> } }
+            self.preparedLocals.append(<LlvmPreparedLocal type=type storageType=storageType mode=mode binding=binding />)
             index += 1U64
         }
-        self.bodyLocalPlans.append(<LlvmBodyLocalPlan canonicalBody=canonical.body bodyIdentity=body.bodyInstance function=function signature=signature moduleIdentity=scope.moduleIdentity contextIdentity=scope.contextIdentity localStart=start localCount=body.locals.len revision=1U64 entry=entry />)
+        self.bodyLocalPlans.append(<LlvmBodyLocalPlan canonicalBody=canonical.body bodyIdentity=body.bodyInstance function=function signature=signature moduleIdentity=scope.moduleIdentity contextIdentity=scope.contextIdentity localStart=start localCount=body.locals.len revision=1U64 entry=entry environmentType=match closureBindings { Optional.Some(v: val bindings) => { give <Optional.Some v=bindings.environmentType /> } Optional.None => { give <Optional[LLVMTypeRef].None /> } } />)
         return <Result.Ok value=<LlvmBodyLocalAdmission.Planned planId=self.bodyLocalPlans.count() /> />
     }
 
@@ -2847,6 +2878,8 @@ pub impl LlvmCtx {
                     LlvmBodyLocalEntry.Normal(abiId: val plannedAbi) => {
                         if plannedAbi != abiId || abiId == 0U64 || self.valueAbis[abiId - 1U64].ownerBody != body.bodyInstance { return <Result.Err error=valueAbiFailure(message: "local plan entry descriptor mismatch") /> }
                     }
+                    LlvmBodyLocalEntry.Closure(abiId: val plannedAbi) => { try self.validateClosureLocalEntry(abiId: abiId, plannedAbi: plannedAbi, bodyId: body.bodyInstance, environmentDrop: false) }
+                    LlvmBodyLocalEntry.EnvironmentDrop(abiId: val plannedAbi) => { try self.validateClosureLocalEntry(abiId: abiId, plannedAbi: plannedAbi, bodyId: body.bodyInstance, environmentDrop: true) }
                     LlvmBodyLocalEntry.ProgramMain => { if abiId != 0U64 || body.sourceFunction == 18446744073709551615U64 { return <Result.Err error=valueAbiFailure(message: "main local plan entry mismatch") /> } }
                     LlvmBodyLocalEntry.GlobalInitializer => { if abiId != 0U64 || body.sourceFunction != 18446744073709551615U64 { return <Result.Err error=valueAbiFailure(message: "global local plan entry mismatch") /> } }
                 }

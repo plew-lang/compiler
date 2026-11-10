@@ -77,17 +77,7 @@ pub impl LlvmCtx {
                 MidLlvmPrepared.None => { return <Result.Err error=c.diagnosticAt(offset: offset, msg: "LLVM backend: closure environment drop could not be prepared as Mid IR") /> }
                 MidLlvmPrepared.Ready(canonical: _, abiParameterCount: _, localAdmission: _) => {
                     self.beginFnBody(fv: queued.function)
-                    val environment = (try self.legacyValueParameter(function: queued.function, index: 0U64))
-                    val environmentType = (try self.closureEnvTy(c: inout c, caps: closure.captures))
-                    mut val parameters: Array[LLVMValueRef] = []
-                    mut val index = 0U64
-                    while index < closure.captures.count() {
-                        val capture = closure.captures[index]
-                        val address = LLVMBuildStructGEP2(self.b, environmentType, environment, index + 1U64, anon())
-                        parameters.append(llvmLoad(self.b, (try self.captureSlotTy(c: inout c, cap: capture)), address, anon()))
-                        index += 1U64
-                    }
-                    if !(try self.genLlvmPreparedMidBody(c: inout c, prepared: prepared, abiParameterValues: parameters)) {
+                    if !(try self.genLlvmPreparedMidBody(c: inout c, prepared: prepared)) {
                         return <Result.Err error=c.diagnosticAt(offset: offset, msg: "LLVM backend: prepared closure environment Mid body failed to emit") />
                     }
                 }
@@ -202,29 +192,97 @@ pub impl LlvmCtx {
         return self.prepareCanonicalForLlvm(c: inout c, bodyId: closure.bodyId, fnIdx: fact.bodyKey, parameterCount: fact.parameters.count())
     }
 
-    // Captures are borrowed from the environment for this activation. Mutable
-    // captures bind the shared cell, not a new value copy or a new ARC owner.
-    inout fn bindMidClosureCaptures(c: inout Comp, body: MidBodyNode, bodyId: U64) -> Result[Bool, CompileDiagnostic] {
-        val slot: U64 = self.closureSlot(bodyId: bodyId)
-        if slot >= self.closures.count() { return <Result.Ok value=false /> }
-        val closure: LlvmClosure = self.closures[slot]
-        val parameterCount: U64 = (try c.preparedSemanticClosureAt(index: closure.semanticIndex)).parameters.count()
-        if parameterCount > body.locals.len || closure.captures.count() > body.locals.len - parameterCount { return <Result.Ok value=false /> }
-        if closure.captures.count() == 0U64 { return <Result.Ok value=true /> }
-        val environmentType: LLVMTypeRef = (try self.closureEnvTy(c: inout c, caps: closure.captures))
-        val environment: LLVMValueRef = (try self.legacyValueParameter(function: self.curFn, index: 0U64))
-        mut val captureI: U64 = 0U64
-        while captureI < closure.captures.count() {
-            val capture: CaptureEntry = closure.captures[captureI]
-            val local: U64 = parameterCount + captureI
-            val declaration: MidLocalDecl = c.mid.locals[body.locals.start + local]
-            if declaration.sourceNameStart != capture.nameStart || declaration.isParameter || declaration.isCaptureCell != capture.boxed || declaration.isInout != capture.boxed || declaration.isBorrowed == capture.boxed || !c.typeRefEq(a: declaration.typeTerm, b: capture.ty) { return <Result.Ok value=false /> }
-            val type: LLVMTypeRef = (try self.captureSlotTy(c: inout c, cap: capture))
-            val value: LLVMValueRef = llvmLoad(self.b, type, LLVMBuildStructGEP2(self.b, environmentType, environment, captureI + 1U64, anon()), anon())
-            llvmStore(self.b, value, self.locPtr[local])
-            captureI += 1U64
+    // Admission is the only place that matches frozen capture/parameter facts
+    // to Mid locals. Emission consumes these physical conversions verbatim.
+    inout fn prepareClosureLocalBindings(c: inout Comp, body: MidBodyNode, parameterCount: U64, abiId: U64, environmentDrop: Bool) -> Result[LlvmClosureLocalBindings, CompileDiagnostic] {
+        if abiId == 0U64 || abiId > self.valueAbis.count() || body.bodyInstance == 0U64 || body.bodyInstance > c.arena.bodyInstanceCount() { return <Result.Err error=valueAbiFailure(message: "closure local admission identity out of range") /> }
+        try self.validateClosureLocalEntry(abiId: abiId, plannedAbi: abiId, bodyId: body.bodyInstance, environmentDrop: environmentDrop)
+        val closureBodyId = if environmentDrop {
+            give match c.arena.bodyOrigin(bodyId: body.bodyInstance) {
+                BodyOrigin.ClosureEnvironmentDrop(closureBodyId: val owner) => { give owner }
+                _ => { return <Result.Err error=valueAbiFailure(message: "environment drop has no closure origin") /> }
+            }
+        } else { give body.bodyInstance }
+        val slot = self.closureSlot(bodyId: closureBodyId)
+        if slot >= self.closures.count() { return <Result.Err error=valueAbiFailure(message: "closure local admission lacks registered captures") /> }
+        val closure = self.closures[slot]
+        val frozen = c.arena.closureSignature(bodyId: closureBodyId)
+        val signature = c.arena.bodySignature(bodyId: body.bodyInstance)
+        val abi = self.valueAbis[abiId - 1U64]
+        if !signature.ready || signature.receiverType != 0U64 || closure.functionTypeTerm != frozen.functionTypeTerm || signature.parameterTypes.count() != parameterCount || signature.parameterPassings.count() != parameterCount || closure.captures.count() != frozen.captures.count() { return <Result.Err error=valueAbiFailure(message: "closure local admission signature shape mismatch") /> }
+        if environmentDrop {
+            if frozen.environmentDropBodyId != body.bodyInstance || parameterCount != frozen.captures.count() || abi.parameterCount != 1U64 || body.locals.len != parameterCount { return <Result.Err error=valueAbiFailure(message: "environment drop local mapping mismatch") /> }
+        } else {
+            if LLVMIsAFunction(closure.function) != LLVMIsAFunction(self.curFn) || abi.parameterCount != parameterCount + 1U64 || parameterCount > body.locals.len || frozen.captures.count() > body.locals.len - parameterCount { return <Result.Err error=valueAbiFailure(message: "closure local mapping mismatch") /> }
         }
-        return <Result.Ok value=true />
+        if abi.parameterStart >= self.valueAbiParameters.count() || plew_pointer_equal(self.valueAbiParameters[abi.parameterStart].type, self.ptrty) == 0I32 { return <Result.Err error=valueAbiFailure(message: "closure environment lane is not a pointer") /> }
+        mut val bindings: Array[LlvmLocalBinding] = []
+        mut val types: Array[LLVMTypeRef] = []
+        mut val index = 0U64
+        while index < body.locals.len {
+            if index >= parameterCount && c.mid.locals[body.locals.start + index].isParameter { return <Result.Err error=valueAbiFailure(message: "closure has an unmapped parameter local") /> }
+            bindings.append(<LlvmLocalBinding.None />)
+            types.append((try self.lowerMidLocalType(c: inout c, body: body, local: index)))
+            index += 1U64
+        }
+        index = 0U64
+        while index < parameterCount {
+            val local = c.mid.locals[body.locals.start + index]
+            val passing = signature.parameterPassings[index]
+            val aliasesAddress = match passing { CallArgumentPassing.Inout => { give true } _ => { give false } }
+            val consumes = match passing { CallArgumentPassing.Move => { give true } _ => { give false } }
+            if !local.isParameter || !c.typeRefEq(a: local.typeTerm, b: signature.parameterTypes[index]) || local.isInout != aliasesAddress || local.ownsAtEntry != consumes { return <Result.Err error=valueAbiFailure(message: "closure parameter correspondence mismatch") /> }
+            if !environmentDrop {
+                if local.isCaptureCell || local.isBorrowed { return <Result.Err error=valueAbiFailure(message: "ordinary closure parameter has capture flags") /> }
+                val parameterIndex = abi.parameterStart + index + 1U64
+                val type = if aliasesAddress { give self.ptrty } else { give types[index] }
+                if parameterIndex >= self.valueAbiParameters.count() || plew_pointer_equal(self.valueAbiParameters[parameterIndex].type, type) == 0I32 { return <Result.Err error=valueAbiFailure(message: "closure parameter representation mismatch") /> }
+                bindings.set(i: index, value: <LlvmLocalBinding.Parameter parameterIndex=parameterIndex alias=aliasesAddress />)
+            }
+            index += 1U64
+        }
+        mut val fields: Array[LLVMTypeRef] = [self.ptrty]
+        index = 0U64
+        while index < frozen.captures.count() {
+            val capture = frozen.captures[index]
+            val lowered = closure.captures[index]
+            val boxed = match capture.mode { SemanticClosureCaptureMode.CellBorrow => { give true } SemanticClosureCaptureMode.ValueCopy => { give false } }
+            val localIndex = if environmentDrop { give index } else { give parameterCount + index }
+            val local = c.mid.locals[body.locals.start + localIndex]
+            if lowered.nameStart != capture.bindingTarget || lowered.boxed != boxed || !c.typeRefEq(a: lowered.ty, b: capture.typeTerm) || !c.typeRefEq(a: local.typeTerm, b: capture.typeTerm) || local.isCaptureCell != boxed { return <Result.Err error=valueAbiFailure(message: "capture field/local representation mismatch") /> }
+            if environmentDrop {
+                if !local.isParameter || !local.ownsAtEntry || local.isInout || local.isBorrowed { return <Result.Err error=valueAbiFailure(message: "environment drop capture ownership mismatch") /> }
+            } else {
+                if local.sourceNameStart != capture.bindingTarget || local.isParameter || local.ownsAtEntry || local.isInout != boxed || local.isBorrowed == boxed { return <Result.Err error=valueAbiFailure(message: "closure capture binding correspondence mismatch") /> }
+            }
+            val type = if boxed { give self.ptrty } else { give types[localIndex] }
+            fields.append(type)
+            bindings.set(i: localIndex, value: <LlvmLocalBinding.Environment field=index + 1U64 type=type />)
+            index += 1U64
+        }
+        return <Result.Ok value=<LlvmClosureLocalBindings environmentType=LLVMStructTypeInContext(self.ctx, arrayCPtr(fields), fields.count(), 0I32) bindings=bindings types=types /> />
+    }
+
+    inout fn validateClosureLocalEntry(abiId: U64, plannedAbi: U64, bodyId: U64, environmentDrop: Bool) -> Result[(), CompileDiagnostic] {
+        if abiId == 0U64 || abiId > self.valueAbis.count() || abiId != plannedAbi || self.valueAbis[abiId - 1U64].ownerBody != bodyId { return <Result.Err error=valueAbiFailure(message: "closure local entry descriptor mismatch") /> }
+        val valid = match self.valueAbis[abiId - 1U64].convention {
+            LlvmValueConvention.Legacy(family: val family) => { give match family { LlvmLegacyConvention.Closure => { give !environmentDrop } LlvmLegacyConvention.EnvironmentDrop => { give environmentDrop } _ => { give false } } }
+            _ => { give false }
+        }
+        if !valid { return <Result.Err error=valueAbiFailure(message: "closure local entry convention mismatch") /> }
+        return <Result.Ok value=() />
+    }
+
+    // This row was admitted against the exact function and native signature.
+    // No function-name lookup or physical classification is repeated here.
+    inout fn preparedLegacyParameter(parameterIndex: U64) -> Result[LLVMValueRef, CompileDiagnostic] {
+        if parameterIndex >= self.valueAbiParameters.count() { return <Result.Err error=valueAbiFailure(message: "prepared parameter index out of range") /> }
+        val parameter = self.valueAbiParameters[parameterIndex]
+        return <Result.Ok value=match parameter.passing {
+            LlvmValuePassing.Omitted => { give LLVMGetUndef(parameter.type) }
+            LlvmValuePassing.Direct => { give LLVMGetParam(self.curFn, parameter.physicalIndex) }
+            LlvmValuePassing.Indirect => { give llvmLoad(self.b, parameter.type, LLVMGetParam(self.curFn, parameter.physicalIndex), anon()) }
+        } />
     }
 
     inout fn emitClosures(c: inout Comp) -> Result[(), CompileDiagnostic] {
@@ -255,7 +313,7 @@ pub impl LlvmCtx {
                 }
                 MidLlvmPrepared.Ready(canonical: _, abiParameterCount: _, localAdmission: _) => {
                     self.beginFnBody(fv: closure.function)
-                    if !(try self.genLlvmPreparedMidBody(c: inout c, prepared: prepared, abiParameterStart: 1U64, closureBodyId: closure.bodyId)) {
+                    if !(try self.genLlvmPreparedMidBody(c: inout c, prepared: prepared)) {
                         return <Result.Err error=c.diagnosticAt(offset: c.exprOffset(id: fact.exprId), msg: "LLVM backend: prepared closure Mid body failed to emit") />
                     }
                 }
