@@ -63,6 +63,12 @@ LLVM optimization preserves already established meaning. It may scalarize aggreg
 
 The shared native preprocessing definition lives in `native/llvm_pipeline.h` and is consumed by both the embedded object path and the text-IR link helper. Its current sequence simplifies functions within SCC processing before private argument promotion, then completes ordinary module optimization. The object path additionally applies its configured standard optimization tier before sanitizer instrumentation. This single definition prevents independently maintained preprocessing strings from drifting; it does not mean every AOT/JIT mode uses identical optimization levels.
 
+The shared ordinary O1 cleanup is retained as a code-quality choice, not a
+semantic check. Omitting it changes the work and input seen by final O2 and
+machine generation; it is not automatically redundant. Current policy is judged
+by both builder cost and generated-program throughput, as the [bounded O1 trial](../issues/met-c9m8.md)
+shows. Retuning it must preserve shared preprocessing and measure both sides.
+
 Normal sanitizer compilation marks emitted definitions for instrumentation, not merely runtime C code. Required language/ownership checks remain enabled. Optimizing a partially transformed aggregate ABI and instrumenting it before the intended preprocessing completes can change physical copy cost, so the stage order is explicit. Sanitizer diagnostics must still be capable of checking unoptimized compiler behavior through the separate raw-IR validation route.
 
 LLVM tools, optimization, sanitizer passes, runtime support, and link drivers must be compatible with the selected LLVM/toolchain configuration. An ASan runtime startup failure is distinct from a Plew memory error. The compiler's release/static-link packaging policy does not authorize mixing an incompatible local opt/clang with the module producer.
