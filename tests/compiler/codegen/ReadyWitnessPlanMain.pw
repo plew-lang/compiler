@@ -100,7 +100,7 @@ fn witnessPlanControl(mode: U64) {
             LlvmLocalBinding.Parameter(parameterIndex: val parameterIndex, alias: val alias) => { if parameterIndex != abi.parameterStart + 1U64 || alias != aliasesAddress { panic "wrong saved ordinary witness lane" } }
             _ => { panic "missing ordinary witness binding" }
         }
-        val ready = <MidLlvmPrepared.Ready canonical=canonical abiParameterCount=2U64 localAdmission=admission />
+        val ready = <MidLlvmPrepared.Ready canonical=canonical localAdmission=admission />
         backend.beginFnBody(fv: function)
         if !requireWitnessOk(result: backend.genLlvmPreparedMidBody(c: inout compiler, prepared: ready), stage: "valid Ready emission", mode: mode) { panic "valid witness emission failed" }
         if aliasesAddress {
@@ -122,9 +122,7 @@ fn witnessPlanControl(mode: U64) {
             if receiverStores != 1U64 { panic "LoadValue did not reach actual receiver store" }
         }
         val body = compiler.mid.bodies[canonical.body - 1U64]
-        if plew_pointer_equal(requireWitnessOk(result: backend.midCanonicalLocalTy(c: inout compiler, body: body, local: 0U64), stage: "later receiver type read", mode: mode), receiverLlvm) == 0I32 { panic "later local reader lost retained receiver type" }
-        requireWitnessInternal(result: backend.genLlvmPreparedMidBody(c: inout compiler, prepared: ready, abiParameterValues: [LLVMConstNull(backend.ptrty), LLVMConstInt(backend.i64ty, 0U64, 0I32)]), mode: mode)
-        requireWitnessInternal(result: backend.genLlvmPreparedMidBody(c: inout compiler, prepared: ready, localsPrepared: true), mode: mode)
+        if plew_pointer_equal(requireWitnessOk(result: backend.midCanonicalLocalTy(body: body, local: 0U64), stage: "later receiver type read", mode: mode), receiverLlvm) == 0I32 { panic "later local reader lost retained receiver type" }
         val otherName = <CString.copied text="other-witness-entry" />
         backend.curFn = requireWitnessOk(result: backend.declareLegacyBodyFunction(name: otherName.ptr, signature: signature, bodyId: targetId, family: <LlvmLegacyConvention.Witness />), stage: "declare foreign witness", mode: mode)
         requireWitnessInternal(result: backend.genLlvmPreparedMidBody(c: inout compiler, prepared: ready), mode: mode)

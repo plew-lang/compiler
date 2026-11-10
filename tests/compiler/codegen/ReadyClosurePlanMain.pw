@@ -125,7 +125,7 @@ fn closurePlanControl(mode: U64) {
                 _ => { panic "ordinary parameter lacks saved lane" }
             }
         }
-        val ready = <MidLlvmPrepared.Ready canonical=canonical abiParameterCount=count localAdmission=admission />
+        val ready = <MidLlvmPrepared.Ready canonical=canonical localAdmission=admission />
         backend.beginFnBody(fv: backend.curFn)
         if !requireClosureOk(result: backend.genLlvmPreparedMidBody(c: inout compiler, prepared: ready), stage: "valid Ready emission", mode: mode) { panic "valid retained closure failed emission" }
         if backend.nLocals != locals.count() { panic "local count changed" }
@@ -147,11 +147,7 @@ fn closurePlanControl(mode: U64) {
             index += 1U64
         }
         val body = compiler.mid.bodies[canonical.body - 1U64]
-        if plew_pointer_equal(requireClosureOk(result: backend.midCanonicalLocalTy(c: inout compiler, body: body, local: captureBase + 1U64), stage: "later local type read", mode: mode), backend.i64ty) == 0I32 { panic "cell logical type lost after binding" }
-        requireClosureInternal(result: backend.genLlvmPreparedMidBody(c: inout compiler, prepared: ready, abiParameterStart: 1U64))
-        requireClosureInternal(result: backend.genLlvmPreparedMidBody(c: inout compiler, prepared: ready, abiParameterValues: [LLVMConstInt(backend.i64ty, 0U64, 0I32)]))
-        requireClosureInternal(result: backend.genLlvmPreparedMidBody(c: inout compiler, prepared: ready, closureBodyId: closureId))
-        requireClosureInternal(result: backend.genLlvmPreparedMidBody(c: inout compiler, prepared: ready, localsPrepared: true))
+        if plew_pointer_equal(requireClosureOk(result: backend.midCanonicalLocalTy(body: body, local: captureBase + 1U64), stage: "later local type read", mode: mode), backend.i64ty) == 0I32 { panic "cell logical type lost after binding" }
         backend.curFn = if drop { give closureFunction } else { give dropFunction }
         requireClosureInternal(result: backend.genLlvmPreparedMidBody(c: inout compiler, prepared: ready))
     }

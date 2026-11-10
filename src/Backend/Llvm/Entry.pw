@@ -89,7 +89,7 @@ pub impl LlvmCtx {
         } else {
             val prepared = (try self.prepareCanonicalForLlvm(c: inout c, bodyId: bodyId, fnIdx: globalOwner, parameterCount: 0U64))
             match prepared {
-                MidLlvmPrepared.Ready(canonical: _, abiParameterCount: _, localAdmission: _) => { midReady = (try self.genLlvmPreparedMidBody(c: inout c, prepared: prepared)) }
+                MidLlvmPrepared.Ready(canonical: _, localAdmission: _) => { midReady = (try self.genLlvmPreparedMidBody(c: inout c, prepared: prepared)) }
                 _ => {}
             }
         }
@@ -159,7 +159,7 @@ pub impl LlvmCtx {
         if self.gvalRef.count() == c.arena.globals.count() {
             preparedMid = (try self.prepareCanonicalForLlvm(c: inout c, bodyId: bodyId, fnIdx: fi, parameterCount: 0U64))
             match preparedMid {
-                MidLlvmPrepared.Ready(canonical: _, abiParameterCount: _, localAdmission: _) => { midReady = true }
+                MidLlvmPrepared.Ready(canonical: _, localAdmission: _) => { midReady = true }
                 _ => {}
             }
         } else {

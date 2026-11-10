@@ -12,60 +12,182 @@ pub impl LlvmCtx {
         }
     }
 
-    inout fn prepareMidAsyncFrame(c: inout Comp, bodyId: U64) -> Result[LlvmAsyncFrame, CompileDiagnostic] {
-        val fi = c.arena.bodyInstanceAt(index: bodyId - 1U64).fnIdx
-        val canonical = (try self.prepareAsyncMidCanonical(c: inout c, bodyId: bodyId))
-        val plan = planCanonicalMidAsyncFrame(c: c, canonical: canonical)
-        if !plan.valid {
-            if c.traceCodegen {
-                eprint(text: "[trace-codegen] async-frame-invalid well-formed=")
-                if c.mid.isWellFormed(body: canonical) { eprint(text: "1") } else { eprint(text: "0") }
-                eprint(text: "\n")
-                val failed = c.mid.bodies[canonical.body - 1U64]
-                mut val index: U64 = 0U64
-                while index < failed.blocks.len {
-                    val block = c.mid.blocks[failed.blocks.start + index]
-                    eprint(text: "[trace-codegen] async-frame-block ")
-                    self.traceCodegenU64(n: index)
-                    eprint(text: " term=")
-                    self.traceCodegenU64(n: c.mid.terminators[block.terminator - 1U64].tag)
-                    mut val statement: U64 = 0U64
-                    while statement < block.statements.len {
-                        val item = c.mid.statements[block.statements.start + statement]
-                        eprint(text: " statement=")
-                        self.traceCodegenU64(n: item.tag)
-                        if item.value != 0U64 { eprint(text: ":")
-                            self.traceCodegenU64(n: c.mid.rvalues[item.value - 1U64].tag) }
-                        statement += 1U64
+    inout fn prepareMidAsyncFrame(c: inout Comp, bodyId: U64, entry: LlvmAsyncEntry, resume: LLVMValueRef) -> Result[U64, CompileDiagnostic] {
+        if bodyId == 0U64 || bodyId > c.arena.bodyInstanceCount() { return <Result.Err error=valueAbiFailure(message: "async body identity is out of range") /> }
+        return self.admitMidAsyncActivation(c: inout c, canonical: (try self.prepareAsyncMidCanonical(c: inout c, bodyId: bodyId)), entry: entry, resume: resume)
+    }
+
+    // Caller supplies ownership-verified canonical Mid. All physical facts are
+    // completed before publishing the activation and its Ready local plan.
+    inout fn admitMidAsyncActivation(c: inout Comp, canonical: MidCanonicalBody, entry: LlvmAsyncEntry, resume: LLVMValueRef) -> Result[U64, CompileDiagnostic] {
+        if canonical.body == 0U64 || canonical.body > c.mid.bodies.count() || !c.mid.isWellFormed(body: canonical) { return <Result.Err error=valueAbiFailure(message: "async canonical body is invalid") /> }
+        val body = c.mid.bodies[canonical.body - 1U64]
+        if body.bodyInstance == 0U64 || body.bodyInstance > c.arena.bodyInstanceCount() || body.sourceFunction >= c.arena.functionCount() { return <Result.Err error=valueAbiFailure(message: "async body owner is invalid") /> }
+        val instance = c.arena.bodyInstanceAt(index: body.bodyInstance - 1U64)
+        val function = c.arena.functionAt(index: body.sourceFunction)
+        if instance.fnIdx != body.sourceFunction || !isAsyncFn(c: inout c, fi: body.sourceFunction) || function.hasRecv || function.typeParams.count() != 0U64 { return <Result.Err error=valueAbiFailure(message: "async activation requires a supported free body") /> }
+        val signature = c.arena.bodySignature(bodyId: body.bodyInstance)
+        val noReceiver = match signature.receiverPassing { CallReceiverPassing.None => { give true } _ => { give false } }
+        if !signature.ready || signature.parameterTypes.count() != signature.parameterPassings.count() || signature.receiverType != 0U64 || !noReceiver { return <Result.Err error=valueAbiFailure(message: "async activation signature is incomplete") /> }
+        val parameterCount = signature.parameterTypes.count()
+        if parameterCount > body.locals.len { return <Result.Err error=valueAbiFailure(message: "async parameter prefix is incomplete") /> }
+        val scope = (try self.prepareValueAbiScope())
+        try scope.validateScope()
+        val resumeAbi = (try self.asyncNativeAbi(function: resume, bodyId: body.bodyInstance, resume: true))
+        val framePlan = planCanonicalMidAsyncFrame(c: c, canonical: canonical)
+        if !framePlan.valid || framePlan.storedLocals.count() != body.locals.len { return <Result.Err error=valueAbiFailure(message: "async frame plan is invalid") /> }
+        mut val fields: Array[LLVMTypeRef] = [self.i32ty, self.ptrty]
+        mut val rows: Array[LlvmPreparedLocal] = []
+        mut val parameters: Array[LLVMTypeRef] = []
+        mut val index = 0U64
+        while index < body.locals.len {
+            val declaration = c.mid.locals[body.locals.start + index]
+            if declaration.isParameter != (index < parameterCount) { return <Result.Err error=valueAbiFailure(message: "async local parameter prefix mismatch") /> }
+            val type = (try self.lowerMidLocalType(c: inout c, body: body, local: index))
+            if !scope.ownsType(type: type) { return <Result.Err error=valueAbiFailure(message: "async local has foreign type") /> }
+            val storageType = if declaration.isCaptureCell { give self.ptrty } else { give type }
+            mut val mode = <LlvmParameterMode.Legacy />
+            if declaration.isParameter {
+                val sameType = if declaration.typeTerm == 0U64 || signature.parameterTypes[index] == 0U64 { give declaration.typeTerm == signature.parameterTypes[index] } else { give declaration.typeTerm < c.arena.typeCount() && signature.parameterTypes[index] < c.arena.typeCount() && c.typeRefEq(a: declaration.typeTerm, b: signature.parameterTypes[index]) }
+                if !sameType || !declaration.ownsAtEntry || declaration.isBorrowed || declaration.isInout || declaration.isCaptureCell { return <Result.Err error=valueAbiFailure(message: "async parameter ownership/type mismatch") /> }
+                mode = match signature.parameterPassings[index] {
+                    CallArgumentPassing.Inout => { return <Result.Err error=valueAbiFailure(message: "async activation cannot retain inout") /> }
+                    CallArgumentPassing.Borrow => {
+                        val destruction = (try c.checkedFinalDestruction(typeRef: declaration.typeTerm))
+                        if destruction != 0U64 && c.arena.finalDestructions[destruction - 1U64].isUnique { return <Result.Err error=valueAbiFailure(message: "async activation cannot copy borrowed unique input") /> }
+                        give <LlvmParameterMode.Borrow />
                     }
-                    eprint(text: "\n")
+                    CallArgumentPassing.Move => { give <LlvmParameterMode.Move /> }
+                }
+                parameters.append(type)
+            }
+            val storage = if declaration.isParameter || framePlan.storedLocals[index] {
+                val field = fields.count()
+                fields.append(storageType)
+                give <LlvmLocalStorage.FrameField field=field />
+            } else { give <LlvmLocalStorage.EntryAlloca /> }
+            rows.append(<LlvmPreparedLocal semanticType=declaration.typeTerm type=type storageType=storageType storage=storage mode=mode />)
+            index += 1U64
+        }
+        mut val entryAbi = 0U64
+        match entry {
+            LlvmAsyncEntry.Main(function: val native) => {
+                if !c.nameIsMain(f: function) || parameterCount != 0U64 || self.valueAbiFunctions.getOr(key: LLVMIsAFunction(native), fallback: 0U64) != 0U64 { return <Result.Err error=valueAbiFailure(message: "async main entry mismatch") /> }
+                try scope.validateFunction(function: native, signature: self.mainFunctionType())
+            }
+            LlvmAsyncEntry.Private(function: val native, abiId: val abiId) => {
+                if c.nameIsMain(f: function) { return <Result.Err error=valueAbiFailure(message: "async main requires its program entry") /> }
+                entryAbi = (try self.asyncNativeAbi(function: native, bodyId: body.bodyInstance, resume: false))
+                if entryAbi != abiId { return <Result.Err error=valueAbiFailure(message: "async entry descriptor mismatch") /> }
+                val abi = self.valueAbis[entryAbi - 1U64]
+                if abi.parameterCount != parameterCount { return <Result.Err error=valueAbiFailure(message: "async entry parameter count mismatch") /> }
+                val expected = LLVMFunctionType(self.ptrty, arrayCPtr(parameters), parameters.count(), 0I32)
+                // The descriptor owns the byval-transformed native signature.
+                // Compare source-local types to its logical side, not that ABI.
+                if plew_pointer_equal(abi.logicalSignature, expected) == 0I32 { return <Result.Err error=valueAbiFailure(message: "async entry logical signature mismatch") /> }
+                index = 0U64
+                while index < parameterCount {
+                    if plew_pointer_equal(self.valueAbiParameters[abi.parameterStart + index].type, rows[index].type) == 0I32 { return <Result.Err error=valueAbiFailure(message: "async entry parameter representation mismatch") /> }
                     index += 1U64
                 }
             }
-            return <Result.Err error=c.diagnosticAt(offset: c.fnAnchor(f: c.arena.functionAt(index: fi)), msg: "async Mid frame analysis failed") />
-            }
-        val body = c.mid.bodies[canonical.body - 1U64]
-        mut val types: Array[LLVMTypeRef] = [self.i32ty, self.ptrty]
-        mut val slots: Array[U64] = []
-        mut val local: U64 = 0U64
-        while local < body.locals.len {
-            val declaration = c.mid.locals[body.locals.start + local]
-            // Parameters are the entry-to-resume handoff, in addition to the
-            // values retained across suspension. All other locals use liveness.
-            if declaration.isParameter || plan.storedLocals[local] {
-                slots.append(types.count())
-                if declaration.isCaptureCell { types.append(self.ptrty) }
-                else { types.append((try self.lowerMidLocalType(c: inout c, body: body, local: local))) }
-            } else { slots.append(0U64) }
-            local += 1U64
+        }
+        match (try self.midVerifiedLlvmPreflight(c: inout c, canonical: canonical, abiParameterCount: parameterCount, asyncBody: true)) {
+            MidLlvmPreflight.Ready => {}
+            _ => { return <Result.Err error=valueAbiFailure(message: "async Mid LLVM capability preflight failed") /> }
         }
         mut val name: Array[U8] = []
         appendBytes(into: inout name, from: "__af".bytes())
-        appendU64Dec(into: inout name, n: fi)
+        appendU64Dec(into: inout name, n: body.sourceFunction)
         name.append(0U8)
         val frame = LLVMStructCreateNamed(self.ctx, arrayCPtr(name))
-        LLVMStructSetBody(frame, arrayCPtr(types), types.count(), 0I32)
-        return <Result.Ok value=<LlvmAsyncFrame type=frame canonical=canonical localSlots=slots /> />
+        LLVMStructSetBody(frame, arrayCPtr(fields), fields.count(), 0I32)
+        val activationId = self.asyncActivations.count() + 1U64
+        val planId = self.bodyLocalPlans.count() + 1U64
+        val localStart = self.preparedLocals.count()
+        index = 0U64
+        while index < rows.count() { self.preparedLocals.append(rows[index]) index += 1U64 }
+        val inputStart = self.asyncActivationInputs.count()
+        index = 0U64
+        while index < parameterCount {
+            self.asyncActivationInputs.append(<LlvmAsyncActivationInput parameterIndex=self.valueAbis[entryAbi - 1U64].parameterStart + index local=index acquireShare=match rows[index].mode { LlvmParameterMode.Borrow => { give true } _ => { give false } } />)
+            index += 1U64
+        }
+        self.bodyLocalPlans.append(<LlvmBodyLocalPlan canonicalBody=canonical.body bodyIdentity=body.bodyInstance function=LLVMIsAFunction(resume) signature=self.valueAbis[resumeAbi - 1U64].functionType moduleIdentity=scope.moduleIdentity contextIdentity=scope.contextIdentity localStart=localStart localCount=rows.count() revision=1U64 entry=<LlvmBodyLocalEntry.AsyncResume activationId=activationId /> />)
+        self.asyncActivations.append(<LlvmAsyncActivation type=frame prepared=<MidLlvmPrepared.Ready canonical=canonical localAdmission=<LlvmBodyLocalAdmission.Planned planId=planId /> /> entry=entry resume=resume resumeAbi=resumeAbi inputStart=inputStart inputCount=parameterCount />)
+        return <Result.Ok value=activationId />
+    }
+
+    inout fn asyncNativeAbi(function: LLVMValueRef, bodyId: U64, resume: Bool) -> Result[U64, CompileDiagnostic] {
+        val native = LLVMIsAFunction(function)
+        val abiId = self.valueAbiFunctions.getOr(key: native, fallback: 0U64)
+        if native == 0U64 || abiId == 0U64 || abiId > self.valueAbis.count() { return <Result.Err error=valueAbiFailure(message: "async native entry lacks descriptor") /> }
+        val abi = self.valueAbis[abiId - 1U64]
+        val valid = match abi.convention { LlvmValueConvention.Legacy(family: val family) => { give match family { LlvmLegacyConvention.AsyncResume => { give resume } LlvmLegacyConvention.AsyncEntry => { give !resume } _ => { give false } } } _ => { give false } }
+        val scope = (try self.prepareValueAbiScope())
+        try scope.validateScope()
+        if !valid || abi.ownerBody != bodyId || abi.moduleIdentity != scope.moduleIdentity || abi.contextIdentity != scope.contextIdentity || abi.revision != 1U64 || abi.parameterStart > self.valueAbiParameters.count() || abi.parameterCount > self.valueAbiParameters.count() - abi.parameterStart { return <Result.Err error=valueAbiFailure(message: "async native descriptor owner/convention mismatch") /> }
+        try scope.validateFunction(function: function, signature: abi.functionType)
+        if resume {
+            val parameters: Array[LLVMTypeRef] = [self.ptrty]
+            try scope.validateFunction(function: function, signature: LLVMFunctionType(self.voidty, arrayCPtr(parameters), 1U64, 0I32))
+            if abi.parameterCount != 1U64 || plew_pointer_equal(self.valueAbiParameters[abi.parameterStart].type, self.ptrty) == 0I32 { return <Result.Err error=valueAbiFailure(message: "async resume frame input mismatch") /> }
+        }
+        return <Result.Ok value=abiId />
+    }
+
+    // Reconcile retained physical records, without semantic re-lowering.
+    inout fn validateMidAsyncActivation(activationId: U64, planId: U64) -> Result[(), CompileDiagnostic] {
+        if activationId == 0U64 || activationId > self.asyncActivations.count() || planId == 0U64 || planId > self.bodyLocalPlans.count() { return <Result.Err error=valueAbiFailure(message: "async activation/plan is out of range") /> }
+        val activation = self.asyncActivations[activationId - 1U64]
+        val plan = self.bodyLocalPlans[planId - 1U64]
+        val savedPlan = match activation.prepared { MidLlvmPrepared.Ready(canonical: val canonical, localAdmission: val admission) => {
+            if canonical.body != plan.canonicalBody { return <Result.Err error=valueAbiFailure(message: "async activation canonical mismatch") /> }
+            give match admission { LlvmBodyLocalAdmission.Planned(planId: val saved) => { give saved } }
+        } _ => { return <Result.Err error=valueAbiFailure(message: "async activation lacks Ready") /> } }
+        val savedActivation = match plan.entry { LlvmBodyLocalEntry.AsyncResume(activationId: val saved) => { give saved } _ => { return <Result.Err error=valueAbiFailure(message: "async activation has wrong local entry") /> } }
+        if savedPlan != planId || savedActivation != activationId || plan.function != LLVMIsAFunction(activation.resume) || plan.localStart > self.preparedLocals.count() || plan.localCount > self.preparedLocals.count() - plan.localStart || activation.inputStart > self.asyncActivationInputs.count() || activation.inputCount > self.asyncActivationInputs.count() - activation.inputStart { return <Result.Err error=valueAbiFailure(message: "async activation foreign local/input range") /> }
+        val resumeAbi = (try self.asyncNativeAbi(function: activation.resume, bodyId: plan.bodyIdentity, resume: true))
+        if resumeAbi != activation.resumeAbi { return <Result.Err error=valueAbiFailure(message: "async activation resume changed") /> }
+        val scope = (try self.prepareValueAbiScope())
+        try scope.validateScope()
+        if !scope.ownsType(type: activation.type) || LLVMGetTypeKind(activation.type) != 10U32 || LLVMIsOpaqueStruct(activation.type) != 0I32 { return <Result.Err error=valueAbiFailure(message: "async activation frame is not a local defined struct") /> }
+        val fieldCount = LLVMCountStructElementTypes(activation.type)
+        if fieldCount < 2U32 || plew_pointer_equal(LLVMStructGetTypeAtIndex(activation.type, 0U32), self.i32ty) == 0I32 || plew_pointer_equal(LLVMStructGetTypeAtIndex(activation.type, 1U32), self.ptrty) == 0I32 { return <Result.Err error=valueAbiFailure(message: "async activation frame header mismatch") /> }
+        mut val field = 2U64
+        mut val index = 0U64
+        while index < plan.localCount {
+            val local = self.preparedLocals[plan.localStart + index]
+            match local.storage {
+                LlvmLocalStorage.FrameField(field: val saved) => {
+                    if saved != field || saved >= 4294967296U64 || truncU32(n: saved) >= fieldCount || plew_pointer_equal(LLVMStructGetTypeAtIndex(activation.type, truncU32(n: saved)), local.storageType) == 0I32 { return <Result.Err error=valueAbiFailure(message: "async retained frame field mismatch") /> }
+                    field += 1U64
+                }
+                LlvmLocalStorage.EntryAlloca => { if index < activation.inputCount { return <Result.Err error=valueAbiFailure(message: "async parameter is not frame bound") /> } }
+            }
+            index += 1U64
+        }
+        if field >= 4294967296U64 || truncU32(n: field) != fieldCount { return <Result.Err error=valueAbiFailure(message: "async frame has unmatched fields") /> }
+        match activation.entry {
+            LlvmAsyncEntry.Main(function: val native) => {
+                if activation.inputCount != 0U64 { return <Result.Err error=valueAbiFailure(message: "async main has inputs") /> }
+                try scope.validateFunction(function: native, signature: self.mainFunctionType())
+            }
+            LlvmAsyncEntry.Private(function: val native, abiId: val abiId) => {
+                if (try self.asyncNativeAbi(function: native, bodyId: plan.bodyIdentity, resume: false)) != abiId { return <Result.Err error=valueAbiFailure(message: "async activation entry changed") /> }
+                val abi = self.valueAbis[abiId - 1U64]
+                if abi.parameterCount != activation.inputCount || activation.inputCount > plan.localCount { return <Result.Err error=valueAbiFailure(message: "async activation input count mismatch") /> }
+                index = 0U64
+                while index < activation.inputCount {
+                    val input = self.asyncActivationInputs[activation.inputStart + index]
+                    val local = self.preparedLocals[plan.localStart + index]
+                    val acquire = match local.mode { LlvmParameterMode.Borrow => { give true } LlvmParameterMode.Move => { give false } _ => { return <Result.Err error=valueAbiFailure(message: "async input has invalid acquisition mode") /> } }
+                    if input.local != index || input.parameterIndex != abi.parameterStart + index || input.acquireShare != acquire || plew_pointer_equal(local.type, self.valueAbiParameters[input.parameterIndex].type) == 0I32 { return <Result.Err error=valueAbiFailure(message: "async retained input mapping mismatch") /> }
+                    index += 1U64
+                }
+            }
+        }
+        return <Result.Ok value=() />
     }
 
     inout fn midAsyncComplete(c: inout Comp, value: LLVMValueRef) -> Result[(), CompileDiagnostic] {
@@ -108,45 +230,20 @@ pub impl LlvmCtx {
         val retained = (try self.midCanonicalEmitOperand(c: inout c, body: body, operandId: term.value))
         val result = llvmLoad(self.b, self.i64ty, LLVMBuildStructGEP2(self.b, self.promiseTy, retained, 1U64, anon()), anon())
         val destination = c.mid.places[term.destination - 1U64]
-        val type = (try self.midCanonicalLocalTy(c: inout c, body: body, local: destination.local))
+        val type = (try self.midCanonicalLocalTy(body: body, local: destination.local))
         llvmStore(self.b, self.coerceInt(v: result, target: type, unsigned: false), (try self.midCanonicalPlacePtr(c: inout c, body: body, place: destination, forWrite: true)))
         LLVMBuildBr(self.b, target)
         return <Result.Ok value=true />
     }
 
-    inout fn genLlvmMidAsyncResume(c: inout Comp, slot: U64, activation: LlvmAsyncFrame) -> Result[(), CompileDiagnostic] {
-        val canonical = activation.canonical
-        val body = c.mid.bodies[canonical.body - 1U64]
-        val parameters = c.arena.bodySignature(bodyId: body.bodyInstance).parameterTypes.count()
-        match (try self.midVerifiedLlvmPreflight(c: inout c, canonical: canonical, abiParameterCount: parameters, asyncBody: true)) {
-            MidLlvmPreflight.Ready => {}
-            _ => { return <Result.Err error=c.diagnosticAt(offset: c.fnAnchor(f: c.arena.functionAt(index: body.sourceFunction)), msg: "async Mid LLVM preflight failed") />
-                }
-        }
-        self.curFn = self.asyncResumeFn[slot]
-        self.curResumeFn = self.curFn
-        self.curFrameTy = activation.type
-        self.curFrameBase = (try self.legacyValueParameter(function: self.curFn, index: 0U64))
+    inout fn genLlvmMidAsyncResume(c: inout Comp, activationId: U64) -> Result[(), CompileDiagnostic] {
+        if activationId == 0U64 || activationId > self.asyncActivations.count() { return <Result.Err error=valueAbiFailure(message: "async resume activation is out of range") /> }
+        val activation = self.asyncActivations[activationId - 1U64]
+        self.curFn = activation.resume
         self.curIsMain = false
         self.curRetVoid = true
         self.beginFnBody(fv: self.curFn)
-        mut val storage: Array[LLVMValueRef] = []
-        val slots = activation.localSlots
-        mut val local: U64 = 0U64
-        while local < body.locals.len {
-            if slots[local] != 0U64 { storage.append(LLVMBuildStructGEP2(self.b, self.curFrameTy, self.curFrameBase, slots[local], anon())) }
-            else if c.mid.locals[body.locals.start + local].isCaptureCell { storage.append(self.entryAlloca(ty: self.ptrty)) }
-            else { storage.append(self.entryAlloca(ty: (try self.midCanonicalLocalTy(c: inout c, body: body, local: local)))) }
-            local += 1U64
-        }
-        if !(try self.midPrepareCanonicalLocals(c: inout c, body: body, storage: storage, initializeParameters: false)) { return <Result.Err error=c.diagnosticAt(offset: 0U64, msg: "async Mid local binding failed") />
-            }
-        val startCString = <CString.copied text="mid.async.start" />
-        val start = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, startCString.ptr)
-        val state = llvmLoad(self.b, self.i32ty, LLVMBuildStructGEP2(self.b, self.curFrameTy, self.curFrameBase, 0U64, anon()), anon())
-        self.curAsyncSwitch = LLVMBuildSwitch(self.b, state, start, 8U32)
-        LLVMPositionBuilderAtEnd(self.b, start)
-        if !(try self.genLlvmPreparedMidBody(c: inout c, prepared: <MidLlvmPrepared.Ready canonical=canonical abiParameterCount=parameters localAdmission=<LlvmBodyLocalAdmission.Legacy convention=<LlvmLegacyConvention.AsyncResume /> /> />, localsPrepared: true, asyncBody: true)) { return <Result.Err error=c.diagnosticAt(offset: 0U64, msg: "async Mid LLVM emission failed") /> }
+        if !(try self.genLlvmPreparedMidBody(c: inout c, prepared: activation.prepared)) { return <Result.Err error=valueAbiFailure(message: "async Mid LLVM emission failed") /> }
         return <Result.Ok value=() />
     }
 }

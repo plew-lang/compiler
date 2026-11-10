@@ -281,38 +281,65 @@ snapshot183. All product source and control hashes match the successful build's
 source CLI, architecture and baseline RED. Async/W2, preparation cost and final
 gates are not included in this acceptance.
 
-## Remaining Async Activation and Checkpoint-3 Exit
+## Ready Async Activation and Checkpoint-3 Exit
 
-The neutral read-only plan review selected the following final increment. It is
-an execution plan, not implemented or accepted work:
+Checkpoint 3 is independently accepted for every actual Ready family. The
+[final async/local-plan evidence](../../../evidence/performance-regression-history/value-passing-implementation/w2-protocol/ready-async-local-plan.json)
+records the immutable build `20261110T014617-build-526d8a`, fresh candidate
+`compiler/bin/plewc-value-abi-ready-async-20261110` (SHA
+`e42eaafeb51308c7c2eb15f7e4f17b2cc8083a60f1a6078beca3a3edd456c8b8`),
+49 CLI controls, eight Mid controls, four private native harnesses,
+raw/optimized ABI and C expose/callback controls. Source183/control133 all match
+the build's 6523 inputs; independent review reconciled 1274 distinct hash
+references and replayed native, CLI, architecture and defect REDs.
 
-- Retain EntryAlloca versus FrameField storage per local from the existing Mid
-  async frame/liveness plan, preserving logical T versus capture-cell ptr storage.
-- Admit the exact canonical/body/frame layout and separately identified native
-  entry and resume signatures. Same body identity is not same entry function.
-  Async main's native C entry is explicit as well.
-- Retain entry ABI-row-to-frame-field mappings and existing acquisition modes.
-  Async Borrow inputs acquire the frame's owned share; Move transfers ownership.
-  Do not apply normal synchronous Borrow-local ownership rules to async inputs.
-- Resume binds retained frame addresses or entry allocas without reinitializing
-  source parameters. The common Ready emitter must perform frame GEP/local
-  binding before the resume state switch so addresses dominate callback re-entry,
-  then emit the existing dispatch/start prologue and common CFG. Preserve current
-  ambient allocation order, Promise-retain-before-resume and no frame reread after
-  synchronous completion.
-- Remove Ready's compatibility parameter count, hand-built AsyncResume Ready,
-  raw offset/value/storage vectors, localsPrepared/initializeParameters and
-  external asyncBody/closureBodyId overrides. Derive the emission mode from the
-  admitted entry. Reconcile every Ready producer/consumer and reject or remove
-  the remaining body-local Legacy fallback; physical Legacy conventions stay
-  explicit until checkpoint 5.
-- Exercise actual frame field/alloca types, parameter mappings/acquisition,
-  malformed frame/body/function/field/mode identities, immediate completion and
-  real suspension/callback dominance. Recheck existing frame/body-contract,
-  async entry ownership, enum/capture, repeated/shared await, async main/global/
-  process-argument controls and prior normal/closure/witness controls.
+The [Ready and async contract](../design/mid-entry-audit.md) now owns the
+retained entry/frame/resume plan. Raw input/storage vectors, count-only Ready,
+external async-mode/closure overrides and the local Legacy fallback are removed.
+The retained-only local type reader no longer accepts Comp or mutation authority.
+Physical Legacy conventions remain explicit pending checkpoints 4/5.
 
-This work uses the existing frame, ownership and runtime contracts, with no new
-lifetime or event-loop semantics. Checkpoint 3 cannot close merely because its
-first three entry increments passed. W2 preparation cost, checkpoints 4–6,
-W3/W4 and final com-ffar gates remain open.
+Real aggregate execution exposed a logical-versus-byval-native signature
+comparison mistake, fixed with separate descriptor-side checks. Independent
+physical-input reproduction exposed contradictory owned+borrowed metadata,
+now rejected by native mode28. Async native cases cover four valid mappings,
+18 malformed admissions and six retained mapping corruptions; manually supplied
+canonical fixtures are not source ownership proofs. Actual source controls
+separately execute ownership, immediate completion, real suspension, shared
+Promise waiters, capture cells and program-argument/global initialization.
+Removed raw APIs are now tested as signature absence; all remaining meaningful
+runtime guards are retained. Generic async/method support is unchanged, not
+newly prohibited by the spec. No formal timing/fixed-point/full ASan is claimed.
+
+## Next Increment: Completed Closure Calls
+
+Checkpoint 4 starts with ordinary closures, preserving the current physical
+byval/staging ABI before W3 forwarding. The read-only source plan review found
+no new source-language decision. Close declaration, local/field indirect call
+and Ready parameter consumption together:
+
+- Add an explicit completed Closure convention and Environment lane alongside
+  indexed Ordinary lanes and their frozen types/modes/result. Retain current
+  source-call support; unsupported source inout is not a passing migration case.
+  Do not treat every
+  non-Body convention as Legacy.
+- Cache completed callable descriptors by finalized function-type identity and
+  LLVM scope. A dynamic target has a callable-signature identity, not a known
+  callee body; do not misuse the normal body input scope. Keep actual caller
+  provenance validation and declared body identity separate.
+- Connect declaration, typed indirect Value/Home calls and environment/ordinary
+  parameter readers to that saved descriptor. Preserve the existing fat closure
+  layout, byval staging, acquisition and local copies.
+- Make raw Legacy helpers reject the completed convention; remove per-call
+  physical reclassification and untyped ordinary/environment overrides.
+- Before product edits, pin the concrete callable-scope/callee-carrier APIs and
+  shared declaration/template correspondence. Test same-ptr lane swaps,
+  type/index/mode/context/provenance/signature mismatch and raw-helper bypass.
+- Execute capturing/noncapturing and local/field calls, Unit/aggregate results,
+  scalar/String/aggregate/zero-sized inputs, mutable cells, escaping closures,
+  ownership/drop controls and raw/optimized ABI. Assert preparation is bounded
+  by completed signatures rather than invocation count.
+
+Existential receiver/ordinary calls and ownership glue follow as separately
+reviewable increments within checkpoint 4. Checkpoints 5/6, W2 preparation cost
+and whole-consumer reconciliation, W3/W4 and com-ffar final gates remain open.

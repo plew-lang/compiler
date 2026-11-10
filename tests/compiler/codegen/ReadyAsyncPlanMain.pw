@@ -1,0 +1,162 @@
+// Appended to an exact Backend.pw snapshot. This exercises the private physical
+// boundary; source acquisition/await/cleanup execute in existing async fixtures.
+use ./Frontend only { analyzeFrontendDeclarations, FrontendInput }
+use ./SourceAccess only { SourceAccess }
+extern(c) {
+    fn LLVMGetAllocatedType(value~: LLVMValueRef) -> LLVMTypeRef
+    fn LLVMIsAAllocaInst(value~: LLVMValueRef) -> U64
+    fn LLVMIsAGetElementPtrInst(value~: LLVMValueRef) -> U64
+    fn LLVMGetOperand(value~: U64, index~: U32) -> LLVMValueRef
+    fn LLVMConstIntGetZExtValue(value~: LLVMValueRef) -> U64
+    fn LLVMGetInstructionParent(value~: LLVMValueRef) -> LLVMBasicBlockRef
+    fn LLVMIsASwitchInst(value~: LLVMValueRef) -> U64
+}
+fn requireAsyncOk[T](result: Result[T, CompileDiagnostic], stage: String, mode: U64) -> T {
+    match result {
+        Result.Ok(value: val value) => { return value }
+        Result.Err(error: val error) => {
+            eprint(text: "async-plan mode=") eprintU64(n: mode)
+            eprint(text: " stage=") eprint(text: stage)
+            eprint(text: ": ") eprint(text: error.message) eprint(text: "\n")
+            panic "private async setup or valid-path API failed"
+        }
+    }
+}
+fn requireAsyncInternal[T](result: Result[T, CompileDiagnostic], mode: U64) {
+    match result {
+        Result.Ok(value: _) => { eprintU64(n: mode) panic "malformed async activation accepted" }
+        Result.Err(error: val error) => { match error.failureDomain { FailureDomain.Internal => {} _ => { panic "wrong async activation failure domain" } } }
+    }
+}
+fn asyncPlanControl(mode: U64) {
+    val context = LLVMContextCreate()
+    val name = <CString.copied text="ready-async-entry" />
+    val module = LLVMModuleCreateWithNameInContext(name.ptr, context)
+    val otherModule = LLVMModuleCreateWithNameInContext(name.ptr, context)
+    val triple = LLVMGetDefaultTargetTriple()
+    val cpu = <CString.copied text="generic" />
+    val layout = plew_llvm_native_data_layout(cpu.ptr)
+    LLVMSetTarget(module, triple) LLVMSetDataLayout(module, layout)
+    LLVMSetTarget(otherModule, triple) LLVMSetDataLayout(otherModule, layout)
+    LLVMDisposeMessage(triple) LLVMDisposeMessage(layout)
+    val builder = LLVMCreateBuilderInContext(context)
+    mut val backend = llvmContext(ctx: context, m: module, builder: builder)
+    mut val compiler = <Comp />
+    compiler.modules.langModule = 0U64
+    val source = "extern(plewIntrinsic) {{ struct Promise[T] }} async fn control(value: I64) {{}} async fn main() {{}} fn ordinary() {{}}"
+    requireAsyncOk(result: analyzeFrontendDeclarations(c: inout compiler, input: <FrontendInput.Text text=source path="ready-async.pw" />, sources: <SourceAccess stdRoot=[] />), stage: "frontend declarations", mode: mode)
+    val isMain = mode == 2U64 || mode == 18U64
+    val selectedName = if isMain { give "main" } else if mode == 20U64 { give "ordinary" } else { give "control" }
+    val functionIndex = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: selectedName).nameId)
+    if functionIndex >= compiler.arena.functionCount() { panic "missing async setup declaration" }
+    val integerName = compiler.internBytes(s: "I64")
+    val integer = compiler.simpleTypeRef(nameStart: integerName.nameStart, nameLen: integerName.nameLen)
+    val unsignedName = compiler.internBytes(s: "U64")
+    val unsigned = compiler.simpleTypeRef(nameStart: unsignedName.nameStart, nameLen: unsignedName.nameLen)
+    requireAsyncOk(result: compiler.enqueueFinalDestruction(typeRef: integer), stage: "finalize I64", mode: mode)
+    requireAsyncOk(result: compiler.enqueueFinalDestruction(typeRef: unsigned), stage: "finalize U64", mode: mode)
+    val bodyId = compiler.arena.registerBodyInstance(<BodyInstance fnIdx=functionIndex environment=<InstanceEnvironment /> />)
+    val otherBodyId = compiler.arena.registerBodyInstance(<BodyInstance fnIdx=functionIndex environment=<InstanceEnvironment /> />)
+    val localInteger = if mode == 21U64 {
+        val duplicate = compiler.arena.registerType(t: compiler.arena.typeAt(index: integer), nameCount: integerName.nameId)
+        if duplicate == integer || !compiler.typeRefEq(a: duplicate, b: integer) { panic "equivalent distinct-ID setup failed" }
+        requireAsyncOk(result: compiler.enqueueFinalDestruction(typeRef: duplicate), stage: "finalize duplicate I64", mode: mode)
+        give duplicate
+    } else { give integer }
+    val consumes = mode == 1U64
+    val passing = if mode == 12U64 { give <CallArgumentPassing.Inout /> } else if consumes { give <CallArgumentPassing.Move /> } else { give <CallArgumentPassing.Borrow /> }
+    val terms: Array[U64] = if isMain { give [] } else { give [integer] }
+    val passings: Array[CallArgumentPassing] = if isMain { give [] } else { give [passing] }
+    compiler.arena.setBodySignature(bodyId: bodyId, parameters: terms, passings: passings, result: 0U64, receiverType: if mode == 13U64 { give integer } else { give 0U64 }, receiverPassing: if mode == 13U64 { give <CallReceiverPassing.Borrow /> } else { give <CallReceiverPassing.None /> })
+    mut val locals: Array[MidLocalDecl] = []
+    if !isMain { locals.append(<MidLocalDecl typeTerm=if mode == 10U64 { give unsigned } else { give localInteger } sourceScope=0U64 isUnique=false isParameter=true isBorrowed=mode == 28U64 ownsAtEntry=mode != 11U64 isInout=mode == 12U64 />) }
+    if mode == 14U64 { locals.append(<MidLocalDecl typeTerm=integer sourceScope=0U64 isUnique=false isParameter=true ownsAtEntry=true />) }
+    val ordinaryLocal = locals.count()
+    locals.append(<MidLocalDecl typeTerm=integer sourceScope=0U64 isUnique=false isParameter=false />)
+    val cellLocal = locals.count()
+    locals.append(<MidLocalDecl typeTerm=integer sourceScope=0U64 isUnique=false isParameter=false isCaptureCell=true />)
+    val canonical = compiler.mid.store(body: <MidBody bodyInstance=if mode == 4U64 { give 0U64 } else if mode == 5U64 { give compiler.arena.bodyInstanceCount() + 1U64 } else { give bodyId } sourceFunction=functionIndex locals=locals blocks=[<MidBlock terminator=<MidTerminator.Return /> />] />)
+    if !compiler.mid.isWellFormed(body: canonical) { panic "malformed async fixture shape" }
+    val entryParameters: Array[LLVMTypeRef] = if isMain { give [] } else { give [if mode == 9U64 { give backend.ptrty } else { give backend.i64ty }] }
+    val entrySignature = if isMain && mode != 18U64 { give backend.mainFunctionType() } else { give LLVMFunctionType(if isMain { give backend.voidty } else { give backend.ptrty }, arrayCPtr(entryParameters), entryParameters.count(), 0I32) }
+    val entryFunction = if isMain { give LLVMAddFunction(module, name.ptr, entrySignature) } else { give requireAsyncOk(result: backend.declareLegacyBodyFunction(name: name.ptr, signature: entrySignature, bodyId: if mode == 8U64 { give otherBodyId } else { give bodyId }, family: if mode == 15U64 { give <LlvmLegacyConvention.Closure /> } else { give <LlvmLegacyConvention.AsyncEntry /> }), stage: "declare async entry", mode: mode) }
+    backend.attachBodyIdentity(function: entryFunction, bodyId: bodyId)
+    val entry = if isMain { give <LlvmAsyncEntry.Main function=entryFunction /> } else { give <LlvmAsyncEntry.Private function=entryFunction abiId=backend.valueAbiFunctions.getOr(key: LLVMIsAFunction(entryFunction), fallback: 0U64) /> }
+    val resumeName = <CString.copied text="ready-async-resume" />
+    val resumeParameters: Array[LLVMTypeRef] = [if mode == 7U64 { give backend.i64ty } else { give backend.ptrty }]
+    val resumeSignature = LLVMFunctionType(backend.voidty, arrayCPtr(resumeParameters), 1U64, 0I32)
+    val resumeFunction = requireAsyncOk(result: backend.declareLegacyBodyFunction(name: resumeName.ptr, signature: resumeSignature, bodyId: if mode == 6U64 { give otherBodyId } else { give bodyId }, family: if mode == 16U64 { give <LlvmLegacyConvention.Witness /> } else { give <LlvmLegacyConvention.AsyncResume /> }), stage: "declare resume", mode: mode)
+    val resume = if mode == 17U64 { give LLVMAddFunction(otherModule, resumeName.ptr, resumeSignature) } else { give resumeFunction }
+    val admissionResult = backend.admitMidAsyncActivation(c: inout compiler, canonical: if mode == 3U64 { give <MidCanonicalBody body=0U64 /> } else { give canonical }, entry: entry, resume: resume)
+    if (mode >= 3U64 && mode <= 20U64) || mode == 28U64 {
+        requireAsyncInternal(result: admissionResult, mode: mode)
+    } else {
+        val activationId = requireAsyncOk(result: admissionResult, stage: "valid activation admission", mode: mode)
+        if activationId == 0U64 || activationId > backend.asyncActivations.count() { panic "activation was not retained" }
+        val activation = backend.asyncActivations[activationId - 1U64]
+        val planId = match activation.prepared {
+            MidLlvmPrepared.Ready(canonical: val saved, localAdmission: val admission) => {
+                if saved.body != canonical.body { panic "activation changed canonical identity" }
+                give match admission { LlvmBodyLocalAdmission.Planned(planId: val planId) => { give planId } }
+            }
+            _ => { panic "activation lacks admitted Ready" }
+        }
+        val plan = backend.bodyLocalPlans[planId - 1U64]
+        match plan.entry { LlvmBodyLocalEntry.AsyncResume(activationId: val saved) => { if saved != activationId { panic "resume plan selected another activation" } } _ => { panic "wrong async local entry" } }
+        if activation.inputCount != terms.count() { panic "wrong activation input count" }
+        if !isMain {
+            val input = backend.asyncActivationInputs[activation.inputStart]
+            val abiId = backend.valueAbiFunctions.getOr(key: LLVMIsAFunction(entryFunction), fallback: 0U64)
+            if input.parameterIndex != backend.valueAbis[abiId - 1U64].parameterStart || input.local != 0U64 || backend.preparedLocals[plan.localStart].semanticType != localInteger || input.acquireShare == consumes { panic "Borrow acquisition / Move transfer mapping lost" }
+            match backend.preparedLocals[plan.localStart].storage { LlvmLocalStorage.FrameField(field: val field) => { if field != 2U64 { panic "entry parameter lacks exact frame field" } } _ => { panic "entry parameter was not retained in frame" } }
+        }
+        match backend.preparedLocals[plan.localStart + ordinaryLocal].storage { LlvmLocalStorage.EntryAlloca => {} _ => { panic "dead ordinary local unnecessarily frame-bound" } }
+        match backend.preparedLocals[plan.localStart + cellLocal].storage { LlvmLocalStorage.EntryAlloca => {} _ => { panic "dead cell local unnecessarily frame-bound" } }
+        // Inject bounded corruptions of the retained physical contract. They
+        // must fail before any frame GEP or native parameter read is emitted.
+        if mode >= 22U64 {
+            val row = backend.preparedLocals[plan.localStart]
+            if mode == 22U64 || mode == 23U64 || mode == 24U64 {
+                backend.preparedLocals.set(i: plan.localStart, value: <LlvmPreparedLocal semanticType=row.semanticType type=row.type storageType=row.storageType mode=if mode == 24U64 { give <LlvmParameterMode.Legacy /> } else { give row.mode } storage=if mode == 22U64 { give <LlvmLocalStorage.FrameField field=1U64 /> } else if mode == 23U64 { give <LlvmLocalStorage.EntryAlloca /> } else { give row.storage } binding=row.binding />)
+            } else if mode == 25U64 {
+                val input = backend.asyncActivationInputs[activation.inputStart]
+                backend.asyncActivationInputs.set(i: activation.inputStart, value: <LlvmAsyncActivationInput parameterIndex=input.parameterIndex local=input.local acquireShare=!input.acquireShare />)
+            } else if mode == 26U64 {
+                val fields: Array[LLVMTypeRef] = [backend.i64ty, backend.ptrty, backend.i64ty]
+                LLVMStructSetBody(activation.type, arrayCPtr(fields), fields.count(), 0I32)
+            } else if mode == 27U64 {
+                val replacement = requireAsyncOk(result: backend.declareLegacyBodyFunction(name: resumeName.ptr, signature: resumeSignature, bodyId: bodyId, family: <LlvmLegacyConvention.AsyncResume />), stage: "different resume setup", mode: mode)
+                // LLVM uniquifies the name and preserves the same body/signature.
+                if LLVMIsAFunction(replacement) == LLVMIsAFunction(resume) { panic "different resume setup reused function" }
+                backend.asyncActivations.set(i: activationId - 1U64, value: <LlvmAsyncActivation type=activation.type prepared=activation.prepared entry=activation.entry resume=replacement resumeAbi=backend.valueAbiFunctions.getOr(key: LLVMIsAFunction(replacement), fallback: 0U64) inputStart=activation.inputStart inputCount=activation.inputCount />)
+            }
+            requireAsyncInternal(result: backend.validateMidAsyncActivation(activationId: activationId, planId: planId), mode: mode)
+            LLVMDisposeBuilder(builder) LLVMDisposeModule(otherModule) LLVMDisposeModule(module) LLVMContextDispose(context)
+            return
+        }
+        requireAsyncOk(result: backend.genLlvmMidAsyncResume(c: inout compiler, activationId: activationId), stage: "real async Ready consumer", mode: mode)
+        if !isMain {
+            val pointer = backend.locPtr[0U64]
+            val gep = LLVMIsAGetElementPtrInst(pointer)
+            if gep == 0U64 || LLVMConstIntGetZExtValue(LLVMGetOperand(gep, 2U32)) != 2U64 { panic "parameter local did not bind retained frame GEP" }
+            // Callback dispatch bypasses the initial start block. Frame GEPs
+            // must precede the dispatch switch, so they dominate every re-entry.
+            if LLVMIsASwitchInst(LLVMGetBasicBlockTerminator(LLVMGetInstructionParent(pointer))) == 0U64 { panic "frame GEP does not dominate resume state dispatch" }
+        }
+        if LLVMIsAAllocaInst(backend.locPtr[ordinaryLocal]) == 0U64 || plew_pointer_equal(LLVMGetAllocatedType(backend.locPtr[ordinaryLocal]), backend.i64ty) == 0I32 { panic "ordinary local lost retained alloca type" }
+        if LLVMIsAAllocaInst(backend.locPtr[cellLocal]) == 0U64 || plew_pointer_equal(LLVMGetAllocatedType(backend.locPtr[cellLocal]), backend.ptrty) == 0I32 { panic "cell local lost pointer-holder storage" }
+        val body = compiler.mid.bodies[canonical.body - 1U64]
+        if plew_pointer_equal(requireAsyncOk(result: backend.midCanonicalLocalTy(body: body, local: cellLocal), stage: "later async local type", mode: mode), backend.i64ty) == 0I32 { panic "later reader lost logical cell type" }
+        backend.curFn = entryFunction
+        requireAsyncInternal(result: backend.genLlvmPreparedMidBody(c: inout compiler, prepared: activation.prepared), mode: mode)
+    }
+    LLVMDisposeBuilder(builder) LLVMDisposeModule(otherModule) LLVMDisposeModule(module) LLVMContextDispose(context)
+}
+fn main() {
+    mut val mode = 0U64
+    while mode <= 18U64 { asyncPlanControl(mode: mode) mode += 1U64 }
+    asyncPlanControl(mode: 20U64)
+    mode = 21U64
+    while mode <= 28U64 { asyncPlanControl(mode: mode) mode += 1U64 }
+    write(s: "ok\n")
+}

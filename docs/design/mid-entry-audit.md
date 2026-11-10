@@ -310,9 +310,13 @@ Mid/Diagnostics owns stage error translation without an LLVM context.
 MidExecutableRequests caches per-body success/failure in the same session/templates;
 signature-not-ready rejects admission before pass-failure caching. It does not
 silently prepare other instances or grant effect-closure publication permission.
-Backend-local MidLlvmPrepared.Ready additionally records that exact immutable
-body's applicability and argument count; emission consumes it without duplicate
-verification/preflight or reusing it for a changed body.
+Backend-local MidLlvmPrepared.Ready additionally retains the exact immutable
+body's admitted native-entry binding and local-storage plan. Admission lowers
+local types once. Representation readers consume retained rows without semantic
+context; emission uses their bindings/storage without raw overrides or duplicate
+verification/preflight.
+The plan is scoped to the canonical body, actual function, module/context and
+signature; a receipt cannot be reused for another entry of the same body.
 
 FinalDestruction.isUnique prohibits Copy independently of needsRelease or a local
 cache. Executable verification rejects missing/unready contracts for Copy, Drop,
@@ -344,8 +348,16 @@ Borrowed-local dependencies transitively include owners, conservatively unioned
 across definitions. Sparse empty dependency rows do not truncate closure. The
 analysis adds no retain or new lifetime rule.
 
-LLVM maps saved locals to frame slots; entry-to-resume arguments also use the
-frame. Resume reloads the awaited result from the saved Promise instead of using
+LLVM admission retains each local's logical/semantic type, storage type and
+entry-alloca or frame-field binding. Entry and resume share that activation plan
+but retain distinct native signatures. Source input types match the logical side
+of the entry descriptor; its physical side may include byval conversion.
+An owned activation input cannot be a borrowed local alias. Entry acquires a
+Borrow share or transfers Move according to the existing input contract; resume
+binds frame addresses without initializing source inputs again. Frame GEPs
+precede state dispatch so they dominate callback entry. The caller Promise share
+is retained before first resume, and synchronous completion is followed without
+rereading the freed frame. Resume reloads the awaited result from the saved Promise instead of using
 pre-suspend SSA values. Shared completion cells own waiter lists; resolution
 moves each continuation once to ready and frees its list node. Source Drop comes
 from Mid, then completion notification, activation Promise release and frame free

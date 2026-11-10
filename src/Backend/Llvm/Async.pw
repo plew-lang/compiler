@@ -151,8 +151,6 @@ pub impl LlvmCtx {
         }
         if !self.admitBody(bodyId: self.asyncBodyIds[slot]) { return <Result.Ok value=() /> }
         val f: Func = c.arena.functionAt(index: fi)
-        val activation = (try self.prepareMidAsyncFrame(c: inout c, bodyId: self.asyncBodyIds[slot]))
-        val frameTy: LLVMTypeRef = activation.type
         val resumeFn: LLVMValueRef = self.asyncResumeFn[slot]
         val isMain: Bool = c.nameIsMain(f: f)
         // ---- entry function ----
@@ -165,6 +163,12 @@ pub impl LlvmCtx {
         } else {
             entryFn = self.asyncEntryVal[self.asyncEntrySlot(fi: fi)]
         }
+        val entry = if isMain { give <LlvmAsyncEntry.Main function=entryFn /> } else { give <LlvmAsyncEntry.Private function=entryFn abiId=self.valueAbiFunctions.getOr(key: LLVMIsAFunction(entryFn), fallback: 0U64) /> }
+        val activationId = (try self.prepareMidAsyncFrame(c: inout c, bodyId: self.asyncBodyIds[slot], entry: entry, resume: resumeFn))
+        val activation = self.asyncActivations[activationId - 1U64]
+        val planId = match activation.prepared { MidLlvmPrepared.Ready(canonical: _, localAdmission: val admission) => { give match admission { LlvmBodyLocalAdmission.Planned(planId: val saved) => { give saved } } } _ => { return <Result.Err error=valueAbiFailure(message: "async entry lacks Ready") /> } }
+        try self.validateMidAsyncActivation(activationId: activationId, planId: planId)
+        val frameTy = activation.type
         self.curFn = entryFn
         // the standard fn skeleton (entry: br body0) — NOT a bare single block: the
         // param-copy loop below retains heap-carrying params, and a payload enum's
@@ -183,19 +187,15 @@ pub impl LlvmCtx {
         // Frame storage owns the entry arguments. Copy borrowed ABI values here;
         // moved arguments transfer their existing ownership. The prepared Mid
         // body supplies the matching parameter Drops on every normal exit.
-        val canonical = activation.canonical
-        val body = c.mid.bodies[canonical.body - 1U64]
-        val signature = c.arena.bodySignature(bodyId: body.bodyInstance)
-        mut val pi: U64 = 0
-        while pi < signature.parameterTypes.count() {
-            val pv: LLVMValueRef = (try self.legacyValueParameter(function: entryFn, index: pi))
-            llvmStore(self.b, pv, LLVMBuildStructGEP2(self.b, frameTy, frame, activation.localSlots[pi], anon()))
-            match signature.parameterPassings[pi] {
-                CallArgumentPassing.Borrow => { try self.valueArc(c: inout c, v: pv, typeRef: signature.parameterTypes[pi], retain: true) }
-                CallArgumentPassing.Move => {}
-                CallArgumentPassing.Inout => { return <Result.Err error=c.diagnosticAt(offset: c.fnAnchor(f: f), msg: "async entry does not support inout parameters") /> }
-            }
-            pi += 1
+        mut val pi = 0U64
+        while pi < activation.inputCount {
+            val input = self.asyncActivationInputs[activation.inputStart + pi]
+            val local = self.preparedLocals[self.bodyLocalPlans[planId - 1U64].localStart + input.local]
+            val field = match local.storage { LlvmLocalStorage.FrameField(field: val saved) => { give saved } _ => { return <Result.Err error=valueAbiFailure(message: "async input lost frame field") /> } }
+            val value = (try self.preparedLegacyParameter(parameterIndex: input.parameterIndex))
+            llvmStore(self.b, value, LLVMBuildStructGEP2(self.b, frameTy, frame, field, anon()))
+            if input.acquireShare { try self.valueArc(c: inout c, v: value, typeRef: local.semanticType, retain: true) }
+            pi += 1U64
         }
         // __self = plew_promise_new(); __f->__self = __self (capture before resume — a
         // synchronously-completing resume frees the frame, so __f->__self would dangle).
@@ -221,7 +221,7 @@ pub impl LlvmCtx {
         } else {
             LLVMBuildRet(self.b, promiseSelf)
         }
-        try self.genLlvmMidAsyncResume(c: inout c, slot: slot, activation: activation)
+        try self.genLlvmMidAsyncResume(c: inout c, activationId: activationId)
         return <Result.Ok value=() />
     }
 

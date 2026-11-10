@@ -37,18 +37,12 @@ fn main() {
     val function = LLVMAddFunction(module, name.ptr, signature)
     backend.curFn = function
     val admission = backend.prepareBodyLocalPlan(c: inout compiler, canonical: canonical, parameterCount: 0U64).unwrap()
-    val ready = <MidLlvmPrepared.Ready canonical=canonical abiParameterCount=0U64 localAdmission=admission />
+    val ready = <MidLlvmPrepared.Ready canonical=canonical localAdmission=admission />
     backend.beginFnBody(fv: function)
     if !backend.genLlvmPreparedMidBody(c: inout compiler, prepared: ready).unwrap() { panic "valid private local plan rejected" }
     if backend.nLocals != 1U64 || LLVMGetIntTypeWidth(backend.locTy[0U64]) != 1U32 || plew_pointer_equal(LLVMGetAllocatedType(backend.locPtr[0U64]), backend.locTy[0U64]) == 0I32 { panic "retained local representation did not reach allocation" }
-    requireInternal(result: backend.genLlvmPreparedMidBody(c: inout compiler, prepared: <MidLlvmPrepared.Ready canonical=<MidCanonicalBody body=0U64 /> abiParameterCount=0U64 localAdmission=admission />))
-    requireInternal(result: backend.genLlvmPreparedMidBody(c: inout compiler, prepared: <MidLlvmPrepared.Ready canonical=<MidCanonicalBody body=compiler.mid.bodies.count() + 1U64 /> abiParameterCount=0U64 localAdmission=admission />))
-    requireInternal(result: backend.genLlvmPreparedMidBody(c: inout compiler, prepared: ready, localsPrepared: true))
-    requireInternal(result: backend.genLlvmPreparedMidBody(c: inout compiler, prepared: ready, abiParameterStart: 1U64))
-    requireInternal(result: backend.genLlvmPreparedMidBody(c: inout compiler, prepared: ready, abiParameterValues: [LLVMConstInt(backend.i64ty, 0U64, 0I32)]))
-    requireInternal(result: backend.genLlvmPreparedMidBody(c: inout compiler, prepared: ready, closureBodyId: 1U64))
-    requireInternal(result: backend.genLlvmPreparedMidBody(c: inout compiler, prepared: ready, asyncBody: true))
-    requireInternal(result: backend.midPrepareCanonicalLocals(c: inout compiler, body: body, initializeParameters: false))
+    requireInternal(result: backend.genLlvmPreparedMidBody(c: inout compiler, prepared: <MidLlvmPrepared.Ready canonical=<MidCanonicalBody body=0U64 /> localAdmission=admission />))
+    requireInternal(result: backend.genLlvmPreparedMidBody(c: inout compiler, prepared: <MidLlvmPrepared.Ready canonical=<MidCanonicalBody body=compiler.mid.bodies.count() + 1U64 /> localAdmission=admission />))
     val controlName = compiler.internBytes(s: "control")
     val control = compiler.arena.firstFunctionNamed(nameId: controlName.nameId)
     if control >= compiler.arena.functionCount() { panic "missing private control declaration" }
@@ -57,8 +51,8 @@ fn main() {
     val otherBody = compiler.mid.store(body: <MidBody bodyInstance=otherBodyId sourceFunction=control locals=[<MidLocalDecl typeTerm=0U64 sourceScope=0U64 isUnique=false isParameter=false isDropFlag=true />] blocks=[<MidBlock terminator=<MidTerminator.Return /> />] />)
     requireInternal(result: backend.validateBodyLocalAdmission(canonical: canonical, body: compiler.mid.bodies[otherBody.body - 1U64]))
     val otherCanonical = compiler.mid.store(body: <MidBody bodyInstance=bodyId sourceFunction=globalOwner blocks=[<MidBlock terminator=<MidTerminator.Return /> />] />)
-    requireInternal(result: backend.genLlvmPreparedMidBody(c: inout compiler, prepared: <MidLlvmPrepared.Ready canonical=otherCanonical abiParameterCount=0U64 localAdmission=admission />))
-    requireInternal(result: backend.genLlvmPreparedMidBody(c: inout compiler, prepared: <MidLlvmPrepared.Ready canonical=canonical abiParameterCount=0U64 localAdmission=<LlvmBodyLocalAdmission.Planned planId=backend.bodyLocalPlans.count() + 1U64 /> />))
+    requireInternal(result: backend.genLlvmPreparedMidBody(c: inout compiler, prepared: <MidLlvmPrepared.Ready canonical=otherCanonical localAdmission=admission />))
+    requireInternal(result: backend.genLlvmPreparedMidBody(c: inout compiler, prepared: <MidLlvmPrepared.Ready canonical=canonical localAdmission=<LlvmBodyLocalAdmission.Planned planId=backend.bodyLocalPlans.count() + 1U64 /> />))
     val otherFunction = LLVMAddFunction(otherModule, name.ptr, signature)
     backend.curFn = otherFunction
     requireInternal(result: backend.prepareBodyLocalPlan(c: inout compiler, canonical: canonical, parameterCount: 0U64))

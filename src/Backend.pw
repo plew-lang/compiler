@@ -79,17 +79,17 @@ fn witnessReceiverMode(passing: CallReceiverPassing) -> Result[LlvmParameterMode
 }
 
 // Backend-local admission result. Ready is constructed only after ownership
-// verification and LLVM capability checks on this frozen body. Its ABI prefix
-// travels with the body rather than being supplied again by emission callers.
+// verification and LLVM capability checks on this frozen body. Its binding
+// and storage plan travels with it, never as an emission override.
 enum MidLlvmPrepared {
     None
-    Ready(canonical: MidCanonicalBody, abiParameterCount: U64, localAdmission: LlvmBodyLocalAdmission)
+    Ready(canonical: MidCanonicalBody, localAdmission: LlvmBodyLocalAdmission)
 }
 
-// Local representation is retained once at admission. Legacy here is an
-// explicit not-yet-migrated physical-to-local adapter, not a normal fallback.
-enum LlvmBodyLocalAdmission { Planned(planId: U64) Legacy(convention: LlvmLegacyConvention) }
-enum LlvmBodyLocalEntry { Normal(abiId: U64) Closure(abiId: U64) EnvironmentDrop(abiId: U64) Witness(abiId: U64) ProgramMain GlobalInitializer }
+// Local representation is retained once at admission for every Ready entry.
+// Physical Legacy conventions remain explicit until their transport migration.
+enum LlvmBodyLocalAdmission { Planned(planId: U64) }
+enum LlvmBodyLocalEntry { Normal(abiId: U64) Closure(abiId: U64) EnvironmentDrop(abiId: U64) Witness(abiId: U64) AsyncResume(activationId: U64) ProgramMain GlobalInitializer }
 // A prepared physical-to-local conversion. Parameter indices address the
 // immutable ABI pool, not source or native positional indices.
 enum LlvmLocalBinding {
@@ -104,9 +104,12 @@ struct LlvmEntryLocalBindings {
     pub val types: Array[LLVMTypeRef]
 }
 pub impl LlvmEntryLocalBindings { factory }
+enum LlvmLocalStorage { EntryAlloca FrameField(field: U64) }
 struct LlvmPreparedLocal {
+    pub val semanticType: U64 = 0U64
     pub val type: LLVMTypeRef
     pub val storageType: LLVMTypeRef
+    pub val storage: LlvmLocalStorage = <LlvmLocalStorage.EntryAlloca />
     pub val mode: LlvmParameterMode
     pub val binding: LlvmLocalBinding = <LlvmLocalBinding.None />
 }
@@ -226,10 +229,20 @@ pub impl LlvmAmbientScope { factory }
 
 // One prepared activation layout is shared by its entry and resume emission.
 // It exists only after the requested canonical body has passed Mid preparation.
-struct LlvmAsyncFrame {
+enum LlvmAsyncEntry { Main(function: LLVMValueRef) Private(function: LLVMValueRef, abiId: U64) }
+struct LlvmAsyncActivationInput {
+    val parameterIndex: U64
+    val local: U64
+    val acquireShare: Bool
+}
+struct LlvmAsyncActivation {
     val type: LLVMTypeRef
-    val canonical: MidCanonicalBody
-    val localSlots: Array[U64]
+    val prepared: MidLlvmPrepared
+    val entry: LlvmAsyncEntry
+    val resume: LLVMValueRef
+    val resumeAbi: U64
+    val inputStart: U64
+    val inputCount: U64
 }
 
 pub enum LlvmBodyEmission { Whole Declarations Requested(bodyId: U64) }
@@ -272,6 +285,8 @@ struct LlvmCtx {
     mut val valueAbiScope: Optional[LlvmSignatureScope] = <Optional.None />
     mut val bodyLocalPlans: Array[LlvmBodyLocalPlan] = []
     mut val preparedLocals: Array[LlvmPreparedLocal] = []
+    mut val asyncActivations: Array[LlvmAsyncActivation] = []
+    mut val asyncActivationInputs: Array[LlvmAsyncActivationInput] = []
     mut val bodyLocalAdmission: Optional[LlvmBodyLocalAdmission] = <Optional.None />
 
     // A diagnostic-only scalar table.  These three columns have identical

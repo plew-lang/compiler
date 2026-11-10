@@ -75,7 +75,7 @@ pub impl LlvmCtx {
             val prepared = (try self.prepareSyntheticMidBody(c: inout c, bodyId: queued.bodyId, fnIdx: body.fnIdx, parameterCount: closure.captures.count()))
             match prepared {
                 MidLlvmPrepared.None => { return <Result.Err error=c.diagnosticAt(offset: offset, msg: "LLVM backend: closure environment drop could not be prepared as Mid IR") /> }
-                MidLlvmPrepared.Ready(canonical: _, abiParameterCount: _, localAdmission: _) => {
+                MidLlvmPrepared.Ready(canonical: _, localAdmission: _) => {
                     self.beginFnBody(fv: queued.function)
                     if !(try self.genLlvmPreparedMidBody(c: inout c, prepared: prepared)) {
                         return <Result.Err error=c.diagnosticAt(offset: offset, msg: "LLVM backend: prepared closure environment Mid body failed to emit") />
@@ -299,7 +299,7 @@ pub impl LlvmCtx {
                     }
                     return <Result.Err error=c.diagnosticAt(offset: c.exprOffset(id: fact.exprId), msg: "LLVM backend: closure body could not be prepared as Mid IR") />
                 }
-                MidLlvmPrepared.Ready(canonical: _, abiParameterCount: _, localAdmission: _) => {
+                MidLlvmPrepared.Ready(canonical: _, localAdmission: _) => {
                     self.beginFnBody(fv: closure.function)
                     if !(try self.genLlvmPreparedMidBody(c: inout c, prepared: prepared)) {
                         return <Result.Err error=c.diagnosticAt(offset: c.exprOffset(id: fact.exprId), msg: "LLVM backend: prepared closure Mid body failed to emit") />

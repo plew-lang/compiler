@@ -18,6 +18,11 @@ async_text=(root/'src/Backend/Llvm/MidAsync.pw').read_text()
 start=async_text.index('    inout fn prepareMidAsyncFrame(')
 end=async_text.find('\n    inout fn ',start+1)
 assert 'midCanonicalLocalTy(' not in async_text[start:end], 'async admission reads a previous emission plan'
-assert 'planned locals cannot use legacy emission overrides' in text
+assert 'localsPrepared:' not in method('genLlvmPreparedMidBody')
+assert 'abiParameterValues:' not in method('genLlvmPreparedMidBody')
+assert 'abiParameterStart:' not in method('genLlvmPreparedMidBody')
+assert 'closureBodyId:' not in method('genLlvmPreparedMidBody')
+assert 'initializeParameters:' not in binding
+assert 'storage: Array[LLVMValueRef]' not in binding
 assert 'Ready canonical body is out of range' in text
 print('PASS admission is independent from active emission plans and bypasses fail closed')
