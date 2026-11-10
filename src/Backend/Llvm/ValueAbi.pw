@@ -51,6 +51,104 @@ pub impl LlvmCtx {
         return self.saveValueAbi(signature: <LlvmLogicalSignature convention=<LlvmValueConvention.Legacy family=family /> parameters=parameters result=LLVMGetReturnType(signature) resultTerm=0U64 />, ownerBody: ownerBody)
     }
 
+    // The template is scoped to this LLVM context/module and finalized semantic
+    // function type. Declarations share its immutable parameter slice; no call
+    // reclassifies or appends physical lanes.
+    inout fn closureValueAbi(c: inout Comp, functionType: U64) -> Result[U64, CompileDiagnostic] {
+        val scope = (try self.prepareValueAbiScope())
+        try scope.validateScope()
+        val cached = self.closureValueAbis.getOr(key: functionType, fallback: 0U64)
+        if cached != 0U64 { return <Result.Ok value=cached /> }
+        if functionType == 0U64 || functionType >= c.arena.typeCount() { return <Result.Err error=valueAbiFailure(message: "closure callable type out of range") /> }
+        val type = c.arena.typeAt(index: functionType)
+        if !c.isFnType(ref: functionType) || type.args.count() == 0U64 { return <Result.Err error=valueAbiFailure(message: "closure requires a completed function type") /> }
+        mut val parameters: Array[LlvmLogicalParameter] = [<LlvmLogicalParameter type=self.ptrty semanticType=0U64 role=<LlvmParameterRole.Environment /> mode=<LlvmParameterMode.Borrow /> />]
+        mut val index = 1U64
+        while index < type.args.count() {
+            val term = type.args[index]
+            parameters.append(<LlvmLogicalParameter type=(try self.llvmTypeOfRef(c: inout c, ref: term)) semanticType=term role=<LlvmParameterRole.Ordinary index=index - 1U64 /> mode=<LlvmParameterMode.Borrow /> />)
+            index += 1U64
+        }
+        val resultTerm = if c.functionTypeReturnsUnit(ref: functionType) { give 0U64 } else { give type.args[0U64] }
+        val result = if resultTerm == 0U64 { give self.voidty } else { give (try self.llvmTypeOfRef(c: inout c, ref: resultTerm)) }
+        val template = (try self.saveValueAbi(signature: <LlvmLogicalSignature convention=<LlvmValueConvention.Closure /> parameters=parameters result=result resultTerm=resultTerm />, ownerBody: 0U64))
+        val plan = self.valueAbis[template - 1U64]
+        self.valueAbis.set(i: template - 1U64, value: <LlvmValueAbi parameterStart=plan.parameterStart parameterCount=plan.parameterCount logicalSignature=plan.logicalSignature functionType=plan.functionType moduleIdentity=plan.moduleIdentity contextIdentity=plan.contextIdentity revision=plan.revision convention=plan.convention resultTerm=plan.resultTerm resultProtocol=plan.resultProtocol ownerBody=0U64 callableType=functionType />)
+        self.closureValueAbis[functionType] = template
+        return <Result.Ok value=template />
+    }
+
+    inout fn closureBodyValueAbi(c: inout Comp, bodyId: U64, template: U64) -> Result[U64, CompileDiagnostic] {
+        if template == 0U64 || template > self.valueAbis.count() || bodyId == 0U64 || bodyId > c.arena.bodyInstanceCount() { return <Result.Err error=valueAbiFailure(message: "closure declaration identity out of range") /> }
+        val plan = self.valueAbis[template - 1U64]
+        val scope = (try self.prepareValueAbiScope())
+        try scope.validateScope()
+        if plan.moduleIdentity != scope.moduleIdentity || plan.contextIdentity != scope.contextIdentity || plan.revision != 1U64 || self.closureValueAbis.getOr(key: plan.callableType, fallback: 0U64) != template { return <Result.Err error=valueAbiFailure(message: "closure declaration template scope mismatch") /> }
+        val signature = c.arena.bodySignature(bodyId: bodyId)
+        val frozen = c.arena.closureSignature(bodyId: bodyId)
+        if plan.convention.key() != 12U64 || plan.ownerBody != 0U64 || plan.callableType != frozen.functionTypeTerm || !signature.ready || signature.receiverType != 0U64 || signature.parameterTypes.count() + 1U64 != plan.parameterCount || signature.parameterPassings.count() != signature.parameterTypes.count() || (signature.resultType != plan.resultTerm && !(plan.resultTerm == 0U64 && c.callableResultIsUnit(ref: signature.resultType)) && !c.typeRefEq(a: signature.resultType, b: plan.resultTerm)) { return <Result.Err error=valueAbiFailure(message: "closure declaration/template correspondence mismatch") /> }
+        mut val index = 0U64
+        while index < signature.parameterTypes.count() {
+            val parameter = self.valueAbiParameters[plan.parameterStart + index + 1U64]
+            if !c.typeRefEq(a: signature.parameterTypes[index], b: parameter.semanticType) { return <Result.Err error=valueAbiFailure(message: "closure declaration parameter term mismatch") /> }
+            match signature.parameterPassings[index] { CallArgumentPassing.Borrow => {} _ => { return <Result.Err error=valueAbiFailure(message: "completed closure requires supported Borrow call mode") /> } }
+            index += 1U64
+        }
+        self.valueAbis.append(<LlvmValueAbi parameterStart=plan.parameterStart parameterCount=plan.parameterCount logicalSignature=plan.logicalSignature functionType=plan.functionType moduleIdentity=plan.moduleIdentity contextIdentity=plan.contextIdentity revision=plan.revision convention=plan.convention resultTerm=plan.resultTerm resultProtocol=plan.resultProtocol ownerBody=bodyId callableType=plan.callableType />)
+        return <Result.Ok value=self.valueAbis.count() />
+    }
+
+    inout fn closureCallee(c: inout Comp, functionType: U64, closure: LLVMValueRef) -> Result[LlvmClosureCallee, CompileDiagnostic] {
+        val template = (try self.closureValueAbi(c: inout c, functionType: functionType))
+        val abi = self.valueAbis[template - 1U64]
+        val scope = (try self.prepareValueAbiScope())
+        return <Result.Ok value=<LlvmClosureCallee template=template inputs=<LlvmCallableInputScope moduleIdentity=scope.moduleIdentity contextIdentity=scope.contextIdentity revision=1U64 callableIdentity=functionType signature=abi.logicalSignature /> closure=closure /> />
+    }
+
+    inout fn callClosureValueFunction(callee: LlvmClosureCallee, arguments: Array[LlvmValueInput]) -> Result[LLVMValueRef, CompileDiagnostic] {
+        if callee.template == 0U64 || callee.template > self.valueAbis.count() { return <Result.Err error=valueAbiFailure(message: "closure call template out of range") /> }
+        val abi = self.valueAbis[callee.template - 1U64]
+        if abi.convention.key() != 12U64 || abi.ownerBody != 0U64 || abi.callableType == 0U64 || self.closureValueAbis.getOr(key: abi.callableType, fallback: 0U64) != callee.template || abi.parameterCount != arguments.count() + 1U64 { return <Result.Err error=valueAbiFailure(message: "closure call template/convention/count mismatch") /> }
+        val scope = (try self.prepareValueAbiScope())
+        if abi.moduleIdentity != scope.moduleIdentity || abi.contextIdentity != scope.contextIdentity || abi.revision != 1U64 || abi.parameterStart > self.valueAbiParameters.count() || abi.parameterCount > self.valueAbiParameters.count() - abi.parameterStart { return <Result.Err error=valueAbiFailure(message: "closure template scope/range mismatch") /> }
+        try scope.validateCallableInputs(scope: callee.inputs, callableIdentity: abi.callableType, signature: abi.logicalSignature)
+        val caller = LLVMGetBasicBlockParent(LLVMGetInsertBlock(self.b))
+        try scope.validateValue(value: callee.closure, type: self.closureTy, function: caller)
+        val function = LLVMBuildExtractValue(self.b, callee.closure, 0U64, anon())
+        val environment = LLVMBuildExtractValue(self.b, callee.closure, 1U64, anon())
+        val environmentLane = self.valueAbiParameters[abi.parameterStart]
+        try scope.validateInput(parameter: environmentLane, input: <LlvmValueInput lane=<LlvmLogicalParameter type=environmentLane.type semanticType=environmentLane.semanticType role=<LlvmParameterRole.Environment /> mode=<LlvmParameterMode.Borrow /> /> index=0U64 carrier=<LlvmValueCarrier.Value value=environment /> />, index: 0U64, function: caller)
+        mut val values: Array[LLVMValueRef] = [environment]
+        mut val index = 0U64
+        while index < arguments.count() {
+            val input = arguments[index]
+            try scope.validateInput(parameter: self.valueAbiParameters[abi.parameterStart + index + 1U64], input: input, index: index + 1U64, function: caller)
+            values.append(self.valueInputValue(input: input))
+            index += 1U64
+        }
+        return self.emitPlannedValueCall(abiId: callee.template, function: function, arguments: values)
+    }
+
+    inout fn closureBodyParameter(function: LLVMValueRef, bodyId: U64, index: U64) -> Result[LlvmValueInput, CompileDiagnostic] {
+        val abiId = self.valueAbiFunctions.getOr(key: LLVMIsAFunction(function), fallback: 0U64)
+        if abiId == 0U64 || abiId > self.valueAbis.count() { return <Result.Err error=valueAbiFailure(message: "closure parameter descriptor missing") /> }
+        val abi = self.valueAbis[abiId - 1U64]
+        if abi.convention.key() != 12U64 || abi.ownerBody != bodyId || bodyId == 0U64 || index >= abi.parameterCount { return <Result.Err error=valueAbiFailure(message: "closure parameter body/convention/index mismatch") /> }
+        val scope = (try self.prepareValueAbiScope())
+        try scope.validateFunction(function: function, signature: abi.functionType)
+        try scope.validateScope()
+        if abi.moduleIdentity != scope.moduleIdentity || abi.contextIdentity != scope.contextIdentity || abi.revision != 1U64 || abi.parameterStart > self.valueAbiParameters.count() || abi.parameterCount > self.valueAbiParameters.count() - abi.parameterStart { return <Result.Err error=valueAbiFailure(message: "closure parameter scope/range mismatch") /> }
+        val parameter = self.valueAbiParameters[abi.parameterStart + index]
+        val carrier = match parameter.passing {
+            LlvmValuePassing.Omitted => { give <LlvmValueCarrier.Value value=LLVMGetUndef(parameter.type) /> }
+            LlvmValuePassing.Direct => { give <LlvmValueCarrier.Value value=LLVMGetParam(function, parameter.physicalIndex) /> }
+            LlvmValuePassing.Indirect => { give <LlvmValueCarrier.Home address=LLVMGetParam(function, parameter.physicalIndex) /> }
+        }
+        val input = <LlvmValueInput lane=<LlvmLogicalParameter type=parameter.type semanticType=parameter.semanticType role=parameter.role mode=parameter.mode /> index=index carrier=carrier />
+        try scope.validateInput(parameter: parameter, input: input, index: index, function: function)
+        return <Result.Ok value=input />
+    }
+
     // Only finalized callable facts decide the normal logical roles and modes.
     // The representation leaf sees no Comp, AST, witness search or source name.
     inout fn bodyValueAbi(c: inout Comp, bodyId: U64) -> Result[U64, CompileDiagnostic] {
@@ -246,6 +344,7 @@ pub impl LlvmCtx {
                 Optional.Some(v: val family) => { give family }
                 Optional.None => { return <Result.Err error=valueAbiFailure(message: "indirect call lacks an explicit completed or legacy convention") /> }
             }
+            match family { LlvmLegacyConvention.Closure => { return <Result.Err error=valueAbiFailure(message: "ordinary indirect closure requires a completed callable descriptor") /> } _ => {} }
             abiId = (try self.legacyValueAbi(signature: signature, family: family))
         }
         val abi = self.valueAbis[abiId - 1U64]
@@ -256,6 +355,7 @@ pub impl LlvmCtx {
             }
             if bodyId == 0U64 || bodyId != abi.ownerBody { return <Result.Err error=valueAbiFailure(message: "compatibility adapter body mismatch") /> }
         } else {
+            match abi.convention { LlvmValueConvention.Closure => { return <Result.Err error=valueAbiFailure(message: "completed closure requires typed inputs") /> } LlvmValueConvention.Legacy(family: _) => {} LlvmValueConvention.Body => {} }
             match bodyAdapter { Optional.Some(v: _) => { return <Result.Err error=valueAbiFailure(message: "body adapter cannot select a legacy convention") /> } Optional.None => {} }
         }
         if plew_pointer_equal(abi.logicalSignature, signature) == 0I32 {
@@ -360,6 +460,11 @@ pub impl LlvmCtx {
     // No function-name lookup or physical classification is repeated here.
     inout fn preparedLegacyParameter(parameterIndex: U64) -> Result[LLVMValueRef, CompileDiagnostic] {
         if parameterIndex >= self.valueAbiParameters.count() { return <Result.Err error=valueAbiFailure(message: "prepared parameter index out of range") /> }
+        val abiId = self.valueAbiFunctions.getOr(key: LLVMIsAFunction(self.curFn), fallback: 0U64)
+        if abiId == 0U64 || abiId > self.valueAbis.count() { return <Result.Err error=valueAbiFailure(message: "raw parameter entry descriptor missing") /> }
+        val abi = self.valueAbis[abiId - 1U64]
+        match abi.convention { LlvmValueConvention.Legacy(family: _) => {} LlvmValueConvention.Closure => { return <Result.Err error=valueAbiFailure(message: "completed closure cannot use raw prepared binding") /> } LlvmValueConvention.Body => { return <Result.Err error=valueAbiFailure(message: "normal body cannot use raw prepared binding") /> } }
+        if parameterIndex < abi.parameterStart || parameterIndex - abi.parameterStart >= abi.parameterCount { return <Result.Err error=valueAbiFailure(message: "raw parameter belongs to a different entry") /> }
         val parameter = self.valueAbiParameters[parameterIndex]
         return <Result.Ok value=match parameter.passing {
             LlvmValuePassing.Omitted => { give LLVMGetUndef(parameter.type) }
@@ -375,7 +480,7 @@ pub impl LlvmCtx {
             return <Result.Err error=<CompileDiagnostic location=<DiagnosticLocation.Line line=0I64 /> message="internal error: private value ABI parameter lacks declaration" /> />
         }
         val abi = self.valueAbis[abiId - 1U64]
-        if abi.convention.key() == 0U64 { return <Result.Err error=valueAbiFailure(message: "normal parameter cannot use raw compatibility binding") /> }
+        match abi.convention { LlvmValueConvention.Legacy(family: _) => {} LlvmValueConvention.Closure => { return <Result.Err error=valueAbiFailure(message: "completed closure cannot use raw compatibility binding") /> } LlvmValueConvention.Body => { return <Result.Err error=valueAbiFailure(message: "normal parameter cannot use raw compatibility binding") /> } }
         if index >= abi.parameterCount {
             return <Result.Err error=<CompileDiagnostic location=<DiagnosticLocation.Line line=0I64 /> message="internal error: private value ABI parameter index out of range" /> />
         }

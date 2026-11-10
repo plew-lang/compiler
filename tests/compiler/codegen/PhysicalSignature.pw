@@ -1,5 +1,5 @@
 // Test the production representation leaf without importing Comp or Backend.
-use ../../../src/Backend/PhysicalSignature only { LlvmSignatureScope, LlvmLogicalSignature, LlvmLogicalParameter, LlvmParameterRole, LlvmParameterMode, LlvmValueConvention, LlvmLegacyConvention, LlvmPhysicalSignature, LlvmValueParameter, LlvmValuePassing, LlvmInputScope, LlvmValueInput, LlvmValueCarrier }
+use ../../../src/Backend/PhysicalSignature only { LlvmSignatureScope, LlvmLogicalSignature, LlvmLogicalParameter, LlvmParameterRole, LlvmParameterMode, LlvmValueConvention, LlvmLegacyConvention, LlvmPhysicalSignature, LlvmValueParameter, LlvmValuePassing, LlvmInputScope, LlvmCallableInputScope, LlvmValueInput, LlvmValueCarrier }
 use ../../../src/LlvmHandles only { LLVMContextRef, LLVMModuleRef, LLVMTypeRef, LLVMValueRef }
 use @Std/Io only { write }
 extern(c) {
@@ -21,6 +21,9 @@ fn parameter(type: LLVMTypeRef, semantic: U64, role: LlvmParameterRole, mode: Ll
 }
 fn body(parameters: Array[LlvmLogicalParameter], result: LLVMTypeRef) -> LlvmLogicalSignature {
     return <LlvmLogicalSignature convention=<LlvmValueConvention.Body /> parameters=parameters result=result resultTerm=0U64 />
+}
+fn closure(parameters: Array[LlvmLogicalParameter], result: LLVMTypeRef, resultTerm: U64 = 0U64) -> LlvmLogicalSignature {
+    return <LlvmLogicalSignature convention=<LlvmValueConvention.Closure /> parameters=parameters result=result resultTerm=resultTerm />
 }
 fn changed(plan: LlvmPhysicalSignature, parameters: Array[LlvmValueParameter], revision: U64 = 1U64) -> LlvmPhysicalSignature {
     return <LlvmPhysicalSignature parameters=parameters logicalSignature=plan.logicalSignature functionType=plan.functionType moduleIdentity=plan.moduleIdentity contextIdentity=plan.contextIdentity revision=revision targetTriple=plan.targetTriple dataLayout=plan.dataLayout convention=plan.convention resultTerm=plan.resultTerm resultProtocol=plan.resultProtocol />
@@ -99,6 +102,55 @@ fn main() {
     val legacy = <LlvmLogicalSignature convention=<LlvmValueConvention.Legacy family=<LlvmLegacyConvention.Closure /> /> parameters=[parameter(type: aggregate, semantic: 0U64, role: <LlvmParameterRole.Legacy index=0U64 />, mode: <LlvmParameterMode.Legacy />)] result=voidType resultTerm=0U64 />
     scope.validate(signature: legacy, plan: scope.plan(signature: legacy).unwrap()).unwrap()
     if scope.plan(signature: <LlvmLogicalSignature convention=legacy.convention parameters=[plain] result=voidType resultTerm=0U64 />).isOk() { panic "legacy claims semantic role" }
+    // Completed closure signatures retain an explicit environment, including
+    // when there are no ordinary lanes or their native ptr types are equal.
+    if (<LlvmValueConvention.Closure />).key() != 12U64 { panic "closure convention key" }
+    val environment = parameter(type: pointer, semantic: 0U64, role: <LlvmParameterRole.Environment />, mode: <LlvmParameterMode.Borrow />)
+    val zeroClosure = closure(parameters: [environment], result: voidType)
+    val zeroClosurePlan = scope.plan(signature: zeroClosure).unwrap()
+    scope.validate(signature: zeroClosure, plan: zeroClosurePlan).unwrap()
+    if zeroClosurePlan.parameters.count() != 1U64 || LLVMCountParamTypes(zeroClosurePlan.functionType) != 1U32 || zeroClosurePlan.parameters[0].passing.key() != 1U64 { panic "zero-argument closure environment" }
+    val closureEmpty = parameter(type: empty, semantic: 12U64, role: <LlvmParameterRole.Ordinary index=0U64 />, mode: <LlvmParameterMode.Borrow />)
+    val closureAggregate = parameter(type: aggregate, semantic: 11U64, role: <LlvmParameterRole.Ordinary index=1U64 />, mode: <LlvmParameterMode.Borrow />)
+    val closurePointer = parameter(type: pointer, semantic: 20U64, role: <LlvmParameterRole.Ordinary index=2U64 />, mode: <LlvmParameterMode.Borrow />)
+    val closureSignature = closure(parameters: [environment, closureEmpty, closureAggregate, closurePointer], result: aggregate, resultTerm: 11U64)
+    val closurePlan = scope.plan(signature: closureSignature).unwrap()
+    scope.validate(signature: closureSignature, plan: closurePlan).unwrap()
+    if closurePlan.parameters.count() != 4U64 || LLVMCountParamTypes(closurePlan.functionType) != 3U32 || closurePlan.resultProtocol.key() != 1U64 { panic "multi-lane closure mapping" }
+    if closurePlan.parameters[1].passing.key() != 0U64 || closurePlan.parameters[2].passing.key() != 2U64 || closurePlan.parameters[2].physicalIndex != 1U64 || closurePlan.parameters[3].physicalIndex != 2U64 { panic "closure omission and byval mapping" }
+    if scope.plan(signature: closure(parameters: [], result: voidType)).isOk() { panic "missing closure environment accepted" }
+    if scope.plan(signature: closure(parameters: [pointerBorrow], result: voidType)).isOk() { panic "ordinary ptr substituted for environment" }
+    if scope.plan(signature: closure(parameters: [pointerBorrow, environment], result: voidType)).isOk() { panic "swapped closure environment accepted" }
+    if scope.plan(signature: closure(parameters: [environment, environment], result: voidType)).isOk() { panic "duplicate closure environment accepted" }
+    if scope.plan(signature: body(parameters: [environment], result: voidType)).isOk() { panic "environment in body accepted" }
+    if scope.plan(signature: closure(parameters: [parameter(type: scalar, semantic: 0U64, role: environment.role, mode: environment.mode)], result: voidType)).isOk() { panic "nonpointer closure environment accepted" }
+    if scope.plan(signature: closure(parameters: [parameter(type: pointer, semantic: 20U64, role: environment.role, mode: environment.mode)], result: voidType)).isOk() { panic "semantic closure environment accepted" }
+    if scope.plan(signature: closure(parameters: [environment, parameter(type: pointer, semantic: 0U64, role: pointerBorrow.role, mode: pointerBorrow.mode)], result: voidType)).isOk() { panic "closure ordinary ptr lacks semantic term" }
+    if scope.plan(signature: closure(parameters: [environment, receiver], result: voidType)).isOk() { panic "closure receiver accepted" }
+    if scope.plan(signature: closure(parameters: [environment, malformedIndex], result: voidType)).isOk() { panic "closure ordinary index accepted" }
+    if scope.plan(signature: closure(parameters: [environment, legacy.parameters[0]], result: voidType)).isOk() { panic "closure legacy lane accepted" }
+    val invalidClosureModes: Array[LlvmParameterMode] = [<LlvmParameterMode.Move />, <LlvmParameterMode.Inout />, <LlvmParameterMode.Legacy />]
+    for mode in invalidClosureModes {
+        if scope.plan(signature: closure(parameters: [parameter(type: pointer, semantic: 0U64, role: environment.role, mode: mode)], result: voidType)).isOk() { panic "nonborrow environment accepted" }
+        if scope.plan(signature: closure(parameters: [environment, parameter(type: pointer, semantic: 20U64, role: pointerBorrow.role, mode: mode)], result: voidType)).isOk() { panic "nonborrow closure ordinary accepted" }
+    }
+    if scope.plan(signature: closure(parameters: [environment], result: voidType, resultTerm: 11U64)).isOk() { panic "closure void result has semantic term" }
+    if scope.plan(signature: closure(parameters: [environment], result: scalar)).isOk() { panic "closure value result lacks semantic term" }
+    val closurePtrSignature = closure(parameters: [environment, pointerBorrow], result: voidType)
+    val closurePtrPlan = scope.plan(signature: closurePtrSignature).unwrap()
+    val changedClosureTerm = parameter(type: pointer, semantic: 99U64, role: pointerBorrow.role, mode: pointerBorrow.mode)
+    if scope.validate(signature: closure(parameters: [environment, changedClosureTerm], result: voidType), plan: closurePtrPlan).isOk() { panic "same ptr closure semantic substitution accepted" }
+    if scope.validate(signature: closure(parameters: closureSignature.parameters, result: aggregate, resultTerm: 99U64), plan: closurePlan).isOk() { panic "closure semantic result substitution accepted" }
+    val callableInputs = <LlvmCallableInputScope moduleIdentity=closurePlan.moduleIdentity contextIdentity=closurePlan.contextIdentity revision=1U64 callableIdentity=17U64 signature=closurePlan.logicalSignature />
+    scope.validateCallableInputs(scope: callableInputs, callableIdentity: 17U64, signature: closurePlan.logicalSignature).unwrap()
+    if scope.validateCallableInputs(scope: callableInputs, callableIdentity: 18U64, signature: closurePlan.logicalSignature).isOk() { panic "wrong callable identity accepted" }
+    if scope.validateCallableInputs(scope: callableInputs, callableIdentity: 17U64, signature: zeroClosurePlan.logicalSignature).isOk() { panic "wrong callable signature accepted" }
+    if otherScope.validateCallableInputs(scope: callableInputs, callableIdentity: 17U64, signature: closurePlan.logicalSignature).isOk() { panic "wrong callable module accepted" }
+    if foreignScope.validateCallableInputs(scope: callableInputs, callableIdentity: 17U64, signature: closurePlan.logicalSignature).isOk() { panic "wrong callable context accepted" }
+    val foreignContextInputs = <LlvmCallableInputScope moduleIdentity=callableInputs.moduleIdentity contextIdentity=foreignScope.contextIdentity revision=1U64 callableIdentity=callableInputs.callableIdentity signature=callableInputs.signature />
+    if scope.validateCallableInputs(scope: foreignContextInputs, callableIdentity: 17U64, signature: closurePlan.logicalSignature).isOk() { panic "foreign callable context identity accepted" }
+    val staleCallableInputs = <LlvmCallableInputScope moduleIdentity=callableInputs.moduleIdentity contextIdentity=callableInputs.contextIdentity revision=2U64 callableIdentity=callableInputs.callableIdentity signature=callableInputs.signature />
+    if scope.validateCallableInputs(scope: staleCallableInputs, callableIdentity: 17U64, signature: closurePlan.logicalSignature).isOk() { panic "wrong callable revision accepted" }
     // Typed call/binding inputs: actual live native values, not metadata only.
     val function = plew_test_signature_function(module, aggregate)
     val otherFunction = plew_test_signature_function(module, aggregate)
@@ -121,6 +173,16 @@ fn main() {
     val pointerValue = plew_test_signature_value(function, pointer, 2U32)
     val aggregateValue = plew_test_signature_value(function, aggregate, 3U32)
     val alloca = plew_test_signature_value(function, aggregate, 4U32)
+    // An indirect callable is a live value in the caller, not a native function declaration.
+    scope.validateValue(value: aggregateValue, type: aggregate, function: function).unwrap()
+    scope.validateValue(value: pointerValue, type: pointer, function: function).unwrap()
+    if scope.validateValue(value: aggregateValue, type: scalar, function: function).isOk() { panic "callable value represented type mismatch accepted" }
+    if scope.validateValue(value: aggregateValue, type: foreignScalar, function: function).isOk() { panic "callable value foreign expected type accepted" }
+    if scope.validateValue(value: aggregateValue, type: aggregate, function: scalarValue).isOk() { panic "callable value nonfunction scope accepted" }
+    if scope.validateValue(value: pointerValue, type: pointer, function: otherFunction).isOk() { panic "callable value foreign function accepted" }
+    if scope.validateValue(value: aggregateValue, type: aggregate, function: otherModuleFunction).isOk() { panic "callable value foreign module accepted" }
+    val foreignAggregate = plew_test_signature_type(foreignContext, 3U32)
+    if scope.validateValue(value: plew_test_signature_value(foreignFunction, foreignAggregate, 3U32), type: aggregate, function: function).isOk() { panic "callable value foreign context accepted" }
     val receiverInput = <LlvmValueInput lane=receiver index=0U64 carrier=<LlvmValueCarrier.Home address=home /> />
     scope.validateInput(parameter: plan.parameters[0], input: receiverInput, index: 0U64, function: function).unwrap()
     scope.validateInput(parameter: plan.parameters[0], input: <LlvmValueInput lane=receiver index=0U64 carrier=<LlvmValueCarrier.Home address=alloca /> />, index: 0U64, function: function).unwrap()
@@ -142,6 +204,8 @@ fn main() {
     while constantKind < 3U32 {
         val sameModuleValue = plew_test_signature_constant(module, constantKind)
         val foreignModuleValue = plew_test_signature_constant(otherModule, constantKind)
+        scope.validateValue(value: sameModuleValue, type: LLVMTypeOf(sameModuleValue), function: function).unwrap()
+        if scope.validateValue(value: foreignModuleValue, type: LLVMTypeOf(sameModuleValue), function: function).isOk() { panic "callable value foreign module constant accepted" }
         val constantLane = parameter(type: LLVMTypeOf(sameModuleValue), semantic: 30U64, role: <LlvmParameterRole.Ordinary index=0U64 />, mode: <LlvmParameterMode.Borrow />)
         val constantPlan = scope.plan(signature: body(parameters: [constantLane], result: voidType)).unwrap()
         scope.validateInput(parameter: constantPlan.parameters[0], input: <LlvmValueInput lane=constantLane index=0U64 carrier=<LlvmValueCarrier.Value value=sameModuleValue /> />, index: 0U64, function: function).unwrap()
@@ -152,6 +216,7 @@ fn main() {
     val readmitted = LlvmSignatureScope.admitted(module: module).unwrap()
     if readmitted.validate(signature: plainSignature, plan: plainPlan).isOk() { panic "readmitted stale target plan accepted" }
     if scope.plan(signature: signature).isOk() { panic "stale target scope accepted" }
+    if scope.validateCallableInputs(scope: callableInputs, callableIdentity: 17U64, signature: closurePlan.logicalSignature).isOk() { panic "stale target callable scope accepted" }
     LLVMDisposeModule(module)
     LLVMDisposeModule(otherModule)
     LLVMDisposeModule(foreignModule)

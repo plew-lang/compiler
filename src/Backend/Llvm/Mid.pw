@@ -1746,25 +1746,23 @@ pub impl LlvmCtx {
             }
             _ => { return <Result.Ok value=false /> }
         }
-        val function: LLVMValueRef = LLVMBuildExtractValue(self.b, closure, 0U64, anon())
-        mut val values: Array[LLVMValueRef] = [LLVMBuildExtractValue(self.b, closure, 1U64, anon())]
-        mut val types: Array[LLVMTypeRef] = [self.ptrty]
+        val callee = (try self.closureCallee(c: inout c, functionType: functionType, closure: closure))
+        val abi = self.valueAbis[callee.template - 1U64]
+        mut val values: Array[LlvmValueInput] = []
         mut val index: U64 = 0U64
         while index < term.args.len {
-            val parameterRef: U64 = c.arena.finalCalleeParameterTypeAt(types: selected.parameterTypeRefs, index: index)
-            val parameter: TypeRef = c.arena.typeAt(index: parameterRef)
-            val parameterType: LLVMTypeRef = (try self.llvmTypeOfRef(c: inout c, ref: parameterRef))
-            mut val value: LLVMValueRef = (try self.midCanonicalEmitOperand(c: inout c, body: body, operandId: c.mid.callArguments[term.args.start + index]))
-            if LLVMGetTypeKind(LLVMTypeOf(value)) == 8U32 { value = self.coerceInt(v: value, target: parameterType, unsigned: isUnsignedName(c: inout c, start: parameter.nameStart, len: parameter.nameLen)) }
-            values.append(value)
-            types.append(parameterType)
+            val parameterRef = c.arena.finalCalleeParameterTypeAt(types: selected.parameterTypeRefs, index: index)
+            val lane = self.valueAbiParameters[abi.parameterStart + index + 1U64]
+            if !c.typeRefEq(a: parameterRef, b: lane.semanticType) { return <Result.Err error=valueAbiFailure(message: "closure selected parameter/template mismatch") /> }
+            val parameter = c.arena.typeAt(index: parameterRef)
+            mut val value = (try self.midCanonicalEmitOperand(c: inout c, body: body, operandId: c.mid.callArguments[term.args.start + index]))
+            if LLVMGetTypeKind(LLVMTypeOf(value)) == 8U32 { value = self.coerceInt(v: value, target: lane.type, unsigned: isUnsignedName(c: inout c, start: parameter.nameStart, len: parameter.nameLen)) }
+            values.append(<LlvmValueInput lane=<LlvmLogicalParameter type=lane.type semanticType=lane.semanticType role=<LlvmParameterRole.Ordinary index=index /> mode=<LlvmParameterMode.Borrow /> /> index=index + 1U64 carrier=<LlvmValueCarrier.Value value=value /> />)
             index += 1U64
         }
-        val unit: Bool = c.functionTypeReturnsUnit(ref: functionType)
-        mut val resultType: LLVMTypeRef = self.voidty
-        if !unit { resultType = (try self.llvmTypeOfRef(c: inout c, ref: selected.resultTypeRef)) }
-        val signature: LLVMTypeRef = LLVMFunctionType(resultType, arrayCPtr(types), types.count(), 0I32)
-        val result: LLVMValueRef = (try self.callLegacyValueFunction(signature: signature, function: function, arguments: values, legacyIndirect: <Optional.Some v=<LlvmLegacyConvention.Closure /> />))
+        val unit = c.functionTypeReturnsUnit(ref: functionType)
+        if !unit && !c.typeRefEq(a: selected.resultTypeRef, b: abi.resultTerm) { return <Result.Err error=valueAbiFailure(message: "closure selected result/template mismatch") /> }
+        val result = (try self.callClosureValueFunction(callee: callee, arguments: values))
         if !unit { llvmStore(self.b, result, (try self.midCanonicalPlacePtr(c: inout c, body: body, place: c.mid.places[term.destination - 1U64]))) }
         return <Result.Ok value=true />
     }
@@ -2545,12 +2543,17 @@ pub impl LlvmCtx {
             val binding = planned.binding
             match binding {
                 LlvmLocalBinding.Parameter(parameterIndex: val parameterIndex, alias: val alias) => {
-                    val value = (try self.preparedLegacyParameter(parameterIndex: parameterIndex))
+                    val entryAbi = self.valueAbiFunctions.getOr(key: LLVMIsAFunction(self.curFn), fallback: 0U64)
+                    val value = if entryAbi != 0U64 && self.valueAbis[entryAbi - 1U64].convention.key() == 12U64 {
+                        give self.valueInputValue(input: (try self.closureBodyParameter(function: self.curFn, bodyId: body.bodyInstance, index: parameterIndex - self.valueAbis[entryAbi - 1U64].parameterStart)))
+                    } else { give (try self.preparedLegacyParameter(parameterIndex: parameterIndex)) }
                     if alias { slot = value } else { llvmStore(self.b, value, slot) }
                 }
                 LlvmLocalBinding.Environment(field: val field, type: val fieldType) => {
                     val closureAbi = match plan.entry { LlvmBodyLocalEntry.Closure(abiId: val id) => { give id } LlvmBodyLocalEntry.EnvironmentDrop(abiId: val id) => { give id } _ => { return <Result.Err error=valueAbiFailure(message: "environment binding on a non-closure entry") /> } }
-                    val environment = (try self.preparedLegacyParameter(parameterIndex: self.valueAbis[closureAbi - 1U64].parameterStart))
+                    val environment = if self.valueAbis[closureAbi - 1U64].convention.key() == 12U64 {
+                        give self.valueInputValue(input: (try self.closureBodyParameter(function: self.curFn, bodyId: body.bodyInstance, index: 0U64)))
+                    } else { give (try self.preparedLegacyParameter(parameterIndex: self.valueAbis[closureAbi - 1U64].parameterStart)) }
                     val address = LLVMBuildStructGEP2(self.b, plan.environmentType.unwrap(), environment, field, anon())
                     llvmStore(self.b, llvmLoad(self.b, fieldType, address, anon()), slot)
                 }
@@ -2824,6 +2827,7 @@ pub impl LlvmCtx {
                     LlvmLegacyConvention.Witness => { give <LlvmBodyLocalEntry.Witness abiId=abiId /> }
                     _ => { return <Result.Err error=valueAbiFailure(message: "entry has no retained local adapter") /> }
                 } }
+                LlvmValueConvention.Closure => { give <LlvmBodyLocalEntry.Closure abiId=abiId /> }
                 LlvmValueConvention.Body => {
                     if parameterCount != abi.parameterCount { return <Result.Err error=valueAbiFailure(message: "local plan normal body/parameter mismatch") /> }
                     give <LlvmBodyLocalEntry.Normal abiId=abiId />

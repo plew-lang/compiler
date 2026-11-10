@@ -2,7 +2,7 @@
 id: com-9hny
 status: in_progress
 deps: [com-b1em]
-links: []
+links: [com-xkcb]
 created: 2026-11-09T17:11:02Z
 type: task
 priority: 2
@@ -311,35 +311,45 @@ Removed raw APIs are now tested as signature absence; all remaining meaningful
 runtime guards are retained. Generic async/method support is unchanged, not
 newly prohibited by the spec. No formal timing/fixed-point/full ASan is claimed.
 
-## Next Increment: Completed Closure Calls
+## Checkpoint 4: Ordinary Completed Closure Increment
 
-Checkpoint 4 starts with ordinary closures, preserving the current physical
-byval/staging ABI before W3 forwarding. The read-only source plan review found
-no new source-language decision. Close declaration, local/field indirect call
-and Ready parameter consumption together:
+The [ordinary closure evidence](../../../evidence/performance-regression-history/value-passing-implementation/w2-protocol/typed-closure-protocol.json)
+closes declaration, local/field indirect call and Ready parameter/environment
+binding for existing Borrow-call support. One LLVM-scoped finalized function-type
+template retains typed lanes; declared owner descriptors share its parameter
+range. Calls validate the typed fat value and caller provenance, then extract
+function/environment together. Both raw parameter helpers and raw direct calls
+reject completed Closure; the retired Legacy.Closure indirect family rejects
+before reclassification. Byval staging, local copies and source ownership remain
+unchanged. The [ABI contract](../design/representation-and-abi.md) owns this
+boundary; a callable scope is not a guessed callee body identity.
 
-- Add an explicit completed Closure convention and Environment lane alongside
-  indexed Ordinary lanes and their frozen types/modes/result. Retain current
-  source-call support; unsupported source inout is not a passing migration case.
-  Do not treat every
-  non-Body convention as Legacy.
-- Cache completed callable descriptors by finalized function-type identity and
-  LLVM scope. A dynamic target has a callable-signature identity, not a known
-  callee body; do not misuse the normal body input scope. Keep actual caller
-  provenance validation and declared body identity separate.
-- Connect declaration, typed indirect Value/Home calls and environment/ordinary
-  parameter readers to that saved descriptor. Preserve the existing fat closure
-  layout, byval staging, acquisition and local copies.
-- Make raw Legacy helpers reject the completed convention; remove per-call
-  physical reclassification and untyped ordinary/environment overrides.
-- Before product edits, pin the concrete callable-scope/callee-carrier APIs and
-  shared declaration/template correspondence. Test same-ptr lane swaps,
-  type/index/mode/context/provenance/signature mismatch and raw-helper bypass.
-- Execute capturing/noncapturing and local/field calls, Unit/aggregate results,
-  scalar/String/aggregate/zero-sized inputs, mutable cells, escaping closures,
-  ownership/drop controls and raw/optimized ABI. Assert preparation is bounded
-  by completed signatures rather than invocation count.
+Standard build `20261110T024413-build-8782b1` passed with unchanged inputs.
+Final product183 matches that build; only the new private test main changed
+afterward. Fresh CLI49/internal8, raw/optimized ABI, expose/C callback,
+physical-planner native and all four Ready native harnesses passed. Closure's
+native controls include two valid and ten malformed Ready mappings, typed
+Value/Home calls and 23 malformed call/binding inputs, plus six malformed
+declaration/template correspondences. Repeated calls append no physical plans;
+multiple owner bodies share a template's lane range. Independent source/native
+review required retiring the old raw indirect family, then replayed the final
+harness and accepted this finite increment. Initial setup-only failures and
+repairs remain distinguished from product defects in the evidence.
 
-Existential receiver/ordinary calls and ownership glue follow as separately
-reviewable increments within checkpoint 4. Checkpoints 5/6, W2 preparation cost
-and whole-consumer reconciliation, W3/W4 and com-ffar final gates remain open.
+The [mode baseline](../../../evidence/performance-regression-history/value-passing-implementation/w2-protocol/closure-mode-baseline.json)
+proves ordinary Inout/Move lazy construction-only succeeds while calls/eager
+construction already fail. Preserve those uncalled declarations as explicit
+Legacy without polluting completed Borrow templates. [com-xkcb](com-xkcb.md)
+owns the existing function-type ownership-mode gap; it is not automatically an
+optimization prerequisite. No new source restriction or support is claimed.
+
+**Next:** existential receiver/ordinary calls, then ownership glue, as separately
+reviewable increments within checkpoint 4. A public existential endpoint, rather
+than a concrete implementation body, must own the dynamic signature; receiver
+conversion still consumes the frozen concrete adapter. Ordinary Borrow/Inout/
+Move paths must be preserved; existing unsupported Move receiver/async dispatch
+must not be confused with physical-fixture acceptance. Pin concrete endpoint
+identity, template/declaration correspondence and typed fat-value consumer APIs
+before edits. Checkpoints 5/6, W2 preparation cost and whole-consumer reconciliation,
+W3/W4 and com-ffar final gates remain open. No formal timing, fixed-point,
+full ASan, main/seed or adopted carrier promotion is claimed.

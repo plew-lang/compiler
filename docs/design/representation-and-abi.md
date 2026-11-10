@@ -47,6 +47,20 @@ The private Plew ABI classifies value parameters as omitted, direct, or indirect
 
 The declared callable records its logical signature, physical function type, and per-logical-parameter physical index/classification. Direct callers and callee binding consume that same record and validate logical signature/argument correspondence. An indirect callable derives the equivalent mapping from its completed signature under the same classification rules, rather than using a different ad hoc closure ABI.
 
+Completed ordinary closure signatures retain a leading Environment/Borrow pointer
+(with no source type term) and indexed Ordinary/Borrow parameters. A template is
+cached by finalized semantic function-type identity within one LLVM scope;
+declarations check their frozen body signature and share its immutable lane
+range with distinct declared body identities. Indirect calls carry a callable
+scope identity, not an invented callee body identity. Their consumer validates
+the typed fat closure and current-caller provenance before extracting function
+and environment together. Ready parameter/environment readers consume the same
+completed descriptor. Raw Legacy call and parameter adapters cannot select it.
+Physical pointer equality alone is not source correspondence; verified Mid owns
+that proof. Explicit compatibility for entries not yet migrated does not claim
+that their source function modes are fully supported; known gaps belong in
+[implementation issues](../issues/com-xkcb.md).
+
 A byval byte snapshot is a physical copying mechanism, not an additional semantic Copy or an implicit ARC retain. Its source/destination lifetime and ownership follow the already selected passing contract; the callee cannot independently destroy a caller-guaranteed share simply because LLVM supplied private bytes.
 
 ABI attributes must match on definitions/declarations and call sites. A `byval` parameter describes an independent snapshot; passing an unprotected address into mutable caller storage is not a substitute. Temporary storage belongs to the function actually being emitted, including when emitting a thunk inside another generation context. Allocate its slot in that function's entry and store the evaluated value at the original call position, preserving evaluation order and avoiding loop-driven stack growth.

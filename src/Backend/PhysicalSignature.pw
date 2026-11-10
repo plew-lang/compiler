@@ -62,20 +62,22 @@ pub impl LlvmLegacyConvention {
         }
     }
 }
-pub enum LlvmValueConvention { Body Legacy(family: LlvmLegacyConvention) }
+pub enum LlvmValueConvention { Body Closure Legacy(family: LlvmLegacyConvention) }
 pub impl LlvmValueConvention {
     fn key() -> U64 {
         return match self {
             LlvmValueConvention.Body => { give 0U64 }
+            LlvmValueConvention.Closure => { give 12U64 }
             LlvmValueConvention.Legacy(family: val family) => { give family.key() }
         }
     }
 }
-pub enum LlvmParameterRole { Receiver Ordinary(index: U64) Legacy(index: U64) }
+pub enum LlvmParameterRole { Receiver Environment Ordinary(index: U64) Legacy(index: U64) }
 pub impl LlvmParameterRole {
     fn same(role: LlvmParameterRole) -> Bool {
         match self {
             LlvmParameterRole.Receiver => { return match role { LlvmParameterRole.Receiver => { give true } _ => { give false } } }
+            LlvmParameterRole.Environment => { return match role { LlvmParameterRole.Environment => { give true } _ => { give false } } }
             LlvmParameterRole.Ordinary(index: val index) => { return match role { LlvmParameterRole.Ordinary(index: val other) => { give index == other } _ => { give false } } }
             LlvmParameterRole.Legacy(index: val index) => { return match role { LlvmParameterRole.Legacy(index: val other) => { give index == other } _ => { give false } } }
         }
@@ -116,6 +118,15 @@ pub struct LlvmInputScope {
     pub val signature: LLVMTypeRef
 }
 pub impl LlvmInputScope { factory }
+// Indirect callable identity is independent of a body binding identity.
+pub struct LlvmCallableInputScope {
+    pub val moduleIdentity: U64
+    pub val contextIdentity: U64
+    pub val revision: U64
+    pub val callableIdentity: U64
+    pub val signature: LLVMTypeRef
+}
+pub impl LlvmCallableInputScope { factory }
 pub enum LlvmValueCarrier { Value(value: LLVMValueRef) Home(address: LLVMValueRef) }
 pub struct LlvmValueInput {
     pub val lane: LlvmLogicalParameter
@@ -206,6 +217,21 @@ pub impl LlvmSignatureScope {
         return <Result.Ok value=() />
     }
 
+    fn validateCallableInputs(scope: LlvmCallableInputScope, callableIdentity: U64, signature: LLVMTypeRef) -> Result[(), CompileDiagnostic] {
+        try self.validateScope()
+        if scope.moduleIdentity != self.moduleIdentity || scope.contextIdentity != self.contextIdentity || scope.revision != 1U64 || scope.callableIdentity != callableIdentity || plew_pointer_equal(scope.signature, signature) == 0I32 { return <Result.Err error=signatureFailure(message: "input callable/scope/signature mismatch") /> }
+        return <Result.Ok value=() />
+    }
+
+    fn validateValue(value: LLVMValueRef, type: LLVMTypeRef, function: LLVMValueRef) -> Result[(), CompileDiagnostic] {
+        try self.validateScope()
+        if !self.ownsType(type: type) || plew_pointer_equal(LLVMTypeOf(value), type) == 0I32 { return <Result.Err error=signatureFailure(message: "value represented type/context mismatch") /> }
+        if LLVMIsAFunction(function) == 0U64 { return <Result.Err error=signatureFailure(message: "value scope is not a function") /> }
+        if plew_llvm_module_identity(LLVMGetGlobalParent(function)) != self.moduleIdentity { return <Result.Err error=signatureFailure(message: "value function belongs to another module") /> }
+        if plew_llvm_value_scope_matches(value, function) == 0I32 { return <Result.Err error=signatureFailure(message: "value has foreign function/module provenance") /> }
+        return <Result.Ok value=() />
+    }
+
     fn validateInput(parameter: LlvmValueParameter, input: LlvmValueInput, index: U64, function: LLVMValueRef) -> Result[(), CompileDiagnostic] {
         if input.index != index { return <Result.Err error=signatureFailure(message: "typed input index mismatch") /> }
         if parameter.semanticType != input.lane.semanticType { return <Result.Err error=signatureFailure(message: "typed input canonical semantic term mismatch") /> }
@@ -237,30 +263,51 @@ pub impl LlvmSignatureScope {
         if !self.ownsType(type: signature.result) { return <Result.Err error=signatureFailure(message: "foreign result context") /> }
         val resultVoid = LLVMGetTypeKind(signature.result) == 0U32
         if !resultVoid && LLVMTypeIsSized(signature.result) == 0I32 { return <Result.Err error=signatureFailure(message: "incomplete result layout") /> }
-        val normal = signature.convention.key() == 0U64
-        if normal && resultVoid != (signature.resultTerm == 0U64) { return <Result.Err error=signatureFailure(message: "body result protocol mismatch") /> }
+        match signature.convention {
+            LlvmValueConvention.Body => {
+                if resultVoid != (signature.resultTerm == 0U64) { return <Result.Err error=signatureFailure(message: "body result protocol mismatch") /> }
+            }
+            LlvmValueConvention.Closure => {
+                if signature.parameters.count() == 0U64 { return <Result.Err error=signatureFailure(message: "closure requires a leading environment") /> }
+                if resultVoid != (signature.resultTerm == 0U64) { return <Result.Err error=signatureFailure(message: "closure result protocol mismatch") /> }
+            }
+            LlvmValueConvention.Legacy(family: _) => {}
+        }
         mut val ordinary = 0U64
         mut val index = 0U64
         while index < signature.parameters.count() {
             val parameter = signature.parameters[index]
             if !self.ownsType(type: parameter.type) { return <Result.Err error=signatureFailure(message: "foreign parameter context") /> }
             if LLVMTypeIsSized(parameter.type) == 0I32 { return <Result.Err error=signatureFailure(message: "incomplete parameter layout") /> }
-            if normal {
-                if parameter.semanticType == 0U64 || parameter.mode.key() == 0U64 { return <Result.Err error=signatureFailure(message: "body parameter lacks a semantic contract") /> }
-                match parameter.role {
-                    LlvmParameterRole.Receiver => { if index != 0U64 { return <Result.Err error=signatureFailure(message: "receiver must be first") /> } }
-                    LlvmParameterRole.Ordinary(index: val position) => {
-                        if position != ordinary { return <Result.Err error=signatureFailure(message: "ordinary parameter index mismatch") /> }
+            match signature.convention {
+                LlvmValueConvention.Body => {
+                    if parameter.semanticType == 0U64 || parameter.mode.key() == 0U64 { return <Result.Err error=signatureFailure(message: "body parameter lacks a semantic contract") /> }
+                    match parameter.role {
+                        LlvmParameterRole.Receiver => { if index != 0U64 { return <Result.Err error=signatureFailure(message: "receiver must be first") /> } }
+                        LlvmParameterRole.Ordinary(index: val position) => {
+                            if position != ordinary { return <Result.Err error=signatureFailure(message: "ordinary parameter index mismatch") /> }
+                            ordinary += 1U64
+                        }
+                        LlvmParameterRole.Environment => { return <Result.Err error=signatureFailure(message: "environment role in body convention") /> }
+                        LlvmParameterRole.Legacy(index: _) => { return <Result.Err error=signatureFailure(message: "legacy role in body convention") /> }
+                    }
+                    match parameter.mode {
+                        LlvmParameterMode.Inout => { if LLVMGetTypeKind(parameter.type) != 12U32 { return <Result.Err error=signatureFailure(message: "inout requires pointer representation") /> } }
+                        _ => {}
+                    }
+                }
+                LlvmValueConvention.Closure => {
+                    if parameter.mode.key() != 1U64 { return <Result.Err error=signatureFailure(message: "closure parameter must borrow") /> }
+                    if index == 0U64 {
+                        if !parameter.role.same(role: <LlvmParameterRole.Environment />) || parameter.semanticType != 0U64 || LLVMGetTypeKind(parameter.type) != 12U32 { return <Result.Err error=signatureFailure(message: "closure requires a leading environment pointer") /> }
+                    } else {
+                        if parameter.semanticType == 0U64 || !parameter.role.same(role: <LlvmParameterRole.Ordinary index=ordinary />) { return <Result.Err error=signatureFailure(message: "closure ordinary semantic role/index mismatch") /> }
                         ordinary += 1U64
                     }
-                    LlvmParameterRole.Legacy(index: _) => { return <Result.Err error=signatureFailure(message: "legacy role in body convention") /> }
                 }
-                match parameter.mode {
-                    LlvmParameterMode.Inout => { if LLVMGetTypeKind(parameter.type) != 12U32 { return <Result.Err error=signatureFailure(message: "inout requires pointer representation") /> } }
-                    _ => {}
+                LlvmValueConvention.Legacy(family: _) => {
+                    if parameter.semanticType != 0U64 || parameter.mode.key() != 0U64 || !parameter.role.same(role: <LlvmParameterRole.Legacy index=index />) { return <Result.Err error=signatureFailure(message: "legacy convention has an unannounced semantic role") /> }
                 }
-            } else {
-                if parameter.semanticType != 0U64 || parameter.mode.key() != 0U64 || !parameter.role.same(role: <LlvmParameterRole.Legacy index=index />) { return <Result.Err error=signatureFailure(message: "legacy convention has an unannounced semantic role") /> }
             }
             index += 1U64
         }

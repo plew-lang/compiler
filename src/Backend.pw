@@ -4,7 +4,7 @@ use @Std/Core only { bitCastU64 }
 use ./Diag only { eprintU64 }
 use ./Mid/Diagnostics only { emitMidCoverageVerify }
 use ./LlvmHandles only { LLVMContextRef, LLVMModuleRef, LLVMTypeRef, LLVMValueRef, PlewLlvmJitRef, PlewProgramArgumentsRef }
-use ./Backend/PhysicalSignature only { LlvmSignatureScope, LlvmLogicalSignature, LlvmLogicalParameter, LlvmParameterRole, LlvmParameterMode, LlvmLegacyConvention, LlvmValueConvention, LlvmValuePassing, LlvmValueParameter, LlvmResultProtocol, LlvmValueCarrier, LlvmValueInput, LlvmInputScope, llvmTypeHasStorage }
+use ./Backend/PhysicalSignature only { LlvmSignatureScope, LlvmLogicalSignature, LlvmLogicalParameter, LlvmParameterRole, LlvmParameterMode, LlvmLegacyConvention, LlvmValueConvention, LlvmValuePassing, LlvmValueParameter, LlvmResultProtocol, LlvmValueCarrier, LlvmValueInput, LlvmInputScope, LlvmCallableInputScope, llvmTypeHasStorage }
 use ./Mid/Ambient only { MidAmbientProgram, MidAmbientBodyPlan, MidAmbientStorage }
 use ./Mid/Program only { MidExecutableProgram }
 use ./PreparedProgram only { PreparedProgram, programPreparationDiagnostic }
@@ -217,8 +217,18 @@ struct LlvmValueAbi {
     pub val resultTerm: U64
     pub val resultProtocol: LlvmResultProtocol
     pub val ownerBody: U64
+    pub val callableType: U64 = 0U64
 }
 pub impl LlvmValueAbi { factory }
+
+// A completed callable identity and its checked fat value travel together.
+// The consumer extracts function/environment, never accepts two arbitrary ptrs.
+struct LlvmClosureCallee {
+    val template: U64
+    val inputs: LlvmCallableInputScope
+    val closure: LLVMValueRef
+}
+impl LlvmClosureCallee { factory }
 
 struct LlvmAmbientScope {
     pub val group: Optional[LLVMValueRef] = <Optional.None />
@@ -280,6 +290,7 @@ struct LlvmCtx {
     mut val cIntegerPolicy: Optional[LlvmCIntegerPolicy] = <Optional.None />
     pub mut val valueAbiByvalKind: U32 = 0U32
     pub mut val valueAbis: Array[LlvmValueAbi] = []
+    mut val closureValueAbis: Dictionary[U64, U64] = [:]
     pub mut val valueAbiFunctions: Dictionary[U64, U64] = [:]
     pub mut val valueAbiParameters: Array[LlvmValueParameter] = []
     mut val valueAbiScope: Optional[LlvmSignatureScope] = <Optional.None />

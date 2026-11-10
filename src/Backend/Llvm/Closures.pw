@@ -162,12 +162,23 @@ pub impl LlvmCtx {
             captures.append(<CaptureEntry closureId=closure.exprId nameStart=capture.bindingTarget nameLen=0U64 tyStart=type.nameStart tyLen=type.nameLen isArray=false ty=term boxed=boxed />)
             captureI += 1U64
         }
-        val functionTypeLlvm: LLVMTypeRef = (try self.closureLlvmFnTy(c: inout c, fnRef: functionType))
         mut val name: Array[U8] = []
         appendBytes(into: inout name, from: "__closure".bytes())
         appendU64Dec(into: inout name, n: bodyId)
         name.append(0U8)
-        val function: LLVMValueRef = (try self.declareLegacyBodyFunction(name: arrayCPtr(name), signature: functionTypeLlvm, bodyId: bodyId, family: <LlvmLegacyConvention.Closure />))
+        // Function TypeRef currently lacks ordinary ownership modes. Keep the
+        // existing uncalled lazy declarations for unsupported modes explicit;
+        // do not pollute a completed Borrow-call template with literal modes.
+        val bodySignature = c.arena.bodySignature(bodyId: bodyId)
+        mut val completed = true
+        for passing in bodySignature.parameterPassings { match passing { CallArgumentPassing.Borrow => {} _ => { completed = false } } }
+        val function = if completed {
+            val template = (try self.closureValueAbi(c: inout c, functionType: functionType))
+            val abiId = (try self.closureBodyValueAbi(c: inout c, bodyId: bodyId, template: template))
+            give (try self.declarePlannedBodyFunction(name: arrayCPtr(name), abiId: abiId, bodyId: bodyId))
+        } else {
+            give (try self.declareLegacyBodyFunction(name: arrayCPtr(name), signature: (try self.closureLlvmFnTy(c: inout c, fnRef: functionType)), bodyId: bodyId, family: <LlvmLegacyConvention.Closure />))
+        }
         self.closures.append(<LlvmClosure bodyId=bodyId semanticIndex=semanticIndex functionTypeTerm=functionType function=function captures=captures />)
         return <Result.Ok value=() />
     }
@@ -237,6 +248,10 @@ pub impl LlvmCtx {
                 val parameterIndex = abi.parameterStart + index + 1U64
                 val type = if aliasesAddress { give self.ptrty } else { give types[index] }
                 if parameterIndex >= self.valueAbiParameters.count() || plew_pointer_equal(self.valueAbiParameters[parameterIndex].type, type) == 0I32 { return <Result.Err error=valueAbiFailure(message: "closure parameter representation mismatch") /> }
+                if abi.convention.key() == 12U64 {
+                    val lane = self.valueAbiParameters[parameterIndex]
+                    if aliasesAddress || consumes || !c.typeRefEq(a: lane.semanticType, b: signature.parameterTypes[index]) || !lane.role.same(role: <LlvmParameterRole.Ordinary index=index />) || lane.mode.key() != 1U64 { return <Result.Err error=valueAbiFailure(message: "completed closure parameter contract mismatch") /> }
+                }
                 bindings.set(i: index, value: <LlvmLocalBinding.Parameter parameterIndex=parameterIndex alias=aliasesAddress />)
             }
             index += 1U64
@@ -266,6 +281,7 @@ pub impl LlvmCtx {
     inout fn validateClosureLocalEntry(abiId: U64, plannedAbi: U64, bodyId: U64, environmentDrop: Bool) -> Result[(), CompileDiagnostic] {
         if abiId == 0U64 || abiId > self.valueAbis.count() || abiId != plannedAbi || self.valueAbis[abiId - 1U64].ownerBody != bodyId { return <Result.Err error=valueAbiFailure(message: "closure local entry descriptor mismatch") /> }
         val valid = match self.valueAbis[abiId - 1U64].convention {
+            LlvmValueConvention.Closure => { give !environmentDrop }
             LlvmValueConvention.Legacy(family: val family) => { give match family { LlvmLegacyConvention.Closure => { give !environmentDrop } LlvmLegacyConvention.EnvironmentDrop => { give environmentDrop } _ => { give false } } }
             _ => { give false }
         }

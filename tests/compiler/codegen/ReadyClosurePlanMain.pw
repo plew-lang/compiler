@@ -9,6 +9,10 @@ extern(c) {
     fn LLVMIsAStoreInst(value~: U64) -> U64
     fn LLVMGetOperand(value~: U64, index~: U32) -> LLVMValueRef
     fn LLVMIsAAllocaInst(value~: LLVMValueRef) -> U64
+    fn LLVMIsAExtractValueInst(value~: LLVMValueRef) -> U64
+    fn LLVMIsAInsertValueInst(value~: LLVMValueRef) -> U64
+    fn LLVMGetCalledValue(value~: LLVMValueRef) -> LLVMValueRef
+    fn LLVMGetArgOperand(value~: LLVMValueRef, index~: U32) -> LLVMValueRef
 }
 fn requireClosureOk[T](result: Result[T, CompileDiagnostic], stage: String, mode: U64) -> T {
     match result {
@@ -67,9 +71,9 @@ fn closurePlanControl(mode: U64) {
     compiler.arena.setClosureSignature(bodyId: closureId, parameters: [integer], passings: [<CallArgumentPassing.Borrow />], result: 0U64, closure: <ClosureSignature functionTypeTerm=functionType environmentDropBodyId=dropId captures=[<SemanticClosureCapture bindingTarget=valueBinding typeTerm=integer mode=<SemanticClosureCaptureMode.ValueCopy /> />, <SemanticClosureCapture bindingTarget=cellBinding typeTerm=integer mode=<SemanticClosureCaptureMode.CellBorrow /> />] />)
     compiler.arena.setBodySignature(bodyId: dropId, parameters: [integer, integer], passings: [<CallArgumentPassing.Move />, <CallArgumentPassing.Move />], result: 0U64)
     val drop = mode == 7U64 || mode == 8U64
-    val parameters: Array[LLVMTypeRef] = [backend.ptrty, backend.i64ty]
-    val closureSignature = LLVMFunctionType(backend.voidty, arrayCPtr(parameters), 2U64, 0I32)
-    val closureFunction = requireClosureOk(result: backend.declareLegacyBodyFunction(name: name.ptr, signature: closureSignature, bodyId: closureId, family: <LlvmLegacyConvention.Closure />), stage: "declare closure", mode: mode)
+    val closureTemplate = requireClosureOk(result: backend.closureValueAbi(c: inout compiler, functionType: functionType), stage: "closure template", mode: mode)
+    val closureAbi = requireClosureOk(result: backend.closureBodyValueAbi(c: inout compiler, bodyId: closureId, template: closureTemplate), stage: "closure body descriptor", mode: mode)
+    val closureFunction = requireClosureOk(result: backend.declarePlannedBodyFunction(name: name.ptr, abiId: closureAbi, bodyId: closureId), stage: "declare closure", mode: mode)
     backend.closures.append(<LlvmClosure bodyId=closureId semanticIndex=0U64 functionTypeTerm=functionType function=closureFunction captures=[<CaptureEntry closureId=0U64 nameStart=valueBinding nameLen=0U64 tyStart=integerName.nameStart tyLen=integerName.nameLen isArray=false ty=integer boxed=false />, <CaptureEntry closureId=0U64 nameStart=cellBinding nameLen=0U64 tyStart=integerName.nameStart tyLen=integerName.nameLen isArray=false ty=integer boxed=true />] />)
     val dropName = <CString.copied text="ready-drop-controls" />
     val dropParameters: Array[LLVMTypeRef] = [backend.ptrty]
@@ -155,8 +159,152 @@ fn closurePlanControl(mode: U64) {
     LLVMDisposeModule(module)
     LLVMContextDispose(context)
 }
+// Live private call controls complement Ready's existing field/local tests.
+// Metadata corruptions start from valid carriers; rejected inputs never reach
+// LLVMBuildCall2. These are physical contracts, not source ownership proofs.
+fn closureCallControl() {
+    val context = LLVMContextCreate()
+    val name = <CString.copied text="completed-closure-call-controls" />
+    val module = LLVMModuleCreateWithNameInContext(name.ptr, context)
+    val triple = LLVMGetDefaultTargetTriple()
+    val cpu = <CString.copied text="generic" />
+    val layout = plew_llvm_native_data_layout(cpu.ptr)
+    LLVMSetTarget(module, triple)
+    LLVMSetDataLayout(module, layout)
+    LLVMDisposeMessage(triple)
+    LLVMDisposeMessage(layout)
+    val builder = LLVMCreateBuilderInContext(context)
+    mut val backend = llvmContext(ctx: context, m: module, builder: builder)
+    mut val compiler = <Comp />
+    requireClosureOk(result: analyzeFrontendDeclarations(c: inout compiler, input: <FrontendInput.Text text="fn control() {{}}" path="closure-call.pw" />, sources: <SourceAccess stdRoot=[] />), stage: "call frontend", mode: 0U64)
+    val integerName = compiler.internBytes(s: "I64")
+    val integer = compiler.simpleTypeRef(nameStart: integerName.nameStart, nameLen: integerName.nameLen)
+    val unsignedName = compiler.internBytes(s: "U64")
+    val unsigned = compiler.simpleTypeRef(nameStart: unsignedName.nameStart, nameLen: unsignedName.nameLen)
+    val fieldName = compiler.internBytes(s: "payload")
+    val aggregate = compiler.pushType(t: <TypeRef nameStart=0U64 nameLen=0U64 args=[] isRecord=true recordFieldLabels=[fieldName.nameId] recordFieldTerms=[integer] />)
+    requireClosureOk(result: compiler.enqueueFinalDestruction(typeRef: integer), stage: "call I64 representation", mode: 0U64)
+    requireClosureOk(result: compiler.enqueueFinalDestruction(typeRef: unsigned), stage: "call U64 representation", mode: 0U64)
+    // A semantic record alone is not a registered physical layout. Use the
+    // production collection boundary before ownership/representation finalization.
+    requireClosureOk(result: compiler.collectRecordedType(ref: aggregate), stage: "collect call record layout", mode: 0U64)
+    requireClosureOk(result: compiler.enqueueFinalDestruction(typeRef: aggregate), stage: "call aggregate representation", mode: 0U64)
+    requireClosureOk(result: backend.registerFinalLayoutNames(c: inout compiler), stage: "call layout names", mode: 0U64)
+    requireClosureOk(result: backend.registerFinalStructBodies(c: inout compiler), stage: "call layout bodies", mode: 0U64)
+    val unit = compiler.pushType(t: <TypeRef nameStart=0U64 nameLen=0U64 args=[] isRecord=true recordFieldLabels=[] recordFieldTerms=[] />)
+    val functionName = compiler.internBytes(s: "fn")
+    val functionType = compiler.pushType(t: <TypeRef nameStart=functionName.nameStart nameLen=functionName.nameLen args=[unit, integer, aggregate] />)
+    val otherFunctionType = compiler.pushType(t: <TypeRef nameStart=functionName.nameStart nameLen=functionName.nameLen args=[unit, unsigned, aggregate] />)
+    val template = requireClosureOk(result: backend.closureValueAbi(c: inout compiler, functionType: functionType), stage: "call template", mode: 0U64)
+    val plan = backend.valueAbis[template - 1U64]
+    val laneCount = backend.valueAbiParameters.count()
+    val descriptorCount = backend.valueAbis.count()
+    mut val repeat = 0U64
+    while repeat < 4U64 {
+        if requireClosureOk(result: backend.closureValueAbi(c: inout compiler, functionType: functionType), stage: "cached template", mode: repeat) != template { panic "closure cache changed template" }
+        repeat += 1U64
+    }
+    if backend.valueAbiParameters.count() != laneCount || backend.valueAbis.count() != descriptorCount { panic "cached closure reclassified signature" }
+    val otherTemplate = requireClosureOk(result: backend.closureValueAbi(c: inout compiler, functionType: otherFunctionType), stage: "same-native distinct-semantic template", mode: 0U64)
+    if otherTemplate == template || plew_pointer_equal(plan.logicalSignature, backend.valueAbis[otherTemplate - 1U64].logicalSignature) == 0I32 { panic "I64/U64 fixture does not isolate semantic identity" }
+    val bodyId = compiler.arena.registerBodyInstance(<BodyInstance fnIdx=9223372036854775900U64 environment=<InstanceEnvironment /> />)
+    val otherBodyId = compiler.arena.registerBodyInstance(<BodyInstance fnIdx=9223372036854775901U64 environment=<InstanceEnvironment /> />)
+    compiler.arena.setClosureSignature(bodyId: bodyId, parameters: [integer, aggregate], passings: [<CallArgumentPassing.Borrow />, <CallArgumentPassing.Borrow />], result: 0U64, closure: <ClosureSignature functionTypeTerm=functionType captures=[] />)
+    compiler.arena.setClosureSignature(bodyId: otherBodyId, parameters: [integer, aggregate], passings: [<CallArgumentPassing.Borrow />, <CallArgumentPassing.Borrow />], result: 0U64, closure: <ClosureSignature functionTypeTerm=functionType captures=[] />)
+    val bodyAbi = requireClosureOk(result: backend.closureBodyValueAbi(c: inout compiler, bodyId: bodyId, template: template), stage: "call body clone", mode: 0U64)
+    val otherBodyAbi = requireClosureOk(result: backend.closureBodyValueAbi(c: inout compiler, bodyId: otherBodyId, template: template), stage: "second body clone", mode: 0U64)
+    if bodyAbi == otherBodyAbi || backend.valueAbis[bodyAbi - 1U64].ownerBody != bodyId || backend.valueAbis[otherBodyAbi - 1U64].ownerBody != otherBodyId || backend.valueAbis[bodyAbi - 1U64].parameterStart != plan.parameterStart || backend.valueAbis[otherBodyAbi - 1U64].parameterStart != plan.parameterStart || backend.valueAbiParameters.count() != laneCount + 3U64 { panic "closure body clone copied lanes or lost body identity" }
+    val beforeRejectedDeclarations = backend.valueAbis.count()
+    requireClosureInternal(result: backend.closureBodyValueAbi(c: inout compiler, bodyId: 0U64, template: template))
+    requireClosureInternal(result: backend.closureBodyValueAbi(c: inout compiler, bodyId: bodyId, template: bodyAbi))
+    mut val declarationMode = 0U64
+    while declarationMode < 4U64 {
+        val malformedBody = compiler.arena.registerBodyInstance(<BodyInstance fnIdx=9223372036854775950U64 + declarationMode environment=<InstanceEnvironment /> />)
+        val terms = if declarationMode == 2U64 { give [integer] } else { give [if declarationMode == 0U64 { give unsigned } else { give integer }, aggregate] }
+        val passings: Array[CallArgumentPassing] = if declarationMode == 2U64 { give [<CallArgumentPassing.Borrow />] } else { give [if declarationMode == 1U64 { give <CallArgumentPassing.Inout /> } else { give <CallArgumentPassing.Borrow /> }, <CallArgumentPassing.Borrow />] }
+        compiler.arena.setClosureSignature(bodyId: malformedBody, parameters: terms, passings: passings, result: if declarationMode == 3U64 { give integer } else { give 0U64 }, closure: <ClosureSignature functionTypeTerm=functionType captures=[] />)
+        requireClosureInternal(result: backend.closureBodyValueAbi(c: inout compiler, bodyId: malformedBody, template: template))
+        declarationMode += 1U64
+    }
+    if backend.valueAbis.count() != beforeRejectedDeclarations { panic "rejected declaration appended a descriptor" }
+    val target = requireClosureOk(result: backend.declarePlannedBodyFunction(name: name.ptr, abiId: bodyAbi, bodyId: bodyId), stage: "call declaration", mode: 0U64)
+    val callerName = <CString.copied text="closure-caller" />
+    val callerParameters: Array[LLVMTypeRef] = []
+    val callerType = LLVMFunctionType(backend.voidty, arrayCPtr(callerParameters), 0U64, 0I32)
+    val caller = LLVMAddFunction(module, callerName.ptr, callerType)
+    backend.curFn = caller
+    backend.beginFnBody(fv: caller)
+    val environment = LLVMBuildAlloca(builder, backend.i64ty, anon())
+    mut val closure = LLVMBuildInsertValue(builder, LLVMGetUndef(backend.closureTy), target, 0U64, anon())
+    closure = LLVMBuildInsertValue(builder, closure, environment, 1U64, anon())
+    val callee = requireClosureOk(result: backend.closureCallee(c: inout compiler, functionType: functionType, closure: closure), stage: "typed fat callee", mode: 0U64)
+    val scalarLane = backend.valueAbiParameters[plan.parameterStart + 1U64]
+    val aggregateLane = backend.valueAbiParameters[plan.parameterStart + 2U64]
+    val scalarValue = LLVMConstInt(backend.i64ty, 7U64, 0I32)
+    val scalarInput = <LlvmValueInput lane=<LlvmLogicalParameter type=scalarLane.type semanticType=integer role=<LlvmParameterRole.Ordinary index=0U64 /> mode=<LlvmParameterMode.Borrow /> /> index=1U64 carrier=<LlvmValueCarrier.Value value=scalarValue /> />
+    val aggregateValue = LLVMGetUndef(aggregateLane.type)
+    val aggregateHome = LLVMBuildAlloca(builder, aggregateLane.type, anon())
+    llvmStore(builder, aggregateValue, aggregateHome)
+    val aggregateInput = <LlvmValueInput lane=<LlvmLogicalParameter type=aggregateLane.type semanticType=aggregate role=<LlvmParameterRole.Ordinary index=1U64 /> mode=<LlvmParameterMode.Borrow /> /> index=2U64 carrier=<LlvmValueCarrier.Value value=aggregateValue /> />
+    val homeInput = <LlvmValueInput lane=aggregateInput.lane index=2U64 carrier=<LlvmValueCarrier.Home address=aggregateHome /> />
+    val beforeCalls = backend.valueAbis.count()
+    val beforeLanes = backend.valueAbiParameters.count()
+    repeat = 0U64
+    while repeat < 4U64 {
+        val call = requireClosureOk(result: backend.callClosureValueFunction(callee: callee, arguments: [scalarInput, if repeat == 0U64 { give aggregateInput } else { give homeInput }]), stage: "Value/Home closure call", mode: repeat)
+        // Both extractvalue instructions must read the exact original fat value.
+        val called = LLVMGetCalledValue(call)
+        val passedEnvironment = LLVMGetArgOperand(call, 0U32)
+        if LLVMIsAExtractValueInst(called) == 0U64 || LLVMIsAExtractValueInst(passedEnvironment) == 0U64 || LLVMIsAExtractValueInst(called) == LLVMIsAExtractValueInst(passedEnvironment) { panic "fat callee/environment extraction missing" }
+        if LLVMIsAInsertValueInst(LLVMGetOperand(LLVMIsAExtractValueInst(called), 0U32)) != LLVMIsAInsertValueInst(closure) || LLVMIsAInsertValueInst(LLVMGetOperand(LLVMIsAExtractValueInst(passedEnvironment), 0U32)) != LLVMIsAInsertValueInst(closure) { panic "fat extraction read different closure values" }
+        repeat += 1U64
+    }
+    if backend.valueAbis.count() != beforeCalls || backend.valueAbiParameters.count() != beforeLanes { panic "closure calls append ABI plans" }
+    mut val mode = 0U64
+    while mode < 5U64 {
+        val input = <LlvmValueInput lane=<LlvmLogicalParameter type=scalarLane.type semanticType=if mode == 0U64 { give unsigned } else { give integer } role=if mode == 2U64 { give <LlvmParameterRole.Environment /> } else if mode == 4U64 { give <LlvmParameterRole.Ordinary index=1U64 /> } else { give <LlvmParameterRole.Ordinary index=0U64 /> } mode=if mode == 3U64 { give <LlvmParameterMode.Move /> } else { give <LlvmParameterMode.Borrow /> } /> index=if mode == 1U64 { give 0U64 } else { give 1U64 } carrier=scalarInput.carrier />
+        requireClosureInternal(result: backend.callClosureValueFunction(callee: callee, arguments: [input, homeInput]))
+        mode += 1U64
+    }
+    mode = 0U64
+    while mode < 6U64 {
+        val inputScope = <LlvmCallableInputScope moduleIdentity=callee.inputs.moduleIdentity + if mode == 2U64 { give 1U64 } else { give 0U64 } contextIdentity=callee.inputs.contextIdentity + if mode == 3U64 { give 1U64 } else { give 0U64 } revision=if mode == 4U64 { give 2U64 } else { give 1U64 } callableIdentity=if mode == 0U64 { give otherFunctionType } else { give functionType } signature=if mode == 1U64 { give callerType } else { give callee.inputs.signature } />
+        val malformed = <LlvmClosureCallee template=if mode == 5U64 { give bodyAbi } else { give template } inputs=inputScope closure=closure />
+        requireClosureInternal(result: backend.callClosureValueFunction(callee: malformed, arguments: [scalarInput, homeInput]))
+        mode += 1U64
+    }
+    requireClosureInternal(result: backend.callClosureValueFunction(callee: <LlvmClosureCallee template=template inputs=callee.inputs closure=scalarValue />, arguments: [scalarInput, homeInput]))
+    requireClosureInternal(result: backend.callClosureValueFunction(callee: callee, arguments: [scalarInput]))
+    val otherCallerName = <CString.copied text="other-closure-caller" />
+    val otherCaller = LLVMAddFunction(module, otherCallerName.ptr, callerType)
+    backend.curFn = otherCaller
+    backend.beginFnBody(fv: otherCaller)
+    val foreignHome = LLVMBuildAlloca(builder, backend.i64ty, anon())
+    val foreignValue = llvmLoad(builder, backend.i64ty, foreignHome, anon())
+    val foreignInput = <LlvmValueInput lane=scalarInput.lane index=1U64 carrier=<LlvmValueCarrier.Value value=foreignValue /> />
+    // Re-enter the original caller without relying on backend.curFn for admission.
+    LLVMPositionBuilderAtEnd(builder, LLVMGetEntryBasicBlock(caller))
+    requireClosureInternal(result: backend.callClosureValueFunction(callee: callee, arguments: [foreignInput, homeInput]))
+    LLVMPositionBuilderAtEnd(builder, LLVMGetEntryBasicBlock(otherCaller))
+    requireClosureInternal(result: backend.callClosureValueFunction(callee: callee, arguments: [scalarInput, aggregateInput]))
+    LLVMPositionBuilderAtEnd(builder, LLVMGetEntryBasicBlock(caller))
+    val rawIndirect = LLVMBuildExtractValue(builder, closure, 0U64, anon())
+    requireClosureInternal(result: backend.callLegacyValueFunction(signature: plan.logicalSignature, function: rawIndirect, arguments: [environment, scalarValue, aggregateValue], legacyIndirect: <Optional.Some v=<LlvmLegacyConvention.Closure /> />))
+    backend.curFn = target
+    requireClosureInternal(result: backend.preparedLegacyParameter(parameterIndex: plan.parameterStart))
+    requireClosureInternal(result: backend.preparedLegacyParameter(parameterIndex: plan.parameterStart + 1U64))
+    requireClosureInternal(result: backend.legacyValueParameter(function: target, index: 0U64))
+    requireClosureInternal(result: backend.legacyValueParameter(function: target, index: 1U64))
+    requireClosureInternal(result: backend.callLegacyValueFunction(signature: plan.logicalSignature, function: target, arguments: [environment, scalarValue, aggregateValue]))
+    requireClosureInternal(result: backend.closureBodyParameter(function: target, bodyId: otherBodyId, index: 0U64))
+    requireClosureInternal(result: backend.closureBodyParameter(function: target, bodyId: bodyId, index: 3U64))
+    LLVMDisposeBuilder(builder)
+    LLVMDisposeModule(module)
+    LLVMContextDispose(context)
+}
 fn main() {
     mut val mode = 0U64
     while mode <= 11U64 { closurePlanControl(mode: mode) mode += 1U64 }
+    closureCallControl()
     write(s: "ok\n")
 }
