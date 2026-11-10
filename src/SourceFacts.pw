@@ -176,7 +176,7 @@ impl SourceFactDirectory {
         }
         return <Optional.None />
     }
-    inout fn isActive(owner: SemanticCompletionOwner) -> Bool {
+    fn isActive(owner: SemanticCompletionOwner) -> Bool {
         match self.activeOwner {
             Optional.Some(v: val active) => { return semanticCompletionOwnersEqual(recorded: active, prepared: owner) }
             Optional.None => { return false }
