@@ -9,6 +9,7 @@ use @Std/Process only { argAt }
 use @Std/Io only { print }
 extern(c) {
     fn exerciseCompilerCallback(address~: U64) -> I32
+    fn exerciseNarrowCompilerCallback(address~: U64) -> I32
     fn rejectCompilerCallback(session~: U64) -> I32
 }
 fn main() {
@@ -29,6 +30,7 @@ fn main() {
                         }
                     }
                     assert(exerciseCompilerCallback(jit.lookup(name: "target")) == 0I32)
+                    assert(exerciseNarrowCompilerCallback(jit.lookup(name: "signedTarget")) == 0I32)
                     assert(jit.lookup(name: "unusedBoundary") != 0U64)
                 }
             }

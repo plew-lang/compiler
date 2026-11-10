@@ -120,6 +120,29 @@ consumer. C integer attributes, result conversion and Inout writeback remain
 the C adapter's responsibility. A raw Body call permission is unnecessary and
 cannot substitute native pointer equality for this correspondence.
 
+Program main and global initialization are body-identified native entries, not
+foreign host imports. Their cached completed descriptors serve publication,
+definition, Ready admission and consumers. Main has native argc/argv lanes with
+no source terms and a program-status i32 result; its source parameter count is
+zero. The initializer has no inputs and native void. Program argument readers
+and initializer calls consume these records rather than rebuilding signatures.
+Missing ABI registration cannot identify a main or initializer implicitly.
+
+Requested native publication retains an ABI receipt per source symbol alongside
+body/session/preparer identity. The receipt compares structural result/parameter
+types, pointer address spaces, packedness, varargs, calling convention and
+return/parameter attributes, including typed byval payloads and integer values.
+LLVM context pointers, nominal IR names and aggregate byte sizes are not ABI
+identity. Type encodings are cached while inspecting one consumed module; saved
+receipts contain no context-owned pointers. Unsupported attribute payloads or
+type forms fail explicitly instead of comparing by kind alone. Declarations and
+requested definitions use the same registration and metadata-identity gate
+before reuse, entry replacement or module submission. A known source entry
+cannot become an unchecked host/raw declaration by dropping body metadata,
+including dependencies and program main. Explicit raw native defer clients
+without source receipts remain a separate trusted interface. The execution
+runtime and source ownership rules are unchanged.
+
 A byval byte snapshot is a physical copying mechanism, not an additional semantic Copy or an implicit ARC retain. Its source/destination lifetime and ownership follow the already selected passing contract; the callee cannot independently destroy a caller-guaranteed share simply because LLVM supplied private bytes.
 
 ABI attributes must match on definitions/declarations and call sites. A `byval` parameter describes an independent snapshot; passing an unprotected address into mutable caller storage is not a substitute. Temporary storage belongs to the function actually being emitted, including when emitting a thunk inside another generation context. Allocate its slot in that function's entry and store the evaluated value at the original call position, preserving evaluation order and avoiding loop-driven stack growth.

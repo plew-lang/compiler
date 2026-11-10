@@ -24,6 +24,7 @@ part ./Llvm/Closures
 part ./Llvm/Any
 part ./Llvm/StmtMatch
 part ./Llvm/StmtDeinit
+part ./Llvm/ProgramAbi
 part ./Llvm/Entry
 part ./Llvm/Mid
 part ./Llvm/Async

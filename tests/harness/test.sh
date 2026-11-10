@@ -310,6 +310,16 @@ else
     fail=$((fail + 1)); failed="$failed ready-async-plan-private"
 fi
 
+if LLVM_CONFIG="$LC" python3 -B ./tests/compiler/codegen/test-source-entry-abi.py; then
+    pass=$((pass + 1))
+else
+    fail=$((fail + 1)); failed="$failed source-entry-abi"
+fi
+if python3 -B ./tests/compiler/architecture/test-completed-program-protocol.py; then
+    pass=$((pass + 1))
+else
+    fail=$((fail + 1)); failed="$failed completed-program-protocol"
+fi
 if python3 -B ./tests/compiler/architecture/test-completed-c-private-protocol.py; then
     pass=$((pass + 1))
 else

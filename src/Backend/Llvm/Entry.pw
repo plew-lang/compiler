@@ -57,10 +57,7 @@ pub impl LlvmCtx {
         val globalOwner: U64 = 18446744073709551615U64
         val bodyId: U64 = c.findBodyInstance(fnIdx: globalOwner, environment: <InstanceEnvironment />)
         if !self.admitBody(bodyId: bodyId) { return <Result.Ok value=() /> }
-        mut val noParams: Array[LLVMTypeRef] = []
-        val fnTy: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(noParams), 0U64, 0I32)
-        val fv: LLVMValueRef = (try self.getOrDeclare(c: inout c, name: "plew_init_globals", fnTy: fnTy))
-        self.attachBodyIdentity(function: fv, bodyId: bodyId)
+        val fv = (try self.declareProgramValueFunction(c: inout c, bodyId: bodyId, main: false))
         self.curFn = fv
         self.curIsMain = false
         self.curRetVoid = true
@@ -102,16 +99,14 @@ pub impl LlvmCtx {
 
 pub impl LlvmCtx {
 
-    fn mainFunctionType() -> LLVMTypeRef {
-        val parameters = [self.i32ty, self.ptrty]
-        return LLVMFunctionType(self.i32ty, arrayCPtr(parameters), 2U64, 0I32)
-    }
-
     inout fn initializeProgramArguments(c: inout Comp, function: LLVMValueRef) -> Result[(), CompileDiagnostic] {
         val parameters = [self.i32ty, self.ptrty]
         val signature = LLVMFunctionType(self.voidty, arrayCPtr(parameters), 2U64, 0I32)
         val setter = (try self.getOrDeclare(c: inout c, name: "plew_set_args", fnTy: signature))
-        val arguments = [LLVMGetParam(function, 0U64), LLVMGetParam(function, 1U64)]
+        val abiId = self.valueAbiFunctions.getOr(key: LLVMIsAFunction(function), fallback: 0U64)
+        if abiId == 0U64 || abiId > self.valueAbis.count() { return <Result.Err error=valueAbiFailure(message: "program arguments lack an entry descriptor") /> }
+        val bodyId = self.valueAbis[abiId - 1U64].ownerBody
+        val arguments = [self.valueInputValue(input: (try self.programValueParameter(function: function, bodyId: bodyId, index: 0U64))), self.valueInputValue(input: (try self.programValueParameter(function: function, bodyId: bodyId, index: 1U64)))]
         LLVMBuildCall2(self.b, signature, setter, arrayCPtr(arguments), 2U64, anon())
         return <Result.Ok value=() />
     }
@@ -120,16 +115,11 @@ pub impl LlvmCtx {
         for bodyId in c.monoWork.bodies() {
             val body = c.arena.bodyInstanceAt(index: bodyId - 1U64)
             if body.fnIdx < c.arena.functionCount() && c.nameIsMain(f: c.arena.functionAt(index: body.fnIdx)) {
-                val signature = self.mainFunctionType()
-                val entry = (try self.getOrDeclare(c: inout c, name: "main", fnTy: signature))
-                self.attachBodyIdentity(function: entry, bodyId: bodyId)
+                (try self.declareProgramValueFunction(c: inout c, bodyId: bodyId, main: true))
             }
         }
         if c.arena.globals.count() != 0U64 {
-            val parameters: Array[LLVMTypeRef] = []
-            val signature = LLVMFunctionType(self.voidty, arrayCPtr(parameters), 0U64, 0I32)
-            val entry = (try self.getOrDeclare(c: inout c, name: "plew_init_globals", fnTy: signature))
-            self.attachBodyIdentity(function: entry, bodyId: c.findBodyInstance(fnIdx: 18446744073709551615U64, environment: <InstanceEnvironment />))
+            (try self.declareProgramValueFunction(c: inout c, bodyId: c.findBodyInstance(fnIdx: 18446744073709551615U64, environment: <InstanceEnvironment />), main: false))
         }
         return <Result.Ok value=() />
     }
@@ -141,10 +131,7 @@ pub impl LlvmCtx {
         // `i32 main(i32 argc, ptr argv)` so the program can read its command-line args
         // (@Std/Process argCount/argAt) — the args are stashed into the runtime via
         // plew_set_args before the body runs.
-        val mainTy: LLVMTypeRef = self.mainFunctionType()
-        val mainFnCString = <CString.copied text="main" />
-        val mainFn: LLVMValueRef = LLVMAddFunction(self.mod, mainFnCString.ptr, mainTy)
-        self.attachBodyIdentity(function: mainFn, bodyId: bodyId)
+        val mainFn = (try self.declareProgramValueFunction(c: inout c, bodyId: bodyId, main: true))
         self.curFn = mainFn
         self.curIsMain = true
         self.curRetVoid = false
@@ -190,13 +177,11 @@ pub impl LlvmCtx {
         if c.arena.globals.count() == 0U64 {
             return <Result.Ok value=() />
         }
-        mut val noParams: Array[LLVMTypeRef] = []
-        val igTy: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(noParams), 0U64, 0I32)
-        val igFn: LLVMValueRef = (try self.getOrDeclare(c: inout c, name: "plew_init_globals", fnTy: igTy))
         val bodyId = c.findBodyInstance(fnIdx: 18446744073709551615U64, environment: <InstanceEnvironment />)
-        self.attachBodyIdentity(function: igFn, bodyId: bodyId)
-        mut val noArgs: Array[LLVMValueRef] = []
-        LLVMBuildCall2(self.b, igTy, igFn, arrayCPtr(noArgs), 0U64, anon())
+        val function = (try self.declareProgramValueFunction(c: inout c, bodyId: bodyId, main: false))
+        val abiId = (try self.programNativeAbi(function: function, bodyId: bodyId, main: false))
+        val abi = self.valueAbis[abiId - 1U64]
+        (try self.callTypedBodyValueFunction(function: function, bodyId: bodyId, inputs: (try self.bodyInputScope(bodyId: bodyId, signature: abi.logicalSignature)), arguments: [], conventionKey: 18U64))
         return <Result.Ok value=() />
     }
 }

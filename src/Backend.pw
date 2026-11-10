@@ -315,6 +315,8 @@ struct LlvmCtx {
     pub val midProgram: MidExecutableProgram = <MidExecutableProgram.empty />
     mut val cIntegerPolicy: Optional[LlvmCIntegerPolicy] = <Optional.None />
     pub mut val valueAbiByvalKind: U32 = 0U32
+    mut val programValueAbis: Dictionary[U64, U64] = [:]
+    mut val programFunctions: Dictionary[U64, LLVMValueRef] = [:]
     mut val asyncValueAbis: Dictionary[U64, Array[U64]] = [:]
     mut val glueValueAbis: Dictionary[U64, Array[U64]] = [:]
     pub mut val valueAbis: Array[LlvmValueAbi] = []

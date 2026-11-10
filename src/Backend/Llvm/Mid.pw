@@ -2842,18 +2842,22 @@ pub impl LlvmCtx {
                 }
                 LlvmValueConvention.Closure => { give <LlvmBodyLocalEntry.Closure abiId=abiId /> }
                 LlvmValueConvention.Witness(targetType: _, traitIndex: _, slot: _) => { give <LlvmBodyLocalEntry.Witness abiId=abiId /> }
+                LlvmValueConvention.ProgramMain => {
+                    if parameterCount != 0U64 || body.sourceFunction >= c.arena.functionCount() || !c.nameIsMain(f: c.arena.functionAt(index: body.sourceFunction)) { return <Result.Err error=valueAbiFailure(message: "program main has source parameters or wrong declaration") /> }
+                    (try self.programNativeAbi(function: self.curFn, bodyId: body.bodyInstance, main: true))
+                    give <LlvmBodyLocalEntry.ProgramMain />
+                }
+                LlvmValueConvention.GlobalInitializer => {
+                    if parameterCount != 0U64 || body.sourceFunction != 18446744073709551615U64 { return <Result.Err error=valueAbiFailure(message: "global initializer source contract mismatch") /> }
+                    (try self.programNativeAbi(function: self.curFn, bodyId: body.bodyInstance, main: false))
+                    give <LlvmBodyLocalEntry.GlobalInitializer />
+                }
                 LlvmValueConvention.Body => {
                     if parameterCount != abi.parameterCount { return <Result.Err error=valueAbiFailure(message: "local plan normal body/parameter mismatch") /> }
                     give <LlvmBodyLocalEntry.Normal abiId=abiId />
                 }
             }
-        } else if body.sourceFunction == 18446744073709551615U64 {
-            if parameterCount != 0U64 { return <Result.Err error=valueAbiFailure(message: "global initializer has source parameters") /> }
-            give <LlvmBodyLocalEntry.GlobalInitializer />
-        } else {
-            if body.sourceFunction >= c.arena.functionCount() || !c.nameIsMain(f: c.arena.functionAt(index: body.sourceFunction)) || parameterCount != 0U64 { return <Result.Err error=valueAbiFailure(message: "unclassified local admission entry") /> }
-            give <LlvmBodyLocalEntry.ProgramMain />
-        }
+        } else { return <Result.Err error=valueAbiFailure(message: "local admission lacks a completed entry descriptor") /> }
         val scope = (try self.prepareValueAbiScope())
         try scope.validateScope()
         val signature = match entry {
@@ -2862,8 +2866,8 @@ pub impl LlvmCtx {
             LlvmBodyLocalEntry.EnvironmentDrop(abiId: val dropAbi) => { give self.valueAbis[dropAbi - 1U64].functionType }
             LlvmBodyLocalEntry.Witness(abiId: val witnessAbi) => { give self.valueAbis[witnessAbi - 1U64].functionType }
             LlvmBodyLocalEntry.AsyncResume(activationId: _) => { return <Result.Err error=valueAbiFailure(message: "async admission requires its activation") /> }
-            LlvmBodyLocalEntry.ProgramMain => { give self.mainFunctionType() }
-            LlvmBodyLocalEntry.GlobalInitializer => { val parameters: Array[LLVMTypeRef] = [] give LLVMFunctionType(self.voidty, arrayCPtr(parameters), 0U64, 0I32) }
+            LlvmBodyLocalEntry.ProgramMain => { give self.valueAbis[abiId - 1U64].functionType }
+            LlvmBodyLocalEntry.GlobalInitializer => { give self.valueAbis[abiId - 1U64].functionType }
         }
         try scope.validateFunction(function: self.curFn, signature: signature)
         val entryBindings = match entry {
@@ -2906,8 +2910,8 @@ pub impl LlvmCtx {
                     LlvmBodyLocalEntry.EnvironmentDrop(abiId: val plannedAbi) => { try self.validateClosureLocalEntry(abiId: abiId, plannedAbi: plannedAbi, bodyId: body.bodyInstance, environmentDrop: true) }
                     LlvmBodyLocalEntry.Witness(abiId: val plannedAbi) => { try self.validateWitnessLocalEntry(abiId: abiId, plannedAbi: plannedAbi, bodyId: body.bodyInstance) }
                     LlvmBodyLocalEntry.AsyncResume(activationId: val activationId) => { try self.validateMidAsyncActivation(activationId: activationId, planId: planId) }
-                    LlvmBodyLocalEntry.ProgramMain => { if abiId != 0U64 || body.sourceFunction == 18446744073709551615U64 { return <Result.Err error=valueAbiFailure(message: "main local plan entry mismatch") /> } }
-                    LlvmBodyLocalEntry.GlobalInitializer => { if abiId != 0U64 || body.sourceFunction != 18446744073709551615U64 { return <Result.Err error=valueAbiFailure(message: "global local plan entry mismatch") /> } }
+                    LlvmBodyLocalEntry.ProgramMain => { if (try self.programNativeAbi(function: self.curFn, bodyId: body.bodyInstance, main: true)) != abiId || body.sourceFunction == 18446744073709551615U64 { return <Result.Err error=valueAbiFailure(message: "main local plan entry mismatch") /> } }
+                    LlvmBodyLocalEntry.GlobalInitializer => { if (try self.programNativeAbi(function: self.curFn, bodyId: body.bodyInstance, main: false)) != abiId || body.sourceFunction != 18446744073709551615U64 { return <Result.Err error=valueAbiFailure(message: "global local plan entry mismatch") /> } }
                 }
             }
         }

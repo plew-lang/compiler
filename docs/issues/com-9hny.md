@@ -501,3 +501,51 @@ re-registration, missing requested definition and host fallback refusal.
 Reuse ReadyLocal/ReadyAsync, global-modules, SessionJit/SessionModule and existing
 request/initializer/callback controls. Checkpoint6 retains full inventory and
 preparation-cost reconciliation; this increment does not itself close W2.
+
+### Completed Program and Publication Increment
+
+[Program/publication evidence](../../../evidence/performance-regression-history/value-passing-implementation/w2-protocol/typed-program-publication-protocol.json)
+records cached ProgramMain/native-status and GlobalInitializer descriptors from
+declaration through Ready admission, native argument reads and typed initializer
+calls. Source and native parameter counts stay separate. Unregistered main/global
+inference and competing signature construction are removed.
+
+Requested source registration compares context-independent structural ABI receipts
+before symbol reuse/replacement/module insertion. Types, address spaces, varargs,
+calling convention and return/parameter attribute payloads participate. Missing
+identity cannot bypass checks through a dependency, sibling or host fallback;
+failed main registration cannot change stored arity. Unsupported attribute
+payloads reject explicitly. C narrow integer attributes now complete before the
+Declarations/definition switch, with an actual requested I8 callback control.
+
+Build `20261110T064109-build-d3ce5a`, all four final immutable gates, CLI66,
+physical/native and optimized private ReadyLocal/Async, C O0/O2/callback/host,
+SessionJit, split/requested/synthetic/exposed globals and cross-context ABI
+registration controls pass. All 186 product and 381 internal control inputs
+match the build. Native RED demonstrates old registration accepted conflicting
+result ABI; structural RED and C declaration-order evidence are separate.
+Independent final reconciliation is linked alongside the evidence. This closes
+checkpoint5 only, not preparation costs, W2, forwarding or performance.
+
+### Checkpoint6 Reconciliation Plan
+
+A neutral read-only review found no further unmigrated source consumers. Close
+this boundary in this order:
+
+1. Remove unused raw call/declaration/parameter APIs; restrict the sole retained
+   Legacy producer/Ready reader to unsupported ordinary Inout/Move closure
+   declarations, preserving com-xkcb construction-only behavior. Retired APIs
+   are tested for absence; all meaningful retained guards remain executed.
+2. Reconcile each of the pinned 180 inventory sites by owner/operation with the
+   current completed consumer, explicit native/C boundary, removed path or the
+   retained unsupported closure branch. Include new ProgramAbi/publication
+   duties not present in the old inventory. Do not migrate native runtime calls
+   or C inputs into source ownership conventions.
+3. In diagnostic snapshots count physical plans/classified lanes, descriptor
+   owner clones and Ready local plans; distinguish cache hits and repeated calls.
+   Compare fixed-input W2 preparation cost and uninstrumented time separately.
+   No permanent counters or assumed forwarding benefit.
+4. On the frozen final candidate reconcile the whole required scenario matrix,
+   malformed inputs, final readers, source/control hashes and raw/optimized
+   controls, then obtain independent source/evidence review. W3/W4 and final
+   com-ffar gates remain separate.

@@ -99,6 +99,14 @@ pub impl LlvmCtx {
         if declaration.hasRet { returnType = (try self.cScalarType(c: inout c, ref: prepared.resultType)) }
         val externalSignature = LLVMFunctionType(returnType, arrayCPtr(parameters), parameters.count(), 0I32)
         val entry = LLVMAddFunction(self.mod, arrayCPtr(name), externalSignature)
+        // Declaration-only and requested-definition modules publish the same
+        // complete external ABI, including narrow integer extension attributes.
+        index = 0U64
+        while index < prepared.parameterTypes.count() {
+            try self.attachCIntegerExtension(c: inout c, function: entry, index: index + 1U64, ref: prepared.parameterTypes[index], physical: parameters[index], callSite: false)
+            index += 1U64
+        }
+        if declaration.hasRet { try self.attachCIntegerExtension(c: inout c, function: entry, index: 0U64, ref: prepared.resultType, physical: returnType, callSite: false) }
         self.attachBodyIdentity(function: entry, bodyId: bodyId)
         self.declId.append(declaration.nameId)
         self.declFn.append(entry)
@@ -117,7 +125,6 @@ pub impl LlvmCtx {
         index = 0U64
         while index < prepared.parameterTypes.count() {
             val argument = LLVMGetParam(entry, index)
-            try self.attachCIntegerExtension(c: inout c, function: entry, index: index + 1U64, ref: prepared.parameterTypes[index], physical: LLVMTypeOf(argument), callSite: false)
             val converted = match prepared.parameterPassings[index] {
                 CallArgumentPassing.Inout => { give (try self.prepareCInout(c: inout c, ref: prepared.parameterTypes[index], pointer: argument, toC: false, writebacks: inout writebacks)) }
                 _ => { give (try self.scalarFromC(c: inout c, ref: prepared.parameterTypes[index], value: argument)) }
@@ -129,7 +136,6 @@ pub impl LlvmCtx {
         try self.completeCInouts(c: inout c, writebacks: writebacks)
         if declaration.hasRet {
             val externalResult = (try self.scalarToC(c: inout c, ref: prepared.resultType, value: result))
-            try self.attachCIntegerExtension(c: inout c, function: entry, index: 0U64, ref: prepared.resultType, physical: LLVMTypeOf(externalResult), callSite: false)
             LLVMBuildRet(self.b, externalResult)
         }
         else { LLVMBuildRetVoid(self.b) }

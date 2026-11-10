@@ -10,6 +10,13 @@ extern "C" int exerciseCompilerCallback(uint64_t address) {
   assert(target(72) == 73);
   return 0;
 }
+extern "C" int exerciseNarrowCompilerCallback(uint64_t address) {
+  assert(address);
+  auto target = reinterpret_cast<int8_t (*)(int8_t)>(address);
+  assert(target(-7) == -6);
+  assert(target(-128) == -127);
+  return 0;
+}
 extern "C" int rejectCompilerCallback(uint64_t session) {
   LLVMModuleRef module = nullptr;
   LLVMContextRef context = nullptr;

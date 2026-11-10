@@ -84,7 +84,7 @@ fn asyncPlanControl(mode: U64) {
     val canonical = compiler.mid.store(body: <MidBody bodyInstance=if mode == 4U64 { give 0U64 } else if mode == 5U64 { give compiler.arena.bodyInstanceCount() + 1U64 } else { give bodyId } sourceFunction=functionIndex locals=locals blocks=[<MidBlock terminator=<MidTerminator.Return /> />] />)
     if !compiler.mid.isWellFormed(body: canonical) { panic "malformed async fixture shape" }
     val entryParameters: Array[LLVMTypeRef] = if isMain { give [] } else { give [if mode == 9U64 { give backend.ptrty } else { give backend.i64ty }] }
-    val entrySignature = if isMain && mode != 18U64 { give backend.mainFunctionType() } else { give LLVMFunctionType(if isMain { give backend.voidty } else { give backend.ptrty }, arrayCPtr(entryParameters), entryParameters.count(), 0I32) }
+    val entrySignature = if isMain && mode != 18U64 { give backend.valueAbis[backend.programValueAbi(c: inout compiler, bodyId: bodyId, main: true).unwrap() - 1U64].functionType } else { give LLVMFunctionType(if isMain { give backend.voidty } else { give backend.ptrty }, arrayCPtr(entryParameters), entryParameters.count(), 0I32) }
     val entryAbiResult: Result[U64, CompileDiagnostic] = if isMain { give <Result.Ok value=0U64 /> }
         else if mode == 15U64 { give backend.legacyValueAbi(signature: entrySignature, family: <LlvmLegacyConvention.Closure />, ownerBody: bodyId) }
         else if mode == 0U64 || mode == 1U64 || mode == 21U64 { give backend.asyncBodyValueAbi(c: inout compiler, bodyId: bodyId, resume: false) }
@@ -97,7 +97,7 @@ fn asyncPlanControl(mode: U64) {
         return
     }
     val entryAbi = requireAsyncOk(result: entryAbiResult, stage: "entry descriptor", mode: mode)
-    val entryFunction = if isMain { give LLVMAddFunction(module, name.ptr, entrySignature) } else { give requireAsyncOk(result: backend.declarePlannedBodyFunction(name: name.ptr, abiId: entryAbi, bodyId: if mode == 8U64 { give otherBodyId } else { give bodyId }), stage: "declare async entry", mode: mode) }
+    val entryFunction = if isMain { give if mode == 18U64 { give LLVMAddFunction(module, name.ptr, entrySignature) } else { give backend.declareProgramValueFunction(c: inout compiler, bodyId: bodyId, main: true).unwrap() } } else { give requireAsyncOk(result: backend.declarePlannedBodyFunction(name: name.ptr, abiId: entryAbi, bodyId: if mode == 8U64 { give otherBodyId } else { give bodyId }), stage: "declare async entry", mode: mode) }
     backend.attachBodyIdentity(function: entryFunction, bodyId: bodyId)
     val entry = if isMain { give <LlvmAsyncEntry.Main function=entryFunction /> } else { give <LlvmAsyncEntry.Private function=entryFunction abiId=backend.valueAbiFunctions.getOr(key: LLVMIsAFunction(entryFunction), fallback: 0U64) /> }
     val resumeName = <CString.copied text="ready-async-resume" />

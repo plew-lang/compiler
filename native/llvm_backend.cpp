@@ -14,7 +14,9 @@
 #include <llvm/ExecutionEngine/Orc/ThreadSafeModule.h>
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Constants.h>
+#include <llvm/IR/DerivedTypes.h>
 #include <llvm/IR/Metadata.h>
+#include <llvm/Support/raw_ostream.h>
 #include <llvm/Support/Error.h>
 #include <llvm-c/Error.h>
 #include <llvm-c/Target.h>
@@ -348,6 +350,96 @@ consumeModule(PlewLlvmJit *jit, LLVMModuleRef module, LLVMContextRef context) {
   std::_Exit(1);
 }
 
+// Context-local LLVM handles and nominal IR names are not cross-module ABI
+// identities. Cache structural encodings while inspecting one module; only the
+// resulting bytes survive the consumed context. Opaque pointers end recursion.
+using SourceAbiTypes = llvm::DenseMap<llvm::Type *, std::string>;
+static bool sourceAbiType(llvm::Type *type, SourceAbiTypes &types,
+                          std::string &result) {
+  auto found = types.find(type);
+  if (found != types.end()) { result += found->second; return true; }
+  std::string encoding;
+  llvm::raw_string_ostream out(encoding);
+  out << type->getTypeID() << ':';
+  if (auto *integer = llvm::dyn_cast<llvm::IntegerType>(type)) {
+    out << integer->getBitWidth();
+  } else if (auto *pointer = llvm::dyn_cast<llvm::PointerType>(type)) {
+    out << pointer->getAddressSpace();
+  } else if (auto *array = llvm::dyn_cast<llvm::ArrayType>(type)) {
+    out << array->getNumElements() << '[';
+    std::string element;
+    if (!sourceAbiType(array->getElementType(), types, element)) return false;
+    out << element << ']';
+  } else if (auto *structure = llvm::dyn_cast<llvm::StructType>(type)) {
+    if (structure->isOpaque() || !structure->isSized()) return false;
+    out << structure->isPacked() << ':' << structure->getNumElements() << '{';
+    for (auto *field : structure->elements()) {
+      std::string element;
+      if (!sourceAbiType(field, types, element)) return false;
+      out << element << ';';
+    }
+    out << '}';
+  } else if (auto *vector = llvm::dyn_cast<llvm::FixedVectorType>(type)) {
+    out << vector->getNumElements() << '<';
+    std::string element;
+    if (!sourceAbiType(vector->getElementType(), types, element)) return false;
+    out << element << '>';
+  } else if (!type->isVoidTy() && !type->isFloatingPointTy()) {
+    // Do not equate unsupported scalable/target/function/token types by size.
+    return false;
+  }
+  out.flush();
+  types.try_emplace(type, encoding);
+  result += encoding;
+  return true;
+}
+
+static llvm::Expected<std::string> sourceAbiReceipt(llvm::Function &function,
+                                                   SourceAbiTypes &types) {
+  std::string receipt;
+  llvm::raw_string_ostream out(receipt);
+  auto *signature = function.getFunctionType();
+  out << function.getCallingConv() << ':' << signature->isVarArg() << ':'
+      << signature->getNumParams() << '|';
+  for (unsigned index = 0; index <= signature->getNumParams(); ++index) {
+    auto *type = index == 0 ? signature->getReturnType() : signature->getParamType(index - 1);
+    std::string encoding;
+    if (!sourceAbiType(type, types, encoding))
+      return llvm::createStringError("unsupported source entry ABI type");
+    out << encoding << '(';
+    auto attributes = index == 0 ? function.getAttributes().getRetAttrs()
+                                : function.getAttributes().getParamAttrs(index - 1);
+    for (auto attribute : attributes) {
+      if (attribute.isStringAttribute()) {
+        auto key = attribute.getKindAsString(), value = attribute.getValueAsString();
+        out << 's' << key.size() << ':' << key << value.size() << ':' << value;
+      } else {
+        out << 'e' << attribute.getKindAsEnum() << ':';
+        if (attribute.isTypeAttribute()) {
+          std::string payload;
+          if (!sourceAbiType(attribute.getValueAsType(), types, payload))
+            return llvm::createStringError("unsupported source entry ABI attribute type");
+          out << 't' << payload;
+        } else if (attribute.isIntAttribute()) {
+          out << 'i' << attribute.getValueAsInt();
+        } else if (!attribute.isEnumAttribute()) {
+          return llvm::createStringError("unsupported source entry ABI attribute payload");
+        }
+      }
+      out << ';';
+    }
+    out << ')';
+  }
+  out.flush();
+  return receipt;
+}
+
+static llvm::Error registerSourceEntry(PlewLlvmJit &, llvm::Function &, uint64_t,
+                                      PlewLlvmPrepareBody, uint64_t, SourceAbiTypes &);
+
+class SourceBodyGenerator;
+static llvm::Expected<uint64_t> sourceBodyIdentity(llvm::Function &, SourceBodyGenerator *);
+
 class SourceBodyGenerator final : public llvm::orc::DefinitionGenerator {
   struct Body {
     std::string name, implementation;
@@ -356,6 +448,7 @@ class SourceBodyGenerator final : public llvm::orc::DefinitionGenerator {
     uint64_t session;
     bool requested = false;
     bool emitted = false;
+    std::string abiReceipt;
   };
   PlewLlvmJit &jit;
   llvm::DenseMap<llvm::orc::SymbolStringPtr, Body> bodies;
@@ -365,6 +458,19 @@ public:
   Body *find(llvm::StringRef name) {
     auto found = publicBodies.find(jit.engine->mangleAndIntern(name));
     return found == publicBodies.end() ? nullptr : &bodies.find(found->second)->second;
+  }
+  bool hasAbiReceipt(llvm::StringRef name) {
+    auto *entry = find(name);
+    return entry && !entry->abiReceipt.empty();
+  }
+  llvm::Error checkAbiReceipt(llvm::StringRef name, const std::string &receipt) {
+    auto *existing = find(name);
+    if (existing && !existing->abiReceipt.empty() && existing->abiReceipt != receipt)
+      return llvm::createStringError("conflicting source entry ABI: " + name.str());
+    return llvm::Error::success();
+  }
+  void rememberAbiReceipt(llvm::StringRef name, std::string receipt) {
+    find(name)->abiReceipt = std::move(receipt);
   }
   void add(std::string name, std::string implementation, uint64_t body,
            PlewLlvmPrepareBody prepare, uint64_t session) {
@@ -420,6 +526,7 @@ private:
       auto *function = value.getFunction(name);
       if (!function || function->isDeclaration())
         return llvm::createStringError("prepared module lacks its requested body");
+      SourceAbiTypes abiTypes;
       // The frontend explicitly identifies immutable session-owned metadata.
       // Keep the first definition; later modules import that same address.
       for (auto &global : value.globals()) {
@@ -445,8 +552,9 @@ private:
       // linking without preparing their source bodies or decoding symbol names.
       std::vector<llvm::Function *> definitions;
       for (auto &candidate : value) {
-        auto *metadata = candidate.getMetadata("plew.body");
-        if (!metadata) {
+        auto identity = sourceBodyIdentity(candidate, this);
+        if (!identity) return identity.takeError();
+        if (*identity == 0) {
           if (candidate.isDeclaration() && !candidate.use_empty() &&
               !candidate.isIntrinsic() && candidate.getMetadata("plew.host")) {
             auto symbol = candidate.getName().str();
@@ -463,17 +571,11 @@ private:
           }
           continue;
         }
-        auto *identity = metadata->getNumOperands() == 1
-            ? llvm::mdconst::dyn_extract<llvm::ConstantInt>(metadata->getOperand(0))
-            : nullptr;
-        if (!identity || identity->getBitWidth() != 64 || identity->isZero())
-          return llvm::createStringError("invalid source body identity");
-        auto candidateBody = identity->getZExtValue();
+        auto candidateBody = *identity;
         if (!candidate.isDeclaration() && candidateBody != body)
           return llvm::createStringError("prepared module defines another source body");
-        if (plew_llvm_jit_defer(&jit, candidate.getName().str().c_str(),
-                                candidateBody, prepare, session))
-          return llvm::createStringError("source dependency registration failed");
+        if (auto error = registerSourceEntry(jit, candidate, candidateBody, prepare, session, abiTypes))
+          return error;
         if (!candidate.isDeclaration())
           definitions.push_back(&candidate);
       }
@@ -507,6 +609,37 @@ private:
     return error;
   }
 };
+
+static llvm::Expected<uint64_t> sourceBodyIdentity(llvm::Function &function,
+                                                     SourceBodyGenerator *registry) {
+  auto *metadata = function.getMetadata("plew.body");
+  if (!metadata) {
+    if (registry && registry->hasAbiReceipt(function.getName()))
+      return llvm::createStringError("prepared source entry lacks body identity: " + function.getName().str());
+    return 0;
+  }
+  auto *identity = metadata->getNumOperands() == 1
+      ? llvm::mdconst::dyn_extract<llvm::ConstantInt>(metadata->getOperand(0)) : nullptr;
+  if (!identity || identity->getBitWidth() != 64 || identity->isZero())
+    return llvm::createStringError("invalid source body identity");
+  return identity->getZExtValue();
+}
+
+static llvm::Error registerSourceEntry(PlewLlvmJit &jit, llvm::Function &function,
+                                      uint64_t body, PlewLlvmPrepareBody prepare,
+                                      uint64_t session, SourceAbiTypes &types) {
+  auto receipt = sourceAbiReceipt(function, types);
+  if (!receipt) return receipt.takeError();
+  auto name = function.getName();
+  if (jit.sourceBodies) {
+    if (auto error = static_cast<SourceBodyGenerator *>(jit.sourceBodies)->checkAbiReceipt(name, *receipt))
+      return error;
+  }
+  if (plew_llvm_jit_defer(&jit, name.str().c_str(), body, prepare, session))
+    return llvm::createStringError("source entry registration failed");
+  static_cast<SourceBodyGenerator *>(jit.sourceBodies)->rememberAbiReceipt(name, std::move(*receipt));
+  return llvm::Error::success();
+}
 } // namespace
 
 extern "C" int plew_llvm_jit_add(PlewLlvmJit *jit, LLVMModuleRef module,
@@ -594,9 +727,13 @@ extern "C" int plew_llvm_jit_declarations(PlewLlvmJit *jit, LLVMModuleRef module
   auto error = owned->withModuleDo([&](llvm::Module &value) -> llvm::Error {
     if (!value.global_empty())
       return llvm::createStringError("declaration module contains global storage");
+    SourceAbiTypes abiTypes;
     for (auto &function : value) {
       if (!function.isDeclaration())
         return llvm::createStringError("declaration module contains executable code");
+      auto identity = sourceBodyIdentity(function, static_cast<SourceBodyGenerator *>(jit->sourceBodies));
+      if (!identity) return identity.takeError();
+      int mainParameters = -1;
       if (function.getName() == "main") {
         auto *type = function.getFunctionType();
         auto count = type->getNumParams();
@@ -604,18 +741,13 @@ extern "C" int plew_llvm_jit_declarations(PlewLlvmJit *jit, LLVMModuleRef module
             (count != 0 && (count != 2 || !type->getParamType(0)->isIntegerTy(32) ||
                             !type->getParamType(1)->isPointerTy())))
           return llvm::createStringError("invalid process entry ABI");
-        jit->mainParameters = static_cast<int>(count);
+        mainParameters = static_cast<int>(count);
       }
-      auto *metadata = function.getMetadata("plew.body");
-      if (!metadata)
-        continue;
-      auto *identity = metadata->getNumOperands() == 1
-          ? llvm::mdconst::dyn_extract<llvm::ConstantInt>(metadata->getOperand(0)) : nullptr;
-      if (!identity || identity->getBitWidth() != 64 || identity->isZero())
-        return llvm::createStringError("invalid entry body identity");
-      if (plew_llvm_jit_defer(jit, function.getName().str().c_str(),
-                              identity->getZExtValue(), prepare, session))
-        return llvm::createStringError("entry registration failed");
+      if (*identity != 0) {
+        if (auto error = registerSourceEntry(*jit, function, *identity, prepare, session, abiTypes))
+          return error;
+      }
+      if (mainParameters >= 0) jit->mainParameters = mainParameters;
     }
     return llvm::Error::success();
   });

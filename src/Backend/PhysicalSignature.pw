@@ -22,6 +22,8 @@ extern(c) {
     fn LLVMABIAlignmentOfType(layout~: LLVMTargetDataRef, type~: LLVMTypeRef) -> U32
     fn LLVMTypeIsSized(type~: LLVMTypeRef) -> I32
     fn LLVMGetTypeKind(type~: LLVMTypeRef) -> U32
+    fn LLVMGetIntTypeWidth(type~: LLVMTypeRef) -> U32
+    fn LLVMGetPointerAddressSpace(type~: LLVMTypeRef) -> U32
     fn LLVMIsOpaqueStruct(type~: LLVMTypeRef) -> I32
     fn LLVMCountStructElementTypes(type~: LLVMTypeRef) -> U32
     fn LLVMStructGetTypeAtIndex(type~: LLVMTypeRef, index~: U32) -> LLVMTypeRef
@@ -79,11 +81,13 @@ pub impl LlvmGlueOperation {
     fn erased() -> Bool { return self.key() <= 3U64 }
     fn borrowsPayload() -> Bool { return self.key() == 2U64 || self.key() == 4U64 || self.key() == 6U64 }
 }
-pub enum LlvmValueConvention { Body Closure Witness(targetType: U64, traitIndex: U64, slot: U64) OwnershipGlue(operation: LlvmGlueOperation) AsyncEntry AsyncResume Legacy(family: LlvmLegacyConvention) }
+pub enum LlvmValueConvention { Body Closure Witness(targetType: U64, traitIndex: U64, slot: U64) OwnershipGlue(operation: LlvmGlueOperation) AsyncEntry AsyncResume ProgramMain GlobalInitializer Legacy(family: LlvmLegacyConvention) }
 pub impl LlvmValueConvention {
     fn key() -> U64 {
         return match self {
             LlvmValueConvention.Body => { give 0U64 }
+            LlvmValueConvention.ProgramMain => { give 17U64 }
+            LlvmValueConvention.GlobalInitializer => { give 18U64 }
             LlvmValueConvention.AsyncEntry => { give 15U64 }
             LlvmValueConvention.AsyncResume => { give 16U64 }
             LlvmValueConvention.Closure => { give 12U64 }
@@ -103,6 +107,8 @@ pub impl LlvmValueConvention {
     }
     fn same(convention: LlvmValueConvention) -> Bool {
         match self {
+            LlvmValueConvention.ProgramMain => { return match convention { LlvmValueConvention.ProgramMain => { give true } _ => { give false } } }
+            LlvmValueConvention.GlobalInitializer => { return match convention { LlvmValueConvention.GlobalInitializer => { give true } _ => { give false } } }
             LlvmValueConvention.AsyncEntry => { return match convention { LlvmValueConvention.AsyncEntry => { give true } _ => { give false } } }
             LlvmValueConvention.AsyncResume => { return match convention { LlvmValueConvention.AsyncResume => { give true } _ => { give false } } }
             LlvmValueConvention.Body => { return match convention { LlvmValueConvention.Body => { give true } _ => { give false } } }
@@ -115,10 +121,12 @@ pub impl LlvmValueConvention {
         }
     }
 }
-pub enum LlvmParameterRole { Receiver Environment ErasedReceiver GlueValue GlueStorage Frame(bodyId: U64) Ordinary(index: U64) Legacy(index: U64) }
+pub enum LlvmParameterRole { Receiver Environment ErasedReceiver GlueValue GlueStorage ProgramArgumentCount ProgramArgumentValues Frame(bodyId: U64) Ordinary(index: U64) Legacy(index: U64) }
 pub impl LlvmParameterRole {
     fn same(role: LlvmParameterRole) -> Bool {
         match self {
+            LlvmParameterRole.ProgramArgumentCount => { return match role { LlvmParameterRole.ProgramArgumentCount => { give true } _ => { give false } } }
+            LlvmParameterRole.ProgramArgumentValues => { return match role { LlvmParameterRole.ProgramArgumentValues => { give true } _ => { give false } } }
             LlvmParameterRole.Receiver => { return match role { LlvmParameterRole.Receiver => { give true } _ => { give false } } }
             LlvmParameterRole.Environment => { return match role { LlvmParameterRole.Environment => { give true } _ => { give false } } }
             LlvmParameterRole.Frame(bodyId: val bodyId) => { return match role { LlvmParameterRole.Frame(bodyId: val other) => { give bodyId == other } _ => { give false } } }
@@ -151,9 +159,9 @@ pub impl LlvmValuePassing {
         }
     }
 }
-pub enum LlvmResultProtocol { Void UnchangedValue }
+pub enum LlvmResultProtocol { Void UnchangedValue ProgramStatus }
 pub impl LlvmResultProtocol {
-    fn key() -> U64 { return match self { LlvmResultProtocol.Void => { give 0U64 } LlvmResultProtocol.UnchangedValue => { give 1U64 } } }
+    fn key() -> U64 { return match self { LlvmResultProtocol.ProgramStatus => { give 2U64 } LlvmResultProtocol.Void => { give 0U64 } LlvmResultProtocol.UnchangedValue => { give 1U64 } } }
 }
 
 // One common scope header per call/binding, not repeated in every lane.
@@ -311,6 +319,12 @@ pub impl LlvmSignatureScope {
         val resultVoid = LLVMGetTypeKind(signature.result) == 0U32
         if !resultVoid && LLVMTypeIsSized(signature.result) == 0I32 { return <Result.Err error=signatureFailure(message: "incomplete result layout") /> }
         match signature.convention {
+            LlvmValueConvention.ProgramMain => {
+                if signature.resultTerm != 0U64 || LLVMGetTypeKind(signature.result) != 8U32 || LLVMGetIntTypeWidth(signature.result) != 32U32 || signature.parameters.count() != 2U64 { return <Result.Err error=signatureFailure(message: "program main native status/input contract mismatch") /> }
+            }
+            LlvmValueConvention.GlobalInitializer => {
+                if !resultVoid || signature.resultTerm != 0U64 || signature.parameters.count() != 0U64 { return <Result.Err error=signatureFailure(message: "global initializer native contract mismatch") /> }
+            }
             LlvmValueConvention.AsyncEntry => {
                 if resultVoid || signature.resultTerm == 0U64 || LLVMGetTypeKind(signature.result) != 12U32 { return <Result.Err error=signatureFailure(message: "async entry must retain its semantic Promise result") /> }
             }
@@ -340,6 +354,14 @@ pub impl LlvmSignatureScope {
             if !self.ownsType(type: parameter.type) { return <Result.Err error=signatureFailure(message: "foreign parameter context") /> }
             if LLVMTypeIsSized(parameter.type) == 0I32 { return <Result.Err error=signatureFailure(message: "incomplete parameter layout") /> }
             match signature.convention {
+                LlvmValueConvention.ProgramMain => {
+                    val role = if index == 0U64 { give <LlvmParameterRole.ProgramArgumentCount /> } else { give <LlvmParameterRole.ProgramArgumentValues /> }
+                    if parameter.semanticType != 0U64 || parameter.mode.key() != 1U64 || !parameter.role.same(role: role) { return <Result.Err error=signatureFailure(message: "program native role/mode/term mismatch") /> }
+                    if index == 0U64 {
+                        if LLVMGetTypeKind(parameter.type) != 8U32 || LLVMGetIntTypeWidth(parameter.type) != 32U32 { return <Result.Err error=signatureFailure(message: "program argc representation mismatch") /> }
+                    } else if LLVMGetTypeKind(parameter.type) != 12U32 || LLVMGetPointerAddressSpace(parameter.type) != 0U32 { return <Result.Err error=signatureFailure(message: "program argv representation mismatch") /> }
+                }
+                LlvmValueConvention.GlobalInitializer => { return <Result.Err error=signatureFailure(message: "global initializer has native inputs") /> }
                 LlvmValueConvention.AsyncEntry => {
                     if parameter.semanticType == 0U64 || (parameter.mode.key() != 1U64 && parameter.mode.key() != 3U64) || !parameter.role.same(role: <LlvmParameterRole.Ordinary index=ordinary />) { return <Result.Err error=signatureFailure(message: "async entry ordinary type/mode/index mismatch") /> }
                     ordinary += 1U64
@@ -358,6 +380,8 @@ pub impl LlvmSignatureScope {
                         }
                         LlvmParameterRole.Environment => { return <Result.Err error=signatureFailure(message: "environment role in body convention") /> }
                         LlvmParameterRole.ErasedReceiver => { return <Result.Err error=signatureFailure(message: "erased receiver role in body convention") /> }
+                        LlvmParameterRole.ProgramArgumentCount => { return <Result.Err error=signatureFailure(message: "program native role in body convention") /> }
+                        LlvmParameterRole.ProgramArgumentValues => { return <Result.Err error=signatureFailure(message: "program native role in body convention") /> }
                         LlvmParameterRole.Frame(bodyId: _) => { return <Result.Err error=signatureFailure(message: "frame role in body convention") /> }
                         LlvmParameterRole.GlueValue => { return <Result.Err error=signatureFailure(message: "glue value role in body convention") /> }
                         LlvmParameterRole.GlueStorage => { return <Result.Err error=signatureFailure(message: "glue storage role in body convention") /> }
@@ -424,7 +448,7 @@ pub impl LlvmSignatureScope {
                 LlvmValuePassing.Indirect => { physical.append(LLVMPointerTypeInContext(self.context, 0U32)) }
             }
         }
-        val resultProtocol = if LLVMGetTypeKind(signature.result) == 0U32 { give <LlvmResultProtocol.Void /> } else { give <LlvmResultProtocol.UnchangedValue /> }
+        val resultProtocol = if signature.convention.key() == 17U64 { give <LlvmResultProtocol.ProgramStatus /> } else if LLVMGetTypeKind(signature.result) == 0U32 { give <LlvmResultProtocol.Void /> } else { give <LlvmResultProtocol.UnchangedValue /> }
         return <Result.Ok value=<LlvmPhysicalSignature parameters=parameters logicalSignature=LLVMFunctionType(signature.result, arrayCPtr(logical), logical.count(), 0I32) functionType=LLVMFunctionType(signature.result, arrayCPtr(physical), physical.count(), 0I32) moduleIdentity=self.moduleIdentity contextIdentity=self.contextIdentity revision=1U64 targetTriple=self.triple dataLayout=self.layout convention=signature.convention resultTerm=signature.resultTerm resultProtocol=resultProtocol /> />
     }
 

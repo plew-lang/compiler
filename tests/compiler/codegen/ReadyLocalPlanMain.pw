@@ -26,7 +26,7 @@ fn main() {
     val builder = LLVMCreateBuilderInContext(context)
     mut val backend = llvmContext(ctx: context, m: module, builder: builder)
     mut val compiler = <Comp />
-    analyzeFrontendDeclarations(c: inout compiler, input: <FrontendInput.Text text="fn control() {{}}" path="ready-private.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
+    analyzeFrontendDeclarations(c: inout compiler, input: <FrontendInput.Text text="fn control() {{}} fn main() {{}}" path="ready-private.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
     val globalOwner = 18446744073709551615U64
     val bodyId = compiler.arena.registerBodyInstance(<BodyInstance fnIdx=globalOwner environment=<InstanceEnvironment /> />)
     val canonical = compiler.mid.store(body: <MidBody bodyInstance=bodyId sourceFunction=globalOwner locals=[<MidLocalDecl typeTerm=0U64 sourceScope=0U64 isUnique=false isParameter=false isDropFlag=true />] blocks=[<MidBlock terminator=<MidTerminator.Return /> />] />)
@@ -34,7 +34,16 @@ fn main() {
     val body = compiler.mid.bodies[canonical.body - 1U64]
     val parameters: Array[LLVMTypeRef] = []
     val signature = LLVMFunctionType(backend.voidty, arrayCPtr(parameters), 0U64, 0I32)
-    val function = LLVMAddFunction(module, name.ptr, signature)
+    val function = backend.declareProgramValueFunction(c: inout compiler, bodyId: bodyId, main: false).unwrap()
+    val globalAbi = backend.programNativeAbi(function: function, bodyId: bodyId, main: false).unwrap()
+    if globalAbi == 0U64 || backend.valueAbis[globalAbi - 1U64].parameterCount != 0U64 { panic "initializer descriptor lost" }
+    requireInternal(result: backend.programNativeAbi(function: function, bodyId: bodyId, main: true))
+    requireInternal(result: backend.programNativeAbi(function: function, bodyId: bodyId + 1U64, main: false))
+    requireInternal(result: backend.programValueParameter(function: function, bodyId: bodyId, index: 0U64))
+    requireInternal(result: backend.callLegacyValueFunction(signature: signature, function: function, arguments: []))
+    val unregistered = LLVMAddFunction(module, name.ptr, signature)
+    backend.curFn = unregistered
+    requireInternal(result: backend.prepareBodyLocalPlan(c: inout compiler, canonical: canonical, parameterCount: 0U64))
     backend.curFn = function
     val admission = backend.prepareBodyLocalPlan(c: inout compiler, canonical: canonical, parameterCount: 0U64).unwrap()
     val ready = <MidLlvmPrepared.Ready canonical=canonical localAdmission=admission />
@@ -57,7 +66,8 @@ fn main() {
     backend.curFn = otherFunction
     requireInternal(result: backend.prepareBodyLocalPlan(c: inout compiler, canonical: canonical, parameterCount: 0U64))
     requireInternal(result: backend.genLlvmPreparedMidBody(c: inout compiler, prepared: ready))
-    val wrongFunction = LLVMAddFunction(module, name.ptr, backend.mainFunctionType())
+    val wrongParameters = [backend.i32ty, backend.ptrty]
+    val wrongFunction = LLVMAddFunction(module, name.ptr, LLVMFunctionType(backend.i32ty, arrayCPtr(wrongParameters), 2U64, 0I32))
     backend.curFn = wrongFunction
     requireInternal(result: backend.prepareBodyLocalPlan(c: inout compiler, canonical: canonical, parameterCount: 0U64))
     requireInternal(result: backend.genLlvmPreparedMidBody(c: inout compiler, prepared: ready))
@@ -95,6 +105,23 @@ fn main() {
     requireInternal(result: backend.callBodyValueFunction(function: convertedTarget, bodyId: otherBodyId, inputs: inputScope, arguments: [<LlvmValueInput lane=lane index=0U64 carrier=<LlvmValueCarrier.Value value=LLVMGetParam(foreignEntry, 0U64) /> />]))
     requireInternal(result: backend.callLegacyValueFunction(signature: convertedSignature, function: convertedTarget, arguments: [LLVMGetParam(entry, 0U64)]))
     LLVMBuildRetVoid(builder)
+    val mainName = compiler.internBytes(s: "main")
+    val mainIndex = compiler.arena.firstFunctionNamed(nameId: mainName.nameId)
+    val mainBodyId = compiler.arena.registerBodyInstance(<BodyInstance fnIdx=mainIndex environment=<InstanceEnvironment /> />)
+    val mainFunction = backend.declareProgramValueFunction(c: inout compiler, bodyId: mainBodyId, main: true).unwrap()
+    val count = backend.valueAbis.count()
+    if LLVMIsAFunction(backend.declareProgramValueFunction(c: inout compiler, bodyId: mainBodyId, main: true).unwrap()) != LLVMIsAFunction(mainFunction) || backend.valueAbis.count() != count { panic "program publisher rebuilt descriptor/function" }
+    if !backend.programValueParameter(function: mainFunction, bodyId: mainBodyId, index: 0U64).unwrap().lane.role.same(role: <LlvmParameterRole.ProgramArgumentCount />) || !backend.programValueParameter(function: mainFunction, bodyId: mainBodyId, index: 1U64).unwrap().lane.role.same(role: <LlvmParameterRole.ProgramArgumentValues />) { panic "native main reader lost roles" }
+    requireInternal(result: backend.programValueParameter(function: mainFunction, bodyId: mainBodyId, index: 2U64))
+    requireInternal(result: backend.programNativeAbi(function: mainFunction, bodyId: mainBodyId, main: false))
+    requireInternal(result: backend.programNativeAbi(function: foreignEntry, bodyId: mainBodyId, main: true))
+    val mainCanonical = compiler.mid.store(body: <MidBody bodyInstance=mainBodyId sourceFunction=mainIndex blocks=[<MidBlock terminator=<MidTerminator.Return /> />] />)
+    backend.curFn = mainFunction
+    backend.curIsMain = true
+    backend.curRetVoid = false
+    val mainAdmission = backend.prepareBodyLocalPlan(c: inout compiler, canonical: mainCanonical, parameterCount: 0U64).unwrap()
+    backend.beginFnBody(fv: mainFunction)
+    if !backend.genLlvmPreparedMidBody(c: inout compiler, prepared: <MidLlvmPrepared.Ready canonical=mainCanonical localAdmission=mainAdmission />).unwrap() { panic "program main Ready failed" }
     LLVMDisposeBuilder(builder)
     LLVMDisposeModule(otherModule)
     LLVMDisposeModule(module)

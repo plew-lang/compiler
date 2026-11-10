@@ -1,0 +1,62 @@
+// Source main and synthetic global initialization are body-identified native
+// entries. Their physical inputs/results are not source ordinary parameters.
+pub impl LlvmCtx {
+    inout fn programValueAbi(c: inout Comp, bodyId: U64, main: Bool) -> Result[U64, CompileDiagnostic] {
+        val scope = (try self.prepareValueAbiScope())
+        try scope.validateScope()
+        val cached = self.programValueAbis.getOr(key: bodyId, fallback: 0U64)
+        if cached != 0U64 {
+            val convention = if main { give 17U64 } else { give 18U64 }
+            if cached > self.valueAbis.count() || self.valueAbis[cached - 1U64].convention.key() != convention { return <Result.Err error=valueAbiFailure(message: "program descriptor kind mismatch") /> }
+            return <Result.Ok value=cached />
+        }
+        if bodyId == 0U64 || bodyId > c.arena.bodyInstanceCount() { return <Result.Err error=valueAbiFailure(message: "program descriptor body out of range") /> }
+        val body = c.arena.bodyInstanceAt(index: bodyId - 1U64)
+        if main {
+            if body.fnIdx >= c.arena.functionCount() || !c.nameIsMain(f: c.arena.functionAt(index: body.fnIdx)) { return <Result.Err error=valueAbiFailure(message: "program main requires its selected source body") /> }
+        } else if body.fnIdx != 18446744073709551615U64 { return <Result.Err error=valueAbiFailure(message: "global initializer requires its synthetic body") /> }
+        val parameters: Array[LlvmLogicalParameter] = if main {
+            give [<LlvmLogicalParameter type=self.i32ty semanticType=0U64 role=<LlvmParameterRole.ProgramArgumentCount /> mode=<LlvmParameterMode.Borrow /> />, <LlvmLogicalParameter type=self.ptrty semanticType=0U64 role=<LlvmParameterRole.ProgramArgumentValues /> mode=<LlvmParameterMode.Borrow /> />]
+        } else { give [] }
+        val descriptor = (try self.saveValueAbi(signature: <LlvmLogicalSignature convention=if main { give <LlvmValueConvention.ProgramMain /> } else { give <LlvmValueConvention.GlobalInitializer /> } parameters=parameters result=if main { give self.i32ty } else { give self.voidty } resultTerm=0U64 />, ownerBody: bodyId))
+        self.programValueAbis[bodyId] = descriptor
+        return <Result.Ok value=descriptor />
+    }
+
+    inout fn declareProgramValueFunction(c: inout Comp, bodyId: U64, main: Bool) -> Result[LLVMValueRef, CompileDiagnostic] {
+        val abiId = (try self.programValueAbi(c: inout c, bodyId: bodyId, main: main))
+        val name = <CString.copied text=if main { give "main" } else { give "plew_init_globals" } />
+        match self.programFunctions.get(key: bodyId) {
+            Optional.Some(v: val existing) => {
+                if (try self.programNativeAbi(function: existing, bodyId: bodyId, main: main)) != abiId { return <Result.Err error=valueAbiFailure(message: "program entry descriptor changed") /> }
+                return <Result.Ok value=existing />
+            }
+            Optional.None => {}
+        }
+        if LLVMGetNamedFunction(self.mod, name.ptr) != 0U64 { return <Result.Err error=valueAbiFailure(message: "program entry name already occupied") /> }
+        val function = LLVMAddFunction(self.mod, name.ptr, self.valueAbis[abiId - 1U64].functionType)
+        LLVMSetLinkage(function, 0U32)
+        self.valueAbiFunctions[LLVMIsAFunction(function)] = abiId
+        self.programFunctions[bodyId] = function
+        self.attachBodyIdentity(function: function, bodyId: bodyId)
+        return <Result.Ok value=function />
+    }
+
+    inout fn programNativeAbi(function: LLVMValueRef, bodyId: U64, main: Bool) -> Result[U64, CompileDiagnostic] {
+        val handle = LLVMIsAFunction(function)
+        val abiId = self.valueAbiFunctions.getOr(key: handle, fallback: 0U64)
+        if handle == 0U64 || bodyId == 0U64 || abiId == 0U64 || abiId > self.valueAbis.count() || self.programValueAbis.getOr(key: bodyId, fallback: 0U64) != abiId { return <Result.Err error=valueAbiFailure(message: "program entry lacks its completed descriptor") /> }
+        val abi = self.valueAbis[abiId - 1U64]
+        val convention = if main { give 17U64 } else { give 18U64 }
+        if abi.ownerBody != bodyId || abi.convention.key() != convention { return <Result.Err error=valueAbiFailure(message: "program entry body/convention mismatch") /> }
+        val scope = (try self.prepareValueAbiScope())
+        try scope.validateScope()
+        if abi.moduleIdentity != scope.moduleIdentity || abi.contextIdentity != scope.contextIdentity || abi.revision != 1U64 { return <Result.Err error=valueAbiFailure(message: "program entry descriptor scope mismatch") /> }
+        try scope.validateFunction(function: function, signature: abi.functionType)
+        return <Result.Ok value=abiId />
+    }
+
+    inout fn programValueParameter(function: LLVMValueRef, bodyId: U64, index: U64) -> Result[LlvmValueInput, CompileDiagnostic] {
+        return self.preparedValueParameter(function: function, abiId: (try self.programNativeAbi(function: function, bodyId: bodyId, main: true)), index: index)
+    }
+}

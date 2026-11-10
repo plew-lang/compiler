@@ -7,6 +7,8 @@ extern(c) {
     fn plew_test_signature_value(function~: LLVMValueRef, type~: LLVMTypeRef, kind~: U32) -> LLVMValueRef
     fn plew_test_signature_constant(module~: LLVMModuleRef, kind~: U32) -> LLVMValueRef
     fn LLVMTypeOf(value~: LLVMValueRef) -> LLVMTypeRef
+    fn LLVMInt32TypeInContext(context~: LLVMContextRef) -> LLVMTypeRef
+    fn LLVMPointerTypeInContext(context~: LLVMContextRef, addressSpace~: U32) -> LLVMTypeRef
     fn LLVMContextCreate() -> LLVMContextRef
     fn LLVMContextDispose(context~: LLVMContextRef)
     fn LLVMDisposeModule(module~: LLVMModuleRef)
@@ -199,6 +201,25 @@ fn main() {
         if scope.plan(signature: <LlvmLogicalSignature convention=asyncResume.convention parameters=if asyncMalformed == 4U64 { give [] } else { give [lane] } result=if asyncMalformed == 5U64 { give pointer } else { give voidType } resultTerm=if asyncMalformed == 6U64 { give 50U64 } else { give 0U64 } />).isOk() { panic "malformed async Frame/result accepted" }
         asyncMalformed += 1U64
     }
+    val status = LLVMInt32TypeInContext(context)
+    val argumentCount = parameter(type: status, semantic: 0U64, role: <LlvmParameterRole.ProgramArgumentCount />, mode: <LlvmParameterMode.Borrow />)
+    val argumentValues = parameter(type: pointer, semantic: 0U64, role: <LlvmParameterRole.ProgramArgumentValues />, mode: <LlvmParameterMode.Borrow />)
+    val program = <LlvmLogicalSignature convention=<LlvmValueConvention.ProgramMain /> parameters=[argumentCount, argumentValues] result=status resultTerm=0U64 />
+    val programPlan = scope.plan(signature: program).unwrap()
+    scope.validate(signature: program, plan: programPlan).unwrap()
+    if programPlan.resultProtocol.key() != 2U64 || programPlan.parameters[0].passing.key() != 1U64 || programPlan.parameters[1].physicalIndex != 1U64 { panic "native program roles/result lost" }
+    mut val programMalformed = 0U64
+    while programMalformed < 9U64 {
+        val count = parameter(type: if programMalformed == 0U64 { give scalar } else { give status }, semantic: if programMalformed == 1U64 { give 40U64 } else { give 0U64 }, role: if programMalformed == 2U64 { give argumentValues.role } else { give argumentCount.role }, mode: if programMalformed == 3U64 { give <LlvmParameterMode.Move /> } else { give argumentCount.mode })
+        val values = parameter(type: if programMalformed == 4U64 { give scalar } else if programMalformed == 8U64 { give LLVMPointerTypeInContext(context, 1U32) } else { give pointer }, semantic: 0U64, role: argumentValues.role, mode: argumentValues.mode)
+        val bad = <LlvmLogicalSignature convention=program.convention parameters=if programMalformed == 5U64 { give [count] } else { give [count, values] } result=if programMalformed == 6U64 { give scalar } else { give status } resultTerm=if programMalformed == 7U64 { give 40U64 } else { give 0U64 } />
+        if scope.plan(signature: bad).isOk() { panic "malformed program native contract accepted" }
+        programMalformed += 1U64
+    }
+    val initializer = <LlvmLogicalSignature convention=<LlvmValueConvention.GlobalInitializer /> parameters=[] result=voidType resultTerm=0U64 />
+    val initializerPlan = scope.plan(signature: initializer).unwrap()
+    if initializerPlan.parameters.count() != 0U64 || initializerPlan.resultProtocol.key() != 0U64 { panic "initializer native contract lost" }
+    if scope.plan(signature: <LlvmLogicalSignature convention=initializer.convention parameters=[argumentCount] result=voidType resultTerm=0U64 />).isOk() || scope.plan(signature: <LlvmLogicalSignature convention=initializer.convention parameters=[] result=status resultTerm=0U64 />).isOk() || scope.plan(signature: <LlvmLogicalSignature convention=initializer.convention parameters=[] result=voidType resultTerm=40U64 />).isOk() { panic "malformed initializer accepted" }
     val witnessSignature = witness(parameters: [erasedReceiver], result: voidType)
     val witnessPlan = scope.plan(signature: witnessSignature).unwrap()
     scope.validate(signature: witnessSignature, plan: witnessPlan).unwrap()

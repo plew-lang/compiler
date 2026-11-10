@@ -71,8 +71,8 @@ pub impl LlvmCtx {
         mut val entryAbi = 0U64
         match entry {
             LlvmAsyncEntry.Main(function: val native) => {
-                if !c.nameIsMain(f: function) || parameterCount != 0U64 || self.valueAbiFunctions.getOr(key: LLVMIsAFunction(native), fallback: 0U64) != 0U64 { return <Result.Err error=valueAbiFailure(message: "async main entry mismatch") /> }
-                try scope.validateFunction(function: native, signature: self.mainFunctionType())
+                if !c.nameIsMain(f: function) || parameterCount != 0U64 { return <Result.Err error=valueAbiFailure(message: "async main entry mismatch") /> }
+                (try self.programNativeAbi(function: native, bodyId: body.bodyInstance, main: true))
             }
             LlvmAsyncEntry.Private(function: val native, abiId: val abiId) => {
                 if c.nameIsMain(f: function) { return <Result.Err error=valueAbiFailure(message: "async main requires its program entry") /> }
@@ -168,7 +168,7 @@ pub impl LlvmCtx {
         match activation.entry {
             LlvmAsyncEntry.Main(function: val native) => {
                 if activation.inputCount != 0U64 { return <Result.Err error=valueAbiFailure(message: "async main has inputs") /> }
-                try scope.validateFunction(function: native, signature: self.mainFunctionType())
+                (try self.programNativeAbi(function: native, bodyId: plan.bodyIdentity, main: true))
             }
             LlvmAsyncEntry.Private(function: val native, abiId: val abiId) => {
                 if (try self.asyncNativeAbi(function: native, bodyId: plan.bodyIdentity, resume: false)) != abiId { return <Result.Err error=valueAbiFailure(message: "async activation entry changed") /> }
