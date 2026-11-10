@@ -7,8 +7,8 @@ LC="${LLVM_CONFIG:-/opt/homebrew/opt/llvm/bin/llvm-config}"
 work=$(mktemp -d tmp/gen_ast.XXXXXX)
 trap 'rm -rf "$work"' EXIT HUP INT TERM
 cp tests/fixtures/genast/UnresolvedField.pw "$work/App.pw"
-cp Plew.toml Plew.lock "$work/"
-# Use the committed dependency manifest and lock, as in tests/harness/test-gen.sh.
+python3 -B scripts/support/fixture_package.py . "$work"
+# Preserve dependency roots and the lock, as in tests/harness/test-gen.sh.
 printf '%s\n' 'check gen-input-ast: compile derive runner' >&2
 "$PLEWC" --gen "$work/App.pw" > "$work/harness.ll"
 "$PLEWC" --runtime > "$work/runtime.c"

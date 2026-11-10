@@ -2875,7 +2875,7 @@ pub impl LlvmCtx {
             LlvmBodyLocalEntry.GlobalInitializer => { give self.valueAbis[abiId - 1U64].functionType }
         }
         try scope.validateFunction(function: self.curFn, signature: signature)
-        val entryBindings = match entry {
+        val entryBindings: Optional[LlvmEntryLocalBindings] = match entry {
             LlvmBodyLocalEntry.Closure(abiId: val closureAbi) => { give <Optional.Some v=(try self.prepareClosureLocalBindings(c: inout c, body: body, parameterCount: parameterCount, abiId: closureAbi, environmentDrop: false)) /> }
             LlvmBodyLocalEntry.EnvironmentDrop(abiId: val dropAbi) => { give <Optional.Some v=(try self.prepareClosureLocalBindings(c: inout c, body: body, parameterCount: parameterCount, abiId: dropAbi, environmentDrop: true)) /> }
             LlvmBodyLocalEntry.Witness(abiId: val witnessAbi) => { give <Optional.Some v=(try self.prepareWitnessLocalBindings(c: inout c, body: body, parameterCount: parameterCount, abiId: witnessAbi)) /> }

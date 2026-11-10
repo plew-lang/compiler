@@ -33,8 +33,8 @@ done
 # LLVM ABI argument position and the number of Mid source parameters are
 # separate facts. They coincide for ordinary functions only accidentally;
 # closures reserve ABI argument 0 for their environment.
-# Preflight validates the count once; the Ready value carries that evidence
-# to emission instead of passing a second, independently supplied count.
+# Preflight validates source shape; Ready carries an admitted local plan tied
+# to the completed entry descriptor rather than a second raw binding array.
 for needle in 'parameterCount: abiParameterCount' 'prepared: preparedMid'; do
     if ! grep -F "$needle" src/Backend/Llvm/Any.pw >/dev/null; then
         echo "ordinary Mid preparation is missing $needle" >&2
@@ -48,8 +48,7 @@ for needle in 'prepared: MidLlvmPrepared' 'MidLlvmPrepared.None => { return <Res
     fi
 done
 
-# The admitted count may now be consumed when physical ABI values are supplied.
-# Verify the hand-off and rejection guard without pinning the binding's name.
+# Verify the typed hand-off and rejection guard at their current owner.
 python3 - <<'PYABI'
 from pathlib import Path
 import re
@@ -57,14 +56,20 @@ source = Path('src/Backend/Llvm/Mid.pw').read_text()
 body = source.split('inout fn genLlvmPreparedMidBody(', 1)[1]
 signature, body = body.split(') -> Result[Bool, CompileDiagnostic] {', 1)
 assert 'abiParameterCount:' not in signature, 'emission must not accept a second count'
-ready = re.search(r'MidLlvmPrepared\.Ready\(canonical:\s*val\s+(\w+),\s*abiParameterCount:\s*val\s+(\w+)\)', body)
-assert ready, 'Ready must carry the admitted body and parameter count'
-canonical, count = ready.groups()
-values = re.search(r'(\w+):\s*Array\[LLVMValueRef\]', signature)
-assert values, 'physical ABI bindings must be explicit'
-array = re.escape(values.group(1))
-guard = rf'if\s+{array}\.count\(\)\s*!=\s*0U64\s*&&\s*{array}\.count\(\)\s*!=\s*{re.escape(count)}\s*\{{\s*return <Result\.Ok value=false />\s*\}}'
-assert re.search(guard, body), 'mismatched physical bindings must be rejected'
+ready = re.search(r'MidLlvmPrepared\.Ready\(canonical:\s*val\s+(\w+),\s*localAdmission:\s*val\s+(\w+)\)', body)
+assert ready, 'Ready must carry canonical body and typed local admission'
+canonical, admission = ready.groups()
+assert 'Array[LLVMValueRef]' not in signature, 'emission must not accept independent raw bindings'
+assert f'self.bodyLocalAdmission = <Optional.Some v={admission} />' in body
+assert body.index('self.validateBodyLocalAdmission(canonical: canonical, body: body)') < body.index('self.ambientBody =')
+producer = source.split('inout fn prepareBodyLocalPlan(', 1)[1].split('\n    inout fn ', 1)[0]
+assert 'parameterCount != abi.parameterCount' in producer, 'normal local admission must reject source count mismatch'
+reader = source.split('inout fn validateBodyLocalAdmission(', 1)[1].split('\n    fn ', 1)[0]
+for required in ['plan.canonicalBody != canonical.body', 'plan.bodyIdentity != body.bodyInstance',
+                 'plan.localCount != body.locals.len', 'plannedAbi != abiId',
+                 'scope.validateFunction(function: self.curFn, signature: plan.signature)',
+                 'plan.moduleIdentity != scope.moduleIdentity', 'plan.contextIdentity != scope.contextIdentity']:
+    assert required in reader, f'local plan reader lost correspondence guard: {required}'
 assert re.search(rf'give\s+{re.escape(canonical)}\b', body), 'emit the admitted canonical body'
 PYABI
 
@@ -205,7 +210,8 @@ for path in Path('src/Backend').rglob('*.pw'):
                    'MidExecutableBody.prepare']:
         assert symbol + '(' not in body, f'{path}: semantic preparation during LLVM emission'
 assert 'canonical: executable.canonical, abiParameterCount: parameterCount' in backend
-assert 'MidLlvmPrepared.Ready canonical=executable.canonical abiParameterCount=parameterCount' in backend
+assert 'MidLlvmPrepared.Ready canonical=executable.canonical localAdmission=' in backend
+assert 'self.prepareBodyLocalPlan(c: inout c, canonical: executable.canonical, parameterCount: parameterCount, executable: <Optional.Some v=executable />)' in backend
 PYPREPARE
 
 # Executable verification must preserve the earlier ownership/dataflow pass.
@@ -323,7 +329,8 @@ for forbidden in ['prepareMidAsyncFrame(', 'prepareAsyncMidCanonical(', 'prepare
     assert forbidden not in declarations, 'async declaration demands an executable body'
 emission = source.split('inout fn genLlvmAsyncFunc(', 1)[1].split('inout fn emitAsyncFns(', 1)[0]
 assert emission.index('prepareMidAsyncFrame(') < emission.index('self.beginFnBody(')
-assert 'genLlvmMidAsyncResume(c: inout c, slot: slot, activation: activation)' in emission
+assert 'genLlvmMidAsyncResume(c: inout c, activationId: activationId)' in emission
+assert 'bodyId: self.asyncBodyIds[slot], entry: entry, resume: resumeFn' in emission
 PYASYNCDECL
 
 # An unused async declaration is not an executable root, just like an unused

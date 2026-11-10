@@ -26,7 +26,8 @@ export PLEWC
 [ -x "$PLEWC" ] || { echo "run ./scripts/build/bootstrap.sh first" >&2; exit 1; }
 
 mkdir -p tmp
-# Scratch packages use the same committed manifest and lock as the compiler.
+# Scratch packages retain the compiler's dependency identities and lock.
+python3 -B tests/tooling/test-fixture-package.py
 RT=tmp/gen_rt.c
 "$PLEWC" --runtime > "$RT"
 
@@ -42,7 +43,7 @@ for app in tests/fixtures/gen/*/App.pw; do
     rm -rf "$work"
     mkdir -p "$work"
     cp "$dir"/*.pw "$work/" 2>/dev/null || true
-    cp Plew.toml Plew.lock "$work/" 2>/dev/null || true
+    python3 -B scripts/support/fixture_package.py . "$work"
     rm -f "$work"/*.gen.pw
 
     # 1. harness IR
@@ -102,7 +103,7 @@ for app in tests/fixtures/genreject/*/App.pw; do
     rm -rf "$work"
     mkdir -p "$work"
     cp "$(dirname "$app")"/*.pw "$work/" 2>/dev/null || true
-    cp Plew.toml Plew.lock "$work/" 2>/dev/null || true
+    python3 -B scripts/support/fixture_package.py . "$work"
     rm -f "$work"/*.gen.pw
     status=0
     "$PLEWC" --gen "$work/App.pw" > /dev/null 2>"$work/gen.err" || status=$?
