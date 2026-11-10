@@ -121,6 +121,10 @@ pub impl LlvmCtx {
         self.curFn = entry
         self.beginFnBody(fv: entry)
         mut val writebacks: Array[LlvmCInout] = []
+        val targetAbiId = self.valueAbiFunctions.getOr(key: LLVMIsAFunction(target), fallback: 0U64)
+        if targetAbiId == 0U64 || targetAbiId > self.valueAbis.count() { return <Result.Err error=valueAbiFailure(message: "C conversion lacks a private descriptor") /> }
+        val targetAbi = self.valueAbis[targetAbiId - 1U64]
+        if targetAbi.parameterCount != prepared.parameterTypes.count() { return <Result.Err error=valueAbiFailure(message: "C/private parameter correspondence mismatch") /> }
         mut val arguments: Array[LlvmValueInput] = []
         index = 0U64
         while index < prepared.parameterTypes.count() {
@@ -129,7 +133,7 @@ pub impl LlvmCtx {
                 CallArgumentPassing.Inout => { give (try self.prepareCInout(c: inout c, ref: prepared.parameterTypes[index], pointer: argument, toC: false, writebacks: inout writebacks)) }
                 _ => { give (try self.scalarFromC(c: inout c, ref: prepared.parameterTypes[index], value: argument)) }
             }
-            arguments.append(<LlvmValueInput lane=<LlvmLogicalParameter type=LLVMTypeOf(converted) semanticType=prepared.parameterTypes[index] role=<LlvmParameterRole.Ordinary index=index /> mode=argumentValueMode(passing: prepared.parameterPassings[index]) /> index=index carrier=<LlvmValueCarrier.Value value=converted /> />)
+            arguments.append(<LlvmValueInput lane=<LlvmLogicalParameter type=LLVMTypeOf(converted) semanticType=prepared.parameterTypes[index] copyable=self.valueAbiParameters[targetAbi.parameterStart + index].copyable role=<LlvmParameterRole.Ordinary index=index /> mode=argumentValueMode(passing: prepared.parameterPassings[index]) /> index=index carrier=<LlvmValueCarrier.Value value=converted /> />)
             index += 1U64
         }
         val result = (try self.callBodyValueFunction(function: target, bodyId: bodyId, inputs: (try self.bodyInputScope(bodyId: bodyId, signature: signature)), arguments: arguments))

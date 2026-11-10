@@ -43,7 +43,7 @@ pub impl LlvmCtx {
         while index < signature.parameterTypes.count() {
             val mode = argumentValueMode(passing: signature.argumentPassings[index])
             val type = if mode.key() == 2U64 { give self.ptrty } else { give (try self.llvmTypeOfRef(c: inout c, ref: signature.parameterTypes[index])) }
-            parameters.append(<LlvmLogicalParameter type=type semanticType=signature.parameterTypes[index] role=<LlvmParameterRole.Ordinary index=index /> mode=mode />)
+            parameters.append(<LlvmLogicalParameter type=type semanticType=signature.parameterTypes[index] copyable=!c.arena.typeTermIsUnique(ref: signature.parameterTypes[index]) role=<LlvmParameterRole.Ordinary index=index /> mode=mode />)
             index += 1U64
         }
         val result = if signature.resultType == 0U64 { give self.voidty } else { give (try self.llvmTypeOfRef(c: inout c, ref: signature.resultType)) }
@@ -135,12 +135,12 @@ pub impl LlvmCtx {
         val function = llvmLoad(self.b, self.ptrty, entry, anon())
         val receiver = self.valueAbiParameters[abi.parameterStart]
         try scope.validateInput(parameter: receiver, input: <LlvmValueInput lane=<LlvmLogicalParameter type=receiver.type semanticType=receiver.semanticType role=<LlvmParameterRole.ErasedReceiver /> mode=receiver.mode /> index=0U64 carrier=<LlvmValueCarrier.Value value=data /> />, index: 0U64, function: caller)
-        mut val values: Array[LLVMValueRef] = [data]
+        mut val values: Array[LlvmValueCarrier] = [<LlvmValueCarrier.Value value=data />]
         mut val index = 0U64
         while index < arguments.count() {
             val input = arguments[index]
             try scope.validateInput(parameter: self.valueAbiParameters[abi.parameterStart + index + 1U64], input: input, index: index + 1U64, function: caller)
-            values.append(self.valueInputValue(input: input))
+            values.append(input.carrier)
             index += 1U64
         }
         return self.emitPlannedValueCall(abiId: callee.template, function: function, arguments: values)

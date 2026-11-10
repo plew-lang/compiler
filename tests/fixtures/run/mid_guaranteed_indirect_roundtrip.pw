@@ -1,0 +1,45 @@
+use @Std/Io only { print }
+use @Std/Async only { sleep }
+
+struct Pair {
+    pub val first: I64
+    pub val second: I64
+}
+pub impl Pair {
+    factory
+    fn total() -> I64 { return self.first + self.second }
+}
+trait Reader { fn read(pair: Pair) -> I64 }
+struct Worker {}
+pub impl Worker { factory }
+pub impl Worker as Reader {
+    fn read(pair: Pair) -> I64 { return forward(pair: pair) }
+}
+fn leaf(pair: Pair) -> I64 { return pair.total() }
+fn forward(pair: Pair) -> I64 { return leaf(pair: pair) }
+fn recursive(pair: Pair, depth: I64) -> I64 {
+    if depth == 0I64 { return forward(pair: pair) }
+    return recursive(pair: pair, depth: depth - 1I64)
+}
+fn identity[T](value: T) -> T { return value }
+fn defaulted(pair: Pair = <Pair first=3I64 second=4I64 />) -> I64 {
+    return forward(pair: pair)
+}
+async fn later(pair: Pair) -> Promise[I64] {
+    await sleep(ms: 1I64)
+    return forward(pair: pair)
+}
+async fn main() {
+    val pair = <Pair first=3I64 second=4I64 />
+    print(forward(pair: pair))
+    print(recursive(pair: pair, depth: 2I64))
+    print(leaf(pair: identity(value: pair)))
+    print(defaulted())
+    val closure = fn(value: Pair) -> I64 { return forward(pair: value) }
+    print(closure(pair))
+    val reader: any Reader = <Worker />
+    print(reader.read(pair: pair))
+    val pending = later(pair: pair)
+    val result = await pending
+    print(result)
+}

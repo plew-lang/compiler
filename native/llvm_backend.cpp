@@ -15,6 +15,8 @@
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/DerivedTypes.h>
+#include <llvm/IR/Instructions.h>
+#include <llvm/IR/Argument.h>
 #include <llvm/IR/Metadata.h>
 #include <llvm/Support/raw_ostream.h>
 #include <llvm/Support/Error.h>
@@ -197,19 +199,37 @@ extern "C" int plew_llvm_value_scope_matches(LLVMValueRef value, LLVMValueRef fu
         if (!plew_llvm_value_scope_matches(LLVMGetOperand(value, index), function)) return 0;
     return 1;
 }
+// Typed ABI homes retain their pointee contract after opaque-pointer lowering.
+// byref is published only for guaranteed copyable lanes; it adds no copy.
 extern "C" int plew_llvm_home_type_matches(LLVMValueRef address, LLVMTypeRef type) {
     if (!address || !type) return 0;
-    if (LLVMIsAAllocaInst(address)) return LLVMGetAllocatedType(address) == type;
-    if (LLVMIsAArgument(address)) {
-        auto function = LLVMGetParamParent(address);
-        auto kind = LLVMGetEnumAttributeKindForName("byval", 5);
-        for (unsigned index = 0; index < LLVMCountParams(function); ++index) {
-            if (LLVMGetParam(function, index) != address) continue;
-            auto attribute = LLVMGetEnumAttributeAtIndex(function, index + 1, kind);
-            return attribute && LLVMIsTypeAttribute(attribute) && LLVMGetTypeAttributeValue(attribute) == type;
-        }
+    auto *value = llvm::unwrap(address);
+    auto *wanted = llvm::unwrap(type);
+    if (auto *allocation = llvm::dyn_cast<llvm::AllocaInst>(value))
+        return allocation->getAllocatedType() == wanted;
+    if (auto *argument = llvm::dyn_cast<llvm::Argument>(value))
+        return (argument->hasByValAttr() && argument->getParamByValType() == wanted) ||
+               (argument->hasByRefAttr() && argument->getParamByRefType() == wanted);
+    return 0;
+}
+extern "C" uint64_t plew_llvm_home_alignment(LLVMValueRef address) {
+    if (!address) return 0;
+    auto *value = llvm::unwrap(address);
+    if (auto *allocation = llvm::dyn_cast<llvm::AllocaInst>(value))
+        return allocation->getAlign().value();
+    if (auto *argument = llvm::dyn_cast<llvm::Argument>(value)) {
+        if (auto alignment = argument->getParamAlign()) return alignment->value();
+        if (argument->hasByValAttr())
+            return argument->getParent()->getParent()->getDataLayout().getABITypeAlign(argument->getParamByValType()).value();
     }
     return 0;
+}
+extern "C" int plew_llvm_guaranteed_parameter_matches(LLVMValueRef address, LLVMTypeRef type, uint64_t alignment) {
+    if (!address || !type || !alignment) return 0;
+    auto *argument = llvm::dyn_cast<llvm::Argument>(llvm::unwrap(address));
+    return argument && argument->hasByRefAttr() &&
+           argument->getParamByRefType() == llvm::unwrap(type) &&
+           plew_llvm_home_alignment(address) >= alignment;
 }
 
 extern "C" char *plew_llvm_jit_target_triple(const PlewLlvmJit *jit) {

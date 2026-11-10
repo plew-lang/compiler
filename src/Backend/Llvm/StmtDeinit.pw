@@ -105,7 +105,10 @@ pub impl LlvmCtx {
                 return <Result.Err error=c.diagnosticAt(offset: declaration.defOffset, msg: "internal error: finalized destructor has no executable body") />
             }
             match contract.deinitCall.receiverPassing { CallReceiverPassing.Borrow => {} _ => { return <Result.Err error=valueAbiFailure(message: "frozen destructor must borrow its receiver") /> } }
-            val input = <LlvmValueInput lane=<LlvmLogicalParameter type=LLVMTypeOf(v) semanticType=contract.deinitCall.receiverType role=<LlvmParameterRole.Receiver /> mode=<LlvmParameterMode.Borrow /> /> index=0U64 carrier=<LlvmValueCarrier.Value value=v /> />
+            val abiId = self.valueAbiFunctions.getOr(key: LLVMIsAFunction(self.genMethVal[slot]), fallback: 0U64)
+            if abiId == 0U64 || abiId > self.valueAbis.count() || self.valueAbis[abiId - 1U64].parameterCount != 1U64 { return <Result.Err error=valueAbiFailure(message: "destructor lacks its private receiver descriptor") /> }
+            val receiver = self.valueAbiParameters[self.valueAbis[abiId - 1U64].parameterStart]
+            val input = <LlvmValueInput lane=<LlvmLogicalParameter type=LLVMTypeOf(v) semanticType=contract.deinitCall.receiverType copyable=receiver.copyable role=<LlvmParameterRole.Receiver /> mode=<LlvmParameterMode.Borrow /> /> index=0U64 carrier=<LlvmValueCarrier.Value value=v /> />
             (try self.callBodyValueFunction(function: self.genMethVal[slot], bodyId: contract.deinitCall.bodyId, inputs: (try self.bodyInputScope(bodyId: contract.deinitCall.bodyId, signature: self.genMethTy[slot])), arguments: [input]))
         }
         mut val field = 0U64

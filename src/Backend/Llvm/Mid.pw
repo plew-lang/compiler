@@ -1754,10 +1754,7 @@ pub impl LlvmCtx {
             val parameterRef = c.arena.finalCalleeParameterTypeAt(types: selected.parameterTypeRefs, index: index)
             val lane = self.valueAbiParameters[abi.parameterStart + index + 1U64]
             if !c.typeRefEq(a: parameterRef, b: lane.semanticType) { return <Result.Err error=valueAbiFailure(message: "closure selected parameter/template mismatch") /> }
-            val parameter = c.arena.typeAt(index: parameterRef)
-            mut val value = (try self.midCanonicalEmitOperand(c: inout c, body: body, operandId: c.mid.callArguments[term.args.start + index]))
-            if LLVMGetTypeKind(LLVMTypeOf(value)) == 8U32 { value = self.coerceInt(v: value, target: lane.type, unsigned: isUnsignedName(c: inout c, start: parameter.nameStart, len: parameter.nameLen)) }
-            values.append(<LlvmValueInput lane=<LlvmLogicalParameter type=lane.type semanticType=lane.semanticType role=<LlvmParameterRole.Ordinary index=index /> mode=<LlvmParameterMode.Borrow /> /> index=index + 1U64 carrier=<LlvmValueCarrier.Value value=value /> />)
+            values.append((try self.midCanonicalCallInput(c: inout c, body: body, operandId: c.mid.callArguments[term.args.start + index], lane: lane, index: index + 1U64, semanticType: parameterRef, mode: <LlvmParameterMode.Borrow />, role: <LlvmParameterRole.Ordinary index=index />)))
             index += 1U64
         }
         val unit = c.functionTypeReturnsUnit(ref: functionType)
@@ -1852,21 +1849,7 @@ pub impl LlvmCtx {
                     val mode = argumentValueMode(passing: passing)
                     val lane = self.valueAbiParameters[abi.parameterStart + index + 1U64]
                     if !c.typeRefEq(a: parameter, b: lane.semanticType) || mode.key() != lane.mode.key() { return <Result.Err error=valueAbiFailure(message: "witness selected parameter/template mismatch") /> }
-                    mut val value = LLVMConstNull(self.ptrty)
-                    match passing {
-                        CallArgumentPassing.Inout => {
-                            val operand = c.mid.operands[operandId - 1U64]
-                            value = (try self.midCanonicalPlacePtr(c: inout c, body: body, place: c.mid.places[operand.place - 1U64], forWrite: true))
-                        }
-                        _ => {
-                            value = (try self.midCanonicalEmitOperand(c: inout c, body: body, operandId: operandId))
-                            if LLVMGetTypeKind(LLVMTypeOf(value)) == 8U32 {
-                                val parameterTerm = c.arena.typeAt(index: parameter)
-                                value = self.coerceInt(v: value, target: lane.type, unsigned: isUnsignedName(c: inout c, start: parameterTerm.nameStart, len: parameterTerm.nameLen))
-                            }
-                        }
-                    }
-                    values.append(<LlvmValueInput lane=<LlvmLogicalParameter type=lane.type semanticType=lane.semanticType role=<LlvmParameterRole.Ordinary index=index /> mode=mode /> index=index + 1U64 carrier=<LlvmValueCarrier.Value value=value /> />)
+                    values.append((try self.midCanonicalCallInput(c: inout c, body: body, operandId: operandId, lane: lane, index: index + 1U64, semanticType: parameter, mode: mode, role: <LlvmParameterRole.Ordinary index=index />)))
                     index += 1U64
                 }
                 val result = (try self.callWitnessValueFunction(callee: callee, arguments: values))
@@ -2094,71 +2077,61 @@ pub impl LlvmCtx {
             asyncAbiId = (try self.asyncNativeAbi(function: self.asyncEntryVal[self.asyncEntrySlot(fi: selected.callee)], bodyId: selected.calleeBodyId, resume: false))
             if !c.typeRefEq(a: self.valueAbis[asyncAbiId - 1U64].resultTerm, b: selected.resultTypeRef) { return <Result.Err error=valueAbiFailure(message: "async call lost its frozen Promise result") /> }
         }
+        mut val privateAbiId = asyncAbiId
+        if !callee.isExtern && !callee.isAsync {
+            val function = if useMethod { give self.genMethVal[methodSlot] } else { give self.genFnVal[freeSlot] }
+            privateAbiId = self.valueAbiFunctions.getOr(key: LLVMIsAFunction(function), fallback: 0U64)
+        }
+        if !callee.isExtern && (privateAbiId == 0U64 || privateAbiId > self.valueAbis.count()) { return <Result.Err error=valueAbiFailure(message: "selected call lacks its completed descriptor") /> }
         mut val values: Array[LLVMValueRef] = []
         mut val typedValues: Array[LlvmValueInput] = []
         val receiver: MidCallReceiverNode = c.mid.callReceivers[term.callReceiver - 1U64]
         if receiver.tag == 2U64 {
-            val operand: MidOperandNode = c.mid.operands[receiver.operand - 1U64]
-            match selected.receiverPassing {
-                CallReceiverPassing.Inout => { values.append((try self.midCanonicalPlacePtr(c: inout c, body: body, place: c.mid.places[operand.place - 1U64], forWrite: true))) }
-                CallReceiverPassing.Borrow => { values.append((try self.midCanonicalEmitOperand(c: inout c, body: body, operandId: receiver.operand))) }
-                CallReceiverPassing.Move => { values.append((try self.midCanonicalEmitOperand(c: inout c, body: body, operandId: receiver.operand))) }
-                _ => { return <Result.Ok value=false /> }
-            }
-        } else {
-            match selected.receiverPassing {
-                CallReceiverPassing.None => {}
-                _ => { return <Result.Ok value=false /> }
-            }
-        }
-        if !callee.isExtern && !callee.isAsync && receiver.tag == 2U64 {
-            val value = values[0U64]
             val mode = match selected.receiverPassing {
                 CallReceiverPassing.Borrow => { give <LlvmParameterMode.Borrow /> }
                 CallReceiverPassing.Inout => { give <LlvmParameterMode.Inout /> }
                 CallReceiverPassing.Move => { give <LlvmParameterMode.Move /> }
                 CallReceiverPassing.None => { return <Result.Err error=valueAbiFailure(message: "typed receiver has no passing mode") /> }
             }
-            typedValues.append(<LlvmValueInput lane=<LlvmLogicalParameter type=LLVMTypeOf(value) semanticType=selected.receiverSignatureTypeRef role=<LlvmParameterRole.Receiver /> mode=mode /> index=0U64 carrier=<LlvmValueCarrier.Value value=value /> />)
+            if callee.isExtern {
+                val operand = c.mid.operands[receiver.operand - 1U64]
+                values.append(if mode.key() == 2U64 { give (try self.midCanonicalPlacePtr(c: inout c, body: body, place: c.mid.places[operand.place - 1U64], forWrite: true)) } else { give (try self.midCanonicalEmitOperand(c: inout c, body: body, operandId: receiver.operand)) })
+            } else {
+                val abi = self.valueAbis[privateAbiId - 1U64]
+                if abi.parameterCount == 0U64 { return <Result.Err error=valueAbiFailure(message: "receiver lacks a completed lane") /> }
+                typedValues.append((try self.midCanonicalCallInput(c: inout c, body: body, operandId: receiver.operand, lane: self.valueAbiParameters[abi.parameterStart], index: 0U64, semanticType: selected.receiverSignatureTypeRef, mode: mode, role: <LlvmParameterRole.Receiver />)))
+            }
+        } else {
+            match selected.receiverPassing { CallReceiverPassing.None => {} _ => { return <Result.Ok value=false /> } }
         }
         mut val cWritebacks: Array[LlvmCInout] = []
-        mut val argumentI: U64 = 0U64
+        mut val argumentI = 0U64
         while argumentI < term.args.len {
-            val operandId: U64 = c.mid.callArguments[term.args.start + argumentI]
-            val operand: MidOperandNode = c.mid.operands[operandId - 1U64]
-            val parameterRef: U64 = c.arena.finalCalleeParameterTypeAt(types: selected.parameterTypeRefs, index: argumentI)
-            mut val value: LLVMValueRef = LLVMConstNull(self.ptrty)
-            match c.arena.finalCalleeArgumentPassingAt(passings: selected.argumentPassings, index: argumentI) {
-                CallArgumentPassing.Inout => {
-                    value = (try self.midCanonicalPlacePtr(c: inout c, body: body, place: c.mid.places[operand.place - 1U64], forWrite: true))
-                    if callee.isExtern { value = (try self.prepareCInout(c: inout c, ref: parameterRef, pointer: value, toC: true, writebacks: inout cWritebacks)) }
-                }
-                _ => {
-                    value = (try self.midCanonicalEmitOperand(c: inout c, body: body, operandId: operandId))
-                    if LLVMGetTypeKind(LLVMTypeOf(value)) == 8U32 {
-                        val parameter: TypeRef = c.arena.typeAt(index: parameterRef)
-                        value = self.coerceInt(v: value, target: (try self.llvmTypeOfRef(c: inout c, ref: parameterRef)), unsigned: isUnsignedName(c: inout c, start: parameter.nameStart, len: parameter.nameLen))
+            val operandId = c.mid.callArguments[term.args.start + argumentI]
+            val parameterRef = c.arena.finalCalleeParameterTypeAt(types: selected.parameterTypeRefs, index: argumentI)
+            val passing = c.arena.finalCalleeArgumentPassingAt(passings: selected.argumentPassings, index: argumentI)
+            if callee.isExtern {
+                val operand = c.mid.operands[operandId - 1U64]
+                mut val value = if argumentValueMode(passing: passing).key() == 2U64 {
+                    val pointer = (try self.midCanonicalPlacePtr(c: inout c, body: body, place: c.mid.places[operand.place - 1U64], forWrite: true))
+                    give (try self.prepareCInout(c: inout c, ref: parameterRef, pointer: pointer, toC: true, writebacks: inout cWritebacks))
+                } else {
+                    mut val evaluated = (try self.midCanonicalEmitOperand(c: inout c, body: body, operandId: operandId))
+                    if LLVMGetTypeKind(LLVMTypeOf(evaluated)) == 8U32 {
+                        val parameter = c.arena.typeAt(index: parameterRef)
+                        evaluated = self.coerceInt(v: evaluated, target: (try self.llvmTypeOfRef(c: inout c, ref: parameterRef)), unsigned: isUnsignedName(c: inout c, start: parameter.nameStart, len: parameter.nameLen))
                     }
+                    give evaluated
                 }
+                value = (try self.scalarToC(c: inout c, ref: parameterRef, value: value))
+                values.append(value)
+            } else {
+                val abi = self.valueAbis[privateAbiId - 1U64]
+                val index = typedValues.count()
+                if index >= abi.parameterCount { return <Result.Err error=valueAbiFailure(message: "call argument range mismatch") /> }
+                typedValues.append((try self.midCanonicalCallInput(c: inout c, body: body, operandId: operandId, lane: self.valueAbiParameters[abi.parameterStart + index], index: index, semanticType: parameterRef, mode: argumentValueMode(passing: passing), role: <LlvmParameterRole.Ordinary index=argumentI />)))
             }
-            if callee.isExtern { value = (try self.scalarToC(c: inout c, ref: parameterRef, value: value)) }
-            if !callee.isAsync { values.append(value) }
-            if !callee.isExtern {
-                val mode = match c.arena.finalCalleeArgumentPassingAt(passings: selected.argumentPassings, index: argumentI) {
-                    CallArgumentPassing.Borrow => { give <LlvmParameterMode.Borrow /> }
-                    CallArgumentPassing.Inout => { give <LlvmParameterMode.Inout /> }
-                    CallArgumentPassing.Move => { give <LlvmParameterMode.Move /> }
-                }
-                val semanticTerm = if callee.isAsync {
-                    val abi = self.valueAbis[asyncAbiId - 1U64]
-                    if argumentI >= abi.parameterCount { return <Result.Err error=valueAbiFailure(message: "async call argument range mismatch") /> }
-                    val lane = self.valueAbiParameters[abi.parameterStart + argumentI]
-                    if !c.typeRefEq(a: parameterRef, b: lane.semanticType) || mode.key() != lane.mode.key() { return <Result.Err error=valueAbiFailure(message: "async call argument contract mismatch") /> }
-                    give lane.semanticType
-                } else { give parameterRef }
-                typedValues.append(<LlvmValueInput lane=<LlvmLogicalParameter type=LLVMTypeOf(value) semanticType=semanticTerm role=<LlvmParameterRole.Ordinary index=argumentI /> mode=mode /> index=typedValues.count() carrier=<LlvmValueCarrier.Value value=value /> />)
-            }
-            argumentI = argumentI + 1U64
+            argumentI += 1U64
         }
         mut val result: LLVMValueRef = LLVMConstInt(self.i64ty, 0U64, 0I32)
         if callee.isAsync {
@@ -2541,13 +2514,36 @@ pub impl LlvmCtx {
             val ty = planned.type
             mut val slot = match planned.storage {
                 LlvmLocalStorage.EntryAlloca => { give self.entryAlloca(ty: planned.storageType) }
+                LlvmLocalStorage.GuaranteedParameter(parameterIndex: val parameterIndex, semanticType: val semanticType) => {
+                    if asyncBody || planned.semanticType != declaration.typeTerm || declaration.isUnique || declaration.isInout || declaration.ownsAtEntry || declaration.isCaptureCell || !declaration.isParameter { return <Result.Err error=valueAbiFailure(message: "invalid guaranteed local binding") /> }
+                    val abiId = self.valueAbiFunctions.getOr(key: LLVMIsAFunction(self.curFn), fallback: 0U64)
+                    if abiId == 0U64 || abiId > self.valueAbis.count() { return <Result.Err error=valueAbiFailure(message: "guaranteed local lacks entry descriptor") /> }
+                    val abi = self.valueAbis[abiId - 1U64]
+                    if parameterIndex < abi.parameterStart || parameterIndex - abi.parameterStart >= abi.parameterCount { return <Result.Err error=valueAbiFailure(message: "guaranteed local belongs to another entry") /> }
+                    val expectedIndex = match plan.entry {
+                        LlvmBodyLocalEntry.Normal(abiId: _) => { give abi.parameterStart + local }
+                        LlvmBodyLocalEntry.Closure(abiId: _) => { give match planned.binding { LlvmLocalBinding.Parameter(parameterIndex: val saved, alias: val alias) => { if alias { return <Result.Err error=valueAbiFailure(message: "guaranteed local cannot alias mutable parameter") /> } give saved } _ => { return <Result.Err error=valueAbiFailure(message: "guaranteed closure local lacks parameter binding") /> } } }
+                        LlvmBodyLocalEntry.Witness(abiId: _) => { give match planned.binding { LlvmLocalBinding.Parameter(parameterIndex: val saved, alias: val alias) => { if alias { return <Result.Err error=valueAbiFailure(message: "guaranteed local cannot alias mutable parameter") /> } give saved } _ => { return <Result.Err error=valueAbiFailure(message: "guaranteed witness local lacks parameter binding") /> } } }
+                        _ => { return <Result.Err error=valueAbiFailure(message: "guaranteed local has no supported entry") /> }
+                    }
+                    if parameterIndex != expectedIndex { return <Result.Err error=valueAbiFailure(message: "guaranteed local parameter identity mismatch") /> }
+                    val lane = self.valueAbiParameters[parameterIndex]
+                    if semanticType != lane.semanticType { return <Result.Err error=valueAbiFailure(message: "guaranteed local semantic identity mismatch") /> }
+                    if lane.passing.key() != 3U64 || !lane.copyable || lane.mode.key() != 1U64 || planned.mode.key() != 1U64 || plew_pointer_equal(planned.type, lane.type) == 0I32 { return <Result.Err error=valueAbiFailure(message: "guaranteed local descriptor mismatch") /> }
+                    val input = (try self.preparedValueParameter(function: self.curFn, abiId: abiId, index: parameterIndex - abi.parameterStart))
+                    give match input.carrier {
+                        LlvmValueCarrier.Home(address: val address) => { give address }
+                        _ => { return <Result.Err error=valueAbiFailure(message: "guaranteed parameter has no typed home") /> }
+                    }
+                }
                 LlvmLocalStorage.FrameField(field: val field) => {
                     if !asyncBody { return <Result.Err error=valueAbiFailure(message: "frame local on a synchronous entry") /> }
                     give LLVMBuildStructGEP2(self.b, self.curFrameTy, self.curFrameBase, field, anon())
                 }
             }
             val binding = planned.binding
-            match binding {
+            val incoming = match planned.storage { LlvmLocalStorage.GuaranteedParameter(parameterIndex: _, semanticType: _) => { give true } _ => { give false } }
+            if !incoming { match binding {
                 LlvmLocalBinding.Parameter(parameterIndex: val parameterIndex, alias: val alias) => {
                     val entryAbi = self.valueAbiFunctions.getOr(key: LLVMIsAFunction(self.curFn), fallback: 0U64)
                     val value = if entryAbi != 0U64 && self.valueAbis[entryAbi - 1U64].convention.key() == 12U64 {
@@ -2581,6 +2577,7 @@ pub impl LlvmCtx {
                         if declaration.isInout { slot = value } else { llvmStore(self.b, value, slot) }
                     }
                 }
+            }
             }
             self.pushLocalR(nameStart: declaration.sourceNameStart, nameLen: 0U64, ptr: slot, ty: ty, kind: 0U64, structIdx: c.arena.structCount(), isArr: false, elemTy: self.i64ty, elemKind: 0U64, typeRef: declaration.typeTerm)
             self.setLocalOwned(owned: declaration.ownsAtEntry)
@@ -2884,7 +2881,19 @@ pub impl LlvmCtx {
             val storageType = if declaration.isCaptureCell { give self.ptrty } else { give type }
             val mode = if !declaration.isParameter { give <LlvmParameterMode.Legacy /> } else if declaration.isInout { give <LlvmParameterMode.Inout /> } else if declaration.ownsAtEntry { give <LlvmParameterMode.Move /> } else { give <LlvmParameterMode.Borrow /> }
             val binding = match entryBindings { Optional.Some(v: val bindings) => { give bindings.bindings[index] } Optional.None => { give <LlvmLocalBinding.None /> } }
-            self.preparedLocals.append(<LlvmPreparedLocal semanticType=declaration.typeTerm type=type storageType=storageType mode=mode binding=binding />)
+            mut val storage = <LlvmLocalStorage.EntryAlloca />
+            val parameterIndex = match binding {
+                LlvmLocalBinding.Parameter(parameterIndex: val saved, alias: val alias) => { give if alias { give 18446744073709551615U64 } else { give saved } }
+                _ => { give if declaration.isParameter && entryBindings.isNone() { give self.valueAbis[abiId - 1U64].parameterStart + index } else { give 18446744073709551615U64 } }
+            }
+            if parameterIndex != 18446744073709551615U64 && parameterIndex < self.valueAbiParameters.count() {
+                val parameter = self.valueAbiParameters[parameterIndex]
+                if parameter.passing.key() == 3U64 {
+                    if !declaration.isParameter || declaration.isUnique || declaration.isInout || declaration.ownsAtEntry || declaration.isCaptureCell || mode.key() != 1U64 || !parameter.copyable || plew_pointer_equal(type, parameter.type) == 0I32 || !c.typeRefEq(a: declaration.typeTerm, b: parameter.semanticType) { return <Result.Err error=valueAbiFailure(message: "guaranteed parameter lacks read-only local correspondence") /> }
+                    storage = <LlvmLocalStorage.GuaranteedParameter parameterIndex=parameterIndex semanticType=parameter.semanticType />
+                }
+            }
+            self.preparedLocals.append(<LlvmPreparedLocal semanticType=declaration.typeTerm type=type storageType=storageType storage=storage mode=mode binding=binding />)
             index += 1U64
         }
         self.bodyLocalPlans.append(<LlvmBodyLocalPlan canonicalBody=canonical.body bodyIdentity=body.bodyInstance function=function signature=signature moduleIdentity=scope.moduleIdentity contextIdentity=scope.contextIdentity localStart=start localCount=body.locals.len revision=1U64 entry=entry environmentType=match entryBindings { Optional.Some(v: val bindings) => { give bindings.environmentType } Optional.None => { give <Optional[LLVMTypeRef].None /> } } />)
@@ -2939,4 +2948,39 @@ pub impl LlvmCtx {
         return <Result.Ok value=<MidLlvmPrepared.None /> />
     }
 
+}
+
+pub impl LlvmCtx {
+    inout fn midCanonicalCallInput(c: inout Comp, body: MidBodyNode, operandId: U64, lane: LlvmValueParameter, index: U64, semanticType: U64, mode: LlvmParameterMode, role: LlvmParameterRole) -> Result[LlvmValueInput, CompileDiagnostic] {
+        if !role.same(role: lane.role) || mode.key() != lane.mode.key() || !c.typeRefEq(a: semanticType, b: lane.semanticType) { return <Result.Err error=valueAbiFailure(message: "selected call input differs from completed lane") /> }
+        if operandId == 0U64 || operandId > c.mid.operands.count() { return <Result.Err error=valueAbiFailure(message: "call operand is out of range") /> }
+        val operand = c.mid.operands[operandId - 1U64]
+        if mode.key() == 2U64 && (operand.place == 0U64 || operand.place > c.mid.places.count()) { return <Result.Err error=valueAbiFailure(message: "inout operand lacks a place") /> }
+        mut val home = <Optional[LLVMValueRef].None />
+        if lane.passing.key() == 3U64 && operand.tag == 3U64 && !operand.borrowsStorage && operand.capability == 1U64 && operand.place != 0U64 && operand.place <= c.mid.places.count() {
+            val place = c.mid.places[operand.place - 1U64]
+            if place.rootTag == 1U64 && place.projections.len == 0U64 && place.local < body.locals.len {
+                val planId = match self.bodyLocalAdmission { Optional.Some(v: val admission) => { give match admission { LlvmBodyLocalAdmission.Planned(planId: val saved) => { give saved } } } Optional.None => { return <Result.Err error=valueAbiFailure(message: "call input lacks Ready storage plan") /> } }
+                val local = (try self.preparedBodyLocal(body: body, planId: planId, local: place.local))
+                match local.storage {
+                    LlvmLocalStorage.GuaranteedParameter(parameterIndex: _, semanticType: _) => {
+                        if plew_pointer_equal(local.type, lane.type) != 0I32 && place.local < self.locPtr.count() { home = <Optional.Some v=self.locPtr[place.local] /> }
+                    }
+                    _ => {}
+                }
+            }
+        }
+        val carrier = match home {
+            Optional.Some(v: val address) => { give <LlvmValueCarrier.Home address=address /> }
+            Optional.None => {
+                mut val value = if mode.key() == 2U64 { give (try self.midCanonicalPlacePtr(c: inout c, body: body, place: c.mid.places[operand.place - 1U64], forWrite: true)) } else { give (try self.midCanonicalEmitOperand(c: inout c, body: body, operandId: operandId)) }
+                if mode.key() != 2U64 && LLVMGetTypeKind(LLVMTypeOf(value)) == 8U32 {
+                    val sourceType = c.arena.typeAt(index: semanticType)
+                    value = self.coerceInt(v: value, target: lane.type, unsigned: isUnsignedName(c: inout c, start: sourceType.nameStart, len: sourceType.nameLen))
+                }
+                give <LlvmValueCarrier.Value value=value />
+            }
+        }
+        return <Result.Ok value=<LlvmValueInput lane=<LlvmLogicalParameter type=lane.type semanticType=lane.semanticType copyable=lane.copyable role=role mode=mode /> index=index carrier=carrier /> />
+    }
 }

@@ -179,7 +179,7 @@ fn asyncPlanControl(mode: U64) {
             if backend.valueAbis.count() != count || backend.valueAbiParameters.count() != lanes { panic "async call rebuilt physical descriptor" }
             mut val bad = 0U64
             while bad < 4U64 {
-                val malformed = <LlvmValueInput lane=<LlvmLogicalParameter type=input.lane.type semanticType=if bad == 0U64 { give unsigned } else { give input.lane.semanticType } role=if bad == 1U64 { give <LlvmParameterRole.Receiver /> } else { give input.lane.role } mode=if bad == 2U64 { give <LlvmParameterMode.Move /> } else { give input.lane.mode } /> index=if bad == 3U64 { give 1U64 } else { give 0U64 } carrier=input.carrier />
+                val malformed = <LlvmValueInput lane=<LlvmLogicalParameter type=input.lane.type copyable=input.lane.copyable semanticType=if bad == 0U64 { give unsigned } else { give input.lane.semanticType } role=if bad == 1U64 { give <LlvmParameterRole.Receiver /> } else { give input.lane.role } mode=if bad == 2U64 { give <LlvmParameterMode.Move /> } else { give input.lane.mode } /> index=if bad == 3U64 { give 1U64 } else { give 0U64 } carrier=input.carrier />
                 requireAsyncInternal(result: backend.callAsyncEntryValueFunction(function: entryFunction, bodyId: bodyId, arguments: [malformed]), mode: bad + 40U64)
                 bad += 1U64
             }

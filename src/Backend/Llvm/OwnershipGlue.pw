@@ -21,7 +21,7 @@ pub impl LlvmCtx {
         val type = if typeRef == 0U64 { give self.ptrty } else { give (try self.llvmTypeOfRef(c: inout c, ref: typeRef)) }
         val mode = if operation.borrowsPayload() { give <LlvmParameterMode.Borrow /> } else { give <LlvmParameterMode.Move /> }
         val role = if operation.erased() { give <LlvmParameterRole.GlueStorage /> } else { give <LlvmParameterRole.GlueValue /> }
-        val template = (try self.saveValueAbi(signature: <LlvmLogicalSignature convention=<LlvmValueConvention.OwnershipGlue operation=operation /> parameters=[<LlvmLogicalParameter type=type semanticType=typeRef role=role mode=mode />] result=if operation.key() == 2U64 { give self.ptrty } else { give self.voidty } resultTerm=0U64 />, ownerBody: 0U64))
+        val template = (try self.saveValueAbi(signature: <LlvmLogicalSignature convention=<LlvmValueConvention.OwnershipGlue operation=operation /> parameters=[<LlvmLogicalParameter type=type semanticType=typeRef copyable=typeRef != 0U64 && !c.arena.typeTermIsUnique(ref: typeRef) role=role mode=mode />] result=if operation.key() == 2U64 { give self.ptrty } else { give self.voidty } resultTerm=0U64 />, ownerBody: 0U64))
         mut val updated = slots
         while updated.count() < 7U64 { updated.append(0U64) }
         updated.set(i: key, value: template)
@@ -47,7 +47,7 @@ pub impl LlvmCtx {
     inout fn glueValueInput(c: inout Comp, operation: LlvmGlueOperation, typeRef: U64, carrier: LlvmValueCarrier) -> Result[LlvmValueInput, CompileDiagnostic] {
         val template = (try self.glueValueAbi(c: inout c, operation: operation, typeRef: typeRef))
         val lane = self.valueAbiParameters[self.valueAbis[template - 1U64].parameterStart]
-        return <Result.Ok value=<LlvmValueInput lane=<LlvmLogicalParameter type=lane.type semanticType=typeRef role=lane.role mode=lane.mode /> index=0U64 carrier=carrier /> />
+        return <Result.Ok value=<LlvmValueInput lane=<LlvmLogicalParameter type=lane.type semanticType=typeRef copyable=lane.copyable role=lane.role mode=lane.mode /> index=0U64 carrier=carrier /> />
     }
 
     inout fn callGlueValueFunction(function: LLVMValueRef, operation: LlvmGlueOperation, input: LlvmValueInput) -> Result[LLVMValueRef, CompileDiagnostic] {
@@ -60,7 +60,7 @@ pub impl LlvmCtx {
         try scope.validateFunction(function: function, signature: abi.functionType)
         if abi.moduleIdentity != scope.moduleIdentity || abi.contextIdentity != scope.contextIdentity || abi.revision != 1U64 || abi.parameterStart >= self.valueAbiParameters.count() { return <Result.Err error=valueAbiFailure(message: "glue call descriptor scope/range mismatch") /> }
         try scope.validateInput(parameter: self.valueAbiParameters[abi.parameterStart], input: input, index: 0U64, function: LLVMGetBasicBlockParent(LLVMGetInsertBlock(self.b)))
-        return self.emitPlannedValueCall(abiId: abiId, function: function, arguments: [self.valueInputValue(input: input)])
+        return self.emitPlannedValueCall(abiId: abiId, function: function, arguments: [input.carrier])
     }
 
     inout fn glueValueParameter(function: LLVMValueRef, operation: LlvmGlueOperation, typeRef: U64 = 0U64, bodyId: U64 = 0U64) -> Result[LlvmValueInput, CompileDiagnostic] {
@@ -105,6 +105,6 @@ pub impl LlvmCtx {
         val parameter = self.valueAbiParameters[abi.parameterStart]
         val input = <LlvmValueInput lane=<LlvmLogicalParameter type=self.ptrty semanticType=0U64 role=<LlvmParameterRole.GlueStorage /> mode=parameter.mode /> index=0U64 carrier=<LlvmValueCarrier.Value value=callee.storage /> />
         try scope.validateInput(parameter: parameter, input: input, index: 0U64, function: caller)
-        return self.emitPlannedValueCall(abiId: callee.template, function: callee.function, arguments: [callee.storage])
+        return self.emitPlannedValueCall(abiId: callee.template, function: callee.function, arguments: [<LlvmValueCarrier.Value value=callee.storage />])
     }
 }

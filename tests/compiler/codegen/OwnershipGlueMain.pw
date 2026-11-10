@@ -77,7 +77,7 @@ fn main() {
         glueInternal(result: backend.glueValueParameter(function: function, operation: operation, typeRef: term, bodyId: 1U64))
         mut val malformed = 0U64
         while malformed < 5U64 {
-            val bad = <LlvmValueInput lane=<LlvmLogicalParameter type=input.lane.type semanticType=if malformed == 0U64 { give integer } else { give term } role=if malformed == 1U64 { give <LlvmParameterRole.Environment /> } else { give input.lane.role } mode=if malformed == 2U64 { give <LlvmParameterMode.Inout /> } else { give input.lane.mode } /> index=if malformed == 3U64 { give 1U64 } else { give 0U64 } carrier=if malformed == 4U64 { give <LlvmValueCarrier.Value value=LLVMConstInt(backend.i32ty, 1U64, 0I32) /> } else { give input.carrier } />
+            val bad = <LlvmValueInput lane=<LlvmLogicalParameter type=input.lane.type copyable=input.lane.copyable semanticType=if malformed == 0U64 { give integer } else { give term } role=if malformed == 1U64 { give <LlvmParameterRole.Environment /> } else { give input.lane.role } mode=if malformed == 2U64 { give <LlvmParameterMode.Inout /> } else { give input.lane.mode } /> index=if malformed == 3U64 { give 1U64 } else { give 0U64 } carrier=if malformed == 4U64 { give <LlvmValueCarrier.Value value=LLVMConstInt(backend.i32ty, 1U64, 0I32) /> } else { give input.carrier } />
             glueInternal(result: backend.callGlueValueFunction(function: function, operation: operation, input: bad))
             malformed += 1U64
         }

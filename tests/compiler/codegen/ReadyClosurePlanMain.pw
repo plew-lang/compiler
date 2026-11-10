@@ -239,11 +239,11 @@ fn closureCallControl() {
     val scalarLane = backend.valueAbiParameters[plan.parameterStart + 1U64]
     val aggregateLane = backend.valueAbiParameters[plan.parameterStart + 2U64]
     val scalarValue = LLVMConstInt(backend.i64ty, 7U64, 0I32)
-    val scalarInput = <LlvmValueInput lane=<LlvmLogicalParameter type=scalarLane.type semanticType=integer role=<LlvmParameterRole.Ordinary index=0U64 /> mode=<LlvmParameterMode.Borrow /> /> index=1U64 carrier=<LlvmValueCarrier.Value value=scalarValue /> />
+    val scalarInput = <LlvmValueInput lane=<LlvmLogicalParameter type=scalarLane.type copyable=scalarLane.copyable semanticType=integer role=<LlvmParameterRole.Ordinary index=0U64 /> mode=<LlvmParameterMode.Borrow /> /> index=1U64 carrier=<LlvmValueCarrier.Value value=scalarValue /> />
     val aggregateValue = LLVMGetUndef(aggregateLane.type)
     val aggregateHome = LLVMBuildAlloca(builder, aggregateLane.type, anon())
     llvmStore(builder, aggregateValue, aggregateHome)
-    val aggregateInput = <LlvmValueInput lane=<LlvmLogicalParameter type=aggregateLane.type semanticType=aggregate role=<LlvmParameterRole.Ordinary index=1U64 /> mode=<LlvmParameterMode.Borrow /> /> index=2U64 carrier=<LlvmValueCarrier.Value value=aggregateValue /> />
+    val aggregateInput = <LlvmValueInput lane=<LlvmLogicalParameter type=aggregateLane.type copyable=aggregateLane.copyable semanticType=aggregate role=<LlvmParameterRole.Ordinary index=1U64 /> mode=<LlvmParameterMode.Borrow /> /> index=2U64 carrier=<LlvmValueCarrier.Value value=aggregateValue /> />
     val homeInput = <LlvmValueInput lane=aggregateInput.lane index=2U64 carrier=<LlvmValueCarrier.Home address=aggregateHome /> />
     val beforeCalls = backend.valueAbis.count()
     val beforeLanes = backend.valueAbiParameters.count()
@@ -260,7 +260,7 @@ fn closureCallControl() {
     if backend.valueAbis.count() != beforeCalls || backend.valueAbiParameters.count() != beforeLanes { panic "closure calls append ABI plans" }
     mut val mode = 0U64
     while mode < 5U64 {
-        val input = <LlvmValueInput lane=<LlvmLogicalParameter type=scalarLane.type semanticType=if mode == 0U64 { give unsigned } else { give integer } role=if mode == 2U64 { give <LlvmParameterRole.Environment /> } else if mode == 4U64 { give <LlvmParameterRole.Ordinary index=1U64 /> } else { give <LlvmParameterRole.Ordinary index=0U64 /> } mode=if mode == 3U64 { give <LlvmParameterMode.Move /> } else { give <LlvmParameterMode.Borrow /> } /> index=if mode == 1U64 { give 0U64 } else { give 1U64 } carrier=scalarInput.carrier />
+        val input = <LlvmValueInput lane=<LlvmLogicalParameter type=scalarLane.type copyable=scalarLane.copyable semanticType=if mode == 0U64 { give unsigned } else { give integer } role=if mode == 2U64 { give <LlvmParameterRole.Environment /> } else if mode == 4U64 { give <LlvmParameterRole.Ordinary index=1U64 /> } else { give <LlvmParameterRole.Ordinary index=0U64 /> } mode=if mode == 3U64 { give <LlvmParameterMode.Move /> } else { give <LlvmParameterMode.Borrow /> } /> index=if mode == 1U64 { give 0U64 } else { give 1U64 } carrier=scalarInput.carrier />
         requireClosureInternal(result: backend.callClosureValueFunction(callee: callee, arguments: [input, homeInput]))
         mode += 1U64
     }

@@ -254,11 +254,11 @@ fn witnessCallControl() {
     val lane = backend.valueAbiParameters[plan.parameterStart + 1U64]
     val recordLane = backend.valueAbiParameters[plan.parameterStart + 2U64]
     val scalar = LLVMConstInt(backend.i64ty, 7U64, 0I32)
-    val input = <LlvmValueInput lane=<LlvmLogicalParameter type=lane.type semanticType=integer role=<LlvmParameterRole.Ordinary index=0U64 /> mode=<LlvmParameterMode.Borrow /> /> index=1U64 carrier=<LlvmValueCarrier.Value value=scalar /> />
+    val input = <LlvmValueInput lane=<LlvmLogicalParameter type=lane.type copyable=lane.copyable semanticType=integer role=<LlvmParameterRole.Ordinary index=0U64 /> mode=<LlvmParameterMode.Borrow /> /> index=1U64 carrier=<LlvmValueCarrier.Value value=scalar /> />
     val recordValue = LLVMGetUndef(recordLane.type)
     val recordHome = LLVMBuildAlloca(builder, recordLane.type, anon())
     llvmStore(builder, recordValue, recordHome)
-    val recordInput = <LlvmValueInput lane=<LlvmLogicalParameter type=recordLane.type semanticType=aggregate role=<LlvmParameterRole.Ordinary index=1U64 /> mode=<LlvmParameterMode.Borrow /> /> index=2U64 carrier=<LlvmValueCarrier.Value value=recordValue /> />
+    val recordInput = <LlvmValueInput lane=<LlvmLogicalParameter type=recordLane.type copyable=recordLane.copyable semanticType=aggregate role=<LlvmParameterRole.Ordinary index=1U64 /> mode=<LlvmParameterMode.Borrow /> /> index=2U64 carrier=<LlvmValueCarrier.Value value=recordValue /> />
     val homeInput = <LlvmValueInput lane=recordInput.lane index=2U64 carrier=<LlvmValueCarrier.Home address=recordHome /> />
     val beforeCalls = backend.valueAbis.count()
     val beforeLanes = backend.valueAbiParameters.count()
@@ -275,20 +275,20 @@ fn witnessCallControl() {
         repeat += 1U64
     }
     val mutateCallee = requireWitnessOk(result: backend.witnessCallee(c: inout compiler, selected: mutate, fat: fat), stage: "inout callee", mode: 0U64)
-    val inoutInput = <LlvmValueInput lane=<LlvmLogicalParameter type=backend.ptrty semanticType=integer role=<LlvmParameterRole.Ordinary index=0U64 /> mode=<LlvmParameterMode.Inout /> /> index=1U64 carrier=<LlvmValueCarrier.Value value=data /> />
+    val inoutInput = <LlvmValueInput lane=<LlvmLogicalParameter type=backend.ptrty semanticType=integer copyable=lane.copyable role=<LlvmParameterRole.Ordinary index=0U64 /> mode=<LlvmParameterMode.Inout /> /> index=1U64 carrier=<LlvmValueCarrier.Value value=data /> />
     requireWitnessOk(result: backend.callWitnessValueFunction(callee: mutateCallee, arguments: [inoutInput]), stage: "inout address call", mode: 0U64)
     val consumeCallee = requireWitnessOk(result: backend.witnessCallee(c: inout compiler, selected: consume, fat: fat), stage: "move callee", mode: 0U64)
-    val moveInput = <LlvmValueInput lane=<LlvmLogicalParameter type=lane.type semanticType=integer role=<LlvmParameterRole.Ordinary index=0U64 /> mode=<LlvmParameterMode.Move /> /> index=1U64 carrier=input.carrier />
+    val moveInput = <LlvmValueInput lane=<LlvmLogicalParameter type=lane.type copyable=lane.copyable semanticType=integer role=<LlvmParameterRole.Ordinary index=0U64 /> mode=<LlvmParameterMode.Move /> /> index=1U64 carrier=input.carrier />
     requireWitnessOk(result: backend.callWitnessValueFunction(callee: consumeCallee, arguments: [moveInput]), stage: "move ordinary call", mode: 0U64)
     if backend.valueAbis.count() != beforeCalls || backend.valueAbiParameters.count() != beforeLanes { panic "witness calls append plans" }
     mut val mode = 0U64
     while mode < 5U64 {
-        val malformed = <LlvmValueInput lane=<LlvmLogicalParameter type=lane.type semanticType=if mode == 0U64 { give unsigned } else { give integer } role=if mode == 2U64 { give <LlvmParameterRole.ErasedReceiver /> } else if mode == 4U64 { give <LlvmParameterRole.Ordinary index=1U64 /> } else { give <LlvmParameterRole.Ordinary index=0U64 /> } mode=if mode == 3U64 { give <LlvmParameterMode.Move /> } else { give <LlvmParameterMode.Borrow /> } /> index=if mode == 1U64 { give 0U64 } else { give 1U64 } carrier=input.carrier />
+        val malformed = <LlvmValueInput lane=<LlvmLogicalParameter type=lane.type copyable=lane.copyable semanticType=if mode == 0U64 { give unsigned } else { give integer } role=if mode == 2U64 { give <LlvmParameterRole.ErasedReceiver /> } else if mode == 4U64 { give <LlvmParameterRole.Ordinary index=1U64 /> } else { give <LlvmParameterRole.Ordinary index=0U64 /> } mode=if mode == 3U64 { give <LlvmParameterMode.Move /> } else { give <LlvmParameterMode.Borrow /> } /> index=if mode == 1U64 { give 0U64 } else { give 1U64 } carrier=input.carrier />
         requireWitnessInternal(result: backend.callWitnessValueFunction(callee: callee, arguments: [malformed, homeInput]), mode: mode)
         mode += 1U64
     }
     // Isolate the same-pointer ErasedReceiver/Ordinary role check on inout.
-    requireWitnessInternal(result: backend.callWitnessValueFunction(callee: mutateCallee, arguments: [<LlvmValueInput lane=<LlvmLogicalParameter type=backend.ptrty semanticType=integer role=<LlvmParameterRole.ErasedReceiver /> mode=<LlvmParameterMode.Inout /> /> index=1U64 carrier=inoutInput.carrier />]), mode: 5U64)
+    requireWitnessInternal(result: backend.callWitnessValueFunction(callee: mutateCallee, arguments: [<LlvmValueInput lane=<LlvmLogicalParameter type=backend.ptrty semanticType=integer copyable=lane.copyable role=<LlvmParameterRole.ErasedReceiver /> mode=<LlvmParameterMode.Inout /> /> index=1U64 carrier=inoutInput.carrier />]), mode: 5U64)
     mode = 0U64
     while mode < 6U64 {
         val inputs = <LlvmCallableInputScope moduleIdentity=callee.inputs.moduleIdentity + if mode == 2U64 { give 1U64 } else { give 0U64 } contextIdentity=callee.inputs.contextIdentity + if mode == 3U64 { give 1U64 } else { give 0U64 } revision=if mode == 4U64 { give 2U64 } else { give 1U64 } callableIdentity=if mode == 0U64 { give secondTemplate } else { give template } signature=if mode == 1U64 { give callerType } else { give callee.inputs.signature } />

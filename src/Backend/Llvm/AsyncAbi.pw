@@ -35,7 +35,7 @@ pub impl LlvmCtx {
                     }
                     CallArgumentPassing.Move => {}
                 }
-                parameters.append(<LlvmLogicalParameter type=(try self.llvmTypeOfRef(c: inout c, ref: signature.parameterTypes[index])) semanticType=signature.parameterTypes[index] role=<LlvmParameterRole.Ordinary index=index /> mode=argumentValueMode(passing: passing) />)
+                parameters.append(<LlvmLogicalParameter type=(try self.llvmTypeOfRef(c: inout c, ref: signature.parameterTypes[index])) semanticType=signature.parameterTypes[index] copyable=!c.arena.typeTermIsUnique(ref: signature.parameterTypes[index]) role=<LlvmParameterRole.Ordinary index=index /> mode=argumentValueMode(passing: passing) />)
                 index += 1U64
             }
         }

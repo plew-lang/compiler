@@ -3,6 +3,7 @@ use ../../../src/Backend/PhysicalSignature only { LlvmSignatureScope, LlvmLogica
 use ../../../src/LlvmHandles only { LLVMContextRef, LLVMModuleRef, LLVMTypeRef, LLVMValueRef }
 use @Std/Io only { write }
 extern(c) {
+    fn plew_test_signature_byref_function(module~: LLVMModuleRef, aggregate~: LLVMTypeRef, alignment~: U64) -> LLVMValueRef
     fn plew_test_signature_function(module~: LLVMModuleRef, aggregate~: LLVMTypeRef) -> LLVMValueRef
     fn plew_test_signature_value(function~: LLVMValueRef, type~: LLVMTypeRef, kind~: U32) -> LLVMValueRef
     fn plew_test_signature_constant(module~: LLVMModuleRef, kind~: U32) -> LLVMValueRef
@@ -18,8 +19,8 @@ extern(c) {
     fn plew_test_signature_change_layout(module~: LLVMModuleRef)
     fn LLVMCountParamTypes(type~: LLVMTypeRef) -> U32
 }
-fn parameter(type: LLVMTypeRef, semantic: U64, role: LlvmParameterRole, mode: LlvmParameterMode) -> LlvmLogicalParameter {
-    return <LlvmLogicalParameter type=type semanticType=semantic role=role mode=mode />
+fn parameter(type: LLVMTypeRef, semantic: U64, role: LlvmParameterRole, mode: LlvmParameterMode, copyable: Bool = false) -> LlvmLogicalParameter {
+    return <LlvmLogicalParameter type=type semanticType=semantic copyable=copyable role=role mode=mode />
 }
 fn body(parameters: Array[LlvmLogicalParameter], result: LLVMTypeRef) -> LlvmLogicalSignature {
     return <LlvmLogicalSignature convention=<LlvmValueConvention.Body /> parameters=parameters result=result resultTerm=0U64 />
@@ -107,6 +108,23 @@ fn main() {
     if scope.validate(signature: plainSignature, plan: changed(plan: plainPlan, parameters: [badAlignment])).isOk() { panic "corrupt alignment accepted" }
     val badTransport = <LlvmValueParameter type=lane.type semanticType=lane.semanticType role=lane.role mode=lane.mode physicalIndex=lane.physicalIndex passing=<LlvmValuePassing.Direct /> valueAlignment=lane.valueAlignment />
     if scope.validate(signature: plainSignature, plan: changed(plan: plainPlan, parameters: [badTransport])).isOk() { panic "corrupt transport accepted" }
+    // Completed copyability selects a deterministic no-copy pointer lane.
+    val guaranteed = parameter(type: aggregate, semantic: 11U64, role: plain.role, mode: plain.mode, copyable: true)
+    val guaranteedPlan = scope.plan(signature: body(parameters: [guaranteed], result: voidType)).unwrap()
+    if guaranteedPlan.parameters[0U64].passing.key() != 3U64 || !guaranteedPlan.parameters[0U64].copyable { panic "copyable Borrow aggregate is not guaranteed indirect" }
+    if plainPlan.parameters[0U64].passing.key() != 2U64 { panic "unproved aggregate lost conservative byval" }
+    val consumingCopyable = parameter(type: aggregate, semantic: 11U64, role: plain.role, mode: <LlvmParameterMode.Move />, copyable: true)
+    if scope.plan(signature: body(parameters: [consumingCopyable], result: voidType)).unwrap().parameters[0U64].passing.key() != 2U64 { panic "consuming lane became guaranteed" }
+    if scope.validate(signature: body(parameters: [guaranteed], result: voidType), plan: plainPlan).isOk() { panic "changed copyability/transport accepted" }
+    val guaranteedFunction = plew_test_signature_byref_function(module, aggregate, guaranteedPlan.parameters[0U64].valueAlignment)
+    val guaranteedHome = plew_test_signature_value(guaranteedFunction, aggregate, 0U32)
+    val guaranteedInput = <LlvmValueInput lane=guaranteed index=0U64 carrier=<LlvmValueCarrier.Home address=guaranteedHome /> />
+    scope.validateInput(parameter: guaranteedPlan.parameters[0U64], input: guaranteedInput, index: 0U64, function: guaranteedFunction).unwrap()
+    val underaligned = plew_test_signature_byref_function(module, aggregate, 1U64)
+    val underalignedInput = <LlvmValueInput lane=guaranteed index=0U64 carrier=<LlvmValueCarrier.Home address=plew_test_signature_value(underaligned, aggregate, 0U32) /> />
+    if scope.validateInput(parameter: guaranteedPlan.parameters[0U64], input: underalignedInput, index: 0U64, function: underaligned).isOk() { panic "underaligned guaranteed home accepted" }
+    val wrongCapability = <LlvmValueInput lane=plain index=0U64 carrier=<LlvmValueCarrier.Home address=guaranteedHome /> />
+    if scope.validateInput(parameter: guaranteedPlan.parameters[0U64], input: wrongCapability, index: 0U64, function: guaranteedFunction).isOk() { panic "missing copyability handoff accepted" }
     val legacy = <LlvmLogicalSignature convention=<LlvmValueConvention.Legacy family=<LlvmLegacyConvention.Closure /> /> parameters=[parameter(type: aggregate, semantic: 0U64, role: <LlvmParameterRole.Legacy index=0U64 />, mode: <LlvmParameterMode.Legacy />)] result=voidType resultTerm=0U64 />
     scope.validate(signature: legacy, plan: scope.plan(signature: legacy).unwrap()).unwrap()
     val retired: Array[LlvmLegacyConvention] = [<LlvmLegacyConvention.Witness />, <LlvmLegacyConvention.AsyncEntry />, <LlvmLegacyConvention.AsyncResume />, <LlvmLegacyConvention.EnvironmentDrop />, <LlvmLegacyConvention.ExistentialCopy />, <LlvmLegacyConvention.ExistentialDrop />, <LlvmLegacyConvention.StructRetain />, <LlvmLegacyConvention.StructDrop />, <LlvmLegacyConvention.EnumRetain />, <LlvmLegacyConvention.EnumRelease />]

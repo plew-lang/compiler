@@ -71,3 +71,11 @@ next call. Record actual machine transfer reduction separately from ARC at W4.
 
 Neutral source/evidence review is required before accepting each increment.
 This plan grants no source semantics/lifetime changes or main/seed promotion.
+
+## Incoming Home Source Checkpoint
+
+[Retained checkpoint](../../../evidence/performance-regression-history/value-passing-implementation/w3-transport/incoming-home-checkpoint.json) records the structural RED, fresh standard build, native private producer/consumer and updated raw/optimized source tests. Completed copyability selects typed byref(T)+align in the common planner; all families retain typed carriers, and readonly synchronous incoming parameters bind and forward directly. Other values/homes retain snapshots. Move/Inout/unique and outer C remain unchanged; async acquires its frame-owned value before returning.
+
+The independent source review found and closed a retained local/lane mapping hole: normal ordinal or closure/witness parameter binding and canonical semantic lane identity are now checked, with same-native two-lane index-swap rejection. LLVM byref is only physical ABI/type evidence, never source stability/lifetime permission. No readonly/noalias or new ARC suppression was added.
+
+This is a source checkpoint, not W3 completion. Next complete sealed local/temporary/eligible static-field facts through canonical instantiation, Ready use correspondence and final call consumption. Source-origin integers or an arbitrary alloca/GEP are not stability proofs. Initialisation/lifetime/access remain the existing verified Mid contract. Remaining final private/family/gates and W4 adoption stay open.

@@ -8,6 +8,7 @@ extern(c) {
     fn plew_llvm_function_matches(module~: LLVMModuleRef, function~: LLVMValueRef, signature~: LLVMTypeRef) -> I32
     fn plew_llvm_value_scope_matches(value~: LLVMValueRef, function~: LLVMValueRef) -> I32
     fn plew_llvm_home_type_matches(address~: LLVMValueRef, type~: LLVMTypeRef) -> I32
+    fn plew_llvm_home_alignment(address~: LLVMValueRef) -> U64
     fn LLVMTypeOf(value~: LLVMValueRef) -> LLVMTypeRef
     fn LLVMIsAFunction(value~: LLVMValueRef) -> U64
     fn LLVMGetGlobalParent(function~: LLVMValueRef) -> LLVMModuleRef
@@ -149,13 +150,14 @@ pub impl LlvmParameterMode {
         }
     }
 }
-pub enum LlvmValuePassing { Omitted Direct Indirect }
+pub enum LlvmValuePassing { Omitted Direct Indirect GuaranteedIndirect }
 pub impl LlvmValuePassing {
     fn key() -> U64 {
         return match self {
             LlvmValuePassing.Omitted => { give 0U64 }
             LlvmValuePassing.Direct => { give 1U64 }
             LlvmValuePassing.Indirect => { give 2U64 }
+            LlvmValuePassing.GuaranteedIndirect => { give 3U64 }
         }
     }
 }
@@ -195,6 +197,7 @@ pub impl LlvmValueInput { factory }
 pub struct LlvmLogicalParameter {
     pub val type: LLVMTypeRef
     pub val semanticType: U64
+    pub val copyable: Bool = false
     pub val role: LlvmParameterRole
     pub val mode: LlvmParameterMode
 }
@@ -209,6 +212,7 @@ pub impl LlvmLogicalSignature { factory }
 pub struct LlvmValueParameter {
     pub val type: LLVMTypeRef
     pub val semanticType: U64
+    pub val copyable: Bool = false
     pub val role: LlvmParameterRole
     pub val mode: LlvmParameterMode
     pub val physicalIndex: U64
@@ -289,6 +293,7 @@ pub impl LlvmSignatureScope {
 
     fn validateInput(parameter: LlvmValueParameter, input: LlvmValueInput, index: U64, function: LLVMValueRef) -> Result[(), CompileDiagnostic] {
         if input.index != index { return <Result.Err error=signatureFailure(message: "typed input index mismatch") /> }
+        if parameter.copyable != input.lane.copyable { return <Result.Err error=signatureFailure(message: "typed input copyability mismatch") /> }
         if parameter.semanticType != input.lane.semanticType { return <Result.Err error=signatureFailure(message: "typed input canonical semantic term mismatch") /> }
         if !parameter.role.same(role: input.lane.role) { return <Result.Err error=signatureFailure(message: "typed input role mismatch") /> }
         if parameter.mode.key() != input.lane.mode.key() { return <Result.Err error=signatureFailure(message: "typed input ownership mode mismatch") /> }
@@ -301,7 +306,7 @@ pub impl LlvmSignatureScope {
                 give value
             }
             LlvmValueCarrier.Home(address: val address) => {
-                if parameter.mode.key() == 2U64 || parameter.passing.key() == 1U64 || LLVMGetTypeKind(LLVMTypeOf(address)) != 12U32 || plew_llvm_home_type_matches(address, parameter.type) == 0I32 { return <Result.Err error=signatureFailure(message: "input is not a typed aggregate home") /> }
+                if parameter.mode.key() == 2U64 || parameter.passing.key() == 1U64 || LLVMGetTypeKind(LLVMTypeOf(address)) != 12U32 || plew_llvm_home_type_matches(address, parameter.type) == 0I32 || plew_llvm_home_alignment(address) < parameter.valueAlignment { return <Result.Err error=signatureFailure(message: "input is not a typed aggregate home") /> }
                 give address
             }
         }
@@ -351,6 +356,7 @@ pub impl LlvmSignatureScope {
         mut val index = 0U64
         while index < signature.parameters.count() {
             val parameter = signature.parameters[index]
+            if parameter.copyable && parameter.semanticType == 0U64 { return <Result.Err error=signatureFailure(message: "copyable value lane lacks a semantic term") /> }
             if !self.ownsType(type: parameter.type) { return <Result.Err error=signatureFailure(message: "foreign parameter context") /> }
             if LLVMTypeIsSized(parameter.type) == 0I32 { return <Result.Err error=signatureFailure(message: "incomplete parameter layout") /> }
             match signature.convention {
@@ -437,15 +443,16 @@ pub impl LlvmSignatureScope {
         mut val physical: Array[LLVMTypeRef] = []
         val layout = LLVMGetModuleDataLayout(self.module)
         for parameter in signature.parameters {
-            val passing = physicalPassing(type: parameter.type)
+            val passing = physicalParameterPassing(parameter: parameter)
             mut val alignment = 0U64
             if passing.key() != 0U64 { alignment = LLVMABIAlignmentOfType(layout, parameter.type) as U64 }
-            parameters.append(<LlvmValueParameter type=parameter.type semanticType=parameter.semanticType role=parameter.role mode=parameter.mode physicalIndex=physical.count() passing=passing valueAlignment=alignment />)
+            parameters.append(<LlvmValueParameter type=parameter.type semanticType=parameter.semanticType copyable=parameter.copyable role=parameter.role mode=parameter.mode physicalIndex=physical.count() passing=passing valueAlignment=alignment />)
             logical.append(parameter.type)
             match passing {
                 LlvmValuePassing.Omitted => {}
                 LlvmValuePassing.Direct => { physical.append(parameter.type) }
                 LlvmValuePassing.Indirect => { physical.append(LLVMPointerTypeInContext(self.context, 0U32)) }
+                LlvmValuePassing.GuaranteedIndirect => { physical.append(LLVMPointerTypeInContext(self.context, 0U32)) }
             }
         }
         val resultProtocol = if signature.convention.key() == 17U64 { give <LlvmResultProtocol.ProgramStatus /> } else if LLVMGetTypeKind(signature.result) == 0U32 { give <LlvmResultProtocol.Void /> } else { give <LlvmResultProtocol.UnchangedValue /> }
@@ -461,7 +468,7 @@ pub impl LlvmSignatureScope {
         while index < expected.parameters.count() {
             val parameter = plan.parameters[index]
             val wanted = expected.parameters[index]
-            if parameter.semanticType != wanted.semanticType || !parameter.role.same(role: wanted.role) || parameter.mode.key() != wanted.mode.key() || parameter.physicalIndex != wanted.physicalIndex || parameter.passing.key() != wanted.passing.key() || parameter.valueAlignment != wanted.valueAlignment || plew_pointer_equal(parameter.type, wanted.type) == 0I32 { return <Result.Err error=signatureFailure(message: "plan lane role/type/index/transport/alignment mismatch") /> }
+            if parameter.copyable != wanted.copyable || parameter.semanticType != wanted.semanticType || !parameter.role.same(role: wanted.role) || parameter.mode.key() != wanted.mode.key() || parameter.physicalIndex != wanted.physicalIndex || parameter.passing.key() != wanted.passing.key() || parameter.valueAlignment != wanted.valueAlignment || plew_pointer_equal(parameter.type, wanted.type) == 0I32 { return <Result.Err error=signatureFailure(message: "plan lane role/type/index/transport/alignment mismatch") /> }
             index += 1U64
         }
         return <Result.Ok value=() />
@@ -491,4 +498,18 @@ fn physicalPassing(type: LLVMTypeRef) -> LlvmValuePassing {
     val kind = LLVMGetTypeKind(type)
     if kind == 10U32 || kind == 11U32 { return <LlvmValuePassing.Indirect /> }
     return <LlvmValuePassing.Direct />
+}
+
+// Copyability is a completed semantic input, never inferred from native layout.
+fn physicalParameterPassing(parameter: LlvmLogicalParameter) -> LlvmValuePassing {
+    val baseline = physicalPassing(type: parameter.type)
+    if baseline.key() != 2U64 || !parameter.copyable || parameter.mode.key() != 1U64 { return baseline }
+    val valueRole = match parameter.role {
+        LlvmParameterRole.Receiver => { give true }
+        LlvmParameterRole.Ordinary(index: _) => { give true }
+        LlvmParameterRole.GlueValue => { give true }
+        _ => { give false }
+    }
+    if valueRole { return <LlvmValuePassing.GuaranteedIndirect /> }
+    return baseline
 }

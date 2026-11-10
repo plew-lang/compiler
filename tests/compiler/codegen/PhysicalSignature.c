@@ -67,3 +67,16 @@ LLVMValueRef plew_test_signature_constant(LLVMModuleRef module, unsigned kind) {
     if (kind == 1) return expression;
     return LLVMConstStructInContext(context, &expression, 1, 0);
 }
+
+LLVMValueRef plew_test_signature_byref_function(LLVMModuleRef module, LLVMTypeRef aggregate, unsigned long long alignment) {
+    LLVMContextRef context = LLVMGetModuleContext(module);
+    LLVMTypeRef pointer = LLVMPointerTypeInContext(context, 0);
+    LLVMValueRef function = LLVMAddFunction(module, "guaranteed-input", LLVMFunctionType(LLVMVoidTypeInContext(context), &pointer, 1, 0));
+    LLVMAddAttributeAtIndex(function, 1, LLVMCreateTypeAttribute(context, LLVMGetEnumAttributeKindForName("byref", 5), aggregate));
+    LLVMAddAttributeAtIndex(function, 1, LLVMCreateEnumAttribute(context, LLVMGetEnumAttributeKindForName("align", 5), alignment));
+    LLVMBuilderRef builder = LLVMCreateBuilderInContext(context);
+    LLVMPositionBuilderAtEnd(builder, LLVMAppendBasicBlockInContext(context, function, "entry"));
+    LLVMBuildRetVoid(builder);
+    LLVMDisposeBuilder(builder);
+    return function;
+}

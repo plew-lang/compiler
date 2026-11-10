@@ -28,6 +28,8 @@ uint64_t plew_llvm_context_identity(LLVMContextRef context);
 int plew_llvm_function_matches(LLVMModuleRef module, LLVMValueRef function, LLVMTypeRef signature);
 int plew_llvm_value_scope_matches(LLVMValueRef value, LLVMValueRef function);
 int plew_llvm_home_type_matches(LLVMValueRef address, LLVMTypeRef type);
+uint64_t plew_llvm_home_alignment(LLVMValueRef address);
+int plew_llvm_guaranteed_parameter_matches(LLVMValueRef address, LLVMTypeRef type, uint64_t alignment);
 
 // Single-threaded native execution session. It owns code, not a second Plew
 // runtime. Hosts explicitly supply symbols from the existing runtime instance.

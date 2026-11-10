@@ -160,6 +160,7 @@ pub impl LlvmCtx {
                     if saved != field || saved >= 4294967296U64 || truncU32(n: saved) >= fieldCount || plew_pointer_equal(LLVMStructGetTypeAtIndex(activation.type, truncU32(n: saved)), local.storageType) == 0I32 { return <Result.Err error=valueAbiFailure(message: "async retained frame field mismatch") /> }
                     field += 1U64
                 }
+                LlvmLocalStorage.GuaranteedParameter(parameterIndex: _, semanticType: _) => { return <Result.Err error=valueAbiFailure(message: "async frame cannot retain a caller parameter home") /> }
                 LlvmLocalStorage.EntryAlloca => { if index < activation.inputCount { return <Result.Err error=valueAbiFailure(message: "async parameter is not frame bound") /> } }
             }
             index += 1U64

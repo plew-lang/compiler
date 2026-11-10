@@ -112,7 +112,7 @@ struct LlvmEntryLocalBindings {
     pub val types: Array[LLVMTypeRef]
 }
 pub impl LlvmEntryLocalBindings { factory }
-enum LlvmLocalStorage { EntryAlloca FrameField(field: U64) }
+enum LlvmLocalStorage { EntryAlloca FrameField(field: U64) GuaranteedParameter(parameterIndex: U64, semanticType: U64) }
 struct LlvmPreparedLocal {
     pub val semanticType: U64 = 0U64
     pub val type: LLVMTypeRef
@@ -315,6 +315,8 @@ struct LlvmCtx {
     pub val midProgram: MidExecutableProgram = <MidExecutableProgram.empty />
     mut val cIntegerPolicy: Optional[LlvmCIntegerPolicy] = <Optional.None />
     pub mut val valueAbiByvalKind: U32 = 0U32
+    mut val valueAbiByrefKind: U32 = 0U32
+    mut val valueAbiAlignKind: U32 = 0U32
     mut val programValueAbis: Dictionary[U64, U64] = [:]
     mut val programFunctions: Dictionary[U64, LLVMValueRef] = [:]
     mut val asyncValueAbis: Dictionary[U64, Array[U64]] = [:]
@@ -1726,4 +1728,8 @@ fn llvmStore(builder~: LLVMBuilderRef, value~: LLVMValueRef, address~: LLVMValue
 
 fn valueAbiFailure(message: String) -> CompileDiagnostic {
     return <CompileDiagnostic failureDomain=<FailureDomain.Internal /> location=<DiagnosticLocation.Line line=0I64 /> message="internal error: private value ABI: " + message />
+}
+
+extern(c) {
+    fn plew_llvm_guaranteed_parameter_matches(address~: LLVMValueRef, type~: LLVMTypeRef, alignment~: U64) -> I32
 }

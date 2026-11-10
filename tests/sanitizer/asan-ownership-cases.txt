@@ -101,3 +101,7 @@ tests/fixtures/run/generic_enum_field_inference.pw
 
 # Associated physical fields preserve grounded generic String ownership.
 tests/fixtures/run/associated_storage_layout.pw
+tests/fixtures/run/mid_guaranteed_indirect_roundtrip.pw
+tests/fixtures/run/mid_value_abi.pw
+tests/fixtures/run/mid_typed_witness_call.pw
+tests/fixtures/run/async_empty_aggregate_roundtrip.pw

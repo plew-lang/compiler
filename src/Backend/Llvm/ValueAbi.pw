@@ -1,4 +1,4 @@
-// The private Plew ABI preserves aggregate value snapshots through byval.
+// The private Plew ABI forwards guaranteed read homes and preserves required snapshots.
 // Logical signatures remain the inputs of call preparation and parameter binding;
 // this layer alone maps them to physical LLVM parameters and attributes.
 pub impl LlvmCtx {
@@ -67,7 +67,7 @@ pub impl LlvmCtx {
         mut val index = 1U64
         while index < type.args.count() {
             val term = type.args[index]
-            parameters.append(<LlvmLogicalParameter type=(try self.llvmTypeOfRef(c: inout c, ref: term)) semanticType=term role=<LlvmParameterRole.Ordinary index=index - 1U64 /> mode=<LlvmParameterMode.Borrow /> />)
+            parameters.append(<LlvmLogicalParameter type=(try self.llvmTypeOfRef(c: inout c, ref: term)) semanticType=term copyable=!c.arena.typeTermIsUnique(ref: term) role=<LlvmParameterRole.Ordinary index=index - 1U64 /> mode=<LlvmParameterMode.Borrow /> />)
             index += 1U64
         }
         val resultTerm = if c.functionTypeReturnsUnit(ref: functionType) { give 0U64 } else { give type.args[0U64] }
@@ -118,13 +118,13 @@ pub impl LlvmCtx {
         val function = LLVMBuildExtractValue(self.b, callee.closure, 0U64, anon())
         val environment = LLVMBuildExtractValue(self.b, callee.closure, 1U64, anon())
         val environmentLane = self.valueAbiParameters[abi.parameterStart]
-        try scope.validateInput(parameter: environmentLane, input: <LlvmValueInput lane=<LlvmLogicalParameter type=environmentLane.type semanticType=environmentLane.semanticType role=<LlvmParameterRole.Environment /> mode=<LlvmParameterMode.Borrow /> /> index=0U64 carrier=<LlvmValueCarrier.Value value=environment /> />, index: 0U64, function: caller)
-        mut val values: Array[LLVMValueRef] = [environment]
+        try scope.validateInput(parameter: environmentLane, input: <LlvmValueInput lane=<LlvmLogicalParameter type=environmentLane.type semanticType=environmentLane.semanticType copyable=environmentLane.copyable role=<LlvmParameterRole.Environment /> mode=<LlvmParameterMode.Borrow /> /> index=0U64 carrier=<LlvmValueCarrier.Value value=environment /> />, index: 0U64, function: caller)
+        mut val values: Array[LlvmValueCarrier] = [<LlvmValueCarrier.Value value=environment />]
         mut val index = 0U64
         while index < arguments.count() {
             val input = arguments[index]
             try scope.validateInput(parameter: self.valueAbiParameters[abi.parameterStart + index + 1U64], input: input, index: index + 1U64, function: caller)
-            values.append(self.valueInputValue(input: input))
+            values.append(input.carrier)
             index += 1U64
         }
         return self.emitPlannedValueCall(abiId: callee.template, function: function, arguments: values)
@@ -153,8 +153,9 @@ pub impl LlvmCtx {
             LlvmValuePassing.Omitted => { give <LlvmValueCarrier.Value value=LLVMGetUndef(parameter.type) /> }
             LlvmValuePassing.Direct => { give <LlvmValueCarrier.Value value=LLVMGetParam(function, parameter.physicalIndex) /> }
             LlvmValuePassing.Indirect => { give <LlvmValueCarrier.Home address=LLVMGetParam(function, parameter.physicalIndex) /> }
+            LlvmValuePassing.GuaranteedIndirect => { give <LlvmValueCarrier.Home address=LLVMGetParam(function, parameter.physicalIndex) /> }
         }
-        val input = <LlvmValueInput lane=<LlvmLogicalParameter type=parameter.type semanticType=parameter.semanticType role=parameter.role mode=parameter.mode /> index=index carrier=carrier />
+        val input = <LlvmValueInput lane=<LlvmLogicalParameter type=parameter.type semanticType=parameter.semanticType copyable=parameter.copyable role=parameter.role mode=parameter.mode /> index=index carrier=carrier />
         try scope.validateInput(parameter: parameter, input: input, index: index, function: function)
         return <Result.Ok value=input />
     }
@@ -177,7 +178,7 @@ pub impl LlvmCtx {
                 CallReceiverPassing.None => { return <Result.Err error=valueAbiFailure(message: "receiver has no passing mode") /> }
             }
             val type = if mode.key() == 2U64 { give self.ptrty } else { give (try self.llvmTypeOfRef(c: inout c, ref: signature.receiverType)) }
-            parameters.append(<LlvmLogicalParameter type=type semanticType=signature.receiverType role=<LlvmParameterRole.Receiver /> mode=mode />)
+            parameters.append(<LlvmLogicalParameter type=type semanticType=signature.receiverType copyable=!c.arena.typeTermIsUnique(ref: signature.receiverType) role=<LlvmParameterRole.Receiver /> mode=mode />)
         } else {
             match signature.receiverPassing { CallReceiverPassing.None => {} _ => { return <Result.Err error=valueAbiFailure(message: "free signature carries a receiver mode") /> } }
         }
@@ -189,7 +190,7 @@ pub impl LlvmCtx {
                 CallArgumentPassing.Inout => { give <LlvmParameterMode.Inout /> }
             }
             val type = if mode.key() == 2U64 { give self.ptrty } else { give (try self.llvmTypeOfRef(c: inout c, ref: signature.parameterTypes[index])) }
-            parameters.append(<LlvmLogicalParameter type=type semanticType=signature.parameterTypes[index] role=<LlvmParameterRole.Ordinary index=index /> mode=mode />)
+            parameters.append(<LlvmLogicalParameter type=type semanticType=signature.parameterTypes[index] copyable=!c.arena.typeTermIsUnique(ref: signature.parameterTypes[index]) role=<LlvmParameterRole.Ordinary index=index /> mode=mode />)
             index += 1U64
         }
         val result = if signature.resultType == 0U64 { give self.voidty } else { give (try self.llvmTypeOfRef(c: inout c, ref: signature.resultType)) }
@@ -315,12 +316,7 @@ pub impl LlvmCtx {
         mut val index = 0U64
         while index < abi.parameterCount {
             val parameter = self.valueAbiParameters[abi.parameterStart + index]
-            match parameter.passing {
-                LlvmValuePassing.Indirect => {
-                    LLVMAddAttributeAtIndex(handle, truncU32(n: parameter.physicalIndex + 1U64), LLVMCreateTypeAttribute(self.ctx, self.byvalAttributeKind(), parameter.type))
-                }
-                _ => {}
-            }
+            self.attachValueParameterAttributes(value: function, parameter: parameter, call: false)
             index += 1U64
         }
         return <Result.Ok value=function />
@@ -338,22 +334,70 @@ pub impl LlvmCtx {
     }
 
 
-    // Admitted typed calls and explicitly legacy entries share this physical
-    // emitter. W2 retains the existing byval snapshot here.
-    inout fn emitPlannedValueCall(abiId: U64, function: LLVMValueRef, arguments: Array[LLVMValueRef]) -> Result[LLVMValueRef, CompileDiagnostic] {
+    inout fn byrefAttributeKind() -> U32 {
+        if self.valueAbiByrefKind == 0U32 {
+            val name = <CString.copied text="byref" />
+            self.valueAbiByrefKind = LLVMGetEnumAttributeKindForName(name.ptr, 5U64)
+        }
+        return self.valueAbiByrefKind
+    }
+
+    inout fn valueAlignAttributeKind() -> U32 {
+        if self.valueAbiAlignKind == 0U32 {
+            val name = <CString.copied text="align" />
+            self.valueAbiAlignKind = LLVMGetEnumAttributeKindForName(name.ptr, 5U64)
+        }
+        return self.valueAbiAlignKind
+    }
+
+    fn attachValueAttribute(value: LLVMValueRef, index: U32, attribute: LLVMAttributeRef, call: Bool) {
+        if call { LLVMAddCallSiteAttribute(value, index, attribute) }
+        else { LLVMAddAttributeAtIndex(LLVMIsAFunction(value), index, attribute) }
+    }
+
+    inout fn attachValueParameterAttributes(value: LLVMValueRef, parameter: LlvmValueParameter, call: Bool) {
+        val kind = match parameter.passing {
+            LlvmValuePassing.Indirect => { give self.byvalAttributeKind() }
+            LlvmValuePassing.GuaranteedIndirect => { give self.byrefAttributeKind() }
+            _ => { return }
+        }
+        val index = truncU32(n: parameter.physicalIndex + 1U64)
+        self.attachValueAttribute(value: value, index: index, attribute: LLVMCreateTypeAttribute(self.ctx, kind, parameter.type), call: call)
+        if parameter.passing.key() == 3U64 {
+            self.attachValueAttribute(value: value, index: index, attribute: LLVMCreateEnumAttribute(self.ctx, self.valueAlignAttributeKind(), parameter.valueAlignment), call: call)
+        }
+    }
+
+    // Typed carriers survive to this sole transport owner. An incoming byref
+    // home can forward; every unproved Value/Home still supplies a snapshot.
+    inout fn emitPlannedValueCall(abiId: U64, function: LLVMValueRef, arguments: Array[LlvmValueCarrier]) -> Result[LLVMValueRef, CompileDiagnostic] {
         val abi = self.valueAbis[abiId - 1U64]
         mut val values: Array[LLVMValueRef] = []
         mut val index = 0U64
         while index < arguments.count() {
-            val value = arguments[index]
+            val carrier = arguments[index]
             val parameter = self.valueAbiParameters[abi.parameterStart + index]
             match parameter.passing {
                 LlvmValuePassing.Omitted => {}
-                LlvmValuePassing.Direct => { values.append(value) }
+                LlvmValuePassing.Direct => { values.append(self.valueCarrierValue(carrier: carrier, type: parameter.type)) }
                 LlvmValuePassing.Indirect => {
                     val slot = self.valueAbiSlot(parameter.type)
-                    llvmStore(self.b, value, slot)
+                    llvmStore(self.b, self.valueCarrierValue(carrier: carrier, type: parameter.type), slot)
                     values.append(slot)
+                }
+                LlvmValuePassing.GuaranteedIndirect => {
+                    val incoming = match carrier {
+                        LlvmValueCarrier.Home(address: val address) => { give plew_llvm_guaranteed_parameter_matches(address, parameter.type, parameter.valueAlignment) != 0I32 }
+                        _ => { give false }
+                    }
+                    if incoming {
+                        match carrier { LlvmValueCarrier.Home(address: val address) => { values.append(address) } _ => {} }
+                    } else {
+                        val slot = self.valueAbiSlot(parameter.type)
+                        LLVMSetAlignment(slot, truncU32(n: parameter.valueAlignment))
+                        llvmStore(self.b, self.valueCarrierValue(carrier: carrier, type: parameter.type), slot)
+                        values.append(slot)
+                    }
                 }
             }
             index += 1U64
@@ -361,13 +405,7 @@ pub impl LlvmCtx {
         val call = LLVMBuildCall2(self.b, abi.functionType, function, arrayCPtr(values), values.count(), anon())
         index = 0U64
         while index < abi.parameterCount {
-            val parameter = self.valueAbiParameters[abi.parameterStart + index]
-            match parameter.passing {
-                LlvmValuePassing.Indirect => {
-                    LLVMAddCallSiteAttribute(call, truncU32(n: parameter.physicalIndex + 1U64), LLVMCreateTypeAttribute(self.ctx, self.byvalAttributeKind(), parameter.type))
-                }
-                _ => {}
-            }
+            self.attachValueParameterAttributes(value: call, parameter: self.valueAbiParameters[abi.parameterStart + index], call: true)
             index += 1U64
         }
         return <Result.Ok value=call />
@@ -392,22 +430,26 @@ pub impl LlvmCtx {
         val scope = (try self.prepareValueAbiScope())
         try scope.validateInputs(scope: inputs, bodyIdentity: abi.ownerBody, signature: abi.logicalSignature)
         val caller = LLVMGetBasicBlockParent(LLVMGetInsertBlock(self.b))
-        mut val values: Array[LLVMValueRef] = []
+        mut val values: Array[LlvmValueCarrier] = []
         mut val index = 0U64
         while index < arguments.count() {
             val input = arguments[index]
             val parameter = self.valueAbiParameters[abi.parameterStart + index]
             try scope.validateInput(parameter: parameter, input: input, index: index, function: caller)
-            values.append(self.valueInputValue(input: input))
+            values.append(input.carrier)
             index += 1U64
         }
         return self.emitPlannedValueCall(abiId: abiId, function: function, arguments: values)
     }
 
     fn valueInputValue(input: LlvmValueInput) -> LLVMValueRef {
-        return match input.carrier {
+        return self.valueCarrierValue(carrier: input.carrier, type: input.lane.type)
+    }
+
+    fn valueCarrierValue(carrier: LlvmValueCarrier, type: LLVMTypeRef) -> LLVMValueRef {
+        return match carrier {
             LlvmValueCarrier.Value(value: val value) => { give value }
-            LlvmValueCarrier.Home(address: val address) => { give llvmLoad(self.b, input.lane.type, address, anon()) }
+            LlvmValueCarrier.Home(address: val address) => { give llvmLoad(self.b, type, address, anon()) }
         }
     }
 
@@ -425,8 +467,9 @@ pub impl LlvmCtx {
             LlvmValuePassing.Omitted => { give <LlvmValueCarrier.Value value=LLVMGetUndef(parameter.type) /> }
             LlvmValuePassing.Direct => { give <LlvmValueCarrier.Value value=LLVMGetParam(function, parameter.physicalIndex) /> }
             LlvmValuePassing.Indirect => { give <LlvmValueCarrier.Home address=LLVMGetParam(function, parameter.physicalIndex) /> }
+            LlvmValuePassing.GuaranteedIndirect => { give <LlvmValueCarrier.Home address=LLVMGetParam(function, parameter.physicalIndex) /> }
         }
-        val input = <LlvmValueInput lane=<LlvmLogicalParameter type=type semanticType=parameter.semanticType role=parameter.role mode=mode /> index=index carrier=carrier />
+        val input = <LlvmValueInput lane=<LlvmLogicalParameter type=type semanticType=parameter.semanticType copyable=parameter.copyable role=parameter.role mode=mode /> index=index carrier=carrier />
         val scope = (try self.prepareValueAbiScope())
         try scope.validateInput(parameter: parameter, input: input, index: index, function: function)
         return <Result.Ok value=input />
@@ -446,6 +489,7 @@ pub impl LlvmCtx {
             LlvmValuePassing.Omitted => { give LLVMGetUndef(parameter.type) }
             LlvmValuePassing.Direct => { give LLVMGetParam(self.curFn, parameter.physicalIndex) }
             LlvmValuePassing.Indirect => { give llvmLoad(self.b, parameter.type, LLVMGetParam(self.curFn, parameter.physicalIndex), anon()) }
+            LlvmValuePassing.GuaranteedIndirect => { return <Result.Err error=valueAbiFailure(message: "legacy parameter cannot bind a guaranteed home") /> }
         } />
     }
 

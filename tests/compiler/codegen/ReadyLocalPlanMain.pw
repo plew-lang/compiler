@@ -93,7 +93,7 @@ fn main() {
     backend.callBodyValueFunction(function: convertedTarget, bodyId: otherBodyId, inputs: inputScope, arguments: [input]).unwrap()
     mut val malformed = 0U64
     while malformed < 4U64 {
-        val bad = <LlvmValueInput lane=<LlvmLogicalParameter type=lane.type semanticType=if malformed == 0U64 { give 12U64 } else { give lane.semanticType } role=if malformed == 1U64 { give <LlvmParameterRole.Receiver /> } else { give lane.role } mode=if malformed == 2U64 { give <LlvmParameterMode.Move /> } else { give lane.mode } /> index=if malformed == 3U64 { give 1U64 } else { give 0U64 } carrier=input.carrier />
+        val bad = <LlvmValueInput lane=<LlvmLogicalParameter type=lane.type copyable=lane.copyable semanticType=if malformed == 0U64 { give 12U64 } else { give lane.semanticType } role=if malformed == 1U64 { give <LlvmParameterRole.Receiver /> } else { give lane.role } mode=if malformed == 2U64 { give <LlvmParameterMode.Move /> } else { give lane.mode } /> index=if malformed == 3U64 { give 1U64 } else { give 0U64 } carrier=input.carrier />
         requireInternal(result: backend.callBodyValueFunction(function: convertedTarget, bodyId: otherBodyId, inputs: inputScope, arguments: [bad]))
         malformed += 1U64
     }
@@ -122,5 +122,72 @@ fn main() {
     LLVMDisposeModule(otherModule)
     LLVMDisposeModule(module)
     LLVMContextDispose(context)
+    guaranteedLocalControl()
     write(s: "ok\n")
+}
+
+extern(c) {
+    fn LLVMIsAArgument(value~: LLVMValueRef) -> U64
+    fn LLVMIsAAllocaInst(value~: LLVMValueRef) -> U64
+    fn LLVMGetArgOperand(value~: LLVMValueRef, index~: U32) -> LLVMValueRef
+}
+fn guaranteedLocalControl() {
+    val context = LLVMContextCreate()
+    val name = <CString.copied text="guaranteed-local-controls" />
+    val module = LLVMModuleCreateWithNameInContext(name.ptr, context)
+    val triple = LLVMGetDefaultTargetTriple()
+    val cpu = <CString.copied text="generic" />
+    val layout = plew_llvm_native_data_layout(cpu.ptr)
+    LLVMSetTarget(module, triple) LLVMSetDataLayout(module, layout)
+    LLVMDisposeMessage(triple) LLVMDisposeMessage(layout)
+    val builder = LLVMCreateBuilderInContext(context)
+    mut val backend = llvmContext(ctx: context, m: module, builder: builder)
+    mut val compiler = <Comp />
+    analyzeFrontendDeclarations(c: inout compiler, input: <FrontendInput.Text text="fn control() {{}}" path="guaranteed-local.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
+    val integerName = compiler.internBytes(s: "I64")
+    val integer = compiler.simpleTypeRef(nameStart: integerName.nameStart, nameLen: integerName.nameLen)
+    val field = compiler.internBytes(s: "payload")
+    val aggregate = compiler.pushType(t: <TypeRef nameStart=0U64 nameLen=0U64 args=[] isRecord=true recordFieldLabels=[field.nameId] recordFieldTerms=[integer] />)
+    compiler.collectRecordedType(ref: aggregate).unwrap()
+    compiler.enqueueFinalDestruction(typeRef: integer).unwrap()
+    compiler.enqueueFinalDestruction(typeRef: aggregate).unwrap()
+    backend.registerFinalLayoutNames(c: inout compiler).unwrap()
+    backend.registerFinalStructBodies(c: inout compiler).unwrap()
+    val functionIndex = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "control").nameId)
+    val bodyId = compiler.arena.registerBodyInstance(<BodyInstance fnIdx=functionIndex environment=<InstanceEnvironment /> />)
+    compiler.arena.setBodySignature(bodyId: bodyId, parameters: [aggregate, aggregate], passings: [<CallArgumentPassing.Borrow />, <CallArgumentPassing.Borrow />], result: 0U64, receiverPassing: <CallReceiverPassing.None />)
+    val abiId = backend.bodyValueAbi(c: inout compiler, bodyId: bodyId).unwrap()
+    val abi = backend.valueAbis[abiId - 1U64]
+    val lane = backend.valueAbiParameters[abi.parameterStart]
+    if lane.passing.key() != 3U64 || !lane.copyable { panic "body lost guaranteed aggregate lane" }
+    val function = backend.declarePlannedBodyFunction(name: name.ptr, abiId: abiId, bodyId: bodyId).unwrap()
+    val canonical = compiler.mid.store(body: <MidBody bodyInstance=bodyId sourceFunction=functionIndex locals=[<MidLocalDecl typeTerm=aggregate sourceScope=0U64 isUnique=false isParameter=true />, <MidLocalDecl typeTerm=aggregate sourceScope=0U64 isUnique=false isParameter=true />] blocks=[<MidBlock terminator=<MidTerminator.Return /> />] />)
+    backend.curFn = function
+    backend.curRetVoid = true
+    val admission = backend.prepareBodyLocalPlan(c: inout compiler, canonical: canonical, parameterCount: 2U64).unwrap()
+    val planId = match admission { LlvmBodyLocalAdmission.Planned(planId: val saved) => { give saved } }
+    val localPlan = backend.bodyLocalPlans[planId - 1U64]
+    val local = backend.preparedLocals[localPlan.localStart]
+    match local.storage { LlvmLocalStorage.GuaranteedParameter(parameterIndex: val saved, semanticType: _) => { if saved != abi.parameterStart { panic "wrong incoming lane" } } _ => { panic "guaranteed input is still allocated" } }
+    backend.beginFnBody(fv: function)
+    backend.genLlvmPreparedMidBody(c: inout compiler, prepared: <MidLlvmPrepared.Ready canonical=canonical localAdmission=admission />).unwrap()
+    if LLVMIsAArgument(backend.locPtr[0U64]) == 0U64 || LLVMIsAArgument(backend.locPtr[0U64]) != LLVMIsAArgument(LLVMGetParam(function, 0U64)) { panic "callee did not bind incoming home directly" }
+    LLVMPositionBuilder(builder, LLVMGetEntryBasicBlock(function), LLVMGetFirstInstruction(LLVMGetEntryBasicBlock(function)))
+    val input = backend.normalBodyParameter(function: function, bodyId: bodyId, index: 0U64, type: lane.type, mode: lane.mode).unwrap()
+    val secondInput = backend.normalBodyParameter(function: function, bodyId: bodyId, index: 1U64, type: lane.type, mode: lane.mode).unwrap()
+    val scope = backend.bodyInputScope(bodyId: bodyId, signature: abi.logicalSignature).unwrap()
+    val forwarded = backend.callBodyValueFunction(function: function, bodyId: bodyId, inputs: scope, arguments: [input, secondInput]).unwrap()
+    if LLVMIsAArgument(LLVMGetArgOperand(forwarded, 0U32)) != LLVMIsAArgument(LLVMGetParam(function, 0U64)) { panic "incoming home was restaged instead of forwarded" }
+    val unproved = LLVMBuildAlloca(builder, lane.type, anon())
+    llvmStore(builder, LLVMGetUndef(lane.type), unproved)
+    val unprovedInput = <LlvmValueInput lane=input.lane index=0U64 carrier=<LlvmValueCarrier.Home address=unproved /> />
+    val snapshot = backend.callBodyValueFunction(function: function, bodyId: bodyId, inputs: scope, arguments: [unprovedInput, secondInput]).unwrap()
+    if LLVMIsAAllocaInst(LLVMGetArgOperand(snapshot, 0U32)) == 0U64 || LLVMIsAAllocaInst(LLVMGetArgOperand(snapshot, 0U32)) == LLVMIsAAllocaInst(unproved) { panic "unproved home bypassed snapshot" }
+    val malformed = <LlvmValueInput lane=<LlvmLogicalParameter type=lane.type semanticType=lane.semanticType role=lane.role mode=lane.mode /> index=0U64 carrier=input.carrier />
+    requireInternal(result: backend.callBodyValueFunction(function: function, bodyId: bodyId, inputs: scope, arguments: [malformed, secondInput]))
+    backend.preparedLocals.set(i: localPlan.localStart, value: <LlvmPreparedLocal semanticType=local.semanticType type=local.type storageType=local.storageType storage=<LlvmLocalStorage.GuaranteedParameter parameterIndex=abi.parameterStart + 1U64 semanticType=lane.semanticType /> mode=local.mode binding=local.binding />)
+    requireInternal(result: backend.genLlvmPreparedMidBody(c: inout compiler, prepared: <MidLlvmPrepared.Ready canonical=canonical localAdmission=admission />))
+    backend.preparedLocals.set(i: localPlan.localStart, value: <LlvmPreparedLocal semanticType=integer type=local.type storageType=local.storageType storage=local.storage mode=local.mode binding=local.binding />)
+    requireInternal(result: backend.genLlvmPreparedMidBody(c: inout compiler, prepared: <MidLlvmPrepared.Ready canonical=canonical localAdmission=admission />))
+    LLVMDisposeBuilder(builder) LLVMDisposeModule(module) LLVMContextDispose(context)
 }
