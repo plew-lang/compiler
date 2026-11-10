@@ -49,3 +49,17 @@ Scenarios/closure:
 - Synchronize native API/design/test/operational docs and independently review
   implementation plus measured candidate. No full-suite/ASan/full-fixed-point
   or adoption certification inferred from scoped gates.
+
+## Implementation checkpoint
+
+Original worker RED is recorded in meta tmp/llvm-progress/red-gate: the new
+no-detail assertion fails on actual default trace output. LLVM20/22 native mode,
+object identity, invalid-parser/output diagnostics and sanitizer-symbol controls
+are GREEN in green-gate. The changed default-trace assertion in direct-object
+uses PLEW_LLVM_TRACE=0 explicitly (independent review caught ambient env leakage).
+prepare-gate also passes reference/native five-fixture executions, fresh embedded
+candidate direct-object controls, repeated in-process requests/verbose init, and
+source/native input invariance. Original LLVM verifier/target/layout rejection
+controls are executed, not inferred from parser rejection. Forty supervisor/unit
+checks pass with existing timeout/cancellation/reaping/diagnostic assertions.
+Measured standard build and final independent candidate review remain required.

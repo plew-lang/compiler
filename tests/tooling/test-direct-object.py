@@ -28,7 +28,8 @@ def main():
     wrapper = [sys.executable, str(ROOT / 'scripts/support/watch-command.py'), '--']
 
     def run(command, expected=0):
-        result = subprocess.run([*wrapper, *map(str, command)], capture_output=True)
+        result = subprocess.run([*wrapper, *map(str, command)], capture_output=True,
+                                env=dict(os.environ, PLEW_LLVM_TRACE='0'))
         assert result.returncode == expected, (command, result.returncode, result.stderr.decode(errors='replace'))
         return result
 
@@ -48,6 +49,7 @@ def main():
             run([Path(query('--bindir')) / 'clang++', '-std=c++17', '-O2',
                  '-isystem', query('--includedir'), ROOT / 'native/llvm_backend.cpp',
                  ROOT / 'native/llvm_object_main.cpp', '-L' + str(library), '-lLLVM', '-o', worker])
+        run([sys.executable, ROOT / 'tests/tooling/test-llvm-progress.py', '--worker', worker])
         runtime = directory / 'runtime.c'
         runtime.write_bytes(run([compiler, '--runtime']).stdout)
         runtime_object = directory / 'runtime.o'
@@ -60,8 +62,9 @@ def main():
             source = ROOT / 'tests/fixtures' / (case + '.pw')
             result = run([compiler, '--emit-object', direct, '--target-cpu', 'apple-m1', '--trace-phases', source])
             assert result.stdout == b'', case
-            assert b'backend:drain:done' in result.stderr and b'Running pass:' in result.stderr, case
-            assert b'Executing Pass' in result.stderr, case
+            assert b'backend:drain:done' in result.stderr and b'llvm:ir-shared completed=' in result.stderr, case
+            assert b'llvm:ir-o2 completed=' in result.stderr and b'llvm:codegen completed=' in result.stderr, case
+            assert b'Running pass:' not in result.stderr and b'Executing Pass' not in result.stderr, case
             assert b'backend:print-module' not in result.stderr and b'backend:write:' not in result.stderr, case
             text = run([compiler, '--trace-phases', source])
             assert b'backend:print-module:done' in text.stderr, case

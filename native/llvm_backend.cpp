@@ -1,5 +1,11 @@
 #include "llvm_backend.h"
 #include "llvm_pipeline.h"
+#include "llvm_progress.h"
+#include <llvm/Passes/PassBuilder.h>
+#include <llvm/Target/TargetMachine.h>
+#include <llvm/Passes/StandardInstrumentations.h>
+#include <llvm/ADT/SmallString.h>
+#include <mutex>
 
 #include <llvm-c/Analysis.h>
 #include <llvm/Support/CommandLine.h>
@@ -143,16 +149,74 @@ bool verify(LLVMModuleRef module) {
   return !failed;
 }
 
+bool verboseLlvmTrace(int trace) {
+  const char *value = std::getenv("PLEW_LLVM_TRACE");
+  return trace && value && std::strcmp(value, "1") == 0;
+}
+
 bool optimize(LLVMModuleRef module, LLVMTargetMachineRef machine,
-              const char *pipeline, LLVMPassBuilderOptionsRef options) {
-  LLVMErrorRef error = LLVMRunPasses(module, pipeline, machine, options);
-  if (!error)
+              const char *pipeline, const char *stage,
+              plew::native::LlvmProgress &progress, bool verbose) {
+  // Match LLVMRunPasses' default setup, adding observation callbacks only. The
+  // C API does not expose these callbacks; do not maintain a second pipeline.
+  // See llvm/lib/Passes/PassBuilderBindings.cpp (LLVM20/22).
+  progress.begin(stage);
+  llvm::PassInstrumentationCallbacks callbacks;
+  if (progress.active()) {
+    callbacks.registerAfterPassCallback(
+        [&](llvm::StringRef, llvm::Any, const llvm::PreservedAnalyses &) {
+          progress.checkpoint();
+        });
+    callbacks.registerAfterPassInvalidatedCallback(
+        [&](llvm::StringRef, const llvm::PreservedAnalyses &) {
+          progress.checkpoint();
+        });
+  }
+  auto *target = reinterpret_cast<llvm::TargetMachine *>(machine);
+  llvm::PassBuilder builder(target, llvm::PipelineTuningOptions(), std::nullopt, &callbacks);
+  llvm::LoopAnalysisManager loops;
+  llvm::FunctionAnalysisManager functions;
+  llvm::CGSCCAnalysisManager sccs;
+  llvm::ModuleAnalysisManager modules;
+  builder.registerLoopAnalyses(loops);
+  builder.registerFunctionAnalyses(functions);
+  builder.registerCGSCCAnalyses(sccs);
+  builder.registerModuleAnalyses(modules);
+  builder.crossRegisterProxies(loops, functions, sccs, modules);
+  llvm::StandardInstrumentations instrumentation(llvm::unwrap(module)->getContext(), verbose, false);
+  instrumentation.registerCallbacks(callbacks, &modules);
+  llvm::ModulePassManager passes;
+  if (auto error = builder.parsePassPipeline(passes, pipeline)) {
+    std::fprintf(stderr, "plew: LLVM optimization failed: %s\n",
+                 llvm::toString(std::move(error)).c_str());
+    return false;
+  }
+  passes.run(*llvm::unwrap(module), modules);
+  progress.finish();
+  return true;
+}
+
+LLVMBool emitObjectBuffer(LLVMTargetMachineRef target, LLVMModuleRef module,
+                         plew::native::LlvmProgress &progress,
+                         char **error, LLVMMemoryBufferRef *buffer) {
+  // Same owned-buffer path as LLVMTargetMachineEmitToMemoryBuffer, with an
+  // observing legacy manager instead of verbose debug-pass output.
+  auto *machine = reinterpret_cast<llvm::TargetMachine *>(target);
+  llvm::SmallString<0> bytes;
+  llvm::raw_svector_ostream output(bytes);
+  plew::native::ObjectPassManager passes(progress);
+  llvm::unwrap(module)->setDataLayout(machine->createDataLayout());
+  progress.begin("codegen");
+  if (machine->addPassesToEmitFile(passes, output, nullptr, llvm::CodeGenFileType::ObjectFile)) {
+    *error = strdup("TargetMachine cannot emit an object file");
     return true;
-  char *message = LLVMGetErrorMessage(error);
-  std::fprintf(stderr, "plew: LLVM optimization failed: %s\n", message);
-  LLVMDisposeErrorMessage(message);
+  }
+  passes.run(*llvm::unwrap(module));
+  *buffer = LLVMCreateMemoryBufferWithMemoryRangeCopy(bytes.data(), bytes.size(), "");
+  progress.finish();
   return false;
 }
+
 } // namespace
 
 extern "C" const unsigned char *plew_llvm_empty_name(void) {
@@ -835,9 +899,14 @@ extern "C" uint64_t plew_llvm_jit_lookup(PlewLlvmJit *jit, const char *name) {
 }
 
 extern "C" void plew_llvm_initialize_worker(int trace) {
-  if (trace) {
-    const char *arguments[] = {"plew-object", "-debug-pass=Executions"};
-    llvm::cl::ParseCommandLineOptions(2, arguments);
+  // These LLVM options are process-global; this entry configures a one-shot
+  // worker, not a per-request logging toggle for an execution session.
+  if (verboseLlvmTrace(trace)) {
+    static std::once_flag initialized;
+    std::call_once(initialized, [] {
+      const char *arguments[] = {"plew-object", "-debug-pass=Executions"};
+      llvm::cl::ParseCommandLineOptions(2, arguments);
+    });
   }
 }
 
@@ -874,22 +943,18 @@ extern "C" int plew_llvm_emit_object(LLVMModuleRef module, const char *output,
       break;
     }
   }
-  auto options = std::unique_ptr<LLVMOpaquePassBuilderOptions,
-                                decltype(&LLVMDisposePassBuilderOptions)>(
-      LLVMCreatePassBuilderOptions(), LLVMDisposePassBuilderOptions);
-  LLVMPassBuilderOptionsSetDebugLogging(options.get(), trace != 0);
-  // Preserve the two optimization stages in the development link path:
-  // the shared opt pipeline followed by clang's O2 IR optimization.
-  if (!optimize(module, machine.get(), PLEW_LLVM_PIPELINE, options.get()) ||
-      !optimize(module, machine.get(), "default<O2>", options.get()) ||
-      (sanitize && !optimize(module, machine.get(), "asan", options.get())) ||
+  plew::native::LlvmProgress progress(trace != 0);
+  bool verbose = verboseLlvmTrace(trace);
+  // Preserve shared preprocessing, the second O2 pipeline and sanitizer order.
+  if (!optimize(module, machine.get(), PLEW_LLVM_PIPELINE, "ir-shared", progress, verbose) ||
+      !optimize(module, machine.get(), "default<O2>", "ir-o2", progress, verbose) ||
+      (sanitize && !optimize(module, machine.get(), "asan", "asan", progress, verbose)) ||
       !verify(module))
     return 1;
 
   LLVMMemoryBufferRef buffer = nullptr;
   char *error = nullptr;
-  if (LLVMTargetMachineEmitToMemoryBuffer(machine.get(), module, LLVMObjectFile,
-                                         &error, &buffer)) {
+  if (emitObjectBuffer(machine.get(), module, progress, &error, &buffer)) {
     Message message(error);
     std::fprintf(stderr, "plew: LLVM object generation failed: %s\n", error);
     return 1;

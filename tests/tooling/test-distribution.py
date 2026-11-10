@@ -67,7 +67,8 @@ def main():
         output = root / 'app with spaces'
         run('build', [binary, 'build', source, '-o', output], extra_env={'PLEW_TRACE_BUILD': '1'})
         trace = (evidence / 'build.stderr').read_bytes()
-        assert b'backend:drain:done' in trace and b'Running pass:' in trace
+        assert b'backend:drain:done' in trace and b'llvm:ir-shared completed=' in trace
+        assert b'llvm:ir-o2 completed=' in trace and b'llvm:codegen completed=' in trace
         assert b'backend:print-module' not in trace and b'backend:write:' not in trace
         assert run('execute', [output]) == b'42\n'
         assert run('run', [binary, 'run', source]) == b'42\n'

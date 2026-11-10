@@ -67,6 +67,24 @@ Normal sanitizer compilation marks emitted definitions for instrumentation, not 
 
 LLVM tools, optimization, sanitizer passes, runtime support, and link drivers must be compatible with the selected LLVM/toolchain configuration. An ASan runtime startup failure is distinct from a Plew memory error. The compiler's release/static-link packaging policy does not authorize mixing an incompatible local opt/clang with the module producer.
 
+Native object progress and LLVM verbose diagnostics are separate concerns. A
+progress request observes completed new-PM passes (including invalidated units)
+and preserves-all/no-change legacy function/module checkpoints, with bounded
+notification frequency. Checkpoints are pipeline progress, not an exact count
+of transformations: skipped/redundant original passes can precede them. They do
+not carry semantic permissions or retain borrowed IR. Each object request owns
+its observation state through manager destruction. Legacy observers add no
+machine-analysis dependencies and do not change the configured transformation
+passes, target policy or verification. Verbose process-global LLVM options are
+initialized once in a one-shot worker, only on explicit opt-in; they are not a
+per-request toggle for an execution session. See the [operating procedure](../../scripts/build/README.md#native-llvm-progress-and-diagnostics).
+
+Counters advance only at completed work/checkpoints, never from a timer thread.
+A single silent pass, initialization/finalization, verification or buffer copy
+can still exceed the watchdog limit and fail; periodic liveness is not progress.
+External LLVM opt/clang text-IR/bootstrap tooling retains its separately monitored
+trace path. Changing that path is not implied by native object observation.
+
 ## Verification, Artifacts, and Failure
 
 Mid verification proves compiler-level invariants; LLVM verification proves LLVM structural/type rules. Neither subsumes the other. Verification occurs at the relevant native consumer boundary. Every consumer that transforms LLVM IR must verify the final transformed module before machine code generation and publication, including any future ORC transform layer; this is not specific to object output. Diagnostic text output must identify whether it is raw emission or transformed output; printing does not itself certify executable readiness.

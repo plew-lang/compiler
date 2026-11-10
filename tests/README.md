@@ -99,6 +99,17 @@ replace the compiler producer and normal/expose/ASan B integration controls.
 `tooling/test-failure-channel-values.py` are manual scoped producer probes for
 com-yeua, including the actual CLI and the Plew terminal adapter respectively.
 
+`tooling/test-llvm-progress.py` is invoked by the normal direct-object checker.
+It checks native quiet/progress/verbose modes, output identity and diagnostics,
+output failure and retention of sanitizer instrumentation. It can also target a
+standalone LLVM20/22 object worker. `tooling/LlvmProgressRepeat.cpp` is a manual embedding probe, linked with the
+production native backend archive, for repeated object requests and one-shot
+verbose initialization. It is not an automatically enumerated fixture.
+It does not certify full sanitizer execution
+or arbitrary long single-pass responsiveness. The distribution checker asserts
+the same bounded native progress contract; external LLVM-tool traces remain
+separate.
+
 ## Shared inputs and companions
 
 Keep one input and all its companions together. A run fixture requires `.out`;

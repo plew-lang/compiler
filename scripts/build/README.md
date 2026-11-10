@@ -14,6 +14,29 @@ The tracked bootstrap inputs are `bootstrap/plewc.seed.ll` and
 resolver is generated on demand at `bin/plew-resolve`. Debug bundles (`*.dSYM`)
 are local artifacts and must not be committed.
 
+## Native LLVM progress and diagnostics
+
+In a rebuilt native backend, `--trace-phases` reports bounded IR/codegen work
+checkpoints without LLVM's expensive per-pass debug text. For detailed native
+LLVM diagnostics, explicitly combine it with `PLEW_LLVM_TRACE=1`. Standard
+validation already requests phase tracing:
+
+```sh
+PLEW_LLVM_TRACE=1 PLEW_TRACE_LOG=full ./validate build --carrier compiler/bin/plewc-candidate
+```
+
+Run that example from meta. `PLEW_TRACE_LOG` selects **retention** (compact/full),
+while `PLEW_LLVM_TRACE` selects upstream native detail **generation**. Retention
+alone does not enable detail generation. The env opt-in alone does not override
+a quiet native request. An older carrier keeps its embedded old behavior until
+rebuilt/relinked; verify the explicit carrier used for a measured build.
+
+The normal60-second no-progress watchdog and failure diagnostics remain active.
+Notifications reflect work, not a timer heartbeat; one silent long operation can
+still time out. Legacy counters are checkpoints, not exact original-pass totals.
+External opt/clang text-IR, bootstrap and formal self-host link paths keep their
+existing detail-based monitoring; this native setting does not quiet them.
+
 ## Development compiler snapshots
 
 Keep the canonical compiler at `bin/plewc`. All development scripts use this
