@@ -294,7 +294,7 @@ impl SourceFactDirectory {
             SemanticCompletionOwner.Closure(expression: _) => {}
         }
     }
-    inout fn expressionHead(owner: SemanticCompletionOwner, exprId: U64) -> SourceExpressionHead {
+    fn expressionHead(owner: SemanticCompletionOwner, exprId: U64) -> SourceExpressionHead {
         if self.isActive(owner: owner) { return readSourceExpressionHead(rows: self.activeBuilder.data.expressions, identities: self.activeBuilder.data.expressionIds, indexSlots: self.activeBuilder.data.expressionIndexSlots, exprId: exprId) }
         match self.state(owner: owner) {
             Optional.Some(v: val state) => {
@@ -309,7 +309,7 @@ impl SourceFactDirectory {
         }
         return <SourceExpressionHead />
     }
-    inout fn expression(owner: SemanticCompletionOwner, exprId: U64) -> Optional[SemanticExprType] {
+    fn expression(owner: SemanticCompletionOwner, exprId: U64) -> Optional[SemanticExprType] {
         if self.isActive(owner: owner) { return readSourceExpression(rows: self.activeBuilder.data.expressions, identities: self.activeBuilder.data.expressionIds, indexSlots: self.activeBuilder.data.expressionIndexSlots, exprId: exprId) }
         match self.state(owner: owner) {
             Optional.Some(v: val state) => {
@@ -339,7 +339,7 @@ impl SourceFactDirectory {
         }
         return <Optional.None />
     }
-    inout fn statement(owner: SemanticCompletionOwner, stmtId: U64) -> Optional[SemanticExpressionCompletion] {
+    fn statement(owner: SemanticCompletionOwner, stmtId: U64) -> Optional[SemanticExpressionCompletion] {
         if self.isActive(owner: owner) { return readSourceRow(rows: self.activeBuilder.data.statements, keys: self.activeBuilder.data.statementKeys, key: stmtId) }
         match self.state(owner: owner) {
             Optional.Some(v: val state) => {
@@ -492,22 +492,20 @@ impl Comp {
         self.sourceFacts.activeBuilder.data.valueBlocks[blockId] = <SourceValueBlockFact expression=expression completion=completion resultTerm=resultTerm />
         return <Result.Ok value=() />
     }
-    inout fn recordedSourceExpressionTerm(exprId: U64) -> U64 {
+    fn recordedSourceExpressionTerm(exprId: U64) -> U64 {
         match self.sourceFacts.expressionOwners.get(key: exprId) {
             Optional.Some(v: val owner) => { return self.sourceFacts.expressionHead(owner: owner, exprId: exprId).term }
             Optional.None => { return 0U64 }
         }
     }
-    inout fn constructionExpressionHead(exprId: U64) -> SourceExpressionHead {
+    fn constructionExpressionHead(exprId: U64) -> SourceExpressionHead {
         match self.currentSourceOwner() {
             Optional.Some(v: val owner) => { return self.sourceFacts.expressionHead(owner: owner, exprId: exprId) }
             Optional.None => { return <SourceExpressionHead /> }
         }
     }
-    // Construction queries borrow the mutable session in place. Passing Comp
-    // by value here would copy the entire session through the aggregate ABI.
     // Published payload readers remain immutable, small Ref-backed handles.
-    inout fn constructionExpression(exprId: U64) -> SemanticExprType {
+    fn constructionExpression(exprId: U64) -> SemanticExprType {
         match self.currentSourceOwner() {
             Optional.Some(v: val owner) => {
                 match self.sourceFacts.expression(owner: owner, exprId: exprId) {
@@ -519,7 +517,7 @@ impl Comp {
         }
         return <SemanticExprType />
     }
-    inout fn semanticExprConstructionClosed(exprId: U64) -> Bool {
+    fn semanticExprConstructionClosed(exprId: U64) -> Bool {
         match self.currentSourceOwner() {
             Optional.Some(v: val owner) => { if self.sourceOwnerConstructionClosed(owner: owner) { return true } }
             Optional.None => {}
@@ -529,7 +527,7 @@ impl Comp {
             Optional.None => { return false }
         }
     }
-    inout fn semanticStmtConstructionClosed(stmtId: U64) -> Bool {
+    fn semanticStmtConstructionClosed(stmtId: U64) -> Bool {
         match self.currentSourceOwner() {
             Optional.Some(v: val owner) => { if self.sourceOwnerConstructionClosed(owner: owner) { return true } }
             Optional.None => {}
@@ -647,11 +645,11 @@ pub impl Comp {
     }
     // Internal construction probes must supply their lexical cursor. Final
     // consumers acquire a successful owner's reader instead.
-    inout fn sourceSemanticExprTypeAt(index: U64) -> SemanticExprType { return self.constructionExpression(exprId: index) }
+    fn sourceSemanticExprTypeAt(index: U64) -> SemanticExprType { return self.constructionExpression(exprId: index) }
 }
 
 impl SourceFactDirectory {
-    inout fn parent(owner: SemanticCompletionOwner) -> Optional[SemanticCompletionOwner] {
+    fn parent(owner: SemanticCompletionOwner) -> Optional[SemanticCompletionOwner] {
         if self.isActive(owner: owner) { return self.activeBuilder.data.parent }
         match self.state(owner: owner) {
             Optional.Some(v: val state) => {
@@ -682,7 +680,7 @@ impl SourceFactDirectory {
     }
 }
 impl Comp {
-    inout fn constructionAggregate(exprId: U64) -> Optional[SemanticAggregate] {
+    fn constructionAggregate(exprId: U64) -> Optional[SemanticAggregate] {
         match self.currentSourceOwner() {
             Optional.Some(v: val owner) => {
                 match self.sourceFacts.state(owner: owner) {
@@ -702,7 +700,7 @@ impl Comp {
         }
         return <Optional.None />
     }
-    inout fn constructionMatch(source: MatchSource) -> Optional[SemanticMatch] {
+    fn constructionMatch(source: MatchSource) -> Optional[SemanticMatch] {
         match self.currentSourceOwner() {
             Optional.Some(v: val owner) => {
                 match self.sourceFacts.state(owner: owner) {
@@ -777,7 +775,7 @@ impl Comp {
         return <Result.Ok value=module />
     }
 
-    inout fn lexicalSourceFactOwner(owner: SemanticCompletionOwner) -> SemanticCompletionOwner {
+    fn lexicalSourceFactOwner(owner: SemanticCompletionOwner) -> SemanticCompletionOwner {
         match self.sourceFacts.parent(owner: owner) {
             Optional.Some(v: val parent) => { return self.lexicalSourceFactOwner(owner: parent) }
             Optional.None => { return owner }
@@ -881,10 +879,9 @@ pub impl Comp {
 }
 
 // Construction readers share the owner directory with all other source facts.
-// They take the directory in place; a read never snapshots the directory or
-// its builder maps. Successful owners are read only through their sealed payload.
+// Successful owners are read only through their sealed payload.
 impl SourceFactDirectory {
-    inout fn operation(owner: SemanticCompletionOwner, index: U64) -> Optional[CallTemplate] {
+    fn operation(owner: SemanticCompletionOwner, index: U64) -> Optional[CallTemplate] {
         if self.isActive(owner: owner) { return readSourceOperationTemplate(rows: self.activeBuilder.data.operations, index: index) }
         match self.state(owner: owner) {
             Optional.Some(v: val state) => {
@@ -900,7 +897,7 @@ impl SourceFactDirectory {
     }
     // The scalar projection follows exactly the full operation's lifecycle
     // routing. Failed owners supply neither their former rows nor defaults.
-    inout fn operationHead(owner: SemanticCompletionOwner, index: U64) -> Optional[SourceOperationHead] {
+    fn operationHead(owner: SemanticCompletionOwner, index: U64) -> Optional[SourceOperationHead] {
         if self.isActive(owner: owner) { return readSourceOperationHead(rows: self.activeBuilder.data.operations, index: index) }
         match self.state(owner: owner) {
             Optional.Some(v: val state) => {
@@ -914,7 +911,7 @@ impl SourceFactDirectory {
         }
         return <Optional.None />
     }
-    inout fn operationConstraints(owner: SemanticCompletionOwner, index: U64) -> Optional[CallConstraintPlanState] {
+    fn operationConstraints(owner: SemanticCompletionOwner, index: U64) -> Optional[CallConstraintPlanState] {
         if self.isActive(owner: owner) { return readSourceOperationConstraints(rows: self.activeBuilder.data.operationConstraints, index: index) }
         match self.state(owner: owner) {
             Optional.Some(v: val state) => {

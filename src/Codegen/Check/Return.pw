@@ -14,7 +14,7 @@ pub impl Comp {
         return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: expression completion requires a checked lexical owner") />
     }
 
-    inout fn semanticCompletionOwnerPrepared(owner: SemanticCompletionOwner) -> Result[Bool, CompileDiagnostic] {
+    fn semanticCompletionOwnerPrepared(owner: SemanticCompletionOwner) -> Result[Bool, CompileDiagnostic] {
         match self.sourceFacts.outcome(owner: owner) {
             Optional.Some(v: val outcome) => { try outcome return <Result.Ok value=self.sourceFacts.prepared(owner: owner).isSome() /> }
             Optional.None => { return <Result.Ok value=false /> }
@@ -117,7 +117,7 @@ pub impl Comp {
     // Selection facts are published by typing, before executable call
     // templates. Pending is not rewritten to Returns by this construction-
     // time walker; finalized readers must require a completed selection.
-    inout fn invocationDiverges(exprId: U64) -> Bool {
+    fn invocationDiverges(exprId: U64) -> Bool {
         if exprId >= self.arena.exprs.count() { return false }
         match self.constructionExpressionHead(exprId: exprId).invocation {
             InvocationCompletion.Diverges => { return true }

@@ -61,7 +61,7 @@ pub impl Comp {
     }
 
 
-    inout fn globalInitializerPrepared(target: U64) -> Bool {
+    fn globalInitializerPrepared(target: U64) -> Bool {
         match self.sourceFacts.outcome(owner: <SemanticCompletionOwner.Global target=target />) {
             Optional.Some(v: val result) => {
                 match result { Result.Ok(value: _) => { return true } Result.Err(error: _) => {} }
@@ -71,7 +71,7 @@ pub impl Comp {
         return false
     }
 
-    inout fn globalInitializerConstructionClosed(target: U64) -> Bool {
+    fn globalInitializerConstructionClosed(target: U64) -> Bool {
         return self.sourceFacts.outcome(owner: <SemanticCompletionOwner.Global target=target />).isSome()
     }
 
@@ -214,7 +214,7 @@ pub impl Comp {
 
     // Consume the existing identifier decision. In particular, do not seed
     // source locals or search names after Record has closed the lexical scope.
-    inout fn recordedGlobalAddress(exprId: U64) -> Optional[SemanticGlobalAddress] {
+    fn recordedGlobalAddress(exprId: U64) -> Optional[SemanticGlobalAddress] {
         if exprId >= self.typeCache.identBind.count() || exprId >= self.typeCache.identTarget.count() { return <Optional.None /> }
         if self.typeCache.identBind[exprId] != identValueCode() { return <Optional.None /> }
         val target = self.typeCache.identTarget[exprId]

@@ -171,7 +171,7 @@ pub impl Comp {
 
     // 1-based source line for a byte offset (count newlines before it). For
     // diagnostics; works across the assembled multi-file buffer.
-    inout fn lineOf(offset: U64) -> I64 {
+    fn lineOf(offset: U64) -> I64 {
         mut val line: I64 = 1
         mut val i: U64 = 0
         while i < offset {
@@ -187,11 +187,11 @@ pub impl Comp {
     // source file via the module ranges and reports `path:line` (line counted from
     // the file's start, not the concatenated buffer). An offset outside every range
     // (interner-appended synthetic names) falls back to the buffer-wide line count.
-    inout fn diagnosticAt(offset: U64, msg: String) -> CompileDiagnostic {
+    fn diagnosticAt(offset: U64, msg: String) -> CompileDiagnostic {
         return self.diagnosticAt(offset: offset, msg: msg, failureDomain: <FailureDomain.Unclassified />)
     }
 
-    inout fn diagnosticAt(offset: U64, msg: String, failureDomain: FailureDomain) -> CompileDiagnostic {
+    fn diagnosticAt(offset: U64, msg: String, failureDomain: FailureDomain) -> CompileDiagnostic {
         match self.modules.sourceFileContaining(offset: offset) {
             Optional.Some(v: val index) => {
                 mut val line: I64 = 1

@@ -302,3 +302,25 @@ previous compiler and passes after build `20261111T152249-build-6ac346`.
 Raw AOT and JIT pass, including previous whole/inout, argument order and
 overlap rejection controls. Independent review found no ABI or ownership
 blocker.
+
+## Dependent reader trials
+
+The first closure trial was slower in five of six pairs (6.544138 to
+6.566213 seconds), and in a second run was slower in all six pairs
+(6.529359 to 6.550633 seconds). The all-candidate compiler in that
+second run was slower still (6.564534 seconds). The closure methods
+forward the intended addresses, but their machine code differs. The
+scanBody trial still snapshots the full Comp passed as an ordinary
+value. Exclude those three declarations from the next adoption.
+
+The narrowed trial from build `20261111T154109-build-f7dc04` restores
+35 declarations across owner checks, expression and operation readers,
+and constraint queries including their diagnostic dependency. The same
+builder and final source give medians 6.552373 / 6.546278 seconds for
+baseline / narrowed and 6.577821 seconds for the all-candidate trial.
+All 21 LLVM outputs agree. Five AOT controls, one JIT receiver control,
+and three check rejection controls pass. valueBlock,
+constructionValueBlock and contextCommitted were introduced as inout
+and are independent of the historical restoration. They are outside
+this adoption.
+[Reader comparisons and controls](../../../evidence/performance-regression-history/readonly-restoration/inout-read-forwarding/dependent-readers/README.md).

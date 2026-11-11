@@ -682,7 +682,7 @@ pub impl Comp {
 
     // Relevance includes deferred public conditions even when no method is
     // used in the callee. Empty trait bounds still require source admission.
-    inout fn selectedCallHasDeferredConstraints(siteKey: CallSiteKey) -> Result[Bool, CompileDiagnostic] {
+    fn selectedCallHasDeferredConstraints(siteKey: CallSiteKey) -> Result[Bool, CompileDiagnostic] {
         val index = self.callTemplateIndex(siteKey: siteKey)
         match self.preparedCallConstraints(index: index) {
             Optional.Some(v: val snapshot) => {

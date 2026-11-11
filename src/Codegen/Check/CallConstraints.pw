@@ -4,7 +4,7 @@
 // A completed owner therefore protects every row without reading/copying its
 // retained constraint evidence merely to decide whether writing is allowed.
 pub impl Comp {
-    inout fn selectedCallConstraintPlan(index: U64) -> Optional[SelectedCallConstraints] {
+    fn selectedCallConstraintPlan(index: U64) -> Optional[SelectedCallConstraints] {
         match self.sourceOperationConstraints(index: index) {
             Optional.Some(v: val state) => {
                 match state {
@@ -17,7 +17,7 @@ pub impl Comp {
         return <Optional.None />
     }
 
-    inout fn preparedCallConstraints(index: U64) -> Optional[PreparedCallConstraints] {
+    fn preparedCallConstraints(index: U64) -> Optional[PreparedCallConstraints] {
         match self.sourceOperationConstraints(index: index) {
             Optional.Some(v: val state) => {
                 match state {
@@ -96,7 +96,7 @@ pub impl Comp {
 
 pub impl Comp {
     fn callTemplateCount() -> U64 { return self.callTemplateLocations.count() }
-    inout fn callTemplateAt(index: U64) -> CallTemplate {
+    fn callTemplateAt(index: U64) -> CallTemplate {
         val location = self.callTemplateLocations[index]
         val result = match cachedSourceOperationReader(readers: self.sourceFacts.readers, index: self.cur.sourceFactReader, session: self.sourceFacts.session, owner: location.owner) {
             Optional.Some(v: val reader) => { give reader.operationAt(index: location.localIndex) }
@@ -108,7 +108,7 @@ pub impl Comp {
         }
         panic("internal error: source operation navigation has no owner row")
     }
-    inout fn callTemplateHeadAt(index: U64) -> SourceOperationHead {
+    fn callTemplateHeadAt(index: U64) -> SourceOperationHead {
         val location = self.callTemplateLocations[index]
         val result = match cachedSourceOperationReader(readers: self.sourceFacts.readers, index: self.cur.sourceFactReader, session: self.sourceFacts.session, owner: location.owner) {
             Optional.Some(v: val reader) => { give reader.operationHeadAt(index: location.localIndex) }
@@ -121,7 +121,7 @@ pub impl Comp {
         panic("internal error: source operation navigation has no owner row")
     }
     // Explicit inspection copy for diagnostics/tests, never a body reader.
-    inout fn callTemplateSnapshot() -> Array[CallTemplate] {
+    fn callTemplateSnapshot() -> Array[CallTemplate] {
         mut val result: Array[CallTemplate] = []
         mut val index = 0U64
         while index < self.callTemplateLocations.count() {
@@ -218,7 +218,7 @@ impl Comp {
 
 
 impl Comp {
-    inout fn sourceOperationConstraints(index: U64) -> Optional[CallConstraintPlanState] {
+    fn sourceOperationConstraints(index: U64) -> Optional[CallConstraintPlanState] {
         if index >= self.callTemplateLocations.count() { return <Optional.None /> }
         val location = self.callTemplateLocations[index]
         match cachedSourceOperationReader(readers: self.sourceFacts.readers, index: self.cur.sourceFactReader, session: self.sourceFacts.session, owner: location.owner) {
