@@ -165,6 +165,12 @@ receivers retain a snapshot in raw LLVM, also observed for
 constructionClosure in ARM64. The two owner/payload AOT controls pass.
 [Evidence](../../../evidence/performance-regression-history/readonly-restoration/inout-read-forwarding/source-body-state-restoration/README.md).
 
-Next, compare dependent read-only contracts, beginning with outcome and
-prepared. The remaining field snapshots need an access proof if an
-independent measurement justifies a forwarding extension.
+Compare the dependent read-only contracts individually. The outcome
+trial regressed in all nine matched pairs and was reverted. The
+six-pair confirmation medians were 7.070159 and 7.214105 seconds.
+Seven of nine emitted calls used a snapshot of the Comp.sourceFacts
+field and representative copies survived in ARM64. The trial kept
+identical emitted LLVM across candidates.
+[Outcome evidence](../../../evidence/performance-regression-history/readonly-restoration/inout-read-forwarding/source-body-outcome-restoration/README.md).
+Compare prepared independently. A forwarding extension needs a
+verified access proof for a nonboxed field of the live inout formal.
