@@ -1764,7 +1764,7 @@ fn valueAbiFailure(message: String) -> CompileDiagnostic {
 
 extern(c) {
     fn plew_llvm_guaranteed_parameter_matches(address~: LLVMValueRef, type~: LLVMTypeRef, alignment~: U64) -> I32
-    fn plew_llvm_inout_parameter_matches(address~: LLVMValueRef, slot~: LLVMValueRef, function~: LLVMValueRef, index~: U64) -> I32
+    fn plew_llvm_inout_home_alignment(address~: LLVMValueRef, root~: LLVMValueRef, function~: LLVMValueRef, index~: U64, rootType~: LLVMTypeRef, fields~: CPtr[U64], count~: U64, leafType~: LLVMTypeRef) -> U64
 }
 
 extern(c) {

@@ -387,7 +387,7 @@ pub impl LlvmCtx {
                 }
                 LlvmValuePassing.GuaranteedIndirect => {
                     val incoming = match carrier {
-                        LlvmValueCarrier.StableHome(address: val address, planId: val planId, useId: val useId, operation: val operation, incomingInout: val incomingInout) => { try self.validateStableHome(address: address, planId: planId, useId: useId, operation: operation, type: parameter.type, role: parameter.role, incomingInout: incomingInout) give true }
+                        LlvmValueCarrier.StableHome(address: val address, planId: val planId, useId: val useId, operation: val operation, incomingInout: val incomingInout) => { try self.validateStableHome(address: address, planId: planId, useId: useId, operation: operation, type: parameter.type, alignment: parameter.valueAlignment, role: parameter.role, incomingInout: incomingInout) give true }
                         LlvmValueCarrier.Home(address: val address) => { give plew_llvm_guaranteed_parameter_matches(address, parameter.type, parameter.valueAlignment) != 0I32 }
                         _ => { give false }
                     }

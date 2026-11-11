@@ -175,23 +175,51 @@ with tempfile.TemporaryDirectory(prefix='plew-stable-homes-') as directory:
         assert subprocess.check_output([str(executable)], timeout=55) == fixture.with_suffix('.out').read_bytes(), material
 print('PASS stable local/temporary/field homes: raw staging reduction and raw/optimized execution')
 
-# A synchronous read receiver can reborrow the whole incoming inout place.
+# A synchronous read receiver can reborrow an incoming inout place or inline field.
 # Exercise both a caller's self and its ordinary inout parameter.
 fixture = root / 'tests/fixtures/run/mid_inout_read_receiver_forwarding.pw'
 raw = subprocess.check_output([str(compiler), '--require-mid', str(fixture)], text=True, timeout=55)
 aggregate, = re.findall(r'^(%[\w.]+) = type \{ i64, i64, i64, i64 \}$', raw, re.M)
-reader, = re.findall(r'^define internal i64 @([\w.]+)\(ptr byref\(' + re.escape(aggregate) + r'\) align \d+ %\w+\)', raw, re.M)
-forwarding_callers = 0
+receiver_lane = r'ptr byref\(' + re.escape(aggregate) + r'\) align 8'
+reader, = re.findall(r'^define internal i64 @([\w.]+)\(' + receiver_lane + r' %\w+\)', raw, re.M)
+reader_after, = re.findall(r'^define internal i64 @(plew\.body\.gm[\w.]+)\(' + receiver_lane + r' %\w+, i64 %\w+\)', raw, re.M)
+whole_callers = 0
+projected_callers = 0
+projected_after_effect = 0
 for caller in re.finditer(r'^define internal i64 @[\w.]+\((ptr %\w+(?:, ptr %\w+)?)\) \{\n(.*?)^\}', raw, re.M | re.S):
-    calls = [line for line in caller[2].splitlines() if f'call i64 @{reader}(' in line]
+    calls = list(re.finditer(
+        r'call i64 @(' + re.escape(reader) + '|' + re.escape(reader_after) + r')\(' + receiver_lane + r' (%\w+)(?:, i64 %\w+)?\)',
+        caller[2],
+    ))
     if not calls:
         continue
-    assert len(calls) == 1 and re.search(
-        r'ptr byref\(' + re.escape(aggregate) + r'\) align \d+ ' + re.escape(caller[1].split()[-1]) + r'\)', calls[0]
-    ), f'read receiver did not forward the incoming inout address: {calls}'
+    call, = calls
+    address = call[2]
+    incoming = caller[1].split()[-1]
+    if address == incoming:
+        whole_callers += 1
+    else:
+        # Both projections select field one. The omitted marker argument
+        # must not shift the physical index used for the second pointer.
+        field_positions = []
+        for _ in range(2):
+            projection = re.search(
+                r'^  ' + re.escape(address) + r' = getelementptr inbounds(?: nuw)? %\w+, ptr (%\w+), i32 0, i32 1$',
+                caller[2], re.M,
+            )
+            assert projection, f'read receiver used a temporary rather than a field address: {call[0]}'
+            field_positions.append(projection.start())
+            address = projection[1]
+        assert address == incoming, 'read receiver did not forward a field of the correct inout argument'
+        if call[1] == reader_after:
+            effect, = re.finditer(r'call i64 @plew\.body\.gf\w*\(ptr %\w+\)', caller[2])
+            leaf, root = field_positions
+            assert effect.start() < root < leaf < call.start(), 'field receiver address must be formed after evaluating the effect'
+            projected_after_effect += 1
+        else:
+            projected_callers += 1
     assert not re.search(r'\b(?:load|store) ' + re.escape(aggregate) + r'\b', caller[2]), 'read receiver still transfers the whole aggregate'
-    forwarding_callers += 1
-assert forwarding_callers == 2, 'expected one forwarding method and one forwarding free function'
+assert (whole_callers, projected_callers, projected_after_effect) == (2, 2, 1), 'expected whole and projected forwarding in methods and free functions'
 with tempfile.TemporaryDirectory(prefix='plew-inout-read-receiver-') as directory:
     directory = Path(directory)
     source = directory / 'raw.ll'

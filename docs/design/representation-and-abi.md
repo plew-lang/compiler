@@ -60,15 +60,17 @@ The callable's classification is independent of the caller's ability to reuse st
 
 Reusable local homes come from verified owned immutable bindings, dedicated evaluation temporaries, and admitted nonboxed static value-field projections. Ready preparation retains exact body, operation/operand occurrence, local root, projection, semantic/native type and LLVM scope correspondence. Final emission validates and consumes that receipt; an arbitrary pointer, source-binding integer, matching byte size, or a different same-typed parameter is not a proof. Contracted incoming homes use their exact entry/lane binding. A missing optimization proof selects a snapshot; a malformed required receipt is an Internal failure. Globals without admitted readiness, reference/index/cell/boxed storage and async frame homes do not inherit this local proof.
 
-A synchronous direct private receiver may reuse the whole storage of an incoming
+A synchronous direct private receiver may reuse storage of an incoming
 copyable inout formal when the verified call retains a semantic read borrow.
-The Ready receipt ties that use to the normal body's exact logical and physical
-parameter and matches the referent's native type. The old whole-value load and
-the receiver's typed byref lane use the same module layout and referent ABI
-alignment. The inout declaration keeps its direct pointer ABI. The physical
-consumer checks the actual LLVM argument belongs to that function and parameter
-index, and emission retains the usual access checks. This call-interval proof
-does not grant a value snapshot or a stable projected, shared or suspended home.
+The Ready receipt ties the use to the normal body's exact logical and physical
+parameter, and admits either the whole referent or a chain of nonboxed static
+fields with natural layout. The inout declaration keeps its direct pointer ABI.
+The physical consumer checks the exact LLVM argument, field path and leaf type.
+It derives the actual leaf alignment from the referent's ABI alignment and
+field offsets in the module layout. Emission retains the usual access checks
+and forms the address at the read, after argument evaluation. The proof is
+limited to the call interval. Value snapshots, indirect or shared storage and
+suspended calls follow their existing rules.
 
 LLVM `byref` describes physical memory transport, not source borrowing, ownership acquisition, immutability or alias freedom. It grants no `readonly`/`noalias` attribute by itself. The frontend/Mid ownership and access contracts establish semantic legality; LLVM lowering cannot remove their Copy, lifetime or cleanup obligations merely because a byte transfer is avoidable.
 

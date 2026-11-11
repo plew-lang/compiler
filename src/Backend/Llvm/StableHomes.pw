@@ -12,7 +12,7 @@ pub impl LlvmCtx {
         val declaration = c.mid.locals[body.locals.start + place.local]
         val local = self.preparedLocals[localStart + place.local]
         if operand.borrowsStorage {
-            if !declaration.isParameter || !declaration.isInout || declaration.isUnique || declaration.isBorrowed || declaration.isCaptureCell || place.projections.len != 0U64 || operand.accessPlace != 0U64 || operand.accessOwner != 0U64 { return <Result.Ok value=0U64 /> }
+            if !declaration.isParameter || !declaration.isInout || declaration.isUnique || declaration.isBorrowed || declaration.isCaptureCell || operand.accessPlace != 0U64 || operand.accessOwner != 0U64 { return <Result.Ok value=0U64 /> }
             val term = c.mid.terminators[operation - 1U64]
             if term.accessScope != 0U64 || term.callTarget == 0U64 || term.callTarget > c.mid.callTargets.count() { return <Result.Ok value=0U64 /> }
             val target = c.mid.callTargets[term.callTarget - 1U64]
@@ -27,18 +27,15 @@ pub impl LlvmCtx {
             val abi = self.valueAbis[normalAbiId - 1U64]
             if place.local >= abi.parameterCount { return <Result.Err error=valueAbiFailure(message: "inout read home formal is out of range") /> }
             val formal = self.valueAbiParameters[abi.parameterStart + place.local]
-            if formal.mode.key() != 2U64 || !formal.copyable || !c.typeRefEq(a: formal.semanticType, b: place.typeTerm) { return <Result.Err error=valueAbiFailure(message: "inout read home lacks formal type correspondence") /> }
-            // The executable call retains the real read interval. The inout
-            // formal supplies the same typed storage the fallback would load.
-            self.stableHomeUses.append(<LlvmStableHomeUse operation=operation operand=operandId sourceIndex=sourceIndex place=operand.place local=place.local scope=declaration.sourceScope semanticType=place.typeTerm rootType=local.type type=local.type fields=[] incomingInout=true />)
-            return <Result.Ok value=self.stableHomeUses.count() />
+            val rootType = if place.projections.len == 0U64 { give place.typeTerm } else { give declaration.typeTerm }
+            if formal.mode.key() != 2U64 || !formal.copyable || !c.typeRefEq(a: formal.semanticType, b: rootType) { return <Result.Err error=valueAbiFailure(message: "inout read home lacks formal type correspondence") /> }
+        } else {
+            val incoming = match local.storage { LlvmLocalStorage.GuaranteedParameter(parameterIndex: _, semanticType: _) => { give true } _ => { give false } }
+            if !incoming && local.homeStability == 0U64 { return <Result.Ok value=0U64 /> }
+            // Whole guaranteed inputs already carry the entry/lane proof.
+            if incoming && place.projections.len == 0U64 { return <Result.Ok value=0U64 /> }
+            if declaration.isUnique || declaration.isBorrowed || declaration.isInout || declaration.isCaptureCell || declaration.isDropFlag || declaration.isReturnPlace || c.arena.typeTermIsUnique(ref: declaration.typeTerm) { return <Result.Ok value=0U64 /> }
         }
-        val incoming = match local.storage { LlvmLocalStorage.GuaranteedParameter(parameterIndex: _, semanticType: _) => { give true } _ => { give false } }
-        if !incoming && local.homeStability == 0U64 { return <Result.Ok value=0U64 /> }
-        // Whole guaranteed inputs already carry the entry/lane proof. Keep
-        // their existing direct forwarder instead of allocating a second receipt.
-        if incoming && place.projections.len == 0U64 { return <Result.Ok value=0U64 /> }
-        if declaration.isUnique || declaration.isBorrowed || declaration.isInout || declaration.isCaptureCell || declaration.isDropFlag || declaration.isReturnPlace || c.arena.typeTermIsUnique(ref: declaration.typeTerm) { return <Result.Ok value=0U64 /> }
         mut val type = local.type
         mut val fields: Array[U64] = []
         mut val index = 0U64
@@ -46,6 +43,9 @@ pub impl LlvmCtx {
             val projection = c.mid.projections[place.projections.start + index]
             if projection.tag != 1U64 || projection.isBoxed { return <Result.Ok value=0U64 /> }
             if LLVMGetTypeKind(type) != 10U32 || LLVMIsOpaqueStruct(type) != 0I32 || projection.index >= 4294967296U64 || truncU32(n: projection.index) >= LLVMCountStructElementTypes(type) { return <Result.Err error=valueAbiFailure(message: "stable field has an invalid parent layout/index") /> }
+            // Natural layout guarantees each field its ABI alignment when the
+            // exact incoming referent starts at its own ABI alignment.
+            if operand.borrowsStorage && LLVMIsPackedStruct(type) != 0I32 { return <Result.Ok value=0U64 /> }
             val child = (try self.llvmTypeOfRef(c: inout c, ref: projection.typeTerm))
             if plew_pointer_equal(LLVMStructGetTypeAtIndex(type, truncU32(n: projection.index)), child) == 0I32 { return <Result.Err error=valueAbiFailure(message: "stable field child layout mismatch") /> }
             type = child
@@ -53,8 +53,8 @@ pub impl LlvmCtx {
             index += 1U64
         }
         if (LLVMGetTypeKind(type) != 10U32 && LLVMGetTypeKind(type) != 11U32) || !llvmTypeHasStorage(type) { return <Result.Ok value=0U64 /> }
-        if plew_pointer_equal(type, (try self.llvmTypeOfRef(c: inout c, ref: place.typeTerm))) == 0I32 { return <Result.Err error=valueAbiFailure(message: "stable use final layout mismatch") /> }
-        self.stableHomeUses.append(<LlvmStableHomeUse operation=operation operand=operandId sourceIndex=sourceIndex place=operand.place local=place.local scope=declaration.sourceScope semanticType=place.typeTerm rootType=local.type type=type fields=fields />)
+        if (!operand.borrowsStorage || place.projections.len != 0U64) && plew_pointer_equal(type, (try self.llvmTypeOfRef(c: inout c, ref: place.typeTerm))) == 0I32 { return <Result.Err error=valueAbiFailure(message: "stable use final layout mismatch") /> }
+        self.stableHomeUses.append(<LlvmStableHomeUse operation=operation operand=operandId sourceIndex=sourceIndex place=operand.place local=place.local scope=declaration.sourceScope semanticType=place.typeTerm rootType=local.type type=type fields=fields incomingInout=operand.borrowsStorage />)
         return <Result.Ok value=self.stableHomeUses.count() />
     }
 
@@ -115,7 +115,7 @@ pub impl LlvmCtx {
         return <Result.Ok value=<Optional.Some v=<LlvmValueCarrier.StableHome address=address planId=planId useId=useId operation=operation incomingInout=receipt.incomingInout /> /> />
     }
 
-    fn validateStableHome(address: LLVMValueRef, planId: U64, useId: U64, operation: U64, type: LLVMTypeRef, role: LlvmParameterRole, incomingInout: Bool) -> Result[(), CompileDiagnostic] {
+    fn validateStableHome(address: LLVMValueRef, planId: U64, useId: U64, operation: U64, type: LLVMTypeRef, alignment: U64, role: LlvmParameterRole, incomingInout: Bool) -> Result[(), CompileDiagnostic] {
         if planId == 0U64 || planId > self.bodyLocalPlans.count() || useId == 0U64 || useId > self.stableHomeUses.count() { return <Result.Err error=valueAbiFailure(message: "stable receipt identity out of range") /> }
         val selected = match self.bodyLocalAdmission { Optional.Some(v: val admission) => { give match admission { LlvmBodyLocalAdmission.Planned(planId: val saved) => { give saved } } } Optional.None => { give 0U64 } }
         val plan = self.bodyLocalPlans[planId - 1U64]
@@ -138,9 +138,11 @@ pub impl LlvmCtx {
                 _ => { return <Result.Err error=valueAbiFailure(message: "inout read home lacks a normal body entry") /> }
             }
             val abi = self.valueAbis[abiId - 1U64]
-            if receipt.sourceIndex != 0U64 || receipt.fields.count() != 0U64 || receipt.local >= abi.parameterCount || local.mode.key() != 2U64 || plew_pointer_equal(local.type, type) == 0I32 { return <Result.Err error=valueAbiFailure(message: "inout read home does not match the local formal") /> }
+            if receipt.sourceIndex != 0U64 || receipt.local >= abi.parameterCount || local.mode.key() != 2U64 { return <Result.Err error=valueAbiFailure(message: "inout read home does not match the local formal") /> }
             val lane = self.valueAbiParameters[abi.parameterStart + receipt.local]
-            if lane.mode.key() != 2U64 || lane.passing.key() != 1U64 || !lane.copyable || plew_llvm_inout_parameter_matches(address, self.locPtr[receipt.local], function, lane.physicalIndex) == 0I32 { return <Result.Err error=valueAbiFailure(message: "inout read home does not match its native formal") /> }
+            if lane.mode.key() != 2U64 || lane.passing.key() != 1U64 || !lane.copyable { return <Result.Err error=valueAbiFailure(message: "inout read home does not match its native formal") /> }
+            val provenAlignment = plew_llvm_inout_home_alignment(address, self.locPtr[receipt.local], function, lane.physicalIndex, receipt.rootType, arrayCPtr(receipt.fields), receipt.fields.count(), receipt.type)
+            if provenAlignment == 0U64 || provenAlignment < alignment { return <Result.Err error=valueAbiFailure(message: "inout read home has invalid native projection or alignment") /> }
             return <Result.Ok value=() />
         }
         val incoming = match local.storage { LlvmLocalStorage.GuaranteedParameter(parameterIndex: _, semanticType: _) => { give true } _ => { give false } }

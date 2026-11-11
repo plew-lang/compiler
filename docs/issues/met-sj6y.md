@@ -190,3 +190,28 @@ root provenance, nonboxed field layout and leaf alignment. The separate
 overlapping-write rejection still passes. Independent review checked the
 raw LLVM, representative ARM64 and ABI boundaries at 461f3eb4.
 [Investigation and probe](../../../evidence/performance-regression-history/readonly-restoration/inout-read-forwarding/source-body-outcome-restoration/field-forwarding-investigation.md).
+
+## Forward verified inline field receivers
+
+Extend normal direct synchronous receiver forwarding from the whole
+copyable inout formal to its statically laid out inline fields. Match
+the emitted field chain and alignment to the exact physical formal.
+Preserve read timing after explicit/default argument evaluation and
+existing rejection of conflicting inout or move arguments. Unsupported
+places keep the snapshot fallback. Cover whole-formal controls, a
+nested field of a non-first physical formal, and projected receiver
+evaluation after a write in an earlier argument expression. Inspect
+raw LLVM and execute the fixture. Compare outcome restoration against
+the same final source only after verifying forwarding.
+
+The forwarding change passed the fixed-carrier development build
+`20261111T115237-build-f121f1`. The final raw LLVM fixture fails on
+the old compiler's stack temporary and passes on the new compiler
+with exact incoming argument and both GEPs verified. The effect case
+verifies the mutation call before both GEPs, alignment 8 and raw AOT
+output. JIT, existing overlap rejections and the Ready/physical ABI
+controls passed. Independent review confirmed the borrowed interval
+and exact root/leaf validation, and prompted stronger order and
+alignment assertions. A scratch read-only outcome trial has seven
+field forwards and two whole forwards with no snapshots. Measure
+the read-only signature independently before adopting it.

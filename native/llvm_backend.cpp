@@ -267,7 +267,9 @@ extern "C" int plew_llvm_value_scope_matches(LLVMValueRef value, LLVMValueRef fu
 // Typed home provenance is independent of semantic interval stability. Accept
 // only whole allocations/typed inputs and constant, non-boxed struct fields.
 struct PlewHomeLayout { llvm::Type *type = nullptr; uint64_t alignment = 0; };
-static PlewHomeLayout plewHomeLayout(llvm::Value *value) {
+static PlewHomeLayout plewHomeLayout(llvm::Value *value, llvm::Value *root = nullptr,
+                                     const uint64_t *indices = nullptr, uint64_t count = 0,
+                                     llvm::Type *inoutReferent = nullptr) {
     llvm::SmallVector<llvm::GetElementPtrInst *, 4> fields;
     while (auto *field = llvm::dyn_cast<llvm::GetElementPtrInst>(value)) {
         if (field->getNumIndices() != 2) return {};
@@ -275,16 +277,25 @@ static PlewHomeLayout plewHomeLayout(llvm::Value *value) {
         auto *zero = llvm::dyn_cast<llvm::ConstantInt>(field->getOperand(1));
         auto *index = llvm::dyn_cast<llvm::ConstantInt>(field->getOperand(2));
         if (!parent || parent->isOpaque() || !zero || !zero->isZero() || !index || index->getValue().uge(parent->getNumElements())) return {};
+        if (root && (!count || index->getValue() != indices[--count])) return {};
         fields.push_back(field);
         value = field->getPointerOperand();
     }
+    if (root && (count || value != root)) return {};
     PlewHomeLayout result;
     if (auto *allocation = llvm::dyn_cast<llvm::AllocaInst>(value)) result = { allocation->getAllocatedType(), allocation->getAlign().value() };
     if (auto *argument = llvm::dyn_cast<llvm::Argument>(value)) {
-        if (argument->hasByValAttr()) result.type = argument->getParamByValType();
+        if (inoutReferent) {
+            // The caller already proved the argument's exact formal identity.
+            // This is the referent alignment assumed by the existing load.
+            const auto &layout = argument->getParent()->getParent()->getDataLayout();
+            result = { inoutReferent, layout.getABITypeAlign(inoutReferent).value() };
+        } else if (argument->hasByValAttr()) result.type = argument->getParamByValType();
         else if (argument->hasByRefAttr()) result.type = argument->getParamByRefType();
-        if (auto alignment = argument->getParamAlign()) result.alignment = alignment->value();
-        else if (argument->hasByValAttr()) result.alignment = argument->getParent()->getParent()->getDataLayout().getABITypeAlign(result.type).value();
+        if (!inoutReferent) {
+            if (auto alignment = argument->getParamAlign()) result.alignment = alignment->value();
+            else if (argument->hasByValAttr()) result.alignment = argument->getParent()->getParent()->getDataLayout().getABITypeAlign(result.type).value();
+        }
     }
     if (!result.type) return {};
     for (auto iterator = fields.rbegin(); iterator != fields.rend(); ++iterator) {
@@ -309,16 +320,9 @@ extern "C" uint64_t plew_llvm_home_alignment(LLVMValueRef address) {
 extern "C" int plew_llvm_projected_home_matches(LLVMValueRef address, LLVMValueRef root, LLVMTypeRef rootType,
                                                 const uint64_t *indices, uint64_t count, LLVMTypeRef resultType) {
     if (!address || !root || !rootType || !resultType || (count && !indices)) return 0;
-    if (plewHomeLayout(llvm::unwrap(address)).type != llvm::unwrap(resultType)) return 0;
-    auto *current = llvm::unwrap(address);
-    for (uint64_t remaining = count; remaining; --remaining) {
-        auto *field = llvm::dyn_cast<llvm::GetElementPtrInst>(current);
-        if (!field) return 0; // the layout pass above validated each node
-        auto *index = llvm::cast<llvm::ConstantInt>(field->getOperand(2));
-        if (index->getValue() != indices[remaining - 1]) return 0;
-        current = field->getPointerOperand();
-    }
-    return current == llvm::unwrap(root) && plewHomeLayout(current).type == llvm::unwrap(rootType);
+    auto *nativeRoot = llvm::unwrap(root);
+    return plewHomeLayout(nativeRoot).type == llvm::unwrap(rootType) &&
+           plewHomeLayout(llvm::unwrap(address), nativeRoot, indices, count).type == llvm::unwrap(resultType);
 }
 extern "C" int plew_llvm_guaranteed_parameter_matches(LLVMValueRef address, LLVMTypeRef type, uint64_t alignment) {
     if (!address || !type || !alignment) return 0;
@@ -333,6 +337,17 @@ extern "C" int plew_llvm_inout_parameter_matches(LLVMValueRef address, LLVMValue
     auto *argument = llvm::dyn_cast<llvm::Argument>(llvm::unwrap(address));
     return argument && llvm::wrap(argument->getParent()) == function &&
            argument->getArgNo() == index;
+}
+
+extern "C" uint64_t plew_llvm_inout_home_alignment(LLVMValueRef address, LLVMValueRef root, LLVMValueRef function,
+                                                  uint64_t index, LLVMTypeRef rootType, const uint64_t *fields,
+                                                  uint64_t count, LLVMTypeRef leafType) {
+    if (!address || !rootType || !leafType || (count && !fields) ||
+        !plew_llvm_inout_parameter_matches(root, root, function, index)) return 0;
+    auto *referent = llvm::unwrap(rootType);
+    if (!referent->isSized()) return 0;
+    const auto home = plewHomeLayout(llvm::unwrap(address), llvm::unwrap(root), fields, count, referent);
+    return home.type == llvm::unwrap(leafType) ? home.alignment : 0;
 }
 
 extern "C" char *plew_llvm_jit_target_triple(const PlewLlvmJit *jit) {

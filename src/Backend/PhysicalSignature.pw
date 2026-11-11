@@ -308,9 +308,9 @@ pub impl LlvmSignatureScope {
             LlvmValueCarrier.StableHome(address: val address, planId: val planId, useId: val useId, operation: val operation, incomingInout: val incomingInout) => {
                 if parameter.passing.key() != 3U64 || planId == 0U64 || useId == 0U64 || operation == 0U64 || LLVMGetTypeKind(LLVMTypeOf(address)) != 12U32 { return <Result.Err error=signatureFailure(message: "input lacks a stable aggregate home") /> }
                 if incomingInout {
-                    // The final receipt verifies the exact formal and referent type.
-                    // Use the alignment of that type's existing load, not of ptr.
-                    if !parameter.role.same(role: <LlvmParameterRole.Receiver />) || (LLVMABIAlignmentOfType(LLVMGetModuleDataLayout(self.module), parameter.type) as U64) < parameter.valueAlignment { return <Result.Err error=signatureFailure(message: "inout read home does not match the receiver ABI") /> }
+                    // Only final receipt validation can prove the exact
+                    // incoming formal and alignment of the projected address.
+                    if !parameter.role.same(role: <LlvmParameterRole.Receiver />) { return <Result.Err error=signatureFailure(message: "inout read home does not match the receiver ABI") /> }
                 } else if plew_llvm_home_type_matches(address, parameter.type) == 0I32 || plew_llvm_home_alignment(address) < parameter.valueAlignment {
                     return <Result.Err error=signatureFailure(message: "input lacks a typed stable aggregate home") />
                 }

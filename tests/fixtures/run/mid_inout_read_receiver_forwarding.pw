@@ -47,10 +47,40 @@ fn checkEvaluation(reading: inout Reading) {
     print(reading.readAfter(effect: replace(reading: inout reading)))
 }
 
+struct Shelf {
+    val marker: I64
+    mut val reading: Reading
+}
+impl Shelf { factory }
+
+struct Cabinet {
+    val marker: I64
+    mut val shelf: Shelf
+}
+impl Cabinet {
+    factory
+
+    inout fn readShelf() -> I64 {
+        return self.shelf.reading.read()
+    }
+}
+
+fn readCabinet(marker: Marker, other: inout Reading, cabinet: inout Cabinet) -> I64 {
+    return cabinet.shelf.reading.read()
+}
+
+fn readCabinetAfter(cabinet: inout Cabinet) -> I64 {
+    return cabinet.shelf.reading.readAfter(effect: replace(reading: inout cabinet.shelf.reading))
+}
+
 fn main() {
     mut val reading = <Reading value=1I64 second=2I64 third=3I64 fourth=4I64 />
     mut val other = <Reading value=20I64 second=0I64 third=0I64 fourth=0I64 />
     print(reading.updateAndRead())
     print(updateAndReadArgument(marker: <Marker />, other: inout other, reading: inout reading))
     checkEvaluation(reading: inout reading)
+    mut val cabinet = <Cabinet marker=0I64 shelf=<Shelf marker=0I64 reading=<Reading value=1I64 second=2I64 third=3I64 fourth=4I64 /> /> />
+    print(cabinet.readShelf())
+    print(readCabinet(marker: <Marker />, other: inout other, cabinet: inout cabinet))
+    print(readCabinetAfter(cabinet: inout cabinet))
 }
