@@ -1195,7 +1195,7 @@ pub impl Comp {
 
     // Checking and diagnostic continuation also need lexical identity, without
     // authorizing publication of a completed expression fact.
-    inout fn currentSourceOwner() -> Optional[SemanticCompletionOwner] {
+    fn currentSourceOwner() -> Optional[SemanticCompletionOwner] {
         // A matching active slot already holds the canonical source identity.
         // Generated aliases still take the lexical-root lookup below.
         match self.sourceFacts.activeOwner {

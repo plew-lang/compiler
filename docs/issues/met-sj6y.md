@@ -148,5 +148,13 @@ With that same build carrier on both sides, restoring callTemplateIndex
 to a read-only receiver gives medians of 7.097031 and 7.154932 seconds.
 All eight LLVM outputs match, the original ARM64 call forwards the Comp
 pointer, and two existing AOT controls pass. Adopt this restoration.
-Recheck currentSourceOwner and state individually. Any projected root
-or other excluded case still needs a separate proof and measurement.
+Restore currentSourceOwner in its own increment. Standard build
+`20261111T095834-build-fbe934` differs from the preceding baseline build
+only in Expr.pw and uses the same carrier. Same-source medians are
+7.064874 and 7.045373 seconds; all eight LLVM outputs agree. All 24 calls
+forward their incoming Comp pointer in raw LLVM, and the representative
+ARM64 call retains that forwarding. Two targeted AOT controls pass.
+[Evidence](../../../evidence/performance-regression-history/readonly-restoration/inout-read-forwarding/current-source-owner-restoration/README.md).
+
+Recheck state individually. Any projected root or other excluded case
+still needs a separate proof and measurement.
