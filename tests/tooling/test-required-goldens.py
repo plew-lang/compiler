@@ -43,11 +43,13 @@ with tempfile.TemporaryDirectory(prefix='plew-required-goldens-') as directory:
     root = Path(directory)
     copied = ('tests/harness/case-phase.sh', 'scripts/support/normal-case-dispatch.py',
               'scripts/support/watch-command.py', 'scripts/support/trace-command.py',
-              'scripts/support/process_watch.py')
+              'scripts/support/process_watch.py', 'tests/tooling/test-fixture-package.py',
+              'scripts/support/fixture_package.py')
     for name in copied:
         p = root / name
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_bytes((ROOT / name).read_bytes())
+    (root / 'Plew.toml').write_text('name = "golden-fixtures"\n')
     tools = root / 'tools'
     tools.mkdir()
     def tool(name, body):
@@ -138,7 +140,8 @@ if args.report:
     args.report.parent.mkdir(parents=True, exist_ok=True)
     names = ('tests/harness/test.sh', 'tests/harness/test-gen.sh',
              'tests/harness/case-phase.sh', 'scripts/support/normal-case-dispatch.py',
-             'tests/tooling/test-required-goldens.py')
+             'tests/tooling/test-required-goldens.py', 'tests/tooling/test-fixture-package.py',
+             'scripts/support/fixture_package.py')
     args.report.write_text(json.dumps(dict(source_hashes={n:hashlib.sha256((ROOT/n).read_bytes()).hexdigest() for n in names},
                                           scenarios=results), indent=2)+'\n')
 raise SystemExit(0 if all(r['passed'] for r in results) else 1)
