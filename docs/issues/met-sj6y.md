@@ -215,3 +215,20 @@ and exact root/leaf validation, and prompted stronger order and
 alignment assertions. A scratch read-only outcome trial has seven
 field forwards and two whole forwards with no snapshots. Measure
 the read-only signature independently before adopting it.
+
+The self-applied comparison used the same forwarding-enabled builder
+for writable and read-only outcome. Six balanced rounds on the same
+read-only trial source give 7.120595 seconds for the original compiler,
+6.849405 for forwarding with writable outcome, and 6.890875 for
+forwarding with read-only outcome. The two forwarding variants emitted
+identical LLVM in all 14 runs. The read-only trial was slower in all
+six pairs. Its outer projected calls are forwarded, but its calls to
+isActive and state both stage the incoming read-only receiver into an
+aggregate temporary. The writable outcome forwards both of these
+receivers, and ARM64 confirms the read-only state call uses the stack.
+Keep the generic field optimization and retain the writable outcome
+until verified read borrows can forward a guaranteed-indirect input.
+This follow-up needs to preserve the typed formal, its lifetime and
+its read-access proof. No claim is made about the time attributable
+to individual copies.
+[Forwarding and measurement evidence](../../../evidence/performance-regression-history/readonly-restoration/inout-read-forwarding/projected-inout/README.md).
