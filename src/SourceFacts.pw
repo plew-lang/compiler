@@ -673,7 +673,7 @@ impl SourceFactDirectory {
             MatchSource.Condition(clauseIndex: val id) => { self.conditionMatchOwners[id] = owner }
         }
     }
-    inout fn matchOwner(source: MatchSource) -> Optional[SemanticCompletionOwner] {
+    fn matchOwner(source: MatchSource) -> Optional[SemanticCompletionOwner] {
         match source {
             MatchSource.Statement(stmtId: val id) => { return self.statementMatchOwners.get(key: id) }
             MatchSource.Expression(exprId: val id) => { return self.expressionMatchOwners.get(key: id) }

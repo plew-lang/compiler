@@ -50,7 +50,11 @@ Record each scope, verdict and revision. No main/seed promotion.
   Same-source medians 8.096866 and 10.213079 seconds, all three pairs
   slower, eight equal LLVM outputs. Raw LLVM and ARM64 again show a Comp
   snapshot surviving optimization.
-- Next independently measurable units: `SourceFactDirectory.matchOwner`, `state`,
+- `SourceFactDirectory.matchOwner`: restored. Standard build
+  `20261111T031131-build-c6ab26` and two AOT controls passed.
+  Same-source medians 8.117086 and 8.129869 seconds, mixed pair direction,
+  eight equal LLVM outputs. No clear regression.
+- Next independently measurable units: `SourceFactDirectory.state`,
   `inactiveBuilder`, and the `Comp` argument of
   `declarationCallHasStorageArguments`.
 - Restore callers after their read-only prerequisites. Check the source owner
