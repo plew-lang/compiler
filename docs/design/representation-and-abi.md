@@ -60,6 +60,16 @@ The callable's classification is independent of the caller's ability to reuse st
 
 Reusable local homes come from verified owned immutable bindings, dedicated evaluation temporaries, and admitted nonboxed static value-field projections. Ready preparation retains exact body, operation/operand occurrence, local root, projection, semantic/native type and LLVM scope correspondence. Final emission validates and consumes that receipt; an arbitrary pointer, source-binding integer, matching byte size, or a different same-typed parameter is not a proof. Contracted incoming homes use their exact entry/lane binding. A missing optimization proof selects a snapshot; a malformed required receipt is an Internal failure. Globals without admitted readiness, reference/index/cell/boxed storage and async frame homes do not inherit this local proof.
 
+A synchronous direct private receiver may reuse the whole storage of an incoming
+copyable inout formal when the verified call retains a semantic read borrow.
+The Ready receipt ties that use to the normal body's exact logical and physical
+parameter and matches the referent's native type. The old whole-value load and
+the receiver's typed byref lane use the same module layout and referent ABI
+alignment. The inout declaration keeps its direct pointer ABI. The physical
+consumer checks the actual LLVM argument belongs to that function and parameter
+index, and emission retains the usual access checks. This call-interval proof
+does not grant a value snapshot or a stable projected, shared or suspended home.
+
 LLVM `byref` describes physical memory transport, not source borrowing, ownership acquisition, immutability or alias freedom. It grants no `readonly`/`noalias` attribute by itself. The frontend/Mid ownership and access contracts establish semantic legality; LLVM lowering cannot remove their Copy, lifetime or cleanup obligations merely because a byte transfer is avoidable.
 
 The declared callable records its logical signature, physical function type, and per-logical-parameter physical index/classification. Direct callers and callee binding consume that same record and validate logical signature/argument correspondence. An indirect callable derives the equivalent mapping from its completed signature under the same classification rules, rather than using a different ad hoc closure ABI.

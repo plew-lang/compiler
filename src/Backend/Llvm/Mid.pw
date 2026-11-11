@@ -2907,7 +2907,8 @@ pub impl LlvmCtx {
         val stableUses = match executable {
             Optional.Some(v: val verified) => {
                 if verified.canonical.body != canonical.body { return <Result.Err error=valueAbiFailure(message: "stable home admission lacks this executable body") /> }
-                give (try self.prepareStableHomeUses(c: inout c, body: body, localStart: start))
+                val normalAbiId = match entry { LlvmBodyLocalEntry.Normal(abiId: val id) => { give id } _ => { give 0U64 } }
+                give (try self.prepareStableHomeUses(c: inout c, body: body, localStart: start, normalAbiId: normalAbiId))
             }
             Optional.None => { give [:] }
         }

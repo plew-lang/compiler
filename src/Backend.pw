@@ -137,6 +137,7 @@ struct LlvmStableHomeUse {
     pub val rootType: LLVMTypeRef
     pub val type: LLVMTypeRef
     pub val fields: Array[U64]
+    pub val incomingInout: Bool = false
 }
 pub impl LlvmStableHomeUse { factory }
 struct LlvmBodyLocalPlan {
@@ -1763,6 +1764,7 @@ fn valueAbiFailure(message: String) -> CompileDiagnostic {
 
 extern(c) {
     fn plew_llvm_guaranteed_parameter_matches(address~: LLVMValueRef, type~: LLVMTypeRef, alignment~: U64) -> I32
+    fn plew_llvm_inout_parameter_matches(address~: LLVMValueRef, slot~: LLVMValueRef, function~: LLVMValueRef, index~: U64) -> I32
 }
 
 extern(c) {

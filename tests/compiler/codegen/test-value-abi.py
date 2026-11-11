@@ -174,3 +174,31 @@ with tempfile.TemporaryDirectory(prefix='plew-stable-homes-') as directory:
         subprocess.run([llvm_link.selected_clang(config), '-w', '-O0', str(material), str(directory / 'runtime.c'), '-o', str(executable)], check=True, timeout=55)
         assert subprocess.check_output([str(executable)], timeout=55) == fixture.with_suffix('.out').read_bytes(), material
 print('PASS stable local/temporary/field homes: raw staging reduction and raw/optimized execution')
+
+# A synchronous read receiver can reborrow the whole incoming inout place.
+# Exercise both a caller's self and its ordinary inout parameter.
+fixture = root / 'tests/fixtures/run/mid_inout_read_receiver_forwarding.pw'
+raw = subprocess.check_output([str(compiler), '--require-mid', str(fixture)], text=True, timeout=55)
+aggregate, = re.findall(r'^(%[\w.]+) = type \{ i64, i64, i64, i64 \}$', raw, re.M)
+reader, = re.findall(r'^define internal i64 @([\w.]+)\(ptr byref\(' + re.escape(aggregate) + r'\) align \d+ %\w+\)', raw, re.M)
+forwarding_callers = 0
+for caller in re.finditer(r'^define internal i64 @[\w.]+\((ptr %\w+(?:, ptr %\w+)?)\) \{\n(.*?)^\}', raw, re.M | re.S):
+    calls = [line for line in caller[2].splitlines() if f'call i64 @{reader}(' in line]
+    if not calls:
+        continue
+    assert len(calls) == 1 and re.search(
+        r'ptr byref\(' + re.escape(aggregate) + r'\) align \d+ ' + re.escape(caller[1].split()[-1]) + r'\)', calls[0]
+    ), f'read receiver did not forward the incoming inout address: {calls}'
+    assert not re.search(r'\b(?:load|store) ' + re.escape(aggregate) + r'\b', caller[2]), 'read receiver still transfers the whole aggregate'
+    forwarding_callers += 1
+assert forwarding_callers == 2, 'expected one forwarding method and one forwarding free function'
+with tempfile.TemporaryDirectory(prefix='plew-inout-read-receiver-') as directory:
+    directory = Path(directory)
+    source = directory / 'raw.ll'
+    runtime_source = directory / 'runtime.c'
+    executable = directory / 'receiver'
+    source.write_text(raw)
+    runtime_source.write_bytes(subprocess.check_output([str(compiler), '--runtime'], timeout=55))
+    subprocess.run([llvm_link.selected_clang(config), '-w', '-O0', source, runtime_source, '-o', executable], check=True, timeout=55)
+    assert subprocess.check_output([executable], timeout=55) == fixture.with_suffix('.out').read_bytes()
+print('PASS read receivers forward exact inout parameter homes and retain evaluation order')

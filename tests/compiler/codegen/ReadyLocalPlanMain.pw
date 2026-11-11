@@ -212,13 +212,13 @@ fn guaranteedLocalControl() {
     val secondUse = backend.stableHomeUses.count()
     backend.bodyLocalPlans.set(i: planId - 1U64, value: <LlvmBodyLocalPlan canonicalBody=localPlan.canonicalBody bodyIdentity=localPlan.bodyIdentity function=localPlan.function signature=localPlan.signature moduleIdentity=localPlan.moduleIdentity contextIdentity=localPlan.contextIdentity localStart=localPlan.localStart localCount=localPlan.localCount revision=localPlan.revision entry=localPlan.entry environmentType=localPlan.environmentType stableUses=[operation: [0U64, firstUse, secondUse]] />)
     backend.activeMidOperation = operation
-    val firstCarrier = <LlvmValueCarrier.StableHome address=backend.locPtr[0U64] planId=planId useId=firstUse operation=operation />
-    val secondCarrier = <LlvmValueCarrier.StableHome address=backend.locPtr[1U64] planId=planId useId=secondUse operation=operation />
+    val firstCarrier = <LlvmValueCarrier.StableHome address=backend.locPtr[0U64] planId=planId useId=firstUse operation=operation incomingInout=false />
+    val secondCarrier = <LlvmValueCarrier.StableHome address=backend.locPtr[1U64] planId=planId useId=secondUse operation=operation incomingInout=false />
     val firstStable = <LlvmValueInput lane=input.lane index=0U64 carrier=firstCarrier />
     val secondStable = <LlvmValueInput lane=secondInput.lane index=1U64 carrier=secondCarrier />
     backend.callBodyValueFunction(function: function, bodyId: bodyId, inputs: scope, arguments: [firstStable, secondStable]).unwrap()
     requireInternal(result: backend.callBodyValueFunction(function: function, bodyId: bodyId, inputs: scope, arguments: [<LlvmValueInput lane=input.lane index=0U64 carrier=secondCarrier />, <LlvmValueInput lane=secondInput.lane index=1U64 carrier=firstCarrier />]))
-    for invalid in [<LlvmValueCarrier.StableHome address=backend.locPtr[0U64] planId=planId + 1U64 useId=firstUse operation=operation />, <LlvmValueCarrier.StableHome address=backend.locPtr[0U64] planId=planId useId=firstUse operation=operation + 1U64 />, <LlvmValueCarrier.StableHome address=backend.locPtr[1U64] planId=planId useId=firstUse operation=operation />] {
+    for invalid in [<LlvmValueCarrier.StableHome address=backend.locPtr[0U64] planId=planId + 1U64 useId=firstUse operation=operation incomingInout=false />, <LlvmValueCarrier.StableHome address=backend.locPtr[0U64] planId=planId useId=firstUse operation=operation + 1U64 incomingInout=false />, <LlvmValueCarrier.StableHome address=backend.locPtr[1U64] planId=planId useId=firstUse operation=operation incomingInout=false />] {
         requireInternal(result: backend.callBodyValueFunction(function: function, bodyId: bodyId, inputs: scope, arguments: [<LlvmValueInput lane=input.lane index=0U64 carrier=invalid />, secondStable]))
     }
     backend.preparedLocals.set(i: localPlan.localStart, value: <LlvmPreparedLocal semanticType=local.semanticType type=local.type storageType=local.storageType storage=local.storage mode=local.mode binding=local.binding sourceScope=1U64 />)

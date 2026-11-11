@@ -112,5 +112,28 @@ A bounded prototype is feasible if it establishes the original inout
 lane's referent alignment, reuses verified call-interval access facts
 and forwards the exact input pointer into the current byref ABI.
 Shared, projected, indexed, async and foreign/indirect paths require
-separate proof. No forwarding change or new throughput result yet.
+separate proof.
 See [evidence and scope](../../../evidence/performance-regression-history/readonly-restoration/call-template-index/forwarding-investigation.md).
+
+### Forwarding increment validation
+
+- The private synchronous body forwards the exact native argument for a
+  read receiver rooted in a whole copyable inout formal. Cover both self
+  and an ordinary formal, including a different same-typed argument and
+  an omitted logical parameter before it.
+- Preserve receiver evaluation at the call and ordinary value evaluation
+  before later sibling effects. Retain existing move/inout overlap rejection,
+  ambient checks, and copy fallback for other shapes.
+- Confirm pre-change structural failure, fresh candidate IR/behavior, and
+  a same-source throughput comparison. Check the original Comp call
+  separately from the synthetic structural fixture.
+
+The forwarding implementation passed the structural RED/GREEN and
+the value ABI, Ready, physical signature, AOT, lazy run and overlapping
+inout/move rejection controls. The original sourceForItemTerm call in
+the read-only trial forwards its incoming address, with two whole-Comp
+loads gone from that caller. Same-source compile-to-LLVM medians are
+8.098441 and 8.080239 seconds for the preceding compiler and the first
+forwarding candidate. Measure the API restoration separately with the
+same forwarding-capable build carrier on both sides.
+[Increment evidence](../../../evidence/performance-regression-history/readonly-restoration/inout-read-forwarding/README.md).

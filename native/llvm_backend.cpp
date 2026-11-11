@@ -328,6 +328,13 @@ extern "C" int plew_llvm_guaranteed_parameter_matches(LLVMValueRef address, LLVM
            plew_llvm_home_alignment(address) >= alignment;
 }
 
+extern "C" int plew_llvm_inout_parameter_matches(LLVMValueRef address, LLVMValueRef slot, LLVMValueRef function, uint64_t index) {
+    if (!address || address != slot || !function) return 0;
+    auto *argument = llvm::dyn_cast<llvm::Argument>(llvm::unwrap(address));
+    return argument && llvm::wrap(argument->getParent()) == function &&
+           argument->getArgNo() == index;
+}
+
 extern "C" char *plew_llvm_jit_target_triple(const PlewLlvmJit *jit) {
   return LLVMCreateMessage(jit && jit->engine
       ? jit->engine->getTargetTriple().str().c_str() : "");

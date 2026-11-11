@@ -1,0 +1,56 @@
+use @Std/Io only { print }
+
+struct Reading {
+    mut val value: I64
+    val second: I64
+    val third: I64
+    val fourth: I64
+}
+
+impl Reading {
+    factory
+
+    fn read() -> I64 {
+        return self.value + self.second + self.third + self.fourth
+    }
+
+    fn readAfter(effect: I64) -> I64 {
+        return self.read() + effect
+    }
+
+    inout fn updateAndRead() -> I64 {
+        self.value = self.value + 1I64
+        return self.read()
+    }
+}
+
+struct Marker {}
+impl Marker { factory }
+
+fn updateAndReadArgument(marker: Marker, other: inout Reading, reading: inout Reading) -> I64 {
+    reading.value = reading.value + 1I64
+    return reading.read()
+}
+
+fn replace(reading: inout Reading) -> I64 {
+    reading.value = 10I64
+    return 0I64
+}
+
+fn readValue(reading: Reading, effect: I64) -> I64 {
+    return reading.read() + effect
+}
+
+fn checkEvaluation(reading: inout Reading) {
+    print(readValue(reading: reading, effect: replace(reading: inout reading)))
+    reading.value = 1I64
+    print(reading.readAfter(effect: replace(reading: inout reading)))
+}
+
+fn main() {
+    mut val reading = <Reading value=1I64 second=2I64 third=3I64 fourth=4I64 />
+    mut val other = <Reading value=20I64 second=0I64 third=0I64 fourth=0I64 />
+    print(reading.updateAndRead())
+    print(updateAndReadArgument(marker: <Marker />, other: inout other, reading: inout reading))
+    checkEvaluation(reading: inout reading)
+}

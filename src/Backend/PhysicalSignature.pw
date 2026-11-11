@@ -184,7 +184,7 @@ pub struct LlvmCallableInputScope {
     pub val signature: LLVMTypeRef
 }
 pub impl LlvmCallableInputScope { factory }
-pub enum LlvmValueCarrier { Value(value: LLVMValueRef) Home(address: LLVMValueRef) StableHome(address: LLVMValueRef, planId: U64, useId: U64, operation: U64) }
+pub enum LlvmValueCarrier { Value(value: LLVMValueRef) Home(address: LLVMValueRef) StableHome(address: LLVMValueRef, planId: U64, useId: U64, operation: U64, incomingInout: Bool) }
 pub struct LlvmValueInput {
     pub val lane: LlvmLogicalParameter
     pub val index: U64
@@ -305,8 +305,15 @@ pub impl LlvmSignatureScope {
                 if plew_pointer_equal(LLVMTypeOf(value), parameter.type) == 0I32 { return <Result.Err error=signatureFailure(message: "actual input value type mismatch") /> }
                 give value
             }
-            LlvmValueCarrier.StableHome(address: val address, planId: val planId, useId: val useId, operation: val operation) => {
-                if parameter.passing.key() != 3U64 || planId == 0U64 || useId == 0U64 || operation == 0U64 || LLVMGetTypeKind(LLVMTypeOf(address)) != 12U32 || plew_llvm_home_type_matches(address, parameter.type) == 0I32 || plew_llvm_home_alignment(address) < parameter.valueAlignment { return <Result.Err error=signatureFailure(message: "input lacks a typed stable aggregate home") /> }
+            LlvmValueCarrier.StableHome(address: val address, planId: val planId, useId: val useId, operation: val operation, incomingInout: val incomingInout) => {
+                if parameter.passing.key() != 3U64 || planId == 0U64 || useId == 0U64 || operation == 0U64 || LLVMGetTypeKind(LLVMTypeOf(address)) != 12U32 { return <Result.Err error=signatureFailure(message: "input lacks a stable aggregate home") /> }
+                if incomingInout {
+                    // The final receipt verifies the exact formal and referent type.
+                    // Use the alignment of that type's existing load, not of ptr.
+                    if !parameter.role.same(role: <LlvmParameterRole.Receiver />) || (LLVMABIAlignmentOfType(LLVMGetModuleDataLayout(self.module), parameter.type) as U64) < parameter.valueAlignment { return <Result.Err error=signatureFailure(message: "inout read home does not match the receiver ABI") /> }
+                } else if plew_llvm_home_type_matches(address, parameter.type) == 0I32 || plew_llvm_home_alignment(address) < parameter.valueAlignment {
+                    return <Result.Err error=signatureFailure(message: "input lacks a typed stable aggregate home") />
+                }
                 give address
             }
             LlvmValueCarrier.Home(address: val address) => {
