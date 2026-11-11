@@ -1,0 +1,50 @@
+---
+id: met-sj6y
+status: in_progress
+deps: []
+links: []
+created: 2026-11-11T02:38:30Z
+type: task
+priority: 2
+assignee: Koji Murata
+tags: [frontend, performance]
+---
+# Restore read-only contracts changed solely to avoid value copies
+
+
+## Scope
+
+Restore independently measurable API units whose history shows a writable
+receiver or argument was introduced only to avoid physical copying. Keep
+ownership/lookup improvements that have independent design reasons. Preserve
+actual mutations, semantic checking and later source-owner behavior. Work from
+historical diffs and today's transitive call graph; do not revert whole commits.
+
+First unit: `Comp.semanticClosureCount`, changed by ab1e958e. It reads a single
+count and does not call another mutable reader. `semanticClosureAt` now also
+routes through owner-local construction metadata; verify that dependency before
+restoring it. The removed Snapshot API is not reintroduced.
+
+Use the saved current carrier as the fixed input for builds. Compare prior and
+restored compiler on the same final source, alternate order after warmup, check
+exact LLVM output and existing closure or source-fact AOT controls. Accept
+small/no regression; leave clearly slower or unvalidated units unadopted.
+Record each scope, verdict and revision. No main/seed promotion.
+
+## Sequential restoration
+
+- `Comp.semanticClosureCount`: restored. Standard build
+  `20261111T023910-build-9e5089` produced the same executable SHA-256 as
+  the baseline. Same-source medians 8.107381 and 8.111118 seconds, eight
+  identical raw LLVM outputs, two existing closure AOT controls passed.
+  The independent review covered the receiver contract, fixed-input receipts
+  and the targeted controls.
+- Next independently measurable units: `Comp.callTemplateIndex`,
+  `Comp.currentSourceOwner`, `SourceFactDirectory.matchOwner`, `state`,
+  `inactiveBuilder`, and the `Comp` argument of
+  `declarationCallHasStorageArguments`.
+- Restore callers after their read-only prerequisites. Check the source owner
+  state/outcome/prepared path, expression/statement/parent and closure
+  construction path, and operation/call-template constraint path. Keep the
+  current owner-local routes and their explicit cache mutations. Preserve
+  mutable receivers that change the constraint graph or active builder.

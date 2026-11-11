@@ -2432,7 +2432,7 @@ fn findSourceCallTemplateIndex(locations: Array[SourceCallLocation], indexSlots:
 }
 
 pub impl Comp {
-    inout fn semanticClosureCount() -> U64 { return self.semanticClosures.count() }
+    fn semanticClosureCount() -> U64 { return self.semanticClosures.count() }
     inout fn semanticClosureAt(index: U64) -> SemanticClosure {
         val declaration = self.semanticClosures[index]
         match self.constructionClosure(owner: self.semanticClosureOwners[index], exprId: declaration.exprId) {
