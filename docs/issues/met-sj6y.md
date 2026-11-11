@@ -45,7 +45,12 @@ Record each scope, verdict and revision. No main/seed promotion.
   eight equal LLVM outputs. Raw LLVM and ARM64 prove a Comp snapshot is
   inserted and survives optimization at a representative call. Resume
   restoration after generalized safe read-home forwarding covers this path.
-- Next independently measurable units: `Comp.currentSourceOwner`, `SourceFactDirectory.matchOwner`, `state`,
+- `Comp.currentSourceOwner`: restoration tested and reverted. Standard
+  build `20261111T030227-build-5d8f16` and two AOT controls passed.
+  Same-source medians 8.096866 and 10.213079 seconds, all three pairs
+  slower, eight equal LLVM outputs. Raw LLVM and ARM64 again show a Comp
+  snapshot surviving optimization.
+- Next independently measurable units: `SourceFactDirectory.matchOwner`, `state`,
   `inactiveBuilder`, and the `Comp` argument of
   `declarationCallHasStorageArguments`.
 - Restore callers after their read-only prerequisites. Check the source owner
