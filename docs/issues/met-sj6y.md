@@ -82,14 +82,14 @@ comparison with alternating runs. See the
   This also gates `semanticClosureAt` and the call template / constraint readers
   that use those operations. Keep their current owner-local routes.
 - `currentSourceOwner` also gates construction expression queries and
-  `sourceRecordingOwner`. `callTemplateIndex` and the operation query gate
+  `sourceRecordingOwner`. The operation query still gates
   restoring the read-only `Comp` argument of `scanBody`. Its receiver writes the
   graph and obligations. `selectedCallHasDeferredConstraints` additionally
   requires checking its diagnostic reader before dropping mutable authority.
 - Explicit reader-cache updates, owner activation, save/remove and other
   writes keep their existing writable contracts. The deleted
   `semanticClosureSnapshot` is outside the restoration.
-- Reopen the three measured regressions after verified Mid facts can prove
+- Recheck the remaining regressions as verified Mid facts can prove
   exact synchronous call-interval stability of eligible mutable places.
   Start with a demonstrated copying call and a competing-write/alias control.
   Keep the snapshot where stability, initialization, access or lifetime
@@ -137,3 +137,16 @@ loads gone from that caller. Same-source compile-to-LLVM medians are
 forwarding candidate. Measure the API restoration separately with the
 same forwarding-capable build carrier on both sides.
 [Increment evidence](../../../evidence/performance-regression-history/readonly-restoration/inout-read-forwarding/README.md).
+
+### Applied optimization and lookup restoration
+
+Rebuilding the exact same compiler source with the new forwarding-capable
+carrier reduces the same-source compile-to-LLVM median from 8.075335 to
+7.132823 seconds. This is a diagnostic comparison, not a formal fixed point.
+
+With that same build carrier on both sides, restoring callTemplateIndex
+to a read-only receiver gives medians of 7.097031 and 7.154932 seconds.
+All eight LLVM outputs match, the original ARM64 call forwards the Comp
+pointer, and two existing AOT controls pass. Adopt this restoration.
+Recheck currentSourceOwner and state individually. Any projected root
+or other excluded case still needs a separate proof and measurement.
