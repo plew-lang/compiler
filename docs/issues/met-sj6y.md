@@ -172,5 +172,12 @@ Seven of nine emitted calls used a snapshot of the Comp.sourceFacts
 field and representative copies survived in ARM64. The trial kept
 identical emitted LLVM across candidates.
 [Outcome evidence](../../../evidence/performance-regression-history/readonly-restoration/inout-read-forwarding/source-body-outcome-restoration/README.md).
-Compare prepared independently. A forwarding extension needs a
-verified access proof for a nonboxed field of the live inout formal.
+The independent prepared trial was adopted. The same-source medians
+are 7.094541 and 7.095004 seconds, all eight LLVM outputs agree, and the
+two owner/payload AOT controls pass. Both projected call sites retain
+a field snapshot in raw LLVM and ARM64.
+[Prepared evidence](../../../evidence/performance-regression-history/readonly-restoration/inout-read-forwarding/source-body-prepared-restoration/README.md).
+
+The outcome-dependent restorations remain pending. A forwarding
+extension needs a verified access proof for a nonboxed field of the
+live inout formal. Other readers can be evaluated in dependency order.

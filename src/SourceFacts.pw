@@ -163,7 +163,7 @@ impl SourceFactDirectory {
         }
         return <Optional.None />
     }
-    inout fn prepared(owner: SemanticCompletionOwner) -> Optional[PreparedSemanticFacts] {
+    fn prepared(owner: SemanticCompletionOwner) -> Optional[PreparedSemanticFacts] {
         if self.isActive(owner: owner) { return <Optional.None /> }
         match self.state(owner: owner) {
             Optional.Some(v: val state) => {
