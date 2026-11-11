@@ -181,3 +181,12 @@ a field snapshot in raw LLVM and ARM64.
 The outcome-dependent restorations remain pending. A forwarding
 extension needs a verified access proof for a nonboxed field of the
 live inout formal. Other readers can be evaluated in dependency order.
+
+The exact prepareLexicalBody call retains a verified read borrow of the
+inline sourceFacts field under inout self. LLVM Ready only admits the
+whole incoming inout home, and its final receipt and native check require
+that exact unprojected argument. A projected proof needs exact incoming
+root provenance, nonboxed field layout and leaf alignment. The separate
+overlapping-write rejection still passes. Independent review checked the
+raw LLVM, representative ARM64 and ABI boundaries at 461f3eb4.
+[Investigation and probe](../../../evidence/performance-regression-history/readonly-restoration/inout-read-forwarding/source-body-outcome-restoration/field-forwarding-investigation.md).
