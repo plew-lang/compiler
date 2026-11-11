@@ -1,6 +1,6 @@
 ---
 id: met-sj6y
-status: in_progress
+status: closed
 deps: []
 links: [com-nkoa]
 created: 2026-11-11T02:38:30Z
@@ -75,7 +75,7 @@ agree and the input gate passed. This is a diagnostic source-to-LLVM
 comparison with alternating runs. See the
 [measurement index](../../../evidence/performance-regression-history/readonly-restoration/README.md).
 
-## Remaining restorations
+## Original candidate dependencies
 
 - `state` gates `outcome` / `prepared`, the global and owner closure checks,
   and owner-local expression, statement, parent, closure and operation queries.
@@ -95,8 +95,7 @@ comparison with alternating runs. See the
   Keep the snapshot where stability, initialization, access or lifetime
   is unproved. Extend the existing storage admission and typed byref
   transport without frontend-specific exceptions. See [com-nkoa](com-nkoa.md)
-  for related effect-precision work. This task remains open for the blocked
-  APIs and their dependent restorations.
+  for related effect-precision work.
 
 ## Receiver forwarding investigation
 
@@ -178,9 +177,9 @@ two owner/payload AOT controls pass. Both projected call sites retain
 a field snapshot in raw LLVM and ARM64.
 [Prepared evidence](../../../evidence/performance-regression-history/readonly-restoration/inout-read-forwarding/source-body-prepared-restoration/README.md).
 
-The outcome-dependent restorations remain pending. A forwarding
-extension needs a verified access proof for a nonboxed field of the
-live inout formal. Other readers can be evaluated in dependency order.
+That trial isolated a missing access proof for a nonboxed field of
+the live inout formal. The later field forwarding work below supplies
+that proof.
 
 The exact prepareLexicalBody call retains a verified read borrow of the
 inline sourceFacts field under inout self. LLVM Ready only admits the
@@ -266,8 +265,7 @@ head/term consumers (constructionExpressionHead, recordedSourceExpressionTerm,
 invocationDiverges, hasSemanticExprTypeFact, recordedExpressionHasUnitResult,
 and recordedGlobalAddress), statement, parent and lexicalSourceFactOwner,
 constructionClosure and semanticClosureAt, constructionAggregate,
-constructionMatch, and the directly related valueBlock/constructionValueBlock
-and contextCommitted readers. Preserve owner activation and reader-cache writes.
+constructionMatch. Preserve owner activation and reader-cache writes.
 
 The operation families are operation/callTemplateAt/callTemplateSnapshot
 and the read-only Comp input of scanBody, operationHead/callTemplateHeadAt,
@@ -324,3 +322,23 @@ constructionValueBlock and contextCommitted were introduced as inout
 and are independent of the historical restoration. They are outside
 this adoption.
 [Reader comparisons and controls](../../../evidence/performance-regression-history/readonly-restoration/inout-read-forwarding/dependent-readers/README.md).
+
+## Final decisions
+
+- Adopt the original seven API restorations, isActive, prepared and
+  outcome, and the reviewed 35 declaration changes for dependent readers.
+- Retain constructionClosure and semanticClosureAt. The final isolated
+  and combined builds have the same binary SHA-256. Their medians are
+  6.534633 and 6.539345 seconds versus 6.522447 for the adopted compiler.
+  Earlier closure comparisons also show a small repeatable slowdown.
+- Retain the inout Comp input of scanBody. Its isolated value-input
+  trial measures 6.541282 seconds and still snapshots the full Comp.
+  The analysis receiver's mutations remain part of its contract.
+
+Each last trial measured slower in six of eight balanced rounds.
+All 36 LLVM outputs agree. The retained signatures close the scoped
+assessment without expanding into ordinary value argument optimization.
+The production changes passed scoped AOT/JIT, raw ABI and rejection
+controls and independent review. No formal self-host, seed or main
+integration was performed.
+[Final trials and controls](../../../evidence/performance-regression-history/readonly-restoration/inout-read-forwarding/dependent-readers/README.md).
