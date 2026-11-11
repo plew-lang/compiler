@@ -2,7 +2,7 @@
 id: met-sj6y
 status: in_progress
 deps: []
-links: []
+links: [com-nkoa]
 created: 2026-11-11T02:38:30Z
 type: task
 priority: 2
@@ -64,10 +64,36 @@ Record each scope, verdict and revision. No main/seed promotion.
   read-only receiver. Standard build `20261111T032603-build-4e100a`
   and two AOT controls passed. Same-source medians 8.154263 and
   8.149342 seconds, mixed pair direction and eight equal LLVM outputs.
-- Next independently measurable unit: the `Comp` argument of
-  `declarationCallHasStorageArguments`.
-- Restore callers after their read-only prerequisites. Check the source owner
-  state/outcome/prepared path, expression/statement/parent and closure
-  construction path, and operation/call-template constraint path. Keep the
-  current owner-local routes and their explicit cache mutations. Preserve
-  mutable receivers that change the constraint graph or active builder.
+- `declarationCallHasStorageArguments`: restored its read-only `Comp`
+  argument. Standard build `20261111T033439-build-57c515`, two AOT
+  controls and independent review passed. Same-source medians 8.109880
+  and 8.149894 seconds, mixed pair direction and eight equal LLVM outputs.
+
+The initial compiler and all four restorations compared on the same final
+source give medians of 8.159039 and 8.167258 seconds. The eight LLVM outputs
+agree and the input gate passed. This is a diagnostic source-to-LLVM
+comparison with alternating runs. See the
+[measurement index](../../../evidence/performance-regression-history/readonly-restoration/README.md).
+
+## Remaining restorations
+
+- `state` gates `outcome` / `prepared`, the global and owner closure checks,
+  and owner-local expression, statement, parent, closure and operation queries.
+  This also gates `semanticClosureAt` and the call template / constraint readers
+  that use those operations. Keep their current owner-local routes.
+- `currentSourceOwner` also gates construction expression queries and
+  `sourceRecordingOwner`. `callTemplateIndex` and the operation query gate
+  restoring the read-only `Comp` argument of `scanBody`. Its receiver writes the
+  graph and obligations. `selectedCallHasDeferredConstraints` additionally
+  requires checking its diagnostic reader before dropping mutable authority.
+- Explicit reader-cache updates, owner activation, save/remove and other
+  writes keep their existing writable contracts. The deleted
+  `semanticClosureSnapshot` is outside the restoration.
+- Reopen the three measured regressions after verified Mid facts can prove
+  exact synchronous call-interval stability of eligible mutable places.
+  Start with a demonstrated copying call and a competing-write/alias control.
+  Keep the snapshot where stability, initialization, access or lifetime
+  is unproved. Extend the existing storage admission and typed byref
+  transport without frontend-specific exceptions. See [com-nkoa](com-nkoa.md)
+  for related effect-precision work. This task remains open for the blocked
+  APIs and their dependent restorations.
