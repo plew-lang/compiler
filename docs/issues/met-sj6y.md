@@ -39,8 +39,13 @@ Record each scope, verdict and revision. No main/seed promotion.
   identical raw LLVM outputs, two existing closure AOT controls passed.
   The independent review covered the receiver contract, fixed-input receipts
   and the targeted controls.
-- Next independently measurable units: `Comp.callTemplateIndex`,
-  `Comp.currentSourceOwner`, `SourceFactDirectory.matchOwner`, `state`,
+- `Comp.callTemplateIndex`: restoration tested and reverted. Standard build
+  `20261111T025329-build-aedfd2` and two AOT controls passed. Same-source
+  medians 8.093618 and 8.489046 seconds; all three matched pairs slower,
+  eight equal LLVM outputs. Raw LLVM and ARM64 prove a Comp snapshot is
+  inserted and survives optimization at a representative call. Resume
+  restoration after generalized safe read-home forwarding covers this path.
+- Next independently measurable units: `Comp.currentSourceOwner`, `SourceFactDirectory.matchOwner`, `state`,
   `inactiveBuilder`, and the `Comp` argument of
   `declarationCallHasStorageArguments`.
 - Restore callers after their read-only prerequisites. Check the source owner
