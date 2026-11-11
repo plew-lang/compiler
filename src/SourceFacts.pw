@@ -149,7 +149,7 @@ impl SourceFactDirectory {
             SemanticCompletionOwner.Closure(expression: val expression) => { self.closures[expression] = state }
         }
     }
-    inout fn outcome(owner: SemanticCompletionOwner) -> Optional[Result[(), CompileDiagnostic]] {
+    fn outcome(owner: SemanticCompletionOwner) -> Optional[Result[(), CompileDiagnostic]] {
         if self.isActive(owner: owner) { return <Optional.None /> }
         match self.state(owner: owner) {
             Optional.Some(v: val state) => {

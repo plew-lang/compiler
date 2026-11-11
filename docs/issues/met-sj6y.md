@@ -251,3 +251,42 @@ The raw AOT and JIT fixtures, existing field and inout controls, and
 overlap rejections pass. Independent review confirmed the exact
 physical argument, typed alignment and access checks. The header
 declarations and non-first-argument control were added after review.
+
+## Remaining candidate inventory
+
+The owner-closure family starts with outcome, then globalInitializerPrepared,
+globalInitializerConstructionClosed, sourceOwnerConstructionClosed,
+semanticCompletionOwnerPrepared, semanticExprConstructionClosed, and
+semanticStmtConstructionClosed. The independent owner selector is
+sourceRecordingOwner. Preserve the mutable body preparation paths.
+
+The owner-table families are expression and constructionExpression
+(including sourceSemanticExprTypeAt), expressionHead and its expression
+head/term consumers (constructionExpressionHead, recordedSourceExpressionTerm,
+invocationDiverges, hasSemanticExprTypeFact, recordedExpressionHasUnitResult,
+and recordedGlobalAddress), statement, parent and lexicalSourceFactOwner,
+constructionClosure and semanticClosureAt, constructionAggregate,
+constructionMatch, and the directly related valueBlock/constructionValueBlock
+and contextCommitted readers. Preserve owner activation and reader-cache writes.
+
+The operation families are operation/callTemplateAt/callTemplateSnapshot
+and the read-only Comp input of scanBody, operationHead/callTemplateHeadAt,
+and operationConstraints/sourceOperationConstraints/selectedCallConstraintPlan/
+preparedCallConstraints/selectedCallHasDeferredConstraints. Preserve scanBody's
+writable analysis receiver. Check the diagnostic path before restoring the
+last reader. The diagnostic entry itself is an enabling dependency only.
+Original signature changes are visible in 0c7ee3c9, 7943e499, ab1e958e,
+24192d1f and 2b241be3. Later pure readers are listed where they share the
+same owner paths. No redesign of construction, caching or diagnostics is
+required to complete this restoration assessment.
+
+The self-applied trials built with the same forwarding-enabled carrier
+(`20261111T151134-build-36e00e` and `20261111T151408-build-c03ad9`)
+measure 6.588481 seconds for writable outcome and 6.585388 for read-only.
+The build receipts record distinct source inputs and byte-identical
+executables. The timing spread reflects repetitions of the same binary.
+All 14 LLVM outputs agree, and the two source-owner AOT controls pass. Outer call sites and both inner calls
+forward their exact addresses. Restore the read-only outcome.
+The closure trial exposes a separate guaranteed-parameter field
+projection gap on its state/inactiveBuilder calls.
+[Read-only outcome evidence](../../../evidence/performance-regression-history/readonly-restoration/inout-read-forwarding/readonly-parameter-relay/README.md).
