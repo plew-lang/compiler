@@ -72,10 +72,12 @@ and forms the address at the read, after argument evaluation. The proof is
 limited to the call interval. Value snapshots, indirect or shared storage and
 suspended calls follow their existing rules.
 
-The same call-interval proof admits a whole guaranteed-indirect argument
-of a normal body as a synchronous direct read receiver. The consumer
-checks the saved binding, the exact physical LLVM argument, and its typed
-byref alignment. Reborrowing adds no local ownership.
+The same call-interval proof admits a guaranteed-indirect argument of a
+normal body, or its nonboxed static fields with natural layout, as a
+synchronous direct read receiver. The consumer checks the saved binding,
+exact LLVM argument, and typed byref root. The emitted field path and
+offsets establish the leaf type and alignment. Reborrowing adds no local
+ownership.
 
 LLVM `byref` describes physical memory transport, not source borrowing, ownership acquisition, immutability or alias freedom. It grants no `readonly`/`noalias` attribute by itself. The frontend/Mid ownership and access contracts establish semantic legality; LLVM lowering cannot remove their Copy, lifetime or cleanup obligations merely because a byte transfer is avoidable.
 

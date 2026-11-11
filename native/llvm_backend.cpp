@@ -355,6 +355,17 @@ extern "C" uint64_t plew_llvm_inout_home_alignment(LLVMValueRef address, LLVMVal
     return home.type == llvm::unwrap(leafType) ? home.alignment : 0;
 }
 
+extern "C" int plew_llvm_guaranteed_home_matches(LLVMValueRef address, LLVMValueRef root, LLVMValueRef function,
+                                                uint64_t index, LLVMTypeRef rootType, const uint64_t *fields,
+                                                uint64_t count, LLVMTypeRef leafType, uint64_t alignment) {
+    if (!address || !rootType || !leafType || !alignment || (count && !fields) ||
+        !plew_llvm_argument_matches(root, root, function, index)) return 0;
+    auto *argument = llvm::cast<llvm::Argument>(llvm::unwrap(root));
+    if (!argument->hasByRefAttr() || argument->getParamByRefType() != llvm::unwrap(rootType)) return 0;
+    const auto home = plewHomeLayout(llvm::unwrap(address), argument, fields, count);
+    return home.type == llvm::unwrap(leafType) && home.alignment >= alignment;
+}
+
 extern "C" char *plew_llvm_jit_target_triple(const PlewLlvmJit *jit) {
   return LLVMCreateMessage(jit && jit->engine
       ? jit->engine->getTargetTriple().str().c_str() : "");

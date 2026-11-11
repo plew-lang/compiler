@@ -63,6 +63,10 @@ impl Cabinet {
     inout fn readShelf() -> I64 {
         return self.shelf.reading.read()
     }
+
+    fn readBorrowedShelf() -> I64 {
+        return self.shelf.reading.read()
+    }
 }
 
 fn readCabinet(marker: Marker, other: inout Reading, cabinet: inout Cabinet) -> I64 {
@@ -81,6 +85,7 @@ fn main() {
     checkEvaluation(reading: inout reading)
     mut val cabinet = <Cabinet marker=0I64 shelf=<Shelf marker=0I64 reading=<Reading value=1I64 second=2I64 third=3I64 fourth=4I64 /> /> />
     print(cabinet.readShelf())
+    print(cabinet.readBorrowedShelf())
     print(readCabinet(marker: <Marker />, other: inout other, cabinet: inout cabinet))
     print(readCabinetAfter(cabinet: inout cabinet))
 }

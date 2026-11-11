@@ -39,6 +39,9 @@ int plew_llvm_inout_parameter_matches(LLVMValueRef address, LLVMValueRef slot, L
 uint64_t plew_llvm_inout_home_alignment(LLVMValueRef address, LLVMValueRef root, LLVMValueRef function,
                                       uint64_t index, LLVMTypeRef rootType, const uint64_t *fields,
                                       uint64_t count, LLVMTypeRef leafType);
+int plew_llvm_guaranteed_home_matches(LLVMValueRef address, LLVMValueRef root, LLVMValueRef function,
+                                      uint64_t index, LLVMTypeRef rootType, const uint64_t *fields,
+                                      uint64_t count, LLVMTypeRef leafType, uint64_t alignment);
 
 // Single-threaded native execution session. It owns code, not a second Plew
 // runtime. Hosts explicitly supply symbols from the existing runtime instance.

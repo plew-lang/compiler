@@ -290,3 +290,15 @@ forward their exact addresses. Restore the read-only outcome.
 The closure trial exposes a separate guaranteed-parameter field
 projection gap on its state/inactiveBuilder calls.
 [Read-only outcome evidence](../../../evidence/performance-regression-history/readonly-restoration/inout-read-forwarding/readonly-parameter-relay/README.md).
+
+## Forward inline fields of guaranteed-indirect formals
+
+The closure trial shows two snapshots from the read-only Comp passed
+to constructionClosure, at SourceFactDirectory.state and inactiveBuilder.
+Extend the existing field path to typed byref roots while checking the
+exact physical formal, nonboxed static field path, native root and leaf
+types and derived leaf alignment. A nested byref fixture fails with the
+previous compiler and passes after build `20261111T152249-build-6ac346`.
+Raw AOT and JIT pass, including previous whole/inout, argument order and
+overlap rejection controls. Independent review found no ABI or ownership
+blocker.

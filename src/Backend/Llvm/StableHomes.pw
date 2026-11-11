@@ -14,7 +14,6 @@ pub impl LlvmCtx {
         if operand.borrowsStorage {
             if !declaration.isParameter || declaration.isUnique || declaration.isBorrowed || declaration.isCaptureCell || operand.accessPlace != 0U64 || operand.accessOwner != 0U64 { return <Result.Ok value=0U64 /> }
             if !declaration.isInout {
-                if place.projections.len != 0U64 { return <Result.Ok value=0U64 /> }
                 match local.storage {
                     LlvmLocalStorage.GuaranteedParameter(parameterIndex: _, semanticType: _) => {}
                     _ => { return <Result.Ok value=0U64 /> }
@@ -158,7 +157,7 @@ pub impl LlvmCtx {
                     LlvmLocalStorage.GuaranteedParameter(parameterIndex: val saved, semanticType: val semanticType) => { give saved == parameterIndex && semanticType == lane.semanticType }
                     _ => { give false }
                 }
-                if !matchesBinding || receipt.fields.count() != 0U64 || lane.mode.key() != 1U64 || lane.passing.key() != 3U64 || plew_pointer_equal(lane.type, type) == 0I32 || plew_llvm_argument_matches(address, self.locPtr[receipt.local], function, lane.physicalIndex) == 0I32 || plew_llvm_guaranteed_parameter_matches(address, type, alignment) == 0I32 {
+                if !matchesBinding || lane.mode.key() != 1U64 || lane.passing.key() != 3U64 || plew_pointer_equal(lane.type, receipt.rootType) == 0I32 || plew_llvm_guaranteed_home_matches(address, self.locPtr[receipt.local], function, lane.physicalIndex, receipt.rootType, arrayCPtr(receipt.fields), receipt.fields.count(), type, alignment) == 0I32 {
                     return <Result.Err error=valueAbiFailure(message: "read home does not match its guaranteed parameter") />
                 }
             }

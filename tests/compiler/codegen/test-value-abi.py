@@ -175,8 +175,8 @@ with tempfile.TemporaryDirectory(prefix='plew-stable-homes-') as directory:
         assert subprocess.check_output([str(executable)], timeout=55) == fixture.with_suffix('.out').read_bytes(), material
 print('PASS stable local/temporary/field homes: raw staging reduction and raw/optimized execution')
 
-# A synchronous read receiver can reborrow an incoming inout place or inline field.
-# Exercise both a caller's self and its ordinary inout parameter.
+# A synchronous read receiver can reborrow an incoming inout or byref
+# parameter, including an inline field. Exercise self and ordinary arguments.
 fixture = root / 'tests/fixtures/run/mid_inout_read_receiver_forwarding.pw'
 raw = subprocess.check_output([str(compiler), '--require-mid', str(fixture)], text=True, timeout=55)
 aggregate, = re.findall(r'^(%[\w.]+) = type \{ i64, i64, i64, i64 \}$', raw, re.M)
@@ -194,8 +194,9 @@ for relay, prefix in ((reader_after, ''), (reader_value, ordinary_prefix)):
     assert not re.search(r'\b(?:load|store) ' + re.escape(aggregate) + r'\b', body[2]), f'{relay} still transfers the whole receiver'
 whole_callers = 0
 projected_callers = 0
+projected_guaranteed = 0
 projected_after_effect = 0
-for caller in re.finditer(r'^define internal i64 @[\w.]+\((ptr %\w+(?:, ptr %\w+)?)\) \{\n(.*?)^\}', raw, re.M | re.S):
+for caller in re.finditer(r'^define internal i64 @[\w.]+\((ptr(?: byref\(%\w+\) align 8)? %\w+(?:, ptr %\w+)?)\) \{\n(.*?)^\}', raw, re.M | re.S):
     calls = list(re.finditer(
         r'call i64 @(' + re.escape(reader) + '|' + re.escape(reader_after) + r')\(' + receiver_lane + r' (%\w+)(?:, i64 %\w+)?\)',
         caller[2],
@@ -219,16 +220,18 @@ for caller in re.finditer(r'^define internal i64 @[\w.]+\((ptr %\w+(?:, ptr %\w+
             assert projection, f'read receiver used a temporary rather than a field address: {call[0]}'
             field_positions.append(projection.start())
             address = projection[1]
-        assert address == incoming, 'read receiver did not forward a field of the correct inout argument'
+        assert address == incoming, 'read receiver did not forward a field of the correct incoming argument'
         if call[1] == reader_after:
             effect, = re.finditer(r'call i64 @plew\.body\.gf\w*\(ptr %\w+\)', caller[2])
             leaf, root = field_positions
             assert effect.start() < root < leaf < call.start(), 'field receiver address must be formed after evaluating the effect'
             projected_after_effect += 1
+        elif 'byref(' in caller[1]:
+            projected_guaranteed += 1
         else:
             projected_callers += 1
     assert not re.search(r'\b(?:load|store) ' + re.escape(aggregate) + r'\b', caller[2]), 'read receiver still transfers the whole aggregate'
-assert (whole_callers, projected_callers, projected_after_effect) == (2, 2, 1), 'expected whole and projected forwarding in methods and free functions'
+assert (whole_callers, projected_callers, projected_guaranteed, projected_after_effect) == (2, 2, 1, 1), 'expected whole and projected forwarding in methods and free functions'
 with tempfile.TemporaryDirectory(prefix='plew-inout-read-receiver-') as directory:
     directory = Path(directory)
     source = directory / 'raw.ll'
@@ -238,4 +241,4 @@ with tempfile.TemporaryDirectory(prefix='plew-inout-read-receiver-') as director
     runtime_source.write_bytes(subprocess.check_output([str(compiler), '--runtime'], timeout=55))
     subprocess.run([llvm_link.selected_clang(config), '-w', '-O0', source, runtime_source, '-o', executable], check=True, timeout=55)
     assert subprocess.check_output([executable], timeout=55) == fixture.with_suffix('.out').read_bytes()
-print('PASS read receivers forward exact inout parameter homes and retain evaluation order')
+print('PASS read receivers forward exact incoming parameter homes and retain evaluation order')
