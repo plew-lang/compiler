@@ -156,5 +156,15 @@ forward their incoming Comp pointer in raw LLVM, and the representative
 ARM64 call retains that forwarding. Two targeted AOT controls pass.
 [Evidence](../../../evidence/performance-regression-history/readonly-restoration/inout-read-forwarding/current-source-owner-restoration/README.md).
 
-Recheck state individually. Any projected root or other excluded case
-still needs a separate proof and measurement.
+Restore state in its own increment. Standard build
+`20261111T100823-build-eab7be` uses the same carrier as the preceding
+baseline and differs only in SourceFacts.pw. Same-source medians are
+7.133965 and 7.061837 seconds with eight equal LLVM outputs. Eleven of
+14 generated calls forward the incoming directory; the three Comp field
+receivers retain a snapshot in raw LLVM, also observed for
+constructionClosure in ARM64. The two owner/payload AOT controls pass.
+[Evidence](../../../evidence/performance-regression-history/readonly-restoration/inout-read-forwarding/source-body-state-restoration/README.md).
+
+Next, compare dependent read-only contracts, beginning with outcome and
+prepared. The remaining field snapshots need an access proof if an
+independent measurement justifies a forwarding extension.

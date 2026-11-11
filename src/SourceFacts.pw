@@ -129,7 +129,7 @@ impl SourceBodyData {
 }
 
 impl SourceFactDirectory {
-    inout fn state(owner: SemanticCompletionOwner) -> Optional[SourceBodyState] {
+    fn state(owner: SemanticCompletionOwner) -> Optional[SourceBodyState] {
         match owner {
             SemanticCompletionOwner.Function(index: val index) => {
                 if index >= self.functions.count() { return <Optional.None /> }
