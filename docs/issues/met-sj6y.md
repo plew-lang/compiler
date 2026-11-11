@@ -60,8 +60,11 @@ Record each scope, verdict and revision. No main/seed promotion.
   LLVM outputs. A whole-directory temporary survives optimization. This
   blocks the dependent readers below. No AOT control was run for the
   rejected trial.
-- Next independently measurable units: `SourceFactDirectory.inactiveBuilder`
-  and the `Comp` argument of
+- `SourceFactDirectory.inactiveBuilder`: restored to the c390b418
+  read-only receiver. Standard build `20261111T032603-build-4e100a`
+  and two AOT controls passed. Same-source medians 8.154263 and
+  8.149342 seconds, mixed pair direction and eight equal LLVM outputs.
+- Next independently measurable unit: the `Comp` argument of
   `declarationCallHasStorageArguments`.
 - Restore callers after their read-only prerequisites. Check the source owner
   state/outcome/prepared path, expression/statement/parent and closure

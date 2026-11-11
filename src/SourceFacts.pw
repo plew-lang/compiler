@@ -182,7 +182,7 @@ impl SourceFactDirectory {
             Optional.None => { return false }
         }
     }
-    inout fn inactiveBuilder(owner: SemanticCompletionOwner) -> SourceBodyBuilder {
+    fn inactiveBuilder(owner: SemanticCompletionOwner) -> SourceBodyBuilder {
         val entry = match owner {
             SemanticCompletionOwner.Function(index: val index) => self.functionBuilders.get(key: index)
             SemanticCompletionOwner.Global(target: val target) => self.globalBuilders.get(key: target)
