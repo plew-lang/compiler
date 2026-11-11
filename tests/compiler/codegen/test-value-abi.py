@@ -183,6 +183,15 @@ aggregate, = re.findall(r'^(%[\w.]+) = type \{ i64, i64, i64, i64 \}$', raw, re.
 receiver_lane = r'ptr byref\(' + re.escape(aggregate) + r'\) align 8'
 reader, = re.findall(r'^define internal i64 @([\w.]+)\(' + receiver_lane + r' %\w+\)', raw, re.M)
 reader_after, = re.findall(r'^define internal i64 @(plew\.body\.gm[\w.]+)\(' + receiver_lane + r' %\w+, i64 %\w+\)', raw, re.M)
+# The ordinary relay has an omitted marker and two physically present values
+# of the same type. Only the second value is used as the receiver.
+ordinary_prefix = receiver_lane + r' %\w+, '
+reader_value, = re.findall(r'^define internal i64 @(plew\.body\.gf[\w.]+)\(' + ordinary_prefix + receiver_lane + r' %\w+, i64 %\w+\)', raw, re.M)
+for relay, prefix in ((reader_after, ''), (reader_value, ordinary_prefix)):
+    body = re.search(r'^define internal i64 @' + re.escape(relay) + r'\(' + prefix + receiver_lane + r' (%\w+), i64 %\w+\) \{\n(.*?)^\}', raw, re.M | re.S)
+    assert body, f'missing relay body {relay}'
+    assert re.search(r'call i64 @' + re.escape(reader) + r'\(' + receiver_lane + ' ' + re.escape(body[1]) + r'\)', body[2]), f'{relay} did not reborrow the incoming read-only argument'
+    assert not re.search(r'\b(?:load|store) ' + re.escape(aggregate) + r'\b', body[2]), f'{relay} still transfers the whole receiver'
 whole_callers = 0
 projected_callers = 0
 projected_after_effect = 0

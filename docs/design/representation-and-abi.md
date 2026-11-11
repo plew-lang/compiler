@@ -72,6 +72,11 @@ and forms the address at the read, after argument evaluation. The proof is
 limited to the call interval. Value snapshots, indirect or shared storage and
 suspended calls follow their existing rules.
 
+The same call-interval proof admits a whole guaranteed-indirect argument
+of a normal body as a synchronous direct read receiver. The consumer
+checks the saved binding, the exact physical LLVM argument, and its typed
+byref alignment. Reborrowing adds no local ownership.
+
 LLVM `byref` describes physical memory transport, not source borrowing, ownership acquisition, immutability or alias freedom. It grants no `readonly`/`noalias` attribute by itself. The frontend/Mid ownership and access contracts establish semantic legality; LLVM lowering cannot remove their Copy, lifetime or cleanup obligations merely because a byte transfer is avoidable.
 
 The declared callable records its logical signature, physical function type, and per-logical-parameter physical index/classification. Direct callers and callee binding consume that same record and validate logical signature/argument correspondence. An indirect callable derives the equivalent mapping from its completed signature under the same classification rules, rather than using a different ad hoc closure ABI.

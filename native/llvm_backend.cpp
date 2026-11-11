@@ -332,18 +332,23 @@ extern "C" int plew_llvm_guaranteed_parameter_matches(LLVMValueRef address, LLVM
            plew_llvm_home_alignment(address) >= alignment;
 }
 
-extern "C" int plew_llvm_inout_parameter_matches(LLVMValueRef address, LLVMValueRef slot, LLVMValueRef function, uint64_t index) {
+extern "C" int plew_llvm_argument_matches(LLVMValueRef address, LLVMValueRef slot, LLVMValueRef function, uint64_t index) {
     if (!address || address != slot || !function) return 0;
     auto *argument = llvm::dyn_cast<llvm::Argument>(llvm::unwrap(address));
     return argument && llvm::wrap(argument->getParent()) == function &&
            argument->getArgNo() == index;
 }
 
+// Older bootstrap inputs may still use the original exported spelling.
+extern "C" int plew_llvm_inout_parameter_matches(LLVMValueRef address, LLVMValueRef slot, LLVMValueRef function, uint64_t index) {
+    return plew_llvm_argument_matches(address, slot, function, index);
+}
+
 extern "C" uint64_t plew_llvm_inout_home_alignment(LLVMValueRef address, LLVMValueRef root, LLVMValueRef function,
                                                   uint64_t index, LLVMTypeRef rootType, const uint64_t *fields,
                                                   uint64_t count, LLVMTypeRef leafType) {
     if (!address || !rootType || !leafType || (count && !fields) ||
-        !plew_llvm_inout_parameter_matches(root, root, function, index)) return 0;
+        !plew_llvm_argument_matches(root, root, function, index)) return 0;
     auto *referent = llvm::unwrap(rootType);
     if (!referent->isSized()) return 0;
     const auto home = plewHomeLayout(llvm::unwrap(address), llvm::unwrap(root), fields, count, referent);

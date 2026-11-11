@@ -232,3 +232,22 @@ This follow-up needs to preserve the typed formal, its lifetime and
 its read-access proof. No claim is made about the time attributable
 to individual copies.
 [Forwarding and measurement evidence](../../../evidence/performance-regression-history/readonly-restoration/inout-read-forwarding/projected-inout/README.md).
+
+## Forward a read borrow from an incoming read-only argument
+
+Reuse the whole guaranteed-indirect formal in a normal body when a
+synchronous direct read-only receiver retains a verified read borrow.
+Check exact argument identity and typed byref alignment at consumption.
+Preserve ordinary value snapshots, overlap rejection, earlier argument
+evaluation, and the existing field/inout controls. Exercise a read-only
+method and an ordinary read-only argument as forwarding sources. The
+previous carrier fails the raw receiver-address assertion for the method.
+
+Development build `20261111T150737-build-4066d2` passed from the
+projected-inout carrier. The read-only method and the ordinary relay
+forward their exact incoming addresses in raw LLVM, including the
+second of two equal-type physical arguments after an omitted marker.
+The raw AOT and JIT fixtures, existing field and inout controls, and
+overlap rejections pass. Independent review confirmed the exact
+physical argument, typed alignment and access checks. The header
+declarations and non-first-argument control were added after review.

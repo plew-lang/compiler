@@ -37,12 +37,12 @@ fn replace(reading: inout Reading) -> I64 {
     return 0I64
 }
 
-fn readValue(reading: Reading, effect: I64) -> I64 {
+fn readValue(marker: Marker, other: Reading, reading: Reading, effect: I64) -> I64 {
     return reading.read() + effect
 }
 
 fn checkEvaluation(reading: inout Reading) {
-    print(readValue(reading: reading, effect: replace(reading: inout reading)))
+    print(readValue(marker: <Marker />, other: reading, reading: reading, effect: replace(reading: inout reading)))
     reading.value = 1I64
     print(reading.readAfter(effect: replace(reading: inout reading)))
 }
