@@ -97,3 +97,20 @@ comparison with alternating runs. See the
   transport without frontend-specific exceptions. See [com-nkoa](com-nkoa.md)
   for related effect-precision work. This task remains open for the blocked
   APIs and their dependent restorations.
+
+## Receiver forwarding investigation
+
+The standard CLI reproduces a whole-Comp temporary in the exact
+sourceForItemTerm call. The production Mid preparation probe confirms
+that the selected call retains a whole inout formal as a semantic read
+borrow. StableHomes and the incoming guaranteed-parameter route both
+exclude this shape. The current plain inout pointer also lacks the
+referent type/alignment evidence used by the native home validator.
+The existing overlapping inout/receiver rejection passed.
+
+A bounded prototype is feasible if it establishes the original inout
+lane's referent alignment, reuses verified call-interval access facts
+and forwards the exact input pointer into the current byref ABI.
+Shared, projected, indexed, async and foreign/indirect paths require
+separate proof. No forwarding change or new throughput result yet.
+See [evidence and scope](../../../evidence/performance-regression-history/readonly-restoration/call-template-index/forwarding-investigation.md).
