@@ -54,8 +54,14 @@ Record each scope, verdict and revision. No main/seed promotion.
   `20261111T031131-build-c6ab26` and two AOT controls passed.
   Same-source medians 8.117086 and 8.129869 seconds, mixed pair direction,
   eight equal LLVM outputs. No clear regression.
-- Next independently measurable units: `SourceFactDirectory.state`,
-  `inactiveBuilder`, and the `Comp` argument of
+- `SourceFactDirectory.state`: restoration tested and reverted. Standard
+  build `20261111T031956-build-264c4e` and same-source comparison passed.
+  Medians 8.141385 and 8.573201 seconds, all three pairs slower, eight equal
+  LLVM outputs. A whole-directory temporary survives optimization. This
+  blocks the dependent readers below. No AOT control was run for the
+  rejected trial.
+- Next independently measurable units: `SourceFactDirectory.inactiveBuilder`
+  and the `Comp` argument of
   `declarationCallHasStorageArguments`.
 - Restore callers after their read-only prerequisites. Check the source owner
   state/outcome/prepared path, expression/statement/parent and closure
