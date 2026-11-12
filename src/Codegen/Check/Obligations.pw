@@ -1207,19 +1207,11 @@ pub impl Comp {
     inout fn sourceSelectedStaticSignatureBounds(resolution: StaticMemberResolution, receiverTerm: U64, arguments: Array[U64], offset: U64) -> Result[Array[TraitBound], CompileDiagnostic] {
         val function = try self.selectedStaticCallDeclaration(resolution: resolution, offset: offset)
         match resolution {
-            StaticMemberResolution.Requirement(proof: val proof, traitIdx: val traitIndex, reqIdx: _) => {
+            StaticMemberResolution.Requirement(proof: _, traitIdx: _, reqIdx: _) => {
                 if function.signatureBounds.len == 0U64 { return <Result.Ok value=[] /> }
-                val bound = try self.staticProofBound(proof: proof, traitIdx: traitIndex)
-                val environment = <InstanceEnvironment params=self.copyFuncBinds(binds: function.typeParams) args=arguments receiverRef=receiverTerm proof=proof />
-                val signature = <SourceCallSignature.Trait bound=bound traitIndex=traitIndex environment=environment />
-                mut val bounds: Array[TraitBound] = []
-                mut val index = 0U64
-                while index < function.signatureBounds.len {
-                    val clause = self.conformBoundAt(bounds: function.signatureBounds, index: index)
-                    bounds.append(<TraitBound subject=(try self.sourceCallSignatureParameter(ref: clause.subject, signature: signature)) constraint=(try self.sourceCallSignatureConstraint(constraint: clause.constraint, signature: signature)) offset=clause.offset />)
-                    index += 1U64
-                }
-                return <Result.Ok value=bounds />
+                val context = try self.staticRequirementSignatureContext(resolution: resolution)
+                if context.isNone() { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "selected requirement has no clause environment", failureDomain: <FailureDomain.Internal />) /> }
+                return self.readRequirementBounds(signature: context.unwrap(), methodArguments: arguments)
             }
             StaticMemberResolution.Provided(proof: val proof, traitIdx: val traitIndex, callee: val callee) => {
                 val indices = self.sourceDeclarationCallBoundIndices(functionIndex: callee)

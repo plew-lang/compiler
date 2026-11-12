@@ -350,6 +350,8 @@ struct PreparedProjectionBound {
     val subject: U64
     val constraint: TraitConstraint
     val arguments: Array[U64]
+    val subjectRecipe: U64
+    val predicateRecipes: Array[U64]
     val parameter: Bind
 }
 impl PreparedProjectionBound { factory }
@@ -376,6 +378,7 @@ impl SignatureRecipeValidation { factory }
 struct RawRequirementPremise {
     val scope: U64
     val bound: TraitBound
+    val sourceClause: U64 = 0U64
 }
 impl RawRequirementPremise { factory }
 
@@ -443,6 +446,7 @@ impl ProjectionBoundClause { factory }
 struct LoweredTraitConstraint {
     val constraint: TraitConstraint
     val arguments: Array[U64]
+    val predicateRecipes: Array[U64]
 }
 impl LoweredTraitConstraint { factory }
 struct LoweredTypeViewRecipe {

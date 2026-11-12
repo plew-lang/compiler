@@ -297,3 +297,37 @@ separate from formal fixed-point certification.
 Next, retain the authored clause terms and map each raw requirement premise
 through the selected caller and implementation evidence. Provided-method
 source signature lookup and final witness translation remain open.
+
+## Requirement clause replay checkpoint
+
+Both lowering adapters retain the subject, positional argument, and associated
+equality recipes of each prepared requirement clause. Declaration admission
+checks the exact source scope and clause identity before recording the
+premise. Static source calls and the existential interface interpret those
+same recipes with their own explicit substitutions. Implementation admission
+uses the same saved clause with the checked method alpha map, validates the
+public evidence, and applies the existing requirement-to-implementation proof
+derivation.
+
+The source-reader regression in `existential_symbolic_result` and the
+implementation-reader regression in `retained_requirement_body_constraints`
+both mutate the raw clause row after admission. Baseline `cd17a8c5` reaches
+the intended assertion in each, with its original compiler source frozen.
+Build `20261112T135636-build-2a655d`, candidate `2fbe0dd9`, preserves the
+retained clause in both cases. The implementation fixture also exercises
+reordered bounds, weaker bounds, an empty public clause list, and a
+trait-subject witness. Fourteen public static/mixed controls passed
+check/JIT/native, the signature group passed check/native and the two public
+JIT controls, and the existential condition and rejection controls passed.
+Generation `20261112T140029-gen-99bf5a` passed. In three interleaved
+same-source runs per candidate after warmup, medians were 6.597499 s and
+6.640045 s. All eight LLVM outputs were byte-identical. This diagnostic
+comparison does not establish a new formal fixed point.
+
+The older internal fixture `source_call_constraint_evidence` separately
+fails in the baseline's ordinary free-call lane on its injected Missing proof
+diagnostic. It did not reach this increment's trait requirement boundary.
+The observation is recorded with [com-qb05](com-qb05.md#missing-proof-control-diagnostic).
+
+Next, migrate the provided source signature consumers and audit the remaining
+inherited and associated proof interpretations through final publication.

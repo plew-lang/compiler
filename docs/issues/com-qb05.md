@@ -147,3 +147,13 @@ The [exact scoped outcome](../../../evidence/existing-feature-conformance/audit-
 Row66: Preserve ordinary/method/factory/default full signatures/labels/modes/bounds/result and final Mid/LLVM no-reselection. Do not reopen com-cwu1 accepted different boundary or infer old task/whole-area closure from repeated controls. com-qb05 original finite saved written-call authority repairs retain their exact evidence; current reopening for com-zy6r and required met-tfbl disposition still block re-admission. B67/B70/B80 are qualified reuse, not new repair discoveries. Required admission: met-ucze.
 
 Preserve the original finite contract and meaningful controls; intake does not choose unresolved source semantics, implement new APIs, certify product GREEN or close a mixed future/optional parent. Required repair/investigation must finish before its affected admission; classification closure cannot bypass it.
+
+## Missing-proof control diagnostic
+
+During com-30u1 clause replay validation, the unmodified
+`source_call_constraint_evidence` fixture stopped in the ordinary free-call
+family at mode 3 on baseline `cd17a8c5` with its original compiler source.
+The injected Missing proof was rejected with “selected conformance evidence
+does not satisfy its declaration conditions”. The fixture expected the
+later signature mismatch diagnostic. Check the intended diagnostic boundary
+and re-run all families before using this fixture as a closure control.

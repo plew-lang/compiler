@@ -32,6 +32,7 @@ impl Comp {
 
     inout fn lowerValueTraitConstraint(traitType: TypeAst, owner: U64, site: U64) -> Result[LoweredTraitConstraint, CompileDiagnostic] {
         mut val recipes: Array[U64] = []
+        mut val predicateRecipes: Array[U64] = []
         mut val boundArgs: Array[U64] = []
         mut val boundAssocNames: Array[U64] = []
         mut val boundAssocValues: Array[U64] = []
@@ -48,6 +49,7 @@ impl Comp {
             else {
                 boundAssocNames.append(label)
                 boundAssocValues.append(boundRef)
+                predicateRecipes.append(try self.authoredChildRecipe(type: type))
             }
             ai += 1U64
         }
@@ -57,7 +59,7 @@ impl Comp {
             predicates.append(<TraitAssocPredicate member=boundAssocNames[pi] value=boundAssocValues[pi] span=site />)
             pi += 1U64
         }
-        return <Result.Ok value=<LoweredTraitConstraint constraint=<TraitConstraint key=<TraitInstanceKey owner=owner positionalArgs=boundArgs /> positionalArgsOpen=boundArgs.count() == 0U64 assocPredicates=predicates /> arguments=recipes /> />
+        return <Result.Ok value=<LoweredTraitConstraint constraint=<TraitConstraint key=<TraitInstanceKey owner=owner positionalArgs=boundArgs /> positionalArgsOpen=boundArgs.count() == 0U64 assocPredicates=predicates /> arguments=recipes predicateRecipes=predicateRecipes /> />
     }
 
     inout fn decodeSyntaxTraitConstraintArguments(traitType: SyntaxType, owner: U64, site: U64) -> Result[TraitConstraint, CompileDiagnostic] {
@@ -66,6 +68,7 @@ impl Comp {
 
     inout fn lowerSyntaxTraitConstraint(traitType: SyntaxType, owner: U64, site: U64) -> Result[LoweredTraitConstraint, CompileDiagnostic] {
         mut val recipes: Array[U64] = []
+        mut val predicateRecipes: Array[U64] = []
         mut val args: Array[U64] = []
         mut val assocNames: Array[U64] = []
         mut val assocValues: Array[U64] = []
@@ -77,6 +80,7 @@ impl Comp {
             if label.end > label.start {
                 assocNames.append(intern(c: inout self, start: label.start, len: label.end - label.start))
                 assocValues.append(arg)
+                predicateRecipes.append(try self.authoredChildRecipe(type: type))
             } else { args.append(arg) recipes.append((try self.authoredChildRecipe(type: type))) }
             ai += 1U64
         }
@@ -86,7 +90,7 @@ impl Comp {
             predicates.append(<TraitAssocPredicate member=assocNames[ai] value=assocValues[ai] span=site />)
             ai += 1U64
         }
-        return <Result.Ok value=<LoweredTraitConstraint constraint=<TraitConstraint key=<TraitInstanceKey owner=owner positionalArgs=args /> positionalArgsOpen=args.count() == 0U64 assocPredicates=predicates /> arguments=recipes /> />
+        return <Result.Ok value=<LoweredTraitConstraint constraint=<TraitConstraint key=<TraitInstanceKey owner=owner positionalArgs=args /> positionalArgsOpen=args.count() == 0U64 assocPredicates=predicates /> arguments=recipes predicateRecipes=predicateRecipes /> />
     }
 
 }
@@ -740,7 +744,7 @@ impl Comp {
         if resolvedOwner == 0U64 && self.modules.qualifiedUseIndex(offset: traitUseStart) >= self.modules.qualifiedUseCount() && boundArgs.count() == 0U64 && origin.isSome() {
             resolvedOwner = self.traitOwnerInScopeOpenById(mod: self.moduleOf(offset: origin.unwrap()), nameId: tn.nameId)
         }
-        return <Result.Ok value=<LoweredTraitConstraint constraint=<TraitConstraint key=<TraitInstanceKey owner=resolvedOwner positionalArgs=boundArgs /> positionalArgsOpen=decoded.positionalArgsOpen assocPredicates=decoded.assocPredicates /> arguments=lowered.arguments /> />
+        return <Result.Ok value=<LoweredTraitConstraint constraint=<TraitConstraint key=<TraitInstanceKey owner=resolvedOwner positionalArgs=boundArgs /> positionalArgsOpen=decoded.positionalArgsOpen assocPredicates=decoded.assocPredicates /> arguments=lowered.arguments predicateRecipes=lowered.predicateRecipes /> />
     }
 
 }
@@ -791,7 +795,7 @@ impl Comp {
         mut val owner: U64 = self.traitOwnerAtUse(start: trait.start, len: trait.end - trait.start, arity: args.count(), openArgs: args.count() == 0U64)
         if owner == 0U64 && self.modules.qualifiedUseIndex(offset: trait.start) >= self.modules.qualifiedUseCount() && origin.isSome() { owner = self.traitOwnerInScopeById(mod: self.moduleOf(offset: origin.unwrap()), nameId: traitId, arity: args.count()) }
         if owner == 0U64 && self.modules.qualifiedUseIndex(offset: trait.start) >= self.modules.qualifiedUseCount() && args.count() == 0U64 && origin.isSome() { owner = self.traitOwnerInScopeOpenById(mod: self.moduleOf(offset: origin.unwrap()), nameId: traitId) }
-        return <Result.Ok value=<LoweredTraitConstraint constraint=<TraitConstraint key=<TraitInstanceKey owner=owner positionalArgs=args /> positionalArgsOpen=decoded.positionalArgsOpen assocPredicates=decoded.assocPredicates /> arguments=lowered.arguments /> />
+        return <Result.Ok value=<LoweredTraitConstraint constraint=<TraitConstraint key=<TraitInstanceKey owner=owner positionalArgs=args /> positionalArgsOpen=decoded.positionalArgsOpen assocPredicates=decoded.assocPredicates /> arguments=lowered.arguments predicateRecipes=lowered.predicateRecipes /> />
     }
 
 }

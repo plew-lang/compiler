@@ -106,14 +106,14 @@ impl Comp {
                     give try self.valueWhereTraitHead(traitType: type, origin: <Optional.Some v=self.sourceTypeUses.scopeAt(token: clause.scope).unwrap().anchor />)
                 }
                 val lowered = try self.lowerValueTraitConstraint(traitType: type, owner: head.traitInstance.owner, site: head.writtenStart)
-                return <Result.Ok value=<PreparedProjectionBound source=head.withArguments(arguments: lowered.constraint.key.positionalArgs) subject=loweredSubject.ref constraint=lowered.constraint arguments=lowered.arguments parameter=parameter /> />
+                return <Result.Ok value=<PreparedProjectionBound source=head.withArguments(arguments: lowered.constraint.key.positionalArgs) subject=loweredSubject.ref constraint=lowered.constraint arguments=lowered.arguments subjectRecipe=(if clause.syntheticSubject { give 0U64 } else { give try self.authoredChildRecipe(type: loweredSubject) }) predicateRecipes=lowered.predicateRecipes parameter=parameter /> />
             }
             ProjectionBoundSyntax.Syntax(subject: val subject, traitType: val traitType, parameter: val parameter) => {
                 val loweredSubject = try self.lowerSyntaxType(id: subject)
                 val type = try self.resolveSyntaxTypePath(t: syntaxType(file: self.syntax, id: traitType))
                 val head = if clause.head.isSome() { give clause.head.unwrap() } else { give try self.syntaxWhereTraitHead(traitType: type) }
                 val lowered = try self.lowerSyntaxTraitConstraint(traitType: type, owner: head.traitInstance.owner, site: head.writtenStart)
-                return <Result.Ok value=<PreparedProjectionBound source=head.withArguments(arguments: lowered.constraint.key.positionalArgs) subject=loweredSubject.ref constraint=lowered.constraint arguments=lowered.arguments parameter=<Bind nameStart=parameter.start nameLen=parameter.end - parameter.start nameId=intern(c: inout self, start: parameter.start, len: parameter.end - parameter.start) fieldStart=0U64 fieldLen=0U64 /> /> />
+                return <Result.Ok value=<PreparedProjectionBound source=head.withArguments(arguments: lowered.constraint.key.positionalArgs) subject=loweredSubject.ref constraint=lowered.constraint arguments=lowered.arguments subjectRecipe=(try self.authoredChildRecipe(type: loweredSubject)) predicateRecipes=lowered.predicateRecipes parameter=<Bind nameStart=parameter.start nameLen=parameter.end - parameter.start nameId=intern(c: inout self, start: parameter.start, len: parameter.end - parameter.start) fieldStart=0U64 fieldLen=0U64 /> /> />
             }
         }
     }

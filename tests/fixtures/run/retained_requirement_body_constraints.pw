@@ -1,6 +1,6 @@
 use /Frontend only { Comp, FrontendInput, analyzeFrontend }
 use /SourceAccess only { SourceAccess }
-use /Ir only { DeclarationBoundRef, StaticConformanceProof }
+use /Ir only { DeclarationBoundRef, StaticConformanceProof, TraitBound, ConformanceProofDemand, ConformBound }
 use @Std/Io only { print }
 
 fn check(source: String, publicCount: U64) {
@@ -31,6 +31,24 @@ fn check(source: String, publicCount: U64) {
                 val assumed = <StaticConformanceProof.AssumedBound source=<DeclarationBoundRef.Requirement index=source /> />
                 val restored = compiler.thawStaticConformanceProof(id: compiler.freezeStaticConformanceProof(proof: assumed))
                 if !compiler.sameStaticConformanceProof(a: assumed, b: restored) { panic("requirement clause identity was lost in storage") }
+            }
+            if publicCount == 2U64 {
+                mut val bounds: Array[TraitBound] = []
+                mut val proofs: Array[StaticConformanceProof] = []
+                for index in plan.requirements {
+                    val evidence = compiler.arena.requirementBoundEvidenceAt(index: index)
+                    val bound = compiler.groundCallableBound(bound: evidence.bound, environment: body.environment, selfRef: body.environment.receiverRef, itemRef: 0U64).unwrap()
+                    bounds.append(bound)
+                    proofs.append(compiler.viewedTraitConstraintProof(demand: <ConformanceProofDemand.SourceAdmission />, ref: bound.subject, constraint: bound.constraint).unwrap())
+                }
+                compiler.instantiateRequirementCallConstraints(fnIdx: body.fnIdx, environment: body.environment, planIndex: planIndex, bounds: bounds, proofs: proofs).unwrap()
+                val clause = compiler.arena.requirementBoundEvidenceAt(index: plan.requirements[0U64]).clause
+                val original = compiler.decls.conformBoundPool[clause]
+                compiler.decls.conformBoundPool[clause] = <ConformBound subject=body.environment.receiverRef constraint=original.constraint offset=original.offset />
+                if compiler.instantiateRequirementCallConstraints(fnIdx: body.fnIdx, environment: body.environment, planIndex: planIndex, bounds: bounds, proofs: proofs).isErr() {
+                    panic("raw where row replaced the retained implementation clause")
+                }
+                compiler.decls.conformBoundPool[clause] = original
             }
             found = true
         }

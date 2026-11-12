@@ -151,18 +151,8 @@ impl Comp {
         if slot == 0U64 || slot > trait.reqs.count() {
             return <Result.Err error=self.diagnosticAt(offset: offset, msg: "selected interface has no retained requirement") />
         }
-        val requirement = self.traitReqAt(reqs: trait.reqs, index: slot - 1U64)
-        // Substitute the selected interface contract only. Ambient concrete
-        // projection closure would replace an opaque interface premise before
-        // its own assumptions and retained derivations can be interpreted.
-        mut val bounds: Array[TraitBound] = []
-        mut val index = 0U64
-        while index < requirement.signatureBounds.len {
-            val clause = self.conformBoundAt(bounds: requirement.signatureBounds, index: index)
-            bounds.append(<TraitBound subject=self.traitBoundTypeTerm(ref: clause.subject, bound: bound, traitIndex: traitIndex) constraint=self.traitConstraintInBound(constraint: clause.constraint, bound: bound, traitIndex: traitIndex) offset=clause.offset />)
-            index += 1U64
-        }
-        return <Result.Ok value=bounds />
+        val scope = try self.requireAdmittedRawRequirement(traitIndex: traitIndex, slot: slot - 1U64, offset: offset)
+        return self.readRequirementBounds(signature: <RequirementSignatureRead scope=scope bound=bound />, methodArguments: [])
     }
 }
 

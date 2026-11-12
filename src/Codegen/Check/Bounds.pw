@@ -1625,9 +1625,27 @@ pub impl Comp {
         if implementation != plan.implementation || witness.conformIdx != plan.conformance + 1U64 {
             return <Result.Err error=self.diagnosticAt(offset: function.defOffset, msg: "requirement evidence belongs to another implementation") />
         }
-        val requirement = self.traitReqAt(reqs: self.decls.traitAt(index: plan.traitIndex).reqs, index: plan.requirement)
+        val scope = try self.requireAdmittedRawRequirement(traitIndex: plan.traitIndex, slot: plan.requirement, offset: function.defOffset)
+        val requirement = self.authoredRequirementViews[scope].declaration
         if bounds.count() != requirement.signatureBounds.len || proofs.count() != bounds.count() || plan.requirements.count() != bounds.count() {
             return <Result.Err error=self.diagnosticAt(offset: function.defOffset, msg: "requirement call has incomplete public constraint evidence") />
+        }
+        mut val expectedBounds: Array[TraitBound] = []
+        if bounds.count() != 0U64 {
+            // Conformance admission retained the alpha map from the original
+            // requirement's method binders to the implementation's terms.
+            if plan.methodParameters.count() != requirement.typeParams.count() || plan.methodArguments.count() != plan.methodParameters.count() {
+                return <Result.Err error=self.diagnosticAt(offset: function.defOffset, msg: "requirement evidence has an incomplete method substitution") />
+            }
+            for position in 0U64..<plan.methodParameters.count() {
+                if plan.methodParameters[position].paramId != self.funcBindAt(binds: requirement.typeParams, index: position).paramId {
+                    return <Result.Err error=self.diagnosticAt(offset: function.defOffset, msg: "requirement evidence has a foreign method substitution") />
+                }
+            }
+            val selection = <StaticMemberResolution.Requirement proof=environment.proof traitIdx=plan.traitIndex reqIdx=plan.requirement />
+            val context = try self.staticRequirementSignatureContext(resolution: selection)
+            if context.isNone() { return <Result.Err error=self.diagnosticAt(offset: function.defOffset, msg: "requirement evidence has no selected clause environment") /> }
+            expectedBounds = try self.readRequirementBounds(signature: context.unwrap(), methodArguments: plan.methodArguments)
         }
         mut val sources: Array[DeclarationBoundRef] = []
         mut val publicProofs: Array[U64] = []
@@ -1638,16 +1656,7 @@ pub impl Comp {
                 return <Result.Err error=self.diagnosticAt(offset: function.defOffset, msg: "requirement evidence has a foreign clause identity") />
             }
             val position = source.clause - requirement.signatureBounds.start
-            // The declaration's entailment bound uses its original receiver.
-            // The public signature instead uses the selected logical Self,
-            // including a newtype's inherited surface. Retain the checked
-            // method alpha map rather than reconstructing it positionally.
-            if plan.methodParameters.count() != requirement.typeParams.count() || plan.methodArguments.count() != plan.methodParameters.count() { return <Result.Err error=self.diagnosticAt(offset: source.bound.offset, msg: "requirement evidence has an incomplete method substitution") /> }
-            val clause = self.conformBoundAt(bounds: requirement.signatureBounds, index: position)
-            val selected = try self.staticProofBound(proof: environment.proof, traitIdx: plan.traitIndex)
-            val subject = self.groundTermInEnvironment(ref: self.traitBoundTypeTerm(ref: clause.subject, bound: selected, traitIndex: plan.traitIndex), params: plan.methodParameters, values: plan.methodArguments)
-            val constraint = self.groundTraitConstraintInEnvironment(constraint: self.traitConstraintInBound(constraint: clause.constraint, bound: selected, traitIndex: plan.traitIndex), params: plan.methodParameters, args: plan.methodArguments)
-            val expected = try self.groundCallableBound(bound: <TraitBound subject=subject constraint=constraint offset=clause.offset />, environment: environment, selfRef: environment.receiverRef, itemRef: 0U64)
+            val expected = try self.groundCallableBound(bound: expectedBounds[position], environment: environment, selfRef: environment.receiverRef, itemRef: 0U64)
             if !self.typeRefEq(a: expected.subject, b: bounds[position].subject) || !self.sameTraitConstraint(a: expected.constraint, b: bounds[position].constraint) {
                 return <Result.Err error=self.diagnosticAt(offset: source.bound.offset, msg: "requirement evidence has a different public substitution") />
             }
