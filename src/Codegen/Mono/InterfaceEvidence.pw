@@ -572,7 +572,7 @@ impl Comp {
     inout fn selectExistentialMember(evidence: ExistentialBoxEvidence, requirement: U64) -> Result[Optional[ExistentialMemberSelection], CompileDiagnostic] {
         if evidence.traitIdx >= self.decls.traitCount() || requirement >= self.decls.traitAt(index: evidence.traitIdx).reqs.count() { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "existential member has no selected declaration") /> }
         val requested = self.traitReqAt(reqs: self.decls.traitAt(index: evidence.traitIdx).reqs, index: requirement)
-        if !(try self.existentialRequirementIsDispatchable(req: requested, target: evidence.targetRef, traitIndex: evidence.traitIdx)) { return <Result.Ok value=<Optional.None /> /> }
+        if !(try self.existentialRequirementIsDispatchable(target: evidence.targetRef, traitIndex: evidence.traitIdx, slot: requirement)) { return <Result.Ok value=<Optional.None /> /> }
         val conditions = match (try self.interfaceMethodConditions(target: evidence.targetRef, traitIndex: evidence.traitIdx, requirement: requirement)) {
             Optional.Some(v: val conditions) => conditions,
             Optional.None => { return <Result.Ok value=<Optional.None /> /> },

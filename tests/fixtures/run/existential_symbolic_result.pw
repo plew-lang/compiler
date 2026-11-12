@@ -1,6 +1,7 @@
 use /Diag only { FailureDomain }
 use /Ir only { ConformanceProofDemand }
 use @Std/Io only { print }
+use @Std/Process only { argCount, argAt }
 use @Std/Core only { assert }
 use /Frontend only { Comp, FrontendInput, analyzeFrontendDeclarations }
 use /SourceAccess only { SourceAccess }
@@ -8,7 +9,7 @@ use /SourceTypeUses only { SourceTypeUses }
 use /Ir only { TypeRef }
 fn main() {
     mut val c = <Comp />
-    val source = "struct Value {{}}\ntrait Cursor {{ type Item }}\ntrait Source {{ type Iter fn iterator() -> Self#Source.Iter fn other() -> Bool }}\nfn test[T](values: any Source[Iter=T]) where T: Cursor[Item=Value] {{}}\n"
+    val source = "struct Value {{}}\ntrait Cursor {{ type Item }}\ntrait Source {{ type Iter fn iterator() -> Self#Source.Iter fn other() -> Bool fn hidden(other: Self) -> Bool }}\nfn test[T](values: any Source[Iter=T]) where T: Cursor[Item=Value] {{}}\n"
     analyzeFrontendDeclarations(c: inout c, input: <FrontendInput.Text text=source path="cursor.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
     val bound = c.decls.funcBounds.at(index: 0U64)
     val function = c.arena.functionAt(index: bound.fnIdx)
@@ -53,7 +54,26 @@ fn main() {
     val retained = c.existentialRequirementSignature(target: receiver, traitIndex: traitIndex, slot: 0U64).unwrap()
     if !c.typeRefEq(a: retained.resultType, b: cursor) { panic "raw trait row replaced the retained existential signature" }
     c.decls.traitReqPool[requirements.start] = originalRequirement
+    val name = c.internBytes(s: "iterator")
+    val args = c.pushArgs(args: [])
+    assert(c.recordAnyRequirementSlot(anyRef: receiver, nameStart: name.nameStart, nameLen: name.nameLen, args: args).unwrap() == 1U64)
+    if argCount() < 2I64 || argAt(1I64) == "hidden" {
+        val hidden = c.traitReqAt(reqs: requirements, index: 2U64)
+        c.decls.traitReqPool[requirements.start + 2U64] = c.traitReqAt(reqs: requirements, index: 1U64)
+        match c.checkExistentialRequirementCall(target: receiver, traitIndex: traitIndex, requirement: 2U64, offset: hidden.nameStart) {
+            Result.Err(error: val diagnostic) => {
+                assert(diagnostic.message == "this member is not callable through `any P`: `Self` appears in a non-receiver input — two `any P` values need not share a concrete type (spec/08)")
+            }
+            Result.Ok(value: _) => { panic "raw trait row made the hidden Self input dispatchable" }
+        }
+        c.decls.traitReqPool[requirements.start + 2U64] = hidden
+    }
     c.sourceTypeUses = <SourceTypeUses />
+    if argCount() < 2I64 || argAt(1I64) == "rank" {
+        if c.recordAnyRequirementSlot(anyRef: receiver, nameStart: name.nameStart, nameLen: name.nameLen, args: args).isOk() {
+            panic "ranked a requirement without its source signature"
+        }
+    }
     match c.existentialRequirementSignature(target: receiver, traitIndex: traitIndex, slot: 0U64) {
         Result.Err(error: val diagnostic) => {
             assert(diagnostic.message == "selected requirement has no authored signature")

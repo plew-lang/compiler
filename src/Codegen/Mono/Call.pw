@@ -1676,8 +1676,7 @@ pub impl Comp {
                         Optional.None => { return <Result.Err error=self.diagnosticAt(offset: key.originStart, msg: "executable interface call retains an unresolved caller substitution") /> },
                     }
                 }
-                val requirement: Func = self.traitReqAt(reqs: self.decls.traitAt(index: traitIndex).reqs, index: requirementSlot - 1U64)
-                try self.checkExistentialRequirementCall(req: requirement, target: selection.receiverRef, traitIndex: traitIndex, requirement: requirementSlot - 1U64, offset: self.exprOffset(id: exprId))
+                try self.checkExistentialRequirementCall(target: selection.receiverRef, traitIndex: traitIndex, requirement: requirementSlot - 1U64, offset: self.exprOffset(id: exprId))
                 val signature = try self.existentialRequirementSignature(target: selection.receiverRef, traitIndex: traitIndex, slot: requirementSlot - 1U64)
                 receiverPassing = signature.receiverPassing
                 parameterTypes = signature.parameterTypes
@@ -2388,7 +2387,7 @@ pub impl Comp {
         val trait = self.decls.traitAt(index: evidence.traitIdx)
         if requirement >= trait.reqs.count() { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "existential conversion has no selected requirement") /> }
         val requested = self.traitReqAt(reqs: trait.reqs, index: requirement)
-        if !(try self.existentialRequirementIsDispatchable(req: requested, target: evidence.targetRef, traitIndex: evidence.traitIdx)) { return <Result.Ok value=<Optional.None /> /> }
+        if !(try self.existentialRequirementIsDispatchable(target: evidence.targetRef, traitIndex: evidence.traitIdx, slot: requirement)) { return <Result.Ok value=<Optional.None /> /> }
         val signature = try self.existentialRequirementSignature(target: evidence.targetRef, traitIndex: evidence.traitIdx, slot: requirement)
         val bound = try self.existentialRequirementBound(target: evidence.targetRef, traitIndex: evidence.traitIdx, receiver: sourceReceiver, offset: requested.nameStart)
         val scope = try self.requireAdmittedRawRequirement(traitIndex: evidence.traitIdx, slot: requirement, offset: requested.defOffset)
@@ -2416,7 +2415,7 @@ pub impl Comp {
     inout fn existentialImplementation(receiver: U64, target: U64, traitIndex: U64, requirement: U64, proof: StaticConformanceProof) -> Result[Optional[ExistentialImplementation], CompileDiagnostic] {
         val trait = self.decls.traitAt(index: traitIndex)
         val requested = self.traitReqAt(reqs: trait.reqs, index: requirement)
-        if !(try self.existentialRequirementIsDispatchable(req: requested, target: target, traitIndex: traitIndex)) { return <Result.Ok value=<Optional.None /> /> }
+        if !(try self.existentialRequirementIsDispatchable(target: target, traitIndex: traitIndex, slot: requirement)) { return <Result.Ok value=<Optional.None /> /> }
         val functionIndex = try self.proofConcreteWitness(proof: proof, receiverRef: receiver, traitIdx: traitIndex, reqIdx: requirement)
         if functionIndex >= self.arena.functionCount() { return <Result.Err error=self.diagnosticAt(offset: requested.nameStart, msg: "existential proof has no selected requirement implementation") /> }
         val function = self.arena.functionAt(index: functionIndex)

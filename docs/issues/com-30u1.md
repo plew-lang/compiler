@@ -158,3 +158,35 @@ Requirement candidate ranking and hidden-Self availability still read the
 legacy parameter terms before selecting the operation. Move those parameter
 reads to the admitted recipe before migrating the translated/provided static
 signature and its retained clause evidence.
+
+## Existential argument selection checkpoint
+
+Candidate ranking, hidden-Self availability, the final dynamic signature,
+and the adapter now share the admitted requirement parameter reader. Name and
+label collection still happens at the existing source selection boundary.
+The existing candidate-local type matcher compares the instantiated parameter
+terms and retains its usual ranking and generic-inference behavior.
+
+Old candidate `f7f918e2` reached both RED assertions in the native
+symbolic-result fixture: a candidate ranked without its source signature,
+and replacing a raw row made a requirement with a hidden Self input callable.
+Build `20261112T130337-build-7dc5ff`, candidate `f52a35b6`, passes both
+regressions. The symbolic and callable result fixtures, inherited projection,
+and qualified associated signature passed check and native execution. The
+two public projection controls also passed JIT. Six other public controls
+passed check and JIT, including existential overload selection, iteration,
+and conditional member guarantees. The four rejection controls preserve
+their diagnostics in eager modes, including nested Self and the prohibition
+on using existential dispatch evidence as static conformance. The invoked
+nested-Self and static-evidence controls reject in JIT too. The two
+unrequested-body controls are accepted by lazy run in both candidates.
+Generation `20261112T130650-gen-1b56df` passed. Three interleaved measured
+runs per candidate after warmup gave same-source medians of 6.666492 s and
+6.686778 s. All eight LLVM outputs were identical. This is a diagnostic
+comparison, separate from a formal fixed-point result.
+
+Next, retain the requirement slot and authored term at static source
+signature consumers, then translate its raw Self and clause premises through
+the selected bound or implementation plan. Keep ordinary provided method
+and concrete executable environments separate from the public interface
+interpretation.

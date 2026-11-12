@@ -21,25 +21,26 @@ inout fn existentialSelfTerm(traitIndex: U64) -> Result[U64, CompileDiagnostic] 
     return <Result.Ok value=self.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen nameId=name.nameId paramId=trait.selfParamId args=[] isRecord=false recordFieldLabels=[] recordFieldTerms=[] />) />
 }
 
-inout fn existentialRequirementIsDispatchable(req: Func, target: U64, traitIndex: U64) -> Result[Bool, CompileDiagnostic] {
-    if req.isAssoc { return <Result.Ok value=false /> }
+inout fn existentialRequirementIsDispatchable(target: U64, traitIndex: U64, slot: U64) -> Result[Bool, CompileDiagnostic] {
+    if traitIndex >= self.decls.traitCount() || slot >= self.decls.traitAt(index: traitIndex).reqs.count() {
+        return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "existential dispatch has no selected declaration", failureDomain: <FailureDomain.Internal />) />
+    }
+    val scope = try self.requireAdmittedRawRequirement(traitIndex: traitIndex, slot: slot, offset: 0U64)
+    val requirement = self.authoredRequirementViews[scope].declaration
+    if requirement.isAssoc { return <Result.Ok value=false /> }
     val source = try self.existentialSelfTerm(traitIndex: traitIndex)
-    val bound = try self.existentialRequirementBound(target: target, traitIndex: traitIndex, receiver: source, offset: req.nameStart)
+    val bound = try self.existentialRequirementBound(target: target, traitIndex: traitIndex, receiver: source, offset: requirement.nameStart)
     val parameter = self.decls.traitAt(index: traitIndex).selfParamId
-    mut val index = 0U64
-    while index < req.params.count() {
-        val input = self.funcParamAt(params: req.params, index: index)
-        val normalized = self.traitBoundTypeTerm(ref: input.ty, bound: bound, traitIndex: traitIndex)
-        if self.typeTermContainsParameter(ref: normalized, parameter: parameter) { return <Result.Ok value=false /> }
-        index += 1U64
+    for input in (try self.requirementInterfaceParameterTypes(scope: scope, bound: bound, traitIndex: traitIndex)) {
+        if self.typeTermContainsParameter(ref: input, parameter: parameter) { return <Result.Ok value=false /> }
     }
     return <Result.Ok value=true />
 }
 
 // Input Self and output conversion are checked against the same selected
 // interface. Associated projections normalize before the Self dependency test.
-inout fn checkExistentialRequirementCall(req: Func, target: U64, traitIndex: U64, requirement: U64, offset: U64) -> Result[(), CompileDiagnostic] {
-    if !(try self.existentialRequirementIsDispatchable(req: req, target: target, traitIndex: traitIndex)) {
+inout fn checkExistentialRequirementCall(target: U64, traitIndex: U64, requirement: U64, offset: U64) -> Result[(), CompileDiagnostic] {
+    if !(try self.existentialRequirementIsDispatchable(target: target, traitIndex: traitIndex, slot: requirement)) {
         return <Result.Err error=self.diagnosticAt(offset: offset, msg: "this member is not callable through `any P`: `Self` appears in a non-receiver input — two `any P` values need not share a concrete type (spec/08)") />
     }
     val source = try self.existentialSelfTerm(traitIndex: traitIndex)

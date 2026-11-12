@@ -548,13 +548,10 @@ impl Comp {
         val environment = self.requirementInterfaceEnvironment(bound: bound, traitIndex: traitIndex)
         val interface = <RequirementInterfaceRead scope=scope bound=bound />
         mut val memo: Dictionary[U64, AuthoredRecipeRead] = [:]
-        mut val terms: Array[U64] = []
+        val terms = try self.readRequirementInterfaceParameters(admitted: admitted, interface: interface, environment: environment, memo: inout memo)
         mut val passings: Array[CallArgumentPassing] = []
         for index in 0U64..<declaration.params.count() {
             val parameter = self.funcParamAt(params: declaration.params, index: index)
-            val occurrence = try self.signatureOccurrence(id: parameter.authoredTypeUse)
-            val read = try self.readAuthoredTypeRecipe(proofs: admitted.proofs, recipe: occurrence.recipe, environment: environment, memo: inout memo, interface: <Optional.Some v=interface />)
-            terms.append(read.term)
             if parameter.isInout { passings.append(<CallArgumentPassing.Inout />) }
             else if parameter.isMove { passings.append(<CallArgumentPassing.Move />) }
             else { passings.append(<CallArgumentPassing.Borrow />) }
@@ -564,6 +561,26 @@ impl Comp {
         else if declaration.selfMove { passing = <CallReceiverPassing.Move /> }
         val result = try self.readRequirementInterfaceResult(interface: interface, environment: environment, memo: inout memo)
         return <Result.Ok value=<ExistentialRequirementSignature receiverPassing=passing parameterTypes=terms argumentPassings=passings resultType=result /> />
+    }
+
+    inout fn readRequirementInterfaceParameters(admitted: AuthoredRequirementSignature, interface: RequirementInterfaceRead, environment: InstanceEnvironment, memo: inout Dictionary[U64, AuthoredRecipeRead]) -> Result[Array[U64], CompileDiagnostic] {
+        val parameters = admitted.declaration.params
+        mut val terms: Array[U64] = []
+        for index in 0U64..<parameters.count() {
+            val parameter = self.funcParamAt(params: parameters, index: index)
+            val occurrence = try self.signatureOccurrence(id: parameter.authoredTypeUse)
+            val read = try self.readAuthoredTypeRecipe(proofs: admitted.proofs, recipe: occurrence.recipe, environment: environment, memo: inout memo, interface: <Optional.Some v=interface />)
+            terms.append(read.term)
+        }
+        return <Result.Ok value=terms />
+    }
+
+    inout fn requirementInterfaceParameterTypes(scope: U64, bound: TraitBound, traitIndex: U64) -> Result[Array[U64], CompileDiagnostic] {
+        val admitted = self.authoredRequirementViews[scope]
+        if admitted.declaration.params.count() == 0U64 { return <Result.Ok value=[] /> }
+        val environment = self.requirementInterfaceEnvironment(bound: bound, traitIndex: traitIndex)
+        mut val memo: Dictionary[U64, AuthoredRecipeRead] = [:]
+        return self.readRequirementInterfaceParameters(admitted: admitted, interface: <RequirementInterfaceRead scope=scope bound=bound />, environment: environment, memo: inout memo)
     }
 
     inout fn requirementInterfaceEnvironment(bound: TraitBound, traitIndex: U64) -> InstanceEnvironment {
