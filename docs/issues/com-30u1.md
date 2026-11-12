@@ -1003,3 +1003,32 @@ fixed-proof receipt store immediately before `selectExistentialMember` in
 successfully by reacquiring the missing receipt. Next, retain the prepared
 witness plan and where conditions across this boundary, and verify the first
 concrete JIT request and the AOT replay independently.
+
+## Prepared existential witnesses
+
+A concrete box now prepares each member's exact signature, result conversion,
+selected implementation and checked environment together. Declaration checking
+and the first concrete lazy request share this producer. The finalizer reads
+its published plan by the source/target types and checks the selected
+conformance identity and slot count. It no longer calls the member or
+signature admission routines. Recursive adapter-result conversions reuse
+prepared boxes. Failed dependent preparation rolls back the new box plans.
+
+Two isolated AOT controls exercise the final consumer. Clearing only the
+fixed-proof lookup store leaves the prepared witness plan usable and the
+store empty after finalization. Clearing the actual prepared box plan
+returns Internal with `existential conversion has no prepared witness plan`.
+Build `20261112T184401-build-21b615`, candidate `bfaa29e1`, generation
+`20261112T184746-gen-44f25d`, eight public check/JIT/native controls, the
+missing-promise rejection and three internal native controls passed.
+Same-source medians were 6.724992 s and 6.707252 s, with identical LLVM
+output in all eight runs.
+
+The independent review's inherited associated-owner case now has a reduced
+source reproducer. `Parent` declares `type Input: Source`;
+`Service: Parent` declares a requirement using `Input#Source.Item`.
+The current candidate rejects the requirement during authored projection
+admission. The directly declared `Service.Input` and the separate terminal
+supertrait of `Source` both have working controls. Check the owner path in
+the source recipe and the replay of its prerequisite, then check a replaced
+fixed associated proof against the full saved bound before independent closure.

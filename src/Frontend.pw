@@ -241,9 +241,15 @@ enum InterfaceEvidenceNode {
     Instance(root: U64, owner: InterfaceEvidenceOwner, bound: TraitBound)
 }
 
-struct ExistentialMemberSelection {
+struct PreparedExistentialMember {
     val implementation: ExistentialImplementation
-    val constraints: CallableConstraintEvidence
+    val environment: InstanceEnvironment
+    val plan: ExistentialWitnessPlan
+}
+
+struct PreparedExistentialBox {
+    val evidence: ExistentialBoxEvidence
+    val members: Array[Optional[PreparedExistentialMember]]
 }
 
 struct ExistentialMethodConditions {
@@ -663,6 +669,8 @@ pub struct Comp {
     // remaining signature/field uses. Synthetic types are not new source uses.
     // Provenance prefix only: not yet the admission/consumer receipt channel.
     pub mut val sourceTypeUses: SourceTypeUses = <SourceTypeUses />
+    mut val preparedExistentialBoxes: Array[PreparedExistentialBox] = []
+    mut val declarationBoxPreparationComplete: Bool = false
     mut val fixedRequirementAssociatedProofs: Dictionary[U64, Array[FixedRequirementAssociatedProof]] = [:]
     mut val rawRequirementPremises: Array[RawRequirementPremise] = []
     mut val rawRequirementRanges: Dictionary[U64, SourceBoundRange] = [:]

@@ -40,6 +40,7 @@ fn main() {
         }
         _ => { panic "missing selected existential evidence" }
     }
+    compiler.prepareConversionDependencies(conversion: conversion).unwrap()
     compiler.finalizeConversionDependencies(conversion: conversion).unwrap()
     val resolution = compiler.arena.finalExistentials[compiler.finalExistentialIndex(sourceRef: sourceType, targetRef: targetType)]
     val member = resolution.members[0U64]

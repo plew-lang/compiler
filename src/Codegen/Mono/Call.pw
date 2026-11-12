@@ -2491,42 +2491,40 @@ pub impl Comp {
                     }
                     return <Result.Ok value=() />
                 }
-                try self.checkConversionProofEvidence(proof: conversion, offset: 0U64)
+                val evidence = <ExistentialBoxEvidence sourceRef=sourceRef targetRef=targetRef traitIdx=traitIdx proof=proof />
+                val preparedIndex = try self.preparedExistentialBoxIndex(evidence: evidence)
+                if preparedIndex >= self.preparedExistentialBoxes.count() {
+                    return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "existential conversion has no prepared witness plan", failureDomain: <FailureDomain.Internal />) />
+                }
+                val prepared = self.preparedExistentialBoxes[preparedIndex].members
+                val trait = self.decls.traitAt(index: traitIdx)
+                if prepared.count() != trait.reqs.count() {
+                    return <Result.Err error=self.diagnosticAt(offset: trait.nameStart, msg: "existential conversion has incomplete prepared witness slots", failureDomain: <FailureDomain.Internal />) />
+                }
                 val index: U64 = self.arena.finalExistentials.count()
                 self.arena.finalExistentials.append(<FinalExistentialResolution sourceRef=sourceRef targetRef=targetRef traitIdx=traitIdx proof=proof />)
-                val trait: TraitDef = self.decls.traitAt(index: traitIdx)
                 mut val members: Array[FinalExistentialMember] = []
-                mut val requirement: U64 = 0U64
-                while requirement < trait.reqs.count() {
-                    val req: Func = self.traitReqAt(reqs: trait.reqs, index: requirement)
+                for requirement in 0U64..<prepared.count() {
+                    val req = self.traitReqAt(reqs: trait.reqs, index: requirement)
                     mut val member = <FinalExistentialMember />
-                    val evidence = <ExistentialBoxEvidence sourceRef=sourceRef targetRef=targetRef traitIdx=traitIdx proof=proof />
-                    match (try self.selectExistentialMember(evidence: evidence, requirement: requirement)) {
-                        Optional.Some(v: val memberSelection) => {
-                            val selected = memberSelection.implementation
-                            val constraints = memberSelection.constraints
-                            val sourceReceiver = self.canonicalBodyReceiverRef(fnIdx: selected.function, recvInstRef: sourceRef)
-                            match (try self.existentialWitnessPlan(evidence: evidence, requirement: requirement, sourceReceiver: sourceReceiver)) {
-                                Optional.Some(v: val plan) => {
-                                    val admitted = try self.existentialImplementationEnvironment(implementation: selected, evidence: evidence, constraints: constraints)
-                                    try self.checkPreparedExistentialWitnessSignature(plan: plan, function: selected.function, environment: admitted)
-                                    val bodyId = try self.enqueuePreparedFinalBody(fnIdx: selected.function, args: selected.arguments, recvInstRef: sourceRef, environment: admitted)
-                                    if bodyId == 0U64 { return <Result.Err error=self.diagnosticAt(offset: req.nameStart, msg: "internal error: existential implementation has no executable body") /> }
-                                    try self.finalizeConversionDependencies(conversion: plan.resultConversion)
-                                    try self.scanType(ref: plan.sourceResultType)
-                                    try self.scanType(ref: plan.signature.resultType)
-                                    val targetBody = self.arena.bodyInstanceAt(index: bodyId - 1U64)
-                                    val adapterBody = self.arena.registerBodyInstance(<BodyInstance fnIdx=targetBody.fnIdx environment=targetBody.environment />, origin: <BodyOrigin.ExistentialWitness resolution=index member=requirement />)
-                                    self.monoWork.appendBody(bodyId: adapterBody)
-                                    member = <FinalExistentialMember adapterBodyId=adapterBody bodyId=bodyId receiverPassing=plan.signature.receiverPassing parameterTypes=plan.signature.parameterTypes argumentPassings=plan.signature.argumentPassings resultType=plan.signature.resultType sourceResultType=plan.sourceResultType resultConversion=self.freezeValueConversionProof(proof: plan.resultConversion) />
-                                }
-                                Optional.None => {}
-                            }
+                    match prepared[requirement] {
+                        Optional.Some(v: val selectedMember) => {
+                            val selected = selectedMember.implementation
+                            val admitted = selectedMember.environment
+                            val plan = selectedMember.plan
+                            val bodyId = try self.enqueuePreparedFinalBody(fnIdx: selected.function, args: selected.arguments, recvInstRef: sourceRef, environment: admitted)
+                            if bodyId == 0U64 { return <Result.Err error=self.diagnosticAt(offset: req.nameStart, msg: "internal error: existential implementation has no executable body") /> }
+                            try self.finalizeConversionDependencies(conversion: plan.resultConversion)
+                            try self.scanType(ref: plan.sourceResultType)
+                            try self.scanType(ref: plan.signature.resultType)
+                            val targetBody = self.arena.bodyInstanceAt(index: bodyId - 1U64)
+                            val adapterBody = self.arena.registerBodyInstance(<BodyInstance fnIdx=targetBody.fnIdx environment=targetBody.environment />, origin: <BodyOrigin.ExistentialWitness resolution=index member=requirement />)
+                            self.monoWork.appendBody(bodyId: adapterBody)
+                            member = <FinalExistentialMember adapterBodyId=adapterBody bodyId=bodyId receiverPassing=plan.signature.receiverPassing parameterTypes=plan.signature.parameterTypes argumentPassings=plan.signature.argumentPassings resultType=plan.signature.resultType sourceResultType=plan.sourceResultType resultConversion=self.freezeValueConversionProof(proof: plan.resultConversion) />
                         }
                         Optional.None => {}
                     }
                     members.append(member)
-                    requirement += 1U64
                 }
                 self.arena.finalExistentials.set(i: index, value: <FinalExistentialResolution sourceRef=sourceRef targetRef=targetRef traitIdx=traitIdx proof=proof members=members />)
                 mut val signatureIndex = 0U64
@@ -2642,6 +2640,12 @@ pub impl Comp {
                         if !self.typeRefEq(a: source, b: sourceRef) { return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "source conversion evidence disagrees with the instantiated value type") /> }
                         if sameType { return <Result.Ok value=<ValueConversionProof.Identity /> /> }
                         val conversion = try self.instantiateValueConversion(conversion: self.thawValueConversionProof(id: recorded.proof), environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
+                        // A lazy request owns first admission for its newly
+                        // concrete conversions. Whole-target analysis published
+                        // these plans before executable discovery.
+                        if !self.declarationBoxPreparationComplete {
+                            try self.prepareConversionDependencies(conversion: conversion)
+                        }
                         try self.finalizeConversionDependencies(conversion: conversion)
                         return <Result.Ok value=conversion />
                     }

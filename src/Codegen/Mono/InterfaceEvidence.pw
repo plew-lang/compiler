@@ -689,7 +689,7 @@ impl Comp {
 }
 
 impl Comp {
-    inout fn selectExistentialMember(evidence: ExistentialBoxEvidence, requirement: U64) -> Result[Optional[ExistentialMemberSelection], CompileDiagnostic] {
+    inout fn prepareExistentialMember(evidence: ExistentialBoxEvidence, requirement: U64) -> Result[Optional[PreparedExistentialMember], CompileDiagnostic] {
         if evidence.traitIdx >= self.decls.traitCount() || requirement >= self.decls.traitAt(index: evidence.traitIdx).reqs.count() { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "existential member has no selected declaration") /> }
         val requested = self.traitReqAt(reqs: self.decls.traitAt(index: evidence.traitIdx).reqs, index: requirement)
         if !(try self.existentialRequirementIsDispatchable(target: evidence.targetRef, traitIndex: evidence.traitIdx, slot: requirement)) { return <Result.Ok value=<Optional.None /> /> }
@@ -704,11 +704,80 @@ impl Comp {
         val publicEvidence = try self.concreteInterfaceConditions(conditions: conditions, evidence: evidence, requirement: requirement)
         val plan = try self.selectedRequirementImplementationPlan(callee: implementation.function, proof: evidence.proof, traitIndex: evidence.traitIdx, requirement: requirement, offset: self.arena.functionAt(index: implementation.function).nameStart)
         val constraints = <CallableConstraintEvidence.Requirement plan=plan bounds=publicEvidence.bounds proofs=publicEvidence.proofs normalizations=publicEvidence.normalizations />
-        return <Result.Ok value=<Optional.Some v=<ExistentialMemberSelection implementation=implementation constraints=constraints /> /> />
+        val receiver = self.canonicalBodyReceiverRef(fnIdx: implementation.function, recvInstRef: evidence.sourceRef)
+        val witness = match (try self.existentialWitnessPlan(evidence: evidence, requirement: requirement, sourceReceiver: receiver)) {
+            Optional.Some(v: val witness) => witness,
+            Optional.None => { return <Result.Ok value=<Optional.None /> /> },
+        }
+        val environment = try self.existentialImplementationEnvironment(implementation: implementation, evidence: evidence, constraints: constraints)
+        try self.checkPreparedExistentialWitnessSignature(plan: witness, function: implementation.function, environment: environment)
+        return <Result.Ok value=<Optional.Some v=<PreparedExistentialMember implementation=implementation environment=environment plan=witness /> /> />
     }
 
     inout fn existentialImplementationEnvironment(implementation: ExistentialImplementation, evidence: ExistentialBoxEvidence, constraints: CallableConstraintEvidence) -> Result[InstanceEnvironment, CompileDiagnostic] {
         val substitution = try self.bodyInstanceEnvironment(fnIdx: implementation.function, args: implementation.arguments, recvInstRef: evidence.sourceRef, selectedProof: evidence.proof)
         return self.environmentWithCallableConstraints(fnIdx: implementation.function, environment: substitution, evidence: constraints)
+    }
+}
+
+impl Comp {
+    inout fn preparedExistentialBoxIndex(evidence: ExistentialBoxEvidence) -> Result[U64, CompileDiagnostic] {
+        for index in 0U64..<self.preparedExistentialBoxes.count() {
+            val saved = self.preparedExistentialBoxes[index].evidence
+            if self.typeRefEq(a: saved.sourceRef, b: evidence.sourceRef) && self.typeRefEq(a: saved.targetRef, b: evidence.targetRef) {
+                if saved.traitIdx != evidence.traitIdx || !self.sameStaticConformanceProof(a: saved.proof, b: evidence.proof) {
+                    return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "existential conversion replaced its prepared conformance evidence", failureDomain: <FailureDomain.Internal />) />
+                }
+                return <Result.Ok value=index />
+            }
+        }
+        return <Result.Ok value=self.preparedExistentialBoxes.count() />
+    }
+
+    inout fn prepareExistentialBox(evidence: ExistentialBoxEvidence) -> Result[U64, CompileDiagnostic] {
+        val index = try self.preparedExistentialBoxIndex(evidence: evidence)
+        if index < self.preparedExistentialBoxes.count() { return <Result.Ok value=index /> }
+        try self.checkConversionProofEvidence(proof: <ValueConversionProof.ExistentialBox sourceRef=evidence.sourceRef targetRef=evidence.targetRef traitIdx=evidence.traitIdx proof=evidence.proof />, offset: 0U64)
+        val trait = self.decls.traitAt(index: evidence.traitIdx)
+        mut val members: Array[Optional[PreparedExistentialMember]] = []
+        for slot in 0U64..<trait.reqs.count() {
+            members.append(try self.prepareExistentialMember(evidence: evidence, requirement: slot))
+        }
+        self.preparedExistentialBoxes.append(<PreparedExistentialBox evidence=evidence members=members />)
+        // Publish before visiting adapter results so recursive Self returns
+        // refer to the same prepared box.
+        for member in members {
+            match member {
+                Optional.Some(v: val member) => {
+                    match self.prepareConversionDependencies(conversion: member.plan.resultConversion) {
+                        Result.Ok(value: _) => {}
+                        Result.Err(error: val diagnostic) => {
+                            self.preparedExistentialBoxes.truncate(count: index)
+                            return <Result.Err error=diagnostic />
+                        }
+                    }
+                }
+                Optional.None => {}
+            }
+        }
+        return <Result.Ok value=index />
+    }
+}
+
+pub impl Comp {
+    inout fn prepareConversionDependencies(conversion: ValueConversionProof) -> Result[(), CompileDiagnostic] {
+        match conversion {
+            ValueConversionProof.ExistentialBox(sourceRef: val source, targetRef: val target, traitIdx: val trait, proof: val proof) => {
+                try self.prepareExistentialBox(evidence: <ExistentialBoxEvidence sourceRef=source targetRef=target traitIdx=trait proof=proof />)
+            }
+            ValueConversionProof.ArrayRepack(sourceRef: _, targetRef: _, element: val element) => {
+                try self.prepareConversionDependencies(conversion: element)
+            }
+            ValueConversionProof.EnumRepack(sourceRef: _, targetRef: _, enumIdx: _, argumentProofs: _, payloads: val payloads) => {
+                for payload in payloads { try self.prepareConversionDependencies(conversion: payload.conversion) }
+            }
+            _ => {}
+        }
+        return <Result.Ok value=() />
     }
 }
