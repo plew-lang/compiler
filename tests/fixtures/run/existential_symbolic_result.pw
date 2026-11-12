@@ -81,7 +81,7 @@ fn checkProvidedWhereClause() {
 
 fn checkProvidedWhereProjection() {
     mut val compiler = <Comp />
-    val source = "trait Source {{ type Item }} trait Marker {{}} trait Provider {{}} pub impl Provider {{ fn supply[T](value: T) where T: Source[Item=Bool], T#Source.Item: Marker {{}} }} fn probe[T,U](receiver: T, value: U, foreign: I64) where T: Provider {{}}"
+    val source = "trait Source {{ type Item }} trait Marker {{}} trait Provider {{}} pub impl Provider {{ fn supply[T,U](value: T, other: U) where U: Source[Item=Bool], T: Source[Item=U#Source.Item], T#Source.Item: Marker {{}} }} fn probe[T,U](receiver: T, value: U, foreign: I64) where T: Provider {{}}"
     analyzeFrontendDeclarations(c: inout compiler, input: <FrontendInput.Text text=source path="provided-where-projection.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
     val callee = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "supply").nameId)
     val caller = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "probe").nameId)
@@ -92,18 +92,18 @@ fn checkProvidedWhereProjection() {
     val receiverBound = compiler.decls.funcBounds.at(index: callerClause)
     val traitIndex = compiler.decls.traitIndexByOffset(offset: receiverBound.constraint.key.owner)
     val resolution = <StaticMemberResolution.Provided proof=<StaticConformanceProof.AssumedBound source=<DeclarationBoundRef.Function index=callerClause /> /> traitIdx=traitIndex callee=callee />
-    val arguments = compiler.publishCallTemplateTypeArgs(args: [value])
+    val arguments = compiler.publishCallTemplateTypeArgs(args: [value, foreign])
     val kind = <CallTemplateKind.StaticMethod receiver=<CallTemplateReceiver.Term term=receiverBound.paramTy /> args=compiler.publishCallTemplateArguments(args: []) resolution=resolution methodTypeArgs=arguments resultTerm=0U64 />
     val template = <CallTemplate siteKey=<CallSiteKey ownerFnIdx=caller originKind=2U64 originSerial=902U64 /> receiverTypeTerm=receiverBound.paramTy kind=kind />
     val assumption = compiler.decls.funcBounds.indices(owner: callee)[0U64]
     val original = compiler.decls.funcBounds.at(index: assumption)
     val equation = original.constraint.assocPredicates[0U64]
     val bounds = compiler.sourceSelectedCallBounds(template: template).unwrap()
-    if bounds.count() != 2U64 || !compiler.typeRefEq(a: bounds[1U64].subject, b: equation.value) { panic "provided associated clause setup failed" }
+    if bounds.count() != 3U64 || !compiler.typeRefEq(a: bounds[2U64].subject, b: equation.value) { panic "provided associated clause setup failed" }
     val changed = <TraitConstraint key=original.constraint.key positionalArgsOpen=original.constraint.positionalArgsOpen assocPredicates=[<TraitAssocPredicate member=equation.member value=foreign span=equation.span />] />
     compiler.decls.funcBounds.set(index: assumption, value: <FuncBound fnIdx=callee sourceClause=original.sourceClause paramStart=original.paramStart paramLen=original.paramLen paramTy=original.paramTy paramNameId=original.paramNameId constraint=changed />)
     val retained = compiler.sourceSelectedCallBounds(template: template).unwrap()
-    if retained.count() != 2U64 || !compiler.typeRefEq(a: retained[1U64].subject, b: equation.value) { panic "raw where equality replaced the retained provided projection" }
+    if retained.count() != 3U64 || !compiler.typeRefEq(a: retained[2U64].subject, b: equation.value) { panic "raw where equality replaced the retained provided projection" }
 }
 
 fn checkProvidedSignature() {

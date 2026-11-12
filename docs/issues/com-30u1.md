@@ -599,3 +599,36 @@ Before closure, trace the nested equation's exact source recipe and
 translated requirement final comparison under evidence removal. The
 successful public control alone does not prove that neither path
 re-queries the prerequisites. Then obtain independent re-review.
+
+## Direct provided where-equation checkpoint
+
+A direct provided premise now reads its retained subject, positional
+arguments, and only the selected associated equation through the shared
+signature recipe reader. Other equations on the premise are independent
+until selected. Re-entry into an active projection equation reports Internal.
+
+The strengthened `existential_symbolic_result` control reaches its
+intended assertion with `885d64c4`: for `U: Source[Item=Bool]`,
+`T: Source[Item=U#Source.Item]`, and `T#Source.Item: Marker`, the last
+subject is left symbolic. It resolves to Bool on the new candidate,
+including after the raw first clause is overwritten. A separate
+source-copy probe reads only the result annotation `T#Source.Item` and
+then removes the single admitted view proof whose receiver is the method's
+second type parameter. The old source still returns a result. The new
+source diagnoses "signature view has no saved proof". The test accessor
+exists only in the isolated probe.
+
+Build `20261112T155516-build-1287c2`, candidate `fce04f7c`, passes five
+targeted check/native fixtures, three of those in JIT as well, and standard
+generation `20261112T155830-gen-b24c70` (25 pass, 5 expected reject).
+The public nested equation returns 42 by direct and generic calls in
+both JIT and native execution. Same-source interleaved medians were
+6.623589 s and 6.633568 s, three samples each after warmup. All eight LLVM
+outputs matched byte for byte.
+
+Next, verify and close the inherited and raw requirement premise paths.
+At the translated implementation boundary, trace the caller's instantiated
+projection equations from static calls and existential thunks to the final
+public clause comparison. That comparison currently still calls
+`groundCallableBound`; test it with the projection evidence removed before
+changing the handoff. Independent re-review remains required for closure.

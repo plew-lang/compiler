@@ -444,6 +444,7 @@ enum SignatureRecipeContext {
 
 struct AuthoredRecipeRead {
     val term: U64
+    val reading: Bool = false
     // Selected derivations from this recipe's canonical child graph only.
     val normalizations: Array[ProjectionNormalizationStep]
     // Folded selectors of this source constructor, before a caller replacement

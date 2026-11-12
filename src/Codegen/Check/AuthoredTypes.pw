@@ -148,7 +148,15 @@ impl Comp {
     // The memo belongs to one exact admitted signature and one environment.
     // No semantic-term cache or source reverse lookup can confer evidence.
     inout fn readAuthoredTypeRecipe(proofs: Array[AuthoredTypeViewProof], recipe: U64, environment: InstanceEnvironment, memo: inout Dictionary[U64, AuthoredRecipeRead], receiverEquations: Array[ProjectionNormalizationStep] = [], context: SignatureRecipeContext) -> Result[AuthoredRecipeRead, CompileDiagnostic] {
-        match memo.get(key: recipe) { Optional.Some(v: val read) => { return <Result.Ok value=read /> } Optional.None => {} }
+        match memo.get(key: recipe) {
+            Optional.Some(v: val read) => {
+                if read.reading {
+                    return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "signature recipe re-entered an active equation", failureDomain: <FailureDomain.Internal />) />
+                }
+                return <Result.Ok value=read />
+            }
+            Optional.None => {}
+        }
         val node = match self.sourceTypeUses.recipeAt(id: recipe) {
             Optional.Some(v: val node) => node,
             Optional.None => { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "signature reader lost its admitted recipe", failureDomain: <FailureDomain.Internal />) /> },
@@ -219,7 +227,8 @@ impl Comp {
                             if output != 0U64 { term = output }
                         }
                         SignatureRecipeContext.Provided(owner: val function) => {
-                            val output = try self.readProvidedProjectionOutput(proof: proof, function: function, receiver: receiver, selector: selector, arguments: arguments, member: original.assocNameId, environment: environment, offset: occurrence.site)
+                            memo[recipe] = <AuthoredRecipeRead term=0U64 reading=true views=[] normalizations=[] />
+                            val output = try self.readProvidedProjectionOutput(proof: proof, function: function, receiver: receiver, selector: selector, arguments: arguments, member: original.assocNameId, environment: environment, offset: occurrence.site, memo: inout memo)
                             if output != 0U64 { term = output }
                         }
                         SignatureRecipeContext.Concrete => {
@@ -742,7 +751,7 @@ impl Comp {
 
     // Replace only the provided declaration's own Self premise with the
     // selected receiver proof. Other admitted premises stay in lexical scope.
-    inout fn readProvidedProjectionOutput(proof: StaticConformanceProof, function: U64, receiver: U64, selector: ResolvedViewSource, arguments: Array[U64], member: U64, environment: InstanceEnvironment, offset: U64) -> Result[U64, CompileDiagnostic] {
+    inout fn readProvidedProjectionOutput(proof: StaticConformanceProof, function: U64, receiver: U64, selector: ResolvedViewSource, arguments: Array[U64], member: U64, environment: InstanceEnvironment, offset: U64, memo: inout Dictionary[U64, AuthoredRecipeRead]) -> Result[U64, CompileDiagnostic] {
         val premise = self.signatureProjectionPremise(proof: proof)
         if premise.source.isSome() {
             match premise.source.unwrap() {
@@ -760,6 +769,11 @@ impl Comp {
                     for clause in admitted.clauses {
                         if clause.assumption == assumption {
                             val prepared = try self.retainedSignatureClause(scope: clause.scope, id: clause.source, offset: offset)
+                            if premise.steps.count() == 0U64 {
+                                val context = <SignatureRecipeContext.Provided owner=function />
+                                val bound = try self.readAuthoredSignatureClause(prepared: prepared, proofs: admitted.proofs, context: context, environment: environment, memo: inout memo, onlyMember: member)
+                                return self.readSelectedSignatureProjection(bound: bound, selected: <Optional.None />, receiver: receiver, selector: selector, arguments: arguments, member: member, offset: offset)
+                            }
                             val root = self.substituteRetainedBound(bound: <TraitBound subject=prepared.subject constraint=prepared.constraint offset=prepared.parameter.nameStart />, environment: environment, selfRef: environment.receiverRef, itemRef: 0U64)
                             val bound = self.supertraitBoundThroughSteps(root: root, steps: premise.steps)
                             return self.readSelectedSignatureProjection(bound: bound, selected: <Optional.None />, receiver: receiver, selector: selector, arguments: arguments, member: member, offset: offset)
@@ -917,7 +931,7 @@ impl Comp {
         return <Result.Ok value=bounds />
     }
 
-    inout fn readAuthoredSignatureClause(prepared: PreparedProjectionBound, proofs: Array[AuthoredTypeViewProof], context: SignatureRecipeContext, environment: InstanceEnvironment, memo: inout Dictionary[U64, AuthoredRecipeRead]) -> Result[TraitBound, CompileDiagnostic] {
+    inout fn readAuthoredSignatureClause(prepared: PreparedProjectionBound, proofs: Array[AuthoredTypeViewProof], context: SignatureRecipeContext, environment: InstanceEnvironment, memo: inout Dictionary[U64, AuthoredRecipeRead], onlyMember: U64 = 0U64) -> Result[TraitBound, CompileDiagnostic] {
         val constraint = prepared.constraint
         val subject = try self.readAuthoredClauseType(recipe: prepared.subjectRecipe, ref: prepared.subject, proofs: proofs, context: context, environment: environment, memo: inout memo)
         mut val arguments: Array[U64] = []
@@ -927,6 +941,7 @@ impl Comp {
         mut val predicates: Array[TraitAssocPredicate] = []
         for index in 0U64..<prepared.predicateRecipes.count() {
             val predicate = constraint.assocPredicates[index]
+            if onlyMember != 0U64 && predicate.member != onlyMember { continue }
             val value = try self.readAuthoredClauseType(recipe: prepared.predicateRecipes[index], ref: predicate.value, proofs: proofs, context: context, environment: environment, memo: inout memo)
             predicates.append(<TraitAssocPredicate member=predicate.member value=value span=predicate.span />)
         }
