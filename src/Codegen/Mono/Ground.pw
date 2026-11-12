@@ -1122,22 +1122,9 @@ pub impl Comp {
     // body. This is deliberately not a receiver-name lookup: `ConformId` and
     // its one directional substitution are the proof that owns the output.
     inout fn associatedOutputInProof(proof: StaticConformanceProof, traitOwner: U64, assocId: U64) -> Result[U64, CompileDiagnostic] {
-        match self.retainedConstraintPathTerminal(proof: proof) {
-            Optional.Some(v: val witness) => {
-                if witness.conformIdx != 0U64 && witness.conformIdx <= self.decls.conformCount() {
-                    val owner = self.decls.conformAt(index: witness.conformIdx - 1U64)
-                    if owner.traitStart != traitOwner { return <Result.Ok value=0U64 /> }
-                    mut val binding: Optional[U64] = <Optional.None />
-                    for index in 0U64..<owner.assocBindingIds.count() {
-                        val candidate = self.conformFuncIdAt(ids: owner.assocBindingIds, index: index)
-                        if candidate >= self.decls.assocBindings.count() { return <Result.Err error=self.diagnosticAt(offset: owner.defOffset, msg: "associated output has an invalid binding slot", failureDomain: <FailureDomain.Internal />) /> }
-                        if self.decls.assocBindings[candidate].nameId == assocId {
-                            if binding.isSome() { return <Result.Ok value=0U64 /> }
-                            binding = <Optional.Some v=candidate />
-                        }
-                    }
-                    if binding.isSome() { return self.readAssociatedBindingOutput(bindingIndex: binding.unwrap(), proof: proof, witness: witness) }
-                }
+        match (try self.selectedAssociatedBinding(proof: proof, traitOwner: traitOwner, assocId: assocId)) {
+            Optional.Some(v: val selected) => {
+                return self.readAssociatedBindingOutput(bindingIndex: selected.bindingIndex, proof: proof, witness: selected.witness)
             }
             Optional.None => {}
         }
@@ -1162,6 +1149,34 @@ pub impl Comp {
         return <Result.Ok value=[] />
     }
 
+    inout fn selectedAssociatedBinding(proof: StaticConformanceProof, traitOwner: U64, assocId: U64) -> Result[Optional[(bindingIndex: U64, witness: WitnessMatch)], CompileDiagnostic] {
+        val terminal = self.retainedConstraintPathTerminal(proof: proof)
+        if terminal.isNone() { return <Result.Ok value=<Optional.None /> /> }
+        val witness = terminal.unwrap()
+        if witness.conformIdx == 0U64 || witness.conformIdx > self.decls.conformCount() { return <Result.Ok value=<Optional.None /> /> }
+        match proof {
+            StaticConformanceProof.TraitPath(edges: _, terminalConformIdx: val index) => {
+                if witness.conformIdx != index { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "associated output has a different path terminal", failureDomain: <FailureDomain.Internal />) /> }
+            }
+            _ => {}
+        }
+        val owner = self.decls.conformAt(index: witness.conformIdx - 1U64)
+        if owner.traitStart != traitOwner { return <Result.Ok value=<Optional.None /> /> }
+        mut val selected: Optional[(bindingIndex: U64, witness: WitnessMatch)] = <Optional.None />
+        for index in 0U64..<owner.assocBindingIds.count() {
+            val binding = self.conformFuncIdAt(ids: owner.assocBindingIds, index: index)
+            if binding >= self.decls.assocBindings.count() { return <Result.Err error=self.diagnosticAt(offset: owner.defOffset, msg: "associated output has an invalid binding slot", failureDomain: <FailureDomain.Internal />) /> }
+            if self.decls.assocBindings[binding].nameId == assocId {
+                if selected.isSome() { return <Result.Ok value=<Optional.None /> /> }
+                selected = <Optional.Some v=(bindingIndex: binding, witness: witness) />
+            }
+        }
+        return <Result.Ok value=selected />
+    }
+
+    // An equation stores the immediate RHS, before its own projections are
+    // normalized. Read its exact occurrence under the witness substitution.
+    // Declaration admission can inspect source before the receipt is published.
     inout fn associatedOutputTermInProof(proof: StaticConformanceProof, traitOwner: U64, assocId: U64) -> Result[U64, CompileDiagnostic] {
         match proof {
             StaticConformanceProof.AssumedBound(val source) => {
@@ -1179,71 +1194,18 @@ pub impl Comp {
                 for val predicate in bound.constraint.assocPredicates { if predicate.member == assocId { return <Result.Ok value=predicate.value /> } }
                 return <Result.Ok value=0U64 />
             }
-            StaticConformanceProof.AssumedTraitPath(source: _, steps: _, edges: val edges) => {
-                if edges.count() == 0U64 { return <Result.Ok value=0U64 /> }
-                return <Result.Ok value=(try self.associatedOutputTermInProof(proof: <StaticConformanceProof.ConcreteWitness witness=edges[edges.count() - 1U64] />, traitOwner: traitOwner, assocId: assocId)) />
-            }
-            StaticConformanceProof.ConcreteWitness(val witness) => {
-                if witness.conformIdx == 0U64 { return <Result.Ok value=0U64 />}
-                val ci: U64 = witness.conformIdx - 1U64
-                if ci >= self.decls.conformCount() { return <Result.Ok value=0U64 />}
-                val cf: Conform = self.decls.conformAt(index: ci)
-                if cf.traitStart != traitOwner { return <Result.Ok value=0U64 />}
-                mut val found: U64 = 0U64
-                mut val count: U64 = 0U64
-                mut val ai: U64 = 0U64
-                while ai < cf.assocBindingIds.count() {
-                    val bindingId: U64 = self.conformFuncIdAt(ids: cf.assocBindingIds, index: ai)
-                    if bindingId < self.decls.assocBindings.count() {
-                        val ab: AssocBinding = self.decls.assocBindings[bindingId]
-                        if ab.nameId == assocId {
-                        // The associated output was lowered in the binding's
-                        // lexical impl scope. A Conform currently mirrors
-                        // that scope for ordinary impls, but it is not the
-                        // owner of `ab.ty` (and need not remain identical for
-                        // generated/conferred witnesses). Ground through the
-                        // binding's own ParamId list so the proof substitution
-                        // is applied to the terms it actually binds.
-                        found = (try self.groundWitnessTypeTerm(ref: ab.ty, params: <PatternBindInput.Conformance range=ab.typeParams />, matchResult: witness))
-                        count += 1U64
-                        }
-                    }
-                    ai += 1U64
+            StaticConformanceProof.AssumedTraitPath(source: _, steps: _, edges: _) | StaticConformanceProof.ConcreteWitness(witness: _) | StaticConformanceProof.TraitPath(edges: _, terminalConformIdx: _) => {
+                val selection = try self.selectedAssociatedBinding(proof: proof, traitOwner: traitOwner, assocId: assocId)
+                if selection.isNone() { return <Result.Ok value=0U64 /> }
+                val selected = selection.unwrap()
+                val binding = self.decls.assocBindings[selected.bindingIndex]
+                val occurrence = if self.associatedBindingAdmissionComplete {
+                    val receipt = try self.selectedAssociatedBindingReceipt(bindingIndex: selected.bindingIndex, witness: selected.witness)
+                    give try self.signatureOccurrence(id: receipt.occurrence)
+                } else {
+                    give try self.associatedBindingOccurrence(binding: binding, witness: selected.witness)
                 }
-                if count == 1U64 { return <Result.Ok value=found />}
-                return <Result.Ok value=0U64 />
-            }
-            StaticConformanceProof.TraitPath(val edges, val terminalConformIdx) => {
-                if terminalConformIdx == 0U64 { return <Result.Ok value=0U64 />}
-                val ci: U64 = terminalConformIdx - 1U64
-                if ci >= self.decls.conformCount() { return <Result.Ok value=0U64 />}
-                val cf: Conform = self.decls.conformAt(index: ci)
-                if cf.traitStart != traitOwner { return <Result.Ok value=0U64 />}
-                mut val edgeIdx: U64 = 0U64
-                mut val terminal: WitnessMatch = <WitnessMatch />
-                while edgeIdx < edges.count() {
-                    if edges[edgeIdx].conformIdx == terminalConformIdx {
-                        terminal = edges[edgeIdx]
-                    }
-                    edgeIdx += 1U64
-                }
-                if terminal.conformIdx == 0U64 { return <Result.Ok value=0U64 />}
-                mut val found: U64 = 0U64
-                mut val count: U64 = 0U64
-                mut val ai: U64 = 0U64
-                while ai < cf.assocBindingIds.count() {
-                    val bindingId: U64 = self.conformFuncIdAt(ids: cf.assocBindingIds, index: ai)
-                    if bindingId < self.decls.assocBindings.count() {
-                        val ab: AssocBinding = self.decls.assocBindings[bindingId]
-                        if ab.nameId == assocId {
-                            found = (try self.groundWitnessTypeTerm(ref: ab.ty, params: <PatternBindInput.Conformance range=ab.typeParams />, matchResult: terminal))
-                            count += 1U64
-                        }
-                    }
-                    ai += 1U64
-                }
-                if count == 1U64 { return <Result.Ok value=found />}
-                return <Result.Ok value=0U64 />
+                return self.groundWitnessTypeTerm(ref: occurrence.term, params: <PatternBindInput.Conformance range=binding.typeParams />, matchResult: selected.witness)
             }
             _ => { return <Result.Ok value=0U64 />}
         }

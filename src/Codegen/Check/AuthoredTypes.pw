@@ -28,16 +28,40 @@ pub impl Comp {
 }
 
 impl Comp {
-    inout fn readAssociatedBindingOutput(bindingIndex: U64, proof: StaticConformanceProof, witness: WitnessMatch) -> Result[U64, CompileDiagnostic] {
+    inout fn associatedBindingOccurrence(binding: AssocBinding, witness: WitnessMatch) -> Result[AuthoredTypeUse, CompileDiagnostic] {
+        val occurrence = try self.signatureOccurrence(id: binding.authoredTypeUse)
+        val scope = self.sourceTypeUses.scopeAt(token: occurrence.scope)
+        if scope.isNone() || scope.unwrap().anchor != binding.implOffset || !self.typeRefEq(a: occurrence.term, b: binding.ty) {
+            return <Result.Err error=self.diagnosticAt(offset: binding.tyStart, msg: "associated output has a foreign source occurrence", failureDomain: <FailureDomain.Internal />) />
+        }
+        val owner = scope.unwrap().implementation
+        if owner.isSome() {
+            match owner.unwrap().kind {
+                SourceImplementationKind.Conformance(index: val index) => {
+                    if index + 1U64 == witness.conformIdx { return <Result.Ok value=occurrence /> }
+                }
+                _ => {}
+            }
+        }
+        return <Result.Err error=self.diagnosticAt(offset: binding.tyStart, msg: "associated output has a foreign implementation owner", failureDomain: <FailureDomain.Internal />) />
+    }
+
+    inout fn selectedAssociatedBindingReceipt(bindingIndex: U64, witness: WitnessMatch) -> Result[AuthoredAssociatedBinding, CompileDiagnostic] {
         val binding = self.decls.assocBindings[bindingIndex]
         val saved = match self.authoredAssociatedBindings.get(key: bindingIndex) {
             Optional.Some(v: val admitted) => admitted,
             Optional.None => { return <Result.Err error=self.diagnosticAt(offset: binding.tyStart, msg: "associated output lost its admitted binding", failureDomain: <FailureDomain.Internal />) /> },
         }
-        val occurrence = try self.signatureOccurrence(id: saved.occurrence)
+        val occurrence = try self.associatedBindingOccurrence(binding: binding, witness: witness)
         if saved.conformance + 1U64 != witness.conformIdx || saved.occurrence != binding.authoredTypeUse || occurrence.recipe != saved.recipe {
             return <Result.Err error=self.diagnosticAt(offset: binding.tyStart, msg: "associated output has a foreign binding receipt", failureDomain: <FailureDomain.Internal />) />
         }
+        return <Result.Ok value=saved />
+    }
+
+    inout fn readAssociatedBindingOutput(bindingIndex: U64, proof: StaticConformanceProof, witness: WitnessMatch) -> Result[U64, CompileDiagnostic] {
+        val binding = self.decls.assocBindings[bindingIndex]
+        val saved = try self.selectedAssociatedBindingReceipt(bindingIndex: bindingIndex, witness: witness)
         for active in self.activeAssociatedBindingReads {
             if active.binding == bindingIndex && self.sameWitnessSubstitution(a: active.witness, b: witness) {
                 return <Result.Err error=self.diagnosticAt(offset: binding.tyStart, msg: "associated binding output is cyclic", failureDomain: <FailureDomain.Source />) />
@@ -90,6 +114,7 @@ impl Comp {
             try self.checkAuthoredTypeRecipe(sourceScope: occurrence.scope, recipe: occurrence.recipe, edge: <AuthoredRecipeEdge.Source />, scopes: scopes, validation: inout validation, offset: occurrence.site)
             self.authoredAssociatedBindings[bindingIndex] = <AuthoredAssociatedBinding conformance=conformance occurrence=binding.authoredTypeUse recipe=occurrence.recipe proofs=validation.proofs />
         }
+        self.associatedBindingAdmissionComplete = true
         return <Result.Ok value=() />
     }
 

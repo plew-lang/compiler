@@ -151,3 +151,31 @@ LLVM in all eight runs.
 The original parameter handoff is covered. Reconcile the retained
 projection equations with the authored RHS reader and verify the
 symbolic/interface and fault cases before closure.
+
+## Immediate equation origin
+
+The immediate output used to establish and validate projection equations
+now selects the same witness binding as the normalized output reader. It
+reads the original RHS occurrence through its admission receipt, applies
+the selected substitution, and leaves RHS projections in the immediate
+equation. During declaration admission the immediate reader can inspect
+the original source occurrence before its receipt exists. The binding
+owner must still match, and the concrete and trait-path cases share the
+same selection.
+
+`associated_binding_equation_origin` replaces a binding's source
+occurrence with that of a different instance of the same trait with the
+same RHS type. The old `a895020e` native executable fails the rejection
+assertion. Candidate `fc39f507` rejects the substituted occurrence and
+reads the original again after restoration. Standard build
+`20261112T230119-build-f27796` passed. Five public controls passed check,
+JIT and native. Additional source probes for Unit, a conditional
+consumer, a forward reference in a nested RHS, and an inherited
+existential with a fixed associated result passed check and JIT.
+Same-source medians were 6.892316 s and 6.836507 s with identical LLVM in
+all eight runs.
+
+The immediate equation still does not transport nested RHS proofs to
+the generic/interface replay that needs them. Continue with that
+handoff, the missing/foreign proof and clause controls, and a committed
+Unit/interface control before closure.

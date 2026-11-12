@@ -1,0 +1,21 @@
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use /Ir only { AssocBinding, StaticConformanceProof, WitnessMatch }
+use /SourceAccess only { SourceAccess }
+use @Std/Core only { assert }
+use @Std/Io only { print }
+
+fn main() {
+    mut val compiler = <Comp />
+    val source = "trait Parent[A] {{ type Item }}\nstruct Worker {{}}\nimpl Worker as Parent[I64] {{ type Item = Bool }}\nimpl Worker as Parent[Bool] {{ type Item = Bool }}\n"
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text text=source path="equation-origin.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
+    val first = compiler.decls.assocBindings[0U64]
+    val second = compiler.decls.assocBindings[1U64]
+    assert(compiler.typeRefEq(a: first.ty, b: second.ty))
+    val proof = <StaticConformanceProof.ConcreteWitness witness=<WitnessMatch conformIdx=1U64 selfRef=first.subjectTy /> />
+    assert(compiler.associatedOutputTermInProof(proof: proof, traitOwner: first.traitOwner, assocId: first.nameId).unwrap() == first.ty)
+    compiler.decls.assocBindings[0U64] = <AssocBinding recvStart=first.recvStart recvLen=first.recvLen recvId=first.recvId nameStart=first.nameStart nameLen=first.nameLen nameId=first.nameId traitId=first.traitId traitOwner=first.traitOwner implOffset=first.implOffset subjectTy=first.subjectTy subjectArgs=first.subjectArgs typeParams=first.typeParams traitArgs=first.traitArgs tyStart=first.tyStart tyLen=first.tyLen tyIsArray=first.tyIsArray ty=first.ty authoredTypeUse=second.authoredTypeUse />
+    assert(compiler.associatedOutputTermInProof(proof: proof, traitOwner: first.traitOwner, assocId: first.nameId).isErr())
+    compiler.decls.assocBindings[0U64] = first
+    assert(compiler.associatedOutputTermInProof(proof: proof, traitOwner: first.traitOwner, assocId: first.nameId).unwrap() == first.ty)
+    print("associated-binding-equation-origin")
+}
