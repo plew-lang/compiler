@@ -1,0 +1,18 @@
+use @Std/Io only { print }
+trait Marker { type Type }
+trait Other { type Value }
+trait Parent { type Item }
+struct Worker {}
+impl Worker as Marker { type Type = I64 }
+struct Wrap[T] {}
+impl[T] Wrap[T] as Other { type Value = T }
+struct Box[T] {}
+impl[T] Box[T] as Parent where T: Marker { type Item = Wrap[T#Marker.Type]#Other.Value }
+trait Mark {}
+impl I64 as Mark {}
+trait Use { fn number() -> I64 }
+struct Envelope[T] {}
+impl[T] Envelope[T] as Use where T: Parent, T#Parent.Item: Mark {
+    fn number() -> I64 { return 42I64 }
+}
+fn main() { print(<Envelope[Box[Worker]] />.number()) }

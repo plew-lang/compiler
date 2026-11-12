@@ -202,3 +202,26 @@ The conditional normalization producer and the requirement reader
 still have raw term consumers to reconcile. Exercise missing and
 foreign proof, clause and normalization failures through final reads
 before independent review.
+
+## Conditional normalization from admitted RHS
+
+After declaration admission, condition normalization reads concrete RHS
+projections from the selected binding's recipe and publishes those child
+equations before the parent projection equation. It applies the selected
+binding substitution once. Abstract equalities and initial declaration
+admission still use their existing symbolic interpretation.
+
+The nested conditional witness fixture is a behavior-preservation
+control and passed on both `a2312c45` and `8047fb30`. The latter also
+passed six neighboring fixtures in check, JIT and native, standard
+build `20261112T231429-build-9a1255`, and generation
+`20261112T231827-gen-a868cc`. Same-source medians were 6.856170 s and
+6.902417 s with identical LLVM in all eight runs. The admission path
+now reads the binding slot twice for this operation; combine its
+immediate and normalized outputs when reconciling the remaining
+requirement and equation readers.
+
+The remaining lexical requirement reader starts from the raw RHS and
+looks through the witness condition list. Move it to exact occurrence
+replay in the requirement's interpretation and exercise corrupt
+receipts, proof/clause identity and normalization before review.

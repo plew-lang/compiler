@@ -283,6 +283,26 @@ pub impl Comp {
                 }
                 return <Result.Ok value=projection />
             }
+            // A binding has already selected all of its RHS projections.
+            // Carry those equations into the condition plan in dependency
+            // order; the caller's scope cannot choose the RHS's witnesses.
+            if self.associatedBindingAdmissionComplete {
+                val binding = try self.selectedAssociatedBinding(proof: selectedProof, traitOwner: traitOwner, assocId: p.assocNameId)
+                if binding.isSome() {
+                    val selected = binding.unwrap()
+                    val read = try self.readAssociatedBindingOutput(bindingIndex: selected.bindingIndex, proof: selectedProof, witness: selected.witness)
+                    if recording {
+                        for equation in (try self.retainedProofProjectionContext(proof: selectedProof)) {
+                            try self.appendRetainedProjectionEquation(step: equation, normalizations: inout normalizations)
+                        }
+                        for equation in read.normalizations {
+                            try self.appendRetainedProjectionEquation(step: equation, normalizations: inout normalizations)
+                        }
+                        try self.appendRetainedProjectionEquation(step: <ProjectionNormalizationStep source=projection proof=self.freezeStaticConformanceProof(proof: selectedProof) output=output />, normalizations: inout normalizations)
+                    }
+                    return <Result.Ok value=read.term />
+                }
+            }
             val substituted: U64 = self.groundTermInEnvironment(ref: output, params: environment.params, values: environment.args, selfRef: selfRef, itemRef: itemRef)
             val normalized = try self.closeBodyProjectionTermsRecording(ref: substituted, environment: environment, selfRef: selfRef, itemRef: itemRef, assumptions: assumptions, normalizations: inout normalizations, recording: recording, demand: demand)
             if recording && !self.proofIsMissing(proof: selectedProof) {
