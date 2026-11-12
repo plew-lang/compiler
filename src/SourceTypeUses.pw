@@ -110,6 +110,7 @@ pub struct SourceTypeUses {
     mut val signatures: Array[AuthoredFunctionSignature] = []
     mut val functionSignatures: Dictionary[U64, U64] = [:]
     mut val requirementScopes: Array[U64] = []
+    mut val requirementScopeByIndex: Dictionary[U64, U64] = [:]
     mut val methodScopes: Dictionary[U64, U64] = [:]
 }
 pub impl SourceTypeUses {
@@ -194,17 +195,20 @@ pub impl SourceTypeUses {
         return true
     }
 
-    inout fn bindRequirement(token: U64, traitOwner: U64, requirement: SourceRequirementOwner) -> Bool {
+    inout fn bindRequirement(token: U64, traitOwner: U64, index: U64, requirement: SourceRequirementOwner) -> Bool {
         if token == 0U64 || token > self.scopes.count() { return false }
         val scope = self.scopes[token - 1U64]
         match scope.kind { SourceTypeScopeKind.RequirementSignature => {} _ => { return false } }
         match scope.state { SourceTypeScopeState.Lowered => {} _ => { return false } }
-        if scope.traitOwner != traitOwner || scope.requirement.isSome() || (requirement.result != 0U64 && requirement.factoryError != 0U64) { return false }
+        if scope.traitOwner != traitOwner || self.requirementScopeByIndex.contains(key: index) || scope.requirement.isSome() || (requirement.result != 0U64 && requirement.factoryError != 0U64) { return false }
         if !self.signatureUseBelongs(id: requirement.result, scope: token) || !self.signatureUseBelongs(id: requirement.factoryError, scope: token) { return false }
         self.scopes[token - 1U64] = <SourceTypeScope kind=scope.kind anchor=scope.anchor traitOwner=scope.traitOwner parent=scope.parent state=scope.state function=scope.function requirement=<Optional.Some v=requirement /> implementation=scope.implementation bounds=scope.bounds />
         self.requirementScopes.append(token)
+        self.requirementScopeByIndex[index] = token
         return true
     }
+
+    fn requirementScopeFor(index: U64) -> Optional[U64] { return self.requirementScopeByIndex.get(key: index) }
 
     fn requirementScopeCount() -> U64 { return self.requirementScopes.count() }
     fn requirementScopeAt(index: U64) -> U64 { return self.requirementScopes[index] }

@@ -21,7 +21,7 @@ fn main() {
     val requirement = compiler.traitReqAt(reqs: compiler.decls.traitAt(index: traitIndex).reqs, index: 0U64)
     val expected = compiler.semanticCallableReturnTerm(function: requirement)
     assert(expected != 0U64)
-    assert(compiler.typeRefEq(a: compiler.anyMemberRetInfo(anyRef: targetType, req: requirement).unwrap().ref, b: expected))
+    assert(compiler.typeRefEq(a: compiler.anyMemberRetInfo(anyRef: targetType, traitIndex: traitIndex, slot: 0U64).unwrap().ref, b: expected))
     val conversion = compiler.callArgumentConversion(sourceRef: sourceType, targetRef: targetType).unwrap()
     match conversion {
         ValueConversionProof.ExistentialBox(sourceRef: val sourceRef, targetRef: val targetRef, traitIdx: val owner, proof: val proof) => {

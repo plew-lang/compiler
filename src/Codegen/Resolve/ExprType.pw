@@ -389,12 +389,8 @@ pub impl Comp {
         return self.groundTermInEnvironment(ref: ref, params: boundParams, values: boundArgs, selfRef: receiverRef)
     }
 
-    inout fn anyMemberRetInfo(anyRef: U64, req: Func) -> Result[TypeInfo, CompileDiagnostic] {
-        val traitIndex = self.recordAnyTraitIndex(anyRef: anyRef)
-        if traitIndex >= self.decls.traitCount() {
-            return <Result.Err error=self.diagnosticAt(offset: req.nameStart, msg: "existential result has no selected trait") />
-        }
-        val signature = try self.existentialRequirementSignature(target: anyRef, traitIndex: traitIndex, requirement: req)
+    inout fn anyMemberRetInfo(anyRef: U64, traitIndex: U64, slot: U64) -> Result[TypeInfo, CompileDiagnostic] {
+        val signature = try self.existentialRequirementSignature(target: anyRef, traitIndex: traitIndex, slot: slot)
         if signature.resultType == 0U64 { return <Result.Ok value=scalarInfo() /> }
         return <Result.Ok value=self.typeInfoOfRef(ref: signature.resultType) />
     }
@@ -1031,8 +1027,7 @@ pub impl Comp {
                                 val traitIndex = self.recordAnyTraitIndex(anyRef: rt.ref)
                                 val slot = try self.recordAnyRequirementSlot(anyRef: rt.ref, nameStart: nameStart, nameLen: nameLen, args: args)
                                 if traitIndex < self.decls.traitCount() && slot != 0U64 {
-                                    val requirement = self.traitReqAt(reqs: self.decls.traitAt(index: traitIndex).reqs, index: slot - 1U64)
-                                    return <Result.Ok value=(try self.anyMemberRetInfo(anyRef: rt.ref, req: requirement)) />
+                                    return <Result.Ok value=(try self.anyMemberRetInfo(anyRef: rt.ref, traitIndex: traitIndex, slot: slot - 1U64)) />
                                 }
                                 return <Result.Ok value=scalarInfo() />
                             }

@@ -13,7 +13,7 @@ impl Comp {
         }
         val scope = signature.scope
         val origin = self.sourceTypeUses.scopeAt(token: scope)
-        if origin.isNone() || origin.unwrap().anchor != self.traitReqAt(reqs: declaration.reqs, index: slot).defOffset || !self.sourceTypeUses.bindRequirement(token: scope, traitOwner: declaration.nameStart, requirement: <SourceRequirementOwner traitIndex=traitIndex slot=slot result=signature.result factoryError=signature.factoryError />) {
+        if origin.isNone() || origin.unwrap().anchor != self.traitReqAt(reqs: declaration.reqs, index: slot).defOffset || !self.sourceTypeUses.bindRequirement(token: scope, traitOwner: declaration.nameStart, index: declaration.reqs.start + slot, requirement: <SourceRequirementOwner traitIndex=traitIndex slot=slot result=signature.result factoryError=signature.factoryError />) {
             return <Result.Err error=self.diagnosticAt(offset: site, msg: "invalid authored requirement scope binding", failureDomain: <FailureDomain.Internal />) />
         }
         return <Result.Ok value=() />

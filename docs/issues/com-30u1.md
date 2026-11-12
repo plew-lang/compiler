@@ -96,3 +96,28 @@ Next, make translated and existential signatures consume this retained
 source evidence. The raw premise currently requires a translation before
 executable replay. Preserve that boundary while replacing the existing
 consumer-side re-interpretation of raw signature terms.
+
+## Existential slot handoff checkpoint
+
+Existential signature reads now take the selected trait index and zero-based
+requirement slot. The registered slot identifies the original source scope
+and requires declaration admission, including reads during initializer
+recording before the ordinary declaration sweep. The raw premises remain
+declaration-local. Symbolic result typing, body-call closure and witness
+planning all use the same slot reader.
+
+The previous candidate `8f6e1174` read the signature after the test removed
+the source store. The native regression reached the expected RED panic.
+Build `20261112T123438-build-0b0714`, candidate `b9bab949`, now returns
+the missing-source diagnostic in the Internal domain. The symbolic and
+callable result fixtures passed check and native execution, and the
+supertrait projection and qualified associated signature controls also
+passed JIT. The source-provenance fixture passed. The interface boxing
+conditions control passed check and native execution. Its JIT run hit the
+no-progress limit and remains unverified.
+
+This increment establishes exact ownership at the existential reader. Its
+projection substitution and the witness's source result still use the
+legacy reifier. Next, interpret the saved occurrence proofs in the selected
+interface scope or selected concrete witness, and replace those reads. The
+provided-signature consumer also remains open.

@@ -1,8 +1,10 @@
+use /Diag only { FailureDomain }
 use /Ir only { ConformanceProofDemand }
 use @Std/Io only { print }
 use @Std/Core only { assert }
 use /Frontend only { Comp, FrontendInput, analyzeFrontendDeclarations }
 use /SourceAccess only { SourceAccess }
+use /SourceTypeUses only { SourceTypeUses }
 use /Ir only { TypeRef }
 fn main() {
     mut val c = <Comp />
@@ -12,7 +14,6 @@ fn main() {
     val function = c.arena.functionAt(index: bound.fnIdx)
     val receiver = c.funcParamAt(params: function.params, index: 0U64).ty
     val traitIndex = c.recordAnyTraitIndex(anyRef: receiver)
-    val req = c.traitReqAt(reqs: c.decls.traitAt(index: traitIndex).reqs, index: 0U64)
     // The reader owns an explicit requirement environment. An unrelated
     // ambient substitution must neither change its result nor be overwritten.
     val parameter = c.funcBindAt(binds: function.typeParams, index: 0U64)
@@ -22,8 +23,8 @@ fn main() {
     c.cur.typeParams = [parameter]
     c.cur.typeArgs = [receiver]
     c.cur.selfRef = receiver
-    val cursor = c.anyMemberRetInfo(anyRef: receiver, req: req).unwrap().ref
-    val signature = c.existentialRequirementSignature(target: receiver, traitIndex: traitIndex, requirement: req).unwrap()
+    val cursor = c.anyMemberRetInfo(anyRef: receiver, traitIndex: traitIndex, slot: 0U64).unwrap().ref
+    val signature = c.existentialRequirementSignature(target: receiver, traitIndex: traitIndex, slot: 0U64).unwrap()
     assert(c.typeRefEq(a: cursor, b: signature.resultType))
     assert(c.cur.typeParams.count() == 1U64)
     assert(c.cur.typeParams[0U64].paramId == parameter.paramId)
@@ -31,7 +32,7 @@ fn main() {
     assert(c.cur.selfRef == receiver)
     val original = c.arena.typeAt(index: receiver)
     val incomplete = c.pushType(t: <TypeRef nameStart=original.nameStart nameLen=original.nameLen nameId=original.nameId args=[] isAny=true hasDecl=original.hasDecl declOffset=original.declOffset />)
-    match c.anyMemberRetInfo(anyRef: incomplete, req: req) {
+    match c.anyMemberRetInfo(anyRef: incomplete, traitIndex: traitIndex, slot: 0U64) {
         Result.Err(error: _) => {}
         Result.Ok(value: _) => { panic "accepted incomplete existential result bindings" }
     }
@@ -46,5 +47,16 @@ fn main() {
     assert(c.typeRefEq(a: cursor, b: bound.paramTy))
     assert(c.viewedTypeConformsTraitConstraint(demand: <ConformanceProofDemand.Existence />, ref: cursor, constraint: bound.constraint, assumptions: c.functionBoundAssumptions(fnIdx: bound.fnIdx)).unwrap())
     assert(c.monoWork.bodyCount() == 0U64)
+    c.sourceTypeUses = <SourceTypeUses />
+    match c.existentialRequirementSignature(target: receiver, traitIndex: traitIndex, slot: 0U64) {
+        Result.Err(error: val diagnostic) => {
+            assert(diagnostic.message == "selected requirement has no authored signature")
+            match diagnostic.failureDomain {
+                FailureDomain.Internal => {}
+                _ => { panic "missing source requirement was not an internal error" }
+            }
+        }
+        Result.Ok(value: _) => { panic "read an existential signature without its source requirement" }
+    }
     print("ok")
 }

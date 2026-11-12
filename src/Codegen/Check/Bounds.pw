@@ -215,8 +215,7 @@ pub impl Comp {
         val slot = try self.recordAnyRequirementSlot(anyRef: receiver, nameStart: name.nameStart, nameLen: name.nameLen, args: self.pushArgs(args: []))
         if slot == 0U64 { return <Result.Ok value=() /> }
         val traitIndex = self.recordAnyTraitIndex(anyRef: receiver)
-        val requirement = self.traitReqAt(reqs: self.decls.traitAt(index: traitIndex).reqs, index: slot - 1U64)
-        val cursor = (try self.anyMemberRetInfo(anyRef: receiver, req: requirement)).ref
+        val cursor = (try self.anyMemberRetInfo(anyRef: receiver, traitIndex: traitIndex, slot: slot - 1U64)).ref
         val owner = self.coreTraitOwner(name: "Iterator")
         mut val valid = false
         if cursor != 0U64 && cursor < self.arena.typeCount() && owner != 0U64 {

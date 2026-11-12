@@ -106,13 +106,13 @@ fn main() {
     if store.scopeAt(token: inner).unwrap().function.unwrap() != 0U64 { panic("scope finish lost registered identity") }
     val requirementScope = store.begin(kind: <SourceTypeScopeKind.RequirementSignature />, anchor: 50U64, traitOwner: 60U64)
     if store.bindFunction(token: requirementScope, function: 0U64) { panic("raw requirement laundered as function") }
-    if store.bindRequirement(token: requirementScope, traitOwner: 60U64, requirement: <SourceRequirementOwner traitIndex=0U64 slot=0U64 />) { panic("unfinished requirement bound") }
+    if store.bindRequirement(token: requirementScope, traitOwner: 60U64, index: 0U64, requirement: <SourceRequirementOwner traitIndex=0U64 slot=0U64 />) { panic("unfinished requirement bound") }
     if !store.finish(token: requirementScope, succeeded: true) { panic("requirement source scope leaked") }
-    if store.bindRequirement(token: requirementScope, traitOwner: 61U64, requirement: <SourceRequirementOwner traitIndex=0U64 slot=0U64 />) { panic("foreign trait owned requirement") }
-    if !store.bindRequirement(token: requirementScope, traitOwner: 60U64, requirement: <SourceRequirementOwner traitIndex=0U64 slot=0U64 />) || store.bindRequirement(token: requirementScope, traitOwner: 60U64, requirement: <SourceRequirementOwner traitIndex=1U64 slot=1U64 />) { panic("requirement binding not single-use") }
+    if store.bindRequirement(token: requirementScope, traitOwner: 61U64, index: 0U64, requirement: <SourceRequirementOwner traitIndex=0U64 slot=0U64 />) { panic("foreign trait owned requirement") }
+    if !store.bindRequirement(token: requirementScope, traitOwner: 60U64, index: 0U64, requirement: <SourceRequirementOwner traitIndex=0U64 slot=0U64 />) || store.bindRequirement(token: requirementScope, traitOwner: 60U64, index: 0U64, requirement: <SourceRequirementOwner traitIndex=1U64 slot=1U64 />) { panic("requirement binding not single-use") }
     if store.scopeAt(token: requirementScope).unwrap().requirement.unwrap().traitIndex != 0U64 { panic("zero trait identity lost") }
     val failedRequirement = store.begin(kind: <SourceTypeScopeKind.RequirementSignature />, anchor: 65U64, traitOwner: 60U64)
-    if !store.finish(token: failedRequirement, succeeded: false) || store.bindRequirement(token: failedRequirement, traitOwner: 60U64, requirement: <SourceRequirementOwner traitIndex=0U64 slot=0U64 />) { panic("failed requirement bound") }
+    if !store.finish(token: failedRequirement, succeeded: false) || store.bindRequirement(token: failedRequirement, traitOwner: 60U64, index: 0U64, requirement: <SourceRequirementOwner traitIndex=0U64 slot=0U64 />) { panic("failed requirement bound") }
 
     val externScope = store.begin(kind: <SourceTypeScopeKind.ExternSignature />, anchor: 70U64)
     if store.bindFunction(token: externScope, function: 3U64) { panic("unfinished extern bound") }

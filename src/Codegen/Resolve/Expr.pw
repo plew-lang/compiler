@@ -1245,7 +1245,7 @@ pub impl Comp {
             DynamicCallTemplateTarget.ExistentialRequirement(traitIdx: val trait, slot: val slot, interfaceRoot: _) => {
                 if slot > 0U64 {
                     val declaration = self.traitReqAt(reqs: self.decls.traitAt(index: trait).reqs, index: slot - 1U64)
-                    val signature = try self.existentialRequirementSignature(target: receiverTerm, traitIndex: trait, requirement: declaration)
+                    val signature = try self.existentialRequirementSignature(target: receiverTerm, traitIndex: trait, slot: slot - 1U64)
                     try self.recordKnownExpressionResult(exprId: exprId, resultTerm: signature.resultType)
                     self.recordInvocationCompletion(exprId: exprId, diverging: declaration.isDiverging, returnsUnit: self.callableResultIsUnit(ref: signature.resultType))
                 }
@@ -1451,8 +1451,7 @@ pub impl Comp {
                 val owner = self.finalAnyTraitIdx(anyRef: receiverTerm)
                 val requirementSlot = try self.recordAnyRequirementSlot(anyRef: receiverTerm, nameStart: name.nameStart, nameLen: name.nameLen, args: arguments)
                 if owner < self.decls.traitCount() && requirementSlot != 0U64 {
-                    val requirement = self.traitReqAt(reqs: self.decls.traitAt(index: owner).reqs, index: requirementSlot - 1U64)
-                    resultTerm = (try self.anyMemberRetInfo(anyRef: receiverTerm, req: requirement)).ref
+                    resultTerm = (try self.anyMemberRetInfo(anyRef: receiverTerm, traitIndex: owner, slot: requirementSlot - 1U64)).ref
                     selection = <ProtocolSelection.Existential traitIdx=owner slot=requirementSlot interfaceRoot=0U64 />
                 } else if slot == 1U64 { selection = <ProtocolSelection.Identity />
                     resultTerm = receiverTerm }

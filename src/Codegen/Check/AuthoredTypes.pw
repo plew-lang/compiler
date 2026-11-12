@@ -513,6 +513,20 @@ impl Comp {
         return <Result.Ok value=() />
     }
 
+    // Interface consumers can read signatures while recording initializers,
+    // before the whole-declaration admission sweep.
+    inout fn requireAdmittedRawRequirement(traitIndex: U64, slot: U64, offset: U64) -> Result[(), CompileDiagnostic] {
+        val trait = self.decls.traitAt(index: traitIndex)
+        val token = match self.sourceTypeUses.requirementScopeFor(index: trait.reqs.start + slot) {
+            Optional.Some(v: val token) => token,
+            Optional.None => { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "selected requirement has no authored signature", failureDomain: <FailureDomain.Internal />) /> },
+        }
+        if !self.authoredRequirementViews.contains(key: token) {
+            try self.admitRawRequirementSignature(token: token)
+        }
+        return <Result.Ok value=() />
+    }
+
     inout fn admitRawRequirementSignature(token: U64) -> Result[(), CompileDiagnostic] {
         val source = self.sourceTypeUses.scopeAt(token: token).unwrap()
         val owner = source.requirement.unwrap()
@@ -531,14 +545,16 @@ impl Comp {
         }
         val scope = <DeclarationTypeScope origin=<DeclarationScopeOrigin.RequirementSignature /> owner=token parameters=parameters selfParameter=declaration.selfParamId />
         try self.checkAuthoredCallableSlots(function: requirement, token: token, result: owner.result, factoryError: owner.factoryError, scope: scope, scopedBinders: true)
-        val first = self.rawRequirementPremises.count() + 1U64
-        val root = <TraitBound subject=selfRef constraint=<TraitConstraint key=<TraitInstanceKey owner=declaration.nameStart positionalArgs=arguments /> assocPredicates=[] /> offset=source.anchor />
-        self.rawRequirementPremises.append(<RawRequirementPremise scope=token bound=root />)
-        for index in 0U64..<requirement.signatureBounds.len {
-            val clause = self.conformBoundAt(bounds: requirement.signatureBounds, index: index)
-            self.rawRequirementPremises.append(<RawRequirementPremise scope=token bound=<TraitBound subject=clause.subject constraint=clause.constraint offset=clause.offset /> />)
+        if !self.rawRequirementRanges.contains(key: token) {
+            val first = self.rawRequirementPremises.count() + 1U64
+            val root = <TraitBound subject=selfRef constraint=<TraitConstraint key=<TraitInstanceKey owner=declaration.nameStart positionalArgs=arguments /> assocPredicates=[] /> offset=source.anchor />
+            self.rawRequirementPremises.append(<RawRequirementPremise scope=token bound=root />)
+            for index in 0U64..<requirement.signatureBounds.len {
+                val clause = self.conformBoundAt(bounds: requirement.signatureBounds, index: index)
+                self.rawRequirementPremises.append(<RawRequirementPremise scope=token bound=<TraitBound subject=clause.subject constraint=clause.constraint offset=clause.offset /> />)
+            }
+            self.rawRequirementRanges[token] = <SourceBoundRange first=first count=1U64 + requirement.signatureBounds.len />
         }
-        self.rawRequirementRanges[token] = <SourceBoundRange first=first count=1U64 + requirement.signatureBounds.len />
         val assumptions = try self.declarationScopeAssumptions(scope: scope)
         val scopes = <SignatureProofScopes local=scope assumptions=assumptions inherited=[] receiver=0U64 scopedBinders=true lexicalTrait=declaration.nameStart lexicalTraitArguments=arguments />
         mut val validation = <SignatureRecipeValidation />

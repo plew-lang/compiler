@@ -1678,7 +1678,7 @@ pub impl Comp {
                 }
                 val requirement: Func = self.traitReqAt(reqs: self.decls.traitAt(index: traitIndex).reqs, index: requirementSlot - 1U64)
                 try self.checkExistentialRequirementCall(req: requirement, target: selection.receiverRef, traitIndex: traitIndex, requirement: requirementSlot - 1U64, offset: self.exprOffset(id: exprId))
-                val signature = try self.existentialRequirementSignature(target: selection.receiverRef, traitIndex: traitIndex, requirement: requirement)
+                val signature = try self.existentialRequirementSignature(target: selection.receiverRef, traitIndex: traitIndex, slot: requirementSlot - 1U64)
                 receiverPassing = signature.receiverPassing
                 parameterTypes = signature.parameterTypes
                 passings = signature.argumentPassings
@@ -2366,8 +2366,17 @@ pub impl Comp {
 
     // Public parameter/result terms and ownership modes belong to the selected
     // requirement, not to an executable witness body or incidental Cursor.
-    inout fn existentialRequirementSignature(target: U64, traitIndex: U64, requirement: Func) -> Result[ExistentialRequirementSignature, CompileDiagnostic] {
+    inout fn existentialRequirementSignature(target: U64, traitIndex: U64, slot: U64) -> Result[ExistentialRequirementSignature, CompileDiagnostic] {
+        if traitIndex >= self.decls.traitCount() {
+            return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "invalid existential signature trait", failureDomain: <FailureDomain.Input />) />
+        }
+        val requirements = self.decls.traitAt(index: traitIndex).reqs
+        if slot >= requirements.len {
+            return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "invalid existential signature slot", failureDomain: <FailureDomain.Input />) />
+        }
+        val requirement = self.traitReqAt(reqs: requirements, index: slot)
         val bound = try self.existentialRequirementBound(target: target, traitIndex: traitIndex, receiver: target, offset: requirement.nameStart)
+        try self.requireAdmittedRawRequirement(traitIndex: traitIndex, slot: slot, offset: requirement.defOffset)
         mut val parameterTypes: Array[U64] = []
         mut val passings: Array[CallArgumentPassing] = []
         mut val parameter = 0U64
@@ -2395,7 +2404,7 @@ pub impl Comp {
         if requirement >= trait.reqs.count() { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "existential conversion has no selected requirement") /> }
         val requested = self.traitReqAt(reqs: trait.reqs, index: requirement)
         if !(try self.existentialRequirementIsDispatchable(req: requested, target: evidence.targetRef, traitIndex: evidence.traitIdx)) { return <Result.Ok value=<Optional.None /> /> }
-        val signature = try self.existentialRequirementSignature(target: evidence.targetRef, traitIndex: evidence.traitIdx, requirement: requested)
+        val signature = try self.existentialRequirementSignature(target: evidence.targetRef, traitIndex: evidence.traitIdx, slot: requirement)
         val bound = try self.existentialRequirementBound(target: evidence.targetRef, traitIndex: evidence.traitIdx, receiver: sourceReceiver, offset: requested.nameStart)
         val sourceResult = self.callableResultSlot(ref: self.traitBoundTypeTerm(ref: self.semanticCallableReturnTerm(function: requested), bound: bound, traitIndex: evidence.traitIdx))
         mut val conversion = <ValueConversionProof.Identity />
@@ -3589,7 +3598,7 @@ pub impl Comp {
                     return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: existential template has invalid receiver or requirement") />
                 }
                 val req: Func = self.traitReqAt(reqs: self.decls.traitAt(index: traitIdx).reqs, index: slot - 1U64)
-                val signature = try self.existentialRequirementSignature(target: receiverRef, traitIndex: traitIdx, requirement: req)
+                val signature = try self.existentialRequirementSignature(target: receiverRef, traitIndex: traitIdx, slot: slot - 1U64)
                 val resultRef = if req.isDiverging { give 0U64 } else { give self.semanticSourceResultTerm(ref: signature.resultType) }
                 return <Result.Ok value=<CallSiteSelection exprId=exprId callee=noCallee receiverRef=receiverRef args=args argumentSources=arguments resultHintRef=expected resultRef=resultRef target=<CallTarget.ExistentialRequirement traitIdx=traitIdx slot=slot /> /> />
             }
