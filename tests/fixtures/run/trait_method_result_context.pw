@@ -69,5 +69,9 @@ fn main() {
     assert(pair.owner.sample() == 7I32)
     assert(absent(value: pair.value))
     contexts(source: source)
+    assert(absent(value: source.supplied()))
+    val direct: (owner: Source, value: Optional[I64]) = source.typedPair()
+    assert(direct.owner.sample() == 7I32)
+    assert(absent(value: direct.value))
     print("ok")
 }

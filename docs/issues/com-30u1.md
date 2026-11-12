@@ -517,3 +517,41 @@ nested where equation recipes, and preserve the requirement-derived
 where contract for synthetic trait-subject forwarding. Check the raw
 requirement metadata and the nested Universal rejection controls before
 re-review. The review does not establish closure.
+
+## Direct provided signature and forwarding checkpoint
+
+Direct provided argument checking and contextual recording now use the
+selected declaration's admitted parameter slots. Source result typing and
+expected-result completion use its retained result recipe. Receiver trait
+arguments come from the selected proof even for a nominal provided copy;
+the expected result only fills the remaining method parameters. Static
+provided expected-result completion uses the same signature interpreter.
+
+The fixed `cf1a1eb6` carrier accepted a direct argument check after the
+source signature was removed, rejected direct `typedPair()` despite its
+annotated result, and lost the original requirement clause when its raw
+row was replaced by a sibling with no clauses. The last RED used the
+compiler source frozen at `7f36d50a`. All three controls pass with the
+fresh carrier. The requirement clause count now comes from its admitted
+signature.
+
+A bounded default forwarder on `impl Base as BoundedRead` reproduced the
+review's incomplete-evidence failure. It passed before the clause-identity
+changes. Its static selection now reads the selected implementation's
+own clauses, through the same explicit substitution as a direct
+implementation call. The original unbounded test remains, with direct
+and generic bounded calls added. A scratch negative control substituting
+`Bool` for the `I64` input retained the missing-where diagnostic across
+check, JIT and native compilation.
+
+Build `20261112T152503-build-b111e3`, candidate `2bd55d6c`, passes 29 group
+checks, ten targeted check/native fixtures, eight public JIT fixtures and
+generation `20261112T152753-gen-7fcf7b`. Same-source medians were 6.669746 s
+and 6.680291 s. The LLVM outputs differ only by a bijective renaming of
+1,541 generated generic body symbols with the same body IDs. This
+diagnostic comparison does not certify a new bootstrap fixed point.
+
+The task remains open. Next confirm the remaining requirement metadata
+readers, nested where recipes, missing post-admission evidence, and the
+Universal rejection boundary. Apply the independent review disposition
+before final re-review.

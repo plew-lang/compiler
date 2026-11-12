@@ -9,7 +9,7 @@ use /SourceTypeUses only { SourceTypeUses }
 use /Ir only { TypeRef }
 fn checkRetainedWhereClause() {
     mut val compiler = <Comp />
-    val source = "trait Marker {{}} trait Service {{ fn read[T](value: T) where T: Marker }} fn probe[T,U,V](receiver: T, value: U, foreign: V) where T: Service, U: Marker {{}}"
+    val source = "trait Marker {{}} trait Service {{ fn read[T](value: T) where T: Marker fn unrelated[T](value: T) }} fn probe[T,U,V](receiver: T, value: U, foreign: V) where T: Service, U: Marker {{}}"
     analyzeFrontendDeclarations(c: inout compiler, input: <FrontendInput.Text text=source path="clause-reader.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
     val owner = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "probe").nameId)
     val declaration = compiler.arena.functionAt(index: owner)
@@ -33,6 +33,11 @@ fn checkRetainedWhereClause() {
             if after.count() != 1U64 || !compiler.typeRefEq(a: after[0U64].subject, b: value) { panic("raw where row replaced the retained requirement clause") }
         }
         Result.Err(error: _) => { panic("raw where row replaced the retained requirement clause") }
+    }
+    compiler.decls.traitReqPool[trait.reqs.start] = compiler.traitReqAt(reqs: trait.reqs, index: 1U64)
+    val after = compiler.sourceSelectedCallBounds(template: template).unwrap()
+    if after.count() != 1U64 || !compiler.typeRefEq(a: after[0U64].subject, b: value) {
+        panic "raw requirement row suppressed the retained where clause"
     }
 }
 

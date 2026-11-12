@@ -142,8 +142,17 @@ pub impl Comp {
         // by its conformance path, not nominal equality with that trait.
         if f.recvTy != 0U64 && receiverMatch.conformIdx == 0U64 && self.proofIsMissing(proof: proof) { return <Result.Ok value=<InstanceEnvironment /> />}
         mut val fullArgs: Array[U64] = (try self.receiverCallableArguments(f: f, receiverRef: semanticReceiver, receiverMatch: receiverMatch))
-        if self.methodRecvIsTrait(f: f) && !self.proofIsMissing(proof: proof) {
-            val traitIndex = self.decls.traitIndexByOffset(offset: f.recvStart)
+        val traitReceiver = if f.isProvided && f.recvTraitArgs.count() != 0U64 {
+            val declaration = try self.lexicalFunction(f: f)
+            give declaration.provTraitOwner != 0U64 && declaration.originTraitOwner == 0U64
+        } else {
+            give self.methodRecvIsTrait(f: f)
+        }
+        if traitReceiver && !self.proofIsMissing(proof: proof) {
+            // A concrete placement still has the lexical provider's trait
+            // arguments. Its nominal receiver cannot bind those parameters.
+            val owner = if f.isProvided { give f.provTraitOwner } else { give f.recvStart }
+            val traitIndex = self.decls.traitIndexByOffset(offset: owner)
             val bound = try self.staticProofBound(proof: proof, traitIdx: traitIndex)
             if bound.subject == 0U64 || bound.constraint.key.positionalArgs.count() != f.recvTraitArgs.count() { return <Result.Ok value=<InstanceEnvironment /> /> }
             mut val argument = 0U64
@@ -266,15 +275,6 @@ pub impl Comp {
         return <Result.Ok value=itemRef />
     }
 
-    // Ground any selected declaration signature term under one final method
-    // environment.  This is intentionally shared by result and argument
-    // contexts: Record is the single frontend producer of both facts.
-    inout fn groundFinalMethodSignatureTerm(f: Func, receiverRef: U64, args: ArgRange, signatureTerm: U64) -> Result[U64, CompileDiagnostic] {
-        if signatureTerm == 0U64 { return <Result.Ok value=0U64 />}
-        val environment: InstanceEnvironment = (try self.finalMethodEnvironment(f: f, receiverRef: receiverRef, args: args))
-        return <Result.Ok value=(try self.groundFinalMethodSignatureInEnvironment(f: f, environment: environment, signatureTerm: signatureTerm)) />
-    }
-
     // Consumers that retain the selected environment must use that same
     // substitution for signature grounding instead of inferring it again.
     inout fn groundFinalMethodSignatureInEnvironment(f: Func, environment: InstanceEnvironment, signatureTerm: U64) -> Result[U64, CompileDiagnostic] {
@@ -300,19 +300,20 @@ pub impl Comp {
         return <Result.Ok value=self.groundTermInEnvironment(ref: f.recvTy, params: self.copyFuncBinds(binds: f.typeParams), values: inferred) />
     }
 
-    inout fn groundFinalMethodReturn(f: Func, recvTy: TypeInfo, args: ArgRange) -> Result[U64, CompileDiagnostic] {
-        mut val receiver = recvTy.ref
-        if receiver == 0U64 { return <Result.Ok value=0U64 /> }
-        return <Result.Ok value=(try self.groundFinalMethodSignatureTerm(f: f, receiverRef: receiver, args: args, signatureTerm: f.retTy)) />
+    inout fn selectedMethodResult(callee: U64, environment: InstanceEnvironment) -> Result[U64, CompileDiagnostic] {
+        if environment.receiverRef == 0U64 { return <Result.Ok value=0U64 /> }
+        val declaration = self.arena.functionAt(index: callee)
+        if declaration.isProvided && self.isAuthoredProvidedDeclaration(function: callee) {
+            return <Result.Ok value=(try self.providedSourceSignature(function: callee, environment: environment, read: <CallableSignatureRead.SourceResult />)).resultType />
+        }
+        return self.groundFinalMethodSignatureInEnvironment(f: declaration, environment: environment, signatureTerm: self.semanticCallableReturnTerm(function: declaration))
     }
 
-    // Parameter contexts are part of the same immutable CallTemplate contract
-    // as a return.  In particular this maps a method/impl ParamId, which
-    // groundUnderInst cannot see, through the receiver-selected environment.
-    inout fn groundFinalMethodParameter(f: Func, recvTy: TypeInfo, args: ArgRange, parameterTerm: U64) -> Result[U64, CompileDiagnostic] {
-        mut val receiver = recvTy.ref
+    inout fn groundFinalMethodReturn(callee: U64, receiver: U64, args: ArgRange) -> Result[U64, CompileDiagnostic] {
         if receiver == 0U64 { return <Result.Ok value=0U64 /> }
-        return <Result.Ok value=(try self.groundFinalMethodSignatureTerm(f: f, receiverRef: receiver, args: args, signatureTerm: parameterTerm)) />
+        val function = self.arena.functionAt(index: callee)
+        val environment = try self.finalMethodEnvironment(f: function, receiverRef: receiver, args: args)
+        return self.selectedMethodResult(callee: callee, environment: environment)
     }
 
     // `fnArgsAllGround` is intentionally stricter: Mono may only enqueue a
@@ -930,7 +931,7 @@ pub impl Comp {
                     val mf: Func = self.arena.functionAt(index: mfi)
                     if mf.isAsync && !mf.hasRet { return self.declaredRetInfo(f: mf) }
                     if mf.hasRet {
-                        val grounded: U64 = (try self.groundFinalMethodReturn(f: mf, recvTy: (try self.exprTypeWithChainHole(id: recv, chainHoleRef: chainHoleRef)), args: args))
+                        val grounded: U64 = (try self.groundFinalMethodReturn(callee: mfi, receiver: (try self.exprTypeWithChainHole(id: recv, chainHoleRef: chainHoleRef)).ref, args: args))
                         if grounded != 0U64 {
                             return <Result.Ok value=self.typeInfoOfRef(ref: grounded) />
                         }
@@ -966,12 +967,12 @@ pub impl Comp {
                     if af.hasRet {
                         val qualifier = (try self.concreteTypeQualifierTerm(exprId: recv))
                         if qualifier != 0U64 {
-                            val result = (try self.groundFinalMethodSignatureTerm(f: af, receiverRef: qualifier, args: args, signatureTerm: af.retTy))
+                            val result = (try self.groundFinalMethodReturn(callee: afi, receiver: qualifier, args: args))
                             if result != 0U64 { return <Result.Ok value=self.typeInfoOfRef(ref: result) />}
                         }
                         val inferredReceiver = (try self.associatedReceiverFromArguments(f: af, args: args))
                         if inferredReceiver != 0U64 {
-                            val result = (try self.groundFinalMethodSignatureTerm(f: af, receiverRef: inferredReceiver, args: args, signatureTerm: af.retTy))
+                            val result = (try self.groundFinalMethodReturn(callee: afi, receiver: inferredReceiver, args: args))
                             if result != 0U64 { return <Result.Ok value=self.typeInfoOfRef(ref: result) />}
                         }
                         return <Result.Ok value=(try self.declaredRetInfo(f: af)) />
@@ -1050,7 +1051,7 @@ pub impl Comp {
                     val mf: Func = self.arena.functionAt(index: mi)
                     if mf.isAsync && !mf.hasRet { return self.declaredRetInfo(f: mf) }
                     if mf.hasRet {
-                        val receiverGrounded: U64 = (try self.groundFinalMethodReturn(f: mf, recvTy: rt, args: args))
+                        val receiverGrounded: U64 = (try self.groundFinalMethodReturn(callee: mi, receiver: rt.ref, args: args))
                         if receiverGrounded != 0U64 {
                             return <Result.Ok value=self.typeInfoOfRef(ref: receiverGrounded) />
                         }

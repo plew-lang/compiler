@@ -5,8 +5,19 @@ pub impl Base as Read { fn read(count: I64 = 5I64) -> I64 { return count } }
 struct X {}
 impl X as Base {}
 fn invoke[T](value: T) -> I64 where T: Read { return value.read() }
+trait Marker {}
+impl I64 as Marker {}
+trait BoundedRead { fn boundedRead[T](value: T) -> I64 where T: Marker }
+pub impl Base as BoundedRead {
+    fn boundedRead[T](value: T, count: I64 = 6I64) -> I64 where T: Marker { return count }
+}
+fn invokeBounded[R, T](receiver: R, value: T) -> I64 where R: BoundedRead, T: Marker {
+    return receiver.boundedRead(value: value)
+}
 fn main() {
     val value = <X />
     print(value.read())
     print(invoke(value: value))
+    print(value.boundedRead(value: 42I64))
+    print(invokeBounded(receiver: value, value: 42I64))
 }

@@ -718,7 +718,6 @@ pub impl Comp {
         // already admitted receiver/proof while that local join is pending;
         // final publication still requires the completed callable signature.
         val finalEnvironment: InstanceEnvironment = (try self.inferMethodEnvironment(f: f, receiverRef: receiverTerm, args: args, retainedArguments: (try self.syntheticSelectedTypeArguments(exprId: exprId, declaration: callee))))
-        val result: U64 = (try self.groundFinalMethodSignatureInEnvironment(f: f, environment: finalEnvironment, signatureTerm: self.semanticCallableReturnTerm(function: f)))
         // The final callable's complete ParamId substitution is provenance,
         // not a Mono inference request.  Persist it beside the selected
         // callee so every downstream consumer sees the same method/impl
@@ -739,6 +738,8 @@ pub impl Comp {
                 _ => {}
             }
         }
+        val signatureEnvironment = <InstanceEnvironment params=finalEnvironment.params args=finalEnvironment.args receiverRef=finalEnvironment.receiverRef proof=proof />
+        val result = try self.selectedMethodResult(callee: callee, environment: signatureEnvironment)
         try self.recordSemanticExprCall(exprId: exprId, callee: callee, receiver: finalReceiverSource, args: args, calleeTypeArgs: self.signatureTypeArguments(f: f, environment: finalEnvironment), resultTerm: result, proof: proof, receiverTypeTerm: receiverTerm)
         return <Result.Ok value=() />
     }
@@ -1421,12 +1422,26 @@ pub impl Comp {
         if callee < self.arena.functionCount() {
             val selectedMethod: Func = self.arena.functionAt(index: callee)
             try self.checkMethodVis(ownerStart: selectedMethod.recvStart, ownerLen: selectedMethod.recvLen, mf: selectedMethod, offset: useOffset)
+            if args.len == 0U64 { return <Result.Ok value=() /> }
+            val signature = if selectedMethod.isProvided && self.isAuthoredProvidedDeclaration(function: callee) {
+                val environment = try self.finalMethodEnvironment(f: selectedMethod, receiverRef: receiverTerm, args: args)
+                if environment.receiverRef == 0U64 { return <Result.Ok value=() /> }
+                give try self.selectedDirectParameterSignature(callee: callee, environment: environment)
+            } else {
+                give <SourceCallSignature.Direct environment=<InstanceEnvironment /> />
+            }
             mut val mk: U64 = 0U64
             while mk < args.len {
                 val parameterIndex: U64 = self.paramIndexForArg(params: selectedMethod.params, args: args, argIdx: mk)
                 if parameterIndex < selectedMethod.params.count() {
                     val parameter: Param = self.funcParamAt(params: selectedMethod.params, index: parameterIndex)
-                    val mctx: U64 = (try self.groundFinalMethodParameter(f: selectedMethod, recvTy: self.typeInfoOfRef(ref: receiverTerm), args: args, parameterTerm: parameter.ty))
+                    val mctx = match signature {
+                        SourceCallSignature.ProvidedParameters(types: val types) => types[parameterIndex],
+                        _ => {
+                            val environment = try self.finalMethodEnvironment(f: selectedMethod, receiverRef: receiverTerm, args: args)
+                            give try self.groundFinalMethodSignatureInEnvironment(f: selectedMethod, environment: environment, signatureTerm: parameter.ty)
+                        }
+                    }
                     val argumentExpr: U64 = self.argAt(args: args, index: mk).expr
                     if mctx != 0U64 && self.expressionNeedsTypeContext(exprId: argumentExpr) { try self.recordExpr(exprId: argumentExpr, chainHoleRef: chainHoleRef, expectedTerm: mctx) }
                     if mctx != 0U64 && (try self.tyRefIsGround(ref: mctx)) {

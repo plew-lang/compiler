@@ -43,7 +43,7 @@ pub impl Comp {
                     return <Result.Ok value=<SourceCallParameterState.Incomplete /> />
                 }
                 val environment = try self.recordedDirectCallEnvironmentForExpression(exprId: exprId, callee: callee, function: function, receiverTerm: template.receiverTypeTerm, typeArgs: arguments, proof: self.thawStaticConformanceProof(id: proofId))
-                return <Result.Ok value=<SourceCallParameterState.Selected function=function signature=<SourceCallSignature.Direct environment=environment /> /> />
+                return <Result.Ok value=<SourceCallParameterState.Selected function=function signature=(try self.selectedDirectParameterSignature(callee: callee, environment: environment)) /> />
             }
             CallTemplateKind.StaticMethod(receiver: _, args: _, resolution: val resolution, methodTypeArgs: val typeArgs, resultTerm: _) => {
                 val function = try self.selectedStaticCallDeclaration(resolution: resolution, offset: site.originStart)

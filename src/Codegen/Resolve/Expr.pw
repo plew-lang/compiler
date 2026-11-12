@@ -563,7 +563,7 @@ pub impl Comp {
                 }
                 try self.checkCallTemplateArguments(args: args, parameterCount: function.params.count(), offset: offset)
                 try self.checkCallTemplateEvidence(template: template)
-                try self.checkSourceDirectCallArguments(template: template, function: function, arguments: args, typeArgs: calleeTypeArgs, proofId: proofId)
+                try self.checkSourceDirectCallArguments(template: template, callee: callee, arguments: args, typeArgs: calleeTypeArgs, proofId: proofId)
                 return <Result.Ok value=() />
             }
             CallTemplateKind.StaticMethod(receiver: _, args: val args, resolution: val resolution, methodTypeArgs: val typeArgs, resultTerm: _) => {
@@ -1779,15 +1779,26 @@ pub impl Comp {
                 // Self in a callable result is a receiver recipe. Expose its
                 // lexical pattern before matching the callee's binders; it
                 // must not remain an unrelated nominal name in inference.
-                val resultPattern = self.groundTermInEnvironment(ref: self.semanticCallableReturnTerm(function: function), params: [], values: [], selfRef: self.parametricSelfRef(f: function))
+                val proof = self.thawStaticConformanceProof(id: proofId)
+                val provided = function.isProvided && self.isAuthoredProvidedDeclaration(function: callee)
+                val resultPattern = if provided {
+                    val selectedReceiver = self.selectedCallableReceiver(function: function, receiver: receiver, receiverTerm: receiverTerm, params: self.copyFuncBinds(binds: function.typeParams), typeArgs: current)
+                    give try self.providedExpectedResultPattern(callee: callee, receiver: selectedReceiver, arguments: current, proof: proof)
+                } else {
+                    give self.groundTermInEnvironment(ref: self.semanticCallableReturnTerm(function: function), params: [], values: [], selfRef: self.parametricSelfRef(f: function))
+                }
                 val completed = self.completeCallTypeArguments(function: function, current: current, resultPattern: resultPattern, expectedTerm: expectedTerm)
                 if completed.count() != function.typeParams.count() || !self.fnArgsAllResolved(args: completed) { return <Result.Ok value=kind /> }
                 // The expected term constrains only this callee's binders.
                 // Publish the substituted declaration result, never the expected
                 // term itself. The same completed substitution is retained for Mono.
                 val selectedReceiver = self.selectedCallableReceiver(function: function, receiver: receiver, receiverTerm: receiverTerm, params: self.copyFuncBinds(binds: function.typeParams), typeArgs: completed)
-                val environment = try self.recordedDirectCallEnvironment(function: function, receiverTerm: selectedReceiver, typeArgs: completed, proof: self.thawStaticConformanceProof(id: proofId))
-                val result = (try self.groundTermForBody(ref: self.semanticCallableReturnTerm(function: function), environment: environment, selfRef: environment.receiverRef, itemRef: 0U64))
+                val environment = try self.recordedDirectCallEnvironment(function: function, receiverTerm: selectedReceiver, typeArgs: completed, proof: proof)
+                val result = if provided {
+                    give try self.selectedMethodResult(callee: callee, environment: environment)
+                } else {
+                    give try self.groundTermForBody(ref: self.semanticCallableReturnTerm(function: function), environment: environment, selfRef: environment.receiverRef, itemRef: 0U64)
+                }
                 self.recordSemanticExprTerm(exprId: exprId, term: result)
                 return <Result.Ok value=<CallTemplateKind.Direct callee=callee receiver=receiver args=args calleeTypeArgs=self.publishCallTemplateTypeArgs(args: completed) proofId=proofId /> />
             }
@@ -1797,32 +1808,55 @@ pub impl Comp {
                     StaticMemberResolution.Provided(proof: _, traitIdx: _, callee: val callee) => { give self.arena.functionAt(index: callee) }
                     StaticMemberResolution.Missing => { return <Result.Ok value=kind /> }
                 }
+                val current = self.callTemplateTypeArgs(range: typeArgs)
+                if typeArgs.len != current.count() { return <Result.Ok value=kind /> }
+                if function.typeParams.count() == 0U64 || (current.count() == function.typeParams.count() && self.fnArgsAllResolved(args: current)) { return <Result.Ok value=kind /> }
                 mut val pattern = 0U64
                 mut val proof = <StaticConformanceProof.Missing />
                 match resolution {
-                    StaticMemberResolution.Requirement(proof: val selectedProof, traitIdx: val owner, reqIdx: val index) => {
+                    StaticMemberResolution.Requirement(proof: val selectedProof, traitIdx: _, reqIdx: _) => {
                         pattern = try self.staticRequirementResultType(resolution: resolution)
                         proof = selectedProof
                     }
                     StaticMemberResolution.Provided(proof: val selectedProof, traitIdx: _, callee: val callee) => {
-                        val lexical = try self.withLexicalSelfBinding(f: function, environment: <InstanceEnvironment receiverRef=receiverTerm proof=selectedProof />)
-                        pattern = self.groundTermInEnvironment(ref: self.semanticCallableReturnTerm(function: function), params: lexical.params, values: lexical.args, selfRef: receiverTerm)
+                        if self.isAuthoredProvidedDeclaration(function: callee) {
+                            pattern = try self.providedExpectedResultPattern(callee: callee, receiver: receiverTerm, arguments: current, proof: selectedProof)
+                        } else {
+                            val lexical = try self.withLexicalSelfBinding(f: function, environment: <InstanceEnvironment receiverRef=receiverTerm proof=selectedProof />)
+                            pattern = self.groundTermInEnvironment(ref: self.semanticCallableReturnTerm(function: function), params: lexical.params, values: lexical.args, selfRef: receiverTerm)
+                        }
                         proof = selectedProof
                     }
                     StaticMemberResolution.Missing => { return <Result.Ok value=kind /> }
                 }
-                val current = self.callTemplateTypeArgs(range: typeArgs)
-                if typeArgs.len != current.count() { return <Result.Ok value=kind /> }
-                if function.typeParams.count() == 0U64 || (current.count() == function.typeParams.count() && self.fnArgsAllResolved(args: current)) { return <Result.Ok value=kind /> }
                 val completed = self.completeCallTypeArguments(function: function, current: current, resultPattern: pattern, expectedTerm: expectedTerm)
                 if completed.count() != function.typeParams.count() || !self.fnArgsAllResolved(args: completed) { return <Result.Ok value=kind /> }
                 val environment = <InstanceEnvironment params=self.copyFuncBinds(binds: function.typeParams) args=completed receiverRef=receiverTerm proof=proof />
-                val result = try self.groundTermForBody(ref: pattern, environment: environment, selfRef: receiverTerm, itemRef: 0U64)
+                val result = match resolution {
+                    StaticMemberResolution.Provided(proof: _, traitIdx: _, callee: val callee) => {
+                        give if self.isAuthoredProvidedDeclaration(function: callee) {
+                            val lexical = try self.withLexicalSelfBinding(f: function, environment: environment)
+                            give (try self.providedSourceSignature(function: callee, environment: lexical, read: <CallableSignatureRead.SourceResult />)).resultType
+                        } else {
+                            give try self.groundTermForBody(ref: pattern, environment: environment, selfRef: receiverTerm, itemRef: 0U64)
+                        }
+                    }
+                    _ => { give try self.groundTermForBody(ref: pattern, environment: environment, selfRef: receiverTerm, itemRef: 0U64) }
+                }
                 self.recordSemanticExprTerm(exprId: exprId, term: result)
                 return <Result.Ok value=<CallTemplateKind.StaticMethod receiver=receiver args=args resolution=resolution methodTypeArgs=self.publishCallTemplateTypeArgs(args: completed) resultTerm=result /> />
             }
             _ => { return <Result.Ok value=kind /> }
         }
+    }
+
+    inout fn providedExpectedResultPattern(callee: U64, receiver: U64, arguments: Array[U64], proof: StaticConformanceProof) -> Result[U64, CompileDiagnostic] {
+        if receiver == 0U64 { return <Result.Ok value=0U64 /> }
+        val declaration = self.arena.functionAt(index: callee)
+        mut val slots = arguments
+        while slots.count() < declaration.typeParams.count() { slots.append(0U64) }
+        val environment = try self.recordedDirectCallEnvironment(function: declaration, receiverTerm: receiver, typeArgs: slots, proof: proof)
+        return <Result.Ok value=(try self.providedSourceSignature(function: callee, environment: environment, read: <CallableSignatureRead.SourceResult />)).resultType />
     }
 
     // Read selected bindings first. Only an actually unselected occurrence

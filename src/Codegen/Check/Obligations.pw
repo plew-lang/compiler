@@ -1034,10 +1034,19 @@ pub impl Comp {
 
     // Complete selections consume the same frozen operand plan. Root evidence
     // is admitted before either substitution context is constructed.
-    inout fn checkSourceDirectCallArguments(template: CallTemplate, function: Func, arguments: CallTemplateArgumentRange, typeArgs: CallTemplateTypeArgumentRange, proofId: U64) -> Result[(), CompileDiagnostic] {
+    inout fn checkSourceDirectCallArguments(template: CallTemplate, callee: U64, arguments: CallTemplateArgumentRange, typeArgs: CallTemplateTypeArgumentRange, proofId: U64) -> Result[(), CompileDiagnostic] {
         if arguments.len == 0U64 { return <Result.Ok value=() /> }
+        val function = self.arena.functionAt(index: callee)
         val environment = try self.recordedDirectCallEnvironment(function: function, receiverTerm: template.receiverTypeTerm, typeArgs: self.callTemplateTypeArgs(range: typeArgs), proof: self.thawStaticConformanceProof(id: proofId))
-        return self.checkSourceCallArguments(template: template, function: function, arguments: arguments, signature: <SourceCallSignature.Direct environment=environment />)
+        return self.checkSourceCallArguments(template: template, function: function, arguments: arguments, signature: (try self.selectedDirectParameterSignature(callee: callee, environment: environment)))
+    }
+
+    inout fn selectedDirectParameterSignature(callee: U64, environment: InstanceEnvironment) -> Result[SourceCallSignature, CompileDiagnostic] {
+        if self.arena.functionAt(index: callee).isProvided && self.isAuthoredProvidedDeclaration(function: callee) {
+            val signature = try self.providedSourceSignature(function: callee, environment: environment, read: <CallableSignatureRead.SourceParameters />)
+            return <Result.Ok value=<SourceCallSignature.ProvidedParameters types=signature.parameterTypes /> />
+        }
+        return <Result.Ok value=<SourceCallSignature.Direct environment=environment /> />
     }
 
     inout fn selectedStaticCallSignature(template: CallTemplate, function: Func, typeArgs: CallTemplateTypeArgumentRange, resolution: StaticMemberResolution) -> Result[SourceCallSignature, CompileDiagnostic] {
@@ -1212,16 +1221,23 @@ pub impl Comp {
     }
 
     inout fn sourceSelectedStaticSignatureBounds(resolution: StaticMemberResolution, receiverTerm: U64, arguments: Array[U64], offset: U64) -> Result[Array[TraitBound], CompileDiagnostic] {
-        val function = try self.selectedStaticCallDeclaration(resolution: resolution, offset: offset)
         match resolution {
             StaticMemberResolution.Requirement(proof: _, traitIdx: _, reqIdx: _) => {
-                if function.signatureBounds.len == 0U64 { return <Result.Ok value=[] /> }
                 val context = try self.staticRequirementSignatureContext(resolution: resolution)
                 if context.isNone() { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "selected requirement has no clause environment", failureDomain: <FailureDomain.Internal />) /> }
                 return self.readRequirementBounds(signature: context.unwrap(), methodArguments: arguments)
             }
             StaticMemberResolution.Provided(proof: val proof, traitIdx: _, callee: val callee) => {
-                return self.sourceProvidedCallBounds(callee: callee, receiver: receiverTerm, arguments: arguments, proof: proof)
+                if self.isAuthoredProvidedDeclaration(function: callee) {
+                    return self.sourceProvidedCallBounds(callee: callee, receiver: receiverTerm, arguments: arguments, proof: proof)
+                }
+                // Synthetic forwarding selects an implementation placement.
+                // Its obligations belong to the implementation's declaration.
+                val indices = self.sourceDeclarationCallBoundIndices(functionIndex: callee)
+                if indices.count() == 0U64 { return <Result.Ok value=[] /> }
+                val declaration = self.arena.functionAt(index: callee)
+                val environment = try self.recordedDirectCallEnvironment(function: declaration, receiverTerm: receiverTerm, typeArgs: arguments, proof: proof)
+                return self.sourceDeclarationCallBounds(indices: indices, signature: <SourceCallSignature.Direct environment=environment />)
             }
             StaticMemberResolution.Missing => { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "deferred declaration obligation has no selected member") /> }
         }

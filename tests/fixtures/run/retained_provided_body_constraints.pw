@@ -1,10 +1,12 @@
 use /Frontend only { Comp, FrontendInput, analyzeFrontend }
-use /Ir only { CallableConstraintEvidence, FuncBound, InstanceEnvironment }
+use /Ir only { CallableConstraintEvidence, CallTemplateKind, FuncBound, InstanceEnvironment }
+use /SourceTypeUses only { SourceTypeUses }
+use /Diag only { FailureDomain }
 use /SourceAccess only { SourceAccess }
 use @Std/Io only { print }
 fn main() {
     mut val compiler = <Comp />
-    match analyzeFrontend(c: inout compiler, input: <FrontendInput.Text text="trait Marker {{ fn value() -> I64 }}\ntrait Root {{ fn root() -> I64 }}\npub impl Root {{\n    fn forward[T](value: T) -> I64 where T: Marker {{ return accept(value: value) }}\n}}\nstruct Item {{}}\npub impl Item {{ factory }}\nimpl Item as Marker {{ fn value() -> I64 {{ return 42I64 }} }}\nimpl Item as Root {{ fn root() -> I64 {{ return 0I64 }} }}\nfn accept[T](value: T) -> I64 where T: Marker {{ return value.value() }}\nfn caller[R, T](receiver: R, value: T) -> I64 where R: Root, T: Marker {{ return receiver.forward(value: value) }}\nfn main() {{\n    val result = caller(receiver: <Item />, value: <Item />)\n}}\n" path="provided-constraints.pw" />, sources: <SourceAccess stdRoot=[] />) {
+    match analyzeFrontend(c: inout compiler, input: <FrontendInput.Text text="trait Marker {{ fn value() -> I64 }}\ntrait Root {{ fn root() -> I64 }}\npub impl Root {{\n    fn forward[T](value: T) -> I64 where T: Marker {{ return accept(value: value) }}\n}}\nstruct Item {{}}\npub impl Item {{ factory }}\nimpl Item as Marker {{ fn value() -> I64 {{ return 42I64 }} }}\nimpl Item as Root {{ fn root() -> I64 {{ return 0I64 }} }}\nfn accept[T](value: T) -> I64 where T: Marker {{ return value.value() }}\nfn caller[R, T](receiver: R, value: T) -> I64 where R: Root, T: Marker {{ return receiver.forward(value: value) }}\nfn main() {{\n    val result = caller(receiver: <Item />, value: <Item />)\n    val direct = <Item />.forward(value: <Item />)\n}}\n" path="provided-constraints.pw" />, sources: <SourceAccess stdRoot=[] />) {
         Result.Ok(value: _) => {}
         Result.Err(error: val diagnostic) => { panic(diagnostic.message) }
     }
@@ -34,5 +36,28 @@ fn main() {
         index += 1U64
     }
     if !found { panic("provided call did not demand its body") }
+    mut val direct = compiler.callTemplateCount()
+    for position in 0U64..<compiler.callTemplateCount() {
+        val template = compiler.callTemplateAt(index: position)
+        match template.kind {
+            CallTemplateKind.Direct(callee: val callee, receiver: _, args: _, calleeTypeArgs: _, proofId: _) => {
+                val function = compiler.arena.functionAt(index: callee)
+                if function.nameId == name && function.isProvided { direct = position break }
+            }
+            _ => {}
+        }
+    }
+    if direct == compiler.callTemplateCount() { panic "direct provided selection setup failed" }
+    compiler.checkCallTemplateSelection(templateIndex: direct).unwrap()
+    compiler.sourceTypeUses = <SourceTypeUses />
+    match compiler.checkCallTemplateSelection(templateIndex: direct) {
+        Result.Ok(value: _) => { panic "direct provided arguments accepted without their authored signature" }
+        Result.Err(error: val error) => {
+            match error.failureDomain {
+                FailureDomain.Internal => {}
+                _ => { panic(error.message) }
+            }
+        }
+    }
     print("retained-provided-body-constraints")
 }
