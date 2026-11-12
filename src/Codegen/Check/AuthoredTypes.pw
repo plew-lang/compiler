@@ -770,13 +770,8 @@ impl Comp {
                     for clause in admitted.clauses {
                         if clause.assumption == assumption {
                             val prepared = try self.retainedSignatureClause(scope: clause.scope, id: clause.source, offset: offset)
-                            if premise.steps.count() == 0U64 {
-                                val context = <SignatureRecipeContext.Provided owner=function />
-                                val bound = try self.readAuthoredSignatureClause(prepared: prepared, proofs: admitted.proofs, context: context, environment: environment, memo: inout memo, onlyMember: member)
-                                return self.readSelectedSignatureProjection(bound: bound, selected: <Optional.None />, receiver: receiver, selector: selector, arguments: arguments, member: member, offset: offset)
-                            }
-                            val root = self.substituteRetainedBound(bound: <TraitBound subject=prepared.subject constraint=prepared.constraint offset=prepared.parameter.nameStart />, environment: environment, selfRef: environment.receiverRef, itemRef: 0U64)
-                            val bound = self.supertraitBoundThroughSteps(root: root, steps: premise.steps)
+                            val context = <SignatureRecipeContext.Provided owner=function />
+                            val bound = try self.readSignatureProjectionClause(prepared: prepared, proofs: admitted.proofs, context: context, environment: environment, memo: inout memo, steps: premise.steps, member: member, offset: offset)
                             return self.readSelectedSignatureProjection(bound: bound, selected: <Optional.None />, receiver: receiver, selector: selector, arguments: arguments, member: member, offset: offset)
                         }
                     }
@@ -843,14 +838,12 @@ impl Comp {
                 } else { give <Optional.None /> }
                 return self.readSelectedSignatureProjection(bound: bound, selected: selected, receiver: receiver, selector: selector, arguments: arguments, member: member, offset: offset)
             }
-            if premise.steps.count() == 0U64 {
-                val clause = self.rawRequirementPremises[index]
-                val prepared = try self.retainedSignatureClause(scope: interface.scope, id: clause.sourceClause, offset: offset)
-                val admitted = self.authoredRequirementViews[interface.scope]
-                val context = <SignatureRecipeContext.Requirement signature=interface />
-                val bound = try self.readAuthoredSignatureClause(prepared: prepared, proofs: admitted.proofs, context: context, environment: environment, memo: inout memo, onlyMember: member)
-                return self.readSelectedSignatureProjection(bound: bound, selected: <Optional.None />, receiver: receiver, selector: selector, arguments: arguments, member: member, offset: offset)
-            }
+            val clause = self.rawRequirementPremises[index]
+            val prepared = try self.retainedSignatureClause(scope: interface.scope, id: clause.sourceClause, offset: offset)
+            val admitted = self.authoredRequirementViews[interface.scope]
+            val context = <SignatureRecipeContext.Requirement signature=interface />
+            val bound = try self.readSignatureProjectionClause(prepared: prepared, proofs: admitted.proofs, context: context, environment: environment, memo: inout memo, steps: premise.steps, member: member, offset: offset)
+            return self.readSelectedSignatureProjection(bound: bound, selected: <Optional.None />, receiver: receiver, selector: selector, arguments: arguments, member: member, offset: offset)
         }
         if premise.source.isSome() {
             match premise.source.unwrap() {
@@ -1030,6 +1023,82 @@ impl Comp {
             bounds.append(try self.readAuthoredSignatureClause(prepared: prepared, proofs: admitted.proofs, context: context, environment: environment, memo: inout memo))
         }
         return <Result.Ok value=bounds />
+    }
+
+    inout fn readSignatureProjectionClause(prepared: PreparedProjectionBound, proofs: Array[AuthoredTypeViewProof], context: SignatureRecipeContext, environment: InstanceEnvironment, memo: inout Dictionary[U64, AuthoredRecipeRead], steps: Array[SupertraitRef], member: U64, offset: U64) -> Result[TraitBound, CompileDiagnostic] {
+        if steps.count() == 0U64 {
+            return self.readAuthoredSignatureClause(prepared: prepared, proofs: proofs, context: context, environment: environment, memo: inout memo, onlyMember: member)
+        }
+        val traitIndex = steps[0U64].traitIndex
+        if traitIndex >= self.decls.traitCount() || self.decls.traitAt(index: traitIndex).nameStart != prepared.constraint.key.owner {
+            return <Result.Err error=self.diagnosticAt(offset: offset, msg: "signature premise lost its selected supertrait path", failureDomain: <FailureDomain.Internal />) />
+        }
+        val declaration = self.decls.traitAt(index: traitIndex)
+        if declaration.typeParams.count() != prepared.arguments.count() {
+            return <Result.Err error=self.diagnosticAt(offset: offset, msg: "signature premise has incomplete trait arguments", failureDomain: <FailureDomain.Internal />) />
+        }
+        // Interpret the selected edges in the root trait's own vocabulary.
+        // Its binders and unconstrained associated projections identify exactly
+        // which source expressions the terminal signature uses.
+        mut val parameters: Array[U64] = []
+        for parameter in self.copyTraitBinds(binds: declaration.typeParams) {
+            parameters.append(self.pushType(t: <TypeRef nameStart=parameter.nameStart nameLen=parameter.nameLen nameId=parameter.nameId paramId=parameter.paramId args=[] />))
+        }
+        val symbolic = <TraitBound subject=self.lexicalSelfTerm(parameter: declaration.selfParamId) constraint=<TraitConstraint key=<TraitInstanceKey owner=declaration.nameStart positionalArgs=parameters /> assocPredicates=[] /> offset=offset />
+        val terminal = self.supertraitBoundThroughSteps(root: symbolic, steps: steps)
+        if terminal.subject == 0U64 {
+            return <Result.Err error=self.diagnosticAt(offset: offset, msg: "signature premise lost its selected supertrait path", failureDomain: <FailureDomain.Internal />) />
+        }
+        val subject = try self.readAuthoredClauseType(recipe: prepared.subjectRecipe, ref: prepared.subject, proofs: proofs, context: context, environment: environment, memo: inout memo)
+        val read = <InheritedSignatureRead symbolic=symbolic subject=subject prepared=prepared proofs=proofs context=context environment=environment />
+        mut val arguments: Array[U64] = []
+        for argument in terminal.constraint.key.positionalArgs {
+            arguments.append(try self.readInheritedSignatureTerm(ref: argument, read: read, memo: inout memo))
+        }
+        mut val predicates: Array[TraitAssocPredicate] = []
+        for predicate in terminal.constraint.assocPredicates {
+            if predicate.member == member {
+                val value = try self.readInheritedSignatureTerm(ref: predicate.value, read: read, memo: inout memo)
+                predicates.append(<TraitAssocPredicate member=predicate.member value=value span=predicate.span />)
+            }
+        }
+        return <Result.Ok value=<TraitBound subject=subject constraint=<TraitConstraint key=<TraitInstanceKey owner=terminal.constraint.key.owner positionalArgs=arguments /> positionalArgsOpen=terminal.constraint.positionalArgsOpen assocPredicates=predicates /> offset=terminal.offset /> />
+    }
+
+    inout fn readInheritedSignatureTerm(ref: U64, read: InheritedSignatureRead, memo: inout Dictionary[U64, AuthoredRecipeRead]) -> Result[U64, CompileDiagnostic] {
+        if self.arena.typeIsClosed(ref: ref) { return <Result.Ok value=ref /> }
+        val term = self.arena.typeAt(index: ref)
+        val key = read.symbolic.constraint.key
+        val prepared = read.prepared
+        mut val replacement = 0U64
+        if term.assocNameId != 0U64 {
+            if self.associatedProjectionTraitOwner(projection: term) == key.owner && self.typeRefEq(a: self.typeTermProjectionReceiver(t: term), b: read.symbolic.subject) && self.sameResolvedTypeRefs(a: term.assocTraitArgs, b: key.positionalArgs) {
+                for index in 0U64..<prepared.predicateRecipes.count() {
+                    val predicate = prepared.constraint.assocPredicates[index]
+                    if predicate.member == term.assocNameId {
+                        return self.readAuthoredClauseType(recipe: prepared.predicateRecipes[index], ref: predicate.value, proofs: read.proofs, context: read.context, environment: read.environment, memo: inout memo)
+                    }
+                }
+            }
+        } else if term.paramId != 0U64 {
+            if term.paramId == self.arena.typeTermAt(index: read.symbolic.subject).paramId {
+                replacement = read.subject
+            } else {
+                for index in 0U64..<key.positionalArgs.count() {
+                    if term.paramId == self.arena.typeTermAt(index: key.positionalArgs[index]).paramId {
+                        replacement = try self.readAuthoredClauseType(recipe: prepared.arguments[index], ref: prepared.constraint.key.positionalArgs[index], proofs: read.proofs, context: read.context, environment: read.environment, memo: inout memo)
+                        break
+                    }
+                }
+            }
+        }
+        mut val children: Array[U64] = []
+        for index in 0U64..<self.typeTermRefChildCount(ref: ref) {
+            children.append(try self.readInheritedSignatureTerm(ref: self.typeTermRefChildRef(ref: ref, index: index), read: read, memo: inout memo))
+        }
+        val rebuilt = self.rebuildTypeTermChildren(ref: ref, children: children)
+        if replacement == 0U64 { return <Result.Ok value=rebuilt /> }
+        return <Result.Ok value=self.typeRefWithAddedViewSources(ref: replacement, additions: self.arena.typeViewSources(ref: rebuilt)) />
     }
 
     inout fn readAuthoredSignatureClause(prepared: PreparedProjectionBound, proofs: Array[AuthoredTypeViewProof], context: SignatureRecipeContext, environment: InstanceEnvironment, memo: inout Dictionary[U64, AuthoredRecipeRead], onlyMember: U64 = 0U64) -> Result[TraitBound, CompileDiagnostic] {

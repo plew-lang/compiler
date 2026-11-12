@@ -7,9 +7,8 @@ use /Frontend only { Comp, FrontendInput, analyzeFrontendDeclarations }
 use /SourceAccess only { SourceAccess }
 use /SourceTypeUses only { SourceTypeUses }
 use /Ir only { TypeRef }
-fn checkRequirementWhereProjection() {
+fn checkRequirementWhereProjection(source: String) {
     mut val compiler = <Comp />
-    val source = "trait Source {{ type Item }} trait Marker {{}} trait Service {{ fn read[T,U](value: T, other: U) where U: Source[Item=Bool], T: Source[Item=U#Source.Item], T#Source.Item: Marker }} fn probe[R,T,U](receiver: R, value: T, other: U) where R: Service {{}}"
     analyzeFrontendDeclarations(c: inout compiler, input: <FrontendInput.Text text=source path="clause-reader.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
     val owner = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "probe").nameId)
     val declaration = compiler.arena.functionAt(index: owner)
@@ -167,7 +166,10 @@ fn checkProvidedSignature() {
 }
 
 fn main() {
-    checkRequirementWhereProjection()
+    checkRequirementWhereProjection(source: "trait Source {{ type Item }} trait Marker {{}} trait Service {{ fn read[T,U](value: T, other: U) where U: Source[Item=Bool], T: Source[Item=U#Source.Item], T#Source.Item: Marker }} fn probe[R,T,U](receiver: R, value: T, other: U) where R: Service {{}}")
+    checkRequirementWhereProjection(source: "trait Source {{ type Item }} trait Parent {{ type Output }} trait Child[Element]: Parent[Output=Element] {{}} trait Marker {{}} trait Service {{ fn read[T,U](value: T, other: U) where U: Source[Item=Bool], T: Child[U#Source.Item], T#Parent.Output: Marker }} fn probe[R,T,U](receiver: R, value: T, other: U) where R: Service {{}}")
+    checkRequirementWhereProjection(source: "trait Source {{ type Item }} trait Parent {{ type Output }} trait Child: Parent[Output=Own] {{ type Own }} trait Marker {{}} trait Service {{ fn read[T,U](value: T, other: U) where U: Source[Item=Bool], T: Child[Own=U#Source.Item], T#Parent.Output: Marker }} fn probe[R,T,U](receiver: R, value: T, other: U) where R: Service {{}}")
+    checkRequirementWhereProjection(source: "trait Source {{ type Item }} trait Parent {{ type Output }} trait Middle[Element]: Parent[Output=Element] {{}} trait Child[Element]: Middle[Element] {{}} trait Marker {{}} trait Service {{ fn read[T,U](value: T, other: U) where U: Source[Item=Bool], T: Child[U#Source.Item], T#Parent.Output: Marker }} fn probe[R,T,U](receiver: R, value: T, other: U) where R: Service {{}}")
     checkProvidedWhereProjection()
     checkProvidedWhereClause()
     checkProvidedSignature()

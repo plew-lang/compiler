@@ -459,6 +459,16 @@ struct InstantiatedCallableConstraints {
 }
 impl InstantiatedCallableConstraints { factory }
 
+struct InheritedSignatureRead {
+    val symbolic: TraitBound
+    val subject: U64
+    val prepared: PreparedProjectionBound
+    val proofs: Array[AuthoredTypeViewProof]
+    val context: SignatureRecipeContext
+    val environment: InstanceEnvironment
+}
+impl InheritedSignatureRead { factory }
+
 struct AuthoredRecipeRead {
     val term: U64
     val reading: Bool = false

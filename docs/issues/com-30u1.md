@@ -830,3 +830,51 @@ Keep the existing controls where an unused sibling equation or argument
 mentions the inherited output. Check other inherited associated-premise
 paths during independent review rather than generalizing the direct-path
 validation to them without evidence.
+
+## Inherited where-clause recipe replay
+
+Raw requirements and provided signatures share the reader for a selected
+where premise. For an inherited premise, the reader follows the saved path
+in the declaring trait's own type parameters and associated projections.
+It reads the source recipes only for the terminal instance's positional
+arguments and selected output. The raw bound mirror no longer supplies the
+result of either where-premise reader.
+
+`existential_symbolic_result` reaches the intended assertion on
+`25141343` when `Child[U#Source.Item]` should imply a Bool output on Parent.
+The new candidate also passes the associated predicate and two-edge cases.
+Isolated provided and raw result readers both reject when the exact proof
+for `U#Source.Item` is removed. Two separate result-only controls still
+read I64 when an unused root argument or predicate refers to that same
+constant parent output. A public provided call with the inherited where
+constraint passes check, JIT and native execution. Build
+`20261112T171551-build-b076fe`, candidate `715bb5cd`, generation
+`20261112T172227-gen-14b2b6`, and five targeted check/native fixtures
+passed. The four public fixtures also passed JIT. Same-source medians
+were 6.696342 s and 6.664377 s with all eight LLVM outputs identical.
+
+### Independent review findings under investigation
+
+Three legal source controls still fail on `715bb5cd`:
+
+- `type Input: Source` with `Source: Root` and a requirement returning
+  `Input#Root.Item` cannot read the associated clause proof through its
+  terminal supertrait path. A concrete implementation returning I64 is
+  rejected even though Entry's Root conformance binds Item to I64.
+- `trait Service: Root { fn fetch() -> Self#Root.Item }` similarly
+  rejects an I64 implementation when the output is supplied by the
+  concrete Root witness. Writing a constant Item on Service's parent edge
+  already passes. This path has no associated-clause premise.
+- A provided method returning `Input#Source.Item` on Service with
+  `type Input: Source` still leaves the concrete result symbolic when
+  a caller uses it as a method receiver. The provided reader does not
+  consume the associated-clause proof on its selected Self.
+
+The associated premise's prerequisite path to the member's owner is
+distinct from the terminal path from its declared bound to the requested
+trait. Check those paths separately. No legal source control for a nested
+projection over an inherited associated member has yet been established.
+The explicit double-projection spelling is currently rejected as a
+nonfinal projection. Also verify that fixed-receiver proof reuse has a
+clear admission/replay boundary under evidence removal. The review is
+ongoing and this task remains open.
