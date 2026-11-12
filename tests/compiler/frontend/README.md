@@ -345,9 +345,10 @@ frame restoration, and canonical trait owner publication.
 `ImplProjectionBoundOrigin.pw` checks that two methods reuse a single
 impl-owned bound argument in signature, body and default projections. Execute
 `syntax`, `value`, `syntax shadow`, `value shadow`, `syntax later`,
-`value later`, `value qualified` and `value recovery`. The controls cover same-spelled binders,
+`value later`, `value qualified`, `value recovery` and `value receiverRecovery`. The controls cover same-spelled binders,
 later clauses, nonmember filtering, failed frame restoration and the value
-adapter's legacy name-only rows.
+adapter's legacy name-only rows. Receiver recovery checks that a rejected
+impl cannot authorize its already registered member's implicit receiver premise.
 
 `AuthoredRecipeIntegrity.pw` checks the admitted constructor graph against the
 canonical child visitor. Execute `valid`, `shape`, `term`, `label`, `forged`,

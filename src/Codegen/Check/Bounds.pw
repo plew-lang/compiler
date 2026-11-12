@@ -26,6 +26,22 @@ pub impl Comp {
         return self.callTemplateLexicalRoots.getOr(key: fnIdx, fallback: fnIdx)
     }
 
+    fn hasMethodReceiverAssumption(function: U64) -> Bool {
+        if !functionHasTraitReceiver(self.arena, self.decls, fnIdx: function) { return false }
+        match self.sourceTypeUses.methodScopeFor(function: function) {
+            Optional.Some(v: val method) => {
+                // A successful earlier member can be registered before a
+                // later member rejects the entire originating impl.
+                match self.sourceTypeUses.completedMethodImplementation(method: method) {
+                    Optional.Some(v: val owner) => { return owner.receiverTrait == self.arena.functionAt(index: function).recvStart }
+                    Optional.None => { return false }
+                }
+            }
+            // Generated callable forms have their own function identity.
+            Optional.None => { return true }
+        }
+    }
+
     fn functionBoundAssumptions(fnIdx: U64) -> Array[DeclarationBoundRef] {
         // A closure owns its call/body identity, but its generic assumptions
         // are declared by its lexical function. This mapping is published
@@ -35,7 +51,7 @@ pub impl Comp {
         for index in self.decls.funcBounds.indices(owner: owner) {
             result.append(<DeclarationBoundRef.Function index=index />)
         }
-        if functionHasTraitReceiver(self.arena, self.decls, fnIdx: owner) { result.append(<DeclarationBoundRef.MethodReceiver index=owner />) }
+        if self.hasMethodReceiverAssumption(function: owner) { result.append(<DeclarationBoundRef.MethodReceiver index=owner />) }
         return result
     }
 
@@ -55,7 +71,7 @@ pub impl Comp {
             DeclarationBoundRef.Conformance(val index) => { return index < self.decls.conformBoundPool.count() }
             DeclarationBoundRef.TraitSubject(val index) => { return index < self.decls.conformCount() }
             DeclarationBoundRef.AssociatedType(val index) => { return index < self.arena.associatedBoundEvidenceCount() }
-            DeclarationBoundRef.MethodReceiver(val index) => { return functionHasTraitReceiver(self.arena, self.decls, fnIdx: index) }
+            DeclarationBoundRef.MethodReceiver(val index) => { return self.hasMethodReceiverAssumption(function: index) }
             DeclarationBoundRef.Requirement(val index) => { return index < self.arena.requirementBoundEvidenceCount() }
             DeclarationBoundRef.Interface(val index) => { return self.interfaceEvidenceIsValid(index: index) }
         }

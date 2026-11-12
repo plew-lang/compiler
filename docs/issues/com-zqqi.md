@@ -46,3 +46,19 @@ premise. Adding the direct Project premise passes; expressing the same
 invalid signature as a free function rejects at the projection with the
 expected source diagnostic. This confirms the existing admission rule can
 be reused and the method path is missing the handoff.
+
+## Failed owner checkpoint
+
+`ImplProjectionBoundOrigin value receiverRecovery` registers a method of a
+trait receiver, then rejects a later member of the same impl. On `1f9a99d6`
+the earlier method still contributes an implicit receiver premise. The fix
+ties authored methods to their exact source scope and requires completion of
+the parent before either enumerating or validating that premise. A completed
+impl still supplies the premise. Generated callable identities continue to
+use their existing evidence path.
+
+Build `20261112T110559-build-383a49` produced candidate `61e6af2d`.
+All nine `ImplProjectionBoundOrigin` cases passed. The retained trait-subject,
+Unit forwarding and default callable-form fixtures passed in check, JIT and
+AOT. The unused method signature RED and the selected signature/body
+handoff remain open.

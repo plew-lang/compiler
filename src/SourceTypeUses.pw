@@ -103,6 +103,7 @@ pub struct SourceTypeUses {
     mut val declarationUses: Array[Array[U64]] = []
     mut val signatures: Array[AuthoredFunctionSignature] = []
     mut val functionSignatures: Dictionary[U64, U64] = [:]
+    mut val methodScopes: Dictionary[U64, U64] = [:]
 }
 pub impl SourceTypeUses {
     factory
@@ -132,6 +133,20 @@ pub impl SourceTypeUses {
         if token == 0U64 || token > self.scopes.count() { return <Optional.None /> }
         return <Optional.Some v=self.scopes[token - 1U64] />
     }
+    fn methodScopeFor(function: U64) -> Optional[SourceTypeScope] {
+        return self.scopeAt(token: self.methodScopes.getOr(key: function, fallback: 0U64))
+    }
+
+    fn completedMethodImplementation(method: SourceTypeScope) -> Optional[SourceImplementationOwner] {
+        match method.state { SourceTypeScopeState.Lowered => {} _ => { return <Optional.None /> } }
+        match self.scopeAt(token: method.parent) {
+            Optional.Some(v: val parent) => {
+                match parent.state { SourceTypeScopeState.Lowered => { return parent.implementation } _ => {} }
+            }
+            Optional.None => {}
+        }
+        return <Optional.None />
+    }
     fn useAt(index: U64) -> Optional[AuthoredTypeUse] {
         if index >= self.uses.count() { return <Optional.None /> }
         return <Optional.Some v=self.uses[index] />
@@ -148,9 +163,16 @@ pub impl SourceTypeUses {
         val scope = self.scopes[token - 1U64]
         if scope.function.isSome() { return false }
         match scope.kind {
-            SourceTypeScopeKind.FreeFunction | SourceTypeScopeKind.Method => {
+            SourceTypeScopeKind.FreeFunction => {
                 if token != self.active { return false }
                 match scope.state { SourceTypeScopeState.Lowering => {} _ => { return false } }
+            }
+            SourceTypeScopeKind.Method => {
+                if token != self.active || scope.parent == 0U64 || self.methodScopes.contains(key: function) { return false }
+                val parent = self.scopes[scope.parent - 1U64]
+                match parent.kind { SourceTypeScopeKind.Implementation => {} _ => { return false } }
+                match scope.state { SourceTypeScopeState.Lowering => {} _ => { return false } }
+                self.methodScopes[function] = token
             }
             SourceTypeScopeKind.ExternSignature => {
                 match scope.state { SourceTypeScopeState.Lowered => {} _ => { return false } }
