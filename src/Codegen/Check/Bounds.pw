@@ -798,7 +798,7 @@ pub impl Comp {
     // Read only equalities entailed by this authored bound and its parents.
     // Traversing a constraint substitutes its declaring trait's binders; it
     // does not search concrete implementations or create a static witness.
-    inout fn traitProjectionEquality(bound: TraitBound, receiver: U64, owner: U64, arguments: Array[U64], member: U64, context: TraitBound, projectionPath: Array[U64], path: Array[U64] = [], retainPath: Bool = false, steps: Array[SupertraitRef] = []) -> TraitProjectionEquality {
+    inout fn traitProjectionEquality(bound: TraitBound, receiver: U64, owner: U64, arguments: Array[U64], member: U64, context: TraitBound, projectionPath: Array[U64], path: Array[U64] = [], retainPath: Bool = false, steps: Array[SupertraitRef] = [], sourceOwners: Array[U64] = []) -> TraitProjectionEquality {
         if !self.typeRefEq(a: bound.subject, b: receiver) { return <TraitProjectionEquality.Missing /> }
         for visited in path { if visited == bound.constraint.key.owner { return <TraitProjectionEquality.Missing /> } }
         val traitIndex = self.decls.traitIndexByOffset(offset: bound.constraint.key.owner)
@@ -807,7 +807,12 @@ pub impl Comp {
         if available.isNone() { return <TraitProjectionEquality.Missing /> }
         val declaration = available.unwrap()
         mut val selected = <TraitProjectionEquality.Missing />
-        if bound.constraint.key.owner == owner {
+        mut val sourceMatches = sourceOwners.count() == 0U64
+        for sourceOwner in sourceOwners {
+            if sourceOwner == owner { sourceMatches = true }
+            for visited in path { if sourceOwner == visited { sourceMatches = true } }
+        }
+        if bound.constraint.key.owner == owner && sourceMatches {
             mut val normalizedArguments: Array[U64] = []
             for argument in bound.constraint.key.positionalArgs {
                 normalizedArguments.append(self.normalizeBoundProjectionTerm(ref: argument, context: context, projectionPath: projectionPath))
@@ -830,7 +835,7 @@ pub impl Comp {
             val parent = <TraitBound subject=bound.subject constraint=constraint offset=bound.offset />
             mut val nextSteps = steps
             if retainPath { nextSteps.append(<SupertraitRef traitIndex=traitIndex boundIndex=index />) }
-            selected = self.mergeTraitProjectionEquality(selected: selected, candidate: self.traitProjectionEquality(bound: parent, receiver: receiver, owner: owner, arguments: arguments, member: member, context: context, projectionPath: projectionPath, path: nextPath, retainPath: retainPath, steps: nextSteps))
+            selected = self.mergeTraitProjectionEquality(selected: selected, candidate: self.traitProjectionEquality(bound: parent, receiver: receiver, owner: owner, arguments: arguments, member: member, context: context, projectionPath: projectionPath, path: nextPath, retainPath: retainPath, steps: nextSteps, sourceOwners: sourceOwners))
             index += 1U64
         }
         return selected

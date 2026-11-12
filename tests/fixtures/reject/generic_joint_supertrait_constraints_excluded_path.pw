@@ -1,0 +1,16 @@
+trait Parent {
+    type Key
+    type Value
+    fn key() -> Key
+}
+trait First: Parent[Key=I64] {}
+trait Second: Parent[Value=Bool] {}
+trait Service: First + Second {}
+
+fn needs[T](value: T) -> I64 where T: Parent[Key=I64, Value=Bool] {
+    return value.key()
+}
+fn forwarding[T](value: T#First) -> I64 where T: Service {
+    return needs(value: value)
+}
+fn main() {}

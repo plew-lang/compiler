@@ -1,0 +1,36 @@
+use @Std/Io only { print }
+
+trait Parent {
+    type Key
+    type Value
+    fn key() -> Key
+}
+trait First: Parent[Key=I64] {}
+trait Second: Parent[Value=Bool] {}
+trait Service: First + Second {}
+trait ReversedService: Second + First {}
+
+struct Worker {}
+impl Worker as Parent {
+    type Key = I64
+    type Value = Bool
+    fn key() -> I64 { return 42I64 }
+}
+impl Worker as First {}
+impl Worker as Second {}
+impl Worker as Service {}
+impl Worker as ReversedService {}
+
+fn needs[T](value: T) -> I64 where T: Parent[Key=I64, Value=Bool] {
+    return value.key()
+}
+fn forwarding[T](value: T) -> I64 where T: Service {
+    return needs(value: value)
+}
+pub impl ReversedService {
+    fn forwardKey() -> I64 { return needs(value: self) }
+}
+fn main() {
+    print(forwarding(value: <Worker />))
+    print(<Worker />.forwardKey())
+}

@@ -1,0 +1,24 @@
+use @Std/Io only { print }
+
+trait Parent {
+    type Key
+    type Value
+}
+trait First: Parent[Key=I64] {}
+trait Second: Parent[Value=Bool] {}
+trait Service: First + Second {
+    fn get() -> Self#Parent.Key where Self: Parent[Key=I64, Value=Bool]
+}
+struct Worker {}
+impl Worker as Parent {
+    type Key = I64
+    type Value = Bool
+}
+impl Worker as First {}
+impl Worker as Second {}
+impl Worker as Service { fn get() -> I64 { return 42I64 } }
+fn main() {
+    val x: any Service = <Worker />
+    val y: I64 = x.get()
+    print(y)
+}

@@ -1,6 +1,6 @@
 ---
 id: com-80t4
-status: open
+status: in_progress
 deps: []
 links: []
 created: 2026-11-12T21:08:42Z
@@ -64,8 +64,8 @@ against each path independently; neither path alone provides both outputs.
 
 ## Requirement and Interface Consumer
 
-Independent review of candidate `34a254d6` reproduced the same rejection
-at the declaration of this requirement in `Service`:
+Independent review of candidate `34a254d6` reproduced the same rejection when calling this requirement through
+`any Service`. The diagnostic points to the requirement's where clause:
 
 ```plew
 fn get() -> Self#Parent.Key where Self: Parent[Key=I64, Value=Bool]
@@ -78,3 +78,28 @@ the requirement's where clause exercises the successful signature path
 in `inherited_associated_complementary_paths`. This is an actual
 prerequisite for [com-30u1](com-30u1.md), including signature validation
 and interface/provided replay through the shared proof repair.
+
+## Retained predicate checkpoint
+
+The selected inherited proof supplies the instance and its local output
+facts. When another output is needed from the same premise, acquisition
+records the exact associated projection and the declared path that proves
+its equation. Saved-plan comparison reads that equation by canonical
+receiver, owner and positional arguments with the same declaration root.
+Direct authored premises and executable witnesses retain their original
+output authority. Preferred-path lookup limits which sibling can supply
+the requested equation.
+
+Fixed carrier `34a254d6` rejects both
+`generic_joint_supertrait_constraints` and
+`interface_joint_supertrait_constraints`. Candidate `1a0e89e7` passed
+check, JIT and native for both, including a provided method under reverse
+supertrait order, and for six inherited-signature controls. Nine targeted
+negative controls preserved their diagnostics, including the new
+`generic_joint_supertrait_constraints_excluded_path` and existing opaque,
+conflicting, wrong-instance, and competing concrete-path controls.
+An explicit `#Service` that includes both branches still checks successfully.
+
+Standard build `20261112T211727-build-73997a` and generation
+`20261112T212101-gen-599d84` passed. Same-source medians were
+6.799868 s and 6.817552 s, with identical LLVM across all eight runs.
