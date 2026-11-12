@@ -2041,6 +2041,7 @@ pub struct InstanceEnvironment {
 // context. Trait parameters/associated outputs come from admitted evidence,
 // separately from method-owned binders; no member selection is repeated.
 pub enum SourceCallSignature {
+    RequirementParameters(types: Array[U64], environment: InstanceEnvironment)
     Direct(environment: InstanceEnvironment)
     Trait(bound: TraitBound, traitIndex: U64, environment: InstanceEnvironment)
 }

@@ -509,7 +509,7 @@ pub impl Comp {
             if requirement.nameId == nameId && self.paramsLabelsOk(params: requirement.params, args: args) {
                 val scope = try self.requireAdmittedRawRequirement(traitIndex: traitIndex, slot: index, offset: requirement.defOffset)
                 val callable = self.authoredRequirementViews[scope].declaration
-                val signatures = try self.requirementInterfaceParameterTypes(scope: scope, bound: bound, traitIndex: traitIndex)
+                val signatures = try self.requirementParameterTypes(signature: <RequirementSignatureRead scope=scope bound=bound />)
                 mut val values: Array[U64] = []
                 while values.count() < callable.typeParams.count() { values.append(0U64) }
                 val rank = try self.callableParameterTypeMatchRank(function: callable, args: args, signatures: signatures, receiver: bound.subject, initialValues: values)
@@ -1464,7 +1464,7 @@ pub impl Comp {
             if self.semanticExprTerm(exprId: argument) == 0U64 {
                 val position = self.paramIndexForArg(params: selected.function.params, args: args, argIdx: index)
                 val parameter = self.funcParamAt(params: selected.function.params, index: position)
-                val expected = try self.sourceCallSignatureParameter(ref: parameter.ty, signature: selected.signature)
+                val expected = try self.sourceCallArgumentType(parameter: parameter, position: position, signature: selected.signature)
                 if expected != 0U64 { try self.recordExpr(exprId: argument, chainHoleRef: chainHoleRef, expectedTerm: expected) }
             }
             index += 1U64

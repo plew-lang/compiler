@@ -548,7 +548,7 @@ impl Comp {
         val environment = self.requirementSignatureEnvironment(bound: bound, traitIndex: traitIndex)
         val interface = <RequirementSignatureRead scope=scope bound=bound />
         mut val memo: Dictionary[U64, AuthoredRecipeRead] = [:]
-        val terms = try self.readRequirementInterfaceParameters(admitted: admitted, interface: interface, environment: environment, memo: inout memo)
+        val terms = try self.readRequirementParameters(admitted: admitted, interface: interface, environment: environment, memo: inout memo)
         mut val passings: Array[CallArgumentPassing] = []
         for index in 0U64..<declaration.params.count() {
             val parameter = self.funcParamAt(params: declaration.params, index: index)
@@ -563,24 +563,38 @@ impl Comp {
         return <Result.Ok value=<ExistentialRequirementSignature receiverPassing=passing parameterTypes=terms argumentPassings=passings resultType=self.callableResultSlot(ref: result) /> />
     }
 
-    inout fn readRequirementInterfaceParameters(admitted: AuthoredRequirementSignature, interface: RequirementSignatureRead, environment: InstanceEnvironment, memo: inout Dictionary[U64, AuthoredRecipeRead]) -> Result[Array[U64], CompileDiagnostic] {
+    inout fn readRequirementParameters(admitted: AuthoredRequirementSignature, interface: RequirementSignatureRead, environment: InstanceEnvironment, memo: inout Dictionary[U64, AuthoredRecipeRead]) -> Result[Array[U64], CompileDiagnostic] {
         val parameters = admitted.declaration.params
         mut val terms: Array[U64] = []
         for index in 0U64..<parameters.count() {
-            val parameter = self.funcParamAt(params: parameters, index: index)
-            val occurrence = try self.signatureOccurrence(id: parameter.authoredTypeUse)
-            val read = try self.readAuthoredTypeRecipe(proofs: admitted.proofs, recipe: occurrence.recipe, environment: environment, memo: inout memo, interface: <Optional.Some v=interface />)
-            terms.append(read.term)
+            terms.append(try self.readRequirementParameter(admitted: admitted, index: index, interface: interface, environment: environment, memo: inout memo))
         }
         return <Result.Ok value=terms />
     }
 
-    inout fn requirementInterfaceParameterTypes(scope: U64, bound: TraitBound, traitIndex: U64) -> Result[Array[U64], CompileDiagnostic] {
-        val admitted = self.authoredRequirementViews[scope]
+    inout fn requirementParameterTypes(signature: RequirementSignatureRead) -> Result[Array[U64], CompileDiagnostic] {
+        val admitted = self.authoredRequirementViews[signature.scope]
         if admitted.declaration.params.count() == 0U64 { return <Result.Ok value=[] /> }
-        val environment = self.requirementSignatureEnvironment(bound: bound, traitIndex: traitIndex)
+        val environment = self.requirementSignatureEnvironment(bound: signature.bound, traitIndex: admitted.source.traitIndex)
         mut val memo: Dictionary[U64, AuthoredRecipeRead] = [:]
-        return self.readRequirementInterfaceParameters(admitted: admitted, interface: <RequirementSignatureRead scope=scope bound=bound />, environment: environment, memo: inout memo)
+        return self.readRequirementParameters(admitted: admitted, interface: signature, environment: environment, memo: inout memo)
+    }
+
+    inout fn readRequirementParameter(admitted: AuthoredRequirementSignature, index: U64, interface: RequirementSignatureRead, environment: InstanceEnvironment, memo: inout Dictionary[U64, AuthoredRecipeRead]) -> Result[U64, CompileDiagnostic] {
+        val parameter = self.funcParamAt(params: admitted.declaration.params, index: index)
+        val occurrence = try self.signatureOccurrence(id: parameter.authoredTypeUse)
+        if admitted.proofs.count() == 0U64 && self.arena.typeIsClosed(ref: occurrence.term) {
+            return <Result.Ok value=occurrence.term />
+        }
+        return <Result.Ok value=(try self.readAuthoredTypeRecipe(proofs: admitted.proofs, recipe: occurrence.recipe, environment: environment, memo: inout memo, interface: <Optional.Some v=interface />)).term />
+    }
+
+    inout fn requirementParameterTypeAt(signature: RequirementSignatureRead, index: U64) -> Result[U64, CompileDiagnostic] {
+        val admitted = self.authoredRequirementViews[signature.scope]
+        if index >= admitted.declaration.params.count() { return <Result.Ok value=0U64 /> }
+        val environment = self.requirementSignatureEnvironment(bound: signature.bound, traitIndex: admitted.source.traitIndex)
+        mut val memo: Dictionary[U64, AuthoredRecipeRead] = [:]
+        return self.readRequirementParameter(admitted: admitted, index: index, interface: signature, environment: environment, memo: inout memo)
     }
 
     inout fn requirementSignatureEnvironment(bound: TraitBound, traitIndex: U64) -> InstanceEnvironment {
@@ -592,17 +606,32 @@ impl Comp {
         return <InstanceEnvironment params=parameters args=values receiverRef=bound.subject />
     }
 
-    inout fn readStaticRequirementResult(scope: U64, bound: TraitBound, traitIndex: U64, proof: StaticConformanceProof) -> Result[U64, CompileDiagnostic] {
-        val admitted = self.authoredRequirementViews[scope]
+    inout fn staticRequirementSignatureContext(resolution: StaticMemberResolution) -> Result[Optional[RequirementSignatureRead], CompileDiagnostic] {
+        match resolution {
+            StaticMemberResolution.Requirement(proof: val proof, traitIdx: val traitIndex, reqIdx: val slot) => {
+                if traitIndex >= self.decls.traitCount() || slot >= self.decls.traitAt(index: traitIndex).reqs.count() { return <Result.Ok value=<Optional.None /> /> }
+                val bound = try self.staticProofBound(proof: proof, traitIdx: traitIndex)
+                if bound.subject == 0U64 { return <Result.Ok value=<Optional.None /> /> }
+                if (try self.interfaceProofRoot(proof: proof)) != 0U64 {
+                    return <Result.Err error=self.diagnosticAt(offset: bound.offset, msg: "universal interface evidence cannot authorize a static callable", failureDomain: <FailureDomain.Internal />) />
+                }
+                val scope = try self.requireAdmittedRawRequirement(traitIndex: traitIndex, slot: slot, offset: bound.offset)
+                return <Result.Ok value=<Optional.Some v=<RequirementSignatureRead scope=scope bound=bound selected=<Optional.Some v=proof /> /> /> />
+            }
+            _ => { return <Result.Ok value=<Optional.None /> /> }
+        }
+    }
+
+    inout fn readStaticRequirementResult(signature: RequirementSignatureRead) -> Result[U64, CompileDiagnostic] {
+        val admitted = self.authoredRequirementViews[signature.scope]
         val declaration = admitted.declaration
         if !declaration.hasRet {
             if declaration.isAsync { return <Result.Ok value=self.semanticCallableReturnTerm(function: declaration) /> }
             return <Result.Ok value=0U64 />
         }
-        val environment = self.requirementSignatureEnvironment(bound: bound, traitIndex: traitIndex)
-        val interpretation = <RequirementSignatureRead scope=scope bound=bound selected=<Optional.Some v=proof /> />
+        val environment = self.requirementSignatureEnvironment(bound: signature.bound, traitIndex: admitted.source.traitIndex)
         mut val memo: Dictionary[U64, AuthoredRecipeRead] = [:]
-        return self.readRequirementResult(interface: interpretation, environment: environment, memo: inout memo)
+        return self.readRequirementResult(interface: signature, environment: environment, memo: inout memo)
     }
 
     inout fn readRequirementResult(interface: RequirementSignatureRead, environment: InstanceEnvironment, memo: inout Dictionary[U64, AuthoredRecipeRead]) -> Result[U64, CompileDiagnostic] {

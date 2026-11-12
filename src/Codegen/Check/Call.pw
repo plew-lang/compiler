@@ -74,9 +74,11 @@ pub impl Comp {
             return <Result.Err error=self.diagnosticAt(offset: template.siteKey.originStart, msg: "internal error: selected dynamic call has no requirement") />
         }
         val source = try self.requireSourceInterfaceRoot(root: root, site: template.siteKey, receiver: template.receiverTypeTerm, traitIndex: traitIndex)
-        val function = self.traitReqAt(reqs: self.decls.traitAt(index: traitIndex).reqs, index: slot - 1U64)
+        val scope = try self.requireAdmittedRawRequirement(traitIndex: traitIndex, slot: slot - 1U64, offset: template.siteKey.originStart)
+        val function = self.authoredRequirementViews[scope].declaration
         val proof = <StaticConformanceProof.AssumedBound source=<DeclarationBoundRef.Interface index=root - 1U64 /> />
-        val signature = <SourceCallSignature.Trait bound=source.bound traitIndex=traitIndex environment=<InstanceEnvironment receiverRef=source.bound.subject proof=proof /> />
+        val types = try self.requirementParameterTypes(signature: <RequirementSignatureRead scope=scope bound=source.bound />)
+        val signature = <SourceCallSignature.RequirementParameters types=types environment=<InstanceEnvironment receiverRef=source.bound.subject proof=proof /> />
         return <Result.Ok value=<SourceCallParameterState.Selected function=function signature=signature /> />
     }
 
@@ -95,7 +97,7 @@ pub impl Comp {
             val parameter = self.funcParamAt(params: selected.function.params, index: position)
             val argument = self.argAt(args: args, index: index)
             try self.checkArgInoutMode(p: parameter, arg: argument)
-            val expected = try self.sourceCallSignatureParameter(ref: parameter.ty, signature: selected.signature)
+            val expected = try self.sourceCallArgumentType(parameter: parameter, position: position, signature: selected.signature)
             if expected == 0U64 { return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: selected call has no parameter type") /> }
             val type = self.typeInfoOfRef(ref: expected)
             try self.checkLitSpanCtx(id: argument.expr, tyStart: type.nameStart, tyLen: type.nameLen, isArray: type.kind == 3, ctxRef: expected)

@@ -587,7 +587,7 @@ pub impl Comp {
                         StaticMemberResolution.Requirement(proof: _, val traitIdx, val reqIdx) => {
                             val resolved = self.traitReqAt(reqs: self.decls.traitAt(index: traitIdx).reqs, index: reqIdx)
                             if resolved.isAnonymousFactory {
-                                val rank = try self.staticRequirementMatchRank(resolution: resolution, requirement: resolved, args: args)
+                                val rank = try self.staticRequirementMatchRank(resolution: resolution, args: args)
                                 if rank > bestRank {
                                     selected = resolution
                                     selectedTrait = traitIdx

@@ -31,7 +31,7 @@ inout fn existentialRequirementIsDispatchable(target: U64, traitIndex: U64, slot
     val source = try self.existentialSelfTerm(traitIndex: traitIndex)
     val bound = try self.existentialRequirementBound(target: target, traitIndex: traitIndex, receiver: source, offset: requirement.nameStart)
     val parameter = self.decls.traitAt(index: traitIndex).selfParamId
-    for input in (try self.requirementInterfaceParameterTypes(scope: scope, bound: bound, traitIndex: traitIndex)) {
+    for input in (try self.requirementParameterTypes(signature: <RequirementSignatureRead scope=scope bound=bound />)) {
         if self.typeTermContainsParameter(ref: input, parameter: parameter) { return <Result.Ok value=false /> }
     }
     return <Result.Ok value=true />

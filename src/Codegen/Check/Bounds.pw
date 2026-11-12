@@ -316,11 +316,16 @@ pub impl Comp {
         return <Result.Ok value=(try self.traitPatternProof(demand: <ConformanceProofDemand.SourceAdmission />, baseRef: receiverRef, traitId: traitId, traitOwner: traitOwner, traitArgs: <PatternTypeInput.Values values=traitArgs />, patternParams: patternParams, assumptions: assumptions)) />
     }
 
-    inout fn staticRequirementMatchRank(resolution: StaticMemberResolution, requirement: Func, args: ArgRange) -> Result[U64, CompileDiagnostic] {
-        match resolution {
-            StaticMemberResolution.Requirement(proof: val proof, traitIdx: val owner, reqIdx: _) => { return self.staticMemberMatchRank(proof: proof, traitIdx: owner, requirement: requirement, args: args) }
-            _ => { return <Result.Ok value=0U64 /> }
-        }
+    inout fn staticRequirementMatchRank(resolution: StaticMemberResolution, args: ArgRange) -> Result[U64, CompileDiagnostic] {
+        val context = try self.staticRequirementSignatureContext(resolution: resolution)
+        if context.isNone() { return <Result.Ok value=0U64 /> }
+        val signature = context.unwrap()
+        val requirement = self.authoredRequirementViews[signature.scope].declaration
+        if !self.paramsLabelsOk(params: requirement.params, args: args) { return <Result.Ok value=0U64 /> }
+        val types = try self.requirementParameterTypes(signature: signature)
+        mut val values: Array[U64] = []
+        while values.count() < requirement.typeParams.count() { values.append(0U64) }
+        return self.callableParameterTypeMatchRank(function: requirement, args: args, signatures: types, receiver: signature.bound.subject, initialValues: values)
     }
 
     // A tentative map contains holes, unlike a complete instance environment.
@@ -383,10 +388,11 @@ pub impl Comp {
         while index < declaration.reqs.count() {
             val requirement = self.traitReqAt(reqs: declaration.reqs, index: index)
             if requirement.nameId == memberId {
-                val rank = try self.staticMemberMatchRank(proof: proof, traitIdx: traitIdx, requirement: requirement, args: args)
+                val candidate = <StaticMemberResolution.Requirement proof=proof traitIdx=traitIdx reqIdx=index />
+                val rank = try self.staticRequirementMatchRank(resolution: candidate, args: args)
                 if rank == 2U64 && bestRank == 2U64 { return <Result.Err error=self.diagnosticAt(offset: requirement.nameStart, msg: "ambiguous call: multiple trait requirements match the arguments") /> }
                 if rank > bestRank {
-                    selected = <StaticMemberResolution.Requirement proof=proof traitIdx=traitIdx reqIdx=index />
+                    selected = candidate
                     bestRank = rank
                 }
             }
@@ -514,7 +520,7 @@ pub impl Comp {
         mut val found = false
         for candidate in candidates {
             val ranking = match candidate {
-                StaticMemberResolution.Requirement(proof: val proof, traitIdx: val owner, reqIdx: val requirement) => { give self.staticMemberMatchRank(proof: proof, traitIdx: owner, requirement: self.traitReqAt(reqs: self.decls.traitAt(index: owner).reqs, index: requirement), args: args) },
+                StaticMemberResolution.Requirement(proof: _, traitIdx: _, reqIdx: _) => { give self.staticRequirementMatchRank(resolution: candidate, args: args) },
                 StaticMemberResolution.Provided(proof: val proof, traitIdx: val owner, callee: val function) => { give self.staticMemberMatchRank(proof: proof, traitIdx: owner, requirement: self.arena.functionAt(index: function), args: args) },
                 StaticMemberResolution.Missing => <Result.Ok value=0U64 />,
             }
@@ -823,36 +829,18 @@ pub impl Comp {
     }
 
     inout fn staticRequirementParamType(resolution: StaticMemberResolution, args: ArgRange, argIdx: U64) -> Result[U64, CompileDiagnostic] {
-        match resolution {
-            StaticMemberResolution.Requirement(proof: _, traitIdx: val traitIdx, reqIdx: val reqIdx) => {
-                if traitIdx >= self.decls.traitCount() { return <Result.Ok value=0U64 /> }
-                val trait = self.decls.traitAt(index: traitIdx)
-                if reqIdx >= trait.reqs.count() { return <Result.Ok value=0U64 /> }
-                val requirement = self.traitReqAt(reqs: trait.reqs, index: reqIdx)
-                val parameter = self.paramIndexForArg(params: requirement.params, args: args, argIdx: argIdx)
-                return self.staticRequirementParamTypeAt(resolution: resolution, paramIdx: parameter)
-            }
-            _ => { return <Result.Ok value=0U64 /> }
-        }
+        val context = try self.staticRequirementSignatureContext(resolution: resolution)
+        if context.isNone() { return <Result.Ok value=0U64 /> }
+        val signature = context.unwrap()
+        val requirement = self.authoredRequirementViews[signature.scope].declaration
+        val parameter = self.paramIndexForArg(params: requirement.params, args: args, argIdx: argIdx)
+        return self.requirementParameterTypeAt(signature: signature, index: parameter)
     }
 
-    // Authored calls and operators consume the same proof-substituted
-    // signature. Proof variants are interpreted only by staticProofBound.
     inout fn staticRequirementParamTypeAt(resolution: StaticMemberResolution, paramIdx: U64) -> Result[U64, CompileDiagnostic] {
-        match resolution {
-            StaticMemberResolution.Requirement(proof: val proof, traitIdx: val traitIdx, reqIdx: val reqIdx) => {
-                if traitIdx >= self.decls.traitCount() { return <Result.Ok value=0U64 /> }
-                val traitDef = self.decls.traitAt(index: traitIdx)
-                if reqIdx >= traitDef.reqs.count() { return <Result.Ok value=0U64 /> }
-                val requirement = self.traitReqAt(reqs: traitDef.reqs, index: reqIdx)
-                if paramIdx >= requirement.params.count() { return <Result.Ok value=0U64 /> }
-                val bound = try self.staticProofBound(proof: proof, traitIdx: traitIdx)
-                if bound.subject == 0U64 { return <Result.Ok value=0U64 /> }
-                return <Result.Ok value=self.traitBoundTypeTerm(ref: self.funcParamAt(params: requirement.params, index: paramIdx).ty, bound: bound, traitIndex: traitIdx) />
-            }
-            _ => {}
-        }
-        return <Result.Ok value=0U64 />
+        val context = try self.staticRequirementSignatureContext(resolution: resolution)
+        if context.isNone() { return <Result.Ok value=0U64 /> }
+        return self.requirementParameterTypeAt(signature: context.unwrap(), index: paramIdx)
     }
 
     // Reify every occurrence of the selected trait's associated-output binder
@@ -949,54 +937,31 @@ pub impl Comp {
     // The latter belongs to this call, including associated projections rooted
     // in a method parameter (for example Output.Error).
     inout fn staticRequirementCallArguments(resolution: StaticMemberResolution, args: ArgRange) -> Result[Array[U64], CompileDiagnostic] {
-        match resolution {
-            StaticMemberResolution.Requirement(proof: _, traitIdx: val owner, reqIdx: val index) => {
-                val requirement = self.traitReqAt(reqs: self.decls.traitAt(index: owner).reqs, index: index)
-                mut val parameterTypes: Array[U64] = []
-                mut val parameter = 0U64
-                while parameter < requirement.params.count() {
-                    parameterTypes.append(try self.staticRequirementParamTypeAt(resolution: resolution, paramIdx: parameter))
-                    parameter += 1U64
-                }
-                return self.inferFnArgs(f: requirement, args: args, parameterTypes: parameterTypes)
-            }
-            _ => { return <Result.Ok value=[] /> }
-        }
+        val context = try self.staticRequirementSignatureContext(resolution: resolution)
+        if context.isNone() { return <Result.Ok value=[] /> }
+        val signature = context.unwrap()
+        val requirement = self.authoredRequirementViews[signature.scope].declaration
+        val types = try self.requirementParameterTypes(signature: signature)
+        return self.inferFnArgs(f: requirement, args: args, parameterTypes: types)
     }
 
     inout fn staticRequirementCallResultType(resolution: StaticMemberResolution, args: ArgRange) -> Result[U64, CompileDiagnostic] {
-        val result = try self.staticRequirementResultType(resolution: resolution)
-        match resolution {
-            StaticMemberResolution.Requirement(proof: _, val traitIdx, val reqIdx) => {
-                val requirement = self.traitReqAt(reqs: self.decls.traitAt(index: traitIdx).reqs, index: reqIdx)
-                if requirement.typeParams.count() != 0U64 {
-                    val arguments = try self.staticRequirementCallArguments(resolution: resolution, args: args)
-                    val environment = <InstanceEnvironment params=self.copyFuncBinds(binds: requirement.typeParams) args=arguments />
-                    return self.groundTermForBody(ref: result, environment: environment, selfRef: 0U64, itemRef: 0U64)
-                }
-            }
-            _ => {}
-        }
-        return <Result.Ok value=result />
+        val context = try self.staticRequirementSignatureContext(resolution: resolution)
+        if context.isNone() { return <Result.Ok value=0U64 /> }
+        val signature = context.unwrap()
+        val declaration = self.authoredRequirementViews[signature.scope].declaration
+        val result = try self.readStaticRequirementResult(signature: signature)
+        if declaration.typeParams.count() == 0U64 { return <Result.Ok value=result /> }
+        val types = try self.requirementParameterTypes(signature: signature)
+        val arguments = try self.inferFnArgs(f: declaration, args: args, parameterTypes: types)
+        val environment = <InstanceEnvironment params=self.copyFuncBinds(binds: declaration.typeParams) args=arguments />
+        return self.groundTermForBody(ref: result, environment: environment, selfRef: 0U64, itemRef: 0U64)
     }
 
     inout fn staticRequirementResultType(resolution: StaticMemberResolution) -> Result[U64, CompileDiagnostic] {
-        match resolution {
-            StaticMemberResolution.Requirement(proof: val proof, traitIdx: val traitIdx, reqIdx: val reqIdx) => {
-                if traitIdx >= self.decls.traitCount() { return <Result.Ok value=0U64 /> }
-                val traitDef = self.decls.traitAt(index: traitIdx)
-                if reqIdx >= traitDef.reqs.count() { return <Result.Ok value=0U64 /> }
-                val bound = try self.staticProofBound(proof: proof, traitIdx: traitIdx)
-                if bound.subject == 0U64 { return <Result.Ok value=0U64 /> }
-                val scope = try self.requireAdmittedRawRequirement(traitIndex: traitIdx, slot: reqIdx, offset: bound.offset)
-                if (try self.interfaceProofRoot(proof: proof)) != 0U64 {
-                    return <Result.Err error=self.diagnosticAt(offset: bound.offset, msg: "universal interface evidence cannot authorize a static callable", failureDomain: <FailureDomain.Internal />) />
-                }
-                return self.readStaticRequirementResult(scope: scope, bound: bound, traitIndex: traitIdx, proof: proof)
-            }
-            _ => {}
-        }
-        return <Result.Ok value=0U64 />
+        val context = try self.staticRequirementSignatureContext(resolution: resolution)
+        if context.isNone() { return <Result.Ok value=0U64 /> }
+        return self.readStaticRequirementResult(signature: context.unwrap())
     }
 
     // A view is an unordered source set.  Bounds may use any active extension

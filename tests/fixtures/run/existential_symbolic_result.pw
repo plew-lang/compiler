@@ -9,7 +9,7 @@ use /SourceTypeUses only { SourceTypeUses }
 use /Ir only { TypeRef }
 fn main() {
     mut val c = <Comp />
-    val source = "struct Value {{}}\ntrait Cursor {{ type Item fn read() -> Item fn alternate() -> Bool }}\ntrait Source {{ type Iter fn iterator() -> Self#Source.Iter fn other() -> Bool fn hidden(other: Self) -> Bool }}\nfn test[T](values: any Source[Iter=T]) where T: Cursor[Item=Value] {{}}\n"
+    val source = "struct Value {{}}\ntrait Cursor {{ type Item fn read(value: Item) -> Item fn alternate(value: Bool) -> Bool }}\ntrait Source {{ type Iter fn iterator() -> Self#Source.Iter fn other() -> Bool fn hidden(other: Self) -> Bool }}\nfn test[T](values: any Source[Iter=T]) where T: Cursor[Item=Value] {{}}\n"
     analyzeFrontendDeclarations(c: inout c, input: <FrontendInput.Text text=source path="cursor.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
     val bound = c.decls.funcBounds.at(index: 0U64)
     val function = c.arena.functionAt(index: bound.fnIdx)
@@ -73,10 +73,14 @@ fn main() {
     val staticCall = <StaticMemberResolution.Requirement proof=<StaticConformanceProof.AssumedBound source=<DeclarationBoundRef.Function index=0U64 /> /> traitIdx=cursorTrait reqIdx=0U64 />
     val staticResult = c.staticRequirementResultType(resolution: staticCall).unwrap()
     assert(c.typeRefEq(a: staticResult, b: bound.constraint.assocPredicates[0U64].value))
+    val staticParameter = c.staticRequirementParamTypeAt(resolution: staticCall, paramIdx: 0U64).unwrap()
+    assert(c.typeRefEq(a: staticParameter, b: staticResult))
     val staticDeclaration = c.traitReqAt(reqs: cursorRequirements, index: 0U64)
     c.decls.traitReqPool[cursorRequirements.start] = c.traitReqAt(reqs: cursorRequirements, index: 1U64)
     val staticRetained = c.staticRequirementResultType(resolution: staticCall).unwrap()
     if !c.typeRefEq(a: staticRetained, b: staticResult) { panic "raw trait row replaced the retained static signature" }
+    val retainedParameter = c.staticRequirementParamTypeAt(resolution: staticCall, paramIdx: 0U64).unwrap()
+    if !c.typeRefEq(a: retainedParameter, b: staticParameter) { panic "raw trait row replaced the retained static parameter" }
     c.decls.traitReqPool[cursorRequirements.start] = staticDeclaration
     c.sourceTypeUses = <SourceTypeUses />
     if argCount() < 2I64 || argAt(1I64) == "rank" {

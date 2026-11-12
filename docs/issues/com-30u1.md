@@ -264,3 +264,36 @@ Next, move the static requirement parameter consumers to the admitted
 signature and then translate its clause evidence into the selected
 implementation. The view-adapter work in [com-3jtd](com-3jtd.md) can reuse
 this query fix.
+
+## Static requirement parameter checkpoint
+
+Static overload ranking, argument context and method type-argument inference
+now read the exact admitted parameter slots using the selected static
+conformance. Source checking of recorded static and existential calls also
+uses those slot terms. It uses the existing argument matcher and keeps
+method-binder substitution separate from trait-instance substitution.
+Provided methods still use their own source signature path.
+
+The native symbolic-result regression also replaces the parameter row with
+a sibling after admission. Candidate `d600caa4` reaches the intended RED
+assertion. Initial build `20261112T133654-build-647852`, candidate
+`c3b4a55e`, preserves the original parameter and result. In the initial
+same-source comparison the candidate median was 6.553251 s versus 6.518940 s
+for the baseline, with all eight LLVM outputs identical. The selected
+generic call now reuses one validated signature context for reading the
+result and inferring the method arguments. Rebuilt as
+`20261112T134249-build-705f7d`, candidate `cd17a8c5`. On that candidate,
+fourteen public static/mixed controls passed check/JIT/native. Four
+additional signature fixtures passed check/native, with JIT passing for
+the two public fixtures. The nested Self and static-evidence negative
+controls preserved their expected diagnostics. Generation
+`20261112T134533-gen-07861c` passed. A fresh three-way same-source run
+gave medians of 6.558847 s (baseline), 6.587564 s (initial), and
+6.601308 s (context reuse). The structural cleanup removes a repeated
+proof-context check but did not show a timing improvement. All twelve
+LLVM outputs were byte-identical. This is a diagnostic comparison,
+separate from formal fixed-point certification.
+
+Next, retain the authored clause terms and map each raw requirement premise
+through the selected caller and implementation evidence. Provided-method
+source signature lookup and final witness translation remain open.
