@@ -4111,7 +4111,12 @@ impl Comp {
         val owned = match source {
             DeclarationBoundRef.Function(index: val index) => {
                 mut val found = false
-                for clause in self.sourceDeclarationCallBoundIndices(functionIndex: function) { if clause == index { found = true } }
+                if self.arena.functionAt(index: function).isProvided {
+                    val admitted = try self.providedSignatureAdmission(function: function)
+                    for clause in admitted.clauses { if clause.assumption == index { found = true } }
+                } else {
+                    for clause in self.sourceDeclarationCallBoundIndices(functionIndex: function) { if clause == index { found = true } }
+                }
                 give found
             }
             DeclarationBoundRef.Requirement(index: val index) => self.arena.requirementBoundEvidenceAt(index: index).implementation == function,

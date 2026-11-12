@@ -1,4 +1,5 @@
 use /Frontend only { Comp, FrontendInput, analyzeFrontend }
+use /Ir only { CallableConstraintEvidence, FuncBound, InstanceEnvironment }
 use /SourceAccess only { SourceAccess }
 use @Std/Io only { print }
 fn main() {
@@ -15,6 +16,19 @@ fn main() {
         if body.fnIdx < compiler.arena.functionCount() && compiler.arena.functionAt(index: body.fnIdx).nameId == name {
             val constraints = body.environment.constraints.unwrap()
             if compiler.arena.callableConstraintCount(evidence: constraints) != 1U64 { panic("provided body lost constraint evidence") }
+            val owner = compiler.arena.functionLexicalOwner(index: body.fnIdx)
+            val clause = compiler.decls.funcBounds.indices(owner: owner)[0U64]
+            val original = compiler.decls.funcBounds.at(index: clause)
+            val bound = compiler.arena.callableConstraintBoundAt(evidence: constraints, index: 0U64)
+            val proof = compiler.thawStaticConformanceProof(id: compiler.arena.callableConstraintProofAt(evidence: constraints, index: 0U64))
+            val environment = <InstanceEnvironment params=body.environment.params args=body.environment.args receiverRef=body.environment.receiverRef proof=body.environment.proof />
+            val recorded = <CallableConstraintEvidence.Recorded bounds=[bound] proofs=[proof] />
+            compiler.environmentWithCallableConstraints(fnIdx: body.fnIdx, environment: environment, evidence: recorded).unwrap()
+            compiler.decls.funcBounds.set(index: clause, value: <FuncBound fnIdx=owner sourceClause=0U64 paramStart=original.paramStart paramLen=original.paramLen paramTy=0U64 paramNameId=original.paramNameId constraint=original.constraint />)
+            if compiler.environmentWithCallableConstraints(fnIdx: body.fnIdx, environment: environment, evidence: recorded).isErr() {
+                panic "executable admission replaced the provided declaration's retained clause"
+            }
+            compiler.decls.funcBounds.set(index: clause, value: original)
             found = true
         }
         index += 1U64

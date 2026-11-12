@@ -832,16 +832,17 @@ impl Comp {
         return <Result.Ok value=self.authoredSignatureViews[owner] />
     }
 
-    inout fn readProvidedSignatureBounds(admitted: AuthoredSignatureViews, environment: InstanceEnvironment) -> Result[Array[TraitBound], CompileDiagnostic] {
+    inout fn readProvidedSignatureBounds(admitted: AuthoredSignatureViews, environment: InstanceEnvironment, concrete: Bool = false) -> Result[Array[TraitBound], CompileDiagnostic] {
         if admitted.clauses.count() == 0U64 { return <Result.Ok value=[] /> }
         val source = admitted.signature
         try self.checkSignatureEnvironment(signature: source, environment: environment)
         val offset = self.arena.functionAt(index: source.function).defOffset
+        val context = if concrete { give <SignatureRecipeContext.Concrete /> } else { give <SignatureRecipeContext.Provided owner=source.function /> }
         mut val memo: Dictionary[U64, AuthoredRecipeRead] = [:]
         mut val bounds: Array[TraitBound] = []
         for clause in admitted.clauses {
             val prepared = try self.retainedSignatureClause(scope: clause.scope, id: clause.source, offset: offset)
-            bounds.append(try self.readAuthoredSignatureClause(prepared: prepared, proofs: admitted.proofs, context: <SignatureRecipeContext.Provided owner=source.function />, environment: environment, memo: inout memo))
+            bounds.append(try self.readAuthoredSignatureClause(prepared: prepared, proofs: admitted.proofs, context: context, environment: environment, memo: inout memo))
         }
         return <Result.Ok value=bounds />
     }

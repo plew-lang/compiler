@@ -459,3 +459,28 @@ and 6.584024 s, with identical LLVM across all eight runs.
 
 Executable admission still needs to compare recorded evidence using
 these admitted clause identities and recipes.
+
+## Provided executable clause checkpoint
+
+Body admission verifies the proofs of a recorded provided call, binds them to
+the admitted clause IDs, and interprets the authored clause recipes in that
+local instance environment. Only a matching clause contract can publish the
+environment. A dependent projection uses the retained prerequisite proof.
+Direct and static calls share the admitted source clause reader.
+
+The internal `retained_provided_body_constraints` fixture starts from an
+actual prepared body. It verifies the original recorded proof, corrupts
+the registered clause row, and repeats executable admission. Candidate
+`32c3ead2` reaches the intended assertion. Build
+`20261112T145514-build-849d77`, candidate `199ab19f`, passes. Nine targeted
+fixtures passed check/native and seven public fixtures passed JIT. Four
+supplemental direct/generic calls using a projected where subject in the
+method or enclosing impl passed check/JIT/native. Standard generation
+`20261112T145808-gen-660bf2` passed. Same-source median 6.587857 s before
+and 6.620319 s after these two increments, with identical LLVM in all
+eight runs.
+
+Before closure, audit the symbolic associated-output read for an authored
+function-bound premise, which can still reach the generic declaration-row
+reader, and compare direct provided argument/result consumers with the
+registered-method sibling's boundary. Then obtain independent review.

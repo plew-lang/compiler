@@ -1589,6 +1589,13 @@ pub impl Comp {
 
     inout fn groundCallableSignatureBounds(fnIdx: U64, environment: InstanceEnvironment) -> Result[Array[TraitBound], CompileDiagnostic] {
         mut val bounds: Array[TraitBound] = []
+        if self.arena.functionAt(index: fnIdx).isProvided {
+            val admitted = try self.providedSignatureAdmission(function: fnIdx)
+            for bound in (try self.readProvidedSignatureBounds(admitted: admitted, environment: environment)) {
+                bounds.append(try self.groundCallableBound(bound: bound, environment: environment, selfRef: environment.receiverRef, itemRef: 0U64))
+            }
+            return <Result.Ok value=bounds />
+        }
         for index in self.sourceDeclarationCallBoundIndices(functionIndex: fnIdx) {
             val bound = self.decls.funcBounds.at(index: index)
             bounds.append((try self.groundCallableBound(bound: <TraitBound subject=bound.paramTy constraint=bound.constraint offset=bound.paramStart />, environment: environment, selfRef: environment.receiverRef, itemRef: 0U64)))
@@ -1705,6 +1712,38 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
+    // The recorded proofs are validated against the already instantiated
+    // obligations before they can interpret any dependent signature recipe.
+    // Keep this environment local until the authored contract matches it.
+    inout fn prepareRecordedProvidedConstraints(fnIdx: U64, environment: InstanceEnvironment, bounds: Array[TraitBound], proofs: Array[StaticConformanceProof]) -> Result[InstanceEnvironment, CompileDiagnostic] {
+        val admitted = try self.providedSignatureAdmission(function: fnIdx)
+        val count = admitted.clauses.count()
+        val offset = self.arena.functionAt(index: fnIdx).defOffset
+        if bounds.count() != count || proofs.count() != count {
+            return <Result.Err error=self.diagnosticAt(offset: offset, msg: "instantiated call has incomplete constraint evidence") />
+        }
+        mut val indices: Array[U64] = []
+        mut val retainedProofs: Array[U64] = []
+        for index in 0U64..<count {
+            val bound = bounds[index]
+            val proof = proofs[index]
+            try self.checkStaticProofEvidence(proof: proof, offset: bound.offset)
+            try self.checkSelectedCallConstraintBoundary(expected: bound, proof: proof, offset: bound.offset)
+            indices.append(admitted.clauses[index].assumption)
+            retainedProofs.append(self.freezeStaticConformanceProof(proof: proof))
+        }
+        val prepared = self.arena.prepareCallableConstraints(function: fnIdx, environment: environment, indices: indices, bounds: bounds, proofs: retainedProofs)
+        val candidate = <InstanceEnvironment params=environment.params args=environment.args receiverRef=environment.receiverRef proof=environment.proof constraints=<Optional.Some v=prepared /> />
+        val expected = try self.readProvidedSignatureBounds(admitted: admitted, environment: candidate, concrete: true)
+        for index in 0U64..<count {
+            val bound = expected[index]
+            if !self.typeRefEq(a: bounds[index].subject, b: bound.subject) || !self.sameTraitConstraint(a: bounds[index].constraint, b: bound.constraint) {
+                return <Result.Err error=self.diagnosticAt(offset: bound.offset, msg: "instantiated call constraint evidence has a different substitution") />
+            }
+        }
+        return <Result.Ok value=candidate />
+    }
+
     // Prepare the body substitution once. Source-recorded evidence is admitted
     // against the callee declaration before acquiring its declaration identities.
     inout fn environmentWithCallableConstraints(fnIdx: U64, environment: InstanceEnvironment, evidence: CallableConstraintEvidence) -> Result[InstanceEnvironment, CompileDiagnostic] {
@@ -1726,6 +1765,9 @@ pub impl Comp {
                 }
             }
             CallableConstraintEvidence.Recorded(bounds: val recordedBounds, proofs: val recorded) => {
+                if self.arena.functionAt(index: fnIdx).isProvided {
+                    return self.prepareRecordedProvidedConstraints(fnIdx: fnIdx, environment: environment, bounds: recordedBounds, proofs: recorded)
+                }
                 try self.checkCallableConstraintEvidence(fnIdx: fnIdx, environment: environment, evidence: evidence)
                 bounds = recordedBounds
                 for proof in recorded { proofs.append(self.freezeStaticConformanceProof(proof: proof)) }
