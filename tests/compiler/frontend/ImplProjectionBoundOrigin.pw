@@ -2,6 +2,7 @@ use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontendForRequests
 use ../../../src/Diag only { FailureDomain }
 use ../../../src/SourceAccess only { SourceAccess }
 use ../../../src/SourceTypeUses only { SourceImplementationKind, SourceTypeScopeKind, SourceTypeUseRole }
+use ../../../src/Ir only { DeclarationBoundRef }
 use @Plew/Syntax only { ImplAst, parseItem, rangeEquals, TopItemAst }
 use @Std/Io only { print }
 use @Std/Process only { argAt }
@@ -122,6 +123,32 @@ fn exerciseValueRecovery() {
     print("1")
 }
 
+fn exerciseFailedMethodReceiver() {
+    val header = "trait Subject {{}} "
+    val good = "impl Subject {{ fn accepted() {{}} }}"
+    val partial = "impl Subject {{ fn prefix() {{}} fn failure[U](value:U.Item) {{}} }}"
+    val source = header + "\n// " + good + "\n// " + partial + "\nfn main() {{}}"
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text text=source path="MethodReceiverRecovery.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
+    val accepted = compiler.arena.functionCount()
+    compiler.lowerImpl(im: parseImplementation(compiler, good)).unwrap()
+    val rejected = compiler.arena.functionCount()
+    match compiler.lowerImpl(im: parseImplementation(compiler, partial)) {
+        Result.Err(error: val diagnostic) => {
+            match diagnostic.failureDomain { FailureDomain.Source => {} _ => { panic(diagnostic.message) } }
+        }
+        Result.Ok(value: _) => { panic("the partial implementation unexpectedly succeeded") }
+    }
+    if compiler.arena.functionCount() != rejected + 1U64 { panic("the failed implementation did not register its first method") }
+    if compiler.functionBoundAssumptions(fnIdx: accepted).count() != 1U64 || !compiler.declarationBoundIsValid(source: <DeclarationBoundRef.MethodReceiver index=accepted />) {
+        panic("the completed implementation lost its receiver premise")
+    }
+    if compiler.functionBoundAssumptions(fnIdx: rejected).count() != 0U64 || compiler.declarationBoundIsValid(source: <DeclarationBoundRef.MethodReceiver index=rejected />) {
+        panic("the failed implementation authorized its first method's receiver premise")
+    }
+    print("1")
+}
+
 fn exerciseQualifiedValueDependency() {
     val path = "tests/fixtures/part/qualified_later_impl_projection/Value.pw"
     val declaration = "impl[T] Box[T] where T: Marker[A.Wrap[T].Item], A.Wrap[T]: P {{ fn accept() {{}} }}"
@@ -146,6 +173,7 @@ fn main() {
     val valueAdapter = argAt(1I64) == "value"
     if argAt(2I64) == "later" { exerciseBoundDependencies(valueAdapter: valueAdapter) return }
     if argAt(2I64) == "recovery" { exerciseValueRecovery() return }
+    if argAt(2I64) == "receiverRecovery" { exerciseFailedMethodReceiver() return }
     if argAt(2I64) == "qualified" { exerciseQualifiedValueDependency() return }
     val shadowedBinder = argAt(2I64) == "shadow"
     val header = "trait Project[Kind] {{ type Item }} trait Alternate[Kind] {{ type Item }} struct Box[T] {{ val item: T }} "
