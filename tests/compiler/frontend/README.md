@@ -341,6 +341,8 @@ restoration, and legacy synthesized subjects; execute `later`, `nonmember`,
 `recovery`, and `legacy`. Each must exit 0, match its `.out` and have empty stderr.
 The `whereSyntax` and `whereValue` modes check ordinary where-clause diagnostics,
 frame restoration, and canonical trait owner publication.
+The `requirementWhereSyntax` and `requirementWhereValue` modes check the same
+boundary for raw trait requirements, including no partial trait publication.
 
 `ImplProjectionBoundOrigin.pw` checks that two methods reuse a single
 impl-owned bound argument in signature, body and default projections. Execute

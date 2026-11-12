@@ -46,3 +46,26 @@ check, JIT and native compilation. The unused raw requirement projects
 Changing the projection to `Project[Bool]` passes in all three modes and
 serves as the exact-instance control. Preserve the actual raw requirement
 owner and diagnose the missing proof at its annotation before publication.
+
+## Prepared where checkpoint
+
+The same old carrier also accepted the unknown trait in
+`where_unknown_trait_unused_requirement`. Both raw signature adapters now
+reserve and prepare clause heads and types in the original scope, and copy the
+prepared bounds into the requirement. Rejection restores the signature and
+enclosing trait frames and leaves the trait unpublished. This shared lowering
+also serves extern signatures. The extern proof/foreign-call handoff remains
+with com-ab7u.
+
+Build `20261112T121127-build-c6f80d`, candidate `55e672a1`, rejects the
+unknown head at line 2 in check, JIT and native compilation. Eight internal
+controls passed, including both adapters, typed Source rejection, no
+partial trait publication and the recovered canonical bound. The
+`trait_where`, `trait_where_args` and `trait_method_output_constraint`
+controls passed check/JIT/AOT. `interface_boxing_conditions` passed check
+and AOT; its JIT run was interrupted and has no result.
+
+The initial wrong-instance RED remains. The next boundary is to bind
+authored parameter/result occurrences to the registered requirement
+slot and admit them under that slot's own Self instance and prepared
+premises, including inherited trait evidence.

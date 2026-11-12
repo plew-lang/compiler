@@ -485,7 +485,7 @@ pub impl Comp {
         return self.useProjectionBounds(own: <SourceBoundRange first=first count=index />)
     }
 
-    inout fn collectPreparedConformanceBounds() -> Result[Array[ConformBound], CompileDiagnostic] {
+    inout fn collectPreparedBounds() -> Result[Array[ConformBound], CompileDiagnostic] {
         mut val bounds: Array[ConformBound] = []
         val range = self.activeProjectionBounds.unwrap().own
         mut val index = 0U64
@@ -1135,7 +1135,7 @@ impl Comp {
         if normalizedImpl.extName.bytes().count() > 0U64 { extensionId = try self.extensionIdentityForImpl(name: normalizedImpl.extNameSpan, siteOffset: normalizedImpl.span.start, text: normalizedImpl.extName) }
         val ownerKind = if normalizedImpl.isTraitImpl {
             val traitN: Bind = conformanceTrait
-            val index = try self.registerDeclaredConformance(cf: <Conform subjectTraitOwner=recvTraitOwner sourceModule=sourceModule typeStart=recvN.nameStart typeLen=recvN.nameLen typeId=intern(c: inout self, start: recvN.nameStart, len: recvN.nameLen) subjectTy=recvTy subjectArgs=self.pushConformTypes(types: subjectArgs) typeParams=self.pushConformBinds(binds: implParamBinds) typeArity=receiverType.args.count() traitStart=traitN.nameStart traitLen=traitN.nameLen traitId=intern(c: inout self, start: traitN.nameStart, len: traitN.nameLen) traitArgs=self.pushConformTypes(types: conformanceTraitArgs) derived=false isPub=normalizedImpl.isPub witnessed=self.pushConformWitnesses(witnesses: witnessed) witnessFuncIds=self.pushConformFuncIds(ids: witnessFuncIds) extId=extensionId defOffset=normalizedImpl.span.start assocBindingIds=self.pushConformFuncIds(ids: assocBindingIds) />, bounds: (try self.collectPreparedConformanceBounds()))
+            val index = try self.registerDeclaredConformance(cf: <Conform subjectTraitOwner=recvTraitOwner sourceModule=sourceModule typeStart=recvN.nameStart typeLen=recvN.nameLen typeId=intern(c: inout self, start: recvN.nameStart, len: recvN.nameLen) subjectTy=recvTy subjectArgs=self.pushConformTypes(types: subjectArgs) typeParams=self.pushConformBinds(binds: implParamBinds) typeArity=receiverType.args.count() traitStart=traitN.nameStart traitLen=traitN.nameLen traitId=intern(c: inout self, start: traitN.nameStart, len: traitN.nameLen) traitArgs=self.pushConformTypes(types: conformanceTraitArgs) derived=false isPub=normalizedImpl.isPub witnessed=self.pushConformWitnesses(witnesses: witnessed) witnessFuncIds=self.pushConformFuncIds(ids: witnessFuncIds) extId=extensionId defOffset=normalizedImpl.span.start assocBindingIds=self.pushConformFuncIds(ids: assocBindingIds) />, bounds: (try self.collectPreparedBounds()))
             give <SourceImplementationKind.Conformance index=index />
         } else { give <SourceImplementationKind.Inherent /> }
         val implementation = <SourceImplementationOwner kind=ownerKind receiver=recvTy receiverTrait=recvTraitOwner receiverArguments=subjectArgs receiverArgumentRecipes=self.lowerMethodReceiverRecipes parameters=implParamBinds sourceModule=sourceModule extensionId=extensionId />
@@ -1282,7 +1282,7 @@ impl Comp {
         if normalizedImpl.extName.end > normalizedImpl.extName.start { extensionId = try self.extensionIdentityForImpl(name: normalizedImpl.extName, siteOffset: normalizedImpl.span.start) }
         val ownerKind = if normalizedImpl.isTraitImpl {
             val traitN: Bind = conformanceTrait
-            val index = try self.registerDeclaredConformance(cf: <Conform subjectTraitOwner=recvTraitOwner sourceModule=sourceModule typeStart=recvN.nameStart typeLen=recvN.nameLen typeId=intern(c: inout self, start: recvN.nameStart, len: recvN.nameLen) subjectTy=recvTy subjectArgs=self.pushConformTypes(types: subjectArgs) typeParams=self.pushConformBinds(binds: implParamBinds) typeArity=recvArity traitStart=traitN.nameStart traitLen=traitN.nameLen traitId=intern(c: inout self, start: traitN.nameStart, len: traitN.nameLen) traitArgs=self.pushConformTypes(types: conformanceTraitArgs) derived=false isPub=normalizedImpl.isPub witnessed=self.pushConformWitnesses(witnesses: witnessed) witnessFuncIds=self.pushConformFuncIds(ids: witnessFuncIds) extId=extensionId defOffset=normalizedImpl.span.start assocBindingIds=self.pushConformFuncIds(ids: assocBindingIds) />, bounds: (try self.collectPreparedConformanceBounds()))
+            val index = try self.registerDeclaredConformance(cf: <Conform subjectTraitOwner=recvTraitOwner sourceModule=sourceModule typeStart=recvN.nameStart typeLen=recvN.nameLen typeId=intern(c: inout self, start: recvN.nameStart, len: recvN.nameLen) subjectTy=recvTy subjectArgs=self.pushConformTypes(types: subjectArgs) typeParams=self.pushConformBinds(binds: implParamBinds) typeArity=recvArity traitStart=traitN.nameStart traitLen=traitN.nameLen traitId=intern(c: inout self, start: traitN.nameStart, len: traitN.nameLen) traitArgs=self.pushConformTypes(types: conformanceTraitArgs) derived=false isPub=normalizedImpl.isPub witnessed=self.pushConformWitnesses(witnesses: witnessed) witnessFuncIds=self.pushConformFuncIds(ids: witnessFuncIds) extId=extensionId defOffset=normalizedImpl.span.start assocBindingIds=self.pushConformFuncIds(ids: assocBindingIds) />, bounds: (try self.collectPreparedBounds()))
             give <SourceImplementationKind.Conformance index=index />
         } else { give <SourceImplementationKind.Inherent /> }
         val implementation = <SourceImplementationOwner kind=ownerKind receiver=recvTy receiverTrait=recvTraitOwner receiverArguments=subjectArgs receiverArgumentRecipes=self.lowerMethodReceiverRecipes parameters=implParamBinds sourceModule=sourceModule extensionId=extensionId />
@@ -1306,8 +1306,12 @@ pub impl Comp {
     }
 
     inout fn lowerSigToFunc(sig: SigAst, isExtern: Bool, isCExtern: Bool) -> Result[LoweredSourceSignature, CompileDiagnostic] {
+        val savedBounds = self.activeProjectionBounds
+        val savedParameters = self.cur.typeParams
         val scope = self.sourceTypeUses.begin(kind: (if isExtern { give <SourceTypeScopeKind.ExternSignature /> } else { give <SourceTypeScopeKind.RequirementSignature /> }), anchor: sig.nameSpan.start, traitOwner: self.lowerAssociatedOwner)
         val result = self.lowerSigToFuncInSourceScope(sig: sig, isExtern: isExtern, isCExtern: isCExtern)
+        self.activeProjectionBounds = savedBounds
+        self.cur.typeParams = savedParameters
         if !self.sourceTypeUses.finish(token: scope, succeeded: result.isOk()) {
             return <Result.Err error=self.diagnosticAt(offset: sig.nameSpan.start, msg: "invalid authored type scope restoration", failureDomain: <FailureDomain.Internal />) />
         }
@@ -1331,10 +1335,7 @@ impl Comp {
             stpi += 1
         }
         self.cur.typeParams = scopeTP
-        val savedWhereTypes = self.lowerWhereTypes
-        val savedWhereTraits = self.lowerWhereTraitTypes
-        self.lowerWhereTypes = sig.whereTypes
-        self.lowerWhereTraitTypes = (try self.valueProjectionTraitTypes(subjects: sig.whereTypes, names: sig.whereTraits, types: sig.whereTraitTypes))
+        try self.reserveValueProjectionBounds(parameters: sig.whereParams, traits: sig.whereTraits, subjects: sig.whereTypes, traitTypes: sig.whereTraitTypes, anchor: nameStart)
         val params: Array[Param] = (try self.lowerParams(params: sig.params))
         mut val retStart: U64 = 0
         mut val retLen: U64 = 0
@@ -1359,18 +1360,7 @@ impl Comp {
             retStart = result.nameStart
             retLen = result.nameLen
         }
-        mut val signatureBounds: Array[ConformBound] = []
-        mut val boundIndex = 0U64
-        while boundIndex < sig.whereTypes.count() {
-            val subjectType = try self.normalizeProjectionType(t: sig.whereTypes[boundIndex])
-            val subject = (try self.lowerType(t: subjectType)).ref
-            val constraint = try self.lowerValueTraitConstraint(traitType: self.lowerWhereTraitTypes[boundIndex])
-            signatureBounds.append(<ConformBound subject=subject constraint=constraint offset=sig.whereTypes[boundIndex].span.start />)
-            boundIndex += 1U64
-        }
-        self.lowerWhereTypes = savedWhereTypes
-        self.lowerWhereTraitTypes = savedWhereTraits
-        self.cur.typeParams = savedTP
+        val signatureBounds = try self.collectPreparedBounds()
         val runtimeIntrinsic: RuntimeIntrinsicDeclaration = self.runtimeIntrinsicDeclaration(sig: sig, isExtern: isExtern, isCExtern: isCExtern)
         return <Result.Ok value=<Func nameStart=nameStart nameLen=nameLen nameId=intern(c: inout self, start: nameStart, len: nameLen) typeParams=self.pushFuncBinds(binds: typeParams) params=self.pushFuncParams(params: params) hasRet=sig.hasRet || sig.isFactory retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=0 hasRecv=false recvStart=0 recvLen=0 selfInout=sig.selfInout selfMove=sig.selfMove isAssoc=sig.isAssoc isFactory=sig.isFactory isAnonymousFactory=sig.isAnonymousFactory isAsync=sig.isAsync isDiverging=sig.isDiverging isExtern=isExtern isCExtern=isCExtern runtimeIntrinsic=runtimeIntrinsic defOffset=nameStart signatureBounds=self.pushConformBounds(bounds: signatureBounds) /> />
     }
@@ -1379,8 +1369,12 @@ impl Comp {
 pub impl Comp {
 
     inout fn lowerSyntaxSigToFunc(sig: SyntaxSig, isExtern: Bool, isCExtern: Bool) -> Result[LoweredSourceSignature, CompileDiagnostic] {
+        val savedBounds = self.activeProjectionBounds
+        val savedParameters = self.cur.typeParams
         val scope = self.sourceTypeUses.begin(kind: (if isExtern { give <SourceTypeScopeKind.ExternSignature /> } else { give <SourceTypeScopeKind.RequirementSignature /> }), anchor: sig.name.start, traitOwner: self.lowerAssociatedOwner)
         val result = self.lowerSyntaxSigToFuncInSourceScope(sig: sig, isExtern: isExtern, isCExtern: isCExtern)
+        self.activeProjectionBounds = savedBounds
+        self.cur.typeParams = savedParameters
         if !self.sourceTypeUses.finish(token: scope, succeeded: result.isOk()) {
             return <Result.Err error=self.diagnosticAt(offset: sig.name.start, msg: "invalid authored type scope restoration", failureDomain: <FailureDomain.Internal />) />
         }
@@ -1408,18 +1402,14 @@ impl Comp {
             i += 1U64
         }
         self.cur.typeParams = scope
-        val savedWhereTypes = self.lowerWhereSyntaxTypes
-        val savedWhereTraits = self.lowerWhereSyntaxTraitTypes
-        mut val whereTypes: Array[TypeId] = []
-        mut val whereTraits: Array[TypeId] = []
+        val first = self.projectionBoundClauses.count() + 1U64
+        val parameters = self.projectionBoundParameterIds()
         mut val boundIndex = 0U64
         while boundIndex < syntaxSigWhereCount(file: self.syntax, sig: sig) {
-            whereTypes.append(syntaxSigWhereType(file: self.syntax, sig: sig, index: boundIndex))
-            whereTraits.append(syntaxSigWhereTraitType(file: self.syntax, sig: sig, index: boundIndex))
+            self.reserveSyntaxProjectionClause(subject: syntaxSigWhereType(file: self.syntax, sig: sig, index: boundIndex), traitType: syntaxSigWhereTraitType(file: self.syntax, sig: sig, index: boundIndex), parameter: syntaxSigWhereParamSpan(file: self.syntax, sig: sig, index: boundIndex), parameters: parameters)
             boundIndex += 1U64
         }
-        self.lowerWhereSyntaxTypes = whereTypes
-        self.lowerWhereSyntaxTraitTypes = whereTraits
+        try self.useProjectionBounds(own: <SourceBoundRange first=first count=boundIndex />)
         mut val params: Array[Param] = []
         i = 0U64
         while i < syntaxSigParamCount(file: self.syntax, sig: sig) {
@@ -1454,17 +1444,7 @@ impl Comp {
             retStart = result.nameStart
             retLen = result.nameLen
         }
-        mut val signatureBounds: Array[ConformBound] = []
-        boundIndex = 0U64
-        while boundIndex < syntaxSigWhereCount(file: self.syntax, sig: sig) {
-            val subject = (try self.lowerSyntaxType(id: syntaxSigWhereType(file: self.syntax, sig: sig, index: boundIndex))).ref
-            val constraint = try self.lowerSyntaxTraitConstraint(traitTy: syntaxSigWhereTraitType(file: self.syntax, sig: sig, index: boundIndex))
-            signatureBounds.append(<ConformBound subject=subject constraint=constraint offset=syntaxSigWhereParamSpan(file: self.syntax, sig: sig, index: boundIndex).start />)
-            boundIndex += 1U64
-        }
-        self.lowerWhereSyntaxTypes = savedWhereTypes
-        self.lowerWhereSyntaxTraitTypes = savedWhereTraits
-        self.cur.typeParams = savedTP
+        val signatureBounds = try self.collectPreparedBounds()
         val runtimeIntrinsic: RuntimeIntrinsicDeclaration = self.runtimeIntrinsicDeclarationSyntax(sig: sig, isExtern: isExtern, isCExtern: isCExtern)
         return <Result.Ok value=<Func nameStart=sig.name.start nameLen=sig.name.end - sig.name.start nameId=intern(c: inout self, start: sig.name.start, len: sig.name.end - sig.name.start) typeParams=self.pushFuncBinds(binds: typeParams) params=self.pushFuncParams(params: params) hasRet=sig.hasRet || sig.isFactory retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=0U64 hasRecv=false recvStart=0U64 recvLen=0U64 selfInout=sig.selfInout selfMove=sig.selfMove isAssoc=sig.isAssoc isFactory=sig.isFactory isAnonymousFactory=sig.isAnonymousFactory isAsync=sig.isAsync isDiverging=sig.isDiverging isExtern=isExtern isCExtern=isCExtern runtimeIntrinsic=runtimeIntrinsic defOffset=sig.name.start signatureBounds=self.pushConformBounds(bounds: signatureBounds) /> />
     }
@@ -1485,6 +1465,19 @@ pub impl Comp {
     }
 
     inout fn lowerTrait(t: TraitAst) -> Result[(), CompileDiagnostic] {
+        val savedParameters = self.cur.typeParams
+        val savedAssociatedOwner = self.lowerAssociatedOwner
+        val savedAssociatedArgs = self.lowerAssociatedArgs
+        val result = self.lowerTraitInLexicalScope(t: t)
+        self.cur.typeParams = savedParameters
+        self.lowerAssociatedOwner = savedAssociatedOwner
+        self.lowerAssociatedArgs = savedAssociatedArgs
+        return result
+    }
+}
+
+impl Comp {
+    inout fn lowerTraitInLexicalScope(t: TraitAst) -> Result[(), CompileDiagnostic] {
         val nameStart: U64 = t.nameSpan.start
         val nameLen: U64 = t.nameSpan.end - t.nameSpan.start
         // Self/type parameters are lexical binders; associated names resolve
@@ -1498,7 +1491,6 @@ pub impl Comp {
         val typeParams: Array[Bind] = (try self.lowerTypeParamNames(names: t.typeParams, anchor: nameStart, sendableFlags: t.typeParamSendable))
         val selfParamId: U64 = self.decls.traitOwnerAt(index: self.decls.traitOwnerIndex(offset: nameStart)).selfParamId
         val selfBind = self.lexicalSelfBinder(parameter: selfParamId)
-        val savedTP: Array[Bind] = self.cur.typeParams
         mut val scopeTP: Array[Bind] = []
         scopeTP.append(selfBind)
         mut val stpi: U64 = 0
@@ -1512,8 +1504,6 @@ pub impl Comp {
             sai += 1
         }
         self.cur.typeParams = scopeTP
-        val savedAssociatedOwner = self.lowerAssociatedOwner
-        val savedAssociatedArgs = self.lowerAssociatedArgs
         self.setLowerAssociatedTrait(owner: nameStart, parameters: typeParams)
         mut val reqs: Array[Func] = []
         mut val requirementScopes: Array[U64] = []
@@ -1538,9 +1528,6 @@ pub impl Comp {
             if constraint.key.owner == 0U64 { return <Result.Err error=self.diagnosticAt(offset: declared.span.start, msg: "unknown supertrait or incompatible trait arguments") /> }
             supertraits.append(constraint)
         }
-        self.lowerAssociatedOwner = savedAssociatedOwner
-        self.lowerAssociatedArgs = savedAssociatedArgs
-        self.cur.typeParams = savedTP
         val traitIndex = self.decls.registerTrait(<TraitDef nameStart=nameStart nameLen=nameLen nameId=intern(c: inout self, start: nameStart, len: nameLen) selfParamId=selfParamId typeParams=self.pushTraitBinds(binds: typeParams) supertraits=self.pushTraitConstraints(constraints: supertraits) reqs=self.pushTraitReqs(reqs: reqs) assocTypes=self.pushTraitBinds(binds: assocTypes) assocBounds=self.pushTraitAssociatedBounds(bounds: associatedBounds) />)
         mut val requirementSlot = 0U64
         while requirementSlot < requirementScopes.count() {
@@ -1553,7 +1540,23 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
+}
+
+pub impl Comp {
     inout fn lowerSyntaxTrait(t: SyntaxTrait) -> Result[(), CompileDiagnostic] {
+        val savedParameters = self.cur.typeParams
+        val savedAssociatedOwner = self.lowerAssociatedOwner
+        val savedAssociatedArgs = self.lowerAssociatedArgs
+        val result = self.lowerSyntaxTraitInLexicalScope(t: t)
+        self.cur.typeParams = savedParameters
+        self.lowerAssociatedOwner = savedAssociatedOwner
+        self.lowerAssociatedArgs = savedAssociatedArgs
+        return result
+    }
+}
+
+impl Comp {
+    inout fn lowerSyntaxTraitInLexicalScope(t: SyntaxTrait) -> Result[(), CompileDiagnostic] {
         mut val assocTypes: Array[Bind] = []
         mut val paramSpans: Array[Span] = []
         mut val paramFlags: Array[Bool] = []
@@ -1573,7 +1576,6 @@ pub impl Comp {
         val typeParams: Array[Bind] = (try self.lowerTypeParamSpans(spans: paramSpans, anchor: t.name.start, sendableFlags: paramFlags))
         val selfParamId: U64 = self.decls.traitOwnerAt(index: self.decls.traitOwnerIndex(offset: t.name.start)).selfParamId
         val selfBind = self.lexicalSelfBinder(parameter: selfParamId)
-        val savedTP: Array[Bind] = self.cur.typeParams
         mut val scope: Array[Bind] = []
         scope.append(selfBind)
         i = 0U64
@@ -1587,8 +1589,6 @@ pub impl Comp {
             i += 1U64
         }
         self.cur.typeParams = scope
-        val savedAssociatedOwner = self.lowerAssociatedOwner
-        val savedAssociatedArgs = self.lowerAssociatedArgs
         self.setLowerAssociatedTrait(owner: t.name.start, parameters: typeParams)
         mut val reqs: Array[Func] = []
         mut val requirementScopes: Array[U64] = []
@@ -1623,9 +1623,6 @@ pub impl Comp {
             supertraits.append(constraint)
             i += 1U64
         }
-        self.lowerAssociatedOwner = savedAssociatedOwner
-        self.lowerAssociatedArgs = savedAssociatedArgs
-        self.cur.typeParams = savedTP
         val traitIndex = self.decls.registerTrait(<TraitDef nameStart=t.name.start nameLen=t.name.end - t.name.start nameId=intern(c: inout self, start: t.name.start, len: t.name.end - t.name.start) selfParamId=selfParamId typeParams=self.pushTraitBinds(binds: typeParams) supertraits=self.pushTraitConstraints(constraints: supertraits) reqs=self.pushTraitReqs(reqs: reqs) assocTypes=self.pushTraitBinds(binds: assocTypes) assocBounds=self.pushTraitAssociatedBounds(bounds: associatedBounds) />)
         mut val requirementSlot = 0U64
         while requirementSlot < requirementScopes.count() {

@@ -2,21 +2,79 @@
 use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
 use ../../../src/SourceAccess only { SourceAccess }
 use ../../../src/Diag only { DiagnosticLocation, FailureDomain }
-use @Plew/Syntax only { DeclAst, TypeAst, parseItem, TopItemAst, rangeEquals }
+use @Plew/Syntax only { DeclAst, TraitAst, TypeAst, parseItem, TopItemAst, rangeEquals }
 use @Std/Io only { print }
 use @Std/Process only { argAt }
 
-fn declaration(compiler~: Comp, text~: String) -> DeclAst {
+fn sourceItem(compiler~: Comp, text~: String) -> TopItemAst {
     mut val start = 0U64
     while start + text.bytes().count() <= compiler.arena.bytes.count() {
         if rangeEquals(bytes: compiler.arena.bytes, start: start, len: text.bytes().count(), kw: text) { break }
         start += 1U64
     }
     if start + text.bytes().count() > compiler.arena.bytes.count() { panic("declaration source setup failed") }
-    match parseItem(source: text, start: start, end: start + text.bytes().count()) {
+    return parseItem(source: text, start: start, end: start + text.bytes().count())
+}
+
+fn declaration(compiler~: Comp, text~: String) -> DeclAst {
+    match sourceItem(compiler, text) {
         TopItemAst.Decl(d: val result) => { return result }
         _ => { panic("declaration AST setup failed") }
     }
+}
+
+fn traitDeclaration(compiler~: Comp, text~: String) -> TraitAst {
+    match sourceItem(compiler, text) {
+        TopItemAst.Trait(t: val result) => { return result }
+        _ => { panic("trait AST setup failed") }
+    }
+}
+
+fn exerciseRequirementWhere(valueAdapter: Bool) {
+    val header = "trait Marker {{}}\n"
+    val invalid = "trait Invalid {{ fn ready() fn invalid[T](value:T)\n    where T:Unknown }}"
+    val valid = "trait Recovered {{ fn accepted[T](value:T) where T:Marker }}"
+    val path = "RequirementWhere.pw"
+    mut val compiler = <Comp />
+    val rejected = if valueAdapter {
+        val source = header + "/* " + invalid + " */\n// " + valid + "\nfn main() {{}}"
+        analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text text=source path=path />, sources: <SourceAccess stdRoot=[] />).unwrap()
+        val trait = traitDeclaration(compiler, invalid)
+        compiler.predeclareTrait(t: trait)
+        give compiler.lowerTrait(t: trait)
+    } else {
+        give analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text text=header + invalid + "\nfn main() {{}}" path=path />, sources: <SourceAccess stdRoot=[] />)
+    }
+    match rejected {
+        Result.Err(error: val diagnostic) => {
+            match diagnostic.failureDomain { FailureDomain.Source => {} _ => { panic(diagnostic.message) } }
+            match diagnostic.location {
+                DiagnosticLocation.File(path: val file, line: val line) => {
+                    if file != path || line != 3I64 { panic("requirement where rejection lost its source location") }
+                }
+                _ => { panic("requirement where rejection has no source location") }
+            }
+            if diagnostic.message != "unknown trait in where clause" { panic(diagnostic.message) }
+        }
+        Result.Ok(value: _) => { panic("an unresolved requirement bound entered source admission") }
+    }
+    if compiler.decls.traitCount() != 1U64 || compiler.sourceTypeUses.currentScope() != 0U64 || compiler.cur.typeParams.count() != 0U64 || compiler.lowerAssociatedOwner != 0U64 || compiler.lowerAssociatedArgs.count() != 0U64 {
+        panic("a failed requirement published its trait or leaked its lexical frame")
+    }
+    if valueAdapter {
+        val trait = traitDeclaration(compiler, valid)
+        compiler.predeclareTrait(t: trait)
+        compiler.lowerTrait(t: trait).unwrap()
+    } else {
+        compiler = <Comp />
+        analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text text=header + valid + "\nfn main() {{}}" path=path />, sources: <SourceAccess stdRoot=[] />).unwrap()
+    }
+    val declaration = compiler.decls.traitAt(index: 1U64)
+    val requirement = compiler.traitReqAt(reqs: declaration.reqs, index: 0U64)
+    if requirement.signatureBounds.len != 1U64 || compiler.conformBoundAt(bounds: requirement.signatureBounds, index: 0U64).constraint.key.owner != compiler.decls.traitAt(index: 0U64).nameStart {
+        panic("the valid requirement did not retain its canonical where bound")
+    }
+    print("1")
 }
 
 fn exerciseWhereAdmission(valueAdapter: Bool) {
@@ -67,6 +125,10 @@ fn exerciseWhereAdmission(valueAdapter: Bool) {
 
 fn main() {
     val scenario = argAt(1I64)
+    if scenario == "requirementWhereSyntax" || scenario == "requirementWhereValue" {
+        exerciseRequirementWhere(valueAdapter: scenario == "requirementWhereValue")
+        return
+    }
     if scenario == "whereSyntax" || scenario == "whereValue" {
         exerciseWhereAdmission(valueAdapter: scenario == "whereValue")
         return
