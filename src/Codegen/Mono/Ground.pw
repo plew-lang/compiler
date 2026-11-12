@@ -505,9 +505,9 @@ pub impl Comp {
         if ta.isRecord || tb.isRecord { return ta.isRecord && tb.isRecord && ta.isSendable == tb.isSendable && ta.isDiverging == tb.isDiverging }
         if ta.isAny != tb.isAny || ta.isSendable != tb.isSendable || ta.isDiverging != tb.isDiverging || ta.paramId != tb.paramId { return false }
         if ta.assocTraitId != tb.assocTraitId || (ta.hasAssocTraitDecl && tb.hasAssocTraitDecl && ta.assocTraitDeclOffset != tb.assocTraitDeclOffset) || ta.assocNameId != tb.assocNameId { return false }
-        if sourceTerms {
-            val left = self.sourceNominalOwner(term: ta)
-            val right = self.sourceNominalOwner(term: tb)
+        if sourceTerms && ta.paramId == 0U64 {
+            val left = self.sourceNominalOwner(nameStart: ta.nameStart, nameLen: ta.nameLen, nameId: ta.nameId, site: ta.siteOffset)
+            val right = self.sourceNominalOwner(nameStart: tb.nameStart, nameLen: tb.nameLen, nameId: tb.nameId, site: tb.siteOffset)
             if left.isSome() || right.isSome() {
                 return left.isSome() && right.isSome() && left.unwrap() == right.unwrap()
             }

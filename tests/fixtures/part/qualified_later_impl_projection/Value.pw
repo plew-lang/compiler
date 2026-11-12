@@ -1,0 +1,6 @@
+use ./A as A
+trait Marker[U] {}
+trait P { type Item }
+struct Box[T] { val item: T }
+// impl[T] Box[T] where T: Marker[A.Wrap[T].Item], A.Wrap[T]: P { fn accept() {} }
+fn main() {}

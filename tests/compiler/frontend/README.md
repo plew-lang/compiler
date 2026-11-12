@@ -343,7 +343,7 @@ restoration, and legacy synthesized subjects; execute `later`, `nonmember`,
 `ImplProjectionBoundOrigin.pw` checks that two methods reuse a single
 impl-owned bound argument in signature, body and default projections. Execute
 `syntax`, `value`, `syntax shadow`, `value shadow`, `syntax later`,
-`value later` and `value recovery`. The controls cover same-spelled binders,
+`value later`, `value qualified` and `value recovery`. The controls cover same-spelled binders,
 later clauses, nonmember filtering, failed frame restoration and the value
 adapter's legacy name-only rows.
 

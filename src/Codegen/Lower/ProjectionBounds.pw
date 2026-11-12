@@ -50,7 +50,7 @@ impl Comp {
         return <Result.Ok value=() />
     }
 
-    inout fn preparedProjectionBound(id: U64) -> Result[PreparedProjectionBound, CompileDiagnostic] {
+    inout fn preparedProjectionBound(id: U64, requestSite: Optional[U64] = <Optional.None />) -> Result[PreparedProjectionBound, CompileDiagnostic] {
         if id == 0U64 || id > self.projectionBoundClauses.count() { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "invalid source bound clause", failureDomain: <FailureDomain.Internal />) /> }
         val saved = self.projectionBoundClauses[id - 1U64]
         val active = self.sourceTypeUses.currentScope()
@@ -70,7 +70,7 @@ impl Comp {
         match saved.state {
             ProjectionBoundState.Ready(bound: val bound) => { return <Result.Ok value=bound /> }
             ProjectionBoundState.Failed(diagnostic: val diagnostic) => { return <Result.Err error=diagnostic /> }
-            ProjectionBoundState.Lowering => { return <Result.Err error=self.diagnosticAt(offset: self.sourceTypeUses.scopeAt(token: saved.scope).unwrap().anchor, msg: "associated-type short projection analysis limit exceeded", failureDomain: <FailureDomain.Limit />) /> }
+            ProjectionBoundState.Lowering => { return <Result.Err error=self.diagnosticAt(offset: requestSite.unwrapOr(fallback: self.sourceTypeUses.scopeAt(token: saved.scope).unwrap().anchor), msg: "associated-type short projection analysis limit exceeded", failureDomain: <FailureDomain.Limit />) /> }
             ProjectionBoundState.Unlowered => {}
         }
         val clause = saved
@@ -85,7 +85,7 @@ impl Comp {
             _ => { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "source bound must be prepared before parameter defaults and bodies", failureDomain: <FailureDomain.Internal />) /> }
         }
         self.projectionBoundClauses[id - 1U64] = <ProjectionBoundClause scope=clause.scope parameters=clause.parameters syntax=clause.syntax syntheticSubject=clause.syntheticSubject head=clause.head state=<ProjectionBoundState.Lowering /> />
-        val result = self.lowerProjectionBoundOnce(id: id)
+        val result = self.lowerProjectionBoundClause(clause: clause)
         val state = match result {
             Result.Ok(value: val bound) => <ProjectionBoundState.Ready bound=bound />,
             Result.Err(error: val diagnostic) => <ProjectionBoundState.Failed diagnostic=diagnostic />,
@@ -95,12 +95,13 @@ impl Comp {
         return result
     }
 
-    inout fn lowerProjectionBoundOnce(id: U64) -> Result[PreparedProjectionBound, CompileDiagnostic] {
-        val head = try self.projectionBoundCandidateSource(id: id)
-        return self.lowerProjectionBoundClause(clause: self.projectionBoundClauses[id - 1U64], head: head)
+    fn preparedBoundSource(constraint: TraitConstraint, site: U64) -> ResolvedViewSource {
+        val index = self.decls.traitOwnerIndex(offset: constraint.key.owner)
+        if index >= self.decls.traitOwnerCount() { return <ResolvedViewSource writtenStart=site /> }
+        return <ResolvedViewSource writtenStart=site surfaceId=self.decls.traitOwnerAt(index: index).nameId traitInstance=constraint.key />
     }
 
-    inout fn lowerProjectionBoundClause(clause: ProjectionBoundClause, head: ResolvedViewSource) -> Result[PreparedProjectionBound, CompileDiagnostic] {
+    inout fn lowerProjectionBoundClause(clause: ProjectionBoundClause) -> Result[PreparedProjectionBound, CompileDiagnostic] {
         val anchor = self.sourceTypeUses.scopeAt(token: clause.scope).unwrap().anchor
         match clause.syntax {
             ProjectionBoundSyntax.Value(subject: val subject, traitType: val traitType, parameter: val parameter) => {
@@ -108,27 +109,38 @@ impl Comp {
                 // Construct its binder term without issuing a fictitious use.
                 val loweredSubject = if clause.syntheticSubject { give (try self.lowerTypeCore(t: (try self.normalizeProjectionType(t: subject)))) } else { give (try self.lowerType(t: subject)) }
                 val lowered = try self.lowerSourceValueTraitBound(traitType: (try self.normalizeProjectionType(t: traitType)), origin: <Optional.Some v=anchor />)
-                return <Result.Ok value=<PreparedProjectionBound source=<ResolvedViewSource writtenStart=head.writtenStart surfaceId=head.surfaceId traitInstance=lowered.constraint.key /> subject=loweredSubject.ref constraint=lowered.constraint arguments=lowered.arguments parameter=parameter /> />
+                return <Result.Ok value=<PreparedProjectionBound source=self.preparedBoundSource(constraint: lowered.constraint, site: traitType.span.start) subject=loweredSubject.ref constraint=lowered.constraint arguments=lowered.arguments parameter=parameter /> />
             }
             ProjectionBoundSyntax.Syntax(subject: val subject, traitType: val traitType, parameter: val parameter) => {
                 val loweredSubject = try self.lowerSyntaxType(id: subject)
                 val lowered = try self.lowerSourceSyntaxTraitBound(traitTy: traitType, origin: <Optional.Some v=anchor />)
-                return <Result.Ok value=<PreparedProjectionBound source=<ResolvedViewSource writtenStart=head.writtenStart surfaceId=head.surfaceId traitInstance=lowered.constraint.key /> subject=loweredSubject.ref constraint=lowered.constraint arguments=lowered.arguments parameter=<Bind nameStart=parameter.start nameLen=parameter.end - parameter.start nameId=intern(c: inout self, start: parameter.start, len: parameter.end - parameter.start) fieldStart=0U64 fieldLen=0U64 /> /> />
+                return <Result.Ok value=<PreparedProjectionBound source=self.preparedBoundSource(constraint: lowered.constraint, site: syntaxType(file: self.syntax, id: traitType).span.start) subject=loweredSubject.ref constraint=lowered.constraint arguments=lowered.arguments parameter=<Bind nameStart=parameter.start nameLen=parameter.end - parameter.start nameId=intern(c: inout self, start: parameter.start, len: parameter.end - parameter.start) fieldStart=0U64 fieldLen=0U64 /> /> />
             }
         }
     }
 
     inout fn appendPreparedFunctionBounds(function: U64) -> Result[(), CompileDiagnostic] {
-        val context = self.activeProjectionBounds.unwrap()
-        try self.appendPreparedFunctionBoundRange(function: function, range: context.own)
-        return self.appendPreparedFunctionBoundRange(function: function, range: context.inherited)
+        mut val bounds: Array[FuncBound] = []
+        try self.collectPreparedFunctionBounds(function: function, into: inout bounds)
+        self.publishFunctionBounds(bounds: bounds)
+        return <Result.Ok value=() />
     }
 
-    inout fn appendPreparedFunctionBoundRange(function: U64, range: SourceBoundRange) -> Result[(), CompileDiagnostic] {
+    inout fn publishFunctionBounds(bounds: Array[FuncBound]) {
+        for val bound in bounds { self.decls.funcBounds.append(bound) }
+    }
+
+    inout fn collectPreparedFunctionBounds(function: U64, into: inout Array[FuncBound]) -> Result[(), CompileDiagnostic] {
+        val context = self.activeProjectionBounds.unwrap()
+        try self.collectPreparedFunctionBoundRange(function: function, range: context.own, into: inout into)
+        return self.collectPreparedFunctionBoundRange(function: function, range: context.inherited, into: inout into)
+    }
+
+    inout fn collectPreparedFunctionBoundRange(function: U64, range: SourceBoundRange, into: inout Array[FuncBound]) -> Result[(), CompileDiagnostic] {
         mut val index = 0U64
         while index < range.count {
             val bound = try self.preparedProjectionBound(id: range.first + index)
-            self.decls.funcBounds.append(<FuncBound fnIdx=function paramStart=bound.parameter.nameStart paramLen=bound.parameter.nameLen paramTy=bound.subject paramNameId=bound.parameter.nameId constraint=bound.constraint />)
+            into.append(<FuncBound fnIdx=function paramStart=bound.parameter.nameStart paramLen=bound.parameter.nameLen paramTy=bound.subject paramNameId=bound.parameter.nameId constraint=bound.constraint />)
             index += 1U64
         }
         return <Result.Ok value=() />
@@ -158,6 +170,51 @@ impl Comp {
         return <Result.Ok value=source />
     }
 
+    // Pending rows use a prefilter to avoid evaluating a recursive RHS for an
+    // unrelated subject. Only the prepared semantic term can grant evidence.
+    inout fn pendingProjectionHeadMatches(name: Bind, site: U64, term: TypeTerm) -> Bool {
+        val binder = self.sourceTypeParameter(name: name)
+        if binder != term.paramId { return false }
+        if binder != 0U64 { return true }
+        val nameId = intern(c: inout self, start: name.nameStart, len: name.nameLen)
+        val left = self.sourceNominalOwner(nameStart: name.nameStart, nameLen: name.nameLen, nameId: nameId, site: site)
+        val right = self.sourceNominalOwner(nameStart: term.nameStart, nameLen: term.nameLen, nameId: term.nameId, site: term.siteOffset)
+        if left.isSome() || right.isSome() { return left.isSome() && right.isSome() && left.unwrap() == right.unwrap() }
+        return nameId == term.nameId
+    }
+
+    inout fn pendingValueProjectionSubjectMatches(subject: TypeAst, receiver: U64) -> Bool {
+        val term = self.arena.typeTermAt(index: receiver)
+        if subject.projectionAssoc.bytes().count() > 0U64 || subject.extView.bytes().count() > 0U64 || subject.args.count() != term.args.len {
+            return false
+        }
+        val name = self.lowerTypeName(name: subject.name, span: subject.nameSpan)
+        if !self.pendingProjectionHeadMatches(name: name, site: subject.span.start, term: term) { return false }
+        mut val index = 0U64
+        while index < term.args.len {
+            if !self.pendingValueProjectionSubjectMatches(subject: subject.args[index], receiver: self.typeTermArgAt(ref: receiver, index: index)) { return false }
+            index += 1U64
+        }
+        return true
+    }
+
+    inout fn pendingSyntaxProjectionSubjectMatches(raw: TypeId, receiver: U64) -> Result[Bool, CompileDiagnostic] {
+        val subject = try self.resolveSyntaxTypePath(t: syntaxType(file: self.syntax, id: raw))
+        val term = self.arena.typeTermAt(index: receiver)
+        if subject.projectionAssoc.end > subject.projectionAssoc.start || subject.extView.end > subject.extView.start || syntaxTypeArgCount(file: self.syntax, ty: subject) != term.args.len {
+            return <Result.Ok value=false />
+        }
+        val name = <Bind nameStart=subject.name.start nameLen=subject.name.end - subject.name.start fieldStart=0U64 fieldLen=0U64 />
+        if !self.pendingProjectionHeadMatches(name: name, site: subject.span.start, term: term) { return <Result.Ok value=false /> }
+        mut val index = 0U64
+        while index < term.args.len {
+            val child = syntaxTypeArg(file: self.syntax, ty: subject, index: index)
+            if !(try self.pendingSyntaxProjectionSubjectMatches(raw: child, receiver: self.typeTermArgAt(ref: receiver, index: index))) { return <Result.Ok value=false /> }
+            index += 1U64
+        }
+        return <Result.Ok value=true />
+    }
+
     inout fn cachedValueProjectionSource(type: TypeAst, receiver: U64) -> Result[LoweredTypeViewRecipe, CompileDiagnostic] {
         val member = self.internBytes(s: type.projectionAssoc).nameId
         mut val sources: Array[LoweredTypeViewRecipe] = []
@@ -182,10 +239,10 @@ impl Comp {
             }
             match clause.syntax {
                 ProjectionBoundSyntax.Value(subject: val subject, traitType: _, parameter: _) => {
-                    if self.boundLhsMatchesType(lhs: subject, t: type) {
+                    if self.pendingValueProjectionSubjectMatches(subject: (try self.normalizeProjectionType(t: subject)), receiver: receiver) {
                         val source = try self.projectionBoundCandidateSource(id: id)
                         if self.traitOwnerHasAssocId(owner: source.traitInstance.owner, assocId: member) {
-                            val bound = try self.preparedProjectionBound(id: id)
+                            val bound = try self.preparedProjectionBound(id: id, requestSite: <Optional.Some v=type.span.start />)
                             if self.typeRefEq(a: bound.subject, b: receiver, sourceTerms: true) {
                                 sources.append(<LoweredTypeViewRecipe source=bound.source arguments=bound.arguments />)
                             }
@@ -222,10 +279,10 @@ impl Comp {
             }
             match clause.syntax {
                 ProjectionBoundSyntax.Syntax(subject: val subject, traitType: _, parameter: _) => {
-                    if self.boundLhsMatchesSyntaxType(lhs: subject, t: type) {
+                    if try self.pendingSyntaxProjectionSubjectMatches(raw: subject, receiver: receiver) {
                         val source = try self.projectionBoundCandidateSource(id: id)
                         if self.traitOwnerHasAssocId(owner: source.traitInstance.owner, assocId: member) {
-                            val bound = try self.preparedProjectionBound(id: id)
+                            val bound = try self.preparedProjectionBound(id: id, requestSite: <Optional.Some v=type.span.start />)
                             if self.typeRefEq(a: bound.subject, b: receiver, sourceTerms: true) {
                                 sources.append(<LoweredTypeViewRecipe source=bound.source arguments=bound.arguments />)
                             }

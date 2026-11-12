@@ -6,17 +6,25 @@ pub impl Decls {
     fn traitSubjectConformCount() -> U64 { return self.traitSubjectConformIndices.count() }
     fn traitSubjectConformIndexAt(index: U64) -> U64 { return self.traitSubjectConformIndices[index] }
 
-    inout fn registerConform(declaration~: Conform, authoredFunctions: Optional[ConformFuncIdRange] = <Optional.None />) {
+    inout fn registerConform(declaration~: Conform, authoredFunctions: Optional[ConformFuncIdRange] = <Optional.None />, sourceBounds: Optional[Array[ConformBound]] = <Optional.None />) {
         // Initialization at the sole writer, not a missing-fact read fallback.
         // Derived rows explicitly carry their original declaration snapshot.
         val authored = authoredFunctions.unwrapOr(fallback: declaration.witnessFuncIds)
         if declaration.subjectTraitOwner != 0U64 {
             self.traitSubjectConformIndices.append(self.conformRows.count())
         }
+        val bounds = match sourceBounds {
+            Optional.Some(v: val prepared) => {
+                val start = self.conformBoundPool.count()
+                for val bound in prepared { self.conformBoundPool.append(bound) }
+                give <ConformBoundRange start=start len=prepared.count() />
+            }
+            Optional.None => declaration.bounds,
+        }
         self.conformRows.append(<Conform
             sourceModule=declaration.sourceModule typeStart=declaration.typeStart typeLen=declaration.typeLen typeId=declaration.typeId
             subjectTraitOwner=declaration.subjectTraitOwner subjectTy=declaration.subjectTy subjectArgs=declaration.subjectArgs
-            typeParams=declaration.typeParams bounds=declaration.bounds typeArity=declaration.typeArity
+            typeParams=declaration.typeParams bounds=bounds typeArity=declaration.typeArity
             traitStart=declaration.traitStart traitLen=declaration.traitLen traitId=declaration.traitId traitArgs=declaration.traitArgs
             derived=declaration.derived isPub=declaration.isPub extId=declaration.extId viewRootId=declaration.viewRootId viewRootOwner=declaration.viewRootOwner viewRootConformIdx=declaration.viewRootConformIdx
             defOffset=declaration.defOffset assocBindingIds=declaration.assocBindingIds witnessed=declaration.witnessed

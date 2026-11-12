@@ -18,6 +18,12 @@ Connect registered inherent/trait-impl method parameter/result annotation occurr
 
 Carry those facts into selected method-call types and actual BodySignature publication, rejecting missing justification before source declaration success. Raw trait requirement/translated provided-signature handoff belongs to the requirement sibling; body-local annotations belong to the body sibling. Do not duplicate com-4k31 candidate/path dispatch selection or API authority-narrowing repairs.
 
+The [com-erlx re-review](com-erlx.md#resumed-checkpoint) found that a failed
+parent can retain raw registered callable rows after a successful earlier
+member. Check the existing missing/failed-owner admission guarantee against
+that prefix, including the implicit trait-receiver premise. Authored where
+premises are staged by com-erlx.
+
 ## Required Scenarios
 
 - Unused and instantiated inherent/trait methods; direct/inherited/selected-extension premise and missing/unrelated/wrong-instance premise.

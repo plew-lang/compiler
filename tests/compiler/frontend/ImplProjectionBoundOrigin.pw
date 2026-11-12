@@ -112,7 +112,7 @@ fn exerciseValueRecovery() {
     val originalBounds = compiler.decls.conformBoundPool.count()
     match compiler.lowerImpl(im: parseImplementation(compiler, duplicate)) {
         Result.Err(error: val diagnostic) => {
-            match diagnostic.failureDomain { FailureDomain.Source => {} _ => { panic(diagnostic.message) } }
+            if diagnostic.message != "duplicate or overlapping trait conformance in one declaration namespace (spec/08,09)" { panic(diagnostic.message) }
         }
         Result.Ok(value: _) => { panic("a duplicate conformance unexpectedly succeeded") }
     }
@@ -122,10 +122,31 @@ fn exerciseValueRecovery() {
     print("1")
 }
 
+fn exerciseQualifiedValueDependency() {
+    val path = "tests/fixtures/part/qualified_later_impl_projection/Value.pw"
+    val declaration = "impl[T] Box[T] where T: Marker[A.Wrap[T].Item], A.Wrap[T]: P {{ fn accept() {{}} }}"
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.File path=path />, sources: <SourceAccess stdRoot=[] />).unwrap()
+    compiler.lowerImpl(im: parseImplementation(compiler, declaration)).unwrap()
+    val anchor = sourceOffset(compiler, declaration)
+    mut val token = 1U64
+    while token <= compiler.sourceTypeUses.scopeCount() {
+        val scope = compiler.sourceTypeUses.scopeAt(token: token).unwrap()
+        if scope.anchor == anchor {
+            if scope.bounds.unwrap().count != 2U64 { panic("qualified impl lost its original clauses") }
+            print("1")
+            return
+        }
+        token += 1U64
+    }
+    panic("qualified value impl was not lowered")
+}
+
 fn main() {
     val valueAdapter = argAt(1I64) == "value"
     if argAt(2I64) == "later" { exerciseBoundDependencies(valueAdapter: valueAdapter) return }
     if argAt(2I64) == "recovery" { exerciseValueRecovery() return }
+    if argAt(2I64) == "qualified" { exerciseQualifiedValueDependency() return }
     val shadowedBinder = argAt(2I64) == "shadow"
     val header = "trait Project[Kind] {{ type Item }} trait Alternate[Kind] {{ type Item }} struct Box[T] {{ val item: T }} "
     val first = if shadowedBinder {

@@ -68,3 +68,31 @@ view source also changes the diagnostic for an unused unknown trait. Keep
 ordinary constraint binding distinct from short-projection candidate
 filtering. The old compiler's unused unknown-trait acceptance is a
 separate admission defect.
+
+## Resumed checkpoint
+
+[com-v5zn](com-v5zn.md) closed the shared nominal identity prerequisite.
+The resumed implementation stages authored method bounds until the owning
+impl succeeds, and publishes conformance bounds only after registration
+checks. Pending subjects use the same admitted nominal identity, with the
+qualified later-clause fixture exercising that route. The value recovery
+probe reproduced the old failed-prefix leak and now checks both method
+and conformance bound publication. The pre-existing low-level duplicate
+conformance diagnostic is still unclassified; the probe pins the diagnostic
+message and absence of newly published premises.
+
+Build `20261112T102103-build-6c2fe4` succeeded. Candidate `da939fd0`
+passed all eight impl provenance scenarios, including qualified later-clause
+preparation through the value adapter, eight existing free-bound controls,
+and the conditional-conformance check/AOT/lazy control.
+
+Independent re-review confirmed these paths. Failed raw callable and implicit
+trait-receiver admission remains with [com-zqqi](com-zqqi.md); no authored
+`where` premise from that prefix remains published.
+
+Removing view-source lookup from ordinary clause lowering exposed a missing
+admission check. The current candidate accepts an unused free function with
+`where T:Unknown`, which both prior fixed candidates rejected. The older
+baseline already accepted the corresponding impl forms. See [com-ffms](com-ffms.md)
+for the exact differential and the common admission repair. This ticket
+remains in progress until ordinary bound admission no longer regresses.
