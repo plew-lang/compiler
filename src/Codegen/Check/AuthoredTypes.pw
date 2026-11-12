@@ -223,7 +223,8 @@ impl Comp {
                     val proof = try self.readAuthoredOccurrenceProof(proofs: proofs, occurrence: node.occurrence, selector: selector, receiver: receiver, arguments: arguments, environment: environment, offset: occurrence.site, normalizations: proofEquations, context: context)
                     match context {
                         SignatureRecipeContext.Requirement(signature: val interface) => {
-                            val output = try self.readRequirementProjectionOutput(proof: proof, interface: interface, receiver: receiver, selector: selector, arguments: arguments, member: original.assocNameId, environment: environment, offset: occurrence.site)
+                            memo[recipe] = <AuthoredRecipeRead term=0U64 reading=true views=[] normalizations=[] />
+                            val output = try self.readRequirementProjectionOutput(proof: proof, interface: interface, receiver: receiver, selector: selector, arguments: arguments, member: original.assocNameId, environment: environment, offset: occurrence.site, memo: inout memo)
                             if output != 0U64 { term = output }
                         }
                         SignatureRecipeContext.Provided(owner: val function) => {
@@ -817,7 +818,7 @@ impl Comp {
         return <Result.Ok value=self.groundTermInEnvironment(ref: output, params: environment.params, values: environment.args, selfRef: environment.receiverRef) />
     }
 
-    inout fn readRequirementProjectionOutput(proof: StaticConformanceProof, interface: RequirementSignatureRead, receiver: U64, selector: ResolvedViewSource, arguments: Array[U64], member: U64, environment: InstanceEnvironment, offset: U64) -> Result[U64, CompileDiagnostic] {
+    inout fn readRequirementProjectionOutput(proof: StaticConformanceProof, interface: RequirementSignatureRead, receiver: U64, selector: ResolvedViewSource, arguments: Array[U64], member: U64, environment: InstanceEnvironment, offset: U64, memo: inout Dictionary[U64, AuthoredRecipeRead]) -> Result[U64, CompileDiagnostic] {
         val premise = self.signatureProjectionPremise(proof: proof)
         mut val raw: Optional[U64] = <Optional.None />
         if premise.source.isSome() {
@@ -836,6 +837,14 @@ impl Comp {
                 val bound = self.supertraitBoundThroughSteps(root: interface.bound, steps: premise.steps)
                 val selected = if premise.steps.count() == 0U64 { give interface.selected } else { give <Optional.None /> }
                 return self.readSelectedSignatureProjection(bound: bound, selected: selected, receiver: receiver, selector: selector, arguments: arguments, member: member, offset: offset)
+            }
+            if premise.steps.count() == 0U64 {
+                val clause = self.rawRequirementPremises[index]
+                val prepared = try self.retainedSignatureClause(scope: interface.scope, id: clause.sourceClause, offset: offset)
+                val admitted = self.authoredRequirementViews[interface.scope]
+                val context = <SignatureRecipeContext.Requirement signature=interface />
+                val bound = try self.readAuthoredSignatureClause(prepared: prepared, proofs: admitted.proofs, context: context, environment: environment, memo: inout memo, onlyMember: member)
+                return self.readSelectedSignatureProjection(bound: bound, selected: <Optional.None />, receiver: receiver, selector: selector, arguments: arguments, member: member, offset: offset)
             }
         }
         // An admitted equation may leave its output symbolic. It does not

@@ -7,6 +7,27 @@ use /Frontend only { Comp, FrontendInput, analyzeFrontendDeclarations }
 use /SourceAccess only { SourceAccess }
 use /SourceTypeUses only { SourceTypeUses }
 use /Ir only { TypeRef }
+fn checkRequirementWhereProjection() {
+    mut val compiler = <Comp />
+    val source = "trait Source {{ type Item }} trait Marker {{}} trait Service {{ fn read[T,U](value: T, other: U) where U: Source[Item=Bool], T: Source[Item=U#Source.Item], T#Source.Item: Marker }} fn probe[R,T,U](receiver: R, value: T, other: U) where R: Service {{}}"
+    analyzeFrontendDeclarations(c: inout compiler, input: <FrontendInput.Text text=source path="clause-reader.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
+    val owner = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "probe").nameId)
+    val declaration = compiler.arena.functionAt(index: owner)
+    val receiver = compiler.funcParamAt(params: declaration.params, index: 0U64).ty
+    val value = compiler.funcParamAt(params: declaration.params, index: 1U64).ty
+    val other = compiler.funcParamAt(params: declaration.params, index: 2U64).ty
+    val sourceBound = compiler.decls.funcBounds.at(index: 0U64)
+    val traitIndex = compiler.decls.traitIndexByOffset(offset: sourceBound.constraint.key.owner)
+    val resolution = <StaticMemberResolution.Requirement proof=<StaticConformanceProof.AssumedBound source=<DeclarationBoundRef.Function index=0U64 /> /> traitIdx=traitIndex reqIdx=0U64 />
+    val arguments = compiler.publishCallTemplateTypeArgs(args: [value, other])
+    val kind = <CallTemplateKind.StaticMethod receiver=<CallTemplateReceiver.Term term=receiver /> args=compiler.publishCallTemplateArguments(args: []) resolution=resolution methodTypeArgs=arguments resultTerm=0U64 />
+    val template = <CallTemplate siteKey=<CallSiteKey ownerFnIdx=owner originKind=2U64 originSerial=903U64 /> receiverTypeTerm=receiver kind=kind />
+    val bounds = compiler.sourceSelectedCallBounds(template: template).unwrap()
+    if bounds.count() != 3U64 { panic "requirement projection lost its clauses" }
+    val item = bounds[0U64].constraint.assocPredicates[0U64].value
+    if !compiler.typeRefEq(a: bounds[2U64].subject, b: item) { panic "requirement where projection did not use its nested equation" }
+}
+
 fn checkRetainedWhereClause() {
     mut val compiler = <Comp />
     val source = "trait Marker {{}} trait Service {{ fn read[T](value: T) where T: Marker fn unrelated[T](value: T) -> I64 }} fn probe[T,U,V](receiver: T, value: U, foreign: V) where T: Service, U: Marker {{}}"
@@ -146,6 +167,7 @@ fn checkProvidedSignature() {
 }
 
 fn main() {
+    checkRequirementWhereProjection()
     checkProvidedWhereProjection()
     checkProvidedWhereClause()
     checkProvidedSignature()

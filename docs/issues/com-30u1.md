@@ -632,3 +632,32 @@ projection equations from static calls and existential thunks to the final
 public clause comparison. That comparison currently still calls
 `groundCallableBound`; test it with the projection evidence removed before
 changing the handoff. Independent re-review remains required for closure.
+
+## Direct raw requirement where-equation checkpoint
+
+The raw requirement reader now uses the same authored clause recipes as the
+provided reader for a selected direct premise. The source slot still owns
+the proof; the selected receiver and positional instance are checked after
+substitution. The nested direct requirement test fails on `fce04f7c` with
+an unresolved last clause subject and resolves it to Bool on `096120ea`.
+An isolated result-only probe removes the view proof on the second method
+parameter. The old source reads the result anyway; the new source reports
+"signature view has no saved proof".
+
+Build `20261112T160509-build-620153`, generation
+`20261112T160836-gen-2a66a5` (25 pass, 5 expected reject), and five
+targeted check/native fixtures passed. Four of those fixtures also passed
+JIT. A separate generic call with `T#Source.Item: Number` returned 42 in
+JIT and native execution and passed check. Same-source interleaved
+medians were 6.633151 s and 6.651190 s; all eight LLVM outputs matched.
+
+Two remaining REDs reproduced on `096120ea` in isolated source copies.
+For `Child[Element]: Parent[Output=Element]` and
+`T: Child[U#Source.Item]`, reading `T#Parent.Output` still succeeds
+after removal of the proof for `U#Source.Item`. The exact inherited
+path must retain the source recipes of the inputs it uses. Separately,
+the implementation boundary accepts a projected public clause after
+receiving the correct concrete bounds and proofs with the projection
+normalizations omitted. The public positive above supplies the valid
+control. Preserve the instantiated normalization receipt into the final
+comparison from both static calls and interface thunks.
