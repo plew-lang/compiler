@@ -267,3 +267,26 @@ the interface where clause and were discarded.
 Next extend the evidence fault cases to cover a missing RHS receipt,
 foreign substitution, and missing or replaced prerequisite or equation
 at the output reader. Then review the full guarantee before closing.
+
+## Nominal witness substitution integrity
+
+The native fault control `associated_binding_witness_substitution` on
+`a828deac` accepted a witness for `Box[I64]` whose binder mapped to
+`Bool`. The normalized RHS reader now checks that the substituted
+nominal declaration subject matches the witness receiver, accounting
+for the retained equations. The control rejects the foreign and
+missing substitutions and reads the original again.
+
+Candidate `c1b0a874` passed standard build
+`20261112T234530-build-851176`, generation
+`20261112T234931-gen-20402d`, the native fault control, and eight public
+controls in check, JIT and native. Same-source medians were 6.891331 s
+and 6.882613 s. LLVM differences were confined to the TypeTerm numbers
+in generic-body symbol names.
+
+Independent review in progress found additional gaps. A conditional
+witness with its condition-plan ID removed can still yield a literal
+or binder RHS. An extra witness binder row can disagree with the
+canonical substitution. Requirement-associated evidence needs its
+replacement proof checked against the retained clause. The task stays
+open for these checks and the remaining fault controls.

@@ -1,0 +1,25 @@
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use /Ir only { StaticConformanceProof, WitnessBind, WitnessMatch }
+use /SourceAccess only { SourceAccess }
+use @Std/Core only { assert }
+use @Std/Io only { print }
+
+fn main() {
+    mut val compiler = <Comp />
+    val source = "trait Parent {{ type Item }}\nstruct Box[T] {{}}\nimpl[T] Box[T] as Parent {{ type Item = T }}\nfn example(value: Box[I64], other: Bool) {{}}\n"
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text text=source path="binding-substitution.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
+    val binding = compiler.decls.assocBindings[0U64]
+    val declaration = compiler.arena.functionAt(index: compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "example").nameId))
+    val receiver = compiler.funcParamAt(params: declaration.params, index: 0U64).ty
+    val expected = compiler.arena.typeAt(index: receiver).args[0U64]
+    val foreign = compiler.funcParamAt(params: declaration.params, index: 1U64).ty
+    val parameter = compiler.conformBindAt(binds: binding.typeParams, index: 0U64)
+    val valid = <StaticConformanceProof.ConcreteWitness witness=<WitnessMatch conformIdx=1U64 selfRef=receiver binds=[<WitnessBind binder=0U64 paramId=parameter.paramId term=expected />] /> />
+    val wrong = <StaticConformanceProof.ConcreteWitness witness=<WitnessMatch conformIdx=1U64 selfRef=receiver binds=[<WitnessBind binder=0U64 paramId=parameter.paramId term=foreign />] /> />
+    val missing = <StaticConformanceProof.ConcreteWitness witness=<WitnessMatch conformIdx=1U64 selfRef=receiver /> />
+    assert(compiler.associatedOutputInProof(proof: valid, traitOwner: binding.traitOwner, assocId: binding.nameId).unwrap() == expected)
+    if !compiler.associatedOutputInProof(proof: wrong, traitOwner: binding.traitOwner, assocId: binding.nameId).isErr() { panic("accepted a foreign witness substitution") }
+    assert(compiler.associatedOutputInProof(proof: missing, traitOwner: binding.traitOwner, assocId: binding.nameId).isErr())
+    assert(compiler.associatedOutputInProof(proof: valid, traitOwner: binding.traitOwner, assocId: binding.nameId).unwrap() == expected)
+    print("associated-binding-witness-substitution")
+}

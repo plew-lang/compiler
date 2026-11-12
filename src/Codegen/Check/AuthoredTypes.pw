@@ -86,6 +86,15 @@ impl Comp {
             }
         }
         val environment = try self.selectedConstraintEnvironment(witness: witness, proof: proof)
+        val declaration = self.decls.conformAt(index: saved.conformance)
+        if declaration.subjectTraitOwner == 0U64 {
+            val subject = self.groundTermInEnvironment(ref: declaration.subjectTy, params: environment.params, values: environment.args)
+            val declared = try self.replayProjectionNormalizations(ref: subject, normalizations: normalizations, offset: binding.tyStart)
+            val actual = self.conformancePhysicalSubject(typeRef: witness.selfRef)
+            if witness.selfRef == 0U64 || !self.typeRefEq(a: self.typeRefWithoutOuterViews(ref: declared), b: self.typeRefWithoutOuterViews(ref: actual)) {
+                return <Result.Err error=self.diagnosticAt(offset: binding.tyStart, msg: "associated binding substitution does not match its witness subject", failureDomain: <FailureDomain.Internal />) />
+            }
+        }
         mut val memo: Dictionary[U64, AuthoredRecipeRead] = [:]
         self.activeAssociatedBindingReads.append((binding: bindingIndex, witness: witness))
         val result = self.readAuthoredTypeRecipe(proofs: saved.proofs, recipe: saved.recipe, environment: environment, memo: inout memo, context: <SignatureRecipeContext.AssociatedBinding requirement=requirement />)
