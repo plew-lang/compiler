@@ -1032,3 +1032,30 @@ admission. The directly declared `Service.Input` and the separate terminal
 supertrait of `Source` both have working controls. Check the owner path in
 the source recipe and the replay of its prerequisite, then check a replaced
 fixed associated proof against the full saved bound before independent closure.
+
+## Fixed associated clause integrity and inherited-owner controls
+
+The receipt now retains the selected clause's projection equations. A hit
+checks its proof against the full clause, including associated predicates,
+using only saved equations. In the isolated replacement control,
+`Service.Input: Source[Item=I64]` is fixed to `Entry`. Keep the receipt key
+and replace its frozen proof with the `Entry#Alternate as Source` proof
+whose `Item` is Bool. Candidate `bfaa29e1` accepted the replacement.
+Candidate `bae2673b` rejects it with Internal
+`fixed requirement proof does not match its admitted associated clause`.
+
+The explicit qualified form `Wrapper[Self#Parent.Input]#Select.Value`
+establishes a legal inherited-owner control. Its where-clause form passes
+through `any Service` and runs in both backends. The return-type variant
+still fails implementation result matching even on the older
+`plewc-retained-source-interface-fixed` carrier. The bare
+`Input#Source.Item` form fails independently. The lexical associated-name
+lowerer reads only the current trait owner's declarations. Source ordering
+must not become a requirement while adding inherited owner resolution.
+After the source binds the member, the signature reader must preserve its
+parent path and any equations consumed by an enclosing projection.
+
+Build `20261112T185328-build-e2b0b3`, generation
+`20261112T185644-gen-7ad1e2`, and seven check/JIT/native controls passed,
+including the qualified inherited where case. Same-source medians were
+6.699748 s and 6.705766 s, with identical LLVM output in all eight runs.

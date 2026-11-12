@@ -435,6 +435,7 @@ impl RequirementSignatureRead { factory }
 struct FixedRequirementAssociatedProof {
     val bound: TraitBound
     val proof: U64
+    val normalizations: Array[ProjectionNormalizationStep]
 }
 impl FixedRequirementAssociatedProof { factory }
 

@@ -995,6 +995,12 @@ impl Comp {
             if self.typeRefEq(a: receipt.bound.subject, b: bound.subject) && self.sameTraitConstraint(a: receipt.bound.constraint, b: bound.constraint) {
                 val proof = self.thawStaticConformanceProof(id: receipt.proof)
                 if self.proofIsMissing(proof: proof) { return <Result.Err error=self.diagnosticAt(offset: bound.offset, msg: "fixed requirement lost its admitted associated proof", failureDomain: <FailureDomain.Internal />) /> }
+                try self.checkProjectionNormalizations(normalizations: receipt.normalizations, offset: bound.offset)
+                try self.checkStaticProofEvidence(proof: proof, offset: bound.offset)
+                val expected = try self.replayBoundNormalizations(bound: bound, normalizations: receipt.normalizations)
+                if !(try self.retainedWitnessClauseMatches(expected: expected, proof: proof, normalizations: receipt.normalizations, offset: bound.offset)) {
+                    return <Result.Err error=self.diagnosticAt(offset: bound.offset, msg: "fixed requirement proof does not match its admitted associated clause", failureDomain: <FailureDomain.Internal />) />
+                }
                 return <Result.Ok value=<Optional.Some v=proof /> />
             }
         }
@@ -1004,7 +1010,8 @@ impl Comp {
         }
         val proof = try self.viewedTraitConstraintProof(demand: <ConformanceProofDemand.SourceAdmission />, ref: bound.subject, constraint: bound.constraint)
         if self.proofIsMissing(proof: proof) { return <Result.Err error=self.diagnosticAt(offset: bound.offset, msg: "fixed associated type does not satisfy its declared trait constraint", failureDomain: <FailureDomain.Source />) /> }
-        receipts.append(<FixedRequirementAssociatedProof bound=bound proof=self.freezeStaticConformanceProof(proof: proof) />)
+        val normalizations = try self.recordSelectedBoundNormalizations(bound: bound, proof: proof, assumptions: [])
+        receipts.append(<FixedRequirementAssociatedProof bound=bound proof=self.freezeStaticConformanceProof(proof: proof) normalizations=normalizations />)
         self.fixedRequirementAssociatedProofs[index] = receipts
         return <Result.Ok value=<Optional.Some v=proof /> />
     }
