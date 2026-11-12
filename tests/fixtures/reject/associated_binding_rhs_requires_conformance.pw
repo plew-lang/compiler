@@ -1,0 +1,5 @@
+trait Marker { type Type }
+trait Parent { type Item }
+struct Box[T] {}
+impl[T] Box[T] as Parent { type Item = T#Marker.Type }
+fn main() {}

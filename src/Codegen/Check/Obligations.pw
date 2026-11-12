@@ -116,6 +116,10 @@ pub impl Comp {
                 }
             }
             DeclarationScopeOrigin.InterfaceContract => {}
+            DeclarationScopeOrigin.AssociatedBinding => {
+                if scope.owner >= self.decls.conformCount() { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "associated binding has no conformance scope", failureDomain: <FailureDomain.Internal />) /> }
+                assumptions = self.conformanceDeclarationAssumptions(conformIndex: scope.owner)
+            }
             DeclarationScopeOrigin.RequirementSignature => {
                 val range = self.rawRequirementRanges.getOr(key: scope.owner, fallback: <SourceBoundRange />)
                 for index in 0U64..<range.count {
@@ -1737,6 +1741,22 @@ impl Comp {
                     }
                     DeclarationBoundRef.AssociatedType(index: _) => {}
                     _ => { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "requirement signature cannot borrow another proof scope", failureDomain: <FailureDomain.Internal />) /> }
+                }
+            }
+            DeclarationScopeOrigin.AssociatedBinding => {
+                if scope.owner >= self.decls.conformCount() { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "associated binding has no conformance scope", failureDomain: <FailureDomain.Internal />) /> }
+                val conformance = self.decls.conformAt(index: scope.owner)
+                match source {
+                    DeclarationBoundRef.Conformance(index: val index) => {
+                        if index >= conformance.bounds.start && index - conformance.bounds.start < conformance.bounds.len { return <Result.Ok value=<DeclarationProofDependencies /> /> }
+                        return <Result.Err error=self.diagnosticAt(offset: offset, msg: "associated binding has a foreign conformance condition", failureDomain: <FailureDomain.Internal />) />
+                    }
+                    DeclarationBoundRef.TraitSubject(index: val index) => {
+                        if index == scope.owner && conformance.subjectTraitOwner != 0U64 { return <Result.Ok value=<DeclarationProofDependencies /> /> }
+                        return <Result.Err error=self.diagnosticAt(offset: offset, msg: "associated binding has a foreign trait subject", failureDomain: <FailureDomain.Internal />) />
+                    }
+                    DeclarationBoundRef.AssociatedType(index: _) => {}
+                    _ => { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "associated binding cannot borrow another declaration premise", failureDomain: <FailureDomain.Internal />) /> }
                 }
             }
             DeclarationScopeOrigin.Lexical => {}

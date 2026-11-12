@@ -71,3 +71,25 @@ concrete and trait-path output consumers to read it through the
 selected witness substitution. Distinguish symbolic declaration
 interpretation from fully instantiated output and cover absent/foreign
 evidence before closure.
+
+## Declaration admission checkpoint
+
+The shared recipe checker now admits each authored conformance binding in
+its original implementation scope before callable forms and trait-subject
+conferral. The receipt is keyed by binding row and retains the exact
+conformance, occurrence, recipe and selected view/projection proofs.
+The scope accepts its own conformance conditions and trait subject and
+rejects foreign assumptions.
+
+`associated_binding_rhs_requires_conformance` was accepted by `e5ccdcc1`
+despite lacking the prerequisite for its unused RHS. Candidate `9fe88cf2`
+rejects it at the RHS in check, JIT and native compilation. Adding
+`where T: Marker` makes the declaration check and run. Standard build
+`20261112T222237-build-9e9a69` and generation
+`20261112T222531-gen-c384e9` passed. Same-source medians were
+6.834570 s and 6.831517 s, with identical LLVM in all eight runs.
+
+The inherited-signature RED still fails return type comparison. The next
+increment must make the selected concrete/trait-path output reader replay
+the receipt in its witness environment, including symbolic impl-condition
+evidence and guarded recursive RHS reads.

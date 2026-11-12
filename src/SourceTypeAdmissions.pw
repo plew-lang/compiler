@@ -13,6 +13,14 @@ pub struct AuthoredTypeViewProof {
 }
 pub impl AuthoredTypeViewProof { factory }
 
+pub struct AuthoredAssociatedBinding {
+    pub val conformance: U64
+    pub val occurrence: U64
+    pub val recipe: U64
+    pub val proofs: Array[AuthoredTypeViewProof]
+}
+pub impl AuthoredAssociatedBinding { factory }
+
 pub struct AuthoredProvidedClause {
     pub val assumption: U64
     pub val scope: U64

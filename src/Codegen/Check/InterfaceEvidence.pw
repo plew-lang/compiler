@@ -55,7 +55,7 @@ impl Comp {
             InterfaceEvidenceNode.Source(root: val source) => {
                 match scope.origin {
                     DeclarationScopeOrigin.Lexical => {}
-                    DeclarationScopeOrigin.InterfaceContract | DeclarationScopeOrigin.RequirementSignature => { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "source-call evidence cannot authorize an interface contract") /> }
+                    DeclarationScopeOrigin.InterfaceContract | DeclarationScopeOrigin.RequirementSignature | DeclarationScopeOrigin.AssociatedBinding => { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "source-call evidence cannot authorize an interface contract") /> }
                 }
                 give source
             }
@@ -65,7 +65,7 @@ impl Comp {
                         if scope.owner != 0U64 || scope.parameters.len != 0U64 || scope.selfParameter != 0U64 { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "interface contract borrowed a lexical declaration scope") /> }
                         return <Result.Ok value=() />
                     }
-                    DeclarationScopeOrigin.Lexical | DeclarationScopeOrigin.RequirementSignature => { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "interface-contract evidence cannot authorize a source call") /> }
+                    DeclarationScopeOrigin.Lexical | DeclarationScopeOrigin.RequirementSignature | DeclarationScopeOrigin.AssociatedBinding => { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "interface-contract evidence cannot authorize a source call") /> }
                 }
             }
             InterfaceEvidenceNode.Instance(root: _, owner: _, bound: _) => { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "interface assumption has no source root") /> },

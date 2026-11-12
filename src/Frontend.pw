@@ -1,6 +1,6 @@
 use ./Ir only { SourceBindingOrigin }
 use ./SourceTypeUses only { SourceTypeRecipe, SourceTypeRecipeOrigin, SourceTypeUses, SourceTypeScope, SourceTypeScopeKind, SourceTypeScopeState, SourceTypeUseRole, AuthoredTypeUse, AuthoredFunctionSignature, LoweredSourceSignature, SourceRequirementOwner, SourceImplementationOwner, SourceImplementationKind, SourceBoundRange }
-use ./SourceTypeAdmissions only { AuthoredTypeViewProof, AuthoredSignatureViews, AuthoredProvidedClause, SourceSignatureSlot }
+use ./SourceTypeAdmissions only { AuthoredTypeViewProof, AuthoredSignatureViews, AuthoredProvidedClause, AuthoredAssociatedBinding, SourceSignatureSlot }
 use ./ModuleScopeBindings only { ModuleScopeBindings, AdmittedModuleScopeBindings, ScopeBindingKind, ScopeBindingFailure, ScopeBinding }
 use @Plew/Syntax only { ExtensionId, syntaxExtension, NameSegmentAst, SyntaxSourceTypes, SyntaxSourceIndex, syntaxSourceApplication, syntaxSourceApplicationTypeArg, syntaxSourceApplicationTypeLabel, SourceApplicationAst, SourceTypesAst, SourceIndexAst }
 use ./Ir only { StructuralOverlap, StructuralOccurrence, StructuralBinding }
@@ -691,6 +691,7 @@ pub struct Comp {
     mut val rawRequirementRanges: Dictionary[U64, SourceBoundRange] = [:]
     mut val authoredRequirementViews: Dictionary[U64, AuthoredRequirementSignature] = [:]
     mut val authoredSignatureViews: Dictionary[U64, AuthoredSignatureViews] = [:]
+    mut val authoredAssociatedBindings: Dictionary[U64, AuthoredAssociatedBinding] = [:]
     mut val authoredSignatureAdmission: AuthoredSignatureAdmissionPhase = <AuthoredSignatureAdmissionPhase.Open />
     pub mut val loweringTypeUses: Array[U64] = []
     // Authored provenance is independent of legacy visibility suppression.
@@ -2211,6 +2212,7 @@ fn loadFrontendDeclarations(c: inout Comp, input: FrontendInput, sources: Source
     // intentionally not a substitute for this diagnostic.
     try c.checkTraitSubjectCycles(activeExtIds: [])
     try c.checkTraitSubjectCycleBundles()
+    try c.admitAssociatedBindingRecipes()
     // inter-trait conformance (spec/08,09): `impl B as A` makes every type
     // conforming to subject trait B also conform to A; copy the methods onto each
     // conforming concrete type (before provided methods, so A's own provided

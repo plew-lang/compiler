@@ -28,6 +28,48 @@ pub impl Comp {
 }
 
 impl Comp {
+    inout fn admitAssociatedBindingRecipes() -> Result[(), CompileDiagnostic] {
+        for bindingIndex in 0U64..<self.decls.assocBindings.count() {
+            val binding = self.decls.assocBindings[bindingIndex]
+            val occurrence = try self.signatureOccurrence(id: binding.authoredTypeUse)
+            val source = match self.sourceTypeUses.scopeAt(token: occurrence.scope) {
+                Optional.Some(v: val source) => source,
+                Optional.None => { return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "associated binding lost its implementation scope", failureDomain: <FailureDomain.Internal />) /> },
+            }
+            val owner = match source.implementation {
+                Optional.Some(v: val owner) => owner,
+                Optional.None => { return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "associated binding lost its implementation owner", failureDomain: <FailureDomain.Internal />) /> },
+            }
+            match source.state {
+                SourceTypeScopeState.Lowered => {}
+                _ => { return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "associated binding implementation is not lowered", failureDomain: <FailureDomain.Internal />) /> }
+            }
+            val conformance = match owner.kind {
+                SourceImplementationKind.Conformance(index: val index) => index,
+                SourceImplementationKind.Inherent => { continue },
+            }
+            if conformance >= self.decls.conformCount() { return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "associated binding has an invalid conformance owner", failureDomain: <FailureDomain.Internal />) /> }
+            val declaration = self.decls.conformAt(index: conformance)
+            mut val ownsBinding = false
+            for index in 0U64..<declaration.assocBindingIds.count() {
+                if self.conformFuncIdAt(ids: declaration.assocBindingIds, index: index) == bindingIndex { ownsBinding = true }
+            }
+            if !ownsBinding || source.anchor != binding.implOffset || declaration.traitStart != binding.traitOwner || !self.typeRefEq(a: occurrence.term, b: binding.ty) {
+                return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "associated binding has a foreign source occurrence", failureDomain: <FailureDomain.Internal />) />
+            }
+            val root = self.conformanceTraitBound(conformance: declaration)
+            val receiverTrait = self.decls.traitIndexByOffset(offset: owner.receiverTrait)
+            val selfParameter = if receiverTrait < self.decls.traitCount() { give self.decls.traitAt(index: receiverTrait).selfParamId } else { give 0U64 }
+            val scope = <DeclarationTypeScope origin=<DeclarationScopeOrigin.AssociatedBinding /> owner=conformance parameters=self.pushFuncBinds(binds: owner.parameters) selfParameter=selfParameter />
+            val assumptions = try self.declarationScopeAssumptions(scope: scope)
+            val scopes = <SignatureProofScopes local=scope assumptions=assumptions inherited=[] receiver=root.subject scopedBinders=true />
+            mut val validation = <SignatureRecipeValidation />
+            try self.checkAuthoredTypeRecipe(sourceScope: occurrence.scope, recipe: occurrence.recipe, edge: <AuthoredRecipeEdge.Source />, scopes: scopes, validation: inout validation, offset: occurrence.site)
+            self.authoredAssociatedBindings[bindingIndex] = <AuthoredAssociatedBinding conformance=conformance occurrence=binding.authoredTypeUse recipe=occurrence.recipe proofs=validation.proofs />
+        }
+        return <Result.Ok value=() />
+    }
+
     inout fn finishAuthoredSignatureAdmission() -> Result[(), CompileDiagnostic] {
         mut val index = 0U64
         while index < self.sourceTypeUses.signatureCount() {
