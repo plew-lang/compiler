@@ -161,6 +161,22 @@ impl Comp {
         return <Result.Ok value=terms />
     }
 
+    // A closed lexical parameter can use the same admitted type as callers
+    // and the executable body. A template retains its symbolic parameter.
+    inout fn lexicalBodyParameterType(function: U64, index: U64, ref: U64, receiver: U64) -> Result[Optional[U64], CompileDiagnostic] {
+        if !self.arena.typeContainsAssociatedProjection(ref: ref) { return <Result.Ok value=<Optional.None /> /> }
+        val declaration = self.arena.functionAt(index: function)
+        if declaration.typeParams.count() != 0U64 || !self.arena.typeIsClosed(ref: receiver) { return <Result.Ok value=<Optional.None /> /> }
+        val source = match self.authoredSignatureViews.get(key: function) {
+            Optional.Some(v: val admitted) => admitted.signature,
+            Optional.None => { return <Result.Ok value=<Optional.None /> /> },
+        }
+        if index >= source.parameters.count() || source.parameters[index] == 0U64 { return <Result.Ok value=<Optional.None /> /> }
+        val environment = <InstanceEnvironment receiverRef=receiver />
+        val term = try self.readAdmittedSignatureRoot(function: function, slot: <SourceSignatureSlot.Parameter index=index />, environment: environment)
+        return <Result.Ok value=<Optional.Some v=term /> />
+    }
+
     inout fn checkSignatureEnvironment(signature: AuthoredFunctionSignature, environment: InstanceEnvironment) -> Result[(), CompileDiagnostic] {
         val declaration = self.arena.functionAt(index: signature.function)
         val parameters = declaration.typeParams

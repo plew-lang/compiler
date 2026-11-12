@@ -121,3 +121,33 @@ The existential control with an interface guarantee
 opaque, the dynamic call still rejects its result conversion. Check
 the remaining interface, nested RHS, and corrupted-evidence controls
 before independent review and closure.
+
+## Nested parameter handoff
+
+The authored parameter `Box[Worker]#Parent.Item` resolves to
+`Array[I64]` via a conditional `Parent` witness whose RHS is
+`Array[T#Marker.Type]`. Candidate `c061fc4a` selected `Index` on the
+resolved array but stored the unreduced parameter as the call receiver.
+The declaration boundary rejected those mismatched endpoints.
+
+Lexical recording and verification now read that concrete parameter
+from the admitted signature, sharing the RHS derivation used by callers
+and executable body signatures. Symbolic templates retain their existing
+parameter representation. A broader eager lexical read was discarded
+because it changed symbolic terms before instance-specific Mid type facts
+were available and regressed existing native and lazy controls.
+
+Candidate `a895020e` passed standard build
+`20261112T225153-build-58d36a` and generation
+`20261112T225540-gen-8c23a7`. The new
+`associated_binding_nested_parameter` and four existing controls
+(`associated_binding_inherited_signature`,
+`inherited_associated_rhs_equations`,
+`concrete_supertrait_projected_signature`,
+`conditional_joint_supertrait_projection`) passed check, JIT and
+native. Same-source medians were 6.830393 s and 6.835228 s with identical
+LLVM in all eight runs.
+
+The original parameter handoff is covered. Reconcile the retained
+projection equations with the authored RHS reader and verify the
+symbolic/interface and fault cases before closure.
