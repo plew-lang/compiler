@@ -529,11 +529,11 @@ impl Comp {
 }
 
 impl Comp {
-    inout fn concreteInterfaceConditions(conditions: ExistentialMethodConditions, evidence: ExistentialBoxEvidence, requirement: U64) -> Result[CallableConstraintEvidence, CompileDiagnostic] {
+    inout fn concreteInterfaceConditions(conditions: ExistentialMethodConditions, evidence: ExistentialBoxEvidence, requirement: U64) -> Result[InstantiatedCallableConstraints, CompileDiagnostic] {
         if conditions.bounds.count() != conditions.proofs.count() { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "interface contract has incomplete public evidence") /> }
         if conditions.bounds.count() == 0U64 {
             if conditions.root != 0U64 || conditions.normalizations.count() != 0U64 { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "empty interface contract unexpectedly owns a proof scope") /> }
-            return <Result.Ok value=<CallableConstraintEvidence.Recorded bounds=[] proofs=[] /> />
+            return <Result.Ok value=<InstantiatedCallableConstraints bounds=[] proofs=[] /> />
         }
         if conditions.root == 0U64 || !self.interfaceEvidenceIsValid(index: conditions.root - 1U64) { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "interface contract has no admitted root") /> }
         val contract = match self.interfaceEvidence[conditions.root - 1U64]->node {
@@ -564,7 +564,7 @@ impl Comp {
             bounds.append(bound)
             proofs.append(proof)
         }
-        return <Result.Ok value=<CallableConstraintEvidence.Recorded bounds=bounds proofs=proofs /> />
+        return <Result.Ok value=<InstantiatedCallableConstraints bounds=bounds proofs=proofs normalizations=normalizations /> />
     }
 }
 
@@ -583,10 +583,8 @@ impl Comp {
         }
         val publicEvidence = try self.concreteInterfaceConditions(conditions: conditions, evidence: evidence, requirement: requirement)
         val plan = try self.selectedRequirementImplementationPlan(callee: implementation.function, proof: evidence.proof, traitIndex: evidence.traitIdx, requirement: requirement, offset: self.arena.functionAt(index: implementation.function).nameStart)
-        match publicEvidence {
-            CallableConstraintEvidence.Recorded(bounds: val bounds, proofs: val proofs) => { return <Result.Ok value=<Optional.Some v=<ExistentialMemberSelection implementation=implementation constraints=<CallableConstraintEvidence.Requirement plan=plan bounds=bounds proofs=proofs /> /> /> /> }
-            _ => { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "interface member has no retained public condition evidence") /> }
-        }
+        val constraints = <CallableConstraintEvidence.Requirement plan=plan bounds=publicEvidence.bounds proofs=publicEvidence.proofs normalizations=publicEvidence.normalizations />
+        return <Result.Ok value=<Optional.Some v=<ExistentialMemberSelection implementation=implementation constraints=constraints /> /> />
     }
 
     inout fn existentialImplementationEnvironment(implementation: ExistentialImplementation, evidence: ExistentialBoxEvidence, constraints: CallableConstraintEvidence) -> Result[InstanceEnvironment, CompileDiagnostic] {

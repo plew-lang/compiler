@@ -49,7 +49,7 @@ fn checkExplicitEnvironment(compiler: inout Comp, templateIndex: U64, callee: U6
     compiler.cur.bodySelfRef = 0U64
     compiler.cur.bodyItemRef = 0U64
     match compiler.selectedCallConstraintEvidence(template: template, callee: callee, proof: proof, environment: environment, selfRef: environment.receiverRef, itemRef: 0U64).unwrap() {
-        CallableConstraintEvidence.Requirement(plan: _, bounds: val bounds, proofs: val proofs) => {
+        CallableConstraintEvidence.Requirement(plan: _, bounds: val bounds, proofs: val proofs, normalizations: _) => {
             if bounds.count() != proofs.count() { panic("implicit public evidence is incomplete") }
         }
         _ => { panic("implicit call reconstructed declaration evidence") }

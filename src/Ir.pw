@@ -2070,7 +2070,7 @@ pub impl SelectedCallConstraints { factory }
 pub enum CallableConstraintEvidence {
     Declaration
     Recorded(bounds: Array[TraitBound], proofs: Array[StaticConformanceProof])
-    Requirement(plan: U64, bounds: Array[TraitBound], proofs: Array[StaticConformanceProof])
+    Requirement(plan: U64, bounds: Array[TraitBound], proofs: Array[StaticConformanceProof], normalizations: Array[ProjectionNormalizationStep])
 }
 
 

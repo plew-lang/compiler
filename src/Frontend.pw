@@ -442,6 +442,13 @@ enum SignatureRecipeContext {
     Provided(owner: U64)
 }
 
+struct InstantiatedCallableConstraints {
+    val bounds: Array[TraitBound]
+    val proofs: Array[StaticConformanceProof]
+    val normalizations: Array[ProjectionNormalizationStep] = []
+}
+impl InstantiatedCallableConstraints { factory }
+
 struct AuthoredRecipeRead {
     val term: U64
     val reading: Bool = false

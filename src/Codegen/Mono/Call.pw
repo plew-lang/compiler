@@ -4222,6 +4222,13 @@ pub impl Comp {
     }
 
     inout fn instantiateSelectedCallConstraints(template: CallTemplate, environment: InstanceEnvironment, selfRef: U64, itemRef: U64) -> Result[CallableConstraintEvidence, CompileDiagnostic] {
+        val concrete = try self.replaySelectedCallConstraints(template: template, environment: environment, selfRef: selfRef, itemRef: itemRef)
+        return <Result.Ok value=<CallableConstraintEvidence.Recorded bounds=concrete.bounds proofs=concrete.proofs /> />
+    }
+}
+
+impl Comp {
+    inout fn replaySelectedCallConstraints(template: CallTemplate, environment: InstanceEnvironment, selfRef: U64, itemRef: U64) -> Result[InstantiatedCallableConstraints, CompileDiagnostic] {
         val index = self.callTemplateIndex(siteKey: template.siteKey)
         if index >= self.callTemplateLocations.count() {
             return <Result.Err error=self.diagnosticAt(offset: template.siteKey.originStart, msg: "selected call has no source constraint owner") />
@@ -4264,11 +4271,13 @@ pub impl Comp {
                     }
                     position += 1U64
                 }
-                return <Result.Ok value=<CallableConstraintEvidence.Recorded bounds=bounds proofs=proofs /> />
+                return <Result.Ok value=<InstantiatedCallableConstraints bounds=bounds proofs=proofs normalizations=normalizations /> />
             }
         }
     }
+}
 
+pub impl Comp {
     // Source call admission and instance preparation share this evidence reader.
     // The caller environment is explicit; only the Mono enqueue adapter reads
     // its active body cursor. Implementation clauses come from the retained
@@ -4325,10 +4334,8 @@ pub impl Comp {
 
     inout fn requirementCallConstraintEvidence(template: CallTemplate, callee: U64, proof: StaticConformanceProof, traitIndex: U64, requirement: U64, environment: InstanceEnvironment, selfRef: U64, itemRef: U64) -> Result[CallableConstraintEvidence, CompileDiagnostic] {
         val plan = try self.selectedRequirementImplementationPlan(callee: callee, proof: proof, traitIndex: traitIndex, requirement: requirement, offset: template.siteKey.originStart)
-        match (try self.instantiateSelectedCallConstraints(template: template, environment: environment, selfRef: selfRef, itemRef: itemRef)) {
-            CallableConstraintEvidence.Recorded(bounds: val bounds, proofs: val proofs) => { return <Result.Ok value=<CallableConstraintEvidence.Requirement plan=plan bounds=bounds proofs=proofs /> /> }
-            _ => { return <Result.Err error=self.diagnosticAt(offset: template.siteKey.originStart, msg: "requirement call has no retained public evidence") /> }
-        }
+        val publicEvidence = try self.replaySelectedCallConstraints(template: template, environment: environment, selfRef: selfRef, itemRef: itemRef)
+        return <Result.Ok value=<CallableConstraintEvidence.Requirement plan=plan bounds=publicEvidence.bounds proofs=publicEvidence.proofs normalizations=publicEvidence.normalizations /> />
     }
 
     inout fn resolveBodyCallee(exprId: U64) -> Result[U64, CompileDiagnostic] {

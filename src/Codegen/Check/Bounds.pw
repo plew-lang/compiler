@@ -1614,7 +1614,7 @@ pub impl Comp {
 
     // Translate public requirement evidence through the declaration's retained
     // entailment. Clause identities, not implementation array positions, bind it.
-    inout fn instantiateRequirementCallConstraints(fnIdx: U64, environment: InstanceEnvironment, planIndex: U64, bounds: Array[TraitBound], proofs: Array[StaticConformanceProof]) -> Result[CallableConstraintEvidence, CompileDiagnostic] {
+    inout fn instantiateRequirementCallConstraints(fnIdx: U64, environment: InstanceEnvironment, planIndex: U64, bounds: Array[TraitBound], proofs: Array[StaticConformanceProof], normalizations: Array[ProjectionNormalizationStep] = []) -> Result[CallableConstraintEvidence, CompileDiagnostic] {
         if planIndex >= self.arena.conformanceMethodEvidenceCount() { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "requirement call has no retained implementation evidence") /> }
         val plan = self.arena.conformanceMethodEvidenceAt(index: planIndex)
         val function = self.arena.functionAt(index: fnIdx)
@@ -1645,6 +1645,7 @@ pub impl Comp {
             if context.isNone() { return <Result.Err error=self.diagnosticAt(offset: function.defOffset, msg: "requirement evidence has no selected clause environment") /> }
             expectedBounds = try self.readRequirementBounds(signature: context.unwrap(), methodArguments: plan.methodArguments)
         }
+        try self.checkProjectionNormalizations(normalizations: normalizations, offset: function.defOffset)
         mut val sources: Array[DeclarationBoundRef] = []
         mut val publicProofs: Array[U64] = []
         mut val publicBounds: Array[TraitBound] = []
@@ -1654,12 +1655,12 @@ pub impl Comp {
                 return <Result.Err error=self.diagnosticAt(offset: function.defOffset, msg: "requirement evidence has a foreign clause identity") />
             }
             val position = source.clause - requirement.signatureBounds.start
-            val expected = try self.groundCallableBound(bound: expectedBounds[position], environment: environment, selfRef: environment.receiverRef, itemRef: 0U64)
+            val substituted = self.substituteRetainedBound(bound: expectedBounds[position], environment: environment, selfRef: environment.receiverRef, itemRef: 0U64)
+            val expected = try self.replayBoundNormalizations(bound: substituted, normalizations: normalizations)
             if !self.typeRefEq(a: expected.subject, b: bounds[position].subject) || !self.sameTraitConstraint(a: expected.constraint, b: bounds[position].constraint) {
                 return <Result.Err error=self.diagnosticAt(offset: source.bound.offset, msg: "requirement evidence has a different public substitution") />
             }
-            try self.checkStaticProofEvidence(proof: proofs[position], offset: source.bound.offset)
-            try self.checkSelectedCallConstraintBoundary(expected: expected, proof: proofs[position], offset: source.bound.offset)
+            try self.checkRetainedWitnessClause(expected: expected, proof: proofs[position], normalizations: normalizations, offset: source.bound.offset)
             sources.append(<DeclarationBoundRef.Requirement index=index />)
             publicProofs.append(self.freezeStaticConformanceProof(proof: proofs[position]))
             publicBounds.append(expected)
@@ -1688,8 +1689,8 @@ pub impl Comp {
     inout fn checkCallableConstraintEvidence(fnIdx: U64, environment: InstanceEnvironment, evidence: CallableConstraintEvidence) -> Result[(), CompileDiagnostic] {
         match evidence {
             CallableConstraintEvidence.Declaration => { return self.checkSelectedCallableBounds(fnIdx: fnIdx, environment: environment) }
-            CallableConstraintEvidence.Requirement(plan: val plan, bounds: val bounds, proofs: val proofs) => {
-                val recorded = try self.instantiateRequirementCallConstraints(fnIdx: fnIdx, environment: environment, planIndex: plan, bounds: bounds, proofs: proofs)
+            CallableConstraintEvidence.Requirement(plan: val plan, bounds: val bounds, proofs: val proofs, normalizations: val normalizations) => {
+                val recorded = try self.instantiateRequirementCallConstraints(fnIdx: fnIdx, environment: environment, planIndex: plan, bounds: bounds, proofs: proofs, normalizations: normalizations)
                 return self.checkCallableConstraintEvidence(fnIdx: fnIdx, environment: environment, evidence: recorded)
             }
             CallableConstraintEvidence.Recorded(val bounds, val proofs) => {
@@ -1750,8 +1751,8 @@ pub impl Comp {
         mut val proofs: Array[U64] = []
         mut val bounds: Array[TraitBound] = []
         match evidence {
-            CallableConstraintEvidence.Requirement(plan: val plan, bounds: val bounds, proofs: val proofs) => {
-                val recorded = try self.instantiateRequirementCallConstraints(fnIdx: fnIdx, environment: environment, planIndex: plan, bounds: bounds, proofs: proofs)
+            CallableConstraintEvidence.Requirement(plan: val plan, bounds: val bounds, proofs: val proofs, normalizations: val normalizations) => {
+                val recorded = try self.instantiateRequirementCallConstraints(fnIdx: fnIdx, environment: environment, planIndex: plan, bounds: bounds, proofs: proofs, normalizations: normalizations)
                 return self.environmentWithCallableConstraints(fnIdx: fnIdx, environment: environment, evidence: recorded)
             }
             CallableConstraintEvidence.Declaration => {

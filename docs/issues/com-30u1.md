@@ -661,3 +661,35 @@ receiving the correct concrete bounds and proofs with the projection
 normalizations omitted. The public positive above supplies the valid
 control. Preserve the instantiated normalization receipt into the final
 comparison from both static calls and interface thunks.
+
+## Public clause replay at the implementation boundary
+
+Static calls and existential boxing now hand the instantiated projection
+equations to the same implementation boundary. It checks the equations,
+structurally substitutes the admitted public clause, replays those equations,
+and compares the saved clause and witness. The public comparison no longer
+calls `groundCallableBound` or the source-admission predicate comparator.
+The implementation's own derivation and declaration-bound validation are
+separate from this public clause replay.
+
+`retained_requirement_body_constraints` exercises a real generic call with
+`T#Source.Item: Number` and then submits the concrete public bounds and
+proofs with the equations omitted. The old `096120ea` source accepted that
+submission; the new candidate diagnoses a different public substitution.
+Separate positive static and existential calls pass check, JIT and native
+with output 42. The existential case uses `Service: Source[Item=Payload]`
+and `where Self#Source.Item: Number`. Eight targeted check/native fixtures
+passed, including boxing conditions and final interface evidence. Build
+`20261112T161447-build-385a23` and generation
+`20261112T162032-gen-4fd25d` passed on candidate `0cfdc037`. Same-source
+medians were 6.645424 s and 6.640831 s, with eight identical LLVM outputs.
+
+The inherited where-equation RED in the previous checkpoint is still open.
+During the existential controls, a declaration-only input also isolated a
+source-admission rejection present on both candidates:
+`trait Source { type Item } trait Service { type Input: Source fn fetch() -> Input#Source.Item }`.
+The diagnostic says that the receiver lacks the exact conformance, despite
+the associated bound. Resolve this under the existing declared-premise
+guarantee and distinguish it from the later interface-call boundary. Both
+source admission and the remaining inherited path precede independent
+closure review.
