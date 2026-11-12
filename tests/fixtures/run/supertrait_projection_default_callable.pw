@@ -1,0 +1,20 @@
+use @Std/Io only { print }
+
+trait Root { type Item }
+trait Middle: Root {}
+trait Service: Middle { fn fetch(value: Self#Root.Item) -> Self#Root.Item }
+
+struct Worker {}
+impl Worker as Service {
+    fn fetch(value: I64, enabled: Bool = true) -> I64 {
+        if enabled { return value }
+        return 0I64
+    }
+}
+impl Worker as Middle {}
+impl Worker as Root { type Item = I64 }
+
+fn main() {
+    val worker = <Worker />
+    print(worker#Service.fetch(value: 42I64))
+}

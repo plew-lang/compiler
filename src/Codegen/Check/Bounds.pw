@@ -1301,6 +1301,32 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
+    // Callable forms are synthesized before trait-subject conferral and the
+    // general conformance check. Publish their selected parent declarations
+    // first so signature readers use the same evidence in both stages.
+    inout fn prepareCallableFormSupertraits(conformanceIndex: U64, traitIndex: U64, prepared: inout Dictionary[U64, Bool]) -> Result[(), CompileDiagnostic] {
+        if prepared.get(key: conformanceIndex).isSome() { return <Result.Ok value=() /> }
+        try self.prepareConformanceSupertraits(conformIndex: conformanceIndex, traitIndex: traitIndex)
+        prepared[conformanceIndex] = true
+        val trait = self.decls.traitAt(index: traitIndex)
+        for clause in 0U64..<trait.supertraits.count() {
+            val row = self.arena.conformanceSupertraitProof(conformance: conformanceIndex, clause: clause)
+            if row.isNone() { return <Result.Err error=self.diagnosticAt(offset: trait.nameStart, msg: "callable form lost its retained supertrait proof", failureDomain: <FailureDomain.Internal />) /> }
+            val proof = self.thawStaticConformanceProof(id: row.unwrap())
+            match self.selectedConstraintWitness(proof: proof) {
+                Optional.Some(v: val witness) => {
+                    if witness.conformIdx == 0U64 || witness.conformIdx > self.decls.conformCount() { return <Result.Err error=self.diagnosticAt(offset: trait.nameStart, msg: "callable form has an invalid parent conformance", failureDomain: <FailureDomain.Internal />) /> }
+                    val parent = witness.conformIdx - 1U64
+                    val parentTrait = self.resolveTraitDef(cf: self.decls.conformAt(index: parent))
+                    if parentTrait >= self.decls.traitCount() { return <Result.Err error=self.diagnosticAt(offset: trait.nameStart, msg: "callable form has an invalid parent trait", failureDomain: <FailureDomain.Internal />) /> }
+                    try self.prepareCallableFormSupertraits(conformanceIndex: parent, traitIndex: parentTrait, prepared: inout prepared)
+                }
+                Optional.None => {}
+            }
+        }
+        return <Result.Ok value=() />
+    }
+
     // Via uses the ordinary callable form, including omitted defaults, while
     // preserving the requirement's result and ownership contract.
     // Match the implementation directionally: requirement
@@ -1868,11 +1894,11 @@ impl Comp {
         return <InstanceEnvironment params=bindings args=values receiverRef=base.receiverRef />
     }
 
-    inout fn conformanceCallableFormParametersMatch(conformanceIndex: U64, traitIndex: U64, slot: U64, witness: Func, parameters: FuncParamRange) -> Result[Bool, CompileDiagnostic] {
+    inout fn conformanceCallableFormParametersMatch(conformanceIndex: U64, traitIndex: U64, slot: U64, witness: Func, parameters: FuncParamRange, preparedParents: inout Dictionary[U64, Bool]) -> Result[Bool, CompileDiagnostic] {
         val conformance = self.decls.conformAt(index: conformanceIndex)
         val requirement = self.traitReqAt(reqs: self.decls.traitAt(index: traitIndex).reqs, index: slot)
         if parameters.count() != requirement.params.count() || witness.typeParams.count() != conformance.typeParams.count() + requirement.typeParams.count() { return <Result.Ok value=false /> }
-        try self.prepareConformanceSupertraits(conformIndex: conformanceIndex, traitIndex: traitIndex)
+        try self.prepareCallableFormSupertraits(conformanceIndex: conformanceIndex, traitIndex: traitIndex, prepared: inout preparedParents)
         try self.checkAssociatedBounds(conformIndex: conformanceIndex, conformance: conformance, traitIndex: traitIndex, assumptions: self.conformanceDeclarationAssumptions(conformIndex: conformanceIndex))
         val scope = try self.requireAdmittedRawRequirement(traitIndex: traitIndex, slot: slot, offset: requirement.defOffset)
         val signature = <RequirementSignatureRead scope=scope bound=self.conformanceTraitBound(conformance: conformance) evidence=<RequirementSelfEvidence.Conformance index=conformanceIndex /> />

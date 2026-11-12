@@ -627,6 +627,7 @@ pub impl Comp {
     }
 
     inout fn prepareConformanceCallableForms() -> Result[(), CompileDiagnostic] {
+        mut val preparedParents: Dictionary[U64, Bool] = [:]
         mut val conformanceIndex = 0U64
         while conformanceIndex < self.decls.conformCount() {
             val conformance = self.decls.conformAt(index: conformanceIndex)
@@ -653,7 +654,7 @@ pub impl Comp {
                         if sameName && (source.params.count() > requirement.params.count() || (source.params.count() == requirement.params.count() && unitBridge)) && source.isFactory == requirement.isFactory && source.isAnonymousFactory == requirement.isAnonymousFactory {
                             match self.callableFormParameters(source: source, requirement: requirement) {
                                 Optional.Some(v: val parameters) => {
-                                    if (try self.conformanceCallableFormParametersMatch(conformanceIndex: conformanceIndex, traitIndex: traitIndex, slot: requirementIndex, witness: source, parameters: parameters)) {
+                                    if (try self.conformanceCallableFormParametersMatch(conformanceIndex: conformanceIndex, traitIndex: traitIndex, slot: requirementIndex, witness: source, parameters: parameters, preparedParents: inout preparedParents)) {
                                         if found { return <Result.Err error=self.diagnosticAt(offset: conformance.defOffset, msg: "ambiguous callable form for trait requirement") /> }
                                         found = true
                                         selected = functionIndex

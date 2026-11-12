@@ -901,12 +901,19 @@ row is removed and the Root conformance is still registered. Build
 five rejection diagnostics passed. Same-source medians were 6.687980 s
 and 6.714668 s, with identical LLVM output in all eight runs.
 
-Two additional controls keep the task open. A generic `Holder[T]` with
-`Service: Middle: Root` and `Root.Item = T` still fails method result
-comparison: the existing executable edge replay defers on a symbolic
-receiver. A nominal implementation of a requirement with the same
-two-edge projection and an omitted default argument reaches its
-parameter reader before Middle's parent evidence has been prepared.
-Close the symbolic interpretation and the callable-form preparation
-ordering while preserving the exact saved path. The fixed-receiver
-proof-removal check and independent re-review remain outstanding.
+Callable-form synthesis now prepares the declarations reached by its selected
+supertrait evidence before reading requirement parameters. The preparation
+shares the existing publisher and visits each selected declaration once in
+the callable-form pass. Signature readers consume the published rows in both
+phases. `supertrait_projection_default_callable` previously rejected the
+missing Middle row and now exercises the adapter through the Service view.
+Build `20261112T174151-build-d9341c`, candidate `02115514`, generation
+`20261112T174454-gen-d9a96f`, and four check/JIT/native controls passed.
+The same-source medians were 6.667171 s and 6.663319 s, with identical LLVM
+output in all eight runs.
+
+A generic `Holder[T]` with `Service: Middle: Root` and `Root.Item = T`
+still fails method result comparison because executable edge replay defers
+on a symbolic receiver. Close the symbolic interpretation using the exact
+saved path. The fixed-receiver proof-removal check and independent
+re-review remain outstanding.
