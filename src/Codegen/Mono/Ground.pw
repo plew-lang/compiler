@@ -1122,6 +1122,25 @@ pub impl Comp {
     // body. This is deliberately not a receiver-name lookup: `ConformId` and
     // its one directional substitution are the proof that owns the output.
     inout fn associatedOutputInProof(proof: StaticConformanceProof, traitOwner: U64, assocId: U64) -> Result[U64, CompileDiagnostic] {
+        match self.retainedConstraintPathTerminal(proof: proof) {
+            Optional.Some(v: val witness) => {
+                if witness.conformIdx != 0U64 && witness.conformIdx <= self.decls.conformCount() {
+                    val owner = self.decls.conformAt(index: witness.conformIdx - 1U64)
+                    if owner.traitStart != traitOwner { return <Result.Ok value=0U64 /> }
+                    mut val binding: Optional[U64] = <Optional.None />
+                    for index in 0U64..<owner.assocBindingIds.count() {
+                        val candidate = self.conformFuncIdAt(ids: owner.assocBindingIds, index: index)
+                        if candidate >= self.decls.assocBindings.count() { return <Result.Err error=self.diagnosticAt(offset: owner.defOffset, msg: "associated output has an invalid binding slot", failureDomain: <FailureDomain.Internal />) /> }
+                        if self.decls.assocBindings[candidate].nameId == assocId {
+                            if binding.isSome() { return <Result.Ok value=0U64 /> }
+                            binding = <Optional.Some v=candidate />
+                        }
+                    }
+                    if binding.isSome() { return self.readAssociatedBindingOutput(bindingIndex: binding.unwrap(), proof: proof, witness: witness) }
+                }
+            }
+            Optional.None => {}
+        }
         val output = try self.associatedOutputTermInProof(proof: proof, traitOwner: traitOwner, assocId: assocId)
         return self.replayProjectionNormalizations(ref: output, normalizations: (try self.retainedProofProjectionContext(proof: proof)), offset: 0U64)
     }

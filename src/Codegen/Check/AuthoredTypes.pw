@@ -28,6 +28,29 @@ pub impl Comp {
 }
 
 impl Comp {
+    inout fn readAssociatedBindingOutput(bindingIndex: U64, proof: StaticConformanceProof, witness: WitnessMatch) -> Result[U64, CompileDiagnostic] {
+        val binding = self.decls.assocBindings[bindingIndex]
+        val saved = match self.authoredAssociatedBindings.get(key: bindingIndex) {
+            Optional.Some(v: val admitted) => admitted,
+            Optional.None => { return <Result.Err error=self.diagnosticAt(offset: binding.tyStart, msg: "associated output lost its admitted binding", failureDomain: <FailureDomain.Internal />) /> },
+        }
+        val occurrence = try self.signatureOccurrence(id: saved.occurrence)
+        if saved.conformance + 1U64 != witness.conformIdx || saved.occurrence != binding.authoredTypeUse || occurrence.recipe != saved.recipe {
+            return <Result.Err error=self.diagnosticAt(offset: binding.tyStart, msg: "associated output has a foreign binding receipt", failureDomain: <FailureDomain.Internal />) />
+        }
+        for active in self.activeAssociatedBindingReads {
+            if active.binding == bindingIndex && self.sameWitnessSubstitution(a: active.witness, b: witness) {
+                return <Result.Err error=self.diagnosticAt(offset: binding.tyStart, msg: "associated binding output is cyclic", failureDomain: <FailureDomain.Source />) />
+            }
+        }
+        val environment = try self.selectedConstraintEnvironment(witness: witness, proof: proof)
+        mut val memo: Dictionary[U64, AuthoredRecipeRead] = [:]
+        self.activeAssociatedBindingReads.append((binding: bindingIndex, witness: witness))
+        val result = self.readAuthoredTypeRecipe(proofs: saved.proofs, recipe: saved.recipe, environment: environment, memo: inout memo, context: <SignatureRecipeContext.AssociatedBinding />)
+        self.activeAssociatedBindingReads.removeLast()
+        return <Result.Ok value=(try result).term />
+    }
+
     inout fn admitAssociatedBindingRecipes() -> Result[(), CompileDiagnostic] {
         for bindingIndex in 0U64..<self.decls.assocBindings.count() {
             val binding = self.decls.assocBindings[bindingIndex]
@@ -292,6 +315,11 @@ impl Comp {
                             term = try self.associatedOutputInProof(proof: proof, traitOwner: owner, assocId: original.assocNameId)
                             if term == 0U64 { return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "saved signature projection is not instantiated", failureDomain: <FailureDomain.Internal />) /> }
                         }
+                        SignatureRecipeContext.AssociatedBinding => {
+                            memo[recipe] = <AuthoredRecipeRead term=0U64 reading=true views=[] normalizations=[] />
+                            val output = try self.associatedOutputInProof(proof: proof, traitOwner: owner, assocId: original.assocNameId)
+                            if output != 0U64 { term = output }
+                        }
                     }
                     term = try self.replayProjectionNormalizations(ref: term, normalizations: lexicalEquations, offset: occurrence.site)
                 }
@@ -320,6 +348,23 @@ impl Comp {
         match context {
             SignatureRecipeContext.Concrete => {
                 return self.instantiateAuthoredViewProof(saved: saved, receiver: receiver, arguments: arguments, environment: environment, offset: offset, normalizations: normalizations)
+            }
+            SignatureRecipeContext.AssociatedBinding => {
+                if !self.arena.hasStaticConformanceProof(id: saved.proof) {
+                    return <Result.Err error=self.diagnosticAt(offset: offset, msg: "associated binding lost its projection proof", failureDomain: <FailureDomain.Internal />) />
+                }
+                val proof = self.thawStaticConformanceProof(id: saved.proof)
+                val state = try self.replayConstraintProof(proof: proof, receiver: receiver, environment: environment, selfRef: environment.receiverRef, itemRef: 0U64, context: <Optional.None />, normalizations: normalizations, declaration: true)
+                match state {
+                    ConstraintProofReplay.Concrete(proof: val selected) | ConstraintProofReplay.Universal(proof: val selected) => {
+                        val bound = try self.staticProofBound(proof: selected, traitIdx: self.decls.traitIndexByOffset(offset: saved.selector.traitInstance.owner))
+                        if bound.subject != 0U64 && self.typeRefEq(a: self.typeRefWithoutOuterViews(ref: bound.subject), b: self.typeRefWithoutOuterViews(ref: receiver)) && self.sameResolvedTypeRefs(a: bound.constraint.key.positionalArgs, b: arguments) {
+                            return <Result.Ok value=selected />
+                        }
+                    }
+                    ConstraintProofReplay.Deferred | ConstraintProofReplay.Missing => {}
+                }
+                return <Result.Err error=self.diagnosticAt(offset: offset, msg: "associated binding projection has no matching retained conformance", failureDomain: <FailureDomain.Internal />) />
             }
             _ => {
                 val proof = self.thawStaticConformanceProof(id: saved.proof)

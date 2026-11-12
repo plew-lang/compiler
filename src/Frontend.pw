@@ -468,6 +468,7 @@ enum SignatureRecipeContext {
     Concrete
     Requirement(signature: RequirementSignatureRead)
     Provided(owner: U64)
+    AssociatedBinding
 }
 
 struct InstantiatedCallableConstraints {
@@ -692,6 +693,7 @@ pub struct Comp {
     mut val authoredRequirementViews: Dictionary[U64, AuthoredRequirementSignature] = [:]
     mut val authoredSignatureViews: Dictionary[U64, AuthoredSignatureViews] = [:]
     mut val authoredAssociatedBindings: Dictionary[U64, AuthoredAssociatedBinding] = [:]
+    mut val activeAssociatedBindingReads: Array[(binding: U64, witness: WitnessMatch)] = []
     mut val authoredSignatureAdmission: AuthoredSignatureAdmissionPhase = <AuthoredSignatureAdmissionPhase.Open />
     pub mut val loweringTypeUses: Array[U64] = []
     // Authored provenance is independent of legacy visibility suppression.

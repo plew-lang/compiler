@@ -93,3 +93,31 @@ The inherited-signature RED still fails return type comparison. The next
 increment must make the selected concrete/trait-path output reader replay
 the receipt in its witness environment, including symbolic impl-condition
 evidence and guarded recursive RHS reads.
+
+## Selected witness output checkpoint
+
+The output reader now resolves the binding in the selected terminal witness
+and reads its admitted recipe under that witness's substitution. Recipe
+projections replay their saved proof, including an impl where condition
+from the selected witness. The reader verifies the conformance, occurrence,
+and recipe identity and detects re-entry for the same binding and
+substitution. The raw output term reader still has consumers that require
+migration and reconciliation with saved equations.
+
+`associated_binding_inherited_signature` rejects return comparison on
+`9fe88cf2` and prints 42 on `c061fc4a`. It and five adjacent public
+controls passed check, JIT and native. A conditional generic binding
+with RHS `T#Marker.Type` also prints 42. Standard build
+`20261112T223041-build-a6eb12` and generation
+`20261112T223412-gen-35a687` passed. Same-source medians were 6.814885 s
+and 6.817123 s, with identical LLVM in all eight runs.
+
+The nested `Array[T#Marker.Type]` RHS used as a parameter still fails
+when an index call checks its saved receiver; the baseline rejected
+earlier for a missing lexical parameter dependency. Reconcile the
+original and normalized receiver through its saved type and proof.
+The existential control with an interface guarantee
+`Middle: Parent[Item=I64] + Marker` prints 42. With the interface output
+opaque, the dynamic call still rejects its result conversion. Check
+the remaining interface, nested RHS, and corrupted-evidence controls
+before independent review and closure.
