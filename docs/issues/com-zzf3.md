@@ -225,3 +225,22 @@ The remaining lexical requirement reader starts from the raw RHS and
 looks through the witness condition list. Move it to exact occurrence
 replay in the requirement's interpretation and exercise corrupt
 receipts, proof/clause identity and normalization before review.
+
+## Single selected output read
+
+The signature reader and conditional normalization now obtain the
+immediate RHS, normalized RHS and child equations from one selected
+binding. Validation of an already stored equation can still read only
+the immediate term from the exact occurrence.
+
+Candidate `27421b95` passed standard build
+`20261112T232127-build-a2ba0f`, generation
+`20261112T232538-gen-c2652a`, and the seven condition, signature,
+existential and Unit fixtures in check, JIT and native. The same-source
+medians were 6.857562 s and 6.849593 s. The raw LLVM differed. A comparison
+of the complete outputs after removing only the embedded TypeTerm number
+from generic-body symbol names was identical, including the body IDs
+and the calls to those bodies. This does not certify the final fixed point.
+
+The requirement-side interpretation of selected associated clauses
+and the remaining evidence fault tests are pending.

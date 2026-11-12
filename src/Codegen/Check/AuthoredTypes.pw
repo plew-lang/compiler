@@ -59,23 +59,25 @@ impl Comp {
         return <Result.Ok value=saved />
     }
 
-    inout fn readSelectedProjectionOutput(proof: StaticConformanceProof, traitOwner: U64, assocId: U64) -> Result[AuthoredRecipeRead, CompileDiagnostic] {
-        mut val normalizations = try self.retainedProofProjectionContext(proof: proof)
-        match (try self.selectedAssociatedBinding(proof: proof, traitOwner: traitOwner, assocId: assocId)) {
-            Optional.Some(v: val selected) => {
-                val read = try self.readAssociatedBindingOutput(bindingIndex: selected.bindingIndex, proof: proof, witness: selected.witness)
-                if normalizations.count() == 0U64 { return <Result.Ok value=read /> }
-                for equation in read.normalizations { try self.appendRetainedProjectionEquation(step: equation, normalizations: inout normalizations) }
-                return <Result.Ok value=<AuthoredRecipeRead term=read.term views=read.views normalizations=normalizations /> />
-            }
-            Optional.None => {}
-        }
-        val output = try self.associatedOutputTermInProof(proof: proof, traitOwner: traitOwner, assocId: assocId)
-        val term = try self.replayProjectionNormalizations(ref: output, normalizations: normalizations, offset: 0U64)
-        return <Result.Ok value=<AuthoredRecipeRead term=term views=[] normalizations=normalizations /> />
+    inout fn readProjectionForNormalization(proof: StaticConformanceProof, traitOwner: U64, assocId: U64) -> Result[SelectedProjectionOutput, CompileDiagnostic] {
+        if self.associatedBindingAdmissionComplete { return self.readSelectedProjectionOutput(proof: proof, traitOwner: traitOwner, assocId: assocId) }
+        val immediate = try self.associatedOutputTermInProof(proof: proof, traitOwner: traitOwner, assocId: assocId)
+        return <Result.Ok value=<SelectedProjectionOutput immediate=immediate term=immediate normalizations=[] /> />
     }
 
-    inout fn readAssociatedBindingOutput(bindingIndex: U64, proof: StaticConformanceProof, witness: WitnessMatch) -> Result[AuthoredRecipeRead, CompileDiagnostic] {
+    inout fn readSelectedProjectionOutput(proof: StaticConformanceProof, traitOwner: U64, assocId: U64) -> Result[SelectedProjectionOutput, CompileDiagnostic] {
+        val normalizations = try self.retainedProofProjectionContext(proof: proof)
+        val binding = try self.selectedAssociatedBinding(proof: proof, traitOwner: traitOwner, assocId: assocId)
+        if binding.isSome() {
+            val selected = binding.unwrap()
+            return self.readAssociatedBindingOutput(bindingIndex: selected.bindingIndex, proof: proof, witness: selected.witness, normalizations: normalizations)
+        }
+        val output = try self.assumedProjectionOutput(proof: proof, traitOwner: traitOwner, assocId: assocId)
+        val term = try self.replayProjectionNormalizations(ref: output, normalizations: normalizations, offset: 0U64)
+        return <Result.Ok value=<SelectedProjectionOutput immediate=output term=term normalizations=normalizations /> />
+    }
+
+    inout fn readAssociatedBindingOutput(bindingIndex: U64, proof: StaticConformanceProof, witness: WitnessMatch, normalizations: Array[ProjectionNormalizationStep]) -> Result[SelectedProjectionOutput, CompileDiagnostic] {
         val binding = self.decls.assocBindings[bindingIndex]
         val saved = try self.selectedAssociatedBindingReceipt(bindingIndex: bindingIndex, witness: witness)
         for active in self.activeAssociatedBindingReads {
@@ -88,7 +90,11 @@ impl Comp {
         self.activeAssociatedBindingReads.append((binding: bindingIndex, witness: witness))
         val result = self.readAuthoredTypeRecipe(proofs: saved.proofs, recipe: saved.recipe, environment: environment, memo: inout memo, context: <SignatureRecipeContext.AssociatedBinding />)
         self.activeAssociatedBindingReads.removeLast()
-        return result
+        val read = try result
+        val immediate = try self.groundWitnessTypeTerm(ref: binding.ty, params: <PatternBindInput.Conformance range=binding.typeParams />, matchResult: witness)
+        mut val equations = normalizations
+        for equation in read.normalizations { try self.appendRetainedProjectionEquation(step: equation, normalizations: inout equations) }
+        return <Result.Ok value=<SelectedProjectionOutput immediate=immediate term=read.term normalizations=equations fromBinding=true /> />
     }
 
     inout fn admitAssociatedBindingRecipes() -> Result[(), CompileDiagnostic] {
@@ -368,7 +374,7 @@ impl Comp {
                             memo[recipe] = <AuthoredRecipeRead term=0U64 reading=true views=[] normalizations=[] />
                             val output = try self.readSelectedProjectionOutput(proof: proof, traitOwner: owner, assocId: original.assocNameId)
                             for equation in output.normalizations { try self.appendRetainedProjectionEquation(step: equation, normalizations: inout normalizations) }
-                            val raw = try self.associatedOutputTermInProof(proof: proof, traitOwner: owner, assocId: original.assocNameId)
+                            val raw = output.immediate
                             val immediate = if raw != 0U64 && !self.typeRefEq(a: raw, b: projected) { give raw } else { give 0U64 }
                             try self.appendRetainedProjectionEquation(step: <ProjectionNormalizationStep source=projected proof=self.freezeStaticConformanceProof(proof: proof) output=immediate />, normalizations: inout normalizations)
                             if output.term != 0U64 {

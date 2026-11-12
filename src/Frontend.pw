@@ -488,6 +488,14 @@ struct InheritedSignatureRead {
 }
 impl InheritedSignatureRead { factory }
 
+struct SelectedProjectionOutput {
+    val immediate: U64
+    val term: U64
+    val normalizations: Array[ProjectionNormalizationStep]
+    val fromBinding: Bool = false
+}
+impl SelectedProjectionOutput { factory }
+
 struct AuthoredRecipeRead {
     val term: U64
     val reading: Bool = false
