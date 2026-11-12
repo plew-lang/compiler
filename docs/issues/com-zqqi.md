@@ -1,6 +1,6 @@
 ---
 id: com-zqqi
-status: open
+status: in_progress
 deps: [com-erlx]
 links: []
 created: 2026-11-09T08:54:16Z
@@ -36,3 +36,13 @@ premises are staged by com-erlx.
 Follow the parent [contract and closure rules](com-amjl.md#contract-and-closure) and task-start TDD. Confirm the actual old-candidate RED for new behavior, preserve valid controls, then build a fresh candidate and test the real source-to-final-consumer path. Pure refactors use existing GREEN. Record exact inputs/carrier, diagnostic origin, meaningful assertions, applicable modes, removed competing authorities and independent neutral review. Do not close from a table/check/helper-only result. Existing unsupported surfaces must retain their actual diagnostic and be recorded, not silently counted as acceptance.
 
 No new specification or general solver/SCC/unique/opening feature, API-wide authority extraction, main/seed promotion or whole-suite/ASan certification is included. Shared API names alone do not create whole-task prerequisites. Whole-program fixed-point/performance/full-suite gates remain with met-si6j; parent closure still requires the complete original guarantee map.
+
+## First RED
+
+On candidate `1f9a99d6`, the new
+`method_signature_unproved_trait_projection` is incorrectly accepted by
+`--check`: the unused method's `T#Project.Item` has only an unrelated Marker
+premise. Adding the direct Project premise passes; expressing the same
+invalid signature as a free function rejects at the projection with the
+expected source diagnostic. This confirms the existing admission rule can
+be reused and the method path is missing the handoff.

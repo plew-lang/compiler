@@ -1,0 +1,7 @@
+trait Project { type Item }
+trait Marker {}
+struct Box[T] { val item: T }
+impl[T] Box[T] where T: Marker {
+    fn missing(value: T#Project.Item) {}
+}
+fn main() {}
