@@ -1,0 +1,223 @@
+use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use ../../../src/Diag only { FailureDomain }
+use ../../../src/SourceAccess only { SourceAccess }
+use ../../../src/SourceTypeUses only { SourceImplementationKind, SourceTypeScopeKind, SourceTypeUseRole }
+use @Plew/Syntax only { ImplAst, parseItem, rangeEquals, TopItemAst }
+use @Std/Io only { print }
+use @Std/Process only { argAt }
+
+fn sourceOffset(compiler~: Comp, text~: String) -> U64 {
+    mut val offset = 0U64
+    val length = text.bytes().count()
+    while offset + length <= compiler.arena.bytes.count() {
+        if rangeEquals(bytes: compiler.arena.bytes, start: offset, len: length, kw: text) { return offset }
+        offset += 1U64
+    }
+    panic("impl projection test source offset was missing")
+}
+
+fn parseImplementation(compiler~: Comp, text~: String) -> ImplAst {
+    val start = sourceOffset(compiler, text)
+    match parseItem(source: text, start: start, end: start + text.bytes().count()) {
+        TopItemAst.Impl(im: val declaration) => { return declaration }
+        _ => { panic("value impl setup did not parse an implementation") }
+    }
+}
+
+fn exerciseBoundDependencies(valueAdapter: Bool) {
+    val header = "trait Project[Kind] {{ type Item }} trait Alternate[Kind] {{ type Item }} trait Marker[Kind] {{}} struct Box[T,U] {{ val first:T val second:U }} "
+    val declaration = "impl[T,U] Box[T,U] where T:Marker[T.Item], T:Project[U.Item], U:Alternate[I64] {{ fn project(value:T.Item) -> T.Item {{ return value }} }}"
+    val source = if valueAdapter {
+        give header + "\n// " + declaration + "\nfn main() {{}}"
+    } else {
+        give header + declaration + " fn main() {{}}"
+    }
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text text=source path="ImplBoundDependencies.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
+    if valueAdapter { compiler.lowerImpl(im: parseImplementation(compiler, declaration)).unwrap() }
+    val leafSite = sourceOffset(compiler, "I64]")
+    val nestedSite = sourceOffset(compiler, "U.Item]")
+    mut val leafRecipe = 0U64
+    mut val nestedRecipe = 0U64
+    mut val index = 0U64
+    while index < compiler.sourceTypeUses.useCount() {
+        val occurrence = compiler.sourceTypeUses.useAt(index: index).unwrap()
+        if occurrence.site == leafSite {
+            if leafRecipe != 0U64 { panic("the later clause was lowered twice") }
+            leafRecipe = occurrence.recipe
+        }
+        if occurrence.site == nestedSite {
+            if nestedRecipe != 0U64 { panic("the nested bound was lowered twice") }
+            nestedRecipe = occurrence.recipe
+        }
+        index += 1U64
+    }
+    if leafRecipe == 0U64 || nestedRecipe == 0U64 { panic("the later-clause fixture missed an argument") }
+    val nested = compiler.sourceTypeUses.recipeAt(id: nestedRecipe).unwrap()
+    if nested.children.count() != 2U64 || nested.children[1U64] != leafRecipe {
+        panic("the nested argument did not retain the later clause's recipe")
+    }
+    print("1")
+}
+
+fn exerciseValueRecovery() {
+    val header = "trait Project[Kind] {{ type Item }} trait Zero {{ type Item }} trait Marker {{}} struct Box[T] {{ val item:T }} "
+    val bad = "impl[T] Box[T] where T:Project[T.Item] {{ fn broken(value:T.Item) {{}} }}"
+    val missing = "impl[T] Box[T] {{ fn missing(value:T.Item) {{}} }}"
+    val good = "impl[T] Box[T] where T:Zero {{ fn restored(value:T.Item) {{}} }}"
+    val partial = "impl[T] Box[T] where T:Project[I64] {{ fn prefix(value:T.Item) {{}} fn failure[U](value:U.Item) {{}} }}"
+    val conformance = "impl[T] Box[T] as Marker where T:Project[I64] {{}}"
+    val duplicate = "impl[U] Box[U] as Marker where U:Project[I64] {{}}"
+    val source = header + "\n// " + bad + "\n// " + missing + "\n// " + good + "\n// " + partial + "\n// " + conformance + "\n// " + duplicate + "\nfn main() {{}}"
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text text=source path="ImplBoundRecovery.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
+    match compiler.lowerImpl(im: parseImplementation(compiler, bad)) {
+        Result.Err(error: val diagnostic) => {
+            match diagnostic.failureDomain { FailureDomain.Limit => {} _ => { panic(diagnostic.message) } }
+        }
+        Result.Ok(value: _) => { panic("recursive impl bound was accepted") }
+    }
+    if compiler.lowerProjectionDepth != 0U64 || compiler.sourceTypeUses.currentScope() != 0U64 || compiler.cur.typeParams.count() != 0U64 {
+        panic("a failed impl left its original frame active")
+    }
+    match compiler.lowerImpl(im: parseImplementation(compiler, missing)) {
+        Result.Err(error: val diagnostic) => {
+            match diagnostic.failureDomain { FailureDomain.Source => {} _ => { panic(diagnostic.message) } }
+        }
+        Result.Ok(value: _) => { panic("an unrelated impl borrowed the previous impl's clauses") }
+    }
+    val parsed = parseImplementation(compiler, good)
+    val legacy = <ImplAst recvType=parsed.recvType implParams=parsed.implParams implParamSpans=parsed.implParamSpans isTraitImpl=parsed.isTraitImpl traitName=parsed.traitName traitArgs=parsed.traitArgs whereParams=parsed.whereParams whereTraits=parsed.whereTraits isPub=parsed.isPub members=parsed.members span=parsed.span />
+    compiler.lowerImpl(im: legacy).unwrap()
+    if compiler.lowerProjectionDepth != 0U64 || compiler.sourceTypeUses.currentScope() != 0U64 || compiler.cur.typeParams.count() != 0U64 {
+        panic("recovered impl leaked its original frame")
+    }
+    val initialFunctionBounds = compiler.decls.funcBounds.count()
+    match compiler.lowerImpl(im: parseImplementation(compiler, partial)) {
+        Result.Err(error: val diagnostic) => {
+            match diagnostic.failureDomain { FailureDomain.Source => {} _ => { panic(diagnostic.message) } }
+        }
+        Result.Ok(value: _) => { panic("the partial implementation unexpectedly succeeded") }
+    }
+    if compiler.decls.funcBounds.count() != initialFunctionBounds {
+        panic("the failed implementation published the first method's premises")
+    }
+    val accepted = parseImplementation(compiler, conformance)
+    compiler.lowerImpl(im: accepted).unwrap()
+    val conformances = compiler.decls.conformCount()
+    val original = compiler.decls.conformAt(index: conformances - 1U64)
+    if original.defOffset != accepted.span.start || original.bounds.len != 1U64 {
+        panic("the original conformance did not receive its prepared condition")
+    }
+    val originalBounds = compiler.decls.conformBoundPool.count()
+    match compiler.lowerImpl(im: parseImplementation(compiler, duplicate)) {
+        Result.Err(error: val diagnostic) => {
+            match diagnostic.failureDomain { FailureDomain.Source => {} _ => { panic(diagnostic.message) } }
+        }
+        Result.Ok(value: _) => { panic("a duplicate conformance unexpectedly succeeded") }
+    }
+    if compiler.decls.conformCount() != conformances || compiler.decls.conformBoundPool.count() != originalBounds {
+        panic("the rejected conformance published new condition evidence")
+    }
+    print("1")
+}
+
+fn main() {
+    val valueAdapter = argAt(1I64) == "value"
+    if argAt(2I64) == "later" { exerciseBoundDependencies(valueAdapter: valueAdapter) return }
+    if argAt(2I64) == "recovery" { exerciseValueRecovery() return }
+    val shadowedBinder = argAt(2I64) == "shadow"
+    val header = "trait Project[Kind] {{ type Item }} trait Alternate[Kind] {{ type Item }} struct Box[T] {{ val item: T }} "
+    val first = if shadowedBinder {
+        give "fn first[T](value:T.Item) -> T.Item where T:Alternate[Bool] {{ return value }}"
+    } else {
+        give "fn first(value:T.Item) -> T.Item {{ return value }}"
+    }
+    val second = "fn second(value:T.Item, count:I64 = {{ val local:T.Item = value give 0I64 }}) -> T.Item {{ val local:T.Item = value return local }}"
+    val implementation = "impl[T] Box[T] where T:Project[I64] {{ " + first + " " + second + " }}"
+    val source = if valueAdapter {
+        give header + "\n// " + implementation + "\nfn main() {{}}"
+    } else {
+        give header + implementation + " fn main() {{}}"
+    }
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text text=source path="ImplBoundOrigin.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
+    if valueAdapter {
+        compiler.lowerImpl(im: parseImplementation(compiler, implementation)).unwrap()
+    }
+    val site = sourceOffset(compiler, "I64]")
+    mut val count = 0U64
+    mut val recipe = 0U64
+    mut val owner = 0U64
+    mut val index = 0U64
+    while index < compiler.sourceTypeUses.useCount() {
+        val occurrence = compiler.sourceTypeUses.useAt(index: index).unwrap()
+        if occurrence.site == site {
+            count += 1U64
+            recipe = occurrence.recipe
+            owner = occurrence.scope
+        }
+        index += 1U64
+    }
+    if count != 1U64 { panic("short projection re-lowered an original impl where argument") }
+    val scope = compiler.sourceTypeUses.scopeAt(token: owner).unwrap()
+    match scope.kind {
+        SourceTypeScopeKind.Implementation => {}
+        _ => { panic("impl where argument escaped its implementation scope") }
+    }
+    if scope.function.isSome() { panic("an inherent impl acquired a function identity") }
+    val implBounds = scope.bounds.unwrap()
+    if implBounds.first == 0U64 || implBounds.count != 1U64 { panic("the impl lost its original clause range") }
+    val implOwner = scope.implementation.unwrap()
+    match implOwner.kind {
+        SourceImplementationKind.Inherent => {}
+        _ => { panic("an inherent impl acquired a conformance identity") }
+    }
+    if implOwner.receiver == 0U64 || implOwner.parameters.count() != 1U64 || implOwner.parameters[0U64].paramId == 0U64 {
+        panic("the impl owner lost its original receiver or binder")
+    }
+    val memberBoundSite = if shadowedBinder { give sourceOffset(compiler, "Bool]") } else { give 0U64 }
+    mut val memberRecipe = 0U64
+    if shadowedBinder {
+        index = 0U64
+        while index < compiler.sourceTypeUses.useCount() {
+            val occurrence = compiler.sourceTypeUses.useAt(index: index).unwrap()
+            if occurrence.site == memberBoundSite {
+                if memberRecipe != 0U64 { panic("short projection re-lowered the member where argument") }
+                if occurrence.scope == owner { panic("the member bound was assigned to the impl") }
+                val memberScope = compiler.sourceTypeUses.scopeAt(token: occurrence.scope).unwrap()
+                val memberBounds = memberScope.bounds.unwrap()
+                if memberScope.parent != owner || memberBounds.count != 1U64 || memberBounds.first == implBounds.first {
+                    panic("the member did not retain a distinct clause range")
+                }
+                memberRecipe = occurrence.recipe
+            }
+            index += 1U64
+        }
+        if memberRecipe == 0U64 { panic("the test missed the member bound") }
+    }
+    val secondMethod = sourceOffset(compiler, "fn second")
+    mut val signatureUses = 0U64
+    mut val bodyUses = 0U64
+    mut val defaultUses = 0U64
+    index = 0U64
+    while index < compiler.sourceTypeUses.useCount() {
+        val occurrence = compiler.sourceTypeUses.useAt(index: index).unwrap()
+        if compiler.arena.typeAt(index: occurrence.term).assocNameId != 0U64 {
+            val projection = compiler.sourceTypeUses.recipeAt(id: occurrence.recipe).unwrap()
+            val expectedRecipe = if shadowedBinder && occurrence.site < secondMethod { give memberRecipe } else { give recipe }
+            if projection.children.count() != 2U64 || projection.children[1U64] != expectedRecipe {
+                panic("method projection lost its original bound argument recipe")
+            }
+            match occurrence.role {
+                SourceTypeUseRole.Declaration => { signatureUses += 1U64 }
+                SourceTypeUseRole.Body => { bodyUses += 1U64 }
+                SourceTypeUseRole.DefaultArgument => { defaultUses += 1U64 }
+                _ => { panic("method projection has the wrong source role") }
+            }
+        }
+        index += 1U64
+    }
+    if signatureUses != 4U64 || bodyUses != 1U64 || defaultUses != 1U64 { panic("the fixture missed a method projection") }
+    print("1")
+}

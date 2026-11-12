@@ -143,15 +143,15 @@ impl Comp {
         return <Result.Err error=self.diagnosticAt(offset: site, msg: message, failureDomain: <FailureDomain.Source />) />
     }
 
-    inout fn uniqueProjectionSource(t: TypeAst) -> Result[LoweredTypeViewRecipe, CompileDiagnostic] {
+    inout fn uniqueProjectionSource(t: TypeAst, receiver: U64) -> Result[LoweredTypeViewRecipe, CompileDiagnostic] {
         try self.beginShortProjection(site: t.span.start)
-        val result = self.uniqueProjectionSourceCore(t: t)
+        val result = self.uniqueProjectionSourceCore(t: t, receiver: receiver)
         self.lowerProjectionDepth -= 1U64
         return result
     }
 
-    inout fn uniqueProjectionSourceCore(t: TypeAst) -> Result[LoweredTypeViewRecipe, CompileDiagnostic] {
-        if self.hasProjectionBoundContext { return self.cachedValueProjectionSource(type: t) }
+    inout fn uniqueProjectionSourceCore(t: TypeAst, receiver: U64) -> Result[LoweredTypeViewRecipe, CompileDiagnostic] {
+        if self.activeProjectionBounds.isSome() { return self.cachedValueProjectionSource(type: t, receiver: receiver) }
         mut val sources: Array[LoweredTypeViewRecipe] = []
         mut val index = 0U64
         while index < self.lowerWhereTypes.count() && index < self.lowerWhereTraitTypes.count() {
@@ -191,15 +191,15 @@ pub impl Comp {
 }
 
 impl Comp {
-    inout fn uniqueSyntaxProjectionSource(t: SyntaxType) -> Result[LoweredTypeViewRecipe, CompileDiagnostic] {
+    inout fn uniqueSyntaxProjectionSource(t: SyntaxType, receiver: U64) -> Result[LoweredTypeViewRecipe, CompileDiagnostic] {
         try self.beginShortProjection(site: t.span.start)
-        val result = self.uniqueSyntaxProjectionSourceCore(t: t)
+        val result = self.uniqueSyntaxProjectionSourceCore(t: t, receiver: receiver)
         self.lowerProjectionDepth -= 1U64
         return result
     }
 
-    inout fn uniqueSyntaxProjectionSourceCore(t: SyntaxType) -> Result[LoweredTypeViewRecipe, CompileDiagnostic] {
-        if self.hasProjectionBoundContext { return self.cachedSyntaxProjectionSource(type: t) }
+    inout fn uniqueSyntaxProjectionSourceCore(t: SyntaxType, receiver: U64) -> Result[LoweredTypeViewRecipe, CompileDiagnostic] {
+        if self.activeProjectionBounds.isSome() { return self.cachedSyntaxProjectionSource(type: t, receiver: receiver) }
         mut val sources: Array[LoweredTypeViewRecipe] = []
         mut val index = 0U64
         while index < self.lowerWhereSyntaxTypes.count() && index < self.lowerWhereSyntaxTraitTypes.count() {
@@ -448,7 +448,6 @@ pub impl Comp {
 
     inout fn lowerSyntaxFuncDecl(d: SyntaxDecl) -> Result[(), CompileDiagnostic] {
         val savedBounds = self.activeProjectionBounds
-        val savedBoundContext = self.hasProjectionBoundContext
         val savedParameters = self.cur.typeParams
         val savedReturn = self.cur.lowerRetTy
         val savedValueSubjects = self.lowerWhereTypes
@@ -458,7 +457,6 @@ pub impl Comp {
         val scope = self.sourceTypeUses.begin(kind: <SourceTypeScopeKind.FreeFunction />, anchor: d.name.start)
         val result = self.lowerSyntaxFuncDeclInSourceScope(d: d)
         self.activeProjectionBounds = savedBounds
-        self.hasProjectionBoundContext = savedBoundContext
         self.cur.typeParams = savedParameters
         self.cur.lowerRetTy = savedReturn
         self.lowerWhereTypes = savedValueSubjects
@@ -589,7 +587,6 @@ pub impl Comp {
 
     inout fn lowerFuncDecl(d: DeclAst) -> Result[(), CompileDiagnostic] {
         val savedBounds = self.activeProjectionBounds
-        val savedBoundContext = self.hasProjectionBoundContext
         val savedParameters = self.cur.typeParams
         val savedReturn = self.cur.lowerRetTy
         val savedValueSubjects = self.lowerWhereTypes
@@ -599,7 +596,6 @@ pub impl Comp {
         val scope = self.sourceTypeUses.begin(kind: <SourceTypeScopeKind.FreeFunction />, anchor: d.nameSpan.start)
         val result = self.lowerFuncDeclInSourceScope(d: d)
         self.activeProjectionBounds = savedBounds
-        self.hasProjectionBoundContext = savedBoundContext
         self.cur.typeParams = savedParameters
         self.cur.lowerRetTy = savedReturn
         self.lowerWhereTypes = savedValueSubjects

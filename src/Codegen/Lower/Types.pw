@@ -654,33 +654,6 @@ pub impl Comp {
             if source.traitInstance.owner == 0U64 { return <Result.Err error=self.diagnosticAt(offset: t.span.start, msg: "associated-type projection source must name a trait", failureDomain: <FailureDomain.Source />) /> }
             projection = <Optional.Some v=<LoweredTypeProjection source=source member=self.lowerTypeName(name: t.projectionAssoc, span: t.projectionAssocSpan) arguments=argumentRecipes /> />
         }
-        if !projection.isSome() && t.projectionAssoc.bytes().count() > 0U64 {
-            val source = try self.uniqueProjectionSource(t: t)
-            projection = <Optional.Some v=<LoweredTypeProjection source=source.source member=self.lowerTypeName(name: t.projectionAssoc, span: t.projectionAssocSpan) arguments=source.arguments /> />
-        }
-        mut val assocTraitStart: U64 = 0U64
-        mut val assocTraitLen: U64 = 0U64
-        mut val assocTraitId: U64 = 0U64
-        mut val assocTraitArgs: Array[U64] = []
-        mut val assocTraitArgLabels: Array[U64] = []
-        mut val assocNameStart: U64 = 0U64
-        mut val assocNameLen: U64 = 0U64
-        mut val assocNameId: U64 = 0U64
-        match projection {
-            Optional.Some(v: val selected) => {
-                assocTraitStart = selected.source.traitInstance.owner
-                assocTraitLen = self.traitNameLenByOwner(owner: assocTraitStart)
-                assocTraitId = selected.source.surfaceId
-                assocTraitArgs = selected.source.traitInstance.positionalArgs
-                for val argument in assocTraitArgs { assocTraitArgLabels.append(0U64) }
-                assocNameStart = selected.member.nameStart
-                assocNameLen = selected.member.nameLen
-                assocNameId = intern(c: inout self, start: assocNameStart, len: assocNameLen)
-            }
-            Optional.None => {}
-        }
-        // intern any named binding labels (`Item`/`Output` in `any P[Item=I32]`) parallel
-        // to args; 0 for a positional argument.
         mut val argLabels: Array[U64] = []
         mut val li: U64 = 0
         while li < t.argLabels.count() {
@@ -711,6 +684,37 @@ pub impl Comp {
             }
             tpi += 1
         }
+        val shortProjection = !projection.isSome() && t.projectionAssoc.bytes().count() > 0U64
+        val projectionReceiver = if projection.isSome() || shortProjection {
+            give self.pushType(t: <TypeRef nameStart=nm.nameStart nameLen=nm.nameLen paramId=paramId args=args isRecord=false recordFieldLabels=[] recordFieldTerms=[] viewExtId=viewExtId viewIds=viewIds viewSources=viewSources isAny=t.isAny argLabels=argLabels isSendable=t.isSendable isDiverging=t.isDiverging siteOffset=site />)
+        } else { give 0U64 }
+        if shortProjection {
+            val source = try self.uniqueProjectionSource(t: t, receiver: projectionReceiver)
+            projection = <Optional.Some v=<LoweredTypeProjection source=source.source member=self.lowerTypeName(name: t.projectionAssoc, span: t.projectionAssocSpan) arguments=source.arguments /> />
+        }
+        mut val assocTraitStart: U64 = 0U64
+        mut val assocTraitLen: U64 = 0U64
+        mut val assocTraitId: U64 = 0U64
+        mut val assocTraitArgs: Array[U64] = []
+        mut val assocTraitArgLabels: Array[U64] = []
+        mut val assocNameStart: U64 = 0U64
+        mut val assocNameLen: U64 = 0U64
+        mut val assocNameId: U64 = 0U64
+        match projection {
+            Optional.Some(v: val selected) => {
+                assocTraitStart = selected.source.traitInstance.owner
+                assocTraitLen = self.traitNameLenByOwner(owner: assocTraitStart)
+                assocTraitId = selected.source.surfaceId
+                assocTraitArgs = selected.source.traitInstance.positionalArgs
+                for val argument in assocTraitArgs { assocTraitArgLabels.append(0U64) }
+                assocNameStart = selected.member.nameStart
+                assocNameLen = selected.member.nameLen
+                assocNameId = intern(c: inout self, start: assocNameStart, len: assocNameLen)
+            }
+            Optional.None => {}
+        }
+        // intern any named binding labels (`Item`/`Output` in `any P[Item=I32]`) parallel
+        // to args; 0 for a positional argument.
         if args.count() == 0U64 && assocNameId == 0U64 && !t.isAny {
             val associated = self.lowerLexicalAssociatedType(nameStart: nm.nameStart, nameLen: nm.nameLen, paramId: paramId)
             if associated != 0U64 {
@@ -718,10 +722,6 @@ pub impl Comp {
                 val resolved = self.arena.typeAt(index: viewed)
                 return <Result.Ok value=<PType start=resolved.nameStart len=resolved.nameLen isArray=false ref=viewed authoredChildren=(try self.lexicalAssociatedRecipeChildren(ref: viewed, sources: viewRecipes)) /> />
             }
-        }
-        mut val projectionReceiver: U64 = 0
-        if assocNameId != 0U64 {
-            projectionReceiver = self.pushType(t: <TypeRef nameStart=nm.nameStart nameLen=nm.nameLen paramId=paramId args=args isRecord=false recordFieldLabels=[] recordFieldTerms=[] viewExtId=viewExtId viewIds=viewIds viewSources=viewSources isAny=t.isAny argLabels=argLabels isSendable=t.isSendable isDiverging=t.isDiverging siteOffset=site />)
         }
         val ref: U64 = self.pushType(t: <TypeRef nameStart=nm.nameStart nameLen=nm.nameLen paramId=paramId args=args isRecord=false recordFieldLabels=[] recordFieldTerms=[] viewExtId=viewExtId viewIds=viewIds viewSources=viewSources isAny=t.isAny argLabels=argLabels assocTraitStart=assocTraitStart assocTraitLen=assocTraitLen assocTraitId=assocTraitId assocTraitArgs=assocTraitArgs assocTraitArgLabels=assocTraitArgLabels assocNameStart=assocNameStart assocNameLen=assocNameLen assocNameId=assocNameId projectionReceiver=projectionReceiver isSendable=t.isSendable isDiverging=t.isDiverging siteOffset=site />)
         mut val result: PType = <PType start=nm.nameStart len=nm.nameLen isArray=false ref=ref />
@@ -899,8 +899,31 @@ pub impl Comp {
             if source.traitInstance.owner == 0U64 { return <Result.Err error=self.diagnosticAt(offset: t.span.start, msg: "associated-type projection source must name a trait", failureDomain: <FailureDomain.Source />) /> }
             projection = <Optional.Some v=<LoweredTypeProjection source=source member=<Bind nameStart=t.projectionAssoc.start nameLen=t.projectionAssoc.end - t.projectionAssoc.start fieldStart=0U64 fieldLen=0U64 /> arguments=argumentRecipes /> />
         }
-        if !projection.isSome() && !namespaceType && t.projectionAssoc.end > t.projectionAssoc.start {
-            val source = try self.uniqueSyntaxProjectionSource(t: t)
+        mut val argLabels: Array[U64] = []
+        mut val li: U64 = 0U64
+        while li < syntaxTypeArgCount(file: self.syntax, ty: t) {
+            val label: Span = syntaxTypeArgLabel(file: self.syntax, ty: t, index: li)
+            if label.end > label.start { argLabels.append(intern(c: inout self, start: label.start, len: label.end - label.start)) }
+            else { argLabels.append(0U64) }
+            li += 1U64
+        }
+        mut val site: U64 = t.span.start
+        mut val paramId: U64 = 0U64
+        mut val tpi: U64 = 0U64
+        while tpi < self.cur.typeParams.count() {
+            val param: Bind = self.cur.typeParams[tpi]
+            if param.paramId != 0U64 && spansEqual(c: inout self, aStart: param.nameStart, aLen: param.nameLen, bStart: name.nameStart, bLen: name.nameLen) {
+                site = 0U64
+                paramId = param.paramId
+            }
+            tpi += 1U64
+        }
+        val shortProjection = !projection.isSome() && !namespaceType && t.projectionAssoc.end > t.projectionAssoc.start
+        val projectionReceiver = if projection.isSome() || shortProjection {
+            give self.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen paramId=paramId args=args isRecord=false recordFieldLabels=[] recordFieldTerms=[] viewExtId=viewExtId viewIds=viewIds viewSources=viewSources isAny=t.isAny argLabels=argLabels isSendable=t.isSendable isDiverging=t.isDiverging siteOffset=site />)
+        } else { give 0U64 }
+        if shortProjection {
+            val source = try self.uniqueSyntaxProjectionSource(t: t, receiver: projectionReceiver)
             projection = <Optional.Some v=<LoweredTypeProjection source=source.source member=<Bind nameStart=t.projectionAssoc.start nameLen=t.projectionAssoc.end - t.projectionAssoc.start fieldStart=0U64 fieldLen=0U64 /> arguments=source.arguments /> />
         }
         mut val assocTraitStart = 0U64
@@ -924,25 +947,6 @@ pub impl Comp {
             }
             Optional.None => {}
         }
-        mut val argLabels: Array[U64] = []
-        mut val li: U64 = 0U64
-        while li < syntaxTypeArgCount(file: self.syntax, ty: t) {
-            val label: Span = syntaxTypeArgLabel(file: self.syntax, ty: t, index: li)
-            if label.end > label.start { argLabels.append(intern(c: inout self, start: label.start, len: label.end - label.start)) }
-            else { argLabels.append(0U64) }
-            li += 1U64
-        }
-        mut val site: U64 = t.span.start
-        mut val paramId: U64 = 0U64
-        mut val tpi: U64 = 0U64
-        while tpi < self.cur.typeParams.count() {
-            val param: Bind = self.cur.typeParams[tpi]
-            if param.paramId != 0U64 && spansEqual(c: inout self, aStart: param.nameStart, aLen: param.nameLen, bStart: name.nameStart, bLen: name.nameLen) {
-                site = 0U64
-                paramId = param.paramId
-            }
-            tpi += 1U64
-        }
         if args.count() == 0U64 && assocNameId == 0U64 && !t.isAny {
             val associated = self.lowerLexicalAssociatedType(nameStart: name.nameStart, nameLen: name.nameLen, paramId: paramId)
             if associated != 0U64 {
@@ -950,10 +954,6 @@ pub impl Comp {
                 val resolved = self.arena.typeAt(index: viewed)
                 return <Result.Ok value=<PType start=resolved.nameStart len=resolved.nameLen isArray=false ref=viewed authoredChildren=(try self.lexicalAssociatedRecipeChildren(ref: viewed, sources: viewRecipes)) /> />
             }
-        }
-        mut val projectionReceiver: U64 = 0
-        if assocNameId != 0U64 {
-            projectionReceiver = self.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen paramId=paramId args=args isRecord=false recordFieldLabels=[] recordFieldTerms=[] viewExtId=viewExtId viewIds=viewIds viewSources=viewSources isAny=t.isAny argLabels=argLabels isSendable=t.isSendable isDiverging=t.isDiverging siteOffset=site />)
         }
         val ref: U64 = self.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen paramId=paramId args=args isRecord=false recordFieldLabels=[] recordFieldTerms=[] viewExtId=viewExtId viewIds=viewIds viewSources=viewSources isAny=t.isAny argLabels=argLabels assocTraitStart=assocTraitStart assocTraitLen=assocTraitLen assocTraitId=assocTraitId assocTraitArgs=assocTraitArgs assocTraitArgLabels=assocTraitArgLabels assocNameStart=assocNameStart assocNameLen=assocNameLen assocNameId=assocNameId projectionReceiver=projectionReceiver isSendable=t.isSendable isDiverging=t.isDiverging siteOffset=site />)
         mut val result: PType = <PType start=name.nameStart len=name.nameLen isArray=false ref=ref />

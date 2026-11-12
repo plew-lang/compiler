@@ -340,6 +340,13 @@ checks later-clause dependencies, nonmember prefiltering, failed-context
 restoration, and legacy synthesized subjects; execute `later`, `nonmember`,
 `recovery`, and `legacy`. Each must exit 0, match its `.out` and have empty stderr.
 
+`ImplProjectionBoundOrigin.pw` checks that two methods reuse a single
+impl-owned bound argument in signature, body and default projections. Execute
+`syntax`, `value`, `syntax shadow`, `value shadow`, `syntax later`,
+`value later` and `value recovery`. The controls cover same-spelled binders,
+later clauses, nonmember filtering, failed frame restoration and the value
+adapter's legacy name-only rows.
+
 `AuthoredRecipeIntegrity.pw` checks the admitted constructor graph against the
 canonical child visitor. Execute `valid`, `shape`, `term`, `label`, `forged`,
 `foreign`, `representation`, `validRepresentation`, `representationSource`,

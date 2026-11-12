@@ -1,0 +1,20 @@
+use @Std/Io only { print }
+
+trait Project[Kind] { type Item }
+trait Consumer { fn first(value: I64) -> I64 }
+
+struct Source {}
+impl Source as Project[I64] { type Item = I64 }
+
+struct Box[T] { val item: T }
+impl[T] Box[T] as Consumer where T: Project[I64, Item=I64] {
+    fn first(value: I64) -> I64 {
+        val local: T.Item = value
+        return local
+    }
+}
+
+fn main() {
+    val box = <Box[Source] item=<Source /> />
+    print(box#Consumer.first(value: 42I64))
+}

@@ -12,6 +12,26 @@ pub struct SourceRequirementOwner {
 }
 pub impl SourceRequirementOwner { factory }
 
+pub enum SourceImplementationKind { Inherent Conformance(index: U64) }
+
+pub struct SourceImplementationOwner {
+    pub val kind: SourceImplementationKind
+    pub val receiver: U64
+    pub val receiverTrait: U64
+    pub val receiverArguments: Array[U64]
+    pub val parameters: Array[Bind]
+    pub val sourceModule: U64
+    pub val extensionId: U64
+}
+pub impl SourceImplementationOwner { factory }
+
+// One-based IDs, contiguous within the original declaration.
+pub struct SourceBoundRange {
+    pub val first: U64 = 0U64
+    pub val count: U64 = 0U64
+}
+pub impl SourceBoundRange { factory }
+
 pub struct SourceTypeScope {
     pub val kind: SourceTypeScopeKind
     pub val anchor: U64
@@ -22,6 +42,8 @@ pub struct SourceTypeScope {
     // function identity. Raw trait requirements and impls never borrow one.
     pub val function: Optional[U64] = <Optional.None />
     pub val requirement: Optional[SourceRequirementOwner] = <Optional.None />
+    pub val implementation: Optional[SourceImplementationOwner] = <Optional.None />
+    pub val bounds: Optional[SourceBoundRange] = <Optional.None />
 }
 pub impl SourceTypeScope { factory }
 
@@ -85,6 +107,13 @@ pub struct SourceTypeUses {
 pub impl SourceTypeUses {
     factory
     fn currentScope() -> U64 { return self.active }
+    fn inImplementation() -> Bool {
+        if self.active == 0U64 { return false }
+        match self.scopes[self.active - 1U64].kind {
+            SourceTypeScopeKind.Implementation => { return true }
+            _ => { return false }
+        }
+    }
     fn currentRole() -> SourceTypeUseRole {
         if self.active == 0U64 { return <SourceTypeUseRole.Unowned /> }
         return self.roles[self.active - 1U64]
@@ -128,7 +157,7 @@ pub impl SourceTypeUses {
             }
             SourceTypeScopeKind.Implementation | SourceTypeScopeKind.RequirementSignature => { return false }
         }
-        self.scopes[token - 1U64] = <SourceTypeScope kind=scope.kind anchor=scope.anchor traitOwner=scope.traitOwner parent=scope.parent state=scope.state function=<Optional.Some v=function /> requirement=scope.requirement />
+        self.scopes[token - 1U64] = <SourceTypeScope kind=scope.kind anchor=scope.anchor traitOwner=scope.traitOwner parent=scope.parent state=scope.state function=<Optional.Some v=function /> requirement=scope.requirement implementation=scope.implementation bounds=scope.bounds />
         return true
     }
 
@@ -138,7 +167,27 @@ pub impl SourceTypeUses {
         match scope.kind { SourceTypeScopeKind.RequirementSignature => {} _ => { return false } }
         match scope.state { SourceTypeScopeState.Lowered => {} _ => { return false } }
         if scope.traitOwner != traitOwner || scope.requirement.isSome() { return false }
-        self.scopes[token - 1U64] = <SourceTypeScope kind=scope.kind anchor=scope.anchor traitOwner=scope.traitOwner parent=scope.parent state=scope.state function=scope.function requirement=<Optional.Some v=requirement /> />
+        self.scopes[token - 1U64] = <SourceTypeScope kind=scope.kind anchor=scope.anchor traitOwner=scope.traitOwner parent=scope.parent state=scope.state function=scope.function requirement=<Optional.Some v=requirement /> implementation=scope.implementation bounds=scope.bounds />
+        return true
+    }
+
+    inout fn bindBounds(range: SourceBoundRange) -> Bool {
+        if self.active == 0U64 { return false }
+        val index = self.active - 1U64
+        val scope = self.scopes[index]
+        if scope.bounds.isSome() { return false }
+        match scope.state { SourceTypeScopeState.Lowering => {} _ => { return false } }
+        self.scopes[index] = <SourceTypeScope kind=scope.kind anchor=scope.anchor traitOwner=scope.traitOwner parent=scope.parent state=scope.state function=scope.function requirement=scope.requirement implementation=scope.implementation bounds=<Optional.Some v=range /> />
+        return true
+    }
+
+    inout fn bindImplementation(token: U64, implementation: SourceImplementationOwner) -> Bool {
+        if token == 0U64 || token != self.active || token > self.scopes.count() { return false }
+        val scope = self.scopes[token - 1U64]
+        match scope.kind { SourceTypeScopeKind.Implementation => {} _ => { return false } }
+        match scope.state { SourceTypeScopeState.Lowering => {} _ => { return false } }
+        if scope.implementation.isSome() { return false }
+        self.scopes[token - 1U64] = <SourceTypeScope kind=scope.kind anchor=scope.anchor traitOwner=scope.traitOwner parent=scope.parent state=scope.state implementation=<Optional.Some v=implementation /> bounds=scope.bounds />
         return true
     }
 
@@ -149,7 +198,7 @@ pub impl SourceTypeUses {
             SourceTypeScopeState.Lowering => {}
             SourceTypeScopeState.Lowered | SourceTypeScopeState.Failed => { return false }
         }
-        self.scopes[token - 1U64] = <SourceTypeScope kind=scope.kind anchor=scope.anchor traitOwner=scope.traitOwner parent=scope.parent state=(if succeeded { give <SourceTypeScopeState.Lowered /> } else { give <SourceTypeScopeState.Failed /> }) function=scope.function requirement=scope.requirement />
+        self.scopes[token - 1U64] = <SourceTypeScope kind=scope.kind anchor=scope.anchor traitOwner=scope.traitOwner parent=scope.parent state=(if succeeded { give <SourceTypeScopeState.Lowered /> } else { give <SourceTypeScopeState.Failed /> }) function=scope.function requirement=scope.requirement implementation=scope.implementation bounds=scope.bounds />
         match scope.function {
             Optional.Some(v: val function) => {
                 match self.functionSignatures.get(key: function) {

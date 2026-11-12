@@ -1257,10 +1257,11 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
-    inout fn registerDeclaredConformance(cf: Conform) -> Result[(), CompileDiagnostic] {
+    inout fn registerDeclaredConformance(cf: Conform) -> Result[U64, CompileDiagnostic] {
         try self.checkConformanceRegistration(cf: cf)
+        val index = self.decls.conformCount()
         self.decls.registerConform(cf)
-        return <Result.Ok value=() />
+        return <Result.Ok value=index />
     }
 
 }
