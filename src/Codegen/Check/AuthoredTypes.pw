@@ -1400,7 +1400,10 @@ impl Comp {
             if !present { selectors.append(projection) }
         }
         if traitSelectors == 0U64 && type.assocNameId == 0U64 { return <Result.Ok value=() /> }
-        val subject = if receiverRef != 0U64 { give self.groundTermInEnvironment(ref: receiver, params: [], values: [], selfRef: receiverRef) } else { give receiver }
+        val writtenSubject = if receiverRef != 0U64 { give self.groundTermInEnvironment(ref: receiver, params: [], values: [], selfRef: receiverRef) } else { give receiver }
+        mut val context = equations
+        for equation in receiverEquations { try self.appendRetainedProjectionEquation(step: equation, normalizations: inout context) }
+        val subject = if context.count() != 0U64 { give (try self.replayProjectionChildren(ref: writtenSubject, normalizations: context, offset: occurrence.site)) } else { give writtenSubject }
         val selectedProjection = if receiverOccurrence != 0U64 {
             give <Optional.Some v=(try self.retainedSignatureReceiverProjection(occurrence: receiverOccurrence, ref: receiver, proofs: proofs, offset: occurrence.site)) />
         } else { give <Optional.None /> }
@@ -1408,9 +1411,12 @@ impl Comp {
             if selector.traitInstance.owner != 0U64 {
                 if self.decls.traitIndexByOffset(offset: selector.traitInstance.owner) >= self.decls.traitCount() { return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "authored view has no canonical trait owner", failureDomain: <FailureDomain.Internal />) /> }
                 mut val arguments = selector.traitInstance.positionalArgs
-                if receiverRef != 0U64 {
+                if receiverRef != 0U64 || context.count() != 0U64 {
                     arguments = []
-                    for argument in selector.traitInstance.positionalArgs { arguments.append(self.groundTermInEnvironment(ref: argument, params: [], values: [], selfRef: receiverRef)) }
+                    for argument in selector.traitInstance.positionalArgs {
+                        val grounded = self.groundTermInEnvironment(ref: argument, params: [], values: [], selfRef: receiverRef)
+                        arguments.append(try self.replayProjectionNormalizations(ref: grounded, normalizations: context, offset: occurrence.site))
+                    }
                 }
                 val isProjection = type.assocNameId != 0U64 && selector.traitInstance.owner == self.associatedProjectionTraitOwner(projection: type) && self.sameResolvedTypeRefs(a: selector.traitInstance.positionalArgs, b: type.assocTraitArgs)
                 mut val projectionAssumptions = assumptions
@@ -1425,8 +1431,6 @@ impl Comp {
                     ConformanceProofResult.Missing => { return <Result.Err error=self.diagnosticAt(offset: selector.writtenStart, msg: "trait view requires a conformance for this receiver and exact trait instance (spec/09)", failureDomain: <FailureDomain.Source />) /> },
                     ConformanceProofResult.Ambiguous(owner: _, demand: _, selectedSource: _) => { return <Result.Err error=self.diagnosticAt(offset: selector.writtenStart, msg: "trait view does not have a unique conformance path (spec/09)", failureDomain: <FailureDomain.Source />) /> },
                 }
-                mut val context = equations
-                for equation in receiverEquations { try self.appendRetainedProjectionEquation(step: equation, normalizations: inout context) }
                 try self.checkStaticProofEvidence(proof: proof, offset: occurrence.site, assumptions: assumptions)
                 try self.requireDeclarationProofSupport(dependencies: (try self.scopedProofDependencies(proof: proof, scope: scope, offset: occurrence.site, normalizations: context)), offset: occurrence.site)
                 if inheritedProjection && isProjection {

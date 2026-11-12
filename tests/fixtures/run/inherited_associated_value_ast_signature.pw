@@ -1,0 +1,38 @@
+use /Frontend only { Comp }
+use /ModuleScopeBindings only { ModuleScopeBindings, ScopeBindingKind }
+use @Plew/Syntax as Syntax
+use @Std/Core only { assert }
+use @Std/Io only { print }
+
+fn main() {
+    val source = "trait Source {{ type Item }}\ntrait Service: Parent {{ fn fetch(value: Input#Source.Item) -> Input#Source.Item }}\ntrait Parent {{ type Input: Source }}"
+    mut val lexer = <Syntax.Lexer bytes=source.bytes() pos=0U64 toks=[] depth=0I64 />
+    Syntax.lex(lx: inout lexer)
+    mut val parser = <Syntax.P bytes=source.bytes() toks=lexer.toks pos=0U64 base=0U64 />
+    val items = Syntax.parseProgramAst(p: inout parser)
+    mut val compiler = <Comp />
+    compiler.arena.reserveTypeSentinel()
+    compiler.appendSrc(from: source.bytes())
+    mut val bindings = <ModuleScopeBindings />
+    for item in items {
+        match item {
+            Syntax.TopItemAst.Trait(t: val trait) => {
+                bindings.addDeclaration(moduleId: 0U64, nameId: compiler.internBytes(s: trait.name).nameId, kind: <ScopeBindingKind.Trait />, offset: trait.nameSpan.start, isPublic: false).unwrap()
+            }
+            _ => {}
+        }
+    }
+    compiler.moduleScopeBindings = <Optional.Some v=bindings.finish().unwrap() />
+    compiler.prepareValueTraitItems(items: items).unwrap()
+    for item in items { compiler.lowerTopItem(item: item).unwrap() }
+    val service = compiler.decls.traitAt(index: 1U64)
+    val parent = compiler.decls.traitAt(index: 2U64)
+    val requirement = compiler.traitReqAt(reqs: service.reqs, index: 0U64)
+    val output = compiler.arena.typeAt(index: requirement.retTy)
+    val receiver = compiler.arena.typeAt(index: compiler.typeTermProjectionReceiver(t: output))
+    assert(receiver.hasAssocTraitDecl)
+    assert(receiver.assocTraitDeclOffset == parent.nameStart)
+    assert(receiver.paramId == service.selfParamId)
+    compiler.admitAuthoredFunctionViews().unwrap()
+    print("ok")
+}

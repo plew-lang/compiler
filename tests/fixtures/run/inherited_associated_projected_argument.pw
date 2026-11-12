@@ -1,0 +1,26 @@
+use @Std/Io only { print }
+
+trait Source { type Item }
+trait Select { type Value }
+struct Wrapper[T] {}
+impl[T] Wrapper[T] as Select where T: Source { type Value = T#Source.Item }
+trait Service: Middle[I64] { fn fetch(value: Wrapper[Self#Parent[Array[Self#Marker.Type]].Input]#Select.Value) -> Wrapper[Self#Parent[Array[Self#Marker.Type]].Input]#Select.Value }
+
+trait Marker { type Type }
+trait Middle[Element]: Parent[Array[Self#Marker.Type]] + Marker[Type=Element] {}
+trait Parent[Context] { type Input: Source }
+
+struct Entry {}
+impl Entry as Source { type Item = I64 }
+struct OtherEntry {}
+impl OtherEntry as Source { type Item = Bool }
+struct Worker {}
+impl Worker as Parent[Array[Bool]] { type Input = OtherEntry }
+impl Worker as Parent[Array[I64]] { type Input = Entry }
+impl Worker as Marker { type Type = I64 }
+impl Worker as Middle[I64] {}
+impl Worker as Service { fn fetch(value: I64) -> I64 { return value } }
+
+fn main() {
+    print(<Worker />.fetch(value: 42I64))
+}

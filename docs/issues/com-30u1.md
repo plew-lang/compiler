@@ -1222,3 +1222,41 @@ producer/consumer check before independent completion review.
 
 Same-source self-compile medians were 6.767873 s and 6.767579 s.
 All eight LLVM outputs matched.
+
+## Projected argument equations and value-AST headers
+
+The fixed carrier `475f6a5c` rejected the explicit
+`inherited_associated_projected_argument` case when selecting the parent
+trait instance. The child recipe had already admitted
+`Self#Marker.Type = I64`, but the selection query used the unnormalized
+argument. Source admission now replays the already collected equations
+for the selector arguments and for the children of a projected receiver.
+It retains the written selector identity for the later occurrence lookup.
+
+The value-AST probe initially lowered the inherited projection receiver
+as a nominal name, despite all three trait identities and module bindings
+being present. The value-AST batch entry now prepares headers before
+lowering signatures and uses the same lexical scope and semantic header
+table as SyntaxFile. The new internal fixture checks the inherited
+declaration owner and the child trait's Self binder, then admits the
+signature. Existing standalone value-AST trait lowering prepares its own
+header when no batch has prepared it.
+
+Candidate `5c1b2723`, build `20261112T201150-build-246d49`, and generation
+`20261112T201448-gen-27392a` passed. Ten public fixtures passed check, JIT
+and native execution. The value-AST fixture and two existing adapter
+controls passed check and native execution.
+
+The bare form of the projected positional argument has no written child
+occurrence for the inner equation. A scratch probe using the existing
+condition equation recorder under the lexical Self premise passed the
+source selection boundary and then failed on the reader's argument
+comparison. A second scratch probe passed declaration analysis after
+using the normalized arguments of the already selected proof during
+signature reading. The production endpoint must restrict that read to
+arguments inherited by the current occurrence, preserve any required
+equation evidence, and verify both execution modes. The scratch probes
+are evidence for the next implementation step.
+
+Same-source medians were 6.794694 s and 6.791139 s. All eight LLVM
+outputs matched.

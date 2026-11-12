@@ -329,6 +329,12 @@ pub impl Comp {
         }
     }
 
+    inout fn prepareValueTraitItems(items: Array[TopItemAst]) -> Result[(), CompileDiagnostic] {
+        for item in items { self.predeclareTraitItem(item: item) }
+        for item in items { try self.prepareValueTraitItemHeader(item: item) }
+        return <Result.Ok value=() />
+    }
+
     // SyntaxFile counterpart of predeclareTraitItem.  The predeclare pass needs
     // only trait identity and arity, so it must not reconstruct a TraitAst.
     inout fn predeclareSyntaxTraitItem(item: TopItemId, traits: inout Array[TraitId]) {
@@ -1495,34 +1501,44 @@ pub impl Comp {
 }
 
 impl Comp {
+    inout fn prepareValueTraitHeaderInLexicalScope(trait: TraitAst) -> Result[(), CompileDiagnostic] {
+        val owner = trait.nameSpan.start
+        val parameters = try self.lowerTypeParamNames(names: trait.typeParams, anchor: owner, sendableFlags: trait.typeParamSendable)
+        self.enterTraitSignatureScope(owner: owner, parameters: parameters)
+        mut val supertraits: Array[TraitConstraint] = []
+        for val declared in trait.supertraits {
+            val constraint = (try self.lowerValueTraitConstraint(traitType: (try self.normalizeProjectionType(t: declared))))
+            if constraint.key.owner == 0U64 { return <Result.Err error=self.diagnosticAt(offset: declared.span.start, msg: "unknown supertrait or incompatible trait arguments") /> }
+            supertraits.append(constraint)
+        }
+        self.traitLexicalHeaders[owner] = <TraitLexicalHeader parameters=parameters supertraits=self.pushTraitConstraints(constraints: supertraits) />
+        return <Result.Ok value=() />
+    }
+
+    inout fn prepareValueTraitItemHeader(item: TopItemAst) -> Result[(), CompileDiagnostic] {
+        match item {
+            TopItemAst.Trait(t: val trait) => {
+                val savedParameters = self.cur.typeParams
+                val savedAssociatedOwner = self.lowerAssociatedOwner
+                val savedAssociatedArgs = self.lowerAssociatedArgs
+                val result = self.prepareValueTraitHeaderInLexicalScope(trait: trait)
+                self.cur.typeParams = savedParameters
+                self.lowerAssociatedOwner = savedAssociatedOwner
+                self.lowerAssociatedArgs = savedAssociatedArgs
+                return result
+            }
+            TopItemAst.Published(inner: val item) => { return self.prepareValueTraitItemHeader(item: item) }
+            _ => { return <Result.Ok value=() /> }
+        }
+    }
+
     inout fn lowerTraitInLexicalScope(t: TraitAst) -> Result[(), CompileDiagnostic] {
-        val nameStart: U64 = t.nameSpan.start
-        val nameLen: U64 = t.nameSpan.end - t.nameSpan.start
-        // Self/type parameters are lexical binders; associated names resolve
-        // through the selected trait's projection authority in requirements.
-        mut val assocTypes: Array[Bind] = []
-        mut val ai: U64 = 0
-        while ai < t.assocTypes.count() {
-            assocTypes.append(self.internBytes(s: t.assocTypes[ai].name))
-            ai += 1
-        }
-        val typeParams: Array[Bind] = (try self.lowerTypeParamNames(names: t.typeParams, anchor: nameStart, sendableFlags: t.typeParamSendable))
-        val selfParamId: U64 = self.decls.traitOwnerAt(index: self.decls.traitOwnerIndex(offset: nameStart)).selfParamId
-        val selfBind = self.lexicalSelfBinder(parameter: selfParamId)
-        mut val scopeTP: Array[Bind] = []
-        scopeTP.append(selfBind)
-        mut val stpi: U64 = 0
-        while stpi < typeParams.count() {
-            scopeTP.append(typeParams[stpi])
-            stpi += 1
-        }
-        mut val sai: U64 = 0
-        while sai < assocTypes.count() {
-            scopeTP.append(assocTypes[sai])
-            sai += 1
-        }
-        self.cur.typeParams = scopeTP
-        self.setLowerAssociatedTrait(owner: nameStart, parameters: typeParams)
+        val nameStart = t.nameSpan.start
+        val nameLen = t.nameSpan.end - nameStart
+        if !self.traitLexicalHeaders.contains(key: nameStart) { try self.prepareValueTraitHeaderInLexicalScope(trait: t) }
+        val header = self.traitLexicalHeaders.get(key: nameStart).unwrap()
+        val identity = self.decls.traitOwnerAt(index: self.decls.traitOwnerIndex(offset: nameStart))
+        self.enterTraitSignatureScope(owner: nameStart, parameters: header.parameters)
         mut val reqs: Array[Func] = []
         mut val requirements: Array[LoweredSourceSignature] = []
         mut val ri: U64 = 0
@@ -1540,13 +1556,7 @@ impl Comp {
                 associatedBounds.append(<TraitAssociatedBound member=member constraint=(try self.lowerValueTraitConstraint(traitType: (try self.normalizeProjectionType(t: bound)))) offset=bound.span.start />)
             }
         }
-        mut val supertraits: Array[TraitConstraint] = []
-        for val declared in t.supertraits {
-            val constraint = (try self.lowerValueTraitConstraint(traitType: (try self.normalizeProjectionType(t: declared))))
-            if constraint.key.owner == 0U64 { return <Result.Err error=self.diagnosticAt(offset: declared.span.start, msg: "unknown supertrait or incompatible trait arguments") /> }
-            supertraits.append(constraint)
-        }
-        val traitIndex = self.decls.registerTrait(<TraitDef nameStart=nameStart nameLen=nameLen nameId=intern(c: inout self, start: nameStart, len: nameLen) selfParamId=selfParamId typeParams=self.pushTraitBinds(binds: typeParams) supertraits=self.pushTraitConstraints(constraints: supertraits) reqs=self.pushTraitReqs(reqs: reqs) assocTypes=self.pushTraitBinds(binds: assocTypes) assocBounds=self.pushTraitAssociatedBounds(bounds: associatedBounds) />)
+        val traitIndex = self.decls.registerTrait(<TraitDef nameStart=nameStart nameLen=nameLen nameId=intern(c: inout self, start: nameStart, len: nameLen) selfParamId=identity.selfParamId typeParams=self.pushTraitBinds(binds: header.parameters) supertraits=header.supertraits reqs=self.pushTraitReqs(reqs: reqs) assocTypes=self.pushTraitBinds(binds: identity.assocTypes) assocBounds=self.pushTraitAssociatedBounds(bounds: associatedBounds) />)
         mut val requirementSlot = 0U64
         while requirementSlot < requirements.count() {
             try self.bindAuthoredRequirementScope(signature: requirements[requirementSlot], traitIndex: traitIndex, slot: requirementSlot, site: nameStart)
