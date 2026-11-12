@@ -1,6 +1,6 @@
 ---
 id: com-erlx
-status: in_progress
+status: closed
 deps: [com-v5zn, com-ffms]
 links: []
 created: 2026-11-09T08:54:16Z
@@ -96,3 +96,21 @@ admission check. The current candidate accepts an unused free function with
 baseline already accepted the corresponding impl forms. See [com-ffms](com-ffms.md)
 for the exact differential and the common admission repair. This ticket
 remains in progress until ordinary bound admission no longer regresses.
+
+## Outcome
+
+Resolved after [com-ffms](com-ffms.md#outcome), production `57a452a5`.
+The exact final carrier `1f9a99d6` passed both lowering adapters, shared
+impl versus member clause recipes (including shadowed binders, body,
+default and result uses), qualified/later clauses, legacy omission,
+nonmember filtering, typed Limit and restored scopes, and failed-prefix
+publication controls. The conditional-conformance fixture ran through
+check, AOT and lazy execution. Generation and the scoped performance
+comparison are recorded in com-ffms. No stage-wide gate or promotion
+is claimed by these results.
+
+Independent review reproduced the earlier receiver identity and partial
+publication failures and verified the repaired paths. Failed raw callable
+and implicit receiver admission is tracked by com-zqqi, raw requirements
+by com-30u1, and associated RHS admission by com-zzf3. They use this
+prepared-clause producer without reopening its closure.

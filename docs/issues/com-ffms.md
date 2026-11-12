@@ -1,6 +1,6 @@
 ---
 id: com-ffms
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-11-12T10:23:29Z
@@ -63,3 +63,32 @@ task-start TDD and independent completion review. Excludes broader callable
 publication and view-formation migration.
 
 This fix is a prerequisite of [com-erlx](com-erlx.md).
+
+## Outcome
+
+Resolved at `57a452a5`. Prepared ordinary clauses and pending short
+projections share the admitted trait head. Owner/kind/visibility and written
+positional arity are checked before argument lowering. Zero positional slots
+retain the existing open-argument behavior; associated labels are not counted.
+Raw signature and associated/supertrait decoding is unchanged and the
+signature case is recorded at com-30u1.
+
+The eleven initial public rejection controls were accepted before their
+fixes. The recursive wrong-arity case also reproduced the incorrect Limit
+on `9a209a27`. The final `1f9a99d6` carrier, build
+`20261112T104944-build-707337`, passed all twelve normal Source rejection
+workers, six namespace/alias/foreign-instance controls, all eighteen internal
+scenarios, and the applicable conditional check/AOT/lazy result. The
+two internal admission cases pin line 3, typed Source, no published invalid
+premise, and the valid canonical owner. The value case reuses the failed
+Comp. Exact-arity recursive Limit remains covered by existing controls.
+The unrelated `trait_bound_owner_identity` control retains its diagnostic
+but fails the strict domain wrapper identically on all compared carriers.
+
+Independent review found and rechecked wrong-kind callable lookup, early
+arity checking, raw-signature scope separation, and source-location tests.
+Final generation `20261112T105319-gen-2b047b` was input-stable and passed 25
+successes, five rejections, and the gen-input AST probe. Development
+carriers `da939fd0` and `1f9a99d6` compiled the identical current sources
+with medians 6.393239 and 6.414401 s after warmup, identical LLVM on all runs.
+This was a scoped comparison, not a new formal fixed-point measurement.
