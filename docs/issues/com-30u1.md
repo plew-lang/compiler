@@ -555,3 +555,47 @@ The task remains open. Next confirm the remaining requirement metadata
 readers, nested where recipes, missing post-admission evidence, and the
 Universal rejection boundary. Apply the independent review disposition
 before final re-review.
+
+## Sealed admission and static proof boundary checkpoint
+
+The declaration sweep closes early signature construction. Request readers
+can use admitted receipts during and after the sweep, but a missing
+receipt after admission is an Internal diagnostic. Failed admission
+retains the original failure. The same boundary serves provided clauses,
+provided callable types, and raw requirement consumers.
+
+In isolated compiler-source copies the only test accessors cleared
+`authoredSignatureViews` or `authoredRequirementViews` after successful
+analysis. Both lanes reconstructed the receipt at `a675522c`, reaching
+the intended assertions. The updated sources reject both while leaving
+the source registration intact. The tracked
+`global_authored_signature_admission` control exercises first reads of
+provided and existential signatures from initializers.
+
+Selected requirement declaration metadata, argument count, and Unit
+classification now use the admitted slot. The raw sibling-row swap in
+`existential_symbolic_result` reached the expected metadata assertion at
+`a675522c`; the new reader retains the original declaration, its where
+clause, and Unit result. Mid receives an explicit diagnostic when the
+selected requirement metadata cannot be read.
+
+The shared recursive static-proof gate now covers provided source
+signatures and clauses as well as raw requirements.
+`interface_final_evidence` injects a genuine interface root directly and
+inside a conditional witness into the provided signature reader. The
+intermediate candidate `a9b873a5` accepted the direct root. The final
+candidate rejects both with the explicit static diagnostic. The concrete
+adapter's nested control separately requires the universal-scope
+diagnostic.
+
+Build `20261112T154429-build-dc628b`, candidate `885d64c4`, passes ten
+targeted check/native fixtures, seven public JIT fixtures, and standard
+generation `20261112T154825-gen-f8d73f`. A supplemental public nested
+where-equation call returned 42 by both direct and generic invocation
+in JIT and native execution. Same-source medians against `2bd55d6c` were
+6.655639 s and 6.672044 s, with identical LLVM in all eight runs.
+
+Before closure, trace the nested equation's exact source recipe and
+translated requirement final comparison under evidence removal. The
+successful public control alone does not prove that neither path
+re-queries the prerequisites. Then obtain independent re-review.

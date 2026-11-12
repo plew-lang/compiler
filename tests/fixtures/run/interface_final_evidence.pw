@@ -1,15 +1,15 @@
 use /Frontend only { Comp, FrontendInput, analyzeFrontend }
 use /SourceAccess only { SourceAccess }
-use /Diag only { emitDiagnostic }
+use /Diag only { emitDiagnostic, FailureDomain }
 use /CheckedProgram only { CompilerSession, CompilerSessionResult }
-use /Ir only { DeclarationScopeOrigin, DeclarationTypeScope, FuncBindRange, CallTarget, CallResolution, StaticConformanceProof, DeclarationBoundRef, InstanceEnvironment, CallTemplateKind, DynamicCallTemplateTarget }
+use /Ir only { DeclarationScopeOrigin, DeclarationTypeScope, FuncBindRange, CallTarget, CallResolution, StaticMemberResolution, StaticConformanceProof, DeclarationBoundRef, InstanceEnvironment, CallTemplateKind, DynamicCallTemplateTarget }
 use @Std/Io only { print }
 fn replaced(row: CallResolution, body: U64, evidence: U64) -> CallResolution {
     return <CallResolution bodyId=body exprId=row.exprId siteKey=row.siteKey callee=row.callee recvTypeRef=row.recvTypeRef target=row.target interfaceEvidence=evidence />
 }
 fn main() {
     mut val compiler = <Comp />
-    val program = "trait Marker {{}}\ntrait Service: Marker {{ fn get() -> I64 where Self: Marker }}\nstruct Wrapper[T] {{}}\nimpl[T] Wrapper[T] as Marker where T: Marker {{}}\ntrait Items {{ type Item: Marker fn get() -> I64 where Wrapper[Item]: Marker }}\nstruct Value {{}}\nimpl Value as Marker {{}}\nimpl Value as Service {{ fn get() -> I64 {{ return 42I64 }} }}\nstruct Collection {{}}\nimpl Collection as Items {{ type Item = Value fn get() -> I64 {{ return 1I64 }} }}\nfn read(value: any Service) -> I64 {{ val first = value.get() return value.get() }}\nfn item[T](value: any Items[Item = T]) -> I64 {{ return value.get() }}\ntrait Family {{ type Child: Marker }}\nstruct Parent {{}}\nimpl Parent as Family {{ type Child = Value }}\nstruct NestedWrapper[T] {{}}\nimpl[T] NestedWrapper[T] as Marker where T: Family, T#Family.Child: Marker {{}}\ntrait Trees {{ type Item: Family fn get() -> I64 where NestedWrapper[Item]: Marker }}\nstruct Tree {{}}\nimpl Tree as Trees {{ type Item = Parent fn get() -> I64 {{ return 3I64 }} }}\nfn tree[T](value: any Trees[Item=T]) -> I64 {{ return value.get() }}\nfn main() {{ val first = read(value: <Value />) val erased: any Items[Item = Value] = <Collection /> val second = item(value: erased) val trees: any Trees[Item=Parent] = <Tree /> val third = tree(value: trees) }}\n"
+    val program = "trait Marker {{}}\npub impl Marker {{ fn markerAnswer() -> I64 {{ return 1I64 }} }}\ntrait Service: Marker {{ fn get() -> I64 where Self: Marker }}\npub impl Service {{ fn providedAnswer() -> I64 {{ return 42I64 }} }}\nstruct Wrapper[T] {{}}\nimpl[T] Wrapper[T] as Marker where T: Marker {{}}\ntrait Items {{ type Item: Marker fn get() -> I64 where Wrapper[Item]: Marker }}\nstruct Value {{}}\nimpl Value as Marker {{}}\nimpl Value as Service {{ fn get() -> I64 {{ return 42I64 }} }}\nstruct Collection {{}}\nimpl Collection as Items {{ type Item = Value fn get() -> I64 {{ return 1I64 }} }}\nfn read(value: any Service) -> I64 {{ val first = value.get() return value.get() }}\nfn item[T](value: any Items[Item = T]) -> I64 {{ return value.get() }}\ntrait Family {{ type Child: Marker }}\nstruct Parent {{}}\nimpl Parent as Family {{ type Child = Value }}\nstruct NestedWrapper[T] {{}}\nimpl[T] NestedWrapper[T] as Marker where T: Family, T#Family.Child: Marker {{}}\ntrait Trees {{ type Item: Family fn get() -> I64 where NestedWrapper[Item]: Marker }}\nstruct Tree {{}}\nimpl Tree as Trees {{ type Item = Parent fn get() -> I64 {{ return 3I64 }} }}\nfn tree[T](value: any Trees[Item=T]) -> I64 {{ return value.get() }}\nfn main() {{ val first = read(value: <Value />) val erased: any Items[Item = Value] = <Collection /> val second = item(value: erased) val trees: any Trees[Item=Parent] = <Tree /> val third = tree(value: trees) }}\n"
     match analyzeFrontend(c: inout compiler, input: <FrontendInput.Text text=program path="interface-final.pw" />, sources: <SourceAccess />) {
         Result.Ok(value: _) => {}
         Result.Err(error: val error) => { emitDiagnostic(diagnostic: error) panic(error.message) }
@@ -49,15 +49,36 @@ fn main() {
         }
     }
     if !compared { panic("independent interface operation scopes were not exercised") }
+    val provided = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "providedAnswer").nameId)
+    if provided >= compiler.arena.functionCount() { panic "missing provided control declaration" }
+    val provider = compiler.arena.functionAt(index: provided).provTraitOwner
+    val noArguments = compiler.pushArgs(args: [])
+    mut val providedEscapeChecked = false
     mut val escaped = false
     for template in compiler.callTemplateSnapshot() {
         match template.kind {
             CallTemplateKind.Dynamic(receiver: _, args: _, target: val target) => {
                 match target {
-                    DynamicCallTemplateTarget.ExistentialRequirement(traitIdx: _, slot: _, interfaceRoot: val root) => {
+                    DynamicCallTemplateTarget.ExistentialRequirement(traitIdx: val traitIndex, slot: _, interfaceRoot: val root) => {
                         if compiler.instantiateConstraintProof(proof: <StaticConformanceProof.AssumedBound source=<DeclarationBoundRef.Interface index=root - 1U64 /> />, receiverRef: template.receiverTypeTerm, environment: <InstanceEnvironment />, selfRef: 0U64, itemRef: 0U64).isOk() { panic("universal interface evidence escaped through the static adapter") }
                         val contractScope = <DeclarationTypeScope origin=<DeclarationScopeOrigin.InterfaceContract /> owner=0U64 parameters=<FuncBindRange start=0U64 len=0U64 /> interfaceRoot=root />
                         if compiler.checkDeclarationAssumptionScope(source: <DeclarationBoundRef.Interface index=root - 1U64 />, scope: contractScope, offset: 0U64).isOk() { panic("source-call evidence authorized a table-member contract") }
+                        if compiler.decls.traitAt(index: traitIndex).nameStart == provider {
+                            val source = <DeclarationBoundRef.Interface index=root - 1U64 />
+                            val resolution = <StaticMemberResolution.Provided proof=<StaticConformanceProof.AssumedBound source=source /> traitIdx=traitIndex callee=provided />
+                            val receiver = compiler.declarationBound(source: source).subject
+                            match compiler.staticMemberCallResultType(resolution: resolution, receiverTerm: receiver, args: noArguments) {
+                                Result.Ok(value: _) => { panic "provided signature accepted universal interface evidence" }
+                                Result.Err(error: val diagnostic) => {
+                                    if diagnostic.message != "universal interface evidence cannot authorize a static callable" { panic(diagnostic.message) }
+                                    match diagnostic.failureDomain {
+                                        FailureDomain.Internal => {}
+                                        _ => { panic(diagnostic.message) }
+                                    }
+                                }
+                            }
+                            providedEscapeChecked = true
+                        }
                         escaped = true
                     }
                     _ => {}
@@ -66,7 +87,11 @@ fn main() {
             _ => {}
         }
     }
-    if !escaped { panic("static escape control had no interface root") }
+    if !escaped || !providedEscapeChecked { panic("static escape control had no interface root") }
+    val nestedProvided = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "markerAnswer").nameId)
+    if nestedProvided >= compiler.arena.functionCount() { panic "missing nested provided control declaration" }
+    val nestedOwner = compiler.arena.functionAt(index: nestedProvided).provTraitOwner
+    val nestedTrait = compiler.decls.traitIndexByOffset(offset: nestedOwner)
     mut val nested = false
     for template in compiler.callTemplateSnapshot() {
         match compiler.preparedCallConstraints(index: compiler.callTemplateIndex(siteKey: template.siteKey)) {
@@ -78,9 +103,23 @@ fn main() {
                     val proof = compiler.thawStaticConformanceProof(id: plan.proofs[index])
                     match proof {
                         StaticConformanceProof.ConcreteWitness(witness: val witness) => {
-                            if witness.conditions != 0U64 {
-                                if compiler.instantiateConstraintProof(proof: proof, receiverRef: plan.bounds[index].subject, environment: <InstanceEnvironment />, selfRef: 0U64, itemRef: 0U64).isOk() { panic("nested universal evidence escaped through the static adapter") }
-                                nested = true
+                            val bound = plan.bounds[index]
+                            if witness.conditions != 0U64 && bound.constraint.key.owner == nestedOwner {
+                                match compiler.instantiateConstraintProof(proof: proof, receiverRef: bound.subject, environment: <InstanceEnvironment />, selfRef: 0U64, itemRef: 0U64) {
+                                    Result.Ok(value: _) => { panic "nested universal evidence escaped through the static adapter" }
+                                    Result.Err(error: val diagnostic) => {
+                                        if diagnostic.message == "interface evidence requires a universal call scope" {
+                                            val resolution = <StaticMemberResolution.Provided proof=proof traitIdx=nestedTrait callee=nestedProvided />
+                                            match compiler.staticMemberCallResultType(resolution: resolution, receiverTerm: bound.subject, args: noArguments) {
+                                                Result.Ok(value: _) => { panic "provided signature accepted nested universal interface evidence" }
+                                                Result.Err(error: val rejected) => {
+                                                    if rejected.message != "universal interface evidence cannot authorize a static callable" { panic(rejected.message) }
+                                                }
+                                            }
+                                            nested = true
+                                        }
+                                    }
+                                }
                             }
                         }
                         _ => {}

@@ -2,6 +2,33 @@
 // originating function's rigid binders are available. No body cursor is used.
 pub impl Comp {
     inout fn admitAuthoredFunctionViews() -> Result[(), CompileDiagnostic] {
+        match self.authoredSignatureAdmission {
+            AuthoredSignatureAdmissionPhase.Open => {}
+            AuthoredSignatureAdmissionPhase.Complete => { return <Result.Ok value=() /> }
+            AuthoredSignatureAdmissionPhase.Failed(diagnostic: val diagnostic) => { return <Result.Err error=diagnostic /> }
+            AuthoredSignatureAdmissionPhase.Checking => {
+                return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "authored signature admission was re-entered", failureDomain: <FailureDomain.Internal />) />
+            }
+        }
+        self.authoredSignatureAdmission = <AuthoredSignatureAdmissionPhase.Checking />
+        val result = self.finishAuthoredSignatureAdmission()
+        self.authoredSignatureAdmission = match result {
+            Result.Ok(value: _) => <AuthoredSignatureAdmissionPhase.Complete />,
+            Result.Err(error: val diagnostic) => <AuthoredSignatureAdmissionPhase.Failed diagnostic=diagnostic />,
+        }
+        return result
+    }
+
+    // Read an exact retained annotation and its canonical child recipes.
+    // Every projection consumes the proof of its own authored occurrence.
+    inout fn readAdmittedSignatureRoot(function: U64, slot: SourceSignatureSlot, environment: InstanceEnvironment) -> Result[U64, CompileDiagnostic] {
+        val terms = try self.readAdmittedSignatureRoots(function: function, slots: [slot], environment: environment)
+        return <Result.Ok value=terms[0U64] />
+    }
+}
+
+impl Comp {
+    inout fn finishAuthoredSignatureAdmission() -> Result[(), CompileDiagnostic] {
         mut val index = 0U64
         while index < self.sourceTypeUses.signatureCount() {
             val signature = self.sourceTypeUses.signatureAt(index: index).unwrap()
@@ -21,18 +48,25 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
-    // Read an exact retained annotation and its canonical child recipes.
-    // Every projection consumes the proof of its own authored occurrence.
-    inout fn readAdmittedSignatureRoot(function: U64, slot: SourceSignatureSlot, environment: InstanceEnvironment) -> Result[U64, CompileDiagnostic] {
-        val terms = try self.readAdmittedSignatureRoots(function: function, slots: [slot], environment: environment)
-        return <Result.Ok value=terms[0U64] />
+    inout fn checkAuthoredSignatureAdmissionOutcome() -> Result[(), CompileDiagnostic] {
+        match self.authoredSignatureAdmission {
+            AuthoredSignatureAdmissionPhase.Failed(diagnostic: val diagnostic) => { return <Result.Err error=diagnostic /> }
+            _ => { return <Result.Ok value=() /> }
+        }
     }
-}
 
-impl Comp {
+    inout fn requireEarlySignatureConstruction(offset: U64) -> Result[(), CompileDiagnostic] {
+        match self.authoredSignatureAdmission {
+            AuthoredSignatureAdmissionPhase.Open => { return <Result.Ok value=() /> }
+            AuthoredSignatureAdmissionPhase.Failed(diagnostic: val diagnostic) => { return <Result.Err error=diagnostic /> }
+            _ => { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "selected declaration lost its admitted signature evidence", failureDomain: <FailureDomain.Internal />) /> }
+        }
+    }
+
     // One read owns one declaration/environment validation and recipe memo.
     // Roots retain their distinct authored occurrences, even for equal terms.
     inout fn readAdmittedSignatureRoots(function: U64, slots: Array[SourceSignatureSlot], environment: InstanceEnvironment, context: SignatureRecipeContext = <SignatureRecipeContext.Concrete />) -> Result[Array[U64], CompileDiagnostic] {
+        try self.checkAuthoredSignatureAdmissionOutcome()
         val admitted = match self.authoredSignatureViews.get(key: function) {
             Optional.Some(v: val admitted) => admitted,
             Optional.None => { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "authored signature has no admitted trait views", failureDomain: <FailureDomain.Internal />) /> },
@@ -560,15 +594,25 @@ impl Comp {
     // Interface consumers can read signatures while recording initializers,
     // before the whole-declaration admission sweep.
     inout fn requireAdmittedRawRequirement(traitIndex: U64, slot: U64, offset: U64) -> Result[U64, CompileDiagnostic] {
+        try self.checkAuthoredSignatureAdmissionOutcome()
         val trait = self.decls.traitAt(index: traitIndex)
         val token = match self.sourceTypeUses.requirementScopeFor(index: trait.reqs.start + slot) {
             Optional.Some(v: val token) => token,
             Optional.None => { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "selected requirement has no authored signature", failureDomain: <FailureDomain.Internal />) /> },
         }
         if !self.authoredRequirementViews.contains(key: token) {
+            try self.requireEarlySignatureConstruction(offset: offset)
             try self.admitRawRequirementSignature(token: token)
         }
         return <Result.Ok value=token />
+    }
+
+    inout fn admittedRequirementDeclaration(traitIndex: U64, slot: U64, offset: U64) -> Result[Func, CompileDiagnostic] {
+        if traitIndex >= self.decls.traitCount() || slot >= self.decls.traitAt(index: traitIndex).reqs.count() {
+            return <Result.Err error=self.diagnosticAt(offset: offset, msg: "selected requirement has no declaration slot", failureDomain: <FailureDomain.Internal />) />
+        }
+        val scope = try self.requireAdmittedRawRequirement(traitIndex: traitIndex, slot: slot, offset: offset)
+        return <Result.Ok value=self.authoredRequirementViews[scope].declaration />
     }
 
     // The public interface interprets the selected declaration's recipe. Its
@@ -638,15 +682,20 @@ impl Comp {
         return <InstanceEnvironment params=parameters args=values receiverRef=bound.subject />
     }
 
+    inout fn requireStaticSignatureProof(proof: StaticConformanceProof, offset: U64) -> Result[(), CompileDiagnostic] {
+        if (try self.interfaceProofRoot(proof: proof)) != 0U64 {
+            return <Result.Err error=self.diagnosticAt(offset: offset, msg: "universal interface evidence cannot authorize a static callable", failureDomain: <FailureDomain.Internal />) />
+        }
+        return <Result.Ok value=() />
+    }
+
     inout fn staticRequirementSignatureContext(resolution: StaticMemberResolution) -> Result[Optional[RequirementSignatureRead], CompileDiagnostic] {
         match resolution {
             StaticMemberResolution.Requirement(proof: val proof, traitIdx: val traitIndex, reqIdx: val slot) => {
                 if traitIndex >= self.decls.traitCount() || slot >= self.decls.traitAt(index: traitIndex).reqs.count() { return <Result.Ok value=<Optional.None /> /> }
                 val bound = try self.staticProofBound(proof: proof, traitIdx: traitIndex)
                 if bound.subject == 0U64 { return <Result.Ok value=<Optional.None /> /> }
-                if (try self.interfaceProofRoot(proof: proof)) != 0U64 {
-                    return <Result.Err error=self.diagnosticAt(offset: bound.offset, msg: "universal interface evidence cannot authorize a static callable", failureDomain: <FailureDomain.Internal />) />
-                }
+                try self.requireStaticSignatureProof(proof: proof, offset: bound.offset)
                 val scope = try self.requireAdmittedRawRequirement(traitIndex: traitIndex, slot: slot, offset: bound.offset)
                 return <Result.Ok value=<Optional.Some v=<RequirementSignatureRead scope=scope bound=bound selected=<Optional.Some v=proof /> /> /> />
             }
@@ -838,6 +887,7 @@ impl Comp {
     }
 
     inout fn providedSignatureAdmission(function: U64) -> Result[AuthoredSignatureViews, CompileDiagnostic] {
+        try self.checkAuthoredSignatureAdmissionOutcome()
         val owner = try self.semanticBodyOwner(fnIdx: function)
         match self.authoredSignatureViews.get(key: owner) {
             Optional.Some(v: val admitted) => { return <Result.Ok value=admitted /> }
@@ -847,6 +897,7 @@ impl Comp {
             Optional.Some(v: val source) => source,
             Optional.None => { return <Result.Err error=self.diagnosticAt(offset: self.arena.functionAt(index: function).defOffset, msg: "provided where clause has no authored signature", failureDomain: <FailureDomain.Internal />) /> },
         }
+        try self.requireEarlySignatureConstruction(offset: self.arena.functionAt(index: function).defOffset)
         try self.admitAuthoredFunctionViewSignature(signature: source)
         return <Result.Ok value=self.authoredSignatureViews[owner] />
     }

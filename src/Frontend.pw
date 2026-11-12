@@ -393,6 +393,13 @@ struct SignatureProofScopes {
 }
 impl SignatureProofScopes { factory }
 
+enum AuthoredSignatureAdmissionPhase {
+    Open
+    Checking
+    Complete
+    Failed(diagnostic: CompileDiagnostic)
+}
+
 struct AuthoredRequirementSignature {
     val source: SourceRequirementOwner
     val declaration: Func
@@ -626,6 +633,7 @@ pub struct Comp {
     mut val rawRequirementRanges: Dictionary[U64, SourceBoundRange] = [:]
     mut val authoredRequirementViews: Dictionary[U64, AuthoredRequirementSignature] = [:]
     mut val authoredSignatureViews: Dictionary[U64, AuthoredSignatureViews] = [:]
+    mut val authoredSignatureAdmission: AuthoredSignatureAdmissionPhase = <AuthoredSignatureAdmissionPhase.Open />
     pub mut val loweringTypeUses: Array[U64] = []
     // Authored provenance is independent of legacy visibility suppression.
     mut val authoredTypeUseSites: Dictionary[U64, U64] = [:]

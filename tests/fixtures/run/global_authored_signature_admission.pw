@@ -1,0 +1,15 @@
+use @Std/Io only { print }
+
+trait Readable { fn value() -> I64 }
+pub impl Readable { fn provided() -> I64 { return self.value() } }
+struct Source {}
+impl Source as Readable { fn value() -> I64 { return 42I64 } }
+
+val direct = <Source />.provided()
+val boxed: any Readable = <Source />
+val dispatched = boxed.value()
+
+fn main() {
+    print(direct)
+    print(dispatched)
+}

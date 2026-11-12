@@ -1154,7 +1154,10 @@ fn materializeMidCallValue(c: inout Comp, state: inout MidBuildState, exprId: U6
         Result.Err(error: val error) => { return <MidOperandBuild.Error error=error /> }
     }
     val term = sourceType.typeTerm()
-    mut val returnsUnit = c.callTemplateReturnsUnit(template: template)
+    mut val returnsUnit = match c.callTemplateReturnsUnit(template: template) {
+        Result.Ok(value: val unit) => unit,
+        Result.Err(error: val diagnostic) => { return midFrontendOperandFailure(diagnostic: diagnostic) }
+    }
     if returnsUnit {
         val invocation = match midSourceSemanticExpression(facts: state.sourceFacts, exprId: exprId) {
             Optional.Some(v: val fact) => fact.invocation

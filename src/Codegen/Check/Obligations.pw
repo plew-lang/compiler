@@ -1244,6 +1244,7 @@ pub impl Comp {
     }
 
     inout fn sourceProvidedCallBounds(callee: U64, receiver: U64, arguments: Array[U64], proof: StaticConformanceProof) -> Result[Array[TraitBound], CompileDiagnostic] {
+        try self.requireStaticSignatureProof(proof: proof, offset: self.arena.functionAt(index: callee).defOffset)
         val admitted = try self.providedSignatureAdmission(function: callee)
         if admitted.clauses.count() == 0U64 { return <Result.Ok value=[] /> }
         val environment = try self.recordedDirectCallEnvironment(function: self.arena.functionAt(index: callee), receiverTerm: receiver, typeArgs: arguments, proof: proof)

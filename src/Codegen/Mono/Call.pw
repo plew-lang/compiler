@@ -331,6 +331,7 @@ pub impl Comp {
 
 impl Comp {
     inout fn providedSourceSignature(function: U64, environment: InstanceEnvironment, read: CallableSignatureRead = <CallableSignatureRead.SourceCall />) -> Result[RetainedCallableTypes, CompileDiagnostic] {
+        try self.requireStaticSignatureProof(proof: environment.proof, offset: self.arena.functionAt(index: function).defOffset)
         match (try self.readRetainedCallableTypes(function: function, environment: environment, read: read)) {
             Optional.Some(v: val signature) => { return <Result.Ok value=signature /> }
             Optional.None => { return <Result.Err error=self.diagnosticAt(offset: self.arena.functionAt(index: function).defOffset, msg: "selected provided method has no authored signature", failureDomain: <FailureDomain.Internal />) /> }
@@ -350,6 +351,7 @@ impl Comp {
     // None identifies an unmigrated/synthetic declaration, never failed
     // admission of a registered source signature.
     inout fn readRetainedCallableTypes(function: U64, environment: InstanceEnvironment, read: CallableSignatureRead) -> Result[Optional[RetainedCallableTypes], CompileDiagnostic] {
+        try self.checkAuthoredSignatureAdmissionOutcome()
         val sourceSelection = match read { CallableSignatureRead.Body => false, _ => true }
         val readParameters = match read { CallableSignatureRead.SourceResult => false, _ => true }
         val readResult = match read { CallableSignatureRead.SourceParameters => false, _ => true }
@@ -369,6 +371,7 @@ impl Comp {
         }
         if !self.authoredSignatureViews.contains(key: owner) {
             if !sourceSelection { return <Result.Err error=self.diagnosticAt(offset: declaration.defOffset, msg: "authored signature has no admitted trait views", failureDomain: <FailureDomain.Internal />) /> }
+            try self.requireEarlySignatureConstruction(offset: declaration.defOffset)
             try self.admitAuthoredFunctionViewSignature(signature: source)
         }
         if source.parameters.count() != declaration.params.count() { return <Result.Err error=self.diagnosticAt(offset: declaration.defOffset, msg: "retained callable signature changed its parameter slots", failureDomain: <FailureDomain.Internal />) /> }
