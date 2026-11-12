@@ -1,6 +1,7 @@
 // Focused source-bound preparation and frame-restoration controls.
 use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
 use ../../../src/SourceAccess only { SourceAccess }
+use ../../../src/ModuleScopeBindings only { ModuleScopeBindings, ScopeBindingKind }
 use ../../../src/Diag only { DiagnosticLocation, FailureDomain }
 use @Plew/Syntax only { DeclAst, TraitAst, TypeAst, parseItem, TopItemAst, rangeEquals }
 use @Std/Io only { print }
@@ -77,29 +78,42 @@ fn exerciseRequirementWhere(valueAdapter: Bool) {
     print("1")
 }
 
-fn exerciseRequirementSignatureValue() {
-    val valid = "trait Exact[Kind]: Project[Kind] {{ fn exact(value: Self#Project[Kind].Item) -> Self#Project[Kind].Item }}"
-    val invalid = "trait Wrong: Project[Bool] {{ fn wrong(value: Self#Project[I64].Item) }}"
-    val source = "trait Project[Kind] {{ type Item }}\n// " + valid + "\n// " + invalid + "\nfn main() {{}}"
+fn valueRequirementCompiler(requirement: String) -> Comp {
+    val project = "trait Project[Kind] {{ type Item }}"
     mut val compiler = <Comp />
-    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text text=source path="ValueRequirement.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
-    val exact = traitDeclaration(compiler, valid)
-    compiler.predeclareTrait(t: exact)
-    compiler.lowerTrait(t: exact).unwrap()
-    compiler.admitAuthoredFunctionViews().unwrap()
-    val token = compiler.sourceTypeUses.requirementScopeAt(index: 0U64)
-    val scope = compiler.sourceTypeUses.scopeAt(token: token).unwrap()
-    val owner = scope.requirement.unwrap()
-    val trait = compiler.decls.traitAt(index: owner.traitIndex)
-    val requirement = compiler.traitReqAt(reqs: trait.reqs, index: owner.slot)
-    val result = compiler.sourceTypeUses.useAt(index: owner.result - 1U64).unwrap()
-    val parameter = compiler.funcParamAt(params: requirement.params, index: 0U64)
-    if scope.function.isSome() || result.scope != token || parameter.authoredTypeUse == owner.result || !compiler.typeRefEq(a: result.term, b: requirement.retTy) {
-        panic("the raw requirement lost its distinct parameter and result occurrences")
+    compiler.arena.reserveTypeSentinel()
+    compiler.internBytes(s: project + "\n" + requirement)
+    val schema = traitDeclaration(compiler, project)
+    mut val bindings = <ModuleScopeBindings />
+    bindings.addDeclaration(moduleId: 0U64, nameId: compiler.internBytes(s: "Project").nameId, kind: <ScopeBindingKind.Trait />, offset: schema.nameSpan.start, isPublic: false).unwrap()
+    compiler.moduleScopeBindings = <Optional.Some v=bindings.finish().unwrap() />
+    compiler.predeclareTrait(t: schema)
+    compiler.lowerTrait(t: schema).unwrap()
+    val declaration = traitDeclaration(compiler, requirement)
+    compiler.predeclareTrait(t: declaration)
+    compiler.lowerTrait(t: declaration).unwrap()
+    return compiler
+}
+
+fn exerciseRequirementSignatureValue() {
+    val inherited = "trait Exact[Kind]: Project[Kind] {{ fn exact(value: Self#Project[Kind].Item) -> Self#Project[Kind].Item }}"
+    val associated = "trait Exact[Kind] {{ type Input: Project[Kind] fn exact(value: Input#Project[Kind].Item) -> Input#Project[Kind].Item }}"
+    for valid in [inherited, associated] {
+        mut val compiler = valueRequirementCompiler(requirement: valid)
+        compiler.admitAuthoredFunctionViews().unwrap()
+        val token = compiler.sourceTypeUses.requirementScopeAt(index: 0U64)
+        val scope = compiler.sourceTypeUses.scopeAt(token: token).unwrap()
+        val owner = scope.requirement.unwrap()
+        val trait = compiler.decls.traitAt(index: owner.traitIndex)
+        val requirement = compiler.traitReqAt(reqs: trait.reqs, index: owner.slot)
+        val result = compiler.sourceTypeUses.useAt(index: owner.result - 1U64).unwrap()
+        val parameter = compiler.funcParamAt(params: requirement.params, index: 0U64)
+        if scope.function.isSome() || result.scope != token || parameter.authoredTypeUse == owner.result || !compiler.typeRefEq(a: result.term, b: requirement.retTy) {
+            panic("the raw requirement lost its distinct parameter and result occurrences")
+        }
     }
-    val wrong = traitDeclaration(compiler, invalid)
-    compiler.predeclareTrait(t: wrong)
-    compiler.lowerTrait(t: wrong).unwrap()
+    val invalid = "trait Wrong: Project[Bool] {{ fn wrong(value: Self#Project[I64].Item) }}"
+    mut val compiler = valueRequirementCompiler(requirement: invalid)
     match compiler.admitAuthoredFunctionViews() {
         Result.Err(error: val diagnostic) => {
             match diagnostic.failureDomain { FailureDomain.Source => {} _ => { panic(diagnostic.message) } }

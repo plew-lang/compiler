@@ -693,3 +693,40 @@ the associated bound. Resolve this under the existing declared-premise
 guarantee and distinguish it from the later interface-call boundary. Both
 source admission and the remaining inherited path precede independent
 closure review.
+
+## Associated receiver admission
+
+Both type lowering adapters now bind the written head in
+`Input#Source.Item` using the same lexical associated-type lookup as a bare
+`Input`. That head is itself an authored occurrence and receives its own
+proof. The outer occurrence consumes it through the existing associated
+clause admission. Explicit method binders still take priority in the
+lexical lookup.
+
+`trait_requirement_signature_associated_receiver` reproduces the unused
+requirement rejection on `0cfdc037` and passes check, JIT and native on
+`64a80a5e`. Removing `Input: Source` still yields the Source conformance
+diagnostic. The value adapter control also passes for the parameterized
+`Input: Project[Kind]` with separate parameter and result occurrences.
+The existing value fixture had been adding traits after signature admission
+was sealed. It now builds each fresh declaration session with an admitted
+module binding and invokes the sweep after lowering, preserving the
+inherited positive and wrong-instance rejection.
+
+Build `20261112T162444-build-9882c1`, generation
+`20261112T163238-gen-dae81a`, four targeted check/native fixtures and three
+public JIT fixtures passed. Interleaved medians were 6.603329 s and
+6.601279 s with all eight LLVM outputs identical.
+
+The new source admission exposes two later failures in valid associated
+receiver programs. With `Entry as Source { type Item = I64 }` and
+`type Input = Entry` in the Service implementation, comparing the
+requirement's projected result against `fn fetch() -> I64` still fails.
+A `fetch() -> I64 where Input#Source.Item: Number` source also reaches
+a where-conformance rejection at the requirement. Trace the admitted
+nested proof through concrete conformance comparison and interface replay.
+The inherited where-equation RED also remains. Two acceptance controls
+already show that an unrelated associated predicate or positional
+argument can mention the inherited output itself when the parent output
+is constant. Do not eagerly read those unrelated source expressions
+while resolving that output.

@@ -1,0 +1,11 @@
+use @Std/Io only { print }
+
+trait Source { type Item }
+trait Service {
+    type Input: Source
+    fn fetch() -> Input#Source.Item
+}
+
+fn main() {
+    print("associated requirement receiver")
+}

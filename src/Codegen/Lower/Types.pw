@@ -701,7 +701,12 @@ pub impl Comp {
         val paramId = self.sourceTypeParameter(name: nm)
         val site = if paramId == 0U64 { give t.span.start } else { give 0U64 }
         val shortProjection = !projection.isSome() && t.projectionAssoc.bytes().count() > 0U64
-        val projectionReceiver = if projection.isSome() || shortProjection {
+        val lexicalReceiver = if (projection.isSome() || shortProjection) && args.count() == 0U64 && !t.isAny {
+            give self.lowerLexicalAssociatedType(nameStart: nm.nameStart, nameLen: nm.nameLen, paramId: paramId)
+        } else { give 0U64 }
+        val projectionReceiver = if lexicalReceiver != 0U64 {
+            give self.typeRefWithAddedViewSources(ref: lexicalReceiver, additions: viewSources)
+        } else if projection.isSome() || shortProjection {
             give self.pushType(t: <TypeRef nameStart=nm.nameStart nameLen=nm.nameLen paramId=paramId args=args isRecord=false recordFieldLabels=[] recordFieldTerms=[] viewExtId=viewExtId viewIds=viewIds viewSources=viewSources isAny=t.isAny argLabels=argLabels isSendable=t.isSendable isDiverging=t.isDiverging siteOffset=site />)
         } else { give 0U64 }
         if shortProjection {
@@ -754,8 +759,7 @@ pub impl Comp {
         }
         mut val children = try self.loweredArgumentRecipes(types: argPtys, terms: args)
         if assocNameId != 0U64 {
-            try self.appendViewArgumentRecipes(ref: projectionReceiver, sources: viewRecipes, children: inout children)
-            val receiverRecipe = self.deriveTypeRecipeWithChildren(ref: projectionReceiver, children: children, origin: <SourceTypeRecipeOrigin.ProjectionReceiver />)
+            val receiverRecipe = try self.loweredProjectionReceiverRecipe(ref: projectionReceiver, site: nm.nameStart, lexical: lexicalReceiver != 0U64, arguments: children, sources: viewRecipes)
             children = [receiverRecipe]
             val selected = projection.unwrap()
             if selected.arguments.count() != assocTraitArgs.count() { return <Result.Err error=self.diagnosticAt(offset: site, msg: "projection argument recipe count mismatch", failureDomain: <FailureDomain.Internal />) /> }
@@ -926,7 +930,12 @@ pub impl Comp {
         val paramId = self.sourceTypeParameter(name: name)
         val site = if paramId == 0U64 { give t.span.start } else { give 0U64 }
         val shortProjection = !projection.isSome() && !namespaceType && t.projectionAssoc.end > t.projectionAssoc.start
-        val projectionReceiver = if projection.isSome() || shortProjection {
+        val lexicalReceiver = if (projection.isSome() || shortProjection) && args.count() == 0U64 && !t.isAny {
+            give self.lowerLexicalAssociatedType(nameStart: name.nameStart, nameLen: name.nameLen, paramId: paramId)
+        } else { give 0U64 }
+        val projectionReceiver = if lexicalReceiver != 0U64 {
+            give self.typeRefWithAddedViewSources(ref: lexicalReceiver, additions: viewSources)
+        } else if projection.isSome() || shortProjection {
             give self.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen paramId=paramId args=args isRecord=false recordFieldLabels=[] recordFieldTerms=[] viewExtId=viewExtId viewIds=viewIds viewSources=viewSources isAny=t.isAny argLabels=argLabels isSendable=t.isSendable isDiverging=t.isDiverging siteOffset=site />)
         } else { give 0U64 }
         if shortProjection {
@@ -977,8 +986,7 @@ pub impl Comp {
         }
         mut val children = try self.loweredArgumentRecipes(types: argPtys, terms: args)
         if assocNameId != 0U64 {
-            try self.appendViewArgumentRecipes(ref: projectionReceiver, sources: viewRecipes, children: inout children)
-            val receiverRecipe = self.deriveTypeRecipeWithChildren(ref: projectionReceiver, children: children, origin: <SourceTypeRecipeOrigin.ProjectionReceiver />)
+            val receiverRecipe = try self.loweredProjectionReceiverRecipe(ref: projectionReceiver, site: name.nameStart, lexical: lexicalReceiver != 0U64, arguments: children, sources: viewRecipes)
             children = [receiverRecipe]
             val selected = projection.unwrap()
             if selected.arguments.count() != assocTraitArgs.count() { return <Result.Err error=self.diagnosticAt(offset: site, msg: "projection argument recipe count mismatch", failureDomain: <FailureDomain.Internal />) /> }

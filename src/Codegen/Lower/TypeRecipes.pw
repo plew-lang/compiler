@@ -95,6 +95,19 @@ impl Comp {
 }
 
 impl Comp {
+    inout fn loweredProjectionReceiverRecipe(ref: U64, site: U64, lexical: Bool, arguments: Array[U64], sources: Array[LoweredTypeViewRecipe]) -> Result[U64, CompileDiagnostic] {
+        if lexical {
+            // The written head is itself an associated type selection.
+            // Preserve its occurrence so the outer projection must consume it.
+            val children = try self.lexicalAssociatedRecipeChildren(ref: ref, sources: sources)
+            val occurrence = self.recordAuthoredTypeUse(ref: ref, site: site, children: children)
+            return <Result.Ok value=self.sourceTypeUses.useAt(index: occurrence - 1U64).unwrap().recipe />
+        }
+        mut val children = arguments
+        try self.appendViewArgumentRecipes(ref: ref, sources: sources, children: inout children)
+        return <Result.Ok value=self.deriveTypeRecipeWithChildren(ref: ref, children: children, origin: <SourceTypeRecipeOrigin.ProjectionReceiver />) />
+    }
+
     inout fn lexicalAssociatedRecipeChildren(ref: U64, sources: Array[LoweredTypeViewRecipe]) -> Result[Array[U64], CompileDiagnostic] {
         val type = self.arena.typeAt(index: ref)
         if type.assocNameId == 0U64 { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "lexical associated recipe is not a projection", failureDomain: <FailureDomain.Internal />) /> }
