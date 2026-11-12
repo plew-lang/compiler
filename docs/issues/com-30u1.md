@@ -1379,3 +1379,29 @@ requirement; the other controls exercise the signature's final use.
 Both remaining source-selection failures reproduce on this candidate.
 Same-source medians against `8d309dc7` were 6.761974 s and 6.775947 s.
 LLVM output matched in all eight runs.
+
+## Lexical root equations for inherited instances
+
+The shared supertrait path interpreter substitutes each edge in its declaring
+bound and resolves projected instance arguments using the full lexical root.
+That second step reads equations in caller terms without reapplying the root
+binder substitution. Recording an equality's prerequisite paths still reads
+the edge terms before lexical-root normalization.
+
+`inherited_associated_root_sibling` covers a bare inherited result in both
+supertrait orders and an explicitly qualified result. All three fail
+individually at exact-instance admission on `9724345d`. The new fixture
+exercises declaration admission. The existing execution controls cover
+signature use, including the separate cross-path prerequisite case.
+
+Build `20261112T205335-build-6454e6` and generation
+`20261112T205737-gen-370a8d` passed on candidate `076646bc`.
+Fourteen inherited-signature controls passed check, JIT and native.
+Distinct inherited instances still diagnose ambiguity. On the same compiler
+source the previous and current candidates measured 6.783400 s and
+6.814806 s, with identical LLVM in all eight runs.
+
+The open case is the opaque and fixed paths to the same instance.
+`076646bc` still diagnoses ambiguous conformance at declaration admission.
+Keep instance identity and the evidence for each associated equation
+separate when handling complementary output constraints.

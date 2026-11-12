@@ -1535,7 +1535,7 @@ impl Comp {
                 // A lexical equality can match an inherited instance whose
                 // written key needs equations from a different parent path.
                 // Keep those prerequisites before publishing this equation.
-                val selected = try self.staticProofBound(proof: proof, traitIdx: self.decls.traitIndexByOffset(offset: owner))
+                val selected = self.supertraitBoundThroughSteps(root: bound, steps: steps, normalizeInstance: false)
                 for argument in selected.constraint.key.positionalArgs {
                     try self.recordInheritedArgumentEquations(ref: argument, lexical: lexical, bound: bound, equations: inout equations, offset: offset, active: next)
                 }

@@ -658,19 +658,50 @@ pub impl Comp {
         return self.supertraitBoundThroughSteps(root: self.declarationBound(source: source), steps: steps)
     }
 
-    // Follow the selected edges. An edge's arguments and equations are
-    // interpreted in its declaring bound, including that bound's inherited
-    // equations. This does not select a different path or a concrete witness.
-    inout fn supertraitBoundThroughSteps(root: TraitBound, steps: Array[SupertraitRef]) -> TraitBound {
+    // Substitute each edge in its declaring bound, then normalize its
+    // instance in the full lexical premise. A sibling of that edge can
+    // establish an equation needed by its positional arguments.
+    inout fn supertraitBoundThroughSteps(root: TraitBound, steps: Array[SupertraitRef], normalizeInstance: Bool = true) -> TraitBound {
         mut val bound = root
         for val step in steps {
             if step.traitIndex >= self.decls.traitCount() { return self.missingTraitBound() }
             val declaration = self.decls.traitAt(index: step.traitIndex)
             if declaration.nameStart != bound.constraint.key.owner || step.boundIndex >= declaration.supertraits.count() { return self.missingTraitBound() }
             val required = self.traitConstraintAt(constraints: declaration.supertraits, index: step.boundIndex)
-            bound = <TraitBound subject=bound.subject constraint=self.traitConstraintInBound(constraint: required, bound: bound, traitIndex: step.traitIndex) offset=declaration.nameStart />
+            mut val constraint = self.traitConstraintInBound(constraint: required, bound: bound, traitIndex: step.traitIndex)
+            if normalizeInstance {
+                val key = constraint.key
+                mut val arguments = key.positionalArgs
+                for val index in 0U64..<arguments.count() {
+                    val argument = arguments[index]
+                    val normalized = self.normalizeBoundProjectionTerm(ref: argument, context: root, projectionPath: [])
+                    if normalized != argument { arguments[index] = normalized }
+                }
+                constraint = <TraitConstraint key=<TraitInstanceKey owner=key.owner positionalArgs=arguments /> positionalArgsOpen=constraint.positionalArgsOpen assocPredicates=constraint.assocPredicates />
+            }
+            bound = <TraitBound subject=bound.subject constraint=constraint offset=declaration.nameStart />
         }
         return bound
+    }
+
+    // These terms already belong to the caller's environment. Only apply
+    // equations, without substituting the lexical root's binders again.
+    inout fn normalizeBoundProjectionTerm(ref: U64, context: TraitBound, projectionPath: Array[U64]) -> U64 {
+        if !self.arena.typeContainsAssociatedProjection(ref: ref) { return ref }
+        for visited in projectionPath { if self.typeRefEq(a: ref, b: visited) { return ref } }
+        mut val children: Array[U64] = []
+        for index in 0U64..<self.typeTermRefChildCount(ref: ref) {
+            children.append(self.normalizeBoundProjectionTerm(ref: self.typeTermRefChildRef(ref: ref, index: index), context: context, projectionPath: projectionPath))
+        }
+        val rebuilt = self.rebuildTypeTermChildren(ref: ref, children: children)
+        val projection = self.arena.typeAt(index: rebuilt)
+        if projection.assocNameId == 0U64 { return rebuilt }
+        mut val next = projectionPath
+        next.append(rebuilt)
+        match self.traitProjectionEquality(bound: context, receiver: self.typeTermProjectionReceiver(t: projection), owner: self.associatedProjectionTraitOwner(projection: projection), arguments: projection.assocTraitArgs, member: projection.assocNameId, context: context, projectionPath: next) {
+            TraitProjectionEquality.Value(term: val output, steps: _) => { return output }
+            TraitProjectionEquality.Missing | TraitProjectionEquality.Conflict => { return rebuilt }
+        }
     }
 
     inout fn conformanceTraitBound(conformance: Conform) -> TraitBound {
@@ -776,17 +807,14 @@ pub impl Comp {
         if available.isNone() { return <TraitProjectionEquality.Missing /> }
         val declaration = available.unwrap()
         mut val selected = <TraitProjectionEquality.Missing />
-        val contextShape = self.availableTraitBoundShape(owner: context.constraint.key.owner)
-        if contextShape.isNone() { return <TraitProjectionEquality.Missing /> }
-        val contextDeclaration = contextShape.unwrap()
-        mut val normalizedArguments: Array[U64] = []
-        for argument in bound.constraint.key.positionalArgs {
-            normalizedArguments.append(self.reifyBoundAssociatedTerms(ref: argument, shape: contextDeclaration, receiverRef: context.subject, traitOwner: context.constraint.key.owner, traitArgs: context.constraint.key.positionalArgs, predicates: context.constraint.assocPredicates, projectionPath: projectionPath))
-        }
-        if bound.constraint.key.owner == owner && self.sameResolvedTypeRefs(a: normalizedArguments, b: arguments) {
+        if bound.constraint.key.owner == owner {
+            mut val normalizedArguments: Array[U64] = []
+            for argument in bound.constraint.key.positionalArgs {
+                normalizedArguments.append(self.normalizeBoundProjectionTerm(ref: argument, context: context, projectionPath: projectionPath))
+            }
             for predicate in bound.constraint.assocPredicates {
-                if predicate.member == member {
-                    val value = self.reifyBoundAssociatedTerms(ref: predicate.value, shape: contextDeclaration, receiverRef: context.subject, traitOwner: context.constraint.key.owner, traitArgs: context.constraint.key.positionalArgs, predicates: context.constraint.assocPredicates, projectionPath: projectionPath)
+                if predicate.member == member && self.sameResolvedTypeRefs(a: normalizedArguments, b: arguments) {
+                    val value = self.normalizeBoundProjectionTerm(ref: predicate.value, context: context, projectionPath: projectionPath)
                     selected = self.mergeTraitProjectionEquality(selected: selected, candidate: <TraitProjectionEquality.Value term=value steps=steps />)
                 }
             }

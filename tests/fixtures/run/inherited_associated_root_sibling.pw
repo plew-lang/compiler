@@ -1,0 +1,8 @@
+trait Marker { type Type }
+trait Parent[T] { type Item }
+trait Middle: Parent[Self#Marker.Type] + Marker {}
+trait Service: Middle + Marker[Type=I64] { fn get() -> Item }
+trait ReversedService: Marker[Type=I64] + Middle { fn get() -> Item }
+trait ExplicitService: Middle + Marker[Type=I64] { fn get() -> Self#Parent[I64].Item }
+
+fn main() {}
