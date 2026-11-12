@@ -55,16 +55,23 @@ impl Comp {
             if witness.conformIdx == 0U64 || witness.conformIdx > self.decls.conformCount() { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "supertrait root has an invalid conformance") /> }
             val owner = self.decls.conformAt(index: witness.conformIdx - 1U64)
             if self.resolveTraitDef(cf: owner) != step.traitIndex { return <Result.Err error=self.diagnosticAt(offset: owner.typeStart, msg: "supertrait edge belongs to another trait") /> }
-            val saved = match self.arena.conformanceSupertraitProof(conformance: witness.conformIdx - 1U64, clause: step.boundIndex) {
-                Optional.Some(v: val proof) => { give proof }
-                Optional.None => { return <Result.Err error=self.diagnosticAt(offset: owner.typeStart, msg: "supertrait edge has no retained declaration evidence") /> }
-            }
+            val saved = try self.readConformanceSupertraitEvidence(conformance: witness.conformIdx - 1U64, step: step)
             val selectedEnvironment = try self.selectedConstraintEnvironment(witness: witness, proof: current)
-            val state = try self.replayConstraintProof(proof: self.thawStaticConformanceProof(id: saved), receiver: receiver, environment: selectedEnvironment, selfRef: witness.selfRef, itemRef: 0U64, context: <Optional.None />, normalizations: normalizations, declaration: declaration)
+            val equations = match (try self.replayProjectionEquations(saved: saved.normalizations, environment: selectedEnvironment, selfRef: witness.selfRef, itemRef: 0U64, context: <Optional.None />, inherited: normalizations, declaration: declaration)) {
+                Optional.Some(v: val equations) => equations,
+                Optional.None => { return <Result.Ok value=<ConstraintProofReplay.Deferred /> /> },
+            }
+            val bound = self.substituteRetainedBound(bound: saved.bound, environment: selectedEnvironment, selfRef: witness.selfRef, itemRef: 0U64)
+            val expected = try self.replayBoundNormalizations(bound: bound, normalizations: equations)
+            val state = try self.replayConstraintProof(proof: self.thawStaticConformanceProof(id: saved.proof), receiver: receiver, environment: selectedEnvironment, selfRef: witness.selfRef, itemRef: 0U64, context: <Optional.None />, normalizations: equations, declaration: declaration)
             match state {
-                ConstraintProofReplay.Concrete(proof: val proof) => { current = proof }
+                ConstraintProofReplay.Concrete(proof: val proof) => {
+                    try self.checkRetainedWitnessClause(expected: expected, proof: proof, normalizations: equations, offset: saved.bound.offset)
+                    current = proof
+                }
                 ConstraintProofReplay.Universal(proof: val proof) => {
                     if !declaration { return <Result.Err error=self.diagnosticAt(offset: owner.typeStart, msg: "universal supertrait evidence cannot authorize a static callable", failureDomain: <FailureDomain.Internal />) /> }
+                    try self.checkRetainedWitnessClause(expected: expected, proof: proof, normalizations: equations, offset: saved.bound.offset)
                     current = proof
                 }
                 _ => { return <Result.Ok value=state /> }

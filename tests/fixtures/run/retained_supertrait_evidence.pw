@@ -69,7 +69,7 @@ fn main() {
     if compiler.instantiateConstraintProof(proof: condition, receiverRef: receiver, environment: <InstanceEnvironment params=selectedEnvironment.params args=selectedEnvironment.args receiverRef=selectedEnvironment.receiverRef />, selfRef: receiver, itemRef: 0U64).isOk() { panic("missing witness environment was repaired by search") }
     val foreign = <StaticConformanceProof.AssumedBound source=<DeclarationBoundRef.Conformance index=declaration.bounds.start + declaration.bounds.len /> />
     if compiler.instantiateConstraintProof(proof: foreign, receiverRef: receiver, environment: selectedEnvironment, selfRef: receiver, itemRef: 0U64).isOk() { panic("foreign conformance condition was accepted") }
-    if compiler.arena.publishConformanceSupertraits(conformance: witness.conformIdx - 1U64, proofs: []) { panic("published supertrait evidence was replaced") }
+    if compiler.arena.publishConformanceSupertraits(conformance: witness.conformIdx - 1U64, evidence: []) { panic("published supertrait evidence was replaced") }
     mut val found = false
     for template in compiler.callTemplateSnapshot() {
         if template.siteKey.ownerFnIdx == forward {

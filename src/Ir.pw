@@ -1771,6 +1771,14 @@ pub struct ConformanceAssociatedEvidence {
 }
 pub impl ConformanceAssociatedEvidence { factory }
 
+pub struct ConformanceSupertraitEvidence {
+    pub val clause: U64
+    pub val bound: TraitBound
+    pub val proof: U64
+    pub val normalizations: Array[ProjectionNormalizationStep]
+}
+pub impl ConformanceSupertraitEvidence { factory }
+
 // A requirement clause translated into one implementation's binder space.
 // The authored clause identity remains distinct from conformance where bounds.
 pub struct RequirementBoundEvidence {
@@ -3157,7 +3165,7 @@ pub struct Arena {
     mut val conformanceAssociatedHeads: Dictionary[U64, U64] = [:]
     mut val conformanceAssociatedProofs: Array[Array[ConformanceAssociatedEvidence]] = []
     mut val conformanceSupertraitHeads: Dictionary[U64, U64] = [:]
-    mut val conformanceSupertraitProofs: Array[Array[U64]] = []
+    mut val conformanceSupertraitProofs: Array[Array[ConformanceSupertraitEvidence]] = []
     mut val staticProofs: Array[StaticProofNode]
     mut val staticProofWitnessBindPool: Array[WitnessBind] = []
     mut val staticProofU64Pool: Array[U64] = []

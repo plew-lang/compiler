@@ -1,0 +1,24 @@
+use @Std/Io only { print }
+
+trait Marker { type Type }
+trait Parent[T] { type Item }
+trait Middle: Marker + Parent[Self#Marker.Type] {
+    fn get() -> Item
+}
+
+trait Reverse: Parent[Self#Marker.Type] + Marker {
+    fn reverseGet() -> Self#Parent[Self#Marker.Type].Item
+}
+
+struct Worker {}
+impl Worker as Reverse { fn reverseGet() -> I64 { return 43I64 } }
+impl Worker as Marker { type Type = I64 }
+impl Worker as Parent[Bool] { type Item = Bool }
+impl Worker as Parent[I64] { type Item = I64 }
+impl Worker as Middle { fn get() -> I64 { return 42I64 } }
+
+fn read[T](value: T) -> T#Parent[T#Marker.Type].Item where T: Middle { return value.get() }
+fn main() {
+    print(read(value: <Worker />))
+    print(<Worker />.reverseGet())
+}

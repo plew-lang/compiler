@@ -1,0 +1,8 @@
+trait Marker { type Type }
+trait Parent[T] {}
+trait Middle: Marker + Parent[Self#Marker.Type] {}
+struct Worker {}
+impl Worker as Marker { type Type = I64 }
+impl Worker as Parent[I64] {}
+impl Worker as Middle {}
+fn main() {}

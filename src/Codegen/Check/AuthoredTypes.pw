@@ -862,9 +862,19 @@ impl Comp {
 
     inout fn readSignatureSelfProjection(root: TraitBound, evidence: RequirementSelfEvidence, steps: Array[SupertraitRef], receiver: U64, selector: ResolvedViewSource, arguments: Array[U64], member: U64, offset: U64) -> Result[U64, CompileDiagnostic] {
         val bound = self.supertraitBoundThroughSteps(root: root, steps: steps)
-        val promised = try self.readSelectedSignatureProjection(bound: bound, selected: <Optional.None />, receiver: receiver, selector: selector, arguments: arguments, member: member, offset: offset)
-        if promised != 0U64 { return <Result.Ok value=promised /> }
+        val lexicalInstance = self.sameResolvedTypeRefs(a: bound.constraint.key.positionalArgs, b: arguments)
+        if lexicalInstance {
+            val promised = try self.readSelectedSignatureProjection(bound: bound, selected: <Optional.None />, receiver: receiver, selector: selector, arguments: arguments, member: member, offset: offset)
+            if promised != 0U64 { return <Result.Ok value=promised /> }
+        }
         val selected = try self.readSignatureSelfWitness(root: root, evidence: evidence, steps: steps, receiver: receiver, offset: offset)
+        if !lexicalInstance && selected.isSome() {
+            // A written argument recipe can read the concrete associated
+            // output while the lexical constraint still contains the
+            // projection. Compare against the retained parent instance.
+            val actual = try self.staticProofBound(proof: selected.unwrap(), traitIdx: self.decls.traitIndexByOffset(offset: selector.traitInstance.owner))
+            return self.readSelectedSignatureProjection(bound: actual, selected: selected, receiver: receiver, selector: selector, arguments: arguments, member: member, offset: offset)
+        }
         return self.readSelectedSignatureProjection(bound: bound, selected: selected, receiver: receiver, selector: selector, arguments: arguments, member: member, offset: offset)
     }
 
@@ -879,9 +889,10 @@ impl Comp {
             }
             RequirementSelfEvidence.Conformance(index: val conformance) => {
                 if steps.count() == 0U64 { return <Result.Ok value=<Optional.None /> /> }
-                val saved = self.arena.conformanceSupertraitProof(conformance: conformance, clause: steps[0U64].boundIndex)
-                if saved.isNone() { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "conformance signature lost its retained supertrait proof", failureDomain: <FailureDomain.Internal />) /> }
-                val proof = self.thawStaticConformanceProof(id: saved.unwrap())
+                val saved = try self.readConformanceSupertraitEvidence(conformance: conformance, step: steps[0U64])
+                val proof = self.thawStaticConformanceProof(id: saved.proof)
+                val bound = try self.replayBoundNormalizations(bound: saved.bound, normalizations: saved.normalizations)
+                try self.checkRetainedWitnessClause(expected: bound, proof: proof, normalizations: saved.normalizations, offset: offset, assumptions: self.conformanceDeclarationAssumptions(conformIndex: conformance))
                 mut val remaining: Array[SupertraitRef] = []
                 for index in 1U64..<steps.count() { remaining.append(steps[index]) }
                 return self.readSignatureSupertraitWitness(proof: proof, steps: remaining, receiver: receiver, offset: offset)

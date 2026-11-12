@@ -1206,18 +1206,56 @@ pub impl Comp {
         if self.arena.hasConformanceSupertraits(conformance: conformIndex) { return <Result.Ok value=() /> }
         val conformance = self.decls.conformAt(index: conformIndex)
         val traitDef = self.decls.traitAt(index: traitIndex)
-        mut val proofs: Array[U64] = []
+        mut val evidence: Array[ConformanceSupertraitEvidence] = []
+        if traitDef.supertraits.count() == 0U64 {
+            if !self.arena.publishConformanceSupertraits(conformance: conformIndex, evidence: []) { return <Result.Err error=self.diagnosticAt(offset: conformance.typeStart, msg: "conformance supertrait evidence could not be published") /> }
+            return <Result.Ok value=() />
+        }
+        val root = self.conformanceTraitBound(conformance: conformance)
+        val assumptions = self.conformanceDeclarationAssumptions(conformIndex: conformIndex)
+        val demand = <ConformanceProofDemand.SourceAdmission />
         mut val clause = 0U64
         while clause < traitDef.supertraits.count() {
             val required = self.traitConstraintAt(constraints: traitDef.supertraits, index: clause)
-            val constraint = self.traitConstraintInBound(constraint: required, bound: self.conformanceTraitBound(conformance: conformance), traitIndex: traitIndex)
-            val proof = try self.viewedTraitConstraintProof(demand: <ConformanceProofDemand.SourceAdmission />, ref: conformance.subjectTy, constraint: constraint, assumptions: self.conformanceDeclarationAssumptions(conformIndex: conformIndex))
+            val constraint = self.traitConstraintInBound(constraint: required, bound: root, traitIndex: traitIndex)
+            val original = <TraitBound subject=conformance.subjectTy constraint=constraint offset=conformance.typeStart />
+            mut val normalizations: Array[ProjectionNormalizationStep] = []
+            try self.recordBoundInputProjectionEquations(bound: original, assumptions: assumptions, normalizations: inout normalizations, demand: demand)
+            val expected = try self.replayBoundNormalizations(bound: original, normalizations: normalizations)
+            val proof = try self.viewedTraitConstraintProof(demand: demand, ref: expected.subject, constraint: expected.constraint, assumptions: assumptions)
             if self.proofIsMissing(proof: proof) { return <Result.Err error=self.diagnosticAt(offset: conformance.typeStart, msg: "supertrait not satisfied: this type must also conform to the trait's supertrait") /> }
-            proofs.append(self.freezeStaticConformanceProof(proof: proof))
+            try self.recordBoundPredicateEquations(bound: original, proof: proof, assumptions: assumptions, normalizations: inout normalizations)
+            try self.checkProjectionNormalizations(normalizations: normalizations, offset: original.offset, assumptions: assumptions)
+            try self.checkRetainedWitnessClause(expected: expected, proof: proof, normalizations: normalizations, offset: original.offset, assumptions: assumptions)
+            evidence.append(<ConformanceSupertraitEvidence clause=traitDef.supertraits.start + clause bound=original proof=self.freezeStaticConformanceProof(proof: proof) normalizations=normalizations />)
             clause += 1U64
         }
-        if !self.arena.publishConformanceSupertraits(conformance: conformIndex, proofs: proofs) { return <Result.Err error=self.diagnosticAt(offset: conformance.typeStart, msg: "conformance supertrait evidence could not be published") /> }
+        if !self.arena.publishConformanceSupertraits(conformance: conformIndex, evidence: evidence) { return <Result.Err error=self.diagnosticAt(offset: conformance.typeStart, msg: "conformance supertrait evidence could not be published") /> }
         return <Result.Ok value=() />
+    }
+
+    inout fn readConformanceSupertraitEvidence(conformance: U64, step: SupertraitRef) -> Result[ConformanceSupertraitEvidence, CompileDiagnostic] {
+        if conformance >= self.decls.conformCount() || step.traitIndex >= self.decls.traitCount() { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "supertrait edge has an invalid declaration", failureDomain: <FailureDomain.Internal />) /> }
+        val owner = self.decls.conformAt(index: conformance)
+        val trait = self.decls.traitAt(index: step.traitIndex)
+        if owner.traitStart != trait.nameStart || step.boundIndex >= trait.supertraits.count() { return <Result.Err error=self.diagnosticAt(offset: owner.typeStart, msg: "supertrait edge belongs to another declaration", failureDomain: <FailureDomain.Internal />) /> }
+        val row = match self.arena.conformanceSupertraitEvidence(conformance: conformance, clause: step.boundIndex) {
+            Optional.Some(v: val evidence) => evidence,
+            Optional.None => { return <Result.Err error=self.diagnosticAt(offset: owner.typeStart, msg: "supertrait edge has no retained declaration evidence", failureDomain: <FailureDomain.Internal />) /> },
+        }
+        val required = self.traitConstraintAt(constraints: trait.supertraits, index: step.boundIndex)
+        // The producer has already substituted this clause in the impl's
+        // declaration environment. Verify the exact slot and its shape;
+        // reinterpret only the saved terms in the selected instance.
+        if row.clause != trait.supertraits.start + step.boundIndex || !self.typeRefEq(a: row.bound.subject, b: owner.subjectTy) || required.key.owner != row.bound.constraint.key.owner || required.key.positionalArgs.count() != row.bound.constraint.key.positionalArgs.count() || required.positionalArgsOpen != row.bound.constraint.positionalArgsOpen || required.assocPredicates.count() != row.bound.constraint.assocPredicates.count() || !self.arena.hasStaticConformanceProof(id: row.proof) {
+            return <Result.Err error=self.diagnosticAt(offset: owner.typeStart, msg: "retained supertrait evidence does not match its declaration", failureDomain: <FailureDomain.Internal />) />
+        }
+        for index in 0U64..<required.assocPredicates.count() {
+            if required.assocPredicates[index].member != row.bound.constraint.assocPredicates[index].member {
+                return <Result.Err error=self.diagnosticAt(offset: owner.typeStart, msg: "retained supertrait evidence has a foreign associated member", failureDomain: <FailureDomain.Internal />) />
+            }
+        }
+        return <Result.Ok value=row />
     }
 
     inout fn checkConformances() -> Result[(), CompileDiagnostic] {
@@ -1259,9 +1297,9 @@ pub impl Comp {
         prepared[conformanceIndex] = true
         val trait = self.decls.traitAt(index: traitIndex)
         for clause in 0U64..<trait.supertraits.count() {
-            val row = self.arena.conformanceSupertraitProof(conformance: conformanceIndex, clause: clause)
+            val row = self.arena.conformanceSupertraitEvidence(conformance: conformanceIndex, clause: clause)
             if row.isNone() { return <Result.Err error=self.diagnosticAt(offset: trait.nameStart, msg: "callable form lost its retained supertrait proof", failureDomain: <FailureDomain.Internal />) /> }
-            val proof = self.thawStaticConformanceProof(id: row.unwrap())
+            val proof = self.thawStaticConformanceProof(id: row.unwrap().proof)
             match self.selectedConstraintWitness(proof: proof) {
                 Optional.Some(v: val witness) => {
                     if witness.conformIdx == 0U64 || witness.conformIdx > self.decls.conformCount() { return <Result.Err error=self.diagnosticAt(offset: trait.nameStart, msg: "callable form has an invalid parent conformance", failureDomain: <FailureDomain.Internal />) /> }

@@ -30,3 +30,17 @@ Read the retained RHS through explicit selected substitution and saved equations
 Follow the parent [contract and closure rules](com-amjl.md#contract-and-closure) and task-start TDD. Confirm the actual old-candidate RED for new behavior, preserve valid controls, then build a fresh candidate and test the real source-to-final-consumer path. Pure refactors use existing GREEN. Record exact inputs/carrier, diagnostic origin, meaningful assertions, applicable modes, removed competing authorities and independent neutral review. Do not close from a table/check/helper-only result. Existing unsupported surfaces must retain their actual diagnostic and be recorded, not silently counted as acceptance.
 
 No new specification or general solver/SCC/unique/opening feature, API-wide authority extraction, main/seed promotion or whole-suite/ASan certification is included. Shared API names alone do not create whole-task prerequisites. Whole-program fixed-point/performance/full-suite gates remain with met-si6j; parent closure still requires the complete original guarantee map.
+
+## Concrete witness RHS through an inherited signature
+
+The [com-5wze](com-5wze.md#retained-parent-admission-and-replay) independent
+review isolated this consumer. Given `trait Marker { type Type }`,
+`trait Parent { type Item }`, and
+`trait Middle: Parent + Marker { fn get() -> Item }`, declare
+`impl Worker as Parent { type Item = Worker#Marker.Type }` and
+`impl Worker as Marker { type Type = I64 }`. A valid
+`impl Worker as Middle { fn get() -> I64 { return 42I64 } }` is rejected
+at implementation result comparison on both `fefa4c07` and `072faa8a`.
+Writing `Marker[Type=I64]` in the Middle declaration is a positive
+control, as is writing the literal I64 binding. Include a call through
+the inherited signature as well as the existing direct RHS consumers.

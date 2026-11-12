@@ -1,6 +1,6 @@
 ---
 id: com-5wze
-status: open
+status: closed
 deps: []
 links: [com-30u1]
 created: 2026-11-12T20:22:54Z
@@ -49,3 +49,38 @@ and an inherited associated-signature consumer through check/JIT/native.
 Inspect the producer and final replay for fresh conformance selection.
 No new syntax or general solver redesign. Independent review is required.
 
+
+## Retained parent admission and replay
+
+The producer substitutes each authored clause in its conformance environment,
+records the projection proofs using source admission, selects the exact
+normalized parent, and publishes the source slot, original terms, equations,
+and frozen parent proof together. Each clause uses the same declared
+environment independently of list and impl order. The replay reader checks
+the source slot and shape, grounds the saved terms, replays saved equations
+and proofs, and compares the exact resulting parent. A concrete signature
+whose authored positional recipe already evaluates the projection uses that
+retained parent's instance for comparison.
+
+On `fefa4c07`, `concrete_supertrait_projected_argument` and the signature
+case reject at parent admission. Intermediate `9204154a` admits the bare
+signature but rejects its fully qualified equivalent when its child recipe
+already produces I64. Candidate `072faa8a` passes both. The public signature
+fixture exercises generic replay, both supertrait orders, a reverse-ordered
+impl, and a competing Parent[Bool], printing 42 and 43.
+
+Standard build `20261112T220246-build-ce999e` and generation
+`20261112T220623-gen-df42e7` passed. Ten public check/JIT/native controls,
+six targeted rejections, and the internal retained-supertrait check/native
+control passed. The internal fixture preserves its write-once, exact
+witness and missing/foreign edge assertions under the updated row API.
+Same-source medians were 6.810221 s and 6.813270 s, with identical LLVM
+across eight runs.
+
+Independent review of `072faa8a` confirmed the stored source slot,
+normalization and exact parent proof reach replay without new selection.
+Additional checks covered ambiguous Marker witness paths and JIT with
+nested projections, conditional impls and a generic receiver. The reviewer
+isolated an associated-binding RHS defect that also reproduces without
+a positional supertrait argument on the old candidate. Its existing
+repair owner is [com-zzf3](com-zzf3.md).
