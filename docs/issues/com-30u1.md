@@ -1115,3 +1115,38 @@ the syntax path and the value-AST controls currently see only the
 current trait's own associated names. Cover a parent declared later,
 a parameterized parent reached through another trait, and the qualified
 control before closing this scope.
+
+## Prepared trait headers for inherited names
+
+Candidate `ad416611` rejects the bare `Input#Source.Item` signature with
+the parent either before or after the child. The same diagnosis occurs
+with `Service: Middle[I64]` and `Middle[Element]: Parent[Array[Element]]`.
+A separate `Child: Parent[Item=()]` control passes with
+`Self#Parent.Item` and fails return-type matching with bare `Item`.
+
+The SyntaxFile frontend now finishes trait identity registration, prepares
+each trait's lexical binders and declared supertrait constraints, and then
+lowers requirements. The completed trait consumes the same binders and
+constraint range. This provides source-order-independent inputs for
+binding inherited names. The remaining work is to select the declaring
+trait instance, build its projection and argument recipes, and carry its
+proof through signature admission and the final consumers. The value-AST
+adapter must share the same semantic selection where it handles these
+signatures.
+
+Candidate `63c91fad`, build `20261112T192921-build-d59e1c` and generation
+`20261112T193207-gen-4e860d` passed. Four public controls passed check,
+JIT and native execution: unit and parameterized supertrait projections,
+the generic conditional supertrait projection and the symbolic inherited
+signature. Three direct SyntaxFile lowering fixtures passed native
+execution. The standalone `syntax_lower_func_decl` and
+`syntax_lower_conformance_bounds` fixtures still abort in both the
+baseline and new candidate. A baseline diagnostic probe confirmed that
+the former calls where-clause lookup without admitted module bindings
+(already recorded under [com-9hde](com-9hde.md)).
+
+Same-source medians were 6.737406 s and 6.738979 s. The output diff is
+confined to the type-reference component of generic body symbol names.
+Moving header preparation earlier changes type-reference allocation order;
+all other LLVM text was identical. This comparison is separate from the
+formal self-host fixed-point gate.

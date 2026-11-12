@@ -541,7 +541,13 @@ struct LoweredTypeProjection {
 impl LoweredTypeProjection { factory }
 
 
+struct TraitLexicalHeader {
+    val parameters: Array[Bind]
+    val supertraits: TraitConstraintRange
+}
+
 pub struct Comp {
+    mut val traitLexicalHeaders: Dictionary[U64, TraitLexicalHeader] = [:]
     mut val projectionBoundClauses: Array[ProjectionBoundClause] = []
     mut val activeProjectionBounds: Optional[ProjectionBoundContext] = <Optional.None />
     pub mut val moduleScopeBindings: Optional[AdmittedModuleScopeBindings] = <Optional.None />
@@ -2138,17 +2144,19 @@ fn loadFrontendDeclarations(c: inout Comp, input: FrontendInput, sources: Source
     tracePhase(c: inout c, label: "predeclare:start")
     mut val rootIndex: U64 = 0U64
     mut val predeclareIndex: U64 = 0U64
+    mut val traits: Array[TraitId] = []
     while rootIndex < pendingRoots.count() {
         val roots: SyntaxSlice = pendingRoots[rootIndex]
         mut val itemIndex: U64 = 0U64
         while itemIndex < roots.count {
             tracePhaseCount(c: inout c, label: "predeclare:top-item", count: predeclareIndex)
-            c.predeclareSyntaxTraitItem(item: syntaxFileTopLevel(file: c.syntax, index: roots.start + itemIndex))
+            c.predeclareSyntaxTraitItem(item: syntaxFileTopLevel(file: c.syntax, index: roots.start + itemIndex), traits: inout traits)
             predeclareIndex += 1U64
             itemIndex += 1U64
         }
         rootIndex += 1U64
     }
+    for trait in traits { try c.prepareSyntaxTraitHeader(id: trait) }
     tracePhase(c: inout c, label: "predeclare:done")
     tracePhase(c: inout c, label: "lower:start")
     rootIndex = 0U64

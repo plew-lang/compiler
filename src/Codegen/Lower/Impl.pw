@@ -331,23 +331,24 @@ pub impl Comp {
 
     // SyntaxFile counterpart of predeclareTraitItem.  The predeclare pass needs
     // only trait identity and arity, so it must not reconstruct a TraitAst.
-    inout fn predeclareSyntaxTraitItem(item: TopItemId) {
+    inout fn predeclareSyntaxTraitItem(item: TopItemId, traits: inout Array[TraitId]) {
         match syntaxTopItemKind(file: self.syntax, item: item) {
             SyntaxTopItemKind.Trait => {
                 val traitId: TraitId = <TraitId raw=syntaxTopItemPayload(file: self.syntax, item: item) />
                 val trait: SyntaxTrait = syntaxTrait(file: self.syntax, id: traitId)
+                traits.append(traitId)
                 val nameLen: U64 = trait.name.end - trait.name.start
                 mut val associated: Array[Bind] = []
                 mut val i: U64 = 0U64
                 while i < syntaxTraitAssocTypeCount(file: self.syntax, trait: trait) {
                     val span = syntaxTraitAssocTypeSpan(file: self.syntax, trait: trait, index: i)
-                    associated.append(<Bind nameStart=span.start nameLen=span.end - span.start nameId=intern(c: inout self, start: span.start, len: span.end - span.start) fieldStart=span.start fieldLen=span.end - span.start />)
+                    associated.append(<Bind nameStart=span.start nameLen=span.end - span.start nameId=intern(c: inout self, start: span.start, len: span.end - span.start) fieldStart=span.start fieldLen=span.end - span.start offset=span.start />)
                     i += 1U64
                 }
                 self.predeclareTraitIdentity(nameStart: trait.name.start, nameLen: nameLen, arity: syntaxTraitTypeParamCount(file: self.syntax, trait: trait), associated: associated)
             }
             SyntaxTopItemKind.Published => {
-                self.predeclareSyntaxTraitItem(item: <TopItemId raw=syntaxTopItemPayload(file: self.syntax, item: item) />)
+                self.predeclareSyntaxTraitItem(item: <TopItemId raw=syntaxTopItemPayload(file: self.syntax, item: item) />, traits: inout traits)
             }
             _ => {}
         }
@@ -1572,41 +1573,60 @@ pub impl Comp {
     }
 }
 
+pub impl Comp {
+    inout fn prepareSyntaxTraitHeader(id: TraitId) -> Result[(), CompileDiagnostic] {
+        val trait = syntaxTrait(file: self.syntax, id: id)
+        val savedParameters = self.cur.typeParams
+        val savedAssociatedOwner = self.lowerAssociatedOwner
+        val savedAssociatedArgs = self.lowerAssociatedArgs
+        val result = self.prepareSyntaxTraitHeaderInLexicalScope(trait: trait)
+        self.cur.typeParams = savedParameters
+        self.lowerAssociatedOwner = savedAssociatedOwner
+        self.lowerAssociatedArgs = savedAssociatedArgs
+        return result
+    }
+}
+
 impl Comp {
-    inout fn lowerSyntaxTraitInLexicalScope(t: SyntaxTrait) -> Result[(), CompileDiagnostic] {
-        mut val assocTypes: Array[Bind] = []
-        mut val paramSpans: Array[Span] = []
-        mut val paramFlags: Array[Bool] = []
-        mut val i: U64 = 0U64
-        i = 0U64
-        while i < syntaxTraitAssocTypeCount(file: self.syntax, trait: t) {
-            val span: Span = syntaxTraitAssocTypeSpan(file: self.syntax, trait: t, index: i)
-            assocTypes.append(<Bind nameStart=span.start nameLen=span.end - span.start nameId=intern(c: inout self, start: span.start, len: span.end - span.start) fieldStart=span.start fieldLen=span.end - span.start offset=span.start />)
-            i += 1U64
+    // Every declaration identity is available before any heritage is lowered.
+    // The finished trait uses these same binders and canonical constraints.
+    inout fn prepareSyntaxTraitHeaderInLexicalScope(trait: SyntaxTrait) -> Result[(), CompileDiagnostic] {
+        mut val spans: Array[Span] = []
+        mut val flags: Array[Bool] = []
+        for index in 0U64..<syntaxTraitTypeParamCount(file: self.syntax, trait: trait) {
+            spans.append(syntaxTraitTypeParamSpan(file: self.syntax, trait: trait, index: index))
+            flags.append(syntaxTraitTypeParamIsSendable(file: self.syntax, trait: trait, index: index))
         }
-        i = 0U64
-        while i < syntaxTraitTypeParamCount(file: self.syntax, trait: t) {
-            paramSpans.append(syntaxTraitTypeParamSpan(file: self.syntax, trait: t, index: i))
-            paramFlags.append(syntaxTraitTypeParamIsSendable(file: self.syntax, trait: t, index: i))
-            i += 1U64
+        val parameters = try self.lowerTypeParamSpans(spans: spans, anchor: trait.name.start, sendableFlags: flags)
+        self.enterTraitSignatureScope(owner: trait.name.start, parameters: parameters)
+        mut val supertraits: Array[TraitConstraint] = []
+        for index in 0U64..<syntaxTraitSupertraitCount(file: self.syntax, trait: trait) {
+            val declared = syntaxTraitSupertrait(file: self.syntax, trait: trait, index: index)
+            val constraint = (try self.lowerSyntaxTraitConstraint(traitTy: declared))
+            if constraint.key.owner == 0U64 { return <Result.Err error=self.diagnosticAt(offset: syntaxType(file: self.syntax, id: declared).span.start, msg: "unknown supertrait or incompatible trait arguments") /> }
+            supertraits.append(constraint)
         }
-        val typeParams: Array[Bind] = (try self.lowerTypeParamSpans(spans: paramSpans, anchor: t.name.start, sendableFlags: paramFlags))
-        val selfParamId: U64 = self.decls.traitOwnerAt(index: self.decls.traitOwnerIndex(offset: t.name.start)).selfParamId
-        val selfBind = self.lexicalSelfBinder(parameter: selfParamId)
-        mut val scope: Array[Bind] = []
-        scope.append(selfBind)
-        i = 0U64
-        while i < typeParams.count() {
-            scope.append(typeParams[i])
-            i += 1U64
-        }
-        i = 0U64
-        while i < assocTypes.count() {
-            scope.append(assocTypes[i])
-            i += 1U64
-        }
+        self.traitLexicalHeaders[trait.name.start] = <TraitLexicalHeader parameters=parameters supertraits=self.pushTraitConstraints(constraints: supertraits) />
+        return <Result.Ok value=() />
+    }
+
+    inout fn enterTraitSignatureScope(owner: U64, parameters: Array[Bind]) {
+        val identity = self.decls.traitOwnerAt(index: self.decls.traitOwnerIndex(offset: owner))
+        mut val scope = [self.lexicalSelfBinder(parameter: identity.selfParamId)]
+        for parameter in parameters { scope.append(parameter) }
+        for member in identity.assocTypes { scope.append(member) }
         self.cur.typeParams = scope
-        self.setLowerAssociatedTrait(owner: t.name.start, parameters: typeParams)
+        self.setLowerAssociatedTrait(owner: owner, parameters: parameters)
+    }
+
+    inout fn lowerSyntaxTraitInLexicalScope(t: SyntaxTrait) -> Result[(), CompileDiagnostic] {
+        val header = match self.traitLexicalHeaders.get(key: t.name.start) {
+            Optional.Some(v: val header) => header,
+            Optional.None => { return <Result.Err error=self.diagnosticAt(offset: t.name.start, msg: "trait has no prepared lexical header", failureDomain: <FailureDomain.Internal />) /> },
+        }
+        val identity = self.decls.traitOwnerAt(index: self.decls.traitOwnerIndex(offset: t.name.start))
+        self.enterTraitSignatureScope(owner: t.name.start, parameters: header.parameters)
+        mut val i: U64 = 0U64
         mut val reqs: Array[Func] = []
         mut val requirements: Array[LoweredSourceSignature] = []
         i = 0U64
@@ -1631,16 +1651,7 @@ impl Comp {
             }
             i += 1U64
         }
-        mut val supertraits: Array[TraitConstraint] = []
-        i = 0U64
-        while i < syntaxTraitSupertraitCount(file: self.syntax, trait: t) {
-            val declared = syntaxTraitSupertrait(file: self.syntax, trait: t, index: i)
-            val constraint = (try self.lowerSyntaxTraitConstraint(traitTy: declared))
-            if constraint.key.owner == 0U64 { return <Result.Err error=self.diagnosticAt(offset: syntaxType(file: self.syntax, id: declared).span.start, msg: "unknown supertrait or incompatible trait arguments") /> }
-            supertraits.append(constraint)
-            i += 1U64
-        }
-        val traitIndex = self.decls.registerTrait(<TraitDef nameStart=t.name.start nameLen=t.name.end - t.name.start nameId=intern(c: inout self, start: t.name.start, len: t.name.end - t.name.start) selfParamId=selfParamId typeParams=self.pushTraitBinds(binds: typeParams) supertraits=self.pushTraitConstraints(constraints: supertraits) reqs=self.pushTraitReqs(reqs: reqs) assocTypes=self.pushTraitBinds(binds: assocTypes) assocBounds=self.pushTraitAssociatedBounds(bounds: associatedBounds) />)
+        val traitIndex = self.decls.registerTrait(<TraitDef nameStart=t.name.start nameLen=t.name.end - t.name.start nameId=intern(c: inout self, start: t.name.start, len: t.name.end - t.name.start) selfParamId=identity.selfParamId typeParams=self.pushTraitBinds(binds: header.parameters) supertraits=header.supertraits reqs=self.pushTraitReqs(reqs: reqs) assocTypes=self.pushTraitBinds(binds: identity.assocTypes) assocBounds=self.pushTraitAssociatedBounds(bounds: associatedBounds) />)
         mut val requirementSlot = 0U64
         while requirementSlot < requirements.count() {
             try self.bindAuthoredRequirementScope(signature: requirements[requirementSlot], traitIndex: traitIndex, slot: requirementSlot, site: t.name.start)

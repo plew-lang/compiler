@@ -49,8 +49,10 @@ fn main() {
     compiler.arena.reserveTypeSentinel()
     compiler.appendSrc(from: source.bytes())
     compiler.syntax = file
+    mut val traits: Array[Syntax.TraitId] = []
     mut val index = 0U64
-    while index < 3U64 { compiler.predeclareSyntaxTraitItem(item: Syntax.syntaxFileTopLevel(file: file, index: index)) index += 1U64 }
+    while index < 3U64 { compiler.predeclareSyntaxTraitItem(item: Syntax.syntaxFileTopLevel(file: file, index: index), traits: inout traits) index += 1U64 }
+    for trait in traits { compiler.prepareSyntaxTraitHeader(id: trait).unwrap() }
     index = 0U64
     while index < 3U64 {
         val item = Syntax.syntaxFileTopLevel(file: file, index: index)
