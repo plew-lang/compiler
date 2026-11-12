@@ -244,3 +244,26 @@ and the calls to those bodies. This does not certify the final fixed point.
 
 The requirement-side interpretation of selected associated clauses
 and the remaining evidence fault tests are pending.
+
+## Requirement RHS replay
+
+A conditional witness selected in a requirement now reads its own
+authored binding. The RHS projection replays its exact impl condition
+and, for a requirement-associated premise, interprets that clause in
+the requirement's environment. The old scan through all witness
+conditions by projected term is removed. A symbolic result keeps the
+selected member on its requirement subject. Interface results also
+apply the requirement's lexical substitution to remaining rigid
+binders.
+
+Candidate `a828deac` passed build `20261112T233830-build-0fc390`,
+generation `20261112T234215-gen-6552a0` and eight check/JIT/native
+controls, including the inherited symbolic signature, inherited
+interface where clause and nested existential witness. Same-source
+medians were 6.856663 s and 6.853942 s. All eight LLVM outputs were
+identical. The earlier attempts rejected the symbolic signature or
+the interface where clause and were discarded.
+
+Next extend the evidence fault cases to cover a missing RHS receipt,
+foreign substitution, and missing or replaced prerequisite or equation
+at the output reader. Then review the full guarantee before closing.

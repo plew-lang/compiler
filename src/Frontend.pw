@@ -468,7 +468,7 @@ enum SignatureRecipeContext {
     Concrete
     Requirement(signature: RequirementSignatureRead)
     Provided(owner: U64)
-    AssociatedBinding
+    AssociatedBinding(requirement: Optional[AssociatedBindingRequirementRead])
 }
 
 struct InstantiatedCallableConstraints {
@@ -487,6 +487,12 @@ struct InheritedSignatureRead {
     val environment: InstanceEnvironment
 }
 impl InheritedSignatureRead { factory }
+
+struct AssociatedBindingRequirementRead {
+    val signature: RequirementSignatureRead
+    val environment: InstanceEnvironment
+}
+impl AssociatedBindingRequirementRead { factory }
 
 struct SelectedProjectionOutput {
     val immediate: U64

@@ -65,19 +65,19 @@ impl Comp {
         return <Result.Ok value=<SelectedProjectionOutput immediate=immediate term=immediate normalizations=[] /> />
     }
 
-    inout fn readSelectedProjectionOutput(proof: StaticConformanceProof, traitOwner: U64, assocId: U64) -> Result[SelectedProjectionOutput, CompileDiagnostic] {
+    inout fn readSelectedProjectionOutput(proof: StaticConformanceProof, traitOwner: U64, assocId: U64, requirement: Optional[AssociatedBindingRequirementRead] = <Optional.None />) -> Result[SelectedProjectionOutput, CompileDiagnostic] {
         val normalizations = try self.retainedProofProjectionContext(proof: proof)
         val binding = try self.selectedAssociatedBinding(proof: proof, traitOwner: traitOwner, assocId: assocId)
         if binding.isSome() {
             val selected = binding.unwrap()
-            return self.readAssociatedBindingOutput(bindingIndex: selected.bindingIndex, proof: proof, witness: selected.witness, normalizations: normalizations)
+            return self.readAssociatedBindingOutput(bindingIndex: selected.bindingIndex, proof: proof, witness: selected.witness, normalizations: normalizations, requirement: requirement)
         }
         val output = try self.assumedProjectionOutput(proof: proof, traitOwner: traitOwner, assocId: assocId)
         val term = try self.replayProjectionNormalizations(ref: output, normalizations: normalizations, offset: 0U64)
         return <Result.Ok value=<SelectedProjectionOutput immediate=output term=term normalizations=normalizations /> />
     }
 
-    inout fn readAssociatedBindingOutput(bindingIndex: U64, proof: StaticConformanceProof, witness: WitnessMatch, normalizations: Array[ProjectionNormalizationStep]) -> Result[SelectedProjectionOutput, CompileDiagnostic] {
+    inout fn readAssociatedBindingOutput(bindingIndex: U64, proof: StaticConformanceProof, witness: WitnessMatch, normalizations: Array[ProjectionNormalizationStep], requirement: Optional[AssociatedBindingRequirementRead]) -> Result[SelectedProjectionOutput, CompileDiagnostic] {
         val binding = self.decls.assocBindings[bindingIndex]
         val saved = try self.selectedAssociatedBindingReceipt(bindingIndex: bindingIndex, witness: witness)
         for active in self.activeAssociatedBindingReads {
@@ -88,7 +88,7 @@ impl Comp {
         val environment = try self.selectedConstraintEnvironment(witness: witness, proof: proof)
         mut val memo: Dictionary[U64, AuthoredRecipeRead] = [:]
         self.activeAssociatedBindingReads.append((binding: bindingIndex, witness: witness))
-        val result = self.readAuthoredTypeRecipe(proofs: saved.proofs, recipe: saved.recipe, environment: environment, memo: inout memo, context: <SignatureRecipeContext.AssociatedBinding />)
+        val result = self.readAuthoredTypeRecipe(proofs: saved.proofs, recipe: saved.recipe, environment: environment, memo: inout memo, context: <SignatureRecipeContext.AssociatedBinding requirement=requirement />)
         self.activeAssociatedBindingReads.removeLast()
         val read = try result
         val immediate = try self.groundWitnessTypeTerm(ref: binding.ty, params: <PatternBindInput.Conformance range=binding.typeParams />, matchResult: witness)
@@ -370,13 +370,23 @@ impl Comp {
                             val output = try self.readProvidedProjectionOutput(proof: proof, function: function, receiver: receiver, selector: selector, arguments: arguments, member: original.assocNameId, environment: environment, offset: occurrence.site, memo: inout memo)
                             if output != 0U64 { term = output }
                         }
-                        SignatureRecipeContext.Concrete | SignatureRecipeContext.AssociatedBinding => {
+                        SignatureRecipeContext.Concrete | SignatureRecipeContext.AssociatedBinding(requirement: _) => {
                             memo[recipe] = <AuthoredRecipeRead term=0U64 reading=true views=[] normalizations=[] />
-                            val output = try self.readSelectedProjectionOutput(proof: proof, traitOwner: owner, assocId: original.assocNameId)
+                            val requirement = match context {
+                                SignatureRecipeContext.AssociatedBinding(requirement: val inherited) => inherited,
+                                _ => <Optional.None />,
+                            }
+                            val source = if requirement.isSome() {
+                                val bound = try self.staticProofBound(proof: proof, traitIdx: self.decls.traitIndexByOffset(offset: owner))
+                                if bound.subject == 0U64 { return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "associated binding projection lost its requirement subject", failureDomain: <FailureDomain.Internal />) /> }
+                                give self.rebuildProjectionTerm(t: original, receiver: bound.subject, traitArgs: bound.constraint.key.positionalArgs)
+                            } else { give projected }
+                            term = source
+                            val output = try self.readSelectedProjectionOutput(proof: proof, traitOwner: owner, assocId: original.assocNameId, requirement: requirement)
                             for equation in output.normalizations { try self.appendRetainedProjectionEquation(step: equation, normalizations: inout normalizations) }
                             val raw = output.immediate
-                            val immediate = if raw != 0U64 && !self.typeRefEq(a: raw, b: projected) { give raw } else { give 0U64 }
-                            try self.appendRetainedProjectionEquation(step: <ProjectionNormalizationStep source=projected proof=self.freezeStaticConformanceProof(proof: proof) output=immediate />, normalizations: inout normalizations)
+                            val immediate = if raw != 0U64 && !self.typeRefEq(a: raw, b: source) { give raw } else { give 0U64 }
+                            try self.appendRetainedProjectionEquation(step: <ProjectionNormalizationStep source=source proof=self.freezeStaticConformanceProof(proof: proof) output=immediate />, normalizations: inout normalizations)
                             if output.term != 0U64 {
                                 term = output.term
                             } else {
@@ -415,7 +425,7 @@ impl Comp {
             SignatureRecipeContext.Concrete => {
                 return self.instantiateAuthoredViewProof(saved: saved, receiver: receiver, arguments: arguments, environment: environment, offset: offset, normalizations: normalizations)
             }
-            SignatureRecipeContext.AssociatedBinding => {
+            SignatureRecipeContext.AssociatedBinding(requirement: val requirement) => {
                 if !self.arena.hasStaticConformanceProof(id: saved.proof) {
                     return <Result.Err error=self.diagnosticAt(offset: offset, msg: "associated binding lost its projection proof", failureDomain: <FailureDomain.Internal />) />
                 }
@@ -425,7 +435,7 @@ impl Comp {
                     ConstraintProofReplay.Concrete(proof: val selected) | ConstraintProofReplay.Universal(proof: val selected) => {
                         val bound = try self.replayBoundNormalizations(bound: (try self.staticProofBound(proof: selected, traitIdx: self.decls.traitIndexByOffset(offset: saved.selector.traitInstance.owner))), normalizations: normalizations)
                         if bound.subject != 0U64 && self.typeRefEq(a: self.typeRefWithoutOuterViews(ref: bound.subject), b: self.typeRefWithoutOuterViews(ref: receiver)) && self.sameResolvedTypeRefs(a: bound.constraint.key.positionalArgs, b: arguments) {
-                            return <Result.Ok value=selected />
+                            return self.readBindingRequirementProof(proof: selected, requirement: requirement, offset: offset)
                         }
                     }
                     ConstraintProofReplay.Deferred | ConstraintProofReplay.Missing => {}
@@ -1140,22 +1150,14 @@ impl Comp {
                 _ => {}
             }
         }
-        // An admitted equation may leave its output symbolic. It does not
-        // authorize discovering another witness after erasure.
-        val output = try self.readLexicalSignatureProjection(proof: proof, owner: selector.traitInstance.owner, member: member, environment: environment)
-        if output == 0U64 || !self.arena.typeContainsAssociatedProjection(ref: output) { return <Result.Ok value=output /> }
-        match self.retainedConstraintPathTerminal(proof: proof) {
-            Optional.Some(v: val witness) => {
-                if witness.conditions != 0U64 {
-                    if witness.conditions > self.arena.witnessConditionPlanCount() { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "signature output has no retained witness condition plan", failureDomain: <FailureDomain.Internal />) /> }
-                    val plan = self.arena.witnessConditionPlanAt(index: witness.conditions - 1U64)
-                    if !self.sameWitnessSubstitution(a: witness, b: plan.witness) { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "signature output has a foreign witness condition plan", failureDomain: <FailureDomain.Internal />) /> }
-                    return self.readRequirementWitnessOutput(ref: output, conditions: plan.proofs, signature: interface, environment: environment, offset: offset)
-                }
-            }
-            Optional.None => {}
+        if self.retainedConstraintPathTerminal(proof: proof).isSome() {
+            val requirement = <AssociatedBindingRequirementRead signature=interface environment=environment />
+            val output = try self.readSelectedProjectionOutput(proof: proof, traitOwner: selector.traitInstance.owner, assocId: member, requirement: <Optional.Some v=requirement />)
+            // A witness selected in the authored requirement still contains
+            // that requirement's rigid binders when its result is symbolic.
+            return <Result.Ok value=self.groundTermInEnvironment(ref: output.term, params: environment.params, values: environment.args, selfRef: environment.receiverRef) />
         }
-        return <Result.Ok value=output />
+        return self.readLexicalSignatureProjection(proof: proof, owner: selector.traitInstance.owner, member: member, environment: environment)
     }
 
     inout fn signatureAssociatedEvidence(index: U64, offset: U64) -> Result[AssociatedBoundEvidence, CompileDiagnostic] {
@@ -1165,50 +1167,27 @@ impl Comp {
         return <Result.Ok value=self.arena.associatedBoundEvidenceAt(index: index) />
     }
 
-    // A selected conditional witness can define its output using a projection
-    // from one of its saved conditions. Resolve that exact source clause in
-    // the requirement's environment before reading the output.
-    inout fn readRequirementWitnessOutput(ref: U64, conditions: Array[U64], signature: RequirementSignatureRead, environment: InstanceEnvironment, offset: U64) -> Result[U64, CompileDiagnostic] {
-        if !self.arena.typeContainsAssociatedProjection(ref: ref) { return <Result.Ok value=ref /> }
-        val term = self.arena.typeAt(index: ref)
-        if term.assocNameId != 0U64 {
-            val owner = self.associatedProjectionTraitOwner(projection: term)
-            val traitIndex = self.decls.traitIndexByOffset(offset: owner)
-            val receiver = self.typeTermProjectionReceiver(t: term)
-            for id in conditions {
-                if !self.arena.hasStaticConformanceProof(id: id) { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "signature output lost a retained witness condition", failureDomain: <FailureDomain.Internal />) /> }
-                val proof = self.thawStaticConformanceProof(id: id)
-                val premise = self.signatureProjectionPremise(proof: proof)
-                match premise.source {
-                    Optional.Some(v: val source) => {
-                        match source {
-                            DeclarationBoundRef.AssociatedType(index: val index) => {
-                                val original = try self.staticProofBound(proof: proof, traitIdx: traitIndex)
-                                val bound = self.substituteRetainedBound(bound: original, environment: environment, selfRef: environment.receiverRef, itemRef: 0U64)
-                                if bound.constraint.key.owner != owner || !self.typeRefEq(a: bound.subject, b: receiver) || !self.sameResolvedTypeRefs(a: bound.constraint.key.positionalArgs, b: term.assocTraitArgs) { continue }
-                                val associated = try self.signatureAssociatedEvidence(index: index, offset: offset)
-                                val root = try self.readRequirementWitnessAssociatedClause(index: index, associated: associated, signature: signature, environment: environment, offset: offset)
-                                match root {
-                                    Optional.Some(v: val root) => {
-                                        val selector = <ResolvedViewSource writtenStart=offset traitInstance=<TraitInstanceKey owner=owner positionalArgs=term.assocTraitArgs /> />
-                                        val output = try self.readSignatureAssociatedProjection(root: <Optional.Some v=root.proof />, steps: premise.steps, receiver: root.receiver, selector: selector, arguments: term.assocTraitArgs, member: term.assocNameId, offset: offset, unresolvedProjection: ref)
-                                        if output != 0U64 { return <Result.Ok value=output /> }
-                                    }
-                                    Optional.None => {}
-                                }
-                            }
-                            _ => {}
-                        }
+    // Interpret the one premise selected by this RHS occurrence in the
+    // requirement's environment. The clause and path come from that proof.
+    inout fn readBindingRequirementProof(proof: StaticConformanceProof, requirement: Optional[AssociatedBindingRequirementRead], offset: U64) -> Result[StaticConformanceProof, CompileDiagnostic] {
+        if requirement.isNone() { return <Result.Ok value=proof /> }
+        val context = requirement.unwrap()
+        val premise = self.signatureProjectionPremise(proof: proof)
+        if premise.source.isSome() {
+            match premise.source.unwrap() {
+                DeclarationBoundRef.AssociatedType(index: val index) => {
+                    val associated = try self.signatureAssociatedEvidence(index: index, offset: offset)
+                    val root = try self.readRequirementWitnessAssociatedClause(index: index, associated: associated, signature: context.signature, environment: context.environment, offset: offset)
+                    if root.isSome() {
+                        val selected = root.unwrap()
+                        val witness = try self.readSignatureSupertraitWitness(proof: selected.proof, steps: premise.steps, receiver: selected.receiver, offset: offset)
+                        if witness.isSome() { return <Result.Ok value=witness.unwrap() /> }
                     }
-                    Optional.None => {}
                 }
+                _ => {}
             }
         }
-        mut val children: Array[U64] = []
-        for index in 0U64..<self.typeTermRefChildCount(ref: ref) {
-            children.append(try self.readRequirementWitnessOutput(ref: self.typeTermRefChildRef(ref: ref, index: index), conditions: conditions, signature: signature, environment: environment, offset: offset))
-        }
-        return <Result.Ok value=self.rebuildTypeTermChildren(ref: ref, children: children) />
+        return <Result.Ok value=proof />
     }
 
     inout fn readRequirementWitnessAssociatedClause(index: U64, associated: AssociatedBoundEvidence, signature: RequirementSignatureRead, environment: InstanceEnvironment, offset: U64) -> Result[Optional[SelectedSignatureAssociatedClause], CompileDiagnostic] {
