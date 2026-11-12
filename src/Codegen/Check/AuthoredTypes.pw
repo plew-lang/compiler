@@ -145,7 +145,11 @@ impl Comp {
         mut val term = rebuilt
         if original.assocNameId == 0U64 {
             match self.typeTermHeadReplacement(ref: node.term, params: environment.params, values: environment.args, selfRef: environment.receiverRef, itemRef: 0U64) {
-                Optional.Some(v: val replacement) => { term = self.typeRefWithAddedViewSources(ref: replacement, additions: sourceViews) }
+                Optional.Some(v: val replacement) => {
+                    // A source call can leave a method binder open for the
+                    // argument matcher or the expected result to infer.
+                    if replacement != 0U64 { term = self.typeRefWithAddedViewSources(ref: replacement, additions: sourceViews) }
+                }
                 Optional.None => {}
             }
         }

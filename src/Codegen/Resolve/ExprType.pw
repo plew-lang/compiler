@@ -346,7 +346,7 @@ pub impl Comp {
             StaticMemberResolution.Provided(proof: val proof, traitIdx: _, callee: val callee) => {
                 val declaration = self.arena.functionAt(index: callee)
                 val environment = try self.staticProvidedCallEnvironment(function: declaration, proof: proof, receiverTerm: receiverTerm, args: args)
-                return <Result.Ok value=(try self.providedSourceSignature(function: callee, environment: environment)).resultType />
+                return <Result.Ok value=(try self.providedSourceSignature(function: callee, environment: environment, read: <CallableSignatureRead.SourceResult />)).resultType />
             }
             StaticMemberResolution.Missing => { return <Result.Ok value=0U64 /> }
         }

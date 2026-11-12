@@ -330,17 +330,29 @@ pub impl Comp {
 }
 
 impl Comp {
-    inout fn providedSourceSignature(function: U64, environment: InstanceEnvironment) -> Result[BodySignature, CompileDiagnostic] {
-        match (try self.readRetainedCallableSignature(function: function, environment: environment, sourceSelection: true)) {
+    inout fn providedSourceSignature(function: U64, environment: InstanceEnvironment, read: CallableSignatureRead = <CallableSignatureRead.SourceCall />) -> Result[RetainedCallableTypes, CompileDiagnostic] {
+        match (try self.readRetainedCallableTypes(function: function, environment: environment, read: read)) {
             Optional.Some(v: val signature) => { return <Result.Ok value=signature /> }
             Optional.None => { return <Result.Err error=self.diagnosticAt(offset: self.arena.functionAt(index: function).defOffset, msg: "selected provided method has no authored signature", failureDomain: <FailureDomain.Internal />) /> }
         }
     }
 
+    inout fn readRetainedCallableSignature(function: U64, environment: InstanceEnvironment) -> Result[Optional[BodySignature], CompileDiagnostic] {
+        match (try self.readRetainedCallableTypes(function: function, environment: environment, read: <CallableSignatureRead.Body />)) {
+            Optional.Some(v: val types) => {
+                val declaration = self.arena.functionAt(index: function)
+                return <Result.Ok value=<Optional.Some v=<BodySignature ready=true receiverType=(if declaration.hasRecv { give environment.receiverRef } else { give 0U64 }) receiverPassing=self.selectedReceiverPassing(callee: function) parameterTypes=types.parameterTypes parameterPassings=self.selectedArgumentPassings(callee: function) resultType=types.resultType bodyResultType=types.bodyResultType /> /> />
+            }
+            Optional.None => { return <Result.Ok value=<Optional.None /> /> }
+        }
+    }
+
     // None identifies an unmigrated/synthetic declaration, never failed
-    // admission of a registered source signature. Saved slots are interpreted
-    // before any body-type cache or ambient grounding can confer authority.
-    inout fn readRetainedCallableSignature(function: U64, environment: InstanceEnvironment, sourceSelection: Bool = false) -> Result[Optional[BodySignature], CompileDiagnostic] {
+    // admission of a registered source signature.
+    inout fn readRetainedCallableTypes(function: U64, environment: InstanceEnvironment, read: CallableSignatureRead) -> Result[Optional[RetainedCallableTypes], CompileDiagnostic] {
+        val sourceSelection = match read { CallableSignatureRead.Body => false, _ => true }
+        val readParameters = match read { CallableSignatureRead.SourceResult => false, _ => true }
+        val readResult = match read { CallableSignatureRead.SourceParameters => false, _ => true }
         val declaration = self.arena.functionAt(index: function)
         // A provided placement retains the source body's parameter slots.
         // Its already selected environment binds that body's lexical Self
@@ -361,27 +373,30 @@ impl Comp {
         }
         if source.parameters.count() != declaration.params.count() { return <Result.Err error=self.diagnosticAt(offset: declaration.defOffset, msg: "retained callable signature changed its parameter slots", failureDomain: <FailureDomain.Internal />) /> }
         mut val slots: Array[SourceSignatureSlot] = []
-        mut val index = 0U64
-        while index < declaration.params.count() {
-            if self.funcParamAt(params: declaration.params, index: index).ty != 0U64 { slots.append(<SourceSignatureSlot.Parameter index=index />) }
-            index += 1U64
+        if readParameters {
+            for index in 0U64..<source.parameters.count() {
+                if source.parameters[index] != 0U64 { slots.append(<SourceSignatureSlot.Parameter index=index />) }
+            }
         }
-        if source.result != 0U64 { slots.append(<SourceSignatureSlot.Result />) }
-        if source.factoryError != 0U64 { slots.append(<SourceSignatureSlot.FactoryError />) }
+        if readResult {
+            if source.result != 0U64 { slots.append(<SourceSignatureSlot.Result />) }
+            if source.factoryError != 0U64 { slots.append(<SourceSignatureSlot.FactoryError />) }
+        }
         val context = if sourceSelection { give <SignatureRecipeContext.Provided owner=owner /> } else { give <SignatureRecipeContext.Concrete /> }
         val terms = try self.readAdmittedSignatureRoots(function: owner, slots: slots, environment: environment, context: context)
         mut val parameters: Array[U64] = []
         mut val termIndex = 0U64
-        index = 0U64
-        while index < declaration.params.count() {
-            if self.funcParamAt(params: declaration.params, index: index).ty != 0U64 {
-                parameters.append(terms[termIndex])
-                termIndex += 1U64
-            } else {
-                parameters.append(0U64)
+        if readParameters {
+            for occurrence in source.parameters {
+                if occurrence != 0U64 {
+                    parameters.append(terms[termIndex])
+                    termIndex += 1U64
+                } else {
+                    parameters.append(0U64)
+                }
             }
-            index += 1U64
         }
+        if !readResult { return <Result.Ok value=<Optional.Some v=<RetainedCallableTypes parameterTypes=parameters /> /> /> }
         mut val result = 0U64
         if declaration.isFactory {
             if environment.receiverRef == 0U64 { return <Result.Err error=self.diagnosticAt(offset: declaration.defOffset, msg: "retained factory signature has no selected receiver", failureDomain: <FailureDomain.Internal />) /> }
@@ -411,7 +426,7 @@ impl Comp {
                 if rangeEquals(bytes: self.arena.bytes, start: returned.nameStart, len: returned.nameLen, kw: "Promise") && returned.args.count() == 1U64 { bodyResult = returned.args[0U64] }
             }
         }
-        return <Result.Ok value=<Optional.Some v=<BodySignature ready=true receiverType=(if declaration.hasRecv { give environment.receiverRef } else { give 0U64 }) receiverPassing=self.selectedReceiverPassing(callee: function) parameterTypes=parameters parameterPassings=self.selectedArgumentPassings(callee: function) resultType=result bodyResultType=bodyResult /> /> />
+        return <Result.Ok value=<Optional.Some v=<RetainedCallableTypes parameterTypes=parameters resultType=result bodyResultType=bodyResult /> /> />
     }
 
     // A candidate already names both source and placement declarations.

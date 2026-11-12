@@ -342,40 +342,28 @@ pub impl Comp {
         return <Result.Ok value=self.groundTermInEnvironment(ref: ref, params: knownParams, values: knownValues, selfRef: receiver) />
     }
 
-    inout fn staticMemberMatchRank(proof: StaticConformanceProof, traitIdx: U64, requirement: Func, args: ArgRange) -> Result[U64, CompileDiagnostic] {
-        if !self.paramsLabelsOk(params: requirement.params, args: args) { return <Result.Ok value=0U64 /> }
-        val bound = try self.staticProofBound(proof: proof, traitIdx: traitIdx)
-        return self.boundMemberTypeMatchRank(bound: bound, traitIdx: traitIdx, requirement: requirement, args: args)
-    }
-
-    // Label applicability is established by the caller. Static and erased
-    // receivers then use one candidate-local type matcher under an explicit
-    // trait instance; dispatch evidence is separate from argument applicability.
-    inout fn boundMemberTypeMatchRank(bound: TraitBound, traitIdx: U64, requirement: Func, args: ArgRange) -> Result[U64, CompileDiagnostic] {
+    // Ranking uses only admitted parameter slots and the candidate receiver
+    // substitution. Method-owned inference remains in the argument matcher.
+    inout fn providedMemberMatchRank(proof: StaticConformanceProof, traitIndex: U64, function: U64, args: ArgRange) -> Result[U64, CompileDiagnostic] {
+        val declaration = self.arena.functionAt(index: function)
+        if !self.paramsLabelsOk(params: declaration.params, args: args) { return <Result.Ok value=0U64 /> }
+        val bound = try self.staticProofBound(proof: proof, traitIdx: traitIndex)
         if bound.subject == 0U64 { return <Result.Ok value=0U64 /> }
-        val parameters = self.copyFuncBinds(binds: requirement.typeParams)
+        val parameters = self.copyFuncBinds(binds: declaration.typeParams)
         mut val values: Array[U64] = []
         while values.count() < parameters.count() { values.append(0U64) }
-        // Provided impl binders differ from trait binders. The ordinary call
-        // matcher supplies their candidate-local receiver substitution too.
         mut val index = 0U64
-        while index < requirement.recvTraitArgs.count() {
+        while index < declaration.recvTraitArgs.count() {
             if index >= bound.constraint.key.positionalArgs.count() { return <Result.Ok value=0U64 /> }
-            match self.matchCallTypeArguments(pattern: self.funcTypeAt(types: requirement.recvTraitArgs, index: index), argument: bound.constraint.key.positionalArgs[index], params: requirement.typeParams, values: inout values) {
+            match self.matchCallTypeArguments(pattern: self.funcTypeAt(types: declaration.recvTraitArgs, index: index), argument: bound.constraint.key.positionalArgs[index], params: declaration.typeParams, values: inout values) {
                 TypeArgumentMatch.Matched | TypeArgumentMatch.Deferred => {}
                 _ => { return <Result.Ok value=0U64 /> }
             }
             index += 1U64
         }
-        mut val signatures: Array[U64] = []
-        index = 0U64
-        while index < requirement.params.count() {
-            val original = self.funcParamAt(params: requirement.params, index: index)
-            val traitType = self.traitBoundTypeTerm(ref: original.ty, bound: bound, traitIndex: traitIdx)
-            signatures.append(try self.groundKnownCallTypeArguments(ref: traitType, params: requirement.typeParams, values: values, receiver: bound.subject))
-            index += 1U64
-        }
-        return self.callableParameterTypeMatchRank(function: requirement, args: args, signatures: signatures, receiver: bound.subject, initialValues: values)
+        val environment = try self.withLexicalSelfBinding(f: declaration, environment: <InstanceEnvironment params=parameters args=values receiverRef=bound.subject proof=proof />)
+        val types = try self.providedSourceSignature(function: function, environment: environment, read: <CallableSignatureRead.SourceParameters />)
+        return self.callableParameterTypeMatchRank(function: declaration, args: args, signatures: types.parameterTypes, receiver: bound.subject, initialValues: values)
     }
 
     // Canonical protocols already carry an exact admitted instance. Select
@@ -521,7 +509,7 @@ pub impl Comp {
         for candidate in candidates {
             val ranking = match candidate {
                 StaticMemberResolution.Requirement(proof: _, traitIdx: _, reqIdx: _) => { give self.staticRequirementMatchRank(resolution: candidate, args: args) },
-                StaticMemberResolution.Provided(proof: val proof, traitIdx: val owner, callee: val function) => { give self.staticMemberMatchRank(proof: proof, traitIdx: owner, requirement: self.arena.functionAt(index: function), args: args) },
+                StaticMemberResolution.Provided(proof: val proof, traitIdx: val owner, callee: val function) => { give self.providedMemberMatchRank(proof: proof, traitIndex: owner, function: function, args: args) },
                 StaticMemberResolution.Missing => <Result.Ok value=0U64 />,
             }
             val rank = match ranking {

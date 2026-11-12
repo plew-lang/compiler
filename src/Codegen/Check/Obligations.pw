@@ -1053,7 +1053,7 @@ pub impl Comp {
             }
             StaticMemberResolution.Provided(proof: val proof, traitIdx: _, callee: val callee) => {
                 val environment = try self.recordedDirectCallEnvironment(function: function, receiverTerm: template.receiverTypeTerm, typeArgs: self.callTemplateTypeArgs(range: typeArgs), proof: proof)
-                val signature = try self.providedSourceSignature(function: callee, environment: environment)
+                val signature = try self.providedSourceSignature(function: callee, environment: environment, read: <CallableSignatureRead.SourceParameters />)
                 return <Result.Ok value=<SourceCallSignature.ProvidedParameters types=signature.parameterTypes /> />
             }
             StaticMemberResolution.Missing => { return <Result.Err error=self.diagnosticAt(offset: template.siteKey.originStart, msg: "deferred declaration obligation has no selected member") /> }

@@ -38,7 +38,7 @@ fn checkRetainedWhereClause() {
 
 fn checkProvidedSignature() {
     mut val compiler = <Comp />
-    val source = "trait Provider {{ type Item }} pub impl Provider {{ fn supply(value: Item) -> Item {{ return value }} }} fn probe[T](receiver: T) where T: Provider[Item=Bool] {{}}"
+    val source = "trait Provider {{ type Item }} pub impl Provider {{ fn supply(value: Item) -> Item {{ return value }} fn marker() -> Bool {{ return true }} }} fn probe[T](receiver: T) where T: Provider[Item=Bool] {{}}"
     match analyzeFrontendDeclarations(c: inout compiler, input: <FrontendInput.Text text=source path="provided-reader.pw" />, sources: <SourceAccess stdRoot=[] />) {
         Result.Ok(value: _) => {}
         Result.Err(error: val diagnostic) => { panic(diagnostic.message) }
@@ -54,7 +54,16 @@ fn checkProvidedSignature() {
         Result.Err(error: val diagnostic) => { panic(diagnostic.message) }
     }
     assert(compiler.typeRefEq(a: result, b: bound.constraint.assocPredicates[0U64].value))
+    val marker = compiler.internBytes(s: "marker")
+    val rank = compiler.staticMemberResolution(fnIdx: bound.fnIdx, receiverRef: receiver, nameStart: marker.nameStart, nameLen: marker.nameLen, args: args).unwrap()
+    match rank {
+        StaticMemberResolution.Provided(proof: _, traitIdx: _, callee: _) => {}
+        _ => { panic "provided candidate setup did not select its method" }
+    }
     compiler.sourceTypeUses = <SourceTypeUses />
+    if compiler.staticMemberResolution(fnIdx: bound.fnIdx, receiverRef: receiver, nameStart: marker.nameStart, nameLen: marker.nameLen, args: args).isOk() {
+        panic "ranked a provided candidate without its source signature"
+    }
     match compiler.staticMemberCallResultType(resolution: resolution, receiverTerm: receiver, args: args) {
         Result.Err(error: val diagnostic) => {
             match diagnostic.failureDomain {

@@ -357,3 +357,33 @@ Standard generation run `20261112T141802-gen-290bbd` passed. On identical
 compiler source the old/new median was 6.646001/6.595748 seconds, with the same
 68,047,127-byte LLVM output in all eight runs. This comparison is separate from
 the integration fixed-point gate.
+
+## Provided candidate parameter checkpoint
+
+Tentative provided-member ranking uses admitted parameter slots with only
+the candidate receiver substitution. Method inference still belongs to the
+shared argument matcher. A hole preserves the lexical binder. Ranking and
+result inference request only the signature slots they use. Source type
+reads do not construct executable body signatures.
+
+The internal `existential_symbolic_result` control selects a valid candidate
+before removing the source signature store. Candidate `7248fd5d` still
+ranked that member after removal, reaching the expected RED assertion.
+Build `20261112T142147-build-01dc71`, candidate `449c7555`, passes that control
+in check and native execution. All 29 provided and trait-method fixtures
+passed check. Fourteen focused fixtures passed check/native, with the 13
+public fixtures also passing JIT. Standard generation
+`20261112T142552-gen-8cd3e8` passed. The `2fbe0dd9` and `449c7555` carriers
+compiled identical source at medians of 6.641948 s and 6.588426 s with
+byte-identical LLVM across all eight runs.
+
+The inherited associated-equation audit has a public regression to
+resolve: `supertrait_projection_sibling` is rejected by both candidates
+in check and JIT as an unsupported existential result conversion. Its
+selected `Second.Item` equation refers to the independently inherited
+`First.Item=I64`. Separately, the internal
+`inherited_projection_identity` panics in native execution under both
+candidates. Its setup declares a requirement against an unavailable
+`Parent[String]` instance and unwraps declaration analysis. Keep that
+test's wrong-instance comparison at the internal boundary; declaration
+rejection already has dedicated coverage.

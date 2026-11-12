@@ -415,6 +415,20 @@ struct SignatureProjectionPremise {
 }
 impl SignatureProjectionPremise { factory }
 
+enum CallableSignatureRead {
+    Body
+    SourceCall
+    SourceParameters
+    SourceResult
+}
+
+struct RetainedCallableTypes {
+    val parameterTypes: Array[U64]
+    val resultType: U64 = 0U64
+    val bodyResultType: U64 = 0U64
+}
+impl RetainedCallableTypes { factory }
+
 enum SignatureRecipeContext {
     Concrete
     Requirement(signature: RequirementSignatureRead)
