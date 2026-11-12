@@ -972,3 +972,34 @@ the clause-witness carrier and the current candidate. The transition to
 `readRequirementBounds` in `d274fab2` is the first suspect. Restore the
 saved conditional proof and projection equation through the actual interface
 reader and repeat the independent review.
+
+## Interface where projection replay
+
+An isolated trace confirmed the failure at `instantiateInterfaceCall` during
+declaration checking. The expected subject was still an associated projection
+while the interpreted proof established the concrete element. Dynamic
+interface calls now substitute the source bound structurally, replay the
+selected call's saved projection equations in the interface instance, and
+compare its condition proof against that normalized bound. No signature
+reconstruction is needed at that comparison.
+
+Build `20261112T183231-build-05d503`, candidate `6b3360c3`, and generation
+`20261112T183553-gen-627029` passed. Eight public check/JIT/native controls
+passed, including the restored `retained_associated_interface_condition`
+with output `45`. The missing-promise rejection and the internal
+`RetainedSourceCallNormalizations` missing/wrongOutput/wrongProof controls
+passed. In the same declaration-checking path, replacing only the saved
+equations with an empty list again rejected the otherwise valid input.
+Same-source medians were 6.689086 s and 6.692439 s, with all eight LLVM
+outputs identical. The unrelated mixed conditional trait-edge fixture is
+already assigned to [com-wfq2](com-wfq2.md) and has the same diagnostic on the
+before and after carriers.
+
+The boxing issue now also has an isolated RED at the final consumer. In the
+fixed-proof removal program above, keep the local conversion to
+`any Service[Input=Entry]` and remove the call to `fetch`. Clear the existing
+fixed-proof receipt store immediately before `selectExistentialMember` in
+`finalizeConversionDependencies`. Candidate `58db42aa` finishes boxing
+successfully by reacquiring the missing receipt. Next, retain the prepared
+witness plan and where conditions across this boundary, and verify the first
+concrete JIT request and the AOT replay independently.

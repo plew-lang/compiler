@@ -572,22 +572,27 @@ impl Comp {
         }
         val lexical = try self.callConstraintScope(template: template)
         val scope = <DeclarationTypeScope owner=lexical.owner parameters=<FuncBindRange start=0U64 len=0U64 /> interfaceRoot=instanceRoot />
+        val normalizations = match (try self.replayProjectionEquations(saved: plan.normalizations, environment: context.environment, selfRef: selfRef, itemRef: itemRef, context: <Optional.Some v=context />, inherited: [])) {
+            Optional.Some(v: val normalizations) => normalizations,
+            Optional.None => { return <Result.Err error=self.diagnosticAt(offset: template.siteKey.originStart, msg: "dynamic call retains unresolved projection evidence", failureDomain: <FailureDomain.Internal />) /> }
+        }
         mut val bounds: Array[TraitBound] = []
         mut val proofs: Array[U64] = []
         for position in 0U64..<plan.bounds.count() {
             val original = plan.bounds[position]
-            val bound = try self.groundCallableBound(bound: original, environment: context.environment, selfRef: selfRef, itemRef: itemRef)
+            val substituted = self.substituteRetainedBound(bound: original, environment: context.environment, selfRef: selfRef, itemRef: itemRef)
+            val bound = try self.replayBoundNormalizations(bound: substituted, normalizations: normalizations)
             val proof = self.thawStaticConformanceProof(id: plan.proofs[position])
             if !self.typeTermContainsParameter(ref: bound.subject, parameter: self.interfaceScopeParameter(scope: scope)) {
                 try self.checkFirstConcreteSourcePath(bound: original, proof: proof, receiverRef: bound.subject, environment: environment, selfRef: selfRef, itemRef: itemRef)
             }
-            val replay = try self.replayConstraintProof(proof: proof, receiver: bound.subject, environment: environment, selfRef: selfRef, itemRef: itemRef, context: <Optional.Some v=context />)
+            val replay = try self.replayConstraintProof(proof: proof, receiver: bound.subject, environment: environment, selfRef: selfRef, itemRef: itemRef, context: <Optional.Some v=context />, normalizations: normalizations)
             val instantiated = match replay {
                 ConstraintProofReplay.Universal(proof: val proof) | ConstraintProofReplay.Concrete(proof: val proof) => proof,
                 _ => { return <Result.Err error=self.diagnosticAt(offset: original.offset, msg: "dynamic call retains an unresolved condition") /> },
             }
             try self.checkDeclarationCallProof(proof: instantiated, scope: scope, offset: original.offset)
-            try self.checkSelectedCallConstraintBoundary(expected: bound, proof: instantiated, offset: original.offset)
+            try self.compareValidatedWitnessClause(expected: bound, proof: instantiated, normalizations: normalizations, offset: original.offset)
             bounds.append(bound)
             proofs.append(self.freezeStaticConformanceProof(proof: instantiated))
         }
