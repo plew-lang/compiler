@@ -512,9 +512,8 @@ impl Comp {
         val body: U64 = (try self.lowerSyntaxBlock(id: d.body))
         try self.setAuthoredTypeUseRole(role: <SourceTypeUseRole.Declaration />, site: d.name.start)
         self.cur.lowerRetTy = savedRet
-        val fnIdx: U64 = (try self.registerDeclaredFunc(f: <Func nameStart=d.name.start nameLen=d.name.end - d.name.start nameId=intern(c: inout self, start: d.name.start, len: d.name.end - d.name.start) typeParams=self.pushFuncBinds(binds: typeParams) params=self.pushFuncParams(params: params) hasRet=d.hasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=body hasRecv=false recvStart=0U64 recvLen=0U64 selfInout=false selfMove=false isAssoc=false isAsync=d.isAsync isDiverging=d.isDiverging isExposed=d.isExposed isExtern=false defOffset=d.name.start />))
+        val fnIdx: U64 = (try self.registerAuthoredCallable(f: <Func nameStart=d.name.start nameLen=d.name.end - d.name.start nameId=intern(c: inout self, start: d.name.start, len: d.name.end - d.name.start) typeParams=self.pushFuncBinds(binds: typeParams) params=self.pushFuncParams(params: params) hasRet=d.hasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=body hasRecv=false recvStart=0U64 recvLen=0U64 selfInout=false selfMove=false isAssoc=false isAsync=d.isAsync isDiverging=d.isDiverging isExposed=d.isExposed isExtern=false defOffset=d.name.start />, result: retUse))
         try self.appendPreparedFunctionBounds(function: fnIdx)
-        try self.bindAuthoredCallableSignature(function: fnIdx, parameters: params, result: retUse, site: d.name.start)
         self.cur.typeParams = savedTP
         self.lowerWhereSyntaxTypes = savedWT
         self.lowerWhereSyntaxTraitTypes = savedWTr
@@ -643,14 +642,13 @@ impl Comp {
         val body: U64 = (try self.lowerBlock(b: d.body))
         try self.setAuthoredTypeUseRole(role: <SourceTypeUseRole.Declaration />, site: d.nameSpan.start)
         self.cur.lowerRetTy = savedRet
-        val fnIdx: U64 = (try self.registerDeclaredFunc(f: <Func nameStart=nameStart nameLen=nameLen nameId=intern(c: inout self, start: nameStart, len: nameLen) typeParams=self.pushFuncBinds(binds: typeParams) params=self.pushFuncParams(params: params) hasRet=d.hasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=body hasRecv=false recvStart=0 recvLen=0 selfInout=false selfMove=false isAssoc=false isAsync=d.isAsync isDiverging=d.isDiverging isExposed=d.isExposed isExtern=false defOffset=nameStart />))
+        val fnIdx: U64 = (try self.registerAuthoredCallable(f: <Func nameStart=nameStart nameLen=nameLen nameId=intern(c: inout self, start: nameStart, len: nameLen) typeParams=self.pushFuncBinds(binds: typeParams) params=self.pushFuncParams(params: params) hasRet=d.hasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=body hasRecv=false recvStart=0 recvLen=0 selfInout=false selfMove=false isAssoc=false isAsync=d.isAsync isDiverging=d.isDiverging isExposed=d.isExposed isExtern=false defOffset=nameStart />, result: retUse))
         // A `where T: P` is part of this function's declaration, not a later
         // name lookup.  Lower it while the same lexical binder scope that
         // lowered the parameters, return type, and body remains installed.
         // Restoring first loses T's ParamId and turns an unrelated global name
         // such as a user-written trait `T` into a false type-visibility error.
         try self.appendPreparedFunctionBounds(function: fnIdx)
-        try self.bindAuthoredCallableSignature(function: fnIdx, parameters: params, result: retUse, site: d.nameSpan.start)
         self.cur.typeParams = savedTP
         self.lowerWhereTypes = savedWT
         self.lowerWhereTraitTypes = savedWTr

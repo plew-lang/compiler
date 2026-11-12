@@ -87,5 +87,12 @@ the admitted types with both final records. Both consumers reject the same
 environment after its impl evidence is removed, even when a body result is
 pre-populated. The public control passed check, JIT and AOT.
 
-Next, verify failed callable registration cannot reach a fallback, then
-review the complete scope before closure.
+The duplicate-callable recovery test reproduced an unowned diagnostic row on
+`f18feecc`. Registration now binds the lexical function before the surface
+can reject it. The failed row cannot contribute a receiver premise or reach
+synthetic signature handling. Candidate `dbf95c14` passed the recovery mode
+and the existing scoped positive/reject controls.
+
+Independent review is in progress. Remaining checks concern the authored
+signature used by a provided placement, replay of receiver proof with nested
+signature normalizations, and exact lexical Self substitution at the reader.

@@ -336,7 +336,12 @@ impl Comp {
     inout fn readRetainedCallableSignature(function: U64, environment: InstanceEnvironment) -> Result[Optional[BodySignature], CompileDiagnostic] {
         val source = match self.sourceTypeUses.signatureFor(function: function) {
             Optional.Some(v: val source) => source,
-            Optional.None => { return <Result.Ok value=<Optional.None /> /> },
+            Optional.None => {
+                if self.sourceTypeUses.methodScopeFor(function: function).isSome() {
+                    return <Result.Err error=self.diagnosticAt(offset: self.arena.functionAt(index: function).defOffset, msg: "authored method has no registered signature", failureDomain: <FailureDomain.Internal />) />
+                }
+                return <Result.Ok value=<Optional.None /> />
+            },
         }
         val declaration = self.arena.functionAt(index: function)
         if !self.authoredSignatureViews.contains(key: function) { return <Result.Err error=self.diagnosticAt(offset: declaration.defOffset, msg: "authored signature has no admitted trait views", failureDomain: <FailureDomain.Internal />) /> }
