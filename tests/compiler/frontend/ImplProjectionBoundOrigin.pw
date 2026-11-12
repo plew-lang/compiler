@@ -2,7 +2,7 @@ use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontendForRequests
 use ../../../src/Diag only { FailureDomain }
 use ../../../src/SourceAccess only { SourceAccess }
 use ../../../src/SourceTypeUses only { SourceImplementationKind, SourceTypeScopeKind, SourceTypeUseRole }
-use ../../../src/Ir only { DeclarationBoundRef }
+use ../../../src/Ir only { DeclarationBoundRef, InstanceEnvironment }
 use @Plew/Syntax only { ImplAst, parseItem, rangeEquals, TopItemAst }
 use @Std/Io only { print }
 use @Std/Process only { argAt }
@@ -145,6 +145,20 @@ fn exerciseFailedMethodReceiver() {
     }
     if compiler.functionBoundAssumptions(fnIdx: rejected).count() != 0U64 || compiler.declarationBoundIsValid(source: <DeclarationBoundRef.MethodReceiver index=rejected />) {
         panic("the failed implementation authorized its first method's receiver premise")
+    }
+    val collision = compiler.arena.functionCount()
+    match compiler.lowerImpl(im: parseImplementation(compiler, good)) {
+        Result.Err(error: val diagnostic) => {
+            if diagnostic.message != "duplicate or overlapping callable form in one declaration namespace: no provably distinct argument type (spec/04,07,09)" { panic(diagnostic.message) }
+        }
+        Result.Ok(value: _) => { panic("a colliding method unexpectedly registered") }
+    }
+    if compiler.arena.functionCount() != collision + 1U64 { panic("registration did not leave its diagnostic prefix") }
+    if compiler.functionBoundAssumptions(fnIdx: collision).count() != 0U64 || compiler.declarationBoundIsValid(source: <DeclarationBoundRef.MethodReceiver index=collision />) {
+        panic("the colliding method authorized its receiver premise")
+    }
+    if compiler.groundedSelectedCalleeParameterTypes(callee: collision, environment: <InstanceEnvironment />).isOk() {
+        panic("the colliding source method was treated as an untracked synthetic")
     }
     print("1")
 }
