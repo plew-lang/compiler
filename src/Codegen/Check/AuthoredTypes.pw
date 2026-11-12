@@ -982,7 +982,7 @@ impl Comp {
                                 match root {
                                     Optional.Some(v: val root) => {
                                         val selector = <ResolvedViewSource writtenStart=offset traitInstance=<TraitInstanceKey owner=owner positionalArgs=term.assocTraitArgs /> />
-                                        val output = try self.readSignatureAssociatedProjection(root: <Optional.Some v=root.proof />, steps: premise.steps, receiver: root.receiver, selector: selector, arguments: term.assocTraitArgs, member: term.assocNameId, offset: offset)
+                                        val output = try self.readSignatureAssociatedProjection(root: <Optional.Some v=root.proof />, steps: premise.steps, receiver: root.receiver, selector: selector, arguments: term.assocTraitArgs, member: term.assocNameId, offset: offset, unresolvedProjection: ref)
                                         if output != 0U64 { return <Result.Ok value=output /> }
                                     }
                                     Optional.None => {}
@@ -1029,21 +1029,28 @@ impl Comp {
         }
         val parent = try self.readSignatureSelfWitness(root: signature.bound, evidence: signature.evidence, steps: premise.steps, receiver: selfReceiver, offset: offset)
         if parent.isNone() { return <Result.Ok value=<Optional.None /> /> }
-        match (try self.replaySelectedAssociatedConstraint(index: index, selected: parent.unwrap(), projectionRef: projectionRef, receiverRef: output, context: <Optional.None />, inherited: [])) {
-            ConstraintProofReplay.Concrete(proof: val proof) => { return <Result.Ok value=<Optional.Some v=<SelectedSignatureAssociatedClause receiver=output proof=proof /> /> /> }
+        val declaration = !self.arena.typeIsClosed(ref: selfReceiver) || !self.arena.typeIsClosed(ref: output)
+        match (try self.replaySelectedAssociatedConstraint(index: index, selected: parent.unwrap(), projectionRef: projectionRef, receiverRef: output, context: <Optional.None />, inherited: [], declaration: declaration)) {
+            ConstraintProofReplay.Concrete(proof: val proof) | ConstraintProofReplay.Universal(proof: val proof) => { return <Result.Ok value=<Optional.Some v=<SelectedSignatureAssociatedClause receiver=output proof=proof /> /> /> }
             ConstraintProofReplay.Deferred => { return <Result.Ok value=<Optional.None /> /> }
             _ => { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "signature lost its selected associated condition", failureDomain: <FailureDomain.Internal />) /> }
         }
     }
 
-    inout fn readSignatureAssociatedProjection(root: Optional[StaticConformanceProof], steps: Array[SupertraitRef], receiver: U64, selector: ResolvedViewSource, arguments: Array[U64], member: U64, offset: U64) -> Result[U64, CompileDiagnostic] {
+    inout fn readSignatureAssociatedProjection(root: Optional[StaticConformanceProof], steps: Array[SupertraitRef], receiver: U64, selector: ResolvedViewSource, arguments: Array[U64], member: U64, offset: U64, unresolvedProjection: U64 = 0U64) -> Result[U64, CompileDiagnostic] {
         if root.isNone() { return <Result.Ok value=0U64 /> }
         val selected = try self.readSignatureSupertraitWitness(proof: root.unwrap(), steps: steps, receiver: receiver, offset: offset)
         if selected.isNone() { return <Result.Ok value=0U64 /> }
         val proof = selected.unwrap()
         val expected = <TraitBound subject=receiver constraint=<TraitConstraint key=<TraitInstanceKey owner=selector.traitInstance.owner positionalArgs=arguments /> assocPredicates=[] /> offset=offset />
         try self.checkRetainedWitnessClause(expected: expected, proof: proof, normalizations: (try self.retainedProofProjectionContext(proof: proof)), offset: offset)
-        return self.associatedOutputInProof(proof: proof, traitOwner: selector.traitInstance.owner, assocId: member)
+        val output = try self.associatedOutputInProof(proof: proof, traitOwner: selector.traitInstance.owner, assocId: member)
+        // A validated abstract clause can establish the projection without an
+        // equality. Keep the member on the subject from the selected clause.
+        if output == 0U64 && unresolvedProjection != 0U64 {
+            return <Result.Ok value=self.rebuildProjectionTerm(t: self.arena.typeAt(index: unresolvedProjection), receiver: receiver, traitArgs: arguments) />
+        }
+        return <Result.Ok value=output />
     }
 
     inout fn readSignatureAssociatedRootProof(index: U64, associated: AssociatedBoundEvidence, bound: TraitBound, evidence: RequirementSelfEvidence, receiver: U64, environment: InstanceEnvironment, offset: U64, read: SignatureProofRead) -> Result[Optional[StaticConformanceProof], CompileDiagnostic] {

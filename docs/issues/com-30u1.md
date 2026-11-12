@@ -1088,3 +1088,30 @@ under `T: Source`, and implement the same wrapped requirement with
 during requirement matching. The inherited projection must carry the
 same symbolic subject and condition evidence while the receiver is open.
 Bare inherited associated-name binding also remains open.
+
+## Symbolic inherited associated signatures
+
+The fixed carrier `2bbe01c9` rejected
+`inherited_associated_symbolic_signature` during requirement matching.
+The associated-clause replay stopped when the selected parent's output
+was a rigid parameter. Signature reads now use declaration replay for
+that open subject, following the parent's retained associated clause to
+the existing condition proof. After validating the exact clause, a
+projection without an equality keeps its member and trait instance on
+the selected subject. Executable proof replay still requires closure.
+
+Candidate `ad416611`, build `20261112T192041-build-0dc16a`, and generation
+`20261112T192326-gen-0d114a` passed. The regression and seven controls
+passed check, JIT, and native execution. A wrong result and a missing
+parent bound were rejected with their respective diagnostics. A variant
+where the symbolic condition is supplied by a supertrait passed check.
+Same-source medians were 6.710371 s and 6.722351 s. All eight LLVM
+outputs matched.
+
+For the remaining bare-name case, source binding must supply the
+declaring parent instance and its substituted arguments before the
+lowerer constructs the outer projection and its authored recipe. Both
+the syntax path and the value-AST controls currently see only the
+current trait's own associated names. Cover a parent declared later,
+a parameterized parent reached through another trait, and the qualified
+control before closing this scope.

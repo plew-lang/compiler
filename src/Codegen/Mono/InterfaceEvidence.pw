@@ -76,7 +76,7 @@ impl Comp {
 
     // The caller has instantiated the source projection once. The clause row
     // belongs to the selected impl; a caller substitution is not its authority.
-    inout fn replaySelectedAssociatedConstraint(index: U64, selected: StaticConformanceProof, projectionRef: U64, receiverRef: U64, context: Optional[InterfaceProofContext], inherited: Array[ProjectionNormalizationStep]) -> Result[ConstraintProofReplay, CompileDiagnostic] {
+    inout fn replaySelectedAssociatedConstraint(index: U64, selected: StaticConformanceProof, projectionRef: U64, receiverRef: U64, context: Optional[InterfaceProofContext], inherited: Array[ProjectionNormalizationStep], declaration: Bool = false) -> Result[ConstraintProofReplay, CompileDiagnostic] {
         if index >= self.arena.associatedBoundEvidenceCount() { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "associated constraint has no original clause") /> }
         val evidence = self.arena.associatedBoundEvidenceAt(index: index)
         val original = try self.associatedClauseBound(projectionRef: evidence.projection, clauseIndex: evidence.clause, prerequisite: evidence.prerequisite, offset: evidence.bound.offset)
@@ -92,7 +92,8 @@ impl Comp {
         val trait = self.decls.traitAt(index: traitIndex)
         val parent = <TraitBound subject=self.typeTermProjectionReceiver(t: projection) constraint=<TraitConstraint key=<TraitInstanceKey owner=trait.nameStart positionalArgs=projection.assocTraitArgs /> assocPredicates=[] /> offset=evidence.bound.offset />
         try self.checkRetainedWitnessClause(expected: parent, proof: selected, normalizations: inherited, offset: evidence.bound.offset)
-        val witness = match self.selectedConstraintWitness(proof: selected) {
+        val terminal = if declaration { give self.retainedConstraintPathTerminal(proof: selected) } else { give self.selectedConstraintWitness(proof: selected) }
+        val witness = match terminal {
             Optional.Some(v: val witness) => witness,
             Optional.None => { return <Result.Err error=self.diagnosticAt(offset: evidence.bound.offset, msg: "associated constraint prerequisite has no selected conformance") /> },
         }
@@ -114,7 +115,7 @@ impl Comp {
         val environment = try self.selectedConstraintEnvironment(witness: witness, proof: selected)
         mut val outer = inherited
         for equation in (try self.retainedProofProjectionContext(proof: selected)) { try self.appendRetainedProjectionEquation(step: equation, normalizations: inout outer) }
-        val normalizations = match (try self.replayProjectionEquations(saved: row.normalizations, environment: environment, selfRef: witness.selfRef, itemRef: 0U64, context: context, inherited: outer)) {
+        val normalizations = match (try self.replayProjectionEquations(saved: row.normalizations, environment: environment, selfRef: witness.selfRef, itemRef: 0U64, context: context, inherited: outer, declaration: declaration)) {
             Optional.Some(v: val normalizations) => normalizations,
             Optional.None => { return <Result.Ok value=<ConstraintProofReplay.Deferred /> /> },
         }
@@ -125,7 +126,7 @@ impl Comp {
             Optional.Some(v: val scope) => match scope.interpretation { InterfaceRootInterpretation.Universal(root: _) => true, _ => false },
             Optional.None => false,
         }
-        if !symbolic {
+        if !declaration && !symbolic {
             if !self.arena.typeIsClosed(ref: expected.subject) { return <Result.Ok value=<ConstraintProofReplay.Deferred /> /> }
             for argument in expected.constraint.key.positionalArgs { if !self.arena.typeIsClosed(ref: argument) { return <Result.Ok value=<ConstraintProofReplay.Deferred /> /> } }
             for predicate in expected.constraint.assocPredicates { if !self.arena.typeIsClosed(ref: predicate.value) { return <Result.Ok value=<ConstraintProofReplay.Deferred /> /> } }
@@ -133,7 +134,7 @@ impl Comp {
         val output = try self.replayProjectionNormalizations(ref: (try self.associatedOutputInProof(proof: selected, traitOwner: trait.nameStart, assocId: projection.assocNameId)), normalizations: normalizations, offset: evidence.bound.offset)
         if output == 0U64 || !self.typeRefEq(a: output, b: expected.subject) || !self.typeRefEq(a: self.typeRefWithoutOuterViews(ref: receiverRef), b: self.typeRefWithoutOuterViews(ref: expected.subject)) { return <Result.Err error=self.diagnosticAt(offset: evidence.bound.offset, msg: "associated constraint has a different selected subject") /> }
         if !self.arena.hasStaticConformanceProof(id: row.proof) { return <Result.Err error=self.diagnosticAt(offset: evidence.bound.offset, msg: "associated constraint has no retained child proof") /> }
-        val state = try self.replayConstraintProof(proof: self.thawStaticConformanceProof(id: row.proof), receiver: expected.subject, environment: environment, selfRef: witness.selfRef, itemRef: 0U64, context: context, normalizations: normalizations)
+        val state = try self.replayConstraintProof(proof: self.thawStaticConformanceProof(id: row.proof), receiver: expected.subject, environment: environment, selfRef: witness.selfRef, itemRef: 0U64, context: context, normalizations: normalizations, declaration: declaration)
         match state {
             ConstraintProofReplay.Concrete(proof: val proof) | ConstraintProofReplay.Universal(proof: val proof) => { try self.checkRetainedWitnessClause(expected: expected, proof: proof, normalizations: normalizations, offset: evidence.bound.offset) }
             _ => {}
