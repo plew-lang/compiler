@@ -1,0 +1,4 @@
+trait Root {
+    fn process[T](value: T) where T: Missing
+}
+fn main() {}
