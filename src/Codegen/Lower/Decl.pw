@@ -679,6 +679,41 @@ pub impl Comp {
 }
 
 impl Comp {
+    inout fn valueWhereTraitHead(traitType: TypeAst, origin: Optional[U64]) -> Result[ResolvedViewSource, CompileDiagnostic] {
+        val name = self.lowerTypeName(name: traitType.name, span: traitType.nameSpan)
+        val site = if traitType.nameSpan.end > traitType.nameSpan.start {
+            give traitType.nameSpan.start
+        } else if traitType.span.start != 0U64 {
+            give traitType.span.start
+        } else { give origin.unwrapOr(fallback: 0U64) }
+        if traitType.isAny || traitType.isRecord || traitType.projectionAssoc != "" || traitType.projectionTrait != "" || traitType.extView != "" || traitType.viewNames.count() != 0U64 || traitType.viewSources.count() != 0U64 {
+            return <Result.Err error=self.diagnosticAt(offset: site, msg: "where clause must name a trait", failureDomain: <FailureDomain.Source />) />
+        }
+        mut val positional = traitType.args.count()
+        mut val index = 0U64
+        while index < traitType.argLabels.count() && index < traitType.args.count() {
+            if traitType.argLabels[index] != "" { positional -= 1U64 }
+            index += 1U64
+        }
+        return self.bindWhereTrait(name: name, site: site, positional: positional)
+    }
+
+    inout fn syntaxWhereTraitHead(traitType: SyntaxType) -> Result[ResolvedViewSource, CompileDiagnostic] {
+        val name = <Bind nameStart=traitType.name.start nameLen=traitType.name.end - traitType.name.start fieldStart=0U64 fieldLen=0U64 />
+        if traitType.isAny || traitType.isRecord || traitType.projectionAssoc.end > traitType.projectionAssoc.start || traitType.projectionTrait.end > traitType.projectionTrait.start || traitType.extView.end > traitType.extView.start || traitType.viewNames.count != 0U64 || traitType.viewSources.count != 0U64 {
+            return <Result.Err error=self.diagnosticAt(offset: traitType.name.start, msg: "where clause must name a trait", failureDomain: <FailureDomain.Source />) />
+        }
+        val count = syntaxTypeArgCount(file: self.syntax, ty: traitType)
+        mut val positional = count
+        mut val index = 0U64
+        while index < traitType.argLabels.count && index < count {
+            val label = syntaxTypeArgLabel(file: self.syntax, ty: traitType, index: index)
+            if label.end > label.start { positional -= 1U64 }
+            index += 1U64
+        }
+        return self.bindWhereTrait(name: name, site: traitType.name.start, positional: positional)
+    }
+
     inout fn lowerSourceValueTraitBound(traitType: TypeAst, origin: Optional[U64]) -> Result[LoweredTraitConstraint, CompileDiagnostic] {
         val tn = self.lowerTypeName(name: traitType.name, span: traitType.nameSpan)
         val lowered = try self.lowerValueTraitConstraint(traitType: traitType, owner: 0U64, site: traitType.span.start)

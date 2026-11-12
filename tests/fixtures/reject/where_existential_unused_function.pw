@@ -1,0 +1,3 @@
+trait Marker {}
+fn unused[T](value: T) where T: any Marker {}
+fn main() {}

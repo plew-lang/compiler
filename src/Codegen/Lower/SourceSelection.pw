@@ -39,6 +39,55 @@ impl Comp {
         return <Optional.None />
     }
 
+    inout fn bindWhereTrait(name: Bind, site: U64, positional: U64) -> Result[ResolvedViewSource, CompileDiagnostic] {
+        val bindings = match self.moduleScopeBindings {
+            Optional.Some(v: val admitted) => admitted
+            Optional.None => { return <Result.Err error=self.diagnosticAt(offset: site, msg: "where clause lookup before module binding admission", failureDomain: <FailureDomain.Internal />) /> }
+        }
+        val qualified = self.modules.qualifiedUseIndex(offset: name.nameStart)
+        val requirePublic = qualified < self.modules.qualifiedUseCount()
+        mut val moduleId = self.moduleOf(offset: site)
+        mut val nameId = intern(c: inout self, start: name.nameStart, len: name.nameLen)
+        if requirePublic {
+            val origin = self.modules.qualifiedUseAt(index: qualified)
+            moduleId = origin.targetModule
+            if origin.sourceStart != name.nameStart || origin.sourceLength != name.nameLen {
+                nameId = intern(c: inout self, start: origin.sourceStart, len: origin.sourceLength)
+            }
+        }
+        val binding = bindings.uniqueBinding(moduleId: moduleId, nameId: nameId)
+        match binding {
+            Optional.Some(v: val declaration) => {
+                if requirePublic && !declaration.isPublic {
+                    return <Result.Err error=self.diagnosticAt(offset: site, msg: "name is not public in the specified namespace", failureDomain: <FailureDomain.Source />) />
+                }
+                match declaration.kind {
+                    ScopeBindingKind.Trait => {
+                        val owner = self.decls.traitOwnerIndex(offset: declaration.declarationOffset)
+                        if owner >= self.decls.traitOwnerCount() {
+                            return <Result.Err error=self.diagnosticAt(offset: site, msg: "admitted where trait is missing its declaration", failureDomain: <FailureDomain.Internal />) />
+                        }
+                        if positional != 0U64 && self.decls.traitOwnerAt(index: owner).arity != positional {
+                            return <Result.Err error=self.diagnosticAt(offset: site, msg: "wrong number of positional trait arguments in where clause", failureDomain: <FailureDomain.Source />) />
+                        }
+                        return <Result.Ok value=<ResolvedViewSource writtenStart=site writtenLen=name.nameLen surfaceId=declaration.ownerNameId traitInstance=<TraitInstanceKey owner=declaration.declarationOffset positionalArgs=[] /> /> />
+                    }
+                    _ => { return <Result.Err error=self.diagnosticAt(offset: site, msg: "where clause must name a trait", failureDomain: <FailureDomain.Source />) /> }
+                }
+            }
+            Optional.None => {
+                // A callable overload set has a kind but no unique owner.
+                if bindings.kind(moduleId: moduleId, nameId: nameId).isSome() {
+                    if requirePublic && !bindings.kind(moduleId: moduleId, nameId: nameId, requirePublic: true).isSome() {
+                        return <Result.Err error=self.diagnosticAt(offset: site, msg: "name is not public in the specified namespace", failureDomain: <FailureDomain.Source />) />
+                    }
+                    return <Result.Err error=self.diagnosticAt(offset: site, msg: "where clause must name a trait", failureDomain: <FailureDomain.Source />) />
+                }
+                return <Result.Err error=self.diagnosticAt(offset: site, msg: "unknown trait in where clause", failureDomain: <FailureDomain.Source />) />
+            }
+        }
+    }
+
     inout fn knownExtensionSource(identity: U64) -> Bool {
         match self.moduleScopeBindings {
             Optional.Some(v: val bindings) => { return bindings.extensionBinding(identity: identity).isSome() }

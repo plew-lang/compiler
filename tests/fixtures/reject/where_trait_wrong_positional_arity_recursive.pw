@@ -1,0 +1,4 @@
+trait Project[Kind] { type Item }
+struct Box[T] {}
+impl[T] Box[T] where T: Project[T.Item, I64] {}
+fn main() {}

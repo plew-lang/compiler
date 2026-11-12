@@ -95,26 +95,25 @@ impl Comp {
         return result
     }
 
-    fn preparedBoundSource(constraint: TraitConstraint, site: U64) -> ResolvedViewSource {
-        val index = self.decls.traitOwnerIndex(offset: constraint.key.owner)
-        if index >= self.decls.traitOwnerCount() { return <ResolvedViewSource writtenStart=site /> }
-        return <ResolvedViewSource writtenStart=site surfaceId=self.decls.traitOwnerAt(index: index).nameId traitInstance=constraint.key />
-    }
-
     inout fn lowerProjectionBoundClause(clause: ProjectionBoundClause) -> Result[PreparedProjectionBound, CompileDiagnostic] {
-        val anchor = self.sourceTypeUses.scopeAt(token: clause.scope).unwrap().anchor
         match clause.syntax {
             ProjectionBoundSyntax.Value(subject: val subject, traitType: val traitType, parameter: val parameter) => {
                 // A legacy name-only row has no authored subject TypeAst.
                 // Construct its binder term without issuing a fictitious use.
                 val loweredSubject = if clause.syntheticSubject { give (try self.lowerTypeCore(t: (try self.normalizeProjectionType(t: subject)))) } else { give (try self.lowerType(t: subject)) }
-                val lowered = try self.lowerSourceValueTraitBound(traitType: (try self.normalizeProjectionType(t: traitType)), origin: <Optional.Some v=anchor />)
-                return <Result.Ok value=<PreparedProjectionBound source=self.preparedBoundSource(constraint: lowered.constraint, site: traitType.span.start) subject=loweredSubject.ref constraint=lowered.constraint arguments=lowered.arguments parameter=parameter /> />
+                val type = try self.normalizeProjectionType(t: traitType)
+                val head = if clause.head.isSome() { give clause.head.unwrap() } else {
+                    give try self.valueWhereTraitHead(traitType: type, origin: <Optional.Some v=self.sourceTypeUses.scopeAt(token: clause.scope).unwrap().anchor />)
+                }
+                val lowered = try self.lowerValueTraitConstraint(traitType: type, owner: head.traitInstance.owner, site: head.writtenStart)
+                return <Result.Ok value=<PreparedProjectionBound source=head.withArguments(arguments: lowered.constraint.key.positionalArgs) subject=loweredSubject.ref constraint=lowered.constraint arguments=lowered.arguments parameter=parameter /> />
             }
             ProjectionBoundSyntax.Syntax(subject: val subject, traitType: val traitType, parameter: val parameter) => {
                 val loweredSubject = try self.lowerSyntaxType(id: subject)
-                val lowered = try self.lowerSourceSyntaxTraitBound(traitTy: traitType, origin: <Optional.Some v=anchor />)
-                return <Result.Ok value=<PreparedProjectionBound source=self.preparedBoundSource(constraint: lowered.constraint, site: syntaxType(file: self.syntax, id: traitType).span.start) subject=loweredSubject.ref constraint=lowered.constraint arguments=lowered.arguments parameter=<Bind nameStart=parameter.start nameLen=parameter.end - parameter.start nameId=intern(c: inout self, start: parameter.start, len: parameter.end - parameter.start) fieldStart=0U64 fieldLen=0U64 /> /> />
+                val type = try self.resolveSyntaxTypePath(t: syntaxType(file: self.syntax, id: traitType))
+                val head = if clause.head.isSome() { give clause.head.unwrap() } else { give try self.syntaxWhereTraitHead(traitType: type) }
+                val lowered = try self.lowerSyntaxTraitConstraint(traitType: type, owner: head.traitInstance.owner, site: head.writtenStart)
+                return <Result.Ok value=<PreparedProjectionBound source=head.withArguments(arguments: lowered.constraint.key.positionalArgs) subject=loweredSubject.ref constraint=lowered.constraint arguments=lowered.arguments parameter=<Bind nameStart=parameter.start nameLen=parameter.end - parameter.start nameId=intern(c: inout self, start: parameter.start, len: parameter.end - parameter.start) fieldStart=0U64 fieldLen=0U64 /> /> />
             }
         }
     }
@@ -159,11 +158,11 @@ impl Comp {
         val source = match clause.syntax {
             ProjectionBoundSyntax.Value(subject: _, traitType: val traitType, parameter: _) => {
                 val type = try self.normalizeProjectionType(t: traitType)
-                give if type.nameSpan.end > type.nameSpan.start { give (try self.bindViewSourceName(siteOffset: type.span.start, name: type.nameSpan)) } else { give (try self.lowerViewSource(siteOffset: type.span.start, text: type.name)) }
+                give try self.valueWhereTraitHead(traitType: type, origin: <Optional.Some v=self.sourceTypeUses.scopeAt(token: clause.scope).unwrap().anchor />)
             }
             ProjectionBoundSyntax.Syntax(subject: _, traitType: val traitType, parameter: _) => {
                 val type = try self.resolveSyntaxTypePath(t: syntaxType(file: self.syntax, id: traitType))
-                give try self.bindViewSourceName(siteOffset: type.span.start, name: type.name)
+                give try self.syntaxWhereTraitHead(traitType: type)
             }
         }
         self.projectionBoundClauses[id - 1U64] = <ProjectionBoundClause scope=clause.scope parameters=clause.parameters syntax=clause.syntax syntheticSubject=clause.syntheticSubject head=<Optional.Some v=source /> state=clause.state />

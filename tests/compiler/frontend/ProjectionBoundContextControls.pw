@@ -1,7 +1,7 @@
 // Focused source-bound preparation and frame-restoration controls.
 use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
 use ../../../src/SourceAccess only { SourceAccess }
-use ../../../src/Diag only { FailureDomain }
+use ../../../src/Diag only { DiagnosticLocation, FailureDomain }
 use @Plew/Syntax only { DeclAst, TypeAst, parseItem, TopItemAst, rangeEquals }
 use @Std/Io only { print }
 use @Std/Process only { argAt }
@@ -19,8 +19,58 @@ fn declaration(compiler~: Comp, text~: String) -> DeclAst {
     }
 }
 
+fn exerciseWhereAdmission(valueAdapter: Bool) {
+    val header = "trait Marker {{}}\n"
+    val invalid = "fn invalid[T](value:T) where T:Marker,\n    T:Unknown {{}}"
+    val valid = "fn valid[T](value:T) where T:Marker {{}}"
+    val path = "WhereAdmission.pw"
+    mut val compiler = <Comp />
+    val rejected = if valueAdapter {
+        val source = header + "/* " + invalid + " */\n// " + valid + "\nfn main() {{}}"
+        analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text text=source path=path />, sources: <SourceAccess stdRoot=[] />).unwrap()
+        give compiler.lowerFuncDecl(d: declaration(compiler, invalid))
+    } else {
+        give analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text text=header + invalid + "\nfn main() {{}}" path=path />, sources: <SourceAccess stdRoot=[] />)
+    }
+    match rejected {
+        Result.Err(error: val diagnostic) => {
+            match diagnostic.failureDomain { FailureDomain.Source => {} _ => { panic(diagnostic.message) } }
+            match diagnostic.location {
+                DiagnosticLocation.File(path: val file, line: val line) => {
+                    if file != path || line != 3I64 { panic("where rejection lost its source location") }
+                }
+                _ => { panic("where rejection has no source location") }
+            }
+            if diagnostic.message != "unknown trait in where clause" { panic(diagnostic.message) }
+        }
+        Result.Ok(value: _) => { panic("an unresolved trait entered source admission") }
+    }
+    if compiler.decls.funcBounds.count() != 0U64 || compiler.sourceTypeUses.currentScope() != 0U64 || compiler.cur.typeParams.count() != 0U64 {
+        panic("where rejection published a bound or leaked its frame")
+    }
+    if valueAdapter {
+        compiler.lowerFuncDecl(d: declaration(compiler, valid)).unwrap()
+    } else {
+        compiler = <Comp />
+        analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text text=header + valid + "\nfn main() {{}}" path=path />, sources: <SourceAccess stdRoot=[] />).unwrap()
+    }
+    val function = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "valid").nameId)
+    val rows = compiler.decls.funcBounds.indices(owner: function)
+    if rows.count() != 1U64 { panic("the valid where clause did not publish one premise") }
+    val owner = compiler.decls.funcBounds.at(index: rows[0U64]).constraint.key.owner
+    val traitIndex = compiler.decls.traitOwnerIndex(offset: owner)
+    if traitIndex >= compiler.decls.traitOwnerCount() || compiler.decls.traitOwnerAt(index: traitIndex).nameId != compiler.internBytes(s: "Marker").nameId {
+        panic("the published where clause lost its canonical trait owner")
+    }
+    print("1")
+}
+
 fn main() {
     val scenario = argAt(1I64)
+    if scenario == "whereSyntax" || scenario == "whereValue" {
+        exerciseWhereAdmission(valueAdapter: scenario == "whereValue")
+        return
+    }
     val header = "trait Project[Kind] {{ type Item }} trait Other[Kind] {{ type Item }} trait Marker[Kind] {{}} trait Zero {{ type Item }} "
     if scenario == "later" || scenario == "nonmember" {
         val body = if scenario == "later" {

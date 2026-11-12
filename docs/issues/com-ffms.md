@@ -1,6 +1,6 @@
 ---
 id: com-ffms
-status: open
+status: in_progress
 deps: []
 links: []
 created: 2026-11-12T10:23:29Z
@@ -14,14 +14,21 @@ tags: [frontend, generics, diagnostics, verification]
 
 ## Guarantee and Finite Work
 
-Resolve each ordinary where-clause trait name under its original declaration
-and admitted module scope. An unknown name or a binding of the wrong kind
+Resolve ordinary where clauses on prepared free functions, implementations
+and their members under the original declaration and admitted module scope.
+An unknown name or a binding of the wrong kind
 cannot become a usable bound or pass source admission because no member/body
 happens to use it. Preserve canonical known owners, open positional bounds,
 qualified imports, exact argument handling, and the distinction between
 source rejection, malformed internal input and analysis limit. Use the
 ordinary declaration-bound resolver; projection candidate filtering has a
 separate role.
+
+The prepared right-hand side must be a trait head, including its optional
+arguments and associated-output predicates. A projection, a view or an
+existential type is not a trait head. Raw requirement/extern signature
+admission and its frame lifecycle remain with [com-30u1](com-30u1.md).
+Associated-type and supertrait declarations keep their existing readers.
 
 Contracts: [generics and where clauses](../../../spec/spec/02-type-system/06-generics.md#where-句)
 and [source evidence admission](../design/types-and-evidence.md#5-conformance-evidence).
@@ -55,5 +62,4 @@ normal source paths and keep scope restoration and Limit behavior. Follow
 task-start TDD and independent completion review. Excludes broader callable
 publication and view-formation migration.
 
-Planned dependency assignment requires confirmation under the phase-three
-task-plan stop condition; [com-erlx](com-erlx.md) remains in progress.
+This fix is a prerequisite of [com-erlx](com-erlx.md).

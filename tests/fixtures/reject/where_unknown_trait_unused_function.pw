@@ -1,0 +1,2 @@
+fn unused[T](value: T) where T: Unknown {}
+fn main() {}

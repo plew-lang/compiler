@@ -1,0 +1,3 @@
+fn marker() {}
+fn unused[T](value: T) where T: marker {}
+fn main() {}

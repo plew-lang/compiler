@@ -1,0 +1,4 @@
+trait Marker {}
+struct Box[T] { val item: T }
+impl[T] Box[T] as Marker where T: Unknown {}
+fn main() {}

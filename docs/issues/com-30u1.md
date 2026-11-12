@@ -18,6 +18,12 @@ Admit raw trait requirement parameter/result annotations using their canonical t
 
 Retain the original contract into translated/provided signature and existential/interface consumers, including selected associated constraints and saved normalizations. This owns raw/provided/interface signature handoff; registered impl-method ownership is the method sibling, and annotations inside a requested provided body are the body sibling.
 
+Use the prepared ordinary bound admission contract in [com-ffms](com-ffms.md)
+when moving raw signature premises. The legacy raw-signature reader can publish
+an unresolved `where` trait and does not restore all lexical state on error.
+Any switch to earlier rejection must restore both signature and enclosing trait
+frames before returning the original diagnostic.
+
 ## Required Scenarios
 
 - Unused requirements, siblings with identical terms, trait Self/inherited premise and full positional trait instance in both adapters.

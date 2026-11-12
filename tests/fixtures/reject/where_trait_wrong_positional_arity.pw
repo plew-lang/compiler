@@ -1,0 +1,3 @@
+trait Marker[A, B] {}
+fn unused[T](value: T) where T: Marker[I64] {}
+fn main() {}

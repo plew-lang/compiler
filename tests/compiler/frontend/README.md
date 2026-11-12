@@ -339,6 +339,8 @@ parameter/result/body short projections. Execute without arguments and with
 checks later-clause dependencies, nonmember prefiltering, failed-context
 restoration, and legacy synthesized subjects; execute `later`, `nonmember`,
 `recovery`, and `legacy`. Each must exit 0, match its `.out` and have empty stderr.
+The `whereSyntax` and `whereValue` modes check ordinary where-clause diagnostics,
+frame restoration, and canonical trait owner publication.
 
 `ImplProjectionBoundOrigin.pw` checks that two methods reuse a single
 impl-owned bound argument in signature, body and default projections. Execute
