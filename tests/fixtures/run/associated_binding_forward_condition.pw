@@ -1,0 +1,12 @@
+use @Std/Io only { print }
+trait Parent { type Item }
+trait Marker { type Item }
+trait Target { type Out }
+struct Worker {}
+struct Container {}
+struct Host[T] {}
+impl Container as Parent { type Item = Host[Worker]#Target.Out }
+impl[T] Host[T] as Target where T: Marker[Item=I64] { type Out = I64 }
+impl Worker as Marker { type Item = I64 }
+fn read(value: Container#Parent.Item) -> I64 { return value }
+fn main() { print(read(value: 42I64)) }

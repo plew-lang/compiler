@@ -67,12 +67,20 @@ impl Comp {
 
     inout fn readSelectedProjectionOutput(proof: StaticConformanceProof, traitOwner: U64, assocId: U64, requirement: Optional[AssociatedBindingRequirementRead] = <Optional.None />) -> Result[SelectedProjectionOutput, CompileDiagnostic] {
         val normalizations = try self.retainedProofProjectionContext(proof: proof)
-        val binding = try self.selectedAssociatedBinding(proof: proof, traitOwner: traitOwner, assocId: assocId)
-        if binding.isSome() {
-            val selected = binding.unwrap()
-            return self.readAssociatedBindingOutput(bindingIndex: selected.bindingIndex, proof: proof, witness: selected.witness, normalizations: normalizations, requirement: requirement)
+        mut val output = 0U64
+        if self.associatedBindingAdmissionComplete {
+            val binding = try self.selectedAssociatedBinding(proof: proof, traitOwner: traitOwner, assocId: assocId)
+            if binding.isSome() {
+                val selected = binding.unwrap()
+                return self.readAssociatedBindingOutput(bindingIndex: selected.bindingIndex, proof: proof, witness: selected.witness, normalizations: normalizations, requirement: requirement)
+            }
+            output = try self.assumedProjectionOutput(proof: proof, traitOwner: traitOwner, assocId: assocId)
+        } else {
+            // All source declarations are registered before RHS admission.
+            // Conditions can inspect a later binding's immediate equation
+            // while that binding is still awaiting its own admission.
+            output = try self.associatedOutputTermInProof(proof: proof, traitOwner: traitOwner, assocId: assocId)
         }
-        val output = try self.assumedProjectionOutput(proof: proof, traitOwner: traitOwner, assocId: assocId)
         val term = try self.replayProjectionNormalizations(ref: output, normalizations: normalizations, offset: 0U64)
         return <Result.Ok value=<SelectedProjectionOutput immediate=output term=term normalizations=normalizations /> />
     }

@@ -290,3 +290,25 @@ or binder RHS. An extra witness binder row can disagree with the
 canonical substitution. Requirement-associated evidence needs its
 replacement proof checked against the retained clause. The task stays
 open for these checks and the remaining fault controls.
+
+## Declaration order and independent review
+
+Independent reviewer `zzf3_completion_review` reviewed `5967aa0b`
+and the nominal-substitution change. The reviewer identified a
+declaration-order dependency, missing or malformed witness condition
+plans, surplus binder rows, a requirement proof that could change its
+subject after rebasing, ambiguity between absent concrete and valid
+abstract output, and a provided-signature route still reading only the
+immediate output. The review also called for exact once-only caller
+substitution and evidence corruption/restore coverage. Completion is
+pending. The nominal subject fix covers the distinct mismatched receiver
+case.
+
+The forward-condition fixture reproduced the declaration-order failure
+on `c1b0a874`. The first binding requests a later conditional witness
+whose associated equality uses a third, later binding. During binding
+admission, the comparison now reads the registered immediate equation.
+After admission, output consumers require its receipt. Candidate
+`45e860c7` passed build `20261112T235211-build-16c253` and the new
+fixture plus four controls in check, JIT and native. Same-source
+medians were 6.866589 s and 6.867015 s, all eight LLVM outputs identical.
