@@ -685,7 +685,7 @@ impl Comp {
                     val declaration = self.arena.functionAt(index: owner)
                     val traitIndex = self.decls.traitIndexByOffset(offset: declaration.recvStart)
                     val root = try self.staticProofBound(proof: environment.proof, traitIdx: traitIndex)
-                    val bound = self.supertraitBoundThroughSteps(root: root, steps: premise.steps, includeInherited: false)
+                    val bound = self.supertraitBoundThroughSteps(root: root, steps: premise.steps)
                     val selected = if premise.steps.count() == 0U64 { give <Optional.Some v=environment.proof /> } else { give <Optional.None /> }
                     return self.readSelectedSignatureProjection(bound: bound, selected: selected, receiver: receiver, selector: selector, arguments: arguments, member: member, offset: offset)
                 }
@@ -741,7 +741,7 @@ impl Comp {
                 return <Result.Err error=self.diagnosticAt(offset: offset, msg: "signature projection belongs to another trait requirement", failureDomain: <FailureDomain.Internal />) />
             }
             if index == first {
-                val bound = self.supertraitBoundThroughSteps(root: interface.bound, steps: premise.steps, includeInherited: false)
+                val bound = self.supertraitBoundThroughSteps(root: interface.bound, steps: premise.steps)
                 val selected = if premise.steps.count() == 0U64 { give interface.selected } else { give <Optional.None /> }
                 return self.readSelectedSignatureProjection(bound: bound, selected: selected, receiver: receiver, selector: selector, arguments: arguments, member: member, offset: offset)
             }

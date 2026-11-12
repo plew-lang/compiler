@@ -387,3 +387,29 @@ candidates. Its setup declares a requirement against an unavailable
 `Parent[String]` instance and unwraps declaration analysis. Keep that
 test's wrong-instance comparison at the internal boundary; declaration
 rejection already has dedicated coverage.
+
+## Inherited signature equation checkpoint
+
+The signature fold follows its admitted supertrait path with the same
+bound interpretation as ordinary inherited evidence. Each selected edge
+interprets the arguments and equations guaranteed by its declaring bound.
+In particular, the existing public fixture now carries
+`Second.Item = First.Item = I64` through interface signature preparation
+and the actual dynamic adapter. No conformance candidate is selected again.
+
+Baseline `449c7555` rejects `supertrait_projection_sibling` in check, JIT
+and native compilation. Build `20261112T143017-build-fb2260`, candidate
+`9728ec46`, passes all three and prints `42`. Eleven focused fixtures
+passed check/native, including the corrected internal identity control;
+the nine public fixtures passed JIT too. The internal fixture now feeds a
+wrong positional instance directly into the comparison API and retains the
+foreign receiver, conflict and known Unit checks. Four rejection fixtures
+matched their diagnostics across check/JIT/native. Generation
+`20261112T143334-gen-787089` passed. Same-source comparison against
+`2fbe0dd9` measured 6.644004 s versus 6.647012 s; LLVM was byte-identical
+across all eight runs.
+
+Before closing, trace the remaining associated constraint paths through
+final witness preparation and check which legacy reads of provided callable
+bounds still interpret raw rows. Reconcile the results with the required
+scenarios and obtain an independent completion review.
