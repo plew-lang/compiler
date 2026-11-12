@@ -748,7 +748,17 @@ impl Comp {
             }
             StaticConformanceProof.AssumedSupertraitPath(source: val left, steps: val leftSteps) => {
                 match b {
-                    StaticConformanceProof.AssumedSupertraitPath(source: val right, steps: val rightSteps) => { return self.sameSourceProofRoot(a: left, b: right) && self.sameSupertraitSteps(a: leftSteps, b: rightSteps) }
+                    StaticConformanceProof.AssumedSupertraitPath(source: val right, steps: val rightSteps) => {
+                        if self.sameSupertraitSteps(a: leftSteps, b: rightSteps) { return self.sameSourceProofRoot(a: left, b: right) }
+                        // A declared supertrait constrains the same subject.
+                        // From one premise, distinct declared paths to the
+                        // same instance add facts to that instance.
+                        if !self.sameDeclarationBound(a: left, b: right) { return false }
+                        val first = self.assumedSupertraitBound(source: left, steps: leftSteps)
+                        val second = self.assumedSupertraitBound(source: right, steps: rightSteps)
+                        if first.subject == 0U64 || second.subject == 0U64 || first.constraint.key.owner != second.constraint.key.owner || !self.sameResolvedTypeRefs(a: first.constraint.key.positionalArgs, b: second.constraint.key.positionalArgs) { return false }
+                        return self.inheritedInstanceEquationsAgree(root: self.declarationBound(source: left), instance: first)
+                    }
                     _ => {}
                 }
             }
@@ -769,6 +779,21 @@ impl Comp {
             _ => {}
         }
         return false
+    }
+
+    inout fn inheritedInstanceEquationsAgree(root: TraitBound, instance: TraitBound) -> Bool {
+        val key = instance.constraint.key
+        val index = self.decls.traitIndexByOffset(offset: key.owner)
+        if index >= self.decls.traitCount() { return false }
+        val members = self.decls.traitAt(index: index).assocTypes
+        for member in 0U64..<members.count() {
+            val declaration = self.traitBindAt(binds: members, index: member)
+            match self.traitProjectionEquality(bound: root, receiver: instance.subject, owner: key.owner, arguments: key.positionalArgs, member: declaration.nameId, context: root, projectionPath: []) {
+                TraitProjectionEquality.Conflict => { return false }
+                TraitProjectionEquality.Missing | TraitProjectionEquality.Value => {}
+            }
+        }
+        return true
     }
 
     inout fn collectTraitProof(selection: inout TraitProofSelection, candidate: StaticConformanceProof, traitOwner: U64, preferred: Bool, demand: ConformanceProofDemand, assocNames: Array[U64], assocValues: Array[U64], assumptions: Array[DeclarationBoundRef]) -> Result[(), CompileDiagnostic] {

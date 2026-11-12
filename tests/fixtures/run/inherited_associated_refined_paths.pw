@@ -1,0 +1,15 @@
+use @Std/Io only { print }
+trait Parent { type Item }
+trait Loose: Parent {}
+trait Fixed: Parent[Item=I64] {}
+trait Service: Loose + Fixed { fn get() -> Item }
+struct Worker {}
+impl Worker as Parent { type Item=I64 }
+impl Worker as Loose {}
+impl Worker as Fixed {}
+impl Worker as Service { fn get() -> I64 { return 42I64 } }
+fn main() {
+    val x: any Service = <Worker />
+    val y: I64 = x.get()
+    print(y)
+}

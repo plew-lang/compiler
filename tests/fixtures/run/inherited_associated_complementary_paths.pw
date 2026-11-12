@@ -1,0 +1,29 @@
+use @Std/Io only { print }
+trait Parent {
+    type Key
+    type Value
+}
+trait First: Parent[Key=I64] {}
+trait Second: Parent[Value=Bool] {}
+trait Service: First + Second {
+    fn getKey() -> Key
+    fn getValue() -> Self#Parent.Value
+}
+struct Worker {}
+impl Worker as Parent {
+    type Key = I64
+    type Value = Bool
+}
+impl Worker as First {}
+impl Worker as Second {}
+impl Worker as Service {
+    fn getKey() -> I64 { return 42I64 }
+    fn getValue() -> Bool { return true }
+}
+fn main() {
+    val x: any Service = <Worker />
+    val key: I64 = x.getKey()
+    val value: Bool = x.getValue()
+    print(key)
+    if value { print("yes") }
+}

@@ -1477,10 +1477,13 @@ impl Comp {
                     }
                     arguments = normalized
                 }
-                val proof = match (try self.queryTraitPatternProof(demand: <ConformanceProofDemand.SourceAdmission />, baseRef: subject, traitId: 0U64, traitOwner: selector.traitInstance.owner, traitArgs: <PatternTypeInput.Values values=arguments />, patternParams: <PatternBindInput.Values values=[] />, assumptions: projectionAssumptions, selectedProjection: selectedProjection)) {
+                mut val proof = match (try self.queryTraitPatternProof(demand: <ConformanceProofDemand.SourceAdmission />, baseRef: subject, traitId: 0U64, traitOwner: selector.traitInstance.owner, traitArgs: <PatternTypeInput.Values values=arguments />, patternParams: <PatternBindInput.Values values=[] />, assumptions: projectionAssumptions, selectedProjection: selectedProjection)) {
                     ConformanceProofResult.Found(proof: val proof) => proof,
                     ConformanceProofResult.Missing => { return <Result.Err error=self.diagnosticAt(offset: selector.writtenStart, msg: "trait view requires a conformance for this receiver and exact trait instance (spec/09)", failureDomain: <FailureDomain.Source />) /> },
                     ConformanceProofResult.Ambiguous(owner: _, demand: _, selectedSource: _) => { return <Result.Err error=self.diagnosticAt(offset: selector.writtenStart, msg: "trait view does not have a unique conformance path (spec/09)", failureDomain: <FailureDomain.Source />) /> },
+                }
+                if isProjection {
+                    proof = try self.selectSignatureProjectionEquation(proof: proof, subject: subject, owner: selector.traitInstance.owner, arguments: arguments, member: type.assocNameId, offset: occurrence.site)
                 }
                 try self.checkStaticProofEvidence(proof: proof, offset: occurrence.site, assumptions: assumptions)
                 try self.requireDeclarationProofSupport(dependencies: (try self.scopedProofDependencies(proof: proof, scope: scope, offset: occurrence.site, normalizations: context)), offset: occurrence.site)
@@ -1502,6 +1505,29 @@ impl Comp {
         }
         return <Result.Ok value=() />
     }
+
+    // A path proving the inherited instance may leave this member opaque.
+    // Retain the path that declares its equation in the same premise, so
+    // requirement and provided readers can replay the original guarantee.
+    inout fn selectSignatureProjectionEquation(proof: StaticConformanceProof, subject: U64, owner: U64, arguments: Array[U64], member: U64, offset: U64) -> Result[StaticConformanceProof, CompileDiagnostic] {
+        match proof {
+            StaticConformanceProof.AssumedSupertraitPath(source: val source, steps: _) => {
+                val root = self.declarationBound(source: source)
+                match self.traitProjectionEquality(bound: root, receiver: subject, owner: owner, arguments: arguments, member: member, context: root, projectionPath: [], retainPath: true) {
+                    TraitProjectionEquality.Value(term: _, steps: val steps) => {
+                        return <Result.Ok value=<StaticConformanceProof.AssumedSupertraitPath source=source steps=steps /> />
+                    }
+                    TraitProjectionEquality.Conflict => {
+                        return <Result.Err error=self.diagnosticAt(offset: offset, msg: "inherited associated type has conflicting equations (spec/08)", failureDomain: <FailureDomain.Source />) />
+                    }
+                    TraitProjectionEquality.Missing => {}
+                }
+            }
+            _ => {}
+        }
+        return <Result.Ok value=proof />
+    }
+
     // Record the bound that actually states the equality. An opaque path to
     // the same trait may establish conformance without stating its output.
     inout fn recordInheritedArgumentEquations(ref: U64, lexical: DeclarationBoundRef, bound: TraitBound, equations: inout Array[ProjectionNormalizationStep], offset: U64, active: Array[U64] = []) -> Result[U64, CompileDiagnostic] {

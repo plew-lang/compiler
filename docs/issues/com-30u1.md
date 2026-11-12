@@ -1,7 +1,7 @@
 ---
 id: com-30u1
 status: in_progress
-deps: []
+deps: [com-80t4]
 links: [com-5wze]
 created: 2026-11-09T08:54:16Z
 type: task
@@ -1405,3 +1405,38 @@ The open case is the opaque and fixed paths to the same instance.
 `076646bc` still diagnoses ambiguous conformance at declaration admission.
 Keep instance identity and the evidence for each associated equation
 separate when handling complementary output constraints.
+
+## Compatible inherited output refinements
+
+Paths from the same authored premise to the same normalized instance
+are compatible only when their lexical output equations agree. Signature
+admission saves the actual edge path declaring each projected member's
+equation. The signature reader replays that path. Concrete and
+trait-subject paths keep their own source identities.
+
+Candidate `076646bc` rejected both new positive fixtures at source
+conformance admission. Candidate `34a254d6` passes sixteen check, JIT
+and native controls, including `inherited_associated_refined_paths`
+(opaque and fixed) and `inherited_associated_complementary_paths` (each
+path supplies a different member). The distinct-instance and conflicting
+where-bound controls still reject. Standard build
+`20261112T210551-build-5712d8` and generation
+`20261112T210950-gen-3c4b35` passed. Same-source medians were 6.829080 s
+and 6.851099 s, with identical LLVM in all eight runs.
+
+Independent review reproduced a valid raw requirement and interface call
+with a where clause requiring both inherited outputs. It still fails
+where admission. The same failure is independently reproducible with
+an ordinary generic call. Keep this task open on
+[com-80t4](com-80t4.md), which owns the shared proof and replay boundary.
+
+The review also reproduced an unresolved right-hand side in a retained
+signature equation. Given `Other { type Value }`, `Parent { type Key }`,
+`First: Parent[Key=Self#Other.Value] + Other` and
+`Service: First + Other[Value=I64]` with `fn get() -> Key`, the
+compiler rejects the valid `Worker.get() -> I64` implementation. The
+normalizer sees the root's `Other.Value = I64` equation, but saving
+the `Parent.Key` path drops the sibling derivation needed by its RHS.
+Add a source-to-interface execution control and retain both equations
+in dependency order. The existing cross-path argument control verifies
+a different prerequisite position.
