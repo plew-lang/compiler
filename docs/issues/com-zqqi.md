@@ -62,3 +62,8 @@ All nine `ImplProjectionBoundOrigin` cases passed. The retained trait-subject,
 Unit forwarding and default callable-form fixtures passed in check, JIT and
 AOT. The unused method signature RED and the selected signature/body
 handoff remain open.
+
+On identical compiler sources, alternating three measured compiles after
+warmup gave medians of 6.375821 s for `1f9a99d6` and 6.401968 s for
+`61e6af2d`, with identical LLVM across all runs. The comparison does not
+replace the formal fixed-point measurement.
