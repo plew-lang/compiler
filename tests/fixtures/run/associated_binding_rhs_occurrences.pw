@@ -1,0 +1,46 @@
+use /Frontend only { Comp, FrontendInput, analyzeFrontendDeclarations }
+use /SourceAccess only { SourceAccess }
+use /SourceTypeUses only { SourceImplementationKind }
+use @Plew/Syntax as Syntax
+use @Std/Core only { assert }
+use @Std/Io only { print }
+
+fn check(compiler: inout Comp) {
+    val first = compiler.decls.assocBindings[0U64]
+    val second = compiler.decls.assocBindings[1U64]
+    assert(first.authoredTypeUse != 0U64 && second.authoredTypeUse != 0U64)
+    assert(first.authoredTypeUse != second.authoredTypeUse)
+    for index in 0U64..<2U64 {
+        val binding = compiler.decls.assocBindings[index]
+        val occurrence = compiler.sourceTypeUses.useAt(index: binding.authoredTypeUse - 1U64).unwrap()
+        val recipe = compiler.sourceTypeUses.recipeAt(id: occurrence.recipe).unwrap()
+        assert(recipe.occurrence == binding.authoredTypeUse)
+        assert(compiler.typeRefEq(a: occurrence.term, b: binding.ty))
+        val owner = compiler.sourceTypeUses.scopeAt(token: occurrence.scope).unwrap().implementation.unwrap()
+        match owner.kind {
+            SourceImplementationKind.Conformance(index: val conformance) => {
+                val declaration = compiler.decls.conformAt(index: conformance)
+                assert(compiler.conformFuncIdAt(ids: declaration.assocBindingIds, index: 0U64) == index)
+                assert(occurrence.parameters[0U64].paramId == compiler.conformBindAt(binds: binding.typeParams, index: 0U64).paramId)
+            }
+            _ => { panic("associated binding lost its conformance owner") }
+        }
+    }
+}
+fn main() {
+    mut val compiler = <Comp />
+    val source = "trait Parent[A] {{ type Item }}\nstruct Box[T] {{}}\nimpl[T] Box[T] as Parent[I64] {{ type Item = T }}\nimpl[T] Box[T] as Parent[Bool] {{ type Item = T }}\n"
+    analyzeFrontendDeclarations(c: inout compiler, input: <FrontendInput.Text text=source path="associated-binding-occurrences.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
+    check(compiler: inout compiler)
+
+    mut val lexer = <Syntax.Lexer bytes=source.bytes() pos=0U64 toks=[] depth=0I64 />
+    Syntax.lex(lx: inout lexer)
+    mut val parser = <Syntax.P bytes=source.bytes() toks=lexer.toks pos=0U64 base=0U64 />
+    val items = Syntax.parseProgramAst(p: inout parser)
+    mut val legacy = <Comp />
+    legacy.appendSrc(from: source.bytes())
+    for item in items { legacy.predeclareTraitItem(item: item) }
+    for item in items { legacy.lowerTopItem(item: item).unwrap() }
+    check(compiler: inout legacy)
+    print("associated-binding-rhs-occurrences")
+}
