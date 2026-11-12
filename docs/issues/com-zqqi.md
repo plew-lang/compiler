@@ -81,6 +81,11 @@ passed in their applicable modes, including trait-subject receivers,
 associated results, default factories and Unit forwarding. Compiler sources
 also compiled to LLVM with the candidate.
 
-Next, exercise exact final call/body records with an inherited projection,
-verify missing evidence and failed registration cannot reach a fallback,
-and review the complete scope before closure.
+`RetainedMethodSignatureConsumers` passed with a real inout call whose
+parameter and result project through a nested impl-bound argument. It compares
+the admitted types with both final records. Both consumers reject the same
+environment after its impl evidence is removed, even when a body result is
+pre-populated. The public control passed check, JIT and AOT.
+
+Next, verify failed callable registration cannot reach a fallback, then
+review the complete scope before closure.

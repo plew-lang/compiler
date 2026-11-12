@@ -350,6 +350,12 @@ later clauses, nonmember filtering, failed frame restoration and the value
 adapter's legacy name-only rows. Receiver recovery checks that a rejected
 impl cannot authorize its already registered member's implicit receiver premise.
 
+`RetainedMethodSignatureConsumers.pw` takes
+`tests/fixtures/run/retained_method_signature.pw` and the standard-library
+root with a trailing slash. It compares the selected call and body signature
+against the admitted nested projection, checks the inout receiver, and
+requires both consumers to reject a body environment with missing impl evidence.
+
 `AuthoredRecipeIntegrity.pw` checks the admitted constructor graph against the
 canonical child visitor. Execute `valid`, `shape`, `term`, `label`, `forged`,
 `foreign`, `representation`, `validRepresentation`, `representationSource`,

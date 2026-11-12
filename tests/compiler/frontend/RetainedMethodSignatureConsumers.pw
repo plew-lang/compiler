@@ -1,0 +1,39 @@
+use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontend }
+use ../../../src/Ir only { CallReceiverPassing, InstanceEnvironment }
+use ../../../src/SourceAccess only { SourceAccess }
+use ../../../src/SourceTypeAdmissions only { SourceSignatureSlot }
+use @Std/Io only { print }
+use @Std/Process only { argAt }
+
+fn main() {
+    mut val compiler = <Comp />
+    analyzeFrontend(c: inout compiler, input: <FrontendInput.File path=argAt(1I64) />, sources: <SourceAccess stdRoot=argAt(2I64).bytes() />).unwrap()
+    val keep = compiler.internBytes(s: "keep").nameId
+    mut val hits = 0U64
+    for index in 0U64..<compiler.arena.finalCalleeCount() {
+        val call = compiler.arena.finalCalleeAt(index: index)
+        if call.callee >= compiler.arena.functionCount() || compiler.arena.functionAt(index: call.callee).nameId != keep { continue }
+        hits += 1U64
+        if call.calleeBodyId == 0U64 { panic("selected method has no body") }
+        val instance = compiler.arena.bodyInstanceAt(index: call.calleeBodyId - 1U64)
+        val environment = instance.environment
+        if environment.constraints.isNone() { panic("the selected call has no retained impl premises") }
+        val parameter = compiler.readAdmittedSignatureRoot(function: call.callee, slot: <SourceSignatureSlot.Parameter index=0U64 />, environment: environment).unwrap()
+        val result = compiler.readAdmittedSignatureRoot(function: call.callee, slot: <SourceSignatureSlot.Result />, environment: environment).unwrap()
+        val signature = compiler.arena.bodySignature(bodyId: call.calleeBodyId)
+        if !signature.ready || signature.parameterTypes.count() != 1U64 || call.parameterTypeRefs.count() != 1U64 { panic("method signature was not published") }
+        if !compiler.typeRefEq(a: signature.receiverType, b: environment.receiverRef) { panic("body signature changed the selected receiver") }
+        match signature.receiverPassing { CallReceiverPassing.Inout => {} _ => { panic("body signature lost inout receiver passing") } }
+        match call.receiverPassing { CallReceiverPassing.Inout => {} _ => { panic("call signature lost inout receiver passing") } }
+        if !compiler.typeRefEq(a: signature.parameterTypes[0U64], b: parameter) || !compiler.typeRefEq(a: signature.resultType, b: result) { panic("body signature changed the saved projection") }
+        if !compiler.typeRefEq(a: compiler.arena.finalCalleeParameterTypeAt(types: call.parameterTypeRefs, index: 0U64), b: parameter) || !compiler.typeRefEq(a: call.resultTypeRef, b: result) { panic("call signature changed the saved projection") }
+
+        val missing = <InstanceEnvironment params=environment.params args=environment.args receiverRef=environment.receiverRef proof=environment.proof />
+        if compiler.groundedSelectedCalleeParameterTypes(callee: call.callee, environment: missing).isOk() || compiler.groundedSelectedCalleeReturn(callee: call.callee, environment: missing).isOk() { panic("selected method recovered missing impl evidence") }
+        val invalidBody = compiler.internBodyInstance(fnIdx: call.callee, environment: missing)
+        compiler.recordBodyTypeTermResult(bodyId: invalidBody, source: compiler.arena.functionAt(index: call.callee).retTy, result: result)
+        if compiler.prepareFinalCallableSignature(bodyId: invalidBody).isOk() || compiler.arena.bodySignature(bodyId: invalidBody).ready { panic("body signature recovered missing impl evidence from a cached result") }
+    }
+    if hits != 1U64 { panic("the inherited projection control did not select one real call") }
+    print("ok")
+}

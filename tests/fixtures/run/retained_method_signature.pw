@@ -1,0 +1,28 @@
+use @Std/Io only { print }
+
+trait Project[Kind] { type Item }
+trait Tag { type Item }
+struct First {}
+impl First as Project[I64] { type Item = Bool }
+struct Second {}
+impl Second as Tag { type Item = I64 }
+
+struct Box[T, U] {
+    val left: T
+    val right: U
+    mut val visits: I64
+}
+
+impl[T, U] Box[T, U] where T: Project[U.Item], U: Tag {
+    inout fn keep(value: T.Item) -> T.Item {
+        self.visits += 1I64
+        return value
+    }
+    fn snapshot() -> Self { return self }
+}
+
+fn main() {
+    mut val pair = <Box[First, Second] left=<First /> right=<Second /> visits=0I64 />
+    print(pair.keep(value: true))
+    print(pair.snapshot().visits)
+}
