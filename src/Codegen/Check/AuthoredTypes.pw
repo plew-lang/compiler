@@ -522,7 +522,10 @@ impl Comp {
                 for recipe in bound.predicateRecipes { try self.checkAuthoredTypeRecipe(sourceScope: signature.scope, recipe: recipe, edge: <AuthoredRecipeEdge.Source />, scopes: scopes, validation: inout validation, offset: parent.anchor) }
             }
         }
-        self.authoredSignatureViews[signature.function] = <AuthoredSignatureViews signature=signature proofs=validation.proofs receiverRecipes=validation.receiverRecipes />
+        val clauses = if function.provTraitOwner != 0U64 && validation.parentScope != 0U64 {
+            give try self.admitProvidedClauseIdentities(signature: signature, own: sourceScope.bounds.unwrapOr(fallback: <SourceBoundRange />), parent: validation.parentScope, offset: sourceScope.anchor)
+        } else { give [] }
+        self.authoredSignatureViews[signature.function] = <AuthoredSignatureViews signature=signature proofs=validation.proofs receiverRecipes=validation.receiverRecipes clauses=clauses />
         return <Result.Ok value=() />
     }
 
@@ -792,33 +795,53 @@ impl Comp {
         return <Result.Ok value=bounds />
     }
 
-    // The registered row names the clause. All three parts of its type
-    // contract come from the prepared declaration, through the same recipe
-    // interpreter as the method's parameter/result annotations.
-    inout fn readProvidedSignatureBounds(function: U64, indices: Array[U64], environment: InstanceEnvironment) -> Result[Array[TraitBound], CompileDiagnostic] {
+    // Bind registered assumption IDs to the exact lexical clause once,
+    // while the signature is admitted. The ranges were published own-first.
+    inout fn admitProvidedClauseIdentities(signature: AuthoredFunctionSignature, own: SourceBoundRange, parent: U64, offset: U64) -> Result[Array[AuthoredProvidedClause], CompileDiagnostic] {
+        val inherited = self.sourceTypeUses.scopeAt(token: parent).unwrap().bounds.unwrapOr(fallback: <SourceBoundRange />)
+        val assumptions = self.decls.funcBounds.indices(owner: signature.function)
+        if assumptions.count() != own.count + inherited.count {
+            return <Result.Err error=self.diagnosticAt(offset: offset, msg: "provided signature changed its where clause count", failureDomain: <FailureDomain.Internal />) />
+        }
+        mut val clauses: Array[AuthoredProvidedClause] = []
+        for position in 0U64..<assumptions.count() {
+            val assumption = assumptions[position]
+            val id = if position < own.count { give own.first + position } else { give inherited.first + (position - own.count) }
+            val scope = if position < own.count { give signature.scope } else { give parent }
+            val row = self.decls.funcBounds.at(index: assumption)
+            val prepared = try self.retainedSignatureClause(scope: scope, id: id, offset: offset)
+            if row.fnIdx != signature.function || row.sourceClause != id || !self.typeRefEq(a: row.paramTy, b: prepared.subject) || !self.sameTraitConstraint(a: row.constraint, b: prepared.constraint) {
+                return <Result.Err error=self.diagnosticAt(offset: offset, msg: "provided where clause differs from its source declaration", failureDomain: <FailureDomain.Internal />) />
+            }
+            clauses.append(<AuthoredProvidedClause assumption=assumption scope=scope source=id />)
+        }
+        return <Result.Ok value=clauses />
+    }
+
+    inout fn providedSignatureAdmission(function: U64) -> Result[AuthoredSignatureViews, CompileDiagnostic] {
         val owner = try self.semanticBodyOwner(fnIdx: function)
+        match self.authoredSignatureViews.get(key: owner) {
+            Optional.Some(v: val admitted) => { return <Result.Ok value=admitted /> }
+            Optional.None => {}
+        }
         val source = match self.sourceTypeUses.signatureFor(function: owner) {
             Optional.Some(v: val source) => source,
             Optional.None => { return <Result.Err error=self.diagnosticAt(offset: self.arena.functionAt(index: function).defOffset, msg: "provided where clause has no authored signature", failureDomain: <FailureDomain.Internal />) /> },
         }
-        if !self.authoredSignatureViews.contains(key: owner) { try self.admitAuthoredFunctionViewSignature(signature: source) }
-        val admitted = self.authoredSignatureViews[owner]
+        try self.admitAuthoredFunctionViewSignature(signature: source)
+        return <Result.Ok value=self.authoredSignatureViews[owner] />
+    }
+
+    inout fn readProvidedSignatureBounds(admitted: AuthoredSignatureViews, environment: InstanceEnvironment) -> Result[Array[TraitBound], CompileDiagnostic] {
+        if admitted.clauses.count() == 0U64 { return <Result.Ok value=[] /> }
+        val source = admitted.signature
         try self.checkSignatureEnvironment(signature: source, environment: environment)
-        val scope = self.sourceTypeUses.scopeAt(token: source.scope).unwrap()
+        val offset = self.arena.functionAt(index: source.function).defOffset
         mut val memo: Dictionary[U64, AuthoredRecipeRead] = [:]
         mut val bounds: Array[TraitBound] = []
-        for index in indices {
-            val row = self.decls.funcBounds.at(index: index)
-            val id = row.sourceClause
-            if row.fnIdx != owner || id == 0U64 || id > self.projectionBoundClauses.count() {
-                return <Result.Err error=self.diagnosticAt(offset: row.paramStart, msg: "provided where clause has no original source identity", failureDomain: <FailureDomain.Internal />) />
-            }
-            val lexicalScope = self.projectionBoundClauses[id - 1U64].scope
-            if lexicalScope != source.scope && lexicalScope != scope.parent {
-                return <Result.Err error=self.diagnosticAt(offset: row.paramStart, msg: "provided where clause belongs to another signature", failureDomain: <FailureDomain.Internal />) />
-            }
-            val prepared = try self.retainedSignatureClause(scope: lexicalScope, id: id, offset: row.paramStart)
-            bounds.append(try self.readAuthoredSignatureClause(prepared: prepared, proofs: admitted.proofs, context: <SignatureRecipeContext.Provided owner=owner />, environment: environment, memo: inout memo))
+        for clause in admitted.clauses {
+            val prepared = try self.retainedSignatureClause(scope: clause.scope, id: clause.source, offset: offset)
+            bounds.append(try self.readAuthoredSignatureClause(prepared: prepared, proofs: admitted.proofs, context: <SignatureRecipeContext.Provided owner=source.function />, environment: environment, memo: inout memo))
         }
         return <Result.Ok value=bounds />
     }

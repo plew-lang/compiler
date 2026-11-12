@@ -59,6 +59,13 @@ fn checkProvidedWhereClause() {
     compiler.decls.funcBounds.set(index: index, value: <FuncBound fnIdx=callee sourceClause=original.sourceClause paramStart=original.paramStart paramLen=original.paramLen paramTy=foreign paramNameId=original.paramNameId constraint=original.constraint />)
     val retained = compiler.sourceSelectedCallBounds(template: template).unwrap()
     if retained.count() != 1U64 || !compiler.typeRefEq(a: retained[0U64].subject, b: value) { panic "raw where row replaced the retained provided clause" }
+    compiler.decls.funcBounds.set(index: index, value: <FuncBound fnIdx=callee sourceClause=0U64 paramStart=original.paramStart paramLen=original.paramLen paramTy=foreign paramNameId=original.paramNameId constraint=original.constraint />)
+    match compiler.sourceSelectedCallBounds(template: template) {
+        Result.Ok(value: val after) => {
+            if after.count() != 1U64 || !compiler.typeRefEq(a: after[0U64].subject, b: value) { panic "raw clause identity replaced the retained provided clause" }
+        }
+        Result.Err(error: _) => { panic "raw clause identity replaced the retained provided clause" }
+    }
 }
 
 fn checkProvidedSignature() {

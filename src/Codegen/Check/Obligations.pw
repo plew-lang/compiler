@@ -1159,9 +1159,12 @@ pub impl Comp {
     inout fn sourceSelectedCallBounds(template: CallTemplate) -> Result[Array[TraitBound], CompileDiagnostic] {
         match template.kind {
             CallTemplateKind.Direct(callee: val callee, receiver: _, args: _, calleeTypeArgs: val arguments, proofId: val proofId) => {
+                val function = self.arena.functionAt(index: callee)
+                if function.isProvided {
+                    return self.sourceProvidedCallBounds(callee: callee, function: function, receiver: template.receiverTypeTerm, arguments: self.callTemplateTypeArgs(range: arguments), proof: self.thawStaticConformanceProof(id: proofId))
+                }
                 val indices = self.sourceDeclarationCallBoundIndices(functionIndex: callee)
                 if indices.count() == 0U64 { return <Result.Ok value=[] /> }
-                val function = self.arena.functionAt(index: callee)
                 val environment = try self.recordedDirectCallEnvironment(function: function, receiverTerm: template.receiverTypeTerm, typeArgs: self.callTemplateTypeArgs(range: arguments), proof: self.thawStaticConformanceProof(id: proofId))
                 return self.sourceDeclarationCallBounds(indices: indices, signature: <SourceCallSignature.Direct environment=environment />)
             }
@@ -1196,9 +1199,13 @@ pub impl Comp {
     // signature, including its declaration bounds. Do not defer those bounds
     // until an unrelated declaration-worklist instance reconstructs them.
     inout fn sourceSelectedReceiverBounds(callee: U64, receiverTerm: U64, proof: StaticConformanceProof) -> Result[Array[TraitBound], CompileDiagnostic] {
+        val function = self.arena.functionAt(index: callee)
+        if function.isProvided {
+            val arguments = try self.callConstraintTypeArguments(function: function, receiver: receiverTerm, proof: proof)
+            return self.sourceProvidedCallBounds(callee: callee, function: function, receiver: receiverTerm, arguments: arguments, proof: proof)
+        }
         val indices = self.sourceDeclarationCallBoundIndices(functionIndex: callee)
         if indices.count() == 0U64 { return <Result.Ok value=[] /> }
-        val function = self.arena.functionAt(index: callee)
         val arguments = try self.callConstraintTypeArguments(function: function, receiver: receiverTerm, proof: proof)
         val environment = try self.recordedDirectCallEnvironment(function: function, receiverTerm: receiverTerm, typeArgs: arguments, proof: proof)
         return self.sourceDeclarationCallBounds(indices: indices, signature: <SourceCallSignature.Direct environment=environment />)
@@ -1214,13 +1221,17 @@ pub impl Comp {
                 return self.readRequirementBounds(signature: context.unwrap(), methodArguments: arguments)
             }
             StaticMemberResolution.Provided(proof: val proof, traitIdx: _, callee: val callee) => {
-                val indices = self.sourceDeclarationCallBoundIndices(functionIndex: callee)
-                if indices.count() == 0U64 { return <Result.Ok value=[] /> }
-                val environment = try self.recordedDirectCallEnvironment(function: function, receiverTerm: receiverTerm, typeArgs: arguments, proof: proof)
-                return self.readProvidedSignatureBounds(function: callee, indices: indices, environment: environment)
+                return self.sourceProvidedCallBounds(callee: callee, function: function, receiver: receiverTerm, arguments: arguments, proof: proof)
             }
             StaticMemberResolution.Missing => { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "deferred declaration obligation has no selected member") /> }
         }
+    }
+
+    inout fn sourceProvidedCallBounds(callee: U64, function: Func, receiver: U64, arguments: Array[U64], proof: StaticConformanceProof) -> Result[Array[TraitBound], CompileDiagnostic] {
+        val admitted = try self.providedSignatureAdmission(function: callee)
+        if admitted.clauses.count() == 0U64 { return <Result.Ok value=[] /> }
+        val environment = try self.recordedDirectCallEnvironment(function: function, receiverTerm: receiver, typeArgs: arguments, proof: proof)
+        return self.readProvidedSignatureBounds(admitted: admitted, environment: environment)
     }
 
     // Admission precedes this boundary reader: a malformed child must never

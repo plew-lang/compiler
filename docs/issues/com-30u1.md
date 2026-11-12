@@ -439,3 +439,23 @@ equations, but body admission still calls `groundCallableSignatureBounds`
 on registered rows for comparison. Direct provided copies likewise still
 use the ordinary source-bound reader. Complete those paths and bind clause
 identity at declaration admission before independent review.
+
+## Provided clause identity and direct-call checkpoint
+
+Admission binds each provided method's assumption index to the exact
+lexical clause in the method or its enclosing impl. Both generic static
+selection and direct selection of a provided placement read that mapping.
+Clause count and authored identity are established before any call reads
+them, including a signature with an empty clause list.
+
+With candidate `9b8c7ea5`, removing the copied row's source clause identity
+after admission fails the intended assertion in `existential_symbolic_result`.
+Build `20261112T144821-build-8f4ab5`, candidate `32c3ead2`, passes.
+Nine focused fixtures passed check/native and seven public fixtures passed
+JIT. Two direct calls with associated-type bounds in the method and the
+enclosing impl returned 42 in JIT and native execution. Standard generation
+`20261112T145135-gen-6b290e` passed. Same-source medians were 6.580754 s
+and 6.584024 s, with identical LLVM across all eight runs.
+
+Executable admission still needs to compare recorded evidence using
+these admitted clause identities and recipes.

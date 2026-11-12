@@ -12,10 +12,18 @@ pub struct AuthoredTypeViewProof {
 }
 pub impl AuthoredTypeViewProof { factory }
 
+pub struct AuthoredProvidedClause {
+    pub val assumption: U64
+    pub val scope: U64
+    pub val source: U64
+}
+pub impl AuthoredProvidedClause { factory }
+
 pub struct AuthoredSignatureViews {
     pub val signature: AuthoredFunctionSignature
     pub val proofs: Array[AuthoredTypeViewProof]
     pub val receiverRecipes: Array[U64] = []
+    pub val clauses: Array[AuthoredProvidedClause] = []
 }
 pub impl AuthoredSignatureViews { factory }
 
