@@ -248,7 +248,7 @@ impl Comp {
                 term = self.semanticSourceResultTerm(ref: source.term)
                 for equation in source.normalizations { try self.appendRetainedProjectionEquation(step: equation, normalizations: inout normalizations) }
             }
-            SourceTypeRecipeOrigin.ProjectionReceiver | SourceTypeRecipeOrigin.LexicalParameter => {}
+            SourceTypeRecipeOrigin.ProjectionReceiver | SourceTypeRecipeOrigin.LexicalParameter | SourceTypeRecipeOrigin.InheritedTraitArgument => {}
             SourceTypeRecipeOrigin.BoundSelection => { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "signature reader encountered an unadmitted bound recipe", failureDomain: <FailureDomain.Internal />) /> }
         }
         val read = <AuthoredRecipeRead term=term views=sourceViews normalizations=normalizations />
@@ -297,6 +297,7 @@ impl Comp {
             // It cannot authorize a source edge. Non-free owner migration must
             // forward the actual originating recipe before using this gate.
             SourceTypeRecipeOrigin.BoundSelection => false,
+            SourceTypeRecipeOrigin.InheritedTraitArgument => match edge { AuthoredRecipeEdge.InheritedTraitArgument => true, _ => false },
             SourceTypeRecipeOrigin.LexicalParameter => match edge {
                 AuthoredRecipeEdge.LexicalTraitArgument => node.children.count() == 0U64 && self.arena.typeTermAt(index: node.term).paramId != 0U64,
                 _ => false,
@@ -335,12 +336,14 @@ impl Comp {
                 if !self.sourceResultRepresentationMatches(source: source.unwrap().term, payload: node.term) { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "authored type recipe has an invalid result representation", failureDomain: <FailureDomain.Internal />) /> }
                 try self.checkAuthoredTypeRecipe(sourceScope: sourceScope, recipe: node.sourceRecipe, edge: <AuthoredRecipeEdge.Source />, scopes: scopes, validation: inout validation, offset: offset)
             }
-            SourceTypeRecipeOrigin.ProjectionReceiver | SourceTypeRecipeOrigin.BoundSelection | SourceTypeRecipeOrigin.LexicalParameter => {
+            SourceTypeRecipeOrigin.ProjectionReceiver | SourceTypeRecipeOrigin.BoundSelection | SourceTypeRecipeOrigin.LexicalParameter | SourceTypeRecipeOrigin.InheritedTraitArgument => {
                 if node.occurrence != 0U64 || node.sourceRecipe != 0U64 { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "derived type recipe acquired source authority", failureDomain: <FailureDomain.Internal />) /> }
             }
         }
         val count = self.typeTermRefChildCount(ref: node.term)
         if node.children.count() != count || node.labels.count() != count { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "authored type recipe does not cover canonical children", failureDomain: <FailureDomain.Internal />) /> }
+        mut val receiverOccurrence = 0U64
+        mut val inheritedProjection = false
         mut val index = 0U64
         while index < count {
             val child = match self.sourceTypeUses.recipeAt(id: node.children[index]) {
@@ -350,7 +353,20 @@ impl Comp {
             if !self.typeRefEq(a: child.term, b: self.typeTermRefChildRef(ref: node.term, index: index)) { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "authored type recipe child differs from canonical term", failureDomain: <FailureDomain.Internal />) /> }
             if node.labels[index] != self.typeTermRefIdentityChildLabel(ref: node.term, index: index) { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "authored type recipe child has a foreign label", failureDomain: <FailureDomain.Internal />) /> }
             val term = self.arena.typeTermAt(index: node.term)
-            val childEdge = if term.assocNameId != 0U64 && index == 0U64 { give <AuthoredRecipeEdge.ProjectionReceiver /> }
+            if index == 0U64 && term.assocNameId != 0U64 && self.arena.typeTermAt(index: child.term).assocNameId != 0U64 {
+                receiverOccurrence = child.occurrence
+            }
+            val inherited = match node.origin {
+                SourceTypeRecipeOrigin.InheritedTraitArgument => true,
+                SourceTypeRecipeOrigin.Authored => match child.origin {
+                    SourceTypeRecipeOrigin.InheritedTraitArgument => term.assocNameId != 0U64 && index != 0U64 && index <= term.assocTraitArgs.len,
+                    _ => false,
+                },
+                _ => false,
+            }
+            if inherited { inheritedProjection = true }
+            val childEdge = if inherited { give <AuthoredRecipeEdge.InheritedTraitArgument /> }
+              else if term.assocNameId != 0U64 && index == 0U64 { give <AuthoredRecipeEdge.ProjectionReceiver /> }
               else if index != 0U64 && index <= scopes.lexicalTraitArguments.count() && term.assocNameId != 0U64 && self.associatedProjectionTraitOwner(projection: self.arena.typeAt(index: node.term)) == scopes.lexicalTrait && self.typeRefEq(a: child.term, b: scopes.lexicalTraitArguments[index - 1U64]) { give <AuthoredRecipeEdge.LexicalTraitArgument /> }
               else if self.isFnType(ref: node.term) && index == 0U64 { give <AuthoredRecipeEdge.FunctionResult /> }
               else { give <AuthoredRecipeEdge.Source /> }
@@ -378,10 +394,10 @@ impl Comp {
             SourceTypeRecipeOrigin.Authored => {
                 val occurrence = try self.signatureOccurrence(id: node.occurrence)
                 if occurrence.scope == sourceScope {
-                    try self.admitSignatureOccurrence(id: node.occurrence, occurrence: occurrence, scope: scopes.local, assumptions: scopes.assumptions, receiverRef: scopes.receiver, receiverEquations: validation.receiverEquations, equations: inout equations, proofs: inout validation.proofs)
+                    try self.admitSignatureOccurrence(id: node.occurrence, occurrence: occurrence, scope: scopes.local, assumptions: scopes.assumptions, receiverRef: scopes.receiver, receiverEquations: validation.receiverEquations, equations: inout equations, proofs: inout validation.proofs, inheritedProjection: inheritedProjection, receiverOccurrence: receiverOccurrence)
                 } else {
                     val parent = <DeclarationTypeScope owner=scopes.local.owner parameters=validation.parentParameters selfParameter=validation.selfParameter />
-                    try self.admitSignatureOccurrence(id: node.occurrence, occurrence: occurrence, scope: parent, assumptions: scopes.inherited, receiverRef: scopes.receiver, receiverEquations: validation.receiverEquations, equations: inout equations, proofs: inout validation.proofs)
+                    try self.admitSignatureOccurrence(id: node.occurrence, occurrence: occurrence, scope: parent, assumptions: scopes.inherited, receiverRef: scopes.receiver, receiverEquations: validation.receiverEquations, equations: inout equations, proofs: inout validation.proofs, inheritedProjection: inheritedProjection, receiverOccurrence: receiverOccurrence)
                 }
             }
             _ => {}
@@ -1365,7 +1381,7 @@ impl Comp {
         return <Result.Ok value=() />
     }
 
-    inout fn admitSignatureOccurrence(id: U64, occurrence: AuthoredTypeUse, scope: DeclarationTypeScope, assumptions: Array[DeclarationBoundRef], receiverRef: U64, receiverEquations: Array[ProjectionNormalizationStep], equations: inout Array[ProjectionNormalizationStep], proofs: inout Array[AuthoredTypeViewProof]) -> Result[(), CompileDiagnostic] {
+    inout fn admitSignatureOccurrence(id: U64, occurrence: AuthoredTypeUse, scope: DeclarationTypeScope, assumptions: Array[DeclarationBoundRef], receiverRef: U64, receiverEquations: Array[ProjectionNormalizationStep], equations: inout Array[ProjectionNormalizationStep], proofs: inout Array[AuthoredTypeViewProof], inheritedProjection: Bool, receiverOccurrence: U64) -> Result[(), CompileDiagnostic] {
         try self.checkAuthoredTypeBinders(ref: occurrence.term, scope: scope, offset: occurrence.site)
         val type = self.arena.typeAt(index: occurrence.term)
         val receiver = if type.assocNameId == 0U64 { give occurrence.term } else { give self.typeTermProjectionReceiver(t: type) }
@@ -1385,6 +1401,9 @@ impl Comp {
         }
         if traitSelectors == 0U64 && type.assocNameId == 0U64 { return <Result.Ok value=() /> }
         val subject = if receiverRef != 0U64 { give self.groundTermInEnvironment(ref: receiver, params: [], values: [], selfRef: receiverRef) } else { give receiver }
+        val selectedProjection = if receiverOccurrence != 0U64 {
+            give <Optional.Some v=(try self.retainedSignatureReceiverProjection(occurrence: receiverOccurrence, ref: receiver, proofs: proofs, offset: occurrence.site)) />
+        } else { give <Optional.None /> }
         for selector in selectors {
             if selector.traitInstance.owner != 0U64 {
                 if self.decls.traitIndexByOffset(offset: selector.traitInstance.owner) >= self.decls.traitCount() { return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "authored view has no canonical trait owner", failureDomain: <FailureDomain.Internal />) /> }
@@ -1393,7 +1412,15 @@ impl Comp {
                     arguments = []
                     for argument in selector.traitInstance.positionalArgs { arguments.append(self.groundTermInEnvironment(ref: argument, params: [], values: [], selfRef: receiverRef)) }
                 }
-                val proof = match (try self.queryTraitPatternProof(demand: <ConformanceProofDemand.SourceAdmission />, baseRef: subject, traitId: 0U64, traitOwner: selector.traitInstance.owner, traitArgs: <PatternTypeInput.Values values=arguments />, patternParams: <PatternBindInput.Values values=[] />, assumptions: assumptions)) {
+                val isProjection = type.assocNameId != 0U64 && selector.traitInstance.owner == self.associatedProjectionTraitOwner(projection: type) && self.sameResolvedTypeRefs(a: selector.traitInstance.positionalArgs, b: type.assocTraitArgs)
+                mut val projectionAssumptions = assumptions
+                if inheritedProjection && isProjection {
+                    projectionAssumptions = []
+                    for assumption in assumptions {
+                        if self.isSignatureLexicalReceiver(source: assumption, scope: scope) { projectionAssumptions.append(assumption) }
+                    }
+                }
+                val proof = match (try self.queryTraitPatternProof(demand: <ConformanceProofDemand.SourceAdmission />, baseRef: subject, traitId: 0U64, traitOwner: selector.traitInstance.owner, traitArgs: <PatternTypeInput.Values values=arguments />, patternParams: <PatternBindInput.Values values=[] />, assumptions: projectionAssumptions, selectedProjection: selectedProjection)) {
                     ConformanceProofResult.Found(proof: val proof) => proof,
                     ConformanceProofResult.Missing => { return <Result.Err error=self.diagnosticAt(offset: selector.writtenStart, msg: "trait view requires a conformance for this receiver and exact trait instance (spec/09)", failureDomain: <FailureDomain.Source />) /> },
                     ConformanceProofResult.Ambiguous(owner: _, demand: _, selectedSource: _) => { return <Result.Err error=self.diagnosticAt(offset: selector.writtenStart, msg: "trait view does not have a unique conformance path (spec/09)", failureDomain: <FailureDomain.Source />) /> },
@@ -1402,9 +1429,12 @@ impl Comp {
                 for equation in receiverEquations { try self.appendRetainedProjectionEquation(step: equation, normalizations: inout context) }
                 try self.checkStaticProofEvidence(proof: proof, offset: occurrence.site, assumptions: assumptions)
                 try self.requireDeclarationProofSupport(dependencies: (try self.scopedProofDependencies(proof: proof, scope: scope, offset: occurrence.site, normalizations: context)), offset: occurrence.site)
+                if inheritedProjection && isProjection {
+                    try self.checkInheritedSignatureProjection(proof: proof, scope: scope, subject: subject, selector: <TraitInstanceKey owner=selector.traitInstance.owner positionalArgs=arguments />, offset: occurrence.site)
+                }
                 val frozen = self.freezeStaticConformanceProof(proof: proof)
                 proofs.append(<AuthoredTypeViewProof occurrence=id receiver=receiver selector=selector proof=frozen />)
-                if type.assocNameId != 0U64 && selector.traitInstance.owner == (if type.assocTraitDeclOffset != 0U64 { give type.assocTraitDeclOffset } else { give type.assocTraitStart }) && self.sameResolvedTypeRefs(a: selector.traitInstance.positionalArgs, b: type.assocTraitArgs) {
+                if isProjection {
                     val raw = self.groundTermInEnvironment(ref: occurrence.term, params: [], values: [], selfRef: receiverRef)
                     // Replay matches a projection after its children have
                     // consumed their saved equations, at admission and run.
@@ -1417,4 +1447,40 @@ impl Comp {
         }
         return <Result.Ok value=() />
     }
+    inout fn retainedSignatureReceiverProjection(occurrence: U64, ref: U64, proofs: Array[AuthoredTypeViewProof], offset: U64) -> Result[StaticConformanceProof, CompileDiagnostic] {
+        val projection = self.arena.typeAt(index: ref)
+        val receiver = self.typeTermProjectionReceiver(t: projection)
+        val owner = self.associatedProjectionTraitOwner(projection: projection)
+        for proof in proofs {
+            if proof.occurrence == occurrence && proof.selector.traitInstance.owner == owner && self.typeRefEq(a: proof.receiver, b: receiver) && self.sameResolvedTypeRefs(a: proof.selector.traitInstance.positionalArgs, b: projection.assocTraitArgs) {
+                return <Result.Ok value=self.thawStaticConformanceProof(id: proof.proof) />
+            }
+        }
+        return <Result.Err error=self.diagnosticAt(offset: offset, msg: "signature projection receiver has no retained occurrence proof", failureDomain: <FailureDomain.Internal />) />
+    }
+
+    // The derived arguments are structural children of this exact projection.
+    // Only the declaring signature's own Self premise authorizes those terms.
+    inout fn checkInheritedSignatureProjection(proof: StaticConformanceProof, scope: DeclarationTypeScope, subject: U64, selector: TraitInstanceKey, offset: U64) -> Result[(), CompileDiagnostic] {
+        val premise = self.signatureProjectionPremise(proof: proof)
+        if premise.steps.count() != 0U64 && premise.source.isSome() {
+            val source = premise.source.unwrap()
+            if self.isSignatureLexicalReceiver(source: source, scope: scope) {
+                val terminal = self.assumedSupertraitBound(source: source, steps: premise.steps)
+                if self.typeRefEq(a: terminal.subject, b: subject) && terminal.constraint.key.owner == selector.owner && self.sameResolvedTypeRefs(a: terminal.constraint.key.positionalArgs, b: selector.positionalArgs) { return <Result.Ok value=() /> }
+            }
+        }
+        return <Result.Err error=self.diagnosticAt(offset: offset, msg: "inherited signature arguments have no matching lexical supertrait path", failureDomain: <FailureDomain.Internal />) />
+    }
+
+    fn isSignatureLexicalReceiver(source: DeclarationBoundRef, scope: DeclarationTypeScope) -> Bool {
+        match source {
+            DeclarationBoundRef.RawRequirement(index: val index) => {
+                return self.rawRequirementRanges.getOr(key: scope.owner, fallback: <SourceBoundRange />).first == index + 1U64
+            }
+            DeclarationBoundRef.MethodReceiver(index: val index) => { return index == scope.owner }
+            _ => { return false }
+        }
+    }
+
 }

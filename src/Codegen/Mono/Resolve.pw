@@ -389,7 +389,7 @@ pub impl Comp {
         }
     }
 
-    inout fn queryTraitPatternProof(demand: ConformanceProofDemand, baseRef: U64, traitId: U64, traitOwner: U64, traitArgs: PatternTypeInput, patternParams: PatternBindInput, traitArgsOpen: Bool = false, assocNames: Array[U64] = [], assocValues: Array[U64] = [], assumptions: Array[DeclarationBoundRef] = [], sourceOwners: Array[U64] = []) -> Result[ConformanceProofResult, CompileDiagnostic] {
+    inout fn queryTraitPatternProof(demand: ConformanceProofDemand, baseRef: U64, traitId: U64, traitOwner: U64, traitArgs: PatternTypeInput, patternParams: PatternBindInput, traitArgsOpen: Bool = false, assocNames: Array[U64] = [], assocValues: Array[U64] = [], assumptions: Array[DeclarationBoundRef] = [], sourceOwners: Array[U64] = [], selectedProjection: Optional[StaticConformanceProof] = <Optional.None />) -> Result[ConformanceProofResult, CompileDiagnostic] {
         // Omitted inputs are fully known for a zero-arity declaration. An
         // internal open-input probe must not turn its exact empty instance
         // into an unresolved pattern or discard an opaque authored premise.
@@ -402,12 +402,12 @@ pub impl Comp {
         if self.arena.typeAt(index: baseRef).assocNameId == 0U64 { return self.traitPatternProofFromFacts(demand: demand, baseRef: baseRef, traitId: traitId, traitOwner: traitOwner, traitArgs: traitArgs, patternParams: patternParams, traitArgsOpen: openArguments, assocNames: assocNames, assocValues: assocValues, assumptions: assumptions, sourceOwners: sourceOwners) }
         for val active in self.activeProjectionProofs { if self.typeRefEq(a: active, b: baseRef) { return self.traitPatternProofFromFacts(demand: demand, baseRef: baseRef, traitId: traitId, traitOwner: traitOwner, traitArgs: traitArgs, patternParams: patternParams, traitArgsOpen: openArguments, assocNames: assocNames, assocValues: assocValues, assumptions: assumptions, sourceOwners: sourceOwners) } }
         self.activeProjectionProofs.append(baseRef)
-        val result = self.projectedTraitPatternProof(demand: demand, baseRef: baseRef, traitId: traitId, traitOwner: traitOwner, traitArgs: traitArgs, patternParams: patternParams, traitArgsOpen: openArguments, assocNames: assocNames, assocValues: assocValues, assumptions: assumptions, sourceOwners: sourceOwners)
+        val result = self.projectedTraitPatternProof(demand: demand, baseRef: baseRef, traitId: traitId, traitOwner: traitOwner, traitArgs: traitArgs, patternParams: patternParams, traitArgsOpen: openArguments, assocNames: assocNames, assocValues: assocValues, assumptions: assumptions, sourceOwners: sourceOwners, selectedProjection: selectedProjection)
         self.activeProjectionProofs.removeLast()
         return result
     }
 
-    inout fn projectedTraitPatternProof(demand: ConformanceProofDemand, baseRef: U64, traitId: U64, traitOwner: U64, traitArgs: PatternTypeInput, patternParams: PatternBindInput, traitArgsOpen: Bool = false, assocNames: Array[U64] = [], assocValues: Array[U64] = [], assumptions: Array[DeclarationBoundRef] = [], sourceOwners: Array[U64] = []) -> Result[ConformanceProofResult, CompileDiagnostic] {
+    inout fn projectedTraitPatternProof(demand: ConformanceProofDemand, baseRef: U64, traitId: U64, traitOwner: U64, traitArgs: PatternTypeInput, patternParams: PatternBindInput, traitArgsOpen: Bool = false, assocNames: Array[U64] = [], assocValues: Array[U64] = [], assumptions: Array[DeclarationBoundRef] = [], sourceOwners: Array[U64] = [], selectedProjection: Optional[StaticConformanceProof] = <Optional.None />) -> Result[ConformanceProofResult, CompileDiagnostic] {
         // An explicitly assumed projected constraint is already evidence for
         // that subject. Requiring the projection's parent conformance first
         // would lose a valid `where T#Parser.Output: Mark` premise. Schema-
@@ -424,10 +424,17 @@ pub impl Comp {
         val declarationIndex = self.decls.traitIndexByOffset(offset: owner)
         if declarationIndex >= self.decls.traitCount() { return <Result.Ok value=<ConformanceProofResult.Missing /> /> }
         val declaration = self.decls.traitAt(index: declarationIndex)
-        val prerequisiteAnswer = (try self.queryTraitPatternProof(demand: demand, baseRef: receiver, traitId: declaration.nameId, traitOwner: owner, traitArgs: <PatternTypeInput.Values values=projection.assocTraitArgs />, patternParams: <PatternBindInput.Values values=[] />, assumptions: assumptions))
-        val prerequisite = match prerequisiteAnswer {
-            ConformanceProofResult.Found(proof: val proof) => proof,
-            ConformanceProofResult.Missing | ConformanceProofResult.Ambiguous(owner: _, demand: _, selectedSource: _) => { return <Result.Ok value=prerequisiteAnswer /> },
+        val prerequisite = if selectedProjection.isSome() {
+            val selected = selectedProjection.unwrap()
+            val expected = <TraitBound subject=receiver constraint=<TraitConstraint key=<TraitInstanceKey owner=owner positionalArgs=projection.assocTraitArgs /> assocPredicates=[] /> offset=projection.siteOffset />
+            try self.checkRetainedWitnessClause(expected: expected, proof: selected, normalizations: [], offset: projection.siteOffset, assumptions: assumptions)
+            give selected
+        } else {
+            give match (try self.queryTraitPatternProof(demand: demand, baseRef: receiver, traitId: declaration.nameId, traitOwner: owner, traitArgs: <PatternTypeInput.Values values=projection.assocTraitArgs />, patternParams: <PatternBindInput.Values values=[] />, assumptions: assumptions)) {
+                ConformanceProofResult.Found(proof: val proof) => { give proof }
+                ConformanceProofResult.Missing => { return <Result.Ok value=<ConformanceProofResult.Missing /> /> }
+                ConformanceProofResult.Ambiguous(owner: val owner, demand: val demand, selectedSource: val source) => { return <Result.Ok value=<ConformanceProofResult.Ambiguous owner=owner demand=demand selectedSource=source /> /> }
+            }
         }
         val output = (try self.associatedOutputInProof(proof: prerequisite, traitOwner: owner, assocId: projection.assocNameId))
         if output != 0U64 && !self.typeRefEq(a: output, b: baseRef) {

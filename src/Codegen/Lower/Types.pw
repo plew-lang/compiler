@@ -226,15 +226,21 @@ pub impl Comp {
                 for edge in 0U64..<header.supertraits.count() {
                     val constraint = self.traitConstraintAt(constraints: header.supertraits, index: edge)
                     mut val arguments: Array[U64] = []
-                    for argument in constraint.key.positionalArgs {
-                        arguments.append(self.groundTermInEnvironment(ref: argument, params: header.parameters, values: instance.positionalArgs, selfRef: receiver))
+                    if constraint.key.positionalArgs.count() != 0U64 {
+                        mut val parameters = header.parameters
+                        mut val values = instance.positionalArgs
+                        self.appendTraitSelfBinder(scope: inout parameters, owner: instance.owner)
+                        values.append(receiver)
+                        for argument in constraint.key.positionalArgs {
+                            arguments.append(self.groundTermInEnvironment(ref: argument, params: parameters, values: values, selfRef: receiver))
+                        }
                     }
                     mut val visited = false
                     for prior in instances {
                         if prior.owner == constraint.key.owner && self.sameResolvedTypeRefs(a: prior.positionalArgs, b: arguments) { visited = true break }
                     }
                     if !visited {
-                        if instances.count() >= 128U64 { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "inherited associated-type analysis limit exceeded", failureDomain: <FailureDomain.Source />) /> }
+                        if instances.count() >= 128U64 { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "inherited associated-type analysis limit exceeded", failureDomain: <FailureDomain.Limit />) /> }
                         instances.append(<TraitInstanceKey owner=constraint.key.owner positionalArgs=arguments />)
                     }
                 }

@@ -1183,3 +1183,42 @@ The construction path now propagates name-binding diagnostics through its
 existing Result callers. Three range/construction controls passed check,
 JIT and native. Same-source medians were 6.737422 s and 6.746021 s. The
 LLVM diff was limited to type-reference numbers in generic body symbols.
+
+## Retained inherited trait arguments
+
+The two-edge requirement fixture selects `Parent[Array[I64]]` through
+`Middle[I64]` while the conformer also has `Parent[Array[Bool]]`. The
+previous carrier `634efb21` classified the inherited argument as a direct
+lexical parameter and refused its recipe. An intermediate candidate exposed
+two further failures: `Parent[Self]` kept the intermediate trait's Self
+binder, and repeating the inherited premise in a requirement where-clause
+made source admission pick the raw where-clause for a projected receiver.
+
+Inherited argument recipes now describe the structure of the chosen
+instance. Admission requires their parent projection to follow the exact
+lexical Self supertrait path, and checks its terminal receiver, owner and
+all positional arguments. Lexical Self is substituted along with the
+declared parameters at each edge. When an authored projection is itself a
+projection's receiver, its saved occurrence proof supplies the prerequisite
+to source admission. A direct where premise on the projected subject still
+has its existing authority.
+
+Build `20261112T200136-build-0f3655`, candidate `475f6a5c`, and generation
+`20261112T200421-gen-f03e11` passed. Eleven tracked fixtures and two
+parameterized provided/interface controls passed check, JIT, and native
+execution. The wrong-instance witness and wrong result were rejected.
+
+A parent positional argument containing a projection still fails at trait
+view admission. The control uses
+`Middle[T]: Parent[Array[Self#Marker.Type]] + Marker[Type=T]`. Its
+declarations and conformances check without the requirement signature.
+Both the bare inherited form and the explicit
+`Wrapper[Self#Parent[Array[Self#Marker.Type]].Input]#Select.Value` form
+fail once used in the signature. This contrast isolates the remaining
+argument-normalization handoff; the failure is shared with explicit
+projection, rather than a missing bare-name candidate. The value-AST
+adapter still needs an order-independent header preparation and its own
+producer/consumer check before independent completion review.
+
+Same-source self-compile medians were 6.767873 s and 6.767579 s.
+All eight LLVM outputs matched.

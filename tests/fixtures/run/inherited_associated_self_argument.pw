@@ -1,0 +1,21 @@
+use @Std/Io only { print }
+
+trait Source { type Item }
+trait Service: Middle[I64] { fn fetch(value: Input#Source.Item) -> Input#Source.Item }
+
+trait Middle[Element]: Parent[Self] {}
+trait Parent[Context] { type Input: Source }
+
+struct Entry {}
+impl Entry as Source { type Item = I64 }
+struct OtherEntry {}
+impl OtherEntry as Source { type Item = Bool }
+struct Worker {}
+impl Worker as Parent[Array[Bool]] { type Input = OtherEntry }
+impl Worker as Parent[Worker] { type Input = Entry }
+impl Worker as Middle[I64] {}
+impl Worker as Service { fn fetch(value: I64) -> I64 { return value } }
+
+fn main() {
+    print(<Worker />.fetch(value: 42I64))
+}

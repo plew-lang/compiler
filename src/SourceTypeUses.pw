@@ -52,7 +52,7 @@ pub impl SourceTypeScope { factory }
 
 // A derived node is structural provenance, never source admission authority.
 // Authored nodes instead identify exactly one immutable source occurrence.
-pub enum SourceTypeRecipeOrigin { Authored ProjectionReceiver BoundSelection ResultRepresentation LexicalParameter }
+pub enum SourceTypeRecipeOrigin { Authored ProjectionReceiver BoundSelection ResultRepresentation LexicalParameter InheritedTraitArgument }
 pub struct SourceTypeRecipe {
     pub val term: U64
     pub val children: Array[U64]

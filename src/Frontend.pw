@@ -367,7 +367,7 @@ enum ProjectionBoundState {
     Ready(bound: PreparedProjectionBound)
     Failed(diagnostic: CompileDiagnostic)
 }
-enum AuthoredRecipeEdge { Source ProjectionReceiver FunctionResult LexicalTraitArgument }
+enum AuthoredRecipeEdge { Source ProjectionReceiver FunctionResult LexicalTraitArgument InheritedTraitArgument }
 struct SignatureRecipeValidation {
     val parentScope: U64 = 0U64
     val parentParameters: FuncBindRange = <FuncBindRange start=0U64 len=0U64 />
