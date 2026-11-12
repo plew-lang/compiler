@@ -2425,7 +2425,7 @@ pub impl Comp {
         val scope = try self.requireAdmittedRawRequirement(traitIndex: evidence.traitIdx, slot: requirement, offset: requested.defOffset)
         val environment = self.requirementSignatureEnvironment(bound: bound, traitIndex: evidence.traitIdx)
         mut val memo: Dictionary[U64, AuthoredRecipeRead] = [:]
-        val sourceResult = self.callableResultSlot(ref: (try self.readRequirementResult(interface: <RequirementSignatureRead scope=scope bound=bound />, environment: environment, memo: inout memo)))
+        val sourceResult = self.callableResultSlot(ref: (try self.readRequirementResult(interface: <RequirementSignatureRead scope=scope bound=bound evidence=<RequirementSelfEvidence.Static proof=evidence.proof /> />, environment: environment, memo: inout memo)))
         mut val conversion = <ValueConversionProof.Identity />
         if sourceResult != 0U64 || signature.resultType != 0U64 {
             conversion = try self.callArgumentConversion(sourceRef: sourceResult, targetRef: signature.resultType, knownBox: <Optional.Some v=evidence />)

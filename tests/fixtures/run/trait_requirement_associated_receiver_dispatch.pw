@@ -1,0 +1,45 @@
+use @Std/Io only { print }
+
+trait Source { type Item }
+trait Number { fn number() -> I64 }
+struct Payload {}
+impl Payload as Number { fn number() -> I64 { return 42I64 } }
+struct Entry {}
+impl Entry as Source { type Item = Payload }
+
+trait Service {
+    type Input: Source
+    fn fetch(value: Input#Source.Item) -> Input#Source.Item where Input#Source.Item: Number
+    fn fetchDefault(value: Input#Source.Item) -> Input#Source.Item
+}
+
+struct Worker {}
+impl Worker as Service {
+    type Input = Entry
+    fn fetch(value: Payload) -> Payload { return value }
+    fn fetchDefault(value: Payload, enabled: Bool = true) -> Payload { return value }
+}
+
+trait Bridge {}
+struct Conferred {}
+impl Conferred as Bridge {}
+pub impl Bridge as Service {
+    type Input = Entry
+    fn fetch(value: Payload) -> Payload { return value }
+    fn fetchDefault(value: Payload) -> Payload { return value }
+}
+
+fn generic[Receiver](receiver: Receiver) -> I64 where Receiver: Service[Input=Entry] {
+    return receiver.fetch(value: <Payload />).number()
+}
+
+fn erased(receiver: any Service[Input=Entry]) -> I64 {
+    return receiver.fetch(value: <Payload />).number()
+}
+
+fn main() {
+    print(generic(receiver: <Worker />))
+    print(erased(receiver: <Worker />))
+    print(generic(receiver: <Conferred />))
+    print(erased(receiver: <Conferred />))
+}

@@ -420,6 +420,12 @@ struct RequirementSignatureRead {
 }
 impl RequirementSignatureRead { factory }
 
+struct FixedRequirementAssociatedProof {
+    val bound: TraitBound
+    val proof: U64
+}
+impl FixedRequirementAssociatedProof { factory }
+
 struct SignatureProjectionPremise {
     val source: Optional[DeclarationBoundRef] = <Optional.None />
     val steps: Array[SupertraitRef] = []
@@ -641,6 +647,7 @@ pub struct Comp {
     // remaining signature/field uses. Synthetic types are not new source uses.
     // Provenance prefix only: not yet the admission/consumer receipt channel.
     pub mut val sourceTypeUses: SourceTypeUses = <SourceTypeUses />
+    mut val fixedRequirementAssociatedProofs: Dictionary[U64, Array[FixedRequirementAssociatedProof]] = [:]
     mut val rawRequirementPremises: Array[RawRequirementPremise] = []
     mut val rawRequirementRanges: Dictionary[U64, SourceBoundRange] = [:]
     mut val authoredRequirementViews: Dictionary[U64, AuthoredRequirementSignature] = [:]

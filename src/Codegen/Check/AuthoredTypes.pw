@@ -852,31 +852,26 @@ impl Comp {
                 return self.readSelectedSignatureProjection(bound: bound, selected: <Optional.None />, receiver: receiver, selector: selector, arguments: arguments, member: member, offset: offset)
             }
         }
-        match interface.evidence {
-            RequirementSelfEvidence.Conformance(index: val conformance) => {
-                if premise.source.isSome() {
-                    match premise.source.unwrap() {
-                        DeclarationBoundRef.AssociatedType(index: val index) => {
-                            val retained = try self.conformanceSignatureAssociatedClause(index: index, conformance: conformance, scope: interface.scope, offset: offset)
-                            if retained.isSome() {
-                                val row = retained.unwrap()
-                                val bound = try self.replayBoundNormalizations(bound: row.bound, normalizations: row.normalizations)
-                                val selected = self.thawStaticConformanceProof(id: row.proof)
-                                return self.readSelectedSignatureProjection(bound: bound, selected: <Optional.Some v=selected />, receiver: receiver, selector: selector, arguments: arguments, member: member, offset: offset)
-                            }
-                        }
-                        _ => {}
+        if premise.source.isSome() {
+            match premise.source.unwrap() {
+                DeclarationBoundRef.AssociatedType(index: val index) => {
+                    val selected = try self.readRequirementAssociatedProof(index: index, steps: premise.steps, signature: interface, receiver: receiver, environment: environment, offset: offset)
+                    if selected.isSome() {
+                        val proof = selected.unwrap()
+                        val expected = <TraitBound subject=receiver constraint=<TraitConstraint key=<TraitInstanceKey owner=selector.traitInstance.owner positionalArgs=arguments /> assocPredicates=[] /> offset=offset />
+                        try self.checkRetainedWitnessClause(expected: expected, proof: proof, normalizations: (try self.retainedProofProjectionContext(proof: proof)), offset: offset)
+                        return self.associatedOutputInProof(proof: proof, traitOwner: selector.traitInstance.owner, assocId: member)
                     }
                 }
+                _ => {}
             }
-            _ => {}
         }
         // An admitted equation may leave its output symbolic. It does not
         // authorize discovering another witness after erasure.
         return self.readLexicalSignatureProjection(proof: proof, owner: selector.traitInstance.owner, member: member, environment: environment)
     }
 
-    inout fn conformanceSignatureAssociatedClause(index: U64, conformance: U64, scope: U64, offset: U64) -> Result[Optional[ConformanceAssociatedEvidence], CompileDiagnostic] {
+    inout fn readRequirementAssociatedProof(index: U64, steps: Array[SupertraitRef], signature: RequirementSignatureRead, receiver: U64, environment: InstanceEnvironment, offset: U64) -> Result[Optional[StaticConformanceProof], CompileDiagnostic] {
         if index >= self.arena.associatedBoundEvidenceCount() {
             return <Result.Err error=self.diagnosticAt(offset: offset, msg: "requirement has no retained associated clause", failureDomain: <FailureDomain.Internal />) />
         }
@@ -885,15 +880,61 @@ impl Comp {
         if prerequisite.source.isNone() || prerequisite.steps.count() != 0U64 { return <Result.Ok value=<Optional.None /> /> }
         match prerequisite.source.unwrap() {
             DeclarationBoundRef.RawRequirement(index: val root) => {
-                if root + 1U64 == self.rawRequirementRanges[scope].first {
-                    val row = self.arena.conformanceAssociatedClause(conformance: conformance, clause: associated.clause)
-                    if row.isNone() { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "conformance signature lost its associated clause evidence", failureDomain: <FailureDomain.Internal />) /> }
-                    return <Result.Ok value=row />
+                if root + 1U64 != self.rawRequirementRanges[signature.scope].first { return <Result.Ok value=<Optional.None /> /> }
+            }
+            _ => { return <Result.Ok value=<Optional.None /> /> }
+        }
+        if steps.count() != 0U64 { return <Result.Ok value=<Optional.None /> /> }
+
+        match signature.evidence {
+            RequirementSelfEvidence.Conformance(index: val conformance) => {
+                val row = self.arena.conformanceAssociatedClause(conformance: conformance, clause: associated.clause)
+                if row.isNone() { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "conformance signature lost its associated clause evidence", failureDomain: <FailureDomain.Internal />) /> }
+                return <Result.Ok value=<Optional.Some v=self.thawStaticConformanceProof(id: row.unwrap().proof) /> />
+            }
+            RequirementSelfEvidence.Static(proof: val proof) => {
+                if self.selectedConstraintWitness(proof: proof).isSome() {
+                    val selected = try self.retainedConstraintPrefix(proof: proof, expected: signature.bound, normalizations: [])
+                    val projection = self.groundTermInEnvironment(ref: associated.projection, params: environment.params, values: environment.args, selfRef: environment.receiverRef)
+                    match (try self.replaySelectedAssociatedConstraint(index: index, selected: selected, projectionRef: projection, receiverRef: receiver, context: <Optional.None />, inherited: [])) {
+                        ConstraintProofReplay.Concrete(proof: val concrete) => { return <Result.Ok value=<Optional.Some v=concrete /> /> }
+                        ConstraintProofReplay.Deferred => { return <Result.Ok value=<Optional.None /> /> }
+                        _ => { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "static requirement lost its associated clause evidence", failureDomain: <FailureDomain.Internal />) /> }
+                    }
                 }
             }
-            _ => {}
+            RequirementSelfEvidence.Interface => {}
+        }
+        if !self.arena.typeIsClosed(ref: receiver) { return <Result.Ok value=<Optional.None /> /> }
+        // A caller-fixed associated value is independently known even when
+        // the requirement's Self witness is abstract or erased.
+        val clause = self.decls.traitAssociatedBoundPool[associated.clause]
+        for predicate in signature.bound.constraint.assocPredicates {
+            if predicate.member == clause.member && self.typeRefEq(a: predicate.value, b: receiver) {
+                val traitIndex = self.decls.traitIndexByOffset(offset: signature.bound.constraint.key.owner)
+                val constraint = self.traitConstraintInBound(constraint: clause.constraint, bound: signature.bound, traitIndex: traitIndex)
+                return self.admitFixedRequirementAssociatedProof(index: index, bound: <TraitBound subject=receiver constraint=constraint offset=offset />)
+            }
         }
         return <Result.Ok value=<Optional.None /> />
+    }
+
+    inout fn admitFixedRequirementAssociatedProof(index: U64, bound: TraitBound) -> Result[Optional[StaticConformanceProof], CompileDiagnostic] {
+        for argument in bound.constraint.key.positionalArgs { if !self.arena.typeIsClosed(ref: argument) { return <Result.Ok value=<Optional.None /> /> } }
+        for predicate in bound.constraint.assocPredicates { if !self.arena.typeIsClosed(ref: predicate.value) { return <Result.Ok value=<Optional.None /> /> } }
+        mut val receipts = self.fixedRequirementAssociatedProofs.getOr(key: index, fallback: [])
+        for receipt in receipts {
+            if self.typeRefEq(a: receipt.bound.subject, b: bound.subject) && self.sameTraitConstraint(a: receipt.bound.constraint, b: bound.constraint) {
+                val proof = self.thawStaticConformanceProof(id: receipt.proof)
+                if self.proofIsMissing(proof: proof) { return <Result.Err error=self.diagnosticAt(offset: bound.offset, msg: "fixed requirement lost its admitted associated proof", failureDomain: <FailureDomain.Internal />) /> }
+                return <Result.Ok value=<Optional.Some v=proof /> />
+            }
+        }
+        val proof = try self.viewedTraitConstraintProof(demand: <ConformanceProofDemand.SourceAdmission />, ref: bound.subject, constraint: bound.constraint)
+        if self.proofIsMissing(proof: proof) { return <Result.Err error=self.diagnosticAt(offset: bound.offset, msg: "fixed associated type does not satisfy its declared trait constraint", failureDomain: <FailureDomain.Source />) /> }
+        receipts.append(<FixedRequirementAssociatedProof bound=bound proof=self.freezeStaticConformanceProof(proof: proof) />)
+        self.fixedRequirementAssociatedProofs[index] = receipts
+        return <Result.Ok value=<Optional.Some v=proof /> />
     }
 
     inout fn readRequirementBounds(signature: RequirementSignatureRead, methodArguments: Array[U64]) -> Result[Array[TraitBound], CompileDiagnostic] {

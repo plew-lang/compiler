@@ -798,3 +798,35 @@ witness-signature and source-call-constraint boundaries, respectively.
 Preserve a fixed associated receiver's projection proof in those readers
 and keep hidden Self abstract. The inherited where-equation proof-removal
 case also remains before independent closure review.
+
+## Fixed associated receivers in dispatch
+
+When a requirement proof derives from a clause on the raw requirement's own
+Self, a caller-fixed associated receiver may have a closed proof independently
+of Self. Admit that exact associated clause once per source proof and
+substituted bound. The key includes receiver identity and the full trait
+constraint. Preserve the frozen proof across public signature and where
+reads. A concrete selected Self instead replays its conformance's saved
+associated clause. Existential witness source results use that concrete
+proof, while the public signature uses its fixed associated binding.
+Replaying a concrete trait-subject conformance retains the path prefix
+through its selected trait. Treating only its terminal edge as a nominal
+witness reproduced a declaration-subject error in intermediate candidate
+`bd1493b1`.
+
+`trait_requirement_associated_receiver_dispatch` fails on `015ad2cc`
+when a second call uses the projected result. It passes check/JIT/native
+on `25141343`, printing 42 for generic and existential calls with both
+a direct conformance and a conferred conformance. The separate result
+and where probes now pass check. Removing the generic associated binding
+still rejects the call. Build `20261112T170502-build-cb56a3`, generation
+`20261112T171046-gen-d462b9`, eight targeted check/native fixtures and
+six public JIT fixtures passed. Same-source medians were 6.660946 s and
+6.657577 s, with byte-identical LLVM in all eight samples.
+
+Next, close the remaining inherited where-equation path under proof
+removal. Resolve only the original recipe inputs that the saved path uses.
+Keep the existing controls where an unused sibling equation or argument
+mentions the inherited output. Check other inherited associated-premise
+paths during independent review rather than generalizing the direct-path
+validation to them without evidence.
