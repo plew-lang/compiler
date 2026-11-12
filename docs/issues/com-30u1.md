@@ -730,3 +730,36 @@ already show that an unrelated associated predicate or positional
 argument can mention the inherited output itself when the parent output
 is constant. Do not eagerly read those unrelated source expressions
 while resolving that output.
+
+## Associated receiver replay diagnosis
+
+On `a5a75c3d`, substituting `Input = Entry` into
+`Input#Source.Item` reaches `Entry#Source.Item` during the implementation
+comparison, but the raw type comparator has no evidence to reduce it.
+`checkConformances` checks method bounds before it publishes the
+conformance's associated-clause rows. Its separate completeness scan also
+matches raw parameter types, and callable-form preparation calls the same
+raw parameter matcher before either step.
+
+An isolated compiler copy prepared the existing associated-clause rows
+first, read the original requirement recipes, and selected the row by
+the saved raw Self prerequisite and associated clause ID. It accepted
+the declaration and static call with an I64 result, continued to reject
+a Bool implementation, and accepted the declaration and static call with
+`where Input#Source.Item: Number` after the clause was read the same way.
+The experiment did not replace the earlier parameter matcher: an I64
+parameter implementing `Input#Source.Item` still failed completeness.
+The existential result case reached witness-signature comparison. The
+existential where case reached `prepareCallTemplateConstraints` and
+rejected the projected bound there. These are distinct from source
+admission and the concrete conformance comparison.
+
+Implement the shared requirement interpretation for parameter matching,
+result validation and translated where clauses, with the relevant
+associated-clause evidence prepared before comparison. Follow the retained
+prerequisite and clause for a concrete conformance. For an erased
+interface, distinguish a caller-fixed associated receiver from hidden
+Self and preserve the resulting proof in the interface's own scope.
+Exercise the positive and mismatching declaration controls, then both
+static and existential calls. The isolated experiment is diagnostic
+evidence and was not installed in the compiler.
