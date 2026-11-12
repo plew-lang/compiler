@@ -2,7 +2,7 @@
 id: com-30u1
 status: in_progress
 deps: []
-links: []
+links: [com-5wze]
 created: 2026-11-09T08:54:16Z
 type: task
 priority: 1
@@ -1260,3 +1260,66 @@ are evidence for the next implementation step.
 
 Same-source medians were 6.794694 s and 6.791139 s. All eight LLVM
 outputs matched.
+
+## Inherited positional argument equations
+
+The fixed carrier `5c1b2723` rejected the new bare
+`inherited_associated_implicit_projected_argument` fixture. Source
+admission now records the positional arguments' equations under the
+lexical Self premise, validates their retained proof and dependencies,
+and stores them on the exact selected occurrence. Signature reading
+substitutes and replays those equations before comparing the selected
+parent instance. In a fault probe, removing only the stored argument
+equations reproduced `signature projection changed its selected trait
+instance` after source admission.
+
+Candidate `65210d55`, build `20261112T201914-build-06f7bd`, and generation
+`20261112T202203-gen-8ca511` passed. Thirteen public cases passed check,
+JIT and native execution, including explicit and implicit argument
+projections and the competing parent instances.
+
+The variant where `Marker.Type` is supplied only by the concrete impl
+still rejects before reaching signatures. A reduced zero-requirement
+case rejects on both candidates, and a declared-equality control passes.
+The general supertrait conformance producer is tracked under
+[com-5wze](com-5wze.md), a required child of com-amjl.
+
+Same-source medians for `5c1b2723` and `65210d55` were 6.789172 s and
+6.803407 s. The LLVM diff was limited to the type-reference numbers in
+generic body symbols.
+
+### Independent review and follow-up
+
+The independent completion review of `65210d55` confirmed the implicit
+projected-argument RED/GREEN, the inherited default and fixed-instance
+native controls, the restored interface result, and the original
+wrong-instance, sibling-premise, unknown-where and conflicting-parent
+rejections. It found two additional source failures in this ticket:
+
+- `Service: Middle + Parent[I64]` with
+  `Middle: Parent[Self#Marker.Type] + Marker[Type=I64]` rejects bare
+  `Item` as ambiguous. The paths select the same instance after the
+  equality. The qualified control checks and executes. A distinct
+  `Parent[Bool]` is a valid ambiguity control.
+- Adding `Loose: Marker` to the same inherited premises gives an
+  order-dependent result: `Loose + Middle` rejects the bare projection;
+  `Middle + Loose` and the qualified form check. The recorder takes the
+  first existence proof rather than the equality justifying the selected
+  argument. The owner and instance must be selected using declared
+  equations, with the matching equation derivation retained for reading.
+
+The reviewer also identified a presence-only check on stored proof IDs.
+A local mutation replaced the inner equation's proof with the parent
+projection's unrelated valid proof. The previous reader accepted it.
+The updated reader checks the equation against the exact lexical root,
+receiver, trait and output before substituting it. The same mutated
+probe now rejects with `selected condition projection evidence has a
+different receiver or trait`; the unmodified probe passes.
+
+The integrity revision built as `20261112T202603-build-2293d9` and
+candidate `8d309dc7`. Generation `20261112T202853-gen-da9e04` passed.
+All thirteen public fixtures and two implicit projected-argument
+provided/existential controls passed check, JIT and native. Same-source
+medians against `5c1b2723` were 6.783960 s and 6.787218 s. The LLVM diff
+was confined to type-reference numbers in generic body symbols.
+The ticket remains open for both independently reproduced lexical cases.
