@@ -74,6 +74,7 @@ pub impl Comp {
             DeclarationBoundRef.MethodReceiver(val index) => { return self.hasMethodReceiverAssumption(function: index) }
             DeclarationBoundRef.Requirement(val index) => { return index < self.arena.requirementBoundEvidenceCount() }
             DeclarationBoundRef.Interface(val index) => { return self.interfaceEvidenceIsValid(index: index) }
+            DeclarationBoundRef.RawRequirement(val index) => { return index < self.rawRequirementPremises.count() }
         }
     }
 
@@ -97,6 +98,7 @@ pub impl Comp {
             DeclarationBoundRef.AssociatedType(val index) => { return self.arena.associatedBoundEvidenceAt(index: index).bound }
             DeclarationBoundRef.Requirement(val index) => { return self.arena.requirementBoundEvidenceAt(index: index).bound }
             DeclarationBoundRef.Interface(val index) => { return self.interfaceEvidenceBound(index: index) }
+            DeclarationBoundRef.RawRequirement(val index) => { return self.rawRequirementPremises[index].bound }
             DeclarationBoundRef.MethodReceiver(val index) => {
                 val function = self.arena.functionAt(index: index)
                 return <TraitBound subject=function.recvTy constraint=<TraitConstraint key=<TraitInstanceKey owner=function.recvStart positionalArgs=self.copyFuncTypes(types: function.recvTraitArgs) /> positionalArgsOpen=false assocPredicates=[] /> offset=function.defOffset />
@@ -123,6 +125,9 @@ pub impl Comp {
             }
             DeclarationBoundRef.Requirement(index: val left) => {
                 match b { DeclarationBoundRef.Requirement(index: val right) => { return left == right } _ => { return false } }
+            }
+            DeclarationBoundRef.RawRequirement(index: val left) => {
+                match b { DeclarationBoundRef.RawRequirement(index: val right) => { return left == right } _ => { return false } }
             }
             DeclarationBoundRef.Interface(index: val left) => {
                 match b { DeclarationBoundRef.Interface(index: val right) => { return left == right } _ => { return false } }

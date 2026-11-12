@@ -3,7 +3,7 @@
 
 
 impl Comp {
-    inout fn bindAuthoredRequirementScope(scope: U64, traitIndex: U64, slot: U64, site: U64) -> Result[(), CompileDiagnostic] {
+    inout fn bindAuthoredRequirementScope(signature: LoweredSourceSignature, traitIndex: U64, slot: U64, site: U64) -> Result[(), CompileDiagnostic] {
         if traitIndex >= self.decls.traitCount() {
             return <Result.Err error=self.diagnosticAt(offset: site, msg: "invalid authored requirement trait", failureDomain: <FailureDomain.Internal />) />
         }
@@ -11,8 +11,9 @@ impl Comp {
         if slot >= declaration.reqs.len {
             return <Result.Err error=self.diagnosticAt(offset: site, msg: "invalid authored requirement slot", failureDomain: <FailureDomain.Internal />) />
         }
+        val scope = signature.scope
         val origin = self.sourceTypeUses.scopeAt(token: scope)
-        if origin.isNone() || origin.unwrap().anchor != self.traitReqAt(reqs: declaration.reqs, index: slot).defOffset || !self.sourceTypeUses.bindRequirement(token: scope, traitOwner: declaration.nameStart, requirement: <SourceRequirementOwner traitIndex=traitIndex slot=slot />) {
+        if origin.isNone() || origin.unwrap().anchor != self.traitReqAt(reqs: declaration.reqs, index: slot).defOffset || !self.sourceTypeUses.bindRequirement(token: scope, traitOwner: declaration.nameStart, requirement: <SourceRequirementOwner traitIndex=traitIndex slot=slot result=signature.result factoryError=signature.factoryError />) {
             return <Result.Err error=self.diagnosticAt(offset: site, msg: "invalid authored requirement scope binding", failureDomain: <FailureDomain.Internal />) />
         }
         return <Result.Ok value=() />

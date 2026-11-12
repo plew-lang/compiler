@@ -10,6 +10,14 @@ pub impl Comp {
             }
             index += 1U64
         }
+        index = 0U64
+        while index < self.sourceTypeUses.requirementScopeCount() {
+            val token = self.sourceTypeUses.requirementScopeAt(index: index)
+            if !self.authoredRequirementViews.contains(key: token) {
+                try self.admitRawRequirementSignature(token: token)
+            }
+            index += 1U64
+        }
         return <Result.Ok value=() />
     }
 
@@ -180,7 +188,7 @@ impl Comp {
                 term = self.semanticSourceResultTerm(ref: source.term)
                 for equation in source.normalizations { try self.appendRetainedProjectionEquation(step: equation, normalizations: inout normalizations) }
             }
-            SourceTypeRecipeOrigin.ProjectionReceiver => {}
+            SourceTypeRecipeOrigin.ProjectionReceiver | SourceTypeRecipeOrigin.LexicalParameter => {}
             SourceTypeRecipeOrigin.BoundSelection => { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "signature reader encountered an unadmitted bound recipe", failureDomain: <FailureDomain.Internal />) /> }
         }
         val read = <AuthoredRecipeRead term=term views=sourceViews normalizations=normalizations />
@@ -200,7 +208,7 @@ impl Comp {
     // Validate the saved constructor graph once per declaration. The semantic
     // visitor owns child shape and labels; recipes only retain the chosen edges.
     // false marks an active node, true a fully validated node of this owner.
-    inout fn checkAuthoredTypeRecipe(signature: AuthoredFunctionSignature, recipe: U64, edge: AuthoredRecipeEdge, scopes: SignatureProofScopes, validation: inout SignatureRecipeValidation, offset: U64) -> Result[(), CompileDiagnostic] {
+    inout fn checkAuthoredTypeRecipe(sourceScope: U64, recipe: U64, edge: AuthoredRecipeEdge, scopes: SignatureProofScopes, validation: inout SignatureRecipeValidation, offset: U64) -> Result[(), CompileDiagnostic] {
         val node = match self.sourceTypeUses.recipeAt(id: recipe) {
             Optional.Some(v: val node) => node,
             Optional.None => { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "authored type recipe has an invalid node", failureDomain: <FailureDomain.Internal />) /> },
@@ -218,6 +226,10 @@ impl Comp {
             // It cannot authorize a source edge. Non-free owner migration must
             // forward the actual originating recipe before using this gate.
             SourceTypeRecipeOrigin.BoundSelection => false,
+            SourceTypeRecipeOrigin.LexicalParameter => match edge {
+                AuthoredRecipeEdge.LexicalTraitArgument => node.children.count() == 0U64 && self.arena.typeTermAt(index: node.term).paramId != 0U64,
+                _ => false,
+            },
         }
         if !permitted { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "authored type recipe has an invalid derived edge", failureDomain: <FailureDomain.Internal />) /> }
         match validation.visited.get(key: recipe) {
@@ -232,13 +244,13 @@ impl Comp {
             SourceTypeRecipeOrigin.Authored => {
                 if node.occurrence == 0U64 || node.sourceRecipe != 0U64 { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "authored type recipe has no exact source occurrence", failureDomain: <FailureDomain.Internal />) /> }
                 val occurrence = try self.signatureOccurrence(id: node.occurrence)
-                if occurrence.scope != signature.scope {
+                if occurrence.scope != sourceScope {
                     if occurrence.scope != validation.parentScope || !validation.inherited.contains(key: recipe) {
                         return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "authored signature has a foreign type occurrence", failureDomain: <FailureDomain.Internal />) />
                     }
                     try self.checkSignatureOccurrence(occurrence: occurrence, scope: validation.parentScope, parameters: validation.parentParameters, selfParameter: validation.selfParameter, method: true)
                 } else {
-                    try self.authoredSignatureOccurrence(signature: signature, id: node.occurrence)
+                    try self.checkSignatureOccurrence(occurrence: occurrence, scope: sourceScope, parameters: scopes.local.parameters, selfParameter: scopes.local.selfParameter, method: scopes.scopedBinders)
                 }
                 if occurrence.recipe != recipe || !self.typeRefEq(a: occurrence.term, b: node.term) { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "authored type recipe changed its source occurrence", failureDomain: <FailureDomain.Internal />) /> }
             }
@@ -250,9 +262,9 @@ impl Comp {
                     _ => { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "result representation must retain an authored source", failureDomain: <FailureDomain.Internal />) /> }
                 }
                 if !self.sourceResultRepresentationMatches(source: source.unwrap().term, payload: node.term) { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "authored type recipe has an invalid result representation", failureDomain: <FailureDomain.Internal />) /> }
-                try self.checkAuthoredTypeRecipe(signature: signature, recipe: node.sourceRecipe, edge: <AuthoredRecipeEdge.Source />, scopes: scopes, validation: inout validation, offset: offset)
+                try self.checkAuthoredTypeRecipe(sourceScope: sourceScope, recipe: node.sourceRecipe, edge: <AuthoredRecipeEdge.Source />, scopes: scopes, validation: inout validation, offset: offset)
             }
-            SourceTypeRecipeOrigin.ProjectionReceiver | SourceTypeRecipeOrigin.BoundSelection => {
+            SourceTypeRecipeOrigin.ProjectionReceiver | SourceTypeRecipeOrigin.BoundSelection | SourceTypeRecipeOrigin.LexicalParameter => {
                 if node.occurrence != 0U64 || node.sourceRecipe != 0U64 { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "derived type recipe acquired source authority", failureDomain: <FailureDomain.Internal />) /> }
             }
         }
@@ -266,10 +278,12 @@ impl Comp {
             }
             if !self.typeRefEq(a: child.term, b: self.typeTermRefChildRef(ref: node.term, index: index)) { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "authored type recipe child differs from canonical term", failureDomain: <FailureDomain.Internal />) /> }
             if node.labels[index] != self.typeTermRefIdentityChildLabel(ref: node.term, index: index) { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "authored type recipe child has a foreign label", failureDomain: <FailureDomain.Internal />) /> }
-            val childEdge = if self.arena.typeAt(index: node.term).assocNameId != 0U64 && index == 0U64 { give <AuthoredRecipeEdge.ProjectionReceiver /> }
+            val term = self.arena.typeTermAt(index: node.term)
+            val childEdge = if term.assocNameId != 0U64 && index == 0U64 { give <AuthoredRecipeEdge.ProjectionReceiver /> }
+              else if index != 0U64 && index <= scopes.lexicalTraitArguments.count() && term.assocNameId != 0U64 && self.associatedProjectionTraitOwner(projection: self.arena.typeAt(index: node.term)) == scopes.lexicalTrait && self.typeRefEq(a: child.term, b: scopes.lexicalTraitArguments[index - 1U64]) { give <AuthoredRecipeEdge.LexicalTraitArgument /> }
               else if self.isFnType(ref: node.term) && index == 0U64 { give <AuthoredRecipeEdge.FunctionResult /> }
               else { give <AuthoredRecipeEdge.Source /> }
-            try self.checkAuthoredTypeRecipe(signature: signature, recipe: node.children[index], edge: childEdge, scopes: scopes, validation: inout validation, offset: offset)
+            try self.checkAuthoredTypeRecipe(sourceScope: sourceScope, recipe: node.children[index], edge: childEdge, scopes: scopes, validation: inout validation, offset: offset)
             index += 1U64
         }
         mut val equations: Array[ProjectionNormalizationStep] = []
@@ -292,7 +306,7 @@ impl Comp {
         match node.origin {
             SourceTypeRecipeOrigin.Authored => {
                 val occurrence = try self.signatureOccurrence(id: node.occurrence)
-                if occurrence.scope == signature.scope {
+                if occurrence.scope == sourceScope {
                     try self.admitSignatureOccurrence(id: node.occurrence, occurrence: occurrence, scope: scopes.local, assumptions: scopes.assumptions, receiverRef: scopes.receiver, receiverEquations: validation.receiverEquations, equations: inout equations, proofs: inout validation.proofs)
                 } else {
                     val parent = <DeclarationTypeScope owner=scopes.local.owner parameters=validation.parentParameters selfParameter=validation.selfParameter />
@@ -431,29 +445,13 @@ impl Comp {
             _ => {}
         }
         if signature.parameters.count() != function.params.len { return <Result.Err error=self.diagnosticAt(offset: sourceScope.anchor, msg: "authored signature changed parameter slots", failureDomain: <FailureDomain.Internal />) /> }
-        mut val index = 0U64
-        while index < signature.parameters.count() {
-            val id = signature.parameters[index]
-            val parameter = self.funcParamAt(params: function.params, index: index)
-            if id != parameter.authoredTypeUse { return <Result.Err error=self.diagnosticAt(offset: sourceScope.anchor, msg: "authored signature changed parameter occurrence", failureDomain: <FailureDomain.Internal />) /> }
-            if id != 0U64 {
-                val occurrence = try self.authoredSignatureOccurrence(signature: signature, id: id)
-                if !self.typeRefEq(a: occurrence.term, b: parameter.ty) { return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "authored signature changed parameter type", failureDomain: <FailureDomain.Internal />) /> }
+        for index in 0U64..<signature.parameters.count() {
+            if signature.parameters[index] != self.funcParamAt(params: function.params, index: index).authoredTypeUse {
+                return <Result.Err error=self.diagnosticAt(offset: sourceScope.anchor, msg: "authored signature changed parameter occurrence", failureDomain: <FailureDomain.Internal />) />
             }
-            index += 1U64
         }
-        if function.isFactory {
-            if !function.hasRet || signature.result != 0U64 { return <Result.Err error=self.diagnosticAt(offset: sourceScope.anchor, msg: "factory signature changed its implicit result", failureDomain: <FailureDomain.Internal />) /> }
-            if signature.factoryError != 0U64 {
-                val error = try self.authoredSignatureOccurrence(signature: signature, id: signature.factoryError)
-                val args = self.arena.typeAt(index: function.retTy).args
-                if args.count() != 2U64 || !self.typeRefEq(a: error.term, b: args[1U64]) { return <Result.Err error=self.diagnosticAt(offset: error.site, msg: "factory signature changed its authored error type", failureDomain: <FailureDomain.Internal />) /> }
-            }
-        } else if signature.result != 0U64 {
-            val occurrence = try self.authoredSignatureOccurrence(signature: signature, id: signature.result)
-            if !function.hasRet || !self.typeRefEq(a: occurrence.term, b: function.retTy) { return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "authored signature changed result type", failureDomain: <FailureDomain.Internal />) /> }
-        } else if function.hasRet { return <Result.Err error=self.diagnosticAt(offset: sourceScope.anchor, msg: "authored signature lost its result occurrence", failureDomain: <FailureDomain.Internal />) /> }
         val scope = try self.declarationTypeScope(owner: signature.function)
+        try self.checkAuthoredCallableSlots(function: function, token: signature.scope, result: signature.result, factoryError: signature.factoryError, scope: scope, scopedBinders: validation.parentScope != 0U64)
         val assumptions = try self.declarationScopeAssumptions(scope: scope)
         mut val inherited: Array[DeclarationBoundRef] = []
         if validation.parentScope != 0U64 {
@@ -470,10 +468,10 @@ impl Comp {
                 }
             }
         }
-        val scopes = <SignatureProofScopes local=scope assumptions=assumptions inherited=inherited receiver=function.recvTy />
+        val scopes = <SignatureProofScopes local=scope assumptions=assumptions inherited=inherited receiver=function.recvTy scopedBinders=validation.parentScope != 0U64 />
         mut val receiverEquations: Array[ProjectionNormalizationStep] = []
         for recipe in validation.receiverRecipes {
-            try self.checkAuthoredTypeRecipe(signature: signature, recipe: recipe, edge: <AuthoredRecipeEdge.Source />, scopes: scopes, validation: inout validation, offset: sourceScope.anchor)
+            try self.checkAuthoredTypeRecipe(sourceScope: signature.scope, recipe: recipe, edge: <AuthoredRecipeEdge.Source />, scopes: scopes, validation: inout validation, offset: sourceScope.anchor)
             for equation in validation.equations.getOr(key: recipe, fallback: []) {
                 try self.appendRetainedProjectionEquation(step: equation, normalizations: inout receiverEquations)
             }
@@ -481,9 +479,74 @@ impl Comp {
         validation.receiverEquations = receiverEquations
         for id in signature.declarationUses {
             val occurrence = try self.authoredSignatureOccurrence(signature: signature, id: id)
-            try self.checkAuthoredTypeRecipe(signature: signature, recipe: occurrence.recipe, edge: <AuthoredRecipeEdge.Source />, scopes: scopes, validation: inout validation, offset: occurrence.site)
+            try self.checkAuthoredTypeRecipe(sourceScope: signature.scope, recipe: occurrence.recipe, edge: <AuthoredRecipeEdge.Source />, scopes: scopes, validation: inout validation, offset: occurrence.site)
         }
         self.authoredSignatureViews[signature.function] = <AuthoredSignatureViews signature=signature proofs=validation.proofs receiverRecipes=validation.receiverRecipes />
+        return <Result.Ok value=() />
+    }
+
+    inout fn checkAuthoredCallableSlots(function: Func, token: U64, result: U64, factoryError: U64, scope: DeclarationTypeScope, scopedBinders: Bool) -> Result[(), CompileDiagnostic] {
+        mut val index = 0U64
+        while index < function.params.len {
+            val parameter = self.funcParamAt(params: function.params, index: index)
+            val id = parameter.authoredTypeUse
+            if id != 0U64 {
+                val occurrence = try self.signatureOccurrence(id: id)
+                try self.checkSignatureOccurrence(occurrence: occurrence, scope: token, parameters: scope.parameters, selfParameter: scope.selfParameter, method: scopedBinders)
+                if !self.typeRefEq(a: occurrence.term, b: parameter.ty) { return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "authored signature changed parameter type", failureDomain: <FailureDomain.Internal />) /> }
+            }
+            index += 1U64
+        }
+        if function.isFactory {
+            if !function.hasRet || result != 0U64 { return <Result.Err error=self.diagnosticAt(offset: function.defOffset, msg: "factory signature changed its implicit result", failureDomain: <FailureDomain.Internal />) /> }
+            if factoryError != 0U64 {
+                val error = try self.signatureOccurrence(id: factoryError)
+            try self.checkSignatureOccurrence(occurrence: error, scope: token, parameters: scope.parameters, selfParameter: scope.selfParameter, method: scopedBinders)
+                val args = self.arena.typeAt(index: function.retTy).args
+                if args.count() != 2U64 || !self.typeRefEq(a: error.term, b: args[1U64]) { return <Result.Err error=self.diagnosticAt(offset: error.site, msg: "factory signature changed its authored error type", failureDomain: <FailureDomain.Internal />) /> }
+            }
+        } else if result != 0U64 {
+            val occurrence = try self.signatureOccurrence(id: result)
+            try self.checkSignatureOccurrence(occurrence: occurrence, scope: token, parameters: scope.parameters, selfParameter: scope.selfParameter, method: scopedBinders)
+            if !function.hasRet || !self.typeRefEq(a: occurrence.term, b: function.retTy) { return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "authored signature changed result type", failureDomain: <FailureDomain.Internal />) /> }
+        } else if function.hasRet { return <Result.Err error=self.diagnosticAt(offset: function.defOffset, msg: "authored signature lost its result occurrence", failureDomain: <FailureDomain.Internal />) /> }
+        return <Result.Ok value=() />
+    }
+
+    inout fn admitRawRequirementSignature(token: U64) -> Result[(), CompileDiagnostic] {
+        val source = self.sourceTypeUses.scopeAt(token: token).unwrap()
+        val owner = source.requirement.unwrap()
+        val declaration = self.decls.traitAt(index: owner.traitIndex)
+        val requirement = self.traitReqAt(reqs: declaration.reqs, index: owner.slot)
+        val selfRef = self.lexicalSelfTerm(parameter: declaration.selfParamId)
+        val traitParameters = self.copyTraitBinds(binds: declaration.typeParams)
+        mut val arguments: Array[U64] = []
+        for parameter in traitParameters {
+            arguments.append(self.pushType(t: <TypeRef nameStart=parameter.nameStart nameLen=parameter.nameLen nameId=parameter.nameId paramId=parameter.paramId args=[] />))
+        }
+        val parameters = if traitParameters.count() == 0U64 { give requirement.typeParams } else {
+            mut val combined = traitParameters
+            for parameter in self.copyFuncBinds(binds: requirement.typeParams) { combined.append(parameter) }
+            give self.pushFuncBinds(binds: combined)
+        }
+        val scope = <DeclarationTypeScope origin=<DeclarationScopeOrigin.RequirementSignature /> owner=token parameters=parameters selfParameter=declaration.selfParamId />
+        try self.checkAuthoredCallableSlots(function: requirement, token: token, result: owner.result, factoryError: owner.factoryError, scope: scope, scopedBinders: true)
+        val first = self.rawRequirementPremises.count() + 1U64
+        val root = <TraitBound subject=selfRef constraint=<TraitConstraint key=<TraitInstanceKey owner=declaration.nameStart positionalArgs=arguments /> assocPredicates=[] /> offset=source.anchor />
+        self.rawRequirementPremises.append(<RawRequirementPremise scope=token bound=root />)
+        for index in 0U64..<requirement.signatureBounds.len {
+            val clause = self.conformBoundAt(bounds: requirement.signatureBounds, index: index)
+            self.rawRequirementPremises.append(<RawRequirementPremise scope=token bound=<TraitBound subject=clause.subject constraint=clause.constraint offset=clause.offset /> />)
+        }
+        self.rawRequirementRanges[token] = <SourceBoundRange first=first count=1U64 + requirement.signatureBounds.len />
+        val assumptions = try self.declarationScopeAssumptions(scope: scope)
+        val scopes = <SignatureProofScopes local=scope assumptions=assumptions inherited=[] receiver=0U64 scopedBinders=true lexicalTrait=declaration.nameStart lexicalTraitArguments=arguments />
+        mut val validation = <SignatureRecipeValidation />
+        for id in self.sourceTypeUses.declarationUsesIn(scope: token) {
+            val occurrence = try self.signatureOccurrence(id: id)
+            try self.checkAuthoredTypeRecipe(sourceScope: token, recipe: occurrence.recipe, edge: <AuthoredRecipeEdge.Source />, scopes: scopes, validation: inout validation, offset: occurrence.site)
+        }
+        self.authoredRequirementViews[token] = validation.proofs
         return <Result.Ok value=() />
     }
 

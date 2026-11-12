@@ -9,6 +9,8 @@ pub enum SourceTypeUseRole { Unowned Declaration DefaultArgument Body }
 pub struct SourceRequirementOwner {
     pub val traitIndex: U64
     pub val slot: U64
+    pub val result: U64 = 0U64
+    pub val factoryError: U64 = 0U64
 }
 pub impl SourceRequirementOwner { factory }
 
@@ -50,7 +52,7 @@ pub impl SourceTypeScope { factory }
 
 // A derived node is structural provenance, never source admission authority.
 // Authored nodes instead identify exactly one immutable source occurrence.
-pub enum SourceTypeRecipeOrigin { Authored ProjectionReceiver BoundSelection ResultRepresentation }
+pub enum SourceTypeRecipeOrigin { Authored ProjectionReceiver BoundSelection ResultRepresentation LexicalParameter }
 pub struct SourceTypeRecipe {
     pub val term: U64
     pub val children: Array[U64]
@@ -79,6 +81,8 @@ pub impl AuthoredTypeUse { factory }
 pub struct LoweredSourceSignature {
     pub val function: Func
     pub val scope: U64
+    pub val result: U64 = 0U64
+    pub val factoryError: U64 = 0U64
 }
 pub impl LoweredSourceSignature { factory }
 
@@ -105,6 +109,7 @@ pub struct SourceTypeUses {
     mut val declarationUses: Array[Array[U64]] = []
     mut val signatures: Array[AuthoredFunctionSignature] = []
     mut val functionSignatures: Dictionary[U64, U64] = [:]
+    mut val requirementScopes: Array[U64] = []
     mut val methodScopes: Dictionary[U64, U64] = [:]
 }
 pub impl SourceTypeUses {
@@ -194,10 +199,17 @@ pub impl SourceTypeUses {
         val scope = self.scopes[token - 1U64]
         match scope.kind { SourceTypeScopeKind.RequirementSignature => {} _ => { return false } }
         match scope.state { SourceTypeScopeState.Lowered => {} _ => { return false } }
-        if scope.traitOwner != traitOwner || scope.requirement.isSome() { return false }
+        if scope.traitOwner != traitOwner || scope.requirement.isSome() || (requirement.result != 0U64 && requirement.factoryError != 0U64) { return false }
+        if !self.signatureUseBelongs(id: requirement.result, scope: token) || !self.signatureUseBelongs(id: requirement.factoryError, scope: token) { return false }
         self.scopes[token - 1U64] = <SourceTypeScope kind=scope.kind anchor=scope.anchor traitOwner=scope.traitOwner parent=scope.parent state=scope.state function=scope.function requirement=<Optional.Some v=requirement /> implementation=scope.implementation bounds=scope.bounds />
+        self.requirementScopes.append(token)
         return true
     }
+
+    fn requirementScopeCount() -> U64 { return self.requirementScopes.count() }
+    fn requirementScopeAt(index: U64) -> U64 { return self.requirementScopes[index] }
+
+    fn declarationUsesIn(scope: U64) -> Array[U64] { return self.declarationUses[scope - 1U64] }
 
     inout fn bindBounds(range: SourceBoundRange) -> Bool {
         if self.active == 0U64 { return false }

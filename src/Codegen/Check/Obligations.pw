@@ -116,6 +116,12 @@ pub impl Comp {
                 }
             }
             DeclarationScopeOrigin.InterfaceContract => {}
+            DeclarationScopeOrigin.RequirementSignature => {
+                val range = self.rawRequirementRanges.getOr(key: scope.owner, fallback: <SourceBoundRange />)
+                for index in 0U64..<range.count {
+                    assumptions.append(<DeclarationBoundRef.RawRequirement index=range.first - 1U64 + index />)
+                }
+            }
         }
         if scope.interfaceRoot != 0U64 {
             val source = <DeclarationBoundRef.Interface index=scope.interfaceRoot - 1U64 />
@@ -1678,6 +1684,18 @@ impl Comp {
                 match source {
                     DeclarationBoundRef.Interface(index: _) | DeclarationBoundRef.AssociatedType(index: _) => {}
                     _ => { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "interface contract cannot borrow a caller declaration premise") /> }
+                }
+            }
+            DeclarationScopeOrigin.RequirementSignature => {
+                match source {
+                    DeclarationBoundRef.RawRequirement(index: val index) => {
+                        if self.rawRequirementPremises[index].scope != scope.owner {
+                            return <Result.Err error=self.diagnosticAt(offset: offset, msg: "requirement premise belongs to another signature", failureDomain: <FailureDomain.Internal />) />
+                        }
+                        return <Result.Ok value=<DeclarationProofDependencies /> />
+                    }
+                    DeclarationBoundRef.AssociatedType(index: _) => {}
+                    _ => { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "requirement signature cannot borrow another proof scope", failureDomain: <FailureDomain.Internal />) /> }
                 }
             }
             DeclarationScopeOrigin.Lexical => {}

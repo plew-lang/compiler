@@ -1,0 +1,6 @@
+trait Project { type Item }
+trait Root {
+    fn proved(value: Self#Project.Item) where Self: Project
+    fn unproved(value: Self#Project.Item)
+}
+fn main() {}

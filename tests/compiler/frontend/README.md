@@ -343,6 +343,8 @@ The `whereSyntax` and `whereValue` modes check ordinary where-clause diagnostics
 frame restoration, and canonical trait owner publication.
 The `requirementWhereSyntax` and `requirementWhereValue` modes check the same
 boundary for raw trait requirements, including no partial trait publication.
+The `requirementSignatureValue` mode checks the exact inherited trait
+instance and distinct authored slots, then rejects a different instance.
 
 `ImplProjectionBoundOrigin.pw` checks that two methods reuse a single
 impl-owned bound argument in signature, body and default projections. Execute

@@ -359,7 +359,7 @@ enum ProjectionBoundState {
     Ready(bound: PreparedProjectionBound)
     Failed(diagnostic: CompileDiagnostic)
 }
-enum AuthoredRecipeEdge { Source ProjectionReceiver FunctionResult }
+enum AuthoredRecipeEdge { Source ProjectionReceiver FunctionResult LexicalTraitArgument }
 struct SignatureRecipeValidation {
     val parentScope: U64 = 0U64
     val parentParameters: FuncBindRange = <FuncBindRange start=0U64 len=0U64 />
@@ -373,11 +373,20 @@ struct SignatureRecipeValidation {
 }
 impl SignatureRecipeValidation { factory }
 
+struct RawRequirementPremise {
+    val scope: U64
+    val bound: TraitBound
+}
+impl RawRequirementPremise { factory }
+
 struct SignatureProofScopes {
     val local: DeclarationTypeScope
     val assumptions: Array[DeclarationBoundRef]
     val inherited: Array[DeclarationBoundRef]
     val receiver: U64
+    val scopedBinders: Bool = false
+    val lexicalTrait: U64 = 0U64
+    val lexicalTraitArguments: Array[U64] = []
 }
 impl SignatureProofScopes { factory }
 
@@ -567,6 +576,9 @@ pub struct Comp {
     // remaining signature/field uses. Synthetic types are not new source uses.
     // Provenance prefix only: not yet the admission/consumer receipt channel.
     pub mut val sourceTypeUses: SourceTypeUses = <SourceTypeUses />
+    mut val rawRequirementPremises: Array[RawRequirementPremise] = []
+    mut val rawRequirementRanges: Dictionary[U64, SourceBoundRange] = [:]
+    mut val authoredRequirementViews: Dictionary[U64, Array[AuthoredTypeViewProof]] = [:]
     mut val authoredSignatureViews: Dictionary[U64, AuthoredSignatureViews] = [:]
     pub mut val loweringTypeUses: Array[U64] = []
     // Authored provenance is independent of legacy visibility suppression.

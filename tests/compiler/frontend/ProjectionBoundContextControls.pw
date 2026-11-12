@@ -77,6 +77,39 @@ fn exerciseRequirementWhere(valueAdapter: Bool) {
     print("1")
 }
 
+fn exerciseRequirementSignatureValue() {
+    val valid = "trait Exact[Kind]: Project[Kind] {{ fn exact(value: Self#Project[Kind].Item) -> Self#Project[Kind].Item }}"
+    val invalid = "trait Wrong: Project[Bool] {{ fn wrong(value: Self#Project[I64].Item) }}"
+    val source = "trait Project[Kind] {{ type Item }}\n// " + valid + "\n// " + invalid + "\nfn main() {{}}"
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text text=source path="ValueRequirement.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
+    val exact = traitDeclaration(compiler, valid)
+    compiler.predeclareTrait(t: exact)
+    compiler.lowerTrait(t: exact).unwrap()
+    compiler.admitAuthoredFunctionViews().unwrap()
+    val token = compiler.sourceTypeUses.requirementScopeAt(index: 0U64)
+    val scope = compiler.sourceTypeUses.scopeAt(token: token).unwrap()
+    val owner = scope.requirement.unwrap()
+    val trait = compiler.decls.traitAt(index: owner.traitIndex)
+    val requirement = compiler.traitReqAt(reqs: trait.reqs, index: owner.slot)
+    val result = compiler.sourceTypeUses.useAt(index: owner.result - 1U64).unwrap()
+    val parameter = compiler.funcParamAt(params: requirement.params, index: 0U64)
+    if scope.function.isSome() || result.scope != token || parameter.authoredTypeUse == owner.result || !compiler.typeRefEq(a: result.term, b: requirement.retTy) {
+        panic("the raw requirement lost its distinct parameter and result occurrences")
+    }
+    val wrong = traitDeclaration(compiler, invalid)
+    compiler.predeclareTrait(t: wrong)
+    compiler.lowerTrait(t: wrong).unwrap()
+    match compiler.admitAuthoredFunctionViews() {
+        Result.Err(error: val diagnostic) => {
+            match diagnostic.failureDomain { FailureDomain.Source => {} _ => { panic(diagnostic.message) } }
+            if diagnostic.message != "trait view requires a conformance for this receiver and exact trait instance (spec/09)" { panic(diagnostic.message) }
+        }
+        Result.Ok(value: _) => { panic("the value adapter admitted a foreign trait instance") }
+    }
+    print("1")
+}
+
 fn exerciseWhereAdmission(valueAdapter: Bool) {
     val header = "trait Marker {{}}\n"
     val invalid = "fn invalid[T](value:T) where T:Marker,\n    T:Unknown {{}}"
@@ -125,6 +158,10 @@ fn exerciseWhereAdmission(valueAdapter: Bool) {
 
 fn main() {
     val scenario = argAt(1I64)
+    if scenario == "requirementSignatureValue" {
+        exerciseRequirementSignatureValue()
+        return
+    }
     if scenario == "requirementWhereSyntax" || scenario == "requirementWhereValue" {
         exerciseRequirementWhere(valueAdapter: scenario == "requirementWhereValue")
         return

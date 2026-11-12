@@ -69,3 +69,30 @@ The initial wrong-instance RED remains. The next boundary is to bind
 authored parameter/result occurrences to the registered requirement
 slot and admit them under that slot's own Self instance and prepared
 premises, including inherited trait evidence.
+
+## Declaration admission checkpoint
+
+Both adapters now attach the authored result or factory-error occurrence to
+the registered trait/requirement slot. The existing parameter occurrences
+remain distinct. Common recipe admission uses that slot's lexical Self,
+full positional trait instance and own prepared where premises. Its proof
+references have a distinct raw-requirement kind with slot-local scope. A
+registered function identity or translated implementation premise cannot
+authorize a raw requirement. Admitted proofs are retained by source scope.
+
+Build `20261112T122226-build-b03af5`, candidate `8f6e1174`, rejects the
+original wrong-instance case and the new sibling-premise case at their
+annotations in check, JIT and native compilation. The old `55e672a1`
+accepted the sibling case. Exact inherited and own-instance controls pass.
+The value adapter control checks the valid inherited instance, distinct
+parameter/result occurrences, and the wrong-instance Source diagnostic.
+Eight public controls passed check/JIT/AOT, including associated outputs,
+existential dispatch, and fallible factories. Standard generation
+`20261112T122758-gen-35d5de` passed. Same-source medians were 6.520705 s
+and 6.529334 s, three interleaved runs after warmup. LLVM matches when
+generated generic body symbol components are normalized by body ID.
+
+Next, make translated and existential signatures consume this retained
+source evidence. The raw premise currently requires a translation before
+executable replay. Preserve that boundary while replacing the existing
+consumer-side re-interpretation of raw signature terms.

@@ -1739,6 +1739,7 @@ pub enum DeclarationBoundRef {
     AssociatedType(index: U64)
     MethodReceiver(index: U64)
     Requirement(index: U64)
+    RawRequirement(index: U64)
     Interface(index: U64)
 }
 
@@ -2729,7 +2730,7 @@ pub impl DeclarationConversion { factory }
 
 // Lexical binder ownership for symbolic declaration obligations. This is a
 // source scope, not an executable substitution or an ambient name environment.
-pub enum DeclarationScopeOrigin { Lexical InterfaceContract }
+pub enum DeclarationScopeOrigin { Lexical InterfaceContract RequirementSignature }
 pub impl DeclarationScopeOrigin { factory }
 
 pub struct DeclarationTypeScope {

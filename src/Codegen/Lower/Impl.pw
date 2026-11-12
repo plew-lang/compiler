@@ -1315,13 +1315,13 @@ pub impl Comp {
         if !self.sourceTypeUses.finish(token: scope, succeeded: result.isOk()) {
             return <Result.Err error=self.diagnosticAt(offset: sig.nameSpan.start, msg: "invalid authored type scope restoration", failureDomain: <FailureDomain.Internal />) />
         }
-        return <Result.Ok value=<LoweredSourceSignature function=(try result) scope=scope /> />
+        return result
     }
 
 }
 
 impl Comp {
-    inout fn lowerSigToFuncInSourceScope(sig: SigAst, isExtern: Bool, isCExtern: Bool) -> Result[Func, CompileDiagnostic] {
+    inout fn lowerSigToFuncInSourceScope(sig: SigAst, isExtern: Bool, isCExtern: Bool) -> Result[LoweredSourceSignature, CompileDiagnostic] {
         val nameStart: U64 = sig.nameSpan.start
         val nameLen: U64 = sig.nameSpan.end - sig.nameSpan.start
         val typeParams: Array[Bind] = (try self.lowerTypeParamNames(names: sig.typeParams, anchor: nameStart, sendableFlags: sig.typeParamSendable))
@@ -1341,12 +1341,15 @@ impl Comp {
         mut val retLen: U64 = 0
         mut val retIsArray: Bool = false
         mut val retRef: U64 = 0
+        mut val resultUse = 0U64
+        mut val factoryError = 0U64
         if sig.hasRet {
             val pt: PType = (try self.lowerType(t: sig.ret))
             retStart = pt.start
             retLen = pt.len
             retIsArray = pt.isArray
             retRef = pt.ref
+            resultUse = pt.authoredUse
         }
         if sig.isFactory {
             val selfName = self.internBytes(s: "Self")
@@ -1354,7 +1357,11 @@ impl Comp {
             retLen = selfName.nameLen
             val selfRef = self.lowerConstructionType(nameStart: retStart, nameLen: retLen, args: [], siteOffset: retStart)
             mut val errorRef = 0U64
-            if sig.factoryKind == 2U64 { errorRef = (try self.lowerType(t: sig.factoryErr)).ref }
+            if sig.factoryKind == 2U64 {
+                val error = try self.lowerType(t: sig.factoryErr)
+                errorRef = error.ref
+                factoryError = error.authoredUse
+            }
             retRef = self.factoryRequirementReturn(selfRef: selfRef, kind: sig.factoryKind, errorRef: errorRef, offset: nameStart)
             val result = self.arena.typeAt(index: retRef)
             retStart = result.nameStart
@@ -1362,7 +1369,8 @@ impl Comp {
         }
         val signatureBounds = try self.collectPreparedBounds()
         val runtimeIntrinsic: RuntimeIntrinsicDeclaration = self.runtimeIntrinsicDeclaration(sig: sig, isExtern: isExtern, isCExtern: isCExtern)
-        return <Result.Ok value=<Func nameStart=nameStart nameLen=nameLen nameId=intern(c: inout self, start: nameStart, len: nameLen) typeParams=self.pushFuncBinds(binds: typeParams) params=self.pushFuncParams(params: params) hasRet=sig.hasRet || sig.isFactory retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=0 hasRecv=false recvStart=0 recvLen=0 selfInout=sig.selfInout selfMove=sig.selfMove isAssoc=sig.isAssoc isFactory=sig.isFactory isAnonymousFactory=sig.isAnonymousFactory isAsync=sig.isAsync isDiverging=sig.isDiverging isExtern=isExtern isCExtern=isCExtern runtimeIntrinsic=runtimeIntrinsic defOffset=nameStart signatureBounds=self.pushConformBounds(bounds: signatureBounds) /> />
+        val function = <Func nameStart=nameStart nameLen=nameLen nameId=intern(c: inout self, start: nameStart, len: nameLen) typeParams=self.pushFuncBinds(binds: typeParams) params=self.pushFuncParams(params: params) hasRet=sig.hasRet || sig.isFactory retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=0 hasRecv=false recvStart=0 recvLen=0 selfInout=sig.selfInout selfMove=sig.selfMove isAssoc=sig.isAssoc isFactory=sig.isFactory isAnonymousFactory=sig.isAnonymousFactory isAsync=sig.isAsync isDiverging=sig.isDiverging isExtern=isExtern isCExtern=isCExtern runtimeIntrinsic=runtimeIntrinsic defOffset=nameStart signatureBounds=self.pushConformBounds(bounds: signatureBounds) />
+        return <Result.Ok value=<LoweredSourceSignature function=function scope=self.sourceTypeUses.currentScope() result=resultUse factoryError=factoryError /> />
     }
 }
 
@@ -1378,13 +1386,13 @@ pub impl Comp {
         if !self.sourceTypeUses.finish(token: scope, succeeded: result.isOk()) {
             return <Result.Err error=self.diagnosticAt(offset: sig.name.start, msg: "invalid authored type scope restoration", failureDomain: <FailureDomain.Internal />) />
         }
-        return <Result.Ok value=<LoweredSourceSignature function=(try result) scope=scope /> />
+        return result
     }
 
 }
 
 impl Comp {
-    inout fn lowerSyntaxSigToFuncInSourceScope(sig: SyntaxSig, isExtern: Bool, isCExtern: Bool) -> Result[Func, CompileDiagnostic] {
+    inout fn lowerSyntaxSigToFuncInSourceScope(sig: SyntaxSig, isExtern: Bool, isCExtern: Bool) -> Result[LoweredSourceSignature, CompileDiagnostic] {
         mut val spans: Array[Span] = []
         mut val flags: Array[Bool] = []
         mut val i: U64 = 0U64
@@ -1425,12 +1433,15 @@ impl Comp {
         mut val retLen: U64 = 0U64
         mut val retIsArray: Bool = false
         mut val retRef: U64 = 0U64
+        mut val resultUse = 0U64
+        mut val factoryError = 0U64
         if sig.hasRet {
             val ret: PType = (try self.lowerSyntaxType(id: sig.ret))
             retStart = ret.start
             retLen = ret.len
             retIsArray = ret.isArray
             retRef = ret.ref
+            resultUse = ret.authoredUse
         }
         if sig.isFactory {
             val selfName = self.internBytes(s: "Self")
@@ -1438,7 +1449,11 @@ impl Comp {
             retLen = selfName.nameLen
             val selfRef = self.lowerConstructionType(nameStart: retStart, nameLen: retLen, args: [], siteOffset: retStart)
             mut val errorRef = 0U64
-            if sig.factoryKind == 2U64 { errorRef = (try self.lowerSyntaxType(id: sig.factoryErr)).ref }
+            if sig.factoryKind == 2U64 {
+                val error = try self.lowerSyntaxType(id: sig.factoryErr)
+                errorRef = error.ref
+                factoryError = error.authoredUse
+            }
             retRef = self.factoryRequirementReturn(selfRef: selfRef, kind: sig.factoryKind, errorRef: errorRef, offset: sig.name.start)
             val result = self.arena.typeAt(index: retRef)
             retStart = result.nameStart
@@ -1446,7 +1461,8 @@ impl Comp {
         }
         val signatureBounds = try self.collectPreparedBounds()
         val runtimeIntrinsic: RuntimeIntrinsicDeclaration = self.runtimeIntrinsicDeclarationSyntax(sig: sig, isExtern: isExtern, isCExtern: isCExtern)
-        return <Result.Ok value=<Func nameStart=sig.name.start nameLen=sig.name.end - sig.name.start nameId=intern(c: inout self, start: sig.name.start, len: sig.name.end - sig.name.start) typeParams=self.pushFuncBinds(binds: typeParams) params=self.pushFuncParams(params: params) hasRet=sig.hasRet || sig.isFactory retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=0U64 hasRecv=false recvStart=0U64 recvLen=0U64 selfInout=sig.selfInout selfMove=sig.selfMove isAssoc=sig.isAssoc isFactory=sig.isFactory isAnonymousFactory=sig.isAnonymousFactory isAsync=sig.isAsync isDiverging=sig.isDiverging isExtern=isExtern isCExtern=isCExtern runtimeIntrinsic=runtimeIntrinsic defOffset=sig.name.start signatureBounds=self.pushConformBounds(bounds: signatureBounds) /> />
+        val function = <Func nameStart=sig.name.start nameLen=sig.name.end - sig.name.start nameId=intern(c: inout self, start: sig.name.start, len: sig.name.end - sig.name.start) typeParams=self.pushFuncBinds(binds: typeParams) params=self.pushFuncParams(params: params) hasRet=sig.hasRet || sig.isFactory retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=0U64 hasRecv=false recvStart=0U64 recvLen=0U64 selfInout=sig.selfInout selfMove=sig.selfMove isAssoc=sig.isAssoc isFactory=sig.isFactory isAnonymousFactory=sig.isAnonymousFactory isAsync=sig.isAsync isDiverging=sig.isDiverging isExtern=isExtern isCExtern=isCExtern runtimeIntrinsic=runtimeIntrinsic defOffset=sig.name.start signatureBounds=self.pushConformBounds(bounds: signatureBounds) />
+        return <Result.Ok value=<LoweredSourceSignature function=function scope=self.sourceTypeUses.currentScope() result=resultUse factoryError=factoryError /> />
     }
 }
 
@@ -1506,13 +1522,13 @@ impl Comp {
         self.cur.typeParams = scopeTP
         self.setLowerAssociatedTrait(owner: nameStart, parameters: typeParams)
         mut val reqs: Array[Func] = []
-        mut val requirementScopes: Array[U64] = []
+        mut val requirements: Array[LoweredSourceSignature] = []
         mut val ri: U64 = 0
         while ri < t.reqs.count() {
             val requirement = try self.lowerSigToFunc(sig: t.reqs[ri], isExtern: false, isCExtern: false)
             try self.validateTraitRequirement(requirement: requirement.function)
             reqs.append(requirement.function)
-            requirementScopes.append(requirement.scope)
+            requirements.append(requirement)
             ri += 1
         }
         mut val associatedBounds: Array[TraitAssociatedBound] = []
@@ -1530,8 +1546,8 @@ impl Comp {
         }
         val traitIndex = self.decls.registerTrait(<TraitDef nameStart=nameStart nameLen=nameLen nameId=intern(c: inout self, start: nameStart, len: nameLen) selfParamId=selfParamId typeParams=self.pushTraitBinds(binds: typeParams) supertraits=self.pushTraitConstraints(constraints: supertraits) reqs=self.pushTraitReqs(reqs: reqs) assocTypes=self.pushTraitBinds(binds: assocTypes) assocBounds=self.pushTraitAssociatedBounds(bounds: associatedBounds) />)
         mut val requirementSlot = 0U64
-        while requirementSlot < requirementScopes.count() {
-            try self.bindAuthoredRequirementScope(scope: requirementScopes[requirementSlot], traitIndex: traitIndex, slot: requirementSlot, site: nameStart)
+        while requirementSlot < requirements.count() {
+            try self.bindAuthoredRequirementScope(signature: requirements[requirementSlot], traitIndex: traitIndex, slot: requirementSlot, site: nameStart)
             requirementSlot += 1U64
         }
         // attach pending `@[...]` directives to this trait (a macro on a trait);
@@ -1591,14 +1607,14 @@ impl Comp {
         self.cur.typeParams = scope
         self.setLowerAssociatedTrait(owner: t.name.start, parameters: typeParams)
         mut val reqs: Array[Func] = []
-        mut val requirementScopes: Array[U64] = []
+        mut val requirements: Array[LoweredSourceSignature] = []
         i = 0U64
         while i < syntaxTraitReqCount(file: self.syntax, trait: t) {
             val requirement = syntaxSig(file: self.syntax, id: syntaxTraitReq(file: self.syntax, trait: t, index: i))
             val lowered = try self.lowerSyntaxSigToFunc(sig: requirement, isExtern: false, isCExtern: false)
             try self.validateTraitRequirement(requirement: lowered.function)
             reqs.append(lowered.function)
-            requirementScopes.append(lowered.scope)
+            requirements.append(lowered)
             i += 1U64
         }
         mut val associatedBounds: Array[TraitAssociatedBound] = []
@@ -1625,8 +1641,8 @@ impl Comp {
         }
         val traitIndex = self.decls.registerTrait(<TraitDef nameStart=t.name.start nameLen=t.name.end - t.name.start nameId=intern(c: inout self, start: t.name.start, len: t.name.end - t.name.start) selfParamId=selfParamId typeParams=self.pushTraitBinds(binds: typeParams) supertraits=self.pushTraitConstraints(constraints: supertraits) reqs=self.pushTraitReqs(reqs: reqs) assocTypes=self.pushTraitBinds(binds: assocTypes) assocBounds=self.pushTraitAssociatedBounds(bounds: associatedBounds) />)
         mut val requirementSlot = 0U64
-        while requirementSlot < requirementScopes.count() {
-            try self.bindAuthoredRequirementScope(scope: requirementScopes[requirementSlot], traitIndex: traitIndex, slot: requirementSlot, site: t.name.start)
+        while requirementSlot < requirements.count() {
+            try self.bindAuthoredRequirementScope(signature: requirements[requirementSlot], traitIndex: traitIndex, slot: requirementSlot, site: t.name.start)
             requirementSlot += 1U64
         }
         self.drainDerives(typeStart: t.name.start, typeLen: t.name.end - t.name.start, isEnum: false, declStart: t.span.start, declEnd: t.span.end)
