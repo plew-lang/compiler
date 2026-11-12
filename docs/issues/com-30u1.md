@@ -1,6 +1,6 @@
 ---
 id: com-30u1
-status: open
+status: in_progress
 deps: []
 links: []
 created: 2026-11-09T08:54:16Z
@@ -36,3 +36,13 @@ frames before returning the original diagnostic.
 Follow the parent [contract and closure rules](com-amjl.md#contract-and-closure) and task-start TDD. Confirm the actual old-candidate RED for new behavior, preserve valid controls, then build a fresh candidate and test the real source-to-final-consumer path. Pure refactors use existing GREEN. Record exact inputs/carrier, diagnostic origin, meaningful assertions, applicable modes, removed competing authorities and independent neutral review. Do not close from a table/check/helper-only result. Existing unsupported surfaces must retain their actual diagnostic and be recorded, not silently counted as acceptance.
 
 No new specification or general solver/SCC/unique/opening feature, API-wide authority extraction, main/seed promotion or whole-suite/ASan certification is included. Shared API names alone do not create whole-task prerequisites. Whole-program fixed-point/performance/full-suite gates remain with met-si6j; parent closure still requires the complete original guarantee map.
+
+## First RED
+
+Candidate `c0b0a04f` accepts
+`tests/fixtures/reject/trait_requirement_signature_wrong_instance.pw` in
+check, JIT and native compilation. The unused raw requirement projects
+`Self#Project[I64].Item`, while its owner only declares `Project[Bool]`.
+Changing the projection to `Project[Bool]` passes in all three modes and
+serves as the exact-instance control. Preserve the actual raw requirement
+owner and diagnose the missing proof at its annotation before publication.

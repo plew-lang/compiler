@@ -1,0 +1,5 @@
+trait Project[Kind] { type Item }
+trait Owner: Project[Bool] {
+    fn missing(value: Self#Project[I64].Item)
+}
+fn main() {}
