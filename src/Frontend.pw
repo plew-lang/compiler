@@ -409,6 +409,18 @@ struct RequirementSignatureRead {
 }
 impl RequirementSignatureRead { factory }
 
+struct SignatureProjectionPremise {
+    val source: Optional[DeclarationBoundRef] = <Optional.None />
+    val steps: Array[SupertraitRef] = []
+}
+impl SignatureProjectionPremise { factory }
+
+enum SignatureRecipeContext {
+    Concrete
+    Requirement(signature: RequirementSignatureRead)
+    Provided(owner: U64)
+}
+
 struct AuthoredRecipeRead {
     val term: U64
     // Selected derivations from this recipe's canonical child graph only.

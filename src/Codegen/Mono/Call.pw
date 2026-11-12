@@ -330,10 +330,17 @@ pub impl Comp {
 }
 
 impl Comp {
+    inout fn providedSourceSignature(function: U64, environment: InstanceEnvironment) -> Result[BodySignature, CompileDiagnostic] {
+        match (try self.readRetainedCallableSignature(function: function, environment: environment, sourceSelection: true)) {
+            Optional.Some(v: val signature) => { return <Result.Ok value=signature /> }
+            Optional.None => { return <Result.Err error=self.diagnosticAt(offset: self.arena.functionAt(index: function).defOffset, msg: "selected provided method has no authored signature", failureDomain: <FailureDomain.Internal />) /> }
+        }
+    }
+
     // None identifies an unmigrated/synthetic declaration, never failed
     // admission of a registered source signature. Saved slots are interpreted
     // before any body-type cache or ambient grounding can confer authority.
-    inout fn readRetainedCallableSignature(function: U64, environment: InstanceEnvironment) -> Result[Optional[BodySignature], CompileDiagnostic] {
+    inout fn readRetainedCallableSignature(function: U64, environment: InstanceEnvironment, sourceSelection: Bool = false) -> Result[Optional[BodySignature], CompileDiagnostic] {
         val declaration = self.arena.functionAt(index: function)
         // A provided placement retains the source body's parameter slots.
         // Its already selected environment binds that body's lexical Self
@@ -348,7 +355,10 @@ impl Comp {
                 return <Result.Ok value=<Optional.None /> />
             },
         }
-        if !self.authoredSignatureViews.contains(key: owner) { return <Result.Err error=self.diagnosticAt(offset: declaration.defOffset, msg: "authored signature has no admitted trait views", failureDomain: <FailureDomain.Internal />) /> }
+        if !self.authoredSignatureViews.contains(key: owner) {
+            if !sourceSelection { return <Result.Err error=self.diagnosticAt(offset: declaration.defOffset, msg: "authored signature has no admitted trait views", failureDomain: <FailureDomain.Internal />) /> }
+            try self.admitAuthoredFunctionViewSignature(signature: source)
+        }
         if source.parameters.count() != declaration.params.count() { return <Result.Err error=self.diagnosticAt(offset: declaration.defOffset, msg: "retained callable signature changed its parameter slots", failureDomain: <FailureDomain.Internal />) /> }
         mut val slots: Array[SourceSignatureSlot] = []
         mut val index = 0U64
@@ -358,7 +368,8 @@ impl Comp {
         }
         if source.result != 0U64 { slots.append(<SourceSignatureSlot.Result />) }
         if source.factoryError != 0U64 { slots.append(<SourceSignatureSlot.FactoryError />) }
-        val terms = try self.readAdmittedSignatureRoots(function: owner, slots: slots, environment: environment)
+        val context = if sourceSelection { give <SignatureRecipeContext.Provided owner=owner /> } else { give <SignatureRecipeContext.Concrete /> }
+        val terms = try self.readAdmittedSignatureRoots(function: owner, slots: slots, environment: environment, context: context)
         mut val parameters: Array[U64] = []
         mut val termIndex = 0U64
         index = 0U64
@@ -387,6 +398,9 @@ impl Comp {
         } else if declaration.isAsync {
             result = self.semanticCallableReturnTerm(function: declaration)
             if result == 0U64 { return <Result.Err error=self.diagnosticAt(offset: declaration.defOffset, msg: "async declaration requires the ambient Promise declaration") /> }
+        }
+        if sourceSelection && !declaration.hasRet && !declaration.isFactory && !declaration.isAsync {
+            result = self.semanticCallableReturnTerm(function: declaration)
         }
         mut val bodyResult = result
         if declaration.isAsync {

@@ -1313,6 +1313,7 @@ pub impl Comp {
         mut val methodArguments: Array[U64] = []
         mut val selectedResult = resultTerm
         mut val selectedEnvironment = <InstanceEnvironment />
+        mut val providedParameters: Array[U64] = []
         match resolution {
             StaticMemberResolution.Requirement(proof: _, traitIdx: val owner, reqIdx: val index) => {
                 val requirement = self.traitReqAt(reqs: self.decls.traitAt(index: owner).reqs, index: index)
@@ -1324,7 +1325,9 @@ pub impl Comp {
                 val environment = try self.staticProvidedCallEnvironment(function: function, proof: proof, receiverTerm: receiverTerm, args: args, retainedArguments: (try self.syntheticSelectedTypeArguments(exprId: exprId, declaration: callee)))
                 selectedEnvironment = environment
                 methodArguments = self.signatureTypeArguments(f: function, environment: environment)
-                selectedResult = try self.groundTermForBody(ref: self.semanticCallableReturnTerm(function: function), environment: environment, selfRef: receiverTerm, itemRef: 0U64)
+                val signature = try self.providedSourceSignature(function: callee, environment: environment)
+                selectedResult = signature.resultType
+                providedParameters = signature.parameterTypes
             }
             _ => {}
         }
@@ -1341,9 +1344,7 @@ pub impl Comp {
                 StaticMemberResolution.Provided(proof: _, traitIdx: _, callee: val callee) => {
                     val function = self.arena.functionAt(index: callee)
                     val parameter = self.paramIndexForArg(params: function.params, args: args, argIdx: argumentIndex)
-                    if parameter < function.params.count() {
-                        expected = try self.groundTermForBody(ref: self.funcParamAt(params: function.params, index: parameter).ty, environment: selectedEnvironment, selfRef: receiverTerm, itemRef: 0U64)
-                    }
+                    if parameter < providedParameters.count() { expected = providedParameters[parameter] }
                 }
                 _ => {}
             }

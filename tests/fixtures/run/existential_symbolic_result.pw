@@ -36,7 +36,38 @@ fn checkRetainedWhereClause() {
     }
 }
 
+fn checkProvidedSignature() {
+    mut val compiler = <Comp />
+    val source = "trait Provider {{ type Item }} pub impl Provider {{ fn supply(value: Item) -> Item {{ return value }} }} fn probe[T](receiver: T) where T: Provider[Item=Bool] {{}}"
+    match analyzeFrontendDeclarations(c: inout compiler, input: <FrontendInput.Text text=source path="provided-reader.pw" />, sources: <SourceAccess stdRoot=[] />) {
+        Result.Ok(value: _) => {}
+        Result.Err(error: val diagnostic) => { panic(diagnostic.message) }
+    }
+    val bound = compiler.decls.funcBounds.at(index: 0U64)
+    val receiver = bound.paramTy
+    val traitIndex = compiler.decls.traitIndexByOffset(offset: bound.constraint.key.owner)
+    val callee = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "supply").nameId)
+    val resolution = <StaticMemberResolution.Provided proof=<StaticConformanceProof.AssumedBound source=<DeclarationBoundRef.Function index=0U64 /> /> traitIdx=traitIndex callee=callee />
+    val args = compiler.pushArgs(args: [])
+    val result = match compiler.staticMemberCallResultType(resolution: resolution, receiverTerm: receiver, args: args) {
+        Result.Ok(value: val term) => term,
+        Result.Err(error: val diagnostic) => { panic(diagnostic.message) }
+    }
+    assert(compiler.typeRefEq(a: result, b: bound.constraint.assocPredicates[0U64].value))
+    compiler.sourceTypeUses = <SourceTypeUses />
+    match compiler.staticMemberCallResultType(resolution: resolution, receiverTerm: receiver, args: args) {
+        Result.Err(error: val diagnostic) => {
+            match diagnostic.failureDomain {
+                FailureDomain.Internal => {}
+                _ => { panic "missing provided signature was not an internal error" }
+            }
+        }
+        Result.Ok(value: _) => { panic "read a provided result without its source signature" }
+    }
+}
+
 fn main() {
+    checkProvidedSignature()
     checkRetainedWhereClause()
     mut val c = <Comp />
     val source = "struct Value {{}}\ntrait Cursor {{ type Item fn read(value: Item) -> Item fn alternate(value: Bool) -> Bool }}\ntrait Source {{ type Iter fn iterator() -> Self#Source.Iter fn other() -> Bool fn hidden(other: Self) -> Bool }}\nfn test[T](values: any Source[Iter=T]) where T: Cursor[Item=Value] {{}}\n"

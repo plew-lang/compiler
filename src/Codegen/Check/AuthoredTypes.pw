@@ -32,7 +32,7 @@ pub impl Comp {
 impl Comp {
     // One read owns one declaration/environment validation and recipe memo.
     // Roots retain their distinct authored occurrences, even for equal terms.
-    inout fn readAdmittedSignatureRoots(function: U64, slots: Array[SourceSignatureSlot], environment: InstanceEnvironment) -> Result[Array[U64], CompileDiagnostic] {
+    inout fn readAdmittedSignatureRoots(function: U64, slots: Array[SourceSignatureSlot], environment: InstanceEnvironment, context: SignatureRecipeContext = <SignatureRecipeContext.Concrete />) -> Result[Array[U64], CompileDiagnostic] {
         val admitted = match self.authoredSignatureViews.get(key: function) {
             Optional.Some(v: val admitted) => admitted,
             Optional.None => { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "authored signature has no admitted trait views", failureDomain: <FailureDomain.Internal />) /> },
@@ -42,7 +42,7 @@ impl Comp {
         mut val memo: Dictionary[U64, AuthoredRecipeRead] = [:]
         mut val receiverEquations: Array[ProjectionNormalizationStep] = []
         for recipe in admitted.receiverRecipes {
-            val read = try self.readAuthoredTypeRecipe(proofs: admitted.proofs, recipe: recipe, environment: environment, memo: inout memo)
+            val read = try self.readAuthoredTypeRecipe(proofs: admitted.proofs, recipe: recipe, environment: environment, memo: inout memo, context: context)
             for equation in read.normalizations { try self.appendRetainedProjectionEquation(step: equation, normalizations: inout receiverEquations) }
         }
         mut val terms: Array[U64] = []
@@ -57,7 +57,7 @@ impl Comp {
             }
             if id == 0U64 { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "signature slot has no authored annotation", failureDomain: <FailureDomain.Input />) /> }
             val occurrence = try self.signatureOccurrence(id: id)
-            terms.append((try self.readAuthoredTypeRecipe(proofs: admitted.proofs, recipe: occurrence.recipe, environment: environment, memo: inout memo, receiverEquations: receiverEquations)).term)
+            terms.append((try self.readAuthoredTypeRecipe(proofs: admitted.proofs, recipe: occurrence.recipe, environment: environment, memo: inout memo, receiverEquations: receiverEquations, context: context)).term)
         }
         return <Result.Ok value=terms />
     }
@@ -113,7 +113,7 @@ impl Comp {
 impl Comp {
     // The memo belongs to one exact admitted signature and one environment.
     // No semantic-term cache or source reverse lookup can confer evidence.
-    inout fn readAuthoredTypeRecipe(proofs: Array[AuthoredTypeViewProof], recipe: U64, environment: InstanceEnvironment, memo: inout Dictionary[U64, AuthoredRecipeRead], receiverEquations: Array[ProjectionNormalizationStep] = [], interface: Optional[RequirementSignatureRead] = <Optional.None />) -> Result[AuthoredRecipeRead, CompileDiagnostic] {
+    inout fn readAuthoredTypeRecipe(proofs: Array[AuthoredTypeViewProof], recipe: U64, environment: InstanceEnvironment, memo: inout Dictionary[U64, AuthoredRecipeRead], receiverEquations: Array[ProjectionNormalizationStep] = [], context: SignatureRecipeContext) -> Result[AuthoredRecipeRead, CompileDiagnostic] {
         match memo.get(key: recipe) { Optional.Some(v: val read) => { return <Result.Ok value=read /> } Optional.None => {} }
         val node = match self.sourceTypeUses.recipeAt(id: recipe) {
             Optional.Some(v: val node) => node,
@@ -123,7 +123,7 @@ impl Comp {
         mut val reads: Array[AuthoredRecipeRead] = []
         mut val normalizations: Array[ProjectionNormalizationStep] = []
         for child in node.children {
-            val read = try self.readAuthoredTypeRecipe(proofs: proofs, recipe: child, environment: environment, memo: inout memo, receiverEquations: receiverEquations, interface: interface)
+            val read = try self.readAuthoredTypeRecipe(proofs: proofs, recipe: child, environment: environment, memo: inout memo, receiverEquations: receiverEquations, context: context)
             children.append(read.term)
             reads.append(read)
             for equation in read.normalizations { try self.appendRetainedProjectionEquation(step: equation, normalizations: inout normalizations) }
@@ -161,7 +161,7 @@ impl Comp {
                 mut val index = 0U64
                 while index < selectors.count() {
                     if selectors[index].traitInstance.owner != 0U64 {
-                        try self.readAuthoredOccurrenceProof(proofs: proofs, occurrence: node.occurrence, selector: selectors[index], receiver: receiver, arguments: sourceViews[index].traitInstance.positionalArgs, environment: environment, offset: occurrence.site, normalizations: proofEquations, interface: interface)
+                        try self.readAuthoredOccurrenceProof(proofs: proofs, occurrence: node.occurrence, selector: selectors[index], receiver: receiver, arguments: sourceViews[index].traitInstance.positionalArgs, environment: environment, offset: occurrence.site, normalizations: proofEquations, context: context)
                     }
                     index += 1U64
                 }
@@ -174,22 +174,29 @@ impl Comp {
                         index += 1U64
                     }
                     val selector = <ResolvedViewSource writtenStart=occurrence.site surfaceId=original.assocTraitId traitInstance=<TraitInstanceKey owner=owner positionalArgs=original.assocTraitArgs /> />
-                    val proof = try self.readAuthoredOccurrenceProof(proofs: proofs, occurrence: node.occurrence, selector: selector, receiver: receiver, arguments: arguments, environment: environment, offset: occurrence.site, normalizations: proofEquations, interface: interface)
-                    if interface.isSome() {
-                        val output = try self.readRequirementProjectionOutput(proof: proof, interface: interface.unwrap(), receiver: receiver, selector: selector, arguments: arguments, member: original.assocNameId, environment: environment, offset: occurrence.site)
-                        if output != 0U64 { term = output }
-                    } else {
-                        val output = try self.associatedOutputTermInProof(proof: proof, traitOwner: owner, assocId: original.assocNameId)
-                        for equation in (try self.retainedProofProjectionContext(proof: proof)) { try self.appendRetainedProjectionEquation(step: equation, normalizations: inout normalizations) }
-                        val immediate = if output != 0U64 && !self.typeRefEq(a: output, b: rebuilt) { give output } else { give 0U64 }
-                        try self.appendRetainedProjectionEquation(step: <ProjectionNormalizationStep source=rebuilt proof=self.freezeStaticConformanceProof(proof: proof) output=immediate />, normalizations: inout normalizations)
-                        term = try self.associatedOutputInProof(proof: proof, traitOwner: owner, assocId: original.assocNameId)
-                        if term == 0U64 { return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "saved signature projection is not instantiated", failureDomain: <FailureDomain.Internal />) /> }
+                    val proof = try self.readAuthoredOccurrenceProof(proofs: proofs, occurrence: node.occurrence, selector: selector, receiver: receiver, arguments: arguments, environment: environment, offset: occurrence.site, normalizations: proofEquations, context: context)
+                    match context {
+                        SignatureRecipeContext.Requirement(signature: val interface) => {
+                            val output = try self.readRequirementProjectionOutput(proof: proof, interface: interface, receiver: receiver, selector: selector, arguments: arguments, member: original.assocNameId, environment: environment, offset: occurrence.site)
+                            if output != 0U64 { term = output }
+                        }
+                        SignatureRecipeContext.Provided(owner: val function) => {
+                            val output = try self.readProvidedProjectionOutput(proof: proof, function: function, receiver: receiver, selector: selector, arguments: arguments, member: original.assocNameId, environment: environment, offset: occurrence.site)
+                            if output != 0U64 { term = output }
+                        }
+                        SignatureRecipeContext.Concrete => {
+                            val output = try self.associatedOutputTermInProof(proof: proof, traitOwner: owner, assocId: original.assocNameId)
+                            for equation in (try self.retainedProofProjectionContext(proof: proof)) { try self.appendRetainedProjectionEquation(step: equation, normalizations: inout normalizations) }
+                            val immediate = if output != 0U64 && !self.typeRefEq(a: output, b: rebuilt) { give output } else { give 0U64 }
+                            try self.appendRetainedProjectionEquation(step: <ProjectionNormalizationStep source=rebuilt proof=self.freezeStaticConformanceProof(proof: proof) output=immediate />, normalizations: inout normalizations)
+                            term = try self.associatedOutputInProof(proof: proof, traitOwner: owner, assocId: original.assocNameId)
+                            if term == 0U64 { return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "saved signature projection is not instantiated", failureDomain: <FailureDomain.Internal />) /> }
+                        }
                     }
                 }
             }
             SourceTypeRecipeOrigin.ResultRepresentation => {
-                val source = try self.readAuthoredTypeRecipe(proofs: proofs, recipe: node.sourceRecipe, environment: environment, memo: inout memo, receiverEquations: receiverEquations, interface: interface)
+                val source = try self.readAuthoredTypeRecipe(proofs: proofs, recipe: node.sourceRecipe, environment: environment, memo: inout memo, receiverEquations: receiverEquations, context: context)
                 term = self.semanticSourceResultTerm(ref: source.term)
                 for equation in source.normalizations { try self.appendRetainedProjectionEquation(step: equation, normalizations: inout normalizations) }
             }
@@ -201,17 +208,21 @@ impl Comp {
         return <Result.Ok value=read />
     }
 
-    inout fn readAuthoredOccurrenceProof(proofs: Array[AuthoredTypeViewProof], occurrence: U64, selector: ResolvedViewSource, receiver: U64, arguments: Array[U64], environment: InstanceEnvironment, offset: U64, normalizations: Array[ProjectionNormalizationStep], interface: Optional[RequirementSignatureRead]) -> Result[StaticConformanceProof, CompileDiagnostic] {
+    inout fn readAuthoredOccurrenceProof(proofs: Array[AuthoredTypeViewProof], occurrence: U64, selector: ResolvedViewSource, receiver: U64, arguments: Array[U64], environment: InstanceEnvironment, offset: U64, normalizations: Array[ProjectionNormalizationStep], context: SignatureRecipeContext) -> Result[StaticConformanceProof, CompileDiagnostic] {
         for saved in proofs {
             if saved.occurrence == occurrence && self.semanticViewSourceEq(a: saved.selector, b: selector) {
-                if interface.isSome() {
-                    val proof = self.thawStaticConformanceProof(id: saved.proof)
-                    match proof {
-                        StaticConformanceProof.Missing => { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "requirement signature view lost its proof", failureDomain: <FailureDomain.Internal />) /> }
-                        _ => { return <Result.Ok value=proof /> }
+                match context {
+                    SignatureRecipeContext.Concrete => {
+                        return self.instantiateAuthoredViewProof(saved: saved, receiver: receiver, arguments: arguments, environment: environment, offset: offset, normalizations: normalizations)
+                    }
+                    _ => {
+                        val proof = self.thawStaticConformanceProof(id: saved.proof)
+                        match proof {
+                            StaticConformanceProof.Missing => { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "signature view lost its proof", failureDomain: <FailureDomain.Internal />) /> }
+                            _ => { return <Result.Ok value=proof /> }
+                        }
                     }
                 }
-                return self.instantiateAuthoredViewProof(saved: saved, receiver: receiver, arguments: arguments, environment: environment, offset: offset, normalizations: normalizations)
             }
         }
         return <Result.Err error=self.diagnosticAt(offset: offset, msg: "signature view has no saved proof", failureDomain: <FailureDomain.Internal />) />
@@ -586,7 +597,7 @@ impl Comp {
         if admitted.proofs.count() == 0U64 && self.arena.typeIsClosed(ref: occurrence.term) {
             return <Result.Ok value=occurrence.term />
         }
-        return <Result.Ok value=(try self.readAuthoredTypeRecipe(proofs: admitted.proofs, recipe: occurrence.recipe, environment: environment, memo: inout memo, interface: <Optional.Some v=interface />)).term />
+        return <Result.Ok value=(try self.readAuthoredTypeRecipe(proofs: admitted.proofs, recipe: occurrence.recipe, environment: environment, memo: inout memo, context: <SignatureRecipeContext.Requirement signature=interface />)).term />
     }
 
     inout fn requirementParameterTypeAt(signature: RequirementSignatureRead, index: U64) -> Result[U64, CompileDiagnostic] {
@@ -644,11 +655,11 @@ impl Comp {
             if admitted.proofs.count() == 0U64 && self.arena.typeIsClosed(ref: occurrence.term) {
                 return <Result.Ok value=occurrence.term />
             }
-            result = (try self.readAuthoredTypeRecipe(proofs: admitted.proofs, recipe: occurrence.recipe, environment: environment, memo: inout memo, interface: <Optional.Some v=interface />)).term
+            result = (try self.readAuthoredTypeRecipe(proofs: admitted.proofs, recipe: occurrence.recipe, environment: environment, memo: inout memo, context: <SignatureRecipeContext.Requirement signature=interface />)).term
         } else if declaration.isFactory {
             if admitted.source.factoryError != 0U64 {
                 val occurrence = try self.signatureOccurrence(id: admitted.source.factoryError)
-                val error = (try self.readAuthoredTypeRecipe(proofs: admitted.proofs, recipe: occurrence.recipe, environment: environment, memo: inout memo, interface: <Optional.Some v=interface />)).term
+                val error = (try self.readAuthoredTypeRecipe(proofs: admitted.proofs, recipe: occurrence.recipe, environment: environment, memo: inout memo, context: <SignatureRecipeContext.Requirement signature=interface />)).term
                 // The wrapper was resolved with the declaration, just as the
                 // explicit error annotation was. Only its two children change.
                 result = self.rebuildTypeTermChildren(ref: result, children: [receiver, error])
@@ -659,20 +670,62 @@ impl Comp {
         return <Result.Ok value=result />
     }
 
-    inout fn readRequirementProjectionOutput(proof: StaticConformanceProof, interface: RequirementSignatureRead, receiver: U64, selector: ResolvedViewSource, arguments: Array[U64], member: U64, environment: InstanceEnvironment, offset: U64) -> Result[U64, CompileDiagnostic] {
-        mut val source: Optional[DeclarationBoundRef] = <Optional.None />
-        mut val steps: Array[SupertraitRef] = []
-        match proof {
-            StaticConformanceProof.AssumedBound(source: val bound) => { source = <Optional.Some v=bound /> }
-            StaticConformanceProof.AssumedSupertraitPath(source: val bound, steps: val path) => {
-                source = <Optional.Some v=bound />
-                steps = path
+    // Replace only the provided declaration's own Self premise with the
+    // selected receiver proof. Other admitted premises stay in lexical scope.
+    inout fn readProvidedProjectionOutput(proof: StaticConformanceProof, function: U64, receiver: U64, selector: ResolvedViewSource, arguments: Array[U64], member: U64, environment: InstanceEnvironment, offset: U64) -> Result[U64, CompileDiagnostic] {
+        val premise = self.signatureProjectionPremise(proof: proof)
+        if premise.source.isSome() {
+            match premise.source.unwrap() {
+                DeclarationBoundRef.MethodReceiver(index: val owner) => {
+                    if owner != function { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "provided signature has a foreign receiver premise", failureDomain: <FailureDomain.Internal />) /> }
+                    val declaration = self.arena.functionAt(index: owner)
+                    val traitIndex = self.decls.traitIndexByOffset(offset: declaration.recvStart)
+                    val root = try self.staticProofBound(proof: environment.proof, traitIdx: traitIndex)
+                    val bound = self.supertraitBoundThroughSteps(root: root, steps: premise.steps, includeInherited: false)
+                    val selected = if premise.steps.count() == 0U64 { give <Optional.Some v=environment.proof /> } else { give <Optional.None /> }
+                    return self.readSelectedSignatureProjection(bound: bound, selected: selected, receiver: receiver, selector: selector, arguments: arguments, member: member, offset: offset)
+                }
+                _ => {}
             }
-            _ => {}
         }
+        return self.readLexicalSignatureProjection(proof: proof, owner: selector.traitInstance.owner, member: member, environment: environment)
+    }
+
+    fn signatureProjectionPremise(proof: StaticConformanceProof) -> SignatureProjectionPremise {
+        match proof {
+            StaticConformanceProof.AssumedBound(source: val bound) => { return <SignatureProjectionPremise source=<Optional.Some v=bound /> /> }
+            StaticConformanceProof.AssumedSupertraitPath(source: val bound, steps: val steps) => { return <SignatureProjectionPremise source=<Optional.Some v=bound /> steps=steps /> }
+            _ => { return <SignatureProjectionPremise /> }
+        }
+    }
+
+    inout fn readSelectedSignatureProjection(bound: TraitBound, selected: Optional[StaticConformanceProof], receiver: U64, selector: ResolvedViewSource, arguments: Array[U64], member: U64, offset: U64) -> Result[U64, CompileDiagnostic] {
+        if bound.subject == 0U64 || !self.typeRefEq(a: self.typeRefWithoutOuterViews(ref: bound.subject), b: self.typeRefWithoutOuterViews(ref: receiver)) {
+            return <Result.Err error=self.diagnosticAt(offset: offset, msg: "signature projection changed its selected receiver", failureDomain: <FailureDomain.Internal />) />
+        }
+        if bound.constraint.key.owner != selector.traitInstance.owner || !self.sameResolvedTypeRefs(a: bound.constraint.key.positionalArgs, b: arguments) {
+            return <Result.Err error=self.diagnosticAt(offset: offset, msg: "signature projection changed its selected trait instance", failureDomain: <FailureDomain.Internal />) />
+        }
+        for predicate in bound.constraint.assocPredicates {
+            if predicate.member == member { return <Result.Ok value=predicate.value /> }
+        }
+        match selected {
+            Optional.Some(v: val proof) => { return self.associatedOutputInProof(proof: proof, traitOwner: selector.traitInstance.owner, assocId: member) }
+            Optional.None => { return <Result.Ok value=0U64 /> }
+        }
+    }
+
+    inout fn readLexicalSignatureProjection(proof: StaticConformanceProof, owner: U64, member: U64, environment: InstanceEnvironment) -> Result[U64, CompileDiagnostic] {
+        val output = try self.associatedOutputTermInProof(proof: proof, traitOwner: owner, assocId: member)
+        if output == 0U64 { return <Result.Ok value=0U64 /> }
+        return <Result.Ok value=self.groundTermInEnvironment(ref: output, params: environment.params, values: environment.args, selfRef: environment.receiverRef) />
+    }
+
+    inout fn readRequirementProjectionOutput(proof: StaticConformanceProof, interface: RequirementSignatureRead, receiver: U64, selector: ResolvedViewSource, arguments: Array[U64], member: U64, environment: InstanceEnvironment, offset: U64) -> Result[U64, CompileDiagnostic] {
+        val premise = self.signatureProjectionPremise(proof: proof)
         mut val raw: Optional[U64] = <Optional.None />
-        if source.isSome() {
-            match source.unwrap() {
+        if premise.source.isSome() {
+            match premise.source.unwrap() {
                 DeclarationBoundRef.RawRequirement(index: val index) => { raw = <Optional.Some v=index /> }
                 _ => {}
             }
@@ -684,25 +737,14 @@ impl Comp {
                 return <Result.Err error=self.diagnosticAt(offset: offset, msg: "signature projection belongs to another trait requirement", failureDomain: <FailureDomain.Internal />) />
             }
             if index == first {
-                val bound = self.supertraitBoundThroughSteps(root: interface.bound, steps: steps, includeInherited: false)
-                if bound.subject == 0U64 || !self.typeRefEq(a: bound.subject, b: self.typeRefWithoutOuterViews(ref: receiver)) || bound.constraint.key.owner != selector.traitInstance.owner || !self.sameResolvedTypeRefs(a: bound.constraint.key.positionalArgs, b: arguments) {
-                    return <Result.Err error=self.diagnosticAt(offset: offset, msg: "signature projection changed its selected interface instance", failureDomain: <FailureDomain.Internal />) />
-                }
-                for predicate in bound.constraint.assocPredicates {
-                    if predicate.member == member { return <Result.Ok value=predicate.value /> }
-                }
-                if steps.count() == 0U64 && interface.selected.isSome() {
-                    return self.associatedOutputInProof(proof: interface.selected.unwrap(), traitOwner: selector.traitInstance.owner, assocId: member)
-                }
-                return <Result.Ok value=0U64 />
+                val bound = self.supertraitBoundThroughSteps(root: interface.bound, steps: premise.steps, includeInherited: false)
+                val selected = if premise.steps.count() == 0U64 { give interface.selected } else { give <Optional.None /> }
+                return self.readSelectedSignatureProjection(bound: bound, selected: selected, receiver: receiver, selector: selector, arguments: arguments, member: member, offset: offset)
             }
         }
-        // Other admitted derivations can supply a declaration equation. A
-        // missing equation leaves the projection symbolic; it does not
-        // authorize discovering a different witness after erasure.
-        val output = try self.associatedOutputTermInProof(proof: proof, traitOwner: selector.traitInstance.owner, assocId: member)
-        if output == 0U64 { return <Result.Ok value=0U64 /> }
-        return <Result.Ok value=self.groundTermInEnvironment(ref: output, params: environment.params, values: environment.args, selfRef: environment.receiverRef) />
+        // An admitted equation may leave its output symbolic. It does not
+        // authorize discovering another witness after erasure.
+        return self.readLexicalSignatureProjection(proof: proof, owner: selector.traitInstance.owner, member: member, environment: environment)
     }
 
     inout fn readRequirementBounds(signature: RequirementSignatureRead, methodArguments: Array[U64]) -> Result[Array[TraitBound], CompileDiagnostic] {
@@ -749,7 +791,7 @@ impl Comp {
             return <Result.Ok value=self.groundTermInEnvironment(ref: ref, params: environment.params, values: environment.args, selfRef: environment.receiverRef) />
         }
         if proofs.count() == 0U64 && self.arena.typeIsClosed(ref: ref) { return <Result.Ok value=ref /> }
-        return <Result.Ok value=(try self.readAuthoredTypeRecipe(proofs: proofs, recipe: recipe, environment: environment, memo: inout memo, interface: <Optional.Some v=signature />)).term />
+        return <Result.Ok value=(try self.readAuthoredTypeRecipe(proofs: proofs, recipe: recipe, environment: environment, memo: inout memo, context: <SignatureRecipeContext.Requirement signature=signature />)).term />
     }
 
     inout fn retainedRequirementClause(scope: U64, id: U64, offset: U64) -> Result[PreparedProjectionBound, CompileDiagnostic] {

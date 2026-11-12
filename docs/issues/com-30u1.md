@@ -331,3 +331,29 @@ The observation is recorded with [com-qb05](com-qb05.md#missing-proof-control-di
 
 Next, migrate the provided source signature consumers and audit the remaining
 inherited and associated proof interpretations through final publication.
+
+## Provided source signature checkpoint
+
+Source result inference, call recording and selected argument validation now
+read the provided declaration's admitted signature slots. The source reader
+substitutes the selected receiver and its exact trait instance into the
+declaration's own receiver premise. Open associated outputs can remain
+symbolic. The concrete body reader still requires instantiated proof.
+The candidate-rank path and the remaining inherited/associated proof replay
+audit are open.
+
+The internal test in `existential_symbolic_result` first reads `Item=Bool`
+through an assumed bound, then removes the authored signature store. The
+`2fbe0dd9` carrier's native fixture reached the assertion “read a provided
+result without its source signature”. The fresh carrier returned an Internal
+diagnostic and the full fixture passed.
+
+Build `20261112T141347-build-d56e61`, candidate `7248fd5d`. Check passed for the
+provided and trait-method fixture groups. Ten focused controls passed check and
+native execution. Nine of those public controls also passed JIT, including
+generic trait paths with and without an extension view, nested associated
+types, a foreign receiver's projection, and contextual result inference.
+Standard generation run `20261112T141802-gen-290bbd` passed. On identical
+compiler source the old/new median was 6.646001/6.595748 seconds, with the same
+68,047,127-byte LLVM output in all eight runs. This comparison is separate from
+the integration fixed-point gate.
