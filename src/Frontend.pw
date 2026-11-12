@@ -413,10 +413,16 @@ enum RequirementSelfEvidence {
     Conformance(index: U64)
 }
 
+enum SignatureProofRead {
+    Admission
+    Retained
+}
+
 struct RequirementSignatureRead {
     val scope: U64
     val bound: TraitBound
     val evidence: RequirementSelfEvidence = <RequirementSelfEvidence.Interface />
+    val proofRead: SignatureProofRead = <SignatureProofRead.Admission />
 }
 impl RequirementSignatureRead { factory }
 

@@ -22,6 +22,19 @@ inout fn existentialSelfTerm(traitIndex: U64) -> Result[U64, CompileDiagnostic] 
 }
 
 inout fn existentialRequirementIsDispatchable(target: U64, traitIndex: U64, slot: U64) -> Result[Bool, CompileDiagnostic] {
+    return self.readExistentialRequirementDispatchability(target: target, traitIndex: traitIndex, slot: slot, proofRead: <SignatureProofRead.Admission />)
+}
+
+inout fn checkExistentialRequirementCall(target: U64, traitIndex: U64, requirement: U64, offset: U64) -> Result[(), CompileDiagnostic] {
+    try self.readCheckedExistentialRequirementCall(target: target, traitIndex: traitIndex, requirement: requirement, offset: offset, proofRead: <SignatureProofRead.Admission />)
+    return <Result.Ok value=() />
+}
+
+}
+
+impl Comp {
+
+inout fn readExistentialRequirementDispatchability(target: U64, traitIndex: U64, slot: U64, proofRead: SignatureProofRead) -> Result[Bool, CompileDiagnostic] {
     if traitIndex >= self.decls.traitCount() || slot >= self.decls.traitAt(index: traitIndex).reqs.count() {
         return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "existential dispatch has no selected declaration", failureDomain: <FailureDomain.Internal />) />
     }
@@ -31,7 +44,7 @@ inout fn existentialRequirementIsDispatchable(target: U64, traitIndex: U64, slot
     val source = try self.existentialSelfTerm(traitIndex: traitIndex)
     val bound = try self.existentialRequirementBound(target: target, traitIndex: traitIndex, receiver: source, offset: requirement.nameStart)
     val parameter = self.decls.traitAt(index: traitIndex).selfParamId
-    for input in (try self.requirementParameterTypes(signature: <RequirementSignatureRead scope=scope bound=bound />)) {
+    for input in (try self.requirementParameterTypes(signature: <RequirementSignatureRead scope=scope bound=bound proofRead=proofRead />)) {
         if self.typeTermContainsParameter(ref: input, parameter: parameter) { return <Result.Ok value=false /> }
     }
     return <Result.Ok value=true />
@@ -39,19 +52,22 @@ inout fn existentialRequirementIsDispatchable(target: U64, traitIndex: U64, slot
 
 // Input Self and output conversion are checked against the same selected
 // interface. Associated projections normalize before the Self dependency test.
-inout fn checkExistentialRequirementCall(target: U64, traitIndex: U64, requirement: U64, offset: U64) -> Result[(), CompileDiagnostic] {
-    if !(try self.existentialRequirementIsDispatchable(target: target, traitIndex: traitIndex, slot: requirement)) {
+inout fn readCheckedExistentialRequirementCall(target: U64, traitIndex: U64, requirement: U64, offset: U64, proofRead: SignatureProofRead) -> Result[ExistentialRequirementSignature, CompileDiagnostic] {
+    if !(try self.readExistentialRequirementDispatchability(target: target, traitIndex: traitIndex, slot: requirement, proofRead: proofRead)) {
         return <Result.Err error=self.diagnosticAt(offset: offset, msg: "this member is not callable through `any P`: `Self` appears in a non-receiver input — two `any P` values need not share a concrete type (spec/08)") />
     }
     val source = try self.existentialSelfTerm(traitIndex: traitIndex)
     val proof = <StaticConformanceProof.TraitSelf traitIdx=traitIndex receiverRef=source traitArgs=self.existentialTraitConstraint(ref: target).key.positionalArgs />
     val evidence = <ExistentialBoxEvidence sourceRef=source targetRef=target traitIdx=traitIndex proof=proof />
-    match (try self.existentialWitnessPlan(evidence: evidence, requirement: requirement, sourceReceiver: source)) {
-        Optional.Some(v: _) => {}
+    match (try self.readExistentialWitnessPlan(evidence: evidence, requirement: requirement, sourceReceiver: source, proofRead: proofRead)) {
+        Optional.Some(v: val plan) => { return <Result.Ok value=plan.signature /> }
         Optional.None => { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "this member's existential result conversion is not supported") /> }
     }
-    return <Result.Ok value=() />
 }
+
+}
+
+pub impl Comp {
 
 // A dynamic interface can forget sendability, but cannot acquire a different
 // trait or change any of its bindings. This consumes resolved declaration

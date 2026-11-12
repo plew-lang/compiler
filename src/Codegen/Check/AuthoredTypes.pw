@@ -628,11 +628,11 @@ impl Comp {
     // The public interface interprets the selected declaration's recipe. Its
     // rigid Self and associated bindings are type substitutions, not static
     // conformance evidence for the erased receiver.
-    inout fn readRequirementInterfaceSignature(scope: U64, bound: TraitBound, traitIndex: U64) -> Result[ExistentialRequirementSignature, CompileDiagnostic] {
+    inout fn readRequirementInterfaceSignature(scope: U64, bound: TraitBound, traitIndex: U64, proofRead: SignatureProofRead) -> Result[ExistentialRequirementSignature, CompileDiagnostic] {
         val admitted = self.authoredRequirementViews[scope]
         val declaration = admitted.declaration
         val environment = self.requirementSignatureEnvironment(bound: bound, traitIndex: traitIndex)
-        val interface = <RequirementSignatureRead scope=scope bound=bound />
+        val interface = <RequirementSignatureRead scope=scope bound=bound proofRead=proofRead />
         mut val memo: Dictionary[U64, AuthoredRecipeRead] = [:]
         val terms = try self.readRequirementParameters(admitted: admitted, interface: interface, environment: environment, memo: inout memo)
         mut val passings: Array[CallArgumentPassing] = []
@@ -773,7 +773,7 @@ impl Comp {
                                 val declaration = self.arena.functionAt(index: function)
                                 val traitIndex = self.decls.traitIndexByOffset(offset: declaration.recvStart)
                                 val bound = try self.staticProofBound(proof: environment.proof, traitIdx: traitIndex)
-                                val root = try self.readSignatureAssociatedRootProof(index: index, associated: associated, bound: bound, evidence: <RequirementSelfEvidence.Static proof=environment.proof />, receiver: receiver, environment: environment, offset: offset)
+                                val root = try self.readSignatureAssociatedRootProof(index: index, associated: associated, bound: bound, evidence: <RequirementSelfEvidence.Static proof=environment.proof />, receiver: receiver, environment: environment, offset: offset, read: <SignatureProofRead.Admission />)
                                 if root.isSome() {
                                     return self.readSignatureAssociatedProjection(root: root, steps: premise.steps, receiver: receiver, selector: selector, arguments: arguments, member: member, offset: offset)
                                 }
@@ -919,7 +919,7 @@ impl Comp {
                                 if root + 1U64 != self.rawRequirementRanges[interface.scope].first {
                                     return self.readLexicalSignatureProjection(proof: proof, owner: selector.traitInstance.owner, member: member, environment: environment)
                                 }
-                                val rootProof = try self.readSignatureAssociatedRootProof(index: index, associated: associated, bound: interface.bound, evidence: interface.evidence, receiver: receiver, environment: environment, offset: offset)
+                                val rootProof = try self.readSignatureAssociatedRootProof(index: index, associated: associated, bound: interface.bound, evidence: interface.evidence, receiver: receiver, environment: environment, offset: offset, read: interface.proofRead)
                                 if rootProof.isSome() {
                                     return self.readSignatureAssociatedProjection(root: rootProof, steps: premise.steps, receiver: receiver, selector: selector, arguments: arguments, member: member, offset: offset)
                                 }
@@ -953,7 +953,7 @@ impl Comp {
         return self.associatedOutputInProof(proof: proof, traitOwner: selector.traitInstance.owner, assocId: member)
     }
 
-    inout fn readSignatureAssociatedRootProof(index: U64, associated: AssociatedBoundEvidence, bound: TraitBound, evidence: RequirementSelfEvidence, receiver: U64, environment: InstanceEnvironment, offset: U64) -> Result[Optional[StaticConformanceProof], CompileDiagnostic] {
+    inout fn readSignatureAssociatedRootProof(index: U64, associated: AssociatedBoundEvidence, bound: TraitBound, evidence: RequirementSelfEvidence, receiver: U64, environment: InstanceEnvironment, offset: U64, read: SignatureProofRead) -> Result[Optional[StaticConformanceProof], CompileDiagnostic] {
         match evidence {
             RequirementSelfEvidence.Conformance(index: val conformance) => {
                 val row = self.arena.conformanceAssociatedClause(conformance: conformance, clause: associated.clause)
@@ -981,13 +981,13 @@ impl Comp {
             if predicate.member == clause.member && self.typeRefEq(a: predicate.value, b: receiver) {
                 val traitIndex = self.decls.traitIndexByOffset(offset: bound.constraint.key.owner)
                 val constraint = self.traitConstraintInBound(constraint: clause.constraint, bound: bound, traitIndex: traitIndex)
-                return self.admitFixedRequirementAssociatedProof(index: index, bound: <TraitBound subject=receiver constraint=constraint offset=offset />)
+                return self.readFixedRequirementAssociatedProof(index: index, bound: <TraitBound subject=receiver constraint=constraint offset=offset />, read: read)
             }
         }
         return <Result.Ok value=<Optional.None /> />
     }
 
-    inout fn admitFixedRequirementAssociatedProof(index: U64, bound: TraitBound) -> Result[Optional[StaticConformanceProof], CompileDiagnostic] {
+    inout fn readFixedRequirementAssociatedProof(index: U64, bound: TraitBound, read: SignatureProofRead) -> Result[Optional[StaticConformanceProof], CompileDiagnostic] {
         for argument in bound.constraint.key.positionalArgs { if !self.arena.typeIsClosed(ref: argument) { return <Result.Ok value=<Optional.None /> /> } }
         for predicate in bound.constraint.assocPredicates { if !self.arena.typeIsClosed(ref: predicate.value) { return <Result.Ok value=<Optional.None /> /> } }
         mut val receipts = self.fixedRequirementAssociatedProofs.getOr(key: index, fallback: [])
@@ -997,6 +997,10 @@ impl Comp {
                 if self.proofIsMissing(proof: proof) { return <Result.Err error=self.diagnosticAt(offset: bound.offset, msg: "fixed requirement lost its admitted associated proof", failureDomain: <FailureDomain.Internal />) /> }
                 return <Result.Ok value=<Optional.Some v=proof /> />
             }
+        }
+        match read {
+            SignatureProofRead.Retained => { return <Result.Err error=self.diagnosticAt(offset: bound.offset, msg: "fixed requirement lost its admitted associated proof", failureDomain: <FailureDomain.Internal />) /> }
+            SignatureProofRead.Admission => {}
         }
         val proof = try self.viewedTraitConstraintProof(demand: <ConformanceProofDemand.SourceAdmission />, ref: bound.subject, constraint: bound.constraint)
         if self.proofIsMissing(proof: proof) { return <Result.Err error=self.diagnosticAt(offset: bound.offset, msg: "fixed associated type does not satisfy its declared trait constraint", failureDomain: <FailureDomain.Source />) /> }

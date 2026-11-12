@@ -1,0 +1,34 @@
+use @Std/Io only { print }
+
+trait Source { type Item }
+struct Entry {}
+struct Flag {}
+impl Entry as Source { type Item = I64 }
+impl Flag as Source { type Item = Bool }
+
+trait Service {
+    type Input: Source
+    fn fetch(value: Input#Source.Item) -> Input#Source.Item
+}
+
+struct NumberWorker {}
+struct FlagWorker {}
+impl NumberWorker as Service {
+    type Input = Entry
+    fn fetch(value: I64) -> I64 { return value }
+}
+impl FlagWorker as Service {
+    type Input = Flag
+    fn fetch(value: Bool) -> Bool { return !value }
+}
+
+fn invoke[Input](worker: any Service[Input=Input], value: Input#Source.Item) -> Input#Source.Item where Input: Source {
+    return worker.fetch(value: value)
+}
+
+fn main() {
+    val number: any Service[Input=Entry] = <NumberWorker />
+    val flag: any Service[Input=Flag] = <FlagWorker />
+    print(invoke(worker: number, value: 42I64))
+    if invoke(worker: flag, value: false) { print(7I64) }
+}

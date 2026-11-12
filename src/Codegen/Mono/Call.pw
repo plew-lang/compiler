@@ -1708,8 +1708,7 @@ pub impl Comp {
                         Optional.None => { return <Result.Err error=self.diagnosticAt(offset: key.originStart, msg: "executable interface call retains an unresolved caller substitution") /> },
                     }
                 }
-                try self.checkExistentialRequirementCall(target: selection.receiverRef, traitIndex: traitIndex, requirement: requirementSlot - 1U64, offset: self.exprOffset(id: exprId))
-                val signature = try self.existentialRequirementSignature(target: selection.receiverRef, traitIndex: traitIndex, slot: requirementSlot - 1U64)
+                val signature = try self.readCheckedExistentialRequirementCall(target: selection.receiverRef, traitIndex: traitIndex, requirement: requirementSlot - 1U64, offset: self.exprOffset(id: exprId), proofRead: <SignatureProofRead.Retained />)
                 receiverPassing = signature.receiverPassing
                 parameterTypes = signature.parameterTypes
                 passings = signature.argumentPassings
@@ -2395,9 +2394,19 @@ pub impl Comp {
         return <Result.Ok value=<TraitBound subject=receiver constraint=<TraitConstraint key=<TraitInstanceKey owner=trait.nameStart positionalArgs=arguments /> positionalArgsOpen=false assocPredicates=predicates /> offset=offset /> />
     }
 
+    inout fn existentialRequirementSignature(target: U64, traitIndex: U64, slot: U64) -> Result[ExistentialRequirementSignature, CompileDiagnostic] {
+        return self.readExistentialRequirementSignature(target: target, traitIndex: traitIndex, slot: slot, proofRead: <SignatureProofRead.Admission />)
+    }
+
+    inout fn existentialWitnessPlan(evidence: ExistentialBoxEvidence, requirement: U64, sourceReceiver: U64) -> Result[Optional[ExistentialWitnessPlan], CompileDiagnostic] {
+        return self.readExistentialWitnessPlan(evidence: evidence, requirement: requirement, sourceReceiver: sourceReceiver, proofRead: <SignatureProofRead.Admission />)
+    }
+}
+
+impl Comp {
     // Public parameter/result terms and ownership modes belong to the selected
     // requirement, not to an executable witness body or incidental Cursor.
-    inout fn existentialRequirementSignature(target: U64, traitIndex: U64, slot: U64) -> Result[ExistentialRequirementSignature, CompileDiagnostic] {
+    inout fn readExistentialRequirementSignature(target: U64, traitIndex: U64, slot: U64, proofRead: SignatureProofRead) -> Result[ExistentialRequirementSignature, CompileDiagnostic] {
         if traitIndex >= self.decls.traitCount() {
             return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "invalid existential signature trait", failureDomain: <FailureDomain.Input />) />
         }
@@ -2408,24 +2417,24 @@ pub impl Comp {
         val requirement = self.traitReqAt(reqs: requirements, index: slot)
         val bound = try self.existentialRequirementBound(target: target, traitIndex: traitIndex, receiver: target, offset: requirement.nameStart)
         val scope = try self.requireAdmittedRawRequirement(traitIndex: traitIndex, slot: slot, offset: requirement.defOffset)
-        return self.readRequirementInterfaceSignature(scope: scope, bound: bound, traitIndex: traitIndex)
+        return self.readRequirementInterfaceSignature(scope: scope, bound: bound, traitIndex: traitIndex, proofRead: proofRead)
     }
 
     // Build the adapter's semantic plan without registering an executable
     // descriptor. Recursive Self results reuse the input evidence; planning
     // never recursively requests the same witness's executable dependencies.
-    inout fn existentialWitnessPlan(evidence: ExistentialBoxEvidence, requirement: U64, sourceReceiver: U64) -> Result[Optional[ExistentialWitnessPlan], CompileDiagnostic] {
+    inout fn readExistentialWitnessPlan(evidence: ExistentialBoxEvidence, requirement: U64, sourceReceiver: U64, proofRead: SignatureProofRead) -> Result[Optional[ExistentialWitnessPlan], CompileDiagnostic] {
         if evidence.traitIdx >= self.decls.traitCount() { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "existential conversion has no selected trait") /> }
         val trait = self.decls.traitAt(index: evidence.traitIdx)
         if requirement >= trait.reqs.count() { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "existential conversion has no selected requirement") /> }
         val requested = self.traitReqAt(reqs: trait.reqs, index: requirement)
-        if !(try self.existentialRequirementIsDispatchable(target: evidence.targetRef, traitIndex: evidence.traitIdx, slot: requirement)) { return <Result.Ok value=<Optional.None /> /> }
-        val signature = try self.existentialRequirementSignature(target: evidence.targetRef, traitIndex: evidence.traitIdx, slot: requirement)
+        if !(try self.readExistentialRequirementDispatchability(target: evidence.targetRef, traitIndex: evidence.traitIdx, slot: requirement, proofRead: proofRead)) { return <Result.Ok value=<Optional.None /> /> }
+        val signature = try self.readExistentialRequirementSignature(target: evidence.targetRef, traitIndex: evidence.traitIdx, slot: requirement, proofRead: proofRead)
         val bound = try self.existentialRequirementBound(target: evidence.targetRef, traitIndex: evidence.traitIdx, receiver: sourceReceiver, offset: requested.nameStart)
         val scope = try self.requireAdmittedRawRequirement(traitIndex: evidence.traitIdx, slot: requirement, offset: requested.defOffset)
         val environment = self.requirementSignatureEnvironment(bound: bound, traitIndex: evidence.traitIdx)
         mut val memo: Dictionary[U64, AuthoredRecipeRead] = [:]
-        val sourceResult = self.callableResultSlot(ref: (try self.readRequirementResult(interface: <RequirementSignatureRead scope=scope bound=bound evidence=<RequirementSelfEvidence.Static proof=evidence.proof /> />, environment: environment, memo: inout memo)))
+        val sourceResult = self.callableResultSlot(ref: (try self.readRequirementResult(interface: <RequirementSignatureRead scope=scope bound=bound evidence=<RequirementSelfEvidence.Static proof=evidence.proof /> proofRead=<SignatureProofRead.Retained /> />, environment: environment, memo: inout memo)))
         mut val conversion = <ValueConversionProof.Identity />
         if sourceResult != 0U64 || signature.resultType != 0U64 {
             conversion = try self.callArgumentConversion(sourceRef: sourceResult, targetRef: signature.resultType, knownBox: <Optional.Some v=evidence />)
@@ -2437,6 +2446,9 @@ pub impl Comp {
         return <Result.Ok value=<Optional.Some v=<ExistentialWitnessPlan signature=signature sourceResultType=sourceResult resultConversion=conversion /> /> />
     }
 
+}
+
+pub impl Comp {
     inout fn checkExistentialWitnessSignature(plan: ExistentialWitnessPlan, implementation: ExistentialImplementation, evidence: ExistentialBoxEvidence) -> Result[(), CompileDiagnostic] {
         val environment = try self.bodyInstanceEnvironment(fnIdx: implementation.function, args: implementation.arguments, recvInstRef: evidence.sourceRef, selectedProof: evidence.proof)
         return self.checkPreparedExistentialWitnessSignature(plan: plan, function: implementation.function, environment: environment)
@@ -3586,7 +3598,7 @@ pub impl Comp {
     // only per-instance operation is grounding the carried TypeTerm/receiver;
     // lexical lookup, field lookup, and existential requirement selection have
     // already happened in Record.
-    inout fn selectDynamicTemplateCall(exprId: U64, receiver: CallTemplateReceiver, expectedResultTerm: U64, arguments: Array[CallTemplateArgument], target: DynamicCallTemplateTarget) -> Result[CallSiteSelection, CompileDiagnostic] {
+    inout fn selectDynamicTemplateCall(exprId: U64, receiver: CallTemplateReceiver, receiverTypeTerm: U64, expectedResultTerm: U64, arguments: Array[CallTemplateArgument], target: DynamicCallTemplateTarget) -> Result[CallSiteSelection, CompileDiagnostic] {
         val expected: U64 = (try self.groundCallTemplateExpectedResult(expectedResultTerm: expectedResultTerm, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef))
         val receiverRef: U64 = (try self.groundCallTemplateReceiver(receiver: receiver))
         val args: ArgRange = self.templateArgumentRangeFromValues(arguments: arguments)
@@ -3617,7 +3629,10 @@ pub impl Comp {
                     return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: existential template has invalid receiver or requirement") />
                 }
                 val req: Func = self.traitReqAt(reqs: self.decls.traitAt(index: traitIdx).reqs, index: slot - 1U64)
-                val signature = try self.existentialRequirementSignature(target: receiverRef, traitIndex: traitIdx, slot: slot - 1U64)
+                // Specialization may be the first request with closed interface bindings.
+                // A closed lexical interface already admitted its signature.
+                val proofRead = if self.arena.typeIsClosed(ref: receiverTypeTerm) { give <SignatureProofRead.Retained /> } else { give <SignatureProofRead.Admission /> }
+                val signature = try self.readExistentialRequirementSignature(target: receiverRef, traitIndex: traitIdx, slot: slot - 1U64, proofRead: proofRead)
                 val resultRef = if req.isDiverging { give 0U64 } else { give self.semanticSourceResultTerm(ref: signature.resultType) }
                 return <Result.Ok value=<CallSiteSelection exprId=exprId callee=noCallee receiverRef=receiverRef args=args argumentSources=arguments resultHintRef=expected resultRef=resultRef target=<CallTarget.ExistentialRequirement traitIdx=traitIdx slot=slot /> /> />
             }
@@ -4370,7 +4385,7 @@ pub impl Comp {
                 }
             }
             CallTemplateKind.Dynamic(receiver: val receiver, args: val arguments, target: val target) => {
-                val selection: CallSiteSelection = (try self.selectDynamicTemplateCall(exprId: exprId, receiver: receiver, expectedResultTerm: template.expectedResultTerm, arguments: self.callTemplateArguments(range: arguments), target: target))
+                val selection: CallSiteSelection = (try self.selectDynamicTemplateCall(exprId: exprId, receiver: receiver, receiverTypeTerm: template.receiverTypeTerm, expectedResultTerm: template.expectedResultTerm, arguments: self.callTemplateArguments(range: arguments), target: target))
                 try self.recordSelectedBodyCallee(selection: selection)
                 return <Result.Ok value=selection.callee />
             }

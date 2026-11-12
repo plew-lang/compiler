@@ -942,7 +942,33 @@ In an isolated source copy, read the result of
 where `Service.Input: Source` and `Entry as Source` supplies `Item=I64`.
 Check that the result is `I64` and that the fixed-receiver receipt store
 contains evidence. Clear that store alone and read the same signature again.
-The reader succeeds by re-querying the still-present conformance. Separate
-first admission from consuming a prepared signature, and verify the final
-consumer rejects a missing retained receipt. Independent re-review remains
-outstanding.
+The reader succeeds by re-querying the still-present conformance.
+
+Dynamic call finalization now requires the retained proof. Initial source
+signature admission and specialization of an open interface can establish a
+closed proof. For a closed source receiver, the dynamic template reader also
+requires the existing proof. An isolated AOT probe cleared only the receipt
+store immediately before `recordSelectedBodyCallee` read the interface
+signature. It verified the receipt existed and left the conformance
+registered. The previous reader accepted the final call; the new reader
+returns Internal with `fixed requirement lost its admitted associated proof`.
+The public instance fixture passes with two bindings, `Input=Entry` and
+`Input=Flag`, whose outputs have different types. Build
+`20261112T181608-build-a0f697`, candidate `58db42aa`, and generation
+`20261112T182038-gen-8bac9c` passed. Nine public check/JIT/native controls and
+three native internal controls passed. Same-source medians were initially
+6.730798 s and 7.033536 s; a reverse-order repeat measured 6.734468 s and
+6.748963 s. All sixteen LLVM outputs matched.
+
+Independent review keeps the task open. The boxing finalizer still reaches
+signature admission through `selectExistentialMember` and
+`existentialWitnessPlan`; thread a prepared witness signature and method
+conditions into that consumer. The existing
+`retained_associated_interface_condition` fixture is also a regression in
+this task's interface where handoff. It passed on `b71d8507` (see
+[source interface normalization evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/retained-source-interface-normalizations.json)),
+and passes on the saved static-parameter-b carrier. It rejects at line 9 on
+the clause-witness carrier and the current candidate. The transition to
+`readRequirementBounds` in `d274fab2` is the first suspect. Restore the
+saved conditional proof and projection equation through the actual interface
+reader and repeat the independent review.
