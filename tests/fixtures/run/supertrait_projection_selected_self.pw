@@ -1,0 +1,28 @@
+use @Std/Io only { print }
+
+trait Root { type Item }
+trait Middle: Root {}
+trait Service: Middle {
+    fn fetch() -> Self#Root.Item
+}
+
+pub impl Service {
+    fn echo(value: Self#Root.Item) -> Self#Root.Item { return value }
+}
+
+trait Number { fn number() -> I64 }
+struct Payload {}
+impl Payload as Number { fn number() -> I64 { return 42I64 } }
+
+struct Worker {}
+impl Worker as Service {
+    fn fetch() -> Payload { return <Payload /> }
+}
+impl Worker as Middle {}
+impl Worker as Root { type Item = Payload }
+
+fn main() {
+    val worker = <Worker />
+    print(worker.fetch().number())
+    print(worker.echo(value: <Payload />).number())
+}

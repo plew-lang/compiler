@@ -1,0 +1,33 @@
+use @Std/Io only { print }
+
+trait Root { type Item }
+trait Source: Root { type Direct }
+trait Service {
+    type Input: Source
+    fn fetch() -> Input#Root.Item
+}
+
+pub impl Service {
+    fn inherited(value: Input#Root.Item) -> Input#Root.Item { return value }
+    fn direct(value: Input#Source.Direct) -> Input#Source.Direct { return value }
+}
+
+struct Worker {}
+impl Worker as Service {
+    type Input = Entry
+    fn fetch() -> I64 { return 42I64 }
+}
+
+struct Entry {}
+impl Entry as Root { type Item = I64 }
+impl Entry as Source { type Direct = I64 }
+
+fn erased(receiver: any Service[Input=Entry]) -> I64 {
+    return receiver.fetch()
+}
+fn main() {
+    print(<Worker />.fetch())
+    print(erased(receiver: <Worker />))
+    print(<Worker />.inherited(value: 42I64))
+    print(<Worker />.direct(value: 42I64))
+}

@@ -878,3 +878,35 @@ The explicit double-projection spelling is currently rejected as a
 nonfinal projection. Also verify that fixed-receiver proof reuse has a
 clear admission/replay boundary under evidence removal. The review is
 ongoing and this task remains open.
+
+## Selected supertrait witness replay
+
+Raw requirements and provided signatures now use one Self projection
+reader. A declared parent equation can determine the output directly.
+Otherwise the reader consumes the selected witness's saved parent edges.
+Conformance checking publishes those edges before method checking, so an
+implementation can precede the declarations of its parent conformances.
+An associated-receiver proof first reads the saved associated clause on
+the selected Self, then follows the terminal supertrait path. Raw and
+provided owners check their respective prerequisite identities before
+using that shared reader.
+
+The review's nominal Self and associated-receiver cases pass check, JIT
+and native, including a two-edge Self chain, erased associated dispatch,
+and direct and inherited associated projections in provided methods.
+An isolated reader rejects when only the selected Service supertrait
+row is removed and the Root conformance is still registered. Build
+`20261112T173145-build-c42430`, candidate `399c3087`, generation
+`20261112T173552-gen-4d31a6`, eight public check/JIT/native fixtures and
+five rejection diagnostics passed. Same-source medians were 6.687980 s
+and 6.714668 s, with identical LLVM output in all eight runs.
+
+Two additional controls keep the task open. A generic `Holder[T]` with
+`Service: Middle: Root` and `Root.Item = T` still fails method result
+comparison: the existing executable edge replay defers on a symbolic
+receiver. A nominal implementation of a requirement with the same
+two-edge projection and an omitted default argument reaches its
+parameter reader before Middle's parent evidence has been prepared.
+Close the symbolic interpretation and the callable-form preparation
+ordering while preserving the exact saved path. The fixed-receiver
+proof-removal check and independent re-review remain outstanding.

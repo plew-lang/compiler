@@ -1278,28 +1278,23 @@ pub impl Comp {
     }
 
     inout fn checkConformances() -> Result[(), CompileDiagnostic] {
-        mut val ci: U64 = 0
-        while ci < self.decls.conformCount() {
-            val cf: Conform = self.decls.conformAt(index: ci)
-            if cf.derived {
-                val derivedTrait = self.resolveTraitDef(cf: cf)
-                if derivedTrait < self.decls.traitCount() { try self.prepareConformanceSupertraits(conformIndex: ci, traitIndex: derivedTrait) }
-                // compiler-synthesized (`@[Eq]`/`@[Ord]`): trivially complete, and its
-                // trait is compiler-known — exempt from unknown-trait/completeness.
-                ci += 1
-            } else {
-            // resolve the one trait this conformance refers to (structural — see
-            // resolveTraitDef); a conformance to an undeclared/unimported trait is a
-            // loud error (spec/08: explicit conformance).
-            val ti: U64 = self.resolveTraitDef(cf: cf)
-            if ti < self.decls.traitCount() {
-                try self.checkAssociatedBounds(conformIndex: ci, conformance: cf, traitIndex: ti, assumptions: self.conformanceDeclarationAssumptions(conformIndex: ci))
-                try self.checkConformanceMethodBounds(conformIndex: ci, traitIndex: ti)
-                try self.prepareConformanceSupertraits(conformIndex: ci, traitIndex: ti)
-            } else {
-                return <Result.Err error=self.diagnosticAt(offset: cf.traitStart, msg: "conformance to an unknown trait (is it declared / imported?)") />
+        // Parent proofs are declaration-owned prerequisites of method
+        // signatures. Complete their publication before comparing any method.
+        for index in 0U64..<self.decls.conformCount() {
+            val conformance = self.decls.conformAt(index: index)
+            val traitIndex = self.decls.traitIndexByOffset(offset: conformance.traitStart)
+            if traitIndex < self.decls.traitCount() {
+                try self.prepareConformanceSupertraits(conformIndex: index, traitIndex: traitIndex)
+            } else if !conformance.derived {
+                return <Result.Err error=self.diagnosticAt(offset: conformance.traitStart, msg: "conformance to an unknown trait (is it declared / imported?)") />
             }
-            ci += 1
+        }
+        for index in 0U64..<self.decls.conformCount() {
+            val conformance = self.decls.conformAt(index: index)
+            if !conformance.derived {
+                val traitIndex = self.decls.traitIndexByOffset(offset: conformance.traitStart)
+                try self.checkAssociatedBounds(conformIndex: index, conformance: conformance, traitIndex: traitIndex, assumptions: self.conformanceDeclarationAssumptions(conformIndex: index))
+                try self.checkConformanceMethodBounds(conformIndex: index, traitIndex: traitIndex)
             }
         }
         try self.checkViaTargets()
@@ -1877,6 +1872,7 @@ impl Comp {
         val conformance = self.decls.conformAt(index: conformanceIndex)
         val requirement = self.traitReqAt(reqs: self.decls.traitAt(index: traitIndex).reqs, index: slot)
         if parameters.count() != requirement.params.count() || witness.typeParams.count() != conformance.typeParams.count() + requirement.typeParams.count() { return <Result.Ok value=false /> }
+        try self.prepareConformanceSupertraits(conformIndex: conformanceIndex, traitIndex: traitIndex)
         try self.checkAssociatedBounds(conformIndex: conformanceIndex, conformance: conformance, traitIndex: traitIndex, assumptions: self.conformanceDeclarationAssumptions(conformIndex: conformanceIndex))
         val scope = try self.requireAdmittedRawRequirement(traitIndex: traitIndex, slot: slot, offset: requirement.defOffset)
         val signature = <RequirementSignatureRead scope=scope bound=self.conformanceTraitBound(conformance: conformance) evidence=<RequirementSelfEvidence.Conformance index=conformanceIndex /> />
