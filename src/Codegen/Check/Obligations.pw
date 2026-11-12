@@ -1087,10 +1087,6 @@ pub impl Comp {
             SourceCallSignature.Direct(environment: val environment) => {
                 return self.groundTermForBody(ref: ref, environment: environment, selfRef: environment.receiverRef, itemRef: 0U64)
             }
-            SourceCallSignature.Trait(bound: val bound, traitIndex: val traitIndex, environment: val environment) => {
-                val traitTerm = self.traitBoundTypeTerm(ref: ref, bound: bound, traitIndex: traitIndex)
-                return self.groundTermForBody(ref: traitTerm, environment: environment, selfRef: environment.receiverRef, itemRef: 0U64)
-            }
         }
     }
 
@@ -1217,12 +1213,11 @@ pub impl Comp {
                 if context.isNone() { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "selected requirement has no clause environment", failureDomain: <FailureDomain.Internal />) /> }
                 return self.readRequirementBounds(signature: context.unwrap(), methodArguments: arguments)
             }
-            StaticMemberResolution.Provided(proof: val proof, traitIdx: val traitIndex, callee: val callee) => {
+            StaticMemberResolution.Provided(proof: val proof, traitIdx: _, callee: val callee) => {
                 val indices = self.sourceDeclarationCallBoundIndices(functionIndex: callee)
                 if indices.count() == 0U64 { return <Result.Ok value=[] /> }
-                val bound = try self.staticProofBound(proof: proof, traitIdx: traitIndex)
                 val environment = try self.recordedDirectCallEnvironment(function: function, receiverTerm: receiverTerm, typeArgs: arguments, proof: proof)
-                return self.sourceDeclarationCallBounds(indices: indices, signature: <SourceCallSignature.Trait bound=bound traitIndex=traitIndex environment=environment />)
+                return self.readProvidedSignatureBounds(function: callee, indices: indices, environment: environment)
             }
             StaticMemberResolution.Missing => { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "deferred declaration obligation has no selected member") /> }
         }

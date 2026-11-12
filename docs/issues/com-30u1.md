@@ -413,3 +413,29 @@ Before closing, trace the remaining associated constraint paths through
 final witness preparation and check which legacy reads of provided callable
 bounds still interpret raw rows. Reconcile the results with the required
 scenarios and obtain an independent completion review.
+
+## Provided source clause replay checkpoint
+
+For static calls to provided methods, the declaration row identifies the
+authored clause. Its subject, positional arguments and associated equations
+come from the prepared source recipes. Method-local and impl-level clauses
+share the same interpretation as retained requirement clauses. Impl-level
+recipes are admitted under their original parent scope before replay.
+
+The internal `existential_symbolic_result` fixture substitutes a foreign
+subject in the registered `FuncBound` after declaration admission.
+Candidate `9728ec46` reaches the expected assertion, “raw where row replaced
+the retained provided clause”. Candidate `9b8c7ea5` preserves the prepared
+subject. Standard build `20261112T143932-build-202bb3` and generation
+`20261112T144251-gen-94b07f` passed. Nine focused fixtures passed check and
+native execution, including the retained body-evidence control. Seven
+public fixtures also passed JIT. Two supplemental probes with
+`T#Source.Output: Marker` on the method and its enclosing impl passed
+check/JIT/native and returned 42. Same-source medians were 6.562816 s
+and 6.550406 s, with byte-identical LLVM across all eight runs.
+
+The executable handoff already replays the caller's retained proofs and
+equations, but body admission still calls `groundCallableSignatureBounds`
+on registered rows for comparison. Direct provided copies likewise still
+use the ordinary source-bound reader. Complete those paths and bind clause
+identity at declaration admission before independent review.

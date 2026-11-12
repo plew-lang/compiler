@@ -447,6 +447,10 @@ impl Comp {
             match clause.state {
                 ProjectionBoundState.Ready(bound: val bound) => {
                     for recipe in bound.arguments { try self.retainInheritedSignatureRecipe(recipe: recipe, into: inout inherited, offset: parent.anchor) }
+                    if function.provTraitOwner != 0U64 {
+                        if bound.subjectRecipe != 0U64 { try self.retainInheritedSignatureRecipe(recipe: bound.subjectRecipe, into: inout inherited, offset: parent.anchor) }
+                        for recipe in bound.predicateRecipes { try self.retainInheritedSignatureRecipe(recipe: recipe, into: inout inherited, offset: parent.anchor) }
+                    }
                 }
                 _ => { return <Result.Err error=self.diagnosticAt(offset: parent.anchor, msg: "implementation signature has an unfinished premise", failureDomain: <FailureDomain.Internal />) /> }
             }
@@ -507,6 +511,16 @@ impl Comp {
         for id in signature.declarationUses {
             val occurrence = try self.authoredSignatureOccurrence(signature: signature, id: id)
             try self.checkAuthoredTypeRecipe(sourceScope: signature.scope, recipe: occurrence.recipe, edge: <AuthoredRecipeEdge.Source />, scopes: scopes, validation: inout validation, offset: occurrence.site)
+        }
+        if function.provTraitOwner != 0U64 && validation.parentScope != 0U64 {
+            val parent = self.sourceTypeUses.scopeAt(token: validation.parentScope).unwrap()
+            val range = parent.bounds.unwrapOr(fallback: <SourceBoundRange />)
+            for index in 0U64..<range.count {
+                val bound = try self.retainedSignatureClause(scope: validation.parentScope, id: range.first + index, offset: parent.anchor)
+                if bound.subjectRecipe != 0U64 { try self.checkAuthoredTypeRecipe(sourceScope: signature.scope, recipe: bound.subjectRecipe, edge: <AuthoredRecipeEdge.Source />, scopes: scopes, validation: inout validation, offset: parent.anchor) }
+                for recipe in bound.arguments { try self.checkAuthoredTypeRecipe(sourceScope: signature.scope, recipe: recipe, edge: <AuthoredRecipeEdge.Source />, scopes: scopes, validation: inout validation, offset: parent.anchor) }
+                for recipe in bound.predicateRecipes { try self.checkAuthoredTypeRecipe(sourceScope: signature.scope, recipe: recipe, edge: <AuthoredRecipeEdge.Source />, scopes: scopes, validation: inout validation, offset: parent.anchor) }
+            }
         }
         self.authoredSignatureViews[signature.function] = <AuthoredSignatureViews signature=signature proofs=validation.proofs receiverRecipes=validation.receiverRecipes />
         return <Result.Ok value=() />
@@ -772,39 +786,75 @@ impl Comp {
         for position in 0U64..<count {
             val premise = self.rawRequirementPremises[range.first + position]
             val bound = premise.bound
-            val prepared = try self.retainedRequirementClause(scope: signature.scope, id: premise.sourceClause, offset: bound.offset)
-            val subject = try self.readRequirementClauseType(recipe: prepared.subjectRecipe, ref: bound.subject, proofs: admitted.proofs, signature: signature, environment: environment, memo: inout memo)
-            mut val arguments: Array[U64] = []
-            for index in 0U64..<prepared.arguments.count() {
-                arguments.append(try self.readRequirementClauseType(recipe: prepared.arguments[index], ref: bound.constraint.key.positionalArgs[index], proofs: admitted.proofs, signature: signature, environment: environment, memo: inout memo))
-            }
-            mut val predicates: Array[TraitAssocPredicate] = []
-            for index in 0U64..<prepared.predicateRecipes.count() {
-                val predicate = bound.constraint.assocPredicates[index]
-                val value = try self.readRequirementClauseType(recipe: prepared.predicateRecipes[index], ref: predicate.value, proofs: admitted.proofs, signature: signature, environment: environment, memo: inout memo)
-                predicates.append(<TraitAssocPredicate member=predicate.member value=value span=predicate.span />)
-            }
-            bounds.append(<TraitBound subject=subject constraint=<TraitConstraint key=<TraitInstanceKey owner=bound.constraint.key.owner positionalArgs=arguments /> positionalArgsOpen=bound.constraint.positionalArgsOpen assocPredicates=predicates /> offset=bound.offset />)
+            val prepared = try self.retainedSignatureClause(scope: signature.scope, id: premise.sourceClause, offset: bound.offset)
+            bounds.append(try self.readAuthoredSignatureClause(prepared: prepared, proofs: admitted.proofs, context: <SignatureRecipeContext.Requirement signature=signature />, environment: environment, memo: inout memo))
         }
         return <Result.Ok value=bounds />
     }
 
-    inout fn readRequirementClauseType(recipe: U64, ref: U64, proofs: Array[AuthoredTypeViewProof], signature: RequirementSignatureRead, environment: InstanceEnvironment, memo: inout Dictionary[U64, AuthoredRecipeRead]) -> Result[U64, CompileDiagnostic] {
+    // The registered row names the clause. All three parts of its type
+    // contract come from the prepared declaration, through the same recipe
+    // interpreter as the method's parameter/result annotations.
+    inout fn readProvidedSignatureBounds(function: U64, indices: Array[U64], environment: InstanceEnvironment) -> Result[Array[TraitBound], CompileDiagnostic] {
+        val owner = try self.semanticBodyOwner(fnIdx: function)
+        val source = match self.sourceTypeUses.signatureFor(function: owner) {
+            Optional.Some(v: val source) => source,
+            Optional.None => { return <Result.Err error=self.diagnosticAt(offset: self.arena.functionAt(index: function).defOffset, msg: "provided where clause has no authored signature", failureDomain: <FailureDomain.Internal />) /> },
+        }
+        if !self.authoredSignatureViews.contains(key: owner) { try self.admitAuthoredFunctionViewSignature(signature: source) }
+        val admitted = self.authoredSignatureViews[owner]
+        try self.checkSignatureEnvironment(signature: source, environment: environment)
+        val scope = self.sourceTypeUses.scopeAt(token: source.scope).unwrap()
+        mut val memo: Dictionary[U64, AuthoredRecipeRead] = [:]
+        mut val bounds: Array[TraitBound] = []
+        for index in indices {
+            val row = self.decls.funcBounds.at(index: index)
+            val id = row.sourceClause
+            if row.fnIdx != owner || id == 0U64 || id > self.projectionBoundClauses.count() {
+                return <Result.Err error=self.diagnosticAt(offset: row.paramStart, msg: "provided where clause has no original source identity", failureDomain: <FailureDomain.Internal />) />
+            }
+            val lexicalScope = self.projectionBoundClauses[id - 1U64].scope
+            if lexicalScope != source.scope && lexicalScope != scope.parent {
+                return <Result.Err error=self.diagnosticAt(offset: row.paramStart, msg: "provided where clause belongs to another signature", failureDomain: <FailureDomain.Internal />) />
+            }
+            val prepared = try self.retainedSignatureClause(scope: lexicalScope, id: id, offset: row.paramStart)
+            bounds.append(try self.readAuthoredSignatureClause(prepared: prepared, proofs: admitted.proofs, context: <SignatureRecipeContext.Provided owner=owner />, environment: environment, memo: inout memo))
+        }
+        return <Result.Ok value=bounds />
+    }
+
+    inout fn readAuthoredSignatureClause(prepared: PreparedProjectionBound, proofs: Array[AuthoredTypeViewProof], context: SignatureRecipeContext, environment: InstanceEnvironment, memo: inout Dictionary[U64, AuthoredRecipeRead]) -> Result[TraitBound, CompileDiagnostic] {
+        val constraint = prepared.constraint
+        val subject = try self.readAuthoredClauseType(recipe: prepared.subjectRecipe, ref: prepared.subject, proofs: proofs, context: context, environment: environment, memo: inout memo)
+        mut val arguments: Array[U64] = []
+        for index in 0U64..<prepared.arguments.count() {
+            arguments.append(try self.readAuthoredClauseType(recipe: prepared.arguments[index], ref: constraint.key.positionalArgs[index], proofs: proofs, context: context, environment: environment, memo: inout memo))
+        }
+        mut val predicates: Array[TraitAssocPredicate] = []
+        for index in 0U64..<prepared.predicateRecipes.count() {
+            val predicate = constraint.assocPredicates[index]
+            val value = try self.readAuthoredClauseType(recipe: prepared.predicateRecipes[index], ref: predicate.value, proofs: proofs, context: context, environment: environment, memo: inout memo)
+            predicates.append(<TraitAssocPredicate member=predicate.member value=value span=predicate.span />)
+        }
+        return <Result.Ok value=<TraitBound subject=subject constraint=<TraitConstraint key=<TraitInstanceKey owner=constraint.key.owner positionalArgs=arguments /> positionalArgsOpen=constraint.positionalArgsOpen assocPredicates=predicates /> offset=prepared.parameter.nameStart /> />
+    }
+
+    inout fn readAuthoredClauseType(recipe: U64, ref: U64, proofs: Array[AuthoredTypeViewProof], context: SignatureRecipeContext, environment: InstanceEnvironment, memo: inout Dictionary[U64, AuthoredRecipeRead]) -> Result[U64, CompileDiagnostic] {
         if recipe == 0U64 {
             // Only the value adapter's name-only bound subject is synthetic.
             return <Result.Ok value=self.groundTermInEnvironment(ref: ref, params: environment.params, values: environment.args, selfRef: environment.receiverRef) />
         }
         if proofs.count() == 0U64 && self.arena.typeIsClosed(ref: ref) { return <Result.Ok value=ref /> }
-        return <Result.Ok value=(try self.readAuthoredTypeRecipe(proofs: proofs, recipe: recipe, environment: environment, memo: inout memo, context: <SignatureRecipeContext.Requirement signature=signature />)).term />
+        return <Result.Ok value=(try self.readAuthoredTypeRecipe(proofs: proofs, recipe: recipe, environment: environment, memo: inout memo, context: context)).term />
     }
 
-    inout fn retainedRequirementClause(scope: U64, id: U64, offset: U64) -> Result[PreparedProjectionBound, CompileDiagnostic] {
+    inout fn retainedSignatureClause(scope: U64, id: U64, offset: U64) -> Result[PreparedProjectionBound, CompileDiagnostic] {
         if id == 0U64 || id > self.projectionBoundClauses.count() || self.projectionBoundClauses[id - 1U64].scope != scope {
-            return <Result.Err error=self.diagnosticAt(offset: offset, msg: "requirement clause has no original source identity", failureDomain: <FailureDomain.Internal />) />
+            return <Result.Err error=self.diagnosticAt(offset: offset, msg: "signature clause has no original source identity", failureDomain: <FailureDomain.Internal />) />
         }
         match self.projectionBoundClauses[id - 1U64].state {
             ProjectionBoundState.Ready(bound: val bound) => { return <Result.Ok value=bound /> }
-            _ => { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "requirement clause has no prepared source types", failureDomain: <FailureDomain.Internal />) /> }
+            _ => { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "signature clause has no prepared source types", failureDomain: <FailureDomain.Internal />) /> }
         }
     }
 
@@ -837,7 +887,7 @@ impl Comp {
             for index in 0U64..<requirement.signatureBounds.len {
                 val clause = self.conformBoundAt(bounds: requirement.signatureBounds, index: index)
                 val id = sources.first + index
-                val prepared = try self.retainedRequirementClause(scope: token, id: id, offset: clause.offset)
+                val prepared = try self.retainedSignatureClause(scope: token, id: id, offset: clause.offset)
                 if !self.typeRefEq(a: prepared.subject, b: clause.subject) || !self.sameTraitConstraint(a: prepared.constraint, b: clause.constraint) || prepared.arguments.count() != clause.constraint.key.positionalArgs.count() || prepared.predicateRecipes.count() != clause.constraint.assocPredicates.count() {
                     return <Result.Err error=self.diagnosticAt(offset: clause.offset, msg: "requirement clause differs from its prepared source types", failureDomain: <FailureDomain.Internal />) />
                 }

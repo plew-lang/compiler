@@ -2044,7 +2044,6 @@ pub enum SourceCallSignature {
     RequirementParameters(types: Array[U64], environment: InstanceEnvironment)
     ProvidedParameters(types: Array[U64])
     Direct(environment: InstanceEnvironment)
-    Trait(bound: TraitBound, traitIndex: U64, environment: InstanceEnvironment)
 }
 
 // A transient projection of the one saved operation during construction.

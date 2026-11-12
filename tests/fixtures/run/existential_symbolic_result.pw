@@ -1,5 +1,5 @@
 use /Diag only { FailureDomain }
-use /Ir only { ConformanceProofDemand, StaticMemberResolution, StaticConformanceProof, DeclarationBoundRef, CallTemplate, CallTemplateKind, CallTemplateReceiver, CallSiteKey, ConformBound }
+use /Ir only { ConformanceProofDemand, StaticMemberResolution, StaticConformanceProof, DeclarationBoundRef, CallTemplate, CallTemplateKind, CallTemplateReceiver, CallSiteKey, ConformBound, FuncBound }
 use @Std/Io only { print }
 use @Std/Process only { argCount, argAt }
 use @Std/Core only { assert }
@@ -34,6 +34,31 @@ fn checkRetainedWhereClause() {
         }
         Result.Err(error: _) => { panic("raw where row replaced the retained requirement clause") }
     }
+}
+
+fn checkProvidedWhereClause() {
+    mut val compiler = <Comp />
+    val source = "trait Marker {{}} trait Provider {{}} pub impl Provider {{ fn supply[T](value: T) where T: Marker {{}} }} fn probe[T,U,V](receiver: T, value: U, foreign: V) where T: Provider, U: Marker {{}}"
+    analyzeFrontendDeclarations(c: inout compiler, input: <FrontendInput.Text text=source path="provided-clause.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
+    val callee = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "supply").nameId)
+    val caller = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "probe").nameId)
+    val callerParams = compiler.arena.functionAt(index: caller).params
+    val value = compiler.funcParamAt(params: callerParams, index: 1U64).ty
+    val foreign = compiler.funcParamAt(params: callerParams, index: 2U64).ty
+    val callerClause = compiler.decls.funcBounds.indices(owner: caller)[0U64]
+    val receiverBound = compiler.decls.funcBounds.at(index: callerClause)
+    val traitIndex = compiler.decls.traitIndexByOffset(offset: receiverBound.constraint.key.owner)
+    val resolution = <StaticMemberResolution.Provided proof=<StaticConformanceProof.AssumedBound source=<DeclarationBoundRef.Function index=callerClause /> /> traitIdx=traitIndex callee=callee />
+    val arguments = compiler.publishCallTemplateTypeArgs(args: [value])
+    val kind = <CallTemplateKind.StaticMethod receiver=<CallTemplateReceiver.Term term=receiverBound.paramTy /> args=compiler.publishCallTemplateArguments(args: []) resolution=resolution methodTypeArgs=arguments resultTerm=0U64 />
+    val template = <CallTemplate siteKey=<CallSiteKey ownerFnIdx=caller originKind=2U64 originSerial=901U64 /> receiverTypeTerm=receiverBound.paramTy kind=kind />
+    val bounds = compiler.sourceSelectedCallBounds(template: template).unwrap()
+    if bounds.count() != 1U64 || !compiler.typeRefEq(a: bounds[0U64].subject, b: value) { panic "provided clause setup failed" }
+    val index = compiler.decls.funcBounds.indices(owner: callee)[0U64]
+    val original = compiler.decls.funcBounds.at(index: index)
+    compiler.decls.funcBounds.set(index: index, value: <FuncBound fnIdx=callee sourceClause=original.sourceClause paramStart=original.paramStart paramLen=original.paramLen paramTy=foreign paramNameId=original.paramNameId constraint=original.constraint />)
+    val retained = compiler.sourceSelectedCallBounds(template: template).unwrap()
+    if retained.count() != 1U64 || !compiler.typeRefEq(a: retained[0U64].subject, b: value) { panic "raw where row replaced the retained provided clause" }
 }
 
 fn checkProvidedSignature() {
@@ -76,6 +101,7 @@ fn checkProvidedSignature() {
 }
 
 fn main() {
+    checkProvidedWhereClause()
     checkProvidedSignature()
     checkRetainedWhereClause()
     mut val c = <Comp />
