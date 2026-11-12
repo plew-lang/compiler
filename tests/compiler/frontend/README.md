@@ -355,6 +355,9 @@ impl cannot authorize its already registered member's implicit receiver premise.
 root with a trailing slash. It compares the selected call and body signature
 against the admitted nested projection, checks the inout receiver, and
 requires both consumers to reject a body environment with missing impl evidence.
+Use `tests/fixtures/run/self_projected_iterable_runtime.pw` as the first
+argument and `provided` as the third to check the selected placement and
+reject missing receiver evidence or a foreign lexical Self.
 
 `AuthoredRecipeIntegrity.pw` checks the admitted constructor graph against the
 canonical child visitor. Execute `valid`, `shape`, `term`, `label`, `forged`,

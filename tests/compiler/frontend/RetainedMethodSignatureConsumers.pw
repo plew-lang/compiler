@@ -24,6 +24,21 @@ fn checkProvided(compiler: inout Comp) {
         if compiler.groundedSelectedCalleeParameterTypes(callee: call.callee, environment: missing).isOk() {
             panic("provided placement recovered missing receiver evidence")
         }
+        val sourceFunction = compiler.arena.functionAt(index: source)
+        val selfParameter = compiler.arena.typeTermAt(index: sourceFunction.recvTy).paramId
+        mut val foreignArgs = environment.args
+        mut val foundSelf = false
+        for index in 0U64..<environment.params.count() {
+            if environment.params[index].paramId == selfParameter {
+                foreignArgs.set(i: index, value: parameter)
+                foundSelf = true
+            }
+        }
+        if !foundSelf || compiler.typeRefEq(a: parameter, b: environment.receiverRef) { panic("the lexical Self control has no foreign type") }
+        val foreign = <InstanceEnvironment params=environment.params args=foreignArgs receiverRef=environment.receiverRef proof=environment.proof constraints=environment.constraints />
+        if compiler.readAdmittedSignatureRoot(function: source, slot: <SourceSignatureSlot.Result />, environment: foreign).isOk() {
+            panic("the original method accepted a foreign lexical Self")
+        }
     }
     if hits != 1U64 { panic("the provided control did not select one real call") }
 }

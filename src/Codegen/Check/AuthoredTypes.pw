@@ -52,20 +52,37 @@ impl Comp {
     inout fn checkSignatureEnvironment(signature: AuthoredFunctionSignature, environment: InstanceEnvironment) -> Result[(), CompileDiagnostic] {
         val declaration = self.arena.functionAt(index: signature.function)
         val parameters = declaration.typeParams
-        val method = self.sourceTypeUses.methodScopeFor(function: signature.function).isSome()
+        val method = self.sourceTypeUses.methodScopeFor(function: signature.function)
         val count = environment.params.count()
-        if count != environment.args.count() || count < parameters.len || (!method && count != parameters.len) {
+        if count != environment.args.count() || count < parameters.len || (method.isNone() && count != parameters.len) {
             return <Result.Err error=self.diagnosticAt(offset: declaration.defOffset, msg: "signature reader requires its declaration substitution", failureDomain: <FailureDomain.Input />) />
         }
         for arg in environment.args {
             if arg >= self.arena.typeCount() { return <Result.Err error=self.diagnosticAt(offset: declaration.defOffset, msg: "signature reader has an invalid substitution term", failureDomain: <FailureDomain.Input />) /> }
+        }
+        if method.isSome() {
+            if environment.receiverRef == 0U64 || environment.receiverRef >= self.arena.typeCount() {
+                return <Result.Err error=self.diagnosticAt(offset: declaration.defOffset, msg: "method signature requires its selected receiver", failureDomain: <FailureDomain.Input />) />
+            }
+            val selfParameter = self.arena.typeTermAt(index: declaration.recvTy).paramId
+            mut val selfBound = selfParameter == 0U64
+            for index in 0U64..<count {
+                val binder = environment.params[index].paramId
+                for prior in 0U64..<index {
+                    if environment.params[prior].paramId == binder { return <Result.Err error=self.diagnosticAt(offset: declaration.defOffset, msg: "signature reader has duplicate substitution binders", failureDomain: <FailureDomain.Input />) /> }
+                }
+                if selfParameter != 0U64 && binder == selfParameter {
+                    selfBound = self.typeRefEq(a: environment.args[index], b: environment.receiverRef)
+                }
+            }
+            if !selfBound { return <Result.Err error=self.diagnosticAt(offset: declaration.defOffset, msg: "signature reader has no matching lexical Self binding", failureDomain: <FailureDomain.Input />) /> }
         }
         mut val index = 0U64
         while index < parameters.len {
             val expected = self.funcBindAt(binds: parameters, index: index).paramId
             if environment.params[index].paramId != expected {
                 mut val found = false
-                if method {
+                if method.isSome() {
                     for binder in environment.params { if binder.paramId == expected { found = true } }
                 }
                 if !found { return <Result.Err error=self.diagnosticAt(offset: declaration.defOffset, msg: "signature reader has a foreign substitution binder", failureDomain: <FailureDomain.Input />) /> }

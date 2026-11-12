@@ -93,6 +93,32 @@ can reject it. The failed row cannot contribute a receiver premise or reach
 synthetic signature handling. Candidate `dbf95c14` passed the recovery mode
 and the existing scoped positive/reject controls.
 
-Independent review is in progress. Remaining checks concern the authored
-signature used by a provided placement, replay of receiver proof with nested
-signature normalizations, and exact lexical Self substitution at the reader.
+### Independent review and provided placement
+
+The independent `zqqi_completion_review` reviewed
+`5eae678d..3374cb2e` and the registration correction that became
+`645dbf9c`. It withheld closure on three findings: provided placements
+missed the authored recipe, receiver-premise replay could recalculate a
+nested trait argument, and the reader accepted a conflicting lexical Self.
+The review also identified repeated per-method parent graph traversal and
+separate reads of the full signature when consumers ask for parameters and
+results. The raw requirement contract remains with com-30u1.
+
+The provided-placement RED on `dbf95c14` showed a real selected method
+recovered receiver evidence after removal. Build
+`20261112T113513-build-e9ab21` produced candidate `dd653ed9`, which
+uses the existing lexical owner and selected environment to read the original
+signature. Both final consumer modes and all eight targeted positive
+check/JIT/AOT fixtures passed. A substituted foreign lexical Self is rejected.
+Identical-source medians were 6.431953 s before signature admission and
+6.427369 s after it, three interleaved measurements per carrier after warmup.
+LLVM differed only in generated generic body symbol components when matched
+by body ID.
+
+Remaining: replace receiver-premise re-grounding with retained normalization
+replay and re-review. A generic provided probe with a projected trait receiver
+argument gives the same pre-existing `no matching method` diagnostic on both
+carriers. Its concrete analogue reaches a new earlier signature diagnostic,
+`unresolved declaration type has no lexical parameter dependency`. Neither
+probe proves successful receiver replay. Diagnose source proof admission for
+that concrete case and validate the replay path independently of dispatch.

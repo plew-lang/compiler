@@ -334,17 +334,21 @@ impl Comp {
     // admission of a registered source signature. Saved slots are interpreted
     // before any body-type cache or ambient grounding can confer authority.
     inout fn readRetainedCallableSignature(function: U64, environment: InstanceEnvironment) -> Result[Optional[BodySignature], CompileDiagnostic] {
-        val source = match self.sourceTypeUses.signatureFor(function: function) {
+        val declaration = self.arena.functionAt(index: function)
+        // A provided placement retains the source body's parameter slots.
+        // Its already selected environment binds that body's lexical Self
+        // and clause proofs. Generated wrappers own a different body/ABI.
+        val owner = if declaration.isProvided { give try self.semanticBodyOwner(fnIdx: function) } else { give function }
+        val source = match self.sourceTypeUses.signatureFor(function: owner) {
             Optional.Some(v: val source) => source,
             Optional.None => {
-                if self.sourceTypeUses.methodScopeFor(function: function).isSome() {
+                if self.sourceTypeUses.methodScopeFor(function: owner).isSome() {
                     return <Result.Err error=self.diagnosticAt(offset: self.arena.functionAt(index: function).defOffset, msg: "authored method has no registered signature", failureDomain: <FailureDomain.Internal />) />
                 }
                 return <Result.Ok value=<Optional.None /> />
             },
         }
-        val declaration = self.arena.functionAt(index: function)
-        if !self.authoredSignatureViews.contains(key: function) { return <Result.Err error=self.diagnosticAt(offset: declaration.defOffset, msg: "authored signature has no admitted trait views", failureDomain: <FailureDomain.Internal />) /> }
+        if !self.authoredSignatureViews.contains(key: owner) { return <Result.Err error=self.diagnosticAt(offset: declaration.defOffset, msg: "authored signature has no admitted trait views", failureDomain: <FailureDomain.Internal />) /> }
         if source.parameters.count() != declaration.params.count() { return <Result.Err error=self.diagnosticAt(offset: declaration.defOffset, msg: "retained callable signature changed its parameter slots", failureDomain: <FailureDomain.Internal />) /> }
         mut val slots: Array[SourceSignatureSlot] = []
         mut val index = 0U64
@@ -354,7 +358,7 @@ impl Comp {
         }
         if source.result != 0U64 { slots.append(<SourceSignatureSlot.Result />) }
         if source.factoryError != 0U64 { slots.append(<SourceSignatureSlot.FactoryError />) }
-        val terms = try self.readAdmittedSignatureRoots(function: function, slots: slots, environment: environment)
+        val terms = try self.readAdmittedSignatureRoots(function: owner, slots: slots, environment: environment)
         mut val parameters: Array[U64] = []
         mut val termIndex = 0U64
         index = 0U64
