@@ -29,12 +29,12 @@ fn main() {
     assert(compiler.arena.typeAt(index: unresolved).assocNameId != 0U64)
     val foreign = compiler.rebuildProjectionTerm(t: projection, receiver: other, traitArgs: projection.assocTraitArgs)
     assert(compiler.arena.typeAt(index: compiler.traitBoundTypeTerm(ref: foreign, bound: bound, traitIndex: traitIndex)).assocNameId != 0U64)
-    match compiler.mergeTraitProjectionEquality(selected: <TraitProjectionEquality.Value term=boolean />, candidate: <TraitProjectionEquality.Value term=integer />) {
+    match compiler.mergeTraitProjectionEquality(selected: <TraitProjectionEquality.Value term=boolean steps=[] />, candidate: <TraitProjectionEquality.Value term=integer steps=[] />) {
         TraitProjectionEquality.Conflict => {}
         _ => { panic "conflicting facts selected a value" }
     }
-    match compiler.mergeTraitProjectionEquality(selected: <TraitProjectionEquality.Missing />, candidate: <TraitProjectionEquality.Value term=0U64 />) {
-        TraitProjectionEquality.Value(term: val value) => { assert(value == 0U64) }
+    match compiler.mergeTraitProjectionEquality(selected: <TraitProjectionEquality.Missing />, candidate: <TraitProjectionEquality.Value term=0U64 steps=[] />) {
+        TraitProjectionEquality.Value(term: val value, steps: _) => { assert(value == 0U64) }
         _ => { panic "known Unit confused with absence" }
     }
     assert(compiler.monoWork.bodyCount() == 0U64)

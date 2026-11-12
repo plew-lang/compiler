@@ -1,6 +1,6 @@
 ---
 id: com-30u1
-status: in_progress
+status: closed
 deps: [com-80t4]
 links: [com-5wze]
 created: 2026-11-09T08:54:16Z
@@ -1440,3 +1440,62 @@ the `Parent.Key` path drops the sibling derivation needed by its RHS.
 Add a source-to-interface execution control and retain both equations
 in dependency order. The existing cross-path argument control verifies
 a different prerequisite position.
+
+## Outcome
+
+The authored signature receipt now retains prerequisite equations for both
+an inherited instance's positional arguments and the selected output's
+right-hand side. Admission records them under the selected lexical premise
+in dependency order. Requirement, provided, and interface readers
+substitute and replay the saved terms at the exact occurrence. They
+continue to interpret the already selected path and concrete witness.
+
+`inherited_associated_rhs_equations` fails implementation return checking on
+`c51623ca`. Candidate `fefa4c07` prints 42 through existential dispatch
+and 43 through a provided signature. Both check and native pass as well.
+The explicit requirement and reversed-supertrait variants also pass.
+Without the sibling equation, a caller cannot read the abstract
+existential result as I64.
+
+Closure evidence for the required scenarios:
+
+- Unused requirements and exact trait instances: the root-sibling,
+  parameterized, projected-argument, and cross-path fixtures check the
+  declaration paths and cover distinct inputs under the same owner.
+- Provided and interface consumers: the RHS, refined, complementary,
+  signature-result, interface-where, and joint-constraint fixtures reach
+  actual consumers. Opaque premises, competing equations, distinct
+  instances, and excluded source paths retain their rejection.
+- Exact slot and static versus universal authority: the
+  [sealed-admission controls](#sealed-admission-and-static-proof-boundary-checkpoint)
+  and [selected witness controls](#selected-supertrait-witness-replay)
+  cover sibling-slot replacement and direct and nested universal proofs.
+  The current candidate re-ran `existential_symbolic_result` and
+  `interface_final_evidence` through native execution.
+- Missing retained evidence: the fault controls in
+  [sealed admission](#sealed-admission-and-static-proof-boundary-checkpoint),
+  [inherited where replay](#inherited-where-clause-recipe-replay), and
+  [prepared existential witnesses](#prepared-existential-witnesses)
+  distinguish exact retained evidence from fresh lookup. Current
+  `provided_receiver_environment`, `retained_provided_body_constraints`,
+  and `inherited_projection_identity` passed native execution.
+  The latter's synthetic `TraitProjectionEquality.Value` now supplies its
+  required empty path; assertions and golden output are unchanged.
+
+Standard build `20261112T214114-build-183a57` and generation
+`20261112T214533-gen-964d17` passed. Twenty public controls passed check,
+JIT, and native, five internal controls passed check and native, and
+four targeted reject fixtures preserved their diagnostics. Same-source
+medians were 6.809808 s and 6.795462 s, with identical LLVM on all eight runs.
+
+Independent review on `fefa4c07` confirmed admission and replay and ran
+check/JIT variations covering reversed and complementary paths, transitive
+RHS dependencies, a requirement parameter, a projected positional
+argument plus RHS, static generic dispatch, and requirement/provided
+where consumers. The independent fixture follow-up confirmed that its
+assertions survived the internal representation change. The reviewer
+noted that combined argument/RHS receipts can revalidate the argument
+prefix; no measured regression. Shared conjunctive where replay is
+closed in [com-80t4](com-80t4.md). Concrete supertrait admission and
+concrete viewed-output equality remain owned by [com-5wze](com-5wze.md)
+and [com-fur3](com-fur3.md).

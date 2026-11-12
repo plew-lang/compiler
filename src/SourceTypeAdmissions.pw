@@ -9,7 +9,7 @@ pub struct AuthoredTypeViewProof {
     pub val receiver: U64
     pub val selector: ResolvedViewSource
     pub val proof: U64
-    pub val inheritedArgumentEquations: Array[ProjectionNormalizationStep] = []
+    pub val lexicalEquations: Array[ProjectionNormalizationStep] = []
 }
 pub impl AuthoredTypeViewProof { factory }
 

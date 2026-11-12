@@ -222,7 +222,12 @@ impl Comp {
                     }
                     val selector = <ResolvedViewSource writtenStart=occurrence.site surfaceId=original.assocTraitId traitInstance=<TraitInstanceKey owner=owner positionalArgs=original.assocTraitArgs /> />
                     val saved = try self.signatureOccurrenceView(proofs: proofs, occurrence: node.occurrence, selector: selector, offset: occurrence.site)
-                    arguments = try self.readInheritedSignatureArguments(arguments: arguments, selected: saved, environment: environment, offset: occurrence.site)
+                    val lexicalEquations = try self.readSignatureLexicalEquations(selected: saved, environment: environment, offset: occurrence.site)
+                    if lexicalEquations.count() != 0U64 {
+                        for index in 0U64..<arguments.count() {
+                            arguments[index] = try self.replayProjectionNormalizations(ref: arguments[index], normalizations: lexicalEquations, offset: occurrence.site)
+                        }
+                    }
                     val projected = self.rebuildProjectionTerm(t: original, receiver: receiver, traitArgs: arguments)
                     term = projected
                     val proof = try self.readAuthoredOccurrenceProof(saved: saved, receiver: receiver, arguments: arguments, environment: environment, offset: occurrence.site, normalizations: proofEquations, context: context)
@@ -246,6 +251,7 @@ impl Comp {
                             if term == 0U64 { return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "saved signature projection is not instantiated", failureDomain: <FailureDomain.Internal />) /> }
                         }
                     }
+                    term = try self.replayProjectionNormalizations(ref: term, normalizations: lexicalEquations, offset: occurrence.site)
                 }
             }
             SourceTypeRecipeOrigin.ResultRepresentation => {
@@ -286,12 +292,12 @@ impl Comp {
     // These equations were proved in the lexical Self environment. The reader
     // substitutes their endpoints as type terms, without reselecting evidence
     // or treating the lexical proof as an executable witness.
-    inout fn readInheritedSignatureArguments(arguments: Array[U64], selected: AuthoredTypeViewProof, environment: InstanceEnvironment, offset: U64) -> Result[Array[U64], CompileDiagnostic] {
-        val equations = selected.inheritedArgumentEquations
-        if equations.count() == 0U64 { return <Result.Ok value=arguments /> }
+    inout fn readSignatureLexicalEquations(selected: AuthoredTypeViewProof, environment: InstanceEnvironment, offset: U64) -> Result[Array[ProjectionNormalizationStep], CompileDiagnostic] {
+        val equations = selected.lexicalEquations
+        if equations.count() == 0U64 { return <Result.Ok value=[] /> }
         val premise = self.signatureProjectionPremise(proof: self.thawStaticConformanceProof(id: selected.proof))
         if premise.steps.count() == 0U64 || premise.source.isNone() {
-            return <Result.Err error=self.diagnosticAt(offset: offset, msg: "inherited argument equations lost their lexical receiver", failureDomain: <FailureDomain.Internal />) />
+            return <Result.Err error=self.diagnosticAt(offset: offset, msg: "signature equations lost their lexical receiver", failureDomain: <FailureDomain.Internal />) />
         }
         match self.checkProjectionNormalizations(normalizations: equations, offset: offset, assumptions: [premise.source.unwrap()]) {
             Result.Ok(value: _) => {}
@@ -303,9 +309,7 @@ impl Comp {
             val output = self.groundTermInEnvironment(ref: equation.output, params: environment.params, values: environment.args, selfRef: environment.receiverRef)
             substitutions.append(<ProjectionNormalizationStep source=(try self.replayProjectionChildren(ref: source, normalizations: substitutions, offset: offset)) output=output proof=equation.proof />)
         }
-        mut val normalized: Array[U64] = []
-        for argument in arguments { normalized.append(try self.replayProjectionNormalizations(ref: argument, normalizations: substitutions, offset: offset)) }
-        return <Result.Ok value=normalized />
+        return <Result.Ok value=substitutions />
     }
 
     // Validate the saved constructor graph once per declaration. The semantic
@@ -1452,7 +1456,7 @@ impl Comp {
                 }
                 val isProjection = type.assocNameId != 0U64 && selector.traitInstance.owner == self.associatedProjectionTraitOwner(projection: type) && self.sameResolvedTypeRefs(a: selector.traitInstance.positionalArgs, b: type.assocTraitArgs)
                 mut val projectionAssumptions = assumptions
-                mut val inheritedArgumentEquations: Array[ProjectionNormalizationStep] = []
+                mut val lexicalEquations: Array[ProjectionNormalizationStep] = []
                 if inheritedProjection && isProjection {
                     projectionAssumptions = []
                     for assumption in assumptions {
@@ -1465,15 +1469,15 @@ impl Comp {
                     val bound = self.declarationBound(source: lexical)
                     mut val normalized: Array[U64] = []
                     for argument in arguments {
-                        normalized.append(try self.recordLexicalProjectionEquations(ref: argument, lexical: lexical, bound: bound, equations: inout inheritedArgumentEquations, offset: occurrence.site))
+                        normalized.append(try self.recordLexicalProjectionEquations(ref: argument, lexical: lexical, bound: bound, equations: inout lexicalEquations, offset: occurrence.site))
                     }
-                    if inheritedArgumentEquations.count() != 0U64 {
-                        try self.checkProjectionNormalizations(normalizations: inheritedArgumentEquations, offset: occurrence.site, assumptions: projectionAssumptions)
-                        for equation in inheritedArgumentEquations {
+                    if lexicalEquations.count() != 0U64 {
+                        try self.checkProjectionNormalizations(normalizations: lexicalEquations, offset: occurrence.site, assumptions: projectionAssumptions)
+                        for equation in lexicalEquations {
                             try self.appendRetainedProjectionEquation(step: equation, normalizations: inout equations)
                             try self.appendRetainedProjectionEquation(step: equation, normalizations: inout context)
                         }
-                        try self.requireDeclarationProofSupport(dependencies: (try self.scopedProjectionDependencies(equations: inheritedArgumentEquations, context: context, scope: scope, offset: occurrence.site)), offset: occurrence.site)
+                        try self.requireDeclarationProofSupport(dependencies: (try self.scopedProjectionDependencies(equations: lexicalEquations, context: context, scope: scope, offset: occurrence.site)), offset: occurrence.site)
                     }
                     arguments = normalized
                 }
@@ -1491,7 +1495,6 @@ impl Comp {
                     try self.checkInheritedSignatureProjection(proof: proof, scope: scope, subject: subject, selector: <TraitInstanceKey owner=selector.traitInstance.owner positionalArgs=arguments />, offset: occurrence.site)
                 }
                 val frozen = self.freezeStaticConformanceProof(proof: proof)
-                proofs.append(<AuthoredTypeViewProof occurrence=id receiver=receiver selector=selector proof=frozen inheritedArgumentEquations=inheritedArgumentEquations />)
                 if isProjection {
                     val raw = self.groundTermInEnvironment(ref: occurrence.term, params: [], values: [], selfRef: receiverRef)
                     // Replay matches a projection after its children have
@@ -1499,8 +1502,25 @@ impl Comp {
                     val projected = try self.replayProjectionChildren(ref: raw, normalizations: equations, offset: occurrence.site)
                     val output = try self.associatedOutputTermInProof(proof: proof, traitOwner: selector.traitInstance.owner, assocId: type.assocNameId)
                     val immediate = if output != 0U64 && !self.typeRefEq(a: output, b: projected) { give output } else { give 0U64 }
+                    if self.arena.typeContainsAssociatedProjection(ref: immediate) {
+                        match proof {
+                            StaticConformanceProof.AssumedSupertraitPath(source: val source, steps: _) => {
+                                mut val prerequisites: Array[ProjectionNormalizationStep] = []
+                                try self.recordLexicalProjectionEquations(ref: immediate, lexical: source, bound: self.declarationBound(source: source), equations: inout prerequisites, offset: occurrence.site, active: [projected])
+                                for equation in prerequisites {
+                                    try self.appendRetainedProjectionEquation(step: equation, normalizations: inout lexicalEquations)
+                                    try self.appendRetainedProjectionEquation(step: equation, normalizations: inout equations)
+                                    try self.appendRetainedProjectionEquation(step: equation, normalizations: inout context)
+                                }
+                                try self.checkProjectionNormalizations(normalizations: lexicalEquations, offset: occurrence.site, assumptions: projectionAssumptions)
+                                try self.requireDeclarationProofSupport(dependencies: (try self.scopedProjectionDependencies(equations: prerequisites, context: context, scope: scope, offset: occurrence.site)), offset: occurrence.site)
+                            }
+                            _ => {}
+                        }
+                    }
                     try self.appendRetainedProjectionEquation(step: <ProjectionNormalizationStep source=projected proof=frozen output=immediate />, normalizations: inout equations)
                 }
+                proofs.append(<AuthoredTypeViewProof occurrence=id receiver=receiver selector=selector proof=frozen lexicalEquations=lexicalEquations />)
             }
         }
         return <Result.Ok value=() />
