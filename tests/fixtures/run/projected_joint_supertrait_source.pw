@@ -1,0 +1,19 @@
+trait Parent {
+    type Key
+    type Value
+}
+trait First: Parent[Key=I64] {}
+trait Second: Parent[Value=Bool] {}
+trait Other { type Item }
+trait Preferred: First + Second {}
+trait Outside: Parent[Key=Self#Other.Item] + Other {}
+trait Service: Outside + Preferred + Other[Item=I64] {}
+trait Holder { type Item }
+
+fn consume[U](value: U) -> I64 where U: Holder, U#Holder.Item: Parent[Key=I64, Value=Bool] {
+    return 42I64
+}
+fn forwarding[T, U](value: U, marker: T) -> I64 where T: Service, U: Holder[Item=T#Preferred] {
+    return consume(value: value)
+}
+fn main() {}

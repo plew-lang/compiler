@@ -277,13 +277,18 @@ pub impl Comp {
                 selectedProof = proof
                 output = (try self.associatedOutputTermInProof(proof: proof, traitOwner: traitOwner, assocId: p.assocNameId))
             }
-            if recording && !self.proofIsMissing(proof: selectedProof) {
-                val recordedOutput = if output == 0U64 || output == projection { give 0U64 } else { give output }
-                normalizations.append(<ProjectionNormalizationStep source=projection proof=self.freezeStaticConformanceProof(proof: selectedProof) output=recordedOutput />)
+            if output == 0U64 || output == projection {
+                if recording && !self.proofIsMissing(proof: selectedProof) {
+                    normalizations.append(<ProjectionNormalizationStep source=projection proof=self.freezeStaticConformanceProof(proof: selectedProof) output=0U64 />)
+                }
+                return <Result.Ok value=projection />
             }
-            if output == 0U64 || output == projection { return <Result.Ok value=projection />}
             val substituted: U64 = self.groundTermInEnvironment(ref: output, params: environment.params, values: environment.args, selfRef: selfRef, itemRef: itemRef)
-            return <Result.Ok value=(try self.closeBodyProjectionTermsRecording(ref: substituted, environment: environment, selfRef: selfRef, itemRef: itemRef, assumptions: assumptions, normalizations: inout normalizations, recording: recording)) />
+            val normalized = try self.closeBodyProjectionTermsRecording(ref: substituted, environment: environment, selfRef: selfRef, itemRef: itemRef, assumptions: assumptions, normalizations: inout normalizations, recording: recording)
+            if recording && !self.proofIsMissing(proof: selectedProof) {
+                normalizations.append(<ProjectionNormalizationStep source=projection proof=self.freezeStaticConformanceProof(proof: selectedProof) output=output />)
+            }
+            return <Result.Ok value=normalized />
         }
         mut val args: Array[U64] = []
         mut val assocArgs: Array[U64] = []

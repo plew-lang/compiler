@@ -155,6 +155,12 @@ pub impl Comp {
         return owners
     }
 
+    inout fn selectedPredicateSourceOwners(proof: StaticConformanceProof, owner: U64, receiver: U64) -> Array[U64] {
+        val preferred = self.traitSourceOwners(ref: receiver)
+        if preferred.count() != 0U64 && self.traitProofMatchesSources(proof: proof, traitOwner: owner, sourceOwners: preferred) { return preferred }
+        return []
+    }
+
     inout fn traitProofStateSeen(states: Array[TraitProofState], candidate: TraitProofState) -> Bool {
         for val state in states {
             if state.traitOwner == candidate.traitOwner && state.traitId == candidate.traitId && self.sameProofTraitArgs(a: state.traitArgs, b: candidate.traitArgs) && self.sameTraitProofOrigin(a: state.origin, b: candidate.origin) && state.edges.count() == candidate.edges.count() {
@@ -255,7 +261,8 @@ pub impl Comp {
             val answer = try self.queryTraitPatternProof(demand: <ConformanceProofDemand.SourceAdmission />, baseRef: subject, traitId: 0U64, traitOwner: constraint.key.owner, traitArgs: <PatternTypeInput.Values values=constraint.key.positionalArgs />, patternParams: <PatternBindInput.Values values=[] />, traitArgsOpen: constraint.positionalArgsOpen, assocNames: names, assocValues: values, assumptions: assumptions)
             match answer {
                 ConformanceProofResult.Found(proof: val proof) => {
-                    if !(try self.recordSelectedProofPredicateNormalizations(proof: proof, traitOwner: constraint.key.owner, names: names, values: values, assumptions: assumptions, normalizations: inout normalizations, offset: bound.offset)) { return <Result.Ok value=<Optional.None /> /> }
+                    val sourceOwners = if names.count() != 0U64 { give self.selectedPredicateSourceOwners(proof: proof, owner: constraint.key.owner, receiver: subject) } else { give [] }
+                    if !(try self.recordSelectedProofPredicateNormalizations(proof: proof, traitOwner: constraint.key.owner, names: names, values: values, assumptions: assumptions, normalizations: inout normalizations, offset: bound.offset, sourceOwners: sourceOwners)) { return <Result.Ok value=<Optional.None /> /> }
                     proofs.append(self.freezeStaticConformanceProof(proof: proof))
                 }
                 ConformanceProofResult.Missing | ConformanceProofResult.Ambiguous(owner: _, demand: _, selectedSource: _) => { return <Result.Ok value=<Optional.None /> /> }
@@ -334,7 +341,7 @@ pub impl Comp {
         return <Result.Ok value=self.typeRefEq(a: normalizedExpected, b: normalizedActual) />
     }
 
-    inout fn retainedPredicateOutput(proof: StaticConformanceProof, owner: U64, member: U64, normalizations: Array[ProjectionNormalizationStep], offset: U64) -> Result[U64, CompileDiagnostic] {
+    inout fn retainedPredicateOutput(proof: StaticConformanceProof, owner: U64, member: U64, normalizations: Array[ProjectionNormalizationStep], offset: U64, sourceOwners: Array[U64]) -> Result[U64, CompileDiagnostic] {
         val output = try self.associatedOutputInProof(proof: proof, traitOwner: owner, assocId: member)
         if output != 0U64 || normalizations.count() == 0U64 { return <Result.Ok value=output /> }
         match proof {
@@ -345,9 +352,12 @@ pub impl Comp {
                     val projection = self.arena.typeAt(index: equation.source)
                     if projection.assocNameId != member || self.associatedProjectionTraitOwner(projection: projection) != owner { continue }
                     if !self.typeRefEq(a: self.typeTermProjectionReceiver(t: projection), b: bound.subject) || !self.sameResolvedTypeRefs(a: projection.assocTraitArgs, b: bound.constraint.key.positionalArgs) { continue }
-                    match self.thawStaticConformanceProof(id: equation.proof) {
+                    val derivation = self.thawStaticConformanceProof(id: equation.proof)
+                    match derivation {
                         StaticConformanceProof.AssumedSupertraitPath(source: val premise, steps: _) => {
-                            if self.sameDeclarationBound(a: source, b: premise) { return self.replayProjectionNormalizations(ref: equation.source, normalizations: normalizations, offset: offset) }
+                            if self.sameDeclarationBound(a: source, b: premise) && (sourceOwners.count() == 0U64 || self.traitProofMatchesSources(proof: derivation, traitOwner: owner, sourceOwners: sourceOwners)) {
+                                return self.replayProjectionNormalizations(ref: equation.output, normalizations: normalizations, offset: offset)
+                            }
                         }
                         _ => {}
                     }
@@ -374,7 +384,7 @@ pub impl Comp {
                         val head = <TypeRef nameStart=0U64 nameLen=0U64 args=[] assocTraitStart=owner assocTraitLen=declaration.nameLen assocTraitId=declaration.nameId assocNameStart=associated.nameStart assocNameLen=associated.nameLen assocNameId=member hasAssocTraitDecl=true assocTraitDeclOffset=owner siteOffset=offset />
                         val projection = self.rebuildProjectionTerm(t: head, receiver: bound.subject, traitArgs: bound.constraint.key.positionalArgs)
                         try self.recordLexicalProjectionEquations(ref: projection, lexical: source, bound: self.declarationBound(source: source), equations: inout normalizations, offset: offset, sourceOwners: sourceOwners)
-                        return self.retainedPredicateOutput(proof: proof, owner: owner, member: member, normalizations: normalizations, offset: offset)
+                        return self.retainedPredicateOutput(proof: proof, owner: owner, member: member, normalizations: normalizations, offset: offset, sourceOwners: sourceOwners)
                     }
                 }
             }
@@ -385,11 +395,11 @@ pub impl Comp {
 
     // Interpret only the selected output and verified saved equations. This
     // comparator cannot acquire evidence or repair an incomplete frozen plan.
-    inout fn retainedProofAssociatedTypesMatch(proof: StaticConformanceProof, traitOwner: U64, names: Array[U64], values: Array[U64], normalizations: Array[ProjectionNormalizationStep], offset: U64 = 0U64) -> Result[Bool, CompileDiagnostic] {
+    inout fn retainedProofAssociatedTypesMatch(proof: StaticConformanceProof, traitOwner: U64, names: Array[U64], values: Array[U64], normalizations: Array[ProjectionNormalizationStep], offset: U64 = 0U64, sourceOwners: Array[U64] = []) -> Result[Bool, CompileDiagnostic] {
         if names.count() != values.count() { return <Result.Ok value=false /> }
         mut val index = 0U64
         while index < names.count() {
-            val output = try self.retainedPredicateOutput(proof: proof, owner: traitOwner, member: names[index], normalizations: normalizations, offset: offset)
+            val output = try self.retainedPredicateOutput(proof: proof, owner: traitOwner, member: names[index], normalizations: normalizations, offset: offset, sourceOwners: sourceOwners)
             if output == 0U64 { return <Result.Ok value=false /> }
             if !(try self.retainedAssociatedPredicateTermsMatch(expected: values[index], actual: output, normalizations: normalizations, offset: offset)) { return <Result.Ok value=false /> }
             index += 1U64
@@ -402,10 +412,10 @@ pub impl Comp {
     // them, so recording and replay cannot establish different equalities.
     inout fn recordSelectedProofPredicateNormalizations(proof: StaticConformanceProof, traitOwner: U64, names: Array[U64], values: Array[U64], assumptions: Array[DeclarationBoundRef], normalizations: inout Array[ProjectionNormalizationStep], offset: U64 = 0U64, sourceOwners: Array[U64] = []) -> Result[Bool, CompileDiagnostic] {
         if names.count() != values.count() { return <Result.Ok value=false /> }
-        if try self.retainedProofAssociatedTypesMatch(proof: proof, traitOwner: traitOwner, names: names, values: values, normalizations: normalizations, offset: offset) { return <Result.Ok value=true /> }
+        if try self.retainedProofAssociatedTypesMatch(proof: proof, traitOwner: traitOwner, names: names, values: values, normalizations: normalizations, offset: offset, sourceOwners: sourceOwners) { return <Result.Ok value=true /> }
         mut val index = 0U64
         while index < names.count() {
-            mut val output = try self.retainedPredicateOutput(proof: proof, owner: traitOwner, member: names[index], normalizations: normalizations, offset: offset)
+            mut val output = try self.retainedPredicateOutput(proof: proof, owner: traitOwner, member: names[index], normalizations: normalizations, offset: offset, sourceOwners: sourceOwners)
             if output == 0U64 {
                 output = try self.recordInheritedPredicateEquation(proof: proof, owner: traitOwner, member: names[index], sourceOwners: sourceOwners, normalizations: inout normalizations, offset: offset)
             }
@@ -416,7 +426,7 @@ pub impl Comp {
             }
             index += 1U64
         }
-        return self.retainedProofAssociatedTypesMatch(proof: proof, traitOwner: traitOwner, names: names, values: values, normalizations: normalizations, offset: offset)
+        return self.retainedProofAssociatedTypesMatch(proof: proof, traitOwner: traitOwner, names: names, values: values, normalizations: normalizations, offset: offset, sourceOwners: sourceOwners)
     }
 
     // Query consumers acquire their own equations. Saved-plan consumers call

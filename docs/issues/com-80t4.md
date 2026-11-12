@@ -1,6 +1,6 @@
 ---
 id: com-80t4
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-11-12T21:08:42Z
@@ -103,3 +103,33 @@ An explicit `#Service` that includes both branches still checks successfully.
 Standard build `20261112T211727-build-73997a` and generation
 `20261112T212101-gen-599d84` passed. Same-source medians were
 6.799868 s and 6.817552 s, with identical LLVM across all eight runs.
+
+## Final review and replay
+
+The first independent review reproduced a forward reference in saved
+equations. Concrete replay compares an output with only the equations
+already admitted. Both lexical and ordinary projection recorders now save
+the right-hand-side prerequisites before the dependent equation. The
+conditional fixture exercises a two-hop chain through final dispatch.
+
+The review also found that conditional evidence did not retain the
+preferred source filter. Selection, recording and retained comparison
+now use that filter, and a retained predicate reads the matching proof's
+own RHS. When the subject itself is a projection, recording derives the
+filter from the normalized subject used by selection. The symbolic
+`projected_joint_supertrait_source` fixture fails on `1919348b` and
+passes on `c51623ca`. Concrete equality of a viewed associated output
+reproduces on the baseline even without inheritance and is tracked
+separately in [com-fur3](com-fur3.md).
+
+Independent recheck on `c51623ca` confirmed the projected-source regression,
+two-hop right-hand-side replay and preferred conditional witness. It
+confirmed that acquisition and retained comparison honor the same source
+filter and found no remaining blocker for this task. Standard build
+`20261112T213327-build-cc81ee` and generation
+`20261112T213703-gen-127a25` passed. Ten focused controls passed check,
+JIT and native, including three final-consumer fixtures and the abstract
+projected-source fixture. Nine targeted rejections kept their diagnostics.
+
+Same-source medians were 6.792120 s for `34a254d6` and 6.790048 s for
+`c51623ca`. All eight LLVM outputs matched.

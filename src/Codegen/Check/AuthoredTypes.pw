@@ -1565,9 +1565,13 @@ impl Comp {
                 for argument in selected.constraint.key.positionalArgs {
                     try self.recordLexicalProjectionEquations(ref: argument, lexical: lexical, bound: bound, equations: inout equations, offset: offset, active: next)
                 }
+                // During concrete replay the witness may already return the
+                // normalized output. Admit the RHS derivation first so the
+                // verifier can establish equality using preceding evidence.
+                val normalized = try self.recordLexicalProjectionEquations(ref: output, lexical: lexical, bound: bound, equations: inout equations, offset: offset, active: next)
                 val equation = <ProjectionNormalizationStep source=rebuilt proof=self.freezeStaticConformanceProof(proof: proof) output=output />
                 try self.appendRetainedProjectionEquation(step: equation, normalizations: inout equations)
-                return self.recordLexicalProjectionEquations(ref: output, lexical: lexical, bound: bound, equations: inout equations, offset: offset, active: next)
+                return <Result.Ok value=normalized />
             }
         }
     }
