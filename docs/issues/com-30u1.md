@@ -1059,3 +1059,32 @@ Build `20261112T185328-build-e2b0b3`, generation
 `20261112T185644-gen-7ad1e2`, and seven check/JIT/native controls passed,
 including the qualified inherited where case. Same-source medians were
 6.699748 s and 6.705766 s, with identical LLVM output in all eight runs.
+
+## Qualified inherited associated results
+
+The reduced output case showed that the enclosing `Wrapper` proof retained
+the associated clause of the original `Parent.Input` as a condition.
+Reading only the witness's output term left that term symbolic after the
+inner projection had already specialized to `Entry`. The requirement
+reader now resolves the selected condition by its full receiver and trait
+instance, follows the saved parent path, and uses the parent's published
+associated clause to read the output. It traverses semantic children when
+the resulting projection is inside another type. Nominal conformance
+checking and default callable-form preparation publish the necessary
+associated clauses before comparing requirements, including when the
+parent impl is written later.
+
+Build `20261112T190915-build-1a8148`, candidate `2bbe01c9`, and generation
+`20261112T191208-gen-9ed8b8` passed. Nine check/JIT/native controls passed,
+including the inherited return and default callable fixtures. The wrong
+result was rejected. An isolated removal of only the selected Parent
+associated-clause table was rejected, with the Parent conformance still
+registered. Same-source medians were 6.697235 s and 6.701365 s, with all
+eight LLVM outputs identical.
+
+The generic version remains RED: bind `Worker[T]`'s `Parent.Input` to `T`
+under `T: Source`, and implement the same wrapped requirement with
+`T#Source.Item` as parameter and result. Candidate `2bbe01c9` rejects it
+during requirement matching. The inherited projection must carry the
+same symbolic subject and condition evidence while the receiver is open.
+Bare inherited associated-name binding also remains open.

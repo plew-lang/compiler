@@ -432,6 +432,11 @@ struct RequirementSignatureRead {
 }
 impl RequirementSignatureRead { factory }
 
+struct SelectedSignatureAssociatedClause {
+    val receiver: U64
+    val proof: StaticConformanceProof
+}
+
 struct FixedRequirementAssociatedProof {
     val bound: TraitBound
     val proof: U64

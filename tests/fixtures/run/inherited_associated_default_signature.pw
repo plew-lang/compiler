@@ -1,0 +1,27 @@
+use @Std/Io only { print }
+
+trait Marker {}
+trait Source { type Item: Marker }
+trait Select { type Value: Marker }
+struct Wrapper[T] {}
+impl[T] Wrapper[T] as Select where T: Source { type Value = T#Source.Item }
+
+trait Parent { type Input: Source }
+trait Service: Parent {
+    fn fetch(value: Wrapper[Self#Parent.Input]#Select.Value) -> Wrapper[Self#Parent.Input]#Select.Value
+}
+
+struct Element {}
+impl Element { fn number() -> I64 { return 42I64 } }
+impl Element as Marker {}
+struct Entry {}
+impl Entry as Source { type Item = Element }
+struct Worker {}
+impl Worker as Service { fn fetch(value: Element, enabled: Bool = true) -> Element { return value } }
+impl Worker as Parent { type Input = Entry }
+
+fn main() {
+    val worker = <Worker />
+    val element: Element = worker#Service.fetch(value: <Element />)
+    print(element.number())
+}
