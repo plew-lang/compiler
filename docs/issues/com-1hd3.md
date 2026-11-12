@@ -1,6 +1,6 @@
 ---
 id: com-1hd3
-status: in_progress
+status: closed
 deps: []
 links: [com-nkoa, com-rv7l]
 created: 2026-11-09T08:54:16Z
@@ -95,8 +95,8 @@ work item is proposed, not implemented. Do not close this child or bypass its
 unresolved acceptance by advancing a sibling.
 
 [Final fixed-point, matched timing and fresh candidate controls](../../../evidence/rejection-domains/diagnostic-domain-implementation/retained-free-signature-batch-final.json)
-record the final candidate. This child remains in_progress; parent/goal, full
-suites/ASan/G2 and main/seed/adopted-carrier promotion remain uncertified.
+record the final candidate. At that checkpoint the child remained in progress. See the resumed
+verification below for the current result.
 
 ## Interruption Checkpoint and Return Procedure
 
@@ -139,3 +139,30 @@ remain separate. No new ABI task or priority/dependency change is implied here.
 The final checkpoint JSON retains the historical stop assessment. The current
 difficulty assessment and return procedure in this task supersede that judgment;
 the measurements and scoped test results themselves remain valid for their inputs.
+
+## Resumed Verification
+
+The retained-signature implementation is unchanged. The known completion
+identity fixture now invokes the existing canonical declaration-conflict API.
+The previous fixture failed to resolve its removed selector; the migrated
+fixture executes all original completion, identity and via assertions.
+
+With the adopted plewc-orc-lifetime input, the current product source reaches
+a third-generation LLVM/runtime fixed point in formal run
+`20261112T035903-self-host-f9cebd`. The same measured compiler produces
+6.996696, 6.503543 and 6.487391 seconds, median **6.503543 seconds**, below
+the seven-second threshold. The measured binary is saved as
+`bin/plewc-com-1hd3-resumed-fixed-20261112`. The dependency is the local
+Syntax revision recorded in the evidence, as used by the current worktree.
+
+The exact measured binary passed all 13 signature controls, all 58
+preservation controls, public check/AOT/lazy and the expected check
+rejection, exact helperboundary generated source, and the migrated
+completion fixture. The older pre-signature compiler and the current
+compiler on the same latest source measured 7.259646 and 6.447799 seconds
+respectively. Each variant is stable across its runs. Their LLVM hashes
+differ, so the cumulative comparison does not isolate signature cost.
+
+[Resumed controls and formal measurement](../../../evidence/rejection-domains/diagnostic-domain-implementation/retained-free-signature-resume.json).
+Independent review confirmed the retained proof and signature consumers, the exact measured binary and input hashes, and the complete scoped controls. This is scoped to this child. The parent, G2 gates, and integration or
+carrier promotion remain separate. The next sibling is [com-erlx](com-erlx.md).

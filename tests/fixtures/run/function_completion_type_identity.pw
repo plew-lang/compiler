@@ -1,5 +1,5 @@
-// Semantic contract test. Surface diverge syntax is covered separately when
-// connected; a function value remains a value regardless of its call contract.
+// Semantic contract test. Source diverge syntax is covered separately.
+// A function value remains a value regardless of its call contract.
 use /Frontend only { Comp }
 use /Ir only { TypeRef, Func, Bind, InstanceEnvironment, PatternBindInput, UnifyBind }
 use @Std/Core only { assert }
@@ -60,7 +60,7 @@ fn main() {
     assert(!compiler.typeRefEq(a: normalArray, b: stoppingArray), message: "nested completion identity")
     val normalDeclaration = declaration(diverging: false)
     val stoppingDeclaration = declaration(diverging: true)
-    assert(compiler.sameFuncSelector(a: normalDeclaration, b: stoppingDeclaration), message: "completion is not an overload selector")
+    assert(compiler.callableDeclarationConflict(a: normalDeclaration, b: stoppingDeclaration).unwrap(), message: "completion is not an overload selector")
     assert(!compiler.viaSignatureMatches(witness: normalDeclaration, target: stoppingDeclaration), message: "via retains completion")
     assert(!compiler.viaSignatureMatches(witness: stoppingDeclaration, target: normalDeclaration), message: "via cannot infer completion")
     assert(compiler.viaSignatureMatches(witness: stoppingDeclaration, target: stoppingDeclaration), message: "same via contract")
