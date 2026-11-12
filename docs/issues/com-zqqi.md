@@ -1,6 +1,6 @@
 ---
 id: com-zqqi
-status: in_progress
+status: closed
 deps: [com-erlx]
 links: []
 created: 2026-11-09T08:54:16Z
@@ -115,10 +115,40 @@ Identical-source medians were 6.431953 s before signature admission and
 LLVM differed only in generated generic body symbol components when matched
 by body ID.
 
-Remaining: replace receiver-premise re-grounding with retained normalization
-replay and re-review. A generic provided probe with a projected trait receiver
-argument gives the same pre-existing `no matching method` diagnostic on both
-carriers. Its concrete analogue reaches a new earlier signature diagnostic,
-`unresolved declaration type has no lexical parameter dependency`. Neither
-probe proves successful receiver replay. Diagnose source proof admission for
-that concrete case and validate the replay path independently of dispatch.
+## Outcome
+
+Resolved in `0facda47`. Both lowering adapters register the original
+implementation and authored signature slots. Selected and provided method
+consumers share the admitted graph and the selected instance environment.
+Receiver arguments use earlier validated projection equations, including on
+the witness side. Missing equations defer instead of selecting another
+conformance. Canonical lexical Self creation uses the trait's binder and a
+stable spelling across file and standard input. The reader rejects foreign
+nominal receivers, conflicting lexical Self and duplicate binder IDs.
+
+Final build `20261112T115943-build-685231`, candidate `c0b0a04f`.
+Two unused signature declarations with one and two levels of receiver
+projection passed from a file and standard input. Four final-consumer
+scenarios passed, including both projection depths with an explicitly
+selected witness and with the equations removed. The 49 existing/free and
+implementation-origin controls passed, including value-adapter acceptance
+and wrong-instance rejection. Selected extension, trait conformance,
+provided receiver, default arguments, async, Unit, fallible factories and
+newtype controls passed check/JIT/AOT. Both unproved and wrong-instance
+methods reject at their annotation. A 133-fixture differential run matched
+132 outputs or diagnostics and changed the intended formerly accepted
+unproved signature. Generation `20261112T120511-gen-38644c` passed 25
+successes, five rejections and the gen-input AST case with fixed inputs.
+
+The final independent re-review found no remaining in-scope violation
+after the input-independent Self binder, child-first equations, concrete
+witness comparison, and foreign nominal receiver fixes. The old generic
+projected receiver dispatch probe still reports `no matching method` on
+both carriers. It is covered by the complete-instance dispatch contract
+in [com-4k31](com-4k31.md); the receiver replay control starts from an
+explicit witness to isolate the signature contract.
+
+Same-source medians were 6.529688 s (`dd653ed9`) and 6.576449 s
+(`c0b0a04f`), three interleaved runs after warmup. LLVM matches when
+generated generic body symbol components are normalized by body ID.
+Formal fixed-point, full-suite and sanitizer gates remain with met-si6j.
