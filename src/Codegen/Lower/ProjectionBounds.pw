@@ -172,7 +172,7 @@ impl Comp {
             val clause = self.projectionBoundClauses[id - 1U64]
             match clause.state {
                 ProjectionBoundState.Ready(bound: val bound) => {
-                    if self.typeRefEq(a: bound.subject, b: receiver) && self.traitOwnerHasAssocId(owner: bound.source.traitInstance.owner, assocId: member) {
+                    if self.typeRefEq(a: bound.subject, b: receiver, sourceTerms: true) && self.traitOwnerHasAssocId(owner: bound.source.traitInstance.owner, assocId: member) {
                         try self.preparedProjectionBound(id: id)
                         sources.append(<LoweredTypeViewRecipe source=bound.source arguments=bound.arguments />)
                     }
@@ -186,7 +186,7 @@ impl Comp {
                         val source = try self.projectionBoundCandidateSource(id: id)
                         if self.traitOwnerHasAssocId(owner: source.traitInstance.owner, assocId: member) {
                             val bound = try self.preparedProjectionBound(id: id)
-                            if self.typeRefEq(a: bound.subject, b: receiver) {
+                            if self.typeRefEq(a: bound.subject, b: receiver, sourceTerms: true) {
                                 sources.append(<LoweredTypeViewRecipe source=bound.source arguments=bound.arguments />)
                             }
                         }
@@ -212,7 +212,7 @@ impl Comp {
             val clause = self.projectionBoundClauses[id - 1U64]
             match clause.state {
                 ProjectionBoundState.Ready(bound: val bound) => {
-                    if self.typeRefEq(a: bound.subject, b: receiver) && self.traitOwnerHasAssocId(owner: bound.source.traitInstance.owner, assocId: member) {
+                    if self.typeRefEq(a: bound.subject, b: receiver, sourceTerms: true) && self.traitOwnerHasAssocId(owner: bound.source.traitInstance.owner, assocId: member) {
                         try self.preparedProjectionBound(id: id)
                         sources.append(<LoweredTypeViewRecipe source=bound.source arguments=bound.arguments />)
                     }
@@ -226,7 +226,7 @@ impl Comp {
                         val source = try self.projectionBoundCandidateSource(id: id)
                         if self.traitOwnerHasAssocId(owner: source.traitInstance.owner, assocId: member) {
                             val bound = try self.preparedProjectionBound(id: id)
-                            if self.typeRefEq(a: bound.subject, b: receiver) {
+                            if self.typeRefEq(a: bound.subject, b: receiver, sourceTerms: true) {
                                 sources.append(<LoweredTypeViewRecipe source=bound.source arguments=bound.arguments />)
                             }
                         }

@@ -135,7 +135,7 @@ impl Comp {
             val owner = self.decls.traitOwnerAt(index: ownerIndex)
             if owner.arity != source.source.traitInstance.positionalArgs.count() || !self.traitOwnerHasAssocId(owner: owner.nameStart, assocId: member) { continue }
             mut val present = false
-            for val candidate in candidates { if self.semanticViewSourceEq(a: candidate.source, b: source.source) { present = true } }
+            for val candidate in candidates { if self.semanticViewSourceEq(a: candidate.source, b: source.source, sourceTerms: true) { present = true } }
             if !present { candidates.append(source) }
         }
         if candidates.count() == 1U64 { return <Result.Ok value=candidates[0U64] /> }

@@ -1,0 +1,8 @@
+use ./A as A
+use ./B as B
+trait P { type Item }
+struct Box[T] { val item: T }
+impl[T] Box[T] where A.Wrap[T]: P {
+    fn accept(value: B.Wrap[T].Item) {}
+}
+fn main() {}

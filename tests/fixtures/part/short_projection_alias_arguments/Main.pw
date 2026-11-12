@@ -1,0 +1,8 @@
+use ./A as A
+use ./A only { Wrap as Alias }
+trait P[U] { type Item }
+struct Box[Wrap] { val item: Wrap }
+impl[Wrap] Box[Wrap] where Wrap: P[Box[A.Wrap[I64]]], Wrap: P[Box[Alias[I64]]] {
+    fn accept(value: Wrap.Item) {}
+}
+fn main() {}

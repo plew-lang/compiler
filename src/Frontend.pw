@@ -1070,12 +1070,12 @@ pub impl Comp {
     // is the flat-TypeRef migration bridge for the eventual TypeTerm `view`
     // node, and keeps the full copy in one place so Mono and LLVM cannot each
     // accidentally turn `S#E` into the trait named by E's conformance subject.
-    inout fn semanticViewSourceEq(a: ResolvedViewSource, b: ResolvedViewSource) -> Bool {
+    inout fn semanticViewSourceEq(a: ResolvedViewSource, b: ResolvedViewSource, sourceTerms: Bool = false) -> Bool {
         if a.traitInstance.owner != 0U64 || b.traitInstance.owner != 0U64 {
             if !a.sameHead(other: b) { return false }
             mut val index = 0U64
             while index < a.traitInstance.positionalArgs.count() {
-                if !self.typeRefEq(a: a.traitInstance.positionalArgs[index], b: b.traitInstance.positionalArgs[index]) { return false }
+                if !self.typeRefEq(a: a.traitInstance.positionalArgs[index], b: b.traitInstance.positionalArgs[index], sourceTerms: sourceTerms) { return false }
                 index += 1U64
             }
             return true

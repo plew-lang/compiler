@@ -1,7 +1,7 @@
 ---
 id: com-erlx
 status: in_progress
-deps: []
+deps: [com-v5zn]
 links: []
 created: 2026-11-09T08:54:16Z
 type: task

@@ -492,7 +492,7 @@ pub impl Comp {
         return self.semanticViewSourceSetsEqual(a: self.arena.typeViewSources(ref: a), b: self.arena.typeViewSources(ref: b))
     }
 
-    inout fn typeTermRefSameHead(a: U64, b: U64) -> Bool {
+    inout fn typeTermRefSameHead(a: U64, b: U64, sourceTerms: Bool = false) -> Bool {
         if a >= self.arena.typeTermCount() || b >= self.arena.typeTermCount() { return false }
         if a == b { return true }
         val ta = self.arena.typeTermAt(index: a)
@@ -503,17 +503,19 @@ pub impl Comp {
             if !(self.arena.typeViewSourceHeadsEqual(a: a, b: b)) { return false }
         }
         if ta.isRecord || tb.isRecord { return ta.isRecord && tb.isRecord && ta.isSendable == tb.isSendable && ta.isDiverging == tb.isDiverging }
-        if ta.hasDecl != tb.hasDecl { return false }
-        if ta.hasDecl && tb.hasDecl {
-            if ta.declOffset != tb.declOffset { return false }
-        } else if ta.nameId != 0U64 && tb.nameId != 0U64 {
-            if ta.nameId != tb.nameId { return false }
-        } else if !(spansEqual(c: inout self, aStart: ta.nameStart, aLen: ta.nameLen, bStart: tb.nameStart, bLen: tb.nameLen)) {
-            return false
-        }
         if ta.isAny != tb.isAny || ta.isSendable != tb.isSendable || ta.isDiverging != tb.isDiverging || ta.paramId != tb.paramId { return false }
         if ta.assocTraitId != tb.assocTraitId || (ta.hasAssocTraitDecl && tb.hasAssocTraitDecl && ta.assocTraitDeclOffset != tb.assocTraitDeclOffset) || ta.assocNameId != tb.assocNameId { return false }
-        return true
+        if sourceTerms {
+            val left = self.sourceNominalOwner(term: ta)
+            val right = self.sourceNominalOwner(term: tb)
+            if left.isSome() || right.isSome() {
+                return left.isSome() && right.isSome() && left.unwrap() == right.unwrap()
+            }
+        }
+        if ta.hasDecl != tb.hasDecl { return false }
+        if ta.hasDecl { return ta.declOffset == tb.declOffset }
+        if ta.nameId != 0U64 && tb.nameId != 0U64 { return ta.nameId == tb.nameId }
+        return spansEqual(c: inout self, aStart: ta.nameStart, aLen: ta.nameLen, bStart: tb.nameStart, bLen: tb.nameLen)
     }
 
     // Reassemble a projection after a structural traversal transformed its

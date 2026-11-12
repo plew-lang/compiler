@@ -1,5 +1,44 @@
 // Shared semantic selection; the two syntax adapters only decode children.
 impl Comp {
+    // Nominal terms can participate in projection selection before their
+    // arena rows have declaration offsets. Read the already admitted source
+    // binding, including aliases and declarations not yet lowered.
+    inout fn sourceNominalOwner(term: TypeTerm) -> Optional[U64] {
+        if term.paramId != 0U64 || term.nameLen == 0U64 || term.siteOffset == 0U64 {
+            return <Optional.None />
+        }
+        val bindings = self.moduleScopeBindings
+        if !bindings.isSome() { return <Optional.None /> }
+        val admitted = bindings.unwrap()
+        val qualified = self.modules.qualifiedUseIndex(offset: term.nameStart)
+        mut val binding: Optional[ScopeBinding] = <Optional.None />
+        if qualified < self.modules.qualifiedUseCount() {
+            val origin = self.modules.qualifiedUseAt(index: qualified)
+            val name = if origin.sourceStart == term.nameStart && origin.sourceLength == term.nameLen {
+                give term.nameId
+            } else {
+                give intern(c: inout self, start: origin.sourceStart, len: origin.sourceLength)
+            }
+            binding = admitted.uniqueBinding(moduleId: origin.targetModule, nameId: name)
+            if binding.isSome() && !binding.unwrap().isPublic { return <Optional.None /> }
+        } else {
+            binding = admitted.uniqueBinding(moduleId: self.moduleOf(offset: term.siteOffset), nameId: term.nameId)
+            if !binding.isSome() && self.modules.langModule != 4000000000U64 {
+                binding = admitted.uniqueBinding(moduleId: self.modules.langModule, nameId: term.nameId)
+            }
+        }
+        match binding {
+            Optional.Some(v: val declaration) => {
+                match declaration.kind {
+                    ScopeBindingKind.Type | ScopeBindingKind.Trait => { return <Optional.Some v=declaration.declarationOffset /> }
+                    _ => {}
+                }
+            }
+            Optional.None => {}
+        }
+        return <Optional.None />
+    }
+
     inout fn knownExtensionSource(identity: U64) -> Bool {
         match self.moduleScopeBindings {
             Optional.Some(v: val bindings) => { return bindings.extensionBinding(identity: identity).isSome() }

@@ -180,7 +180,7 @@ pub impl Comp {
         mut val i: U64 = 0U64
         while i < owner.assocTypes.count() {
             val member = owner.assocTypes[i]
-            if member.nameId == nameId {
+            if member.nameId == nameId && self.modules.qualifiedUseIndex(offset: nameStart) >= self.modules.qualifiedUseCount() {
                 val selfName = self.kwSpan(kw: "Self", kwLen: 4U64)
                 val receiver = self.pushType(t: <TypeRef nameStart=selfName.nameStart nameLen=selfName.nameLen paramId=owner.selfParamId args=[] isRecord=false recordFieldLabels=[] recordFieldTerms=[] />)
                 return self.pushType(t: <TypeRef nameStart=selfName.nameStart nameLen=selfName.nameLen paramId=owner.selfParamId args=[] isRecord=false recordFieldLabels=[] recordFieldTerms=[] assocTraitStart=owner.nameStart assocTraitLen=owner.nameLen assocTraitId=owner.nameId assocTraitArgs=self.lowerAssociatedArgs assocNameStart=member.nameStart assocNameLen=member.nameLen assocNameId=member.nameId projectionReceiver=receiver hasAssocTraitDecl=true assocTraitDeclOffset=owner.nameStart />)
@@ -190,6 +190,19 @@ pub impl Comp {
         return 0U64
     }
 
+
+    inout fn sourceTypeParameter(name: Bind) -> U64 {
+        mut val index = self.cur.typeParams.count()
+        while index > 0U64 {
+            index -= 1U64
+            val parameter = self.cur.typeParams[index]
+            if parameter.paramId != 0U64 && spansEqual(c: inout self, aStart: parameter.nameStart, aLen: parameter.nameLen, bStart: name.nameStart, bLen: name.nameLen) {
+                if self.modules.qualifiedUseIndex(offset: name.nameStart) < self.modules.qualifiedUseCount() { return 0U64 }
+                return parameter.paramId
+            }
+        }
+        return 0U64
+    }
 
     // Construction heads retain the same lexical identity as written type
     // annotations, including when their explicit argument list is empty.
@@ -669,21 +682,8 @@ pub impl Comp {
         // type-visibility (Check/Visibility.pw walks self.arena.types by siteOffset). 0 = skip:
         // a head naming an in-scope type parameter (self.cur.typeParams, set during lowering) is
         // a binder, not a module-scoped type — exclude it from the visibility walk.
-        mut val site: U64 = t.span.start
-        mut val paramId: U64 = 0U64
-        mut val tpi: U64 = 0
-        while tpi < self.cur.typeParams.count() {
-            val tp: Bind = self.cur.typeParams[tpi]
-            // A projection's receiver is still a lexical type parameter.  Do
-            // not send `T#Trait.Item` through module type-name resolution just
-            // because the outer term is a projection: during declaration-time
-            // checks its receiver is a symbolic Param, not a concrete witness.
-            if tp.paramId != 0U64 && spansEqual(c: inout self, aStart: tp.nameStart, aLen: tp.nameLen, bStart: nm.nameStart, bLen: nm.nameLen) {
-                site = 0U64
-                paramId = tp.paramId
-            }
-            tpi += 1
-        }
+        val paramId = self.sourceTypeParameter(name: nm)
+        val site = if paramId == 0U64 { give t.span.start } else { give 0U64 }
         val shortProjection = !projection.isSome() && t.projectionAssoc.bytes().count() > 0U64
         val projectionReceiver = if projection.isSome() || shortProjection {
             give self.pushType(t: <TypeRef nameStart=nm.nameStart nameLen=nm.nameLen paramId=paramId args=args isRecord=false recordFieldLabels=[] recordFieldTerms=[] viewExtId=viewExtId viewIds=viewIds viewSources=viewSources isAny=t.isAny argLabels=argLabels isSendable=t.isSendable isDiverging=t.isDiverging siteOffset=site />)
@@ -907,17 +907,8 @@ pub impl Comp {
             else { argLabels.append(0U64) }
             li += 1U64
         }
-        mut val site: U64 = t.span.start
-        mut val paramId: U64 = 0U64
-        mut val tpi: U64 = 0U64
-        while tpi < self.cur.typeParams.count() {
-            val param: Bind = self.cur.typeParams[tpi]
-            if param.paramId != 0U64 && spansEqual(c: inout self, aStart: param.nameStart, aLen: param.nameLen, bStart: name.nameStart, bLen: name.nameLen) {
-                site = 0U64
-                paramId = param.paramId
-            }
-            tpi += 1U64
-        }
+        val paramId = self.sourceTypeParameter(name: name)
+        val site = if paramId == 0U64 { give t.span.start } else { give 0U64 }
         val shortProjection = !projection.isSome() && !namespaceType && t.projectionAssoc.end > t.projectionAssoc.start
         val projectionReceiver = if projection.isSome() || shortProjection {
             give self.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen paramId=paramId args=args isRecord=false recordFieldLabels=[] recordFieldTerms=[] viewExtId=viewExtId viewIds=viewIds viewSources=viewSources isAny=t.isAny argLabels=argLabels isSendable=t.isSendable isDiverging=t.isDiverging siteOffset=site />)

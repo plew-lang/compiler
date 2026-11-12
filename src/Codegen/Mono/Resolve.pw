@@ -892,17 +892,17 @@ pub impl Comp {
         return self.genericEnumIndexForType(ref: ref) < self.arena.enumCount()
     }
 
-    inout fn typeRefEq(a: U64, b: U64) -> Bool {
+    inout fn typeRefEq(a: U64, b: U64, sourceTerms: Bool = false) -> Bool {
         if a == b {
             return true
         }
         if a >= self.arena.typeTermCount() || b >= self.arena.typeTermCount() { return false }
-        if !(self.typeTermRefSameHead(a: a, b: b)) { return false }
+        if !(self.typeTermRefSameHead(a: a, b: b, sourceTerms: sourceTerms)) { return false }
         val childCount = self.typeTermRefChildCount(ref: a)
         if childCount != self.typeTermRefChildCount(ref: b) { return false }
         mut val i: U64 = 0U64
         while i < childCount {
-            if self.typeTermRefIdentityChildLabel(ref: a, index: i) != self.typeTermRefIdentityChildLabel(ref: b, index: i) || !(self.typeRefEq(a: self.typeTermRefChildRef(ref: a, index: i), b: self.typeTermRefChildRef(ref: b, index: i))) { return false }
+            if self.typeTermRefIdentityChildLabel(ref: a, index: i) != self.typeTermRefIdentityChildLabel(ref: b, index: i) || !(self.typeRefEq(a: self.typeTermRefChildRef(ref: a, index: i), b: self.typeTermRefChildRef(ref: b, index: i), sourceTerms: sourceTerms)) { return false }
             i += 1U64
         }
         return true

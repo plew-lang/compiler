@@ -1,7 +1,7 @@
 ---
 id: com-3jtd
 status: open
-deps: []
+deps: [com-v5zn]
 links: []
 created: 2026-11-09T08:54:16Z
 type: task
