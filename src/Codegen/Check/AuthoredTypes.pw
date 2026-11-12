@@ -707,7 +707,7 @@ impl Comp {
                 if bound.subject == 0U64 { return <Result.Ok value=<Optional.None /> /> }
                 try self.requireStaticSignatureProof(proof: proof, offset: bound.offset)
                 val scope = try self.requireAdmittedRawRequirement(traitIndex: traitIndex, slot: slot, offset: bound.offset)
-                return <Result.Ok value=<Optional.Some v=<RequirementSignatureRead scope=scope bound=bound selected=<Optional.Some v=proof /> /> /> />
+                return <Result.Ok value=<Optional.Some v=<RequirementSignatureRead scope=scope bound=bound evidence=<RequirementSelfEvidence.Static proof=proof /> /> /> />
             }
             _ => { return <Result.Ok value=<Optional.None /> /> }
         }
@@ -835,7 +835,12 @@ impl Comp {
             }
             if index == first {
                 val bound = self.supertraitBoundThroughSteps(root: interface.bound, steps: premise.steps)
-                val selected = if premise.steps.count() == 0U64 { give interface.selected } else { give <Optional.None /> }
+                val selected: Optional[StaticConformanceProof] = if premise.steps.count() == 0U64 {
+                    give match interface.evidence {
+                        RequirementSelfEvidence.Static(proof: val proof) => <Optional.Some v=proof />,
+                        _ => <Optional.None />,
+                    }
+                } else { give <Optional.None /> }
                 return self.readSelectedSignatureProjection(bound: bound, selected: selected, receiver: receiver, selector: selector, arguments: arguments, member: member, offset: offset)
             }
             if premise.steps.count() == 0U64 {
@@ -847,9 +852,48 @@ impl Comp {
                 return self.readSelectedSignatureProjection(bound: bound, selected: <Optional.None />, receiver: receiver, selector: selector, arguments: arguments, member: member, offset: offset)
             }
         }
+        match interface.evidence {
+            RequirementSelfEvidence.Conformance(index: val conformance) => {
+                if premise.source.isSome() {
+                    match premise.source.unwrap() {
+                        DeclarationBoundRef.AssociatedType(index: val index) => {
+                            val retained = try self.conformanceSignatureAssociatedClause(index: index, conformance: conformance, scope: interface.scope, offset: offset)
+                            if retained.isSome() {
+                                val row = retained.unwrap()
+                                val bound = try self.replayBoundNormalizations(bound: row.bound, normalizations: row.normalizations)
+                                val selected = self.thawStaticConformanceProof(id: row.proof)
+                                return self.readSelectedSignatureProjection(bound: bound, selected: <Optional.Some v=selected />, receiver: receiver, selector: selector, arguments: arguments, member: member, offset: offset)
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            _ => {}
+        }
         // An admitted equation may leave its output symbolic. It does not
         // authorize discovering another witness after erasure.
         return self.readLexicalSignatureProjection(proof: proof, owner: selector.traitInstance.owner, member: member, environment: environment)
+    }
+
+    inout fn conformanceSignatureAssociatedClause(index: U64, conformance: U64, scope: U64, offset: U64) -> Result[Optional[ConformanceAssociatedEvidence], CompileDiagnostic] {
+        if index >= self.arena.associatedBoundEvidenceCount() {
+            return <Result.Err error=self.diagnosticAt(offset: offset, msg: "requirement has no retained associated clause", failureDomain: <FailureDomain.Internal />) />
+        }
+        val associated = self.arena.associatedBoundEvidenceAt(index: index)
+        val prerequisite = self.signatureProjectionPremise(proof: associated.prerequisite)
+        if prerequisite.source.isNone() || prerequisite.steps.count() != 0U64 { return <Result.Ok value=<Optional.None /> /> }
+        match prerequisite.source.unwrap() {
+            DeclarationBoundRef.RawRequirement(index: val root) => {
+                if root + 1U64 == self.rawRequirementRanges[scope].first {
+                    val row = self.arena.conformanceAssociatedClause(conformance: conformance, clause: associated.clause)
+                    if row.isNone() { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "conformance signature lost its associated clause evidence", failureDomain: <FailureDomain.Internal />) /> }
+                    return <Result.Ok value=row />
+                }
+            }
+            _ => {}
+        }
+        return <Result.Ok value=<Optional.None /> />
     }
 
     inout fn readRequirementBounds(signature: RequirementSignatureRead, methodArguments: Array[U64]) -> Result[Array[TraitBound], CompileDiagnostic] {
@@ -867,8 +911,15 @@ impl Comp {
             for argument in methodArguments { values.append(argument) }
         }
         val environment = <InstanceEnvironment params=parameters args=values receiverRef=original.receiverRef />
-        val range = self.rawRequirementRanges[signature.scope]
         mut val memo: Dictionary[U64, AuthoredRecipeRead] = [:]
+        return self.readRequirementBoundsInEnvironment(signature: signature, environment: environment, memo: inout memo)
+    }
+
+    inout fn readRequirementBoundsInEnvironment(signature: RequirementSignatureRead, environment: InstanceEnvironment, memo: inout Dictionary[U64, AuthoredRecipeRead]) -> Result[Array[TraitBound], CompileDiagnostic] {
+        val admitted = self.authoredRequirementViews[signature.scope]
+        val count = admitted.declaration.signatureBounds.len
+        if count == 0U64 { return <Result.Ok value=[] /> }
+        val range = self.rawRequirementRanges[signature.scope]
         mut val bounds: Array[TraitBound] = []
         for position in 0U64..<count {
             val premise = self.rawRequirementPremises[range.first + position]

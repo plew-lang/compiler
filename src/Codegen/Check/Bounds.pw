@@ -983,59 +983,6 @@ pub impl Comp {
 
     // Completeness belongs to one selected impl, not every same-named
     // associated type on its receiver (Add.Output and Pow.Output may differ).
-    inout fn conformAssocBindingSpan(cf: Conform, nameStart: U64, nameLen: U64) -> Bind {
-        val nameId = intern(c: inout self, start: nameStart, len: nameLen)
-        mut val index: U64 = 0U64
-        while index < cf.assocBindingIds.count() {
-            val bindingId = self.conformFuncIdAt(ids: cf.assocBindingIds, index: index)
-            val binding = self.decls.assocBindings[bindingId]
-            if binding.nameId == nameId {
-                val term = self.groundTermInEnvironment(ref: binding.ty, params: [], values: [], selfRef: cf.subjectTy)
-                val ty = self.arena.typeAt(index: term)
-                return <Bind nameStart=ty.nameStart nameLen=ty.nameLen nameId=ty.nameId fieldStart=ty.nameStart fieldLen=ty.nameLen />
-            }
-            index += 1U64
-        }
-        return <Bind nameStart=nameStart nameLen=nameLen nameId=nameId fieldStart=nameStart fieldLen=nameLen />
-    }
-
-    inout fn substReqParamHeadId(cf: Conform, recvStart: U64, recvLen: U64, tps: Array[Bind], targs: Array[U64], prStart: U64, prLen: U64) -> U64 {
-        if rangeEquals(bytes: self.arena.bytes, start: prStart, len: prLen, kw: "Self") {
-            return intern(c: inout self, start: recvStart, len: recvLen)
-        }
-        val prId: U64 = intern(c: inout self, start: prStart, len: prLen)
-        mut val k: U64 = 0
-        while k < tps.count() {
-            if tps[k].nameId == prId {
-                if k < targs.count() {
-                    return self.arena.typeTermAt(index: targs[k]).nameId
-                }
-            }
-            k += 1
-        }
-        val sub: Bind = self.conformAssocBindingSpan(cf: cf, nameStart: prStart, nameLen: prLen)
-        return sub.nameId
-    }
-
-    inout fn substReqParamArrayElemRef(tps: Array[Bind], targs: Array[U64], prStart: U64, prLen: U64) -> U64 {
-        val prId: U64 = intern(c: inout self, start: prStart, len: prLen)
-        mut val k: U64 = 0
-        while k < tps.count() {
-            if tps[k].nameId == prId {
-                if k < targs.count() {
-                    val tr: TypeRef = self.arena.typeAt(index: targs[k])
-                    if rangeEquals(bytes: self.arena.bytes, start: tr.nameStart, len: tr.nameLen, kw: "Array") {
-                        if tr.args.count() > 0U64 {
-                            return targs[k]
-                        }
-                    }
-                }
-            }
-            k += 1
-        }
-        return 0U64
-    }
-
     // Compare requirement types in the implementation's binder environment.
     // Method binder spelling is immaterial; conformance binders remain rigid.
     inout fn conformanceParameterTypesMatch(cf: Conform, witness: Func, requirement: Func, parameters: FuncParamRange) -> Bool {
@@ -1060,78 +1007,6 @@ pub impl Comp {
             val actualType = self.traitBoundTypeTerm(ref: self.groundTermInEnvironment(ref: actual.ty, params: [], values: [], selfRef: bound.subject), bound: bound, traitIndex: traitIndex)
             if !self.typeRefEq(a: expectedType, b: actualType) { return false }
             index += 1U64
-        }
-        return true
-    }
-
-    inout fn reqReturnMismatch(cf: Conform, w: Func, r: Func, recvStart: U64, recvLen: U64) -> Bool {
-        if w.isDiverging != r.isDiverging { return true }
-        if !(r.hasRet) {
-            return false
-        }
-        if r.retIsArray {
-            return false
-        }
-        // resolve an associated-type requirement return (`fn first()->Item` with
-        // `type Item = I64`) through the conformance's binding, so the witness's concrete
-        // return is compared to the bound concrete type.
-        val rr: Bind = self.conformAssocBindingSpan(cf: cf, nameStart: r.retStart, nameLen: r.retLen)
-        if !(self.isPrimType(start: rr.nameStart, len: rr.nameLen)) {
-            return false
-        }
-        // requirement returns a concrete primitive: the witness must return it exactly.
-        if !(w.hasRet) {
-            return true
-        }
-        if w.retIsArray {
-            return true
-        }
-        mut val witnessStart = w.retStart
-        mut val witnessLen = w.retLen
-        if rangeEquals(bytes: self.arena.bytes, start: witnessStart, len: witnessLen, kw: "Self") {
-            witnessStart = recvStart
-            witnessLen = recvLen
-        }
-        if spansEqual(c: inout self, aStart: rr.nameStart, aLen: rr.nameLen, bStart: witnessStart, bLen: witnessLen) {
-            return false
-        }
-        return true
-    }
-
-    inout fn witnessedHas(cf: Conform, witnessed: Array[Func], r: Func, recvStart: U64, recvLen: U64, tps: Array[Bind], targs: Array[U64]) -> Bool {
-        mut val i: U64 = 0
-        while i < witnessed.count() {
-            val w: Func = witnessed[i]
-            if w.nameId == r.nameId {
-                if self.conformanceParameterTypesMatch(cf: cf, witness: w, requirement: r, parameters: w.params) {
-                    if !(self.reqReturnMismatch(cf: cf, w: w, r: r, recvStart: recvStart, recvLen: recvLen)) {
-                        return true
-                    }
-                }
-            }
-            i += 1
-        }
-        return false
-    }
-
-    inout fn confWitnessesAll(cf: Conform, t: TraitDef) -> Bool {
-        // Substitute Self through complete trait arguments before comparing
-        // requirement signatures, including Self nested in a container.
-        mut val selfParams: Array[Bind] = []
-        self.appendTraitSelfBinder(scope: inout selfParams, owner: t.nameStart)
-        mut val traitArgs: Array[U64] = []
-        mut val argument: U64 = 0U64
-        while argument < cf.traitArgs.count() {
-            traitArgs.append(self.groundTermInEnvironment(ref: self.conformTypeAt(types: cf.traitArgs, index: argument), params: selfParams, values: [cf.subjectTy], selfRef: cf.subjectTy))
-            argument += 1U64
-        }
-        mut val ri: U64 = 0
-        while ri < t.reqs.count() {
-            val r: Func = self.traitReqAt(reqs: t.reqs, index: ri)
-            if !(self.witnessedHas(cf: cf, witnessed: self.copyConformWitnesses(witnesses: cf.witnessed), r: r, recvStart: cf.typeStart, recvLen: cf.typeLen, tps: self.copyTraitBinds(binds: t.typeParams), targs: traitArgs)) {
-                return false
-            }
-            ri += 1
         }
         return true
     }
@@ -1228,6 +1103,7 @@ pub impl Comp {
     }
 
     inout fn checkAssociatedBounds(conformIndex: U64, conformance: Conform, traitIndex: U64, assumptions: Array[DeclarationBoundRef]) -> Result[(), CompileDiagnostic] {
+        if self.arena.hasConformanceAssociatedEvidence(conformance: conformIndex) { return <Result.Ok value=() /> }
         val declaration = self.decls.traitAt(index: traitIndex)
         mut val evidence: Array[ConformanceAssociatedEvidence] = []
         mut val outputs: Array[TraitAssocPredicate] = []
@@ -1283,33 +1159,36 @@ pub impl Comp {
     inout fn checkConformanceMethodBounds(conformIndex: U64, traitIndex: U64) -> Result[(), CompileDiagnostic] {
         val conformance = self.decls.conformAt(index: conformIndex)
         val trait = self.decls.traitAt(index: traitIndex)
+        if trait.reqs.count() == 0U64 { return <Result.Ok value=() /> }
         val traitBound = self.conformanceTraitBound(conformance: conformance)
+        val traitEnvironment = self.requirementSignatureEnvironment(bound: traitBound, traitIndex: traitIndex)
         mut val requirementIndex = 0U64
         while requirementIndex < trait.reqs.count() {
             val requirement = self.traitReqAt(reqs: trait.reqs, index: requirementIndex)
+            mut val matched = false
             mut val witnessIndex = 0U64
             while witnessIndex < conformance.witnessFuncIds.count() {
                 val functionIndex = self.conformFuncIdAt(ids: conformance.witnessFuncIds, index: witnessIndex)
                 val function = self.arena.functionAt(index: functionIndex)
-                if function.nameId == requirement.nameId && self.conformanceParameterTypesMatch(cf: conformance, witness: function, requirement: requirement, parameters: function.params) {
+                if function.nameId == requirement.nameId && function.isDiverging == requirement.isDiverging && function.params.count() == requirement.params.count() && function.typeParams.count() == conformance.typeParams.count() + requirement.typeParams.count() {
+                    val parameters = self.copyFuncBinds(binds: requirement.typeParams)
+                    val arguments = self.conformanceRequirementMethodArguments(conformance: conformance, requirement: requirement, witness: function)
+                    val scope = try self.requireAdmittedRawRequirement(traitIndex: traitIndex, slot: requirementIndex, offset: requirement.defOffset)
+                    val signature = <RequirementSignatureRead scope=scope bound=traitBound evidence=<RequirementSelfEvidence.Conformance index=conformIndex /> />
+                    val environment = self.conformanceRequirementEnvironment(base: traitEnvironment, parameters: parameters, arguments: arguments)
+                    mut val memo: Dictionary[U64, AuthoredRecipeRead] = [:]
+                    if !(try self.conformanceRequirementParametersMatch(signature: signature, environment: environment, traitIndex: traitIndex, parameters: function.params, memo: inout memo)) {
+                        witnessIndex += 1U64
+                        continue
+                    }
+                    matched = true
                     if function.isFactory != requirement.isFactory || function.isAnonymousFactory != requirement.isAnonymousFactory {
                         return <Result.Err error=self.diagnosticAt(offset: function.defOffset, msg: "a factory requirement must be implemented by the matching factory declaration") />
                     }
-                    if function.typeParams.count() != conformance.typeParams.count() + requirement.typeParams.count() {
-                        return <Result.Err error=self.diagnosticAt(offset: function.defOffset, msg: "implementation generic parameters do not match the trait requirement") />
-                    }
-                    mut val arguments: Array[U64] = []
-                    mut val parameterIndex = 0U64
-                    while parameterIndex < requirement.typeParams.count() {
-                        val parameter = self.funcBindAt(binds: function.typeParams, index: conformance.typeParams.count() + parameterIndex)
-                        arguments.append(self.pushType(t: <TypeRef nameStart=parameter.nameStart nameLen=parameter.nameLen paramId=parameter.paramId args=[] isRecord=false recordFieldLabels=[] recordFieldTerms=[] />))
-                        parameterIndex += 1U64
-                    }
-                    val parameters = self.copyFuncBinds(binds: requirement.typeParams)
-                    if function.isAssoc != requirement.isAssoc || function.selfInout != requirement.selfInout || function.selfMove != requirement.selfMove || function.isAsync != requirement.isAsync || function.isDiverging != requirement.isDiverging {
+                    if function.isAssoc != requirement.isAssoc || function.selfInout != requirement.selfInout || function.selfMove != requirement.selfMove || function.isAsync != requirement.isAsync {
                         return <Result.Err error=self.diagnosticAt(offset: function.defOffset, msg: "implementation calling convention does not match the trait requirement") />
                     }
-                    parameterIndex = 0U64
+                    mut val parameterIndex = 0U64
                     while parameterIndex < requirement.params.count() {
                         val actual = self.funcParamAt(params: function.params, index: parameterIndex)
                         val expected = self.funcParamAt(params: requirement.params, index: parameterIndex)
@@ -1318,21 +1197,17 @@ pub impl Comp {
                         }
                         parameterIndex += 1U64
                     }
-                    val expectedResult = self.groundTermInEnvironment(ref: self.traitBoundTypeTerm(ref: self.semanticCallableReturnTerm(function: requirement), bound: traitBound, traitIndex: traitIndex), params: parameters, values: arguments)
+                    val expectedResult = try self.readRequirementResult(interface: signature, environment: environment, memo: inout memo)
                     val actualResult = self.traitBoundTypeTerm(ref: self.groundTermInEnvironment(ref: self.semanticCallableReturnTerm(function: function), params: [], values: [], selfRef: traitBound.subject), bound: traitBound, traitIndex: traitIndex)
                     if !self.callableResultTypesEqual(a: expectedResult, b: actualResult) {
                         if requirement.isFactory { return <Result.Err error=self.diagnosticAt(offset: function.defOffset, msg: "factory return type does not match the trait requirement") /> }
                         return <Result.Err error=self.diagnosticAt(offset: function.defOffset, msg: "implementation return type does not match the trait requirement") />
                     }
-                    mut val required: Array[ConformBound] = []
                     mut val requirementSources: Array[U64] = []
+                    val clauses = try self.readRequirementBoundsInEnvironment(signature: signature, environment: environment, memo: inout memo)
                     mut val boundIndex = 0U64
-                    while boundIndex < requirement.signatureBounds.len {
-                        val raw = self.conformBoundAt(bounds: requirement.signatureBounds, index: boundIndex)
-                        val subject = self.groundTermInEnvironment(ref: self.traitBoundTypeTerm(ref: raw.subject, bound: traitBound, traitIndex: traitIndex), params: parameters, values: arguments)
-                        val constraint = self.groundTraitConstraintInEnvironment(constraint: self.traitConstraintInBound(constraint: raw.constraint, bound: traitBound, traitIndex: traitIndex), params: parameters, args: arguments)
-                        required.append(<ConformBound subject=subject constraint=constraint offset=raw.offset />)
-                        requirementSources.append(self.arena.publishRequirementBoundEvidence(evidence: <RequirementBoundEvidence conformance=conformIndex traitIndex=traitIndex requirement=requirementIndex implementation=functionIndex clause=requirement.signatureBounds.start + boundIndex bound=<TraitBound subject=subject constraint=constraint offset=raw.offset /> />))
+                    for bound in clauses {
+                        requirementSources.append(self.arena.publishRequirementBoundEvidence(evidence: <RequirementBoundEvidence conformance=conformIndex traitIndex=traitIndex requirement=requirementIndex implementation=functionIndex clause=requirement.signatureBounds.start + boundIndex bound=bound />))
                         boundIndex += 1U64
                     }
                     mut val assumptions = self.conformanceDeclarationAssumptions(conformIndex: conformIndex)
@@ -1358,7 +1233,7 @@ pub impl Comp {
                         }
                         boundIndex += 1U64
                     }
-                    for val bound in required {
+                    for bound in clauses {
                         if !(try self.viewedTypeConformsTraitConstraint(demand: <ConformanceProofDemand.SourceAdmission />, ref: bound.subject, constraint: bound.constraint, assumptions: self.functionBoundAssumptions(fnIdx: functionIndex))) {
                             val subject = self.arena.typeAt(index: bound.subject)
                             val proof = try self.viewedTraitConstraintProof(demand: <ConformanceProofDemand.SourceAdmission />, ref: bound.subject, constraint: bound.constraint, assumptions: assumptions)
@@ -1373,6 +1248,9 @@ pub impl Comp {
                     }
                 }
                 witnessIndex += 1U64
+            }
+            if !matched {
+                return <Result.Err error=self.diagnosticAt(offset: conformance.typeStart, msg: "incomplete trait conformance: a requirement is not witnessed (define its body or bind it with `via`)") />
             }
             requirementIndex += 1U64
         }
@@ -1415,12 +1293,8 @@ pub impl Comp {
             // loud error (spec/08: explicit conformance).
             val ti: U64 = self.resolveTraitDef(cf: cf)
             if ti < self.decls.traitCount() {
-                val t: TraitDef = self.decls.traitAt(index: ti)
-                if !self.confWitnessesAll(cf: cf, t: t) {
-                    return <Result.Err error=self.diagnosticAt(offset: cf.typeStart, msg: "incomplete trait conformance: a requirement is not witnessed (define its body or bind it with `via`)") />
-                }
-                try self.checkConformanceMethodBounds(conformIndex: ci, traitIndex: ti)
                 try self.checkAssociatedBounds(conformIndex: ci, conformance: cf, traitIndex: ti, assumptions: self.conformanceDeclarationAssumptions(conformIndex: ci))
+                try self.checkConformanceMethodBounds(conformIndex: ci, traitIndex: ti)
                 try self.prepareConformanceSupertraits(conformIndex: ci, traitIndex: ti)
             } else {
                 return <Result.Err error=self.diagnosticAt(offset: cf.traitStart, msg: "conformance to an unknown trait (is it declared / imported?)") />
@@ -1978,4 +1852,52 @@ pub impl Comp {
         return <Result.Ok value=(try self.conformancePatternWitnessMatch(conformIdx: 0U64, subjectId: f.recvId, subjectTy: f.recvTy, subjectArgs: <PatternTypeInput.Values values=noArgs />, typeParams: <PatternBindInput.Function range=patternParams />, declaredTraitArgs: <PatternTypeInput.Values values=noArgs />, typeRef: instRef, traitArgs: <PatternTypeInput.Values values=noArgs />)) />
     }
 
+}
+
+impl Comp {
+    inout fn conformanceRequirementMethodArguments(conformance: Conform, requirement: Func, witness: Func) -> Array[U64] {
+        mut val arguments: Array[U64] = []
+        for index in 0U64..<requirement.typeParams.count() {
+            val parameter = self.funcBindAt(binds: witness.typeParams, index: conformance.typeParams.count() + index)
+            arguments.append(self.pushType(t: <TypeRef nameStart=parameter.nameStart nameLen=parameter.nameLen paramId=parameter.paramId args=[] />))
+        }
+        return arguments
+    }
+
+    fn conformanceRequirementEnvironment(base: InstanceEnvironment, parameters: Array[Bind], arguments: Array[U64]) -> InstanceEnvironment {
+        if parameters.count() == 0U64 { return base }
+        mut val bindings = base.params
+        mut val values = base.args
+        for parameter in parameters { bindings.append(parameter) }
+        for argument in arguments { values.append(argument) }
+        return <InstanceEnvironment params=bindings args=values receiverRef=base.receiverRef />
+    }
+
+    inout fn conformanceCallableFormParametersMatch(conformanceIndex: U64, traitIndex: U64, slot: U64, witness: Func, parameters: FuncParamRange) -> Result[Bool, CompileDiagnostic] {
+        val conformance = self.decls.conformAt(index: conformanceIndex)
+        val requirement = self.traitReqAt(reqs: self.decls.traitAt(index: traitIndex).reqs, index: slot)
+        if parameters.count() != requirement.params.count() || witness.typeParams.count() != conformance.typeParams.count() + requirement.typeParams.count() { return <Result.Ok value=false /> }
+        try self.checkAssociatedBounds(conformIndex: conformanceIndex, conformance: conformance, traitIndex: traitIndex, assumptions: self.conformanceDeclarationAssumptions(conformIndex: conformanceIndex))
+        val scope = try self.requireAdmittedRawRequirement(traitIndex: traitIndex, slot: slot, offset: requirement.defOffset)
+        val signature = <RequirementSignatureRead scope=scope bound=self.conformanceTraitBound(conformance: conformance) evidence=<RequirementSelfEvidence.Conformance index=conformanceIndex /> />
+        val arguments = self.conformanceRequirementMethodArguments(conformance: conformance, requirement: requirement, witness: witness)
+        val base = self.requirementSignatureEnvironment(bound: signature.bound, traitIndex: traitIndex)
+        val environment = self.conformanceRequirementEnvironment(base: base, parameters: self.copyFuncBinds(binds: requirement.typeParams), arguments: arguments)
+        mut val memo: Dictionary[U64, AuthoredRecipeRead] = [:]
+        return self.conformanceRequirementParametersMatch(signature: signature, environment: environment, traitIndex: traitIndex, parameters: parameters, memo: inout memo)
+    }
+
+    inout fn conformanceRequirementParametersMatch(signature: RequirementSignatureRead, environment: InstanceEnvironment, traitIndex: U64, parameters: FuncParamRange, memo: inout Dictionary[U64, AuthoredRecipeRead]) -> Result[Bool, CompileDiagnostic] {
+        val admitted = self.authoredRequirementViews[signature.scope]
+        val requirement = admitted.declaration
+        for index in 0U64..<parameters.count() {
+            val actual = self.funcParamAt(params: parameters, index: index)
+            val expected = self.funcParamAt(params: requirement.params, index: index)
+            if actual.noLabel != expected.noLabel || (!expected.noLabel && actual.nameId != expected.nameId) { return <Result.Ok value=false /> }
+            val expectedType = try self.readRequirementParameter(admitted: admitted, index: index, interface: signature, environment: environment, memo: inout memo)
+            val actualType = self.traitBoundTypeTerm(ref: self.groundTermInEnvironment(ref: actual.ty, params: [], values: [], selfRef: signature.bound.subject), bound: signature.bound, traitIndex: traitIndex)
+            if !self.typeRefEq(a: expectedType, b: actualType) { return <Result.Ok value=false /> }
+        }
+        return <Result.Ok value=true />
+    }
 }

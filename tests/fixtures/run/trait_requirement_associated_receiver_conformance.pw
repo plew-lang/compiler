@@ -1,0 +1,26 @@
+use @Std/Io only { print }
+
+trait Source { type Item }
+trait Number { fn number() -> I64 }
+struct Payload {}
+impl Payload as Number { fn number() -> I64 { return 42I64 } }
+struct Entry {}
+impl Entry as Source { type Item = Payload }
+
+trait Service {
+    type Input: Source
+    fn fetch(value: Input#Source.Item) -> Input#Source.Item where Input#Source.Item: Number
+    fn fetchDefault(value: Input#Source.Item) -> Input#Source.Item
+}
+
+struct Worker {}
+impl Worker as Service {
+    type Input = Entry
+    fn fetch(value: Payload) -> Payload { return value }
+    fn fetchDefault(value: Payload, enabled: Bool = true) -> Payload { return value }
+}
+
+fn main() {
+    print(<Worker />.fetch(value: <Payload />).number())
+    print(<Worker />.fetchDefault(value: <Payload />).number())
+}

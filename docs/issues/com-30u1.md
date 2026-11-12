@@ -763,3 +763,38 @@ Self and preserve the resulting proof in the interface's own scope.
 Exercise the positive and mismatching declaration controls, then both
 static and existential calls. The isolated experiment is diagnostic
 evidence and was not installed in the compiler.
+
+## Concrete conformance signature replay
+
+Concrete conformance admission prepares associated-clause evidence before
+checking method signatures. Parameter matching, result comparison and
+translated public clauses share the admitted requirement, Self environment
+and recipe memo. For an associated clause rooted in the selected declaration's
+own Self, the recipe reader consumes the conformance's exact saved clause
+and proof. Callable-form preparation uses the same parameter reader and
+prepares the clause evidence only if it has not already been published.
+The separate raw completeness scan is removed. When interpreting an
+authored concrete witness, static dispatch tests the saved implementation
+plan for the exact requirement slot. Synthesized conformance selection
+still uses its own witness list.
+
+The new `trait_requirement_associated_receiver_conformance` fixture
+reproduces the incomplete-conformance diagnostic on `64a80a5e` and
+passes with the concrete associated receiver in a parameter, result and
+where clause. The default-argument variant also passes. A wrong concrete
+result still fails at the implementation. Build
+`20261112T165311-build-9d447c`, generation `20261112T165722-gen-e30567`,
+eight public check/JIT/native fixtures and seven rejection checks passed
+with candidate `015ad2cc`. Reusing the trait environment and the read
+public clauses removed avoidable work. The same-source comparison was
+6.633076 s to 6.648505 s. A separate LLVM comparison matched after
+normalizing generated generic-body symbol components by body ID.
+
+The declaration and direct static call now pass, but a generic call with
+`R: Service[Input=Entry]` still fails receiver validation when its projected
+result is used in another call. The variant that leaves the result unused
+passes check. Existential result and where probes still fail at the
+witness-signature and source-call-constraint boundaries, respectively.
+Preserve a fixed associated receiver's projection proof in those readers
+and keep hidden Self abstract. The inherited where-equation proof-removal
+case also remains before independent closure review.

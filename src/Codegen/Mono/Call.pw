@@ -3680,14 +3680,16 @@ pub impl Comp {
         return <WitnessMatch />
     }
 
-    // The proof already fixes the conformance and its substitution. Select
-    // its requirement in that declaration environment, using the same binder
-    // correspondence as conformance validation, rather than re-inferring a
-    // method binder from one particular runtime call.
-    inout fn proofRequirementSelectorMatches(source: Func, requirement: Func, witness: WitnessMatch, traitIdx: U64, receiverRef: U64, proof: StaticConformanceProof) -> Result[Bool, CompileDiagnostic] {
+    // Authored witnesses have an exact requirement-to-function plan after
+    // declaration admission. Derived conformances still carry their own
+    // synthesized witness list.
+    inout fn proofRequirementSelectorMatches(source: Func, sourceIndex: U64, requirement: Func, witness: WitnessMatch, traitIdx: U64, slot: U64) -> Result[Bool, CompileDiagnostic] {
         if source.nameId != requirement.nameId || source.isAssoc != requirement.isAssoc || source.isFactory != requirement.isFactory || source.isAnonymousFactory != requirement.isAnonymousFactory { return <Result.Ok value=false /> }
         if witness.conformIdx == 0U64 || witness.conformIdx > self.decls.conformCount() || traitIdx >= self.decls.traitCount() { return <Result.Ok value=false /> }
         val conform = self.decls.conformAt(index: witness.conformIdx - 1U64)
+        if !conform.derived {
+            return <Result.Ok value=self.arena.conformanceMethodPlan(conformance: witness.conformIdx - 1U64, traitIndex: traitIdx, requirement: slot, implementation: sourceIndex).isSome() />
+        }
         return <Result.Ok value=self.conformanceParameterTypesMatch(cf: conform, witness: source, requirement: requirement, parameters: source.params) />
     }
 
@@ -3801,7 +3803,7 @@ pub impl Comp {
             val sourceIdx: U64 = self.conformFuncIdAt(ids: conform.witnessFuncIds, index: wi)
             if sourceIdx < self.arena.functionCount() {
                 val source: Func = self.arena.functionAt(index: sourceIdx)
-                if (try self.proofRequirementSelectorMatches(source: source, requirement: req, witness: witness, traitIdx: traitIdx, receiverRef: receiverRef, proof: proof)) {
+                if (try self.proofRequirementSelectorMatches(source: source, sourceIndex: sourceIdx, requirement: req, witness: witness, traitIdx: traitIdx, slot: reqIdx)) {
                     // A concrete impl owns its witness body directly.  The
                     // proof's witnessFuncIds is already the exact semantic
                     // selection, so do not require an imaginary provided
