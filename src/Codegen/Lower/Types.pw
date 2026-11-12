@@ -196,9 +196,9 @@ pub impl Comp {
         while i < owner.assocTypes.count() {
             val member = owner.assocTypes[i]
             if member.nameId == nameId && self.modules.qualifiedUseIndex(offset: nameStart) >= self.modules.qualifiedUseCount() {
-                val selfName = self.kwSpan(kw: "Self", kwLen: 4U64)
-                val receiver = self.pushType(t: <TypeRef nameStart=selfName.nameStart nameLen=selfName.nameLen paramId=owner.selfParamId args=[] isRecord=false recordFieldLabels=[] recordFieldTerms=[] />)
-                return self.pushType(t: <TypeRef nameStart=selfName.nameStart nameLen=selfName.nameLen paramId=owner.selfParamId args=[] isRecord=false recordFieldLabels=[] recordFieldTerms=[] assocTraitStart=owner.nameStart assocTraitLen=owner.nameLen assocTraitId=owner.nameId assocTraitArgs=self.lowerAssociatedArgs assocNameStart=member.nameStart assocNameLen=member.nameLen assocNameId=member.nameId projectionReceiver=receiver hasAssocTraitDecl=true assocTraitDeclOffset=owner.nameStart />)
+                val receiver = self.lexicalSelfTerm(parameter: owner.selfParamId)
+                val selfType = self.arena.typeTermAt(index: receiver)
+                return self.pushType(t: <TypeRef nameStart=selfType.nameStart nameLen=selfType.nameLen nameId=selfType.nameId paramId=owner.selfParamId args=[] isRecord=false recordFieldLabels=[] recordFieldTerms=[] assocTraitStart=owner.nameStart assocTraitLen=owner.nameLen assocTraitId=owner.nameId assocTraitArgs=self.lowerAssociatedArgs assocNameStart=member.nameStart assocNameLen=member.nameLen assocNameId=member.nameId projectionReceiver=receiver hasAssocTraitDecl=true assocTraitDeclOffset=owner.nameStart />)
             }
             i += 1U64
         }

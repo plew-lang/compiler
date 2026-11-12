@@ -1,0 +1,6 @@
+trait Project[Kind] { type Item }
+struct Box[T] { val item: T }
+impl[T] Box[T] where T: Project[Bool] {
+    fn missing(value: T#Project[I64].Item) {}
+}
+fn main() {}

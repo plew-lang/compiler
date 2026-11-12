@@ -32,6 +32,11 @@ impl Comp {
         val signature = admitted.signature
         try self.checkSignatureEnvironment(signature: signature, environment: environment)
         mut val memo: Dictionary[U64, AuthoredRecipeRead] = [:]
+        mut val receiverEquations: Array[ProjectionNormalizationStep] = []
+        for recipe in admitted.receiverRecipes {
+            val read = try self.readAuthoredTypeRecipe(admitted: admitted, recipe: recipe, environment: environment, memo: inout memo)
+            for equation in read.normalizations { try self.appendRetainedProjectionEquation(step: equation, normalizations: inout receiverEquations) }
+        }
         mut val terms: Array[U64] = []
         for slot in slots {
             val id = match slot {
@@ -44,7 +49,7 @@ impl Comp {
             }
             if id == 0U64 { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "signature slot has no authored annotation", failureDomain: <FailureDomain.Input />) /> }
             val occurrence = try self.signatureOccurrence(id: id)
-            terms.append((try self.readAuthoredTypeRecipe(admitted: admitted, recipe: occurrence.recipe, environment: environment, memo: inout memo)).term)
+            terms.append((try self.readAuthoredTypeRecipe(admitted: admitted, recipe: occurrence.recipe, environment: environment, memo: inout memo, receiverEquations: receiverEquations)).term)
         }
         return <Result.Ok value=terms />
     }
@@ -65,6 +70,9 @@ impl Comp {
                 return <Result.Err error=self.diagnosticAt(offset: declaration.defOffset, msg: "method signature requires its selected receiver", failureDomain: <FailureDomain.Input />) />
             }
             val selfParameter = self.arena.typeTermAt(index: declaration.recvTy).paramId
+            if selfParameter == 0U64 && !self.bodyReceiverMatchesDeclaration(function: declaration, environment: environment) {
+                return <Result.Err error=self.diagnosticAt(offset: declaration.defOffset, msg: "method signature has a foreign selected receiver", failureDomain: <FailureDomain.Input />) />
+            }
             mut val selfBound = selfParameter == 0U64
             for index in 0U64..<count {
                 val binder = environment.params[index].paramId
@@ -97,7 +105,7 @@ impl Comp {
 impl Comp {
     // The memo belongs to one exact admitted signature and one environment.
     // No semantic-term cache or source reverse lookup can confer evidence.
-    inout fn readAuthoredTypeRecipe(admitted: AuthoredSignatureViews, recipe: U64, environment: InstanceEnvironment, memo: inout Dictionary[U64, AuthoredRecipeRead]) -> Result[AuthoredRecipeRead, CompileDiagnostic] {
+    inout fn readAuthoredTypeRecipe(admitted: AuthoredSignatureViews, recipe: U64, environment: InstanceEnvironment, memo: inout Dictionary[U64, AuthoredRecipeRead], receiverEquations: Array[ProjectionNormalizationStep] = []) -> Result[AuthoredRecipeRead, CompileDiagnostic] {
         match memo.get(key: recipe) { Optional.Some(v: val read) => { return <Result.Ok value=read /> } Optional.None => {} }
         val node = match self.sourceTypeUses.recipeAt(id: recipe) {
             Optional.Some(v: val node) => node,
@@ -107,7 +115,7 @@ impl Comp {
         mut val reads: Array[AuthoredRecipeRead] = []
         mut val normalizations: Array[ProjectionNormalizationStep] = []
         for child in node.children {
-            val read = try self.readAuthoredTypeRecipe(admitted: admitted, recipe: child, environment: environment, memo: inout memo)
+            val read = try self.readAuthoredTypeRecipe(admitted: admitted, recipe: child, environment: environment, memo: inout memo, receiverEquations: receiverEquations)
             children.append(read.term)
             reads.append(read)
             for equation in read.normalizations { try self.appendRetainedProjectionEquation(step: equation, normalizations: inout normalizations) }
@@ -139,11 +147,13 @@ impl Comp {
                 val originalReceiver = if original.assocNameId == 0U64 { give node.term } else { give self.typeTermProjectionReceiver(t: original) }
                 val receiver = if original.assocNameId == 0U64 { give term } else { give children[0U64] }
                 val selectors = self.arena.typeViewSources(ref: originalReceiver)
+                mut val proofEquations = normalizations
+                for equation in receiverEquations { try self.appendRetainedProjectionEquation(step: equation, normalizations: inout proofEquations) }
                 if selectors.count() != sourceViews.count() { return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "signature reader changed source selectors", failureDomain: <FailureDomain.Internal />) /> }
                 mut val index = 0U64
                 while index < selectors.count() {
                     if selectors[index].traitInstance.owner != 0U64 {
-                        try self.readAuthoredOccurrenceProof(admitted: admitted, occurrence: node.occurrence, selector: selectors[index], receiver: receiver, arguments: sourceViews[index].traitInstance.positionalArgs, environment: environment, offset: occurrence.site, normalizations: normalizations)
+                        try self.readAuthoredOccurrenceProof(admitted: admitted, occurrence: node.occurrence, selector: selectors[index], receiver: receiver, arguments: sourceViews[index].traitInstance.positionalArgs, environment: environment, offset: occurrence.site, normalizations: proofEquations)
                     }
                     index += 1U64
                 }
@@ -156,7 +166,7 @@ impl Comp {
                         index += 1U64
                     }
                     val selector = <ResolvedViewSource writtenStart=occurrence.site surfaceId=original.assocTraitId traitInstance=<TraitInstanceKey owner=owner positionalArgs=original.assocTraitArgs /> />
-                    val proof = try self.readAuthoredOccurrenceProof(admitted: admitted, occurrence: node.occurrence, selector: selector, receiver: receiver, arguments: arguments, environment: environment, offset: occurrence.site, normalizations: normalizations)
+                    val proof = try self.readAuthoredOccurrenceProof(admitted: admitted, occurrence: node.occurrence, selector: selector, receiver: receiver, arguments: arguments, environment: environment, offset: occurrence.site, normalizations: proofEquations)
                     val output = try self.associatedOutputTermInProof(proof: proof, traitOwner: owner, assocId: original.assocNameId)
                     for equation in (try self.retainedProofProjectionContext(proof: proof)) { try self.appendRetainedProjectionEquation(step: equation, normalizations: inout normalizations) }
                     val immediate = if output != 0U64 && !self.typeRefEq(a: output, b: rebuilt) { give output } else { give 0U64 }
@@ -166,7 +176,7 @@ impl Comp {
                 }
             }
             SourceTypeRecipeOrigin.ResultRepresentation => {
-                val source = try self.readAuthoredTypeRecipe(admitted: admitted, recipe: node.sourceRecipe, environment: environment, memo: inout memo)
+                val source = try self.readAuthoredTypeRecipe(admitted: admitted, recipe: node.sourceRecipe, environment: environment, memo: inout memo, receiverEquations: receiverEquations)
                 term = self.semanticSourceResultTerm(ref: source.term)
                 for equation in source.normalizations { try self.appendRetainedProjectionEquation(step: equation, normalizations: inout normalizations) }
             }
@@ -190,7 +200,7 @@ impl Comp {
     // Validate the saved constructor graph once per declaration. The semantic
     // visitor owns child shape and labels; recipes only retain the chosen edges.
     // false marks an active node, true a fully validated node of this owner.
-    inout fn checkAuthoredTypeRecipe(signature: AuthoredFunctionSignature, recipe: U64, edge: AuthoredRecipeEdge, validation: inout SignatureRecipeValidation, offset: U64) -> Result[(), CompileDiagnostic] {
+    inout fn checkAuthoredTypeRecipe(signature: AuthoredFunctionSignature, recipe: U64, edge: AuthoredRecipeEdge, scopes: SignatureProofScopes, validation: inout SignatureRecipeValidation, offset: U64) -> Result[(), CompileDiagnostic] {
         val node = match self.sourceTypeUses.recipeAt(id: recipe) {
             Optional.Some(v: val node) => node,
             Optional.None => { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "authored type recipe has an invalid node", failureDomain: <FailureDomain.Internal />) /> },
@@ -227,7 +237,6 @@ impl Comp {
                         return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "authored signature has a foreign type occurrence", failureDomain: <FailureDomain.Internal />) />
                     }
                     try self.checkSignatureOccurrence(occurrence: occurrence, scope: validation.parentScope, parameters: validation.parentParameters, selfParameter: validation.selfParameter, method: true)
-                    validation.inheritedOccurrences.append(node.occurrence)
                 } else {
                     try self.authoredSignatureOccurrence(signature: signature, id: node.occurrence)
                 }
@@ -241,7 +250,7 @@ impl Comp {
                     _ => { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "result representation must retain an authored source", failureDomain: <FailureDomain.Internal />) /> }
                 }
                 if !self.sourceResultRepresentationMatches(source: source.unwrap().term, payload: node.term) { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "authored type recipe has an invalid result representation", failureDomain: <FailureDomain.Internal />) /> }
-                try self.checkAuthoredTypeRecipe(signature: signature, recipe: node.sourceRecipe, edge: <AuthoredRecipeEdge.Source />, validation: inout validation, offset: offset)
+                try self.checkAuthoredTypeRecipe(signature: signature, recipe: node.sourceRecipe, edge: <AuthoredRecipeEdge.Source />, scopes: scopes, validation: inout validation, offset: offset)
             }
             SourceTypeRecipeOrigin.ProjectionReceiver | SourceTypeRecipeOrigin.BoundSelection => {
                 if node.occurrence != 0U64 || node.sourceRecipe != 0U64 { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "derived type recipe acquired source authority", failureDomain: <FailureDomain.Internal />) /> }
@@ -260,9 +269,39 @@ impl Comp {
             val childEdge = if self.arena.typeAt(index: node.term).assocNameId != 0U64 && index == 0U64 { give <AuthoredRecipeEdge.ProjectionReceiver /> }
               else if self.isFnType(ref: node.term) && index == 0U64 { give <AuthoredRecipeEdge.FunctionResult /> }
               else { give <AuthoredRecipeEdge.Source /> }
-            try self.checkAuthoredTypeRecipe(signature: signature, recipe: node.children[index], edge: childEdge, validation: inout validation, offset: offset)
+            try self.checkAuthoredTypeRecipe(signature: signature, recipe: node.children[index], edge: childEdge, scopes: scopes, validation: inout validation, offset: offset)
             index += 1U64
         }
+        mut val equations: Array[ProjectionNormalizationStep] = []
+        for child in node.children {
+            match validation.equations.get(key: child) {
+                Optional.Some(v: val childEquations) => {
+                    for equation in childEquations { try self.appendRetainedProjectionEquation(step: equation, normalizations: inout equations) }
+                }
+                Optional.None => {}
+            }
+        }
+        if node.sourceRecipe != 0U64 {
+            match validation.equations.get(key: node.sourceRecipe) {
+                Optional.Some(v: val sourceEquations) => {
+                    for equation in sourceEquations { try self.appendRetainedProjectionEquation(step: equation, normalizations: inout equations) }
+                }
+                Optional.None => {}
+            }
+        }
+        match node.origin {
+            SourceTypeRecipeOrigin.Authored => {
+                val occurrence = try self.signatureOccurrence(id: node.occurrence)
+                if occurrence.scope == signature.scope {
+                    try self.admitSignatureOccurrence(id: node.occurrence, occurrence: occurrence, scope: scopes.local, assumptions: scopes.assumptions, receiverRef: scopes.receiver, receiverEquations: validation.receiverEquations, equations: inout equations, proofs: inout validation.proofs)
+                } else {
+                    val parent = <DeclarationTypeScope owner=scopes.local.owner parameters=validation.parentParameters selfParameter=validation.selfParameter />
+                    try self.admitSignatureOccurrence(id: node.occurrence, occurrence: occurrence, scope: parent, assumptions: scopes.inherited, receiverRef: scopes.receiver, receiverEquations: validation.receiverEquations, equations: inout equations, proofs: inout validation.proofs)
+                }
+            }
+            _ => {}
+        }
+        if equations.count() != 0U64 { validation.equations[recipe] = equations }
         validation.visited[recipe] = true
         return <Result.Ok value=() />
     }
@@ -273,8 +312,7 @@ impl Comp {
         val state = try self.instantiateConstraintProof(proof: self.thawStaticConformanceProof(id: saved.proof), receiverRef: receiver, environment: environment, selfRef: environment.receiverRef, itemRef: 0U64, normalizations: normalizations)
         match state {
             StaticProofInstantiation.Ready(proof: val proof) => {
-                try self.checkStaticProofEvidence(proof: proof, offset: offset)
-                try self.checkSelectedCallConstraintBoundary(expected: <TraitBound subject=receiver constraint=<TraitConstraint key=<TraitInstanceKey owner=saved.selector.traitInstance.owner positionalArgs=arguments /> assocPredicates=[] /> offset=offset />, proof: proof, offset: offset)
+                try self.checkRetainedWitnessClause(expected: <TraitBound subject=receiver constraint=<TraitConstraint key=<TraitInstanceKey owner=saved.selector.traitInstance.owner positionalArgs=arguments /> assocPredicates=[] /> offset=offset />, proof: proof, normalizations: normalizations, offset: offset)
                 return <Result.Ok value=proof />
             }
             _ => { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "saved signature view is not instantiated", failureDomain: <FailureDomain.Internal />) /> }
@@ -373,7 +411,7 @@ impl Comp {
             }
             index += 1U64
         }
-        return <Result.Ok value=<SignatureRecipeValidation parentScope=method.parent parentParameters=<FuncBindRange start=parameters.start len=owner.parameters.count() /> selfParameter=self.arena.typeTermAt(index: receiver).paramId inherited=inherited /> />
+        return <Result.Ok value=<SignatureRecipeValidation parentScope=method.parent parentParameters=<FuncBindRange start=parameters.start len=owner.parameters.count() /> selfParameter=self.arena.typeTermAt(index: receiver).paramId inherited=inherited receiverRecipes=owner.receiverArgumentRecipes /> />
     }
 
     inout fn admitAuthoredFunctionViewSignature(signature: AuthoredFunctionSignature) -> Result[(), CompileDiagnostic] {
@@ -417,16 +455,10 @@ impl Comp {
         } else if function.hasRet { return <Result.Err error=self.diagnosticAt(offset: sourceScope.anchor, msg: "authored signature lost its result occurrence", failureDomain: <FailureDomain.Internal />) /> }
         val scope = try self.declarationTypeScope(owner: signature.function)
         val assumptions = try self.declarationScopeAssumptions(scope: scope)
-        mut val proofs: Array[AuthoredTypeViewProof] = []
-        for id in signature.declarationUses {
-            val occurrence = try self.authoredSignatureOccurrence(signature: signature, id: id)
-            try self.checkAuthoredTypeRecipe(signature: signature, recipe: occurrence.recipe, edge: <AuthoredRecipeEdge.Source />, validation: inout validation, offset: occurrence.site)
-            try self.admitSignatureOccurrence(id: id, occurrence: occurrence, scope: scope, assumptions: assumptions, receiverRef: function.recvTy, proofs: inout proofs)
-        }
-        if validation.inheritedOccurrences.count() != 0U64 {
+        mut val inherited: Array[DeclarationBoundRef] = []
+        if validation.parentScope != 0U64 {
             val parent = self.sourceTypeUses.scopeAt(token: validation.parentScope).unwrap()
             val range = parent.bounds.unwrapOr(fallback: <SourceBoundRange />)
-            mut val inherited: Array[DeclarationBoundRef] = []
             for assumption in assumptions {
                 match assumption {
                     DeclarationBoundRef.Function(index: val index) => {
@@ -437,17 +469,25 @@ impl Comp {
                     _ => {}
                 }
             }
-            val parentScope = <DeclarationTypeScope owner=scope.owner parameters=validation.parentParameters selfParameter=validation.selfParameter />
-            for id in validation.inheritedOccurrences {
-                val occurrence = try self.signatureOccurrence(id: id)
-                try self.admitSignatureOccurrence(id: id, occurrence: occurrence, scope: parentScope, assumptions: inherited, receiverRef: function.recvTy, proofs: inout proofs)
+        }
+        val scopes = <SignatureProofScopes local=scope assumptions=assumptions inherited=inherited receiver=function.recvTy />
+        mut val receiverEquations: Array[ProjectionNormalizationStep] = []
+        for recipe in validation.receiverRecipes {
+            try self.checkAuthoredTypeRecipe(signature: signature, recipe: recipe, edge: <AuthoredRecipeEdge.Source />, scopes: scopes, validation: inout validation, offset: sourceScope.anchor)
+            for equation in validation.equations.getOr(key: recipe, fallback: []) {
+                try self.appendRetainedProjectionEquation(step: equation, normalizations: inout receiverEquations)
             }
         }
-        self.authoredSignatureViews[signature.function] = <AuthoredSignatureViews signature=signature proofs=proofs />
+        validation.receiverEquations = receiverEquations
+        for id in signature.declarationUses {
+            val occurrence = try self.authoredSignatureOccurrence(signature: signature, id: id)
+            try self.checkAuthoredTypeRecipe(signature: signature, recipe: occurrence.recipe, edge: <AuthoredRecipeEdge.Source />, scopes: scopes, validation: inout validation, offset: occurrence.site)
+        }
+        self.authoredSignatureViews[signature.function] = <AuthoredSignatureViews signature=signature proofs=validation.proofs receiverRecipes=validation.receiverRecipes />
         return <Result.Ok value=() />
     }
 
-    inout fn admitSignatureOccurrence(id: U64, occurrence: AuthoredTypeUse, scope: DeclarationTypeScope, assumptions: Array[DeclarationBoundRef], receiverRef: U64, proofs: inout Array[AuthoredTypeViewProof]) -> Result[(), CompileDiagnostic] {
+    inout fn admitSignatureOccurrence(id: U64, occurrence: AuthoredTypeUse, scope: DeclarationTypeScope, assumptions: Array[DeclarationBoundRef], receiverRef: U64, receiverEquations: Array[ProjectionNormalizationStep], equations: inout Array[ProjectionNormalizationStep], proofs: inout Array[AuthoredTypeViewProof]) -> Result[(), CompileDiagnostic] {
         try self.checkAuthoredTypeBinders(ref: occurrence.term, scope: scope, offset: occurrence.site)
         val type = self.arena.typeAt(index: occurrence.term)
         val receiver = if type.assocNameId == 0U64 { give occurrence.term } else { give self.typeTermProjectionReceiver(t: type) }
@@ -480,8 +520,21 @@ impl Comp {
                     ConformanceProofResult.Missing => { return <Result.Err error=self.diagnosticAt(offset: selector.writtenStart, msg: "trait view requires a conformance for this receiver and exact trait instance (spec/09)", failureDomain: <FailureDomain.Source />) /> },
                     ConformanceProofResult.Ambiguous(owner: _, demand: _, selectedSource: _) => { return <Result.Err error=self.diagnosticAt(offset: selector.writtenStart, msg: "trait view does not have a unique conformance path (spec/09)", failureDomain: <FailureDomain.Source />) /> },
                 }
-                try self.checkDeclarationCallProof(proof: proof, scope: scope, offset: occurrence.site)
-                proofs.append(<AuthoredTypeViewProof occurrence=id receiver=receiver selector=selector proof=self.freezeStaticConformanceProof(proof: proof) />)
+                mut val context = equations
+                for equation in receiverEquations { try self.appendRetainedProjectionEquation(step: equation, normalizations: inout context) }
+                try self.checkStaticProofEvidence(proof: proof, offset: occurrence.site, assumptions: assumptions)
+                try self.requireDeclarationProofSupport(dependencies: (try self.scopedProofDependencies(proof: proof, scope: scope, offset: occurrence.site, normalizations: context)), offset: occurrence.site)
+                val frozen = self.freezeStaticConformanceProof(proof: proof)
+                proofs.append(<AuthoredTypeViewProof occurrence=id receiver=receiver selector=selector proof=frozen />)
+                if type.assocNameId != 0U64 && selector.traitInstance.owner == (if type.assocTraitDeclOffset != 0U64 { give type.assocTraitDeclOffset } else { give type.assocTraitStart }) && self.sameResolvedTypeRefs(a: selector.traitInstance.positionalArgs, b: type.assocTraitArgs) {
+                    val raw = self.groundTermInEnvironment(ref: occurrence.term, params: [], values: [], selfRef: receiverRef)
+                    // Replay matches a projection after its children have
+                    // consumed their saved equations, at admission and run.
+                    val projected = try self.replayProjectionChildren(ref: raw, normalizations: equations, offset: occurrence.site)
+                    val output = try self.associatedOutputTermInProof(proof: proof, traitOwner: selector.traitInstance.owner, assocId: type.assocNameId)
+                    val immediate = if output != 0U64 && !self.typeRefEq(a: output, b: projected) { give output } else { give 0U64 }
+                    try self.appendRetainedProjectionEquation(step: <ProjectionNormalizationStep source=projected proof=frozen output=immediate />, normalizations: inout equations)
+                }
             }
         }
         return <Result.Ok value=() />

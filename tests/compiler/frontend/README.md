@@ -345,10 +345,13 @@ frame restoration, and canonical trait owner publication.
 `ImplProjectionBoundOrigin.pw` checks that two methods reuse a single
 impl-owned bound argument in signature, body and default projections. Execute
 `syntax`, `value`, `syntax shadow`, `value shadow`, `syntax later`,
-`value later`, `value qualified`, `value recovery` and `value receiverRecovery`. The controls cover same-spelled binders,
+`value later`, `value qualified`, `value recovery`, `value receiverRecovery`
+and `value signatureAdmission`. The controls cover same-spelled binders,
 later clauses, nonmember filtering, failed frame restoration and the value
 adapter's legacy name-only rows. Receiver recovery checks that a rejected
 impl cannot authorize its already registered member's implicit receiver premise.
+Signature admission checks that the value adapter rejects a different exact trait
+instance after accepting a method with the declared instance.
 
 `RetainedMethodSignatureConsumers.pw` takes
 `tests/fixtures/run/retained_method_signature.pw` and the standard-library
@@ -358,6 +361,10 @@ requires both consumers to reject a body environment with missing impl evidence.
 Use `tests/fixtures/run/self_projected_iterable_runtime.pw` as the first
 argument and `provided` as the third to check the selected placement and
 reject missing receiver evidence or a foreign lexical Self.
+For receiver equation replay, pass `receiverReplay`, either
+`tests/fixtures/run/provided_signature_concrete_receiver_projection.pw` or
+`tests/fixtures/run/provided_signature_nested_receiver_projection.pw`, and
+the standard-library root with a trailing slash.
 
 `AuthoredRecipeIntegrity.pw` checks the admitted constructor graph against the
 canonical child visitor. Execute `valid`, `shape`, `term`, `label`, `forged`,

@@ -1,9 +1,58 @@
-use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontend }
-use ../../../src/Ir only { CallReceiverPassing, InstanceEnvironment }
+use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontend, analyzeFrontendForRequests }
+use ../../../src/Ir only { CallReceiverPassing, ConformanceProofDemand, DeclarationBoundRef, InstanceEnvironment, PatternBindInput, PatternTypeInput, StaticConformanceProof, StaticProofInstantiation }
 use ../../../src/SourceAccess only { SourceAccess }
 use ../../../src/SourceTypeAdmissions only { SourceSignatureSlot }
 use @Std/Io only { print }
 use @Std/Process only { argAt }
+
+fn checkReceiverReplay() {
+    mut val compiler = <Comp />
+    match analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.File path=argAt(2I64) />, sources: <SourceAccess stdRoot=argAt(3I64).bytes() />) {
+        Result.Ok(value: _) => {}
+        Result.Err(error: val diagnostic) => { panic(diagnostic.message) }
+    }
+    val function = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "retain").nameId)
+    val declaration = compiler.arena.functionAt(index: function)
+    val types = compiler.arena.functionAt(index: compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "types").nameId)).params
+    val receiver = compiler.funcParamAt(params: types, index: 0U64).ty
+    val kind = compiler.funcParamAt(params: types, index: 1U64).ty
+    val expected = compiler.funcParamAt(params: types, index: 2U64).ty
+    val selected = match compiler.traitPatternProof(demand: <ConformanceProofDemand.Existence />, baseRef: receiver, traitId: 0U64, traitOwner: declaration.recvStart, traitArgs: <PatternTypeInput.Values values=[kind] />, patternParams: <PatternBindInput.Values values=[] />) {
+        Result.Ok(value: val value) => value,
+        Result.Err(error: val diagnostic) => { panic("selected: " + diagnostic.message) },
+    }
+    match selected { StaticConformanceProof.Missing => { panic("receiver replay setup has no concrete witness") } _ => {} }
+    val environment = match compiler.bodyInstanceEnvironment(fnIdx: function, args: [], recvInstRef: receiver, selectedProof: selected) {
+        Result.Ok(value: val value) => value,
+        Result.Err(error: val diagnostic) => { panic("environment: " + diagnostic.message) },
+    }
+    val premise = <StaticConformanceProof.AssumedBound source=<DeclarationBoundRef.MethodReceiver index=function /> />
+    val bare = match compiler.instantiateConstraintProof(proof: premise, receiverRef: receiver, environment: environment, selfRef: receiver, itemRef: 0U64) {
+        Result.Ok(value: val value) => value,
+        Result.Err(error: val diagnostic) => { panic("bare: " + diagnostic.message) },
+    }
+    match bare {
+        StaticProofInstantiation.Deferred => {}
+        _ => { panic("receiver replay reconstructed a missing projection equation") }
+    }
+    val parameter = match compiler.readAdmittedSignatureRoot(function: function, slot: <SourceSignatureSlot.Parameter index=0U64 />, environment: environment) {
+        Result.Ok(value: val value) => value,
+        Result.Err(error: val diagnostic) => { panic("parameter: " + diagnostic.message) },
+    }
+    val returned = match compiler.readAdmittedSignatureRoot(function: function, slot: <SourceSignatureSlot.Result />, environment: environment) {
+        Result.Ok(value: val value) => value,
+        Result.Err(error: val diagnostic) => { panic("returned: " + diagnostic.message) },
+    }
+    if !compiler.typeRefEq(a: parameter, b: expected) || !compiler.typeRefEq(a: returned, b: expected) { panic("receiver equations did not reach both signature slots") }
+    val body = compiler.internBodyInstance(fnIdx: function, environment: environment)
+    match compiler.prepareFinalCallableSignature(bodyId: body) {
+        Result.Ok(value: _) => {}
+        Result.Err(error: val diagnostic) => { panic("body: " + diagnostic.message) }
+    }
+    val signature = compiler.arena.bodySignature(bodyId: body)
+    if !signature.ready || !compiler.typeRefEq(a: signature.resultType, b: expected) { panic("receiver equations did not reach the body signature") }
+}
+
 
 fn checkProvided(compiler: inout Comp) {
     val sum = compiler.internBytes(s: "sum").nameId
@@ -44,6 +93,11 @@ fn checkProvided(compiler: inout Comp) {
 }
 
 fn main() {
+    if argAt(1I64) == "receiverReplay" {
+        checkReceiverReplay()
+        print("ok")
+        return
+    }
     mut val compiler = <Comp />
     analyzeFrontend(c: inout compiler, input: <FrontendInput.File path=argAt(1I64) />, sources: <SourceAccess stdRoot=argAt(2I64).bytes() />).unwrap()
     if argAt(3I64) == "provided" {
@@ -76,6 +130,11 @@ fn main() {
         val invalidBody = compiler.internBodyInstance(fnIdx: call.callee, environment: missing)
         compiler.recordBodyTypeTermResult(bodyId: invalidBody, source: compiler.arena.functionAt(index: call.callee).retTy, result: result)
         if compiler.prepareFinalCallableSignature(bodyId: invalidBody).isOk() || compiler.arena.bodySignature(bodyId: invalidBody).ready { panic("body signature recovered missing impl evidence from a cached result") }
+        val snapshot = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "snapshot").nameId)
+        val foreignReceiver = <InstanceEnvironment params=environment.params args=environment.args receiverRef=parameter />
+        if compiler.readAdmittedSignatureRoot(function: snapshot, slot: <SourceSignatureSlot.Result />, environment: foreignReceiver).isOk() {
+            panic("an inherent method accepted a foreign receiver for Self")
+        }
     }
     if hits != 1U64 { panic("the inherited projection control did not select one real call") }
     print("ok")

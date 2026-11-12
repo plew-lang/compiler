@@ -955,8 +955,7 @@ pub impl Comp {
             }
             i += 1U64
         }
-        val name = self.internBytes(s: "Self")
-        mut val params: Array[Bind] = [<Bind nameStart=name.nameStart nameLen=name.nameLen nameId=name.nameId paramId=traitDef.selfParamId fieldStart=name.fieldStart fieldLen=name.fieldLen />]
+        mut val params: Array[Bind] = [self.lexicalSelfBinder(parameter: traitDef.selfParamId)]
         mut val values: Array[U64] = [environment.receiverRef]
         i = 0U64
         while i < environment.params.count() && i < environment.args.count() {
@@ -3999,13 +3998,13 @@ pub impl Comp {
 
     // Return the retained path prefix that proves this exact obligation. A
     // later edge may witness a different trait and must not become its terminal.
-    inout fn retainedConstraintPrefix(proof: StaticConformanceProof, expected: TraitBound) -> Result[StaticConformanceProof, CompileDiagnostic] {
+    inout fn retainedConstraintPrefix(proof: StaticConformanceProof, expected: TraitBound, normalizations: Array[ProjectionNormalizationStep]) -> Result[StaticConformanceProof, CompileDiagnostic] {
         match proof {
             StaticConformanceProof.TraitPath(edges: val edges, terminalConformIdx: _) => {
                 mut val prefix: Array[WitnessMatch] = []
                 for edge in edges {
                     val candidate = <StaticConformanceProof.ConcreteWitness witness=edge />
-                    if try self.selectedCallConstraintMatches(expected: expected, proof: candidate) {
+                    if try self.retainedWitnessClauseMatches(expected: expected, proof: candidate, normalizations: normalizations, offset: expected.offset) {
                         if prefix.count() == 0U64 { return <Result.Ok value=candidate /> }
                         prefix.append(edge)
                         return <Result.Ok value=<StaticConformanceProof.TraitPath edges=prefix terminalConformIdx=edge.conformIdx /> />
@@ -4015,7 +4014,7 @@ pub impl Comp {
                 return <Result.Err error=self.diagnosticAt(offset: expected.offset, msg: "retained receiver path has no evidence for its constraint") />
             }
             _ => {
-                try self.checkSelectedCallConstraintBoundary(expected: expected, proof: proof, offset: expected.offset)
+                try self.compareValidatedWitnessClause(expected: expected, proof: proof, normalizations: normalizations, offset: expected.offset)
                 return <Result.Ok value=proof />
             }
         }
@@ -4024,7 +4023,8 @@ pub impl Comp {
     // Receiver assumptions share the enclosing body's selected conformance.
     // Presence consumes that evidence; it never selects an implementation.
     inout fn instantiateReceiverConstraint(bound: TraitBound, receiverRef: U64, environment: InstanceEnvironment, selfRef: U64, itemRef: U64, normalizations: Array[ProjectionNormalizationStep] = []) -> Result[StaticProofInstantiation, CompileDiagnostic] {
-        val expected = try self.groundCallableBound(bound: bound, environment: environment, selfRef: selfRef, itemRef: itemRef)
+        val substituted = self.substituteRetainedBound(bound: bound, environment: environment, selfRef: selfRef, itemRef: itemRef)
+        val expected = try self.replayBoundNormalizations(bound: substituted, normalizations: normalizations)
         if expected.subject == 0U64 || !self.arena.typeIsClosed(ref: expected.subject) { return <Result.Ok value=<StaticProofInstantiation.Deferred /> /> }
         for argument in expected.constraint.key.positionalArgs {
             if argument == 0U64 || !self.arena.typeIsClosed(ref: argument) { return <Result.Ok value=<StaticProofInstantiation.Deferred /> /> }
@@ -4039,7 +4039,7 @@ pub impl Comp {
         val state = try self.instantiateStaticMemberProof(proof: environment.proof, receiverRef: receiverRef, environment: environment, selfRef: selfRef, itemRef: itemRef, normalizations: normalizations)
         match state {
             StaticProofInstantiation.Ready(proof: val selected) => {
-                return <Result.Ok value=<StaticProofInstantiation.Ready proof=(try self.retainedConstraintPrefix(proof: selected, expected: expected)) /> />
+                return <Result.Ok value=<StaticProofInstantiation.Ready proof=(try self.retainedConstraintPrefix(proof: selected, expected: expected, normalizations: normalizations)) /> />
             }
             _ => {}
         }
@@ -4138,18 +4138,10 @@ impl Comp {
                     _ => {}
                 }
                 val bound = self.declarationBound(source: source)
-                for argument in bound.constraint.key.positionalArgs {
-                    val grounded = try self.groundTermForBody(ref: argument, environment: environment, selfRef: selfRef, itemRef: itemRef)
-                    if grounded == 0U64 || !self.arena.typeIsClosed(ref: grounded) { return <Result.Ok value=<StaticProofInstantiation.Deferred /> /> }
-                }
-                for predicate in bound.constraint.assocPredicates {
-                    val grounded = try self.groundTermForBody(ref: predicate.value, environment: environment, selfRef: selfRef, itemRef: itemRef)
-                    if grounded == 0U64 || !self.arena.typeIsClosed(ref: grounded) { return <Result.Ok value=<StaticProofInstantiation.Deferred /> /> }
-                }
                 match source {
-                    DeclarationBoundRef.Function(index: _) | DeclarationBoundRef.Requirement(index: _) => { panic("retained callable clause reached source grounding") }
-                    DeclarationBoundRef.Conformance(index: _) => { panic("retained conformance clause reached source grounding") }
-                    DeclarationBoundRef.AssociatedType(index: _) => { panic("retained associated clause reached source grounding") }
+                    DeclarationBoundRef.Function(index: _) | DeclarationBoundRef.Requirement(index: _) => { panic("retained callable clause reached receiver replay") }
+                    DeclarationBoundRef.Conformance(index: _) => { panic("retained conformance clause reached receiver replay") }
+                    DeclarationBoundRef.AssociatedType(index: _) => { panic("retained associated clause reached receiver replay") }
                     DeclarationBoundRef.Interface(index: _) => { return <Result.Err error=self.diagnosticAt(offset: bound.offset, msg: "interface evidence requires a universal call scope") /> }
                     DeclarationBoundRef.MethodReceiver(index: _) | DeclarationBoundRef.TraitSubject(index: _) => { return self.instantiateReceiverConstraint(bound: bound, receiverRef: receiverRef, environment: environment, selfRef: selfRef, itemRef: itemRef, normalizations: normalizations) }
                 }

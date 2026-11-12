@@ -313,6 +313,7 @@ pub impl Comp {
     }
 
     inout fn checkProjectionNormalizations(normalizations: Array[ProjectionNormalizationStep], offset: U64, assumptions: Array[DeclarationBoundRef] = []) -> Result[(), CompileDiagnostic] {
+        mut val admitted: Array[ProjectionNormalizationStep] = []
         for step in normalizations {
             if step.source == 0U64 || step.source >= self.arena.typeCount() || step.output >= self.arena.typeCount() {
                 return <Result.Err error=self.diagnosticAt(offset: offset, msg: "selected condition has invalid projection evidence") />
@@ -330,7 +331,10 @@ pub impl Comp {
             if !declared { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "selected condition projection evidence has no declared associated type") /> }
             val proof = self.thawStaticConformanceProof(id: step.proof)
             try self.checkStaticProofEvidence(proof: proof, offset: offset, assumptions: assumptions)
-            val bound = try self.staticProofBound(proof: proof, traitIdx: traitIndex)
+            // A parent equation may compare a normalized child with a raw
+            // witness argument. Only previously checked equations may justify
+            // that comparison.
+            val bound = try self.replayBoundNormalizations(bound: (try self.staticProofBound(proof: proof, traitIdx: traitIndex)), normalizations: admitted)
             val receiver = self.typeTermProjectionReceiver(t: projection)
             if bound.subject == 0U64 || bound.constraint.key.owner != owner || !self.typeRefEq(a: self.typeRefWithoutOuterViews(ref: receiver), b: self.typeRefWithoutOuterViews(ref: bound.subject)) || !self.sameResolvedTypeRefs(a: projection.assocTraitArgs, b: bound.constraint.key.positionalArgs) {
                 return <Result.Err error=self.diagnosticAt(offset: offset, msg: "selected condition projection evidence has a different receiver or trait") />
@@ -338,6 +342,7 @@ pub impl Comp {
             val output = try self.associatedOutputTermInProof(proof: proof, traitOwner: owner, assocId: projection.assocNameId)
             val comparable = if output == 0U64 || self.typeRefEq(a: output, b: step.source) { give 0U64 } else { give output }
             if !self.typeRefEq(a: comparable, b: step.output) { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "selected condition projection evidence has a different output") /> }
+            admitted.append(step)
         }
         return <Result.Ok value=() />
     }
@@ -1574,16 +1579,23 @@ impl Comp {
     // assumptions before scope traversal. This private comparison performs
     // no admission/query and cannot recover missing projection evidence.
     inout fn compareValidatedWitnessClause(expected: TraitBound, proof: StaticConformanceProof, normalizations: Array[ProjectionNormalizationStep], offset: U64) -> Result[(), CompileDiagnostic] {
+        if !(try self.retainedWitnessClauseMatches(expected: expected, proof: proof, normalizations: normalizations, offset: offset)) {
+            return <Result.Err error=self.diagnosticAt(offset: offset, msg: "selected conformance evidence does not satisfy its declaration conditions") />
+        }
+        return <Result.Ok value=() />
+    }
+
+    inout fn retainedWitnessClauseMatches(expected: TraitBound, proof: StaticConformanceProof, normalizations: Array[ProjectionNormalizationStep], offset: U64) -> Result[Bool, CompileDiagnostic] {
         val traitIndex = self.decls.traitIndexByOffset(offset: expected.constraint.key.owner)
         val bound = try self.staticProofBound(proof: proof, traitIdx: traitIndex)
         val proofSubject = try self.replayProjectionNormalizations(ref: bound.subject, normalizations: normalizations, offset: offset)
         val proofConstraint = try self.replayConstraintNormalizations(constraint: bound.constraint, normalizations: normalizations, offset: offset)
-        if bound.subject == 0U64 || !self.typeRefEq(a: self.typeRefWithoutOuterViews(ref: expected.subject), b: self.typeRefWithoutOuterViews(ref: proofSubject)) || bound.constraint.key.owner != expected.constraint.key.owner || (!expected.constraint.positionalArgsOpen && !self.sameResolvedTypeRefs(a: proofConstraint.key.positionalArgs, b: expected.constraint.key.positionalArgs)) { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "selected conformance evidence does not satisfy its declaration conditions") /> }
+        if bound.subject == 0U64 || !self.typeRefEq(a: self.typeRefWithoutOuterViews(ref: expected.subject), b: self.typeRefWithoutOuterViews(ref: proofSubject)) || bound.constraint.key.owner != expected.constraint.key.owner || (!expected.constraint.positionalArgsOpen && !self.sameResolvedTypeRefs(a: proofConstraint.key.positionalArgs, b: expected.constraint.key.positionalArgs)) { return <Result.Ok value=false /> }
         mut val names: Array[U64] = []
         mut val values: Array[U64] = []
         for predicate in expected.constraint.assocPredicates { names.append(predicate.member) values.append(predicate.value) }
-        if !(try self.retainedProofAssociatedTypesMatch(proof: proof, traitOwner: expected.constraint.key.owner, names: names, values: values, normalizations: normalizations, offset: offset)) { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "selected conformance evidence does not satisfy its declaration conditions") /> }
-        return <Result.Ok value=() />
+        if !(try self.retainedProofAssociatedTypesMatch(proof: proof, traitOwner: expected.constraint.key.owner, names: names, values: values, normalizations: normalizations, offset: offset)) { return <Result.Ok value=false /> }
+        return <Result.Ok value=true />
     }
 
     // Substitution is structural. A saved-plan consumer must not repair a

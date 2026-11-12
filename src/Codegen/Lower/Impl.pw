@@ -407,14 +407,23 @@ pub impl Comp {
         }
     }
 
-    // Reconstruct the implicit lexical `Self` binder of one completed trait.
-    // The source spelling is shared, but identity is declaration-owned.
+    // Every lexical Self producer uses one spelling and the trait's ParamId.
+    // The spelling need not occur in source bytes (implicit Item on stdin).
+    inout fn lexicalSelfBinder(parameter: U64) -> Bind {
+        if self.lexicalSelfName.isNone() { self.lexicalSelfName = <Optional.Some v=self.internBytes(s: "Self") /> }
+        val name = self.lexicalSelfName.unwrap()
+        return <Bind nameStart=name.nameStart nameLen=name.nameLen nameId=name.nameId paramId=parameter fieldStart=name.fieldStart fieldLen=name.fieldLen />
+    }
+
+    inout fn lexicalSelfTerm(parameter: U64) -> U64 {
+        val name = self.lexicalSelfBinder(parameter: parameter)
+        return self.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen nameId=name.nameId paramId=parameter args=[] isRecord=false recordFieldLabels=[] recordFieldTerms=[] />)
+    }
+
     inout fn appendTraitSelfBinder(scope: inout Array[Bind], owner: U64) {
         val index = self.decls.traitOwnerIndex(offset: owner)
         if index >= self.decls.traitOwnerCount() { return }
-        val declaration = self.decls.traitOwnerAt(index: index)
-        val selfName = self.kwSpan(kw: "Self", kwLen: 4U64)
-        scope.append(<Bind nameStart=selfName.nameStart nameLen=selfName.nameLen nameId=intern(c: inout self, start: selfName.nameStart, len: selfName.nameLen) paramId=declaration.selfParamId fieldStart=selfName.fieldStart fieldLen=selfName.fieldLen />)
+        scope.append(self.lexicalSelfBinder(parameter: self.decls.traitOwnerAt(index: index).selfParamId))
     }
 
     // A trait subject is not a value type. Its executable methods receive
@@ -423,9 +432,7 @@ pub impl Comp {
         if traitOwner == 0U64 { return receiver }
         val index = self.decls.traitOwnerIndex(offset: traitOwner)
         if index >= self.decls.traitOwnerCount() { return 0U64 }
-        val declaration = self.decls.traitOwnerAt(index: index)
-        val name = self.internBytes(s: "Self")
-        return self.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen nameId=name.nameId paramId=declaration.selfParamId args=[] isRecord=false recordFieldLabels=[] recordFieldTerms=[] />)
+        return self.lexicalSelfTerm(parameter: self.decls.traitOwnerAt(index: index).selfParamId)
     }
 
     inout fn lowerSyntaxMemberTypeParams(member: SyntaxMember) -> Result[Array[Bind], CompileDiagnostic] {
@@ -1489,9 +1496,8 @@ pub impl Comp {
             ai += 1
         }
         val typeParams: Array[Bind] = (try self.lowerTypeParamNames(names: t.typeParams, anchor: nameStart, sendableFlags: t.typeParamSendable))
-        val selfName: Bind = self.kwSpan(kw: "Self", kwLen: 4U64)
         val selfParamId: U64 = self.decls.traitOwnerAt(index: self.decls.traitOwnerIndex(offset: nameStart)).selfParamId
-        val selfBind: Bind = <Bind nameStart=selfName.nameStart nameLen=selfName.nameLen nameId=intern(c: inout self, start: selfName.nameStart, len: selfName.nameLen) paramId=selfParamId fieldStart=selfName.fieldStart fieldLen=selfName.fieldLen />
+        val selfBind = self.lexicalSelfBinder(parameter: selfParamId)
         val savedTP: Array[Bind] = self.cur.typeParams
         mut val scopeTP: Array[Bind] = []
         scopeTP.append(selfBind)
@@ -1565,9 +1571,8 @@ pub impl Comp {
             i += 1U64
         }
         val typeParams: Array[Bind] = (try self.lowerTypeParamSpans(spans: paramSpans, anchor: t.name.start, sendableFlags: paramFlags))
-        val selfName: Bind = self.kwSpan(kw: "Self", kwLen: 4U64)
         val selfParamId: U64 = self.decls.traitOwnerAt(index: self.decls.traitOwnerIndex(offset: t.name.start)).selfParamId
-        val selfBind: Bind = <Bind nameStart=selfName.nameStart nameLen=selfName.nameLen nameId=intern(c: inout self, start: selfName.nameStart, len: selfName.nameLen) paramId=selfParamId fieldStart=selfName.fieldStart fieldLen=selfName.fieldLen />
+        val selfBind = self.lexicalSelfBinder(parameter: selfParamId)
         val savedTP: Array[Bind] = self.cur.typeParams
         mut val scope: Array[Bind] = []
         scope.append(selfBind)

@@ -1,0 +1,19 @@
+trait Leaf { type Kind }
+struct Token {}
+impl Token as Leaf { type Kind = I64 }
+
+trait Seed[Input] { type Output }
+trait Source[Kind] { type Item }
+
+struct Key {}
+impl Key as Seed[Token#Leaf.Kind] { type Output = Bool }
+
+struct Box {}
+impl Box as Source[Bool] { type Item = Bool }
+
+pub impl Source[Key#Seed[Token#Leaf.Kind].Output] {
+    fn retain(value: Item) -> Item { return value }
+}
+
+fn types(box: Box, kind: Bool, expected: Bool) {}
+fn main() {}
