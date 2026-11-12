@@ -114,7 +114,15 @@ callable result fixtures passed check and native execution, and the
 supertrait projection and qualified associated signature controls also
 passed JIT. The source-provenance fixture passed. The interface boxing
 conditions control passed check and native execution. Its JIT run hit the
-no-progress limit and remains unverified.
+no-progress limit. A traced baseline run continued preparing thousands of
+bodies in this compiler-embedding fixture and was cancelled. JIT remains
+unverified for this control. Standard generation
+`20261112T124022-gen-c7bea3` passed.
+
+Three measured same-source runs per candidate after warmup gave medians of
+6.638584 s and 6.607788 s. All eight LLVM outputs had the same SHA-256,
+`7c12646aea3190f61446967b33a8e45913a30e856e548b902585f89024f2d2e3`.
+This is a same-source comparison, separate from fixed-point certification.
 
 This increment establishes exact ownership at the existential reader. Its
 projection substitution and the witness's source result still use the
