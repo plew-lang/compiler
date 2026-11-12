@@ -1,0 +1,11 @@
+trait Seed { type Output }
+trait Source[Kind] { type Item }
+
+struct Key {}
+impl Key as Seed { type Output = I64 }
+
+pub impl Source[Key#Seed.Output] {
+    fn retain(value: Item) -> Item { return value }
+}
+
+fn main() {}
