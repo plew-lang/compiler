@@ -390,6 +390,19 @@ struct SignatureProofScopes {
 }
 impl SignatureProofScopes { factory }
 
+struct AuthoredRequirementSignature {
+    val source: SourceRequirementOwner
+    val declaration: Func
+    val proofs: Array[AuthoredTypeViewProof]
+}
+impl AuthoredRequirementSignature { factory }
+
+struct RequirementInterfaceRead {
+    val scope: U64
+    val bound: TraitBound
+}
+impl RequirementInterfaceRead { factory }
+
 struct AuthoredRecipeRead {
     val term: U64
     // Selected derivations from this recipe's canonical child graph only.
@@ -578,7 +591,7 @@ pub struct Comp {
     pub mut val sourceTypeUses: SourceTypeUses = <SourceTypeUses />
     mut val rawRequirementPremises: Array[RawRequirementPremise] = []
     mut val rawRequirementRanges: Dictionary[U64, SourceBoundRange] = [:]
-    mut val authoredRequirementViews: Dictionary[U64, Array[AuthoredTypeViewProof]] = [:]
+    mut val authoredRequirementViews: Dictionary[U64, AuthoredRequirementSignature] = [:]
     mut val authoredSignatureViews: Dictionary[U64, AuthoredSignatureViews] = [:]
     pub mut val loweringTypeUses: Array[U64] = []
     // Authored provenance is independent of legacy visibility suppression.

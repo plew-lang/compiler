@@ -665,13 +665,17 @@ pub impl Comp {
 
     inout fn assumedSupertraitBound(source: DeclarationBoundRef, steps: Array[SupertraitRef]) -> TraitBound {
         if !self.declarationBoundIsValid(source: source) { return self.missingTraitBound() }
-        mut val bound = self.declarationBound(source: source)
+        return self.supertraitBoundThroughSteps(root: self.declarationBound(source: source), steps: steps, includeInherited: true)
+    }
+
+    inout fn supertraitBoundThroughSteps(root: TraitBound, steps: Array[SupertraitRef], includeInherited: Bool) -> TraitBound {
+        mut val bound = root
         for val step in steps {
             if step.traitIndex >= self.decls.traitCount() { return self.missingTraitBound() }
             val declaration = self.decls.traitAt(index: step.traitIndex)
             if declaration.nameStart != bound.constraint.key.owner || step.boundIndex >= declaration.supertraits.count() { return self.missingTraitBound() }
             val required = self.traitConstraintAt(constraints: declaration.supertraits, index: step.boundIndex)
-            bound = <TraitBound subject=bound.subject constraint=self.traitConstraintInBound(constraint: required, bound: bound, traitIndex: step.traitIndex) offset=declaration.nameStart />
+            bound = <TraitBound subject=bound.subject constraint=self.traitConstraintInBound(constraint: required, bound: bound, traitIndex: step.traitIndex, includeInherited: includeInherited) offset=declaration.nameStart />
         }
         return bound
     }

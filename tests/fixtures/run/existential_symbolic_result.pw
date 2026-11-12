@@ -8,7 +8,7 @@ use /SourceTypeUses only { SourceTypeUses }
 use /Ir only { TypeRef }
 fn main() {
     mut val c = <Comp />
-    val source = "struct Value {{}}\ntrait Cursor {{ type Item }}\ntrait Source {{ type Iter fn iterator() -> Iter }}\nfn test[T](values: any Source[Iter=T]) where T: Cursor[Item=Value] {{}}\n"
+    val source = "struct Value {{}}\ntrait Cursor {{ type Item }}\ntrait Source {{ type Iter fn iterator() -> Self#Source.Iter fn other() -> Bool }}\nfn test[T](values: any Source[Iter=T]) where T: Cursor[Item=Value] {{}}\n"
     analyzeFrontendDeclarations(c: inout c, input: <FrontendInput.Text text=source path="cursor.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
     val bound = c.decls.funcBounds.at(index: 0U64)
     val function = c.arena.functionAt(index: bound.fnIdx)
@@ -47,6 +47,12 @@ fn main() {
     assert(c.typeRefEq(a: cursor, b: bound.paramTy))
     assert(c.viewedTypeConformsTraitConstraint(demand: <ConformanceProofDemand.Existence />, ref: cursor, constraint: bound.constraint, assumptions: c.functionBoundAssumptions(fnIdx: bound.fnIdx)).unwrap())
     assert(c.monoWork.bodyCount() == 0U64)
+    val requirements = c.decls.traitAt(index: traitIndex).reqs
+    val originalRequirement = c.traitReqAt(reqs: requirements, index: 0U64)
+    c.decls.traitReqPool[requirements.start] = c.traitReqAt(reqs: requirements, index: 1U64)
+    val retained = c.existentialRequirementSignature(target: receiver, traitIndex: traitIndex, slot: 0U64).unwrap()
+    if !c.typeRefEq(a: retained.resultType, b: cursor) { panic "raw trait row replaced the retained existential signature" }
+    c.decls.traitReqPool[requirements.start] = originalRequirement
     c.sourceTypeUses = <SourceTypeUses />
     match c.existentialRequirementSignature(target: receiver, traitIndex: traitIndex, slot: 0U64) {
         Result.Err(error: val diagnostic) => {

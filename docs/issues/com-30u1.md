@@ -129,3 +129,32 @@ projection substitution and the witness's source result still use the
 legacy reifier. Next, interpret the saved occurrence proofs in the selected
 interface scope or selected concrete witness, and replace those reads. The
 provided-signature consumer also remains open.
+
+## Existential signature replay checkpoint
+
+The public signature and the source result used by its witness adapter now
+read the admitted requirement's parameter and result occurrences. They fold
+the same canonical recipes as registered callable signatures. For projections
+on the interface's Self, the reader follows the exact saved supertrait clauses
+and substitutes the selected positional and associated bindings. It keeps
+unresolved output terms symbolic and does not use the interface substitution
+as static conformance evidence.
+
+The symbolic-result fixture replaces the published raw row with a sibling
+after declaration admission. Old candidate `b9bab949` then returns the
+sibling's result and reaches the RED assertion. Build
+`20261112T125549-build-5a6381`, candidate `f7f918e2`, returns the admitted
+result. Both internal existential signature fixtures, inherited projection
+and qualified associated signatures passed check and native execution. The
+two public projection controls also passed JIT. Conditional boxing passed
+native execution. The intermediate recipe reader also passed 13 existing
+registered-signature assertions. Standard generation
+`20261112T125838-gen-059d3f` passed. Same-source medians after warmup
+were 6.641706 s and 6.630960 s across three interleaved samples each. All
+eight LLVM outputs matched. This comparison does not establish a new
+formal fixed point.
+
+Requirement candidate ranking and hidden-Self availability still read the
+legacy parameter terms before selecting the operation. Move those parameter
+reads to the admitted recipe before migrating the translated/provided static
+signature and its retained clause evidence.

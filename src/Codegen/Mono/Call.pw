@@ -2376,23 +2376,8 @@ pub impl Comp {
         }
         val requirement = self.traitReqAt(reqs: requirements, index: slot)
         val bound = try self.existentialRequirementBound(target: target, traitIndex: traitIndex, receiver: target, offset: requirement.nameStart)
-        try self.requireAdmittedRawRequirement(traitIndex: traitIndex, slot: slot, offset: requirement.defOffset)
-        mut val parameterTypes: Array[U64] = []
-        mut val passings: Array[CallArgumentPassing] = []
-        mut val parameter = 0U64
-        while parameter < requirement.params.count() {
-            val declaration = self.funcParamAt(params: requirement.params, index: parameter)
-            parameterTypes.append(self.traitBoundTypeTerm(ref: declaration.ty, bound: bound, traitIndex: traitIndex))
-            if declaration.isInout { passings.append(<CallArgumentPassing.Inout />) }
-            else if declaration.isMove { passings.append(<CallArgumentPassing.Move />) }
-            else { passings.append(<CallArgumentPassing.Borrow />) }
-            parameter += 1U64
-        }
-        mut val passing = <CallReceiverPassing.Borrow />
-        if requirement.selfInout { passing = <CallReceiverPassing.Inout /> }
-        else if requirement.selfMove { passing = <CallReceiverPassing.Move /> }
-        val result = self.callableResultSlot(ref: self.traitBoundTypeTerm(ref: self.semanticCallableReturnTerm(function: requirement), bound: bound, traitIndex: traitIndex))
-        return <Result.Ok value=<ExistentialRequirementSignature receiverPassing=passing parameterTypes=parameterTypes argumentPassings=passings resultType=result /> />
+        val scope = try self.requireAdmittedRawRequirement(traitIndex: traitIndex, slot: slot, offset: requirement.defOffset)
+        return self.readRequirementInterfaceSignature(scope: scope, bound: bound, traitIndex: traitIndex)
     }
 
     // Build the adapter's semantic plan without registering an executable
@@ -2406,7 +2391,10 @@ pub impl Comp {
         if !(try self.existentialRequirementIsDispatchable(req: requested, target: evidence.targetRef, traitIndex: evidence.traitIdx)) { return <Result.Ok value=<Optional.None /> /> }
         val signature = try self.existentialRequirementSignature(target: evidence.targetRef, traitIndex: evidence.traitIdx, slot: requirement)
         val bound = try self.existentialRequirementBound(target: evidence.targetRef, traitIndex: evidence.traitIdx, receiver: sourceReceiver, offset: requested.nameStart)
-        val sourceResult = self.callableResultSlot(ref: self.traitBoundTypeTerm(ref: self.semanticCallableReturnTerm(function: requested), bound: bound, traitIndex: evidence.traitIdx))
+        val scope = try self.requireAdmittedRawRequirement(traitIndex: evidence.traitIdx, slot: requirement, offset: requested.defOffset)
+        val environment = self.requirementInterfaceEnvironment(bound: bound, traitIndex: evidence.traitIdx)
+        mut val memo: Dictionary[U64, AuthoredRecipeRead] = [:]
+        val sourceResult = try self.readRequirementInterfaceResult(interface: <RequirementInterfaceRead scope=scope bound=bound />, environment: environment, memo: inout memo)
         mut val conversion = <ValueConversionProof.Identity />
         if sourceResult != 0U64 || signature.resultType != 0U64 {
             conversion = try self.callArgumentConversion(sourceRef: sourceResult, targetRef: signature.resultType, knownBox: <Optional.Some v=evidence />)
