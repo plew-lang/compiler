@@ -1323,3 +1323,59 @@ provided/existential controls passed check, JIT and native. Same-source
 medians against `5c1b2723` were 6.783960 s and 6.787218 s. The LLVM diff
 was confined to type-reference numbers in generic body symbols.
 The ticket remains open for both independently reproduced lexical cases.
+
+## Canonical inherited instances and equation paths
+
+Both review failures now have runtime-bearing fixtures. The old carrier
+`8d309dc7` rejects `inherited_associated_equation_order`; the intermediate
+equation-path carrier still rejects `inherited_associated_convergent_paths`.
+The equation reader's inputs now come from the declared equality traversal,
+which returns the exact supertrait steps that supply the value. An opaque
+path to the same trait cannot hide a declared output. Early trait headers
+and completed declarations share the same constraint metadata and reifier.
+Bare-name lookup compares the instances under the lexical Self premise.
+It retains the original projection so source admission publishes the
+equations and selected proof rather than reconstructing them at a use site.
+
+Candidate `3ff6b512`, build `20261112T203750-build-872ecb`, and generation
+`20261112T204038-gen-ec2c84` passed. Fifteen public fixtures passed check,
+JIT and native execution. The reversed forms of both new fixtures also
+printed 42 in both execution modes. Distinct Parent instances still reject
+as ambiguous in check, JIT and AOT. Three internal adapter fixtures passed
+check and native execution.
+
+Same-source medians were 6.820275 s and 6.827561 s. LLVM output
+matched in all eight runs.
+
+Independent re-review verified both prior repairs and found a nested
+case where the equality's own terminal path has an argument normalized
+by a sibling path. The new `inherited_associated_cross_path_equation`
+fixture rejects on `3ff6b512`. Keep the terminal path's argument
+equations before the equation that relies on them. This uses the
+same lexical premise and the normal proof integrity checks.
+
+Two source selection cases from the re-review remain:
+
+- `Service: Loose + Fixed`, where `Loose: Parent` and
+  `Fixed: Parent[Item=I64]`, rejects with a non-unique conformance path
+  in either order, even with `Self#Parent.Item`. The Fixed-only
+  existential control returns 42. Both declarations refine the same
+  owner and positional instance under the same lexical root. Merge
+  the guaranteed output equations while preserving distinct-instance,
+  conflicting-equation and distinct concrete witness refusals.
+- `Middle: Parent[Self#Marker.Type] + Marker` and
+  `Service: Middle + Marker[Type=I64]` rejects both bare `Item`
+  and explicit `Self#Parent[I64].Item` in a requirement. Without the
+  requirement the declarations are accepted. The full root supplies
+  the normalization when the path-local bound does not. This is a
+  signature source-selection case, with no concrete conformance
+  producer involved.
+
+The nested-prerequisite revision built as `20261112T204412-build-7012b3`,
+candidate `9724345d`, and passed generation
+`20261112T204702-gen-b91f92`. The sixteen public controls passed check,
+JIT and native. The new fixture exercises admission of an unused
+requirement; the other controls exercise the signature's final use.
+Both remaining source-selection failures reproduce on this candidate.
+Same-source medians against `8d309dc7` were 6.761974 s and 6.775947 s.
+LLVM output matched in all eight runs.

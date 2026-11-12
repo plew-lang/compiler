@@ -206,7 +206,11 @@ pub impl Comp {
             val owner = self.decls.traitOwnerAt(index: ownerIndex)
             for member in owner.assocTypes {
                 if member.nameId == name {
-                    if selected != 0U64 { return <Result.Err error=self.diagnosticAt(offset: nameStart, msg: "inherited associated type is ambiguous — write its explicit trait projection (spec/08)", failureDomain: <FailureDomain.Source />) /> }
+                    if selected != 0U64 {
+                        val rootBound = <TraitBound subject=receiver constraint=<TraitConstraint key=origin assocPredicates=[] /> offset=nameStart />
+                        if self.sameLexicalAssociatedInstance(projection: self.arena.typeAt(index: selected), instance: instance, root: rootBound) { continue }
+                        return <Result.Err error=self.diagnosticAt(offset: nameStart, msg: "inherited associated type is ambiguous — write its explicit trait projection (spec/08)", failureDomain: <FailureDomain.Source />) />
+                    }
                     val selfType = self.arena.typeTermAt(index: receiver)
                     selected = self.pushType(t: <TypeRef nameStart=selfType.nameStart nameLen=selfType.nameLen nameId=selfType.nameId paramId=root.selfParamId args=[] assocTraitStart=owner.nameStart assocTraitLen=owner.nameLen assocTraitId=owner.nameId assocTraitArgs=instance.positionalArgs assocNameStart=member.nameStart assocNameLen=member.nameLen assocNameId=member.nameId projectionReceiver=receiver hasAssocTraitDecl=true assocTraitDeclOffset=owner.nameStart />)
                     // A direct declaration is the lexical binder. Shadowing an
@@ -220,6 +224,21 @@ pub impl Comp {
         return <Result.Ok value=selected />
     }
 
+    // Compare with the declaring Self premise, retaining the written
+    // projection so admission can publish the equations that justify it.
+    inout fn sameLexicalAssociatedInstance(projection: TypeRef, instance: TraitInstanceKey, root: TraitBound) -> Bool {
+        if self.associatedProjectionTraitOwner(projection: projection) != instance.owner || projection.assocTraitArgs.count() != instance.positionalArgs.count() { return false }
+        val available = self.availableTraitBoundShape(owner: root.constraint.key.owner)
+        if available.isNone() { return false }
+        val shape = available.unwrap()
+        for index in 0U64..<instance.positionalArgs.count() {
+            val left = self.traitBoundTypeTermInShape(ref: projection.assocTraitArgs[index], bound: root, shape: shape)
+            val right = self.traitBoundTypeTermInShape(ref: instance.positionalArgs[index], bound: root, shape: shape)
+            if !self.typeRefEq(a: left, b: right) { return false }
+        }
+        return true
+    }
+
     inout fn appendLexicalSupertraitInstances(instance: TraitInstanceKey, receiver: U64, offset: U64, instances: inout Array[TraitInstanceKey]) -> Result[(), CompileDiagnostic] {
         match self.traitLexicalHeaders.get(key: instance.owner) {
             Optional.Some(v: val header) => {
@@ -227,7 +246,7 @@ pub impl Comp {
                     val constraint = self.traitConstraintAt(constraints: header.supertraits, index: edge)
                     mut val arguments: Array[U64] = []
                     if constraint.key.positionalArgs.count() != 0U64 {
-                        mut val parameters = header.parameters
+                        mut val parameters = self.copyTraitBinds(binds: header.typeParams)
                         mut val values = instance.positionalArgs
                         self.appendTraitSelfBinder(scope: inout parameters, owner: instance.owner)
                         values.append(receiver)

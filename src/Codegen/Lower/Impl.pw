@@ -1511,7 +1511,7 @@ impl Comp {
             if constraint.key.owner == 0U64 { return <Result.Err error=self.diagnosticAt(offset: declared.span.start, msg: "unknown supertrait or incompatible trait arguments") /> }
             supertraits.append(constraint)
         }
-        self.traitLexicalHeaders[owner] = <TraitLexicalHeader parameters=parameters supertraits=self.pushTraitConstraints(constraints: supertraits) />
+        self.saveTraitLexicalHeader(owner: owner, parameters: parameters, supertraits: supertraits)
         return <Result.Ok value=() />
     }
 
@@ -1538,7 +1538,7 @@ impl Comp {
         if !self.traitLexicalHeaders.contains(key: nameStart) { try self.prepareValueTraitHeaderInLexicalScope(trait: t) }
         val header = self.traitLexicalHeaders.get(key: nameStart).unwrap()
         val identity = self.decls.traitOwnerAt(index: self.decls.traitOwnerIndex(offset: nameStart))
-        self.enterTraitSignatureScope(owner: nameStart, parameters: header.parameters)
+        self.enterTraitSignatureScope(owner: nameStart, parameters: self.copyTraitBinds(binds: header.typeParams))
         mut val reqs: Array[Func] = []
         mut val requirements: Array[LoweredSourceSignature] = []
         mut val ri: U64 = 0
@@ -1556,7 +1556,7 @@ impl Comp {
                 associatedBounds.append(<TraitAssociatedBound member=member constraint=(try self.lowerValueTraitConstraint(traitType: (try self.normalizeProjectionType(t: bound)))) offset=bound.span.start />)
             }
         }
-        val traitIndex = self.decls.registerTrait(<TraitDef nameStart=nameStart nameLen=nameLen nameId=intern(c: inout self, start: nameStart, len: nameLen) selfParamId=identity.selfParamId typeParams=self.pushTraitBinds(binds: header.parameters) supertraits=header.supertraits reqs=self.pushTraitReqs(reqs: reqs) assocTypes=self.pushTraitBinds(binds: identity.assocTypes) assocBounds=self.pushTraitAssociatedBounds(bounds: associatedBounds) />)
+        val traitIndex = self.decls.registerTrait(<TraitDef nameStart=nameStart nameLen=nameLen nameId=intern(c: inout self, start: nameStart, len: nameLen) selfParamId=identity.selfParamId typeParams=header.typeParams supertraits=header.supertraits reqs=self.pushTraitReqs(reqs: reqs) assocTypes=header.assocTypes assocBounds=self.pushTraitAssociatedBounds(bounds: associatedBounds) />)
         mut val requirementSlot = 0U64
         while requirementSlot < requirements.count() {
             try self.bindAuthoredRequirementScope(signature: requirements[requirementSlot], traitIndex: traitIndex, slot: requirementSlot, site: nameStart)
@@ -1616,8 +1616,13 @@ impl Comp {
             if constraint.key.owner == 0U64 { return <Result.Err error=self.diagnosticAt(offset: syntaxType(file: self.syntax, id: declared).span.start, msg: "unknown supertrait or incompatible trait arguments") /> }
             supertraits.append(constraint)
         }
-        self.traitLexicalHeaders[trait.name.start] = <TraitLexicalHeader parameters=parameters supertraits=self.pushTraitConstraints(constraints: supertraits) />
+        self.saveTraitLexicalHeader(owner: trait.name.start, parameters: parameters, supertraits: supertraits)
         return <Result.Ok value=() />
+    }
+
+    inout fn saveTraitLexicalHeader(owner: U64, parameters: Array[Bind], supertraits: Array[TraitConstraint]) {
+        val identity = self.decls.traitOwnerAt(index: self.decls.traitOwnerIndex(offset: owner))
+        self.traitLexicalHeaders[owner] = <TraitBoundShape nameStart=owner selfParamId=identity.selfParamId typeParams=self.pushTraitBinds(binds: parameters) assocTypes=self.pushTraitBinds(binds: identity.assocTypes) supertraits=self.pushTraitConstraints(constraints: supertraits) />
     }
 
     inout fn enterTraitSignatureScope(owner: U64, parameters: Array[Bind]) {
@@ -1635,7 +1640,7 @@ impl Comp {
             Optional.None => { return <Result.Err error=self.diagnosticAt(offset: t.name.start, msg: "trait has no prepared lexical header", failureDomain: <FailureDomain.Internal />) /> },
         }
         val identity = self.decls.traitOwnerAt(index: self.decls.traitOwnerIndex(offset: t.name.start))
-        self.enterTraitSignatureScope(owner: t.name.start, parameters: header.parameters)
+        self.enterTraitSignatureScope(owner: t.name.start, parameters: self.copyTraitBinds(binds: header.typeParams))
         mut val i: U64 = 0U64
         mut val reqs: Array[Func] = []
         mut val requirements: Array[LoweredSourceSignature] = []
@@ -1661,7 +1666,7 @@ impl Comp {
             }
             i += 1U64
         }
-        val traitIndex = self.decls.registerTrait(<TraitDef nameStart=t.name.start nameLen=t.name.end - t.name.start nameId=intern(c: inout self, start: t.name.start, len: t.name.end - t.name.start) selfParamId=identity.selfParamId typeParams=self.pushTraitBinds(binds: header.parameters) supertraits=header.supertraits reqs=self.pushTraitReqs(reqs: reqs) assocTypes=self.pushTraitBinds(binds: identity.assocTypes) assocBounds=self.pushTraitAssociatedBounds(bounds: associatedBounds) />)
+        val traitIndex = self.decls.registerTrait(<TraitDef nameStart=t.name.start nameLen=t.name.end - t.name.start nameId=intern(c: inout self, start: t.name.start, len: t.name.end - t.name.start) selfParamId=identity.selfParamId typeParams=header.typeParams supertraits=header.supertraits reqs=self.pushTraitReqs(reqs: reqs) assocTypes=header.assocTypes assocBounds=self.pushTraitAssociatedBounds(bounds: associatedBounds) />)
         mut val requirementSlot = 0U64
         while requirementSlot < requirements.count() {
             try self.bindAuthoredRequirementScope(signature: requirements[requirementSlot], traitIndex: traitIndex, slot: requirementSlot, site: t.name.start)

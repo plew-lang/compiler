@@ -1,0 +1,5 @@
+trait Marker { type Type }
+trait Parent[T] { type Item }
+trait Middle: Parent[Self#Marker.Type] + Marker[Type=I64] {}
+trait Service: Middle + Parent[Bool] { fn get() -> Item }
+fn main() {}

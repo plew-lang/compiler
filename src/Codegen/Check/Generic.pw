@@ -37,7 +37,7 @@ pub impl Comp {
                 val item: Bind = self.kwSpan(kw: "Item", kwLen: 4U64)
                 val raw: U64 = self.simpleTypeRef(nameStart: item.nameStart, nameLen: item.nameLen)
                 val selfRef: U64 = self.parametricSelfRef(f: f)
-                val projection: U64 = self.reifyBoundAssociatedTerms(ref: raw, traitDef: traitDef, receiverRef: selfRef, traitOwner: traitDef.nameStart, traitArgs: [], predicates: [])
+                val projection: U64 = self.reifyBoundAssociatedTerms(ref: raw, shape: self.traitBoundShape(declaration: traitDef), receiverRef: selfRef, traitOwner: traitDef.nameStart, traitArgs: [], predicates: [])
                 if projection != raw { return projection }
                 return 0U64
             }

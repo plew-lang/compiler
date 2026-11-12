@@ -541,13 +541,16 @@ struct LoweredTypeProjection {
 impl LoweredTypeProjection { factory }
 
 
-struct TraitLexicalHeader {
-    val parameters: Array[Bind]
+struct TraitBoundShape {
+    val nameStart: U64
+    val selfParamId: U64
+    val typeParams: TraitBindRange
+    val assocTypes: TraitBindRange
     val supertraits: TraitConstraintRange
 }
 
 pub struct Comp {
-    mut val traitLexicalHeaders: Dictionary[U64, TraitLexicalHeader] = [:]
+    mut val traitLexicalHeaders: Dictionary[U64, TraitBoundShape] = [:]
     mut val projectionBoundClauses: Array[ProjectionBoundClause] = []
     mut val activeProjectionBounds: Optional[ProjectionBoundContext] = <Optional.None />
     pub mut val moduleScopeBindings: Optional[AdmittedModuleScopeBindings] = <Optional.None />

@@ -1,0 +1,10 @@
+use @Std/Io only { print }
+
+trait Key { type Type }
+trait Marker[T] { type Out }
+trait Parent[T] { type Item }
+trait Inner: Marker[Self#Key.Type, Out=I64] + Key {}
+trait Middle: Parent[Self#Marker[Bool].Out] + Inner + Key[Type=Bool] {}
+trait Service: Middle { fn get() -> Item }
+
+fn main() { print("ok") }

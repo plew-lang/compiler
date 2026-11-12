@@ -1458,9 +1458,14 @@ impl Comp {
                     for assumption in assumptions {
                         if self.isSignatureLexicalReceiver(source: assumption, scope: scope) { projectionAssumptions.append(assumption) }
                     }
+                    if projectionAssumptions.count() != 1U64 {
+                        return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "inherited arguments have no unique lexical Self premise", failureDomain: <FailureDomain.Internal />) />
+                    }
+                    val lexical = projectionAssumptions[0U64]
+                    val bound = self.declarationBound(source: lexical)
                     mut val normalized: Array[U64] = []
                     for argument in arguments {
-                        normalized.append(try self.recordConditionTypeNormalization(ref: argument, assumptions: projectionAssumptions, normalizations: inout inheritedArgumentEquations))
+                        normalized.append(try self.recordInheritedArgumentEquations(ref: argument, lexical: lexical, bound: bound, equations: inout inheritedArgumentEquations, offset: occurrence.site))
                     }
                     if inheritedArgumentEquations.count() != 0U64 {
                         try self.checkProjectionNormalizations(normalizations: inheritedArgumentEquations, offset: occurrence.site, assumptions: projectionAssumptions)
@@ -1497,6 +1502,50 @@ impl Comp {
         }
         return <Result.Ok value=() />
     }
+    // Record the bound that actually states the equality. An opaque path to
+    // the same trait may establish conformance without stating its output.
+    inout fn recordInheritedArgumentEquations(ref: U64, lexical: DeclarationBoundRef, bound: TraitBound, equations: inout Array[ProjectionNormalizationStep], offset: U64, active: Array[U64] = []) -> Result[U64, CompileDiagnostic] {
+        if !self.arena.typeContainsAssociatedProjection(ref: ref) { return <Result.Ok value=ref /> }
+        mut val children: Array[U64] = []
+        for index in 0U64..<self.typeTermRefChildCount(ref: ref) {
+            val child = self.typeTermRefChildRef(ref: ref, index: index)
+            children.append(try self.recordInheritedArgumentEquations(ref: child, lexical: lexical, bound: bound, equations: inout equations, offset: offset, active: active))
+        }
+        val rebuilt = self.rebuildTypeTermChildren(ref: ref, children: children)
+        val projection = self.arena.typeAt(index: rebuilt)
+        if projection.assocNameId == 0U64 { return <Result.Ok value=rebuilt /> }
+        for prior in active {
+            if self.typeRefEq(a: prior, b: rebuilt) {
+                return <Result.Err error=self.diagnosticAt(offset: offset, msg: "inherited argument projection equations are cyclic", failureDomain: <FailureDomain.Source />) />
+            }
+        }
+        val owner = self.associatedProjectionTraitOwner(projection: projection)
+        val receiver = self.typeTermProjectionReceiver(t: projection)
+        match self.traitProjectionEquality(bound: bound, receiver: receiver, owner: owner, arguments: projection.assocTraitArgs, member: projection.assocNameId, context: bound, projectionPath: [rebuilt], retainPath: true) {
+            TraitProjectionEquality.Missing | TraitProjectionEquality.Conflict => { return <Result.Ok value=rebuilt /> }
+            TraitProjectionEquality.Value(term: _, steps: val steps) => {
+                val proof = if steps.count() == 0U64 { give <StaticConformanceProof.AssumedBound source=lexical /> } else { give <StaticConformanceProof.AssumedSupertraitPath source=lexical steps=steps /> }
+                val output = try self.associatedOutputTermInProof(proof: proof, traitOwner: owner, assocId: projection.assocNameId)
+                if output == 0U64 {
+                    return <Result.Err error=self.diagnosticAt(offset: offset, msg: "inherited argument equation lost its declared output", failureDomain: <FailureDomain.Internal />) />
+                }
+                if self.typeRefEq(a: output, b: rebuilt) { return <Result.Ok value=rebuilt /> }
+                mut val next = active
+                next.append(rebuilt)
+                // A lexical equality can match an inherited instance whose
+                // written key needs equations from a different parent path.
+                // Keep those prerequisites before publishing this equation.
+                val selected = try self.staticProofBound(proof: proof, traitIdx: self.decls.traitIndexByOffset(offset: owner))
+                for argument in selected.constraint.key.positionalArgs {
+                    try self.recordInheritedArgumentEquations(ref: argument, lexical: lexical, bound: bound, equations: inout equations, offset: offset, active: next)
+                }
+                val equation = <ProjectionNormalizationStep source=rebuilt proof=self.freezeStaticConformanceProof(proof: proof) output=output />
+                try self.appendRetainedProjectionEquation(step: equation, normalizations: inout equations)
+                return self.recordInheritedArgumentEquations(ref: output, lexical: lexical, bound: bound, equations: inout equations, offset: offset, active: next)
+            }
+        }
+    }
+
     inout fn retainedSignatureReceiverProjection(occurrence: U64, ref: U64, proofs: Array[AuthoredTypeViewProof], offset: U64) -> Result[StaticConformanceProof, CompileDiagnostic] {
         val projection = self.arena.typeAt(index: ref)
         val receiver = self.typeTermProjectionReceiver(t: projection)

@@ -1756,7 +1756,7 @@ pub impl TraitBound { factory }
 // A known Unit output is Value(0), never the Missing sentinel.
 pub enum TraitProjectionEquality {
     Missing
-    Value(term: U64)
+    Value(term: U64, steps: Array[SupertraitRef])
     Conflict
 }
 
