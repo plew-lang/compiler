@@ -3961,6 +3961,18 @@ pub impl Comp {
         return <Optional.None />
     }
 
+    // The terminal of an assumed path can own signature data even while its
+    // premise is abstract. Executable consumers use selectedConstraintWitness.
+    fn retainedConstraintPathTerminal(proof: StaticConformanceProof) -> Optional[WitnessMatch] {
+        match proof {
+            StaticConformanceProof.AssumedTraitPath(source: _, steps: _, edges: val edges) => {
+                if edges.count() != 0U64 { return <Optional.Some v=edges[edges.count() - 1U64] /> }
+                return <Optional.None />
+            }
+            _ => { return self.selectedConstraintWitness(proof: proof) }
+        }
+    }
+
     inout fn selectedConstraintEnvironment(witness: WitnessMatch, proof: StaticConformanceProof = <StaticConformanceProof.Missing />) -> Result[InstanceEnvironment, CompileDiagnostic] {
         if witness.conformIdx == 0U64 || witness.conformIdx > self.decls.conformCount() { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "constraint has no selected conformance") /> }
         val declaration = self.decls.conformAt(index: witness.conformIdx - 1U64)
@@ -3976,7 +3988,7 @@ pub impl Comp {
             index += 1U64
         }
         val selected = if self.proofIsMissing(proof: proof) { give <StaticConformanceProof.ConcreteWitness witness=witness /> } else { give proof }
-        match self.selectedConstraintWitness(proof: selected) {
+        match self.retainedConstraintPathTerminal(proof: selected) {
             Optional.Some(v: val terminal) => {
                 if !self.sameWitnessSubstitution(a: terminal, b: witness) { return <Result.Err error=self.diagnosticAt(offset: declaration.typeStart, msg: "selected constraint environment has a different path terminal") /> }
             }

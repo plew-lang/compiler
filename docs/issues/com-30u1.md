@@ -924,7 +924,25 @@ Build `20261112T175214-build-188bd2` and generation
 `20261112T175514-gen-a3dfc5` passed. The same-source medians were 6.678752 s
 and 6.676580 s, with identical LLVM output in all eight runs.
 
-The declaration interpreter still defers on an assumed trait-subject path
-with explicit conformance edges. Establish whether that proof can reach
-this signature boundary and cover its replay if reachable. The fixed-receiver
-proof-removal check and independent re-review remain outstanding.
+An assumed trait-subject path reaches this boundary when the generic Middle
+impl assumes `Holder[T]: Seed[T]` and `impl Seed[Element] as Root`
+supplies `Root.Item = Element`. Candidate `fb46c683` rejected the Service
+result. Declaration replay now substitutes the retained bridge and preserves
+the path's premise. Interface rebasing shares path composition. The resulting
+terminal can provide signature data, while executable selection still needs a
+concrete path. Candidate `424cb68a` passed the new fixture and five existing
+check/JIT/native controls. Removing the Middle assumption rejected with
+`supertrait not satisfied`. Build `20261112T180450-build-bb6f17` and
+generation `20261112T180757-gen-817897` passed. Same-source medians were
+6.704753 s and 6.700268 s, with identical LLVM output in all eight runs.
+
+The fixed-receiver removal probe has a verified RED on `3428d631`.
+In an isolated source copy, read the result of
+`any Service[Input=Entry]`'s `fn fetch() -> Input#Source.Item`,
+where `Service.Input: Source` and `Entry as Source` supplies `Item=I64`.
+Check that the result is `I64` and that the fixed-receiver receipt store
+contains evidence. Clear that store alone and read the same signature again.
+The reader succeeds by re-querying the still-present conformance. Separate
+first admission from consuming a prepared signature, and verify the final
+consumer rejects a missing retained receipt. Independent re-review remains
+outstanding.

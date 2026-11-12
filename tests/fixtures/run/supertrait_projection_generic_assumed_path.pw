@@ -1,0 +1,16 @@
+use @Std/Io only { print }
+
+trait Seed[Element] {}
+trait Root { type Item }
+impl[Element] Seed[Element] as Root { type Item = Element }
+trait Middle: Root {}
+trait Service: Middle { fn fetch() -> Self#Root.Item }
+
+struct Holder[T] { val value: T }
+impl[T] Holder[T] as Service where Holder[T]: Seed[T] { fn fetch() -> T { return self.value } }
+impl[T] Holder[T] as Middle where Holder[T]: Seed[T] {}
+impl Holder[I64] as Seed[I64] {}
+
+fn main() {
+    print(<Holder[I64] value=42I64 />.fetch())
+}

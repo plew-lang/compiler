@@ -853,7 +853,7 @@ impl Comp {
             }
             _ => {}
         }
-        if self.selectedConstraintWitness(proof: proof).isNone() { return <Result.Ok value=<Optional.None /> /> }
+        if self.retainedConstraintPathTerminal(proof: proof).isNone() { return <Result.Ok value=<Optional.None /> /> }
         match (try self.replaySelectedSupertraits(proof: proof, steps: steps, receiver: receiver, declaration: !self.arena.typeIsClosed(ref: receiver))) {
             ConstraintProofReplay.Concrete(proof: val selected) | ConstraintProofReplay.Universal(proof: val selected) => { return <Result.Ok value=<Optional.Some v=selected /> /> }
             ConstraintProofReplay.Deferred => { return <Result.Ok value=<Optional.None /> /> }
