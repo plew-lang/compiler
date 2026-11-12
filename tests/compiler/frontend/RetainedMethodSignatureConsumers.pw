@@ -5,9 +5,37 @@ use ../../../src/SourceTypeAdmissions only { SourceSignatureSlot }
 use @Std/Io only { print }
 use @Std/Process only { argAt }
 
+fn checkProvided(compiler: inout Comp) {
+    val sum = compiler.internBytes(s: "sum").nameId
+    mut val hits = 0U64
+    for index in 0U64..<compiler.arena.finalCalleeCount() {
+        val call = compiler.arena.finalCalleeAt(index: index)
+        if call.callee >= compiler.arena.functionCount() || compiler.arena.functionAt(index: call.callee).nameId != sum { continue }
+        hits += 1U64
+        if call.calleeBodyId == 0U64 { panic("provided method has no body") }
+        val source = compiler.arena.functionLexicalOwner(index: call.callee)
+        if source == call.callee { panic("provided control did not select a placement") }
+        val instance = compiler.arena.bodyInstanceAt(index: call.calleeBodyId - 1U64)
+        val environment = instance.environment
+        val parameter = compiler.readAdmittedSignatureRoot(function: source, slot: <SourceSignatureSlot.Parameter index=0U64 />, environment: environment).unwrap()
+        val signature = compiler.arena.bodySignature(bodyId: call.calleeBodyId)
+        if !signature.ready || !compiler.typeRefEq(a: parameter, b: signature.parameterTypes[0U64]) { panic("placed body did not consume its original signature") }
+        val missing = <InstanceEnvironment params=environment.params args=environment.args receiverRef=environment.receiverRef constraints=environment.constraints />
+        if compiler.groundedSelectedCalleeParameterTypes(callee: call.callee, environment: missing).isOk() {
+            panic("provided placement recovered missing receiver evidence")
+        }
+    }
+    if hits != 1U64 { panic("the provided control did not select one real call") }
+}
+
 fn main() {
     mut val compiler = <Comp />
     analyzeFrontend(c: inout compiler, input: <FrontendInput.File path=argAt(1I64) />, sources: <SourceAccess stdRoot=argAt(2I64).bytes() />).unwrap()
+    if argAt(3I64) == "provided" {
+        checkProvided(compiler: inout compiler)
+        print("ok")
+        return
+    }
     val keep = compiler.internBytes(s: "keep").nameId
     mut val hits = 0U64
     for index in 0U64..<compiler.arena.finalCalleeCount() {
