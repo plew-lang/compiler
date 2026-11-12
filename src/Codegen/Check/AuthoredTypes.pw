@@ -912,20 +912,13 @@ impl Comp {
             match premise.source.unwrap() {
                 DeclarationBoundRef.AssociatedType(index: val index) => {
                     val associated = try self.signatureAssociatedEvidence(index: index, offset: offset)
-                    val prerequisite = self.signatureProjectionPremise(proof: associated.prerequisite)
-                    if prerequisite.source.isSome() && prerequisite.steps.count() == 0U64 {
-                        match prerequisite.source.unwrap() {
-                            DeclarationBoundRef.RawRequirement(index: val root) => {
-                                if root + 1U64 != self.rawRequirementRanges[interface.scope].first {
-                                    return self.readLexicalSignatureProjection(proof: proof, owner: selector.traitInstance.owner, member: member, environment: environment)
-                                }
-                                val rootProof = try self.readSignatureAssociatedRootProof(index: index, associated: associated, bound: interface.bound, evidence: interface.evidence, receiver: receiver, environment: environment, offset: offset, read: interface.proofRead)
-                                if rootProof.isSome() {
-                                    return self.readSignatureAssociatedProjection(root: rootProof, steps: premise.steps, receiver: receiver, selector: selector, arguments: arguments, member: member, offset: offset)
-                                }
-                            }
-                            _ => {}
+                    val clause = try self.readRequirementWitnessAssociatedClause(index: index, associated: associated, signature: interface, environment: environment, offset: offset)
+                    if clause.isSome() {
+                        val selected = clause.unwrap()
+                        if !self.typeRefEq(a: self.typeRefWithoutOuterViews(ref: selected.receiver), b: self.typeRefWithoutOuterViews(ref: receiver)) {
+                            return <Result.Err error=self.diagnosticAt(offset: offset, msg: "signature changed its selected associated subject", failureDomain: <FailureDomain.Internal />) />
                         }
+                        return self.readSignatureAssociatedProjection(root: <Optional.Some v=selected.proof />, steps: premise.steps, receiver: receiver, selector: selector, arguments: arguments, member: member, offset: offset)
                     }
                 }
                 _ => {}

@@ -1,0 +1,16 @@
+use @Std/Io only { print }
+
+trait Source { type Item }
+trait Service: Parent { fn fetch(value: Input#Source.Item) -> Input#Source.Item }
+
+trait Parent { type Input: Source }
+
+struct Entry {}
+impl Entry as Source { type Item = I64 }
+struct Worker {}
+impl Worker as Parent { type Input = Entry }
+impl Worker as Service { fn fetch(value: I64) -> I64 { return value } }
+
+fn main() {
+    print(<Worker />.fetch(value: 42I64))
+}

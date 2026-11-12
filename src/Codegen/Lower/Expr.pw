@@ -184,7 +184,7 @@ pub impl Comp {
                     targs.append((try self.lowerType(t: constructorArgs[ti])).ref)
                     ti += 1U64
                 }
-                val tyRef = self.lowerConstructionType(nameStart: tn.nameStart, nameLen: tn.nameLen, args: targs, siteOffset: typeNameSpan.start)
+                val tyRef = try self.lowerConstructionType(nameStart: tn.nameStart, nameLen: tn.nameLen, args: targs, siteOffset: typeNameSpan.start)
                 mut val vStart: U64 = 0
                 mut val vLen: U64 = 0
                 if constructionEnum {
@@ -294,20 +294,20 @@ pub impl Comp {
     // Range syntax is fixed sugar for ordinary aggregate construction. Keep
     // both endpoint expressions in source order and let the common Make
     // inference/checking pipeline determine their element type.
-    inout fn lowerRangeConstruction(low: U64, high: U64, inclusive: Bool, span: Span) -> U64 {
+    inout fn lowerRangeConstruction(low: U64, high: U64, inclusive: Bool, span: Span) -> Result[U64, CompileDiagnostic] {
         val name = if inclusive { give "ClosedRange" } else { give "HalfOpenRange" }
         val typeName = self.internBytes(s: name)
-        val rangeTy = self.lowerConstructionType(nameStart: typeName.nameStart, nameLen: typeName.nameLen, args: [], siteOffset: span.start)
+        val rangeTy = try self.lowerConstructionType(nameStart: typeName.nameStart, nameLen: typeName.nameLen, args: [], siteOffset: span.start)
         val result = self.pushExpr(e: <Expr.Range rangeTy=rangeTy endpoints=self.pushExprs(exprs: [low, high]) />)
         self.arena.exprSpanStart[result] = span.start
         self.arena.exprSpanEnd[result] = span.end
-        return result
+        return <Result.Ok value=result />
     }
 
     inout fn lowerSyntaxRange(expr: SyntaxExpr) -> Result[U64, CompileDiagnostic] {
         val low: U64 = (try self.lowerSyntaxExpr(id: expr.child0))
         val high: U64 = (try self.lowerSyntaxExpr(id: expr.child1))
-        return <Result.Ok value=self.lowerRangeConstruction(low: low, high: high, inclusive: expr.flag0, span: expr.span) />
+        return self.lowerRangeConstruction(low: low, high: high, inclusive: expr.flag0, span: expr.span)
     }
 
     inout fn lowerSyntaxExpr(id: ExprId) -> Result[U64, CompileDiagnostic] {
@@ -432,7 +432,7 @@ pub impl Comp {
                         i += 1U64
                     }
                 }
-                val tyRef = self.lowerConstructionType(nameStart: typeName.start, nameLen: typeName.end - typeName.start, args: typeArgs, siteOffset: e.name.start)
+                val tyRef = try self.lowerConstructionType(nameStart: typeName.start, nameLen: typeName.end - typeName.start, args: typeArgs, siteOffset: e.name.start)
                 val fields: Array[MakeField] = (try self.lowerSyntaxMakeFields(expr: e))
                 result = self.pushExpr(e: <Expr.Make typeStart=typeName.start typeLen=typeName.end - typeName.start variantStart=variantName.start variantLen=variantName.end - variantName.start isEnum=constructionEnum ty=tyRef fields=self.pushMakeFields(fields: fields) />)
                 if e.name.start == e.name.end { self.pendingConstructionContexts.insert(result) }

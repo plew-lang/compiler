@@ -1299,8 +1299,8 @@ impl Comp {
 
 pub impl Comp {
 
-    inout fn factoryRequirementReturn(selfRef: U64, kind: U64, errorRef: U64, offset: U64) -> U64 {
-        if kind == 0U64 { return selfRef }
+    inout fn factoryRequirementReturn(selfRef: U64, kind: U64, errorRef: U64, offset: U64) -> Result[U64, CompileDiagnostic] {
+        if kind == 0U64 { return <Result.Ok value=selfRef /> }
         val wrapper = self.internBytes(s: if kind == 1U64 { give "Optional" } else { give "Result" })
         mut val arguments = [selfRef]
         if kind == 2U64 { arguments.append(errorRef) }
@@ -1357,14 +1357,14 @@ impl Comp {
             val selfName = self.internBytes(s: "Self")
             retStart = selfName.nameStart
             retLen = selfName.nameLen
-            val selfRef = self.lowerConstructionType(nameStart: retStart, nameLen: retLen, args: [], siteOffset: retStart)
+            val selfRef = try self.lowerConstructionType(nameStart: retStart, nameLen: retLen, args: [], siteOffset: retStart)
             mut val errorRef = 0U64
             if sig.factoryKind == 2U64 {
                 val error = try self.lowerType(t: sig.factoryErr)
                 errorRef = error.ref
                 factoryError = error.authoredUse
             }
-            retRef = self.factoryRequirementReturn(selfRef: selfRef, kind: sig.factoryKind, errorRef: errorRef, offset: nameStart)
+            retRef = try self.factoryRequirementReturn(selfRef: selfRef, kind: sig.factoryKind, errorRef: errorRef, offset: nameStart)
             val result = self.arena.typeAt(index: retRef)
             retStart = result.nameStart
             retLen = result.nameLen
@@ -1449,14 +1449,14 @@ impl Comp {
             val selfName = self.internBytes(s: "Self")
             retStart = selfName.nameStart
             retLen = selfName.nameLen
-            val selfRef = self.lowerConstructionType(nameStart: retStart, nameLen: retLen, args: [], siteOffset: retStart)
+            val selfRef = try self.lowerConstructionType(nameStart: retStart, nameLen: retLen, args: [], siteOffset: retStart)
             mut val errorRef = 0U64
             if sig.factoryKind == 2U64 {
                 val error = try self.lowerSyntaxType(id: sig.factoryErr)
                 errorRef = error.ref
                 factoryError = error.authoredUse
             }
-            retRef = self.factoryRequirementReturn(selfRef: selfRef, kind: sig.factoryKind, errorRef: errorRef, offset: sig.name.start)
+            retRef = try self.factoryRequirementReturn(selfRef: selfRef, kind: sig.factoryKind, errorRef: errorRef, offset: sig.name.start)
             val result = self.arena.typeAt(index: retRef)
             retStart = result.nameStart
             retLen = result.nameLen

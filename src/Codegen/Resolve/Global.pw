@@ -356,7 +356,7 @@ pub impl Comp {
     inout fn factoryConstructionReceiver(writtenTerm: U64, typeStart: U64, typeLen: U64, offset: U64) -> Result[U64, CompileDiagnostic] {
         if writtenTerm != 0U64 { return <Result.Ok value=writtenTerm /> }
         if !self.arena.typeDeclarationResolutionComplete() {
-            return <Result.Ok value=self.lowerConstructionType(nameStart: typeStart, nameLen: typeLen, args: [], siteOffset: offset) />
+            return self.lowerConstructionType(nameStart: typeStart, nameLen: typeLen, args: [], siteOffset: offset)
         }
         val declaration = self.typeDeclIdentityAt(useMod: self.moduleOf(offset: typeStart), start: typeStart, len: typeLen)
         if declaration.nameLen == 0U64 { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "factory construction requires a resolved receiver declaration") /> }

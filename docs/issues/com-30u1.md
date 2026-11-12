@@ -1150,3 +1150,36 @@ confined to the type-reference component of generic body symbol names.
 Moving header preparation earlier changes type-reference allocation order;
 all other LLVM text was identical. This comparison is separate from the
 formal self-host fixed-point gate.
+
+## Bare inherited associated projection
+
+The fixed header candidate `63c91fad` rejects the new
+`inherited_associated_bare_signature` fixture at the outer trait view.
+The lexical resolver now follows prepared supertrait instances with
+simultaneous positional substitution and forms the projection on lexical
+`Self`, with the associated member's declaring owner. The nominal
+requirement reader uses the same selected associated-clause reader for a
+written projection and for a projection in a retained witness output.
+After the lexical binding alone, the fixture still failed witness matching;
+replaying the saved parent clause closes that second boundary.
+
+Candidate `634efb21`, build `20261112T194215-build-2aa650`, and generation
+`20261112T194507-gen-22f782` passed. Eight tracked fixtures passed check,
+JIT and native. Four extra controls passed both execution modes: parent
+before child, a fixed unit output, existential dispatch with a fixed
+inherited receiver, and a provided method with the inherited receiver.
+
+The parameterized two-hop path now reaches signature recipe admission.
+`Service: Middle[I64]`, `Middle[T]: Parent[Array[T]]` selects
+`Parent[Array[I64]]`, but the recipe builder classifies the inherited
+argument as a direct lexical parameter. The verifier correctly refuses
+that derived edge. The control with a competing `Parent[Array[Bool]]`
+instance fails at the same boundary. Retain argument provenance from the
+selected heritage edge and validate it against the admitted parent path;
+keep the existing direct lexical parameter rule. The lookup traversal's
+analysis-limit diagnostic also needs the Limit failure classification.
+
+The construction path now propagates name-binding diagnostics through its
+existing Result callers. Three range/construction controls passed check,
+JIT and native. Same-source medians were 6.737422 s and 6.746021 s. The
+LLVM diff was limited to type-reference numbers in generic body symbols.

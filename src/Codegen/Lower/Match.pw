@@ -527,7 +527,7 @@ pub impl Comp {
                 mut val lo: U64 = (try self.lowerExpr(e: iter))
                 if isRange {
                     val hi: U64 = (try self.lowerExpr(e: rangeHi))
-                    lo = self.lowerRangeConstruction(low: lo, high: hi, inclusive: inclusive, span: <Span start=exprAstSpan(e: iter).start end=exprAstSpan(e: rangeHi).end />)
+                    lo = try self.lowerRangeConstruction(low: lo, high: hi, inclusive: inclusive, span: <Span start=exprAstSpan(e: iter).start end=exprAstSpan(e: rangeHi).end />)
                 }
                 val bd: U64 = (try self.lowerBlock(b: body))
                 result = self.lowerForBinding(nameStart: vStart, nameLen: vLen, typeStart: vtStart, typeLen: vtLen, typeRef: elementRef, iter: lo, body: bd)
@@ -753,7 +753,7 @@ pub impl Comp {
         if stmt.flag1 {
             val rangeHi: U64 = (try self.lowerSyntaxExpr(id: stmt.child1))
             val rangeSpan: Span = <Span start=syntaxExpr(file: self.syntax, id: stmt.child0).span.start end=syntaxExpr(file: self.syntax, id: stmt.child1).span.end />
-            iter = self.lowerRangeConstruction(low: iter, high: rangeHi, inclusive: stmt.flag2, span: rangeSpan)
+            iter = try self.lowerRangeConstruction(low: iter, high: rangeHi, inclusive: stmt.flag2, span: rangeSpan)
         }
         return <Result.Ok value=self.lowerForBinding(nameStart: stmt.name.start, nameLen: stmt.name.end - stmt.name.start, typeStart: varTyStart, typeLen: varTyLen, typeRef: elementRef, iter: iter, body: (try self.lowerSyntaxBlock(id: stmt.block0))) />
     }
