@@ -484,3 +484,36 @@ Before closure, audit the symbolic associated-output read for an authored
 function-bound premise, which can still reach the generic declaration-row
 reader, and compare direct provided argument/result consumers with the
 registered-method sibling's boundary. Then obtain independent review.
+
+## Provided where equation checkpoint
+
+A symbolic projection rooted in a provided declaration's function-bound
+premise now uses the admitted assumption-to-source mapping and the
+prepared bound instead of reading the registered row. In
+`existential_symbolic_result`, candidate `199ab19f` substitutes the wrong
+associated output after that row is changed. The fresh candidate retains
+the original `Bool` equation.
+
+The 29-fixture group exposed an earlier regression in
+`trait_method_inherited_constraint`. Candidates `32c3ead2` and `199ab19f`
+count a translated requirement clause on `impl Layer as Action` as if it
+were authored in a provided declaration. Source admission and the
+direct/executable clause adapters now distinguish these by the original
+declaration role. This fixture passes check, JIT and native execution.
+
+Build `20261112T150710-build-543d5e`, candidate `cf1a1eb6`, passes all 29
+group checks, ten targeted check/native controls, eight of those controls
+under JIT, and generation `20261112T151010-gen-eec5e9`. The separate known
+`trait_subject_associated_paths` diagnostic reproduces on both this candidate
+and `9b8c7ea5`, with ownership retained by [com-9clj](com-9clj.md).
+Same-source comparison against `9b8c7ea5` measured 6.711351 s and 6.709681 s
+with identical LLVM in all eight runs.
+
+Independent review confirms this task owns the remaining direct provided
+source argument and result consumers, including expected-result
+completion in Direct and StaticMethod. Review also identified the need to
+distinguish first admission from missing evidence after admission, replay
+nested where equation recipes, and preserve the requirement-derived
+where contract for synthetic trait-subject forwarding. Check the raw
+requirement metadata and the nested Universal rejection controls before
+re-review. The review does not establish closure.

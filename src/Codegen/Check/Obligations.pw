@@ -1160,7 +1160,7 @@ pub impl Comp {
         match template.kind {
             CallTemplateKind.Direct(callee: val callee, receiver: _, args: _, calleeTypeArgs: val arguments, proofId: val proofId) => {
                 val function = self.arena.functionAt(index: callee)
-                if function.isProvided {
+                if function.isProvided && self.isAuthoredProvidedDeclaration(function: callee) {
                     return self.sourceProvidedCallBounds(callee: callee, receiver: template.receiverTypeTerm, arguments: self.callTemplateTypeArgs(range: arguments), proof: self.thawStaticConformanceProof(id: proofId))
                 }
                 val indices = self.sourceDeclarationCallBoundIndices(functionIndex: callee)
@@ -1200,7 +1200,7 @@ pub impl Comp {
     // until an unrelated declaration-worklist instance reconstructs them.
     inout fn sourceSelectedReceiverBounds(callee: U64, receiverTerm: U64, proof: StaticConformanceProof) -> Result[Array[TraitBound], CompileDiagnostic] {
         val function = self.arena.functionAt(index: callee)
-        if function.isProvided {
+        if function.isProvided && self.isAuthoredProvidedDeclaration(function: callee) {
             val arguments = try self.callConstraintTypeArguments(function: function, receiver: receiverTerm, proof: proof)
             return self.sourceProvidedCallBounds(callee: callee, receiver: receiverTerm, arguments: arguments, proof: proof)
         }

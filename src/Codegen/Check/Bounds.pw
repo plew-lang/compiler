@@ -1589,7 +1589,7 @@ pub impl Comp {
 
     inout fn groundCallableSignatureBounds(fnIdx: U64, environment: InstanceEnvironment) -> Result[Array[TraitBound], CompileDiagnostic] {
         mut val bounds: Array[TraitBound] = []
-        if self.arena.functionAt(index: fnIdx).isProvided {
+        if self.arena.functionAt(index: fnIdx).isProvided && self.isAuthoredProvidedDeclaration(function: fnIdx) {
             val admitted = try self.providedSignatureAdmission(function: fnIdx)
             for bound in (try self.readProvidedSignatureBounds(admitted: admitted, environment: environment)) {
                 bounds.append(try self.groundCallableBound(bound: bound, environment: environment, selfRef: environment.receiverRef, itemRef: 0U64))
@@ -1765,7 +1765,7 @@ pub impl Comp {
                 }
             }
             CallableConstraintEvidence.Recorded(bounds: val recordedBounds, proofs: val recorded) => {
-                if self.arena.functionAt(index: fnIdx).isProvided {
+                if self.arena.functionAt(index: fnIdx).isProvided && self.isAuthoredProvidedDeclaration(function: fnIdx) {
                     return self.prepareRecordedProvidedConstraints(fnIdx: fnIdx, environment: environment, bounds: recordedBounds, proofs: recorded)
                 }
                 try self.checkCallableConstraintEvidence(fnIdx: fnIdx, environment: environment, evidence: evidence)
