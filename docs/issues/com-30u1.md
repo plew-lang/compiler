@@ -912,8 +912,19 @@ Build `20261112T174151-build-d9341c`, candidate `02115514`, generation
 The same-source medians were 6.667171 s and 6.663319 s, with identical LLVM
 output in all eight runs.
 
-A generic `Holder[T]` with `Service: Middle: Root` and `Root.Item = T`
-still fails method result comparison because executable edge replay defers
-on a symbolic receiver. Close the symbolic interpretation using the exact
-saved path. The fixed-receiver proof-removal check and independent
-re-review remain outstanding.
+For a generic `Holder[T]` with `Service: Middle: Root` and `Root.Item = T`,
+signature checking now substitutes each selected parent row in its owner's
+environment while the receiver is still symbolic. Conditional parent edges
+read the corresponding clause of the retained witness plan. Executable
+replay still requires closed types. Two generic fixtures (unconditional and
+conditional) rejected with a return-type mismatch on candidate `02115514`.
+Both now pass check, JIT and native on `fb46c683`, alongside four existing
+controls. Six rejection controls passed, including the generic wrong result.
+Build `20261112T175214-build-188bd2` and generation
+`20261112T175514-gen-a3dfc5` passed. The same-source medians were 6.678752 s
+and 6.676580 s, with identical LLVM output in all eight runs.
+
+The declaration interpreter still defers on an assumed trait-subject path
+with explicit conformance edges. Establish whether that proof can reach
+this signature boundary and cover its replay if reachable. The fixed-receiver
+proof-removal check and independent re-review remain outstanding.

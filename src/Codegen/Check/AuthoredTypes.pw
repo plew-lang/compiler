@@ -761,7 +761,7 @@ impl Comp {
                     val declaration = self.arena.functionAt(index: owner)
                     val traitIndex = self.decls.traitIndexByOffset(offset: declaration.recvStart)
                     val root = try self.staticProofBound(proof: environment.proof, traitIdx: traitIndex)
-                    return self.readSignatureSelfProjection(root: root, evidence: <RequirementSelfEvidence.Static proof=environment.proof />, steps: premise.steps, receiver: receiver, selector: selector, arguments: arguments, member: member, environment: environment, offset: offset)
+                    return self.readSignatureSelfProjection(root: root, evidence: <RequirementSelfEvidence.Static proof=environment.proof />, steps: premise.steps, receiver: receiver, selector: selector, arguments: arguments, member: member, offset: offset)
                 }
                 DeclarationBoundRef.AssociatedType(index: val index) => {
                     val associated = try self.signatureAssociatedEvidence(index: index, offset: offset)
@@ -775,7 +775,7 @@ impl Comp {
                                 val bound = try self.staticProofBound(proof: environment.proof, traitIdx: traitIndex)
                                 val root = try self.readSignatureAssociatedRootProof(index: index, associated: associated, bound: bound, evidence: <RequirementSelfEvidence.Static proof=environment.proof />, receiver: receiver, environment: environment, offset: offset)
                                 if root.isSome() {
-                                    return self.readSignatureAssociatedProjection(root: root, steps: premise.steps, receiver: receiver, selector: selector, arguments: arguments, member: member, environment: environment, offset: offset)
+                                    return self.readSignatureAssociatedProjection(root: root, steps: premise.steps, receiver: receiver, selector: selector, arguments: arguments, member: member, offset: offset)
                                 }
                             }
                             _ => {}
@@ -808,22 +808,22 @@ impl Comp {
         }
     }
 
-    inout fn readSignatureSelfProjection(root: TraitBound, evidence: RequirementSelfEvidence, steps: Array[SupertraitRef], receiver: U64, selector: ResolvedViewSource, arguments: Array[U64], member: U64, environment: InstanceEnvironment, offset: U64) -> Result[U64, CompileDiagnostic] {
+    inout fn readSignatureSelfProjection(root: TraitBound, evidence: RequirementSelfEvidence, steps: Array[SupertraitRef], receiver: U64, selector: ResolvedViewSource, arguments: Array[U64], member: U64, offset: U64) -> Result[U64, CompileDiagnostic] {
         val bound = self.supertraitBoundThroughSteps(root: root, steps: steps)
         val promised = try self.readSelectedSignatureProjection(bound: bound, selected: <Optional.None />, receiver: receiver, selector: selector, arguments: arguments, member: member, offset: offset)
         if promised != 0U64 { return <Result.Ok value=promised /> }
-        val selected = try self.readSignatureSelfWitness(root: root, evidence: evidence, steps: steps, receiver: receiver, environment: environment, offset: offset)
+        val selected = try self.readSignatureSelfWitness(root: root, evidence: evidence, steps: steps, receiver: receiver, offset: offset)
         return self.readSelectedSignatureProjection(bound: bound, selected: selected, receiver: receiver, selector: selector, arguments: arguments, member: member, offset: offset)
     }
 
-    inout fn readSignatureSelfWitness(root: TraitBound, evidence: RequirementSelfEvidence, steps: Array[SupertraitRef], receiver: U64, environment: InstanceEnvironment, offset: U64) -> Result[Optional[StaticConformanceProof], CompileDiagnostic] {
+    inout fn readSignatureSelfWitness(root: TraitBound, evidence: RequirementSelfEvidence, steps: Array[SupertraitRef], receiver: U64, offset: U64) -> Result[Optional[StaticConformanceProof], CompileDiagnostic] {
         match evidence {
             RequirementSelfEvidence.Interface => { return <Result.Ok value=<Optional.None /> /> }
             RequirementSelfEvidence.Static(proof: val proof) => {
                 if steps.count() == 0U64 { return <Result.Ok value=<Optional.Some v=proof /> /> }
                 if self.selectedConstraintWitness(proof: proof).isNone() { return <Result.Ok value=<Optional.None /> /> }
                 val prefix = try self.retainedConstraintPrefix(proof: proof, expected: root, normalizations: [])
-                return self.readSignatureSupertraitWitness(proof: prefix, steps: steps, receiver: receiver, environment: environment, offset: offset)
+                return self.readSignatureSupertraitWitness(proof: prefix, steps: steps, receiver: receiver, offset: offset)
             }
             RequirementSelfEvidence.Conformance(index: val conformance) => {
                 if steps.count() == 0U64 { return <Result.Ok value=<Optional.None /> /> }
@@ -832,12 +832,12 @@ impl Comp {
                 val proof = self.thawStaticConformanceProof(id: saved.unwrap())
                 mut val remaining: Array[SupertraitRef] = []
                 for index in 1U64..<steps.count() { remaining.append(steps[index]) }
-                return self.readSignatureSupertraitWitness(proof: proof, steps: remaining, receiver: receiver, environment: environment, offset: offset)
+                return self.readSignatureSupertraitWitness(proof: proof, steps: remaining, receiver: receiver, offset: offset)
             }
         }
     }
 
-    inout fn readSignatureSupertraitWitness(proof: StaticConformanceProof, steps: Array[SupertraitRef], receiver: U64, environment: InstanceEnvironment, offset: U64) -> Result[Optional[StaticConformanceProof], CompileDiagnostic] {
+    inout fn readSignatureSupertraitWitness(proof: StaticConformanceProof, steps: Array[SupertraitRef], receiver: U64, offset: U64) -> Result[Optional[StaticConformanceProof], CompileDiagnostic] {
         if self.proofIsMissing(proof: proof) {
             return <Result.Err error=self.diagnosticAt(offset: offset, msg: "signature projection lost its supertrait witness", failureDomain: <FailureDomain.Internal />) />
         }
@@ -853,11 +853,11 @@ impl Comp {
             }
             _ => {}
         }
-        if self.selectedConstraintWitness(proof: proof).isNone() || !self.arena.typeIsClosed(ref: receiver) { return <Result.Ok value=<Optional.None /> /> }
-        match (try self.instantiateSelectedSupertraitConstraint(proof: proof, steps: steps, receiverRef: receiver, environment: environment, selfRef: environment.receiverRef, itemRef: 0U64)) {
-            StaticProofInstantiation.Ready(proof: val selected) => { return <Result.Ok value=<Optional.Some v=selected /> /> }
-            StaticProofInstantiation.Deferred => { return <Result.Ok value=<Optional.None /> /> }
-            StaticProofInstantiation.Missing => { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "signature projection lost its supertrait witness", failureDomain: <FailureDomain.Internal />) /> }
+        if self.selectedConstraintWitness(proof: proof).isNone() { return <Result.Ok value=<Optional.None /> /> }
+        match (try self.replaySelectedSupertraits(proof: proof, steps: steps, receiver: receiver, declaration: !self.arena.typeIsClosed(ref: receiver))) {
+            ConstraintProofReplay.Concrete(proof: val selected) | ConstraintProofReplay.Universal(proof: val selected) => { return <Result.Ok value=<Optional.Some v=selected /> /> }
+            ConstraintProofReplay.Deferred => { return <Result.Ok value=<Optional.None /> /> }
+            ConstraintProofReplay.Missing => { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "signature projection lost its supertrait witness", failureDomain: <FailureDomain.Internal />) /> }
         }
     }
 
@@ -899,7 +899,7 @@ impl Comp {
                 return <Result.Err error=self.diagnosticAt(offset: offset, msg: "signature projection belongs to another trait requirement", failureDomain: <FailureDomain.Internal />) />
             }
             if index == first {
-                return self.readSignatureSelfProjection(root: interface.bound, evidence: interface.evidence, steps: premise.steps, receiver: receiver, selector: selector, arguments: arguments, member: member, environment: environment, offset: offset)
+                return self.readSignatureSelfProjection(root: interface.bound, evidence: interface.evidence, steps: premise.steps, receiver: receiver, selector: selector, arguments: arguments, member: member, offset: offset)
             }
             val clause = self.rawRequirementPremises[index]
             val prepared = try self.retainedSignatureClause(scope: interface.scope, id: clause.sourceClause, offset: offset)
@@ -921,7 +921,7 @@ impl Comp {
                                 }
                                 val rootProof = try self.readSignatureAssociatedRootProof(index: index, associated: associated, bound: interface.bound, evidence: interface.evidence, receiver: receiver, environment: environment, offset: offset)
                                 if rootProof.isSome() {
-                                    return self.readSignatureAssociatedProjection(root: rootProof, steps: premise.steps, receiver: receiver, selector: selector, arguments: arguments, member: member, environment: environment, offset: offset)
+                                    return self.readSignatureAssociatedProjection(root: rootProof, steps: premise.steps, receiver: receiver, selector: selector, arguments: arguments, member: member, offset: offset)
                                 }
                             }
                             _ => {}
@@ -943,9 +943,9 @@ impl Comp {
         return <Result.Ok value=self.arena.associatedBoundEvidenceAt(index: index) />
     }
 
-    inout fn readSignatureAssociatedProjection(root: Optional[StaticConformanceProof], steps: Array[SupertraitRef], receiver: U64, selector: ResolvedViewSource, arguments: Array[U64], member: U64, environment: InstanceEnvironment, offset: U64) -> Result[U64, CompileDiagnostic] {
+    inout fn readSignatureAssociatedProjection(root: Optional[StaticConformanceProof], steps: Array[SupertraitRef], receiver: U64, selector: ResolvedViewSource, arguments: Array[U64], member: U64, offset: U64) -> Result[U64, CompileDiagnostic] {
         if root.isNone() { return <Result.Ok value=0U64 /> }
-        val selected = try self.readSignatureSupertraitWitness(proof: root.unwrap(), steps: steps, receiver: receiver, environment: environment, offset: offset)
+        val selected = try self.readSignatureSupertraitWitness(proof: root.unwrap(), steps: steps, receiver: receiver, offset: offset)
         if selected.isNone() { return <Result.Ok value=0U64 /> }
         val proof = selected.unwrap()
         val expected = <TraitBound subject=receiver constraint=<TraitConstraint key=<TraitInstanceKey owner=selector.traitInstance.owner positionalArgs=arguments /> assocPredicates=[] /> offset=offset />

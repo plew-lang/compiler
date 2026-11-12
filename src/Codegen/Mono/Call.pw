@@ -3986,7 +3986,7 @@ pub impl Comp {
         return self.withTraitSelfBinding(traitOwner: declaration.subjectTraitOwner, environment: environment, offset: declaration.defOffset)
     }
 
-    inout fn retainedConformanceConstraint(declared: U64, receiver: U64, witness: WitnessMatch) -> Result[StaticProofInstantiation, CompileDiagnostic] {
+    inout fn retainedConformanceConstraint(declared: U64, receiver: U64, witness: WitnessMatch, requireClosed: Bool = true) -> Result[StaticProofInstantiation, CompileDiagnostic] {
         if witness.conformIdx == 0U64 || witness.conformIdx > self.decls.conformCount() { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "conformance constraint has an invalid owner") /> }
         val declaration = self.decls.conformAt(index: witness.conformIdx - 1U64)
         if declared < declaration.bounds.start || declared - declaration.bounds.start >= declaration.bounds.len { return <Result.Err error=self.diagnosticAt(offset: declaration.typeStart, msg: "conformance constraint belongs to another declaration") /> }
@@ -3999,17 +3999,19 @@ pub impl Comp {
             if active == witness.conditions { return <Result.Err error=self.diagnosticAt(offset: declaration.typeStart, msg: "selected conformance condition evidence is cyclic") /> }
         }
         self.activeConditionAdmission.append(witness.conditions)
-        val result = self.readRetainedConformanceClause(witness: witness, index: declared - declaration.bounds.start, receiver: receiver, proof: proof, normalizations: plan.normalizations, offset: declaration.typeStart)
+        val result = self.readRetainedConformanceClause(witness: witness, index: declared - declaration.bounds.start, receiver: receiver, proof: proof, normalizations: plan.normalizations, offset: declaration.typeStart, requireClosed: requireClosed)
         self.activeConditionAdmission.removeLast()
         return result
     }
 
-    inout fn readRetainedConformanceClause(witness: WitnessMatch, index: U64, receiver: U64, proof: U64, normalizations: Array[ProjectionNormalizationStep], offset: U64) -> Result[StaticProofInstantiation, CompileDiagnostic] {
+    inout fn readRetainedConformanceClause(witness: WitnessMatch, index: U64, receiver: U64, proof: U64, normalizations: Array[ProjectionNormalizationStep], offset: U64, requireClosed: Bool = true) -> Result[StaticProofInstantiation, CompileDiagnostic] {
         try self.checkProjectionNormalizations(normalizations: normalizations, offset: offset)
         val expected = try self.retainedWitnessClauseBound(witness: witness, index: index, normalizations: normalizations, offset: offset)
-        if expected.subject == 0U64 || !self.arena.typeIsClosed(ref: expected.subject) { return <Result.Ok value=<StaticProofInstantiation.Deferred /> /> }
-        for argument in expected.constraint.key.positionalArgs { if argument == 0U64 || !self.arena.typeIsClosed(ref: argument) { return <Result.Ok value=<StaticProofInstantiation.Deferred /> /> } }
-        for predicate in expected.constraint.assocPredicates { if predicate.value == 0U64 || !self.arena.typeIsClosed(ref: predicate.value) { return <Result.Ok value=<StaticProofInstantiation.Deferred /> /> } }
+        if requireClosed {
+            if expected.subject == 0U64 || !self.arena.typeIsClosed(ref: expected.subject) { return <Result.Ok value=<StaticProofInstantiation.Deferred /> /> }
+            for argument in expected.constraint.key.positionalArgs { if argument == 0U64 || !self.arena.typeIsClosed(ref: argument) { return <Result.Ok value=<StaticProofInstantiation.Deferred /> /> } }
+            for predicate in expected.constraint.assocPredicates { if predicate.value == 0U64 || !self.arena.typeIsClosed(ref: predicate.value) { return <Result.Ok value=<StaticProofInstantiation.Deferred /> /> } }
+        }
         if !self.typeRefEq(a: self.typeRefWithoutOuterViews(ref: receiver), b: self.typeRefWithoutOuterViews(ref: expected.subject)) { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "conformance constraint has a different subject") /> }
         val retained = self.thawStaticConformanceProof(id: proof)
         try self.checkRetainedWitnessClause(expected: expected, proof: retained, normalizations: normalizations, offset: offset)
@@ -4021,7 +4023,7 @@ pub impl Comp {
     inout fn instantiateSupertraitConstraint(source: DeclarationBoundRef, steps: Array[SupertraitRef], receiverRef: U64, environment: InstanceEnvironment, selfRef: U64, itemRef: U64, normalizations: Array[ProjectionNormalizationStep] = []) -> Result[StaticProofInstantiation, CompileDiagnostic] {
         val root = try self.instantiateConstraintProof(proof: <StaticConformanceProof.AssumedBound source=source />, receiverRef: receiverRef, environment: environment, selfRef: selfRef, itemRef: itemRef, normalizations: normalizations)
         match root {
-            StaticProofInstantiation.Ready(proof: val proof) => { return self.instantiateSelectedSupertraitConstraint(proof: proof, steps: steps, receiverRef: receiverRef, environment: environment, selfRef: selfRef, itemRef: itemRef, normalizations: normalizations) }
+            StaticProofInstantiation.Ready(proof: val proof) => { return self.instantiateSelectedSupertraitConstraint(proof: proof, steps: steps, receiverRef: receiverRef, normalizations: normalizations) }
             _ => { return <Result.Ok value=root /> }
         }
     }
