@@ -1,0 +1,8 @@
+trait Parent[T] { type Item }
+trait Left: Parent[I64, Item=Bool] {}
+trait Right: Parent[I64, Item=I64] {}
+trait Child: Left + Right {
+    fn read() -> Self#Parent[I64].Item
+}
+
+fn main() {}

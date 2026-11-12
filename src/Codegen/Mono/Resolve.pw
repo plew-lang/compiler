@@ -74,30 +74,40 @@ pub impl Comp {
         }
     }
 
-    // For inherited assumptions, derivation paths with the same complete
-    // constraint carry equivalent facts. Keep one path without conflating
-    // distinct associated equalities or roots.
-    inout fn assumedTraitInstanceSeen(states: Array[TraitProofState], candidate: TraitProofState, bound: TraitBound) -> Bool {
-        for val state in states {
-            if state.edges.count() == 0U64 && state.traitOwner == candidate.traitOwner && self.sameProofTraitArgs(a: state.traitArgs, b: candidate.traitArgs) {
-                match state.origin {
-                    TraitProofOrigin.Assumption(source: val source, steps: val steps) => {
-                        val existing = self.assumedSupertraitBound(source: source, steps: steps)
-                        if self.typeRefEq(a: existing.subject, b: bound.subject) && existing.constraint.assocPredicates.count() == bound.constraint.assocPredicates.count() {
-                            mut val equal = true
-                            for val predicate in bound.constraint.assocPredicates {
-                                mut val found = false
-                                for val other in existing.constraint.assocPredicates { if predicate.member == other.member && self.typeRefEq(a: predicate.value, b: other.value) { found = true } }
-                                if !found { equal = false }
-                            }
-                            if equal { return true }
-                        }
+    // Paths through declared supertraits can carry one identical fact from
+    // the same premise. Keep a representative for each selector outcome,
+    // with its original path, before either publishing or expanding it.
+    inout fn assumedTraitInstanceSeen(states: Array[TraitProofState], candidate: TraitProofState, source: DeclarationBoundRef, bound: TraitBound, sourceOwners: Array[U64]) -> Bool {
+        val selected = self.traitProofStateMatchesSources(state: candidate, sourceOwners: sourceOwners)
+        for state in states {
+            if state.edges.count() != 0U64 || state.traitOwner != candidate.traitOwner || !self.sameProofTraitArgs(a: state.traitArgs, b: candidate.traitArgs) { continue }
+            match state.origin {
+                TraitProofOrigin.Assumption(source: val existingSource, steps: val steps) => {
+                    if !self.sameDeclarationBound(a: source, b: existingSource) || self.traitProofStateMatchesSources(state: state, sourceOwners: sourceOwners) != selected { continue }
+                    val existing = self.assumedSupertraitBound(source: existingSource, steps: steps)
+                    if self.typeRefEq(a: existing.subject, b: bound.subject) && existing.constraint.positionalArgsOpen == bound.constraint.positionalArgsOpen && self.sameInheritedAssociatedPredicates(a: existing.constraint.assocPredicates, b: bound.constraint.assocPredicates) {
+                        return true
                     }
-                    TraitProofOrigin.Witness => {}
                 }
+                TraitProofOrigin.Witness => {}
             }
         }
         return false
+    }
+
+    inout fn sameInheritedAssociatedPredicates(a: Array[TraitAssocPredicate], b: Array[TraitAssocPredicate]) -> Bool {
+        if a.count() != b.count() { return false }
+        for predicate in a {
+            mut val found = false
+            for other in b {
+                if predicate.member == other.member && self.typeRefEq(a: predicate.value, b: other.value) {
+                    found = true
+                    break
+                }
+            }
+            if !found { return false }
+        }
+        return true
     }
 
     // A member source selector constrains the proof path, not whether the
@@ -649,6 +659,12 @@ pub impl Comp {
                                 val targetIndex = self.decls.traitIndexByOffset(offset: inherited.constraint.key.owner)
                                 if targetIndex < self.decls.traitCount() {
                                     val next = <TraitProofState origin=<TraitProofOrigin.Assumption source=source steps=nextSteps /> traitOwner=inherited.constraint.key.owner traitId=self.decls.traitAt(index: targetIndex).nameId traitArgs=inherited.constraint.key.positionalArgs edges=[] />
+                                    if self.assumedTraitInstanceSeen(states: seen, candidate: next, source: source, bound: inherited, sourceOwners: preferredOwners) {
+                                        clause += 1U64
+                                        continue
+                                    }
+                                    seen.append(next)
+                                    pending.append(next)
                                     if (!demand.isExistence() || self.traitProofStateMatchesSources(state: next, sourceOwners: sourceOwners)) && next.traitOwner == traitOwner && (traitId == 0U64 || next.traitId == traitId) && (traitArgsOpen || self.typeRefListPatternMatches(pattern: traitArgs, patternParams: patternParams, actual: <PatternTypeInput.Values values=next.traitArgs />)) {
                                         val completed = try self.completeTraitProofState(state: next, assumptions: assumptions)
                                         if !self.proofIsMissing(proof: completed) {
@@ -657,7 +673,6 @@ pub impl Comp {
                                             if !enumerateInstances && !demand.isExistence() { try self.collectTraitProof(selection: inout selection, candidate: completed, traitOwner: traitOwner, preferred: preferredOwners.count() != 0U64 && self.traitProofStateMatchesSources(state: next, sourceOwners: preferredOwners), demand: demand, assocNames: assocNames, assocValues: assocValues, assumptions: assumptions) }
                                         }
                                     }
-                                    if !self.assumedTraitInstanceSeen(states: seen, candidate: next, bound: inherited) { seen.append(next) pending.append(next) }
                                 }
                                 clause += 1U64
                             }

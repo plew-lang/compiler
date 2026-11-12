@@ -1,9 +1,51 @@
 use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
 use /SourceAccess only { SourceAccess }
-use /Ir only { CallTemplateKind, CallableConstraintEvidence, StaticConformanceProof, StaticProofInstantiation, DeclarationBoundRef, SupertraitRef, InstanceEnvironment }
+use /Ir only { CallTemplateKind, CallableConstraintEvidence, StaticConformanceProof, StaticProofInstantiation, DeclarationBoundRef, SupertraitRef, InstanceEnvironment, ConformanceProofDemand, ConformanceProofResult, PatternBindInput, PatternTypeInput }
 use @Std/Io only { print }
 
+fn checkPreferredInheritedPath() {
+    mut val compiler = <Comp />
+    val source = "trait Base {{}} trait Shared: Base {{}} trait Left: Shared {{}} trait Right: Shared {{}} trait Diamond: Left + Right {{}} fn bind[T](value: T) where T: Diamond {{}}"
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text text=source path="preferred-supertraits.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
+    val function = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "bind").nameId)
+    val declaration = compiler.arena.functionAt(index: function)
+    val receiver = compiler.funcParamAt(params: declaration.params, index: 0U64).ty
+    val assumptions = compiler.functionBoundAssumptions(fnIdx: function)
+    val baseName = compiler.internBytes(s: "Base").nameId
+    val leftName = compiler.internBytes(s: "Left").nameId
+    val rightName = compiler.internBytes(s: "Right").nameId
+    mut val base = 0U64
+    mut val left = 0U64
+    mut val right = 0U64
+    for index in 0U64..<compiler.decls.traitCount() {
+        val trait = compiler.decls.traitAt(index: index)
+        if trait.nameId == baseName { base = trait.nameStart }
+        if trait.nameId == leftName { left = trait.nameStart }
+        if trait.nameId == rightName { right = trait.nameStart }
+    }
+    if base == 0U64 || left == 0U64 || right == 0U64 { panic("missing test trait owner") }
+    for owner in [left, right] {
+        val result = compiler.queryTraitPatternProof(demand: <ConformanceProofDemand.SourceAdmission />, baseRef: receiver, traitId: baseName, traitOwner: base, traitArgs: <PatternTypeInput.Values values=[] />, patternParams: <PatternBindInput.Values values=[] />, assumptions: assumptions, sourceOwners: [owner]).unwrap()
+        mut val retained = false
+        match result {
+            ConformanceProofResult.Found(proof: val proof) => {
+                match proof {
+                    StaticConformanceProof.AssumedSupertraitPath(source: _, steps: val steps) => {
+                        for step in steps {
+                            if compiler.decls.traitAt(index: step.traitIndex).nameStart == owner { retained = true }
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            _ => { panic("diamond did not retain a unique preferred proof") }
+        }
+        if !retained { panic("converging supertraits discarded the preferred branch") }
+    }
+}
+
 fn main() {
+    checkPreferredInheritedPath()
     mut val compiler = <Comp />
     analyzeFrontendForRequests(c: inout compiler,
         input: <FrontendInput.Text text="trait Parent[A] {{}} trait Child[A]: Parent[A] {{}} struct Box[V] {{}} impl[V] Box[V] as Parent[V] {{}} impl[V] Box[V] as Child[V] where Box[V]: Parent[V] {{}} struct Foreign {{}} impl Foreign as Parent[I64] {{}} impl Foreign as Child[I64] where Foreign: Parent[I64] {{}} fn accept[V](value: V) where V: Parent[I64] {{}} fn forward[V](value: V) where V: Child[I64] {{ accept(value: value) }} fn context(value: Box[I64]) {{}}" path="retained-supertraits.pw" />,

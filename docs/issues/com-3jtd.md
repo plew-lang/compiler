@@ -41,4 +41,6 @@ This divides equivalence between search and result selection. The repair
 must preserve the exact root, positional arguments and associated equations.
 Explicit source priority and distinct `impl Trait as Trait` paths retain
 their existing behavior. Reuse the raw requirement regression and its
-verified fix when auditing the remaining shared view entries.
+verified fix when auditing the remaining shared view entries. The repair and
+both old-candidate regressions are recorded in the
+[diamond checkpoint](com-30u1.md#declared-supertrait-diamond-checkpoint).

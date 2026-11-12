@@ -226,3 +226,41 @@ trait-subject paths and selected source priority protected. See
 
 Static parameters, call-specific where premises, provided source results
 and executable witness translation remain open.
+
+## Declared-supertrait diamond checkpoint
+
+One search admission now controls both inherited candidate collection and
+worklist expansion. Two declared-supertrait paths are equivalent here when
+they start from the same authored premise, have the same subject and complete
+trait constraint, and agree on whether they match the active source selector.
+The chosen representative retains its original path. Trait-subject witness
+edges stay outside this equivalence.
+
+Candidate `03fc0e86` rejects `supertrait_projection_instances` in check,
+JIT and native compilation. The added case in `retained_supertrait_evidence`
+queries both explicitly preferred branches beyond a convergence point. It
+reaches the intended panic with the baseline compiler source in an isolated
+copy, and passes against the repaired source. The new conflicting-equalities
+fixture preserves the existing ambiguity diagnostic.
+
+Build `20261112T132326-build-6f3910`, candidate `d600caa4`, passes the
+diamond regression and five public controls in check, JIT and native
+execution. Seven rejection controls preserve their expected diagnostics in
+all three modes, including the conflicting equality, wrong positional
+instance and ambiguous trait-subject paths. Standard generation
+`20261112T132645-gen-671bf3` passed. The associated static selection
+control `trait_subject_associated_paths` still reproduces the pre-existing
+failure tracked by [com-9clj](com-9clj.md#reopened-current-source-regression-controls).
+
+A disk-full comparison produced empty LLVM files despite successful exit,
+reproducing [com-x386](com-x386.md#additional-capacity-associated-observation).
+That run is invalid. A repeat drained LLVM to memory and verified nonempty
+output. After warmup, the same-source medians of three alternating samples
+were 6.490329 s and 6.485967 s. All eight outputs were exactly 67,780,020
+bytes and shared SHA-256
+`9721d3d9e89189bbef31aa9a7227db7099c5fe1648ff43b6396358f1cdc496a1`.
+
+Next, move the static requirement parameter consumers to the admitted
+signature and then translate its clause evidence into the selected
+implementation. The view-adapter work in [com-3jtd](com-3jtd.md) can reuse
+this query fix.
