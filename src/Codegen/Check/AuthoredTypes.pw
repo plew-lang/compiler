@@ -59,7 +59,23 @@ impl Comp {
         return <Result.Ok value=saved />
     }
 
-    inout fn readAssociatedBindingOutput(bindingIndex: U64, proof: StaticConformanceProof, witness: WitnessMatch) -> Result[U64, CompileDiagnostic] {
+    inout fn readSelectedProjectionOutput(proof: StaticConformanceProof, traitOwner: U64, assocId: U64) -> Result[AuthoredRecipeRead, CompileDiagnostic] {
+        mut val normalizations = try self.retainedProofProjectionContext(proof: proof)
+        match (try self.selectedAssociatedBinding(proof: proof, traitOwner: traitOwner, assocId: assocId)) {
+            Optional.Some(v: val selected) => {
+                val read = try self.readAssociatedBindingOutput(bindingIndex: selected.bindingIndex, proof: proof, witness: selected.witness)
+                if normalizations.count() == 0U64 { return <Result.Ok value=read /> }
+                for equation in read.normalizations { try self.appendRetainedProjectionEquation(step: equation, normalizations: inout normalizations) }
+                return <Result.Ok value=<AuthoredRecipeRead term=read.term views=read.views normalizations=normalizations /> />
+            }
+            Optional.None => {}
+        }
+        val output = try self.associatedOutputTermInProof(proof: proof, traitOwner: traitOwner, assocId: assocId)
+        val term = try self.replayProjectionNormalizations(ref: output, normalizations: normalizations, offset: 0U64)
+        return <Result.Ok value=<AuthoredRecipeRead term=term views=[] normalizations=normalizations /> />
+    }
+
+    inout fn readAssociatedBindingOutput(bindingIndex: U64, proof: StaticConformanceProof, witness: WitnessMatch) -> Result[AuthoredRecipeRead, CompileDiagnostic] {
         val binding = self.decls.assocBindings[bindingIndex]
         val saved = try self.selectedAssociatedBindingReceipt(bindingIndex: bindingIndex, witness: witness)
         for active in self.activeAssociatedBindingReads {
@@ -72,7 +88,7 @@ impl Comp {
         self.activeAssociatedBindingReads.append((binding: bindingIndex, witness: witness))
         val result = self.readAuthoredTypeRecipe(proofs: saved.proofs, recipe: saved.recipe, environment: environment, memo: inout memo, context: <SignatureRecipeContext.AssociatedBinding />)
         self.activeAssociatedBindingReads.removeLast()
-        return <Result.Ok value=(try result).term />
+        return result
     }
 
     inout fn admitAssociatedBindingRecipes() -> Result[(), CompileDiagnostic] {
@@ -348,18 +364,21 @@ impl Comp {
                             val output = try self.readProvidedProjectionOutput(proof: proof, function: function, receiver: receiver, selector: selector, arguments: arguments, member: original.assocNameId, environment: environment, offset: occurrence.site, memo: inout memo)
                             if output != 0U64 { term = output }
                         }
-                        SignatureRecipeContext.Concrete => {
-                            val output = try self.associatedOutputTermInProof(proof: proof, traitOwner: owner, assocId: original.assocNameId)
-                            for equation in (try self.retainedProofProjectionContext(proof: proof)) { try self.appendRetainedProjectionEquation(step: equation, normalizations: inout normalizations) }
-                            val immediate = if output != 0U64 && !self.typeRefEq(a: output, b: projected) { give output } else { give 0U64 }
-                            try self.appendRetainedProjectionEquation(step: <ProjectionNormalizationStep source=projected proof=self.freezeStaticConformanceProof(proof: proof) output=immediate />, normalizations: inout normalizations)
-                            term = try self.associatedOutputInProof(proof: proof, traitOwner: owner, assocId: original.assocNameId)
-                            if term == 0U64 { return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "saved signature projection is not instantiated", failureDomain: <FailureDomain.Internal />) /> }
-                        }
-                        SignatureRecipeContext.AssociatedBinding => {
+                        SignatureRecipeContext.Concrete | SignatureRecipeContext.AssociatedBinding => {
                             memo[recipe] = <AuthoredRecipeRead term=0U64 reading=true views=[] normalizations=[] />
-                            val output = try self.associatedOutputInProof(proof: proof, traitOwner: owner, assocId: original.assocNameId)
-                            if output != 0U64 { term = output }
+                            val output = try self.readSelectedProjectionOutput(proof: proof, traitOwner: owner, assocId: original.assocNameId)
+                            for equation in output.normalizations { try self.appendRetainedProjectionEquation(step: equation, normalizations: inout normalizations) }
+                            val raw = try self.associatedOutputTermInProof(proof: proof, traitOwner: owner, assocId: original.assocNameId)
+                            val immediate = if raw != 0U64 && !self.typeRefEq(a: raw, b: projected) { give raw } else { give 0U64 }
+                            try self.appendRetainedProjectionEquation(step: <ProjectionNormalizationStep source=projected proof=self.freezeStaticConformanceProof(proof: proof) output=immediate />, normalizations: inout normalizations)
+                            if output.term != 0U64 {
+                                term = output.term
+                            } else {
+                                match context {
+                                    SignatureRecipeContext.Concrete => { return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "saved signature projection is not instantiated", failureDomain: <FailureDomain.Internal />) /> }
+                                    _ => {}
+                                }
+                            }
                         }
                     }
                     term = try self.replayProjectionNormalizations(ref: term, normalizations: lexicalEquations, offset: occurrence.site)
@@ -398,7 +417,7 @@ impl Comp {
                 val state = try self.replayConstraintProof(proof: proof, receiver: receiver, environment: environment, selfRef: environment.receiverRef, itemRef: 0U64, context: <Optional.None />, normalizations: normalizations, declaration: true)
                 match state {
                     ConstraintProofReplay.Concrete(proof: val selected) | ConstraintProofReplay.Universal(proof: val selected) => {
-                        val bound = try self.staticProofBound(proof: selected, traitIdx: self.decls.traitIndexByOffset(offset: saved.selector.traitInstance.owner))
+                        val bound = try self.replayBoundNormalizations(bound: (try self.staticProofBound(proof: selected, traitIdx: self.decls.traitIndexByOffset(offset: saved.selector.traitInstance.owner))), normalizations: normalizations)
                         if bound.subject != 0U64 && self.typeRefEq(a: self.typeRefWithoutOuterViews(ref: bound.subject), b: self.typeRefWithoutOuterViews(ref: receiver)) && self.sameResolvedTypeRefs(a: bound.constraint.key.positionalArgs, b: arguments) {
                             return <Result.Ok value=selected />
                         }

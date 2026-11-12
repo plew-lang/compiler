@@ -1,0 +1,12 @@
+use @Std/Io only { print }
+trait Marker { type Type }
+trait Other { type Value }
+trait Parent { type Item }
+struct Worker {}
+impl Worker as Marker { type Type = I64 }
+struct Wrap[T] {}
+impl[T] Wrap[T] as Other { type Value = T }
+struct Box[T] {}
+impl[T] Box[T] as Parent where T: Marker { type Item = Wrap[T#Marker.Type]#Other.Value }
+fn read(value: Box[Worker]#Parent.Item) -> I64 { return value }
+fn main() { print(read(value: 42I64)) }

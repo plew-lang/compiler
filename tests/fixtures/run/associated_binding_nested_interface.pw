@@ -1,0 +1,16 @@
+use @Std/Io only { print }
+trait Marker { type Type }
+trait Other { type Value }
+trait Parent { type Item }
+trait Service: Parent[Item=I64] { fn get() -> Item }
+struct Worker {}
+impl Worker as Marker { type Type = I64 }
+struct Wrap[T] {}
+impl[T] Wrap[T] as Other { type Value = T }
+struct Box[T] {}
+impl[T] Box[T] as Parent where T: Marker { type Item = Wrap[T#Marker.Type]#Other.Value }
+impl Box[Worker] as Service { fn get() -> I64 { return 42I64 } }
+fn main() {
+    val service: any Service = <Box[Worker] />
+    print(service.get())
+}

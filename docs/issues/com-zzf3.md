@@ -179,3 +179,26 @@ The immediate equation still does not transport nested RHS proofs to
 the generic/interface replay that needs them. Continue with that
 handoff, the missing/foreign proof and clause controls, and a committed
 Unit/interface control before closure.
+
+## Nested receiver proof replay
+
+The binding `Wrap[T#Marker.Type]#Other.Value` needs the result of
+`T#Marker.Type` to replay the `Other` witness on `Wrap[I64]`. Candidate
+`fc39f507` rejected the retained conformance at the outer projection in
+both the lexical parameter and an existential witness. The authored RHS
+reader now returns the child equations with its output. Parent recipes
+compose those equations and compare the replayed witness bound in the
+same normalized context as the authored receiver.
+
+Candidate `a2312c45` passed standard build
+`20261112T230744-build-9857d1` and generation
+`20261112T231130-gen-50357b`. The nested receiver, existential dispatch
+with an interface equality, and explicit Unit output fixtures passed
+check, JIT and native, along with five neighboring controls.
+Same-source medians were 6.845093 s and 6.864734 s, with identical LLVM
+in all eight runs.
+
+The conditional normalization producer and the requirement reader
+still have raw term consumers to reconcile. Exercise missing and
+foreign proof, clause and normalization failures through final reads
+before independent review.
