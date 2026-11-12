@@ -945,19 +945,6 @@ pub impl Comp {
         return ref
     }
 
-    // Reify a requirement result under the selected static proof. Ordinary
-    // trait parameters ground first; then associated outputs reify recursively
-    // through the selected proof's constraint.
-    inout fn staticRequirementResultTypeForProof(traitDef: TraitDef, req: Func, receiverRef: U64, traitArgs: Array[U64], predicates: Array[TraitAssocPredicate]) -> U64 {
-        if req.isAsync && !req.hasRet { return self.semanticCallableReturnTerm(function: req) }
-        if !(req.hasRet) || req.retTy == 0U64 || req.retTy >= self.arena.typeCount() { return 0U64 }
-        // This is a declaration-time proof query, not a body-instance read.
-        // Ground only the selected trait instance's binders; consulting Cursor
-        // here let an unrelated temporary receiver reinterpret abstract Self.
-        val grounded: U64 = self.staticRequirementType(ref: req.retTy, traitDef: traitDef, receiverRef: receiverRef, traitArgs: traitArgs)
-        return self.reifyBoundAssociatedTerms(ref: grounded, traitDef: traitDef, receiverRef: receiverRef, traitOwner: traitDef.nameStart, traitArgs: traitArgs, predicates: predicates)
-    }
-
     // Trait instance substitution and method binder substitution are distinct.
     // The latter belongs to this call, including associated projections rooted
     // in a method parameter (for example Output.Error).
@@ -1001,7 +988,11 @@ pub impl Comp {
                 if reqIdx >= traitDef.reqs.count() { return <Result.Ok value=0U64 /> }
                 val bound = try self.staticProofBound(proof: proof, traitIdx: traitIdx)
                 if bound.subject == 0U64 { return <Result.Ok value=0U64 /> }
-                return <Result.Ok value=self.staticRequirementResultTypeForProof(traitDef: traitDef, req: self.traitReqAt(reqs: traitDef.reqs, index: reqIdx), receiverRef: bound.subject, traitArgs: bound.constraint.key.positionalArgs, predicates: bound.constraint.assocPredicates) />
+                val scope = try self.requireAdmittedRawRequirement(traitIndex: traitIdx, slot: reqIdx, offset: bound.offset)
+                if (try self.interfaceProofRoot(proof: proof)) != 0U64 {
+                    return <Result.Err error=self.diagnosticAt(offset: bound.offset, msg: "universal interface evidence cannot authorize a static callable", failureDomain: <FailureDomain.Internal />) />
+                }
+                return self.readStaticRequirementResult(scope: scope, bound: bound, traitIndex: traitIdx, proof: proof)
             }
             _ => {}
         }

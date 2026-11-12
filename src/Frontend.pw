@@ -397,11 +397,14 @@ struct AuthoredRequirementSignature {
 }
 impl AuthoredRequirementSignature { factory }
 
-struct RequirementInterfaceRead {
+struct RequirementSignatureRead {
     val scope: U64
     val bound: TraitBound
+    // Only a static selection supplies a witness. An existential supplies
+    // the interface type's own equations without acquiring a static proof.
+    val selected: Optional[StaticConformanceProof] = <Optional.None />
 }
-impl RequirementInterfaceRead { factory }
+impl RequirementSignatureRead { factory }
 
 struct AuthoredRecipeRead {
     val term: U64

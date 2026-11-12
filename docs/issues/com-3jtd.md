@@ -30,3 +30,15 @@ Remove boundLhsMatches raw-form/lexical-owner shortcuts that discard semantic re
 Follow the parent [contract and closure rules](com-amjl.md#contract-and-closure) and task-start TDD. Confirm the actual old-candidate RED for new behavior, preserve valid controls, then build a fresh candidate and test the real source-to-final-consumer path. Pure refactors use existing GREEN. Record exact inputs/carrier, diagnostic origin, meaningful assertions, applicable modes, removed competing authorities and independent neutral review. Do not close from a table/check/helper-only result. Existing unsupported surfaces must retain their actual diagnostic and be recorded, not silently counted as acceptance.
 
 No new specification or general solver/SCC/unique/opening feature, API-wide authority extraction, main/seed promotion or whole-suite/ASan certification is included. Shared API names alone do not create whole-task prerequisites. Whole-program fixed-point/performance/full-suite gates remain with met-si6j; parent closure still requires the complete original guarantee map.
+
+## Repeated declared supertrait instance
+
+[com-30u1](com-30u1.md#static-requirement-result-checkpoint) found a source
+admission regression in `supertrait_projection_instances`. The common
+`searchTraitPatternProofFromFacts` collects an inherited candidate before
+`assumedTraitInstanceSeen` can coalesce its repeated complete constraint.
+This divides equivalence between search and result selection. The repair
+must preserve the exact root, positional arguments and associated equations.
+Explicit source priority and distinct `impl Trait as Trait` paths retain
+their existing behavior. Reuse the raw requirement regression and its
+verified fix when auditing the remaining shared view entries.

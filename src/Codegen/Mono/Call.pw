@@ -2391,9 +2391,9 @@ pub impl Comp {
         val signature = try self.existentialRequirementSignature(target: evidence.targetRef, traitIndex: evidence.traitIdx, slot: requirement)
         val bound = try self.existentialRequirementBound(target: evidence.targetRef, traitIndex: evidence.traitIdx, receiver: sourceReceiver, offset: requested.nameStart)
         val scope = try self.requireAdmittedRawRequirement(traitIndex: evidence.traitIdx, slot: requirement, offset: requested.defOffset)
-        val environment = self.requirementInterfaceEnvironment(bound: bound, traitIndex: evidence.traitIdx)
+        val environment = self.requirementSignatureEnvironment(bound: bound, traitIndex: evidence.traitIdx)
         mut val memo: Dictionary[U64, AuthoredRecipeRead] = [:]
-        val sourceResult = try self.readRequirementInterfaceResult(interface: <RequirementInterfaceRead scope=scope bound=bound />, environment: environment, memo: inout memo)
+        val sourceResult = self.callableResultSlot(ref: (try self.readRequirementResult(interface: <RequirementSignatureRead scope=scope bound=bound />, environment: environment, memo: inout memo)))
         mut val conversion = <ValueConversionProof.Identity />
         if sourceResult != 0U64 || signature.resultType != 0U64 {
             conversion = try self.callArgumentConversion(sourceRef: sourceResult, targetRef: signature.resultType, knownBox: <Optional.Some v=evidence />)

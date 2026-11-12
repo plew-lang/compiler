@@ -190,3 +190,39 @@ signature consumers, then translate its raw Self and clause premises through
 the selected bound or implementation plan. Keep ordinary provided method
 and concrete executable environments separate from the public interface
 interpretation.
+
+## Static requirement result checkpoint
+
+The static source result reader now consumes the admitted result occurrence
+for the selected requirement slot. It uses the selected bound's associated
+equations and can read a direct associated output from a selected concrete
+witness. Interface-root evidence cannot authorize the static reader. The
+fallible factory result preserves the nominal wrapper resolved at declaration
+time while substituting its receiver and authored error type.
+
+The native symbolic-result fixture replaces the raw static requirement row
+with a sibling after admission. Candidate `f52a35b6` reaches the expected RED
+assertion. Build `20261112T131552-build-dc7625`, candidate `03fc0e86`,
+preserves the admitted result. Thirteen public static and mixed controls
+passed check/JIT/native execution, including associated outputs, inherited
+Unit, iteration, overloads and both fallible factory forms. Four existential
+controls passed check/native, with JIT passing on the two public controls.
+Standard generation `20261112T131838-gen-3fcc6b` passed. Same-source
+medians were 6.962234 s and 6.950459 s across three interleaved runs each
+after warmup. All eight LLVM outputs matched after normalizing the generated
+generic body symbol component by its body ID. This was a diagnostic
+comparison, not a fixed-point certification.
+
+The existing `supertrait_projection_instances` success fixture is a
+remaining raw-admission regression. It passes candidate `55e672a1` and
+rejects at its first qualified result on `8f6e1174`, `f52a35b6` and
+`03fc0e86`. The source-admission collector considers a repeated inherited
+state before the traversal deduplicates its full associated constraint.
+The fixture covers the same declared parent instance and equality reached
+through a diamond as well as a second positional instance. Repair the shared
+source admission in this regression scope, with the query's separate
+trait-subject paths and selected source priority protected. See
+[shared view admission](com-3jtd.md#repeated-declared-supertrait-instance).
+
+Static parameters, call-specific where premises, provided source results
+and executable witness translation remain open.

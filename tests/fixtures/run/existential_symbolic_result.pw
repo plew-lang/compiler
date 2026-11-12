@@ -1,5 +1,5 @@
 use /Diag only { FailureDomain }
-use /Ir only { ConformanceProofDemand }
+use /Ir only { ConformanceProofDemand, StaticMemberResolution, StaticConformanceProof, DeclarationBoundRef }
 use @Std/Io only { print }
 use @Std/Process only { argCount, argAt }
 use @Std/Core only { assert }
@@ -9,7 +9,7 @@ use /SourceTypeUses only { SourceTypeUses }
 use /Ir only { TypeRef }
 fn main() {
     mut val c = <Comp />
-    val source = "struct Value {{}}\ntrait Cursor {{ type Item }}\ntrait Source {{ type Iter fn iterator() -> Self#Source.Iter fn other() -> Bool fn hidden(other: Self) -> Bool }}\nfn test[T](values: any Source[Iter=T]) where T: Cursor[Item=Value] {{}}\n"
+    val source = "struct Value {{}}\ntrait Cursor {{ type Item fn read() -> Item fn alternate() -> Bool }}\ntrait Source {{ type Iter fn iterator() -> Self#Source.Iter fn other() -> Bool fn hidden(other: Self) -> Bool }}\nfn test[T](values: any Source[Iter=T]) where T: Cursor[Item=Value] {{}}\n"
     analyzeFrontendDeclarations(c: inout c, input: <FrontendInput.Text text=source path="cursor.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
     val bound = c.decls.funcBounds.at(index: 0U64)
     val function = c.arena.functionAt(index: bound.fnIdx)
@@ -68,6 +68,16 @@ fn main() {
         }
         c.decls.traitReqPool[requirements.start + 2U64] = hidden
     }
+    val cursorTrait = c.decls.traitIndexByOffset(offset: bound.constraint.key.owner)
+    val cursorRequirements = c.decls.traitAt(index: cursorTrait).reqs
+    val staticCall = <StaticMemberResolution.Requirement proof=<StaticConformanceProof.AssumedBound source=<DeclarationBoundRef.Function index=0U64 /> /> traitIdx=cursorTrait reqIdx=0U64 />
+    val staticResult = c.staticRequirementResultType(resolution: staticCall).unwrap()
+    assert(c.typeRefEq(a: staticResult, b: bound.constraint.assocPredicates[0U64].value))
+    val staticDeclaration = c.traitReqAt(reqs: cursorRequirements, index: 0U64)
+    c.decls.traitReqPool[cursorRequirements.start] = c.traitReqAt(reqs: cursorRequirements, index: 1U64)
+    val staticRetained = c.staticRequirementResultType(resolution: staticCall).unwrap()
+    if !c.typeRefEq(a: staticRetained, b: staticResult) { panic "raw trait row replaced the retained static signature" }
+    c.decls.traitReqPool[cursorRequirements.start] = staticDeclaration
     c.sourceTypeUses = <SourceTypeUses />
     if argCount() < 2I64 || argAt(1I64) == "rank" {
         if c.recordAnyRequirementSlot(anyRef: receiver, nameStart: name.nameStart, nameLen: name.nameLen, args: args).isOk() {
