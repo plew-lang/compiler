@@ -1655,6 +1655,7 @@ pub impl FunctionBoundArena {
 
 pub struct FuncBound {
     pub val fnIdx: U64
+    pub val sourceClause: U64 = 0U64
     pub val paramStart: U64
     pub val paramLen: U64
     // Structured left-hand type of the bound. For legacy `where T: Trait` this is

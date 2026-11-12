@@ -18,4 +18,4 @@ pub struct AuthoredSignatureViews {
 }
 pub impl AuthoredSignatureViews { factory }
 
-pub enum SourceSignatureSlot { Parameter(index: U64) Result }
+pub enum SourceSignatureSlot { Parameter(index: U64) Result FactoryError }

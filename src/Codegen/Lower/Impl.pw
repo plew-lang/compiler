@@ -739,12 +739,15 @@ impl Comp {
         mut val retLen: U64 = 0U64
         mut val retIsArray: Bool = false
         mut val retRef: U64 = 0U64
+        mut val retUse = 0U64
+        mut val factoryError = 0U64
         if m.hasRet {
             val pt: PType = (try self.lowerSyntaxType(id: m.ret))
             retStart = pt.start
             retLen = pt.len
             retIsArray = pt.isArray
             retRef = pt.ref
+            retUse = pt.authoredUse
         }
         mut val effHasRet: Bool = m.hasRet
         if m.isFactory {
@@ -762,6 +765,7 @@ impl Comp {
                 if m.factoryKind == 2U64 {
                     val resN: Bind = self.internBytes(s: "Result")
                     val et: PType = (try self.lowerSyntaxType(id: m.factoryErr))
+                    factoryError = et.authoredUse
                     mut val rargs: Array[U64] = []
                     rargs.append(ft.ref)
                     rargs.append(et.ref)
@@ -815,7 +819,7 @@ impl Comp {
         }
         val fnIdx: U64 = (try self.registerDeclaredFunc(f: <Func nameStart=nameN.nameStart nameLen=nameN.nameLen nameId=intern(c: inout self, start: nameN.nameStart, len: nameN.nameLen) recvId=intern(c: inout self, start: recvN.nameStart, len: recvN.nameLen) recvTy=self.receiverSubjectTerm(receiver: recvTy, traitOwner: recvTraitOwner) recvTraitArgs=self.pushFuncTypes(types: recvTraitArgs) typeParams=self.pushFuncBinds(binds: typeParams) params=self.pushFuncParams(params: params) hasRet=effHasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=body hasRecv=hasRecv recvStart=recvN.nameStart recvLen=recvN.nameLen selfInout=m.selfInout selfMove=m.selfMove isAssoc=isAssoc isFactory=m.isFactory isAnonymousFactory=m.isAnonymousFactory isAsync=m.isAsync isDiverging=m.isDiverging isExtern=false isPub=im.isPub extId=extId provTraitArity=recvTraitArgs.count() provTraitOwner=recvTraitOwner originTraitId=originTraitId originTraitOwner=originTraitOwner originTraitArity=originTraitArity sourceWitnessFuncId=prospectiveFnIdx + 1U64 defOffset=m.name.start />, registerSurface: registerSurface))
         try self.collectPreparedFunctionBounds(function: fnIdx, into: inout stagedBounds)
-        try self.bindAuthoredFunctionScope(scope: self.sourceTypeUses.currentScope(), function: fnIdx, site: m.name.start)
+        try self.bindAuthoredCallableSignature(function: fnIdx, parameters: params, result: retUse, factoryError: factoryError, site: m.name.start)
         self.cur.typeParams = savedTP
         return <Result.Ok value=() />
     }
@@ -886,12 +890,15 @@ impl Comp {
         mut val retLen: U64 = 0
         mut val retIsArray: Bool = false
         mut val retRef: U64 = 0
+        mut val retUse = 0U64
+        mut val factoryError = 0U64
         if m.hasRet {
             val pt: PType = (try self.lowerType(t: (try self.normalizeProjectionType(t: m.ret))))
             retStart = pt.start
             retLen = pt.len
             retIsArray = pt.isArray
             retRef = pt.ref
+            retUse = pt.authoredUse
         }
         // a custom factory (spec/05) returns the impl's type (the implicit `Self`); the
         // body's `return <Type …/>` then grounds against it. A fallible factory wraps that
@@ -913,6 +920,7 @@ impl Comp {
                 if m.factoryKind == 2U64 {
                     val resN: Bind = self.internBytes(s: "Result")
                     val et: PType = (try self.lowerType(t: m.factoryErr))
+                    factoryError = et.authoredUse
                     mut val rargs: Array[U64] = []
                     rargs.append(ft.ref)
                     rargs.append(et.ref)
@@ -973,7 +981,7 @@ impl Comp {
         }
         val fnIdx: U64 = (try self.registerDeclaredFunc(f: <Func nameStart=nameN.nameStart nameLen=nameN.nameLen nameId=intern(c: inout self, start: nameN.nameStart, len: nameN.nameLen) recvId=intern(c: inout self, start: recvN.nameStart, len: recvN.nameLen) recvTy=self.receiverSubjectTerm(receiver: recvTy, traitOwner: recvTraitOwner) recvTraitArgs=self.pushFuncTypes(types: recvTraitArgs) typeParams=self.pushFuncBinds(binds: typeParams) params=self.pushFuncParams(params: params) hasRet=effHasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=body hasRecv=hasRecv recvStart=recvN.nameStart recvLen=recvN.nameLen selfInout=m.selfInout selfMove=m.selfMove isAssoc=isAssoc isFactory=m.isFactory isAnonymousFactory=m.isAnonymousFactory isAsync=m.isAsync isDiverging=m.isDiverging isExtern=false isPub=im.isPub extId=extId provTraitArity=recvTraitArgs.count() provTraitOwner=recvTraitOwner originTraitId=originTraitId originTraitOwner=originTraitOwner originTraitArity=originTraitArity sourceWitnessFuncId=prospectiveFnIdx + 1U64 defOffset=m.nameSpan.start />, registerSurface: registerSurface))
         try self.collectPreparedFunctionBounds(function: fnIdx, into: inout stagedBounds)
-        try self.bindAuthoredFunctionScope(scope: self.sourceTypeUses.currentScope(), function: fnIdx, site: m.nameSpan.start)
+        try self.bindAuthoredCallableSignature(function: fnIdx, parameters: params, result: retUse, factoryError: factoryError, site: m.nameSpan.start)
         self.cur.typeParams = savedTP
         return <Result.Ok value=() />
     }
@@ -987,6 +995,7 @@ pub impl Comp {
         val savedReturn = self.cur.lowerRetTy
         val savedAssociatedOwner = self.lowerAssociatedOwner
         val savedAssociatedArgs = self.lowerAssociatedArgs
+        val savedReceiverRecipes = self.lowerMethodReceiverRecipes
         val scope = self.sourceTypeUses.begin(kind: <SourceTypeScopeKind.Implementation />, anchor: im.span.start)
         mut val stagedBounds: Array[FuncBound] = []
         val result = self.lowerImplInSourceScope(im: im, stagedBounds: inout stagedBounds)
@@ -995,6 +1004,7 @@ pub impl Comp {
         self.cur.lowerRetTy = savedReturn
         self.lowerAssociatedOwner = savedAssociatedOwner
         self.lowerAssociatedArgs = savedAssociatedArgs
+        self.lowerMethodReceiverRecipes = savedReceiverRecipes
         if !self.sourceTypeUses.finish(token: scope, succeeded: result.isOk()) {
             return <Result.Err error=self.diagnosticAt(offset: im.span.start, msg: "invalid authored type scope restoration", failureDomain: <FailureDomain.Internal />) />
         }
@@ -1053,9 +1063,12 @@ impl Comp {
             recvTy = (try self.lowerType(t: receiverType)).ref
         }
         mut val subjectArgs: Array[U64] = []
+        self.lowerMethodReceiverRecipes = []
         mut val subjectArgIdx: U64 = 0
         while subjectArgIdx < receiverType.args.count() {
-            subjectArgs.append((try self.lowerType(t: receiverType.args[subjectArgIdx])).ref)
+            val argument = try self.lowerType(t: receiverType.args[subjectArgIdx])
+            subjectArgs.append(argument.ref)
+            if recvTraitOwner != 0U64 { self.lowerMethodReceiverRecipes.append((try self.authoredChildRecipe(type: argument))) }
             subjectArgIdx += 1U64
         }
         mut val conformanceTraitArgs: Array[U64] = []
@@ -1120,7 +1133,7 @@ impl Comp {
             val index = try self.registerDeclaredConformance(cf: <Conform subjectTraitOwner=recvTraitOwner sourceModule=sourceModule typeStart=recvN.nameStart typeLen=recvN.nameLen typeId=intern(c: inout self, start: recvN.nameStart, len: recvN.nameLen) subjectTy=recvTy subjectArgs=self.pushConformTypes(types: subjectArgs) typeParams=self.pushConformBinds(binds: implParamBinds) typeArity=receiverType.args.count() traitStart=traitN.nameStart traitLen=traitN.nameLen traitId=intern(c: inout self, start: traitN.nameStart, len: traitN.nameLen) traitArgs=self.pushConformTypes(types: conformanceTraitArgs) derived=false isPub=normalizedImpl.isPub witnessed=self.pushConformWitnesses(witnesses: witnessed) witnessFuncIds=self.pushConformFuncIds(ids: witnessFuncIds) extId=extensionId defOffset=normalizedImpl.span.start assocBindingIds=self.pushConformFuncIds(ids: assocBindingIds) />, bounds: (try self.collectPreparedConformanceBounds()))
             give <SourceImplementationKind.Conformance index=index />
         } else { give <SourceImplementationKind.Inherent /> }
-        val implementation = <SourceImplementationOwner kind=ownerKind receiver=recvTy receiverTrait=recvTraitOwner receiverArguments=subjectArgs parameters=implParamBinds sourceModule=sourceModule extensionId=extensionId />
+        val implementation = <SourceImplementationOwner kind=ownerKind receiver=recvTy receiverTrait=recvTraitOwner receiverArguments=subjectArgs receiverArgumentRecipes=self.lowerMethodReceiverRecipes parameters=implParamBinds sourceModule=sourceModule extensionId=extensionId />
         if !self.sourceTypeUses.bindImplementation(token: self.sourceTypeUses.currentScope(), implementation: implementation) {
             return <Result.Err error=self.diagnosticAt(offset: normalizedImpl.span.start, msg: "invalid authored implementation scope binding", failureDomain: <FailureDomain.Internal />) />
         }
@@ -1140,6 +1153,7 @@ pub impl Comp {
         val savedReturn = self.cur.lowerRetTy
         val savedAssociatedOwner = self.lowerAssociatedOwner
         val savedAssociatedArgs = self.lowerAssociatedArgs
+        val savedReceiverRecipes = self.lowerMethodReceiverRecipes
         val scope = self.sourceTypeUses.begin(kind: <SourceTypeScopeKind.Implementation />, anchor: im.span.start)
         mut val stagedBounds: Array[FuncBound] = []
         val result = self.lowerSyntaxImplInSourceScope(im: im, stagedBounds: inout stagedBounds)
@@ -1148,6 +1162,7 @@ pub impl Comp {
         self.cur.lowerRetTy = savedReturn
         self.lowerAssociatedOwner = savedAssociatedOwner
         self.lowerAssociatedArgs = savedAssociatedArgs
+        self.lowerMethodReceiverRecipes = savedReceiverRecipes
         if !self.sourceTypeUses.finish(token: scope, succeeded: result.isOk()) {
             return <Result.Err error=self.diagnosticAt(offset: im.span.start, msg: "invalid authored type scope restoration", failureDomain: <FailureDomain.Internal />) />
         }
@@ -1199,9 +1214,12 @@ impl Comp {
         mut val recvTy: U64 = 0U64
         if recvTraitOwner == 0U64 { recvTy = (try self.lowerSyntaxType(id: normalizedImpl.recvType)).ref }
         mut val subjectArgs: Array[U64] = []
+        self.lowerMethodReceiverRecipes = []
         i = 0U64
         while i < recvArity {
-            subjectArgs.append((try self.lowerSyntaxType(id: syntaxTypeArg(file: self.syntax, ty: recvSyntax, index: i))).ref)
+            val argument = try self.lowerSyntaxType(id: syntaxTypeArg(file: self.syntax, ty: recvSyntax, index: i))
+            subjectArgs.append(argument.ref)
+            if recvTraitOwner != 0U64 { self.lowerMethodReceiverRecipes.append((try self.authoredChildRecipe(type: argument))) }
             i += 1U64
         }
         mut val conformanceTraitArgs: Array[U64] = []
@@ -1262,7 +1280,7 @@ impl Comp {
             val index = try self.registerDeclaredConformance(cf: <Conform subjectTraitOwner=recvTraitOwner sourceModule=sourceModule typeStart=recvN.nameStart typeLen=recvN.nameLen typeId=intern(c: inout self, start: recvN.nameStart, len: recvN.nameLen) subjectTy=recvTy subjectArgs=self.pushConformTypes(types: subjectArgs) typeParams=self.pushConformBinds(binds: implParamBinds) typeArity=recvArity traitStart=traitN.nameStart traitLen=traitN.nameLen traitId=intern(c: inout self, start: traitN.nameStart, len: traitN.nameLen) traitArgs=self.pushConformTypes(types: conformanceTraitArgs) derived=false isPub=normalizedImpl.isPub witnessed=self.pushConformWitnesses(witnesses: witnessed) witnessFuncIds=self.pushConformFuncIds(ids: witnessFuncIds) extId=extensionId defOffset=normalizedImpl.span.start assocBindingIds=self.pushConformFuncIds(ids: assocBindingIds) />, bounds: (try self.collectPreparedConformanceBounds()))
             give <SourceImplementationKind.Conformance index=index />
         } else { give <SourceImplementationKind.Inherent /> }
-        val implementation = <SourceImplementationOwner kind=ownerKind receiver=recvTy receiverTrait=recvTraitOwner receiverArguments=subjectArgs parameters=implParamBinds sourceModule=sourceModule extensionId=extensionId />
+        val implementation = <SourceImplementationOwner kind=ownerKind receiver=recvTy receiverTrait=recvTraitOwner receiverArguments=subjectArgs receiverArgumentRecipes=self.lowerMethodReceiverRecipes parameters=implParamBinds sourceModule=sourceModule extensionId=extensionId />
         if !self.sourceTypeUses.bindImplementation(token: self.sourceTypeUses.currentScope(), implementation: implementation) {
             return <Result.Err error=self.diagnosticAt(offset: normalizedImpl.span.start, msg: "invalid authored implementation scope binding", failureDomain: <FailureDomain.Internal />) />
         }

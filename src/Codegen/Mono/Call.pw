@@ -276,7 +276,7 @@ pub impl Comp {
     // under their own incidental environment.
     inout fn groundedSelectedCalleeReturn(callee: U64, environment: InstanceEnvironment) -> Result[U64, CompileDiagnostic] {
         if callee >= self.arena.functionCount() { return <Result.Ok value=0U64 />}
-        match (try self.readRetainedFreeCallableSignature(function: callee, environment: environment)) {
+        match (try self.readRetainedCallableSignature(function: callee, environment: environment)) {
             Optional.Some(v: val signature) => { return <Result.Ok value=signature.resultType /> }
             Optional.None => {}
         }
@@ -299,7 +299,7 @@ pub impl Comp {
     inout fn groundedSelectedCalleeParameterTypes(callee: U64, environment: InstanceEnvironment) -> Result[Array[U64], CompileDiagnostic] {
         mut val out: Array[U64] = []
         if callee >= self.arena.functionCount() { return <Result.Ok value=out />}
-        match (try self.readRetainedFreeCallableSignature(function: callee, environment: environment)) {
+        match (try self.readRetainedCallableSignature(function: callee, environment: environment)) {
             Optional.Some(v: val signature) => { return <Result.Ok value=signature.parameterTypes /> }
             Optional.None => {}
         }
@@ -333,7 +333,7 @@ impl Comp {
     // None identifies an unmigrated/synthetic declaration, never failed
     // admission of a registered source signature. Saved slots are interpreted
     // before any body-type cache or ambient grounding can confer authority.
-    inout fn readRetainedFreeCallableSignature(function: U64, environment: InstanceEnvironment) -> Result[Optional[BodySignature], CompileDiagnostic] {
+    inout fn readRetainedCallableSignature(function: U64, environment: InstanceEnvironment) -> Result[Optional[BodySignature], CompileDiagnostic] {
         val source = match self.sourceTypeUses.signatureFor(function: function) {
             Optional.Some(v: val source) => source,
             Optional.None => { return <Result.Ok value=<Optional.None /> /> },
@@ -347,7 +347,8 @@ impl Comp {
             if self.funcParamAt(params: declaration.params, index: index).ty != 0U64 { slots.append(<SourceSignatureSlot.Parameter index=index />) }
             index += 1U64
         }
-        if declaration.hasRet { slots.append(<SourceSignatureSlot.Result />) }
+        if source.result != 0U64 { slots.append(<SourceSignatureSlot.Result />) }
+        if source.factoryError != 0U64 { slots.append(<SourceSignatureSlot.FactoryError />) }
         val terms = try self.readAdmittedSignatureRoots(function: function, slots: slots, environment: environment)
         mut val parameters: Array[U64] = []
         mut val termIndex = 0U64
@@ -362,7 +363,17 @@ impl Comp {
             index += 1U64
         }
         mut val result = 0U64
-        if declaration.hasRet {
+        if declaration.isFactory {
+            if environment.receiverRef == 0U64 { return <Result.Err error=self.diagnosticAt(offset: declaration.defOffset, msg: "retained factory signature has no selected receiver", failureDomain: <FailureDomain.Internal />) /> }
+            val argumentCount = self.arena.typeAt(index: declaration.retTy).args.count()
+            if source.factoryError != 0U64 {
+                result = self.rebuildTypeTermChildren(ref: declaration.retTy, children: [environment.receiverRef, terms[termIndex]])
+            } else if argumentCount == 1U64 {
+                result = self.rebuildTypeTermChildren(ref: declaration.retTy, children: [environment.receiverRef])
+            } else {
+                result = environment.receiverRef
+            }
+        } else if declaration.hasRet {
             result = terms[termIndex]
         } else if declaration.isAsync {
             result = self.semanticCallableReturnTerm(function: declaration)
@@ -377,7 +388,7 @@ impl Comp {
                 if rangeEquals(bytes: self.arena.bytes, start: returned.nameStart, len: returned.nameLen, kw: "Promise") && returned.args.count() == 1U64 { bodyResult = returned.args[0U64] }
             }
         }
-        return <Result.Ok value=<Optional.Some v=<BodySignature ready=true parameterTypes=parameters parameterPassings=self.selectedArgumentPassings(callee: function) resultType=result bodyResultType=bodyResult /> /> />
+        return <Result.Ok value=<Optional.Some v=<BodySignature ready=true receiverType=(if declaration.hasRecv { give environment.receiverRef } else { give 0U64 }) receiverPassing=self.selectedReceiverPassing(callee: function) parameterTypes=parameters parameterPassings=self.selectedArgumentPassings(callee: function) resultType=result bodyResultType=bodyResult /> /> />
     }
 
     // A candidate already names both source and placement declarations.
@@ -4455,7 +4466,7 @@ pub impl Comp {
 
     inout fn recordFinalCallableSignature(bodyId: U64, instance: BodyInstance, function: Func) -> Result[(), CompileDiagnostic] {
         val f = function
-        match (try self.readRetainedFreeCallableSignature(function: instance.fnIdx, environment: instance.environment)) {
+        match (try self.readRetainedCallableSignature(function: instance.fnIdx, environment: instance.environment)) {
             Optional.Some(v: val signature) => {
                 mut val index = 0U64
                 while index < f.params.count() {
@@ -4468,7 +4479,7 @@ pub impl Comp {
                     try self.scanType(ref: signature.resultType)
                 }
                 if f.isAsync { self.recordBodyTypeTermResult(bodyId: bodyId, source: self.declaredBodyReturnTerm(fnIdx: instance.fnIdx), result: signature.bodyResultType) }
-                self.arena.setBodySignature(bodyId: bodyId, parameters: signature.parameterTypes, passings: signature.parameterPassings, result: signature.resultType, bodyResult: signature.bodyResultType)
+                self.arena.setBodySignature(bodyId: bodyId, parameters: signature.parameterTypes, passings: signature.parameterPassings, result: signature.resultType, receiverType: signature.receiverType, receiverPassing: signature.receiverPassing, bodyResult: signature.bodyResultType)
                 return <Result.Ok value=() />
             }
             Optional.None => {}

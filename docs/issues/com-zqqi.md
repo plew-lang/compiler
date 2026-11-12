@@ -67,3 +67,20 @@ On identical compiler sources, alternating three measured compiles after
 warmup gave medians of 6.375821 s for `1f9a99d6` and 6.401968 s for
 `61e6af2d`, with identical LLVM across all runs. The comparison does not
 replace the formal fixed-point measurement.
+
+## Signature handoff checkpoint
+
+Build `20261112T111926-build-598946` produced candidate `f18feecc`.
+Both lowering adapters now register method source slots with the existing
+signature admission path. Impl-owned recipe edges are admitted against the
+original impl premises. Selected method signatures and body signature
+publication consume the retained recipes. The original unused-method RED
+rejects at line 5 with the exact conformance diagnostic in check, JIT and
+native compilation. Nine internal controls and nine distinct public fixtures
+passed in their applicable modes, including trait-subject receivers,
+associated results, default factories and Unit forwarding. Compiler sources
+also compiled to LLVM with the candidate.
+
+Next, exercise exact final call/body records with an inherited projection,
+verify missing evidence and failed registration cannot reach a fallback,
+and review the complete scope before closure.

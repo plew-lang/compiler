@@ -19,6 +19,7 @@ pub struct SourceImplementationOwner {
     pub val receiver: U64
     pub val receiverTrait: U64
     pub val receiverArguments: Array[U64]
+    pub val receiverArgumentRecipes: Array[U64] = []
     pub val parameters: Array[Bind]
     pub val sourceModule: U64
     pub val extensionId: U64
@@ -88,6 +89,7 @@ pub struct AuthoredFunctionSignature {
     pub val scope: U64
     pub val parameters: Array[U64]
     pub val result: U64
+    pub val factoryError: U64 = 0U64
     pub val declarationUses: Array[U64]
 }
 pub impl AuthoredFunctionSignature { factory }
@@ -114,6 +116,10 @@ pub impl SourceTypeUses {
             SourceTypeScopeKind.Implementation => { return true }
             _ => { return false }
         }
+    }
+    fn inMethod() -> Bool {
+        if self.active == 0U64 { return false }
+        match self.scopes[self.active - 1U64].kind { SourceTypeScopeKind.Method => { return true } _ => { return false } }
     }
     fn currentRole() -> SourceTypeUseRole {
         if self.active == 0U64 { return <SourceTypeUseRole.Unowned /> }
@@ -227,7 +233,7 @@ pub impl SourceTypeUses {
                     Optional.Some(v: val index) => {
                         val signature = self.signatures[index]
                         if signature.scope == token {
-                            self.signatures[index] = <AuthoredFunctionSignature function=function scope=token parameters=signature.parameters result=signature.result declarationUses=self.declarationUses[token - 1U64] />
+                            self.signatures[index] = <AuthoredFunctionSignature function=function scope=token parameters=signature.parameters result=signature.result factoryError=signature.factoryError declarationUses=self.declarationUses[token - 1U64] />
                         }
                     }
                     Optional.None => {}
@@ -256,10 +262,11 @@ pub impl SourceTypeUses {
         if occurrence.scope != scope { return false }
         match occurrence.role { SourceTypeUseRole.Declaration => { return true } _ => { return false } }
     }
-    inout fn bindSignature(token: U64, function: U64, parameters: Array[U64], result: U64) -> Bool {
+    inout fn bindSignature(token: U64, function: U64, parameters: Array[U64], result: U64, factoryError: U64 = 0U64) -> Bool {
         if token == 0U64 || token != self.active || token > self.scopes.count() || self.functionSignatures.contains(key: function) { return false }
         val scope = self.scopes[token - 1U64]
-        match scope.kind { SourceTypeScopeKind.FreeFunction => {} _ => { return false } }
+        match scope.kind { SourceTypeScopeKind.FreeFunction => { if factoryError != 0U64 { return false } } SourceTypeScopeKind.Method => {} _ => { return false } }
+        if result != 0U64 && factoryError != 0U64 { return false }
         match scope.state { SourceTypeScopeState.Lowering => {} _ => { return false } }
         if scope.function.unwrapOr(fallback: 18446744073709551615U64) != function { return false }
         mut val index = 0U64
@@ -267,15 +274,15 @@ pub impl SourceTypeUses {
             val occurrence = parameters[index]
             if !self.signatureUseBelongs(id: occurrence, scope: token) { return false }
             if occurrence != 0U64 {
-                if occurrence == result { return false }
+                if occurrence == result || occurrence == factoryError { return false }
                 mut val previous = 0U64
                 while previous < index { if parameters[previous] == occurrence { return false } previous += 1U64 }
             }
             index += 1U64
         }
-        if !self.signatureUseBelongs(id: result, scope: token) { return false }
+        if !self.signatureUseBelongs(id: result, scope: token) || !self.signatureUseBelongs(id: factoryError, scope: token) { return false }
         self.functionSignatures[function] = self.signatures.count()
-        self.signatures.append(<AuthoredFunctionSignature function=function scope=token parameters=parameters result=result declarationUses=self.declarationUses[token - 1U64] />)
+        self.signatures.append(<AuthoredFunctionSignature function=function scope=token parameters=parameters result=result factoryError=factoryError declarationUses=self.declarationUses[token - 1U64] />)
         return true
     }
     fn recipeCount() -> U64 { return self.recipes.count() }

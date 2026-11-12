@@ -138,8 +138,9 @@ impl Comp {
     inout fn collectPreparedFunctionBoundRange(function: U64, range: SourceBoundRange, into: inout Array[FuncBound]) -> Result[(), CompileDiagnostic] {
         mut val index = 0U64
         while index < range.count {
-            val bound = try self.preparedProjectionBound(id: range.first + index)
-            into.append(<FuncBound fnIdx=function paramStart=bound.parameter.nameStart paramLen=bound.parameter.nameLen paramTy=bound.subject paramNameId=bound.parameter.nameId constraint=bound.constraint />)
+            val id = range.first + index
+            val bound = try self.preparedProjectionBound(id: id)
+            into.append(<FuncBound fnIdx=function sourceClause=id paramStart=bound.parameter.nameStart paramLen=bound.parameter.nameLen paramTy=bound.subject paramNameId=bound.parameter.nameId constraint=bound.constraint />)
             index += 1U64
         }
         return <Result.Ok value=() />

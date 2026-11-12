@@ -103,7 +103,11 @@ impl Comp {
         for argument in self.arena.typeAt(index: receiver).args { receiverChildren.append(self.derivedTypeRecipe(ref: argument, origin: <SourceTypeRecipeOrigin.BoundSelection />)) }
         try self.appendViewArgumentRecipes(ref: receiver, sources: sources, children: inout receiverChildren)
         mut val children: Array[U64] = [self.deriveTypeRecipeWithChildren(ref: receiver, children: receiverChildren, origin: <SourceTypeRecipeOrigin.ProjectionReceiver />)]
-        for argument in type.assocTraitArgs { children.append(self.derivedTypeRecipe(ref: argument, origin: <SourceTypeRecipeOrigin.BoundSelection />)) }
+        if self.sourceTypeUses.inMethod() {
+            for recipe in self.lowerMethodReceiverRecipes { children.append(recipe) }
+        } else {
+            for argument in type.assocTraitArgs { children.append(self.derivedTypeRecipe(ref: argument, origin: <SourceTypeRecipeOrigin.BoundSelection />)) }
+        }
         return <Result.Ok value=children />
     }
 }
