@@ -1,6 +1,6 @@
 ---
 id: com-yjq0
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-11-09T08:54:16Z
@@ -447,3 +447,65 @@ receiver in the old build. With the guard still present, the new
 build passes JIT and native. The uninstrumented candidate also passed
 check/JIT, native, lazy CLI and generation controls.
 [Reproduction and timing](../../../evidence/rejection-domains/diagnostic-domain-implementation/value-view-proof-replay/README.md#concrete-type-handoff-to-layout-and-mid).
+
+## Exercise closure, aggregate and generic argument consumers
+
+Independent review reproduced three failures in `a4406464` that
+`aafe9e7f` did not exhibit. A closure capturing the viewed value got
+a differently grounded capture type. An inferred array and a generic
+call also lost the view while grounding their retained types.
+The new fixtures `capture_projected_trait_view`,
+`array_of_projected_trait_views` and `call_with_projected_trait_view`
+reproduce those failures on `92695e81`.
+
+`a4cff431` keeps the parent binding's type in the closure ABI and
+feeds finalized children into composite type grounding. Generic call
+substitutions use the same concrete term results. Projection grounding
+and equation replay preserve views applied to the projection result
+alongside the projection's existing receiver relation. Parameterized
+value views must have a lowering row, including when the row identifies
+a global or default argument rather than a body-authored argument list.
+The missing lowering row and missing published proof are distinct
+invariant violations.
+
+Build `20261113T060527-build-1466eb` produced `05c03571`. The three
+new fixtures pass check, JIT and native execution with golden output.
+The prior receiver, argument, closure, provided path and extension
+projection controls also pass JIT. Lazy CLI passes 47 cases and
+generation run `20261113T060832-gen-9b51ed` passes.
+
+## Separate projection receiver and output facets
+
+The next independent check found a structural alias. The compatibility
+row copied receiver views onto the projection, so adding the same view
+to the result collapsed the two placements. Distinct selectors could
+also be rejected as two selections on one value. `de87d9be` preserves
+receiver selectors on the explicit receiver term and gives the
+projection row's outer facets exclusively to its output. Structural
+children include result selector arguments. Substitution and projection
+replay preserve the separate layers.
+
+The old candidate rejects both `view_of_qualified_projection` and
+`view_of_projection_with_same_selector` in JIT. Build
+`20261113T061222-build-9f4e64` produced `109a757c`, which passes check,
+JIT and native for both, as well as the three prior regressions and 47
+lazy CLI cases. The isolated structural probe rejects equality of an
+unviewed output and an output with the receiver's same view, and
+grounds the latter to the correctly viewed concrete type.
+
+An isolated lowerer omission on `a4cff431` rejects check and JIT with
+`trait value view has no matching lowered argument occurrences`.
+Both expressions in the intact projected-argument control print 42.
+
+## Outcome
+
+Resolved at compiler `de87d9be`. Independent review of candidate
+`109a757c` reran the five regression fixtures and exercised direct
+calls, prior-call results, array elements and closure captures with
+qualified projections. It accepted closure after tracing the missing
+and foreign receipt checks. Generation run
+`20261113T061810-gen-aad082` passed. Warm medians on identical final
+source were 7.123244 s and 7.078672 s with identical LLVM across all
+eight runs. The whole-program fixed-point gate belongs to the parent.
+Common view formation and final dispatch remain with
+[com-3jtd](com-3jtd.md) and [com-4k31](com-4k31.md).
