@@ -1,6 +1,6 @@
 ---
 id: com-0cwy
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-11-09T08:54:16Z
@@ -80,7 +80,70 @@ comparison overlapped a source change and is excluded. A generation
 run for `972d2df6` also detected changed inputs and is superseded by the
 fixed-input run above.
 
-Remaining: verify omission of authored argument and local annotation
-occurrences separately from omission of their published proofs. A
-default's explicitly typed local must not use the inference fallback.
-Recheck the repaired revision independently before closure.
+## Verify retained local annotations and view arguments
+
+`46d41cfd` attaches the authored occurrence to the lowered local
+declaration. Record, compatibility checking and Mono consume that
+identity. Inferred locals, generated locals and declarations with a
+separate owner have no body annotation. Removing the old statement-ID
+dictionary removes the fallback caused by loss of its entry.
+
+The fixed-input build `20261113T065214-build-77d487` produced `03c05701`.
+All three projection fixtures pass check, JIT and native with output
+42. Typed loop, ordinary local projection and interpolation controls
+also pass. A native probe accepted the missing authored occurrence on
+`e834d530`; invalidating the ID while preserving the authored variant on
+`46d41cfd` returns Internal twice, preserves the caller cursor, publishes
+no facts and leaves the sibling inferred local request usable. Separate
+faults remove a view's authored arguments, its saved argument receipts,
+and a saved annotation proof. All three report their missing evidence;
+the intact control prints 42. A real derive harness using two defaults
+emits a method returning 4243.
+
+Alternating three timed same-source runs after warm-up, `ebacc84b` and
+`03c05701` took median 7.787 s and 7.790 s. All eight runs emitted the
+same 73,111,576 bytes of LLVM IR (SHA-256 `2a380a2d7db8`). This is a
+development comparison, with the formal fixed point and performance
+gate owned by met-si6j.
+
+## Independent re-review and scope identity
+
+The independent reviewer reran projected defaults, order and lifetime
+controls, and proved that a caller-only generic premise cannot admit a
+default in the declaration. The reviewer traced the zero-argument
+generator call into the original callable in emitted LLVM and ran a
+native derive harness that consumes an omitted default. Old carrier
+`109a757c` rejects the derive input in the default; `03c05701` emits
+the expected output.
+
+Review also found that a literal default's lookup could accept the
+sibling's completed scope. `da15170d` validates the root expression
+origin, kind, and completion state at lookup, including when the
+default has no type occurrences. The same native probe rejects on
+first request and retry and leaves the sibling usable. The review of
+this patch found no remaining blocker.
+
+Candidate `f14e6539` passed fixed-input build
+`20261113T070303-build-9b143a` and generation
+`20261113T070617-gen-5ddf98`, the three check/JIT/native regression
+fixtures, the caller-premise rejection, the derive harness, and all 47
+lazy CLI cases. Fault
+inputs, patches and commands are in the
+[default-expression evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/default-expression-view-origins/README.md).
+
+The reviewer found an existing cast-target limitation on both old and
+new carriers. A projected trait view in an `as` target reports the
+exact-instance diagnostic. A concrete cast target passes check but
+fails Mid preparation under JIT. The cast-target formation path belongs
+to the remaining shared type/value entry inventory in
+[com-3jtd](com-3jtd.md); these cases are recorded as unsupported, not
+as passing default-view tests.
+
+The final scope check comparison alternated the same compiler source
+on `03c05701` and `f14e6539`, with one warm-up and three timed runs per
+carrier. Medians were 7.093 s and 7.135 s, with overlapping ranges and
+identical LLVM IR in all eight runs (SHA-256 `9e1a28326d4a`). These
+measurements compare the local increment only.
+
+Resolved at product revision `da15170d`; the independent reviewer found
+no further issue in the supported paths after the scope-origin fix.

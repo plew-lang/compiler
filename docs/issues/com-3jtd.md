@@ -60,3 +60,14 @@ The reproduced failure predates the local body work in com-yjq0.
 The example passes check and JIT with `4fac5791` after
 [retained-equation matching](com-yjq0.md#match-a-selector-under-its-retained-equations).
 Keep it as a declaration control for the common formation audit.
+
+## Cast-target trait-view formation
+
+Include the `as` target adapter in the existing source-view entry inventory.
+The [default-generator review](com-0cwy.md#independent-re-review-and-scope-identity)
+reproduced the same rejection at a projected target on baseline and final
+carriers. A concrete positional argument passed check but failed lazy Mid
+preparation. Compare the cast adapter to the same complete instance written
+as a local annotation or direct value view. The issue is in the existing
+formation audit; downstream conversion/Mid failures need attribution to
+their actual owner after the source admission path is traced.
