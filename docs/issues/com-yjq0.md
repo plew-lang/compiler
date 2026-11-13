@@ -58,6 +58,10 @@ statement adapters keep only its TypeRef in the statement. Interned
 type identity cannot distinguish a declaration from an unrequested
 local or closure occurrence.
 
+The new `local-view-unused` case in `tests/tooling/test-lazy-cli.py`
+fails on the frozen baseline with the diagnostic above. The preceding
+whole-target check and build controls both reject for conformance.
+
 Start with a paired local annotation fixture for declaration-only,
 whole-target and requested-body checking. Trace which remaining
 consumers require the exact local annotation and remove their

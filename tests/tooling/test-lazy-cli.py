@@ -58,6 +58,18 @@ with tempfile.TemporaryDirectory(prefix='lazy-cli-', dir=ROOT / 'tmp') as tempor
     declaration = prefix + 'fn main() { eprint(text: "entered\\n") }\nfn bad(x: any Missing) {}\n'
     assert not run('declaration-type', declaration, 1).stderr.startswith(b'entered\n')
 
+    # An annotation in an unrequested body is checked when that body is needed.
+    view = ('use @Std/Io only { eprint }\ntrait Marker {}\n'
+            'fn bad() { val number = 42I64 val value: I64#Marker = number }\n'
+            'fn main() { eprint(text: "entered\\n") }\n')
+    for mode in ('--check', None):
+        rejected = run('local-view-' + (mode[2:] if mode else 'build'), view, 1, mode=mode)
+        assert b'conform' in rejected.stderr, rejected.stderr
+    assert run('local-view-unused', view, 0).stderr == b'entered\n'
+    requested = view.replace('"entered\\n") }', '"entered\\n") bad() }')
+    rejected = run('local-view-requested', requested, 1)
+    assert rejected.stderr.startswith(b'entered\n') and b'conform' in rejected.stderr, rejected.stderr
+
     # Native exit callbacks run after main returns. Compare the same application
     # via AOT and JIT, including string storage rather than only argc.
     fixture = ROOT / 'tests/compiler/codegen/ExitArguments.pw'
