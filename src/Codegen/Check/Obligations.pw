@@ -293,8 +293,9 @@ pub impl Comp {
                 if declaration.subjectTraitOwner == 0U64 || declaration.subjectTraitOwner != previous.constraint.key.owner || !self.typeRefEq(a: self.typeRefWithoutOuterViews(ref: witness.selfRef), b: self.typeRefWithoutOuterViews(ref: previous.subject)) { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "selected conformance path does not match its predecessor", failureDomain: <FailureDomain.Internal />) /> }
                 mut val arguments: Array[U64] = []
                 mut val argument = 0U64
-                while argument < declaration.subjectArgs.count() {
-                    arguments.append((try self.groundWitnessTypeTerm(ref: self.conformTypeAt(types: declaration.subjectArgs, index: argument), params: <PatternBindInput.Conformance range=declaration.typeParams />, matchResult: witness)))
+                val declared = self.conformanceDeclarationSubjectTerms(index: witness.conformIdx - 1U64, written: declaration.subjectArgs)
+                while argument < declared.count() {
+                    arguments.append((try self.groundWitnessTypeTerm(ref: self.conformTypeAt(types: declared, index: argument), params: <PatternBindInput.Conformance range=declaration.typeParams />, matchResult: witness)))
                     argument += 1U64
                 }
                 if !self.sameResolvedTypeRefs(a: arguments, b: previous.constraint.key.positionalArgs) { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "selected conformance path does not match its predecessor", failureDomain: <FailureDomain.Internal />) /> }

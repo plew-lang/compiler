@@ -72,11 +72,12 @@ pub impl Comp {
     inout fn traitSubjectWitnessMatch(conformIdx: U64, subjectArgs: Array[U64], selfRef: U64) -> WitnessMatch {
         if conformIdx >= self.decls.conformCount() { return <WitnessMatch /> }
         val cf: Conform = self.decls.conformAt(index: conformIdx)
-        if cf.subjectArgs.count() != subjectArgs.count() { return <WitnessMatch /> }
+        val declared = self.conformanceDeclarationSubjectTerms(index: conformIdx, written: cf.subjectArgs)
+        if declared.count() != subjectArgs.count() { return <WitnessMatch /> }
         mut val binds: Array[UnifyBind] = []
         mut val i: U64 = 0U64
-        while i < cf.subjectArgs.count() {
-            if !(self.unifyPatterns(a: self.conformTypeAt(types: cf.subjectArgs, index: i), aSide: 0U64, b: subjectArgs[i], bSide: 1U64, aParams: <PatternBindInput.Conformance range=cf.typeParams />, bParams: <PatternBindInput.Values values=[] />, binds: inout binds)) { return <WitnessMatch /> }
+        while i < declared.count() {
+            if !(self.unifyPatterns(a: self.conformTypeAt(types: declared, index: i), aSide: 0U64, b: subjectArgs[i], bSide: 1U64, aParams: <PatternBindInput.Conformance range=cf.typeParams />, bParams: <PatternBindInput.Values values=[] />, binds: inout binds)) { return <WitnessMatch /> }
             i += 1U64
         }
         val selected: WitnessMatch = self.witnessMatchFromUnify(conformIdx: conformIdx, typeParams: <PatternBindInput.Conformance range=cf.typeParams />, binds: binds)
@@ -305,8 +306,9 @@ pub impl Comp {
         mut val subjectArguments: Array[U64] = []
         if source.subjectTraitOwner != 0U64 {
             mut val index = 0U64
-            while index < source.subjectArgs.count() {
-                subjectArguments.append((try self.groundWitnessTypeTerm(ref: self.conformTypeAt(types: source.subjectArgs, index: index), params: <PatternBindInput.Conformance range=source.typeParams />, matchResult: witness)))
+            val declared = self.conformanceDeclarationSubjectTerms(index: witness.conformIdx - 1U64, written: source.subjectArgs)
+            while index < declared.count() {
+                subjectArguments.append((try self.groundWitnessTypeTerm(ref: self.conformTypeAt(types: declared, index: index), params: <PatternBindInput.Conformance range=source.typeParams />, matchResult: witness)))
                 index += 1U64
             }
         }

@@ -619,3 +619,29 @@ while both still call a separate source resolver for extension
 applicability. Before removing either caller, cover explicit impl
 receiver arguments and type-qualified source arguments, then show that
 the same saved source recipe drives their consumers.
+
+### Trait receiver arguments in inter-trait implementations
+
+An impl of `Marker[Number#Source[I64].Item] as Show` now admits the
+receiver argument on the original impl scope. Trait path matching,
+predecessor checking, extension applicability and both method placement
+passes read the same normalized subject range. Structural cycle
+validation retains the written terms. The overlap matcher compares
+the actual subject argument patterns for trait receivers, using the
+same binders as for their target arguments, and rechecks admitted keys.
+
+Fixed-input build `20261113T143600-build-9b7244` produced
+`0436298b3524`. The bare and explicit-extension call fixtures now print
+42 in check-accepted JIT and native execution. The disjoint subject
+pair with empty witnesses is admitted, while a literal/projected
+equivalent pair rejects as overlapping. An unused impl with a wrong
+trait instance now rejects at the projection's source site. Both
+negative cases were verified in check and JIT, and four existing
+placement and cycle controls retained their JIT output. Fixed-input
+generation `20261113T143931-gen-d6a9b5` passed.
+
+Continue with type-qualified selector arguments and the remaining
+compatibility sweep. The new receiver tests cover concrete normalization
+and do not establish replay for every open impl pattern or inherent impl
+receiver. Measure the accumulated changes with the same source before
+claiming performance neutrality.

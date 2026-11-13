@@ -551,6 +551,12 @@ struct LoweredTraitConstraint {
 }
 impl LoweredTraitConstraint { factory }
 
+struct AdmittedConformanceSubject {
+    val terms: ConformTypeRange
+    val proofs: Array[LocalAnnotationProof]
+}
+impl AdmittedConformanceSubject { factory }
+
 struct AuthoredTraitConstraintOperands {
     val scope: U64
     val arguments: Array[U64]
@@ -723,6 +729,8 @@ pub struct Comp {
     mut val rawRequirementRanges: Dictionary[U64, SourceBoundRange] = [:]
     mut val authoredRequirementViews: Dictionary[U64, AuthoredRequirementSignature] = [:]
     mut val authoredSignatureViews: Dictionary[U64, AuthoredSignatureViews] = [:]
+    mut val conformanceSubjectScopes: Dictionary[U64, U64] = [:]
+    mut val admittedConformanceSubjects: Dictionary[U64, AdmittedConformanceSubject] = [:]
     mut val conformanceTargetScopes: Dictionary[U64, U64] = [:]
     mut val authoredConformanceTargets: Dictionary[U64, AuthoredConformanceTarget] = [:]
     mut val activeConformanceTargetAdmissions: Set[U64] = Set.new()
@@ -1774,7 +1782,8 @@ pub fn analyzeFrontend(c: inout Comp, input: FrontendInput, sources: SourceAcces
 // The admission window covers roots which may require a newtype before
 // declaration identity resolution, as well as the final nominal sweep.
 fn admitFrontendNominalDependencies(c: inout Comp) -> Result[(), CompileDiagnostic] {
-    c.indexConformanceTargetScopes()
+    c.indexConformanceArgumentScopes()
+    try c.admitConformanceSubjects()
     try c.admitAssociatedBindingRecipes()
     try c.admitConformanceTargets()
     try c.admitClosedTraitConstraintOperands()

@@ -755,12 +755,18 @@ pub impl Comp {
     // Registration-side counterpart of `conformanceSubjectMatches`: two
     // declarations collide exactly when one substitution satisfies both their
     // subject and trait-argument patterns.
-    inout fn conformancePatternsMayOverlap(a: Conform, b: Conform, leftArguments: PatternTypeInput, rightArguments: PatternTypeInput) -> Bool {
+    inout fn conformancePatternsMayOverlap(a: Conform, b: Conform, leftArguments: PatternTypeInput, rightArguments: PatternTypeInput, leftSubject: ConformTypeRange, rightSubject: ConformTypeRange) -> Bool {
         if leftArguments.count() != rightArguments.count() { return false }
         mut val binds: Array[UnifyBind] = []
         val aParams: PatternBindInput = <PatternBindInput.Conformance range=a.typeParams />
         val bParams: PatternBindInput = <PatternBindInput.Conformance range=b.typeParams />
-        if !(self.unifyPatterns(a: a.subjectTy, aSide: 0U64, b: b.subjectTy, bSide: 1U64, aParams: aParams, bParams: bParams, binds: inout binds, ignoreTopView: true)) { return false }
+        if a.subjectTraitOwner != b.subjectTraitOwner { return false }
+        if a.subjectTraitOwner != 0U64 {
+            if leftSubject.count() != rightSubject.count() { return false }
+            for index in 0U64..<leftSubject.count() {
+                if !self.unifyPatterns(a: self.conformTypeAt(types: leftSubject, index: index), aSide: 0U64, b: self.conformTypeAt(types: rightSubject, index: index), bSide: 1U64, aParams: aParams, bParams: bParams, binds: inout binds) { return false }
+            }
+        } else if !self.unifyPatterns(a: a.subjectTy, aSide: 0U64, b: b.subjectTy, bSide: 1U64, aParams: aParams, bParams: bParams, binds: inout binds, ignoreTopView: true) { return false }
         mut val i: U64 = 0U64
         while i < leftArguments.count() {
             if !(self.unifyPatterns(a: leftArguments.at(index: i, declarations: self.decls), aSide: 0U64, b: rightArguments.at(index: i, declarations: self.decls), bSide: 1U64, aParams: aParams, bParams: bParams, binds: inout binds)) { return false }
@@ -1257,7 +1263,7 @@ pub impl Comp {
     inout fn checkConformanceRegistration(cf: Conform) -> Result[(), CompileDiagnostic] {
         for index in 0U64..<self.decls.conformCount() {
             val prior = self.decls.conformAt(index: index)
-            if self.sameConformanceNamespace(left: prior, right: cf) && self.conformancePatternsMayOverlap(a: prior, b: cf, leftArguments: <PatternTypeInput.Conformance range=prior.traitArgs />, rightArguments: <PatternTypeInput.Conformance range=cf.traitArgs />) {
+            if self.sameConformanceNamespace(left: prior, right: cf) && self.conformancePatternsMayOverlap(a: prior, b: cf, leftArguments: <PatternTypeInput.Conformance range=prior.traitArgs />, rightArguments: <PatternTypeInput.Conformance range=cf.traitArgs />, leftSubject: prior.subjectArgs, rightSubject: cf.subjectArgs) {
                 return <Result.Err error=self.overlappingConformanceDiagnostic(offset: cf.defOffset) />
             }
         }
@@ -1266,15 +1272,15 @@ pub impl Comp {
 
     inout fn checkAdmittedConformanceOverlap() -> Result[(), CompileDiagnostic] {
         for index in 0U64..<self.decls.conformCount() {
-            if !self.authoredConformanceTargets.contains(key: index) { continue }
+            if !self.authoredConformanceTargets.contains(key: index) && !self.admittedConformanceSubjects.contains(key: index) { continue }
             val declaration = self.decls.conformAt(index: index)
             val arguments = <PatternTypeInput.Values values=self.conformanceDeclarationTargetArguments(index: index, declaration: declaration) />
             for otherIndex in 0U64..<self.decls.conformCount() {
-                if otherIndex == index || (otherIndex < index && self.authoredConformanceTargets.contains(key: otherIndex)) { continue }
+                if otherIndex == index || (otherIndex < index && (self.authoredConformanceTargets.contains(key: otherIndex) || self.admittedConformanceSubjects.contains(key: otherIndex))) { continue }
                 val other = self.decls.conformAt(index: otherIndex)
                 if !self.sameConformanceNamespace(left: declaration, right: other) { continue }
                 val comparison = <PatternTypeInput.Values values=self.conformanceDeclarationTargetArguments(index: otherIndex, declaration: other) />
-                if self.conformancePatternsMayOverlap(a: declaration, b: other, leftArguments: arguments, rightArguments: comparison) {
+                if self.conformancePatternsMayOverlap(a: declaration, b: other, leftArguments: arguments, rightArguments: comparison, leftSubject: self.conformanceDeclarationSubjectTerms(index: index, written: declaration.subjectArgs), rightSubject: self.conformanceDeclarationSubjectTerms(index: otherIndex, written: other.subjectArgs)) {
                     val offset = if index < otherIndex { give other.defOffset } else { give declaration.defOffset }
                     return <Result.Err error=self.overlappingConformanceDiagnostic(offset: offset) />
                 }

@@ -94,7 +94,7 @@ pub impl Comp {
             DeclarationBoundRef.TraitSubject(val index) => {
                 val conformance = self.decls.conformAt(index: index)
                 val owner = conformance.subjectTraitOwner
-                return <TraitBound subject=self.receiverSubjectTerm(receiver: conformance.subjectTy, traitOwner: owner) constraint=<TraitConstraint key=<TraitInstanceKey owner=owner positionalArgs=self.copyConformTypes(types: conformance.subjectArgs) /> positionalArgsOpen=false assocPredicates=[] /> offset=conformance.defOffset />
+                return <TraitBound subject=self.receiverSubjectTerm(receiver: conformance.subjectTy, traitOwner: owner) constraint=<TraitConstraint key=<TraitInstanceKey owner=owner positionalArgs=self.copyConformTypes(types: self.conformanceDeclarationSubjectTerms(index: index, written: conformance.subjectArgs)) /> positionalArgsOpen=false assocPredicates=[] /> offset=conformance.defOffset />
             }
             DeclarationBoundRef.AssociatedType(val index) => { return self.arena.associatedBoundEvidenceAt(index: index).bound }
             DeclarationBoundRef.Requirement(val index) => { return self.arena.requirementBoundEvidenceAt(index: index).bound }

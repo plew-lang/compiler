@@ -1,0 +1,7 @@
+trait Source[T] { type Item }
+struct Number {}
+impl Number as Source[I64] { type Item=I64 }
+trait Marker[T] {}
+trait Show {}
+impl Marker[Number#Source[Bool].Item] as Show {}
+fn main() {}

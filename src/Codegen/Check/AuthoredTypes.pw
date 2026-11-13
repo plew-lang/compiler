@@ -331,13 +331,19 @@ impl Comp {
         return self.checkTraitConstraintOperands(source: source, written: written, scopes: scopes, closedOnly: false)
     }
 
-    inout fn indexConformanceTargetScopes() {
+    inout fn indexConformanceArgumentScopes() {
         for token in 1U64..<(self.sourceTypeUses.scopeCount() + 1U64) {
             val source = self.sourceTypeUses.scopeAt(token: token).unwrap()
             if source.implementation.isNone() { continue }
             val owner = source.implementation.unwrap()
             match owner.kind {
                 SourceImplementationKind.Conformance(index: val index) => {
+                    for argument in owner.receiverArguments {
+                        if owner.receiverTrait != 0U64 && self.bodyTypeNeedsViewAdmission(ref: argument) {
+                            self.conformanceSubjectScopes[index] = token
+                            break
+                        }
+                    }
                     for id in owner.targetArgumentOccurrences {
                         val occurrence = self.sourceTypeUses.useAt(index: id - 1U64).unwrap()
                         if self.bodyTypeNeedsViewAdmission(ref: occurrence.term) {
@@ -351,8 +357,59 @@ impl Comp {
         }
     }
 
+    inout fn admitConformanceSubjects() -> Result[(), CompileDiagnostic] {
+        if self.conformanceSubjectScopes.count() == 0U64 { return <Result.Ok value=() /> }
+        for index in 0U64..<self.decls.conformCount() {
+            match self.conformanceSubjectScopes.get(key: index) {
+                Optional.Some(v: val token) => { self.admittedConformanceSubjects[index] = try self.checkConformanceSubject(index: index, token: token) }
+                Optional.None => {}
+            }
+        }
+        return <Result.Ok value=() />
+    }
+
+    inout fn checkConformanceSubject(index: U64, token: U64) -> Result[AdmittedConformanceSubject, CompileDiagnostic] {
+        val declaration = self.decls.conformAt(index: index)
+        val source = self.sourceTypeUses.scopeAt(token: token).unwrap()
+        val owner = source.implementation.unwrap()
+        match source.state {
+            SourceTypeScopeState.Lowered => {}
+            _ => { return <Result.Err error=self.diagnosticAt(offset: source.anchor, msg: "conformance subject owner is not lowered", failureDomain: <FailureDomain.Internal />) /> }
+        }
+        if declaration.subjectTraitOwner != owner.receiverTrait || declaration.subjectArgs.count() != owner.receiverArgumentRecipes.count() {
+            return <Result.Err error=self.diagnosticAt(offset: source.anchor, msg: "conformance subject lost its authored arguments", failureDomain: <FailureDomain.Internal />) />
+        }
+        val receiver = self.receiverSubjectTerm(receiver: declaration.subjectTy, traitOwner: owner.receiverTrait)
+        val parameters = self.pushFuncBinds(binds: owner.parameters)
+        val scope = <DeclarationTypeScope origin=<DeclarationScopeOrigin.AssociatedBinding /> owner=index parameters=parameters selfParameter=self.arena.typeTermAt(index: receiver).paramId />
+        val scopes = <SignatureProofScopes local=scope assumptions=self.conformanceBoundAssumptions(bounds: declaration.bounds) inherited=[] receiver=receiver scopedBinders=true />
+        mut val terms: Array[U64] = []
+        mut val proofs: Array[LocalAnnotationProof] = []
+        for position in 0U64..<declaration.subjectArgs.count() {
+            val written = self.conformTypeAt(types: declaration.subjectArgs, index: position)
+            val proof = try self.checkTraitConstraintOperand(recipe: owner.receiverArgumentRecipes[position], term: written, sourceScope: token, scopes: scopes, closedOnly: false)
+            if proof.isSome() {
+                val admitted = proof.unwrap()
+                terms.append(admitted.sourceTerm)
+                proofs.append(admitted)
+            } else { terms.append(written) }
+        }
+        for proof in proofs { self.markAdmittedRecipeTypeUses(recipe: proof.recipe) }
+        return <Result.Ok value=<AdmittedConformanceSubject terms=self.pushConformTypes(types: terms) proofs=proofs /> />
+    }
+
+    fn conformanceDeclarationSubjectTerms(index: U64, written: ConformTypeRange) -> ConformTypeRange {
+        if self.admittedConformanceSubjects.count() != 0U64 {
+            match self.admittedConformanceSubjects.get(key: index) {
+                Optional.Some(v: val admitted) => { return admitted.terms }
+                Optional.None => {}
+            }
+        }
+        return written
+    }
+
     inout fn admitConformanceTargets() -> Result[(), CompileDiagnostic] {
-        if self.conformanceTargetScopes.count() == 0U64 { return <Result.Ok value=() /> }
+        if self.conformanceTargetScopes.count() == 0U64 && self.admittedConformanceSubjects.count() == 0U64 { return <Result.Ok value=() /> }
         for index in 0U64..<self.decls.conformCount() {
             if self.conformanceTargetScopes.contains(key: index) { try self.admitConformanceTarget(index: index) }
         }
