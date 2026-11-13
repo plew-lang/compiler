@@ -2760,6 +2760,7 @@ struct SourceBodyData {
     mut val valueBlocks: Dictionary[U64, SourceValueBlockFact] = [:]
     mut val valueBlockIds: Array[U64] = []
     mut val identifierTargets: Dictionary[U64, U64] = [:]
+    mut val traitValueViews: Dictionary[U64, AuthoredTypeViewProof] = [:]
     mut val globalAddresses: Dictionary[U64, SemanticGlobalAddress] = [:]
     mut val bindings: Array[SourceBindingFact] = []
     mut val bindingKeys: Dictionary[U64, U64] = [:]
@@ -2953,6 +2954,7 @@ pub impl PreparedSemanticFacts {
     fn expression(exprId: U64) -> Optional[SemanticExprType] { return readSourceExpression(rows: self.payload->expressions, identities: self.payload->expressionIds, indexSlots: self.payload->expressionIndexSlots, exprId: exprId) }
     fn valueBlock(blockId: U64) -> Optional[SourceValueBlockFact] { return self.payload->valueBlocks.get(key: blockId) }
     fn identifierTarget(exprId: U64) -> Optional[U64] { return self.payload->identifierTargets.get(key: exprId) }
+    fn traitValueView(exprId: U64) -> Optional[AuthoredTypeViewProof] { return self.payload->traitValueViews.get(key: exprId) }
     fn globalAddress(exprId: U64) -> Optional[SemanticGlobalAddress] { return self.payload->globalAddresses.get(key: exprId) }
     fn bindingNeedsCaptureCell(sourceFunction: U64, bindingTarget: U64) -> Bool { return sourceBindingNeedsCaptureCell(closures: self.payload->closurePlans, sourceFunction: sourceFunction, bindingTarget: bindingTarget) }
     fn binding(stmtId: U64) -> Optional[SourceBindingFact] { return readSourceRow(rows: self.payload->bindings, keys: self.payload->bindingKeys, key: stmtId) }

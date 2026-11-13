@@ -3,6 +3,35 @@
 // facts under a BodyInstance; they do not repeat lexical type inference.
 
 impl Comp {
+    inout fn recordTraitValueView(exprId: U64, receiver: U64, source: ResolvedViewSource) -> Result[(), CompileDiagnostic] {
+        if receiver == 0U64 { return <Result.Ok value=() /> }
+        val owner = match self.currentSourceOwner() {
+            Optional.Some(v: val owner) => owner,
+            Optional.None => { return <Result.Err error=self.diagnosticAt(offset: source.writtenStart, msg: "trait value view has no lexical body", failureDomain: <FailureDomain.Internal />) /> },
+        }
+        self.sourceFacts.activate(owner: owner)
+        val subject = self.typeRefWithoutOuterViews(ref: receiver)
+        match self.sourceFacts.activeBuilder.data.traitValueViews.get(key: exprId) {
+            Optional.Some(v: val saved) => {
+                if saved.receiver == subject && self.semanticViewSourceEq(a: saved.selector, b: source) { return <Result.Ok value=() /> }
+            }
+            Optional.None => {}
+        }
+        for active in self.arena.typeViewSources(ref: receiver) {
+            if active.traitInstance.owner != 0U64 && !self.semanticViewSourceEq(a: active, b: source) {
+                return <Result.Err error=self.diagnosticAt(offset: source.writtenStart, msg: "a view may select at most one trait source; extension views compose but trait selection is singular (spec/09)", failureDomain: <FailureDomain.Source />) />
+            }
+        }
+        val assumptions = try self.lexicalViewAssumptions(owner: self.lexicalSourceFactOwner(owner: owner))
+        val missingMessage = if source.traitInstance.positionalArgs.count() == 0U64 {
+            give "cannot view this value through that trait (`value#P`): its type does not conform to the trait — a trait view only narrows an existing conformance, it never confers one (spec/09)"
+        } else { give "trait view requires a conformance for this receiver and exact trait instance (spec/09)" }
+        val proof = try self.requireAuthoredViewProof(subject: subject, instance: source.traitInstance, assumptions: assumptions, offset: source.writtenStart, missingMessage: missingMessage)
+        val saved = <AuthoredTypeViewProof occurrence=exprId receiver=subject selector=source proof=self.freezeStaticConformanceProof(proof: proof) />
+        self.sourceFacts.activeBuilder.data.traitValueViews[exprId] = saved
+        return <Result.Ok value=() />
+    }
+
     // Completeness is independent of concrete closedness: a lexical parameter
     // or a justified projection is usable context, a bare generic head is not.
     // This only inspects the saved term's structure and declaration arity; it
@@ -1823,7 +1852,11 @@ pub impl Comp {
             Expr.ExtMethod(recv: val recv, source: val source, nameStart: val nameStart, nameLen: val nameLen, args: val args) => {
                 try self.recordExpr(exprId: recv, chainHoleRef: chainHoleRef)
                 if self.assocRecvName(recv: recv).nameLen == 0U64 {
-                    try self.checkResolvedViewValid(recv: recv, source: source, strip: false)
+                    if source.traitInstance.owner != 0U64 {
+                        try self.recordTraitValueView(exprId: exprId, receiver: self.parametricExprTerm(exprId: recv), source: source)
+                    } else {
+                        try self.checkResolvedExtensionView(recv: recv, source: source)
+                    }
                 }
                 mut val i: U64 = 0
                 while i < args.len {
@@ -1885,6 +1918,9 @@ pub impl Comp {
                     if strip {
                         sources = []
                     } else {
+                        if source.traitInstance.owner != 0U64 && self.assocRecvName(recv: exprId).nameLen == 0U64 {
+                            try self.recordTraitValueView(exprId: exprId, receiver: receiverTerm, source: source)
+                        }
                         mut val present: Bool = false
                         mut val i: U64 = 0U64
                         while i < sources.count() {

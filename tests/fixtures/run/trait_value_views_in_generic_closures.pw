@@ -1,0 +1,16 @@
+use @Std/Io only { print }
+
+trait Marker[T] { fn number() -> I64 }
+impl I64 as Marker[Bool] { fn number() -> I64 { return self } }
+
+fn show[T](value: T) where T: Marker[Bool] {
+    val first = fn() -> I64 { return value#Marker[Bool].number() }
+    val second = fn() -> I64 {
+        val viewed = value#Marker[Bool]
+        return viewed.number()
+    }
+    print(first())
+    print(second())
+}
+
+fn main() { show(value: 42I64) }

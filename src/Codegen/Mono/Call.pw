@@ -6113,6 +6113,28 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
+    inout fn requireFinalTraitValueView(exprId: U64, source: ResolvedViewSource) -> Result[(), CompileDiagnostic] {
+        val bodyId = self.currentBodyInstanceId()
+        if bodyId == 0U64 { return <Result.Ok value=() /> }
+        val facts = try self.preparedBodyFacts(bodyId: bodyId, globalInitializerTarget: self.cur.globalInitializerTarget)
+        val saved = match facts.traitValueView(exprId: exprId) {
+            Optional.Some(v: val saved) => saved,
+            Optional.None => { return <Result.Err error=self.diagnosticAt(offset: source.writtenStart, msg: "trait value view has no saved proof", failureDomain: <FailureDomain.Internal />) /> },
+        }
+        if saved.occurrence != exprId || !self.semanticViewSourceEq(a: saved.selector, b: source) {
+            return <Result.Err error=self.diagnosticAt(offset: source.writtenStart, msg: "trait value view has a foreign proof", failureDomain: <FailureDomain.Internal />) />
+        }
+        val instance = self.arena.bodyInstanceAt(index: bodyId - 1U64)
+        val environment = instance.environment
+        val subject = self.groundTermInEnvironment(ref: saved.receiver, params: environment.params, values: environment.args, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
+        mut val arguments: Array[U64] = []
+        for argument in saved.selector.traitInstance.positionalArgs {
+            arguments.append(self.groundTermInEnvironment(ref: argument, params: environment.params, values: environment.args, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef))
+        }
+        (try self.instantiateAuthoredViewProof(saved: saved, receiver: subject, arguments: arguments, environment: environment, offset: source.writtenStart, normalizations: []))
+        return <Result.Ok value=() />
+    }
+
     // Capturing is a use of a lexical binding, including a write-only place.
     // Keep value and place traversal distinct; only their binding bookkeeping
     // is shared so assignment indexes are never rewritten as value reads.
@@ -6182,8 +6204,11 @@ pub impl Comp {
                 try self.registerCallInst(id: exprId, nameStart: nameStart, nameLen: nameLen, args: callArgs, finalIdx: (try self.resolveBodyCallee(exprId: exprId)))
                 try self.finalizeAccessWriteFacets(parentExpr: exprId)
             }
-            Expr.ExtMethod(val recv, source: _, val nameStart, val nameLen, val args) => {
+            Expr.ExtMethod(val recv, val source, val nameStart, val nameLen, val args) => {
                 try self.scanExprInsts(exprId: recv)
+                if source.traitInstance.owner != 0U64 && self.assocRecvName(recv: recv).nameLen == 0U64 {
+                    try self.requireFinalTraitValueView(exprId: exprId, source: source)
+                }
                 val callArgs = (try self.callArgumentRangeForCurrentBody(exprId: exprId, authored: args))
                 mut val i: U64 = 0
                 while i < callArgs.len {
@@ -6193,10 +6218,13 @@ pub impl Comp {
                 try self.registerMethodInst(callId: exprId, finalIdx: (try self.resolveBodyCallee(exprId: exprId)))
                 try self.finalizeAccessWriteFacets(parentExpr: exprId)
             }
-            Expr.ExtView(val recv, source: _, strip: _) => {
+            Expr.ExtView(val recv, val source, val strip) => {
                 try self.scanExprInsts(exprId: recv)
                 // Every intermediate view is a typed value, even when only
                 // the outermost view reaches a call or storage boundary.
+                if !strip && source.traitInstance.owner != 0U64 && self.assocRecvName(recv: exprId).nameLen == 0U64 {
+                    try self.requireFinalTraitValueView(exprId: exprId, source: source)
+                }
                 try self.collectRecordedValueLayout(exprId: exprId)
             }
             Expr.Method(val recv, val nameStart, val nameLen, val args) => {

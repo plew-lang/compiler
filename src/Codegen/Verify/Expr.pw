@@ -187,7 +187,7 @@ pub impl Comp {
                 if self.assocRecvName(recv: id).nameLen != 0U64 {
                     return <Result.Ok value=() />
                 }
-                try self.checkResolvedViewValid(recv: recv, source: sourceSelector, strip: strip)
+                if !strip && sourceSelector.traitInstance.owner == 0U64 { try self.checkResolvedExtensionView(recv: recv, source: sourceSelector) }
                 if !(self.exprFeedsAnotherView(id: id)) {
                     val finalType: TypeInfo = (try self.typeOf(id: id))
                     try self.checkTraitSubjectViewCycles(sources: self.arena.typeViewSources(ref: finalType.ref), offset: sourceSelector.writtenStart)

@@ -120,3 +120,30 @@ though only `Marker[Bool]` is implemented. Record attaches a view to
 the operand's semantic type before Verify checks the older head lookup.
 Use the exact instance and the lexical owner when recording the
 admitted value view, then transfer its evidence to sealed body facts.
+
+## Standalone and call-receiver value views
+
+The pre-change candidate accepted a wrong instance in
+`viewed_method_wrong_trait_instance` and two instances of the same
+trait in `value_view_two_instances_of_same_trait`. It also rejected
+the second closure in `trait_value_views_in_generic_closures` because
+the old verifier did not read the enclosing generic's premises.
+
+Record now requires the complete instance when building a value
+view or recording a viewed value receiver. It stores the selected
+proof on the exact expression's source-body builder. The final
+instance scanner reads the sealed body, checks the expression and
+selector identities, and replays the proof before visiting the
+viewed layout or finalizing the call. Verify retains extension
+applicability and cycle checks. Generic declaration annotations
+already admitted with lexical premises bypass the compatibility
+sweep that has no such premises. This restores four positive
+associated-type/extension controls that the timing change had
+regressed.
+
+Fixed-input build `20261113T033415-build-7786fe` produced candidate
+`plewc-com-yjq0-value-views-checked` (`263a7415`). The three value
+rejects and existing missing-conformance diagnostic match, both
+closures print `42`, and the four restored controls pass check and
+JIT with the original expected output. A fault test at the final
+body reader and full annotation-recipe publication remain open.

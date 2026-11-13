@@ -113,7 +113,9 @@ pub impl Comp {
             val term = self.arena.typeTermAt(index: occurrence.term)
             // A projection's views belong to its receiver, not its output.
             val receiver = if term.assocNameId != 0U64 { give term.projectionReceiver } else { give occurrence.term }
-            if self.arena.typeViewSourceCount(ref: receiver) != 0U64 {
+            // Declaration binders already use their signature/impl admission.
+            // The compatibility check has no lexical premises for them.
+            if (term.siteOffset != 0U64 || (requested.isSome() && term.assocNameId == 0U64)) && self.arena.typeViewSourceCount(ref: receiver) != 0U64 {
                 val lexical = if requested.isSome() && term.assocNameId == 0U64 {
                     give <Optional.Some v=self.lexicalSourceFactOwner(owner: requested.unwrap()) />
                 } else { give <Optional.None /> }
@@ -130,13 +132,7 @@ pub impl Comp {
         for source in sources {
             if source.surfaceId != 0U64 {
                 if source.traitInstance.owner != 0U64 && lexical.isSome() {
-                    val assumptions = match lexical.unwrap() {
-                        SemanticCompletionOwner.Function(index: val function) => {
-                            val scope = try self.declarationTypeScope(owner: function)
-                            give try self.declarationScopeAssumptions(scope: scope)
-                        }
-                        _ => { give [] }
-                    }
+                    val assumptions = try self.lexicalViewAssumptions(owner: lexical.unwrap())
                     val subject = self.typeRefWithoutOuterViews(ref: receiver)
                     (try self.requireAuthoredViewProof(subject: subject, instance: source.traitInstance, assumptions: assumptions, offset: source.writtenStart))
                     selectedCount += 1U64
@@ -152,34 +148,24 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
-    // Value selectors carry the already bound source identity. Validation
-    // checks receiver applicability without reselecting a declaration by name.
-    inout fn checkResolvedViewValid(recv: U64, source: ResolvedViewSource, strip: Bool) -> Result[(), CompileDiagnostic] {
-        if strip { return <Result.Ok value=() /> }
+    inout fn lexicalViewAssumptions(owner: SemanticCompletionOwner) -> Result[Array[DeclarationBoundRef], CompileDiagnostic] {
+        match owner {
+            SemanticCompletionOwner.Function(index: val function) => {
+                val scope = try self.declarationTypeScope(owner: function)
+                return self.declarationScopeAssumptions(scope: scope)
+            }
+            SemanticCompletionOwner.Global(target: _) => { return <Result.Ok value=[] /> }
+            SemanticCompletionOwner.Closure(expression: _) => {
+                return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "trait view closure has no lexical owner", failureDomain: <FailureDomain.Internal />) />
+            }
+        }
+    }
+
+    inout fn checkResolvedExtensionView(recv: U64, source: ResolvedViewSource) -> Result[(), CompileDiagnostic] {
         val rt: TypeInfo = (try self.exprType(id: recv))
         if rt.nameLen == 0U64 { return <Result.Ok value=() /> }
-        val selected: CallableSourceHead = (try self.resolveViewSourceKey(recvStart: rt.nameStart, recvLen: rt.nameLen, recvRef: rt.ref, sourceId: source.surfaceId, sourceOwner: source.traitInstance.owner))
-        if selected.kind != 0U64 {
-            // `#Trait` is a singleton selector in the normalized view state.
-            // Compare semantic owners carried by both authored selectors; a
-            // spelling-only reconstruction here would again make imports part
-            // of the later resolver's meaning.
-            if selected.kind == 2U64 {
-                val active: Array[CallableSourceHead] = (try self.collectViewSources(recv: recv, recvStart: rt.nameStart, recvLen: rt.nameLen, recvRef: rt.ref))
-                mut val i: U64 = 0U64
-                while i < active.count() {
-                    if active[i].kind == 2U64 && !(self.sameCallableSourceHead(a: active[i], b: selected)) {
-                        return <Result.Err error=self.diagnosticAt(offset: source.writtenStart, msg: "a view may select at most one trait source; extension views compose but trait selection is singular (spec/09)") />
-                    }
-                    i += 1U64
-                }
-            }
-            return <Result.Ok value=() />
-        }
-        if source.traitInstance.owner != 0U64 {
-            return <Result.Err error=self.diagnosticAt(offset: source.writtenStart, msg: "cannot view this value through that trait (`value#P`): its type does not conform to the trait — a trait view only narrows an existing conformance, it never confers one (spec/09)") />
-        }
-
+        val selected = try self.resolveViewSourceKey(recvStart: rt.nameStart, recvLen: rt.nameLen, recvRef: rt.ref, sourceId: source.surfaceId)
+        if selected.kind != 0U64 { return <Result.Ok value=() /> }
         if self.knownExtensionSource(identity: source.surfaceId) {
             return <Result.Err error=self.diagnosticAt(offset: source.writtenStart, msg: "extension does not apply to this trait instance or concrete receiver (spec/09)") />
         }

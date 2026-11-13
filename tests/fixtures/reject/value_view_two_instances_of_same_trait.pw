@@ -1,0 +1,8 @@
+trait Marker[T] {}
+impl I64 as Marker[Bool] {}
+impl I64 as Marker[I64] {}
+
+fn main() {
+    val number = 42I64
+    val viewed = number#Marker[I64]#Marker[Bool]
+}

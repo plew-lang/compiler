@@ -1,0 +1,7 @@
+trait Marker[T] { fn number() -> I64 }
+impl I64 as Marker[Bool] { fn number() -> I64 { return self } }
+
+fn main() {
+    val number = 42I64
+    val result = number#Marker[I64].number()
+}

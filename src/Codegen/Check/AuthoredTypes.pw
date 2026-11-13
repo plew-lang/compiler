@@ -1760,10 +1760,10 @@ impl Comp {
         return <Result.Ok value=() />
     }
 
-    inout fn requireAuthoredViewProof(subject: U64, instance: TraitInstanceKey, assumptions: Array[DeclarationBoundRef], offset: U64, selectedProjection: Optional[StaticConformanceProof] = <Optional.None />) -> Result[StaticConformanceProof, CompileDiagnostic] {
+    inout fn requireAuthoredViewProof(subject: U64, instance: TraitInstanceKey, assumptions: Array[DeclarationBoundRef], offset: U64, selectedProjection: Optional[StaticConformanceProof] = <Optional.None />, missingMessage: String = "trait view requires a conformance for this receiver and exact trait instance (spec/09)") -> Result[StaticConformanceProof, CompileDiagnostic] {
         match (try self.queryTraitPatternProof(demand: <ConformanceProofDemand.SourceAdmission />, baseRef: subject, traitId: 0U64, traitOwner: instance.owner, traitArgs: <PatternTypeInput.Values values=instance.positionalArgs />, patternParams: <PatternBindInput.Values values=[] />, assumptions: assumptions, selectedProjection: selectedProjection)) {
             ConformanceProofResult.Found(proof: val proof) => { return <Result.Ok value=proof /> }
-            ConformanceProofResult.Missing => { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "trait view requires a conformance for this receiver and exact trait instance (spec/09)", failureDomain: <FailureDomain.Source />) /> }
+            ConformanceProofResult.Missing => { return <Result.Err error=self.diagnosticAt(offset: offset, msg: missingMessage, failureDomain: <FailureDomain.Source />) /> }
             ConformanceProofResult.Ambiguous(owner: _, demand: _, selectedSource: _) => { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "trait view does not have a unique conformance path (spec/09)", failureDomain: <FailureDomain.Source />) /> }
         }
     }
