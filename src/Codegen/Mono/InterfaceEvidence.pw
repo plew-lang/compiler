@@ -361,6 +361,14 @@ impl Comp {
     inout fn replayDeclarationAssumption(source: DeclarationBoundRef, receiver: U64, environment: InstanceEnvironment, normalizations: Array[ProjectionNormalizationStep]) -> Result[ConstraintProofReplay, CompileDiagnostic] {
         if !self.declarationBoundIsValid(source: source) { return <Result.Ok value=<ConstraintProofReplay.Missing /> /> }
         match source {
+            DeclarationBoundRef.Implementation(index: _) => {
+                if environment.constraints.isNone() { return <Result.Ok value=<ConstraintProofReplay.Deferred /> /> }
+                match (try self.readRetainedCallableConstraint(source: source, receiver: receiver, environment: environment)) {
+                    StaticProofInstantiation.Ready(proof: val proof) => { return <Result.Ok value=<ConstraintProofReplay.Universal proof=proof /> /> }
+                    StaticProofInstantiation.Deferred => { return <Result.Ok value=<ConstraintProofReplay.Deferred /> /> }
+                    StaticProofInstantiation.Missing => { return <Result.Ok value=<ConstraintProofReplay.Missing /> /> }
+                }
+            }
             DeclarationBoundRef.Conformance(index: val index) => {
                 match self.retainedConstraintPathTerminal(proof: environment.proof) {
                     Optional.Some(v: val witness) => {

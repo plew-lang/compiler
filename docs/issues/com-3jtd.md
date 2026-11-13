@@ -962,3 +962,23 @@ The final receiver check needs access to the retained callable constraints
 already present on the selected call. Currently `bodyInstanceEnvironment`
 compares the symbolic receiver before installing them. No repair or complete
 mode certification has been established for this increment.
+
+#### Concrete replay of an already-selected method
+
+The lexical implementation premise now reads its callable constraint by
+exact source clause ID and completed implementation ownership. The body
+admission checks the saved receiver recipe after binding the selected call's
+constraints. The resulting body signature supplies the receiver mapping
+used by Mid. The generic-call fixture
+`inherent_receiver_projection_replay` exercises the receiver, projected
+return type and a field read through that receiver. It passed source check
+but failed in JIT on `2c814c06` with the receiver mismatch, then passed
+check, JIT and linked native on `340dad81` (build
+`20261113T165121-build-b1288a`, immutable inputs unchanged). JIT goldens
+for disjoint dependent conformance receivers and the retained provided and
+requirement call constraints also matched.
+
+Concrete source lookup still needs to publish an admitted receiver with
+the selected operation. Audit its preselection inference and omitted
+defaults paths before removing the split between provisional substitutions
+and published body evidence. Full test and closure evidence is pending.

@@ -783,6 +783,29 @@ pub impl Comp {
         return false
     }
 
+    fn dependentInherentReceiverScope(function: U64) -> U64 {
+        val declaration = self.arena.functionAt(index: function)
+        if !self.arena.typeContainsAssociatedProjection(ref: declaration.recvTy) { return 0U64 }
+        val method = self.sourceTypeUses.methodScopeFor(function: self.arena.functionLexicalOwner(index: function))
+        if method.isNone() { return 0U64 }
+        val owner = self.sourceTypeUses.completedMethodImplementation(method: method.unwrap())
+        if owner.isNone() { return 0U64 }
+        match owner.unwrap().kind {
+            SourceImplementationKind.Inherent => { return method.unwrap().parent }
+            _ => { return 0U64 }
+        }
+    }
+
+    inout fn readConcreteInherentReceiver(scope: U64, environment: InstanceEnvironment) -> Result[U64, CompileDiagnostic] {
+        val saved = match self.authoredImplementationReceivers.get(key: scope) {
+            Optional.Some(v: val proof) => proof,
+            Optional.None => { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "selected inherent receiver lost its authored recipe", failureDomain: <FailureDomain.Internal />) /> },
+        }
+        mut val memo: Dictionary[U64, AuthoredRecipeRead] = [:]
+        val read = try self.readAuthoredTypeRecipe(proofs: saved.proofs, recipe: saved.recipe, environment: environment, memo: inout memo, context: <SignatureRecipeContext.Concrete />)
+        return <Result.Ok value=read.term />
+    }
+
     // Validation consumes the selected declaration and its explicit bindings.
     // It neither selects a conformance nor recovers a missing nominal owner.
     inout fn bodyReceiverMatchesDeclaration(function: Func, environment: InstanceEnvironment) -> Bool {
@@ -815,6 +838,21 @@ pub impl Comp {
         val expected = self.typeRefWithoutOuterViews(ref: declared)
         val actual = self.typeRefWithoutOuterViews(ref: receiver)
         if self.typeRefEq(a: expected, b: actual) { return true }
+        if self.arena.typeContainsAssociatedProjection(ref: expected) && environment.constraints.isSome() {
+            val constraints = environment.constraints.unwrap()
+            if self.arena.callableConstraintCount(evidence: constraints) != 0U64 {
+                val callable = self.arena.callableConstraintFunction(evidence: constraints)
+                if callable < self.arena.functionCount() {
+                    val scope = self.dependentInherentReceiverScope(function: callable)
+                    if scope != 0U64 && self.typeRefEq(a: self.arena.functionAt(index: callable).recvTy, b: function.recvTy) {
+                        return match self.readConcreteInherentReceiver(scope: scope, environment: environment) {
+                            Result.Ok(value: val term) => self.typeRefEq(a: self.typeRefWithoutOuterViews(ref: term), b: actual),
+                            Result.Err(error: _) => false,
+                        }
+                    }
+                }
+            }
+        }
         // An inherited callable belongs to the underlying declaration. This
         // does not equate two distinct newtypes that happen to share storage.
         if self.fieldStorageTypeRef(receiverRef: expected) != expected { return false }
@@ -864,7 +902,7 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
-    inout fn bodyInstanceEnvironment(fnIdx: U64, args: Array[U64], recvInstRef: U64, selectedProof: StaticConformanceProof = <StaticConformanceProof.Missing />) -> Result[InstanceEnvironment, CompileDiagnostic] {
+    inout fn bodyInstanceEnvironment(fnIdx: U64, args: Array[U64], recvInstRef: U64, selectedProof: StaticConformanceProof = <StaticConformanceProof.Missing />, pendingInherentReceiver: Bool = false) -> Result[InstanceEnvironment, CompileDiagnostic] {
         mut val params: Array[Bind] = []
         mut val values: Array[U64] = []
         mut val suppliedReceiver = recvInstRef
@@ -949,7 +987,7 @@ pub impl Comp {
         if fnIdx >= self.arena.functionCount() { return <Result.Ok value=environment />}
         val function = self.arena.functionAt(index: fnIdx)
         val complete = try self.withLexicalSelfBinding(f: function, environment: environment)
-        if !self.bodyReceiverMatchesDeclaration(function: function, environment: complete) {
+        if !pendingInherentReceiver && !self.bodyReceiverMatchesDeclaration(function: function, environment: complete) {
             if self.traceCodegen {
                 eprint(text: "[trace-codegen] body-receiver mismatch function=")
                 eprintU64(n: fnIdx)
@@ -1084,8 +1122,15 @@ pub impl Comp {
         if fnIdx >= self.arena.functionCount() { return <Result.Ok value=0U64 />}
         // A call contract exists even when its implementation has no Plew
         // body. Admit the grounded signature before deciding body demand.
-        val substitution: InstanceEnvironment = (try self.bodyInstanceEnvironment(fnIdx: fnIdx, args: args, recvInstRef: recvInstRef, selectedProof: selectedProof))
+        val receiverScope = self.dependentInherentReceiverScope(function: fnIdx)
+        val substitution: InstanceEnvironment = (try self.bodyInstanceEnvironment(fnIdx: fnIdx, args: args, recvInstRef: recvInstRef, selectedProof: selectedProof, pendingInherentReceiver: receiverScope != 0U64))
         val environment = try self.environmentWithCallableConstraints(fnIdx: fnIdx, environment: substitution, evidence: constraints)
+        if receiverScope != 0U64 {
+            val admitted = try self.readConcreteInherentReceiver(scope: receiverScope, environment: environment)
+            if !self.typeRefEq(a: self.typeRefWithoutOuterViews(ref: admitted), b: self.typeRefWithoutOuterViews(ref: environment.receiverRef)) {
+                return <Result.Err error=self.diagnosticAt(offset: self.arena.functionAt(index: fnIdx).nameStart, msg: "internal error: body receiver does not match its selected declaration") />
+            }
+        }
         return self.enqueuePreparedFinalBody(fnIdx: fnIdx, args: args, recvInstRef: recvInstRef, environment: environment)
     }
 
@@ -4182,7 +4227,13 @@ impl Comp {
         if !self.sameInstanceEnvironment(a: self.arena.callableConstraintEnvironment(evidence: evidence), b: context) { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "call constraint belongs to another instance environment", failureDomain: <FailureDomain.Internal />) /> }
         val function = self.arena.callableConstraintFunction(evidence: evidence)
         if function >= self.arena.functionCount() { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "call constraint has no function owner", failureDomain: <FailureDomain.Internal />) /> }
-        val owned = match source {
+        val retainedSource = match source {
+            DeclarationBoundRef.Implementation(index: val index) => {
+                give try self.retainedImplementationCallableClause(function: function, index: index)
+            }
+            _ => source,
+        }
+        val owned = match retainedSource {
             DeclarationBoundRef.Function(index: val index) => {
                 mut val found = false
                 if self.arena.functionAt(index: function).isProvided && self.isAuthoredProvidedDeclaration(function: function) {
@@ -4200,7 +4251,7 @@ impl Comp {
         mut val selected = count
         mut val index = 0U64
         while index < count {
-            if self.sameDeclarationBound(a: self.arena.callableConstraintSourceAt(evidence: evidence, index: index), b: source) {
+            if self.sameDeclarationBound(a: self.arena.callableConstraintSourceAt(evidence: evidence, index: index), b: retainedSource) {
                 if selected != count { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "call constraint has duplicate retained clauses", failureDomain: <FailureDomain.Internal />) /> }
                 selected = index
             }
@@ -4217,6 +4268,36 @@ impl Comp {
         return <Result.Ok value=<StaticProofInstantiation.Ready proof=proof /> />
     }
 
+    // An impl recipe refers to its lexical clause. The call plan stores the
+    // callable row for that same clause, including on a synthesized callable.
+    inout fn retainedImplementationCallableClause(function: U64, index: U64) -> Result[DeclarationBoundRef, CompileDiagnostic] {
+        val source = <DeclarationBoundRef.Implementation index=index />
+        if !self.declarationBoundIsValid(source: source) {
+            return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "receiver proof has an invalid implementation clause", failureDomain: <FailureDomain.Internal />) />
+        }
+        val clause = self.projectionBoundClauses[index]
+        val owner = self.arena.functionLexicalOwner(index: function)
+        val method = self.sourceTypeUses.methodScopeFor(function: owner)
+        if method.isNone() || method.unwrap().parent != clause.scope || self.sourceTypeUses.completedMethodImplementation(method: method.unwrap()).isNone() {
+            return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "receiver proof belongs to another implementation", failureDomain: <FailureDomain.Internal />) />
+        }
+        // The lexical row is the canonical source for inherited clauses.
+        // A synthetic callable can copy it, but must not supply another row
+        // as authority for the same authored premise.
+        mut val selected = self.decls.funcBounds.count()
+        for row in self.decls.funcBounds.indices(owner: owner) {
+            if self.decls.funcBounds.at(index: row).sourceClause != index + 1U64 { continue }
+            if selected != self.decls.funcBounds.count() {
+                return <Result.Err error=self.diagnosticAt(offset: method.unwrap().anchor, msg: "implementation clause has duplicate callable rows", failureDomain: <FailureDomain.Internal />) />
+            }
+            selected = row
+        }
+        if selected == self.decls.funcBounds.count() {
+            return <Result.Err error=self.diagnosticAt(offset: method.unwrap().anchor, msg: "implementation clause has no lexical callable row", failureDomain: <FailureDomain.Internal />) />
+        }
+        return <Result.Ok value=<DeclarationBoundRef.Function index=selected /> />
+    }
+
     inout fn instantiateConcreteConstraintProof(proof: StaticConformanceProof, receiverRef: U64, environment: InstanceEnvironment, selfRef: U64, itemRef: U64, normalizations: Array[ProjectionNormalizationStep] = []) -> Result[StaticProofInstantiation, CompileDiagnostic] {
         if receiverRef == 0U64 || !self.arena.typeIsClosed(ref: receiverRef) { return <Result.Ok value=<StaticProofInstantiation.Deferred /> /> }
         match proof {
@@ -4226,7 +4307,7 @@ impl Comp {
             StaticConformanceProof.AssumedBound(source: val source) => {
                 if !self.declarationBoundIsValid(source: source) { return <Result.Ok value=<StaticProofInstantiation.Missing /> /> }
                 match source {
-                    DeclarationBoundRef.Function(index: _) | DeclarationBoundRef.Requirement(index: _) => {
+                    DeclarationBoundRef.Function(index: _) | DeclarationBoundRef.Requirement(index: _) | DeclarationBoundRef.Implementation(index: _) => {
                         return self.readRetainedCallableConstraint(source: source, receiver: receiverRef, environment: environment)
                     }
                     DeclarationBoundRef.AssociatedType(index: val index) => {
@@ -4581,7 +4662,7 @@ pub impl Comp {
         val f = function
         match (try self.readRetainedCallableSignature(function: instance.fnIdx, environment: instance.environment)) {
             Optional.Some(v: val signature) => {
-                if f.hasRecv && self.nominalConformanceReceiverScopes.count() != 0U64 && self.arena.typeContainsAssociatedProjection(ref: f.recvTy) {
+                if f.hasRecv && self.arena.typeContainsAssociatedProjection(ref: f.recvTy) && (self.nominalConformanceReceiverScopes.count() != 0U64 || self.dependentInherentReceiverScope(function: instance.fnIdx) != 0U64) {
                     self.recordBodyTypeTermResult(bodyId: bodyId, source: self.parametricSelfRef(f: f), result: signature.receiverType)
                 }
                 mut val index = 0U64
