@@ -430,3 +430,11 @@ overlap, extension precedence and final witness consumers. Keep target
 admission dependencies tied to the requested trait path, with a bounded
 active stack. The fixture correction for unbounded structural cycle
 projections remains assigned to [com-1a3k](com-1a3k.md).
+
+Both impl lowerers now retain the authored occurrence per target argument
+on the implementation scope. The scope writer verifies ownership and
+declaration role. Build `20261113T132233-build-e56568` produced
+`e2c85391544e`. The repaired source cycle fixture passes check and JIT,
+and the existing nested projected receiver signature passes check.
+This is the provenance producer. The target admission and witness
+readers still need to consume it.

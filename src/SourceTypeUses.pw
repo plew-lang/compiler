@@ -22,6 +22,7 @@ pub struct SourceImplementationOwner {
     pub val receiverTrait: U64
     pub val receiverArguments: Array[U64]
     pub val receiverArgumentRecipes: Array[U64] = []
+    pub val targetArgumentOccurrences: Array[U64] = []
     pub val parameters: Array[Bind]
     pub val sourceModule: U64
     pub val extensionId: U64
@@ -328,6 +329,9 @@ pub impl SourceTypeUses {
         match scope.kind { SourceTypeScopeKind.Implementation => {} _ => { return false } }
         match scope.state { SourceTypeScopeState.Lowering => {} _ => { return false } }
         if scope.implementation.isSome() { return false }
+        for occurrence in implementation.targetArgumentOccurrences {
+            if occurrence == 0U64 || !self.signatureUseBelongs(id: occurrence, scope: token) { return false }
+        }
         self.scopes[token - 1U64] = <SourceTypeScope kind=scope.kind anchor=scope.anchor traitOwner=scope.traitOwner parent=scope.parent state=scope.state implementation=<Optional.Some v=implementation /> bounds=scope.bounds />
         return true
     }
