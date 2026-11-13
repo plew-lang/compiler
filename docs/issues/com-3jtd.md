@@ -44,3 +44,15 @@ their existing behavior. Reuse the raw requirement regression and its
 verified fix when auditing the remaining shared view entries. The repair and
 both old-candidate regressions are recorded in the
 [diamond checkpoint](com-30u1.md#declared-supertrait-diamond-checkpoint).
+
+## Nested projection in a provided receiver
+
+The existing run fixture `provided_signature_nested_receiver_projection`
+passes `--check` on `plewc-com-zqqi-receiver-20261112` and rejects at
+its provided impl header on `plewc-com-ab7u-final` and `8720f079`,
+with the missing exact-instance Source diagnostic. The receiver
+uses `Source[Key#Seed[Token#Leaf.Kind].Output]` and the registered
+conformance itself uses `Token#Leaf.Kind` as a positional argument.
+The common instance-formation audit must cover this declaration case,
+preserve the earlier accepted fixture and bisect the first failure.
+The reproduced failure predates the local body work in com-yjq0.

@@ -1,0 +1,14 @@
+use @Std/Io only { print }
+trait Projection { type Item }
+trait Project[T] {}
+struct Number {}
+struct Obj {}
+impl Number as Projection { type Item = I64 }
+impl Obj as Project[I64] {}
+pub impl Projection {
+    fn inspect(n: Obj) -> I64 where Self: Projection[Item=I64] {
+        val view = n#Project[Self#Projection.Item]
+        return 42I64
+    }
+}
+fn main() { print(<Number />.inspect(n: <Obj />)) }

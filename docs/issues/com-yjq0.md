@@ -388,3 +388,22 @@ The independent recheck did not approve closure. Existing check/JIT
 successes for the earlier four regressions, ordered argument cases,
 provided-body separation and sibling closure timing remain valid
 controls for the next candidate.
+
+## Keep the equation from an equivalent lexical premise
+
+The source recipe now selects a member equation among equivalent
+roots for the already-selected abstract trait instance. An opaque
+premise supplies no equation and cannot overwrite one. Conflicting
+outputs fail rather than choosing the first or last value.
+
+Fixed-input build `20261113T051557-build-fadbac` produced `8720f079`.
+The provided method fixture passes check, JIT and native with output
+42. The two orders of the equivalent free-function clauses both pass
+check and JIT. Compiler source check and the covered shorthand,
+view and concrete supertrait controls pass. Matching a normalized
+selector against the raw lexical premise remains open.
+
+The pre-existing nested provided receiver signature fixture also
+fails on the archived pre-task carrier. Its separate declaration
+formation boundary and last known passing carrier are recorded in
+[com-3jtd](com-3jtd.md#nested-projection-in-a-provided-receiver).

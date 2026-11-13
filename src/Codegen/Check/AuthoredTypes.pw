@@ -1775,7 +1775,7 @@ impl Comp {
                 val instance = <TraitInstanceKey owner=selector.traitInstance.owner positionalArgs=arguments />
                 mut val proof = try self.requireAuthoredViewProof(subject: subject, instance: instance, assumptions: projectionAssumptions, offset: selector.writtenStart, selectedProjection: selectedProjection)
                 if isProjection {
-                    proof = try self.selectSignatureProjectionEquation(proof: proof, subject: subject, owner: selector.traitInstance.owner, arguments: arguments, member: type.assocNameId, offset: occurrence.site)
+                    proof = try self.selectSignatureProjectionEquation(proof: proof, subject: subject, owner: selector.traitInstance.owner, arguments: arguments, member: type.assocNameId, assumptions: projectionAssumptions, offset: occurrence.site)
                 }
                 try self.checkStaticProofEvidence(proof: proof, offset: occurrence.site, assumptions: assumptions)
                 try self.requireDeclarationProofSupport(dependencies: (try self.scopedProofDependencies(proof: proof, scope: scope, offset: occurrence.site, normalizations: context)), offset: occurrence.site)
@@ -1822,26 +1822,36 @@ impl Comp {
         }
     }
 
-    // A path proving the inherited instance may leave this member opaque.
-    // Retain the path that declares its equation in the same premise, so
-    // requirement and provided readers can replay the original guarantee.
-    inout fn selectSignatureProjectionEquation(proof: StaticConformanceProof, subject: U64, owner: U64, arguments: Array[U64], member: U64, offset: U64) -> Result[StaticConformanceProof, CompileDiagnostic] {
-        match proof {
-            StaticConformanceProof.AssumedSupertraitPath(source: val source, steps: _) => {
-                val root = self.declarationBound(source: source)
-                match self.traitProjectionEquality(bound: root, receiver: subject, owner: owner, arguments: arguments, member: member, context: root, projectionPath: [], retainPath: true) {
-                    TraitProjectionEquality.Value(term: _, steps: val steps) => {
-                        return <Result.Ok value=<StaticConformanceProof.AssumedSupertraitPath source=source steps=steps /> />
+    // Equivalent declaration premises can contribute the equation for this
+    // instance without allowing an unrelated conformance path to compete.
+    inout fn selectSignatureProjectionEquation(proof: StaticConformanceProof, subject: U64, owner: U64, arguments: Array[U64], member: U64, assumptions: Array[DeclarationBoundRef], offset: U64) -> Result[StaticConformanceProof, CompileDiagnostic] {
+        val premise = self.signatureProjectionPremise(proof: proof)
+        if premise.source.isNone() { return <Result.Ok value=proof /> }
+        val root = premise.source.unwrap()
+        mut val selected = <TraitProjectionEquality.Missing />
+        mut val equationProof = proof
+        for source in assumptions {
+            if !self.sameSourceProofRoot(a: root, b: source) { continue }
+            val bound = self.declarationBound(source: source)
+            val equation = self.traitProjectionEquality(bound: bound, receiver: subject, owner: owner, arguments: arguments, member: member, context: bound, projectionPath: [], retainPath: true)
+            match equation {
+                TraitProjectionEquality.Value(term: _, steps: val steps) => {
+                    match selected {
+                        TraitProjectionEquality.Missing => {
+                            equationProof = if steps.count() == 0U64 { give <StaticConformanceProof.AssumedBound source=source /> }
+                              else { give <StaticConformanceProof.AssumedSupertraitPath source=source steps=steps /> }
+                        }
+                        _ => {}
                     }
-                    TraitProjectionEquality.Conflict => {
-                        return <Result.Err error=self.diagnosticAt(offset: offset, msg: "inherited associated type has conflicting equations (spec/08)", failureDomain: <FailureDomain.Source />) />
-                    }
-                    TraitProjectionEquality.Missing => {}
                 }
+                _ => {}
             }
-            _ => {}
+            selected = self.mergeTraitProjectionEquality(selected: selected, candidate: equation)
         }
-        return <Result.Ok value=proof />
+        match selected {
+            TraitProjectionEquality.Conflict => { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "inherited associated type has conflicting equations (spec/08)", failureDomain: <FailureDomain.Source />) /> }
+            _ => { return <Result.Ok value=equationProof /> }
+        }
     }
 
     // Record the bound that actually states the equality. An opaque path to
