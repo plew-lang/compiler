@@ -169,3 +169,18 @@ newtype cast and five existing numeric, From and retag controls.
 The paired `Project.Item = Bool` program has a satisfied lexical bound
 and rejects at the cast target in check and JIT. Standard generation
 `20261113T114453-gen-af9fb5` and all 47 lazy CLI cases pass.
+
+## Value selection from an active extension
+
+The fixed cast candidate `afc8f218f01f` rejects
+`trait_view_extension_only_conformance` in check and JIT. Its only
+`Marker[I64]` witness comes from the explicit `#Selection`. Type recipes
+already preserve extension sources when establishing a trait selector.
+Record was stripping every outer view from the value receiver. It now
+uses the same subject construction as the type recipe and retains that
+subject in the proof consumed by finalization.
+
+Fixed-input build `20261113T114642-build-807045`, candidate `03cc2adc0cb1`,
+prints 42 with the stored view and dependent generic call in JIT and
+linked native. Existing extension-shadowing and distinct-receipt controls
+pass. Wrong and swapped trait instances still reject in check and JIT.

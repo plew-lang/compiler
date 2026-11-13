@@ -76,7 +76,7 @@ impl Comp {
             Optional.None => { return <Result.Err error=self.diagnosticAt(offset: source.writtenStart, msg: "trait value view has no lexical body", failureDomain: <FailureDomain.Internal />) /> },
         }
         self.sourceFacts.activate(owner: owner)
-        val subject = self.typeRefWithoutOuterViews(ref: receiver)
+        val subject = self.authoredTraitViewSubject(ref: receiver)
         match self.sourceFacts.activeBuilder.data.traitValueViews.get(key: exprId) {
             Optional.Some(v: val fact) => {
                 val saved = fact.selection
