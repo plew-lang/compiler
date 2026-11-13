@@ -12,6 +12,14 @@ pub impl Comp {
         return self.readAdmittedNewtypeUnderlying(declaration: declaration)
     }
 
+    inout fn isExactNewtypeRetag(source: U64, target: U64) -> Result[Bool, CompileDiagnostic] {
+        if source == 0U64 || target == 0U64 { return <Result.Ok value=false /> }
+        val sourceUnderlying = try self.checkedNominalUnderlying(ref: source)
+        if sourceUnderlying != 0U64 && self.typeRefEq(a: sourceUnderlying, b: target) { return <Result.Ok value=true /> }
+        val targetUnderlying = try self.checkedNominalUnderlying(ref: target)
+        return <Result.Ok value=targetUnderlying != 0U64 && self.typeRefEq(a: source, b: targetUnderlying) />
+    }
+
     inout fn admitAuthoredFunctionViews() -> Result[(), CompileDiagnostic] {
         match self.authoredSignatureAdmission {
             AuthoredSignatureAdmissionPhase.Open => {}

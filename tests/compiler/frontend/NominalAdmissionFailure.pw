@@ -1,0 +1,32 @@
+// A failed nominal admission must not grant a later query permission to
+// publish another declaration's provisional RHS.
+use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use ../../../src/SourceAccess only { SourceAccess }
+use ../../../src/Diag only { FailureDomain }
+use ../../../src/Ir only { TypeRef }
+use @Std/Io only { print }
+
+fn main() {
+    mut val c = <Comp />
+    val source = "trait Marker {{}}\nstruct Base {{}}\nnewtype Bad = Base#Marker\nnewtype Pending = I64\nfn main() {{}}"
+    match analyzeFrontendForRequests(c: inout c, input: <FrontendInput.Text text=source path="NominalAdmissionFailure.pw" />, sources: <SourceAccess stdRoot=[] />) {
+        Result.Ok(value: _) => { panic("invalid nominal declaration admitted") }
+        Result.Err(error: val diagnostic) => {
+            if diagnostic.message != "trait view requires a conformance for this receiver and exact trait instance (spec/09)" { panic(diagnostic.message) }
+        }
+    }
+    if c.arena.newtypeCount() != 2U64 { panic("nominal admission did not reach declaration loading") }
+    val pending = c.arena.newtypeAt(index: 1U64)
+    val ref = c.pushType(t: <TypeRef nameStart=pending.nameStart nameLen=pending.nameLen args=[] hasDecl=true declOffset=pending.defOffset />)
+    match c.conformancePhysicalSubject(typeRef: ref) {
+        Result.Err(error: val diagnostic) => {
+            match diagnostic.failureDomain {
+                FailureDomain.Internal => {}
+                _ => { panic(diagnostic.message) }
+            }
+            if diagnostic.message != "nominal type has no matching saved annotation" { panic(diagnostic.message) }
+        }
+        Result.Ok(value: _) => { panic("failed nominal admission allowed a later declaration to publish") }
+    }
+    print("1")
+}

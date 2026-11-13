@@ -1,0 +1,15 @@
+use @Std/Io only { print }
+
+trait Project { type Item }
+struct Projector {}
+impl Projector as Project { type Item = Bool }
+newtype Flag = Bool
+newtype Projected = Projector#Project.Item
+
+fn main() {
+    val direct: Flag = true as Flag
+    val projected: Projected = true as Projected
+    if (direct as Bool) && (projected as Bool) {
+        print(42I64)
+    }
+}

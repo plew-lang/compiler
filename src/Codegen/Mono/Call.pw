@@ -6368,7 +6368,12 @@ pub impl Comp {
                 }
                 try self.finalizeCurrentBodyAggregate(exprId: exprId)
             }
-            Expr.Cast(val operand, val tyStart, val tyLen, val ty) => { try self.scanExprInsts(exprId: operand) }
+            Expr.Cast(val operand, tyStart: _, tyLen: _, ty: _) => {
+                try self.scanExprInsts(exprId: operand)
+                // A nested cast can own an intermediate Mid temporary even
+                // when no binding or call independently roots its type.
+                try self.collectRecordedValueLayout(exprId: exprId)
+            }
             Expr.OptChain(val base, val cont) => {
                 try self.scanExprInsts(exprId: base)
                 // Collection precedes Record, so it has no parametric TypeTerm

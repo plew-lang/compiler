@@ -1761,6 +1761,10 @@ pub impl Comp {
         // boundary rather than the universal source of semantic truth.
         try self.prepareInterpolationWrite(exprId: exprId)
         try self.prepareFactoryConstruction(exprId: exprId, chainHoleRef: chainHoleRef)
+        val hasPreparedCastOperand = match self.arena.exprs[exprId] {
+            Expr.Cast(val operand, val tyStart, val tyLen, val ty) => { give try self.prepareCastFactory(exprId: exprId, operand: operand, target: ty, typeStart: tyStart, typeLen: tyLen, chainHoleRef: chainHoleRef) }
+            _ => false
+        }
         match self.arena.exprs[exprId] {
             // These literals have a type fixed by their own spelling.  Record
             // it as a TypeTerm directly instead of routing through TypeInfo;
@@ -1841,7 +1845,7 @@ pub impl Comp {
             Expr.Method(val recv, val nameStart, val nameLen, val args) => {
                 try self.recordExpr(exprId: recv, chainHoleRef: chainHoleRef)
                 mut val i: U64 = 0
-                while i < args.len {
+                while !hasPreparedCastOperand && i < args.len {
                     try self.recordExpr(exprId: self.argAt(args: args, index: i).expr, chainHoleRef: chainHoleRef, deferContext: true)
                     i += 1
                 }
@@ -2201,8 +2205,10 @@ pub impl Comp {
             }
             Expr.Cast(val operand, tyStart: _, tyLen: _, val ty) => {
                 try self.collectRecordedType(ref: ty)
-                val operandContext: U64 = try self.castLiteralContextTerm(operand: operand, targetTerm: ty)
-                try self.recordExpr(exprId: operand, chainHoleRef: chainHoleRef, expectedTerm: operandContext)
+                if !hasPreparedCastOperand {
+                    val operandContext = try self.castLiteralContextTerm(operand: operand, targetTerm: ty)
+                    try self.recordExpr(exprId: operand, chainHoleRef: chainHoleRef, expectedTerm: operandContext)
+                }
                 // `as Target` is an explicit source-level type boundary; Lower
                 // has resolved Target into `ty`, so this is not an inference
                 // query. Recording it directly preserves a generic/view term

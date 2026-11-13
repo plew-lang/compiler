@@ -525,6 +525,9 @@ pub impl Comp {
         // (`true as I64`, `1I64 as Bool`) — use match / a comparison instead.
         val targetBool: Bool = rangeEquals(bytes: self.arena.bytes, start: tyStart, len: tyLen, kw: "Bool")
         val targetNum: Bool = self.isIntType(start: tyStart, len: tyLen) || self.isFloatType(start: tyStart, len: tyLen)
+        if targetBool && (try self.isExactNewtypeRetag(source: self.parametricExprTerm(exprId: operand), target: targetTerm)) {
+            return <Result.Ok value=() />
+        }
         if (try self.castOperandIsBool(operand: operand)) {
             if targetNum {
                 return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: operand), msg: "`as` cannot cast a Bool to a numeric type (Bool is not numeric; spec/12)") />

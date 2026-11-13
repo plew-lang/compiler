@@ -351,3 +351,28 @@ passed check, JIT and linked native execution. Lazy CLI passed all 47
 checks. Internal programs that import the compiler are separate from
 these counts. The final review, generation rerun and same-source
 comparison are still required.
+
+## Nested retag lifetime and failure-state checkpoint
+
+Focused review at `e382bebc` identified a duplicated operand walk:
+cast conversion preparation and ordinary Record both recorded the same
+operand. The lexical cast path now passes that local preparation result
+to either the retag or the factory call, with ordinary contextual
+refinement still owned by Record. The same fixture class found a
+distinct final-use failure: a cast used only as a nested intermediate
+did not root its destruction contract. A function returning
+`(raw as Projected) as Number` failed JIT and native Mid preparation on
+`d666607fcba1`; it now publishes the recorded intermediate type to the
+same destruction worklist used by other owned temporaries.
+
+The shared exact-retag test also handles newtypes whose checked
+underlying is Bool before Verify's numeric rules. Both the fixed
+baseline and the preceding candidate rejected the direct Bool retag.
+This closes the tested direct/projected case without allowing
+ordinary numeric-to-Bool casts.
+
+The compiled `NominalAdmissionFailure` control ran independently,
+returned exit 0 and matched its golden on `d666607fcba1`. After nominal
+admission fails, public conformance lookup refuses to create evidence
+for a later declaration. The latest fixed-input build
+`20261113T111036-build-729084` produced `92b3cf006403`.
