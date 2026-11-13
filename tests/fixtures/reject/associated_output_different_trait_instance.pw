@@ -1,0 +1,12 @@
+use @Std/Io only { print }
+trait Preferred[A] {}
+trait Holder { type Item }
+struct Worker {}
+impl Worker as Preferred[I64] {}
+impl Worker as Preferred[Bool] {}
+struct Box[T] {}
+impl[T] Box[T] as Holder where T: Preferred[I64], T: Preferred[Bool] { type Item = T#Preferred[I64] }
+fn accept[T, U](marker: T, value: U) -> I64 where T: Preferred[I64], T: Preferred[Bool], U: Holder[Item=T#Preferred[Bool]] {
+    return 42I64
+}
+fn main() { print(accept(marker: <Worker />, value: <Box[Worker] />)) }

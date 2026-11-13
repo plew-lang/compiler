@@ -573,12 +573,16 @@ pub impl Comp {
         }
         if semantic.paramId != 0U64 {
             val byParam: U64 = self.witnessBindParamIndex(binds: matchResult.binds, paramId: semantic.paramId)
-            if byParam < matchResult.binds.count() { return <Result.Ok value=matchResult.binds[byParam].term />}
+            if byParam < matchResult.binds.count() {
+                return <Result.Ok value=self.typeRefWithAddedViewSources(ref: matchResult.binds[byParam].term, additions: self.arena.typeViewSources(ref: ref)) />
+            }
         }
         val binder: U64 = self.plainBinder(ref: ref, params: params)
         if binder < params.count() {
             val found: U64 = self.witnessBindIndex(binds: matchResult.binds, binder: binder)
-            if found < matchResult.binds.count() { return <Result.Ok value=matchResult.binds[found].term />}
+            if found < matchResult.binds.count() {
+                return <Result.Ok value=self.typeRefWithAddedViewSources(ref: matchResult.binds[found].term, additions: self.arena.typeViewSources(ref: ref)) />
+            }
             return <Result.Ok value=ref />
         }
         val t: TypeRef = semantic

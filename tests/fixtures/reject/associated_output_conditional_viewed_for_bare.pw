@@ -1,0 +1,12 @@
+use @Std/Io only { print }
+trait Preferred {}
+trait Holder { type Item }
+trait Eligible {}
+struct Worker {}
+impl Worker as Preferred {}
+struct Box[T] {}
+impl[T] Box[T] as Holder where T: Preferred { type Item = T#Preferred }
+struct Envelope[T] {}
+impl[T] Envelope[T] as Eligible where T: Preferred, Box[T]: Holder[Item=T] {}
+fn accept[U](value: U) -> I64 where U: Eligible { return 42I64 }
+fn main() { print(accept(value: <Envelope[Worker] />)) }

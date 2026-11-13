@@ -75,3 +75,21 @@ bare, two different trait views, and missing `Preferred` conformance
 reject with the expected where-clause diagnostic. The fixed baseline
 rejects the new viewed positive fixture. This checkpoint adds only
 regression coverage; independent review remains pending.
+
+## Witness substitution for conditional predicates
+
+Independent review traced the original loss to `groundWitnessTypeTerm`.
+Its zero-positional-argument branch replaced a parameter with the saved
+binder term without preserving the original view. The direct call was
+already repaired by using the admitted binding recipe. The same loss
+remained when grounding the expected predicate of a conditional impl and
+the immediate RHS of a retained projection equation.
+
+`associated_output_conditional_trait_view` rejects on `17e89289`
+and succeeds on `ee7bfebf`. Witness substitution now preserves the
+authored view on both the ParamId and positional binder replacements.
+The matching same-owner instance control also succeeds; changing only
+the trait's positional argument is rejected. Six check/JIT/native
+controls and six rejection controls passed. Build
+`20261113T020149-build-840df8` passed, with same-source medians
+6.896634 s and 6.898719 s and identical LLVM in all eight runs.
