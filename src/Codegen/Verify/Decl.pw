@@ -109,6 +109,9 @@ pub impl Comp {
 
     inout fn checkAuthoredTypeViews(occurrences: Array[U64], requested: Optional[SemanticCompletionOwner] = <Optional.None />) -> Result[(), CompileDiagnostic] {
         for id in occurrences {
+            // Declaration-owned recipes already validated their entire view
+            // set in the correct scope, including extension applicability.
+            if requested.isNone() && self.admittedRecipeTypeUses.contains(id) { continue }
             val occurrence = try self.signatureOccurrence(id: id)
             val term = self.arena.typeTermAt(index: occurrence.term)
             // A projection's views belong to its receiver, not its output.

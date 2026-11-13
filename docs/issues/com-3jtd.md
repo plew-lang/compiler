@@ -712,3 +712,35 @@ in check and JIT. The existing concrete qualifier, strip, generic
 associated call and associated subject fixtures passed check and JIT.
 Fixed-input generation `20261113T150844-gen-1cb85e` passed.
 Final selection among competing instances remains in com-4k31.
+
+### Declaration compatibility sweep coverage
+
+The declaration-wide compatibility sweep skips occurrences already
+marked by successful declaration recipe checks. These recipes admit the
+complete trait instance, validate applicable extension sources and check
+the normalized source set for cycles. The body sweep is unchanged:
+lowering still marks some body occurrences before their receipts exist,
+so that marker alone is insufficient to remove the body sweep.
+
+Fixed-input build `20261113T151308-build-ed0704` produced `9e27a108cdfb`
+from baseline candidate `e4d539f239a2`. The projected newtype/field,
+composed extension, generic extension, retained supertrait and open
+type-qualifier controls passed check and JIT. The projected newtype
+control also printed 42 in linked native execution. Seven rejection
+controls kept identical check diagnostics, including the wrong nominal
+instance, source-set cycles, multiple trait selectors, a missing
+extension bound and an inapplicable extension in a conformance target.
+
+The remaining declaration sweep still has an owner/arity-only branch.
+Both candidates accepted an unused `impl Box[Number#Mark[Bool]]`
+although Number implements only `Mark[I64]`. The positive
+`impl Box[Number#Mark[I64]]` additionally runs its method and prints 42.
+The nominal impl receiver currently discards the written root occurrence;
+the receiver argument recipe list is populated only for trait subjects.
+Retain and admit the nominal receiver under its original impl scope,
+including inherent impls that have no conformance row. The parent
+guarantee already covers this adapter. An inherent `type Item = ...`
+also bypasses the associated-binding admission loop on both candidates;
+spec/08 describes associated bindings under trait conformance, so
+establish whether an inherent alias is a supported surface before
+counting that probe as a view-formation regression.
