@@ -1416,3 +1416,22 @@ matched linked native output. The additional immediate result probe
 Derived types whose evidence comes through other producers (including an
 inferred binding, a projected field or result, and generic substitution)
 still need provenance tracing before removing the compatibility lookup.
+
+### Forward initializer and field annotation evidence
+
+An inferred local preserves the initializer's saved extension sources by
+binding identity for subsequent receiver reads in the lexical body.
+Nominal field projection takes evidence from the already selected field's
+annotation occurrence. The current result type still determines which
+extensions are active. This leaves unannotated receivers and views
+supplied through generic argument substitution on the compatibility path.
+
+Fixed-input build `20261113T211629-build-d230da` produced `d8b35a35`.
+Twelve existing controls matched check and JIT. The scratch probe
+`tmp/com-3jtd/derived-extension/derived.pw` in meta checks a two-step inferred
+binding, a viewed annotated field, and a bare shadowed receiver. Expected
+`11/42/0/11` matched in precursor check/JIT and candidate check/JIT/native.
+The change preserves behavior while removing the need to re-admit these
+saved extensions in Record's candidate lookup. Closure-crossing inferred
+bindings, generic-substituted fields and other derived terms still require
+an explicit evidence handoff before removing compatibility lookup.

@@ -1573,7 +1573,13 @@ pub impl Comp {
                 val structIndex: U64 = self.structIndexForType(ref: storageRef)
                 if structIndex < self.arena.structCount() {
                     fieldCount = self.arena.structAt(index: structIndex).fields.count()
-                    if fieldIndex < fieldCount { isBoxed = self.fieldIsBoxed(f: self.arena.structFieldAt(structIndex: structIndex, fieldIndex: fieldIndex)) }
+                    if fieldIndex < fieldCount {
+                        val field = self.arena.structFieldAt(structIndex: structIndex, fieldIndex: fieldIndex)
+                        isBoxed = self.fieldIsBoxed(f: field)
+                        if field.authoredTypeUse != 0U64 && self.arena.typeViewSourceCount(ref: fieldTerm) != 0U64 {
+                            self.recordExpressionExtensionSources(exprId: exprId, proofs: self.authoredExtensionViews.getOr(key: field.authoredTypeUse, fallback: []))
+                        }
+                    }
                 }
             }
             if fieldIndex < fieldCount {
@@ -1958,8 +1964,16 @@ pub impl Comp {
                     val local: Local = (try self.typedLocal(index: localIdx))
                     if local.ty != 0U64 {
                         self.recordSemanticExprTerm(exprId: exprId, term: local.ty)
-                        if local.authoredTypeUse != 0U64 && self.arena.typeViewSourceCount(ref: local.ty) != 0U64 {
-                            val proofs = self.authoredExtensionViews.getOr(key: local.authoredTypeUse, fallback: [])
+                        if self.arena.typeViewSourceCount(ref: local.ty) != 0U64 {
+                            mut val proofs: Array[SourceExtensionViewProof] = []
+                            if local.authoredTypeUse != 0U64 {
+                                proofs = self.authoredExtensionViews.getOr(key: local.authoredTypeUse, fallback: [])
+                            } else {
+                                val owner = self.currentSourceOwner()
+                                if owner.isSome() && self.sourceFacts.isActive(owner: owner.unwrap()) {
+                                    proofs = self.sourceFacts.activeBuilder.data.inferredBindingExtensionViews.getOr(key: local.nameStart, fallback: [])
+                                }
+                            }
                             self.recordExpressionExtensionSources(exprId: exprId, proofs: proofs)
                         }
                     }
@@ -2736,6 +2750,12 @@ pub impl Comp {
                     self.addLocal(nameStart: nameStart, nameLen: nameLen, tyStart: tyStart, tyLen: tyLen, isArray: tyIsArray, ty: expected, isInout: false, isMut: mutable, owned: true, authoredTypeUse: annotation.unwrap().occurrence)
                 } else {
                     try self.addLetLocal(nameStart: nameStart, nameLen: nameLen, tyStart: tyStart, tyLen: tyLen, tyIsArray: tyIsArray, ty: ty, init: init, mutable: mutable, owned: true)
+                    if ty == 0U64 {
+                        val proofs = self.recordedExtensionSources(exprId: init)
+                        if proofs.count() != 0U64 {
+                            self.sourceFacts.activeBuilder.data.inferredBindingExtensionViews[nameStart] = proofs
+                        }
+                    }
                 }
                 self.storeBuildingSemanticBinding(stmtId: stmtId, declarationTarget: nameStart, isMutable: mutable, typeTerm: self.cur.locals[self.cur.locals.count() - 1U64].ty, endedBinding: endedBinding, annotation: annotation)
                 self.commitSourceTypeContext(exprId: init)
