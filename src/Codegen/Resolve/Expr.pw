@@ -1300,7 +1300,19 @@ pub impl Comp {
     }
 
     inout fn recordStaticMethodTemplate(exprId: U64, receiverTerm: U64, receiver: CallTemplateReceiver, args: ArgRange, resolution: StaticMemberResolution, resultTerm: U64) -> Result[(), CompileDiagnostic] {
-        val declaration = try self.selectedStaticCallDeclaration(resolution: resolution, offset: self.exprOffset(id: exprId))
+        val offset = self.exprOffset(id: exprId)
+        mut val resultOccurrence = 0U64
+        val declaration = match resolution {
+            StaticMemberResolution.Requirement(val proof, traitIdx: val traitIndex, reqIdx: val slot) => {
+                if self.proofIsMissing(proof: proof) {
+                    return <Result.Err error=self.diagnosticAt(offset: offset, msg: "selected static callable has no declaration or proof (internal)", failureDomain: <FailureDomain.Internal />) />
+                }
+                val signature = try self.admittedRequirementSignature(traitIndex: traitIndex, slot: slot, offset: offset)
+                resultOccurrence = signature.source.result
+                give signature.declaration
+            }
+            _ => { give try self.selectedStaticCallDeclaration(resolution: resolution, offset: offset) }
+        }
         self.recordInvocationCompletion(exprId: exprId, diverging: declaration.isDiverging, returnsUnit: self.callableResultIsUnit(ref: self.semanticCallableReturnTerm(function: declaration)))
         match resolution {
             StaticMemberResolution.Requirement(proof: _, traitIdx: _, reqIdx: _) => {
@@ -1332,6 +1344,7 @@ pub impl Comp {
                 methodArguments = self.signatureTypeArguments(f: function, environment: environment)
                 val signature = try self.providedSourceSignature(function: callee, environment: environment)
                 selectedResult = signature.resultType
+                resultOccurrence = signature.resultOccurrence
                 providedParameters = signature.parameterTypes
             }
             _ => {}
@@ -1365,6 +1378,12 @@ pub impl Comp {
         if self.callableResultIsUnit(ref: self.semanticCallableReturnTerm(function: declaration)) {
             try self.recordKnownExpressionResult(exprId: exprId, resultTerm: selectedResult)
         } else { self.recordSemanticExprTerm(exprId: exprId, term: selectedResult) }
+        if selectedResult != 0U64 && resultOccurrence != 0U64 {
+            self.recordAuthoredCompositeOrigin(exprId: exprId, term: selectedResult, occurrence: resultOccurrence)
+            if self.arena.typeViewSourceCount(ref: selectedResult) != 0U64 {
+                self.recordExpressionExtensionSources(exprId: exprId, proofs: self.authoredResultExtensionSources(occurrence: resultOccurrence))
+            }
+        }
         // Like Direct calls, keep the unsealed selection during preparation.
         // The generic checker needs its contextual substitution before the
         // publication walk; closure still happens only after validation.

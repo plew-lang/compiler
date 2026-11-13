@@ -20,7 +20,25 @@ fn makePair() -> Slot[Counter#Read, Counter#Other] {
     return <Slot[Counter#Read, Counter#Other] item=<Counter n=42I64 />#Read other=<Counter n=8I64 />#Other />
 }
 newtype Wrapped = Slot[Counter#Read, Counter#Other]
+trait PairSource {
+    fn pair() -> Slot[Counter#Other, Counter#Read]
+}
+pub impl PairSource {
+    fn providedPair() -> Slot[Counter#Read, Counter#Other] { return makePair() }
+}
+struct PairMaker {}
+impl PairMaker as PairSource {
+    fn pair() -> Slot[Counter#Other, Counter#Read] {
+        return <Slot[Counter#Other, Counter#Read] item=<Counter n=8I64 />#Other other=<Counter n=42I64 />#Read />
+    }
+}
+fn useSource[T](source: T) where T: PairSource {
+    val pair = source.pair()
+    print(take(value: pair).get())
+    print(take(value: source.providedPair()).get())
+}
 fn main() {
+    useSource(source: <PairMaker />)
     val inferred = <Slot[Counter#Read, Counter#Other] item=<Counter n=42I64 />#Read other=<Counter n=8I64 />#Other />
     val holder = <Holder pair=<Slot[Counter#Other, Counter#Read] item=<Counter n=8I64 />#Other other=<Counter n=42I64 />#Read /> />
     print(take(value: holder.pair).get())

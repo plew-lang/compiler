@@ -1602,3 +1602,26 @@ pre-existing missing-cast-conversion admission gap is recorded in
 [com-q6xg](com-q6xg.md). The next remaining routes are composite
 static requirement results and children supplied by inference. Keep the
 lookup compatibility path until their coverage is established.
+
+### Retain selected static callable result origins
+
+The abstract trait requirement uses the admitted requirement slot, and the
+provided callable uses the result occurrence returned with its retained
+signature. Both publish the authored result for downstream child selection
+alongside the already selected result term, before a parent or inferred
+binding consumes the call. Both keep the existing distinction between a
+declared view and a view present only in the caller's substitution.
+
+Build `20261113T223230-build-b19c14` produced `f8c253d2`. The expanded
+`generic_child_extension_evidence` passes check, JIT and linked native.
+A generic call through the required signature prints 99 and a provided
+member on the same bound prints 42. Precursor `3bf7023e` also passes the
+public control. Ten adjacent run inputs pass check and JIT, and three
+rejection controls retain their expected check diagnostics.
+
+Omitting explicit arguments from the memberwise construction in that
+control also succeeds on the precursor. The original inference loop
+commits type arguments from successful field matches, but returns only
+the built term, so the exact field occurrence and matched child are lost.
+Retain that origin at the existing substitution decision, then test that
+the downstream call works with the corresponding lookup fallback disabled.

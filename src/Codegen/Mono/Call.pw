@@ -432,7 +432,7 @@ impl Comp {
                 if rangeEquals(bytes: self.arena.bytes, start: returned.nameStart, len: returned.nameLen, kw: "Promise") && returned.args.count() == 1U64 { bodyResult = returned.args[0U64] }
             }
         }
-        return <Result.Ok value=<Optional.Some v=<RetainedCallableTypes parameterTypes=parameters resultType=result bodyResultType=bodyResult /> /> />
+        return <Result.Ok value=<Optional.Some v=<RetainedCallableTypes parameterTypes=parameters resultType=result bodyResultType=bodyResult resultOccurrence=source.result /> /> />
     }
 
     // A candidate already names both source and placement declarations.

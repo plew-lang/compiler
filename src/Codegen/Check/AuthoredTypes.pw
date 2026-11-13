@@ -1805,12 +1805,17 @@ impl Comp {
         return <Result.Ok value=token />
     }
 
-    inout fn admittedRequirementDeclaration(traitIndex: U64, slot: U64, offset: U64) -> Result[Func, CompileDiagnostic] {
+    inout fn admittedRequirementSignature(traitIndex: U64, slot: U64, offset: U64) -> Result[AuthoredRequirementSignature, CompileDiagnostic] {
         if traitIndex >= self.decls.traitCount() || slot >= self.decls.traitAt(index: traitIndex).reqs.count() {
             return <Result.Err error=self.diagnosticAt(offset: offset, msg: "selected requirement has no declaration slot", failureDomain: <FailureDomain.Internal />) />
         }
         val scope = try self.requireAdmittedRawRequirement(traitIndex: traitIndex, slot: slot, offset: offset)
-        return <Result.Ok value=self.authoredRequirementViews[scope].declaration />
+        return <Result.Ok value=self.authoredRequirementViews[scope] />
+    }
+
+    inout fn admittedRequirementDeclaration(traitIndex: U64, slot: U64, offset: U64) -> Result[Func, CompileDiagnostic] {
+        val signature = try self.admittedRequirementSignature(traitIndex: traitIndex, slot: slot, offset: offset)
+        return <Result.Ok value=signature.declaration />
     }
 
     // The public interface interprets the selected declaration's recipe. Its
