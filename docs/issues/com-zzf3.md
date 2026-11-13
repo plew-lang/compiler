@@ -370,3 +370,35 @@ is still unverified. Verify a valid but foreign proof and restore the
 original through an internal test without expanding the production
 mutation API. Confirm remaining evidence cases and re-review before
 closing.
+
+## Full declaration bound validation
+
+The native scratch probe kept the clause and output type fixed while
+substituting another subject's valid `Source` proof. `de958158`
+accepted the replacement and `93ba3600` rejected it. Both accepted
+the original before and after the replacement. No production mutation
+API was added.
+
+The independent follow-up review found a second issue. Replacing the
+row bound and its proof together from `Entry: Source[I64]` to
+`Entry: Source[Bool]` passed `93ba3600` even though both instances
+returned the same associated type. The declaration producer, requirement
+reader and interface replay now share construction of the complete
+pre-normalization bound from the original impl. In the native probe,
+`Service.Input: Source[I64]` drives a requirement returning
+`Wrapper[Self#Service.Input]#Select.Value`. The producer's selected
+row is replaced before publication with the valid extension witness
+and bound for `Entry: Source[Bool]`. Candidate `a1fc14fc` reports
+`retained associated clause differs from its declared bound` and
+accepts the original control before and after the replacement. It also
+continues to reject the subject-only proof replacement.
+
+Build `20261113T002212-build-c65a55`, generation
+`20261113T002656-gen-ed1b75` and eight public check/JIT/native controls
+passed. Same-source medians were 6.855093 s and 6.879164 s, with
+identical LLVM output across all eight executions. The broad diagnostic
+batch on the prior candidate timed out during a compiler-importing JIT
+fixture and is not counted. The review also identified a remaining
+case to verify: replacing a clause proof with a same-shaped premise
+from an unrelated lexical owner. Final independent review and that
+scope check are pending.

@@ -1045,55 +1045,87 @@ pub impl Comp {
         return self.groundTraitRequirementType(ref: reified, traitIdx: traitIndex, receiverRef: conformance.subjectTy, params: self.copyTraitBinds(binds: declaration.typeParams), args: arguments)
     }
 
-    inout fn checkAssociatedBounds(conformIndex: U64, conformance: Conform, traitIndex: U64, assumptions: Array[DeclarationBoundRef]) -> Result[(), CompileDiagnostic] {
-        if self.arena.hasConformanceAssociatedEvidence(conformance: conformIndex) { return <Result.Ok value=() /> }
-        val declaration = self.decls.traitAt(index: traitIndex)
-        mut val evidence: Array[ConformanceAssociatedEvidence] = []
+    inout fn conformanceAssociatedOutputs(conformance: Conform) -> Array[TraitAssocPredicate] {
         mut val outputs: Array[TraitAssocPredicate] = []
         mut val index = 0U64
-        while declaration.assocBounds.len != 0U64 && index < conformance.assocBindingIds.count() {
+        while index < conformance.assocBindingIds.count() {
             val binding = self.decls.assocBindings[self.conformFuncIdAt(ids: conformance.assocBindingIds, index: index)]
             val term = self.groundTermInEnvironment(ref: binding.ty, params: [], values: [], selfRef: conformance.subjectTy)
             outputs.append(<TraitAssocPredicate member=binding.nameId value=term span=binding.tyStart />)
             index += 1U64
         }
-        index = 0U64
+        return outputs
+    }
+
+    inout fn conformanceAssociatedDeclarationBound(conformance: Conform, traitIndex: U64, clause: U64, outputs: Array[TraitAssocPredicate]) -> Result[TraitBound, CompileDiagnostic] {
+        val declaration = self.decls.traitAt(index: traitIndex)
+        if clause < declaration.assocBounds.start || clause - declaration.assocBounds.start >= declaration.assocBounds.len {
+            return <Result.Err error=self.diagnosticAt(offset: conformance.defOffset, msg: "associated clause belongs to another trait", failureDomain: <FailureDomain.Internal />) />
+        }
+        val bound = self.traitAssociatedBoundAt(bounds: declaration.assocBounds, index: clause - declaration.assocBounds.start)
+        mut val subject = 0U64
+        mut val offset = conformance.defOffset
+        for val output in outputs {
+            if output.member == bound.member { subject = output.value offset = output.span }
+        }
+        if subject == 0U64 {
+            return <Result.Err error=self.diagnosticAt(offset: conformance.defOffset, msg: "associated type required by a trait constraint is not bound") />
+        }
+        mut val arguments: Array[U64] = []
+        for val argument in bound.constraint.key.positionalArgs {
+            val term = self.conformanceAssociatedConstraintTerm(ref: argument, traitIndex: traitIndex, conformance: conformance, outputs: outputs)
+            arguments.append(term)
+        }
+        mut val predicates: Array[TraitAssocPredicate] = []
+        for val predicate in bound.constraint.assocPredicates {
+            val term = self.conformanceAssociatedConstraintTerm(ref: predicate.value, traitIndex: traitIndex, conformance: conformance, outputs: outputs)
+            predicates.append(<TraitAssocPredicate member=predicate.member value=term span=predicate.span />)
+        }
+        val constraint = <TraitConstraint key=<TraitInstanceKey owner=bound.constraint.key.owner positionalArgs=arguments /> positionalArgsOpen=bound.constraint.positionalArgsOpen assocPredicates=predicates />
+        return <Result.Ok value=<TraitBound subject=subject constraint=constraint offset=offset /> />
+    }
+
+    inout fn checkAssociatedBounds(conformIndex: U64, conformance: Conform, traitIndex: U64, assumptions: Array[DeclarationBoundRef]) -> Result[(), CompileDiagnostic] {
+        if self.arena.hasConformanceAssociatedEvidence(conformance: conformIndex) { return <Result.Ok value=() /> }
+        val declaration = self.decls.traitAt(index: traitIndex)
+        mut val evidence: Array[ConformanceAssociatedEvidence] = []
+        val outputs: Array[TraitAssocPredicate] = if declaration.assocBounds.len == 0U64 { give [] } else { give self.conformanceAssociatedOutputs(conformance: conformance) }
+        mut val index = 0U64
         while index < declaration.assocBounds.len {
-            val bound = self.traitAssociatedBoundAt(bounds: declaration.assocBounds, index: index)
-            mut val subject = 0U64
-            mut val offset = conformance.defOffset
-            for val output in outputs {
-                if output.member == bound.member { subject = output.value offset = output.span }
-            }
-            if subject == 0U64 {
-                return <Result.Err error=self.diagnosticAt(offset: conformance.defOffset, msg: "associated type required by a trait constraint is not bound") />
-            }
-            mut val arguments: Array[U64] = []
-            for val argument in bound.constraint.key.positionalArgs {
-                val term = self.conformanceAssociatedConstraintTerm(ref: argument, traitIndex: traitIndex, conformance: conformance, outputs: outputs)
-                arguments.append(term)
-            }
-            mut val predicates: Array[TraitAssocPredicate] = []
-            for val predicate in bound.constraint.assocPredicates {
-                val term = self.conformanceAssociatedConstraintTerm(ref: predicate.value, traitIndex: traitIndex, conformance: conformance, outputs: outputs)
-                predicates.append(<TraitAssocPredicate member=predicate.member value=term span=predicate.span />)
-            }
-            val constraint = <TraitConstraint key=<TraitInstanceKey owner=bound.constraint.key.owner positionalArgs=arguments /> positionalArgsOpen=bound.constraint.positionalArgsOpen assocPredicates=predicates />
-            val proof = try self.viewedTraitConstraintProof(demand: <ConformanceProofDemand.SourceAdmission />, ref: subject, constraint: constraint, assumptions: assumptions)
+            val clause = declaration.assocBounds.start + index
+            val original = try self.conformanceAssociatedDeclarationBound(conformance: conformance, traitIndex: traitIndex, clause: clause, outputs: outputs)
+            val proof = try self.viewedTraitConstraintProof(demand: <ConformanceProofDemand.SourceAdmission />, ref: original.subject, constraint: original.constraint, assumptions: assumptions)
             if self.proofIsMissing(proof: proof) {
-                return <Result.Err error=self.diagnosticAt(offset: offset, msg: "associated type does not satisfy its declared trait constraint") />
+                return <Result.Err error=self.diagnosticAt(offset: original.offset, msg: "associated type does not satisfy its declared trait constraint") />
             }
             // Preserve the exact SourceAdmission inputs. Recording afterward
             // cannot change the selected proof or replace its source provenance.
-            val original = <TraitBound subject=subject constraint=constraint offset=offset />
             val normalizations = try self.recordSelectedBoundNormalizations(bound: original, proof: proof, assumptions: assumptions)
             val expected = try self.replayBoundNormalizations(bound: original, normalizations: normalizations)
-            try self.checkRetainedWitnessClause(expected: expected, proof: proof, normalizations: normalizations, offset: offset, assumptions: assumptions)
-            evidence.append(<ConformanceAssociatedEvidence clause=declaration.assocBounds.start + index bound=original proof=self.freezeStaticConformanceProof(proof: proof) normalizations=normalizations />)
+            try self.checkRetainedWitnessClause(expected: expected, proof: proof, normalizations: normalizations, offset: original.offset, assumptions: assumptions)
+            evidence.append(<ConformanceAssociatedEvidence clause=clause bound=original proof=self.freezeStaticConformanceProof(proof: proof) normalizations=normalizations />)
             index += 1U64
         }
         if !self.arena.publishConformanceAssociatedEvidence(conformance: conformIndex, evidence: evidence) { return <Result.Err error=self.diagnosticAt(offset: conformance.defOffset, msg: "associated constraint evidence could not be published") /> }
         return <Result.Ok value=() />
+    }
+
+    // A row and its proof can agree while both differ from the declaration.
+    inout fn readConformanceAssociatedClause(conformance: U64, clause: U64) -> Result[ConformanceAssociatedEvidence, CompileDiagnostic] {
+        val owner = self.decls.conformAt(index: conformance)
+        val row = match self.arena.conformanceAssociatedClause(conformance: conformance, clause: clause) {
+            Optional.Some(v: val row) => row,
+            Optional.None => { return <Result.Err error=self.diagnosticAt(offset: owner.defOffset, msg: "associated constraint has no retained declaration evidence", failureDomain: <FailureDomain.Internal />) /> },
+        }
+        val traitIndex = self.resolveTraitDef(cf: owner)
+        if traitIndex >= self.decls.traitCount() {
+            return <Result.Err error=self.diagnosticAt(offset: owner.defOffset, msg: "associated constraint has no declaration trait", failureDomain: <FailureDomain.Internal />) />
+        }
+        val expected = try self.conformanceAssociatedDeclarationBound(conformance: owner, traitIndex: traitIndex, clause: clause, outputs: self.conformanceAssociatedOutputs(conformance: owner))
+        if !self.typeRefEq(a: row.bound.subject, b: expected.subject) || !self.sameTraitConstraint(a: row.bound.constraint, b: expected.constraint) {
+            return <Result.Err error=self.diagnosticAt(offset: expected.offset, msg: "retained associated clause differs from its declared bound", failureDomain: <FailureDomain.Internal />) />
+        }
+        return <Result.Ok value=row />
     }
 
     // A witness may implement a requirement for more inputs, but must not

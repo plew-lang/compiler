@@ -1261,18 +1261,7 @@ impl Comp {
     inout fn readSignatureAssociatedRootProof(index: U64, associated: AssociatedBoundEvidence, bound: TraitBound, evidence: RequirementSelfEvidence, receiver: U64, environment: InstanceEnvironment, offset: U64, read: SignatureProofRead) -> Result[Optional[StaticConformanceProof], CompileDiagnostic] {
         match evidence {
             RequirementSelfEvidence.Conformance(index: val conformance) => {
-                val row = self.arena.conformanceAssociatedClause(conformance: conformance, clause: associated.clause)
-                if row.isNone() { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "conformance signature lost its associated clause evidence", failureDomain: <FailureDomain.Internal />) /> }
-                val saved = row.unwrap()
-                val original = self.decls.traitAssociatedBoundPool[associated.clause]
-                if saved.bound.constraint.key.owner != original.constraint.key.owner || saved.bound.constraint.positionalArgsOpen != original.constraint.positionalArgsOpen || saved.bound.constraint.key.positionalArgs.count() != original.constraint.key.positionalArgs.count() || saved.bound.constraint.assocPredicates.count() != original.constraint.assocPredicates.count() {
-                    return <Result.Err error=self.diagnosticAt(offset: offset, msg: "conformance signature has a foreign associated clause", failureDomain: <FailureDomain.Internal />) />
-                }
-                for position in 0U64..<original.constraint.assocPredicates.count() {
-                    if saved.bound.constraint.assocPredicates[position].member != original.constraint.assocPredicates[position].member {
-                        return <Result.Err error=self.diagnosticAt(offset: offset, msg: "conformance signature has a foreign associated predicate", failureDomain: <FailureDomain.Internal />) />
-                    }
-                }
+                val saved = try self.readConformanceAssociatedClause(conformance: conformance, clause: associated.clause)
                 val assumptions = self.conformanceDeclarationAssumptions(conformIndex: conformance)
                 try self.checkProjectionNormalizations(normalizations: saved.normalizations, offset: offset, assumptions: assumptions)
                 val expected = try self.replayBoundNormalizations(bound: saved.bound, normalizations: saved.normalizations)

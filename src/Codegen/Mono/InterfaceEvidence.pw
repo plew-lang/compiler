@@ -111,14 +111,7 @@ impl Comp {
         for position in 0U64..<trait.assocBounds.len {
             if self.arena.conformanceAssociatedClause(conformance: conformance, clause: trait.assocBounds.start + position).isNone() { return <Result.Err error=self.diagnosticAt(offset: evidence.bound.offset, msg: "associated constraint has a missing or duplicate retained clause") /> }
         }
-        val row = match self.arena.conformanceAssociatedClause(conformance: conformance, clause: evidence.clause) {
-            Optional.Some(v: val row) => row,
-            Optional.None => { return <Result.Err error=self.diagnosticAt(offset: evidence.bound.offset, msg: "associated constraint has no retained declaration evidence") /> },
-        }
-        if row.bound.constraint.key.owner != original.constraint.key.owner || row.bound.constraint.positionalArgsOpen != original.constraint.positionalArgsOpen || row.bound.constraint.key.positionalArgs.count() != original.constraint.key.positionalArgs.count() || row.bound.constraint.assocPredicates.count() != original.constraint.assocPredicates.count() { return <Result.Err error=self.diagnosticAt(offset: evidence.bound.offset, msg: "associated constraint row has a foreign clause shape") /> }
-        for position in 0U64..<original.constraint.assocPredicates.count() {
-            if row.bound.constraint.assocPredicates[position].member != original.constraint.assocPredicates[position].member { return <Result.Err error=self.diagnosticAt(offset: evidence.bound.offset, msg: "associated constraint row has a foreign predicate") /> }
-        }
+        val row = try self.readConformanceAssociatedClause(conformance: conformance, clause: evidence.clause)
         val environment = try self.selectedConstraintEnvironment(witness: witness, proof: selected)
         mut val outer = inherited
         for equation in (try self.retainedProofProjectionContext(proof: selected)) { try self.appendRetainedProjectionEquation(step: equation, normalizations: inout outer) }
