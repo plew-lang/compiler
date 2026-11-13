@@ -2826,6 +2826,9 @@ pub struct Func {
     // head-name fast path; this preserves the generic arguments and # view that
     // are part of the declaration namespace.
     pub mut val recvTy: U64 = 0
+    // Nonzero only for a nominal inherent receiver whose admitted recipe
+    // still needs substitution. The token is its authored impl scope.
+    pub mut val dependentReceiverScope: U64 = 0U64
     // Binder scope used only to match `recvTy`. A provided copy's receiver
     // pattern belongs to its source conformance, while its callable body keeps
     // its own nominal/method binder environment in `typeParams`.

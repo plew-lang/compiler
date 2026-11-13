@@ -383,7 +383,16 @@ impl Comp {
                 match self.sourceTypeUses.methodScopeFor(function: function) {
                     Optional.Some(v: val method) => {
                         match self.authoredImplementationReceivers.get(key: method.parent) {
-                            Optional.Some(v: val proof) => { self.arena.setAdmittedFunctionReceiver(index: function, term: proof.sourceTerm) }
+                            Optional.Some(v: val proof) => {
+                                val owner = self.sourceTypeUses.completedMethodImplementation(method: method)
+                                val dependentScope = if owner.isSome() && self.arena.typeContainsAssociatedProjection(ref: proof.sourceTerm) {
+                                    give match owner.unwrap().kind {
+                                        SourceImplementationKind.Inherent => method.parent,
+                                        _ => 0U64,
+                                    }
+                                } else { give 0U64 }
+                                self.arena.setAdmittedFunctionReceiver(index: function, term: proof.sourceTerm, dependentScope: dependentScope)
+                            }
                             Optional.None => {}
                         }
                     }

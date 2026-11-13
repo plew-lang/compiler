@@ -785,15 +785,12 @@ pub impl Comp {
 
     fn dependentInherentReceiverScope(function: U64) -> U64 {
         val declaration = self.arena.functionAt(index: function)
+        if declaration.dependentReceiverScope != 0U64 { return declaration.dependentReceiverScope }
+        if declaration.lexicalOwnerFnId == 0U64 { return 0U64 }
         if !self.arena.typeContainsAssociatedProjection(ref: declaration.recvTy) { return 0U64 }
-        val method = self.sourceTypeUses.methodScopeFor(function: self.arena.functionLexicalOwner(index: function))
-        if method.isNone() { return 0U64 }
-        val owner = self.sourceTypeUses.completedMethodImplementation(method: method.unwrap())
-        if owner.isNone() { return 0U64 }
-        match owner.unwrap().kind {
-            SourceImplementationKind.Inherent => { return method.unwrap().parent }
-            _ => { return 0U64 }
-        }
+        val owner = self.arena.functionLexicalOwner(index: function)
+        if owner >= self.arena.functionCount() { return 0U64 }
+        return self.arena.functionAt(index: owner).dependentReceiverScope
     }
 
     inout fn readConcreteInherentReceiver(scope: U64, environment: InstanceEnvironment) -> Result[U64, CompileDiagnostic] {

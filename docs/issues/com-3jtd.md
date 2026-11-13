@@ -990,3 +990,14 @@ same associated-type recipe on every descriptor. Build
 `20261113T170017-build-3d40f4` produced `96bc971b`; the inherent,
 conformance, provided-call and requirement-call controls passed check
 and JIT. Candidate selection still fails the direct-call control.
+
+Declaration admission now publishes the dependent inherent receiver's
+authored impl token on each affected callable. Plain receivers keep the
+zero-token fast path. A compiler-generated callable may use its lexical
+declaration's token. Build `20261113T170904-build-d465fb`, candidate
+`08696e2c`, preserved the four check/JIT controls.
+
+The direct-call regression uses one program with three results: `42` for
+a matching inherent receiver, `7` for a different projected output, and
+`7` when the projection's prerequisite does not hold. The baseline
+`96bc971b` checks the program but prints `7` in all three cases.
