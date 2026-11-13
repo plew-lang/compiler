@@ -730,6 +730,7 @@ pub struct Comp {
     mut val authoredRequirementViews: Dictionary[U64, AuthoredRequirementSignature] = [:]
     mut val authoredSignatureViews: Dictionary[U64, AuthoredSignatureViews] = [:]
     mut val authoredImplementationReceivers: Dictionary[U64, LocalAnnotationProof] = [:]
+    mut val inherentReceiverPremises: Dictionary[U64, Array[U64]] = [:]
     mut val nominalConformanceReceiverScopes: Dictionary[U64, U64] = [:]
     mut val activeNominalReceiverAdmissions: Set[U64] = Set.new()
     mut val changedNominalConformanceSubjects: Set[U64] = Set.new()

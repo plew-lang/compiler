@@ -1001,3 +1001,12 @@ The direct-call regression uses one program with three results: `42` for
 a matching inherent receiver, `7` for a different projected output, and
 `7` when the projection's prerequisite does not hold. The baseline
 `96bc971b` checks the program but prints `7` in all three cases.
+
+Inherent receiver admission now collects the exact impl clauses reached
+from the authored projection proofs, including inherited paths,
+associated prerequisites and retained condition equations. It validates
+clause ownership and preserves the existing proof graph. Candidate
+admission still needs to consume this set and pass its instantiated
+proofs into the selected call. Standard build
+`20261113T171512-build-c5415b` produced `589aa04b`; the four existing
+check/JIT controls passed.

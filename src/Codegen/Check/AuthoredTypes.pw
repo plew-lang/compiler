@@ -353,8 +353,6 @@ impl Comp {
             Optional.Some(v: val proof) => proof,
             Optional.None => { return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "implementation receiver lost its view admission", failureDomain: <FailureDomain.Internal />) /> },
         }
-        self.authoredImplementationReceivers[token] = proof
-        self.markAdmittedRecipeTypeUses(recipe: proof.recipe)
         match owner.kind {
             SourceImplementationKind.Conformance(index: val index) => {
                 if !self.typeRefEq(a: owner.receiver, b: proof.sourceTerm) {
@@ -364,7 +362,88 @@ impl Comp {
                     self.changedNominalConformanceSubjects.insert(index)
                 }
             }
-            SourceImplementationKind.Inherent => {}
+            SourceImplementationKind.Inherent => {
+                if self.arena.typeContainsAssociatedProjection(ref: proof.sourceTerm) {
+                    mut val clauses: Array[U64] = []
+                    mut val visited: Set[U64] = Set.new()
+                    mut val associated: Set[U64] = Set.new()
+                    for occurrenceProof in proof.proofs {
+                        try self.collectImplementationReceiverPremises(proof: occurrenceProof.proof, scope: token, offset: occurrence.site, clauses: inout clauses, visited: inout visited, associated: inout associated)
+                        for equation in occurrenceProof.lexicalEquations {
+                            try self.collectImplementationReceiverPremises(proof: equation.proof, scope: token, offset: occurrence.site, clauses: inout clauses, visited: inout visited, associated: inout associated)
+                        }
+                    }
+                    self.inherentReceiverPremises[token] = clauses
+                }
+            }
+        }
+        self.authoredImplementationReceivers[token] = proof
+        self.markAdmittedRecipeTypeUses(recipe: proof.recipe)
+        return <Result.Ok value=() />
+    }
+
+    // Only a premise reached from the admitted receiver graph can take part
+    // in deciding whether the receiver matches. Other impl clauses belong to
+    // the ordinary where check of the selected call.
+    inout fn collectImplementationReceiverPremises(proof: U64, scope: U64, offset: U64, clauses: inout Array[U64], visited: inout Set[U64], associated: inout Set[U64], depth: U64 = 0U64) -> Result[(), CompileDiagnostic] {
+        if visited.contains(proof) { return <Result.Ok value=() /> }
+        if depth >= 64U64 {
+            return <Result.Err error=self.diagnosticAt(offset: offset, msg: "implementation receiver proof analysis limit exceeded", failureDomain: <FailureDomain.Limit />) />
+        }
+        if !self.arena.hasStaticConformanceProof(id: proof) {
+            return <Result.Err error=self.diagnosticAt(offset: offset, msg: "implementation receiver lost its admitted proof", failureDomain: <FailureDomain.Internal />) />
+        }
+        visited.insert(proof)
+        mut val witnesses: Array[WitnessMatch] = []
+        mut val source: Optional[DeclarationBoundRef] = <Optional.None />
+        match self.thawStaticConformanceProof(id: proof) {
+            StaticConformanceProof.ConcreteWitness(witness: val witness) => { witnesses.append(witness) }
+            StaticConformanceProof.TraitPath(edges: val edges, terminalConformIdx: _) => { witnesses = edges }
+            StaticConformanceProof.AssumedTraitPath(source: val root, steps: _, edges: val edges) => {
+                source = <Optional.Some v=root />
+                witnesses = edges
+            }
+            StaticConformanceProof.AssumedBound(source: val root) | StaticConformanceProof.AssumedSupertraitPath(source: val root, steps: _) => {
+                source = <Optional.Some v=root />
+            }
+            _ => {}
+        }
+        if source.isSome() {
+            val premise = source.unwrap()
+            if !self.declarationBoundIsValid(source: premise) {
+                return <Result.Err error=self.diagnosticAt(offset: offset, msg: "implementation receiver has an invalid premise", failureDomain: <FailureDomain.Internal />) />
+            }
+            match premise {
+                DeclarationBoundRef.Implementation(index: val index) => {
+                    if self.projectionBoundClauses[index].scope != scope {
+                        return <Result.Err error=self.diagnosticAt(offset: offset, msg: "implementation receiver has a foreign declaration premise", failureDomain: <FailureDomain.Internal />) />
+                    }
+                    mut val found = false
+                    for clause in clauses { if clause == index { found = true } }
+                    if !found { clauses.append(index) }
+                }
+                DeclarationBoundRef.AssociatedType(index: val index) => {
+                    if !associated.contains(index) {
+                        associated.insert(index)
+                        val prerequisite = self.arena.associatedBoundEvidenceAt(index: index).prerequisite
+                        try self.collectImplementationReceiverPremises(proof: self.freezeStaticConformanceProof(proof: prerequisite), scope: scope, offset: offset, clauses: inout clauses, visited: inout visited, associated: inout associated, depth: depth + 1U64)
+                    }
+                }
+                _ => {}
+            }
+        }
+        for witness in witnesses {
+            if witness.conditions == 0U64 { continue }
+            if witness.conditions > self.arena.witnessConditionPlanCount() {
+                return <Result.Err error=self.diagnosticAt(offset: offset, msg: "implementation receiver has an invalid condition plan", failureDomain: <FailureDomain.Internal />) />
+            }
+            val plan = self.arena.witnessConditionPlanAt(index: witness.conditions - 1U64)
+            for child in plan.proofs {
+                try self.collectImplementationReceiverPremises(proof: child, scope: scope, offset: offset, clauses: inout clauses, visited: inout visited, associated: inout associated, depth: depth + 1U64)
+            }
+            for equation in plan.normalizations {
+                try self.collectImplementationReceiverPremises(proof: equation.proof, scope: scope, offset: offset, clauses: inout clauses, visited: inout visited, associated: inout associated, depth: depth + 1U64)
+            }
         }
         return <Result.Ok value=() />
     }
