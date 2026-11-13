@@ -1,6 +1,6 @@
 ---
 id: com-fur3
-status: open
+status: in_progress
 deps: []
 links: []
 created: 2026-11-12T21:36:22Z
@@ -57,3 +57,21 @@ regression is separate.
 - Record the source-to-consumer evidence, fixed-candidate RED, result and
   independent review. This is a repair of existing invariant view
   equality, with no inheritance, syntax or solver expansion.
+
+## Reverification after the associated RHS migration
+
+The original viewed case still rejects on `c51623ca` and `9fe88cf2`.
+It passes on `27421b95` and on `17e89289` (`3b570dd7`). The
+[associated binding migration](com-zzf3.md) covers the intervening
+transition from the raw binding term to the admitted authored recipe.
+The current predicate comparator reads the selected witness's output
+and compares it through `typeRefEq`, retaining the exact view attached
+by recipe replay. The precise first passing intermediate revision is
+unverified.
+
+The matching viewed and matching bare fixtures each print `42` in JIT
+and native and pass check on `17e89289`. Both directions of viewed versus
+bare, two different trait views, and missing `Preferred` conformance
+reject with the expected where-clause diagnostic. The fixed baseline
+rejects the new viewed positive fixture. This checkpoint adds only
+regression coverage; independent review remains pending.
