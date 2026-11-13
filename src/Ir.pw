@@ -2743,7 +2743,7 @@ pub impl DeclarationConversion { factory }
 
 // Lexical binder ownership for symbolic declaration obligations. This is a
 // source scope, not an executable substitution or an ambient name environment.
-pub enum DeclarationScopeOrigin { Lexical InterfaceContract RequirementSignature AssociatedBinding }
+pub enum DeclarationScopeOrigin { Lexical InterfaceContract RequirementSignature AssociatedBinding Global }
 pub impl DeclarationScopeOrigin { factory }
 
 pub struct DeclarationTypeScope {

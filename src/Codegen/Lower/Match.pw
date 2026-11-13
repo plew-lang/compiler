@@ -369,7 +369,7 @@ pub impl Comp {
     // owns compound-assignment, destructuring, and match desugaring; this
     // function deliberately handles only the statement forms that have a
     // one-to-one semantic IR representation.
-    inout fn lowerSyntaxStmt(id: StmtId) -> Result[U64, CompileDiagnostic] {
+    inout fn lowerSyntaxStmt(id: StmtId, global: Bool = false) -> Result[U64, CompileDiagnostic] {
         val s: SyntaxStmt = syntaxStmt(file: self.syntax, id: id)
         match s.kind {
             SyntaxStmtKind.Let => {
@@ -387,6 +387,7 @@ pub impl Comp {
                     authoredUse = ty.authoredUse
                 }
                 val annotation = try self.lowerLocalAnnotation(written: s.flag1, occurrence: authoredUse)
+                if global { try self.setAuthoredTypeUseRole(role: <SourceTypeUseRole.Body />, site: s.name.start) }
                 val statement = self.pushStmt(s: <Stmt.Let mutable=s.flag0 nameStart=s.name.start nameLen=s.name.end - s.name.start tyStart=tyStart tyLen=tyLen tyIsArray=tyIsArray ty=tyRef init=(try self.lowerSyntaxExpr(id: s.child0)) annotationOccurrence=annotation />)
                 return <Result.Ok value=statement />
             }
@@ -461,11 +462,14 @@ pub impl Comp {
         return <Result.Ok value=self.pushBlock(stmts: stmts, implicitResult: block.implicitResult) />
     }
 
-    inout fn lowerStmt(s: StmtAst) -> Result[U64, CompileDiagnostic] {
+    inout fn lowerStmt(s: StmtAst, globalTarget: Optional[Bind] = <Optional.None />) -> Result[U64, CompileDiagnostic] {
         mut val result: U64 = 0
         match s {
             StmtAst.Let(val mutable, val name, nameSpan: _, val hasTy, val ty, val init, val span) => {
-                val nm: Bind = self.internBytes(s: name)
+                val nm = match globalTarget {
+                    Optional.Some(v: val target) => target,
+                    Optional.None => self.internBytes(s: name),
+                }
                 mut val tyStart: U64 = 0
                 mut val tyLen: U64 = 0
                 mut val tyIsArray: Bool = false
@@ -479,8 +483,9 @@ pub impl Comp {
                     tyRef = pt.ref
                     authoredUse = pt.authoredUse
                 }
-                val iv: U64 = (try self.lowerExpr(e: init))
                 val annotation = try self.lowerLocalAnnotation(written: hasTy, occurrence: authoredUse)
+                if globalTarget.isSome() { try self.setAuthoredTypeUseRole(role: <SourceTypeUseRole.Body />, site: nm.nameStart) }
+                val iv: U64 = (try self.lowerExpr(e: init))
                 result = self.pushStmt(s: <Stmt.Let mutable=mutable nameStart=nm.nameStart nameLen=nm.nameLen tyStart=tyStart tyLen=tyLen tyIsArray=tyIsArray ty=tyRef init=iv annotationOccurrence=annotation />)
             }
             StmtAst.Assign(val op, val target, val value, val span) => {

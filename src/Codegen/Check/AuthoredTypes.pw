@@ -694,6 +694,10 @@ impl Comp {
         val occurrence = try self.signatureOccurrence(id: id)
         val lexical = self.lexicalSourceFactOwner(owner: owner)
         val function = match lexical {
+            SemanticCompletionOwner.Global(target: val target) => {
+                val token = self.sourceTypeUses.globalScope(target: target)
+                return self.admitGlobalTypeUse(occurrence: occurrence, id: id, term: term, target: target, token: token, role: <SourceTypeUseRole.Body />)
+            }
             SemanticCompletionOwner.Function(index: val index) => index,
             _ => { return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "authored body type has no lexical declaration", failureDomain: <FailureDomain.Internal />) /> },
         }
@@ -758,6 +762,19 @@ impl Comp {
         val receiverType = self.groundTermInEnvironment(ref: term, params: [], values: [], selfRef: scopes.receiver)
         val equations = validation.equations.getOr(key: occurrence.recipe, fallback: [])
         val sourceTerm = try self.replayProjectionNormalizations(ref: receiverType, normalizations: equations, offset: occurrence.site)
+        return <Result.Ok value=<LocalAnnotationProof occurrence=id recipe=occurrence.recipe sourceTerm=sourceTerm normalizations=equations proofs=validation.proofs /> />
+    }
+
+    inout fn admitGlobalTypeUse(occurrence: AuthoredTypeUse, id: U64, term: U64, target: U64, token: U64, role: SourceTypeUseRole) -> Result[LocalAnnotationProof, CompileDiagnostic] {
+        if token == 0U64 || occurrence.scope != token || occurrence.term != term {
+            return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "global type has a foreign source occurrence", failureDomain: <FailureDomain.Internal />) />
+        }
+        val scope = <DeclarationTypeScope origin=<DeclarationScopeOrigin.Global /> owner=target parameters=<FuncBindRange start=0U64 len=0U64 /> />
+        val scopes = <SignatureProofScopes local=scope assumptions=[] inherited=[] receiver=0U64 useRole=role />
+        mut val validation = <SignatureRecipeValidation />
+        try self.checkAuthoredTypeRecipe(sourceScope: token, recipe: occurrence.recipe, edge: <AuthoredRecipeEdge.Source />, scopes: scopes, validation: inout validation, offset: occurrence.site)
+        val equations = validation.equations.getOr(key: occurrence.recipe, fallback: [])
+        val sourceTerm = try self.replayProjectionNormalizations(ref: term, normalizations: equations, offset: occurrence.site)
         return <Result.Ok value=<LocalAnnotationProof occurrence=id recipe=occurrence.recipe sourceTerm=sourceTerm normalizations=equations proofs=validation.proofs /> />
     }
 

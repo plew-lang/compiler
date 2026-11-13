@@ -2,7 +2,7 @@
 // scope completed syntax lowering only; it has not admitted any source proof.
 use ./Ir only { Bind, Func }
 
-pub enum SourceTypeScopeKind { FreeFunction Method Deinit Implementation RequirementSignature ExternSignature DefaultExpression }
+pub enum SourceTypeScopeKind { FreeFunction Method Deinit Implementation RequirementSignature ExternSignature DefaultExpression Global }
 pub enum SourceTypeScopeState { Lowering Lowered Failed }
 pub enum SourceTypeUseRole { Unowned Declaration DefaultArgument Body }
 
@@ -118,6 +118,7 @@ pub struct SourceTypeUses {
     mut val viewArguments: Dictionary[U64, Optional[Array[U64]]] = [:]
     mut val deinitScopes: Dictionary[U64, U64] = [:]
     mut val defaultExpressionScopes: Dictionary[U64, U64] = [:]
+    mut val globalScopes: Dictionary[U64, U64] = [:]
 }
 pub impl SourceTypeUses {
     factory
@@ -172,6 +173,29 @@ pub impl SourceTypeUses {
     }
     fn deinitScopeToken(function: U64) -> U64 {
         return self.deinitScopes.getOr(key: function, fallback: 0U64)
+    }
+    inout fn bindGlobalScope(target: U64, token: U64) -> Bool {
+        if self.globalScopes.contains(key: target) { return false }
+        val scope = match self.scopeAt(token: token) {
+            Optional.Some(v: val scope) => scope,
+            Optional.None => { return false }
+        }
+        if scope.anchor != target || scope.parent != 0U64 { return false }
+        match scope.kind { SourceTypeScopeKind.Global => {} _ => { return false } }
+        match scope.state { SourceTypeScopeState.Lowered => {} _ => { return false } }
+        self.globalScopes[target] = token
+        return true
+    }
+    fn globalScope(target: U64) -> U64 {
+        val token = self.globalScopes.getOr(key: target, fallback: 0U64)
+        match self.scopeAt(token: token) {
+            Optional.Some(v: val scope) => {
+                if scope.anchor != target || scope.parent != 0U64 { return 0U64 }
+                match scope.kind { SourceTypeScopeKind.Global => {} _ => { return 0U64 } }
+                match scope.state { SourceTypeScopeState.Lowered => { return token } _ => { return 0U64 } }
+            }
+            Optional.None => { return 0U64 }
+        }
     }
     inout fn bindDefaultExpressionScope(origin: U64, token: U64) -> Bool {
         if origin == 0U64 || self.defaultExpressionScopes.contains(key: origin) { return false }
@@ -250,7 +274,7 @@ pub impl SourceTypeUses {
             SourceTypeScopeKind.ExternSignature => {
                 match scope.state { SourceTypeScopeState.Lowered => {} _ => { return false } }
             }
-            SourceTypeScopeKind.Implementation | SourceTypeScopeKind.RequirementSignature | SourceTypeScopeKind.DefaultExpression => { return false }
+            SourceTypeScopeKind.Implementation | SourceTypeScopeKind.RequirementSignature | SourceTypeScopeKind.DefaultExpression | SourceTypeScopeKind.Global => { return false }
         }
         self.scopes[token - 1U64] = <SourceTypeScope kind=scope.kind anchor=scope.anchor traitOwner=scope.traitOwner parent=scope.parent state=scope.state function=<Optional.Some v=function /> requirement=scope.requirement implementation=scope.implementation bounds=scope.bounds />
         return true

@@ -50,3 +50,22 @@ counterparts of all three print 42 in lazy execution.
 Keep the top-level initializer execution plan unchanged. Trace the
 declaration annotation and each initializer-owned recipe separately
 through preparation and final storage or operation consumers.
+
+## Initializer recipe increment
+
+Global lowering registers a scope keyed by its declaration target.
+Annotations in the initializer and positional value-view arguments use
+the body phase of that scope. Admission resolves it from the actual
+initializer or closure owner, checks occurrence identity and reuses the
+authored recipe reader with an empty lexical premise set. A
+parameterized global value view without its authored arguments now
+fails as Internal before it can use unadmitted terms.
+
+Fixed-input build `20261113T071546-build-a25f98` produced `d5b64a4f`.
+The two initializer fixtures now pass check, JIT and native with
+output 42. Changing the projected output to Bool still rejects in check
+and JIT at the view site. Existing global forward references and
+global authored signature calls preserve their JIT outputs. The
+global declaration annotation fixture still passes check but fails
+Mid preparation. Its declaration proof and storage handoff are the
+next increment.

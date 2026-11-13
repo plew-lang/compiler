@@ -431,22 +431,39 @@ pub impl Comp {
     }
 
     inout fn lowerGlobalVal(s: StmtAst) -> Result[(), CompileDiagnostic] {
-        val stid: U64 = (try self.lowerStmt(s: s))
-        self.appendLoweredGlobal(letStmt: stid)
-        return <Result.Ok value=() />
+        val target = match s {
+            StmtAst.Let(mutable: _, val name, nameSpan: _, hasTy: _, ty: _, init: _, span: _) => self.internBytes(s: name),
+            _ => { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "global declaration has no binding", failureDomain: <FailureDomain.Internal />) /> }
+        }
+        val scope = self.sourceTypeUses.begin(kind: <SourceTypeScopeKind.Global />, anchor: target.nameStart)
+        val result = self.lowerStmt(s: s, globalTarget: <Optional.Some v=target />)
+        return self.finishLoweredGlobal(result: result, scope: scope, target: target.nameStart)
     }
 
     inout fn lowerSyntaxGlobalVal(id: StmtId) -> Result[(), CompileDiagnostic] {
-        self.appendLoweredGlobal(letStmt: (try self.lowerSyntaxStmt(id: id)))
-        return <Result.Ok value=() />
+        val target = syntaxStmt(file: self.syntax, id: id).name.start
+        val scope = self.sourceTypeUses.begin(kind: <SourceTypeScopeKind.Global />, anchor: target)
+        val result = self.lowerSyntaxStmt(id: id, global: true)
+        return self.finishLoweredGlobal(result: result, scope: scope, target: target)
     }
 
-    inout fn appendLoweredGlobal(letStmt: U64) {
+    inout fn finishLoweredGlobal(result: Result[U64, CompileDiagnostic], scope: U64, target: U64) -> Result[(), CompileDiagnostic] {
+        if !self.sourceTypeUses.finish(token: scope, succeeded: result.isOk()) {
+            return <Result.Err error=self.diagnosticAt(offset: target, msg: "invalid global source scope completion", failureDomain: <FailureDomain.Internal />) />
+        }
+        val letStmt = try result
+        if !self.sourceTypeUses.bindGlobalScope(target: target, token: scope) {
+            return <Result.Err error=self.diagnosticAt(offset: target, msg: "invalid global source scope owner", failureDomain: <FailureDomain.Internal />) />
+        }
         match self.arena.stmts[letStmt] {
             Stmt.Let(val mutable, val nameStart, val nameLen, tyStart: _, tyLen: _, tyIsArray: _, ty: _, init: _, annotationOccurrence: _) => {
-                self.arena.globals.append(<Global nameStart=nameStart nameLen=nameLen letStmt=letStmt mutable=mutable />)
+                if nameStart == target {
+                    self.arena.globals.append(<Global nameStart=nameStart nameLen=nameLen letStmt=letStmt mutable=mutable />)
+                    return <Result.Ok value=() />
+                }
             }
             _ => {}
         }
+        return <Result.Err error=self.diagnosticAt(offset: target, msg: "global source scope has a foreign binding", failureDomain: <FailureDomain.Internal />) />
     }
 }

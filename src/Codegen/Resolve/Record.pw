@@ -10,6 +10,9 @@ impl Comp {
             Optional.Some(v: val arguments) => {
                 if arguments.isNone() && owner.isSome() {
                     match self.lexicalSourceFactOwner(owner: owner.unwrap()) {
+                        SemanticCompletionOwner.Global(target: _) => {
+                            return <Result.Err error=self.diagnosticAt(offset: selector.writtenStart, msg: "global value view has no authored argument occurrences", failureDomain: <FailureDomain.Internal />) />
+                        }
                         SemanticCompletionOwner.Function(index: val function) => {
                             if function < self.arena.functionCount() && self.arena.functionAt(index: function).isDefaultGenerator {
                                 return <Result.Err error=self.diagnosticAt(offset: selector.writtenStart, msg: "default value view has no authored argument occurrences", failureDomain: <FailureDomain.Internal />) />
