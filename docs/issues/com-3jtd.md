@@ -1229,3 +1229,18 @@ proof searches have unverified cache-key hazards, with no reproduced
 foreign evidence so far. Preserve the exact proof inputs while replacing
 the cache dependency. These are completion findings for existing
 com-3jtd guarantees; explicit delegation stays in com-6esv.
+
+The fixed-input normal suite `20261113T185937-test-6b3c54` finished
+with exit 1 on `2f00cb3a` (780 reports, including the known widespread
+reject classification failures). Five ordinary source check failures
+were also reproduced with the earlier pre-inherent-replay carrier.
+The other failures still require baseline/ownership reconciliation;
+the whole suite is not certification.
+
+The nominal conformance-only extension branch now uses the existing
+admitted witness receiver and condition check. The new
+`extension_projected_conformance_view` passed check, JIT and linked native
+on `f350c546` (fixed-input build `20261113T195310-build-5cad4f`).
+The runtime variant that calls the conformance witness also passes check
+and JIT. A conformance-only bundle with an unmet condition now rejects at
+view formation in both modes. The other formation findings remain open.

@@ -582,8 +582,11 @@ pub impl Comp {
                 if cf.typeId == qType && (typeRef == 0U64 || cf.subjectTy == 0U64) {
                     return <Result.Ok value=true />
                 }
-                if cf.typeId == qType && self.conformanceSubjectMatches(cf: cf, typeRef: typeRef) {
-                    return <Result.Ok value=true />
+                if cf.typeId == qType && cf.subjectTraitOwner == 0U64 && !cf.derived {
+                    val matchResult = try self.conformanceWitnessMatch(conformIdx: i, typeRef: typeRef, traitArgs: [], traitArgsOpen: true, assumptions: assumptions)
+                    if matchResult.conformIdx != 0U64 && (try self.witnessConditionsSatisfied(witness: matchResult, assumptions: assumptions)) {
+                        return <Result.Ok value=true />
+                    }
                 }
                 // `extension E { impl B as C }` is applicable to an abstract
                 // `T` precisely when the current declaration proves T: B.
