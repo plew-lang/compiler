@@ -1046,6 +1046,10 @@ impl Comp {
                         }
                     }
                     term = try self.replayProjectionNormalizations(ref: term, normalizations: lexicalEquations, offset: occurrence.site)
+                    if saved.outputEquations.count() != 0U64 {
+                        val outputEquations = try self.substituteSignatureEquations(equations: saved.outputEquations, environment: environment, offset: occurrence.site)
+                        term = try self.replayProjectionNormalizations(ref: term, normalizations: outputEquations, offset: occurrence.site)
+                    }
                 }
             }
             SourceTypeRecipeOrigin.ResultRepresentation => {
@@ -1115,6 +1119,10 @@ impl Comp {
             Result.Ok(value: _) => {}
             Result.Err(error: val diagnostic) => { return <Result.Err error=self.diagnosticAt(offset: offset, msg: diagnostic.message, failureDomain: <FailureDomain.Internal />) /> }
         }
+        return self.substituteSignatureEquations(equations: equations, environment: environment, offset: offset)
+    }
+
+    inout fn substituteSignatureEquations(equations: Array[ProjectionNormalizationStep], environment: InstanceEnvironment, offset: U64) -> Result[Array[ProjectionNormalizationStep], CompileDiagnostic] {
         mut val substitutions: Array[ProjectionNormalizationStep] = []
         for equation in equations {
             val source = self.groundTermInEnvironment(ref: equation.source, params: environment.params, values: environment.args, selfRef: environment.receiverRef)
@@ -2716,6 +2724,7 @@ impl Comp {
                 if inheritedProjection && isProjection {
                     try self.checkInheritedSignatureProjection(proof: proof, scope: scope, subject: subject, selector: <TraitInstanceKey owner=selector.traitInstance.owner positionalArgs=arguments />, offset: occurrence.site)
                 }
+                mut val outputEquations: Array[ProjectionNormalizationStep] = []
                 val frozen = self.freezeStaticConformanceProof(proof: proof)
                 if isProjection {
                     val raw = self.groundTermInEnvironment(ref: occurrence.term, params: [], values: [], selfRef: receiverRef)
@@ -2732,15 +2741,15 @@ impl Comp {
                     if immediate != 0U64 { outputOccurrence = selected.bindingOccurrence }
                     if self.arena.typeContainsAssociatedProjection(ref: immediate) {
                         match proof {
-                            StaticConformanceProof.AssumedSupertraitPath(source: val source, steps: _) => {
+                            StaticConformanceProof.AssumedBound(source: _) | StaticConformanceProof.AssumedSupertraitPath(source: _, steps: _) => {
                                 mut val prerequisites: Array[ProjectionNormalizationStep] = []
-                                try self.recordLexicalProjectionEquations(ref: immediate, lexical: source, bound: self.declarationBound(source: source), equations: inout prerequisites, offset: occurrence.site, active: [projected])
+                                try self.recordSignatureOutputEquations(ref: immediate, assumptions: projectionAssumptions, equations: inout prerequisites, offset: occurrence.site, active: [projected])
                                 for equation in prerequisites {
-                                    try self.appendRetainedProjectionEquation(step: equation, normalizations: inout lexicalEquations)
+                                    try self.appendRetainedProjectionEquation(step: equation, normalizations: inout outputEquations)
                                     try self.appendRetainedProjectionEquation(step: equation, normalizations: inout equations)
                                     try self.appendRetainedProjectionEquation(step: equation, normalizations: inout context)
                                 }
-                                try self.checkProjectionNormalizations(normalizations: lexicalEquations, offset: occurrence.site, assumptions: projectionAssumptions)
+                                try self.checkProjectionNormalizations(normalizations: outputEquations, offset: occurrence.site, assumptions: projectionAssumptions)
                                 try self.requireDeclarationProofSupport(dependencies: (try self.scopedProjectionDependencies(equations: prerequisites, context: context, scope: scope, offset: occurrence.site)), offset: occurrence.site)
                             }
                             _ => {}
@@ -2748,7 +2757,7 @@ impl Comp {
                     }
                     try self.appendRetainedProjectionEquation(step: <ProjectionNormalizationStep source=projected proof=frozen output=immediate />, normalizations: inout equations)
                 }
-                proofs.append(<AuthoredTypeViewProof occurrence=id receiver=receiver selector=selector proof=frozen lexicalEquations=lexicalEquations />)
+                proofs.append(<AuthoredTypeViewProof occurrence=id receiver=receiver selector=selector proof=frozen lexicalEquations=lexicalEquations outputEquations=outputEquations />)
             }
         }
         if extensions.count() != 0U64 {
@@ -2824,6 +2833,45 @@ impl Comp {
 
     // Record the bound that actually states the equality. An opaque path to
     // the same trait may establish conformance without stating its output.
+    // Walk the selected equality's output under the same lexical premises.
+    // Save prerequisites before the equation that uses them.
+    inout fn recordSignatureOutputEquations(ref: U64, assumptions: Array[DeclarationBoundRef], equations: inout Array[ProjectionNormalizationStep], offset: U64, active: Array[U64]) -> Result[U64, CompileDiagnostic] {
+        if !self.arena.typeContainsAssociatedProjection(ref: ref) { return <Result.Ok value=ref /> }
+        mut val children: Array[U64] = []
+        for index in 0U64..<self.typeTermRefChildCount(ref: ref) {
+            val child = self.typeTermRefChildRef(ref: ref, index: index)
+            children.append(try self.recordSignatureOutputEquations(ref: child, assumptions: assumptions, equations: inout equations, offset: offset, active: active))
+        }
+        val rebuilt = self.rebuildTypeTermChildren(ref: ref, children: children)
+        val projection = self.arena.typeAt(index: rebuilt)
+        if projection.assocNameId == 0U64 { return <Result.Ok value=rebuilt /> }
+        for prior in active {
+            if self.typeRefEq(a: prior, b: rebuilt) {
+                return <Result.Err error=self.diagnosticAt(offset: offset, msg: "retained associated type equations are cyclic", failureDomain: <FailureDomain.Source />) />
+            }
+        }
+        if active.count() >= 64U64 {
+            return <Result.Err error=self.diagnosticAt(offset: offset, msg: "associated type equation analysis limit exceeded", failureDomain: <FailureDomain.Limit />) />
+        }
+        val owner = self.associatedProjectionTraitOwner(projection: projection)
+        val receiver = self.typeTermProjectionReceiver(t: projection)
+        val args = projection.assocTraitArgs
+        val answer = try self.queryTraitPatternProof(demand: <ConformanceProofDemand.SourceAdmission />, baseRef: receiver, traitId: 0U64, traitOwner: owner, traitArgs: <PatternTypeInput.Values values=args />, patternParams: <PatternBindInput.Values values=[] />, assumptions: assumptions, normalizations: equations)
+        match answer {
+            ConformanceProofResult.Found(proof: val selected) => {
+                val proof = try self.selectSignatureProjectionEquation(proof: selected, subject: receiver, owner: owner, arguments: args, member: projection.assocNameId, assumptions: assumptions, offset: offset)
+                val output = try self.associatedOutputTermInProof(proof: proof, traitOwner: owner, assocId: projection.assocNameId)
+                if output == 0U64 || self.typeRefEq(a: output, b: rebuilt) { return <Result.Ok value=rebuilt /> }
+                mut val next = active
+                next.append(rebuilt)
+                val normalized = try self.recordSignatureOutputEquations(ref: output, assumptions: assumptions, equations: inout equations, offset: offset, active: next)
+                try self.appendRetainedProjectionEquation(step: <ProjectionNormalizationStep source=rebuilt proof=self.freezeStaticConformanceProof(proof: proof) output=output />, normalizations: inout equations)
+                return <Result.Ok value=normalized />
+            }
+            _ => { return <Result.Ok value=rebuilt /> }
+        }
+    }
+
     inout fn recordLexicalProjectionEquations(ref: U64, lexical: DeclarationBoundRef, bound: TraitBound, equations: inout Array[ProjectionNormalizationStep], offset: U64, active: Array[U64] = [], sourceOwners: Array[U64] = []) -> Result[U64, CompileDiagnostic] {
         if !self.arena.typeContainsAssociatedProjection(ref: ref) { return <Result.Ok value=ref /> }
         mut val children: Array[U64] = []

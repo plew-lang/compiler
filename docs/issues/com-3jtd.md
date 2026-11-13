@@ -1500,3 +1500,19 @@ Include this control when tracing selected lexical equality RHS evidence.
 Check that the earlier equality is retained and consumed through the
 second equation before publishing the type or evidence. The shared
 parameter replay in com-nppi only consumes equations already admitted.
+
+The signature producer now records output prerequisites in dependency
+order and keeps them separate from equations needed to identify the
+projection's lexical receiver. Abstract slot reads replay the full recipe
+equations. Signature replay substitutes the already admitted output
+equations before using the resulting term. No output dependency is added
+for a missing equality, and the active chain rejects cyclic expansion.
+
+`chained_lexical_associated_equalities` was RED at member selection in
+check and JIT on `180bd891`. Fixed-input build
+`20261113T215538-build-160b1e` produced `15a0a7b0`; the fixture passed
+check/JIT and linked native with output `42`. All 25 exercised adjacent
+supertrait, associated declaration and projection fixtures passed
+check/JIT. Scratch controls preserved the symbolic missing-method
+rejection and diagnosed the cyclic equality. RHS source provenance for
+extension lookup is still a separate handoff.

@@ -1,0 +1,8 @@
+use @Std/Io only { print }
+trait Output { type Item }
+struct Counter {}
+impl Counter { fn get() -> I64 { return 42I64 } }
+struct Producer {}
+impl Producer as Output { type Item=Counter }
+fn read[U, T](prior: U, owner: T, item: T#Output.Item) -> I64 where U: Output[Item=Counter], T: Output[Item=U#Output.Item] { return item.get() }
+fn main() { print(read(prior: <Producer />, owner: <Producer />, item: <Counter />)) }

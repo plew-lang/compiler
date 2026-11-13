@@ -11,6 +11,7 @@ pub struct AuthoredTypeViewProof {
     pub val proof: U64
     pub val admittedArguments: Array[U64] = []
     pub val lexicalEquations: Array[ProjectionNormalizationStep] = []
+    pub val outputEquations: Array[ProjectionNormalizationStep] = []
 }
 pub impl AuthoredTypeViewProof { factory }
 
