@@ -1288,3 +1288,21 @@ its unused signature in check/JIT. Nine adjacent positive controls pass
 both modes. This exposes the actual composed view defect on the
 declaration-based path: separated `value#Left` then `path#Extra` works,
 while adjacent and typed combinations still require unified formation.
+
+### Compose a trait selector with extension admission
+
+A type annotation now establishes each extension against the bare
+receiver and the sources already proved for it. If extensions remain
+pending, the same receiver and lexical projection context may establish
+the exact authored trait selector, which then participates in the next
+round. A pending extension cannot justify its own selector. The normal
+signature proof reader still records and validates the selector.
+
+`extension_trait_selector_type_composition` was rejected by `92e2f79b`
+and passes check, JIT and linked native on `a31d1213` (fixed-input build
+`20261113T202331-build-1bbce7`). Six adjacent acceptance fixtures pass
+check/JIT. Ambiguous extension without a selector, extension added after
+a separately rejected selector, and removed enabling extension still
+reject. Value chains still move the trait selector outward during
+lowering, so their inner extension checks must consume the same
+composition context before this increment can close.

@@ -1,0 +1,17 @@
+use @Std/Io only { print }
+trait Match {}
+trait Left {}
+trait Right {}
+impl Left as Match {}
+impl Right as Match {}
+struct Number { val digit: I64 }
+impl Number as Left {}
+impl Number as Right {}
+extension Extra {
+    impl Match { fn fromMatch() -> I64 { return 42I64 } }
+}
+fn main() {
+    val path = <Number digit=42I64 />#Left
+    val extra: Number#Left#Extra = path#Extra
+    print(extra.digit)
+}

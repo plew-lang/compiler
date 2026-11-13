@@ -2582,13 +2582,16 @@ impl Comp {
         return <Result.Ok value=selectors />
     }
 
-    // Prove a bundle against the bare subject or an already applicable
-    // bundle. A selector cannot supply the evidence for opening itself.
-    inout fn admitTypeExtensionSources(subject: U64, sources: Array[ResolvedViewSource], assumptions: Array[DeclarationBoundRef], offset: U64) -> Result[(), CompileDiagnostic] {
+    // Admit each source against only the sources established so far.
+    // A trait selector can disambiguate the premise for an extension, and
+    // an already applicable extension can establish the selector's trait.
+    inout fn admitTypeExtensionSources(subject: U64, sources: Array[ResolvedViewSource], assumptions: Array[DeclarationBoundRef], normalizations: Array[ProjectionNormalizationStep], selectedProjection: Optional[StaticConformanceProof], offset: U64) -> Result[(), CompileDiagnostic] {
         try self.checkTraitSubjectViewCycles(sources: sources, offset: offset)
         mut val pending: Array[ResolvedViewSource] = []
+        mut val traitSelector: Optional[ResolvedViewSource] = <Optional.None />
         for source in sources {
             if source.traitInstance.owner == 0U64 { pending.append(source) }
+            else { traitSelector = <Optional.Some v=source /> }
         }
         if pending.count() == 0U64 { return <Result.Ok value=() /> }
         mut val receiver = self.typeRefWithoutOuterViews(ref: subject)
@@ -2603,6 +2606,18 @@ impl Comp {
                 }
             }
             if remaining.count() == 0U64 { return <Result.Ok value=() /> }
+            if traitSelector.isSome() {
+                val selector = traitSelector.unwrap()
+                val instance = selector.traitInstance
+                val answer = try self.queryTraitPatternProof(demand: <ConformanceProofDemand.SourceAdmission />, baseRef: receiver, traitId: 0U64, traitOwner: instance.owner, traitArgs: <PatternTypeInput.Values values=instance.positionalArgs />, patternParams: <PatternBindInput.Values values=[] />, assumptions: assumptions, selectedProjection: selectedProjection, normalizations: normalizations)
+                match answer {
+                    ConformanceProofResult.Found(proof: _) => {
+                        additions.append(selector)
+                        traitSelector = <Optional.None />
+                    }
+                    _ => {}
+                }
+            }
             if additions.count() == 0U64 {
                 return <Result.Err error=self.diagnosticAt(offset: remaining[0U64].writtenStart, msg: "extension does not apply to this trait instance or concrete receiver (spec/09)", failureDomain: <FailureDomain.Source />) />
             }
@@ -2623,10 +2638,10 @@ impl Comp {
         mut val context = equations
         for equation in receiverEquations { try self.appendRetainedProjectionEquation(step: equation, normalizations: inout context) }
         val subject = if context.count() != 0U64 { give (try self.replayProjectionChildren(ref: writtenSubject, normalizations: context, offset: occurrence.site)) } else { give writtenSubject }
-        try self.admitTypeExtensionSources(subject: subject, sources: sources, assumptions: assumptions, offset: occurrence.site)
         val selectedProjection = if receiverOccurrence != 0U64 {
             give <Optional.Some v=(try self.retainedSignatureReceiverProjection(occurrence: receiverOccurrence, ref: receiver, proofs: proofs, offset: occurrence.site)) />
         } else { give <Optional.None /> }
+        try self.admitTypeExtensionSources(subject: subject, sources: self.arena.typeViewSources(ref: subject), assumptions: assumptions, normalizations: context, selectedProjection: selectedProjection, offset: occurrence.site)
         for selector in selectors {
             if selector.traitInstance.owner != 0U64 {
                 if self.decls.traitIndexByOffset(offset: selector.traitInstance.owner) >= self.decls.traitCount() { return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "authored view has no canonical trait owner", failureDomain: <FailureDomain.Internal />) /> }
