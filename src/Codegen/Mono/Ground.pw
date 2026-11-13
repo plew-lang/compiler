@@ -1187,7 +1187,7 @@ pub impl Comp {
             }
         }
         if selected.isNone() && self.associatedBindingAdmissionComplete && self.traitOwnerHasAssocId(owner: traitOwner, assocId: assocId) {
-            return <Result.Err error=self.diagnosticAt(offset: owner.defOffset, msg: "associated-type projection names an associated type that is not bound by the selected conformance (spec/08)", failureDomain: <FailureDomain.Source />) />
+            return <Result.Err error=self.diagnosticAt(offset: owner.defOffset, msg: "selected conformance lost its declared associated binding", failureDomain: <FailureDomain.Internal />) />
         }
         return <Result.Ok value=selected />
     }

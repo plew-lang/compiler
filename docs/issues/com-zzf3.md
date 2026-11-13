@@ -481,3 +481,23 @@ whose method uses the same projection also passed `--check`.
 Same-source medians were 6.881091 s and 6.869889 s. The complete
 LLVM outputs differed only in TypeTerm numbers in generic-body symbol
 names. The final fixed-point check belongs to the parent gate.
+
+## Abstract output and lost concrete evidence
+
+The equation-origin test now uses the actual premise of
+`probe[T] where T: Parent[I64]`. Its missing associated equality returns
+the abstract zero sentinel. Removing the concrete impl's binding while
+keeping the selected witness now produces an Internal diagnostic. The
+same fixture restores the original binding and reads it successfully.
+Candidate `84eef38a` failed at the diagnostic-domain assertion; candidate
+`5ff41be1` passed. Unit, direct requirement and trait-subject controls
+passed in check/JIT/native. Unknown member source rejection retained its
+diagnostic. The existing stale no-conformance oracle is tracked in
+[com-9hde](com-9hde.md#current-fixture-migration-obligations); both
+candidates reject at view formation.
+
+Build `20261113T010459-build-3cb96c` passed. Same-source medians were
+6.888581 s and 6.862877 s with identical LLVM in all eight runs. The
+first caller-substitution probe used an open caller type at the concrete
+signature entry and was deferred. It is not evidence for substitution
+count; use a declaration replay path for the non-idempotent contrast.
