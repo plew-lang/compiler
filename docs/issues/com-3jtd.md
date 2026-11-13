@@ -1164,3 +1164,15 @@ It passes check, JIT and linked native on `51fc3403` (fixed-input build
 `20261113T184419-build-c60e56`). The inherent receiver group and the
 associated interface condition control pass check/JIT. Replacing the
 caller's `Item=I64` with `Item=Bool` still rejects the member lookup.
+
+Candidate lookup and selected-call constraint preparation now read the same
+receiver-match entry by callable, lexical caller and complete semantic type.
+Equivalent arena rows compare through the canonical type relation, which
+retains nominal owners, binder identity and every view source. A cached
+negative cannot furnish call evidence. The existing clause-substitution and
+lexical-proof checks remain at the handoff. Fixed-input build
+`20261113T185038-build-634daf` produced candidate `f2d8ea51`; the inherent
+receiver fixture group passed check/JIT and the extension signature passed
+native. This is a behavior-preserving increment. Extension applicability
+still calls the matcher separately and must distinguish the context before
+a view is added from the context with that view.

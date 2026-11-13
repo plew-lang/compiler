@@ -1934,10 +1934,8 @@ pub impl Comp {
 impl Comp {
     inout fn matchInherentReceiver(f: Func, receiver: U64, params: PatternBindInput) -> Result[WitnessMatch, CompileDiagnostic] {
         val caller = self.sourceLexicalFunction(fnIdx: self.cur.checkFn)
-        val cached = self.inherentReceiverMatches.getOr(key: f.dependentReceiverCallable, fallback: [])
-        for entry in cached {
-            if entry.caller == caller && entry.receiver == receiver { return <Result.Ok value=entry.witness /> }
-        }
+        val cached = self.findInherentReceiverMatch(function: f, receiver: receiver, caller: caller)
+        if cached.isSome() { return <Result.Ok value=cached.unwrap().witness /> }
         val scope = try self.declarationTypeScope(owner: caller)
         val assumptions = try self.declarationScopeAssumptions(scope: scope)
         val entry = try self.admitInherentReceiverMatch(f: f, receiver: receiver, caller: caller, params: params, assumptions: assumptions)
@@ -1948,6 +1946,18 @@ impl Comp {
         updated.append(entry)
         self.inherentReceiverMatches[f.dependentReceiverCallable] = updated
         return <Result.Ok value=entry.witness />
+    }
+
+    inout fn findInherentReceiverMatch(function: Func, receiver: U64, caller: U64) -> Optional[InherentReceiverMatch] {
+        if function.dependentReceiverCallable == 0U64 { return <Optional.None /> }
+        for entry in self.inherentReceiverMatches.getOr(key: function.dependentReceiverCallable, fallback: []) {
+            // The complete semantic receiver includes view sources, nominal
+            // owners and rigid binders. Its arena row need not be the same.
+            if entry.caller == caller && self.typeRefEq(a: entry.receiver, b: receiver) {
+                return <Optional.Some v=entry />
+            }
+        }
+        return <Optional.None />
     }
 
     inout fn admitInherentReceiverMatch(f: Func, receiver: U64, caller: U64, params: PatternBindInput, assumptions: Array[DeclarationBoundRef]) -> Result[InherentReceiverMatch, CompileDiagnostic] {

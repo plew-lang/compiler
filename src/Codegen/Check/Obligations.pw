@@ -1337,7 +1337,10 @@ pub impl Comp {
         mut val normalizations: Array[ProjectionNormalizationStep] = []
         val retained = match template.kind {
             CallTemplateKind.Direct(callee: val callee, receiver: _, args: _, calleeTypeArgs: _, proofId: _) => {
-                give self.retainedInherentCallMatch(callee: callee, receiver: template.receiverTypeTerm, caller: self.sourceLexicalFunction(fnIdx: template.siteKey.ownerFnIdx))
+                val matchResult = self.findInherentReceiverMatch(function: self.arena.functionAt(index: callee), receiver: template.receiverTypeTerm, caller: self.sourceLexicalFunction(fnIdx: template.siteKey.ownerFnIdx))
+                give if matchResult.isSome() && matchResult.unwrap().witness.conformIdx != 0U64 {
+                    give matchResult
+                } else { give <Optional.None /> }
             }
             _ => <Optional.None />,
         }
@@ -1399,19 +1402,6 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
-}
-
-impl Comp {
-    fn retainedInherentCallMatch(callee: U64, receiver: U64, caller: U64) -> Optional[InherentReceiverMatch] {
-        val function = self.arena.functionAt(index: callee)
-        if function.dependentReceiverCallable == 0U64 { return <Optional.None /> }
-        for entry in self.inherentReceiverMatches.getOr(key: function.dependentReceiverCallable, fallback: []) {
-            if entry.caller == caller && entry.receiver == receiver && entry.witness.conformIdx != 0U64 {
-                return <Optional.Some v=entry />
-            }
-        }
-        return <Optional.None />
-    }
 }
 
 pub impl Comp {
