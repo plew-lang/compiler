@@ -728,6 +728,7 @@ pub struct Comp {
     pub mut val blockExitRequirements: Dictionary[U64, U64] = [:]
     pub mut val blockTypeUses: Dictionary[U64, Array[U64]] = [:]
     mut val bodyRecipeTypeUses: Set[U64] = Set.new()
+    mut val nominalAnnotationProofs: Dictionary[U64, LocalAnnotationProof] = [:]
     mut val globalAnnotationProofs: Dictionary[U64, LocalAnnotationProof] = [:]
     pub mut val checkedTypeUses: Set[U64] = Set.new()
     pub mut val sourceExpressionLimit: U64 = 0U64
@@ -2278,6 +2279,7 @@ fn loadFrontendDeclarations(c: inout Comp, input: FrontendInput, sources: Source
         try c.checkSourceTypeUses(occurrences: c.loweringTypeUses)
     }
     try c.resolveTypeDeclIdentities()
+    try c.admitNominalTypeAnnotations()
     // Registration reserves identities. Admit all overload groups under the
     // shared rule only after nominal identities are authoritative.
     try c.checkCallableDeclarationAdmission()

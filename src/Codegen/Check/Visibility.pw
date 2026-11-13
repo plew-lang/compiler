@@ -702,7 +702,7 @@ pub impl Comp {
         while fi < sd.fields.count() {
             val f: FieldDef = sd.fields[fi]
             if f.vis != 0U64 || publishesFactory {
-                try self.checkSurfaceType(surfaces: inout surfaces, surfaceMod: surfaceMod, ref: f.ty, offset: f.nameStart)
+                try self.checkSurfaceType(surfaces: inout surfaces, surfaceMod: surfaceMod, ref: self.writtenNominalAnnotation(id: f.authoredTypeUse, fallback: f.ty), offset: f.nameStart)
             }
             fi += 1
         }
@@ -716,7 +716,7 @@ pub impl Comp {
             mut val fi: U64 = 0
             while fi < v.fields.count() {
                 val f: FieldDef = v.fields[fi]
-                try self.checkSurfaceType(surfaces: inout surfaces, surfaceMod: surfaceMod, ref: f.ty, offset: f.nameStart)
+                try self.checkSurfaceType(surfaces: inout surfaces, surfaceMod: surfaceMod, ref: self.writtenNominalAnnotation(id: f.authoredTypeUse, fallback: f.ty), offset: f.nameStart)
                 fi += 1
             }
             vi += 1
@@ -725,7 +725,7 @@ pub impl Comp {
     }
 
     inout fn checkNewtypeSurfaceInModule(surfaces: inout PublicSurfaceIndex, surfaceMod: U64, nt: NewtypeDef) -> Result[(), CompileDiagnostic] {
-        try self.checkSurfaceType(surfaces: inout surfaces, surfaceMod: surfaceMod, ref: nt.underRef, offset: nt.defOffset)
+        try self.checkSurfaceType(surfaces: inout surfaces, surfaceMod: surfaceMod, ref: self.writtenNominalAnnotation(id: nt.authoredTypeUse, fallback: nt.underRef), offset: nt.defOffset)
         return <Result.Ok value=() />
     }
 

@@ -703,6 +703,7 @@ impl Comp {
         }
         mut val declarationFunction = function
         mut val defaultToken: U64 = 0U64
+        mut val fieldDefaultParent: Optional[U64] = <Optional.None />
         match self.decls.defaultGeneratorOrigins.get(key: function) {
             Optional.Some(v: val origin) => {
                 val expression = try self.defaultOriginExpression(origin: origin, offset: occurrence.site)
@@ -712,7 +713,9 @@ impl Comp {
                 }
                 match origin {
                     DefaultGeneratorOrigin.Parameter(function: val parent, parameter: _) => { declarationFunction = parent }
-                    DefaultGeneratorOrigin.Field(structure: _, field: _) => {}
+                    DefaultGeneratorOrigin.Field(structure: val structure, field: _) => {
+                        fieldDefaultParent = <Optional.Some v=self.arena.structAt(index: structure).sourceTypeScope />
+                    }
                 }
             }
             Optional.None => {}
@@ -731,7 +734,7 @@ impl Comp {
             _ => { return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "authored body type belongs to an unfinished declaration", failureDomain: <FailureDomain.Internal />) /> }
         }
         val matchesOwner = if defaultToken != 0U64 {
-            give sourceScope.parent == signatureToken
+            give sourceScope.parent == fieldDefaultParent.unwrapOr(fallback: signatureToken)
         } else { give sourceScope.function.unwrapOr(fallback: 18446744073709551615U64) == function }
         if occurrence.term != term || occurrence.scope != token || !matchesOwner {
             return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "authored body type has a foreign occurrence", failureDomain: <FailureDomain.Internal />) />
@@ -763,6 +766,115 @@ impl Comp {
         val equations = validation.equations.getOr(key: occurrence.recipe, fallback: [])
         val sourceTerm = try self.replayProjectionNormalizations(ref: receiverType, normalizations: equations, offset: occurrence.site)
         return <Result.Ok value=<LocalAnnotationProof occurrence=id recipe=occurrence.recipe sourceTerm=sourceTerm normalizations=equations proofs=validation.proofs /> />
+    }
+
+    inout fn admitNominalTypeAnnotations() -> Result[(), CompileDiagnostic] {
+        for index in 0U64..<self.arena.structCount() {
+            val declaration = self.arena.structAt(index: index)
+            if declaration.sourceTypeScope == 0U64 { continue }
+            val scope = <DeclarationTypeScope origin=<DeclarationScopeOrigin.Nominal /> owner=declaration.defOffset parameters=self.pushFuncBinds(binds: declaration.typeParams) />
+            for fieldIndex in 0U64..<declaration.fields.count() {
+                val field = declaration.fields[fieldIndex]
+                val proof = try self.admitNominalTypeAnnotation(id: field.authoredTypeUse, term: field.ty, token: declaration.sourceTypeScope, scope: scope)
+                if proof.sourceTerm != field.ty {
+                    self.arena.setAdmittedStructFieldType(index: index, field: fieldIndex, term: proof.sourceTerm)
+                }
+            }
+        }
+        for index in 0U64..<self.arena.enumCount() {
+            val declaration = self.arena.enumAt(index: index)
+            if declaration.sourceTypeScope == 0U64 { continue }
+            val scope = <DeclarationTypeScope origin=<DeclarationScopeOrigin.Nominal /> owner=declaration.defOffset parameters=self.pushFuncBinds(binds: declaration.typeParams) />
+            for variantIndex in 0U64..<declaration.variants.count() {
+                val variant = declaration.variants[variantIndex]
+                for fieldIndex in 0U64..<variant.fields.count() {
+                    val field = variant.fields[fieldIndex]
+                    val proof = try self.admitNominalTypeAnnotation(id: field.authoredTypeUse, term: field.ty, token: declaration.sourceTypeScope, scope: scope)
+                    if proof.sourceTerm != field.ty {
+                        self.arena.setAdmittedEnumFieldType(index: index, variant: variantIndex, field: fieldIndex, term: proof.sourceTerm)
+                    }
+                }
+            }
+        }
+        for index in 0U64..<self.arena.newtypeCount() {
+            val declaration = self.arena.newtypeAt(index: index)
+            if declaration.sourceTypeScope == 0U64 { continue }
+            val scope = <DeclarationTypeScope origin=<DeclarationScopeOrigin.Nominal /> owner=declaration.defOffset parameters=<FuncBindRange start=0U64 len=0U64 /> />
+            val proof = try self.admitNominalTypeAnnotation(id: declaration.authoredTypeUse, term: declaration.underRef, token: declaration.sourceTypeScope, scope: scope)
+            if proof.sourceTerm != declaration.underRef {
+                self.arena.setAdmittedNewtypeUnderlying(index: index, term: proof.sourceTerm)
+            }
+        }
+        return <Result.Ok value=() />
+    }
+
+    // A selected field owns its written occurrence; only the exact nominal
+    // instance supplies its substitutions. Open uses retain the admitted term
+    // until a closed instance can interpret the saved conformance.
+    inout fn selectedNominalFieldType(field: FieldDef, token: U64, owner: U64, params: Array[Bind], receiver: U64) -> Result[U64, CompileDiagnostic] {
+        if token == 0U64 { return self.groundUnderInst(instRef: receiver, tyRef: field.ty) }
+        val saved = try self.requireNominalTypeAnnotation(id: field.authoredTypeUse, term: field.ty, token: token, owner: owner)
+        if self.arena.typeIsClosed(ref: field.ty) { return <Result.Ok value=field.ty /> }
+        val instance = self.arena.typeAt(index: receiver)
+        if instance.args.count() != params.count() || !self.arena.typeIsClosed(ref: receiver) {
+            return self.groundUnderInst(instRef: receiver, tyRef: field.ty)
+        }
+        val environment = <InstanceEnvironment params=params args=instance.args receiverRef=receiver />
+        if saved.proofs.count() == 0U64 {
+            return <Result.Ok value=self.groundTermInEnvironment(ref: field.ty, params: params, values: instance.args, selfRef: receiver) />
+        }
+        mut val memo: Dictionary[U64, AuthoredRecipeRead] = [:]
+        val admitted = try self.readAuthoredTypeRecipe(proofs: saved.proofs, recipe: saved.recipe, environment: environment, memo: inout memo, context: <SignatureRecipeContext.Concrete />)
+        return <Result.Ok value=admitted.term />
+    }
+
+    inout fn requireNominalTypeAnnotation(id: U64, term: U64, token: U64, owner: U64) -> Result[LocalAnnotationProof, CompileDiagnostic] {
+        val occurrence = try self.signatureOccurrence(id: id)
+        val source = self.sourceTypeUses.scopeAt(token: token)
+        match self.nominalAnnotationProofs.get(key: id) {
+            Optional.Some(v: val saved) => {
+                if saved.occurrence == id && saved.recipe == occurrence.recipe && saved.sourceTerm == term && occurrence.scope == token && source.isSome() && source.unwrap().anchor == owner {
+                    return <Result.Ok value=saved />
+                }
+            }
+            Optional.None => {}
+        }
+        return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "nominal type has no matching saved annotation", failureDomain: <FailureDomain.Internal />) />
+    }
+
+    // Surface visibility examines what was written. Field and representation
+    // consumers use the admitted term, which may have erased private selectors.
+    fn writtenNominalAnnotation(id: U64, fallback: U64) -> U64 {
+        if id == 0U64 { return fallback }
+        return self.sourceTypeUses.useAt(index: id - 1U64).unwrap().term
+    }
+
+    inout fn admitNominalTypeAnnotation(id: U64, term: U64, token: U64, scope: DeclarationTypeScope) -> Result[LocalAnnotationProof, CompileDiagnostic] {
+        val occurrence = try self.signatureOccurrence(id: id)
+        val source = match self.sourceTypeUses.scopeAt(token: token) {
+            Optional.Some(v: val source) => source,
+            Optional.None => { return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "nominal annotation has no source scope", failureDomain: <FailureDomain.Internal />) /> }
+        }
+        match source.kind {
+            SourceTypeScopeKind.Nominal => {}
+            _ => { return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "nominal annotation has a foreign scope kind", failureDomain: <FailureDomain.Internal />) /> }
+        }
+        match source.state {
+            SourceTypeScopeState.Lowered => {}
+            _ => { return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "nominal annotation belongs to an unfinished declaration", failureDomain: <FailureDomain.Internal />) /> }
+        }
+        if source.anchor != scope.owner || occurrence.scope != token || occurrence.term != term || self.nominalAnnotationProofs.contains(key: id) {
+            return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "nominal annotation has a foreign source occurrence", failureDomain: <FailureDomain.Internal />) />
+        }
+        val scopes = <SignatureProofScopes local=scope assumptions=[] inherited=[] receiver=0U64 />
+        mut val validation = <SignatureRecipeValidation />
+        try self.checkAuthoredTypeRecipe(sourceScope: token, recipe: occurrence.recipe, edge: <AuthoredRecipeEdge.Source />, scopes: scopes, validation: inout validation, offset: occurrence.site)
+        val equations = validation.equations.getOr(key: occurrence.recipe, fallback: [])
+        val sourceTerm = try self.replayProjectionNormalizations(ref: term, normalizations: equations, offset: occurrence.site)
+        val proof = <LocalAnnotationProof occurrence=id recipe=occurrence.recipe sourceTerm=sourceTerm normalizations=equations proofs=validation.proofs />
+        self.nominalAnnotationProofs[id] = proof
+        self.markBodyRecipeTypeUses(recipe: proof.recipe)
+        return <Result.Ok value=proof />
     }
 
     inout fn admitGlobalAnnotations() -> Result[(), CompileDiagnostic] {

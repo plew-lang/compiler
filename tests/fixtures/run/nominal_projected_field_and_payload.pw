@@ -1,0 +1,12 @@
+use @Std/Io only { print }
+trait Project { type Item }
+struct Projector[T] { val item: T }
+impl[T] Projector[T] as Project { type Item = T }
+struct Box[T] { val value: Projector[T]#Project.Item }
+enum Payload[T] { Item(value: Projector[T]#Project.Item) }
+fn main() {
+    val box: Box[I64] = <Box value=42I64 />
+    val payload: Payload[Bool] = <Payload.Item value=true />
+    print(box.value)
+    match payload { Payload.Item(val value) => { print(value) } }
+}

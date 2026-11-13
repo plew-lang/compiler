@@ -2,7 +2,7 @@
 // scope completed syntax lowering only; it has not admitted any source proof.
 use ./Ir only { Bind, Func }
 
-pub enum SourceTypeScopeKind { FreeFunction Method Deinit Implementation RequirementSignature ExternSignature DefaultExpression Global }
+pub enum SourceTypeScopeKind { FreeFunction Method Deinit Implementation RequirementSignature ExternSignature DefaultExpression Global Nominal }
 pub enum SourceTypeScopeState { Lowering Lowered Failed }
 pub enum SourceTypeUseRole { Unowned Declaration DefaultArgument Body }
 
@@ -276,7 +276,7 @@ pub impl SourceTypeUses {
             SourceTypeScopeKind.ExternSignature => {
                 match scope.state { SourceTypeScopeState.Lowered => {} _ => { return false } }
             }
-            SourceTypeScopeKind.Implementation | SourceTypeScopeKind.RequirementSignature | SourceTypeScopeKind.DefaultExpression | SourceTypeScopeKind.Global => { return false }
+            SourceTypeScopeKind.Implementation | SourceTypeScopeKind.RequirementSignature | SourceTypeScopeKind.DefaultExpression | SourceTypeScopeKind.Global | SourceTypeScopeKind.Nominal => { return false }
         }
         self.scopes[token - 1U64] = <SourceTypeScope kind=scope.kind anchor=scope.anchor traitOwner=scope.traitOwner parent=scope.parent state=scope.state function=<Optional.Some v=function /> requirement=scope.requirement implementation=scope.implementation bounds=scope.bounds />
         return true

@@ -1195,6 +1195,7 @@ pub struct Param {
 }
 
 pub struct FieldDef {
+    pub val authoredTypeUse: U64 = 0U64
     pub val nameStart: U64
     pub val nameLen: U64
     // interned name id (Phase C): set by internAllDecls; 0 until then.
@@ -1205,7 +1206,7 @@ pub struct FieldDef {
     // lowerFieldDef. A field's declared type matches by integer == instead of spansEqual.
     pub val tyNameId: U64 = 0
     pub val tyIsArray: Bool
-    pub val ty: U64
+    pub(get) mut val ty: U64
     // declared `mut val` (assignable storage) vs `val` (immutable). Always false
     // for enum variant fields (they take no modifier). Used for the composite
     // mutability check on `base.field = x` (spec: both binding and field `mut`).
@@ -1224,13 +1225,14 @@ pub struct FieldDef {
 }
 
 pub struct StructDef {
+    pub val sourceTypeScope: U64 = 0U64
     pub val nameStart: U64
     pub val nameLen: U64
     pub val nameId: U64 = 0
     // generic type parameters `[T, U]` (each a name span; reuses Bind). Empty for
     // a non-generic struct. `[sendable T]` is recorded on Bind.isSendable.
     pub val typeParams: Array[Bind]
-    pub val fields: Array[FieldDef]
+    pub(get) mut val fields: Array[FieldDef]
     // declared `unique struct` (spec/03): copy-incapable, move-only, may carry a
     // `deinit`. A unique value is never CoW-shared; bindings move ownership and
     // the last owner runs `deinit` at scope exit. Default false = copyable.
@@ -1265,7 +1267,7 @@ pub struct Variant {
     pub val nameStart: U64
     pub val nameLen: U64
     pub val nameId: U64 = 0
-    pub val fields: Array[FieldDef]
+    pub(get) mut val fields: Array[FieldDef]
 }
 
 // A trait declaration `trait Name { fn req(...) -> T ... }` (spec/08). The body
@@ -2743,7 +2745,7 @@ pub impl DeclarationConversion { factory }
 
 // Lexical binder ownership for symbolic declaration obligations. This is a
 // source scope, not an executable substitution or an ambient name environment.
-pub enum DeclarationScopeOrigin { Lexical InterfaceContract RequirementSignature AssociatedBinding Global }
+pub enum DeclarationScopeOrigin { Lexical InterfaceContract RequirementSignature AssociatedBinding Global Nominal }
 pub impl DeclarationScopeOrigin { factory }
 
 pub struct DeclarationTypeScope {
@@ -2788,12 +2790,13 @@ pub struct BodyInstance {
 }
 
 pub struct EnumDef {
+    pub val sourceTypeScope: U64 = 0U64
     pub val nameStart: U64
     pub val nameLen: U64
     pub val nameId: U64 = 0
     // generic type parameters `[T, U]` (see StructDef.typeParams).
     pub val typeParams: Array[Bind]
-    pub val variants: Array[Variant]
+    pub(get) mut val variants: Array[Variant]
     // `unique enum` (spec/03): copy-forbidden, move-only — same single-ownership
     // regime as a unique struct (a unique payload may live in it legally).
     pub val isUnique: Bool = false
@@ -3106,12 +3109,14 @@ pub impl SemanticGlobalAddress { factory }
 // representation. `nameId` is the interned newtype name; (underStart, underLen) /
 // underRef name the underlying type (its head span and full TypeRef).
 pub struct NewtypeDef {
+    pub val sourceTypeScope: U64 = 0U64
     pub val nameStart: U64
     pub val nameLen: U64
     pub val nameId: U64
     pub val underStart: U64
     pub val underLen: U64
-    pub val underRef: U64
+    pub(get) mut val underRef: U64
+    pub val authoredTypeUse: U64 = 0U64
     // original source offset of the declaration (see StructDef.defOffset): kept for
     // `moduleOf` (scoped type-visibility), since nameStart is re-interned. 0 if unknown.
     pub val defOffset: U64 = 0

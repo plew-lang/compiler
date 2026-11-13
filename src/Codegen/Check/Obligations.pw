@@ -115,7 +115,7 @@ pub impl Comp {
                     assumptions = self.functionBoundAssumptions(fnIdx: scope.owner)
                 }
             }
-            DeclarationScopeOrigin.InterfaceContract | DeclarationScopeOrigin.Global => {}
+            DeclarationScopeOrigin.InterfaceContract | DeclarationScopeOrigin.Global | DeclarationScopeOrigin.Nominal => {}
             DeclarationScopeOrigin.AssociatedBinding => {
                 if scope.owner >= self.decls.conformCount() { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "associated binding has no conformance scope", failureDomain: <FailureDomain.Internal />) /> }
                 assumptions = self.conformanceDeclarationAssumptions(conformIndex: scope.owner)
@@ -1774,7 +1774,7 @@ impl Comp {
                 }
             }
             DeclarationScopeOrigin.Lexical => {}
-            DeclarationScopeOrigin.Global => { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "global type cannot borrow a lexical premise", failureDomain: <FailureDomain.Internal />) /> }
+            DeclarationScopeOrigin.Global | DeclarationScopeOrigin.Nominal => { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "non-callable declaration cannot borrow a lexical premise", failureDomain: <FailureDomain.Internal />) /> }
         }
         val owner = match source {
             DeclarationBoundRef.Function(index: val index) => { give self.decls.funcBounds.at(index: index).fnIdx }

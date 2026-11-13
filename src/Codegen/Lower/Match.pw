@@ -360,7 +360,7 @@ pub impl Comp {
                 SourceTypeUseRole.Body | SourceTypeUseRole.DefaultArgument => { self.bodyRecipeTypeUses.insert(node.occurrence) }
                 SourceTypeUseRole.Declaration => {
                     val source = self.sourceTypeUses.scopeAt(token: occurrence.scope).unwrap()
-                    match source.kind { SourceTypeScopeKind.Global => { self.bodyRecipeTypeUses.insert(node.occurrence) } _ => { return } }
+                    match source.kind { SourceTypeScopeKind.Global | SourceTypeScopeKind.Nominal => { self.bodyRecipeTypeUses.insert(node.occurrence) } _ => { return } }
                 }
                 _ => { return }
             }

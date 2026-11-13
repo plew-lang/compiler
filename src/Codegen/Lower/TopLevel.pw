@@ -408,26 +408,40 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
+    inout fn finishNominalSourceScope(scope: U64, offset: U64, result: Result[(), CompileDiagnostic]) -> Result[(), CompileDiagnostic] {
+        if !self.sourceTypeUses.finish(token: scope, succeeded: result.isOk()) {
+            return <Result.Err error=self.diagnosticAt(offset: offset, msg: "invalid nominal source scope completion", failureDomain: <FailureDomain.Internal />) />
+        }
+        return result
+    }
+
     inout fn lowerNewtype(name: String, ty: TypeAst, defOffset: U64) -> Result[(), CompileDiagnostic] {
-        val nm: Bind = self.internBytes(s: name)
-        val under: PType = (try self.lowerType(t: ty))
-        self.appendLoweredNewtype(name: nm, under: under, defOffset: defOffset)
-        return <Result.Ok value=() />
+        val scope = self.sourceTypeUses.begin(kind: <SourceTypeScopeKind.Nominal />, anchor: defOffset)
+        val result = self.lowerType(t: ty)
+        val binding = self.internBytes(s: name)
+        return self.finishLoweredNewtype(name: binding, result: result, defOffset: defOffset, scope: scope)
     }
 
     inout fn lowerSyntaxNewtype(id: NewtypeId) -> Result[(), CompileDiagnostic] {
         val item: SyntaxNewtype = syntaxNewtype(file: self.syntax, id: id)
         val nameLen: U64 = item.name.end - item.name.start
         val name: Bind = <Bind nameStart=item.name.start nameLen=nameLen fieldStart=item.name.start fieldLen=nameLen />
-        val under: PType = (try self.lowerSyntaxType(id: item.ty))
-        self.appendLoweredNewtype(name: name, under: under, defOffset: item.span.start)
+        val scope = self.sourceTypeUses.begin(kind: <SourceTypeScopeKind.Nominal />, anchor: item.span.start)
+        val result = self.lowerSyntaxType(id: item.ty)
+        return self.finishLoweredNewtype(name: name, result: result, defOffset: item.span.start, scope: scope)
+    }
+
+    inout fn finishLoweredNewtype(name: Bind, result: Result[PType, CompileDiagnostic], defOffset: U64, scope: U64) -> Result[(), CompileDiagnostic] {
+        if !self.sourceTypeUses.finish(token: scope, succeeded: result.isOk()) {
+            return <Result.Err error=self.diagnosticAt(offset: defOffset, msg: "invalid nominal source scope completion", failureDomain: <FailureDomain.Internal />) />
+        }
+        val under = try result
+        self.appendLoweredNewtype(name: name, under: under, defOffset: defOffset, scope: scope)
         return <Result.Ok value=() />
     }
 
-    // Both source decoders converge here.  The semantic mutation is deliberately
-    // shared so SyntaxFile migration cannot create a second newtype lowerer.
-    inout fn appendLoweredNewtype(name: Bind, under: PType, defOffset: U64) {
-        self.arena.registerNewtype(<NewtypeDef nameStart=name.nameStart nameLen=name.nameLen nameId=intern(c: inout self, start: name.nameStart, len: name.nameLen) underStart=under.start underLen=under.len underRef=under.ref defOffset=defOffset />)
+    inout fn appendLoweredNewtype(name: Bind, under: PType, defOffset: U64, scope: U64) {
+        self.arena.registerNewtype(<NewtypeDef sourceTypeScope=scope authoredTypeUse=under.authoredUse nameStart=name.nameStart nameLen=name.nameLen nameId=intern(c: inout self, start: name.nameStart, len: name.nameLen) underStart=under.start underLen=under.len underRef=under.ref defOffset=defOffset />)
     }
 
     inout fn lowerGlobalVal(s: StmtAst) -> Result[(), CompileDiagnostic] {

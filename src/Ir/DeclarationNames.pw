@@ -13,6 +13,13 @@ pub impl Arena {
     fn enumCount() -> U64 { return self.enums.count() }
     fn enumAt(index: U64) -> EnumDef { return self.enums[index] }
 
+    inout fn setAdmittedStructFieldType(index: U64, field: U64, term: U64) {
+        self.structs[index].fields[field].ty = term
+    }
+    inout fn setAdmittedEnumFieldType(index: U64, variant: U64, field: U64, term: U64) {
+        self.enums[index].variants[variant].fields[field].ty = term
+    }
+
     fn enumVariantAt(enumIndex: U64, variantIndex: U64) -> Variant {
         val declaration = self.enums[enumIndex]
         return declaration.variants[variantIndex]
@@ -257,6 +264,9 @@ pub impl Arena {
             self.newtypesByOffset[declaration.defOffset] = self.newtypes.count() + 1U64
         }
         self.newtypes.append(declaration)
+    }
+    inout fn setAdmittedNewtypeUnderlying(index: U64, term: U64) {
+        self.newtypes[index].underRef = term
     }
     fn newtypeUnderlyingByOffset(offset: U64) -> U64 {
         val entry = self.newtypesByOffset.getOr(key: offset, fallback: 0U64)

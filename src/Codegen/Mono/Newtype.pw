@@ -10,8 +10,8 @@ pub impl Comp {
         if self.typeRefEq(a: source, b: target) { return true }
         val sourceUnderlying = self.arena.newtypeUnderlying(ref: source)
         val targetUnderlying = self.arena.newtypeUnderlying(ref: target)
-        if sourceUnderlying != 0U64 && self.typeRefEq(a: sourceUnderlying, b: target) { return true }
-        if targetUnderlying != 0U64 && self.typeRefEq(a: targetUnderlying, b: source) { return true }
+        if sourceUnderlying != 0U64 && self.newtypeUnderlyingBoundaryMatches(underlying: sourceUnderlying, term: target) { return true }
+        if targetUnderlying != 0U64 && self.newtypeUnderlyingBoundaryMatches(underlying: targetUnderlying, term: source) { return true }
         if !self.typeTermRefSameHead(a: source, b: target) { return false }
         val count = self.typeTermRefChildCount(ref: source)
         if count != self.typeTermRefChildCount(ref: target) { return false }
@@ -22,6 +22,16 @@ pub impl Comp {
             index += 1U64
         }
         return true
+    }
+
+    // An inherited implementation executes with its own receiver surface.
+    // The stored underlying term still carries the source view for selection.
+    // Compare that term to the bare body receiver without changing either
+    // term or treating an unrelated viewed type as a matching receiver.
+    inout fn newtypeUnderlyingBoundaryMatches(underlying: U64, term: U64) -> Bool {
+        if self.typeRefEq(a: underlying, b: term) { return true }
+        val receiver = self.typeRefWithoutOuterViews(ref: underlying)
+        return receiver != underlying && self.typeRefEq(a: receiver, b: term)
     }
 
     inout fn finalizeNewtypeAdapter(bodyId: U64) -> Result[(), CompileDiagnostic] {

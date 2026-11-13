@@ -1,0 +1,11 @@
+use @Std/Io only { print }
+trait Project { type Item }
+struct Projector {}
+struct Number { val value: I64 }
+impl Projector as Project { type Item = Number }
+impl Number { fn number() -> I64 { return self.value } }
+newtype Box = Projector#Project.Item
+fn main() {
+    val box = <Number value=42I64 /> as Box
+    print(box.number())
+}

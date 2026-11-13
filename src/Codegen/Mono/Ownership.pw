@@ -241,7 +241,6 @@ pub impl Comp {
             return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: destruction shape requires a closed type") />
         }
         val type = self.arena.typeAt(index: typeRef)
-        mut val environment = <InstanceEnvironment receiverRef=typeRef />
         mut val fields: Array[U64] = []
         mut val boxed: Array[Bool] = []
         mut val variantStarts: Array[U64] = []
@@ -262,7 +261,6 @@ pub impl Comp {
                 val structure = self.structIndexForType(ref: typeRef)
                 if structure < self.arena.structCount() {
                     val declaration = self.arena.structAt(index: structure)
-                    environment = <InstanceEnvironment params=declaration.typeParams args=type.args receiverRef=typeRef />
                     structureDeclaration = structure + 1U64
                     isOpaquePointer = declaration.isCExtern || (declaration.isExtern && type.args.count() > 0U64)
                     hasStructStorage = !declaration.isExtern && !declaration.isCExtern
@@ -272,22 +270,23 @@ pub impl Comp {
                     }
                     mut val field = 0U64
                     while field < declaration.fields.count() {
-                        fields.append(self.groundTermInEnvironment(ref: declaration.fields[field].ty, params: declaration.typeParams, values: type.args, selfRef: typeRef))
-                        boxed.append(self.fieldIsBoxed(f: declaration.fields[field]))
+                        val slot = declaration.fields[field]
+                        fields.append(try self.selectedNominalFieldType(field: slot, token: declaration.sourceTypeScope, owner: declaration.defOffset, params: declaration.typeParams, receiver: typeRef))
+                        boxed.append(self.fieldIsBoxed(f: slot))
                         field += 1U64
                     }
                 } else {
                     val enumeration = self.enumIndexForType(ref: typeRef)
                     if enumeration < self.arena.enumCount() {
                         val declaration = self.arena.enumAt(index: enumeration)
-                        environment = <InstanceEnvironment params=declaration.typeParams args=type.args receiverRef=typeRef />
                         variantStarts.append(fields.count())
                         mut val variant = 0U64
                         while variant < declaration.variants.count() {
                             mut val field = 0U64
                             while field < declaration.variants[variant].fields.count() {
-                                fields.append(self.groundTermInEnvironment(ref: declaration.variants[variant].fields[field].ty, params: declaration.typeParams, values: type.args, selfRef: typeRef))
-                                boxed.append(self.fieldIsBoxed(f: declaration.variants[variant].fields[field]))
+                                val slot = declaration.variants[variant].fields[field]
+                                fields.append(try self.selectedNominalFieldType(field: slot, token: declaration.sourceTypeScope, owner: declaration.defOffset, params: declaration.typeParams, receiver: typeRef))
+                                boxed.append(self.fieldIsBoxed(f: slot))
                                 field += 1U64
                             }
                             variantStarts.append(fields.count())
@@ -309,10 +308,6 @@ pub impl Comp {
         if !type.isRecord {
             mut val field = 0U64
             while field < fields.count() {
-                val original = fields[field]
-                if self.arena.typeContainsAssociatedProjection(ref: original) {
-                    fields.set(i: field, value: (try self.closeBodyProjectionTerms(ref: original, environment: environment, selfRef: typeRef, itemRef: 0U64)))
-                }
                 if !self.arena.typeIsClosed(ref: fields[field]) {
                     return <Result.Err error=self.diagnosticAt(offset: type.nameStart, msg: "internal error: destruction field type is not closed") />
                 }

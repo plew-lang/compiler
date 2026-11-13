@@ -154,14 +154,14 @@ pub impl Comp {
         }
         val si: U64 = self.structIndexForType(ref: storageRef)
         if si >= self.arena.structCount() { return <Result.Ok value=0U64 />}
-        val fields: Array[FieldDef] = self.arena.structAt(index: si).fields
+        val declaration = self.arena.structAt(index: si)
+        val fields = declaration.fields
         val qField: U64 = intern(c: inout self, start: fieldStart, len: fieldLen)
         mut val i: U64 = 0U64
         while i < fields.count() {
             val fd: FieldDef = fields[i]
             if fd.nameId == qField {
-                val grounded = try self.groundUnderInst(instRef: storageRef, tyRef: fd.ty)
-                return self.normalizedSelectedFieldType(ref: grounded, receiverRef: storageRef)
+                return self.selectedNominalFieldType(field: fd, token: declaration.sourceTypeScope, owner: declaration.defOffset, params: declaration.typeParams, receiver: storageRef)
             }
             i += 1U64
         }
@@ -226,13 +226,16 @@ pub impl Comp {
         if isEnum {
             val enumIndex: U64 = self.enumIndexForType(ref: storage)
             if enumIndex >= self.arena.enumCount() || variantIndex >= self.arena.enumAt(index: enumIndex).variants.count() { return <Result.Ok value=0U64 />}
-            val fields: Array[FieldDef] = self.arena.enumVariantAt(enumIndex: enumIndex, variantIndex: variantIndex).fields
+            val declaration = self.arena.enumAt(index: enumIndex)
+            val fields = declaration.variants[variantIndex].fields
             if fieldIndex >= fields.count() { return <Result.Ok value=0U64 />}
-            return <Result.Ok value=(try self.groundUnderInst(instRef: storage, tyRef: fields[fieldIndex].ty)) />
+            return self.selectedNominalFieldType(field: fields[fieldIndex], token: declaration.sourceTypeScope, owner: declaration.defOffset, params: declaration.typeParams, receiver: storage)
         }
         val structIndex: U64 = self.structIndexForType(ref: storage)
-        if structIndex >= self.arena.structCount() || fieldIndex >= self.arena.structAt(index: structIndex).fields.count() { return <Result.Ok value=0U64 />}
-        return <Result.Ok value=(try self.groundUnderInst(instRef: storage, tyRef: self.arena.structFieldAt(structIndex: structIndex, fieldIndex: fieldIndex).ty)) />
+        if structIndex >= self.arena.structCount() { return <Result.Ok value=0U64 />}
+        val declaration = self.arena.structAt(index: structIndex)
+        if fieldIndex >= declaration.fields.count() { return <Result.Ok value=0U64 />}
+        return self.selectedNominalFieldType(field: declaration.fields[fieldIndex], token: declaration.sourceTypeScope, owner: declaration.defOffset, params: declaration.typeParams, receiver: storage)
     }
 
     inout fn genericEnumFieldTypeInfo(instRef: U64, variantStart: U64, variantLen: U64, fieldStart: U64, fieldLen: U64) -> Result[TypeInfo, CompileDiagnostic] {
@@ -258,7 +261,8 @@ pub impl Comp {
                         // substitution as struct fields.  Keeping a separate
                         // `nameId` loop here made reconstructed `T` refs (whose
                         // cache id is 0) escape only through match bindings.
-                        return <Result.Ok value=self.typeInfoOfRef(ref: (try self.groundUnderInst(instRef: layoutReceiver, tyRef: fd.ty))) />
+                        val term = try self.selectedNominalFieldType(field: fd, token: e.sourceTypeScope, owner: e.defOffset, params: e.typeParams, receiver: layoutReceiver)
+                        return <Result.Ok value=self.typeInfoOfRef(ref: term) />
                     }
                     fi += 1
                 }
