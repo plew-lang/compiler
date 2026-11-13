@@ -206,6 +206,33 @@ impl Comp {
         return <Result.Ok value=<Optional.Some v=saved /> />
     }
 
+    inout fn recordedTraitSelector(exprId: U64, receiver: U64) -> Optional[ResolvedViewSource] {
+        if self.arena.typeViewSourceCount(ref: receiver) == 0U64 { return <Optional.None /> }
+        val owner = self.currentSourceOwner()
+        if owner.isNone() || !self.sourceFacts.isActive(owner: owner.unwrap()) { return <Optional.None /> }
+        mut val current = exprId
+        while current < self.arena.exprs.count() {
+            match self.sourceFacts.activeBuilder.data.traitValueViews.get(key: current) {
+                Optional.Some(v: val fact) => {
+                    val selected = fact.selection.selector.withArguments(arguments: fact.selection.admittedArguments)
+                    for active in self.arena.typeViewSources(ref: receiver) {
+                        if self.semanticViewSourceEq(a: active, b: selected) { return <Optional.Some v=selected /> }
+                    }
+                    return <Optional.None />
+                }
+                Optional.None => {}
+            }
+            match self.arena.exprs[current] {
+                Expr.ExtView(recv: val base, source: _, strip: val stripped) => {
+                    if stripped { return <Optional.None /> }
+                    current = base
+                }
+                _ => { return <Optional.None /> }
+            }
+        }
+        return <Optional.None />
+    }
+
     fn recordedExpressionTypeOrigin(exprId: U64) -> Optional[SourceExpressionTypeOrigin] {
         val owner = self.currentSourceOwner()
         if owner.isNone() || !self.sourceFacts.isActive(owner: owner.unwrap()) { return <Optional.None /> }
@@ -2165,17 +2192,18 @@ pub impl Comp {
                 val receiverTerm = if admittedFactoryReceiver != 0U64 { give admittedFactoryReceiver } else { give self.syntheticCallReceiverTerm(exprId: exprId, fallback: (try self.methodReceiverTerm(exprId: recv))) }
                 val requiredTraitOwner = self.syntheticRequiredTraitOwner(exprId: exprId)
                 val extensionProofs = self.recordedExtensionSources(exprId: recv)
+                val admittedTrait = self.recordedTraitSelector(exprId: recv, receiver: receiverTerm)
                 // The construction query preserves the synthetic requirement on its
                 // selected cache entry.
                 // Only unresolved receivers need the parametric Record query.
                 mut val methodCallee = if admittedFactoryReceiver != 0U64 {
                     give try self.resolveWrittenMethod(exprId: exprId, recv: recv, nameStart: nameStart, nameLen: nameLen, args: args, admittedReceiver: admittedFactoryReceiver)
-                } else if extensionProofs.count() != 0U64 {
-                    give try self.resolveMethodForResolvedReceiver(recv: recv, surfaceRef: receiverTerm, sourceId: 0U64, sourceOwner: 0U64, nameStart: nameStart, nameLen: nameLen, args: args, useOffset: self.exprOffset(id: exprId), requiredTraitOwner: requiredTraitOwner, extensionProofs: extensionProofs)
+                } else if extensionProofs.count() != 0U64 || admittedTrait.isSome() {
+                    give try self.resolveMethodForResolvedReceiver(recv: recv, surfaceRef: receiverTerm, sourceId: 0U64, sourceOwner: 0U64, nameStart: nameStart, nameLen: nameLen, args: args, useOffset: self.exprOffset(id: exprId), requiredTraitOwner: requiredTraitOwner, extensionProofs: extensionProofs, admittedTrait: admittedTrait)
                 } else { give try self.resolvedCallee(id: exprId) }
-                if extensionProofs.count() == 0U64 && requiredTraitOwner != 0U64 && methodCallee >= self.arena.functionCount() {
+                if extensionProofs.count() == 0U64 && admittedTrait.isNone() && requiredTraitOwner != 0U64 && methodCallee >= self.arena.functionCount() {
                     methodCallee = (try self.resolveMethodFinalForType(recv: recv, receiverType: self.typeInfoOfRef(ref: receiverTerm), nameStart: nameStart, nameLen: nameLen, args: args, requiredTraitOwner: requiredTraitOwner))
-                } else if extensionProofs.count() == 0U64 && requiredTraitOwner == 0U64 {
+                } else if extensionProofs.count() == 0U64 && admittedTrait.isNone() && requiredTraitOwner == 0U64 {
                     // A factory is lowered to Expr.Method but its receiver is a
                     // type spelling, not a value receiver.  Select its associated
                     // callable here while Record still owns that lexical/type-name
@@ -2261,10 +2289,14 @@ pub impl Comp {
             }
             Expr.ExtMethod(recv: val recv, source: val source, nameStart: val nameStart, nameLen: val nameLen, args: val args) => {
                 try self.recordExpr(exprId: recv, chainHoleRef: chainHoleRef)
+                mut val admittedTrait: Optional[ResolvedViewSource] = <Optional.None />
                 mut val extension: Optional[SourceExtensionViewProof] = <Optional.None />
                 if self.assocRecvName(recv: recv).nameLen == 0U64 {
                     if source.traitInstance.owner != 0U64 {
-                        (try self.recordTraitValueView(exprId: exprId, receiver: self.parametricExprTerm(exprId: recv), source: source))
+                        val receiver = self.parametricExprTerm(exprId: recv)
+                        if receiver != 0U64 {
+                            admittedTrait = <Optional.Some v=(try self.recordTraitValueView(exprId: exprId, receiver: receiver, source: source)) />
+                        }
                     } else {
                         extension = try self.recordValueExtension(exprId: exprId, receiver: self.parametricExprTerm(exprId: recv), source: source)
                     }
@@ -2276,22 +2308,25 @@ pub impl Comp {
                 }
                 mut val receiverTerm: U64 = (try self.methodReceiverTerm(exprId: recv))
                 if source.surfaceId != 0U64 && receiverTerm != 0U64 {
-                    val additions: Array[ResolvedViewSource] = [<ResolvedViewSource surfaceId=source.surfaceId traitInstance=source.traitInstance />]
+                    val additions: Array[ResolvedViewSource] = [admittedTrait.unwrapOr(fallback: source)]
                     receiverTerm = self.typeRefWithAddedViewSources(ref: receiverTerm, additions: additions)
+                }
+                if admittedTrait.isNone() {
+                    admittedTrait = self.recordedTraitSelector(exprId: recv, receiver: receiverTerm)
                 }
                 val receiverSource: CallTemplateReceiver = (try self.viewedReceiverTemplateForExpr(exprId: recv, viewedTerm: receiverTerm))
                 mut val extensionProofs = self.recordedExtensionSources(exprId: recv)
                 if extension.isSome() { extensionProofs.append(extension.unwrap()) }
-                mut val methodCallee: U64 = if extensionProofs.count() != 0U64 { give self.arena.functionCount() } else { give try self.resolvedCallee(id: exprId) }
+                mut val methodCallee: U64 = if admittedTrait.isSome() || extensionProofs.count() != 0U64 { give self.arena.functionCount() } else { give try self.resolvedCallee(id: exprId) }
                 // `#` fixes a trait/view source at the syntax site.  Its
                 // selected member must be recorded while that source is still
                 // present in Record; the ordinary TypeCache intentionally
                 // leaves some extension-path selections unfilled because the
                 // final concrete receiver is not known during the early pass.
                 if methodCallee >= self.arena.functionCount() {
-                    methodCallee = (try self.resolveMethodForResolvedReceiver(recv: recv, surfaceRef: receiverTerm, sourceId: source.surfaceId, sourceOwner: source.traitInstance.owner, nameStart: nameStart, nameLen: nameLen, args: args, useOffset: self.exprOffset(id: exprId), extensionProofs: extensionProofs))
+                    methodCallee = (try self.resolveMethodForResolvedReceiver(recv: recv, surfaceRef: receiverTerm, sourceId: source.surfaceId, sourceOwner: source.traitInstance.owner, nameStart: nameStart, nameLen: nameLen, args: args, useOffset: self.exprOffset(id: exprId), extensionProofs: extensionProofs, admittedTrait: admittedTrait))
                 }
-                if methodCallee >= self.arena.functionCount() && source.surfaceId != 0U64 && extensionProofs.count() == 0U64 {
+                if methodCallee >= self.arena.functionCount() && source.surfaceId != 0U64 && extensionProofs.count() == 0U64 && admittedTrait.isNone() {
                         methodCallee = (try self.resolveExtMethodFinal(recv: recv, source: source, nameStart: nameStart, nameLen: nameLen, args: args))
                 }
                 try self.recordSelectedMethodArguments(callee: methodCallee, receiverTerm: receiverTerm, args: args, chainHoleRef: chainHoleRef, useOffset: self.exprOffset(id: exprId))

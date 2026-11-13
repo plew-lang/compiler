@@ -1803,3 +1803,24 @@ also passed JIT, and three check rejection controls kept their diagnostics.
 Use the retained exact trait-selection receipt in the value-call path
 next. Keep the associated-extension regression with com-4k31 and use
 the full verification suite before removing the general fallback.
+
+### Consume the admitted value trait selector in candidate collection
+
+An explicit selector admitted on the call or on its receiver expression is
+passed to candidate collection with the admitted arguments. Stacked views
+reuse the receipt only when the selected instance matches the current
+receiver's active instance. A strip terminates the syntax walk. The
+candidate collector consumes the admitted source without the compatibility
+query and keeps an independently selected extension in the same source set.
+Final applicability among same-trait instances remains with
+[com-4k31](com-4k31.md).
+
+Build `20261113T234128-build-9edb75` produced `2622e5a1`. Twelve existing
+positive fixtures pass check and JIT with matching goldens, three of them
+also pass linked native, and three wrong-instance/extension controls reject
+during check. The ten previously traced fixtures go from 22 legacy trait
+queries to 9. Explicit stacked views and global calls account for most of
+the reduction. The remaining queries include local bindings with a retained
+view, projected array elements, closure results, and the static qualifier.
+[Same-source comparison](../../../evidence/rejection-domains/diagnostic-domain-implementation/trait-receiver-admission/admitted-trait-same-source.json):
+7.873 s versus 7.901 s and all eight nonempty LLVM outputs identical.
