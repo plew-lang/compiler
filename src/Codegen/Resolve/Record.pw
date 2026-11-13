@@ -212,13 +212,14 @@ impl Comp {
         if owner.isNone() || !self.sourceFacts.isActive(owner: owner.unwrap()) { return <Optional.None /> }
         mut val current = exprId
         while current < self.arena.exprs.count() {
+            match self.sourceFacts.activeBuilder.data.expressionTraitSelectors.get(key: current) {
+                Optional.Some(v: val selected) => { return self.matchRecordedTraitSelector(selected: selected, receiver: receiver) }
+                Optional.None => {}
+            }
             match self.sourceFacts.activeBuilder.data.traitValueViews.get(key: current) {
                 Optional.Some(v: val fact) => {
                     val selected = fact.selection.selector.withArguments(arguments: fact.selection.admittedArguments)
-                    for active in self.arena.typeViewSources(ref: receiver) {
-                        if self.semanticViewSourceEq(a: active, b: selected) { return <Optional.Some v=selected /> }
-                    }
-                    return <Optional.None />
+                    return self.matchRecordedTraitSelector(selected: selected, receiver: receiver)
                 }
                 Optional.None => {}
             }
@@ -231,6 +232,32 @@ impl Comp {
             }
         }
         return <Optional.None />
+    }
+
+    inout fn matchRecordedTraitSelector(selected: ResolvedViewSource, receiver: U64) -> Optional[ResolvedViewSource] {
+        for active in self.arena.typeViewSources(ref: receiver) {
+            if self.semanticViewSourceEq(a: active, b: selected) { return <Optional.Some v=selected /> }
+        }
+        return <Optional.None />
+    }
+
+    inout fn recordExpressionTraitSelector(exprId: U64, selection: Optional[ResolvedViewSource]) {
+        if selection.isNone() { return }
+        val owner = self.currentSourceOwner()
+        if owner.isNone() { return }
+        self.sourceFacts.activate(owner: owner.unwrap())
+        self.sourceFacts.activeBuilder.data.expressionTraitSelectors[exprId] = selection.unwrap()
+    }
+
+    inout fn recordAuthoredTraitSelector(exprId: U64, occurrence: U64, term: U64) {
+        if occurrence == 0U64 || self.arena.typeViewSourceCount(ref: term) == 0U64 { return }
+        val selected = self.authoredResultTypeOccurrence(occurrence: occurrence)
+        match self.authoredTraitSelectors.get(key: selected) {
+            Optional.Some(v: val selector) => {
+                self.recordExpressionTraitSelector(exprId: exprId, selection: self.matchRecordedTraitSelector(selected: selector, receiver: term))
+            }
+            Optional.None => {}
+        }
     }
 
     fn recordedExpressionTypeOrigin(exprId: U64) -> Optional[SourceExpressionTypeOrigin] {
@@ -255,8 +282,9 @@ impl Comp {
         val extensions = if self.arena.typeViewSourceCount(ref: term) != 0U64 {
             give self.recordedExtensionSources(exprId: exprId)
         } else { give [] }
-        if origin.isNone() && extensions.count() == 0U64 { return 0U64 }
-        self.constructionSlotEvidence.append(<SourceBindingTypeEvidence origin=origin extensions=extensions />)
+        val selection = self.recordedTraitSelector(exprId: exprId, receiver: term)
+        if origin.isNone() && extensions.count() == 0U64 && selection.isNone() { return 0U64 }
+        self.constructionSlotEvidence.append(<SourceBindingTypeEvidence origin=origin extensions=extensions traitSelector=selection />)
         return self.constructionSlotEvidence.count()
     }
 
@@ -275,6 +303,7 @@ impl Comp {
                             Optional.None => {}
                         }
                         self.recordExpressionExtensionSources(exprId: exprId, proofs: evidence.extensions)
+                        self.recordExpressionTraitSelector(exprId: exprId, selection: evidence.traitSelector)
                         return
                     }
                 }
@@ -293,6 +322,7 @@ impl Comp {
                 if child.isNone() { return }
                 val childOccurrence = child.unwrap().occurrence
                 self.recordAuthoredCompositeOrigin(exprId: exprId, term: term, occurrence: childOccurrence)
+                self.recordAuthoredTraitSelector(exprId: exprId, occurrence: childOccurrence, term: term)
                 self.recordExpressionExtensionSources(exprId: exprId, proofs: self.authoredResultExtensionSources(occurrence: childOccurrence))
             }
             _ => {}
@@ -2141,6 +2171,7 @@ pub impl Comp {
                                 self.recordExpressionTypeOrigin(exprId: exprId, origin: <SourceExpressionTypeOrigin.Authored occurrence=local.authoredTypeUse />)
                             }
                             if viewed {
+                                self.recordAuthoredTraitSelector(exprId: exprId, occurrence: local.authoredTypeUse, term: local.ty)
                                 self.recordExpressionExtensionSources(exprId: exprId, proofs: self.authoredResultExtensionSources(occurrence: local.authoredTypeUse))
                             }
                         } else if viewed || typeTerm.args.len != 0U64 || typeTerm.isRecord {
@@ -2150,7 +2181,10 @@ pub impl Comp {
                                         Optional.Some(v: val origin) => { self.recordExpressionTypeOrigin(exprId: exprId, origin: origin) }
                                         Optional.None => {}
                                     }
-                                    if viewed { self.recordExpressionExtensionSources(exprId: exprId, proofs: evidence.extensions) }
+                                    if viewed {
+                                        self.recordExpressionTraitSelector(exprId: exprId, selection: evidence.traitSelector)
+                                        self.recordExpressionExtensionSources(exprId: exprId, proofs: evidence.extensions)
+                                    }
                                 }
                                 Optional.None => {}
                             }
@@ -2974,8 +3008,9 @@ pub impl Comp {
                     if ty == 0U64 {
                         val proofs = self.recordedExtensionSources(exprId: init)
                         val origin = self.recordedExpressionTypeOrigin(exprId: init)
-                        if origin.isSome() || proofs.count() != 0U64 {
-                            self.sourceFacts.activeBuilder.data.inferredBindingTypeEvidence[nameStart] = <SourceBindingTypeEvidence origin=origin extensions=proofs />
+                        val selected = self.recordedTraitSelector(exprId: init, receiver: self.parametricExprTerm(exprId: init))
+                        if origin.isSome() || proofs.count() != 0U64 || selected.isSome() {
+                            self.sourceFacts.activeBuilder.data.inferredBindingTypeEvidence[nameStart] = <SourceBindingTypeEvidence origin=origin extensions=proofs traitSelector=selected />
                         }
                     }
                 }

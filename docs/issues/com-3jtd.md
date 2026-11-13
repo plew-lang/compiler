@@ -1824,3 +1824,25 @@ the reduction. The remaining queries include local bindings with a retained
 view, projected array elements, closure results, and the static qualifier.
 [Same-source comparison](../../../evidence/rejection-domains/diagnostic-domain-implementation/trait-receiver-admission/admitted-trait-same-source.json):
 7.873 s versus 7.901 s and all eight nonempty LLVM outputs identical.
+
+### Retain admitted trait selectors through bindings
+
+Record preserves the selected trait instance when an inferred binding reads
+a viewed initializer, including a binding read from a closure's lexical parent.
+An annotation publishes its selected instance at authored-type admission and
+the binding reader checks it against the actual receiver. Structural child
+evidence carries the instance alongside its other evidence.
+
+Build `20261113T234817-build-3e540a` produced `f10a587d`. The four remaining
+positive controls had nine legacy trait queries on `2622e5a1`; six vanished,
+including the captured binding, the annotated binding and the additive-view
+bindings. Seven positive controls passed check and JIT, four passed linked
+native, and three wrong-instance controls rejected. Despite its name,
+`static_trait_view_method_source` exercises a typed local in this test.
+[Same-source comparison](../../../evidence/rejection-domains/diagnostic-domain-implementation/trait-receiver-admission/inherited-trait-same-source.json):
+7.881 s versus 7.818 s, all eight nonempty LLVM outputs identical.
+
+The three queries in `array_of_projected_trait_views` remain even though
+the ordinary structural child path now stores an admitted selector.
+Trace this synthetic index/protocol receiver back to its selected input
+before removing the shared fallback.

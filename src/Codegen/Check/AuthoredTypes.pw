@@ -2812,6 +2812,9 @@ impl Comp {
                     try self.appendRetainedProjectionEquation(step: <ProjectionNormalizationStep source=projected proof=frozen output=immediate />, normalizations: inout equations)
                 }
                 proofs.append(<AuthoredTypeViewProof occurrence=id receiver=receiver selector=selector proof=frozen lexicalEquations=lexicalEquations outputEquations=outputEquations />)
+                if type.assocNameId == 0U64 {
+                    self.authoredTraitSelectors[id] = selector.withArguments(arguments: arguments)
+                }
             }
         }
         if extensions.count() != 0U64 {
