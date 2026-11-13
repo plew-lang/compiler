@@ -550,6 +550,13 @@ struct LoweredTraitConstraint {
     val predicateRecipes: Array[U64]
 }
 impl LoweredTraitConstraint { factory }
+
+struct AuthoredTraitConstraintOperands {
+    val scope: U64
+    val arguments: Array[U64]
+    val predicates: Array[U64]
+}
+impl AuthoredTraitConstraintOperands { factory }
 struct LoweredTypeViewRecipe {
     val source: ResolvedViewSource
     val arguments: Array[U64]
@@ -572,6 +579,8 @@ struct TraitBoundShape {
 }
 
 pub struct Comp {
+    mut val authoredSupertraitOperands: Dictionary[U64, AuthoredTraitConstraintOperands] = [:]
+    mut val authoredAssociatedConstraintOperands: Dictionary[U64, AuthoredTraitConstraintOperands] = [:]
     mut val traitLexicalHeaders: Dictionary[U64, TraitBoundShape] = [:]
     mut val projectionBoundClauses: Array[ProjectionBoundClause] = []
     mut val activeProjectionBounds: Optional[ProjectionBoundContext] = <Optional.None />

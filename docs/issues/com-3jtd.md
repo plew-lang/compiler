@@ -514,3 +514,30 @@ their compatibility wrappers discard those recipes when publishing the
 trait header. Separate the authored graph terms from admitted operands
 and verify inherited equations still resolve with the lexical Self
 premise.
+
+### Trait declaration operand provenance
+
+The SyntaxFile and value AST adapters now retain positional and predicate
+recipes on a trait declaration scope. The entries are indexed by the
+original supertrait or associated-clause pool position. The shared producer
+checks that each recipe's root is a declaration occurrence in that scope
+and denotes the exact written term. Only clauses requiring view or
+projection admission enter the retained-recipe index.
+
+On baseline `d0102c57eaa5e`, the two unused declarations
+`Parent[Number#Source[Bool].Item]` and
+`type Output: Parent[Number#Source[Bool].Item]` both pass despite Number
+implementing only Source[I64]. A valid closed supertrait projection used
+as a method result still rejects because the declared parent arguments
+remain symbolic at the consumer. These are the source-admission and
+consumption probes for the next change. Keep
+`inherited_associated_cross_path_equation`: its projection of Self is
+justified by a sibling edge after applying the inherited Key equation.
+
+Fixed-input build `20261113T135745-build-9dcd67` produced
+`dcfbff813c49`. Standard generation `20261113T140057-gen-d679b9` passed.
+The inherited equation, repeated supertrait instances, associated clause
+with positional and named arguments, and both run-mode placement controls
+pass check and JIT. Admission and replay still need to read the retained
+recipes. In particular, an unverified clause cannot supply the sole
+evidence for the selector it declares.

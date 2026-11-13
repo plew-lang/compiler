@@ -1526,14 +1526,21 @@ impl Comp {
         val owner = trait.nameSpan.start
         val parameters = try self.lowerTypeParamNames(names: trait.typeParams, anchor: owner, sendableFlags: trait.typeParamSendable)
         self.enterTraitSignatureScope(owner: owner, parameters: parameters)
-        mut val supertraits: Array[TraitConstraint] = []
-        for val declared in trait.supertraits {
-            val constraint = (try self.lowerValueTraitConstraint(traitType: (try self.normalizeProjectionType(t: declared))))
-            if constraint.key.owner == 0U64 { return <Result.Err error=self.diagnosticAt(offset: declared.span.start, msg: "unknown supertrait or incompatible trait arguments") /> }
-            supertraits.append(constraint)
-        }
-        self.saveTraitLexicalHeader(owner: owner, parameters: parameters, supertraits: supertraits)
+        val scope = self.sourceTypeUses.begin(kind: <SourceTypeScopeKind.TraitDeclaration />, anchor: owner)
+        val lowered = self.lowerValueSupertraits(trait: trait)
+        self.sourceTypeUses.finish(token: scope, succeeded: lowered.isOk())
+        try self.saveTraitLexicalHeader(owner: owner, parameters: parameters, supertraits: (try lowered), scope: scope)
         return <Result.Ok value=() />
+    }
+
+    inout fn lowerValueSupertraits(trait: TraitAst) -> Result[Array[LoweredTraitConstraint], CompileDiagnostic] {
+        mut val supertraits: Array[LoweredTraitConstraint] = []
+        for declared in trait.supertraits {
+            val lowered = try self.lowerSourceValueTraitBound(traitType: (try self.normalizeProjectionType(t: declared)), origin: <Optional.None />)
+            if lowered.constraint.key.owner == 0U64 { return <Result.Err error=self.diagnosticAt(offset: declared.span.start, msg: "unknown supertrait or incompatible trait arguments") /> }
+            supertraits.append(lowered)
+        }
+        return <Result.Ok value=supertraits />
     }
 
     inout fn prepareValueTraitItemHeader(item: TopItemAst) -> Result[(), CompileDiagnostic] {
@@ -1553,6 +1560,21 @@ impl Comp {
         }
     }
 
+    inout fn lowerValueAssociatedConstraints(trait: TraitAst, scope: U64) -> Result[Array[TraitAssociatedBound], CompileDiagnostic] {
+        val start = self.decls.traitAssociatedBoundPool.count()
+        mut val bounds: Array[TraitAssociatedBound] = []
+        for associated in trait.assocTypes {
+            val member = self.internBytes(s: associated.name).nameId
+            for bound in associated.bounds {
+                val lowered = try self.lowerSourceValueTraitBound(traitType: (try self.normalizeProjectionType(t: bound)), origin: <Optional.None />)
+                val operands = try self.authoredTraitConstraintOperands(lowered: lowered, scope: scope)
+                if operands.isSome() { self.authoredAssociatedConstraintOperands[start + bounds.count()] = operands.unwrap() }
+                bounds.append(<TraitAssociatedBound member=member constraint=lowered.constraint offset=bound.span.start />)
+            }
+        }
+        return <Result.Ok value=bounds />
+    }
+
     inout fn lowerTraitInLexicalScope(t: TraitAst) -> Result[(), CompileDiagnostic] {
         val nameStart = t.nameSpan.start
         val nameLen = t.nameSpan.end - nameStart
@@ -1570,13 +1592,10 @@ impl Comp {
             requirements.append(requirement)
             ri += 1
         }
-        mut val associatedBounds: Array[TraitAssociatedBound] = []
-        for val associated in t.assocTypes {
-            val member = self.internBytes(s: associated.name).nameId
-            for val bound in associated.bounds {
-                associatedBounds.append(<TraitAssociatedBound member=member constraint=(try self.lowerValueTraitConstraint(traitType: (try self.normalizeProjectionType(t: bound)))) offset=bound.span.start />)
-            }
-        }
+        val scope = self.sourceTypeUses.begin(kind: <SourceTypeScopeKind.TraitDeclaration />, anchor: nameStart)
+        val loweredBounds = self.lowerValueAssociatedConstraints(trait: t, scope: scope)
+        self.sourceTypeUses.finish(token: scope, succeeded: loweredBounds.isOk())
+        val associatedBounds = try loweredBounds
         val traitIndex = self.decls.registerTrait(<TraitDef nameStart=nameStart nameLen=nameLen nameId=intern(c: inout self, start: nameStart, len: nameLen) selfParamId=identity.selfParamId typeParams=header.typeParams supertraits=header.supertraits reqs=self.pushTraitReqs(reqs: reqs) assocTypes=header.assocTypes assocBounds=self.pushTraitAssociatedBounds(bounds: associatedBounds) />)
         mut val requirementSlot = 0U64
         while requirementSlot < requirements.count() {
@@ -1630,20 +1649,62 @@ impl Comp {
         }
         val parameters = try self.lowerTypeParamSpans(spans: spans, anchor: trait.name.start, sendableFlags: flags)
         self.enterTraitSignatureScope(owner: trait.name.start, parameters: parameters)
-        mut val supertraits: Array[TraitConstraint] = []
+        val scope = self.sourceTypeUses.begin(kind: <SourceTypeScopeKind.TraitDeclaration />, anchor: trait.name.start)
+        val lowered = self.lowerSyntaxSupertraits(trait: trait)
+        self.sourceTypeUses.finish(token: scope, succeeded: lowered.isOk())
+        return self.saveTraitLexicalHeader(owner: trait.name.start, parameters: parameters, supertraits: (try lowered), scope: scope)
+    }
+
+    inout fn lowerSyntaxSupertraits(trait: SyntaxTrait) -> Result[Array[LoweredTraitConstraint], CompileDiagnostic] {
+        mut val supertraits: Array[LoweredTraitConstraint] = []
         for index in 0U64..<syntaxTraitSupertraitCount(file: self.syntax, trait: trait) {
             val declared = syntaxTraitSupertrait(file: self.syntax, trait: trait, index: index)
-            val constraint = (try self.lowerSyntaxTraitConstraint(traitTy: declared))
-            if constraint.key.owner == 0U64 { return <Result.Err error=self.diagnosticAt(offset: syntaxType(file: self.syntax, id: declared).span.start, msg: "unknown supertrait or incompatible trait arguments") /> }
-            supertraits.append(constraint)
+            val lowered = try self.lowerSourceSyntaxTraitBound(traitTy: declared, origin: <Optional.None />)
+            if lowered.constraint.key.owner == 0U64 { return <Result.Err error=self.diagnosticAt(offset: syntaxType(file: self.syntax, id: declared).span.start, msg: "unknown supertrait or incompatible trait arguments") /> }
+            supertraits.append(lowered)
         }
-        self.saveTraitLexicalHeader(owner: trait.name.start, parameters: parameters, supertraits: supertraits)
+        return <Result.Ok value=supertraits />
+    }
+
+    inout fn saveTraitLexicalHeader(owner: U64, parameters: Array[Bind], supertraits: Array[LoweredTraitConstraint], scope: U64) -> Result[(), CompileDiagnostic] {
+        val identity = self.decls.traitOwnerAt(index: self.decls.traitOwnerIndex(offset: owner))
+        val start = self.decls.traitConstraintPool.count()
+        mut val terms: Array[TraitConstraint] = []
+        for lowered in supertraits {
+            val operands = try self.authoredTraitConstraintOperands(lowered: lowered, scope: scope)
+            if operands.isSome() { self.authoredSupertraitOperands[start + terms.count()] = operands.unwrap() }
+            terms.append(lowered.constraint)
+        }
+        self.traitLexicalHeaders[owner] = <TraitBoundShape nameStart=owner selfParamId=identity.selfParamId typeParams=self.pushTraitBinds(binds: parameters) assocTypes=self.pushTraitBinds(binds: identity.assocTypes) supertraits=self.pushTraitConstraints(constraints: terms) />
         return <Result.Ok value=() />
     }
 
-    inout fn saveTraitLexicalHeader(owner: U64, parameters: Array[Bind], supertraits: Array[TraitConstraint]) {
-        val identity = self.decls.traitOwnerAt(index: self.decls.traitOwnerIndex(offset: owner))
-        self.traitLexicalHeaders[owner] = <TraitBoundShape nameStart=owner selfParamId=identity.selfParamId typeParams=self.pushTraitBinds(binds: parameters) assocTypes=self.pushTraitBinds(binds: identity.assocTypes) supertraits=self.pushTraitConstraints(constraints: supertraits) />
+    inout fn authoredTraitConstraintOperands(lowered: LoweredTraitConstraint, scope: U64) -> Result[Optional[AuthoredTraitConstraintOperands], CompileDiagnostic] {
+        val constraint = lowered.constraint
+        if constraint.key.positionalArgs.count() != lowered.arguments.count() || constraint.assocPredicates.count() != lowered.predicateRecipes.count() {
+            return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "lowered trait constraint lost its operand recipes", failureDomain: <FailureDomain.Internal />) />
+        }
+        mut val needsAdmission = false
+        for position in 0U64..<lowered.arguments.count() {
+            val term = constraint.key.positionalArgs[position]
+            try self.checkTraitConstraintOperandRecipe(recipe: lowered.arguments[position], term: term, scope: scope)
+            needsAdmission = needsAdmission || self.bodyTypeNeedsViewAdmission(ref: term)
+        }
+        for position in 0U64..<lowered.predicateRecipes.count() {
+            val term = constraint.assocPredicates[position].value
+            try self.checkTraitConstraintOperandRecipe(recipe: lowered.predicateRecipes[position], term: term, scope: scope)
+            needsAdmission = needsAdmission || self.bodyTypeNeedsViewAdmission(ref: term)
+        }
+        if !needsAdmission { return <Result.Ok value=<Optional.None /> /> }
+        return <Result.Ok value=<Optional.Some v=<AuthoredTraitConstraintOperands scope=scope arguments=lowered.arguments predicates=lowered.predicateRecipes /> /> />
+    }
+
+    inout fn checkTraitConstraintOperandRecipe(recipe: U64, term: U64, scope: U64) -> Result[(), CompileDiagnostic] {
+        val node = self.sourceTypeUses.recipeAt(id: recipe)
+        if node.isNone() || node.unwrap().occurrence == 0U64 || node.unwrap().term != term || !self.sourceTypeUses.signatureUseBelongs(id: node.unwrap().occurrence, scope: scope) {
+            return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "trait constraint has a foreign operand recipe", failureDomain: <FailureDomain.Internal />) />
+        }
+        return <Result.Ok value=() />
     }
 
     inout fn enterTraitSignatureScope(owner: U64, parameters: Array[Bind]) {
@@ -1653,6 +1714,23 @@ impl Comp {
         for member in identity.assocTypes { scope.append(member) }
         self.cur.typeParams = scope
         self.setLowerAssociatedTrait(owner: owner, parameters: parameters)
+    }
+
+    inout fn lowerSyntaxAssociatedConstraints(trait: SyntaxTrait, scope: U64) -> Result[Array[TraitAssociatedBound], CompileDiagnostic] {
+        val start = self.decls.traitAssociatedBoundPool.count()
+        mut val bounds: Array[TraitAssociatedBound] = []
+        for index in 0U64..<syntaxTraitAssocTypeCount(file: self.syntax, trait: trait) {
+            val associated = syntaxTraitAssocType(file: self.syntax, trait: trait, index: index)
+            val member = intern(c: inout self, start: associated.name.start, len: associated.name.end - associated.name.start)
+            for boundIndex in 0U64..<associated.bounds.count {
+                val boundId = syntaxAssociatedTypeBound(file: self.syntax, associated: associated, index: boundIndex)
+                val lowered = try self.lowerSourceSyntaxTraitBound(traitTy: boundId, origin: <Optional.None />)
+                val operands = try self.authoredTraitConstraintOperands(lowered: lowered, scope: scope)
+                if operands.isSome() { self.authoredAssociatedConstraintOperands[start + bounds.count()] = operands.unwrap() }
+                bounds.append(<TraitAssociatedBound member=member constraint=lowered.constraint offset=syntaxType(file: self.syntax, id: boundId).span.start />)
+            }
+        }
+        return <Result.Ok value=bounds />
     }
 
     inout fn lowerSyntaxTraitInLexicalScope(t: SyntaxTrait) -> Result[(), CompileDiagnostic] {
@@ -1674,19 +1752,10 @@ impl Comp {
             requirements.append(lowered)
             i += 1U64
         }
-        mut val associatedBounds: Array[TraitAssociatedBound] = []
-        i = 0U64
-        while i < syntaxTraitAssocTypeCount(file: self.syntax, trait: t) {
-            val associated = syntaxTraitAssocType(file: self.syntax, trait: t, index: i)
-            val member = intern(c: inout self, start: associated.name.start, len: associated.name.end - associated.name.start)
-            mut val boundIndex = 0U64
-            while boundIndex < associated.bounds.count {
-                val boundId = syntaxAssociatedTypeBound(file: self.syntax, associated: associated, index: boundIndex)
-                associatedBounds.append(<TraitAssociatedBound member=member constraint=(try self.lowerSyntaxTraitConstraint(traitTy: boundId)) offset=syntaxType(file: self.syntax, id: boundId).span.start />)
-                boundIndex += 1U64
-            }
-            i += 1U64
-        }
+        val scope = self.sourceTypeUses.begin(kind: <SourceTypeScopeKind.TraitDeclaration />, anchor: t.name.start)
+        val loweredBounds = self.lowerSyntaxAssociatedConstraints(trait: t, scope: scope)
+        self.sourceTypeUses.finish(token: scope, succeeded: loweredBounds.isOk())
+        val associatedBounds = try loweredBounds
         val traitIndex = self.decls.registerTrait(<TraitDef nameStart=t.name.start nameLen=t.name.end - t.name.start nameId=intern(c: inout self, start: t.name.start, len: t.name.end - t.name.start) selfParamId=identity.selfParamId typeParams=header.typeParams supertraits=header.supertraits reqs=self.pushTraitReqs(reqs: reqs) assocTypes=header.assocTypes assocBounds=self.pushTraitAssociatedBounds(bounds: associatedBounds) />)
         mut val requirementSlot = 0U64
         while requirementSlot < requirements.count() {
