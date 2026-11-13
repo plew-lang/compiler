@@ -434,5 +434,16 @@ compiler source check and lazy CLI. The isolated publication probe
 rejects a missing receipt list and swapped receipts for identical
 written types with Internal. Both intact controls pass. Same-source
 medians were 7.173830 s and 7.040047 s with identical nonempty LLVM.
-The proof replay still needs to hand off the concrete view type to
-layout and later consumers.
+
+## Publish the replayed value-view type
+
+Compiler `a4406464` uses the replayed receiver and ordered selector
+arguments to prepare the value expression's concrete term. The
+recorded extension facets carry through to that term. Layout receives
+the concrete term and Mono/Mid consume its published body type result.
+Before this change, generic grounding ran again immediately after the
+receipt check. An isolated guard at that entry rejected the projected
+receiver in the old build. With the guard still present, the new
+build passes JIT and native. The uninstrumented candidate also passed
+check/JIT, native, lazy CLI and generation controls.
+[Reproduction and timing](../../../evidence/rejection-domains/diagnostic-domain-implementation/value-view-proof-replay/README.md#concrete-type-handoff-to-layout-and-mid).
