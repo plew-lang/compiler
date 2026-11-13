@@ -1713,3 +1713,24 @@ Adding a standalone block and an if-expression to the projection probe
 reintroduces the legacy query once for each. Their shared result admission
 must transfer evidence from normally completing value producers, including
 the existing compatibility and conversion rules for the result type.
+
+### Carry evidence through value regions
+
+The shared value-region recorder can forward evidence from a normally
+completing give whose checked type is exactly the result type. It retains
+the first available evidence for that result in source order. A diverging
+arm supplies no evidence, and a give that needs a conversion does not
+authorize its destination with evidence for the operand.
+
+Build `20261113T230750-build-af679a` produced `2c115b0a`.
+`value_region_extension_evidence` covers a standalone block, two-arm if,
+match returning an aggregate, and an if that returns from the enclosing
+function in one branch. Check, JIT and native passed. The trace entered
+the legacy query four times on `2391853f` and zero times on `2c115b0a`.
+Six adjacent run controls and three check rejection controls passed.
+[Same-source comparison](../../../evidence/rejection-domains/diagnostic-domain-implementation/trait-receiver-admission/block-result-same-source.json):
+7.816 s versus 7.804 s, with all eight nonempty LLVM outputs identical.
+
+Inventory the remaining legacy callers before deleting the compatibility
+query. Test callers with no receipt separately from those still passing
+only a selector spelling or invoking a legacy lookup before Record.

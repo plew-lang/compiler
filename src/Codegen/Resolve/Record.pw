@@ -1537,9 +1537,25 @@ pub impl Comp {
             // recordBlockContents admitted this producer against its result
             // context. Preserve that destination for boxing/repacking joins;
             // without one, infer from the admitted producer itself.
+            val producerTerm = self.parametricExprTerm(exprId: value)
             resultTerm = context
-            if resultTerm == 0U64 { resultTerm = self.parametricExprTerm(exprId: value) }
+            if resultTerm == 0U64 { resultTerm = producerTerm }
             self.recordSemanticExprTerm(exprId: exprId, term: resultTerm)
+            // The result context can require a conversion. Reuse a producer's
+            // evidence only when its checked source type supplies this exact result.
+            if self.bodyTypeNeedsViewAdmission(ref: resultTerm) && self.typeRefEq(a: producerTerm, b: resultTerm) {
+                match self.recordedExpressionTypeOrigin(exprId: value) {
+                    Optional.Some(v: val origin) => {
+                        if self.recordedExpressionTypeOrigin(exprId: exprId).isNone() {
+                            self.recordExpressionTypeOrigin(exprId: exprId, origin: origin)
+                        }
+                    }
+                    Optional.None => {}
+                }
+                if self.arena.typeViewSourceCount(ref: resultTerm) != 0U64 && self.recordedExtensionSources(exprId: exprId).count() == 0U64 {
+                    self.recordExpressionExtensionSources(exprId: exprId, proofs: self.recordedExtensionSources(exprId: value))
+                }
+            }
         }
         try self.storeBuildingValueBlock(blockId: blockId, expression: exprId, completion: completion, resultTerm: resultTerm)
         self.popLocals(mark: mark)
