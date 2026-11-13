@@ -1005,7 +1005,8 @@ pub impl Comp {
         if traitOwner == 0U64 { traitOwner = t.assocTraitStart }
         val bound: U64 = (try self.assocBindingFor(baseRef: baseRef, traitId: t.assocTraitId, traitOwner: traitOwner, traitArgs: traitArgs, assocId: t.assocNameId))
         if bound != 0U64 {
-            return <Result.Ok value=(try self.groundTypeRef(ref: bound)) />
+            val output = try self.groundTypeRef(ref: bound)
+            return <Result.Ok value=self.typeRefWithAddedViewSources(ref: output, additions: self.arena.typeViewSources(ref: tyRef)) />
         }
         return <Result.Err error=self.diagnosticAt(offset: t.siteOffset, msg: "associated-type projection names an associated type that is not bound by the selected conformance (spec/08)") />
     }

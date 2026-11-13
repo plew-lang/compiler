@@ -1,0 +1,17 @@
+use @Std/Io only { print }
+trait P {}
+trait Q { type Item fn value() -> Item }
+trait R { fn number() -> I64 }
+struct Owner {}
+struct Payload {}
+impl Owner as Q {
+    type Item = Payload
+    fn value() -> Payload { return <Payload /> }
+}
+impl Owner as P {}
+impl Payload as R { fn number() -> I64 { return 42I64 } }
+fn invoke[T](value: T#P#Q.Item, owner: T) where T: P + Q, T#P#Q.Item: R {
+    val viewed = value#R
+    print(viewed.number())
+}
+fn main() { invoke(value: <Payload />, owner: <Owner />) }

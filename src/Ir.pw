@@ -202,6 +202,8 @@ pub struct TypeTerm {
     pub val assocNameId: U64 = 0U64
     // A projection owns no implicit receiver copy: `S#P.Item` points at the
     // separately interned semantic term for `S`. Zero for non-projections.
+    // Its receiver owns its own view sources. This row's view sources qualify
+    // the associated output.
     pub val projectionReceiver: U64 = 0U64
     pub val isSendable: Bool = false
     // Function call completion is part of semantic identity. This marks the
