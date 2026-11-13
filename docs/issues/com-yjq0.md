@@ -268,3 +268,29 @@ literal control, lazy CLI and standard gen
 previous carrier's diagnostics. Alternating same-source medians were
 7.324725 s and 7.261029 s. LLVM was identical in all eight runs.
 This is a same-source comparison, not the formal fixed-point gate.
+
+## Independent review and local annotation admission
+
+Independent review at `b8250653` found that the block-level sweep
+re-selected the trait instance for each local annotation before the
+binding's authored recipe could normalize its children. A projected
+trait argument was rejected on both check and JIT despite passing on
+the pre-task carrier. The sweep now retains extension and cycle
+checks and defers trait admission for the exact local annotation
+recipe occurrences to the binding's source check. Candidate
+`1c68b4d0` (fixed-input build `20261113T043852-build-2fad76`)
+passes the regression fixture in check, JIT and native. Invalid direct
+and nested instances still reject. Compiler source check and lazy CLI
+also pass.
+
+The review did not approve closure. Parameterized local shorthand
+`T.Item` and provided-method `Item` still need the declaration
+recipe provenance from their where clause and parent impl,
+respectively. Value-view arguments containing a projection require an
+ordered authored-argument handoff. A view of a value whose type is a
+projection also needs the selected receiver normalization at final
+instantiation. The independent controls and failure diagnostics are in
+the meta `value-view-proof-replay` evidence directory. The old and
+new carriers both reject the review's extension-only witness and
+viewed assignment-place examples. General view formation remains with
+[com-3jtd](com-3jtd.md).

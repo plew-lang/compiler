@@ -1,0 +1,11 @@
+use @Std/Io only { print }
+trait Projection { type Item }
+trait Project[T] { fn item() -> I64 }
+struct Number {}
+impl Number as Projection { type Item = I64 }
+impl Number as Project[I64] { fn item() -> I64 { return 42I64 } }
+fn main() {
+    val n = <Number />
+    val result: Number#Project[Number#Projection.Item] = n#Project[I64]
+    print(result.item())
+}

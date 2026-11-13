@@ -343,6 +343,14 @@ pub impl Comp {
         val written = self.sourceTypeUses.useAt(index: occurrence - 1U64).unwrap()
         match written.role { SourceTypeUseRole.Body => {} _ => { return } }
         self.localAnnotationOccurrences[statement] = occurrence
+        self.markLocalAnnotationTypeUses(recipe: written.recipe)
+    }
+
+    inout fn markLocalAnnotationTypeUses(recipe: U64) {
+        val node = self.sourceTypeUses.recipeAt(id: recipe).unwrap()
+        if node.occurrence != 0U64 { self.localAnnotationTypeUses.insert(node.occurrence) }
+        for child in node.children { self.markLocalAnnotationTypeUses(recipe: child) }
+        if node.sourceRecipe != 0U64 { self.markLocalAnnotationTypeUses(recipe: node.sourceRecipe) }
     }
 
     // SyntaxFile counterpart of the direct statement lowerer. The block path
