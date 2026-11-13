@@ -93,3 +93,10 @@ the trait's positional argument is rejected. Six check/JIT/native
 controls and six rejection controls passed. Build
 `20261113T020149-build-840df8` passed, with same-source medians
 6.896634 s and 6.898719 s and identical LLVM in all eight runs.
+
+An isolated native probe reads the admitted parameter
+`Box[Worker]#Holder.Item` and inspects the equation transported by
+the recipe. Both revisions return `Worker#Preferred` as the normalized
+parameter. With the `db463c14` witness substitution, the saved equation
+has bare `Worker` and fails the exact type check. With `3f09a219`, both
+the parameter and the saved immediate RHS are `Worker#Preferred`.
