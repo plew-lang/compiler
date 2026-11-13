@@ -1,0 +1,23 @@
+use @Std/Io only { print }
+trait Marker {}
+trait Source { type Item: Marker }
+trait Pick { type Out }
+struct Select[T] {}
+impl[T] Select[T] as Pick where T: Marker { type Out = T }
+trait Parent {
+    type Value
+    fn get(value: Value) -> Value
+}
+struct Box[T] {}
+impl[T] Box[T] as Parent where T: Source {
+    type Value = Select[T#Source.Item]#Pick.Out
+    fn get(value: T#Source.Item) -> T#Source.Item { return value }
+}
+struct Entry {}
+struct Payload {}
+impl Payload as Marker {}
+impl Entry as Source { type Item = Payload }
+fn main() {
+    val result: Payload = <Box[Entry] />.get(value: <Payload />)
+    print(42I64)
+}

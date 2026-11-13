@@ -385,9 +385,45 @@ impl Comp {
                 try self.checkRetainedWitnessClause(expected: expected, proof: predecessor, normalizations: normalizations, offset: bound.offset)
                 return <Result.Ok value=<ConstraintProofReplay.Universal proof=predecessor /> />
             }
+            DeclarationBoundRef.AssociatedType(index: val index) => {
+                for active in self.activeAssumptionAdmission {
+                    if active == index { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "associated declaration premise replay is cyclic", failureDomain: <FailureDomain.Internal />) /> }
+                }
+                self.activeAssumptionAdmission.append(index)
+                val result = self.replayDeclarationAssociatedAssumption(index: index, receiver: receiver, environment: environment, normalizations: normalizations)
+                self.activeAssumptionAdmission.removeLast()
+                return result
+            }
             _ => {}
         }
         return <Result.Ok value=<ConstraintProofReplay.Deferred /> />
+    }
+
+    inout fn replayDeclarationAssociatedAssumption(index: U64, receiver: U64, environment: InstanceEnvironment, normalizations: Array[ProjectionNormalizationStep]) -> Result[ConstraintProofReplay, CompileDiagnostic] {
+        val evidence = self.arena.associatedBoundEvidenceAt(index: index)
+        val original = try self.associatedClauseBound(projectionRef: evidence.projection, clauseIndex: evidence.clause, prerequisite: evidence.prerequisite, offset: evidence.bound.offset)
+        if !self.typeRefEq(a: original.subject, b: evidence.bound.subject) || !self.sameTraitConstraint(a: original.constraint, b: evidence.bound.constraint) {
+            return <Result.Err error=self.diagnosticAt(offset: evidence.bound.offset, msg: "associated assumption does not match its declaration clause", failureDomain: <FailureDomain.Internal />) />
+        }
+        val substituted = self.groundTermInEnvironment(ref: evidence.projection, params: environment.params, values: environment.args, selfRef: environment.receiverRef)
+        val projectionRef = try self.replayProjectionChildren(ref: substituted, normalizations: normalizations, offset: evidence.bound.offset)
+        val projection = self.arena.typeAt(index: projectionRef)
+        val root = self.typeTermProjectionReceiver(t: projection)
+        val state = try self.replayDeclarationConstraintProof(proof: evidence.prerequisite, receiver: root, environment: environment, selfRef: environment.receiverRef, itemRef: 0U64, normalizations: normalizations)
+        val selected = match state {
+            ConstraintProofReplay.Universal(proof: val proof) | ConstraintProofReplay.Concrete(proof: val proof) => proof,
+            _ => { return <Result.Ok value=state /> },
+        }
+        if self.retainedConstraintPathTerminal(proof: selected).isSome() {
+            return self.replaySelectedAssociatedConstraint(index: index, selected: selected, projectionRef: projectionRef, receiverRef: receiver, context: <Optional.None />, inherited: normalizations, declaration: true)
+        }
+        val bound = try self.associatedClauseBound(projectionRef: projectionRef, clauseIndex: evidence.clause, prerequisite: selected, offset: evidence.bound.offset)
+        val expected = try self.replayProjectionNormalizations(ref: bound.subject, normalizations: normalizations, offset: bound.offset)
+        if !self.typeRefEq(a: self.typeRefWithoutOuterViews(ref: receiver), b: self.typeRefWithoutOuterViews(ref: expected)) {
+            return <Result.Err error=self.diagnosticAt(offset: bound.offset, msg: "associated declaration premise changed its receiver", failureDomain: <FailureDomain.Internal />) />
+        }
+        val source = self.registerAssociatedBoundEvidence(evidence: <AssociatedBoundEvidence projection=projectionRef clause=evidence.clause prerequisite=selected bound=bound />)
+        return <Result.Ok value=<ConstraintProofReplay.Universal proof=<StaticConformanceProof.AssumedBound source=source /> /> />
     }
 
     inout fn retainedTraitSubjectPredecessor(proof: StaticConformanceProof) -> Result[StaticConformanceProof, CompileDiagnostic] {

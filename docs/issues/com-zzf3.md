@@ -574,3 +574,18 @@ controls, including `inherited_associated_interface_where`, passed.
 Build `20261113T012553-build-09123d`, generation
 `20261113T012958-gen-6e9229`, and same-source medians 6.873823 s and
 6.878970 s passed with identical LLVM output in all eight runs.
+
+## Associated prerequisite in a generic binding RHS
+
+`associated_binding_associated_prerequisite` obtains `Marker` for
+`T#Source.Item` from `T: Source`, then consumes that premise in
+`Select[T#Source.Item]#Pick.Out`. `0feb30fe` rejects while reading the
+associated RHS. Declaration replay now interprets the saved premise's
+prerequisite and original associated clause. A concrete prerequisite
+uses its saved implementation row; a symbolic prerequisite retains
+the rebased clause and its proof. Neither route searches for a witness.
+
+Candidate `8d91343a` passed build `20261113T013256-build-693a0e` and
+the new regression plus eight existing check/JIT/native controls.
+Same-source medians were 6.877527 s and 6.856642 s. All eight LLVM
+outputs were identical.
