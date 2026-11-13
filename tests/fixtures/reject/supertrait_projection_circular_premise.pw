@@ -1,0 +1,3 @@
+trait Source[T] { type Item }
+trait Child: Source[Self#Source[I64].Item, Item=I64] {}
+fn main() {}

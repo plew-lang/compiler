@@ -1,0 +1,12 @@
+use @Std/Io only { print }
+trait Source { type Item }
+struct Number {}
+impl Number as Source { type Item=I64 }
+trait Parent[L,R] { fn read() -> R }
+trait Child: Parent[Number#Source.Item, Self#Source.Item] + Source[Item=I64] {}
+struct Receiver {}
+impl Receiver as Source { type Item=I64 }
+impl Receiver as Parent[I64,I64] { fn read() -> I64 { return 42I64 } }
+impl Receiver as Child {}
+fn readChild[T](value: T) -> I64 where T: Child { return value.read() }
+fn main() { print(readChild(value: <Receiver />)) }

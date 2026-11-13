@@ -1,0 +1,4 @@
+trait Source { type Item }
+trait Parent[T] {}
+trait Child: Parent[Self#Source.Item] {}
+fn main() {}

@@ -116,6 +116,7 @@ pub impl Comp {
                 }
             }
             DeclarationScopeOrigin.InterfaceContract | DeclarationScopeOrigin.Global | DeclarationScopeOrigin.Nominal => {}
+            DeclarationScopeOrigin.TraitDeclaration => { assumptions.append(<DeclarationBoundRef.TraitDeclaration index=scope.owner />) }
             DeclarationScopeOrigin.AssociatedBinding => {
                 if scope.owner >= self.decls.conformCount() { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "associated binding has no conformance scope", failureDomain: <FailureDomain.Internal />) /> }
                 assumptions = self.conformanceDeclarationAssumptions(conformIndex: scope.owner)
@@ -1772,6 +1773,15 @@ impl Comp {
                     DeclarationBoundRef.AssociatedType(index: _) => {}
                     _ => { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "associated binding cannot borrow another declaration premise", failureDomain: <FailureDomain.Internal />) /> }
                 }
+            }
+            DeclarationScopeOrigin.TraitDeclaration => {
+                match source {
+                    DeclarationBoundRef.TraitDeclaration(index: val index) => {
+                        if index == scope.owner { return <Result.Ok value=<DeclarationProofDependencies /> /> }
+                    }
+                    _ => {}
+                }
+                return <Result.Err error=self.diagnosticAt(offset: offset, msg: "trait operand has a foreign declaration premise", failureDomain: <FailureDomain.Internal />) />
             }
             DeclarationScopeOrigin.Lexical => {}
             DeclarationScopeOrigin.Global | DeclarationScopeOrigin.Nominal => { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "non-callable declaration cannot borrow a lexical premise", failureDomain: <FailureDomain.Internal />) /> }

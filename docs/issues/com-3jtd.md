@@ -567,3 +567,32 @@ remain usable. The lexical Self proof must track which inherited clauses
 supply evidence independently of the clause under admission. Consumers
 of abstract projected terms must carry that evidence when substituting
 the declaration's trait and Self binders.
+
+### Inherited Self premises for trait declaration operands
+
+The same recipe checker now admits lexical operands with the declaring
+trait's rigid Self and parameters. A clause can derive evidence from
+completed sibling clauses and their parents. An unfinished clause is
+unavailable to both path selection and associated equality traversal.
+Admission retries while clauses become available and observes a finite
+analysis limit. Associated constraints are checked after supertraits.
+The clause table retains the source proofs with the normalized terms.
+
+Fixed-input build `20261113T141648-build-0d51be` produced
+`0b42d25c39ee`. Three previous false accepts now reject at the exact
+trait-instance check in check and JIT: missing Self premise in a
+supertrait, the same in an associated constraint, and a clause attempting
+to justify its own argument. Three run fixtures exercise an output open
+until concrete substitution, a sibling that needs its own sibling
+first, and mixed closed and lexical operands. All three pass check,
+JIT and native with output 42. The inherited cross-path equation and
+repeated supertrait controls also pass. Fixed-input generation
+`20261113T142141-gen-eca67a` passed. The earlier generation attempt had
+green cases but an input change while the new fixtures were installed;
+only the rerun is evidence.
+
+Before closure, verify that the remaining compatibility type-use
+entries have real declaration or body owners. In particular check the
+handoff of retained lexical operand equations under instantiation,
+including an associated-constraint consumer, rather than inferring it
+from the supertrait runtime cases.

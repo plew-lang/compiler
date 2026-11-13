@@ -559,6 +559,7 @@ struct AuthoredTraitConstraintOperands {
 impl AuthoredTraitConstraintOperands { factory }
 
 struct AdmittedTraitConstraintOperands {
+    val complete: Bool
     val constraint: TraitConstraint
     val checked: Array[LocalAnnotationProof]
 }
@@ -585,6 +586,8 @@ struct TraitBoundShape {
 }
 
 pub struct Comp {
+    mut val checkingTraitOperandDependencies: Bool = false
+    mut val traitDeclarationPremises: Dictionary[U64, TraitBound] = [:]
     mut val admittedSupertraitOperands: Dictionary[U64, AdmittedTraitConstraintOperands] = [:]
     mut val admittedAssociatedConstraintOperands: Dictionary[U64, AdmittedTraitConstraintOperands] = [:]
     mut val authoredSupertraitOperands: Dictionary[U64, AuthoredTraitConstraintOperands] = [:]
@@ -980,6 +983,10 @@ pub impl Comp {
             }
         }
         return written
+    }
+
+    fn supertraitOperandAvailable(slot: U64) -> Bool {
+        return !self.checkingTraitOperandDependencies || !self.authoredSupertraitOperands.contains(key: slot) || (self.admittedSupertraitOperands.contains(key: slot) && self.admittedSupertraitOperands[slot].complete)
     }
 
     fn semanticSupertraitConstraintAt(constraints: TraitConstraintRange, index: U64) -> TraitConstraint {
@@ -1771,6 +1778,7 @@ fn admitFrontendNominalDependencies(c: inout Comp) -> Result[(), CompileDiagnost
     try c.admitAssociatedBindingRecipes()
     try c.admitConformanceTargets()
     try c.admitClosedTraitConstraintOperands()
+    try c.admitLexicalTraitConstraintOperands()
     // inter-trait conformance (spec/08,09): `impl B as A` makes every type
     // conforming to subject trait B also conform to A; copy the methods onto each
     // conforming concrete type (before provided methods, so A's own provided

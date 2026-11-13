@@ -4237,7 +4237,7 @@ impl Comp {
                     DeclarationBoundRef.Conformance(index: _) => { panic("retained conformance clause reached receiver replay") }
                     DeclarationBoundRef.AssociatedType(index: _) => { panic("retained associated clause reached receiver replay") }
                     DeclarationBoundRef.Interface(index: _) => { return <Result.Err error=self.diagnosticAt(offset: bound.offset, msg: "interface evidence requires a universal call scope") /> }
-                    DeclarationBoundRef.RawRequirement(index: _) => { return <Result.Err error=self.diagnosticAt(offset: bound.offset, msg: "raw requirement evidence requires a translated signature", failureDomain: <FailureDomain.Internal />) /> }
+                    DeclarationBoundRef.RawRequirement(index: _) | DeclarationBoundRef.TraitDeclaration(index: _) => { return <Result.Err error=self.diagnosticAt(offset: bound.offset, msg: "declaration evidence requires translation to the selected witness", failureDomain: <FailureDomain.Internal />) /> }
                     DeclarationBoundRef.MethodReceiver(index: _) | DeclarationBoundRef.TraitSubject(index: _) => { return self.instantiateReceiverConstraint(bound: bound, receiverRef: receiverRef, environment: environment, selfRef: selfRef, itemRef: itemRef, normalizations: normalizations) }
                 }
             }
