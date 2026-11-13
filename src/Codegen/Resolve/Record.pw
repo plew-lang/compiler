@@ -84,7 +84,11 @@ impl Comp {
                     _ => {}
                 }
                 match occurrence {
-                    Optional.Some(v: val id) => { return <Result.Ok value=<Optional.Some v=(try self.admitBodyTypeUse(id: id, term: written, owner: owner)) /> /> }
+                    Optional.Some(v: val id) => {
+                        val proof = try self.admitBodyTypeUse(id: id, term: written, owner: owner)
+                        self.markAdmittedRecipeTypeUses(recipe: proof.recipe)
+                        return <Result.Ok value=<Optional.Some v=proof /> />
+                    }
                     Optional.None => {}
                 }
             }

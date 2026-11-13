@@ -345,11 +345,26 @@ pub impl Comp {
         match self.sourceTypeUses.currentRole() {
             SourceTypeUseRole.Body | SourceTypeUseRole.DefaultArgument => {
                 val typeUse = try self.signatureOccurrence(id: occurrence)
-                self.markAdmittedRecipeTypeUses(recipe: typeUse.recipe)
+                self.registerLocalAnnotationTypeUses(recipe: typeUse.recipe)
                 return <Result.Ok value=<Optional.Some v=occurrence /> />
             }
             _ => { return <Result.Ok value=<Optional.None /> /> }
         }
+    }
+
+    // These occurrences have a dedicated checker at the binding. Registration
+    // during lowering routes them there without claiming successful admission.
+    inout fn registerLocalAnnotationTypeUses(recipe: U64) {
+        val node = self.sourceTypeUses.recipeAt(id: recipe).unwrap()
+        if node.occurrence != 0U64 {
+            val occurrence = self.sourceTypeUses.useAt(index: node.occurrence - 1U64).unwrap()
+            match occurrence.role {
+                SourceTypeUseRole.Body | SourceTypeUseRole.DefaultArgument => { self.localAnnotationTypeUses.insert(node.occurrence) }
+                _ => { return }
+            }
+        }
+        for child in node.children { self.registerLocalAnnotationTypeUses(recipe: child) }
+        if node.sourceRecipe != 0U64 { self.registerLocalAnnotationTypeUses(recipe: node.sourceRecipe) }
     }
 
     inout fn markAdmittedRecipeTypeUses(recipe: U64) {

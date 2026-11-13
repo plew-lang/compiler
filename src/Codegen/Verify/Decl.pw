@@ -109,6 +109,7 @@ pub impl Comp {
 
     inout fn checkAuthoredTypeViews(occurrences: Array[U64], requested: Optional[SemanticCompletionOwner] = <Optional.None />) -> Result[(), CompileDiagnostic] {
         for id in occurrences {
+            if self.localAnnotationTypeUses.contains(id) { continue }
             // Declaration-owned recipes already validated their entire view
             // set in the correct scope, including extension applicability.
             if requested.isNone() && self.admittedRecipeTypeUses.contains(id) { continue }

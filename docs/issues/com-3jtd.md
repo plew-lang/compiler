@@ -1758,3 +1758,23 @@ when a receiver receipt is absent, and early expression/callee lookup
 and its local-type recovery). Associated entry points also use the same
 collector but have no value receipt. `extension_type_view` still records
 one legacy query. Isolate that query before removing the shared fallback.
+
+### Route local annotations to binding admission
+
+Removing both the annotated binding and its use from `extension_type_view`
+eliminated its remaining legacy query. Removing the use alone did not.
+Lowering now records that the local annotation recipe belongs to the
+binding checker, separately from successful admission. The block-wide
+compatibility pass leaves those view decisions to the binding. The
+binding records successful admission only after checking the recipe.
+The existing source-type visibility check remains active.
+
+Fixed-input build `20261113T232138-build-2104f2` produced `3d808cf5`.
+The existing test now enters the legacy query zero times (previously one)
+and passes check, JIT and linked native. Six additional run fixtures,
+three existing rejection fixtures, and a nested local annotation with a
+missing extension premise passed their respective checks. The nested
+rejection points to the original annotation in both check and JIT.
+
+Other authored type entries and early method lookup remain to be measured
+before retiring the shared compatibility resolver.
