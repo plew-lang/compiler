@@ -30,8 +30,7 @@ impl Comp {
 
     inout fn requiredBodyValueViewArguments(exprId: U64, selector: ResolvedViewSource, owner: Optional[SemanticCompletionOwner]) -> Result[Optional[Array[U64]], CompileDiagnostic] {
         if selector.traitInstance.positionalArgs.count() == 0U64 { return <Result.Ok value=<Optional.None /> /> }
-        val origin = self.arena.exprOriginSerial[exprId]
-        match self.sourceTypeUses.valueViewArguments(origin: origin) {
+        match self.sourceTypeUses.valueViewArguments(expression: exprId) {
             Optional.Some(v: val arguments) => {
                 if arguments.isNone() && owner.isSome() {
                     match self.lexicalSourceFactOwner(owner: owner.unwrap()) {

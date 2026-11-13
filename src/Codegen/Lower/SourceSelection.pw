@@ -184,8 +184,7 @@ impl Comp {
         }
         mut val result = self.pushExpr(e: <Expr.ExtView recv=recv source=source strip=strip />)
         if !strip && source.traitInstance.positionalArgs.count() != 0U64 {
-            val origin = self.arena.exprOriginSerial[result]
-            if !self.sourceTypeUses.bindValueViewArguments(origin: origin, arguments: authoredArguments) {
+            if !self.sourceTypeUses.bindValueViewArguments(expression: result, arguments: authoredArguments) {
                 return <Result.Err error=self.diagnosticAt(offset: source.writtenStart, msg: "invalid value view argument registration", failureDomain: <FailureDomain.Internal />) />
             }
         }

@@ -233,13 +233,13 @@ pub impl SourceTypeUses {
         }
         return <Optional.None />
     }
-    inout fn bindValueViewArguments(origin: U64, arguments: Optional[Array[U64]]) -> Bool {
-        if origin == 0U64 || self.viewArguments.contains(key: origin) { return false }
-        self.viewArguments[origin] = arguments
+    inout fn bindValueViewArguments(expression: U64, arguments: Optional[Array[U64]]) -> Bool {
+        if self.viewArguments.contains(key: expression) { return false }
+        self.viewArguments[expression] = arguments
         return true
     }
-    fn valueViewArguments(origin: U64) -> Optional[Optional[Array[U64]]] {
-        return self.viewArguments.get(key: origin)
+    fn valueViewArguments(expression: U64) -> Optional[Optional[Array[U64]]] {
+        return self.viewArguments.get(key: expression)
     }
     fn useAt(index: U64) -> Optional[AuthoredTypeUse] {
         if index >= self.uses.count() { return <Optional.None /> }
