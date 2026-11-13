@@ -115,6 +115,7 @@ pub struct SourceTypeUses {
     mut val requirementScopes: Array[U64] = []
     mut val requirementScopeByIndex: Dictionary[U64, U64] = [:]
     mut val methodScopes: Dictionary[U64, U64] = [:]
+    mut val extensionImplementations: Dictionary[U64, Array[U64]] = [:]
     // Every parameterized value-view site has a write-once row. The inner
     // Optional distinguishes a body recipe from an unowned source site.
     mut val viewArguments: Dictionary[U64, Optional[Array[U64]]] = [:]
@@ -172,6 +173,9 @@ pub impl SourceTypeUses {
     }
     fn methodScopeFor(function: U64) -> Optional[SourceTypeScope] {
         return self.scopeAt(token: self.methodScopes.getOr(key: function, fallback: 0U64))
+    }
+    fn implementationScopes(extensionId: U64) -> Array[U64] {
+        return self.extensionImplementations.getOr(key: extensionId, fallback: [])
     }
     fn deinitScopeToken(function: U64) -> U64 {
         return self.deinitScopes.getOr(key: function, fallback: 0U64)
@@ -334,6 +338,11 @@ pub impl SourceTypeUses {
             if occurrence == 0U64 || !self.signatureUseBelongs(id: occurrence, scope: token) { return false }
         }
         self.scopes[token - 1U64] = <SourceTypeScope kind=scope.kind anchor=scope.anchor traitOwner=scope.traitOwner parent=scope.parent state=scope.state implementation=<Optional.Some v=implementation /> bounds=scope.bounds />
+        if implementation.extensionId != 0U64 {
+            mut val scopes = self.implementationScopes(extensionId: implementation.extensionId)
+            scopes.append(token)
+            self.extensionImplementations[implementation.extensionId] = scopes
+        }
         return true
     }
 

@@ -486,22 +486,18 @@ impl Comp {
         self.arena.setAdmittedFunctionReceiver(index: function, term: term, dependentScope: dependentScope)
     }
 
-    // Source formation can demand an extension member before the nominal
-    // sweep publishes all callable receivers. Admit the same lexical recipe.
-    inout fn admitExtensionMethodReceiver(function: U64, receiver: U64) -> Result[Func, CompileDiagnostic] {
-        if !self.bodyTypeNeedsViewAdmission(ref: receiver) { return <Result.Ok value=self.arena.functionAt(index: function) /> }
-        val scope = self.sourceTypeUses.methodScopeFor(function: function)
-        if scope.isNone() { return <Result.Ok value=self.arena.functionAt(index: function) /> }
-        val method = scope.unwrap()
-        val implementation = self.sourceTypeUses.completedMethodImplementation(method: method)
-        if implementation.isNone() { return <Result.Ok value=self.arena.functionAt(index: function) /> }
-        val owner = implementation.unwrap()
-        if owner.receiverOccurrence != 0U64 {
-            try self.admitNominalImplementationReceiver(token: method.parent, owner: owner)
-            val proof = self.authoredImplementationReceivers[method.parent]
-            self.publishAdmittedMethodReceiver(function: function, method: method, term: proof.sourceTerm)
+    inout fn extensionInherentReceiverApplies(token: U64, implementation: SourceImplementationOwner, receiver: U64, assumptions: Array[DeclarationBoundRef]) -> Result[Bool, CompileDiagnostic] {
+        mut val pattern = implementation.receiver
+        if implementation.receiverOccurrence != 0U64 && self.bodyTypeNeedsViewAdmission(ref: pattern) {
+            try self.admitNominalImplementationReceiver(token: token, owner: implementation)
+            pattern = self.authoredImplementationReceivers[token].sourceTerm
+            if self.arena.typeContainsAssociatedProjection(ref: pattern) {
+                val matchResult = try self.admitInherentReceiverMatch(token: token, pattern: pattern, receiver: receiver, params: <PatternBindInput.Values values=implementation.parameters />, assumptions: assumptions)
+                return <Result.Ok value=matchResult.witness.conformIdx != 0U64 />
+            }
         }
-        return <Result.Ok value=self.arena.functionAt(index: function) />
+        mut val binds: Array[UnifyBind] = []
+        return <Result.Ok value=self.unifyPatterns(a: pattern, aSide: 0U64, b: receiver, bSide: 1U64, aParams: <PatternBindInput.Values values=implementation.parameters />, bParams: <PatternBindInput.Values values=[] />, binds: inout binds, ignoreTopView: true) />
     }
 
     inout fn indexConformanceArgumentScopes() {

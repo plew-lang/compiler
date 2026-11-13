@@ -1,0 +1,5 @@
+use @Std/Io only { print }
+struct Number { val digit: I64 }
+extension Extra { impl Number {} }
+fn read(value: Number#Extra) -> I64 { return value.digit }
+fn main() { print(read(value: <Number digit=42I64 />#Extra)) }

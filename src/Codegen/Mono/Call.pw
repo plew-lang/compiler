@@ -1057,6 +1057,7 @@ pub impl Comp {
                         val count = self.arena.callableConstraintCount(evidence: left)
                         if count != self.arena.callableConstraintCount(evidence: right) { return false }
                         if count != 0U64 && self.arena.callableConstraintFunction(evidence: left) != self.arena.callableConstraintFunction(evidence: right) { return false }
+                        if count != 0U64 && self.arena.callableConstraintImplementation(evidence: left) != self.arena.callableConstraintImplementation(evidence: right) { return false }
                         if count != 0U64 && !self.sameInstanceEnvironment(a: self.arena.callableConstraintEnvironment(evidence: left), b: self.arena.callableConstraintEnvironment(evidence: right)) { return false }
                         mut val index = 0U64
                         while index < count {
@@ -4243,26 +4244,36 @@ impl Comp {
         val context = <InstanceEnvironment params=environment.params args=environment.args receiverRef=environment.receiverRef proof=environment.proof />
         if !self.sameInstanceEnvironment(a: self.arena.callableConstraintEnvironment(evidence: evidence), b: context) { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "call constraint belongs to another instance environment", failureDomain: <FailureDomain.Internal />) /> }
         val function = self.arena.callableConstraintFunction(evidence: evidence)
-        if function >= self.arena.functionCount() { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "call constraint has no function owner", failureDomain: <FailureDomain.Internal />) /> }
+        val implementation = self.arena.callableConstraintImplementation(evidence: evidence)
+        if implementation == 0U64 && function >= self.arena.functionCount() { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "call constraint has no function owner", failureDomain: <FailureDomain.Internal />) /> }
         val retainedSource = match source {
             DeclarationBoundRef.Implementation(index: val index) => {
-                give try self.retainedImplementationCallableClause(function: function, index: index)
+                give if implementation == 0U64 {
+                    give try self.retainedImplementationCallableClause(function: function, index: index)
+                } else { give source }
             }
             _ => source,
         }
-        val owned = match retainedSource {
-            DeclarationBoundRef.Function(index: val index) => {
-                mut val found = false
-                if self.arena.functionAt(index: function).isProvided && self.isAuthoredProvidedDeclaration(function: function) {
-                    val admitted = try self.providedSignatureAdmission(function: function)
-                    for clause in admitted.clauses { if clause.assumption == index { found = true } }
-                } else {
-                    for clause in self.sourceDeclarationCallBoundIndices(functionIndex: function) { if clause == index { found = true } }
-                }
-                give found
+        val owned = if implementation != 0U64 {
+            give match retainedSource {
+                DeclarationBoundRef.Implementation(index: val index) => declaration && self.declarationBoundIsValid(source: source) && self.projectionBoundClauses[index].scope == implementation,
+                _ => false,
             }
-            DeclarationBoundRef.Requirement(index: val index) => self.arena.requirementBoundEvidenceAt(index: index).implementation == function,
-            _ => false,
+        } else {
+            give match retainedSource {
+                DeclarationBoundRef.Function(index: val index) => {
+                    mut val found = false
+                    if self.arena.functionAt(index: function).isProvided && self.isAuthoredProvidedDeclaration(function: function) {
+                        val admitted = try self.providedSignatureAdmission(function: function)
+                        for clause in admitted.clauses { if clause.assumption == index { found = true } }
+                    } else {
+                        for clause in self.sourceDeclarationCallBoundIndices(functionIndex: function) { if clause == index { found = true } }
+                    }
+                    give found
+                }
+                DeclarationBoundRef.Requirement(index: val index) => self.arena.requirementBoundEvidenceAt(index: index).implementation == function,
+                _ => false,
+            }
         }
         if !owned { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "call constraint belongs to another declaration owner", failureDomain: <FailureDomain.Internal />) /> }
         mut val selected = count

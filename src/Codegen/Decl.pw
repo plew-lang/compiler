@@ -537,70 +537,45 @@ pub impl Comp {
     inout fn extAppliesToType(extensionId: U64, typeStart: U64, typeLen: U64, typeRef: U64, assumptions: Array[DeclarationBoundRef]) -> Result[Bool, CompileDiagnostic] {
         val receiverHead = self.arena.typeHeadSpan(ref: typeRef, fallback: <InternedSpan start=typeStart len=typeLen />)
         val qType: U64 = intern(c: inout self, start: receiverHead.start, len: receiverHead.len)
-        mut val i: U64 = 0
-        while i < self.arena.functionCount() {
-            val f: Func = self.arena.functionAt(index: i)
-            if f.extId == extensionId {
-                // A trait-receiver extension applies through a concrete value
-                // only when that value conforms to the full trait instance.
-                // Head-name equality (`B`) is not enough for B[I64] vs
-                // B[String].
-                if self.methodRecvIsTrait(f: f) && typeRef != 0U64 {
-                    val traitOwner: U64 = self.canonicalTraitOwner(start: f.recvStart, len: f.recvLen)
-                    val answer = try self.queryTraitPatternProof(demand: <ConformanceProofDemand.SourceAdmission />, baseRef: typeRef, traitId: f.recvId, traitOwner: traitOwner, traitArgs: <PatternTypeInput.Values values=self.copyFuncTypes(types: f.recvTraitArgs) />, patternParams: <PatternBindInput.Function range=f.typeParams />, assumptions: assumptions)
-                    match answer {
-                        ConformanceProofResult.Found(proof: _) => { return <Result.Ok value=true /> }
-                        ConformanceProofResult.Missing | ConformanceProofResult.Ambiguous(owner: _, demand: _, selectedSource: _) => { i += 1U64 continue }
-                    }
+        for token in self.sourceTypeUses.implementationScopes(extensionId: extensionId) {
+            val scope = self.sourceTypeUses.scopeAt(token: token).unwrap()
+            match scope.state { SourceTypeScopeState.Lowered => {} _ => { continue } }
+            val implementation = scope.implementation.unwrap()
+            if implementation.receiverTrait != 0U64 {
+                val traitOwner = implementation.receiverTrait
+                val traitIndex = self.decls.traitOwnerIndex(offset: traitOwner)
+                if traitIndex >= self.decls.traitOwnerCount() {
+                    return <Result.Err error=self.diagnosticAt(offset: scope.anchor, msg: "extension implementation lost its trait owner", failureDomain: <FailureDomain.Internal />) />
                 }
-                if f.recvId == qType {
-                    if typeRef == 0U64 || f.recvTy == 0U64 {
-                        return <Result.Ok value=true />
-                    }
-                    val member = if f.dependentReceiverCallable == 0U64 && self.newtypeAnnotationAdmissionOpen {
-                        give try self.admitExtensionMethodReceiver(function: i, receiver: f.recvTy)
-                    } else { give f }
-                    if member.dependentReceiverCallable != 0U64 {
-                        if (try self.dependentInherentReceiverApplies(f: member, receiver: typeRef, assumptions: assumptions)) { return <Result.Ok value=true /> }
-                    } else {
-                        mut val binds: Array[UnifyBind] = []
-                        if self.unifyPatterns(a: member.recvTy, aSide: 0U64, b: typeRef, bSide: 1U64, aParams: <PatternBindInput.Function range=member.typeParams />, bParams: <PatternBindInput.Values values=[] />, binds: inout binds, ignoreTopView: true) {
-                            return <Result.Ok value=true />
-                        }
-                    }
+                val traitId = self.decls.traitOwnerAt(index: traitIndex).nameId
+                if typeRef == 0U64 {
+                    if traitId == qType { return <Result.Ok value=true /> }
+                    continue
                 }
+                val traitArgs = match implementation.kind {
+                    SourceImplementationKind.Conformance(index: val index) => <PatternTypeInput.Conformance range=self.conformanceDeclarationSubjectTerms(index: index, written: self.decls.conformAt(index: index).subjectArgs) />,
+                    SourceImplementationKind.Inherent => <PatternTypeInput.Values values=implementation.receiverArguments />,
+                }
+                val answer = try self.queryTraitPatternProof(demand: <ConformanceProofDemand.SourceAdmission />, baseRef: typeRef, traitId: traitId, traitOwner: traitOwner, traitArgs: traitArgs, patternParams: <PatternBindInput.Values values=implementation.parameters />, assumptions: assumptions)
+                if self.conformanceQueryFound(answer: answer) { return <Result.Ok value=true /> }
+                continue
             }
-            i += 1
-        }
-        // A named extension may contribute only a conformance.  It is still a
-        // real source surface: `value#Ext` is needed to expose that conformance
-        // to a bound even when no member happens to be declared in the bundle.
-        i = 0U64
-        while i < self.decls.conformCount() {
-            val cf: Conform = self.decls.conformAt(index: i)
-            if cf.extId == extensionId {
-                if cf.typeId == qType && (typeRef == 0U64 || cf.subjectTy == 0U64) {
-                    return <Result.Ok value=true />
-                }
-                if cf.typeId == qType && cf.subjectTraitOwner == 0U64 && !cf.derived {
-                    val matchResult = try self.conformanceWitnessMatch(conformIdx: i, typeRef: typeRef, traitArgs: [], traitArgsOpen: true, assumptions: assumptions)
+            val pattern = self.arena.typeAt(index: implementation.receiver)
+            if pattern.nameId != qType { continue }
+            if typeRef == 0U64 { return <Result.Ok value=true /> }
+            match implementation.kind {
+                SourceImplementationKind.Conformance(index: val index) => {
+                    val matchResult = try self.conformanceWitnessMatch(conformIdx: index, typeRef: typeRef, traitArgs: [], traitArgsOpen: true, assumptions: assumptions)
                     if matchResult.conformIdx != 0U64 && (try self.witnessConditionsSatisfied(witness: matchResult, assumptions: assumptions)) {
                         return <Result.Ok value=true />
                     }
                 }
-                // `extension E { impl B as C }` is applicable to an abstract
-                // `T` precisely when the current declaration proves T: B.
-                // This is a trait-pattern source, so receiver head spelling
-                // must not be compared to T.
-                if typeRef != 0U64 && cf.subjectTraitOwner != 0U64 {
-                    val subjectOwner: U64 = cf.subjectTraitOwner
-                    val answer = try self.queryTraitPatternProof(demand: <ConformanceProofDemand.SourceAdmission />, baseRef: typeRef, traitId: cf.typeId, traitOwner: subjectOwner, traitArgs: <PatternTypeInput.Conformance range=self.conformanceDeclarationSubjectTerms(index: i, written: cf.subjectArgs) />, patternParams: <PatternBindInput.Conformance range=cf.typeParams />, assumptions: assumptions)
-                    if self.conformanceQueryFound(answer: answer) {
+                SourceImplementationKind.Inherent => {
+                    if try self.extensionInherentReceiverApplies(token: token, implementation: implementation, receiver: typeRef, assumptions: assumptions) {
                         return <Result.Ok value=true />
                     }
                 }
             }
-            i += 1U64
         }
         // Inheritance follows the semantic newtype declaration. The
         // admitted RHS retains its arguments and any already selected views.

@@ -2037,6 +2037,7 @@ struct CallableConstraintBinding {
 impl CallableConstraintBinding { factory }
 struct CallableConstraintBindings {
     val function: U64
+    val implementation: U64 = 0U64
     // No constraints link: the publication context cannot recursively contain
     // the evidence being issued. Rows retain the admitted obligation itself.
     val environment: InstanceEnvironment

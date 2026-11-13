@@ -1273,3 +1273,18 @@ as paired controls. Declared extension/trait source composition and
 retention remain open. The direct `#Extra#Left.fromMatch()` probe also
 reports no matching method. Record it as a final member-selection
 contrast distinct from field-only formation.
+
+Extension applicability now enumerates authored implementation scopes by
+bundle identity. Derived method copies no longer serve as applicability
+evidence. Both nominal inherent and conformance paths read the admitted
+receiver; a projected inherent receiver can replay premises owned by the
+impl itself even when the impl declares no callable. Executable constraint
+replay continues to require callable-owned evidence.
+
+The bare empty impl and projected empty impl regressions pass check, JIT
+and linked native with `92e2f79b` (build `20261113T201813-build-6243ea`).
+The formerly accepted `extension_ambiguous_trait_receiver` rejects at
+its unused signature in check/JIT. Nine adjacent positive controls pass
+both modes. This exposes the actual composed view defect on the
+declaration-based path: separated `value#Left` then `path#Extra` works,
+while adjacent and typed combinations still require unified formation.

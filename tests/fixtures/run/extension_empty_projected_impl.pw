@@ -1,0 +1,8 @@
+use @Std/Io only { print }
+trait Source { type Item }
+struct Number {}
+impl Number as Source { type Item = I64 }
+struct Box[Key, Item] { val item: Item }
+extension Extra { impl[T] Box[T, T#Source.Item] where T: Source {} }
+fn read(value: Box[Number, I64]#Extra) -> I64 { return value.item }
+fn main() { print(read(value: <Box[Number, I64] item=42I64 />#Extra)) }
