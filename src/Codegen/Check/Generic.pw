@@ -209,7 +209,7 @@ pub impl Comp {
     inout fn checkBoundsRecv(recv: U64, tpFn: U64) -> Result[(), CompileDiagnostic] {
         // A type-qualified associated call may carry a `#` view. It remains a
         // qualifier, never a value use of the base type identifier.
-        if self.assocRecvName(recv: recv).nameLen != 0U64 {
+        if self.assocRecvName(recv: recv).nameLen != 0U64 || self.typeParameterQualifierTerm(exprId: recv) != 0U64 {
             return <Result.Ok value=() />
         }
         match self.arena.exprs[recv] {

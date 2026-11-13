@@ -6334,7 +6334,9 @@ pub impl Comp {
                     val owner = try self.bodySourceOwner(bodyId: bodyId, globalInitializerTarget: self.cur.globalInitializerTarget)
                     val authored = try self.requiredBodyValueViewArguments(exprId: exprId, selector: source, owner: <Optional.Some v=owner />)
                     val viewed = try self.replayFinalTraitValueView(exprId: exprId, source: source, authoredArguments: authored, viewedTerm: fact.term)
-                    if self.assocRecvName(recv: exprId).nameLen == 0U64 { try self.enqueueFinalDestruction(typeRef: viewed) }
+                    if self.assocRecvName(recv: exprId).nameLen == 0U64 && self.typeParameterQualifierTerm(exprId: exprId) == 0U64 {
+                        try self.enqueueFinalDestruction(typeRef: viewed)
+                    }
                 } else {
                     try self.collectRecordedValueLayout(exprId: exprId)
                 }

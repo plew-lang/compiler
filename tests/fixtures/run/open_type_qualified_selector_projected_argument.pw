@@ -1,0 +1,11 @@
+use @Std/Io only { print }
+trait Source[T] { type Item }
+trait Make[T] { assoc fn value() -> I64 }
+struct Number {}
+impl Number as Source[I64] { type Item=I64 }
+struct Receiver {}
+impl Receiver as Make[I64] { assoc fn value() -> I64 { return 42I64 } }
+fn get[T,U](value: T, source: U) -> I64 where T: Make[I64], U: Source[I64, Item=I64] {
+    return T#Make[U#Source[I64].Item].value()
+}
+fn main() { print(get(value: <Receiver />, source: <Number />)) }

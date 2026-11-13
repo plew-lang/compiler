@@ -574,7 +574,7 @@ pub impl Comp {
     // Ident arm runs the value check). A non-generic body has no type parameters in scope,
     // so pass the funcs.count() sentinel to identIsTypeQualifier.
     inout fn verifyRecv(recv: U64) -> Result[(), CompileDiagnostic] {
-        if self.assocRecvName(recv: recv).nameLen != 0U64 {
+        if self.assocRecvName(recv: recv).nameLen != 0U64 || self.typeParameterQualifierTerm(exprId: recv) != 0U64 {
             // A type-qualified associated call can carry `#` view selectors.
             // It is not a value read, so descending into its base Ident would
             // incorrectly demand a local named `Sample`.

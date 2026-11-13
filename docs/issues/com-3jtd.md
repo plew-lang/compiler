@@ -693,9 +693,22 @@ linked native execution with output 42. Existing value ARC, extension
 super, view-source-cycle removal and concrete qualifier controls pass
 in JIT. Fixed-input generation `20261113T145504-gen-bdd003` passed.
 
-The open qualifier RED is `T#Make[U#Source[I64].Item].value()` with
-`T: Make[I64]` and `U: Source[I64, Item=I64]`; both this call and the
-literal `T#Make[I64].value()` still reject as no matching method.
-The qualifier's type-parameter identity currently stops at Expr.Ident.
-Trace the viewed binder into a saved complete source before the
-associated-member selection boundary in com-4k31.
+### Viewed type-parameter qualifiers
+
+With `T: Make[I64]` and `U: Source[I64, Item=I64]`, the baseline
+rejected both `T#Make[U#Source[I64].Item].value()` and the literal
+`T#Make[I64].value()` as missing methods. Record now carries the lexical
+parameter into the existing view admission and puts the resulting term
+on the call template. Receiver walks preserve its type-qualifier role.
+Body replay consumes the recorded selector proof, with no value layout
+to destroy for a type qualifier.
+
+Fixed-input build `20261113T150503-build-d7a479` produced `e4d539f239a2`.
+Both forms pass check and JIT with output 42, and the projected form
+also produces 42 in linked native execution. A projected Bool argument
+is rejected as a missing exact instance; a standalone viewed qualifier
+is still rejected as an undefined value. Both rejections were confirmed
+in check and JIT. The existing concrete qualifier, strip, generic
+associated call and associated subject fixtures passed check and JIT.
+Fixed-input generation `20261113T150844-gen-1cb85e` passed.
+Final selection among competing instances remains in com-4k31.

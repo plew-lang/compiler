@@ -402,6 +402,9 @@ pub impl Comp {
         val owner = self.sourceLexicalFunction(fnIdx: self.cur.checkFn)
         if owner >= self.arena.functionCount() { return 0U64 }
         match self.arena.exprs[exprId] {
+            Expr.ExtView(recv: val receiver, source: _, strip: _) => {
+                return self.typeParameterQualifierTerm(exprId: receiver)
+            }
             Expr.Ident(val start, val len) => {
                 if !self.identIsTypeQualifier(start: start, len: len, tpFn: self.cur.checkFn) { return 0U64 }
                 val nameId: U64 = intern(c: inout self, start: start, len: len)
@@ -449,7 +452,10 @@ pub impl Comp {
 
     inout fn directReceiverTemplateForExpr(exprId: U64) -> Result[CallTemplateReceiver, CompileDiagnostic] {
         val qualifier: U64 = self.typeParameterQualifierTerm(exprId: exprId)
-        if qualifier != 0U64 { return <Result.Ok value=<CallTemplateReceiver.Term term=qualifier /> />}
+        if qualifier != 0U64 {
+            val recorded = self.parametricExprTerm(exprId: exprId)
+            return <Result.Ok value=<CallTemplateReceiver.Term term=(if recorded != 0U64 { give recorded } else { give qualifier }) /> />
+        }
         val concrete = (try self.concreteTypeQualifierTerm(exprId: exprId))
         if concrete != 0U64 { return <Result.Ok value=<CallTemplateReceiver.Term term=concrete /> />}
         return <Result.Ok value=(try self.protocolReceiverTemplateForExpr(exprId: exprId)) />
@@ -2113,9 +2119,9 @@ pub impl Comp {
                 // TypeTerm and apply the resolved source set once, matching
                 // the canonical TypeRef representation used everywhere else.
                 mut val receiverTerm = self.parametricExprTerm(exprId: recv)
-                val qualification = self.assocRecvName(recv: exprId).nameLen != 0U64
-                if receiverTerm == 0U64 && qualification && !strip && source.traitInstance.owner != 0U64 {
-                    receiverTerm = try self.concreteTypeQualifierTerm(exprId: recv)
+                if receiverTerm == 0U64 && !strip && source.traitInstance.owner != 0U64 {
+                    receiverTerm = self.typeParameterQualifierTerm(exprId: recv)
+                    if receiverTerm == 0U64 { receiverTerm = try self.concreteTypeQualifierTerm(exprId: recv) }
                 }
                 if receiverTerm != 0U64 && receiverTerm < self.arena.typeCount() {
                     mut val sources: Array[ResolvedViewSource] = self.arena.typeViewSources(ref: receiverTerm)
