@@ -1,13 +1,13 @@
 use @Std/Io only { print }
-trait Project { type Item }
+trait Project[Input] { type Item }
 trait Marker[T] { fn number() -> I64 }
 struct Projector {}
 struct Number {}
-impl Projector as Project { type Item = I64 }
+impl Projector as Project[Bool] { type Item = I64 }
 impl Number as Marker[I64] { fn number() -> I64 { return 42I64 } }
 
 struct Holder[T] {}
-impl[T] Holder[T] where T: Project[Item=I64] {
+impl[T] Holder[T] where T: Project[Bool, Item=I64] {
  fn make(number: I64 = {
     val item: T.Item = 42I64
     give item

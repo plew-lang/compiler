@@ -737,7 +737,6 @@ impl Comp {
         val assumptions = try self.declarationScopeAssumptions(scope: scope)
         val method = self.sourceTypeUses.methodScopeFor(function: declarationFunction).isSome()
         val role = if defaultToken != 0U64 { give <SourceTypeUseRole.DefaultArgument /> } else { give <SourceTypeUseRole.Body /> }
-        val scopes = <SignatureProofScopes local=scope assumptions=assumptions inherited=[] receiver=declaration.recvTy scopedBinders=method useRole=role />
         mut val validation = <SignatureRecipeValidation />
         // Short projections may link to a where-clause argument or a parent
         // receiver argument. Other annotations have only body-owned recipes.
@@ -748,16 +747,36 @@ impl Comp {
                     if admitted.signature.scope != signatureToken || admitted.signature.function != declarationFunction {
                         return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "authored body type has a foreign signature admission", failureDomain: <FailureDomain.Internal />) />
                     }
-                    validation = <SignatureRecipeValidation admittedDeclarations=admitted.recipeChecks equations=admitted.recipeEquations receiverEquations=admitted.receiverEquations proofs=admitted.proofs />
+                    validation = <SignatureRecipeValidation parentScope=admitted.parentScope parentParameters=admitted.parentParameters selfParameter=admitted.parentSelfParameter inherited=admitted.inheritedRecipes admittedDeclarations=admitted.recipeChecks equations=admitted.recipeEquations receiverEquations=admitted.receiverEquations proofs=admitted.proofs />
                 }
                 Optional.None => {}
             }
         }
+        val inherited = self.methodSignatureInheritedAssumptions(parentScope: validation.parentScope, assumptions: assumptions)
+        val scopes = <SignatureProofScopes local=scope assumptions=assumptions inherited=inherited receiver=declaration.recvTy scopedBinders=method useRole=role />
         try self.checkAuthoredTypeRecipe(sourceScope: token, recipe: occurrence.recipe, edge: <AuthoredRecipeEdge.Source />, scopes: scopes, validation: inout validation, offset: occurrence.site)
         val receiverType = self.groundTermInEnvironment(ref: term, params: [], values: [], selfRef: scopes.receiver)
         val equations = validation.equations.getOr(key: occurrence.recipe, fallback: [])
         val sourceTerm = try self.replayProjectionNormalizations(ref: receiverType, normalizations: equations, offset: occurrence.site)
         return <Result.Ok value=<LocalAnnotationProof occurrence=id recipe=occurrence.recipe sourceTerm=sourceTerm normalizations=equations proofs=validation.proofs /> />
+    }
+
+    fn methodSignatureInheritedAssumptions(parentScope: U64, assumptions: Array[DeclarationBoundRef]) -> Array[DeclarationBoundRef] {
+        if parentScope == 0U64 { return [] }
+        val parent = self.sourceTypeUses.scopeAt(token: parentScope).unwrap()
+        val range = parent.bounds.unwrapOr(fallback: <SourceBoundRange />)
+        mut val inherited: Array[DeclarationBoundRef] = []
+        for assumption in assumptions {
+            match assumption {
+                DeclarationBoundRef.Function(index: val index) => {
+                    val clause = self.decls.funcBounds.at(index: index).sourceClause
+                    if clause >= range.first && clause - range.first < range.count { inherited.append(assumption) }
+                }
+                DeclarationBoundRef.MethodReceiver(index: _) => { inherited.append(assumption) }
+                _ => {}
+            }
+        }
+        return inherited
     }
 
     inout fn authoredSignatureOccurrence(signature: AuthoredFunctionSignature, id: U64) -> Result[AuthoredTypeUse, CompileDiagnostic] {
@@ -868,21 +887,7 @@ impl Comp {
         val scope = try self.declarationTypeScope(owner: signature.function)
         try self.checkAuthoredCallableSlots(function: function, token: signature.scope, result: signature.result, factoryError: signature.factoryError, scope: scope, scopedBinders: validation.parentScope != 0U64)
         val assumptions = try self.declarationScopeAssumptions(scope: scope)
-        mut val inherited: Array[DeclarationBoundRef] = []
-        if validation.parentScope != 0U64 {
-            val parent = self.sourceTypeUses.scopeAt(token: validation.parentScope).unwrap()
-            val range = parent.bounds.unwrapOr(fallback: <SourceBoundRange />)
-            for assumption in assumptions {
-                match assumption {
-                    DeclarationBoundRef.Function(index: val index) => {
-                        val clause = self.decls.funcBounds.at(index: index).sourceClause
-                        if clause >= range.first && clause - range.first < range.count { inherited.append(assumption) }
-                    }
-                    DeclarationBoundRef.MethodReceiver(index: _) => { inherited.append(assumption) }
-                    _ => {}
-                }
-            }
-        }
+        val inherited = self.methodSignatureInheritedAssumptions(parentScope: validation.parentScope, assumptions: assumptions)
         val scopes = <SignatureProofScopes local=scope assumptions=assumptions inherited=inherited receiver=function.recvTy scopedBinders=validation.parentScope != 0U64 />
         mut val receiverEquations: Array[ProjectionNormalizationStep] = []
         for recipe in validation.receiverRecipes {
@@ -909,7 +914,7 @@ impl Comp {
         val clauses = if self.isAuthoredProvidedDeclaration(function: signature.function) && validation.parentScope != 0U64 {
             give try self.admitProvidedClauseIdentities(signature: signature, own: sourceScope.bounds.unwrapOr(fallback: <SourceBoundRange />), parent: validation.parentScope, offset: sourceScope.anchor)
         } else { give [] }
-        self.authoredSignatureViews[signature.function] = <AuthoredSignatureViews signature=signature proofs=validation.proofs receiverRecipes=validation.receiverRecipes recipeChecks=validation.visited recipeEquations=validation.equations receiverEquations=validation.receiverEquations clauses=clauses />
+        self.authoredSignatureViews[signature.function] = <AuthoredSignatureViews signature=signature proofs=validation.proofs receiverRecipes=validation.receiverRecipes recipeChecks=validation.visited recipeEquations=validation.equations receiverEquations=validation.receiverEquations parentScope=validation.parentScope parentParameters=validation.parentParameters parentSelfParameter=validation.selfParameter inheritedRecipes=validation.inherited clauses=clauses />
         return <Result.Ok value=() />
     }
 

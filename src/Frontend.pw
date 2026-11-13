@@ -2370,7 +2370,7 @@ pub fn analyzeFrontendDeclarations(c: inout Comp, input: FrontendInput, sources:
     val defaultLimit = c.arena.functionCount()
     mut val defaultIndex = 0U64
     while defaultIndex < defaultLimit {
-        if c.decls.defaultGeneratorOrigins.contains(key: defaultIndex) {
+        if c.arena.functionAt(index: defaultIndex).isDefaultGenerator {
             try c.prepareLexicalBody(fnIdx: defaultIndex)
         }
         defaultIndex += 1U64

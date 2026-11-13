@@ -631,6 +631,8 @@ pub impl Comp {
     // Called in the generator's lexical type environment, before its body is
     // recorded. Placed aliases share this original declaration's one request.
     inout fn checkDefaultGeneratorRestrictions(fnIdx: U64) -> Result[(), CompileDiagnostic] {
+        val function = self.arena.functionAt(index: fnIdx)
+        if !function.isDefaultGenerator { return <Result.Ok value=() /> }
         match self.decls.defaultGeneratorOrigins.get(key: fnIdx) {
             Optional.Some(v: val origin) => {
                 try self.checkDefaultGeneratorOrigin(function: fnIdx, origin: origin)
@@ -639,14 +641,16 @@ pub impl Comp {
                     DefaultGeneratorOrigin.Field(structure: val structure, field: val field) => { return self.checkFieldDefaultRestrictions(structure: structure, field: field) }
                 }
             }
-            Optional.None => {}
+            Optional.None => {
+                return <Result.Err error=self.diagnosticAt(offset: function.defOffset, msg: "default generator has no declaration origin", failureDomain: <FailureDomain.Internal />) />
+            }
         }
-        return <Result.Ok value=() />
     }
 
     // Called in the generator's lexical type environment, after its body is
     // recorded. Placed aliases share this original declaration's one request.
     inout fn checkDefaultGenerator(fnIdx: U64) -> Result[(), CompileDiagnostic] {
+        if !self.arena.functionAt(index: fnIdx).isDefaultGenerator { return <Result.Ok value=() /> }
         match self.decls.defaultGeneratorOrigins.get(key: fnIdx) {
             Optional.Some(v: val origin) => {
                 match origin {

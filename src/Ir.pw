@@ -2812,6 +2812,7 @@ pub struct Func {
     // (not another forwarding row); it supplies scope/type/proof provenance,
     // never value parameters, body identity, or source callable visibility.
     pub val lexicalOwnerFnId: U64 = 0U64
+    pub val isDefaultGenerator: Bool = false
     // interned ids (Phase C): name and (for methods/assoc) receiver type name.
     pub val nameId: U64 = 0
     pub val recvId: U64 = 0

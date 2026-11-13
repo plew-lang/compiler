@@ -7,6 +7,13 @@ pub impl Comp {
         val generator = self.arena.functionAt(index: function)
         val offset = generator.defOffset
         val expression = try self.defaultOriginExpression(origin: origin, offset: offset)
+        val token = self.sourceTypeUses.defaultExpressionScope(origin: self.arena.exprOriginSerial[expression])
+        match self.sourceTypeUses.scopeAt(token: token) {
+            Optional.Some(v: val scope) => {
+                match scope.state { SourceTypeScopeState.Lowered => {} _ => { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "default expression scope is incomplete", failureDomain: <FailureDomain.Internal />) /> } }
+            }
+            Optional.None => { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "default generator has no authored expression scope", failureDomain: <FailureDomain.Internal />) /> }
+        }
         if generator.body != 0U64 && self.blockStmtCount(blkId: generator.body) == 1U64 {
             val statement = self.blockStmtAt(blkId: generator.body, index: 0U64)
             match self.arena.stmts[statement] {
@@ -412,6 +419,7 @@ pub impl Comp {
                     val body: U64 = self.pushBlock(stmts: [returned])
                     self.arena.registerFunction(<Func
                         nameStart=name.nameStart nameLen=name.nameLen nameId=name.nameId
+                        isDefaultGenerator=true
                         typeParams=binders
                         hasRet=true retStart=field.tyStart retLen=field.tyLen
                         retIsArray=field.tyIsArray retTy=field.ty body=body
@@ -566,6 +574,7 @@ pub impl Comp {
         val generator: Func = <Func
             nameStart=name.nameStart nameLen=name.nameLen nameId=name.nameId
             lexicalOwnerFnId=lexicalOwner
+            isDefaultGenerator=true
             typeParams=source.typeParams
             hasRet=true retStart=parameter.tyStart retLen=parameter.tyLen
             retIsArray=parameter.tyIsArray retTy=parameter.ty body=body

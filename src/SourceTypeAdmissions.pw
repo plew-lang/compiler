@@ -1,7 +1,7 @@
 // Successful trait-view admission belongs to an authored occurrence, not to a
 // globally interned type. Provenance remains in SourceTypeUses; these rows carry
 // the frozen evidence interpreted by signature consumers.
-use ./Ir only { ResolvedViewSource, ProjectionNormalizationStep }
+use ./Ir only { ResolvedViewSource, ProjectionNormalizationStep, FuncBindRange }
 use ./SourceTypeUses only { AuthoredFunctionSignature }
 
 pub struct AuthoredTypeViewProof {
@@ -36,6 +36,10 @@ pub struct AuthoredSignatureViews {
     pub val recipeChecks: Dictionary[U64, Bool] = [:]
     pub val recipeEquations: Dictionary[U64, Array[ProjectionNormalizationStep]] = [:]
     pub val receiverEquations: Array[ProjectionNormalizationStep] = []
+    pub val parentScope: U64 = 0U64
+    pub val parentParameters: FuncBindRange = <FuncBindRange start=0U64 len=0U64 />
+    pub val parentSelfParameter: U64 = 0U64
+    pub val inheritedRecipes: Dictionary[U64, Bool] = [:]
     pub val clauses: Array[AuthoredProvidedClause] = []
 }
 pub impl AuthoredSignatureViews { factory }

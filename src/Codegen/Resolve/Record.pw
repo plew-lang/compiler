@@ -3,11 +3,23 @@
 // facts under a BodyInstance; they do not repeat lexical type inference.
 
 impl Comp {
-    inout fn requiredBodyValueViewArguments(exprId: U64, selector: ResolvedViewSource) -> Result[Optional[Array[U64]], CompileDiagnostic] {
+    inout fn requiredBodyValueViewArguments(exprId: U64, selector: ResolvedViewSource, owner: Optional[SemanticCompletionOwner]) -> Result[Optional[Array[U64]], CompileDiagnostic] {
         if selector.traitInstance.positionalArgs.count() == 0U64 { return <Result.Ok value=<Optional.None /> /> }
         val origin = self.arena.exprOriginSerial[exprId]
         match self.sourceTypeUses.valueViewArguments(origin: origin) {
-            Optional.Some(v: val arguments) => { return <Result.Ok value=arguments /> }
+            Optional.Some(v: val arguments) => {
+                if arguments.isNone() && owner.isSome() {
+                    match self.lexicalSourceFactOwner(owner: owner.unwrap()) {
+                        SemanticCompletionOwner.Function(index: val function) => {
+                            if function < self.arena.functionCount() && self.arena.functionAt(index: function).isDefaultGenerator {
+                                return <Result.Err error=self.diagnosticAt(offset: selector.writtenStart, msg: "default value view has no authored argument occurrences", failureDomain: <FailureDomain.Internal />) />
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                return <Result.Ok value=arguments />
+            }
             Optional.None => { return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "trait value view has no matching lowered argument occurrences", failureDomain: <FailureDomain.Internal />) /> }
         }
     }
@@ -1693,7 +1705,7 @@ pub impl Comp {
         match self.arena.exprs[exprId] {
             Expr.ExtView(recv: _, source: val selector, strip: val strip) => {
                 if !strip && selector.traitInstance.positionalArgs.count() != 0U64 {
-                    authored = try self.requiredBodyValueViewArguments(exprId: exprId, selector: selector)
+                    authored = try self.requiredBodyValueViewArguments(exprId: exprId, selector: selector, owner: self.currentSourceOwner())
                 }
             }
             _ => {}

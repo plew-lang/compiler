@@ -6290,7 +6290,8 @@ pub impl Comp {
                 val bodyId = self.currentBodyInstanceId()
                 if bodyId != 0U64 && !strip && source.traitInstance.owner != 0U64 && self.assocRecvName(recv: exprId).nameLen == 0U64 {
                     val fact = try self.preparedBodyExpression(bodyId: bodyId, exprId: exprId, globalInitializerTarget: self.cur.globalInitializerTarget)
-                    val authored = try self.requiredBodyValueViewArguments(exprId: exprId, selector: source)
+                    val owner = try self.bodySourceOwner(bodyId: bodyId, globalInitializerTarget: self.cur.globalInitializerTarget)
+                    val authored = try self.requiredBodyValueViewArguments(exprId: exprId, selector: source, owner: <Optional.Some v=owner />)
                     val viewed = try self.replayFinalTraitValueView(exprId: exprId, source: source, authoredArguments: authored, viewedTerm: fact.term)
                     try self.enqueueFinalDestruction(typeRef: viewed)
                 } else {
