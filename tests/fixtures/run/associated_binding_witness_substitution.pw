@@ -6,7 +6,7 @@ use @Std/Io only { print }
 
 fn main() {
     mut val compiler = <Comp />
-    val source = "trait Parent {{ type Item }}\ntrait Marker {{}}\nimpl I64 as Marker {{}}\nstruct Box[T] {{}}\nimpl[T] Box[T] as Parent where T: Marker {{ type Item = T }}\nfn example(value: Box[I64], other: Bool, target: any Parent[Item=I64]) {{}}\n"
+    val source = "trait Parent {{ type Item }}\ntrait Marker {{}}\nimpl I64 as Marker {{}}\nimpl Bool as Marker {{}}\nstruct Box[T] {{}}\nimpl[T] Box[T] as Parent where T: Marker {{ type Item = T }}\nfn example(value: Box[I64], other: Bool, target: any Parent[Item=I64], marker: any Marker) {{}}\n"
     analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text text=source path="binding-substitution.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
     val binding = compiler.decls.assocBindings[0U64]
     val declaration = compiler.arena.functionAt(index: compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "example").nameId))
@@ -31,6 +31,15 @@ fn main() {
     val missing = <StaticConformanceProof.ConcreteWitness witness=<WitnessMatch conformIdx=witness.conformIdx selfRef=receiver conditions=witness.conditions /> />
     val noPlan = <StaticConformanceProof.ConcreteWitness witness=<WitnessMatch conformIdx=witness.conformIdx selfRef=receiver binds=witness.binds /> />
     val plan = compiler.arena.witnessConditionPlanAt(index: witness.conditions - 1U64)
+    val marker = compiler.funcParamAt(params: declaration.params, index: 3U64).ty
+    val foreignConversion = compiler.callArgumentConversion(sourceRef: foreign, targetRef: marker, assumptions: []).unwrap()
+    val foreignProof = match foreignConversion {
+        ValueConversionProof.ExistentialBox(sourceRef: _, targetRef: _, traitIdx: _, proof: val proof) => proof,
+        _ => { panic("expected Bool's selected Marker proof") },
+    }
+    val foreignChild = compiler.freezeStaticConformanceProof(proof: foreignProof)
+    val foreignPlan = compiler.arena.publishWitnessConditionPlan(plan: <WitnessConditionPlan witness=plan.witness proofs=[foreignChild] normalizations=plan.normalizations />)
+    val foreignCondition = <StaticConformanceProof.ConcreteWitness witness=<WitnessMatch conformIdx=witness.conformIdx selfRef=receiver binds=witness.binds conditions=foreignPlan /> />
     val missingChild = compiler.arena.publishWitnessConditionPlan(plan: <WitnessConditionPlan witness=plan.witness proofs=[0U64] normalizations=plan.normalizations />)
     val noChild = <StaticConformanceProof.ConcreteWitness witness=<WitnessMatch conformIdx=witness.conformIdx selfRef=receiver binds=witness.binds conditions=missingChild /> />
     val surplus = [<WitnessBind binder=99U64 paramId=parameter.paramId term=foreign />, witness.binds[0U64]]
@@ -39,6 +48,7 @@ fn main() {
     assert(compiler.associatedOutputInProof(proof: valid, traitOwner: binding.traitOwner, assocId: binding.nameId).unwrap() == expected)
     if !compiler.associatedOutputInProof(proof: noPlan, traitOwner: binding.traitOwner, assocId: binding.nameId).isErr() { panic("accepted a missing witness condition plan") }
     if !compiler.associatedOutputInProof(proof: noChild, traitOwner: binding.traitOwner, assocId: binding.nameId).isErr() { panic("accepted a missing witness condition child") }
+    if !compiler.associatedOutputInProof(proof: foreignCondition, traitOwner: binding.traitOwner, assocId: binding.nameId).isErr() { panic("accepted a foreign witness condition child") }
     if !compiler.associatedOutputInProof(proof: extra, traitOwner: binding.traitOwner, assocId: binding.nameId).isErr() { panic("accepted an extra witness binder") }
     assert(compiler.associatedOutputInProof(proof: wrong, traitOwner: binding.traitOwner, assocId: binding.nameId).isErr())
     assert(compiler.associatedOutputInProof(proof: missing, traitOwner: binding.traitOwner, assocId: binding.nameId).isErr())

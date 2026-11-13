@@ -418,3 +418,33 @@ Build `20261113T003036-build-36825e`, generation
 `20261113T003441-gen-c00e6a` and eight public check/JIT/native controls
 passed. Same-source medians were 6.874314 s and 6.878091 s, with
 identical LLVM output across all eight executions.
+
+## Condition proof validation on RHS read
+
+Independent review of `d0c81610` found three reproducible cases. A
+conditional `Box[I64]` witness accepted a real `Bool: Marker` proof in
+place of `I64: Marker`. A requirement declared directly on the trait
+rejected its own implementation result when `Item` was bound to
+`Worker#Marker.Type`. A trait-to-trait impl failed to replay
+`Self#Root.Input` from its selected predecessor. The direct requirement
+also rejected on the earlier `e5ccdcc1` candidate. On that candidate
+the trait-to-trait probe passed `--check`, but failed in JIT with a
+missing source conversion receipt.
+
+The shared RHS reader now checks the witness condition plan with the
+existing condition evidence verifier before reading the RHS recipe.
+This verifies the child against the substituted clause and validates
+the saved normalization equations. The native
+`associated_binding_witness_substitution` fixture failed on `752239a5`
+with `accepted a foreign witness condition child`, and passed on
+`a4fe1f1b`, including the original witness before and after the fault.
+Build `20261113T003905-build-b5f67e`, generation
+`20261113T004323-gen-4ed8fb` and eight check/JIT/native controls passed.
+Same-source medians were 6.860850 s and 6.876053 s, with identical
+LLVM output in all eight runs.
+
+The two public cases remain open. The review also requires direct
+fault controls for incorrect normalizations and missing RHS evidence,
+a real abstract-zero contrast, and a non-idempotent caller substitution
+contrast. Verify the legacy adapter's handoff to the shared reader
+where its frontend continuation is supported.
