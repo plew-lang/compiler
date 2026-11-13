@@ -10,4 +10,6 @@ fn main() {
     print(read(value: reversed))
     val grouped = (<Number />#Marker[I64])#Selection
     print(read(value: grouped))
+    val repeated: Number#Selection#Marker[I64] = <Number />#Marker[I64]#Marker[I64]#Selection
+    print(read(value: repeated))
 }

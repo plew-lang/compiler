@@ -219,3 +219,36 @@ adding an extension after a separate binding, and choosing a different
 trait instance still reject in check and JIT. Existing extension cycle
 removal, extension super calls, stacked views and projected cast controls
 also pass.
+
+### Independent review and remaining formation entries
+
+The independent review of `73aaca94` traced the single-selector value and
+cast proofs through Record, Mono and Mid, and verified semantic newtype RHS
+lookup in the extension path. It found three remaining source boundaries.
+Check on the fixed `f547663c2e7d` candidate reproduced each:
+
+- A repeated identical selector followed by its enabling extension still
+  visits an intermediate selector without the extension. Normalize the
+  adjacent chain without losing either authored argument occurrence.
+- A generic value extension is independently refused by
+  `boundAllowsExtension` when `T: Child` and `Child: Base` provide the
+  extension's `Base` premise. Replace the spelling/direct-bound gate with
+  applicability on the complete receiver under its lexical assumptions.
+- `<Box[Number#Selection#Marker[I64]] n=42I64 />` fails at the exact trait
+  check because the compatibility sweep removes Selection. Explicit
+  constructor arguments lose the authored occurrence and their final
+  aggregate falls back to ordinary type grounding. Keep their authored
+  recipes through construction and body instance preparation. A negative
+  projection with `Marker[Bool]` now rejects at the missing associated
+  binding diagnostic rather than at exact source admission.
+
+Existing conditional-witness fallback remains a control. Opening a
+nominal extension subject and selecting an applicable conditional
+conformance are separate checks in that control.
+
+Fixed-input build `20261113T120322-build-f68678` produced `0d26d7347bb6`.
+The repeated identical selector now passes check, JIT and linked native
+as part of the four-case composed fixture. The three rejected composition
+boundaries retained their exact selector diagnostic in check and JIT.
+A composed selector with a projected positional argument passes both
+check and JIT under its retained lexical equation.

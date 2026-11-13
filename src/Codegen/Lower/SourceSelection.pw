@@ -178,30 +178,35 @@ impl Comp {
     // set. Put the trait selection after its extension inputs before any
     // lexical or executable consumer observes an intermediate expression.
     inout fn lowerValueView(recv: U64, source: ResolvedViewSource, strip: Bool) -> Result[U64, CompileDiagnostic] {
+        val viewed = self.pushExpr(e: <Expr.ExtView recv=recv source=source strip=strip />)
+        mut val destination = viewed
+        mut val receiver = recv
         if !strip && source.traitInstance.owner == 0U64 {
-            match self.arena.exprs[recv] {
-                Expr.ExtView(recv: val subject, source: val selector, strip: val stripped) => {
-                    if !stripped && selector.traitInstance.owner != 0U64 {
-                        self.arena.exprs[recv] = <Expr.ExtView recv=subject source=source strip=false />
-                        val selected = self.pushExpr(e: <Expr.ExtView recv=recv source=selector strip=false />)
-                        if !self.sourceTypeUses.moveValueViewArguments(from: recv, to: selected) {
+            while true {
+                match self.arena.exprs[receiver] {
+                    Expr.ExtView(recv: val subject, source: val selector, strip: val stripped) => {
+                        if stripped || selector.traitInstance.owner == 0U64 { break }
+                        self.arena.exprs[destination] = <Expr.ExtView recv=receiver source=selector strip=false />
+                        if !self.sourceTypeUses.moveValueViewArguments(from: receiver, to: destination) {
                             return <Result.Err error=self.diagnosticAt(offset: selector.writtenStart, msg: "invalid composed value view argument registration", failureDomain: <FailureDomain.Internal />) />
                         }
-                        match self.expressionTypeUses.get(key: recv) {
+                        match self.expressionTypeUses.get(key: receiver) {
                             Optional.Some(v: val uses) => {
-                                self.expressionTypeUses[selected] = uses
-                                self.expressionTypeUses.remove(key: recv)
+                                self.expressionTypeUses[destination] = uses
+                                self.expressionTypeUses.remove(key: receiver)
                             }
                             Optional.None => {}
                         }
-                        self.decls.registerPlaceSource(exprId: selected, source: self.decls.placeSource(exprId: recv), expressionCount: self.arena.exprs.count())
-                        return <Result.Ok value=selected />
+                        destination = receiver
+                        receiver = subject
                     }
+                    _ => { break }
                 }
-                _ => {}
+            }
+            if destination != viewed {
+                self.arena.exprs[destination] = <Expr.ExtView recv=receiver source=source strip=false />
             }
         }
-        val viewed = self.pushExpr(e: <Expr.ExtView recv=recv source=source strip=strip />)
         self.decls.registerPlaceSource(exprId: viewed, source: self.decls.placeSource(exprId: recv), expressionCount: self.arena.exprs.count())
         return <Result.Ok value=viewed />
     }
