@@ -487,3 +487,30 @@ concrete conformance target reaches `Marker[I64]` through a projection.
 Writing `Marker[I64]` directly succeeds. The supertrait argument with a
 missing exact projection premise still passes check. Both are next
 source probes for the remaining adapters.
+
+### Projected declaration arguments in callable placement
+
+Both early placement passes and the path-count check read the admitted
+declaration target range. The originating edge ID remains attached to
+the placed function. Derived rows carry the admitted target range; the
+authored rows used by graph validation keep their original terms. The
+new range is allocated once per admitted declaration and the ordinary
+range remains directly readable for declarations without a recipe.
+
+Build `20261113T135046-build-042c24` produced `d0102c57eaa5e`.
+Baseline `d2c2f72e3cc3` rejected both projected placement probes with a
+missing method while the literal control executed successfully. The new
+candidate passes check, JIT and linked native execution with output 42
+for both bare and extension placement. The different positional instance
+still rejects at extension applicability in check and JIT. The existing
+extension, structural cycle positive, generic provided-method and
+projected witness controls pass check and JIT. Open projection replay
+in witness queries retains its prior verification; this placement
+check does not certify every abstract callable materialization path.
+
+Next inspect authored supertrait and associated-constraint inputs. Both
+header lowerers construct recipes for trait-constraint operands but
+their compatibility wrappers discard those recipes when publishing the
+trait header. Separate the authored graph terms from admitted operands
+and verify inherited equations still resolve with the lexical Self
+premise.

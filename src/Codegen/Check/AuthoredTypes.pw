@@ -187,17 +187,17 @@ impl Comp {
     }
 
     inout fn conformanceDeclarationTargetArguments(index: U64, declaration: Conform) -> Array[U64] {
+        return self.copyConformTypes(types: self.conformanceDeclarationTargetTerms(index: index, written: declaration.traitArgs))
+    }
+
+    inout fn conformanceDeclarationTargetTerms(index: U64, written: ConformTypeRange) -> ConformTypeRange {
         if self.authoredConformanceTargets.count() != 0U64 {
             match self.authoredConformanceTargets.get(key: index) {
-                Optional.Some(v: val saved) => {
-                    mut val arguments: Array[U64] = []
-                    for argument in saved.arguments { arguments.append(argument.term) }
-                    return arguments
-                }
+                Optional.Some(v: val saved) => { return saved.terms }
                 Optional.None => {}
             }
         }
-        return self.copyConformTypes(types: declaration.traitArgs)
+        return written
     }
 
     inout fn admitConformanceTarget(index: U64) -> Result[(), CompileDiagnostic] {
@@ -252,8 +252,12 @@ impl Comp {
             val replay = !self.arena.typeIsClosed(ref: normalized) || self.arena.typeContainsAssociatedProjection(ref: normalized)
             arguments.append(<AuthoredConformanceArgument occurrence=id recipe=occurrence.recipe term=normalized replay=replay />)
         }
-        for argument in arguments { self.markAdmittedRecipeTypeUses(recipe: argument.recipe) }
-        return <Result.Ok value=<AuthoredConformanceTarget scope=token arguments=arguments proofs=validation.proofs /> />
+        mut val terms: Array[U64] = []
+        for argument in arguments {
+            self.markAdmittedRecipeTypeUses(recipe: argument.recipe)
+            terms.append(argument.term)
+        }
+        return <Result.Ok value=<AuthoredConformanceTarget scope=token terms=self.pushConformTypes(types: terms) arguments=arguments proofs=validation.proofs /> />
     }
 
     inout fn readConformanceTargetArguments(saved: AuthoredConformanceTarget, declaration: Conform, witness: WitnessMatch) -> Result[Array[U64], CompileDiagnostic] {

@@ -1,0 +1,10 @@
+use @Std/Io only { print }
+trait Source { type Item }
+struct Number {}
+impl Number as Source { type Item = I64 }
+trait Marker[Kind] {}
+trait Display { fn show() -> I64 }
+struct Receiver {}
+impl Receiver as Marker[Number#Source.Item] {}
+impl Marker[I64] as Display { fn show() -> I64 { return 42I64 } }
+fn main() { print(<Receiver />.show()) }

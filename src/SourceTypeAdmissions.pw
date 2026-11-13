@@ -1,7 +1,7 @@
 // Successful trait-view admission belongs to an authored occurrence, not to a
 // globally interned type. Provenance remains in SourceTypeUses; these rows carry
 // the frozen evidence interpreted by signature consumers.
-use ./Ir only { ResolvedViewSource, ProjectionNormalizationStep, FuncBindRange }
+use ./Ir only { ResolvedViewSource, ProjectionNormalizationStep, FuncBindRange, ConformTypeRange }
 use ./SourceTypeUses only { AuthoredFunctionSignature }
 
 pub struct AuthoredTypeViewProof {
@@ -32,6 +32,7 @@ pub impl AuthoredConformanceArgument { factory }
 
 pub struct AuthoredConformanceTarget {
     pub val scope: U64
+    pub val terms: ConformTypeRange
     pub val arguments: Array[AuthoredConformanceArgument]
     pub val proofs: Array[AuthoredTypeViewProof]
 }

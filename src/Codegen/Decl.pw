@@ -520,7 +520,7 @@ pub impl Comp {
         while i < self.decls.conformCount() {
             if self.decls.conformAt(index: i).typeId == typeId && self.conformanceSubjectMatches(cf: self.decls.conformAt(index: i), typeRef: typeRef) {
                 if self.decls.conformAt(index: i).traitStart == traitOwner {
-                    if self.traitInstanceArgsMatch(pattern: traitArgs, patternParams: patternParams, actual: <PatternTypeInput.Conformance range=self.decls.conformAt(index: i).traitArgs />) {
+                    if self.traitInstanceArgsMatch(pattern: traitArgs, patternParams: patternParams, actual: <PatternTypeInput.Conformance range=self.conformanceDeclarationTargetTerms(index: i, written: self.decls.conformAt(index: i).traitArgs) />) {
                         if self.decls.conformAt(index: i).viewRootId == 0U64 {
                             return true
                         }
@@ -610,7 +610,7 @@ pub impl Comp {
         while i < self.decls.conformCount() {
             val cf: Conform = self.decls.conformAt(index: i)
             if !(cf.derived) && cf.extId == 0U64 {
-                if cf.traitStart == traitOwner && self.traitInstanceArgsMatch(pattern: aTraitArgs, patternParams: patternParams, actual: <PatternTypeInput.Conformance range=cf.traitArgs />) {
+                if cf.traitStart == traitOwner && self.traitInstanceArgsMatch(pattern: aTraitArgs, patternParams: patternParams, actual: <PatternTypeInput.Conformance range=self.conformanceDeclarationTargetTerms(index: i, written: cf.traitArgs) />) {
                     if cf.subjectTraitOwner != 0U64 {
                         // cf is `impl B as A`; does tId conform to the subject trait B?
                         if self.conformExistsTraitInstance(typeRef: typeRef, traitOwner: cf.typeStart, traitArgs: <PatternTypeInput.Conformance range=cf.subjectArgs />, patternParams: <PatternBindInput.Conformance range=cf.typeParams />) {
@@ -645,27 +645,25 @@ pub impl Comp {
                     mut val cj: U64 = 0
                     while cj < self.decls.conformCount() {
                         val cand: Conform = self.decls.conformAt(index: cj)
-                        if cand.traitStart == cf.typeStart && self.traitInstanceArgsMatch(pattern: <PatternTypeInput.Conformance range=cf.subjectArgs />, patternParams: <PatternBindInput.Conformance range=cf.typeParams />, actual: <PatternTypeInput.Conformance range=cand.traitArgs />) {
-                            if cand.subjectTraitOwner == 0U64 {
-                                // the view-root under which we confer A on T via this impl
-                                // (spec/09 chain conflict). If the candidate conformance to B
-                                // is already view-rooted (T reaches B only via #root), the
-                                // chain stays rooted there — propagate it. Otherwise (T
-                                // bare-conforms to B) a NEW root is born iff A is reached by T
-                                // through more than one subject trait (multi-path): the root
-                                // is THIS impl's subject. A single bare path → root 0 (bare).
-                                mut val vr: U64 = cand.viewRootId
-                                mut val rootOwner = cand.viewRootOwner
-                                mut val rootConformIdx = cand.viewRootConformIdx
-                                if vr == 0U64 {
-                                    if self.subjectPathCount(typeRef: cand.subjectTy, traitOwner: cf.traitStart, aTraitArgs: <PatternTypeInput.Conformance range=cf.traitArgs />, patternParams: <PatternBindInput.Conformance range=cf.typeParams />) > 1U64 {
-                                        vr = cf.typeId
-                                        rootOwner = cf.subjectTraitOwner
-                                        rootConformIdx = ci + 1U64
-                                    }
+                        if cand.subjectTraitOwner == 0U64 && cand.traitStart == cf.subjectTraitOwner && self.traitInstanceArgsMatch(pattern: <PatternTypeInput.Conformance range=cf.subjectArgs />, patternParams: <PatternBindInput.Conformance range=cf.typeParams />, actual: <PatternTypeInput.Conformance range=self.conformanceDeclarationTargetTerms(index: cj, written: cand.traitArgs) />) {
+                            // the view-root under which we confer A on T via this impl
+                            // (spec/09 chain conflict). If the candidate conformance to B
+                            // is already view-rooted (T reaches B only via #root), the
+                            // chain stays rooted there — propagate it. Otherwise (T
+                            // bare-conforms to B) a NEW root is born iff A is reached by T
+                            // through more than one subject trait (multi-path): the root
+                            // is THIS impl's subject. A single bare path → root 0 (bare).
+                            mut val vr: U64 = cand.viewRootId
+                            mut val rootOwner = cand.viewRootOwner
+                            mut val rootConformIdx = cand.viewRootConformIdx
+                            if vr == 0U64 {
+                                if self.subjectPathCount(typeRef: cand.subjectTy, traitOwner: cf.traitStart, aTraitArgs: <PatternTypeInput.Conformance range=self.conformanceDeclarationTargetTerms(index: ci, written: cf.traitArgs) />, patternParams: <PatternBindInput.Conformance range=cf.typeParams />) > 1U64 {
+                                    vr = cf.typeId
+                                    rootOwner = cf.subjectTraitOwner
+                                    rootConformIdx = ci + 1U64
                                 }
-                                try self.applyBlanketTo(blanket: cf, blanketConformIdx: ci + 1U64, receiver: cand, guardHi: guardHi, viewRoot: vr, viewRootOwner: rootOwner, viewRootConformIdx: rootConformIdx)
                             }
+                            try self.applyBlanketTo(blanket: cf, blanketConformIdx: ci + 1U64, receiver: cand, guardHi: guardHi, viewRoot: vr, viewRootOwner: rootOwner, viewRootConformIdx: rootConformIdx)
                         }
                         cj += 1
                     }
@@ -835,7 +833,7 @@ pub impl Comp {
             fi += 1
         }
         if !(self.conformWithRootExists(typeId: recvId, traitId: blanket.traitId, viewRootOwner: viewRootOwner, viewRootConformIdx: viewRootConformIdx)) {
-            self.decls.registerConform(<Conform subjectTraitOwner=receiver.subjectTraitOwner sourceModule=blanket.sourceModule typeStart=recvStart typeLen=recvLen typeId=recvId subjectTy=receiver.subjectTy subjectArgs=receiver.subjectArgs typeParams=receiver.typeParams typeArity=receiver.typeArity traitStart=blanket.traitStart traitLen=blanket.traitLen traitId=blanket.traitId traitArgs=blanket.traitArgs derived=true witnessed=blanket.witnessed witnessFuncIds=blanket.witnessFuncIds viewRootId=viewRoot viewRootOwner=viewRootOwner viewRootConformIdx=viewRootConformIdx defOffset=blanket.defOffset />, authoredFunctions: <Optional.Some v=blanket.authoredFuncIds />)
+            self.decls.registerConform(<Conform subjectTraitOwner=receiver.subjectTraitOwner sourceModule=blanket.sourceModule typeStart=recvStart typeLen=recvLen typeId=recvId subjectTy=receiver.subjectTy subjectArgs=receiver.subjectArgs typeParams=receiver.typeParams typeArity=receiver.typeArity traitStart=blanket.traitStart traitLen=blanket.traitLen traitId=blanket.traitId traitArgs=self.conformanceDeclarationTargetTerms(index: blanketConformIdx - 1U64, written: blanket.traitArgs) derived=true witnessed=blanket.witnessed witnessFuncIds=blanket.witnessFuncIds viewRootId=viewRoot viewRootOwner=viewRootOwner viewRootConformIdx=viewRootConformIdx defOffset=blanket.defOffset />, authoredFunctions: <Optional.Some v=blanket.authoredFuncIds />)
         }
         return <Result.Ok value=() />
     }
@@ -866,7 +864,7 @@ pub impl Comp {
                     // trait names share a flat namespace — a user `trait Sub` vs Core's
                     // operator `Sub[Rhs]`). Without the arity gate a provided method on the
                     // 0-ary `Sub` would copy onto every type conforming to `Sub[Rhs]`.
-                    if f.recvId == cf.traitId && f.provTraitArity == cf.traitArgs.count() && f.provTraitOwner == cf.traitStart && self.traitInstanceArgsMatch(pattern: <PatternTypeInput.Values values=self.copyFuncTypes(types: f.recvTraitArgs) />, patternParams: <PatternBindInput.Function range=f.typeParams />, actual: <PatternTypeInput.Conformance range=cf.traitArgs />) {
+                    if f.recvId == cf.traitId && f.provTraitArity == cf.traitArgs.count() && f.provTraitOwner == cf.traitStart && self.traitInstanceArgsMatch(pattern: <PatternTypeInput.Values values=self.copyFuncTypes(types: f.recvTraitArgs) />, patternParams: <PatternBindInput.Function range=f.typeParams />, actual: <PatternTypeInput.Conformance range=self.conformanceDeclarationTargetTerms(index: ci, written: cf.traitArgs) />) {
                             val sourceConformIdx = try self.sourceConformanceForDeclaration(functionIndex: fi)
                             // Bare conformance implementations were already
                             // placed by instantiateTraitSubjectConforms. This
