@@ -1691,3 +1691,25 @@ view-source query three times on `e2063d31` and zero times on `f0b7c9d6`.
 Five adjacent accepted inputs and three check rejection controls passed.
 [Same-source comparison](../../../evidence/rejection-domains/diagnostic-domain-implementation/trait-receiver-admission/structural-same-source.json):
 7.845 s versus 7.806 s, with eight identical nonempty LLVM outputs.
+
+### Carry selected structural projection evidence
+
+Array and Buffer element selection reads the selected element type slot.
+Anonymous-record field selection uses the already selected canonical field
+index. A literal origin supplies the retained child evidence and an authored
+origin supplies the matching child recipe. These paths preserve both the
+child's direct extension proof and its nested origin.
+
+Build `20261113T230131-build-3bfa63` produced `2391853f`.
+`structural_projection_extension_evidence` covers an index other than zero,
+an array-valued inferred record field, and projection from typed parameters
+with two different extensions. It passes check, JIT and native, with two
+legacy queries before the change and zero afterward. Five adjacent accepted
+fixtures passed check and JIT.
+[Same-source comparison](../../../evidence/rejection-domains/diagnostic-domain-implementation/trait-receiver-admission/structural-projection-same-source.json):
+7.818 s versus 7.797 s, eight identical nonempty LLVM outputs.
+
+Adding a standalone block and an if-expression to the projection probe
+reintroduces the legacy query once for each. Their shared result admission
+must transfer evidence from normally completing value producers, including
+the existing compatibility and conversion rules for the result type.

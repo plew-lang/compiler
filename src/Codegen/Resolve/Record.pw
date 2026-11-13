@@ -229,8 +229,49 @@ impl Comp {
         return self.constructionSlotEvidence.count()
     }
 
+    inout fn recordStructuralProjectionEvidence(exprId: U64, base: U64, baseTerm: U64, slot: U64, term: U64) {
+        if !self.bodyTypeNeedsViewAdmission(ref: term) { return }
+        val origin = self.recordedExpressionTypeOrigin(exprId: base)
+        if origin.isNone() { return }
+        match origin.unwrap() {
+            SourceExpressionTypeOrigin.Structural(term: val source, val slots) => {
+                if !self.typeRefEq(a: source, b: baseTerm) { return }
+                for retained in slots {
+                    if retained.index == slot {
+                        val evidence = self.constructionSlotEvidence[retained.evidence - 1U64]
+                        match evidence.origin {
+                            Optional.Some(v: val child) => { self.recordExpressionTypeOrigin(exprId: exprId, origin: child) }
+                            Optional.None => {}
+                        }
+                        self.recordExpressionExtensionSources(exprId: exprId, proofs: evidence.extensions)
+                        return
+                    }
+                }
+            }
+            SourceExpressionTypeOrigin.Authored(val occurrence) => {
+                val selected = self.authoredResultTypeOccurrence(occurrence: occurrence)
+                if selected == 0U64 { return }
+                val typeUse = self.sourceTypeUses.useAt(index: selected - 1U64)
+                if typeUse.isNone() { return }
+                val recipe = self.sourceTypeUses.recipeAt(id: typeUse.unwrap().recipe)
+                if recipe.isNone() { return }
+                val parent = recipe.unwrap()
+                if slot >= parent.children.count() || !self.typeTermRefSameHead(a: parent.term, b: baseTerm) ||
+                   self.typeTermRefIdentityChildLabel(ref: parent.term, index: slot) != self.typeTermRefIdentityChildLabel(ref: baseTerm, index: slot) { return }
+                val child = self.sourceTypeUses.recipeAt(id: parent.children[slot])
+                if child.isNone() { return }
+                val childOccurrence = child.unwrap().occurrence
+                self.recordAuthoredCompositeOrigin(exprId: exprId, term: term, occurrence: childOccurrence)
+                self.recordExpressionExtensionSources(exprId: exprId, proofs: self.authoredResultExtensionSources(occurrence: childOccurrence))
+            }
+            _ => {}
+        }
+    }
+
     inout fn recordAuthoredCompositeOrigin(exprId: U64, term: U64, occurrence: U64) {
-        if occurrence == 0U64 || self.arena.typeTermAt(index: term).args.len == 0U64 { return }
+        if occurrence == 0U64 || term == 0U64 { return }
+        val shape = self.arena.typeTermAt(index: term)
+        if shape.args.len == 0U64 && !shape.isRecord { return }
         if self.bodyTypeNeedsViewAdmission(ref: term) {
             self.recordExpressionTypeOrigin(exprId: exprId, origin: <SourceExpressionTypeOrigin.Authored occurrence=occurrence />)
         }
@@ -1637,7 +1678,7 @@ pub impl Comp {
 
     // Field and Arrow share the same declaration-time selection. Arrow's
     // receiver term is its pointee; Mid must not repeat this layout lookup.
-    inout fn recordFieldSelection(exprId: U64, receiverTerm: U64, nameStart: U64, nameLen: U64) -> Result[(), CompileDiagnostic] {
+    inout fn recordFieldSelection(exprId: U64, receiverTerm: U64, nameStart: U64, nameLen: U64, base: Optional[U64] = <Optional.None />) -> Result[(), CompileDiagnostic] {
         val layoutReceiver: U64 = self.lexicalLayoutReceiver(receiverTerm: receiverTerm)
         val storageRef: U64 = try self.readFieldStorageType(receiverRef: layoutReceiver, requireEvidence: true)
         val fieldTerm: U64 = (try self.fieldTypeRefOfReceiver(receiverRef: storageRef, fieldStart: nameStart, fieldLen: nameLen))
@@ -1662,6 +1703,9 @@ pub impl Comp {
                 }
             }
             if fieldIndex < fieldCount {
+                if receiver.isRecord && base.isSome() {
+                    self.recordStructuralProjectionEvidence(exprId: exprId, base: base.unwrap(), baseTerm: storageRef, slot: fieldIndex, term: fieldTerm)
+                }
                 self.recordSemanticExprFieldProjection(exprId: exprId, index: fieldIndex, isBoxed: isBoxed)
             }
         }
@@ -2320,7 +2364,7 @@ pub impl Comp {
                 // groundedTypeOf. `groundUnderInst` preserves a symbolic
                 // receiver argument (Box[T]) for later body grounding.
                 val baseTerm: U64 = self.parametricExprTerm(exprId: base)
-                try self.recordFieldSelection(exprId: exprId, receiverTerm: baseTerm, nameStart: nameStart, nameLen: nameLen)
+                try self.recordFieldSelection(exprId: exprId, receiverTerm: baseTerm, nameStart: nameStart, nameLen: nameLen, base: <Optional.Some v=base />)
                 try self.verifySelectedFieldExists(exprId: exprId, receiverTerm: baseTerm, nameStart: nameStart, nameLen: nameLen, message: "no such field on this value's type (check the field name)")
             }
             Expr.Make(val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, val ty, val fields) => {
@@ -2489,7 +2533,9 @@ pub impl Comp {
                     val baseTy: TypeRef = self.arena.typeAt(index: baseTerm)
                     if baseTy.args.count() == 1U64 {
                         if rangeEquals(bytes: self.arena.bytes, start: baseTy.nameStart, len: baseTy.nameLen, kw: "Array") || rangeEquals(bytes: self.arena.bytes, start: baseTy.nameStart, len: baseTy.nameLen, kw: "Buffer") {
-                            self.recordSemanticExprTerm(exprId: exprId, term: baseTy.args[0])
+                            val element = baseTy.args[0]
+                            self.recordSemanticExprTerm(exprId: exprId, term: element)
+                            self.recordStructuralProjectionEvidence(exprId: exprId, base: base, baseTerm: baseTerm, slot: 0U64, term: element)
                             // Structural subscripts have the same U64 key
                             // contract as their selected collection operation.
                             // Publish context before recording the key so Mid

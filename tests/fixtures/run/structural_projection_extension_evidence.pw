@@ -1,0 +1,18 @@
+use @Std/Io only { print }
+struct Counter { val n: I64 }
+impl Counter { fn get() -> I64 { return 0I64 } }
+extension Read { impl Counter { fn get() -> I64 { return self.n } } }
+extension Other { impl Counter { fn get() -> I64 { return 99I64 } } }
+fn first[T](values: Array[T]) -> T { return values[0] }
+fn checked(values: Array[Counter#Read], record: (item: Counter#Other, extra: Counter#Read)) {
+    print(values[0].get())
+    print(record.item.get())
+}
+fn main() {
+    val values = [<Counter n=42I64 />#Read, <Counter n=43I64 />#Read]
+    val selected = values[1]
+    print(selected.get())
+    val record = (item: values, extra: <Counter n=8I64 />#Other)
+    print(first(values: record.item).get())
+    checked(values: values, record: (item: <Counter n=8I64 />#Other, extra: selected))
+}
