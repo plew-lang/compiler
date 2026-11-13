@@ -1778,3 +1778,28 @@ rejection points to the original annotation in both check and JIT.
 
 Other authored type entries and early method lookup remain to be measured
 before retiring the shared compatibility resolver.
+
+### Separate remaining extension and trait compatibility queries
+
+The legacy resolver ran the conformance-table loop even after processing
+an extension selector, although no conformance row could match that case.
+Return the extension result immediately and keep distinct trace events
+for the two remaining legacy operations.
+
+Build `20261113T232642-build-63de4b` produced `dda88668`. Of 62 focused
+public run fixtures checked with tracing, 61 passed and made no legacy
+extension applicability query. Ten of the accepted fixtures still made
+legacy trait queries, including explicit qualification on global values,
+stacked views and the projected array/closure controls. The sole failing
+fixture was the already tracked `extension_assoc_source_select`
+([com-4k31](com-4k31.md#concrete-associated-extension-control)), which
+still made one extension query. The inventory covers the public run
+fixtures matching `*extension*`, `*ext_view*` or `*trait_view*`, excluding
+internal fixtures importing the compiler. Twelve accepted fixtures
+also passed JIT, and three check rejection controls kept their diagnostics.
+[Same-source comparison](../../../evidence/rejection-domains/diagnostic-domain-implementation/trait-receiver-admission/split-view-source-same-source.json):
+7.849 s versus 7.852 s, all eight nonempty LLVM outputs identical.
+
+Use the retained exact trait-selection receipt in the value-call path
+next. Keep the associated-extension regression with com-4k31 and use
+the full verification suite before removing the general fallback.

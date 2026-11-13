@@ -561,21 +561,21 @@ pub impl Comp {
     // thereafter compare kind + declaration/bundle owner + arity.
     inout fn resolveViewSourceKey(recvStart: U64, recvLen: U64, recvRef: U64, sourceId: U64, sourceOwner: U64 = 0U64) -> Result[CallableSourceHead, CompileDiagnostic] {
         val receiverHead = self.arena.typeHeadSpan(ref: recvRef, fallback: <InternedSpan start=recvStart len=recvLen />)
-        mut val found: CallableSourceHead = <CallableSourceHead />
-        // A retained trait owner already fixes the source kind. An applicable
-        // same-spelled extension cannot compete with that lexical decision.
-        if sourceOwner == 0U64 && (try self.extAppliesToType(extensionId: sourceId, typeStart: receiverHead.start, typeLen: receiverHead.len, typeRef: recvRef, assumptions: self.functionBoundAssumptions(fnIdx: self.cur.checkFn))) {
-            found = <CallableSourceHead kind=1U64 id=sourceId owner=sourceId arity=0U64 />
+        // Lowering has already distinguished the extension bundle from a
+        // trait declaration. Only trait selectors can use the conformance table.
+        if sourceOwner == 0U64 {
+            if self.traceCodegen { eprint(text: "[trace-codegen] legacy extension applicability query\n") }
+            if try self.extAppliesToType(extensionId: sourceId, typeStart: receiverHead.start, typeLen: receiverHead.len, typeRef: recvRef, assumptions: self.functionBoundAssumptions(fnIdx: self.cur.checkFn)) {
+                return <Result.Ok value=<CallableSourceHead kind=1U64 id=sourceId owner=sourceId /> />
+            }
+            return <Result.Ok value=<CallableSourceHead /> />
         }
-        // A trait selector is resolved while lowering at its lexical use site.
-        // Never reconstruct an absent owner from its spelling here: doing so lets
-        // `#P` select an unimported, same-named trait from another module.
-        // Extension bundles intentionally remain name-keyed above.
-        val traitOwner: U64 = sourceOwner
+        mut val found: CallableSourceHead = <CallableSourceHead />
+        val traitOwner = sourceOwner
         // A declared bound establishes the same source identity as a concrete
         // conformance. Preserve the lexical trait owner through re-exports;
         // the receiver's spelling alone cannot identify an abstract proof.
-        if traitOwner != 0U64 && recvRef != 0U64 && self.cur.checkFn < self.arena.functionCount() {
+        if recvRef != 0U64 && self.cur.checkFn < self.arena.functionCount() {
             mut val boundIndex = 0U64
             while boundIndex < self.decls.funcBounds.count() {
                 val bound = self.decls.funcBounds.at(index: boundIndex)
@@ -594,7 +594,7 @@ pub impl Comp {
         mut val i: U64 = 0U64
         while i < self.decls.conformCount() {
             val cf: Conform = self.decls.conformAt(index: i)
-            if traitOwner != 0U64 && cf.extId == 0U64 && cf.typeId == recvId && cf.traitStart == traitOwner {
+            if cf.extId == 0U64 && cf.typeId == recvId && cf.traitStart == traitOwner {
                 if self.traceCodegen {
                     eprint(text: "[trace-codegen] view-source matching conformance key\n")
                 }
