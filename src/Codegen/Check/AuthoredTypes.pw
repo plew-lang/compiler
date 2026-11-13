@@ -171,6 +171,7 @@ impl Comp {
             mut val validation = <SignatureRecipeValidation />
             try self.checkAuthoredTypeRecipe(sourceScope: occurrence.scope, recipe: occurrence.recipe, edge: <AuthoredRecipeEdge.Source />, scopes: scopes, validation: inout validation, offset: occurrence.site)
             self.authoredAssociatedBindings[bindingIndex] = <AuthoredAssociatedBinding conformance=conformance occurrence=binding.authoredTypeUse recipe=occurrence.recipe proofs=validation.proofs />
+            self.markAdmittedRecipeTypeUses(recipe: occurrence.recipe)
         }
         self.associatedBindingAdmissionComplete = true
         return <Result.Ok value=() />
@@ -839,8 +840,8 @@ impl Comp {
             return <Result.Err error=self.diagnosticAt(offset: field.authoredTypeSite, msg: "nominal field has a foreign selected receiver", failureDomain: <FailureDomain.Internal />) />
         }
         val saved = try self.requireNominalTypeAnnotation(id: field.authoredTypeUse, site: field.authoredTypeSite, term: field.ty, token: token, owner: owner)
+        try self.checkNominalAnnotationEvidence(saved: saved, offset: field.authoredTypeSite)
         if self.arena.typeIsClosed(ref: field.ty) {
-            try self.checkClosedNominalAnnotation(saved: saved, offset: field.authoredTypeSite)
             return <Result.Ok value=field.ty />
         }
         val instance = self.arena.typeAt(index: receiver)
@@ -879,27 +880,62 @@ impl Comp {
             Optional.Some(v: val declaration) => declaration,
         }
         val saved = try self.requireNominalTypeAnnotation(id: declaration.authoredTypeUse, site: declaration.authoredTypeSite, term: declaration.underRef, token: declaration.sourceTypeScope, owner: declaration.defOffset)
-        try self.checkClosedNominalAnnotation(saved: saved, offset: declaration.authoredTypeSite)
+        try self.checkNominalAnnotationEvidence(saved: saved, offset: declaration.authoredTypeSite)
         return <Result.Ok value=declaration.underRef />
     }
 
-    // A normalized result cannot justify its own projection or view. Read
-    // the exact saved evidence whenever the authored term depended on it.
-    inout fn checkClosedNominalAnnotation(saved: LocalAnnotationProof, offset: U64) -> Result[(), CompileDiagnostic] {
+    // Walk the saved recipe in admission order. A valid proof for another
+    // annotation, even one with the same term, cannot discharge this edge.
+    inout fn checkNominalRecipeProofs(recipe: U64, proofs: Array[AuthoredTypeViewProof], normalizations: Array[ProjectionNormalizationStep], visited: inout Set[U64], next: inout U64, offset: U64) -> Result[(), CompileDiagnostic] {
+        if visited.contains(recipe) { return <Result.Ok value=() /> }
+        visited.insert(recipe)
+        val node = match self.sourceTypeUses.recipeAt(id: recipe) {
+            Optional.Some(v: val node) => node,
+            Optional.None => { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "nominal annotation lost its saved recipe", failureDomain: <FailureDomain.Internal />) /> }
+        }
+        for child in node.children {
+            try self.checkNominalRecipeProofs(recipe: child, proofs: proofs, normalizations: normalizations, visited: inout visited, next: inout next, offset: offset)
+        }
+        if node.sourceRecipe != 0U64 {
+            try self.checkNominalRecipeProofs(recipe: node.sourceRecipe, proofs: proofs, normalizations: normalizations, visited: inout visited, next: inout next, offset: offset)
+        }
+        match node.origin {
+            SourceTypeRecipeOrigin.Authored => {}
+            _ => { return <Result.Ok value=() /> }
+        }
+        val occurrence = try self.signatureOccurrence(id: node.occurrence)
+        val type = self.arena.typeAt(index: node.term)
+        val receiver = if type.assocNameId == 0U64 { give node.term } else { give self.typeTermProjectionReceiver(t: type) }
+        val selectors = try self.authoredTraitSelectors(type: type, receiver: receiver, site: occurrence.site)
+        for selector in selectors {
+            if next >= proofs.count() {
+                return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "nominal annotation lost its saved conformance", failureDomain: <FailureDomain.Internal />) />
+            }
+            val row = proofs[next]
+            next += 1U64
+            if row.occurrence != node.occurrence || row.receiver != receiver || !self.semanticViewSourceEq(a: row.selector, b: selector) || !self.arena.hasStaticConformanceProof(id: row.proof) {
+                return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "nominal annotation has a foreign saved conformance", failureDomain: <FailureDomain.Internal />) />
+            }
+            val subject = try self.replayProjectionChildren(ref: receiver, normalizations: normalizations, offset: offset)
+            val constraint = <TraitConstraint key=selector.traitInstance assocPredicates=[] />
+            val expected = try self.replayBoundNormalizations(bound: <TraitBound subject=subject constraint=constraint offset=offset />, normalizations: normalizations)
+            if !(try self.retainedWitnessClauseMatches(expected: expected, proof: self.thawStaticConformanceProof(id: row.proof), normalizations: normalizations, offset: offset)) {
+                return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "nominal annotation has a foreign saved conformance", failureDomain: <FailureDomain.Internal />) />
+            }
+        }
+        return <Result.Ok value=() />
+    }
+
+    inout fn checkNominalAnnotationEvidence(saved: LocalAnnotationProof, offset: U64) -> Result[(), CompileDiagnostic] {
         if saved.requiredProofs == 0U64 { return <Result.Ok value=() /> }
-        // A generic field can already have a closed normalized output even
-        // while its written receiver still contains declaration binders.
-        // Those proofs were checked in the rigid declaration scope.
-        for row in saved.proofs {
-            if !self.arena.hasStaticConformanceProof(id: row.proof) {
-                return <Result.Err error=self.diagnosticAt(offset: offset, msg: "nominal annotation lost its saved conformance", failureDomain: <FailureDomain.Internal />) />
-            }
-            val subject = try self.replayProjectionChildren(ref: row.receiver, normalizations: saved.normalizations, offset: offset)
-            val constraint = <TraitConstraint key=row.selector.traitInstance assocPredicates=[] />
-            val expected = try self.replayBoundNormalizations(bound: <TraitBound subject=subject constraint=constraint offset=offset />, normalizations: saved.normalizations)
-            if !(try self.retainedWitnessClauseMatches(expected: expected, proof: self.thawStaticConformanceProof(id: row.proof), normalizations: saved.normalizations, offset: offset)) {
-                return <Result.Err error=self.diagnosticAt(offset: offset, msg: "nominal annotation has a foreign saved conformance", failureDomain: <FailureDomain.Internal />) />
-            }
+        try self.checkProjectionNormalizations(normalizations: saved.normalizations, offset: offset)
+        mut val visited: Set[U64] = Set.new()
+        mut val next = 0U64
+        try self.checkNominalRecipeProofs(recipe: saved.recipe, proofs: saved.proofs, normalizations: saved.normalizations, visited: inout visited, next: inout next, offset: offset)
+        val written = (try self.signatureOccurrence(id: saved.occurrence)).term
+        val term = try self.replayProjectionNormalizations(ref: written, normalizations: saved.normalizations, offset: offset)
+        if next != saved.proofs.count() || !self.typeRefEq(a: term, b: saved.sourceTerm) {
+            return <Result.Err error=self.diagnosticAt(offset: offset, msg: "nominal annotation has a foreign saved type recipe", failureDomain: <FailureDomain.Internal />) />
         }
         return <Result.Ok value=() />
     }
@@ -935,7 +971,7 @@ impl Comp {
         val sourceTerm = try self.replayProjectionNormalizations(ref: term, normalizations: equations, offset: occurrence.site)
         val proof = <LocalAnnotationProof occurrence=id recipe=occurrence.recipe sourceTerm=sourceTerm normalizations=equations proofs=validation.proofs requiredProofs=validation.proofs.count() />
         self.nominalAnnotationProofs[id] = proof
-        self.markBodyRecipeTypeUses(recipe: proof.recipe)
+        self.markAdmittedRecipeTypeUses(recipe: proof.recipe)
         return <Result.Ok value=proof />
     }
 
@@ -948,7 +984,7 @@ impl Comp {
                     val occurrence = try self.signatureOccurrence(id: id)
                     val token = self.sourceTypeUses.globalScope(target: global.nameStart)
                     val proof = try self.admitGlobalTypeUse(occurrence: occurrence, id: id, term: ty, target: global.nameStart, token: token, role: <SourceTypeUseRole.Declaration />)
-                    self.markBodyRecipeTypeUses(recipe: proof.recipe)
+                    self.markAdmittedRecipeTypeUses(recipe: proof.recipe)
                     self.globalAnnotationProofs[global.nameStart] = proof
                 }
                 _ => { return <Result.Err error=self.diagnosticAt(offset: global.nameStart, msg: "global declaration has no binding", failureDomain: <FailureDomain.Internal />) /> }
@@ -1976,25 +2012,31 @@ impl Comp {
         return self.typeRefWithViewSources(ref: base, sources: extensions)
     }
 
-    inout fn admitSignatureOccurrence(id: U64, occurrence: AuthoredTypeUse, scope: DeclarationTypeScope, assumptions: Array[DeclarationBoundRef], receiverRef: U64, receiverEquations: Array[ProjectionNormalizationStep], equations: inout Array[ProjectionNormalizationStep], proofs: inout Array[AuthoredTypeViewProof], inheritedProjection: Bool, receiverOccurrence: U64) -> Result[(), CompileDiagnostic] {
-        try self.checkAuthoredTypeBinders(ref: occurrence.term, scope: scope, offset: occurrence.site)
-        val type = self.arena.typeAt(index: occurrence.term)
-        val receiver = if type.assocNameId == 0U64 { give occurrence.term } else { give self.typeTermProjectionReceiver(t: type) }
-        mut val selectors = self.arena.typeViewSources(ref: receiver)
+    inout fn authoredTraitSelectors(type: TypeRef, receiver: U64, site: U64) -> Result[Array[ResolvedViewSource], CompileDiagnostic] {
+        mut val selectors: Array[ResolvedViewSource] = []
+        for source in self.arena.typeViewSources(ref: receiver) {
+            if source.traitInstance.owner != 0U64 { selectors.append(source) }
+        }
         // Only receiver views participate in the view normal form. The
         // associated member's trait instance is a separate selection.
-        mut val traitSelectors = 0U64
-        for selector in selectors { if selector.traitInstance.owner != 0U64 { traitSelectors += 1U64 } }
-        if traitSelectors > 1U64 { return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "a type view may select at most one trait source (spec/09)", failureDomain: <FailureDomain.Source />) /> }
+        if selectors.count() > 1U64 { return <Result.Err error=self.diagnosticAt(offset: site, msg: "a type view may select at most one trait source (spec/09)", failureDomain: <FailureDomain.Source />) /> }
         if type.assocNameId != 0U64 {
             val owner = if type.assocTraitDeclOffset != 0U64 { give type.assocTraitDeclOffset } else { give type.assocTraitStart }
-            if owner == 0U64 || self.decls.traitIndexByOffset(offset: owner) >= self.decls.traitCount() { return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "authored projection has no canonical trait owner", failureDomain: <FailureDomain.Internal />) /> }
-            val projection = <ResolvedViewSource writtenStart=occurrence.site surfaceId=type.assocTraitId traitInstance=<TraitInstanceKey owner=owner positionalArgs=type.assocTraitArgs /> />
+            if owner == 0U64 || self.decls.traitIndexByOffset(offset: owner) >= self.decls.traitCount() { return <Result.Err error=self.diagnosticAt(offset: site, msg: "authored projection has no canonical trait owner", failureDomain: <FailureDomain.Internal />) /> }
+            val projection = <ResolvedViewSource writtenStart=site surfaceId=type.assocTraitId traitInstance=<TraitInstanceKey owner=owner positionalArgs=type.assocTraitArgs /> />
             mut val present = false
             for selector in selectors { if self.semanticViewSourceEq(a: selector, b: projection) { present = true } }
             if !present { selectors.append(projection) }
         }
-        if traitSelectors == 0U64 && type.assocNameId == 0U64 { return <Result.Ok value=() /> }
+        return <Result.Ok value=selectors />
+    }
+
+    inout fn admitSignatureOccurrence(id: U64, occurrence: AuthoredTypeUse, scope: DeclarationTypeScope, assumptions: Array[DeclarationBoundRef], receiverRef: U64, receiverEquations: Array[ProjectionNormalizationStep], equations: inout Array[ProjectionNormalizationStep], proofs: inout Array[AuthoredTypeViewProof], inheritedProjection: Bool, receiverOccurrence: U64) -> Result[(), CompileDiagnostic] {
+        try self.checkAuthoredTypeBinders(ref: occurrence.term, scope: scope, offset: occurrence.site)
+        val type = self.arena.typeAt(index: occurrence.term)
+        val receiver = if type.assocNameId == 0U64 { give occurrence.term } else { give self.typeTermProjectionReceiver(t: type) }
+        val selectors = try self.authoredTraitSelectors(type: type, receiver: receiver, site: occurrence.site)
+        if selectors.count() == 0U64 { return <Result.Ok value=() /> }
         val writtenSubject = if receiverRef != 0U64 { give self.groundTermInEnvironment(ref: receiver, params: [], values: [], selfRef: receiverRef) } else { give receiver }
         mut val context = equations
         for equation in receiverEquations { try self.appendRetainedProjectionEquation(step: equation, normalizations: inout context) }

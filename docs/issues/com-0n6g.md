@@ -147,3 +147,30 @@ A same-source development comparison on the preceding `6d107091a574`
 candidate measured medians 7.151 s (c5146239) and 7.180 s (candidate).
 The emitted LLVM hashes matched across all eight runs. This comparison
 does not establish formal self-host timing.
+
+## Nominal recipe integrity and associated RHS checkpoint
+
+A scratch compiler based on `b4a21146` replaced two retained proof rows
+with copies of the first row. It still accepted the nested
+`(first: A#Left, second: B#Right)` field and ran its construction,
+printing 42 (fault-injected SHA `fea3705211f2`). With the same
+substitution, the updated reader rejects at the second annotation
+in check and JIT (fault-injected SHA `4c99c6eb7941`). The plain
+candidate walks the original recipe in admission order and verifies
+projection equations and their replayed output before consuming the type.
+
+The associated RHS can now request a newtype RHS while associated
+bindings are being admitted. The later compatibility sweep recognizes
+the exact already-admitted RHS recipe and retains its extension checks.
+The end-to-end fixture reads `Provider#Project.Item` and prints 42
+through the viewed newtype. Fixed-input build
+`20261113T092231-build-772973` produced
+`ee112676d216c739efbdfe9f860c73a0a97e31bcf33d7116646a913813b8e1ab`.
+Eight positive fixtures passed check, JIT and linked native execution.
+Four negative fixtures passed check and lazy diagnostic checks.
+
+The independent review identified a remaining proof-handle check:
+matching erased receiver and trait arguments can accept a foreign
+witness using a different extension source if the row's own metadata
+was preserved. This needs a selected-source comparison at the reader.
+The independent review stopped before completing its follow-up.

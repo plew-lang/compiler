@@ -1738,7 +1738,7 @@ pub impl Comp {
             _ => {}
         }
         if authored.isSome() && self.assocRecvName(recv: exprId).nameLen == 0U64 {
-            for id in authored.unwrap() { self.markBodyRecipeTypeUses(recipe: (try self.signatureOccurrence(id: id)).recipe) }
+            for id in authored.unwrap() { self.markAdmittedRecipeTypeUses(recipe: (try self.signatureOccurrence(id: id)).recipe) }
         }
         match self.expressionTypeUses.get(key: exprId) {
             Optional.Some(v: val uses) => { try self.checkRequestedTypeUses(occurrences: uses) }

@@ -345,28 +345,33 @@ pub impl Comp {
         match self.sourceTypeUses.currentRole() {
             SourceTypeUseRole.Body | SourceTypeUseRole.DefaultArgument => {
                 val typeUse = try self.signatureOccurrence(id: occurrence)
-                self.markBodyRecipeTypeUses(recipe: typeUse.recipe)
+                self.markAdmittedRecipeTypeUses(recipe: typeUse.recipe)
                 return <Result.Ok value=<Optional.Some v=occurrence /> />
             }
             _ => { return <Result.Ok value=<Optional.None /> /> }
         }
     }
 
-    inout fn markBodyRecipeTypeUses(recipe: U64) {
+    inout fn markAdmittedRecipeTypeUses(recipe: U64) {
         val node = self.sourceTypeUses.recipeAt(id: recipe).unwrap()
         if node.occurrence != 0U64 {
             val occurrence = self.sourceTypeUses.useAt(index: node.occurrence - 1U64).unwrap()
             match occurrence.role {
-                SourceTypeUseRole.Body | SourceTypeUseRole.DefaultArgument => { self.bodyRecipeTypeUses.insert(node.occurrence) }
+                SourceTypeUseRole.Body | SourceTypeUseRole.DefaultArgument => { self.admittedRecipeTypeUses.insert(node.occurrence) }
                 SourceTypeUseRole.Declaration => {
                     val source = self.sourceTypeUses.scopeAt(token: occurrence.scope).unwrap()
-                    match source.kind { SourceTypeScopeKind.Global | SourceTypeScopeKind.Nominal => { self.bodyRecipeTypeUses.insert(node.occurrence) } _ => { return } }
+                    match source.kind {
+                        SourceTypeScopeKind.Global | SourceTypeScopeKind.Nominal | SourceTypeScopeKind.Implementation => {
+                            self.admittedRecipeTypeUses.insert(node.occurrence)
+                        }
+                        _ => { return }
+                    }
                 }
                 _ => { return }
             }
         }
-        for child in node.children { self.markBodyRecipeTypeUses(recipe: child) }
-        if node.sourceRecipe != 0U64 { self.markBodyRecipeTypeUses(recipe: node.sourceRecipe) }
+        for child in node.children { self.markAdmittedRecipeTypeUses(recipe: child) }
+        if node.sourceRecipe != 0U64 { self.markAdmittedRecipeTypeUses(recipe: node.sourceRecipe) }
     }
 
     // SyntaxFile counterpart of the direct statement lowerer. The block path
