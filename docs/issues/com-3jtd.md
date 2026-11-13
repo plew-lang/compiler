@@ -1,7 +1,7 @@
 ---
 id: com-3jtd
 status: in_progress
-deps: [com-v5zn]
+deps: [com-v5zn, com-nppi]
 links: [com-6esv]
 created: 2026-11-09T08:54:16Z
 type: task
