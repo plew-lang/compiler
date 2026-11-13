@@ -21,39 +21,38 @@ impl Comp {
         return <Result.Ok value=proof.sourceTerm />
     }
 
-    inout fn recordConstructionArguments(exprId: U64, written: U64) -> Result[U64, CompileDiagnostic] {
-        val authored = self.authoredConstructionArguments.getOr(key: exprId, fallback: [])
+    inout fn recordExpressionTypeSlots(exprId: U64, written: Array[U64]) -> Result[Array[U64], CompileDiagnostic] {
+        val authored = self.authoredExpressionTypeSlots.getOr(key: exprId, fallback: [])
         if authored.count() == 0U64 { return <Result.Ok value=written /> }
         val owner = match self.currentSourceOwner() {
             Optional.Some(v: val owner) => owner,
-            Optional.None => { return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "authored construction has no lexical owner", failureDomain: <FailureDomain.Internal />) /> },
+            Optional.None => { return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "authored expression type slots have no lexical owner", failureDomain: <FailureDomain.Internal />) /> },
         }
         self.sourceFacts.activate(owner: owner)
-        val type = self.arena.typeAt(index: written)
-        mut val arguments = type.args
-        val proofs = match self.sourceFacts.activeBuilder.data.constructionArgumentProofs.get(key: exprId) {
+        mut val arguments = written
+        val proofs = match self.sourceFacts.activeBuilder.data.expressionTypeSlotProofs.get(key: exprId) {
             Optional.Some(v: val saved) => saved,
             Optional.None => {
                 mut val checked: Array[LocalAnnotationProof] = []
                 for argument in authored {
                     if argument.index >= arguments.count() {
-                        return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "construction has an invalid type argument occurrence", failureDomain: <FailureDomain.Internal />) />
+                        return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "expression has an invalid type slot occurrence", failureDomain: <FailureDomain.Internal />) />
                     }
                     val proof = try self.admitBodyTypeUse(id: argument.occurrence, term: arguments[argument.index], owner: owner)
                     self.markAdmittedRecipeTypeUses(recipe: proof.recipe)
                     checked.append(proof)
                 }
-                self.sourceFacts.activeBuilder.data.constructionArgumentProofs[exprId] = checked
+                self.sourceFacts.activeBuilder.data.expressionTypeSlotProofs[exprId] = checked
                 give checked
             }
         }
         if proofs.count() != authored.count() {
-            return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "construction has incomplete type argument proofs", failureDomain: <FailureDomain.Internal />) />
+            return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "expression has incomplete type slot proofs", failureDomain: <FailureDomain.Internal />) />
         }
         for index in 0U64..<authored.count() {
             arguments[authored[index].index] = proofs[index].sourceTerm
         }
-        return <Result.Ok value=self.rebuildTypeTermChildren(ref: written, children: arguments) />
+        return <Result.Ok value=arguments />
     }
 
     inout fn recordBindingAnnotation(nameStart: U64, written: U64, occurrence: Optional[U64]) -> Result[Optional[LocalAnnotationProof], CompileDiagnostic] {
@@ -1811,8 +1810,27 @@ pub impl Comp {
             _ => 0U64
         }
         val construction = match self.arena.exprs[exprId] {
-            Expr.Make(typeStart: _, typeLen: _, variantStart: _, variantLen: _, isEnum: _, val ty, fields: _) => { give try self.recordConstructionArguments(exprId: exprId, written: ty) }
+            Expr.Make(typeStart: _, typeLen: _, variantStart: _, variantLen: _, isEnum: _, val ty, fields: _) => {
+                mut val admitted = ty
+                if self.authoredExpressionTypeSlots.contains(key: exprId) {
+                    val arguments = try self.recordExpressionTypeSlots(exprId: exprId, written: self.arena.typeAt(index: ty).args)
+                    admitted = self.rebuildTypeTermChildren(ref: ty, children: arguments)
+                }
+                give admitted
+            }
             _ => 0U64
+        }
+        val closureSlots = match self.arena.exprs[exprId] {
+            Expr.Closure(val params, hasRet: _, retStart: _, retLen: _, retIsArray: _, val retTy, body: _, isDiverging: _) => {
+                mut val admitted: Array[U64] = []
+                if self.authoredExpressionTypeSlots.contains(key: exprId) {
+                    mut val slots: Array[U64] = [retTy]
+                    for parameter in params { slots.append(parameter.ty) }
+                    admitted = try self.recordExpressionTypeSlots(exprId: exprId, written: slots)
+                }
+                give admitted
+            }
+            _ => [],
         }
         match self.expressionTypeUses.get(key: exprId) {
             Optional.Some(v: val uses) => { try self.checkRequestedTypeUses(occurrences: uses) }
@@ -2442,7 +2460,7 @@ pub impl Comp {
                 val signature = if recordedSignature != 0U64 {
                     give recordedSignature
                 } else {
-                    give try self.resolveClosureFunctionType(exprId: exprId, parameters: params, hasReturn: hasRet, returnType: retTy, expectedTerm: normalizedContext, isDiverging: diverging)
+                    give try self.resolveClosureFunctionType(exprId: exprId, parameters: params, hasReturn: hasRet, returnType: retTy, expectedTerm: normalizedContext, isDiverging: diverging, admittedSlots: closureSlots)
                 }
                 self.recordSemanticExprTerm(exprId: exprId, term: signature)
                 try self.publishSemanticClosure(ownerFnIdx: self.cur.checkFn, closureId: exprId, parameters: params, functionTypeTerm: signature, bodyBlock: body)
@@ -2993,7 +3011,7 @@ impl Comp {
 // Construct a closure signature from declared inputs and explicit context.
 // Reuse of a previously recorded expression belongs to Record, not here.
 pub impl Comp {
-    inout fn resolveClosureFunctionType(exprId: U64, parameters: Array[Param], hasReturn: Bool, returnType: U64, expectedTerm: U64, isDiverging: Bool = false) -> Result[U64, CompileDiagnostic] {
+    inout fn resolveClosureFunctionType(exprId: U64, parameters: Array[Param], hasReturn: Bool, returnType: U64, expectedTerm: U64, isDiverging: Bool = false, admittedSlots: Array[U64] = []) -> Result[U64, CompileDiagnostic] {
         if isDiverging && hasReturn {
             return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "a diverging closure cannot declare a return type (spec/04)") />
         }
@@ -3006,7 +3024,7 @@ pub impl Comp {
         if contextual && expected.count() != parameters.count() + 1U64 {
             return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "closure parameter count does not match the expected function type") />
         }
-        mut val result = returnType
+        mut val result = if admittedSlots.count() != 0U64 { give admittedSlots[0U64] } else { give returnType }
         if !hasReturn && !isDiverging && contextual { result = expected[0U64] }
         if !isDiverging { result = self.semanticSourceResultTerm(ref: result) }
         mut val types: Array[U64] = [result]
@@ -3014,7 +3032,7 @@ pub impl Comp {
         mut val index = 0U64
         while index < parameters.count() {
             val parameter = parameters[index]
-            mut val type = parameter.ty
+            mut val type = if admittedSlots.count() != 0U64 { give admittedSlots[index + 1U64] } else { give parameter.ty }
             if type == 0U64 && contextual { type = expected[index + 1U64] }
             if type == 0U64 {
                 return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "cannot infer closure parameter type; provide a function type context or an explicit annotation") />

@@ -715,7 +715,7 @@ pub struct Comp {
     pub mut val pendingConstructionContexts: Set[U64] = Set.new()
     pub mut val pendingInterpolationWrites: Dictionary[U64, InterpolationWrite] = [:]
     mut val authoredCastTargets: Dictionary[U64, U64] = [:]
-    mut val authoredConstructionArguments: Dictionary[U64, Array[(index: U64, occurrence: U64)]] = [:]
+    mut val authoredExpressionTypeSlots: Dictionary[U64, Array[(index: U64, occurrence: U64)]] = [:]
     pub mut val expressionTypeUses: Dictionary[U64, Array[U64]] = [:]
     pub mut val blockExitRequirements: Dictionary[U64, U64] = [:]
     pub mut val blockTypeUses: Dictionary[U64, Array[U64]] = [:]
@@ -2775,7 +2775,7 @@ struct SourceBodyData {
     mut val valueBlockIds: Array[U64] = []
     mut val identifierTargets: Dictionary[U64, U64] = [:]
     mut val castTargetProofs: Dictionary[U64, LocalAnnotationProof] = [:]
-    mut val constructionArgumentProofs: Dictionary[U64, Array[LocalAnnotationProof]] = [:]
+    mut val expressionTypeSlotProofs: Dictionary[U64, Array[LocalAnnotationProof]] = [:]
     mut val traitValueViews: Dictionary[U64, SourceValueViewProof] = [:]
     mut val globalAddresses: Dictionary[U64, SemanticGlobalAddress] = [:]
     mut val bindings: Array[SourceBindingFact] = []
@@ -2988,7 +2988,7 @@ pub struct PreparedSemanticFacts {
 impl PreparedSemanticFacts { factory }
 impl PreparedSemanticFacts {
     fn castTargetProof(exprId: U64) -> Optional[LocalAnnotationProof] { return self.payload->castTargetProofs.get(key: exprId) }
-    fn constructionArgumentProofs(exprId: U64) -> Optional[Array[LocalAnnotationProof]] { return self.payload->constructionArgumentProofs.get(key: exprId) }
+    fn expressionTypeSlotProofs(exprId: U64) -> Optional[Array[LocalAnnotationProof]] { return self.payload->expressionTypeSlotProofs.get(key: exprId) }
 }
 pub impl PreparedSemanticFacts {
     fn belongsToSession(session: U64) -> Bool { return self.session == session }

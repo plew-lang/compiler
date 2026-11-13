@@ -321,3 +321,18 @@ signature cycle still reports its original diagnostic. Both generic
 extension-backed associated result controls, the concrete signature
 control, explicit construction and conditional witness fallback pass
 check and JIT with their expected outputs.
+
+### Closure signature type slots
+
+The closure parameter and result share the constructor's authored type
+slot pipeline. The enclosing body admits the actual occurrence before the
+closure signature is constructed. Mono reads those receipts from the
+enclosing body and publishes the grounded function type to the closure's
+own body instance. Keep inferred slots under the ordinary contextual
+function type rule.
+
+Fixed-input build `20261113T123636-build-dcaa12` produced `46019f3cda73`.
+The wrong trait instance in a closure parameter now rejects at source
+admission in check and JIT. An explicitly projected parameter and result
+under a generic bound produce 42 in check-accepted JIT and linked native.
+The explicit constructor extension control still produces 42.

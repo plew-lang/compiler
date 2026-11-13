@@ -39,6 +39,16 @@ pub impl Comp {
         return expression
     }
 
+    inout fn retainClosureTypeSlots(expression: U64, parameters: Array[Param], result: PType) {
+        mut val authored: Array[(index: U64, occurrence: U64)] = []
+        if self.bodyTypeNeedsViewAdmission(ref: result.ref) { authored.append((index: 0U64, occurrence: result.authoredUse)) }
+        for index in 0U64..<parameters.count() {
+            val parameter = parameters[index]
+            if self.bodyTypeNeedsViewAdmission(ref: parameter.ty) { authored.append((index: index + 1U64, occurrence: parameter.authoredTypeUse)) }
+        }
+        if authored.count() != 0U64 { self.authoredExpressionTypeSlots[expression] = authored }
+    }
+
     inout fn lowerExpr(e: ExprAst) -> Result[U64, CompileDiagnostic] {
         val parent = self.loweringTypeUses
         self.loweringTypeUses = []
@@ -216,7 +226,7 @@ pub impl Comp {
                 }
                 val fs: Array[MakeField] = (try self.lowerMakeFields(fields: fields))
                 result = self.pushExpr(e: <Expr.Make typeStart=tn.nameStart typeLen=tn.nameLen variantStart=vStart variantLen=vLen isEnum=constructionEnum ty=tyRef fields=self.pushMakeFields(fields: fs) />)
-                if authored.count() != 0U64 { self.authoredConstructionArguments[result] = authored }
+                if authored.count() != 0U64 { self.authoredExpressionTypeSlots[result] = authored }
                 if typeNameSpan.start == typeNameSpan.end && typeName.bytes().count() == 0U64 { self.pendingConstructionContexts.insert(result) }
             }
             ExprAst.ArrayLit(val elems, val span) => {
@@ -283,8 +293,10 @@ pub impl Comp {
                 mut val rLen: U64 = 0
                 mut val rIsArray: Bool = false
                 mut val rTy: U64 = 0
+                mut val resultType: PType = <PType start=0U64 len=0U64 isArray=false ref=0U64 />
                 if hasRet {
                     val pt: PType = (try self.lowerType(t: ret))
+                    resultType = pt
                     rStart = pt.start
                     rLen = pt.len
                     rIsArray = pt.isArray
@@ -295,6 +307,7 @@ pub impl Comp {
                 val bd: U64 = (try self.lowerBlock(b: body))
                 self.cur.lowerRetTy = savedRet
                 result = self.pushExpr(e: <Expr.Closure isDiverging=diverging params=ps hasRet=hasRet retStart=rStart retLen=rLen retIsArray=rIsArray retTy=rTy body=bd />)
+                self.retainClosureTypeSlots(expression: result, parameters: ps, result: resultType)
             }
             ExprAst.Move(val operand, val isBorrow, val span) => {
                 val o: U64 = (try self.lowerExpr(e: operand))
@@ -467,7 +480,7 @@ pub impl Comp {
                 val tyRef = try self.lowerConstructionType(nameStart: typeName.start, nameLen: typeName.end - typeName.start, args: typeArgs, siteOffset: e.name.start)
                 val fields: Array[MakeField] = (try self.lowerSyntaxMakeFields(expr: e))
                 result = self.pushExpr(e: <Expr.Make typeStart=typeName.start typeLen=typeName.end - typeName.start variantStart=variantName.start variantLen=variantName.end - variantName.start isEnum=constructionEnum ty=tyRef fields=self.pushMakeFields(fields: fields) />)
-                if authored.count() != 0U64 { self.authoredConstructionArguments[result] = authored }
+                if authored.count() != 0U64 { self.authoredExpressionTypeSlots[result] = authored }
                 if e.name.start == e.name.end { self.pendingConstructionContexts.insert(result) }
             }
             SyntaxExprKind.Range => {
@@ -529,8 +542,10 @@ pub impl Comp {
                 mut val retLen: U64 = 0U64
                 mut val retIsArray: Bool = false
                 mut val retTy: U64 = 0U64
+                mut val resultType: PType = <PType start=0U64 len=0U64 isArray=false ref=0U64 />
                 if e.flag0 {
                     val ret: PType = (try self.lowerSyntaxType(id: e.type0))
+                    resultType = ret
                     retStart = ret.start
                     retLen = ret.len
                     retIsArray = ret.isArray
@@ -541,6 +556,7 @@ pub impl Comp {
                 val body: U64 = (try self.lowerSyntaxBlock(id: e.block0))
                 self.cur.lowerRetTy = savedRet
                 result = self.pushExpr(e: <Expr.Closure isDiverging=e.flag1 params=params hasRet=e.flag0 retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retTy body=body />)
+                self.retainClosureTypeSlots(expression: result, parameters: params, result: resultType)
             }
             _ => {
                 panic "compiler bug: incomplete SyntaxFile expression lowering was used before loader migration completed"

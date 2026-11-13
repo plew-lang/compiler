@@ -3064,32 +3064,30 @@ pub impl Comp {
         self.arena.finalForIndexSlots.set(i: slot, value: self.arena.finalFors.count())
     }
 
-    inout fn replayConstructionArgumentProofs(exprId: U64, written: U64, bodyId: U64) -> Result[(), CompileDiagnostic] {
-        val authored = self.authoredConstructionArguments.getOr(key: exprId, fallback: [])
+    inout fn replayExpressionTypeSlotProofs(exprId: U64, written: Array[U64], term: U64, bodyId: U64, sourceBodyId: U64) -> Result[(), CompileDiagnostic] {
+        val authored = self.authoredExpressionTypeSlots.getOr(key: exprId, fallback: [])
         if authored.count() == 0U64 || bodyId == 0U64 { return <Result.Ok value=() /> }
         val offset = self.exprOffset(id: exprId)
-        val facts = try self.preparedBodyFacts(bodyId: bodyId, globalInitializerTarget: self.cur.globalInitializerTarget)
-        val proofs = match facts.constructionArgumentProofs(exprId: exprId) {
+        val facts = try self.preparedBodyFacts(bodyId: sourceBodyId, globalInitializerTarget: self.cur.globalInitializerTarget)
+        val proofs = match facts.expressionTypeSlotProofs(exprId: exprId) {
             Optional.Some(v: val proofs) => proofs,
-            Optional.None => { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "construction has no saved type argument proofs", failureDomain: <FailureDomain.Internal />) /> },
+            Optional.None => { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "expression has no saved type slot proofs", failureDomain: <FailureDomain.Internal />) /> },
         }
-        val arguments = self.arena.typeAt(index: written).args
-        if proofs.count() != authored.count() { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "construction has incomplete type argument proofs", failureDomain: <FailureDomain.Internal />) /> }
+        if proofs.count() != authored.count() { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "expression has incomplete type slot proofs", failureDomain: <FailureDomain.Internal />) /> }
         mut val memo: Dictionary[U64, AuthoredRecipeRead] = [:]
         for index in 0U64..<authored.count() {
             val argument = authored[index]
             val proof = proofs[index]
             val occurrence = try self.signatureOccurrence(id: argument.occurrence)
-            if argument.index >= arguments.count() || occurrence.term != arguments[argument.index] || proof.occurrence != argument.occurrence || proof.recipe != occurrence.recipe {
-                return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "construction has a foreign type argument proof", failureDomain: <FailureDomain.Internal />) />
+            if argument.index >= written.count() || occurrence.term != written[argument.index] || proof.occurrence != argument.occurrence || proof.recipe != occurrence.recipe {
+                return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "expression has a foreign type slot proof", failureDomain: <FailureDomain.Internal />) />
             }
             val result = (try self.readAuthoredTypeRecipe(proofs: proof.proofs, recipe: proof.recipe, environment: self.cur.bodyEnvironment, memo: inout memo, context: <SignatureRecipeContext.Concrete />)).term
             self.recordBodyTypeTermResult(bodyId: bodyId, source: proof.sourceTerm, result: result)
         }
-        val expression = try self.preparedBodyExpression(bodyId: bodyId, exprId: exprId, globalInitializerTarget: self.cur.globalInitializerTarget)
-        val prepared = self.applyPublishedBodyTypeChildren(bodyId: bodyId, ref: expression.term)
+        val prepared = self.applyPublishedBodyTypeChildren(bodyId: bodyId, ref: term)
         val result = try self.groundAndRecordBodyType(ref: prepared, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: bodyId)
-        self.recordBodyTypeTermResult(bodyId: bodyId, source: expression.term, result: result)
+        self.recordBodyTypeTermResult(bodyId: bodyId, source: term, result: result)
         return <Result.Ok value=() />
     }
 
@@ -5734,6 +5732,16 @@ pub impl Comp {
             return <Result.Ok value=() />
         }
         val environment = instance.environment
+        if self.authoredExpressionTypeSlots.contains(key: closureId) {
+            match self.arena.exprs[closureId] {
+                Expr.Closure(val params, hasRet: _, retStart: _, retLen: _, retIsArray: _, val retTy, body: _, isDiverging: _) => {
+                    mut val slots: Array[U64] = [retTy]
+                    for parameter in params { slots.append(parameter.ty) }
+                    try self.replayExpressionTypeSlotProofs(exprId: closureId, written: slots, term: closure.functionTypeTerm, bodyId: closureBodyId, sourceBodyId: enclosingBodyId)
+                }
+                _ => { return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: closureId), msg: "closure type slots have a foreign expression", failureDomain: <FailureDomain.Internal />) /> }
+            }
+        }
         val functionType = (try self.groundAndRecordBodyType(ref: closure.functionTypeTerm, environment: environment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.cur.bodyId))
         if functionType == 0U64 || functionType >= self.arena.typeCount() { return <Result.Ok value=() /> }
         val signature = self.arena.typeAt(index: functionType)
@@ -6375,7 +6383,11 @@ pub impl Comp {
                 try self.scanExprInsts(exprId: index)
             }
             Expr.Make(val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, val ty, val fields) => {
-                try self.replayConstructionArgumentProofs(exprId: exprId, written: ty, bodyId: self.currentBodyInstanceId())
+                if self.authoredExpressionTypeSlots.contains(key: exprId) {
+                    val bodyId = self.currentBodyInstanceId()
+                    val expression = try self.preparedBodyExpression(bodyId: bodyId, exprId: exprId, globalInitializerTarget: self.cur.globalInitializerTarget)
+                    try self.replayExpressionTypeSlotProofs(exprId: exprId, written: self.arena.typeAt(index: ty).args, term: expression.term, bodyId: bodyId, sourceBodyId: bodyId)
+                }
                 mut val i: U64 = 0
                 while i < fields.len {
                     try self.scanExprInsts(exprId: self.makeFieldAt(fields: fields, index: i).value)
