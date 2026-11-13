@@ -1,0 +1,14 @@
+use @Std/Io only { print }
+trait Project { type Item }
+trait Marker {}
+struct Projector {}
+struct Number { val n: I64 }
+impl Projector as Project { type Item = Number }
+impl Number as Marker {}
+newtype Outer = Wrapped#Marker
+newtype Wrapped = Projector#Project.Item
+fn main() {
+    val wrapped = <Number n=42I64 /> as Wrapped
+    val outer = (wrapped#Marker) as Outer
+    print(outer.n)
+}

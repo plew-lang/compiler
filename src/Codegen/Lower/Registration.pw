@@ -655,16 +655,27 @@ pub impl Comp {
 
     // A selected proof retains semantic Self, while inherited newtype
     // implementations match their physical underlying subject.
-    inout fn conformancePhysicalSubject(typeRef: U64) -> U64 {
+    inout fn conformancePhysicalSubject(typeRef: U64) -> Result[U64, CompileDiagnostic] {
         mut val matchRef: U64 = typeRef
         mut val depth: U64 = 0U64
         while matchRef != 0U64 && matchRef < self.arena.typeCount() && depth < self.arena.newtypeCount() {
-            val underlying: U64 = self.arena.newtypeUnderlying(ref: matchRef)
+            val term = self.arena.typeTermAt(index: matchRef)
+            mut val owner = term.declOffset
+            if !term.hasDecl {
+                if !self.newtypeAnnotationAdmissionOpen || term.paramId != 0U64 || term.assocNameId != 0U64 || term.isAny || term.isRecord { break }
+                val source = self.sourceNominalOwner(nameStart: term.nameStart, nameLen: term.nameLen, nameId: term.nameId, site: term.siteOffset)
+                if source.isNone() { break }
+                owner = source.unwrap()
+            }
+            val index = self.arena.newtypeIndexByOffset(offset: owner)
+            if index >= self.arena.newtypeCount() { break }
+            if self.newtypeAnnotationAdmissionOpen { try self.admitNewtypeAnnotation(index: index) }
+            val underlying = self.arena.newtypeAt(index: index).underRef
             if underlying == 0U64 || underlying == matchRef { break }
             matchRef = underlying
             depth += 1U64
         }
-        return matchRef
+        return <Result.Ok value=matchRef />
     }
 
     // Directional concrete-witness selection. This is the one entry that
@@ -674,7 +685,7 @@ pub impl Comp {
         if !traitArgsOpen && declaredTraitArgs.count() != traitArgs.count() { return <Result.Ok value=<WitnessMatch /> />}
         // Match the inherited implementation against its physical subject,
         // but preserve the authored receiver as Self in the returned proof.
-        val matchRef = self.conformancePhysicalSubject(typeRef: typeRef)
+        val matchRef = try self.conformancePhysicalSubject(typeRef: typeRef)
         mut val binds: Array[UnifyBind] = []
         if subjectTy != 0U64 {
             if !(self.unifyPatterns(a: subjectTy, aSide: 0U64, b: matchRef, bSide: 1U64, aParams: typeParams, bParams: <PatternBindInput.Values values=[] />, binds: inout binds, ignoreTopView: true)) { return <Result.Ok value=<WitnessMatch /> />}

@@ -57,11 +57,11 @@ impl Comp {
     // A selected conformance has a logical Self as well as its physical
     // declaration subject. Inheritance changes the former without selecting
     // another declaration. An unrelated receiver never changes saved evidence.
-    inout fn selectedWitnessReceiver(declared: U64, requested: U64) -> U64 {
-        if declared == requested || requested == 0U64 || self.typeRefEq(a: declared, b: requested) { return declared }
-        if self.arena.newtypeUnderlying(ref: declared) == 0U64 && self.arena.newtypeUnderlying(ref: requested) == 0U64 { return declared }
-        if self.typeRefEq(a: self.conformancePhysicalSubject(typeRef: declared), b: self.conformancePhysicalSubject(typeRef: requested)) { return requested }
-        return declared
+    inout fn selectedWitnessReceiver(declared: U64, requested: U64) -> Result[U64, CompileDiagnostic] {
+        if declared == requested || requested == 0U64 || self.typeRefEq(a: declared, b: requested) { return <Result.Ok value=declared /> }
+        if self.arena.newtypeUnderlying(ref: declared) == 0U64 && self.arena.newtypeUnderlying(ref: requested) == 0U64 { return <Result.Ok value=declared /> }
+        if self.typeRefEq(a: (try self.conformancePhysicalSubject(typeRef: declared)), b: (try self.conformancePhysicalSubject(typeRef: requested))) { return <Result.Ok value=requested /> }
+        return <Result.Ok value=declared />
     }
 
     // The inherited public body and original implementation share declaration

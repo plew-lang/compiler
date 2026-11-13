@@ -109,7 +109,7 @@ impl Comp {
         if declaration.subjectTraitOwner == 0U64 {
             val subject = self.groundTermInEnvironment(ref: declaration.subjectTy, params: environment.params, values: environment.args)
             val declared = try self.replayProjectionNormalizations(ref: subject, normalizations: normalizations, offset: binding.tyStart)
-            val actual = self.conformancePhysicalSubject(typeRef: witness.selfRef)
+            val actual = try self.conformancePhysicalSubject(typeRef: witness.selfRef)
             if witness.selfRef == 0U64 || !self.typeRefEq(a: self.typeRefWithoutOuterViews(ref: declared), b: self.typeRefWithoutOuterViews(ref: actual)) {
                 return <Result.Err error=self.diagnosticAt(offset: binding.tyStart, msg: "associated binding substitution does not match its witness subject", failureDomain: <FailureDomain.Internal />) />
             }
@@ -770,14 +770,9 @@ impl Comp {
 
     inout fn admitNominalTypeAnnotations() -> Result[(), CompileDiagnostic] {
         for index in 0U64..<self.arena.newtypeCount() {
-            val declaration = self.arena.newtypeAt(index: index)
-            if declaration.sourceTypeScope == 0U64 { continue }
-            val scope = <DeclarationTypeScope origin=<DeclarationScopeOrigin.Nominal /> owner=declaration.defOffset parameters=<FuncBindRange start=0U64 len=0U64 /> />
-            val proof = try self.admitNominalTypeAnnotation(id: declaration.authoredTypeUse, site: declaration.authoredTypeSite, term: declaration.underRef, token: declaration.sourceTypeScope, scope: scope)
-            if proof.sourceTerm != declaration.underRef {
-                self.arena.setAdmittedNewtypeUnderlying(index: index, term: proof.sourceTerm)
-            }
+            try self.admitNewtypeAnnotation(index: index)
         }
+        self.newtypeAnnotationAdmissionOpen = false
         for index in 0U64..<self.arena.structCount() {
             val declaration = self.arena.structAt(index: index)
             if declaration.sourceTypeScope == 0U64 { continue }
@@ -804,6 +799,28 @@ impl Comp {
                     }
                 }
             }
+        }
+        return <Result.Ok value=() />
+    }
+
+    // Resolve once per declaration. A view requiring another newtype's
+    // inherited conformance may request that underlying before its source row
+    // is reached. Active declarations cannot supply their own prerequisites.
+    inout fn admitNewtypeAnnotation(index: U64) -> Result[(), CompileDiagnostic] {
+        val declaration = self.arena.newtypeAt(index: index)
+        if declaration.sourceTypeScope == 0U64 || self.nominalAnnotationProofs.contains(key: declaration.authoredTypeUse) {
+            return <Result.Ok value=() />
+        }
+        if self.activeNewtypeAnnotations.contains(index) {
+            return <Result.Err error=self.diagnosticAt(offset: declaration.authoredTypeSite, msg: "newtype underlying annotation has a cyclic dependency (spec/10)", failureDomain: <FailureDomain.Source />) />
+        }
+        self.activeNewtypeAnnotations.insert(index)
+        val scope = <DeclarationTypeScope origin=<DeclarationScopeOrigin.Nominal /> owner=declaration.defOffset parameters=<FuncBindRange start=0U64 len=0U64 /> />
+        val result = self.admitNominalTypeAnnotation(id: declaration.authoredTypeUse, site: declaration.authoredTypeSite, term: declaration.underRef, token: declaration.sourceTypeScope, scope: scope)
+        self.activeNewtypeAnnotations.remove(index)
+        val proof = try result
+        if proof.sourceTerm != declaration.underRef {
+            self.arena.setAdmittedNewtypeUnderlying(index: index, term: proof.sourceTerm)
         }
         return <Result.Ok value=() />
     }

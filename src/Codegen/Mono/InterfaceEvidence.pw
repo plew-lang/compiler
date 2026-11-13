@@ -188,7 +188,7 @@ impl Comp {
             if !symbolic && (term == 0U64 || !self.arena.typeIsClosed(ref: term)) { return <Result.Ok value=<SelectedWitnessInstantiation.Deferred /> /> }
             bindings.append(<WitnessBind binder=binding.binder paramId=binding.paramId term=term />)
         }
-        val receiver = self.selectedWitnessReceiver(declared: (try self.replayProjectionNormalizations(ref: witness.selfRef, normalizations: normalizations, offset: 0U64)), requested: receiverRef)
+        val receiver = try self.selectedWitnessReceiver(declared: (try self.replayProjectionNormalizations(ref: witness.selfRef, normalizations: normalizations, offset: 0U64)), requested: receiverRef)
         if !symbolic && (receiver == 0U64 || !self.arena.typeIsClosed(ref: receiver)) { return <Result.Ok value=<SelectedWitnessInstantiation.Deferred /> /> }
         val grounded = <WitnessMatch conformIdx=witness.conformIdx binds=bindings selfRef=receiver />
         if !retain || normalizations.count() == 0U64 { return <Result.Ok value=<SelectedWitnessInstantiation.Ready witness=grounded /> /> }

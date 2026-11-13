@@ -1,0 +1,4 @@
+trait Marker {}
+newtype Left = Right#Marker
+newtype Right = Left
+fn main() {}

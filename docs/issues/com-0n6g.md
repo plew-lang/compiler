@@ -98,3 +98,26 @@ on success. Receipt substitution, lowering-failure restoration and forward
 newtype admission still require final verification. An earlier build was
 excluded because the scratch test file changed during validation. The
 fixed-input rerun produced the same binary.
+
+## Forward newtype dependency checkpoint
+
+The conformance physical-subject traversal now requests each newtype's
+authored RHS while declaration admission is open. A completed dependency
+is reused, and re-entering an active declaration reports a source cycle.
+The explicit declaration pass seals this window before checking field and
+payload annotations. Fixed-input build `20261113T085340-build-13a447`
+produced `6d107091a5741a4289dfce4ba7cd0041a21a91fe2bd1e93d8c4d5fa1c4f10840`.
+Five positive fixtures pass check, JIT and linked native execution, and
+all four rejection fixtures report the intended diagnostic in check and
+lazy run. The forward-view regression prints 42; its paired cyclic view
+is rejected.
+
+The associated-bound probe still rejects `type Item = Wrapped` with
+"associated type does not satisfy its declared trait constraint" in
+both check and run. This occurs with both a projected RHS and a direct
+`newtype Wrapped = Number`, even though using `Number` directly passes.
+The direct newtype also fails on the original carrier. The nominal
+forward-reference fix alone does not repair the inherited-conformance
+query used by associated bounds. Exact failure origin and responsibility
+still need to be established. Receipt corruption and restoration-on-error
+probes remain to be completed before closing this task.

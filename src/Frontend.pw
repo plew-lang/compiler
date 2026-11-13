@@ -729,6 +729,8 @@ pub struct Comp {
     pub mut val blockTypeUses: Dictionary[U64, Array[U64]] = [:]
     mut val bodyRecipeTypeUses: Set[U64] = Set.new()
     mut val nominalAnnotationProofs: Dictionary[U64, LocalAnnotationProof] = [:]
+    mut val activeNewtypeAnnotations: Set[U64] = Set.new()
+    mut val newtypeAnnotationAdmissionOpen: Bool = false
     mut val globalAnnotationProofs: Dictionary[U64, LocalAnnotationProof] = [:]
     pub mut val checkedTypeUses: Set[U64] = Set.new()
     pub mut val sourceExpressionLimit: U64 = 0U64
@@ -2246,6 +2248,7 @@ fn loadFrontendDeclarations(c: inout Comp, input: FrontendInput, sources: Source
     // conforming concrete type (before provided methods, so A's own provided
     // methods also reach the newly-conforming types). The headless form
     // `impl[T] T as A where T: B` is rejected separately (Verify.checkBlanketHeadless).
+    c.newtypeAnnotationAdmissionOpen = true
     try c.prepareConformanceCallableForms()
     try c.instantiateTraitSubjectConforms()
     // trait provided methods (spec/08): copy each `impl Trait { }` provided
