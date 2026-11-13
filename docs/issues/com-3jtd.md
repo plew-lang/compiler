@@ -1577,3 +1577,28 @@ three rejection controls preserved their expected check diagnostics.
 This increment retains a new class of evidence before the compatibility
 path is removed. Declaration recipes for composite field/call results and
 evidence inferred from constituent expressions still require inventory.
+
+### Retain composite field, call and cast result origins
+
+Record forwards the selected field's authored occurrence and the selected
+direct call's result occurrence to the existing child-recipe consumer.
+Explicit cast results publish the already checked target occurrence. The
+consumer uses the matching child role of the recipe and keeps inferred
+binding aliases attached to that origin. It does not infer proof from the
+result type's spelling.
+
+Fixed-input build `20261113T222225-build-56981e` produced `3bf7023e`.
+The extended `generic_child_extension_evidence` fixture checks a selected
+field, a declared function result through an alias, and an exact newtype
+retag with the same two distinct child extensions. It passed check, JIT
+and linked native. Nine adjacent run inputs passed check and JIT, and
+three rejection inputs kept their expected check diagnostics. The old
+candidate also passed the public fixture; this tests preserved behavior
+while moving the evidence to its declaration.
+
+[Same-source comparison](../../../evidence/rejection-domains/diagnostic-domain-implementation/trait-receiver-admission/composite-output-same-source.json):
+7.789 s to 7.819 s, all eight nonempty LLVM outputs identical. The
+pre-existing missing-cast-conversion admission gap is recorded in
+[com-q6xg](com-q6xg.md). The next remaining routes are composite
+static requirement results and children supplied by inference. Keep the
+lookup compatibility path until their coverage is established.

@@ -3092,17 +3092,23 @@ impl Comp {
             }
         }
         try self.recordCallTemplate(exprId: exprId, callee: callee, receiver: receiver, args: args, calleeTypeArgs: calleeTypeArgs, proof: selectedProof, receiverTypeTerm: receiverTypeTerm)
-        if callee < self.arena.functionCount() && resultTerm != 0U64 && self.arena.typeViewSourceCount(ref: resultTerm) != 0U64 {
-            val declaration = self.arena.functionAt(index: callee)
-            val source = if declaration.lexicalOwnerFnId == 0U64 { give callee } else { give declaration.lexicalOwnerFnId - 1U64 }
-            mut val proofs = self.resultSubstitutionExtensions(exprId: exprId, declaration: declaration, args: args, typeArguments: calleeTypeArgs, receiverTerm: receiverTypeTerm)
-            match self.sourceTypeUses.signatureFor(function: source) {
-                Optional.Some(v: val signature) => {
-                    for proof in self.authoredResultExtensionSources(occurrence: signature.result) { proofs.append(proof) }
+        if callee < self.arena.functionCount() && resultTerm != 0U64 {
+            val viewed = self.arena.typeViewSourceCount(ref: resultTerm) != 0U64
+            val composite = self.arena.typeTermAt(index: resultTerm).args.len != 0U64
+            if viewed || composite {
+                val declaration = self.arena.functionAt(index: callee)
+                val source = if declaration.lexicalOwnerFnId == 0U64 { give callee } else { give declaration.lexicalOwnerFnId - 1U64 }
+                val occurrence = match self.sourceTypeUses.signatureFor(function: source) {
+                    Optional.Some(v: val signature) => signature.result,
+                    Optional.None => 0U64,
                 }
-                Optional.None => {}
+                self.recordAuthoredCompositeOrigin(exprId: exprId, term: resultTerm, occurrence: occurrence)
+                if viewed {
+                    mut val proofs = self.resultSubstitutionExtensions(exprId: exprId, declaration: declaration, args: args, typeArguments: calleeTypeArgs, receiverTerm: receiverTypeTerm)
+                    for proof in self.authoredResultExtensionSources(occurrence: occurrence) { proofs.append(proof) }
+                    self.recordExpressionExtensionSources(exprId: exprId, proofs: proofs)
+                }
             }
-            self.recordExpressionExtensionSources(exprId: exprId, proofs: proofs)
         }
         return <Result.Ok value=() />
     }

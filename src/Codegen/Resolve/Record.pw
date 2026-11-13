@@ -218,6 +218,13 @@ impl Comp {
         }
     }
 
+    inout fn recordAuthoredCompositeOrigin(exprId: U64, term: U64, occurrence: U64) {
+        if occurrence == 0U64 || self.arena.typeTermAt(index: term).args.len == 0U64 { return }
+        if self.bodyTypeNeedsViewAdmission(ref: term) {
+            self.recordExpressionTypeOrigin(exprId: exprId, origin: <SourceExpressionTypeOrigin.Authored occurrence=occurrence />)
+        }
+    }
+
     fn authoredResultTypeOccurrence(occurrence: U64) -> U64 {
         // A projection contributes the selected associated output, never its receiver.
         mut val current = occurrence
@@ -1636,6 +1643,7 @@ pub impl Comp {
                     if fieldIndex < fieldCount {
                         val field = self.arena.structFieldAt(structIndex: structIndex, fieldIndex: fieldIndex)
                         isBoxed = self.fieldIsBoxed(f: field)
+                        self.recordAuthoredCompositeOrigin(exprId: exprId, term: fieldTerm, occurrence: field.authoredTypeUse)
                         if field.authoredTypeUse != 0U64 && self.arena.typeViewSourceCount(ref: fieldTerm) != 0U64 {
                             self.recordExpressionExtensionSources(exprId: exprId, proofs: self.authoredResultExtensionSources(occurrence: field.authoredTypeUse))
                         }
@@ -2472,8 +2480,9 @@ pub impl Comp {
                     try self.recordExpr(exprId: operand, chainHoleRef: chainHoleRef, expectedTerm: operandContext)
                 }
                 self.recordSemanticExprTerm(exprId: exprId, term: castTarget)
+                val occurrence = self.authoredCastTargets.getOr(key: exprId, fallback: 0U64)
+                self.recordAuthoredCompositeOrigin(exprId: exprId, term: castTarget, occurrence: occurrence)
                 if self.arena.typeViewSourceCount(ref: castTarget) != 0U64 {
-                    val occurrence = self.authoredCastTargets.getOr(key: exprId, fallback: 0U64)
                     self.recordExpressionExtensionSources(exprId: exprId, proofs: self.authoredResultExtensionSources(occurrence: occurrence))
                 }
             }
