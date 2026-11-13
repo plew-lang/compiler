@@ -55,6 +55,15 @@ impl Comp {
         return <Result.Ok value=arguments />
     }
 
+    inout fn recordExpressionNominalType(exprId: U64, written: U64) -> Result[U64, CompileDiagnostic] {
+        if !self.authoredExpressionTypeSlots.contains(key: exprId) { return <Result.Ok value=written /> }
+        if written == 0U64 || written >= self.arena.typeCount() {
+            return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "authored expression type slots have no nominal term", failureDomain: <FailureDomain.Internal />) />
+        }
+        val arguments = try self.recordExpressionTypeSlots(exprId: exprId, written: self.arena.typeAt(index: written).args)
+        return <Result.Ok value=self.rebuildTypeTermChildren(ref: written, children: arguments) />
+    }
+
     inout fn recordBindingAnnotation(nameStart: U64, written: U64, occurrence: Optional[U64]) -> Result[Optional[LocalAnnotationProof], CompileDiagnostic] {
         match self.currentSourceOwner() {
             Optional.Some(v: val owner) => {
@@ -1811,12 +1820,14 @@ pub impl Comp {
         }
         val construction = match self.arena.exprs[exprId] {
             Expr.Make(typeStart: _, typeLen: _, variantStart: _, variantLen: _, isEnum: _, val ty, fields: _) => {
-                mut val admitted = ty
+                give try self.recordExpressionNominalType(exprId: exprId, written: ty)
+            }
+            Expr.Method(recv: _, nameStart: _, nameLen: _, args: _) => {
+                mut val receiver = 0U64
                 if self.authoredExpressionTypeSlots.contains(key: exprId) {
-                    val arguments = try self.recordExpressionTypeSlots(exprId: exprId, written: self.arena.typeAt(index: ty).args)
-                    admitted = self.rebuildTypeTermChildren(ref: ty, children: arguments)
+                    receiver = try self.recordExpressionNominalType(exprId: exprId, written: self.syntheticCallReceiverTerm(exprId: exprId, fallback: 0U64))
                 }
-                give admitted
+                give receiver
             }
             _ => 0U64
         }
@@ -1941,12 +1952,15 @@ pub impl Comp {
                     try self.recordExpr(exprId: self.argAt(args: args, index: i).expr, chainHoleRef: chainHoleRef, deferContext: true)
                     i += 1
                 }
-                val receiverTerm: U64 = self.syntheticCallReceiverTerm(exprId: exprId, fallback: (try self.methodReceiverTerm(exprId: recv)))
+                val receiverTerm = if construction != 0U64 { give construction } else { give self.syntheticCallReceiverTerm(exprId: exprId, fallback: (try self.methodReceiverTerm(exprId: recv))) }
                 val requiredTraitOwner = self.syntheticRequiredTraitOwner(exprId: exprId)
                 // The construction query preserves the synthetic requirement on its
                 // selected cache entry.
                 // Only unresolved receivers need the parametric Record query.
-                mut val methodCallee: U64 = (try self.resolvedCallee(id: exprId))
+                mut val methodCallee = if construction != 0U64 {
+                    val qualifier = self.assocRecvName(recv: recv)
+                    give try self.findAssoc(recvStart: qualifier.nameStart, recvLen: qualifier.nameLen, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: construction)
+                } else { give try self.resolvedCallee(id: exprId) }
                 if requiredTraitOwner != 0U64 && methodCallee >= self.arena.functionCount() {
                     methodCallee = (try self.resolveMethodFinalForType(recv: recv, receiverType: self.typeInfoOfRef(ref: receiverTerm), nameStart: nameStart, nameLen: nameLen, args: args, requiredTraitOwner: requiredTraitOwner))
                 } else if requiredTraitOwner == 0U64 {

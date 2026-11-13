@@ -363,3 +363,20 @@ Fixed-input build `20261113T124107-build-1de25d` produced `e541d3e88517`.
 The new arity rejection passes check. Generic closures with a projected
 parameter and return pass check, JIT and linked native, both with a
 declared associated equality and with the output open until instantiation.
+
+### Named factory receiver arguments
+
+On `e541d3e88517` a factory whose explicit receiver argument names the
+extension-backed `Number#Selection#Marker[I64]` rejects in check and JIT.
+An argument with the wrong projection instance rejects only at a later
+associated-output check. Record now admits the original construction's
+type slots before associated factory selection. Mono replays those
+receipts into the selected call template's receiver before grounding the
+call signature. The source-side synthetic receiver remains the written
+term and supplies the identity check during replay.
+
+Build `20261113T124659-build-c17f0c` produced `1d3a02b8270c`. The
+extension-backed argument and a generic argument with an open projected
+type pass check, JIT and native, both printing 42. The wrong instance
+rejects at admission in check and JIT. The existing concrete factory,
+contextual construction and optional-chain controls retain their output.

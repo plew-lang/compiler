@@ -1,0 +1,10 @@
+trait Marker[T] { type Item }
+struct Number {}
+impl Number as Marker[I64] { type Item = I64 }
+struct Box[T] { val n: I64 }
+impl[T] Box[T] {
+    factory tagged(number: I64) { return <Box[T] n=number /> }
+}
+fn main() {
+    val box = <Box[Number#Marker[Bool].Item].tagged number=42I64 />
+}

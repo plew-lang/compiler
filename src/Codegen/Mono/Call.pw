@@ -6335,6 +6335,12 @@ pub impl Comp {
                 }
             }
             Expr.Method(val recv, val nameStart, val nameLen, val args) => {
+                if self.authoredExpressionTypeSlots.contains(key: exprId) {
+                    val bodyId = self.currentBodyInstanceId()
+                    val template = try self.callTemplateForCurrentBody(exprId: exprId)
+                    val written = self.syntheticCallReceiverTerm(exprId: exprId, fallback: 0U64)
+                    try self.replayExpressionTypeSlotProofs(exprId: exprId, written: self.arena.typeAt(index: written).args, term: template.receiverTypeTerm, bodyId: bodyId, sourceBodyId: bodyId)
+                }
                 try self.scanExprInsts(exprId: recv)
                 val callArgs = (try self.callArgumentRangeForCurrentBody(exprId: exprId, authored: args))
                 mut val i: U64 = 0
