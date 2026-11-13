@@ -2832,7 +2832,7 @@ pub impl Comp {
         mut val args: Array[U64] = []
         while args.count() < typeParameters.count() { args.append(0U64) }
         val parameters = <PatternBindInput.Values values=typeParameters />
-        mut val origins: Array[(index: U64, proofs: Array[SourceExtensionViewProof])] = []
+        mut val origins: Array[InferredConstructionSlot] = []
         mut val index = 0U64
         while index < declaredFields.count() {
             val field = declaredFields[index]
@@ -2842,10 +2842,19 @@ pub impl Comp {
             match self.matchTypeArgumentConstraints(pattern: field.ty, argument: argument, params: parameters, values: inout candidate) {
                 TypeArgumentMatch.Matched | TypeArgumentMatch.Deferred => {
                     if expression.isSome() && fieldExpression.isSome() {
-                        for slot in 0U64..<candidate.count() {
-                            if args[slot] != 0U64 || self.arena.typeViewSourceCount(ref: candidate[slot]) == 0U64 { continue }
-                            val proofs = self.expressionSubstitutionExtensions(exprId: fieldExpression.unwrap(), pattern: field.ty, actual: argument, binder: typeParameters[slot].paramId, substituted: candidate[slot])
-                            if proofs.count() != 0U64 { origins.append((index: slot, proofs: proofs)) }
+                        val origin = self.recordedExpressionTypeOrigin(exprId: fieldExpression.unwrap())
+                        val extensions = self.recordedExtensionSources(exprId: fieldExpression.unwrap())
+                        mut val evidence = 0U64
+                        if origin.isSome() || extensions.count() != 0U64 {
+                            for slot in 0U64..<candidate.count() {
+                                if args[slot] != 0U64 || candidate[slot] == 0U64 { continue }
+                                if self.arena.typeViewSourceCount(ref: candidate[slot]) == 0U64 && origin.isNone() { continue }
+                                if evidence == 0U64 {
+                                    self.constructionSlotEvidence.append(<SourceBindingTypeEvidence origin=origin extensions=extensions />)
+                                    evidence = self.constructionSlotEvidence.count()
+                                }
+                                origins.append(<InferredConstructionSlot index=slot binder=typeParameters[slot] pattern=field.ty argument=argument evidence=evidence />)
+                            }
                         }
                     }
                     args = candidate
@@ -3019,7 +3028,12 @@ impl Comp {
         if self.bareInferenceParamId(ref: pattern) == binder && self.typeRefEq(a: actual, b: substituted) {
             return self.recordedExtensionSources(exprId: exprId)
         }
-        match self.recordedExpressionTypeOrigin(exprId: exprId) {
+        val origin = self.recordedExpressionTypeOrigin(exprId: exprId)
+        return self.originSubstitutionExtensions(origin: origin, pattern: pattern, actual: actual, binder: binder, substituted: substituted)
+    }
+
+    inout fn originSubstitutionExtensions(origin: Optional[SourceExpressionTypeOrigin], pattern: U64, actual: U64, binder: U64, substituted: U64) -> Array[SourceExtensionViewProof] {
+        match origin {
             Optional.Some(v: val origin) => {
                 match origin {
                     SourceExpressionTypeOrigin.Authored(val occurrence) => {
@@ -3048,11 +3062,16 @@ impl Comp {
                             val index = slot.index
                             if index >= actualCount { return [] }
                             val child = self.typeTermRefChildRef(ref: actual, index: index)
-                            if self.bareInferenceParamId(ref: self.typeTermRefChildRef(ref: pattern, index: index)) == binder &&
-                               self.typeRefEq(a: child, b: substituted) &&
-                               self.typeRefEq(a: child, b: self.typeTermRefChildRef(ref: term, index: index)) {
-                                return slot.proofs
+                            if !self.typeRefEq(a: child, b: self.typeTermRefChildRef(ref: term, index: index)) { continue }
+                            val childPattern = self.typeTermRefChildRef(ref: pattern, index: index)
+                            val evidence = self.constructionSlotEvidence[slot.evidence - 1U64]
+                            if self.typeRefEq(a: child, b: substituted) {
+                                val proofs = self.retainedConstructionSlotProofs(slot: slot, evidence: evidence, substituted: substituted)
+                                if self.bareInferenceParamId(ref: childPattern) == binder && proofs.count() != 0U64 { return proofs }
                             }
+                            val fieldPattern = self.groundTermInEnvironment(ref: slot.pattern, params: [slot.binder], values: [childPattern])
+                            val proofs = self.originSubstitutionExtensions(origin: evidence.origin, pattern: fieldPattern, actual: slot.argument, binder: binder, substituted: substituted)
+                            if proofs.count() != 0U64 { return proofs }
                         }
                     }
                 }
@@ -3060,6 +3079,13 @@ impl Comp {
             Optional.None => {}
         }
         return []
+    }
+
+    inout fn retainedConstructionSlotProofs(slot: InferredConstructionSlot, evidence: SourceBindingTypeEvidence, substituted: U64) -> Array[SourceExtensionViewProof] {
+        if self.bareInferenceParamId(ref: slot.pattern) == slot.binder.paramId && self.typeRefEq(a: slot.argument, b: substituted) {
+            return evidence.extensions
+        }
+        return self.originSubstitutionExtensions(origin: evidence.origin, pattern: slot.pattern, actual: slot.argument, binder: slot.binder.paramId, substituted: substituted)
     }
 
     inout fn resultSubstitutionExtensions(exprId: U64, declaration: Func, args: ArgRange, typeArguments: Array[U64], receiverTerm: U64) -> Array[SourceExtensionViewProof] {

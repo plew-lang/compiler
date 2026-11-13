@@ -1651,3 +1651,25 @@ gave 7.823 s and 7.828 s with all eight nonempty LLVM outputs identical.
 The inference handoff currently retains proofs for a directly viewed
 inferred type argument. Composite inferred arguments and non-nominal result
 producers still need to be traced before removing the shared fallback.
+
+### Preserve nested inferred type-argument evidence
+
+The successful field match saves its original pattern, argument and evidence
+for the exact inferred slot. When a later call selects a binder inside that
+slot, the reader composes the requested child pattern with the saved field
+pattern and follows the saved evidence. The same reader handles an explicitly
+typed nested construction and an inferred one; a sibling slot cannot supply
+the proof merely because its receiver has the same nominal type.
+
+Build `20261113T224814-build-e0a9a9` produced `e2063d31`. The regression
+`nested_inferred_extension_evidence` prints 42 and 99 in JIT and native
+after passing check. The old carrier prints the same values but enters the
+fallback view-source query twice in check. The candidate enters it zero
+times. Five adjacent public run inputs and three check rejection controls
+also passed. [Same-source comparison](../../../evidence/rejection-domains/diagnostic-domain-implementation/trait-receiver-admission/nested-inferred-same-source.json)
+was 7.837 s versus 7.783 s with identical nonempty LLVM in all eight runs.
+
+A separate focused input confirmed two fallback entries for array and
+anonymous-record literals passed through generic functions. Start their
+handoff at the selected element or labeled field, then continue checking
+other structural producers before removing the shared fallback.

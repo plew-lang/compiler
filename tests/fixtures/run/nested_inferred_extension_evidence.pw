@@ -1,0 +1,15 @@
+use @Std/Io only { print }
+struct Counter { val n: I64 }
+impl Counter { fn get() -> I64 { return 0I64 } }
+extension Read { impl Counter { fn get() -> I64 { return self.n } } }
+extension Other { impl Counter { fn get() -> I64 { return 99I64 } } }
+struct Pair[T, U] { val item: T val other: U }
+struct Outer[T] { val inner: T }
+fn take[T, U](value: Outer[Pair[T, U]]) -> T { return value.inner.item }
+fn main() {
+    val first = <Pair item=<Counter n=42I64 />#Read other=<Counter n=8I64 />#Other />
+    val second = <Pair[Counter#Other, Counter#Read] other=<Counter n=42I64 />#Read item=<Counter n=8I64 />#Other />
+    val inferred = <Outer inner=first />
+    print(take(value: inferred).get())
+    print(take(value: <Outer inner=second />).get())
+}
