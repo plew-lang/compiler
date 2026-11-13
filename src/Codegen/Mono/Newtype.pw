@@ -75,7 +75,8 @@ impl Comp {
             Optional.Some(v: val stored) => stored,
             Optional.None => { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "inherited body lost its admitted constraints") /> },
         }
-        val substitution = try self.bodyInstanceEnvironment(fnIdx: function, args: arguments, recvInstRef: receiver, selectedProof: source.proof)
+        val scope = self.dependentInherentReceiverScope(function: function)
+        val substitution = try self.bodyInstanceEnvironment(fnIdx: function, args: arguments, recvInstRef: receiver, selectedProof: source.proof, pendingInherentReceiver: scope != 0U64)
         mut val proof = source.proof
         if !self.proofIsMissing(proof: proof) {
             proof = match (try self.instantiateConstraintProof(proof: proof, receiverRef: receiver, environment: substitution, selfRef: receiver, itemRef: 0U64)) {
@@ -104,6 +105,8 @@ impl Comp {
             bounds.append(bound)
             proofs.append(selected)
         }
-        return self.environmentWithCallableConstraints(fnIdx: function, environment: target, evidence: <CallableConstraintEvidence.Recorded bounds=bounds proofs=proofs />)
+        val environment = try self.environmentWithCallableConstraints(fnIdx: function, environment: target, evidence: <CallableConstraintEvidence.Recorded bounds=bounds proofs=proofs />)
+        try self.checkSelectedInherentReceiver(fnIdx: function, scope: scope, environment: environment)
+        return <Result.Ok value=environment />
     }
 }

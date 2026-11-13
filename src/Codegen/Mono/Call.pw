@@ -842,8 +842,8 @@ pub impl Comp {
                 if callable < self.arena.functionCount() {
                     val scope = self.dependentInherentReceiverScope(function: callable)
                     if scope != 0U64 && self.typeRefEq(a: self.arena.functionAt(index: callable).recvTy, b: function.recvTy) {
-                        return match self.readConcreteInherentReceiver(scope: scope, environment: environment) {
-                            Result.Ok(value: val term) => self.typeRefEq(a: self.typeRefWithoutOuterViews(ref: term), b: actual),
+                        return match self.selectedInherentReceiverMatches(scope: scope, environment: environment) {
+                            Result.Ok(value: val matches) => matches,
                             Result.Err(error: _) => false,
                         }
                     }
@@ -1127,13 +1127,21 @@ pub impl Comp {
         val receiverScope = self.dependentInherentReceiverScope(function: fnIdx)
         val substitution: InstanceEnvironment = (try self.bodyInstanceEnvironment(fnIdx: fnIdx, args: args, recvInstRef: recvInstRef, selectedProof: selectedProof, pendingInherentReceiver: receiverScope != 0U64))
         val environment = try self.environmentWithCallableConstraints(fnIdx: fnIdx, environment: substitution, evidence: constraints)
-        if receiverScope != 0U64 {
-            val admitted = try self.readConcreteInherentReceiver(scope: receiverScope, environment: environment)
-            if !self.typeRefEq(a: self.typeRefWithoutOuterViews(ref: admitted), b: self.typeRefWithoutOuterViews(ref: environment.receiverRef)) {
-                return <Result.Err error=self.diagnosticAt(offset: self.arena.functionAt(index: fnIdx).nameStart, msg: "internal error: body receiver does not match its selected declaration") />
-            }
-        }
+        try self.checkSelectedInherentReceiver(fnIdx: fnIdx, scope: receiverScope, environment: environment)
         return <Result.Ok value=environment />
+    }
+
+    inout fn selectedInherentReceiverMatches(scope: U64, environment: InstanceEnvironment) -> Result[Bool, CompileDiagnostic] {
+        val admitted = try self.readConcreteInherentReceiver(scope: scope, environment: environment)
+        val physical = try self.conformancePhysicalSubject(typeRef: environment.receiverRef)
+        return <Result.Ok value=self.typeRefEq(a: self.typeRefWithoutOuterViews(ref: admitted), b: self.typeRefWithoutOuterViews(ref: physical)) />
+    }
+
+    inout fn checkSelectedInherentReceiver(fnIdx: U64, scope: U64, environment: InstanceEnvironment) -> Result[(), CompileDiagnostic] {
+        if scope != 0U64 && !(try self.selectedInherentReceiverMatches(scope: scope, environment: environment)) {
+            return <Result.Err error=self.diagnosticAt(offset: self.arena.functionAt(index: fnIdx).nameStart, msg: "internal error: body receiver does not match its selected declaration") />
+        }
+        return <Result.Ok value=() />
     }
 
     // The selected conformance edge owns provided-body binders. Match its

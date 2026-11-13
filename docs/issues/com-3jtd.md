@@ -1117,3 +1117,11 @@ and the selected-call check still enforces their clauses. The regression
 by `2328d912`. It passes check, JIT and linked native with `122ee116`
 (fixed-input build `20261113T181608-build-40930b`). Replacing its
 argument by `Bool` still diagnoses the missing independent conformance.
+
+The newtype boundary preserves the public receiver but compares the
+admitted inherent receiver to its physical subject. When constructing
+the original implementation body, the adapter transfers its selected
+clause evidence before replaying the receiver. The previously failing
+bare inheritance control passes check, JIT and linked native with
+`d67db168` (fixed-input build `20261113T182015-build-2a7d0a`).
+Four nearby receiver controls pass check and JIT.

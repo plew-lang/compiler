@@ -1,0 +1,8 @@
+use @Std/Io only { print }
+trait Source { type Item }
+struct Number {}
+impl Number as Source { type Item = I64 }
+struct Box[Key, Item] { val item: Item }
+newtype Wrapped = Box[Number, I64]
+impl[T] Box[T, T#Source.Item] where T: Source { fn code() -> T#Source.Item { return self.item } }
+fn main() { val valBox = <Box[Number, I64] item=42I64 /> as Wrapped print(valBox.code()) }
