@@ -151,3 +151,21 @@ were 7.087 s (`c5146239`) and 7.139 s (`848b915e5dec`). All eight LLVM
 outputs matched SHA-256
 `88d8ba4dc813ef356a29e896e5fbfa4500ad13640daece23db67610e2a19cf91`.
 Formal fixed-point performance remains a parent gate.
+
+## Projected newtype cast handoff
+
+Both lowering adapters attach the exact cast target occurrence when its
+type contains a view or a projection. Record admits that occurrence in
+the original lexical scope, saves its proof in the prepared source body,
+and records the normalized target. The concrete scan reads the recipe
+with that proof before publishing the target used by Mid. Mid consumes
+the prepared expression type instead of demanding equality against the
+unnormalized syntax field. Conversion admissibility remains separate.
+
+Fixed-input build `20261113T114116-build-f20138`, candidate
+`afc8f218f01f77ae0d363f9c38dda34b583f87beacc2774d8ed0857dbd9b4e6c`,
+prints 42 in check-accepted JIT and linked native runs of the projected
+newtype cast and five existing numeric, From and retag controls.
+The paired `Project.Item = Bool` program has a satisfied lexical bound
+and rejects at the cast target in check and JIT. Standard generation
+`20261113T114453-gen-af9fb5` and all 47 lazy CLI cases pass.

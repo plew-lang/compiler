@@ -6368,8 +6368,24 @@ pub impl Comp {
                 }
                 try self.finalizeCurrentBodyAggregate(exprId: exprId)
             }
-            Expr.Cast(val operand, tyStart: _, tyLen: _, ty: _) => {
+            Expr.Cast(val operand, tyStart: _, tyLen: _, val ty) => {
                 try self.scanExprInsts(exprId: operand)
+                val occurrenceId = self.authoredCastTargets.getOr(key: exprId, fallback: 0U64)
+                val bodyId = self.currentBodyInstanceId()
+                if occurrenceId != 0U64 && bodyId != 0U64 {
+                    val occurrence = try self.signatureOccurrence(id: occurrenceId)
+                    val facts = try self.preparedBodyFacts(bodyId: bodyId, globalInitializerTarget: self.cur.globalInitializerTarget)
+                    val saved = match facts.castTargetProof(exprId: exprId) {
+                        Optional.Some(v: val proof) => proof,
+                        Optional.None => { return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "cast target has no saved annotation proof", failureDomain: <FailureDomain.Internal />) /> },
+                    }
+                    if saved.occurrence != occurrenceId || saved.recipe != occurrence.recipe || occurrence.term != ty {
+                        return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "cast target has a foreign annotation proof", failureDomain: <FailureDomain.Internal />) />
+                    }
+                    mut val memo: Dictionary[U64, AuthoredRecipeRead] = [:]
+                    val result = (try self.readAuthoredTypeRecipe(proofs: saved.proofs, recipe: saved.recipe, environment: self.cur.bodyEnvironment, memo: inout memo, context: <SignatureRecipeContext.Concrete />)).term
+                    self.recordBodyTypeTermResult(bodyId: bodyId, source: saved.sourceTerm, result: result)
+                }
                 // A nested cast can own an intermediate Mid temporary even
                 // when no binding or call independently roots its type.
                 try self.collectRecordedValueLayout(exprId: exprId)

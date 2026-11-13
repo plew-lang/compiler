@@ -23,6 +23,22 @@ pub impl Comp {
         return <Result.Ok value=call />
     }
 
+    inout fn castTargetNeedsAdmission(ref: U64) -> Bool {
+        if ref == 0U64 { return false }
+        val term = self.arena.typeTermAt(index: ref)
+        if term.assocNameId != 0U64 || term.hasTopLevelView() { return true }
+        for index in 0U64..<self.typeTermRefChildCount(ref: ref) {
+            if self.castTargetNeedsAdmission(ref: self.typeTermRefChildRef(ref: ref, index: index)) { return true }
+        }
+        return false
+    }
+
+    inout fn lowerCast(operand: U64, target: PType) -> U64 {
+        val expression = self.pushExpr(e: <Expr.Cast operand=operand tyStart=target.start tyLen=target.len ty=target.ref />)
+        if self.castTargetNeedsAdmission(ref: target.ref) { self.authoredCastTargets[expression] = target.authoredUse }
+        return expression
+    }
+
     inout fn lowerExpr(e: ExprAst) -> Result[U64, CompileDiagnostic] {
         val parent = self.loweringTypeUses
         self.loweringTypeUses = []
@@ -217,7 +233,7 @@ pub impl Comp {
             ExprAst.Cast(val operand, val ty, val span) => {
                 val o: U64 = (try self.lowerExpr(e: operand))
                 val pt: PType = (try self.lowerType(t: ty))
-                result = self.pushExpr(e: <Expr.Cast operand=o tyStart=pt.start tyLen=pt.len ty=pt.ref />)
+                result = self.lowerCast(operand: o, target: pt)
             }
             ExprAst.MatchExpr(val scrut, val arms, span: _) => {
                 result = self.pushExpr(e: <Expr.MatchExpr scrut=(try self.lowerExpr(e: scrut)) arms=(try self.lowerMatchArms(arms: arms)) />)
@@ -458,7 +474,7 @@ pub impl Comp {
             }
             SyntaxExprKind.Cast => {
                 val ty: PType = (try self.lowerSyntaxType(id: e.type0))
-                result = self.pushExpr(e: <Expr.Cast operand=(try self.lowerSyntaxExpr(id: e.child0)) tyStart=ty.start tyLen=ty.len ty=ty.ref />)
+                result = self.lowerCast(operand: (try self.lowerSyntaxExpr(id: e.child0)), target: ty)
             }
             SyntaxExprKind.BlockExpr => { result = self.pushExpr(e: <Expr.Block body=(try self.lowerSyntaxBlock(id: e.block0)) offset=e.span.start />) }
             SyntaxExprKind.IfChain => {

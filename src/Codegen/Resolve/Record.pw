@@ -3,6 +3,24 @@
 // facts under a BodyInstance; they do not repeat lexical type inference.
 
 impl Comp {
+    inout fn recordCastTarget(exprId: U64, written: U64) -> Result[U64, CompileDiagnostic] {
+        val occurrenceId = self.authoredCastTargets.getOr(key: exprId, fallback: 0U64)
+        if occurrenceId == 0U64 { return <Result.Ok value=written /> }
+        val owner = match self.currentSourceOwner() {
+            Optional.Some(v: val owner) => owner,
+            Optional.None => { return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "authored cast target has no lexical owner", failureDomain: <FailureDomain.Internal />) /> },
+        }
+        self.sourceFacts.activate(owner: owner)
+        match self.sourceFacts.activeBuilder.data.castTargetProofs.get(key: exprId) {
+            Optional.Some(v: val saved) => { return <Result.Ok value=saved.sourceTerm /> }
+            Optional.None => {}
+        }
+        val proof = try self.admitBodyTypeUse(id: occurrenceId, term: written, owner: owner)
+        self.markAdmittedRecipeTypeUses(recipe: proof.recipe)
+        self.sourceFacts.activeBuilder.data.castTargetProofs[exprId] = proof
+        return <Result.Ok value=proof.sourceTerm />
+    }
+
     inout fn recordBindingAnnotation(nameStart: U64, written: U64, occurrence: Optional[U64]) -> Result[Optional[LocalAnnotationProof], CompileDiagnostic] {
         match self.currentSourceOwner() {
             Optional.Some(v: val owner) => {
@@ -1740,6 +1758,10 @@ pub impl Comp {
         if authored.isSome() && self.assocRecvName(recv: exprId).nameLen == 0U64 {
             for id in authored.unwrap() { self.markAdmittedRecipeTypeUses(recipe: (try self.signatureOccurrence(id: id)).recipe) }
         }
+        val castTarget = match self.arena.exprs[exprId] {
+            Expr.Cast(operand: _, tyStart: _, tyLen: _, val ty) => { give try self.recordCastTarget(exprId: exprId, written: ty) }
+            _ => 0U64
+        }
         match self.expressionTypeUses.get(key: exprId) {
             Optional.Some(v: val uses) => { try self.checkRequestedTypeUses(occurrences: uses) }
             Optional.None => {}
@@ -1762,7 +1784,7 @@ pub impl Comp {
         try self.prepareInterpolationWrite(exprId: exprId)
         try self.prepareFactoryConstruction(exprId: exprId, chainHoleRef: chainHoleRef)
         val hasPreparedCastOperand = match self.arena.exprs[exprId] {
-            Expr.Cast(val operand, val tyStart, val tyLen, val ty) => { give try self.prepareCastFactory(exprId: exprId, operand: operand, target: ty, typeStart: tyStart, typeLen: tyLen, chainHoleRef: chainHoleRef) }
+            Expr.Cast(val operand, val tyStart, val tyLen, ty: _) => { give try self.prepareCastFactory(exprId: exprId, operand: operand, target: castTarget, typeStart: tyStart, typeLen: tyLen, chainHoleRef: chainHoleRef) }
             _ => false
         }
         match self.arena.exprs[exprId] {
@@ -2203,17 +2225,13 @@ pub impl Comp {
                 // first-time method resolution under a concrete body.
                 try self.recordIndexCall(exprId: exprId, base: base, key: index, receiverTerm: baseTerm, receiverType: (try self.exprTypeWithChainHole(id: base, chainHoleRef: chainHoleRef)))
             }
-            Expr.Cast(val operand, tyStart: _, tyLen: _, val ty) => {
-                try self.collectRecordedType(ref: ty)
+            Expr.Cast(val operand, tyStart: _, tyLen: _, ty: _) => {
+                try self.collectRecordedType(ref: castTarget)
                 if !hasPreparedCastOperand {
-                    val operandContext = try self.castLiteralContextTerm(operand: operand, targetTerm: ty)
+                    val operandContext = try self.castLiteralContextTerm(operand: operand, targetTerm: castTarget)
                     try self.recordExpr(exprId: operand, chainHoleRef: chainHoleRef, expectedTerm: operandContext)
                 }
-                // `as Target` is an explicit source-level type boundary; Lower
-                // has resolved Target into `ty`, so this is not an inference
-                // query. Recording it directly preserves a generic/view term
-                // exactly as written for every later BodyInstance.
-                self.recordSemanticExprTerm(exprId: exprId, term: ty)
+                self.recordSemanticExprTerm(exprId: exprId, term: castTarget)
             }
             Expr.MatchExpr(val scrut, val arms) => {
                 // Validate labels before publishing lexical pattern bindings.

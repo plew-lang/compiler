@@ -714,6 +714,7 @@ pub struct Comp {
     // Source constructions awaiting a parameter or result expectation.
     pub mut val pendingConstructionContexts: Set[U64] = Set.new()
     pub mut val pendingInterpolationWrites: Dictionary[U64, InterpolationWrite] = [:]
+    mut val authoredCastTargets: Dictionary[U64, U64] = [:]
     pub mut val expressionTypeUses: Dictionary[U64, Array[U64]] = [:]
     pub mut val blockExitRequirements: Dictionary[U64, U64] = [:]
     pub mut val blockTypeUses: Dictionary[U64, Array[U64]] = [:]
@@ -2772,6 +2773,7 @@ struct SourceBodyData {
     mut val valueBlocks: Dictionary[U64, SourceValueBlockFact] = [:]
     mut val valueBlockIds: Array[U64] = []
     mut val identifierTargets: Dictionary[U64, U64] = [:]
+    mut val castTargetProofs: Dictionary[U64, LocalAnnotationProof] = [:]
     mut val traitValueViews: Dictionary[U64, SourceValueViewProof] = [:]
     mut val globalAddresses: Dictionary[U64, SemanticGlobalAddress] = [:]
     mut val bindings: Array[SourceBindingFact] = []
@@ -2982,6 +2984,9 @@ pub struct PreparedSemanticFacts {
     val payload: Ref[SourceBodyData]
 }
 impl PreparedSemanticFacts { factory }
+impl PreparedSemanticFacts {
+    fn castTargetProof(exprId: U64) -> Optional[LocalAnnotationProof] { return self.payload->castTargetProofs.get(key: exprId) }
+}
 pub impl PreparedSemanticFacts {
     fn belongsToSession(session: U64) -> Bool { return self.session == session }
     fn operationAt(index: U64) -> Optional[CallTemplate] { return readSourceOperationTemplate(rows: self.payload->operations, index: index) }

@@ -1735,7 +1735,7 @@ fn midValueOperandForSourceExpr(c: inout Comp, state: inout MidBuildState, exprI
             if ownsUnique { return <MidOperandBuild.Value operand=<MidOperand.Move place=destination /> /> }
             return <MidOperandBuild.Value operand=<MidOperand.Copy place=destination /> />
         }
-        Expr.Cast(operand: val sourceExpr, tyStart: _, tyLen: _, ty: val targetTerm) => {
+        Expr.Cast(operand: val sourceExpr, tyStart: _, tyLen: _, ty: _) => {
             // The cast's type facts were recorded before Mid construction.
             // Builder uses Expr.Cast only as syntax navigation to its operand;
             // it neither classifies nor chooses the representation operation.
@@ -1747,7 +1747,7 @@ fn midValueOperandForSourceExpr(c: inout Comp, state: inout MidBuildState, exprI
                 MidOperandBuild.Error(error: val error) => { return source }
             }
             val selectedTarget: U64 = (match midSourceSemanticTerm(c: inout c, facts: state.sourceFacts, sourceFunction: state.sourceFunction, exprId: exprId) { Result.Ok(value: val term) => { give term } Result.Err(error: val error) => { return <MidOperandBuild.Error error=error /> } })
-            if sourceTerm == 0U64 || selectedTarget == 0U64 || targetTerm == 0U64 || !(c.typeRefEq(a: selectedTarget, b: targetTerm)) {
+            if sourceTerm == 0U64 || selectedTarget == 0U64 {
                 if c.traceCodegen {
                     eprint(text: "[trace-codegen] Mid cast type missing offset=")
                     eprintU64(n: c.exprOffset(id: exprId))
@@ -1755,8 +1755,6 @@ fn midValueOperandForSourceExpr(c: inout Comp, state: inout MidBuildState, exprI
                     eprintU64(n: sourceTerm)
                     eprint(text: " selected=")
                     eprintU64(n: selectedTarget)
-                    eprint(text: " target=")
-                    eprintU64(n: targetTerm)
                     eprint(text: "\n")
                 }
                 return <MidOperandBuild.Error error=<MidBuildError.MissingSemanticType /> />
