@@ -1,3 +1,4 @@
+use /Diag only { FailureDomain }
 use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
 use /Ir only { StaticConformanceProof, WitnessBind, WitnessConditionPlan, WitnessMatch, ValueConversionProof }
 use /SourceAccess only { SourceAccess }
@@ -49,9 +50,18 @@ fn main() {
     if !compiler.associatedOutputInProof(proof: noPlan, traitOwner: binding.traitOwner, assocId: binding.nameId).isErr() { panic("accepted a missing witness condition plan") }
     if !compiler.associatedOutputInProof(proof: noChild, traitOwner: binding.traitOwner, assocId: binding.nameId).isErr() { panic("accepted a missing witness condition child") }
     if !compiler.associatedOutputInProof(proof: foreignCondition, traitOwner: binding.traitOwner, assocId: binding.nameId).isErr() { panic("accepted a foreign witness condition child") }
-    if !compiler.associatedOutputInProof(proof: extra, traitOwner: binding.traitOwner, assocId: binding.nameId).isErr() { panic("accepted an extra witness binder") }
+    for malformed in [extra, missing] {
+        match compiler.associatedOutputInProof(proof: malformed, traitOwner: binding.traitOwner, assocId: binding.nameId) {
+            Result.Err(error: val diagnostic) => {
+                match diagnostic.failureDomain {
+                    FailureDomain.Internal => {}
+                    _ => { panic("malformed binder is not an internal evidence failure") }
+                }
+            }
+            Result.Ok(value: _) => { panic("accepted a malformed witness binder") }
+        }
+    }
     assert(compiler.associatedOutputInProof(proof: wrong, traitOwner: binding.traitOwner, assocId: binding.nameId).isErr())
-    assert(compiler.associatedOutputInProof(proof: missing, traitOwner: binding.traitOwner, assocId: binding.nameId).isErr())
     assert(compiler.associatedOutputInProof(proof: valid, traitOwner: binding.traitOwner, assocId: binding.nameId).unwrap() == expected)
     print("associated-binding-witness-substitution")
 }

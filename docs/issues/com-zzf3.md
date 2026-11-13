@@ -642,3 +642,23 @@ occurrence/equation controls and seven check/JIT/native controls.
 Same-source medians were 6.925578 s and 6.909718 s with identical LLVM
 in all eight runs. One native link retry required removing older
 temporary compiler binaries after the filesystem ran out of space.
+
+## Replayed path integrity and typed binder failures
+
+Independent re-review isolated a retained `Worker: Root -> Root: View`
+path that accepted `Worker: Unrelated` as its predecessor after replacing
+only the frozen root. `e557ff09` accepted the fault. `b12435f9` uses the
+existing full path verifier for replayed associated RHS proof, rejects the
+wrong predecessor as Internal, and accepts the original before and after
+the fault. This also covers memberless RHS selectors whose proof is only
+used to authorize the view.
+
+The binder control now asserts Internal for missing and surplus binders.
+The missing binder is rejected at the earlier saved condition context
+boundary; the surplus binder is rejected when building the explicit
+witness environment. Both have typed diagnostics on `b12435f9`.
+
+Build `20261113T021917-build-400fd9`, generation
+`20261113T022341-gen-3c592a`, both native fault controls, and nine
+check/JIT/native controls passed. Same-source medians were 6.909925 s
+and 6.912062 s with identical LLVM in all eight runs.

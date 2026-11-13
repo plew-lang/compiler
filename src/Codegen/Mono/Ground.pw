@@ -1149,9 +1149,9 @@ pub impl Comp {
                     return <Result.Err error=self.diagnosticAt(offset: declaration.defOffset, msg: "associated output has no retained condition context", failureDomain: <FailureDomain.Internal />) />
                 }
                 if witness.conditions != 0U64 {
-                    if witness.conditions > self.arena.witnessConditionPlanCount() { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "associated output has no retained condition context") /> }
+                    if witness.conditions > self.arena.witnessConditionPlanCount() { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "associated output has no retained condition context", failureDomain: <FailureDomain.Internal />) /> }
                     val plan = self.arena.witnessConditionPlanAt(index: witness.conditions - 1U64)
-                    if !self.sameWitnessSubstitution(a: witness, b: plan.witness) { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "associated output has a foreign retained context") /> }
+                    if !self.sameWitnessSubstitution(a: witness, b: plan.witness) { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "associated output has a foreign retained context", failureDomain: <FailureDomain.Internal />) /> }
                     if plan.proofs.count() != declaration.bounds.len {
                         return <Result.Err error=self.diagnosticAt(offset: declaration.defOffset, msg: "associated output has an incomplete condition context", failureDomain: <FailureDomain.Internal />) />
                     }

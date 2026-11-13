@@ -3993,10 +3993,10 @@ pub impl Comp {
     }
 
     inout fn selectedConstraintEnvironment(witness: WitnessMatch, proof: StaticConformanceProof = <StaticConformanceProof.Missing />) -> Result[InstanceEnvironment, CompileDiagnostic] {
-        if witness.conformIdx == 0U64 || witness.conformIdx > self.decls.conformCount() { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "constraint has no selected conformance") /> }
+        if witness.conformIdx == 0U64 || witness.conformIdx > self.decls.conformCount() { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "constraint has no selected conformance", failureDomain: <FailureDomain.Internal />) /> }
         val declaration = self.decls.conformAt(index: witness.conformIdx - 1U64)
         if witness.binds.count() != declaration.typeParams.len {
-            return <Result.Err error=self.diagnosticAt(offset: declaration.typeStart, msg: "selected constraint has the wrong number of implementation parameters") />
+            return <Result.Err error=self.diagnosticAt(offset: declaration.typeStart, msg: "selected constraint has the wrong number of implementation parameters", failureDomain: <FailureDomain.Internal />) />
         }
         mut val params: Array[Bind] = []
         mut val values: Array[U64] = []
@@ -4004,10 +4004,10 @@ pub impl Comp {
         while index < declaration.typeParams.len {
             val parameter = self.conformBindAt(binds: declaration.typeParams, index: index)
             val binding = self.witnessBindIndex(binds: witness.binds, binder: index)
-            if binding >= witness.binds.count() || witness.binds[binding].paramId != parameter.paramId { return <Result.Err error=self.diagnosticAt(offset: declaration.typeStart, msg: "selected constraint has an unbound implementation parameter") /> }
+            if binding >= witness.binds.count() || witness.binds[binding].paramId != parameter.paramId { return <Result.Err error=self.diagnosticAt(offset: declaration.typeStart, msg: "selected constraint has an unbound implementation parameter", failureDomain: <FailureDomain.Internal />) /> }
             val term = witness.binds[binding].term
             if term == 0U64 || term >= self.arena.typeCount() {
-                return <Result.Err error=self.diagnosticAt(offset: declaration.typeStart, msg: "selected constraint has an invalid implementation parameter") />
+                return <Result.Err error=self.diagnosticAt(offset: declaration.typeStart, msg: "selected constraint has an invalid implementation parameter", failureDomain: <FailureDomain.Internal />) />
             }
             params.append(parameter)
             values.append(term)
@@ -4016,9 +4016,9 @@ pub impl Comp {
         val selected = if self.proofIsMissing(proof: proof) { give <StaticConformanceProof.ConcreteWitness witness=witness /> } else { give proof }
         match self.retainedConstraintPathTerminal(proof: selected) {
             Optional.Some(v: val terminal) => {
-                if !self.sameWitnessSubstitution(a: terminal, b: witness) { return <Result.Err error=self.diagnosticAt(offset: declaration.typeStart, msg: "selected constraint environment has a different path terminal") /> }
+                if !self.sameWitnessSubstitution(a: terminal, b: witness) { return <Result.Err error=self.diagnosticAt(offset: declaration.typeStart, msg: "selected constraint environment has a different path terminal", failureDomain: <FailureDomain.Internal />) /> }
             }
-            Optional.None => { return <Result.Err error=self.diagnosticAt(offset: declaration.typeStart, msg: "selected constraint environment has no concrete path terminal") /> }
+            Optional.None => { return <Result.Err error=self.diagnosticAt(offset: declaration.typeStart, msg: "selected constraint environment has no concrete path terminal", failureDomain: <FailureDomain.Internal />) /> }
         }
         val environment = <InstanceEnvironment params=params args=values receiverRef=witness.selfRef proof=selected />
         return self.withTraitSelfBinding(traitOwner: declaration.subjectTraitOwner, environment: environment, offset: declaration.defOffset)

@@ -465,6 +465,7 @@ impl Comp {
                 val state = try self.replayConstraintProof(proof: proof, receiver: receiver, environment: environment, selfRef: environment.receiverRef, itemRef: 0U64, context: <Optional.None />, normalizations: normalizations, declaration: true)
                 match state {
                     ConstraintProofReplay.Concrete(proof: val selected) | ConstraintProofReplay.Universal(proof: val selected) => {
+                        try self.checkStaticProofEvidence(proof: selected, offset: offset)
                         val bound = try self.replayBoundNormalizations(bound: (try self.staticProofBound(proof: selected, traitIdx: self.decls.traitIndexByOffset(offset: saved.selector.traitInstance.owner))), normalizations: normalizations)
                         if bound.subject != 0U64 && self.typeRefEq(a: self.typeRefWithoutOuterViews(ref: bound.subject), b: self.typeRefWithoutOuterViews(ref: receiver)) && self.sameResolvedTypeRefs(a: bound.constraint.key.positionalArgs, b: arguments) {
                             return self.readBindingRequirementProof(proof: selected, requirement: requirement, offset: offset)
