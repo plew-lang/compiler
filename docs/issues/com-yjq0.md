@@ -318,3 +318,18 @@ build `20261113T044855-build-e79797` produced `14fc222b`; the same six
 check/JIT controls pass. Comparing the optimized candidate to the
 same pre-fix carrier gave 7.026079 s and 7.008201 s with identical
 nonempty LLVM across all eight runs.
+
+## Replay a value view's projected receiver
+
+The prior candidate accepted the projected-receiver fixture during
+check and failed JIT with `saved signature view is not instantiated`.
+Record now retains the receiver's source projection equations with
+the selected view proof. Finalization instantiates and replays those
+equations before consuming the proof, including when the source
+receiver remains abstract until the body is instantiated.
+
+Fixed-input build `20261113T045410-build-b3daa3` produced `4635ba84`.
+The projected receiver fixture passes check, JIT and native with
+output 42. Four related check/JIT fixtures also pass. An explicit
+trait argument containing a projection still needs its authored
+argument handoff.

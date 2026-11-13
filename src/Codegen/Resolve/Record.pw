@@ -26,8 +26,12 @@ impl Comp {
         val missingMessage = if source.traitInstance.positionalArgs.count() == 0U64 {
             give "cannot view this value through that trait (`value#P`): its type does not conform to the trait — a trait view only narrows an existing conformance, it never confers one (spec/09)"
         } else { give "trait view requires a conformance for this receiver and exact trait instance (spec/09)" }
-        val proof = try self.requireAuthoredViewProof(subject: subject, instance: source.traitInstance, assumptions: assumptions, offset: source.writtenStart, missingMessage: missingMessage)
-        val saved = <AuthoredTypeViewProof occurrence=exprId receiver=subject selector=source proof=self.freezeStaticConformanceProof(proof: proof) />
+        mut val receiverEquations: Array[ProjectionNormalizationStep] = []
+        val selectionSubject = if self.arena.typeContainsAssociatedProjection(ref: subject) {
+            give try self.recordConditionTypeNormalization(ref: subject, assumptions: assumptions, normalizations: inout receiverEquations, demand: <ConformanceProofDemand.SourceAdmission />)
+        } else { give subject }
+        val proof = try self.requireAuthoredViewProof(subject: selectionSubject, instance: source.traitInstance, assumptions: assumptions, offset: source.writtenStart, missingMessage: missingMessage)
+        val saved = <AuthoredTypeViewProof occurrence=exprId receiver=subject selector=source proof=self.freezeStaticConformanceProof(proof: proof) lexicalEquations=receiverEquations />
         self.sourceFacts.activeBuilder.data.traitValueViews[exprId] = saved
         return <Result.Ok value=() />
     }

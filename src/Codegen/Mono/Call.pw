@@ -6126,12 +6126,21 @@ pub impl Comp {
         }
         val instance = self.arena.bodyInstanceAt(index: bodyId - 1U64)
         val environment = instance.environment
-        val subject = self.groundTermInEnvironment(ref: saved.receiver, params: environment.params, values: environment.args, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
+        val substituted = self.groundTermInEnvironment(ref: saved.receiver, params: environment.params, values: environment.args, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
+        mut val equations: Array[ProjectionNormalizationStep] = []
+        if saved.lexicalEquations.count() != 0U64 {
+            val instantiated = try self.instantiateProjectionNormalizations(normalizations: saved.lexicalEquations, environment: environment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
+            match instantiated {
+                Optional.Some(v: val prepared) => { equations = prepared }
+                Optional.None => { return <Result.Err error=self.diagnosticAt(offset: source.writtenStart, msg: "trait value view has unresolved receiver projection evidence", failureDomain: <FailureDomain.Internal />) /> }
+            }
+        }
+        val subject = try self.replayProjectionNormalizations(ref: substituted, normalizations: equations, offset: source.writtenStart)
         mut val arguments: Array[U64] = []
         for argument in saved.selector.traitInstance.positionalArgs {
             arguments.append(self.groundTermInEnvironment(ref: argument, params: environment.params, values: environment.args, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef))
         }
-        (try self.instantiateAuthoredViewProof(saved: saved, receiver: subject, arguments: arguments, environment: environment, offset: source.writtenStart, normalizations: []))
+        (try self.instantiateAuthoredViewProof(saved: saved, receiver: subject, arguments: arguments, environment: environment, offset: source.writtenStart, normalizations: equations))
         return <Result.Ok value=() />
     }
 
