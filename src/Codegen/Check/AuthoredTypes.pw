@@ -837,17 +837,30 @@ impl Comp {
         return <Result.Ok value=terms />
     }
 
-    // A closed lexical parameter can use the same admitted type as callers
-    // and the executable body. A template retains its symbolic parameter.
+    // An abstract body uses only the equations admitted for its exact
+    // signature slot. Closed signatures also interpret their retained
+    // projection proofs through the ordinary concrete recipe reader.
     inout fn lexicalBodyParameterType(function: U64, index: U64, ref: U64, receiver: U64) -> Result[Optional[U64], CompileDiagnostic] {
         if !self.arena.typeContainsAssociatedProjection(ref: ref) { return <Result.Ok value=<Optional.None /> /> }
-        val declaration = self.arena.functionAt(index: function)
-        if declaration.typeParams.count() != 0U64 || !self.arena.typeIsClosed(ref: receiver) { return <Result.Ok value=<Optional.None /> /> }
-        val source = match self.authoredSignatureViews.get(key: function) {
-            Optional.Some(v: val admitted) => admitted.signature,
+        val admitted = match self.authoredSignatureViews.get(key: function) {
+            Optional.Some(v: val admitted) => admitted,
             Optional.None => { return <Result.Ok value=<Optional.None /> /> },
         }
+        val source = admitted.signature
         if index >= source.parameters.count() || source.parameters[index] == 0U64 { return <Result.Ok value=<Optional.None /> /> }
+        val declaration = self.arena.functionAt(index: function)
+        if declaration.typeParams.count() != 0U64 || !self.arena.typeIsClosed(ref: receiver) {
+            val occurrence = try self.authoredSignatureOccurrence(signature: source, id: source.parameters[index])
+            if source.function != function || !self.typeRefEq(a: occurrence.term, b: ref) {
+                return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "lexical parameter has a foreign signature slot", failureDomain: <FailureDomain.Internal />) />
+            }
+            val equations = admitted.recipeEquations.getOr(key: occurrence.recipe, fallback: [])
+            if equations.count() == 0U64 { return <Result.Ok value=<Optional.None /> /> }
+            val subject = self.groundTermInEnvironment(ref: occurrence.term, params: [], values: [], selfRef: receiver)
+            val term = try self.replayProjectionNormalizations(ref: subject, normalizations: equations, offset: occurrence.site)
+            if term == subject { return <Result.Ok value=<Optional.None /> /> }
+            return <Result.Ok value=<Optional.Some v=term /> />
+        }
         val environment = <InstanceEnvironment receiverRef=receiver />
         val term = try self.readAdmittedSignatureRoot(function: function, slot: <SourceSignatureSlot.Parameter index=index />, environment: environment)
         return <Result.Ok value=<Optional.Some v=term /> />

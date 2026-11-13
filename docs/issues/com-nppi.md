@@ -1,6 +1,6 @@
 ---
 id: com-nppi
-status: open
+status: in_progress
 deps: []
 links: []
 created: 2026-11-13T21:39:46Z
@@ -62,3 +62,20 @@ instance to admit the abstract body, or bypass the declaration verifier.
 This repair supplies the parameter producer used by
 [com-3jtd](com-3jtd.md); that task owns forwarding the selected RHS
 extension evidence into candidate lookup.
+
+## Candidate verification
+
+The retained lexical parameter reader validates the authored slot and
+replays its saved equations in the abstract receiver environment. It
+does not query a concrete generic instantiation. An output with no
+usable equation stays symbolic. Closed signatures continue through the
+concrete recipe reader.
+
+`lexical_projected_parameter_equalities` rejects at the method call under
+`98a78601` in check/JIT. Fixed-input build
+`20261113T214140-build-ad7752` produced `180bd891`. The fixture passes
+check including its unused generic body, JIT, and linked native
+(`49/1`). Nine positive fixtures passed check/JIT, and the diagnostics
+of three existing missing or wrong-instance controls matched the precursor
+in both modes. The bare projected-parameter scratch control also passes
+check. Closure requires an independent review of this candidate.

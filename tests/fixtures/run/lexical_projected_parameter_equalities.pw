@@ -1,0 +1,26 @@
+use @Std/Io only { print }
+
+trait Output { type First type Second }
+struct Producer {}
+struct Counter { val n: I64 }
+struct Other {}
+impl Counter { fn get() -> I64 { return 1I64 } }
+impl Other { fn get() -> I64 { return 7I64 } }
+extension Read { impl Counter { fn get() -> I64 { return self.n } } }
+impl Producer as Output {
+    type First = Counter#Read
+    type Second = Other
+}
+
+fn read[T](owner: T, first: T#Output.First, second: T#Output.Second) -> I64 where T: Output[First=Counter#Read, Second=Other] {
+    return first.get() + second.get()
+}
+
+fn unused[T](owner: T, second: T#Output.Second) -> I64 where T: Output[Second=Other] {
+    return second.get()
+}
+
+fn main() {
+    print(read(owner: <Producer />, first: <Counter n=42I64 />#Read, second: <Other />))
+    print(<Counter n=42I64 />.get())
+}
