@@ -102,6 +102,9 @@ lexical declaration. Build `20261113T032208-build-d6ed26` passed.
 Candidate `plewc-com-yjq0-exact-local` (`f540d3b5`) rejects the RED
 input in check, build and run. The lazy CLI suite passes, and both a
 concrete and a generic view with a matching bound print `42`.
+The compiler source passed check. On that same source, alternating
+measurements gave medians of 6.928772 s for the timing candidate and
+6.912429 s for the exact-instance candidate (three runs each).
 
 Projection recipes, value views, owner-scoped proof publication and
 final readers still need migration. Mid already reads sealed local
@@ -110,3 +113,10 @@ through the general term reader, and its statement walk also scans the
 raw annotation. Both consumers need to take their input from the
 admitted occurrence under the same body owner. The common formation
 audit outside this body lifecycle remains under [com-3jtd](com-3jtd.md).
+
+The next RED is `local_value_wrong_trait_instance`. A standalone
+`number#Marker[I64]` passes both check and run on `f540d3b5` even
+though only `Marker[Bool]` is implemented. Record attaches a view to
+the operand's semantic type before Verify checks the older head lookup.
+Use the exact instance and the lexical owner when recording the
+admitted value view, then transfer its evidence to sealed body facts.
