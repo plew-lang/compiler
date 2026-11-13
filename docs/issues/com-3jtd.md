@@ -1244,3 +1244,13 @@ on `f350c546` (fixed-input build `20261113T195310-build-5cad4f`).
 The runtime variant that calls the conformance witness also passes check
 and JIT. A conformance-only bundle with an unmet condition now rejects at
 view formation in both modes. The other formation findings remain open.
+
+Extension applicability and the dependent inherent receiver matcher now
+consume the conformance query's found/missing/ambiguous result before
+diagnostics. An ambiguous premise excludes that candidate and the bundle
+can still use another applicable impl. Both
+`extension_inapplicable_{trait,projected}_receiver` failed on `f350c546`
+and pass check, JIT and linked native on `b54c049c` (build
+`20261113T195829-build-2f6785`). The reversed declaration-order controls
+also pass check/JIT. An ambiguous required bound and an inapplicable
+conformance-only extension still reject.

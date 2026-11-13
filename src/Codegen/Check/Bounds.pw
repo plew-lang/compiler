@@ -2006,8 +2006,11 @@ impl Comp {
             val bound = self.substituteRetainedBound(bound: self.declarationBound(source: source), environment: environment, selfRef: receiver, itemRef: 0U64)
             try self.recordBoundInputProjectionEquations(bound: bound, assumptions: assumptions, normalizations: inout normalizations, demand: <ConformanceProofDemand.SourceAdmission />)
             val expected = try self.replayBoundNormalizations(bound: bound, normalizations: normalizations)
-            val proof = try self.viewedTraitConstraintProof(demand: <ConformanceProofDemand.SourceAdmission />, ref: expected.subject, constraint: expected.constraint, assumptions: assumptions)
-            if self.proofIsMissing(proof: proof) { return <Result.Ok value=absent /> }
+            val answer = try self.queryViewedTraitConstraint(demand: <ConformanceProofDemand.SourceAdmission />, ref: expected.subject, constraint: expected.constraint, assumptions: assumptions)
+            val proof = match answer {
+                ConformanceProofResult.Found(proof: val proof) => proof,
+                ConformanceProofResult.Missing | ConformanceProofResult.Ambiguous(owner: _, demand: _, selectedSource: _) => { return <Result.Ok value=absent /> },
+            }
             try self.checkStaticProofEvidence(proof: proof, offset: bound.offset, assumptions: assumptions)
             try self.recordBoundPredicateEquations(bound: expected, proof: proof, assumptions: assumptions, normalizations: inout normalizations)
             try self.compareValidatedWitnessClause(expected: expected, proof: proof, normalizations: normalizations, offset: bound.offset)

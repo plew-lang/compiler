@@ -547,10 +547,10 @@ pub impl Comp {
                 // B[String].
                 if self.methodRecvIsTrait(f: f) && typeRef != 0U64 {
                     val traitOwner: U64 = self.canonicalTraitOwner(start: f.recvStart, len: f.recvLen)
-                    val proof = try self.traitPatternProof(demand: <ConformanceProofDemand.SourceAdmission />, baseRef: typeRef, traitId: f.recvId, traitOwner: traitOwner, traitArgs: <PatternTypeInput.Values values=self.copyFuncTypes(types: f.recvTraitArgs) />, patternParams: <PatternBindInput.Function range=f.typeParams />, assumptions: assumptions)
-                    match proof {
-                        StaticConformanceProof.Missing => {}
-                        _ => { return <Result.Ok value=true />}
+                    val answer = try self.queryTraitPatternProof(demand: <ConformanceProofDemand.SourceAdmission />, baseRef: typeRef, traitId: f.recvId, traitOwner: traitOwner, traitArgs: <PatternTypeInput.Values values=self.copyFuncTypes(types: f.recvTraitArgs) />, patternParams: <PatternBindInput.Function range=f.typeParams />, assumptions: assumptions)
+                    match answer {
+                        ConformanceProofResult.Found(proof: _) => { return <Result.Ok value=true /> }
+                        ConformanceProofResult.Missing | ConformanceProofResult.Ambiguous(owner: _, demand: _, selectedSource: _) => { i += 1U64 continue }
                     }
                 }
                 if f.recvId == qType {
@@ -594,10 +594,9 @@ pub impl Comp {
                 // must not be compared to T.
                 if typeRef != 0U64 && cf.subjectTraitOwner != 0U64 {
                     val subjectOwner: U64 = cf.subjectTraitOwner
-                    val proof = try self.traitPatternProof(demand: <ConformanceProofDemand.SourceAdmission />, baseRef: typeRef, traitId: cf.typeId, traitOwner: subjectOwner, traitArgs: <PatternTypeInput.Conformance range=self.conformanceDeclarationSubjectTerms(index: i, written: cf.subjectArgs) />, patternParams: <PatternBindInput.Conformance range=cf.typeParams />, assumptions: assumptions)
-                    match proof {
-                        StaticConformanceProof.Missing => {}
-                        _ => { return <Result.Ok value=true />}
+                    val answer = try self.queryTraitPatternProof(demand: <ConformanceProofDemand.SourceAdmission />, baseRef: typeRef, traitId: cf.typeId, traitOwner: subjectOwner, traitArgs: <PatternTypeInput.Conformance range=self.conformanceDeclarationSubjectTerms(index: i, written: cf.subjectArgs) />, patternParams: <PatternBindInput.Conformance range=cf.typeParams />, assumptions: assumptions)
+                    if self.conformanceQueryFound(answer: answer) {
+                        return <Result.Ok value=true />
                     }
                 }
             }
