@@ -2265,7 +2265,7 @@ fn loadFrontendDeclarations(c: inout Comp, input: FrontendInput, sources: Source
         try c.checkUseVisibility()
         try c.checkTypeVisibility()
     } else {
-        try c.checkSourceTypeUses(types: c.loweringTypeUses)
+        try c.checkSourceTypeUses(occurrences: c.loweringTypeUses)
     }
     try c.resolveTypeDeclIdentities()
     // Registration reserves identities. Admit all overload groups under the

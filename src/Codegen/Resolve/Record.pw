@@ -1622,12 +1622,10 @@ pub impl Comp {
             val context = (try self.requireConstructionContext(ctxRef: normalizedContext, offset: self.exprOffset(id: exprId)))
             try self.resolveConstructionContext(exprId: exprId, context: context)
         }
-        if !self.genMode {
-            if exprId < self.sourceExpressionLimit { try self.checkExpressionVisibility(exprId: exprId) }
-            match self.expressionTypeUses.get(key: exprId) {
-                Optional.Some(v: val uses) => { try self.checkSourceTypeUses(types: uses) }
-                Optional.None => {}
-            }
+        if !self.genMode && exprId < self.sourceExpressionLimit { try self.checkExpressionVisibility(exprId: exprId) }
+        match self.expressionTypeUses.get(key: exprId) {
+            Optional.Some(v: val uses) => { try self.checkRequestedTypeUses(occurrences: uses) }
+            Optional.None => {}
         }
         // Recording owns its destination slot. Parent expressions can be
         // newer than every child; type publication must not depend on an
@@ -2557,11 +2555,9 @@ pub impl Comp {
                 permitsGive = true
             }
         }
-        if !self.genMode {
-            match self.blockTypeUses.get(key: blkId) {
-                Optional.Some(v: val uses) => { try self.checkSourceTypeUses(types: uses) }
-                Optional.None => {}
-            }
+        match self.blockTypeUses.get(key: blkId) {
+            Optional.Some(v: val uses) => { try self.checkRequestedTypeUses(occurrences: uses) }
+            Optional.None => {}
         }
         mut val i: U64 = 0
         mut val flow = <SourceCompletion />

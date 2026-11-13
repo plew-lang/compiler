@@ -69,3 +69,24 @@ dependence on the global scan as that authority moves to lexical body
 preparation. Then trace the closure, provided/deinit and concrete
 consumers against the same owner contract. Keep type-view source
 formation distinct from discovering or publishing executable bodies.
+
+## Request timing increment
+
+Lowering now retains authored occurrence IDs in the existing block and
+expression type-use lists. Declaration verification reads its own list;
+body recording checks only the block and expression lists reached by its
+request. This removes the scan across interned type terms and avoids
+resolving a selected view head twice within a single check.
+
+Build `20261113T031508-build-6c50d3` passed with immutable inputs.
+Candidate `plewc-com-yjq0-request-timing` (`5590955d`) passed the lazy
+CLI suite, including the new unused/requested/check/build controls, and
+checked the compiler's own source. A valid locally annotated generic
+view with a matching bound also printed `42` under JIT.
+
+Exact-instance admission remains open. The frozen baseline and this
+candidate both accept `val values: Array[I64#Marker[I64]] = []` when
+the sole conformance is `I64 as Marker[Bool]`. The current head check
+compares trait owner and arity without checking positional arguments.
+Use this as the next RED. The owner-scoped publication and final-reader
+requirements are still open.

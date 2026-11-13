@@ -57,7 +57,6 @@ impl Comp {
     }
 
     inout fn recordAuthoredTypeUse(ref: U64, site: U64, children: Array[U64] = []) -> U64 {
-        self.loweringTypeUses.append(ref)
         mut val labels: Array[U64] = []
         mut val index = 0U64
         while index < children.count() {
@@ -65,6 +64,7 @@ impl Comp {
             index += 1U64
         }
         val occurrence = self.sourceTypeUses.record(term: ref, site: site, parameters: self.cur.typeParams, children: children, labels: labels)
+        self.loweringTypeUses.append(occurrence)
         if site != 0U64 && self.modules.sourceFileContaining(offset: site).isSome() && !self.authoredTypeUseSites.contains(key: ref) {
             self.authoredTypeUseSites[ref] = site
         }

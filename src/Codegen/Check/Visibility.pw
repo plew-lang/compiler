@@ -318,8 +318,9 @@ pub impl Comp {
         return self.authoredTypeUseSites.get(key: ref)
     }
 
-    inout fn checkSourceTypeUses(types: Array[U64]) -> Result[(), CompileDiagnostic] {
-        for ref in types {
+    inout fn checkSourceTypeUses(occurrences: Array[U64]) -> Result[(), CompileDiagnostic] {
+        for id in occurrences {
+            val ref = (try self.signatureOccurrence(id: id)).term
             if !self.checkedTypeUses.contains(ref) {
                 try self.checkAnyTypeFormation(ref: ref)
                 try self.checkTypeUseVisibility(ref: ref)
@@ -327,6 +328,11 @@ pub impl Comp {
             }
         }
         return <Result.Ok value=() />
+    }
+
+    inout fn checkRequestedTypeUses(occurrences: Array[U64]) -> Result[(), CompileDiagnostic] {
+        if !self.genMode { try self.checkSourceTypeUses(occurrences: occurrences) }
+        return self.checkAuthoredTypeViews(occurrences: occurrences)
     }
 
     inout fn checkTypeUseVisibility(ref: U64) -> Result[(), CompileDiagnostic] {
