@@ -184,3 +184,22 @@ Fixed-input build `20261113T114642-build-807045`, candidate `03cc2adc0cb1`,
 prints 42 with the stored view and dependent generic call in JIT and
 linked native. Existing extension-shadowing and distinct-receipt controls
 pass. Wrong and swapped trait instances still reject in check and JIT.
+
+### Remaining composed-view admission
+
+The fixed candidate `03cc2adc0cb1` accepts the type annotation in both
+orders. The value expression `<Number />#Marker[I64]#Selection` still
+rejects when Selection supplies the only Marker witness. The same failure
+occurs with a parenthesis around the inner view. The existing spec/09
+source-set rule is order-independent. Record currently admits the inner
+selector before the full extension set is assembled, and Mono replays
+the separate inner view facts. Prepare the normalized set for a composed
+expression before selecting the trait proof, then preserve its boundary
+through Mid. An independently bound earlier value still needs its own
+valid source set. Include strip and wrong-instance contrasts.
+
+The same-source development comparison of `c5146239` and `03cc2adc0cb1`
+on the source at `619e0292` used four alternating pairs and excluded the
+first pair as warmup. Medians were 7.111 s and 7.152 s; all eight LLVM
+outputs matched SHA-256
+`0cd5566502474f59f393acb471c25aab1eba0a9b825a030f87df0ac1588b0533`.
