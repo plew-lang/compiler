@@ -121,6 +121,13 @@ pub impl Comp {
                 if scope.owner >= self.decls.conformCount() { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "associated binding has no conformance scope", failureDomain: <FailureDomain.Internal />) /> }
                 assumptions = self.conformanceDeclarationAssumptions(conformIndex: scope.owner)
             }
+            DeclarationScopeOrigin.Implementation => {
+                val source = self.sourceTypeUses.scopeAt(token: scope.owner).unwrap()
+                val range = source.bounds.unwrapOr(fallback: <SourceBoundRange />)
+                for index in 0U64..<range.count {
+                    assumptions.append(<DeclarationBoundRef.Implementation index=range.first + index - 1U64 />)
+                }
+            }
             DeclarationScopeOrigin.RequirementSignature => {
                 val range = self.rawRequirementRanges.getOr(key: scope.owner, fallback: <SourceBoundRange />)
                 for index in 0U64..<range.count {
@@ -1773,6 +1780,18 @@ impl Comp {
                     }
                     DeclarationBoundRef.AssociatedType(index: _) => {}
                     _ => { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "associated binding cannot borrow another declaration premise", failureDomain: <FailureDomain.Internal />) /> }
+                }
+            }
+            DeclarationScopeOrigin.Implementation => {
+                match source {
+                    DeclarationBoundRef.Implementation(index: val index) => {
+                        if self.projectionBoundClauses[index].scope != scope.owner {
+                            return <Result.Err error=self.diagnosticAt(offset: offset, msg: "implementation receiver has a foreign declaration premise", failureDomain: <FailureDomain.Internal />) />
+                        }
+                        return <Result.Ok value=<DeclarationProofDependencies /> />
+                    }
+                    DeclarationBoundRef.AssociatedType(index: _) => {}
+                    _ => { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "implementation receiver has a foreign declaration premise", failureDomain: <FailureDomain.Internal />) /> }
                 }
             }
             DeclarationScopeOrigin.TraitDeclaration => {

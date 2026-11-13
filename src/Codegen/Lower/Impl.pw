@@ -1094,17 +1094,19 @@ impl Comp {
         try self.reserveValueProjectionBounds(parameters: normalizedImpl.whereParams, traits: normalizedImpl.whereTraits, subjects: normalizedImpl.whereTypes, traitTypes: normalizedImpl.whereTraitTypes, anchor: normalizedImpl.span.start)
         // Trait subjects are not value TypeRefs; concrete impl receivers are.
         // Keep the receiver pattern for callable-surface matching.
-        mut val recvTy: U64 = 0U64
-        if recvTraitOwner == 0U64 {
-            recvTy = (try self.lowerType(t: receiverType)).ref
-        }
+        val nominalReceiver = if recvTraitOwner == 0U64 { give try self.lowerType(t: receiverType) } else { give <PType start=0U64 len=0U64 isArray=false ref=0U64 /> }
+        val recvTy = nominalReceiver.ref
         mut val subjectArgs: Array[U64] = []
         self.lowerMethodReceiverRecipes = []
         mut val subjectArgIdx: U64 = 0
         while subjectArgIdx < receiverType.args.count() {
-            val argument = try self.lowerType(t: receiverType.args[subjectArgIdx])
-            subjectArgs.append(argument.ref)
-            if recvTraitOwner != 0U64 { self.lowerMethodReceiverRecipes.append((try self.authoredChildRecipe(type: argument))) }
+            if recvTraitOwner == 0U64 {
+                subjectArgs.append(self.typeTermRefChildRef(ref: recvTy, index: subjectArgIdx))
+            } else {
+                val argument = try self.lowerType(t: receiverType.args[subjectArgIdx])
+                subjectArgs.append(argument.ref)
+                self.lowerMethodReceiverRecipes.append(try self.authoredChildRecipe(type: argument))
+            }
             subjectArgIdx += 1U64
         }
         mut val conformanceTraitArgs: Array[U64] = []
@@ -1168,7 +1170,7 @@ impl Comp {
             val index = try self.registerDeclaredConformance(cf: <Conform subjectTraitOwner=recvTraitOwner sourceModule=sourceModule typeStart=recvN.nameStart typeLen=recvN.nameLen typeId=intern(c: inout self, start: recvN.nameStart, len: recvN.nameLen) subjectTy=recvTy subjectArgs=self.pushConformTypes(types: subjectArgs) typeParams=self.pushConformBinds(binds: implParamBinds) typeArity=receiverType.args.count() traitStart=traitN.nameStart traitLen=traitN.nameLen traitId=intern(c: inout self, start: traitN.nameStart, len: traitN.nameLen) traitArgs=self.pushConformTypes(types: conformanceTraitArgs) derived=false isPub=normalizedImpl.isPub witnessed=self.pushConformWitnesses(witnesses: witnessed) witnessFuncIds=self.pushConformFuncIds(ids: witnessFuncIds) extId=extensionId defOffset=normalizedImpl.span.start assocBindingIds=self.pushConformFuncIds(ids: assocBindingIds) />, bounds: (try self.collectPreparedBounds()))
             give <SourceImplementationKind.Conformance index=index />
         } else { give <SourceImplementationKind.Inherent /> }
-        val implementation = <SourceImplementationOwner kind=ownerKind receiver=recvTy receiverTrait=recvTraitOwner receiverArguments=subjectArgs receiverArgumentRecipes=self.lowerMethodReceiverRecipes targetArgumentOccurrences=targetArgumentOccurrences parameters=implParamBinds sourceModule=sourceModule extensionId=extensionId />
+        val implementation = <SourceImplementationOwner kind=ownerKind receiver=recvTy receiverOccurrence=nominalReceiver.authoredUse receiverTrait=recvTraitOwner receiverArguments=subjectArgs receiverArgumentRecipes=self.lowerMethodReceiverRecipes targetArgumentOccurrences=targetArgumentOccurrences parameters=implParamBinds sourceModule=sourceModule extensionId=extensionId />
         if !self.sourceTypeUses.bindImplementation(token: self.sourceTypeUses.currentScope(), implementation: implementation) {
             return <Result.Err error=self.diagnosticAt(offset: normalizedImpl.span.start, msg: "invalid authored implementation scope binding", failureDomain: <FailureDomain.Internal />) />
         }
@@ -1246,15 +1248,19 @@ impl Comp {
         val savedTP: Array[Bind] = self.cur.typeParams
         self.cur.typeParams = implScope
         try self.prepareSyntaxImplProjectionBounds(implementation: normalizedImpl)
-        mut val recvTy: U64 = 0U64
-        if recvTraitOwner == 0U64 { recvTy = (try self.lowerSyntaxType(id: normalizedImpl.recvType)).ref }
+        val nominalReceiver = if recvTraitOwner == 0U64 { give try self.lowerSyntaxType(id: normalizedImpl.recvType) } else { give <PType start=0U64 len=0U64 isArray=false ref=0U64 /> }
+        val recvTy = nominalReceiver.ref
         mut val subjectArgs: Array[U64] = []
         self.lowerMethodReceiverRecipes = []
         i = 0U64
         while i < recvArity {
-            val argument = try self.lowerSyntaxType(id: syntaxTypeArg(file: self.syntax, ty: recvSyntax, index: i))
-            subjectArgs.append(argument.ref)
-            if recvTraitOwner != 0U64 { self.lowerMethodReceiverRecipes.append((try self.authoredChildRecipe(type: argument))) }
+            if recvTraitOwner == 0U64 {
+                subjectArgs.append(self.typeTermRefChildRef(ref: recvTy, index: i))
+            } else {
+                val argument = try self.lowerSyntaxType(id: syntaxTypeArg(file: self.syntax, ty: recvSyntax, index: i))
+                subjectArgs.append(argument.ref)
+                self.lowerMethodReceiverRecipes.append(try self.authoredChildRecipe(type: argument))
+            }
             i += 1U64
         }
         mut val conformanceTraitArgs: Array[U64] = []
@@ -1314,7 +1320,7 @@ impl Comp {
             val index = try self.registerDeclaredConformance(cf: <Conform subjectTraitOwner=recvTraitOwner sourceModule=sourceModule typeStart=recvN.nameStart typeLen=recvN.nameLen typeId=intern(c: inout self, start: recvN.nameStart, len: recvN.nameLen) subjectTy=recvTy subjectArgs=self.pushConformTypes(types: subjectArgs) typeParams=self.pushConformBinds(binds: implParamBinds) typeArity=recvArity traitStart=traitN.nameStart traitLen=traitN.nameLen traitId=intern(c: inout self, start: traitN.nameStart, len: traitN.nameLen) traitArgs=self.pushConformTypes(types: conformanceTraitArgs) derived=false isPub=normalizedImpl.isPub witnessed=self.pushConformWitnesses(witnesses: witnessed) witnessFuncIds=self.pushConformFuncIds(ids: witnessFuncIds) extId=extensionId defOffset=normalizedImpl.span.start assocBindingIds=self.pushConformFuncIds(ids: assocBindingIds) />, bounds: (try self.collectPreparedBounds()))
             give <SourceImplementationKind.Conformance index=index />
         } else { give <SourceImplementationKind.Inherent /> }
-        val implementation = <SourceImplementationOwner kind=ownerKind receiver=recvTy receiverTrait=recvTraitOwner receiverArguments=subjectArgs receiverArgumentRecipes=self.lowerMethodReceiverRecipes targetArgumentOccurrences=targetArgumentOccurrences parameters=implParamBinds sourceModule=sourceModule extensionId=extensionId />
+        val implementation = <SourceImplementationOwner kind=ownerKind receiver=recvTy receiverOccurrence=nominalReceiver.authoredUse receiverTrait=recvTraitOwner receiverArguments=subjectArgs receiverArgumentRecipes=self.lowerMethodReceiverRecipes targetArgumentOccurrences=targetArgumentOccurrences parameters=implParamBinds sourceModule=sourceModule extensionId=extensionId />
         if !self.sourceTypeUses.bindImplementation(token: self.sourceTypeUses.currentScope(), implementation: implementation) {
             return <Result.Err error=self.diagnosticAt(offset: normalizedImpl.span.start, msg: "invalid authored implementation scope binding", failureDomain: <FailureDomain.Internal />) />
         }

@@ -74,6 +74,13 @@ pub impl Comp {
             DeclarationBoundRef.MethodReceiver(val index) => { return self.hasMethodReceiverAssumption(function: index) }
             DeclarationBoundRef.Requirement(val index) => { return index < self.arena.requirementBoundEvidenceCount() }
             DeclarationBoundRef.Interface(val index) => { return self.interfaceEvidenceIsValid(index: index) }
+            DeclarationBoundRef.Implementation(index: val index) => {
+                if index >= self.projectionBoundClauses.count() { return false }
+                val clause = self.projectionBoundClauses[index]
+                val scope = self.sourceTypeUses.scopeAt(token: clause.scope)
+                if scope.isNone() || scope.unwrap().implementation.isNone() { return false }
+                return match clause.state { ProjectionBoundState.Ready(bound: _) => true _ => false }
+            }
             DeclarationBoundRef.RawRequirement(val index) => { return index < self.rawRequirementPremises.count() }
             DeclarationBoundRef.TraitDeclaration(val index) => { return self.traitDeclarationPremises.contains(key: index) }
         }
@@ -99,6 +106,12 @@ pub impl Comp {
             DeclarationBoundRef.AssociatedType(val index) => { return self.arena.associatedBoundEvidenceAt(index: index).bound }
             DeclarationBoundRef.Requirement(val index) => { return self.arena.requirementBoundEvidenceAt(index: index).bound }
             DeclarationBoundRef.Interface(val index) => { return self.interfaceEvidenceBound(index: index) }
+            DeclarationBoundRef.Implementation(index: val index) => {
+                match self.projectionBoundClauses[index].state {
+                    ProjectionBoundState.Ready(bound: val bound) => { return <TraitBound subject=bound.subject constraint=bound.constraint offset=bound.parameter.nameStart /> }
+                    _ => { panic("implementation premise was not prepared") }
+                }
+            }
             DeclarationBoundRef.RawRequirement(val index) => { return self.rawRequirementPremises[index].bound }
             DeclarationBoundRef.TraitDeclaration(val index) => { return self.traitDeclarationPremises[index] }
             DeclarationBoundRef.MethodReceiver(val index) => {
@@ -127,6 +140,9 @@ pub impl Comp {
             }
             DeclarationBoundRef.Requirement(index: val left) => {
                 match b { DeclarationBoundRef.Requirement(index: val right) => { return left == right } _ => { return false } }
+            }
+            DeclarationBoundRef.Implementation(index: val left) => {
+                match b { DeclarationBoundRef.Implementation(index: val right) => { return left == right } _ => { return false } }
             }
             DeclarationBoundRef.RawRequirement(index: val left) => {
                 match b { DeclarationBoundRef.RawRequirement(index: val right) => { return left == right } _ => { return false } }

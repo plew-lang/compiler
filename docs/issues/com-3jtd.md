@@ -744,3 +744,30 @@ also bypasses the associated-binding admission loop on both candidates;
 spec/08 describes associated bindings under trait conformance, so
 establish whether an inherent alias is a supported surface before
 counting that probe as a view-formation regression.
+
+### Nominal implementation receiver admission
+
+Both lowerers now retain the exact nominal receiver occurrence on the
+original implementation scope and use its canonical children for the
+receiver arguments. The declaration checks the recipe against references
+to its prepared `where` clauses, without manufacturing a function or
+conformance owner for an inherent implementation. It retains the
+admitted recipe and proof under the implementation scope. This removes
+the owner/arity-only sweep for the nominal receiver and its arguments.
+
+Baseline `9e27a108cdfb` accepted unused inherent and conformance impls
+whose receiver selects an unavailable trait instance. Fixed-input build
+`20261113T152514-build-a37531` produced `76d2cdad475c`. It rejects the
+concrete mismatch and the generic mismatch in check and JIT, and accepts
+an unused generic declaration with the matching lexical bound. A
+concrete matching inherent receiver invokes its method and prints 42
+under JIT and native. The matching concrete conformance receiver also
+prints 42 under JIT. The nested provided receiver and conditional target
+projection controls and generation `20261113T152839-gen-c009dc` passed.
+
+One final-consumer gap remains for this entry. Calling the method on
+`impl[T] Box[T#Mark[I64]] where T: Mark[I64]` fails with “no matching
+method” on both candidates, while the analogous concrete specialization
+runs. Trace how matching and later specialization consume the admitted
+receiver recipe, including projected receiver arguments. Source
+admission success alone does not establish that handoff.

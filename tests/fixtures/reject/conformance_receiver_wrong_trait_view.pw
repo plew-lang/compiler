@@ -1,0 +1,7 @@
+trait Mark[T] {}
+struct Number {}
+impl Number as Mark[I64] {}
+struct Box[T] {}
+trait Other {}
+impl Box[Number#Mark[Bool]] as Other {}
+fn main() {}

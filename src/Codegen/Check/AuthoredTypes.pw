@@ -331,6 +331,26 @@ impl Comp {
         return self.checkTraitConstraintOperands(source: source, written: written, scopes: scopes, closedOnly: false)
     }
 
+    inout fn admitNominalImplementationReceivers() -> Result[(), CompileDiagnostic] {
+        for token in 1U64..<(self.sourceTypeUses.scopeCount() + 1U64) {
+            val source = self.sourceTypeUses.scopeAt(token: token).unwrap()
+            if source.implementation.isNone() { continue }
+            val owner = source.implementation.unwrap()
+            if owner.receiverOccurrence == 0U64 || !self.bodyTypeNeedsViewAdmission(ref: owner.receiver) { continue }
+            val occurrence = try self.signatureOccurrence(id: owner.receiverOccurrence)
+            val scope = <DeclarationTypeScope origin=<DeclarationScopeOrigin.Implementation /> owner=token parameters=self.pushFuncBinds(binds: owner.parameters) />
+            val scopes = <SignatureProofScopes local=scope assumptions=(try self.declarationScopeAssumptions(scope: scope)) inherited=[] receiver=0U64 scopedBinders=true />
+            match (try self.checkTraitConstraintOperand(recipe: occurrence.recipe, term: owner.receiver, sourceScope: token, scopes: scopes, closedOnly: false)) {
+                Optional.Some(v: val proof) => {
+                    self.authoredImplementationReceivers[token] = proof
+                    self.markAdmittedRecipeTypeUses(recipe: proof.recipe)
+                }
+                Optional.None => { return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "implementation receiver lost its view admission", failureDomain: <FailureDomain.Internal />) /> }
+            }
+        }
+        return <Result.Ok value=() />
+    }
+
     inout fn indexConformanceArgumentScopes() {
         for token in 1U64..<(self.sourceTypeUses.scopeCount() + 1U64) {
             val source = self.sourceTypeUses.scopeAt(token: token).unwrap()
