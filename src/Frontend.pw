@@ -728,6 +728,7 @@ pub struct Comp {
     pub mut val blockExitRequirements: Dictionary[U64, U64] = [:]
     pub mut val blockTypeUses: Dictionary[U64, Array[U64]] = [:]
     mut val bodyRecipeTypeUses: Set[U64] = Set.new()
+    mut val globalAnnotationProofs: Dictionary[U64, LocalAnnotationProof] = [:]
     pub mut val checkedTypeUses: Set[U64] = Set.new()
     pub mut val sourceExpressionLimit: U64 = 0U64
     pub mut val globalCallTemplatesClosed: Bool = false
@@ -2331,6 +2332,7 @@ pub fn analyzeFrontendDeclarations(c: inout Comp, input: FrontendInput, sources:
     // checked only when finalization enqueues their grounded BodyInstance; that
     // is the one semantic edge Mono and LLVM will actually consume.
     tracePhase(c: inout c, label: "generic-checks:start")
+    try c.admitGlobalAnnotations()
     try recordSemanticExpressionTypes(c: inout c)
     // Allocate the persistent expression cache before abstract generic checking.
     // `checkGenericBodies` resolves each lexical identifier under its symbolic
@@ -2409,6 +2411,7 @@ pub fn analyzeFrontendForRequests(c: inout Comp, input: FrontendInput, sources: 
         return <Result.Err error=c.diagnosticAt(offset: 0U64, msg: "source body requests cannot use generator mode") />
     }
     try loadFrontendDeclarations(c: inout c, input: input, sources: sources, options: options)
+    try c.admitGlobalAnnotations()
     try recordSemanticExpressionTypes(c: inout c, includeBodies: false)
     c.buildExprTyTable()
     try c.verifyProgram(includeBodies: false)

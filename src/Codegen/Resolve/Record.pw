@@ -2511,7 +2511,14 @@ pub impl Comp {
                 val annotation = match annotationOccurrence {
                     Optional.Some(v: val occurrence) => {
                         val owner = self.currentSourceOwner().unwrap()
-                        give <Optional.Some v=(try self.admitBodyTypeUse(id: occurrence, term: ty, owner: owner)) />
+                        val declaration = match owner {
+                            SemanticCompletionOwner.Global(target: val target) => target == nameStart,
+                            _ => false,
+                        }
+                        val proof = if declaration {
+                            give try self.requireGlobalAnnotation(target: nameStart, id: occurrence, written: ty)
+                        } else { give try self.admitBodyTypeUse(id: occurrence, term: ty, owner: owner) }
+                        give <Optional.Some v=proof />
                     }
                     Optional.None => { give <Optional.None /> }
                 }

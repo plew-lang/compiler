@@ -69,3 +69,26 @@ global authored signature calls preserve their JIT outputs. The
 global declaration annotation fixture still passes check but fails
 Mid preparation. Its declaration proof and storage handoff are the
 next increment.
+
+## Declaration annotations and Mid storage
+
+Admit each global declaration's root annotation before recording
+initializers. Its exact retained recipe supplies the initializer's
+expected type and forward references to the global. The initializer
+publishes the checked binding under its own declaration target. Mid
+builds the initializer's storage boundary and destination from that
+binding instead of the raw declaration term.
+
+Fixed-input build `20261113T072222-build-03006a` produced `39d67842`.
+All three regression fixtures and both global forward-reference and
+authored-signature controls pass check, JIT and native execution
+with their expected output. `global_projected_view_distinct_declarations`
+uses the same annotated term on two globals and reads the first from
+the second's initializer. The prior candidate reports a Mid failure.
+The new candidate prints 42 and 43 during initialization and once each
+from main in JIT and native execution. This tests dependency ordering,
+distinct values and one execution of each initializer.
+
+Remaining: test missing and foreign annotations and initializer
+facts independently, verify the request and compatibility boundaries,
+run the targeted suites and comparison, and obtain independent review.

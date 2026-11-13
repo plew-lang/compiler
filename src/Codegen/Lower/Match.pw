@@ -358,6 +358,10 @@ pub impl Comp {
             val occurrence = self.sourceTypeUses.useAt(index: node.occurrence - 1U64).unwrap()
             match occurrence.role {
                 SourceTypeUseRole.Body | SourceTypeUseRole.DefaultArgument => { self.bodyRecipeTypeUses.insert(node.occurrence) }
+                SourceTypeUseRole.Declaration => {
+                    val source = self.sourceTypeUses.scopeAt(token: occurrence.scope).unwrap()
+                    match source.kind { SourceTypeScopeKind.Global => { self.bodyRecipeTypeUses.insert(node.occurrence) } _ => { return } }
+                }
                 _ => { return }
             }
         }
@@ -386,7 +390,9 @@ pub impl Comp {
                     tyRef = ty.ref
                     authoredUse = ty.authoredUse
                 }
-                val annotation = try self.lowerLocalAnnotation(written: s.flag1, occurrence: authoredUse)
+                val annotation = if global && s.flag1 {
+                    give <Optional.Some v=authoredUse />
+                } else { give try self.lowerLocalAnnotation(written: s.flag1, occurrence: authoredUse) }
                 if global { try self.setAuthoredTypeUseRole(role: <SourceTypeUseRole.Body />, site: s.name.start) }
                 val statement = self.pushStmt(s: <Stmt.Let mutable=s.flag0 nameStart=s.name.start nameLen=s.name.end - s.name.start tyStart=tyStart tyLen=tyLen tyIsArray=tyIsArray ty=tyRef init=(try self.lowerSyntaxExpr(id: s.child0)) annotationOccurrence=annotation />)
                 return <Result.Ok value=statement />
@@ -483,7 +489,9 @@ pub impl Comp {
                     tyRef = pt.ref
                     authoredUse = pt.authoredUse
                 }
-                val annotation = try self.lowerLocalAnnotation(written: hasTy, occurrence: authoredUse)
+                val annotation = if globalTarget.isSome() && hasTy {
+                    give <Optional.Some v=authoredUse />
+                } else { give try self.lowerLocalAnnotation(written: hasTy, occurrence: authoredUse) }
                 if globalTarget.isSome() { try self.setAuthoredTypeUseRole(role: <SourceTypeUseRole.Body />, site: nm.nameStart) }
                 val iv: U64 = (try self.lowerExpr(e: init))
                 result = self.pushStmt(s: <Stmt.Let mutable=mutable nameStart=nm.nameStart nameLen=nm.nameLen tyStart=tyStart tyLen=tyLen tyIsArray=tyIsArray ty=tyRef init=iv annotationOccurrence=annotation />)

@@ -765,6 +765,36 @@ impl Comp {
         return <Result.Ok value=<LocalAnnotationProof occurrence=id recipe=occurrence.recipe sourceTerm=sourceTerm normalizations=equations proofs=validation.proofs /> />
     }
 
+    inout fn admitGlobalAnnotations() -> Result[(), CompileDiagnostic] {
+        for global in self.arena.globals {
+            match self.arena.stmts[global.letStmt] {
+                Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, val ty, init: _, val annotationOccurrence) => {
+                    if ty == 0U64 && annotationOccurrence.isNone() { continue }
+                    val id = annotationOccurrence.unwrapOr(fallback: 0U64)
+                    val occurrence = try self.signatureOccurrence(id: id)
+                    val token = self.sourceTypeUses.globalScope(target: global.nameStart)
+                    val proof = try self.admitGlobalTypeUse(occurrence: occurrence, id: id, term: ty, target: global.nameStart, token: token, role: <SourceTypeUseRole.Declaration />)
+                    self.markBodyRecipeTypeUses(recipe: proof.recipe)
+                    self.globalAnnotationProofs[global.nameStart] = proof
+                }
+                _ => { return <Result.Err error=self.diagnosticAt(offset: global.nameStart, msg: "global declaration has no binding", failureDomain: <FailureDomain.Internal />) /> }
+            }
+        }
+        return <Result.Ok value=() />
+    }
+
+    inout fn requireGlobalAnnotation(target: U64, id: U64, written: U64) -> Result[LocalAnnotationProof, CompileDiagnostic] {
+        val occurrence = try self.signatureOccurrence(id: id)
+        val proof = match self.globalAnnotationProofs.get(key: target) {
+            Optional.Some(v: val proof) => proof,
+            Optional.None => { return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "global declaration has no admitted annotation", failureDomain: <FailureDomain.Internal />) /> }
+        }
+        if occurrence.scope != self.sourceTypeUses.globalScope(target: target) || proof.occurrence != id || proof.recipe != occurrence.recipe || occurrence.term != written {
+            return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "global declaration has a foreign annotation proof", failureDomain: <FailureDomain.Internal />) />
+        }
+        return <Result.Ok value=proof />
+    }
+
     inout fn admitGlobalTypeUse(occurrence: AuthoredTypeUse, id: U64, term: U64, target: U64, token: U64, role: SourceTypeUseRole) -> Result[LocalAnnotationProof, CompileDiagnostic] {
         if token == 0U64 || occurrence.scope != token || occurrence.term != term {
             return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "global type has a foreign source occurrence", failureDomain: <FailureDomain.Internal />) />

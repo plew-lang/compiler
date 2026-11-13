@@ -3733,10 +3733,16 @@ pub fn buildParametricMidGlobalInit(c: inout Comp) -> MidBodyBuild {
         }
         if global.letStmt >= c.arena.stmts.count() { return <MidBodyBuild body=<MidBody sourceFunction=globalOwner locals=state.locals scopes=state.scopes blocks=state.blocks entry=0U64 /> error=<MidBuildError.InvalidStatement /> /> }
         match c.arena.stmts[global.letStmt] {
-            Stmt.Let(nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: val declaredTerm, init: val init, mutable: _, annotationOccurrence: _) => {
+            Stmt.Let(nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, init: val init, mutable: _, annotationOccurrence: _) => {
+                val binding = match facts.binding(stmtId: global.letStmt) {
+                    Optional.Some(v: val binding) => binding,
+                    Optional.None => { return <MidBodyBuild body=emptyMidBody(sourceFunction: globalOwner) error=<MidBuildError.MissingSemanticType /> /> }
+                }
+                if binding.declarationTarget != global.nameStart || binding.isMutable != global.mutable {
+                    return <MidBodyBuild body=emptyMidBody(sourceFunction: globalOwner) error=<MidBuildError.InvalidStatement /> />
+                }
                 val sourceTerm: U64 = (match midSourceSemanticTerm(c: inout c, facts: state.sourceFacts, sourceFunction: state.sourceFunction, exprId: init) { Result.Ok(value: val term) => { give term } Result.Err(error: val error) => { return <MidBodyBuild body=emptyMidBody(sourceFunction: globalOwner) error=error /> } })
-                mut val term: U64 = declaredTerm
-                if term == 0U64 { term = sourceTerm }
+                val term = binding.typeTerm
                 if term == 0U64 { return <MidBodyBuild body=<MidBody sourceFunction=globalOwner locals=state.locals scopes=state.scopes blocks=state.blocks entry=0U64 /> error=<MidBuildError.MissingSemanticType /> /> }
                 val evaluation: U64 = midOpenScope(state: inout state)
                 val temporaryLocal: U64 = addMidTemporary(state: inout state, typeTerm: term)

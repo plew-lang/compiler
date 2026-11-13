@@ -140,8 +140,14 @@ pub impl Comp {
         try self.enterGlobalInitializer(target: local.nameStart)
         mut val result: Local = local
         match self.arena.stmts[self.arena.globals[globalIndex].letStmt] {
-            Stmt.Let(mutable: _, nameStart: _, nameLen: _, val tyStart, val tyLen, val tyIsArray, val ty, val init, annotationOccurrence: _) => {
-                val inferred = (try self.inferLetType(tyStart: tyStart, tyLen: tyLen, tyIsArray: tyIsArray, ty: ty, init: init))
+            Stmt.Let(mutable: _, nameStart: _, nameLen: _, val tyStart, val tyLen, val tyIsArray, val ty, val init, val annotationOccurrence) => {
+                val inferred = if ty != 0U64 || annotationOccurrence.isSome() {
+                    val admitted = try self.requireGlobalAnnotation(target: local.nameStart, id: annotationOccurrence.unwrapOr(fallback: 0U64), written: ty)
+                    val info = self.typeInfoOfRef(ref: admitted.sourceTerm)
+                    give <LetEff start=info.nameStart len=info.nameLen arr=info.kind == 3 ty=admitted.sourceTerm />
+                } else {
+                    give try self.inferLetType(tyStart: tyStart, tyLen: tyLen, tyIsArray: tyIsArray, ty: ty, init: init)
+                }
                 result = <Local isGlobal=local.isGlobal nameStart=local.nameStart nameLen=local.nameLen nameId=local.nameId tyStart=inferred.start tyLen=inferred.len tyNameId=intern(c: inout self, start: inferred.start, len: inferred.len) isArray=inferred.arr ty=inferred.ty isInout=local.isInout isMut=local.isMut owned=local.owned moved=local.moved cnum=local.cnum />
             }
             _ => {}

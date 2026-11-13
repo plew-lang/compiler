@@ -1,0 +1,17 @@
+use @Std/Io only { print }
+trait Project { type Item }
+trait Marker[T] { fn number() -> I64 }
+struct Projector {}
+struct Number { val value: I64 }
+impl Projector as Project { type Item = I64 }
+impl Number as Marker[I64] { fn number() -> I64 { return self.value } }
+fn initialize(value: I64) -> Number#Marker[I64] {
+    print(value)
+    return <Number value=value />#Marker[I64]
+}
+val first: Number#Marker[Projector#Project.Item] = initialize(value: 42I64)
+val second: Number#Marker[Projector#Project.Item] = initialize(value: first.number() + 1I64)
+fn main() {
+    print(first.number())
+    print(second.number())
+}
