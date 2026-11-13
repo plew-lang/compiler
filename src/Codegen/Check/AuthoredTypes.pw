@@ -9,9 +9,7 @@ pub impl Comp {
             Optional.None => { return <Result.Ok value=0U64 /> }
             Optional.Some(v: val declaration) => declaration,
         }
-        val saved = try self.requireNominalTypeAnnotation(id: declaration.authoredTypeUse, site: declaration.authoredTypeSite, term: declaration.underRef, token: declaration.sourceTypeScope, owner: declaration.defOffset)
-        try self.checkNominalAnnotationEvidence(saved: saved, offset: declaration.authoredTypeSite)
-        return <Result.Ok value=declaration.underRef />
+        return self.readAdmittedNewtypeUnderlying(declaration: declaration)
     }
 
     inout fn admitAuthoredFunctionViews() -> Result[(), CompileDiagnostic] {
@@ -821,6 +819,12 @@ impl Comp {
     // Resolve once per declaration. A view requiring another newtype's
     // inherited conformance may request that underlying before its source row
     // is reached. Active declarations cannot supply their own prerequisites.
+    inout fn readAdmittedNewtypeUnderlying(declaration: NewtypeDef) -> Result[U64, CompileDiagnostic] {
+        val saved = try self.requireNominalTypeAnnotation(id: declaration.authoredTypeUse, site: declaration.authoredTypeSite, term: declaration.underRef, token: declaration.sourceTypeScope, owner: declaration.defOffset)
+        try self.checkNominalAnnotationEvidence(saved: saved, offset: declaration.authoredTypeSite)
+        return <Result.Ok value=declaration.underRef />
+    }
+
     inout fn admitNewtypeAnnotation(index: U64) -> Result[(), CompileDiagnostic] {
         val declaration = self.arena.newtypeAt(index: index)
         if declaration.sourceTypeScope == 0U64 || self.nominalAnnotationProofs.contains(key: declaration.authoredTypeUse) {
@@ -873,10 +877,9 @@ impl Comp {
     inout fn requireNominalTypeAnnotation(id: U64, site: U64, term: U64, token: U64, owner: U64) -> Result[LocalAnnotationProof, CompileDiagnostic] {
         val occurrence = try self.signatureOccurrence(id: id)
         val source = self.sourceTypeUses.scopeAt(token: token)
-        val expectedProofCount = self.nominalAnnotationEvidenceCounts.getOr(key: occurrence.recipe, fallback: 18446744073709551615U64)
         match self.nominalAnnotationProofs.get(key: id) {
             Optional.Some(v: val saved) => {
-                if saved.occurrence == id && saved.recipe == occurrence.recipe && saved.sourceTerm == term && saved.proofs.count() == expectedProofCount && occurrence.site == site && occurrence.scope == token && source.isSome() && source.unwrap().anchor == owner {
+                if saved.occurrence == id && saved.recipe == occurrence.recipe && saved.sourceTerm == term && occurrence.site == site && occurrence.scope == token && source.isSome() && source.unwrap().anchor == owner {
                     return <Result.Ok value=saved />
                 }
             }
@@ -885,97 +888,30 @@ impl Comp {
         return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "nominal type has no matching saved annotation", failureDomain: <FailureDomain.Internal />) />
     }
 
-    fn nominalWitnessSourceIsActive(witness: WitnessMatch, subject: U64) -> Bool {
-        if witness.conformIdx == 0U64 || witness.conformIdx > self.decls.conformCount() { return false }
-        val extension = self.decls.conformAt(index: witness.conformIdx - 1U64).extId
-        if extension == 0U64 { return true }
-        for source in self.arena.typeViewSources(ref: subject) {
-            if source.traitInstance.owner == 0U64 && source.surfaceId == extension { return true }
-        }
-        return false
-    }
-
-    fn nominalProofSourcesAreActive(proof: StaticConformanceProof, subject: U64) -> Bool {
-        match proof {
-            StaticConformanceProof.ConcreteWitness(witness: val witness) => { return self.nominalWitnessSourceIsActive(witness: witness, subject: subject) }
-            StaticConformanceProof.TraitPath(edges: val edges, terminalConformIdx: _) => {
-                if edges.count() == 0U64 { return false }
-                for witness in edges {
-                    if !self.nominalWitnessSourceIsActive(witness: witness, subject: subject) { return false }
-                }
-                return true
-            }
-            _ => { return false }
-        }
-    }
-
-    // Walk the saved recipe in admission order. A valid proof for another
-    // annotation, even one with the same term, cannot discharge this edge.
-    inout fn checkNominalRecipeProofs(recipe: U64, proofs: Array[AuthoredTypeViewProof], normalizations: Array[ProjectionNormalizationStep], visited: inout Set[U64], next: inout U64, offset: U64) -> Result[(), CompileDiagnostic] {
-        if visited.contains(recipe) { return <Result.Ok value=() /> }
-        visited.insert(recipe)
-        val node = match self.sourceTypeUses.recipeAt(id: recipe) {
-            Optional.Some(v: val node) => node,
-            Optional.None => { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "nominal annotation lost its saved recipe", failureDomain: <FailureDomain.Internal />) /> }
-        }
-        for child in node.children {
-            try self.checkNominalRecipeProofs(recipe: child, proofs: proofs, normalizations: normalizations, visited: inout visited, next: inout next, offset: offset)
-        }
-        if node.sourceRecipe != 0U64 {
-            try self.checkNominalRecipeProofs(recipe: node.sourceRecipe, proofs: proofs, normalizations: normalizations, visited: inout visited, next: inout next, offset: offset)
-        }
-        match node.origin {
-            SourceTypeRecipeOrigin.Authored => {}
-            _ => { return <Result.Ok value=() /> }
-        }
-        val occurrence = try self.signatureOccurrence(id: node.occurrence)
-        val type = self.arena.typeAt(index: node.term)
-        val receiver = if type.assocNameId == 0U64 { give node.term } else { give self.typeTermProjectionReceiver(t: type) }
-        val selectors = try self.authoredTraitSelectors(type: type, receiver: receiver, site: occurrence.site)
-        for selector in selectors {
-            if next >= proofs.count() {
-                return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "nominal annotation lost its saved conformance", failureDomain: <FailureDomain.Internal />) />
-            }
-            val row = proofs[next]
-            next += 1U64
-            if row.occurrence != node.occurrence || row.receiver != receiver || !self.semanticViewSourceEq(a: row.selector, b: selector) || !self.arena.hasStaticConformanceProof(id: row.proof) {
-                return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "nominal annotation has a foreign saved conformance", failureDomain: <FailureDomain.Internal />) />
-            }
-            val subject = try self.replayProjectionChildren(ref: receiver, normalizations: normalizations, offset: offset)
-            val proofSubject = if type.assocNameId == 0U64 { give self.authoredTraitViewSubject(ref: subject) } else { give subject }
-            val constraint = <TraitConstraint key=selector.traitInstance assocPredicates=[] />
-            val expected = try self.replayBoundNormalizations(bound: <TraitBound subject=proofSubject constraint=constraint offset=offset />, normalizations: normalizations)
-            val proof = self.thawStaticConformanceProof(id: row.proof)
-            val traitIndex = self.decls.traitIndexByOffset(offset: selector.traitInstance.owner)
-            val bound = try self.replayBoundNormalizations(bound: (try self.staticProofBound(proof: proof, traitIdx: traitIndex)), normalizations: normalizations)
-            if bound.subject == 0U64 || !self.typeRefEq(a: expected.subject, b: bound.subject) || !self.sameTraitConstraint(a: expected.constraint, b: bound.constraint) || !self.nominalProofSourcesAreActive(proof: proof, subject: expected.subject) {
-                return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "nominal annotation has a foreign saved conformance", failureDomain: <FailureDomain.Internal />) />
-            }
-            try self.checkStaticProofEvidence(proof: proof, offset: occurrence.site)
-            if type.assocNameId != 0U64 && selector.traitInstance.owner == self.associatedProjectionTraitOwner(projection: type) && self.sameResolvedTypeRefs(a: selector.traitInstance.positionalArgs, b: type.assocTraitArgs) {
-                val projection = try self.replayProjectionChildren(ref: node.term, normalizations: normalizations, offset: offset)
-                mut val found = false
-                for equation in normalizations {
-                    if self.typeRefEq(a: equation.source, b: projection) && (equation.proof == row.proof || self.sameStaticConformanceProof(a: proof, b: self.thawStaticConformanceProof(id: equation.proof))) { found = true }
-                }
-                if !found {
-                    return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "nominal projection lost its selected conformance equation", failureDomain: <FailureDomain.Internal />) />
-                }
-            }
-        }
-        return <Result.Ok value=() />
-    }
-
+    // A proof for the same receiver and trait is insufficient: it can
+    // name a different conformance. Compare against the exact selection
+    // published for this recipe, without replaying witness discovery.
     inout fn checkNominalAnnotationEvidence(saved: LocalAnnotationProof, offset: U64) -> Result[(), CompileDiagnostic] {
-        if saved.proofs.count() == 0U64 { return <Result.Ok value=() /> }
-        try self.checkProjectionNormalizations(normalizations: saved.normalizations, offset: offset)
-        mut val visited: Set[U64] = Set.new()
-        mut val next = 0U64
-        try self.checkNominalRecipeProofs(recipe: saved.recipe, proofs: saved.proofs, normalizations: saved.normalizations, visited: inout visited, next: inout next, offset: offset)
-        val written = (try self.signatureOccurrence(id: saved.occurrence)).term
-        val term = try self.replayProjectionNormalizations(ref: written, normalizations: saved.normalizations, offset: offset)
-        if next != saved.proofs.count() || !self.typeRefEq(a: term, b: saved.sourceTerm) {
-            return <Result.Err error=self.diagnosticAt(offset: offset, msg: "nominal annotation has a foreign saved type recipe", failureDomain: <FailureDomain.Internal />) />
+        val selection = match self.nominalAnnotationSelections.get(key: saved.recipe) {
+            Optional.Some(v: val selection) => selection,
+            Optional.None => { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "nominal annotation lost its selected evidence", failureDomain: <FailureDomain.Internal />) /> }
+        }
+        if saved.sourceTerm != selection.sourceTerm || saved.proofs.count() != selection.proofs.count() || saved.normalizations.count() != selection.equations.count() {
+            return <Result.Err error=self.diagnosticAt(offset: offset, msg: "nominal annotation lost its selected evidence", failureDomain: <FailureDomain.Internal />) />
+        }
+        for index in 0U64..<selection.proofs.count() {
+            val proof = saved.proofs[index]
+            val expected = selection.proofs[index]
+            if proof.proof != expected.proof || proof.occurrence != expected.occurrence || proof.receiver != expected.receiver || proof.lexicalEquations.count() != 0U64 || !self.semanticViewSourceEq(a: proof.selector, b: expected.selector) || !self.arena.hasStaticConformanceProof(id: proof.proof) {
+                return <Result.Err error=self.diagnosticAt(offset: offset, msg: "nominal annotation has a foreign saved conformance", failureDomain: <FailureDomain.Internal />) />
+            }
+        }
+        for index in 0U64..<selection.equations.count() {
+            val expected = selection.equations[index]
+            val equation = saved.normalizations[index]
+            if equation.source != expected.source || equation.proof != expected.proof || equation.output != expected.output || !self.arena.hasStaticConformanceProof(id: equation.proof) {
+                return <Result.Err error=self.diagnosticAt(offset: offset, msg: "nominal projection has a foreign saved equation", failureDomain: <FailureDomain.Internal />) />
+            }
         }
         return <Result.Ok value=() />
     }
@@ -1011,7 +947,7 @@ impl Comp {
         val sourceTerm = try self.replayProjectionNormalizations(ref: term, normalizations: equations, offset: occurrence.site)
         val proof = <LocalAnnotationProof occurrence=id recipe=occurrence.recipe sourceTerm=sourceTerm normalizations=equations proofs=validation.proofs />
         self.nominalAnnotationProofs[id] = proof
-        self.nominalAnnotationEvidenceCounts[occurrence.recipe] = validation.proofs.count()
+        self.nominalAnnotationSelections[occurrence.recipe] = <NominalAnnotationSelection sourceTerm=sourceTerm proofs=validation.proofs equations=equations />
         self.markAdmittedRecipeTypeUses(recipe: proof.recipe)
         return <Result.Ok value=proof />
     }

@@ -1597,7 +1597,7 @@ impl Comp {
         // A public inherited signature is not the original body. Follow the
         // same retained boundary as executable preparation before inspecting
         // the body's saved operations.
-        val underlying = self.arena.newtypeUnderlying(ref: environment.receiverRef)
+        val underlying = try self.checkedNominalUnderlying(ref: environment.receiverRef)
         if underlying != 0U64 {
             val target = try self.inheritedBodyEnvironment(function: function, arguments: arguments, source: environment, receiver: underlying)
             return self.appendPreparedCallConstraintInstance(function: function, arguments: arguments, receiver: underlying, environment: target, depth: depth, requests: inout requests, heads: inout heads, relevant: relevant)

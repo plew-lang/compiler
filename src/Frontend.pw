@@ -729,7 +729,8 @@ pub struct Comp {
     pub mut val blockTypeUses: Dictionary[U64, Array[U64]] = [:]
     mut val admittedRecipeTypeUses: Set[U64] = Set.new()
     mut val nominalAnnotationProofs: Dictionary[U64, LocalAnnotationProof] = [:]
-    mut val nominalAnnotationEvidenceCounts: Dictionary[U64, U64] = [:]
+    // Canonical selection by root recipe. Handles reference append-only proofs.
+    mut val nominalAnnotationSelections: Dictionary[U64, NominalAnnotationSelection] = [:]
     mut val activeNewtypeAnnotations: Set[U64] = Set.new()
     mut val newtypeAnnotationAdmissionOpen: Bool = false
     mut val globalAnnotationProofs: Dictionary[U64, LocalAnnotationProof] = [:]
@@ -2220,19 +2221,7 @@ fn loadFrontendDeclarations(c: inout Comp, input: FrontendInput, sources: Source
     // the source. Before any analysis (which calls kwSpan via exprType).
     c.buildKwCache()
     try c.checkImplicitCallableResultTypes()
-    // assoc-val reads (spec/05): rewrite `Type.NAME` (a Field on a type that owns an
-    // `assoc fn NAME`) into a zero-arg assoc-fn call, before any analysis sees it.
     c.resolveLexicalModuleNames()
-    c.rewriteAssocValReads()
-    // named factory calls (spec/05): rewrite `<Type.name attrs/>` to an assoc-fn call
-    // when `name` is a named factory (not an enum variant).
-    try c.rewriteFactoryConstruction()
-    // Defaults depend on the complete declaration set, not file load order.
-    // Custom factories have already consumed their written label sets; only
-    // structural memberwise Make nodes remain for default materialization.
-    // module-level variable init order (spec/15): topologically sort globals so a
-    // forward reference in an initializer reads the already-initialized value.
-    try c.orderGlobalsByDependency()
     // conformance provenance (spec/08,09): owner-module-only bare trait provided
     // methods and bare `impl B as A` must be validated before they can confer
     // methods/conformances onto other types.
@@ -2275,7 +2264,6 @@ fn loadFrontendDeclarations(c: inout Comp, input: FrontendInput, sources: Source
     // among the exported (loaded) declarations.
     try c.checkImports()
     try c.detectImportCycles()
-    c.sourceExpressionLimit = c.arena.exprs.count()
     if c.genMode {
         try c.checkUseVisibility()
         try c.checkTypeVisibility()
@@ -2284,6 +2272,19 @@ fn loadFrontendDeclarations(c: inout Comp, input: FrontendInput, sources: Source
     }
     try c.resolveTypeDeclIdentities()
     try c.admitNominalTypeAnnotations()
+    // assoc-val reads (spec/05): rewrite `Type.NAME` (a Field on a type that owns an
+    // `assoc fn NAME`) into a zero-arg assoc-fn call, before any analysis sees it.
+    c.rewriteAssocValReads()
+    // named factory calls (spec/05): rewrite `<Type.name attrs/>` to an assoc-fn call
+    // when `name` is a named factory (not an enum variant).
+    try c.rewriteFactoryConstruction()
+    // Defaults depend on the complete declaration set, not file load order.
+    // Custom factories have already consumed their written label sets; only
+    // structural memberwise Make nodes remain for default materialization.
+    // module-level variable init order (spec/15): topologically sort globals so a
+    // forward reference in an initializer reads the already-initialized value.
+    try c.orderGlobalsByDependency()
+    c.sourceExpressionLimit = c.arena.exprs.count()
     // Registration reserves identities. Admit all overload groups under the
     // shared rule only after nominal identities are authoritative.
     try c.checkCallableDeclarationAdmission()
@@ -2913,6 +2914,13 @@ pub struct SourceBindingFact {
     val annotation: Optional[LocalAnnotationProof] = <Optional.None />
 }
 impl SourceBindingFact { factory }
+
+struct NominalAnnotationSelection {
+    val sourceTerm: U64
+    val proofs: Array[AuthoredTypeViewProof]
+    val equations: Array[ProjectionNormalizationStep]
+}
+impl NominalAnnotationSelection { factory }
 
 struct LocalAnnotationProof {
     val occurrence: U64

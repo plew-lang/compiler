@@ -1,0 +1,13 @@
+use @Std/Io only { print }
+trait Project { type Item }
+struct Source {}
+struct Number { val value: I64 }
+impl Source as Project { type Item = Number }
+impl Number {
+    factory named(value: I64) { return <Number value=value /> }
+}
+newtype Wrapped = Source#Project.Item
+fn main() {
+    val number = <Wrapped.named value=42I64 />
+    print(number.value)
+}

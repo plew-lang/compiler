@@ -673,7 +673,7 @@ pub impl Comp {
             val index = self.arena.newtypeIndexByOffset(offset: owner)
             if index >= self.arena.newtypeCount() { break }
             if self.newtypeAnnotationAdmissionOpen { try self.admitNewtypeAnnotation(index: index) }
-            val underlying = self.arena.newtypeAt(index: index).underRef
+            val underlying = try self.readAdmittedNewtypeUnderlying(declaration: self.arena.newtypeAt(index: index))
             if underlying == 0U64 || underlying == matchRef { break }
             matchRef = underlying
             depth += 1U64

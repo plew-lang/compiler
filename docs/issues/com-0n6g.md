@@ -242,3 +242,35 @@ Record now selects checked aggregate storage once before the slot loop,
 covering zero-slot constructions and eliminating repeated RHS checks
 per field in that loop. All nine nominal JIT fixtures and the existing
 newtype literal/adapter controls pass on this candidate.
+
+## Exact admission selection and inherited factory checkpoint
+
+On `8a65d98d` the same-source development comparison was 7.071 s
+(carrier `c5146239`) vs 7.137 s, with byte-identical LLVM output on all
+eight runs. Replacing the nominal receipt's proof payload with an empty
+array was rejected in check and JIT at the field's written site by the
+fixed-input internal probe `20261113T100317-build-6ab29a`, SHA
+`0e5ac004e0ab6`. An earlier probe build ran out of disk space at link
+time; this passing probe was rebuilt after clearing obsolete generated
+LLVM files from a completed performance task.
+
+The exact proof handles, receiver/selector metadata, normalized term,
+and equation triples are now compared with the canonical selection
+published for the recipe at admission. This eliminates repeated
+recipe/proof graph traversal and prevents later same-type/same-trait
+evidence from being substituted for the selected handle. The selected
+check-side inherited body and the conformance physical-subject walk
+consume the same checked newtype RHS. The latter preserves the early
+declaration lookup and first admits its dependency when needed.
+
+The independent review identified a real inherited-factory ordering
+defect. `nominal_newtype_projected_factory` was rejected in check and
+JIT by both the baseline and preceding candidate because the rewrite
+ran before the projected RHS normalized. The factory and associated
+value rewrites now follow nominal admission, before global dependency
+ordering and body preparation. Fixed-input build
+`20261113T101503-build-6d75a2` produced `7a16cc685ab6`; all ten
+nominal positives pass check/JIT/linked native and four negatives pass
+check and lazy diagnostics. The existing newtype factory and adapter
+controls pass JIT. Final review, final same-source comparison and
+remaining internal substitution controls are open.
