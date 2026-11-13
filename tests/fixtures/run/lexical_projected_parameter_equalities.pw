@@ -13,7 +13,7 @@ impl Producer as Output {
 }
 
 fn read[T](owner: T, first: T#Output.First, second: T#Output.Second) -> I64 where T: Output[First=Counter#Read, Second=Other] {
-    return first.get() + second.get()
+    return first.get() * 10I64 + second.get()
 }
 
 fn unused[T](owner: T, second: T#Output.Second) -> I64 where T: Output[Second=Other] {
