@@ -1,6 +1,6 @@
 ---
 id: com-3jtd
-status: open
+status: in_progress
 deps: [com-v5zn]
 links: []
 created: 2026-11-09T08:54:16Z
@@ -71,3 +71,48 @@ preparation. Compare the cast adapter to the same complete instance written
 as a local annotation or direct value view. The issue is in the existing
 formation audit; downstream conversion/Mid failures need attribution to
 their actual owner after the source admission path is traced.
+
+## Entry inventory and fixed baseline
+
+Baseline `f0ac23c4` uses development candidate `92b3cf006403`.
+The authored nominal/signature recipe visitor and Record's value-view
+producer use the complete trait query. Verify's type-use compatibility
+sweep still has a separate owner/arity head check; its match is not
+proof of a complete trait instance. Record and Verify also have distinct
+extension formation call sites, both reaching the same name-based
+newtype recursion in `extAppliesToType`. The callable source-head collector
+has different responsibilities and its remaining dispatch migration is
+tracked by com-4k31.
+
+Both ordinary declaration adapters reserve lexical projection clauses
+before lowering type consumers. The raw `boundLhsMatches*` fallback
+therefore serves the unscoped compatibility calls, including an internal
+test that injects arrays into Comp, rather than ordinary declaration
+lowering. Compare the adapter through its actual scoped declaration
+entry before removing the fallback and stale arrays.
+
+Fixed candidate check/JIT accepts a default-independent value view
+`Number#Marker[T#Project.Item]` under `T: Project[Item=I64]` and prints
+42. Both stored cast probes still reproduce their original outcomes.
+Per spec/09, formation and admissibility of the target type must be
+established separately from whether `as` can convert the operand.
+The five selected short-projection/provided controls pass check and
+JIT. The existing distinct-argument and foreign-receiver controls
+reject at short-projection selection.
+
+For `newtype Wrapped = Box[I64]`, standalone `Wrapped#Numbers` and
+`wrapped#Numbers` pass on the fixed candidate when Numbers implements
+`Box[I64]`. Replacing the underlying with `Box[Bool]` rejects in
+both check and JIT. Invoking an inherited extension method through
+the valid view passes check but fails in Mid body preparation.
+This is tracked separately from merely admitting the extension view.
+
+The recursive extension applicability reader now follows canonical
+receiver identity through the checked newtype RHS, with the full type
+term passed into the next applicability check. The no-term compatibility
+lookup can still identify its existing direct extension control; it no
+longer recovers an inherited receiver by spelling. Fixed-input build
+`20261113T112303-build-54a05c` produced `9ee2aa877955`. Both newtype
+view positives and the projected trait value view passed check, JIT
+and native with output 42. Both wrong-underlying forms reject in check
+and JIT. Existing conformance-only and stored extension controls pass.

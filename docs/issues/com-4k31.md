@@ -51,3 +51,30 @@ that does not certify the parser's ExtView+ordinary Method path. Trace the
 associated receiver/source through the common frontend owner rather than add
 another consumer-specific spelling fallback. Keep the existing successful
 value-call controls and the exact-instance guarantees above.
+
+## Inherited extension call on a parameterized newtype base
+
+The shared view inventory (com-3jtd) found that the following accepts
+in check but fails in JIT and AOT while preparing a Mid body. Removing
+the call leaves a type- and value-view control that runs. Replacing the
+underlying and the constructor with `Box[Bool]` instead rejects the
+view itself. The baseline is compiler `f0ac23c4`, candidate
+`92b3cf006403`. The AOT trace reports Mid build detail 3 at fn 0.
+Trace the selected extension's method and receiver into the generated
+newtype adapter before changing the check or expected output.
+
+```plew
+use @Std/Io only { print }
+
+struct Box[T] {}
+extension Numbers {
+    impl Box[I64] { fn number() -> I64 { return 42I64 } }
+}
+newtype Wrapped = Box[I64]
+
+fn main() {
+    val wrapped = <Box[I64] /> as Wrapped
+    val selected: Wrapped#Numbers = wrapped#Numbers
+    print(selected.number())
+}
+```

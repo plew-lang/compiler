@@ -593,11 +593,13 @@ pub impl Comp {
             }
             i += 1U64
         }
-        // a newtype inherits the underlying type's extensions (spec/10).
-        val underlying = self.newtypeUnderRef(start: receiverHead.start, len: receiverHead.len)
-        if underlying != 0U64 {
-            val type = self.arena.typeAt(index: underlying)
-            return <Result.Ok value=(try self.extAppliesToType(extensionId: extensionId, typeStart: type.nameStart, typeLen: type.nameLen, typeRef: underlying)) />
+        // Inheritance follows the semantic newtype declaration. The
+        // admitted RHS retains its arguments and any already selected views.
+        if typeRef != 0U64 {
+            val underlying = try self.checkedNominalUnderlying(ref: typeRef)
+            if underlying != 0U64 {
+                return self.extAppliesToType(extensionId: extensionId, typeStart: 0U64, typeLen: 0U64, typeRef: underlying)
+            }
         }
         return <Result.Ok value=false />
     }
