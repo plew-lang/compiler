@@ -589,3 +589,22 @@ Candidate `8d91343a` passed build `20261113T013256-build-693a0e` and
 the new regression plus eight existing check/JIT/native controls.
 Same-source medians were 6.877527 s and 6.856642 s. All eight LLVM
 outputs were identical.
+
+## Closed associated evidence cannot borrow a caller premise
+
+The native scope probe replaced the condition of `Box[I64]: Parent`
+with an equal `I64: Marker` premise from another function before the
+authored signature published its proof. `d24135a5` rejected it through
+the existing declaration scope check and accepted the original controls.
+
+For `any Service[Input=Entry[I64]]`, a second probe replaced the same
+condition in the receipt used by the fixed associated signature and
+ran full frontend finalization. `d24135a5` accepted the replacement.
+Candidate `17e89289` rejects it at the retained receipt reader, using
+the existing interface scope with no premises. Both candidates accept
+the unchanged input before and after the fault.
+
+Build `20261113T014204-build-ae61c6`, generation
+`20261113T014613-gen-ca2244` and ten public check/JIT/native controls
+passed. Same-source medians were 6.857982 s and 6.865882 s, with
+identical LLVM output in all eight runs.

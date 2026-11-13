@@ -1357,6 +1357,11 @@ impl Comp {
                 if self.proofIsMissing(proof: proof) { return <Result.Err error=self.diagnosticAt(offset: bound.offset, msg: "fixed requirement lost its admitted associated proof", failureDomain: <FailureDomain.Internal />) /> }
                 try self.checkProjectionNormalizations(normalizations: receipt.normalizations, offset: bound.offset)
                 try self.checkStaticProofEvidence(proof: proof, offset: bound.offset)
+                // Fixed associated outputs are admitted with no lexical or
+                // interface premise. Reuse the interface scope with no root.
+                val scope = <DeclarationTypeScope origin=<DeclarationScopeOrigin.InterfaceContract /> owner=0U64 parameters=<FuncBindRange start=0U64 len=0U64 /> />
+                try self.scopedProofDependencies(proof: proof, scope: scope, offset: bound.offset, normalizations: receipt.normalizations)
+                try self.scopedProjectionDependencies(equations: receipt.normalizations, context: receipt.normalizations, scope: scope, offset: bound.offset)
                 val expected = try self.replayBoundNormalizations(bound: bound, normalizations: receipt.normalizations)
                 if !(try self.retainedWitnessClauseMatches(expected: expected, proof: proof, normalizations: receipt.normalizations, offset: bound.offset)) {
                     return <Result.Err error=self.diagnosticAt(offset: bound.offset, msg: "fixed requirement proof does not match its admitted associated clause", failureDomain: <FailureDomain.Internal />) />
