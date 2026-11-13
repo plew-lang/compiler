@@ -175,12 +175,16 @@ impl Comp {
     }
 
     inout fn lowerBoundValueView(recv: U64, source: ResolvedViewSource, names: Array[Span], head: U64, strip: Bool, argumentOccurrences: Array[U64]) -> U64 {
-        mut val result = self.pushExpr(e: <Expr.ExtView recv=recv source=source strip=strip />)
+        mut val authoredArguments: Optional[Array[U64]] = <Optional.None />
         if argumentOccurrences.count() != 0U64 && !strip {
             match self.sourceTypeUses.currentRole() {
-                SourceTypeUseRole.Body => { self.valueViewArgumentOccurrences[result] = argumentOccurrences }
+                SourceTypeUseRole.Body => { authoredArguments = <Optional.Some v=argumentOccurrences /> }
                 _ => {}
             }
+        }
+        mut val result = self.pushExpr(e: <Expr.ExtView recv=recv source=source strip=strip />)
+        if authoredArguments.isSome() {
+            self.sourceTypeUses.bindValueViewArguments(origin: self.arena.exprOriginSerial[result], arguments: authoredArguments.unwrap())
         }
         self.decls.registerPlaceSource(exprId: result, source: self.decls.placeSource(exprId: recv), expressionCount: self.arena.exprs.count())
         mut val index = head + 1U64

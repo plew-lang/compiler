@@ -6104,14 +6104,15 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
-    inout fn requireFinalTraitValueView(exprId: U64, source: ResolvedViewSource) -> Result[(), CompileDiagnostic] {
+    inout fn requireFinalTraitValueView(exprId: U64, source: ResolvedViewSource, authoredArguments: Optional[Array[U64]] = <Optional.None />) -> Result[(), CompileDiagnostic] {
         val bodyId = self.currentBodyInstanceId()
         if bodyId == 0U64 { return <Result.Ok value=() /> }
         val facts = try self.preparedBodyFacts(bodyId: bodyId, globalInitializerTarget: self.cur.globalInitializerTarget)
-        val saved = match facts.traitValueView(exprId: exprId) {
+        val receipt = match facts.traitValueView(exprId: exprId) {
             Optional.Some(v: val saved) => saved,
             Optional.None => { return <Result.Err error=self.diagnosticAt(offset: source.writtenStart, msg: "trait value view has no saved proof", failureDomain: <FailureDomain.Internal />) /> },
         }
+        val saved = receipt.selection
         if saved.occurrence != exprId || !self.semanticViewSourceEq(a: saved.selector, b: source) {
             return <Result.Err error=self.diagnosticAt(offset: source.writtenStart, msg: "trait value view has a foreign proof", failureDomain: <FailureDomain.Internal />) />
         }
@@ -6128,9 +6129,30 @@ pub impl Comp {
         }
         val subject = try self.replayProjectionNormalizations(ref: substituted, normalizations: equations, offset: source.writtenStart)
         mut val arguments: Array[U64] = []
-        for argument in saved.selector.traitInstance.positionalArgs {
-            val substituted = self.groundTermInEnvironment(ref: argument, params: environment.params, values: environment.args, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
-            arguments.append(try self.replayProjectionNormalizations(ref: substituted, normalizations: equations, offset: source.writtenStart))
+        if authoredArguments.isSome() != receipt.arguments.isSome() {
+            return <Result.Err error=self.diagnosticAt(offset: source.writtenStart, msg: "trait value view lost its argument receipts", failureDomain: <FailureDomain.Internal />) />
+        }
+        if authoredArguments.isSome() {
+            val occurrences = authoredArguments.unwrap()
+            val savedArguments = receipt.arguments.unwrap()
+            if occurrences.count() != source.traitInstance.positionalArgs.count() || occurrences.count() != savedArguments.count() {
+                return <Result.Err error=self.diagnosticAt(offset: source.writtenStart, msg: "trait value view changed its argument slots", failureDomain: <FailureDomain.Internal />) />
+            }
+            mut val memo: Dictionary[U64, AuthoredRecipeRead] = [:]
+            for index in 0U64..<occurrences.count() {
+                val argument = savedArguments[index]
+                val occurrence = try self.signatureOccurrence(id: occurrences[index])
+                if argument.occurrence != occurrences[index] || argument.recipe != occurrence.recipe || occurrence.term != source.traitInstance.positionalArgs[index] {
+                    return <Result.Err error=self.diagnosticAt(offset: source.writtenStart, msg: "trait value view has a foreign argument receipt", failureDomain: <FailureDomain.Internal />) />
+                }
+                val read = try self.readAuthoredTypeRecipe(proofs: argument.proofs, recipe: argument.recipe, environment: environment, memo: inout memo, receiverEquations: equations, context: <SignatureRecipeContext.Concrete />)
+                arguments.append(read.term)
+            }
+        } else {
+            for argument in saved.selector.traitInstance.positionalArgs {
+                val grounded = self.groundTermInEnvironment(ref: argument, params: environment.params, values: environment.args, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
+                arguments.append(try self.replayProjectionNormalizations(ref: grounded, normalizations: equations, offset: source.writtenStart))
+            }
         }
         (try self.instantiateAuthoredViewProof(saved: saved, receiver: subject, arguments: arguments, environment: environment, offset: source.writtenStart, normalizations: equations))
         return <Result.Ok value=() />
@@ -6219,12 +6241,12 @@ pub impl Comp {
                 try self.registerMethodInst(callId: exprId, finalIdx: (try self.resolveBodyCallee(exprId: exprId)))
                 try self.finalizeAccessWriteFacets(parentExpr: exprId)
             }
-            Expr.ExtView(val recv, val source, val strip) => {
+            Expr.ExtView(recv: val recv, source: val source, strip: val strip) => {
                 try self.scanExprInsts(exprId: recv)
                 // Every intermediate view is a typed value, even when only
                 // the outermost view reaches a call or storage boundary.
                 if !strip && source.traitInstance.owner != 0U64 && self.assocRecvName(recv: exprId).nameLen == 0U64 {
-                    try self.requireFinalTraitValueView(exprId: exprId, source: source)
+                    try self.requireFinalTraitValueView(exprId: exprId, source: source, authoredArguments: self.sourceTypeUses.valueViewArguments(origin: self.arena.exprOriginSerial[exprId]))
                 }
                 try self.collectRecordedValueLayout(exprId: exprId)
             }

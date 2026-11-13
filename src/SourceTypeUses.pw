@@ -112,6 +112,7 @@ pub struct SourceTypeUses {
     mut val requirementScopes: Array[U64] = []
     mut val requirementScopeByIndex: Dictionary[U64, U64] = [:]
     mut val methodScopes: Dictionary[U64, U64] = [:]
+    mut val viewArguments: Dictionary[U64, Array[U64]] = [:]
     mut val deinitScopes: Dictionary[U64, U64] = [:]
 }
 pub impl SourceTypeUses {
@@ -162,6 +163,12 @@ pub impl SourceTypeUses {
             Optional.None => {}
         }
         return <Optional.None />
+    }
+    inout fn bindValueViewArguments(origin: U64, arguments: Array[U64]) {
+        self.viewArguments[origin] = arguments
+    }
+    fn valueViewArguments(origin: U64) -> Optional[Array[U64]] {
+        return self.viewArguments.get(key: origin)
     }
     fn useAt(index: U64) -> Optional[AuthoredTypeUse] {
         if index >= self.uses.count() { return <Optional.None /> }

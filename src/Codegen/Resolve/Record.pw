@@ -3,7 +3,7 @@
 // facts under a BodyInstance; they do not repeat lexical type inference.
 
 impl Comp {
-    inout fn recordTraitValueView(exprId: U64, receiver: U64, source: ResolvedViewSource) -> Result[ResolvedViewSource, CompileDiagnostic] {
+    inout fn recordTraitValueView(exprId: U64, receiver: U64, source: ResolvedViewSource, authoredArguments: Optional[Array[U64]] = <Optional.None />) -> Result[ResolvedViewSource, CompileDiagnostic] {
         if receiver == 0U64 { return <Result.Ok value=source /> }
         val owner = match self.currentSourceOwner() {
             Optional.Some(v: val owner) => owner,
@@ -12,7 +12,8 @@ impl Comp {
         self.sourceFacts.activate(owner: owner)
         val subject = self.typeRefWithoutOuterViews(ref: receiver)
         match self.sourceFacts.activeBuilder.data.traitValueViews.get(key: exprId) {
-            Optional.Some(v: val saved) => {
+            Optional.Some(v: val fact) => {
+                val saved = fact.selection
                 if saved.receiver == subject && self.semanticViewSourceEq(a: saved.selector, b: source) { return <Result.Ok value=source.withArguments(arguments: saved.admittedArguments) /> }
             }
             Optional.None => {}
@@ -27,19 +28,23 @@ impl Comp {
         } else { give subject }
         val writtenArguments = source.traitInstance.positionalArgs
         mut val arguments = writtenArguments
-        match self.valueViewArgumentOccurrences.get(key: exprId) {
+        mut val receipts: Optional[Array[LocalAnnotationProof]] = <Optional.None />
+        match authoredArguments {
             Optional.Some(v: val occurrences) => {
                 if occurrences.count() != writtenArguments.count() {
                     return <Result.Err error=self.diagnosticAt(offset: source.writtenStart, msg: "trait value view lost its authored arguments", failureDomain: <FailureDomain.Internal />) />
                 }
                 arguments = []
+                mut val admitted: Array[LocalAnnotationProof] = []
                 for index in 0U64..<occurrences.count() {
                     val argument = try self.admitBodyTypeUse(id: occurrences[index], term: writtenArguments[index], owner: owner)
                     arguments.append(argument.sourceTerm)
+                    admitted.append(argument)
                     for equation in argument.normalizations {
                         try self.appendRetainedProjectionEquation(step: equation, normalizations: inout receiverEquations)
                     }
                 }
+                receipts = <Optional.Some v=admitted />
             }
             Optional.None => {}
         }
@@ -51,7 +56,7 @@ impl Comp {
         }
         val proof = try self.requireAuthoredViewProof(subject: selectionSubject, instance: selectedSource.traitInstance, assumptions: assumptions, offset: source.writtenStart, normalizations: receiverEquations, missingMessage: missingMessage)
         val saved = <AuthoredTypeViewProof occurrence=exprId receiver=subject selector=source proof=self.freezeStaticConformanceProof(proof: proof) admittedArguments=arguments lexicalEquations=receiverEquations />
-        self.sourceFacts.activeBuilder.data.traitValueViews[exprId] = saved
+        self.sourceFacts.activeBuilder.data.traitValueViews[exprId] = <SourceValueViewProof selection=saved arguments=receipts />
         return <Result.Ok value=selectedSource />
     }
 
@@ -1675,15 +1680,9 @@ pub impl Comp {
             try self.resolveConstructionContext(exprId: exprId, context: context)
         }
         if !self.genMode && exprId < self.sourceExpressionLimit { try self.checkExpressionVisibility(exprId: exprId) }
-        match self.valueViewArgumentOccurrences.get(key: exprId) {
-            Optional.Some(v: val occurrences) => {
-                if self.assocRecvName(recv: exprId).nameLen == 0U64 {
-                    for id in occurrences {
-                        self.markBodyRecipeTypeUses(recipe: (try self.signatureOccurrence(id: id)).recipe)
-                    }
-                }
-            }
-            Optional.None => {}
+        val authored = self.sourceTypeUses.valueViewArguments(origin: self.arena.exprOriginSerial[exprId])
+        if authored.isSome() && self.assocRecvName(recv: exprId).nameLen == 0U64 {
+            for id in authored.unwrap() { self.markBodyRecipeTypeUses(recipe: (try self.signatureOccurrence(id: id)).recipe) }
         }
         match self.expressionTypeUses.get(key: exprId) {
             Optional.Some(v: val uses) => { try self.checkRequestedTypeUses(occurrences: uses) }
@@ -1939,7 +1938,7 @@ pub impl Comp {
                 try self.recordAccessWriteFacet(readExpr: recv)
                 try self.recordArgumentAccessUses(parentExpr: exprId, callee: methodCallee, args: args)
             }
-            Expr.ExtView(val recv, val source, val strip) => {
+            Expr.ExtView(recv: val recv, source: val source, strip: val strip) => {
                 try self.recordExpr(exprId: recv, chainHoleRef: chainHoleRef)
                 // A view is a type-level facet of an existing value, not a
                 // method-resolution query.  Preserve the receiver's exact
@@ -1952,7 +1951,7 @@ pub impl Comp {
                         sources = []
                     } else {
                         val selectedSource = if source.traitInstance.owner != 0U64 && self.assocRecvName(recv: exprId).nameLen == 0U64 {
-                            give try self.recordTraitValueView(exprId: exprId, receiver: receiverTerm, source: source)
+                            give try self.recordTraitValueView(exprId: exprId, receiver: receiverTerm, source: source, authoredArguments: authored)
                         } else { give source }
                         mut val present: Bool = false
                         mut val i: U64 = 0U64

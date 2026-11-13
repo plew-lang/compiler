@@ -419,3 +419,20 @@ nested provided receiver signature fixture also passes check and JIT
 again, as do six additional target fixtures. Compiler source check and
 lazy CLI passed. Same-source medians were 7.028838 s and 7.030233 s
 with identical nonempty LLVM in all eight runs.
+
+## Validate ordered argument receipts during finalization
+
+The originating source expression serial identifies the ordered roots
+in the source-use store. Record publishes the admitted per-argument
+occurrences, recipes and proofs alongside the selected value view.
+Mono checks the presence, length and identity of each slot against the
+source-use store and reads the retained recipe in the instance.
+
+Fixed-input build `20261113T052912-build-735838` produced `723fdb18`.
+Eight targeted check/JIT fixtures passed, as did two native controls,
+compiler source check and lazy CLI. The isolated publication probe
+rejects a missing receipt list and swapped receipts for identical
+written types with Internal. Both intact controls pass. Same-source
+medians were 7.173830 s and 7.040047 s with identical nonempty LLVM.
+The proof replay still needs to hand off the concrete view type to
+layout and later consumers.

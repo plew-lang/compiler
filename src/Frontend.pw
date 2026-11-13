@@ -728,7 +728,6 @@ pub struct Comp {
     pub mut val blockTypeUses: Dictionary[U64, Array[U64]] = [:]
     mut val localAnnotationOccurrences: Dictionary[U64, U64] = [:]
     mut val bodyRecipeTypeUses: Set[U64] = Set.new()
-    mut val valueViewArgumentOccurrences: Dictionary[U64, Array[U64]] = [:]
     pub mut val checkedTypeUses: Set[U64] = Set.new()
     pub mut val sourceExpressionLimit: U64 = 0U64
     pub mut val globalCallTemplatesClosed: Bool = false
@@ -2770,7 +2769,7 @@ struct SourceBodyData {
     mut val valueBlocks: Dictionary[U64, SourceValueBlockFact] = [:]
     mut val valueBlockIds: Array[U64] = []
     mut val identifierTargets: Dictionary[U64, U64] = [:]
-    mut val traitValueViews: Dictionary[U64, AuthoredTypeViewProof] = [:]
+    mut val traitValueViews: Dictionary[U64, SourceValueViewProof] = [:]
     mut val globalAddresses: Dictionary[U64, SemanticGlobalAddress] = [:]
     mut val bindings: Array[SourceBindingFact] = []
     mut val bindingKeys: Dictionary[U64, U64] = [:]
@@ -2920,6 +2919,12 @@ struct LocalAnnotationProof {
 }
 impl LocalAnnotationProof { factory }
 
+pub struct SourceValueViewProof {
+    val selection: AuthoredTypeViewProof
+    val arguments: Optional[Array[LocalAnnotationProof]]
+}
+impl SourceValueViewProof { factory }
+
 // Navigation only: a declaration may have several accepted lowering rows
 // (for example a shared or-pattern body). Keep each reader's exact row order.
 // Mutability and types remain authoritative only in the sealed SourceFacts.
@@ -2974,7 +2979,7 @@ pub impl PreparedSemanticFacts {
     fn expression(exprId: U64) -> Optional[SemanticExprType] { return readSourceExpression(rows: self.payload->expressions, identities: self.payload->expressionIds, indexSlots: self.payload->expressionIndexSlots, exprId: exprId) }
     fn valueBlock(blockId: U64) -> Optional[SourceValueBlockFact] { return self.payload->valueBlocks.get(key: blockId) }
     fn identifierTarget(exprId: U64) -> Optional[U64] { return self.payload->identifierTargets.get(key: exprId) }
-    fn traitValueView(exprId: U64) -> Optional[AuthoredTypeViewProof] { return self.payload->traitValueViews.get(key: exprId) }
+    fn traitValueView(exprId: U64) -> Optional[SourceValueViewProof] { return self.payload->traitValueViews.get(key: exprId) }
     fn globalAddress(exprId: U64) -> Optional[SemanticGlobalAddress] { return self.payload->globalAddresses.get(key: exprId) }
     fn bindingNeedsCaptureCell(sourceFunction: U64, bindingTarget: U64) -> Bool { return sourceBindingNeedsCaptureCell(closures: self.payload->closurePlans, sourceFunction: sourceFunction, bindingTarget: bindingTarget) }
     fn binding(stmtId: U64) -> Optional[SourceBindingFact] { return readSourceRow(rows: self.payload->bindings, keys: self.payload->bindingKeys, key: stmtId) }
