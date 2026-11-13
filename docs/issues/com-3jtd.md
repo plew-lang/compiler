@@ -1452,3 +1452,22 @@ Output `50/0` matched in precursor check/JIT and candidate check/JIT/native.
 Nine existing closure and extension controls matched in check and JIT.
 The probe exercises the supported single closure boundary. Generic result
 substitution and associated output provenance remain to be connected.
+
+### Forward evidence for a directly substituted result binder
+
+When a selected callable returns one of its own type parameters, Record can
+reuse the evidence of an explicit argument whose parameter has that same
+binder and whose full type equals the selected substitution. Parameter
+mapping uses the shared label and default handling. Other arguments do not
+authorize views on the result. Authored result extensions still contribute
+their own evidence. This covers a direct argument-to-result substitution;
+nested argument types, receiver-supplied binders, context-only substitutions
+and associated outputs still need provenance at the corresponding type edge.
+
+Fixed-input build `20261113T212732-build-0e3522` produced `10c297b8`.
+Seven existing controls matched check/JIT. The generic result probes
+in meta `tmp/com-3jtd/captured-extension` matched precursor check/JIT
+and candidate check/JIT. The probe with two distinct binders and an
+omitted default also matched linked native output `42/99/0`. This
+preserves existing behavior while making the saved evidence available
+to Record's candidate collection for these results.

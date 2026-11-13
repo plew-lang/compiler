@@ -2946,6 +2946,35 @@ impl Comp {
         self.storeBuildingSemanticExprType(i: exprId, value: <SemanticExprType typeState=prior.typeState completion=prior.completion invocation=prior.invocation term=prior.term shape=prior.shape legacyKind=prior.legacyKind legacyNameStart=prior.legacyNameStart legacyNameLen=prior.legacyNameLen legacyRef=prior.legacyRef legacyViewExtId=prior.legacyViewExtId literalContext=prior.literalContext hasFieldProjection=true fieldProjectionIndex=index fieldProjectionIsBoxed=isBoxed />)
     }
 
+    // An argument whose entire type is the selected substitution carries
+    // its outer view evidence with it. A nested occurrence of the binder
+    // needs the evidence for that child, not the enclosing value.
+    inout fn directResultSubstitutionExtensions(declaration: Func, args: ArgRange, typeArguments: Array[U64]) -> Array[SourceExtensionViewProof] {
+        if typeArguments.count() == 0U64 { return [] }
+        val parameters = <PatternBindInput.Function range=declaration.typeParams />
+        val result = self.semanticCallableReturnTerm(function: declaration)
+        if result == 0U64 || result >= self.arena.typeTermCount() || self.arena.typeTermAt(index: result).paramId == 0U64 { return [] }
+        val binder = self.typeParameterHeadIndex(ref: result, params: parameters)
+        if binder >= parameters.count() || binder >= typeArguments.count() { return [] }
+        val substituted = typeArguments[binder]
+        if self.arena.typeViewSourceCount(ref: substituted) == 0U64 { return [] }
+        val input = <CallableArgumentInput.Expressions range=args />
+        mut val position = 0U64
+        for index in 0U64..<args.len {
+            position = self.callableNextParameter(params: declaration.params, input: input, index: index, start: position)
+            if position >= declaration.params.count() { break }
+            val parameter = self.funcParamAt(params: declaration.params, index: position)
+            position += 1U64
+            if self.typeParameterHeadIndex(ref: parameter.ty, params: parameters) != binder || self.arena.typeViewSourceCount(ref: parameter.ty) != 0U64 { continue }
+            val expression = self.argAt(args: args, index: index).expr
+            if self.typeRefEq(a: self.parametricCallArgumentTerm(exprId: expression), b: substituted) {
+                val proofs = self.recordedExtensionSources(exprId: expression)
+                if proofs.count() != 0U64 { return proofs }
+            }
+        }
+        return []
+    }
+
     inout fn recordSemanticExprCall(exprId: U64, callee: U64, receiver: CallTemplateReceiver, args: ArgRange, calleeTypeArgs: Array[U64], resultTerm: U64, proof: StaticConformanceProof = <StaticConformanceProof.Missing />, receiverTypeTerm: U64 = 0U64) -> Result[(), CompileDiagnostic] {
         val prior: SemanticExprType = self.constructionExpression(exprId: exprId)
         mut val contract = prior.invocation
@@ -2995,13 +3024,14 @@ impl Comp {
         if callee < self.arena.functionCount() && resultTerm != 0U64 && self.arena.typeViewSourceCount(ref: resultTerm) != 0U64 {
             val declaration = self.arena.functionAt(index: callee)
             val source = if declaration.lexicalOwnerFnId == 0U64 { give callee } else { give declaration.lexicalOwnerFnId - 1U64 }
+            mut val proofs = self.directResultSubstitutionExtensions(declaration: declaration, args: args, typeArguments: calleeTypeArgs)
             match self.sourceTypeUses.signatureFor(function: source) {
                 Optional.Some(v: val signature) => {
-                    val proofs = self.authoredExtensionViews.getOr(key: signature.result, fallback: [])
-                    self.recordExpressionExtensionSources(exprId: exprId, proofs: proofs)
+                    for proof in self.authoredExtensionViews.getOr(key: signature.result, fallback: []) { proofs.append(proof) }
                 }
                 Optional.None => {}
             }
+            self.recordExpressionExtensionSources(exprId: exprId, proofs: proofs)
         }
         return <Result.Ok value=() />
     }
