@@ -1,7 +1,9 @@
-use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use /Diag only { FailureDomain }
+use /Frontend only { Comp, FrontendInput, analyzeFrontendDeclarations, analyzeFrontendForRequests }
 use /Ir only { InstanceEnvironment }
 use /SourceAccess only { SourceAccess }
 use /SourceTypeAdmissions only { SourceSignatureSlot }
+use /SourceTypeUses only { SourceTypeScopeKind, SourceTypeUses }
 use @Plew/Syntax as Syntax
 use @Std/Core only { assert }
 use @Std/Io only { print }
@@ -26,7 +28,47 @@ fn check(compiler: inout Comp) {
     assert(compiler.typeRefEq(a: result, b: declaration.retTy))
 }
 
+fn checkScopeRegistration() {
+    mut val uses = <SourceTypeUses />
+    val abandoned = uses.begin(kind: <SourceTypeScopeKind.ExternSignature />, anchor: 1U64)
+    assert(!uses.bindFunction(token: abandoned, function: 0U64))
+    assert(uses.finish(token: abandoned, succeeded: false))
+    assert(!uses.bindFunction(token: abandoned, function: 0U64))
+
+    val owner = uses.begin(kind: <SourceTypeScopeKind.ExternSignature />, anchor: 2U64)
+    val parameter = uses.record(term: 1U64, site: 3U64, parameters: [])
+    assert(uses.finish(token: owner, succeeded: true))
+    val other = uses.begin(kind: <SourceTypeScopeKind.ExternSignature />, anchor: 4U64)
+    val foreignResult = uses.record(term: 1U64, site: 5U64, parameters: [])
+    assert(uses.finish(token: other, succeeded: true))
+
+    assert(uses.bindFunction(token: owner, function: 0U64))
+    assert(!uses.bindFunction(token: owner, function: 1U64))
+    assert(!uses.bindSignature(token: owner, function: 1U64, parameters: [parameter], result: 0U64))
+    assert(!uses.bindSignature(token: owner, function: 0U64, parameters: [parameter], result: foreignResult))
+    assert(!uses.bindSignature(token: owner, function: 0U64, parameters: [parameter], result: parameter))
+    assert(uses.bindSignature(token: owner, function: 0U64, parameters: [parameter], result: 0U64))
+    assert(!uses.bindSignature(token: owner, function: 0U64, parameters: [parameter], result: 0U64))
+}
+
+fn checkUnprovenView(source: String) {
+    mut val compiler = <Comp />
+    match analyzeFrontendDeclarations(c: inout compiler, input: <FrontendInput.Text text=source path="unused-extern.pw" />, sources: <SourceAccess stdRoot=[] />) {
+        Result.Ok(value: _) => { panic("unused extern with an unproven view passed declaration checking") }
+        Result.Err(error: val diagnostic) => {
+            assert(diagnostic.message == "trait view requires a conformance for this receiver and exact trait instance (spec/09)")
+            match diagnostic.failureDomain {
+                FailureDomain.Source => {}
+                _ => { panic("unproven extern view did not produce a source diagnostic") }
+            }
+        }
+    }
+}
+
 fn main() {
+    checkScopeRegistration()
+    checkUnprovenView(source: "trait Marker[T] {{}}\nimpl I64 as Marker[Bool] {{}}\nextern(c) {{ fn llabs(value~: I64#Marker[I64]) -> I64 }}\n")
+    checkUnprovenView(source: "trait Marker {{}}\nstruct Other {{}}\nimpl Other as Marker {{}}\nextern(c) {{ fn llabs(value~: I64) -> I64#Marker }}\n")
     val source = "extern(c) {{ fn llabs(value~: I64) -> I64 }}\n"
     mut val compiler = <Comp />
     analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text text=source path="extern-slots.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()

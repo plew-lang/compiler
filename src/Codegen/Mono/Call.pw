@@ -389,7 +389,7 @@ impl Comp {
             if source.factoryError != 0U64 { slots.append(<SourceSignatureSlot.FactoryError />) }
         }
         val context = if sourceSelection { give <SignatureRecipeContext.Provided owner=owner /> } else { give <SignatureRecipeContext.Concrete /> }
-        val terms = try self.readAdmittedSignatureRoots(function: owner, slots: slots, environment: environment, context: context)
+        val terms = try self.readAdmittedSignatureRoots(source: source, slots: slots, environment: environment, context: context)
         mut val parameters: Array[U64] = []
         mut val termIndex = 0U64
         if readParameters {

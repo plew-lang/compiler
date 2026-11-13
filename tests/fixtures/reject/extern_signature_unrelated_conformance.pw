@@ -1,0 +1,6 @@
+trait Carrier { type Value }
+struct Number {}
+struct Other {}
+impl Other as Carrier { type Value = I64 }
+extern(c) { fn llabs(value~: I64) -> Number#Carrier.Value }
+fn main() {}

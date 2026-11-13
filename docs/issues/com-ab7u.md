@@ -63,3 +63,29 @@ diagnostic gap in the scope of [com-2o4w](com-2o4w.md); it is not an
 accepted ABI shape or a passing diagnostic control. Next verify absent
 and foreign proof/owner cases at the actual foreign-call publication
 boundary before independent review.
+
+## Independent review and follow-up
+
+The first independent review confirmed both registration adapters and
+traced the saved parameters and result through final call publication to
+LLVM. It withheld closure: a receipt from another function could pass
+under the selected key, and even comparing function IDs still allowed
+an equally typed result occurrence from another declaration to replace
+the registered result. The revised reader compares the registered
+owner, scope and requested occurrence IDs before reading recipes.
+Lowering checks the scope anchor and extern kind before binding the
+registered function.
+
+The fault control now mutates the receipt around the unchanged
+`completeStaticBodyCallee` call, rather than adding a separate read.
+With only the function-owner check, a foreign result occurrence under
+the original owner and scope was accepted (probe abort, exit 134).
+Memberless unused views exercise declaration admission separately from
+the earlier projection-specific source rejection. The original
+`recordParametricFreeCall` source-result normalization still runs
+before final publication. It cannot replace missing final evidence.
+
+Initial owner-check build `20261113T024932-build-91c49f` compiled and
+linked, but its fixture inputs changed during the run. The fixed-input
+retry `20261113T025235-build-2f5957` reached link and ran out of disk
+space. Neither is accepted as the final fixed-input build.

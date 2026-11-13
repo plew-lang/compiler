@@ -1,0 +1,14 @@
+use @Std/Io only { print }
+
+trait Convert[T] { type Output }
+struct Destination {}
+impl Destination as Convert[I64] { type Output = I64 }
+
+trait Carrier { type Value }
+struct Number {}
+impl Number as Carrier { type Value = I64 }
+
+extern(c) { fn llabs(value~: Destination#Convert[Number#Carrier.Value].Output) -> Destination#Convert[Number#Carrier.Value].Output }
+fn main() {
+    print(llabs(-42I64))
+}

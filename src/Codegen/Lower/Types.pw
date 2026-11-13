@@ -20,7 +20,16 @@ impl Comp {
     }
 
     inout fn bindAuthoredFunctionScope(scope: U64, function: U64, site: U64) -> Result[(), CompileDiagnostic] {
-        if function >= self.arena.functionCount() || !self.sourceTypeUses.bindFunction(token: scope, function: function) {
+        if function >= self.arena.functionCount() {
+            return <Result.Err error=self.diagnosticAt(offset: site, msg: "invalid authored function scope binding", failureDomain: <FailureDomain.Internal />) />
+        }
+        val declaration = self.arena.functionAt(index: function)
+        val origin = match self.sourceTypeUses.scopeAt(token: scope) {
+            Optional.Some(v: val origin) => origin,
+            Optional.None => { return <Result.Err error=self.diagnosticAt(offset: site, msg: "invalid authored function scope binding", failureDomain: <FailureDomain.Internal />) /> },
+        }
+        val externScope = match origin.kind { SourceTypeScopeKind.ExternSignature => true, _ => false }
+        if origin.anchor != declaration.defOffset || externScope != declaration.isExtern || !self.sourceTypeUses.bindFunction(token: scope, function: function) {
             return <Result.Err error=self.diagnosticAt(offset: site, msg: "invalid authored function scope binding", failureDomain: <FailureDomain.Internal />) />
         }
         return <Result.Ok value=() />

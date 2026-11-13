@@ -1,0 +1,5 @@
+trait Carrier[T] { type Value }
+struct Number {}
+impl Number as Carrier[Bool] { type Value = I64 }
+extern(c) { fn llabs(value~: Number#Carrier[I64].Value) -> I64 }
+fn main() {}
