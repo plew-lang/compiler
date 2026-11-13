@@ -53,7 +53,34 @@ A mismatched view instance is rejected in check and JIT. Supplying the
 argument explicitly leaves that invalid default unrequested in JIT
 (output 13), while whole check still rejects it.
 
-Remaining: exercise slot/owner substitution, missing origins and proof
-publication, failure recovery and generation. Confirm scope restoration
-and closure/default context isolation in an independent review before
-closing the task.
+## Validate generator selection and inherited recipes
+
+Independent review found a regression in impl-bound shorthand and a gap
+in validating a selected generator against the requested declaration
+slot. `6c7b2b8e` checks both directions of the slot relation and lets
+the default scope use its declaring method's prepared impl bounds.
+The native fault probes show that a valid same-typed generator for a
+different parameter or field is rejected as Internal. Retrying the
+failed request preserves its diagnostic and the caller cursor.
+
+A second review found that the inherited trait's positional argument
+recipe also needs the method's admitted parent context. `e834d530`
+reuses the saved method metadata for that child recipe and identifies
+generator bodies independently of their origin table. Build
+`20261113T064138-build-a460a4` produced `ebacc84b`; the parameterized
+`default_method_inherited_short_projection` fixture passes check, JIT
+and native. The old candidate `972d2df6` rejected the foreign occurrence.
+The direct generator request now rejects a deleted origin as Internal
+and the neighboring request succeeds. Generation
+`20261113T064452-gen-88e518` passes with fixed inputs.
+
+Same-source development medians for `109a757c` and `972d2df6` were
+7.996 s and 7.826 s, with identical LLVM across all eight runs. An earlier
+comparison overlapped a source change and is excluded. A generation
+run for `972d2df6` also detected changed inputs and is superseded by the
+fixed-input run above.
+
+Remaining: verify omission of authored argument and local annotation
+occurrences separately from omission of their published proofs. A
+default's explicitly typed local must not use the inference fallback.
+Recheck the repaired revision independently before closure.
