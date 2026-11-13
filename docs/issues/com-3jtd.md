@@ -463,3 +463,27 @@ terms, especially associated bounds and inter-trait callable
 materialization, then inspect the supertrait-argument producer and the
 compatibility sweep entries. This checkpoint has no independent closure
 review or formal self-host measurement.
+
+### Associated clause substitution
+
+Candidate `58c239c4cd0e` correctly selected a projected target for
+witness lookup yet rejected the same target in an associated requirement
+`type Output: Required[Kind]`. Clause construction now passes the admitted
+target arguments and receiver explicitly into substitution. Both admission
+and the retained-clause reader use that same declaration environment.
+
+Build `20261113T134530-build-3c55d7` produced `d2c2f72e3cc3`. The
+`Required[I64]` fixture passes check, lazy and linked native execution.
+The `Required[Bool]` contrast rejects at the associated type binding.
+Two existing associated-declaration check controls and the conditional
+and method projected-target fixtures pass. Existing structural projection
+cycle controls retain one positive and three exact rejections.
+The internal `source_conditional_witness_owner_evidence` fixture panics
+on unwrap on `58c239c4cd0e` and older `8a65d98d5d62` in native
+execution, so it supplies no successful control for this increment.
+
+The bare inter-trait placement still fails to find a method when the
+concrete conformance target reaches `Marker[I64]` through a projection.
+Writing `Marker[I64]` directly succeeds. The supertrait argument with a
+missing exact projection premise still passes check. Both are next
+source probes for the remaining adapters.

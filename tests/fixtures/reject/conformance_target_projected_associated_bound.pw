@@ -1,0 +1,10 @@
+trait Source { type Item }
+struct Number {}
+impl Number as Source { type Item = I64 }
+trait Required[Kind] {}
+trait Marker[Kind] { type Output: Required[Kind] }
+struct Value {}
+impl Value as Required[Bool] {}
+struct Receiver {}
+impl Receiver as Marker[Number#Source.Item] { type Output = Value }
+fn main() {}

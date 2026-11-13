@@ -1039,11 +1039,10 @@ pub impl Comp {
 
     // Substitute one trait declaration's associated-output and parameter
     // environment using only bindings owned by the selected conformance.
-    inout fn conformanceAssociatedConstraintTerm(ref: U64, traitIndex: U64, conformance: Conform, outputs: Array[TraitAssocPredicate]) -> U64 {
+    inout fn conformanceAssociatedConstraintTerm(ref: U64, traitIndex: U64, receiver: U64, arguments: Array[U64], outputs: Array[TraitAssocPredicate]) -> U64 {
         val declaration = self.decls.traitAt(index: traitIndex)
-        val arguments = self.copyConformTypes(types: conformance.traitArgs)
-        val reified = self.reifyBoundAssociatedTerms(ref: ref, shape: self.traitBoundShape(declaration: declaration), receiverRef: conformance.subjectTy, traitOwner: declaration.nameStart, traitArgs: arguments, predicates: outputs)
-        return self.groundTraitRequirementType(ref: reified, traitIdx: traitIndex, receiverRef: conformance.subjectTy, params: self.copyTraitBinds(binds: declaration.typeParams), args: arguments)
+        val reified = self.reifyBoundAssociatedTerms(ref: ref, shape: self.traitBoundShape(declaration: declaration), receiverRef: receiver, traitOwner: declaration.nameStart, traitArgs: arguments, predicates: outputs)
+        return self.groundTraitRequirementType(ref: reified, traitIdx: traitIndex, receiverRef: receiver, params: self.copyTraitBinds(binds: declaration.typeParams), args: arguments)
     }
 
     inout fn conformanceAssociatedOutputs(conformance: Conform) -> Array[TraitAssocPredicate] {
@@ -1058,7 +1057,7 @@ pub impl Comp {
         return outputs
     }
 
-    inout fn conformanceAssociatedDeclarationBound(conformance: Conform, traitIndex: U64, clause: U64, outputs: Array[TraitAssocPredicate]) -> Result[TraitBound, CompileDiagnostic] {
+    inout fn conformanceAssociatedDeclarationBound(conformance: Conform, conformanceIndex: U64, traitIndex: U64, clause: U64, outputs: Array[TraitAssocPredicate]) -> Result[TraitBound, CompileDiagnostic] {
         val declaration = self.decls.traitAt(index: traitIndex)
         if clause < declaration.assocBounds.start || clause - declaration.assocBounds.start >= declaration.assocBounds.len {
             return <Result.Err error=self.diagnosticAt(offset: conformance.defOffset, msg: "associated clause belongs to another trait", failureDomain: <FailureDomain.Internal />) />
@@ -1072,14 +1071,15 @@ pub impl Comp {
         if subject == 0U64 {
             return <Result.Err error=self.diagnosticAt(offset: conformance.defOffset, msg: "associated type required by a trait constraint is not bound") />
         }
+        val targetArguments = self.conformanceDeclarationTargetArguments(index: conformanceIndex, declaration: conformance)
         mut val arguments: Array[U64] = []
         for val argument in bound.constraint.key.positionalArgs {
-            val term = self.conformanceAssociatedConstraintTerm(ref: argument, traitIndex: traitIndex, conformance: conformance, outputs: outputs)
+            val term = self.conformanceAssociatedConstraintTerm(ref: argument, traitIndex: traitIndex, receiver: conformance.subjectTy, arguments: targetArguments, outputs: outputs)
             arguments.append(term)
         }
         mut val predicates: Array[TraitAssocPredicate] = []
         for val predicate in bound.constraint.assocPredicates {
-            val term = self.conformanceAssociatedConstraintTerm(ref: predicate.value, traitIndex: traitIndex, conformance: conformance, outputs: outputs)
+            val term = self.conformanceAssociatedConstraintTerm(ref: predicate.value, traitIndex: traitIndex, receiver: conformance.subjectTy, arguments: targetArguments, outputs: outputs)
             predicates.append(<TraitAssocPredicate member=predicate.member value=term span=predicate.span />)
         }
         val constraint = <TraitConstraint key=<TraitInstanceKey owner=bound.constraint.key.owner positionalArgs=arguments /> positionalArgsOpen=bound.constraint.positionalArgsOpen assocPredicates=predicates />
@@ -1094,7 +1094,7 @@ pub impl Comp {
         mut val index = 0U64
         while index < declaration.assocBounds.len {
             val clause = declaration.assocBounds.start + index
-            val original = try self.conformanceAssociatedDeclarationBound(conformance: conformance, traitIndex: traitIndex, clause: clause, outputs: outputs)
+            val original = try self.conformanceAssociatedDeclarationBound(conformance: conformance, conformanceIndex: conformIndex, traitIndex: traitIndex, clause: clause, outputs: outputs)
             val proof = try self.viewedTraitConstraintProof(demand: <ConformanceProofDemand.SourceAdmission />, ref: original.subject, constraint: original.constraint, assumptions: assumptions)
             if self.proofIsMissing(proof: proof) {
                 return <Result.Err error=self.diagnosticAt(offset: original.offset, msg: "associated type does not satisfy its declared trait constraint") />
@@ -1122,7 +1122,7 @@ pub impl Comp {
         if traitIndex >= self.decls.traitCount() {
             return <Result.Err error=self.diagnosticAt(offset: owner.defOffset, msg: "associated constraint has no declaration trait", failureDomain: <FailureDomain.Internal />) />
         }
-        val expected = try self.conformanceAssociatedDeclarationBound(conformance: owner, traitIndex: traitIndex, clause: clause, outputs: self.conformanceAssociatedOutputs(conformance: owner))
+        val expected = try self.conformanceAssociatedDeclarationBound(conformance: owner, conformanceIndex: conformance, traitIndex: traitIndex, clause: clause, outputs: self.conformanceAssociatedOutputs(conformance: owner))
         if !self.typeRefEq(a: row.bound.subject, b: expected.subject) || !self.sameTraitConstraint(a: row.bound.constraint, b: expected.constraint) {
             return <Result.Err error=self.diagnosticAt(offset: expected.offset, msg: "retained associated clause differs from its declared bound", failureDomain: <FailureDomain.Internal />) />
         }
