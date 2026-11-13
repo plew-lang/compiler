@@ -144,3 +144,10 @@ cast target in both check and JIT on `848b915e5dec`. The corresponding
 ordinary value-view selection succeeds. Follow the cast target's original
 type-use occurrence through its lexical proof and then its checked
 conversion to final Mid.
+
+On the source at `590236de`, a balanced same-source development
+comparison used four pairs and excluded the first as warm-up. Medians
+were 7.087 s (`c5146239`) and 7.139 s (`848b915e5dec`). All eight LLVM
+outputs matched SHA-256
+`88d8ba4dc813ef356a29e896e5fbfa4500ad13640daece23db67610e2a19cf91`.
+Formal fixed-point performance remains a parent gate.
