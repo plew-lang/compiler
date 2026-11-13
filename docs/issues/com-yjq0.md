@@ -353,3 +353,12 @@ that instance is absent. Generic argument and global controls also
 pass. Compiler source check and lazy CLI passed. Same-source medians
 were 7.022430 s and 7.045990 s in three measured pairs. All eight
 nonempty LLVM outputs matched. This is a throughput comparison.
+
+## Remove the raw initializer expectation from Mono
+
+The local instance scanner no longer installs an ambient expectation
+from the written annotation. Its sole reader constructed an unused
+operator result hint. Source-selected call templates and saved local
+types still supply the final scanner's inputs. Fixed-input build
+`20261113T050954-build-ed0c9e` produced `9cf01e79`. Four projection
+runtime fixtures, compiler source check and the lazy CLI suite passed.

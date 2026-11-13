@@ -1501,7 +1501,7 @@ pub impl Comp {
         if op == opLt() || op == opLe() || op == opGt() || op == opGe() {
             resultProjection = <CallResultProjection.OrderingTest op=op />
         }
-        val selection: CallSiteSelection = <CallSiteSelection exprId=exprId callee=callee receiverRef=selectedReceiverRef args=self.operatorTemplateArgs(operands: operands) argumentSources=argumentSources calleeTypeArgs=typeArguments proof=selectedProof resultHintRef=(try self.selectedResultHint(callee: callee)) resultRef=selectedResultRef resultProjection=resultProjection target=target />
+        val selection: CallSiteSelection = <CallSiteSelection exprId=exprId callee=callee receiverRef=selectedReceiverRef args=self.operatorTemplateArgs(operands: operands) argumentSources=argumentSources calleeTypeArgs=typeArguments proof=selectedProof resultRef=selectedResultRef resultProjection=resultProjection target=target />
         try self.recordSelectedBodyCallee(selection: selection)
         if callee < self.arena.functionCount() { try self.enqueueSelectedCallee(selection: selection, template: template) }
         return <Result.Ok value=() />
@@ -2003,15 +2003,6 @@ pub impl Comp {
             }
         }
         return false
-    }
-
-    // Capture expected-result provenance at the semantic selection boundary.
-    // The final builder must not consult the collector's ambient expected type.
-    inout fn selectedResultHint(callee: U64) -> Result[U64, CompileDiagnostic] {
-        if callee < self.arena.functionCount() && self.arena.functionAt(index: callee).isAssoc && self.monoWork.scanExpectedTy != 0U64 {
-            return <Result.Ok value=(try self.groundTypeRef(ref: self.monoWork.scanExpectedTy)) />
-        }
-        return <Result.Ok value=0U64 />
     }
 
     // AST navigation adapter for legacy backend sites.  The semantic lookup
@@ -6559,15 +6550,7 @@ pub impl Comp {
     inout fn scanStmtInsts(stmtId: U64) -> Result[(), CompileDiagnostic] {
         match self.arena.stmts[stmtId] {
             Stmt.Let(val mutable, val nameStart, val nameLen, val tyStart, val tyLen, val tyIsArray, val ty, val init) => {
-                // expose the annotation as the expected type while scanning the
-                // initializer, so an assoc-fn constructor whose type param comes only
-                // from context (`val s: Set[I64] = Set.new()`) registers its instance.
-                val savedExpected: U64 = self.monoWork.scanExpectedTy
-                if !(tyIsArray) {
-                    self.monoWork.scanExpectedTy = ty
-                }
                 try self.scanExprInsts(exprId: init)
-                self.monoWork.scanExpectedTy = savedExpected
                 // register the local with its EFFECTIVE type (inferred when there is no
                 // annotation), mirroring codegen — otherwise a later `p.x` on an
                 // inferred-typed `val p = <P …/>` can't recover its type, so a generic
