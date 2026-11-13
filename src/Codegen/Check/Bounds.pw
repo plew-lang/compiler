@@ -1125,6 +1125,11 @@ pub impl Comp {
         if !self.typeRefEq(a: row.bound.subject, b: expected.subject) || !self.sameTraitConstraint(a: row.bound.constraint, b: expected.constraint) {
             return <Result.Err error=self.diagnosticAt(offset: expected.offset, msg: "retained associated clause differs from its declared bound", failureDomain: <FailureDomain.Internal />) />
         }
+        val trait = self.decls.traitIndexByOffset(offset: owner.subjectTraitOwner)
+        val selfParameter = if trait < self.decls.traitCount() { give self.decls.traitAt(index: trait).selfParamId } else { give 0U64 }
+        val scope = <DeclarationTypeScope origin=<DeclarationScopeOrigin.AssociatedBinding /> owner=conformance parameters=self.pushFuncBinds(binds: self.copyConformBinds(binds: owner.typeParams)) selfParameter=selfParameter />
+        try self.scopedProofDependencies(proof: self.thawStaticConformanceProof(id: row.proof), scope: scope, offset: expected.offset, normalizations: row.normalizations)
+        try self.scopedProjectionDependencies(equations: row.normalizations, context: row.normalizations, scope: scope, offset: expected.offset)
         return <Result.Ok value=row />
     }
 

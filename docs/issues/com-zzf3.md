@@ -402,3 +402,19 @@ fixture and is not counted. The review also identified a remaining
 case to verify: replacing a clause proof with a same-shaped premise
 from an unrelated lexical owner. Final independent review and that
 scope check are pending.
+
+## Lexical scope of retained associated clauses
+
+The native scratch control replaces only the saved proof with an
+assumption from a free function with the same `Entry: Source` bound.
+On `d4ed3dff` the foreign premise passes the reader and reaches its
+return. Candidate `752239a5` rejects it at the reader with
+`associated binding cannot borrow another declaration premise`.
+Both candidates accept the original proof before and after the fault.
+The shared reader checks the proof and its normalization dependencies
+in the owning impl's declaration scope.
+
+Build `20261113T003036-build-36825e`, generation
+`20261113T003441-gen-c00e6a` and eight public check/JIT/native controls
+passed. Same-source medians were 6.874314 s and 6.878091 s, with
+identical LLVM output across all eight executions.
