@@ -1673,3 +1673,21 @@ A separate focused input confirmed two fallback entries for array and
 anonymous-record literals passed through generic functions. Start their
 handoff at the selected element or labeled field, then continue checking
 other structural producers before removing the shared fallback.
+
+### Carry array and record literal child evidence
+
+Record carries the first element's evidence with the selected array element
+term. For an anonymous record it maps each field to the canonical labeled
+slot and preserves evidence only when the slot and field terms agree.
+Substitution follows those exact children and propagates their evidence
+through inferred bindings and nested shapes.
+
+Fixed-input build `20261113T225501-build-0b47cb` produced `f0b7c9d6`.
+The new `structural_child_extension_evidence` fixture passes check, JIT,
+and linked native with output 42/43/43. It exercises arrays, a record whose
+written order differs from its canonical label order, a sibling with a
+different extension, and an array of records. The check trace entered the old
+view-source query three times on `e2063d31` and zero times on `f0b7c9d6`.
+Five adjacent accepted inputs and three check rejection controls passed.
+[Same-source comparison](../../../evidence/rejection-domains/diagnostic-domain-implementation/trait-receiver-admission/structural-same-source.json):
+7.845 s versus 7.806 s, with eight identical nonempty LLVM outputs.

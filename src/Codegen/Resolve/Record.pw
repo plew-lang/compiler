@@ -218,6 +218,17 @@ impl Comp {
         }
     }
 
+    inout fn retainStructuralChildEvidence(exprId: U64, term: U64) -> U64 {
+        if term == 0U64 { return 0U64 }
+        val origin = self.recordedExpressionTypeOrigin(exprId: exprId)
+        val extensions = if self.arena.typeViewSourceCount(ref: term) != 0U64 {
+            give self.recordedExtensionSources(exprId: exprId)
+        } else { give [] }
+        if origin.isNone() && extensions.count() == 0U64 { return 0U64 }
+        self.constructionSlotEvidence.append(<SourceBindingTypeEvidence origin=origin extensions=extensions />)
+        return self.constructionSlotEvidence.count()
+    }
+
     inout fn recordAuthoredCompositeOrigin(exprId: U64, term: U64, occurrence: U64) {
         if occurrence == 0U64 || self.arena.typeTermAt(index: term).args.len == 0U64 { return }
         if self.bodyTypeNeedsViewAdmission(ref: term) {
@@ -2035,13 +2046,13 @@ pub impl Comp {
                         val typeTerm = self.arena.typeTermAt(index: local.ty)
                         val viewed = self.arena.typeViewSourceCount(ref: local.ty) != 0U64
                         if local.authoredTypeUse != 0U64 {
-                            if typeTerm.args.len != 0U64 {
+                            if typeTerm.args.len != 0U64 || typeTerm.isRecord {
                                 self.recordExpressionTypeOrigin(exprId: exprId, origin: <SourceExpressionTypeOrigin.Authored occurrence=local.authoredTypeUse />)
                             }
                             if viewed {
                                 self.recordExpressionExtensionSources(exprId: exprId, proofs: self.authoredResultExtensionSources(occurrence: local.authoredTypeUse))
                             }
-                        } else if viewed || typeTerm.args.len != 0U64 {
+                        } else if viewed || typeTerm.args.len != 0U64 || typeTerm.isRecord {
                             match self.lexicalBindingTypeEvidence(declaration: local.nameStart) {
                                 Optional.Some(v: val evidence) => {
                                     match evidence.origin {
@@ -2360,6 +2371,8 @@ pub impl Comp {
                     val inferred = try self.inferMakeInstance(typeStart: typeStart, typeLen: typeLen, typeRef: instance, isEnum: isEnum, variantStart: variantStart, variantLen: variantLen, fields: fields, expression: <Optional.Some v=exprId />)
                     if inferred != 0U64 { instance = inferred }
                 }
+                val structural = instance != 0U64 && self.arena.typeTermAt(index: instance).isRecord
+                mut val origins: Array[(index: U64, evidence: U64)] = []
                 mut val completedFields: Array[MakeField] = []
                 i = 0U64
                 while i < fields.len {
@@ -2389,10 +2402,24 @@ pub impl Comp {
                     // ground loses the only result-side substitution for an
                     // argument-less generic associated call.
                     try self.recordSemanticExprExpectedResult(exprId: value, expectedTerm: ctxRef)
+                    if structural {
+                        val term = self.parametricExprTerm(exprId: value)
+                        val evidence = self.retainStructuralChildEvidence(exprId: value, term: term)
+                        if evidence != 0U64 {
+                            val index = self.fieldIndexOfReceiver(receiverRef: instance, fieldStart: field.nameStart, fieldLen: field.nameLen)
+                            if index < self.arena.typeTermAt(index: instance).recordFieldTerms.len &&
+                               self.typeRefEq(a: term, b: self.typeTermRefChildRef(ref: instance, index: index)) {
+                                origins.append((index: index, evidence: evidence))
+                            }
+                        }
+                    }
                     i += 1
                 }
                 if completedFields.count() != 0U64 {
                     self.arena.exprs.set(i: exprId, value: <Expr.Make typeStart=typeStart typeLen=typeLen variantStart=variantStart variantLen=variantLen isEnum=isEnum ty=ty fields=self.pushMakeFields(fields: completedFields) />)
+                }
+                if origins.count() != 0U64 {
+                    self.recordExpressionTypeOrigin(exprId: exprId, origin: <SourceExpressionTypeOrigin.Structural term=instance slots=origins />)
                 }
                 // Aggregate finalization and body instances consume this
                 // selected TypeTerm and the completed per-occurrence operands.
@@ -2425,10 +2452,16 @@ pub impl Comp {
                 // now that child recording has applied the available context.
                 // Empty/unresolved arrays retain their need for an element context.
                 if elems.len > 0U64 {
-                    val eRef: U64 = self.parametricExprTerm(exprId: self.exprAt(exprs: elems, index: 0U64))
+                    val first = self.exprAt(exprs: elems, index: 0U64)
+                    val eRef = self.parametricExprTerm(exprId: first)
                     if eRef != 0U64 {
                         if exprId < self.arena.exprs.count() {
-                            self.recordSemanticExprTerm(exprId: exprId, term: (try self.sourceArrayTypeRef(elemRef: eRef, offset: self.exprOffset(id: exprId))))
+                            val arrayTerm = try self.sourceArrayTypeRef(elemRef: eRef, offset: self.exprOffset(id: exprId))
+                            self.recordSemanticExprTerm(exprId: exprId, term: arrayTerm)
+                            val evidence = self.retainStructuralChildEvidence(exprId: first, term: eRef)
+                            if evidence != 0U64 {
+                                self.recordExpressionTypeOrigin(exprId: exprId, origin: <SourceExpressionTypeOrigin.Structural term=arrayTerm slots=[(index: 0U64, evidence: evidence)] />)
+                            }
                         }
                     }
                 } else if elementContext != 0U64 {

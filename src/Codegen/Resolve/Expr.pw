@@ -3054,6 +3054,25 @@ impl Comp {
                             if proofs.count() != 0U64 { return proofs }
                         }
                     }
+                    SourceExpressionTypeOrigin.Structural(val term, val slots) => {
+                        if !self.typeTermRefSameHead(a: pattern, b: actual) || !self.typeRefEq(a: term, b: actual) { return [] }
+                        val count = self.typeTermRefChildCount(ref: actual)
+                        if count != self.typeTermRefChildCount(ref: pattern) { return [] }
+                        for index in 0U64..<count {
+                            if self.typeTermRefIdentityChildLabel(ref: pattern, index: index) != self.typeTermRefIdentityChildLabel(ref: actual, index: index) { return [] }
+                        }
+                        for slot in slots {
+                            val child = self.typeTermRefChildRef(ref: actual, index: slot.index)
+                            val childPattern = self.typeTermRefChildRef(ref: pattern, index: slot.index)
+                            val evidence = self.constructionSlotEvidence[slot.evidence - 1U64]
+                            if self.bareInferenceParamId(ref: childPattern) == binder && self.typeRefEq(a: child, b: substituted) {
+                                if evidence.extensions.count() != 0U64 { return evidence.extensions }
+                            } else {
+                                val proofs = self.originSubstitutionExtensions(origin: evidence.origin, pattern: childPattern, actual: child, binder: binder, substituted: substituted)
+                                if proofs.count() != 0U64 { return proofs }
+                            }
+                        }
+                    }
                     SourceExpressionTypeOrigin.InferredConstruction(val term, val slots) => {
                         if !self.typeTermRefSameHead(a: pattern, b: actual) || !self.typeTermRefSameHead(a: term, b: actual) { return [] }
                         val actualCount = self.typeTermRefChildCount(ref: actual)

@@ -1,0 +1,16 @@
+use @Std/Io only { print }
+struct Counter { val n: I64 }
+impl Counter { fn get() -> I64 { return 0I64 } }
+extension Read { impl Counter { fn get() -> I64 { return self.n } } }
+extension Other { impl Counter { fn get() -> I64 { return 99I64 } } }
+fn arrayFirst[T](values: Array[T]) -> T { return values[0] }
+fn recordFirst[T](value: (item: T, extra: Counter#Other)) -> T { return value.item }
+fn nestedFirst[T](values: Array[(item: T, extra: Counter#Other)]) -> T { return values[0].item }
+fn main() {
+    val array = [<Counter n=42I64 />#Read]
+    val record = (item: <Counter n=43I64 />#Read, extra: <Counter n=8I64 />#Other)
+    val nested = [record]
+    print(arrayFirst(values: array).get())
+    print(recordFirst(value: record).get())
+    print(nestedFirst(values: nested).get())
+}

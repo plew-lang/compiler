@@ -2878,6 +2878,7 @@ enum SourceExpressionTypeOrigin {
     Authored(occurrence: U64)
     Construction(term: U64, slots: Array[(index: U64, recipe: U64)])
     InferredConstruction(term: U64, slots: Array[InferredConstructionSlot])
+    Structural(term: U64, slots: Array[(index: U64, evidence: U64)])
 }
 
 struct InferredConstructionSlot {
