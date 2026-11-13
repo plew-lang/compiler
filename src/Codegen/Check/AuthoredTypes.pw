@@ -690,12 +690,12 @@ impl Comp {
         return <Result.Ok value=self.sourceTypeUses.useAt(index: id - 1U64).unwrap() />
     }
 
-    inout fn admitLocalAnnotation(id: U64, term: U64, owner: SemanticCompletionOwner) -> Result[LocalAnnotationProof, CompileDiagnostic] {
+    inout fn admitBodyTypeUse(id: U64, term: U64, owner: SemanticCompletionOwner) -> Result[LocalAnnotationProof, CompileDiagnostic] {
         val occurrence = try self.signatureOccurrence(id: id)
         val lexical = self.lexicalSourceFactOwner(owner: owner)
         val function = match lexical {
             SemanticCompletionOwner.Function(index: val index) => index,
-            _ => { return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "local annotation has no lexical declaration", failureDomain: <FailureDomain.Internal />) /> },
+            _ => { return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "authored body type has no lexical declaration", failureDomain: <FailureDomain.Internal />) /> },
         }
         val token = match self.sourceTypeUses.signatureFor(function: function) {
             Optional.Some(v: val signature) => signature.scope,
@@ -703,14 +703,14 @@ impl Comp {
         }
         val sourceScope = match self.sourceTypeUses.scopeAt(token: token) {
             Optional.Some(v: val scope) => scope,
-            Optional.None => { return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "local annotation has no registered lexical declaration", failureDomain: <FailureDomain.Internal />) /> },
+            Optional.None => { return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "authored body type has no registered lexical declaration", failureDomain: <FailureDomain.Internal />) /> },
         }
         match sourceScope.state {
             SourceTypeScopeState.Lowered => {}
-            _ => { return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "local annotation belongs to an unfinished declaration", failureDomain: <FailureDomain.Internal />) /> }
+            _ => { return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "authored body type belongs to an unfinished declaration", failureDomain: <FailureDomain.Internal />) /> }
         }
         if occurrence.term != term || occurrence.scope != token || sourceScope.function.unwrapOr(fallback: 18446744073709551615U64) != function {
-            return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "local annotation has a foreign occurrence", failureDomain: <FailureDomain.Internal />) />
+            return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "authored body type has a foreign occurrence", failureDomain: <FailureDomain.Internal />) />
         }
         val declaration = self.arena.functionAt(index: function)
         val scope = try self.declarationTypeScope(owner: function)
@@ -725,7 +725,7 @@ impl Comp {
             match self.authoredSignatureViews.get(key: function) {
                 Optional.Some(v: val admitted) => {
                     if admitted.signature.scope != token || admitted.signature.function != function {
-                        return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "local annotation has a foreign signature admission", failureDomain: <FailureDomain.Internal />) />
+                        return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "authored body type has a foreign signature admission", failureDomain: <FailureDomain.Internal />) />
                     }
                     validation = <SignatureRecipeValidation admittedDeclarations=admitted.recipeChecks equations=admitted.recipeEquations receiverEquations=admitted.receiverEquations proofs=admitted.proofs />
                 }
@@ -736,7 +736,7 @@ impl Comp {
         val receiverType = self.groundTermInEnvironment(ref: term, params: [], values: [], selfRef: scopes.receiver)
         val equations = validation.equations.getOr(key: occurrence.recipe, fallback: [])
         val sourceTerm = try self.replayProjectionNormalizations(ref: receiverType, normalizations: equations, offset: occurrence.site)
-        return <Result.Ok value=<LocalAnnotationProof occurrence=id recipe=occurrence.recipe sourceTerm=sourceTerm proofs=validation.proofs /> />
+        return <Result.Ok value=<LocalAnnotationProof occurrence=id recipe=occurrence.recipe sourceTerm=sourceTerm normalizations=equations proofs=validation.proofs /> />
     }
 
     inout fn authoredSignatureOccurrence(signature: AuthoredFunctionSignature, id: U64) -> Result[AuthoredTypeUse, CompileDiagnostic] {

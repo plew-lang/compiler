@@ -1,0 +1,11 @@
+use @Std/Io only { print }
+trait Projection { type Left type Right }
+trait Project[L, R] {}
+struct Number {}
+impl Number as Projection { type Left = Bool type Right = I64 }
+impl Number as Project[Bool, I64] {}
+fn main() {
+    val n = <Number />
+    val view = n#Project[Number#Projection.Left, Number#Projection.Right]
+    print(42I64)
+}

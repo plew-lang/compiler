@@ -6138,7 +6138,8 @@ pub impl Comp {
         val subject = try self.replayProjectionNormalizations(ref: substituted, normalizations: equations, offset: source.writtenStart)
         mut val arguments: Array[U64] = []
         for argument in saved.selector.traitInstance.positionalArgs {
-            arguments.append(self.groundTermInEnvironment(ref: argument, params: environment.params, values: environment.args, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef))
+            val substituted = self.groundTermInEnvironment(ref: argument, params: environment.params, values: environment.args, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
+            arguments.append(try self.replayProjectionNormalizations(ref: substituted, normalizations: equations, offset: source.writtenStart))
         }
         (try self.instantiateAuthoredViewProof(saved: saved, receiver: subject, arguments: arguments, environment: environment, offset: source.writtenStart, normalizations: equations))
         return <Result.Ok value=() />

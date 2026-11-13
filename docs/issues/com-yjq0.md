@@ -333,3 +333,23 @@ The projected receiver fixture passes check, JIT and native with
 output 42. Four related check/JIT fixtures also pass. An explicit
 trait argument containing a projection still needs its authored
 argument handoff.
+
+## Retain ordered arguments of body-owned value views
+
+Both syntax adapters preserve the exact authored occurrences of the
+positional arguments. Record admits the argument recipes in order and
+uses the resulting trait instance for the view term and for proof
+selection. Finalization checks the written selector identity, then
+instantiates and replays the saved equations for its receiver and
+arguments. Declaration/global/default paths keep their existing
+ownership boundaries.
+
+The projected-argument fixture reproduces a false Source rejection
+on `4635ba84`. Fixed-input build `20261113T050412-build-ea199e`
+produced `811d0918`, which passes check, JIT and native for both a
+stored view and a directly viewed call. Two projected positional
+arguments pass in the written order and reject in reverse order when
+that instance is absent. Generic argument and global controls also
+pass. Compiler source check and lazy CLI passed. Same-source medians
+were 7.022430 s and 7.045990 s in three measured pairs. All eight
+nonempty LLVM outputs matched. This is a throughput comparison.

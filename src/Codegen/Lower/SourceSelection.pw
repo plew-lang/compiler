@@ -174,8 +174,14 @@ impl Comp {
         return index < self.decls.traitOwnerCount() && self.decls.traitOwnerAt(index: index).arity != 0U64
     }
 
-    inout fn lowerBoundValueView(recv: U64, source: ResolvedViewSource, names: Array[Span], head: U64, strip: Bool) -> U64 {
+    inout fn lowerBoundValueView(recv: U64, source: ResolvedViewSource, names: Array[Span], head: U64, strip: Bool, argumentOccurrences: Array[U64]) -> U64 {
         mut val result = self.pushExpr(e: <Expr.ExtView recv=recv source=source strip=strip />)
+        if argumentOccurrences.count() != 0U64 && !strip {
+            match self.sourceTypeUses.currentRole() {
+                SourceTypeUseRole.Body => { self.valueViewArgumentOccurrences[result] = argumentOccurrences }
+                _ => {}
+            }
+        }
         self.decls.registerPlaceSource(exprId: result, source: self.decls.placeSource(exprId: recv), expressionCount: self.arena.exprs.count())
         mut val index = head + 1U64
         while index < names.count() {
@@ -193,6 +199,7 @@ impl Comp {
         val head = try self.bindValueViewSource(names: names)
         val typeApplication = self.valueViewNeedsArguments(source: head.source)
         mut val arguments: Array[U64] = []
+        mut val argumentOccurrences: Array[U64] = []
         mut val labels = false
         mut val key: Optional[ExprId] = <Optional.None />
         if expr.application.raw != 0U64 {
@@ -202,7 +209,9 @@ impl Comp {
                     SyntaxSourceTypes.Parsed(val args, labels: _) => {
                         index = 0U64
                         while index < args.count {
-                            arguments.append((try self.lowerSyntaxType(id: syntaxSourceApplicationTypeArg(file: self.syntax, application: application, index: index).unwrap())).ref)
+                            val argument = try self.lowerSyntaxType(id: syntaxSourceApplicationTypeArg(file: self.syntax, application: application, index: index).unwrap())
+                            arguments.append(argument.ref)
+                            argumentOccurrences.append(argument.authoredUse)
                             val label = syntaxSourceApplicationTypeLabel(file: self.syntax, application: application, index: index).unwrap()
                             if label.end > label.start { labels = true }
                             index += 1U64
@@ -219,7 +228,7 @@ impl Comp {
         }
         val source = try self.completeTypeViewSource(source: head.source, arguments: arguments, hasLabels: labels)
         val receiver = try self.lowerSyntaxExpr(id: expr.child0)
-        val viewed = self.lowerBoundValueView(recv: receiver, source: source, names: names, head: head.index, strip: expr.flag0)
+        val viewed = self.lowerBoundValueView(recv: receiver, source: source, names: names, head: head.index, strip: expr.flag0, argumentOccurrences: argumentOccurrences)
         match key {
             Optional.Some(v: val expression) => { return self.lowerIndexRead(recv: viewed, key: (try self.lowerSyntaxExpr(id: expression))) }
             Optional.None => { return <Result.Ok value=viewed /> }
@@ -232,6 +241,7 @@ impl Comp {
         val head = try self.bindValueViewSource(names: names)
         val typeApplication = self.valueViewNeedsArguments(source: head.source)
         mut val arguments: Array[U64] = []
+        mut val argumentOccurrences: Array[U64] = []
         mut val labels = false
         mut val key: Optional[ExprAst] = <Optional.None />
         match application {
@@ -239,7 +249,11 @@ impl Comp {
                 if typeApplication && head.index + 1U64 == names.count() {
                     match packet.types {
                         SourceTypesAst.Parsed(val args, labels: val written, labelSpans: _) => {
-                            for argument in args { arguments.append((try self.lowerType(t: argument)).ref) }
+                            for syntaxArgument in args {
+                                val argument = try self.lowerType(t: syntaxArgument)
+                                arguments.append(argument.ref)
+                                argumentOccurrences.append(argument.authoredUse)
+                            }
                             for label in written { if label != "" { labels = true } }
                         }
                         SourceTypesAst.Invalid(val offset, val message) => { return <Result.Err error=self.diagnosticAt(offset: offset, msg: message, failureDomain: <FailureDomain.Source />) /> }
@@ -255,7 +269,7 @@ impl Comp {
         }
         val source = try self.completeTypeViewSource(source: head.source, arguments: arguments, hasLabels: labels)
         val receiver = try self.lowerExpr(e: recv)
-        val viewed = self.lowerBoundValueView(recv: receiver, source: source, names: names, head: head.index, strip: strip)
+        val viewed = self.lowerBoundValueView(recv: receiver, source: source, names: names, head: head.index, strip: strip, argumentOccurrences: argumentOccurrences)
         match key {
             Optional.Some(v: val expression) => { return self.lowerIndexRead(recv: viewed, key: (try self.lowerExpr(e: expression))) }
             Optional.None => { return <Result.Ok value=viewed /> }

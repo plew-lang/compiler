@@ -727,7 +727,8 @@ pub struct Comp {
     pub mut val blockExitRequirements: Dictionary[U64, U64] = [:]
     pub mut val blockTypeUses: Dictionary[U64, Array[U64]] = [:]
     mut val localAnnotationOccurrences: Dictionary[U64, U64] = [:]
-    mut val localAnnotationTypeUses: Set[U64] = Set.new()
+    mut val bodyRecipeTypeUses: Set[U64] = Set.new()
+    mut val valueViewArgumentOccurrences: Dictionary[U64, Array[U64]] = [:]
     pub mut val checkedTypeUses: Set[U64] = Set.new()
     pub mut val sourceExpressionLimit: U64 = 0U64
     pub mut val globalCallTemplatesClosed: Bool = false
@@ -2914,6 +2915,7 @@ struct LocalAnnotationProof {
     val occurrence: U64
     val recipe: U64
     val sourceTerm: U64
+    val normalizations: Array[ProjectionNormalizationStep] = []
     val proofs: Array[AuthoredTypeViewProof]
 }
 impl LocalAnnotationProof { factory }
