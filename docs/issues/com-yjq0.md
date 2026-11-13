@@ -294,3 +294,18 @@ the meta `value-view-proof-replay` evidence directory. The old and
 new carriers both reject the review's extension-only witness and
 viewed assignment-place examples. General view formation remains with
 [com-3jtd](com-3jtd.md).
+
+## Reuse admitted declaration recipes in local shorthand
+
+The body root must still be a Body-role occurrence of the registered
+lexical function. A descendant can reuse a recipe already admitted by
+that function's signature, including the exact argument recipe from a
+where clause or the parent implementation's receiver. Body validation
+inherits the frozen proofs and equations from that signature. The
+compatibility sweep marks only Body-role uses as local-owned.
+
+Carrier `1c68b4d0` rejects the two new shorthand fixtures during
+check. Fixed-input build `20261113T044402-build-a7bfcc` produced
+`8f8d0bb7`, which checks both fixtures and prints 42 in JIT and
+native execution. The compiler source check, four additional runtime
+fixtures and the lazy CLI suite passed.

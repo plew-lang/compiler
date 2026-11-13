@@ -383,6 +383,7 @@ struct SignatureRecipeValidation {
     mut val equations: Dictionary[U64, Array[ProjectionNormalizationStep]] = [:]
     mut val proofs: Array[AuthoredTypeViewProof] = []
     mut val visited: Dictionary[U64, Bool] = [:]
+    val admittedDeclarations: Dictionary[U64, Bool] = [:]
 }
 impl SignatureRecipeValidation { factory }
 

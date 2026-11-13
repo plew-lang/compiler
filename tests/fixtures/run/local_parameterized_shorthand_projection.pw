@@ -1,0 +1,9 @@
+use @Std/Io only { print }
+trait Project[T] { type Item fn item() -> Item }
+struct Number {}
+impl Number as Project[Bool] { type Item = I64 fn item() -> I64 { return 42I64 } }
+fn get[T](value: T) -> T#Project[Bool].Item where T: Project[Bool] {
+    val output: T.Item = value.item()
+    return output
+}
+fn main() { print(get(value: <Number />)) }

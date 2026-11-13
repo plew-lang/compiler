@@ -32,6 +32,9 @@ pub struct AuthoredSignatureViews {
     pub val signature: AuthoredFunctionSignature
     pub val proofs: Array[AuthoredTypeViewProof]
     pub val receiverRecipes: Array[U64] = []
+    pub val recipeChecks: Dictionary[U64, Bool] = [:]
+    pub val recipeEquations: Dictionary[U64, Array[ProjectionNormalizationStep]] = [:]
+    pub val receiverEquations: Array[ProjectionNormalizationStep] = []
     pub val clauses: Array[AuthoredProvidedClause] = []
 }
 pub impl AuthoredSignatureViews { factory }
