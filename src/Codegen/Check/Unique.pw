@@ -633,6 +633,7 @@ pub impl Comp {
     inout fn checkDefaultGeneratorRestrictions(fnIdx: U64) -> Result[(), CompileDiagnostic] {
         match self.decls.defaultGeneratorOrigins.get(key: fnIdx) {
             Optional.Some(v: val origin) => {
+                try self.checkDefaultGeneratorOrigin(function: fnIdx, origin: origin)
                 match origin {
                     DefaultGeneratorOrigin.Parameter(function: val function, parameter: val parameter) => { return self.checkParamDefaultRestrictions(function: function, parameter: parameter) }
                     DefaultGeneratorOrigin.Field(structure: val structure, field: val field) => { return self.checkFieldDefaultRestrictions(structure: structure, field: field) }

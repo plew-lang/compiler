@@ -121,6 +121,14 @@ pub struct SourceTypeUses {
 pub impl SourceTypeUses {
     factory
     fn currentScope() -> U64 { return self.active }
+    fn projectionBoundScope() -> U64 {
+        if self.active == 0U64 { return 0U64 }
+        val scope = self.scopes[self.active - 1U64]
+        match scope.kind {
+            SourceTypeScopeKind.DefaultExpression => { return scope.parent }
+            _ => { return self.active }
+        }
+    }
     fn inImplementation() -> Bool {
         if self.active == 0U64 { return false }
         match self.scopes[self.active - 1U64].kind {

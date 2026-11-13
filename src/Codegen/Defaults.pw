@@ -3,6 +3,22 @@
 // but take no value parameters and never capture `self` or another argument.
 // They are deliberately absent from the source callable surface.
 pub impl Comp {
+    inout fn checkDefaultGeneratorOrigin(function: U64, origin: DefaultGeneratorOrigin) -> Result[(), CompileDiagnostic] {
+        val generator = self.arena.functionAt(index: function)
+        val offset = generator.defOffset
+        val expression = try self.defaultOriginExpression(origin: origin, offset: offset)
+        if generator.body != 0U64 && self.blockStmtCount(blkId: generator.body) == 1U64 {
+            val statement = self.blockStmtAt(blkId: generator.body, index: 0U64)
+            match self.arena.stmts[statement] {
+                Stmt.Return(value: val value, hasValue: val hasValue, offset: _) => {
+                    if hasValue && value == expression { return <Result.Ok value=() /> }
+                }
+                _ => {}
+            }
+        }
+        return <Result.Err error=self.diagnosticAt(offset: offset, msg: "default generator does not own its declared expression", failureDomain: <FailureDomain.Internal />) />
+    }
+
     inout fn defaultOriginExpression(origin: DefaultGeneratorOrigin, offset: U64) -> Result[U64, CompileDiagnostic] {
         match origin {
             DefaultGeneratorOrigin.Parameter(function: val function, parameter: val parameter) => {
@@ -172,6 +188,8 @@ pub impl Comp {
         while index < bindings.count() {
             match bindings[index] {
                 CallParameterBinding.Default(val generator) => {
+                    val owner = try self.semanticBodyOwner(fnIdx: callee)
+                    try self.requireDefaultGeneratorSlot(generator: generator, expected: <DefaultGeneratorOrigin.Parameter function=owner parameter=index />)
                     if parameterTerms[index] == 0U64 || parameterTerms[index] >= self.arena.typeCount() {
                         tracePhaseCount(c: inout self, label: "default-call-completion:invalid-parameter-term", count: parameterTerms[index])
                         return <Result.Ok value=<Optional.None /> />
@@ -314,6 +332,33 @@ pub impl Comp {
         return functionId - 1U64
     }
 
+    inout fn requireDefaultGeneratorSlot(generator: U64, expected: DefaultGeneratorOrigin) -> Result[(), CompileDiagnostic] {
+        match self.decls.defaultGeneratorOrigins.get(key: generator) {
+            Optional.Some(v: val origin) => {
+                match expected {
+                    DefaultGeneratorOrigin.Parameter(function: val function, parameter: val parameter) => {
+                        match origin {
+                            DefaultGeneratorOrigin.Parameter(function: val owner, parameter: val slot) => {
+                                if function == owner && parameter == slot { return <Result.Ok value=() /> }
+                            }
+                            _ => {}
+                        }
+                    }
+                    DefaultGeneratorOrigin.Field(structure: val structure, field: val field) => {
+                        match origin {
+                            DefaultGeneratorOrigin.Field(structure: val owner, field: val slot) => {
+                                if structure == owner && field == slot { return <Result.Ok value=() /> }
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+            }
+            Optional.None => {}
+        }
+        return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "selected default generator belongs to another declaration slot", failureDomain: <FailureDomain.Internal />) />
+    }
+
     // Placed provided copies prepend receiver binders to the source method's
     // binders. A source-owned generator retains only its lexical signature;
     // positional truncation would substitute the receiver argument for T.
@@ -419,6 +464,7 @@ pub impl Comp {
             return <Result.Err error=self.diagnosticAt(offset: field.offset, msg: "internal error: field default has no selected generator") />
         }
         val generator: U64 = functionId - 1U64
+        try self.requireDefaultGeneratorSlot(generator: generator, expected: <DefaultGeneratorOrigin.Field structure=structIndex field=fieldIndex />)
         val arguments: Array[U64] = self.copyTypeTermArgs(ref: instance)
         if arguments.count() != self.arena.functionAt(index: generator).typeParams.count() {
             return <Result.Err error=self.diagnosticAt(offset: field.offset, msg: "internal error: field default instance has incomplete type arguments") />

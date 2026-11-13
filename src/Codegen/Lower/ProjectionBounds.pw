@@ -53,13 +53,13 @@ impl Comp {
     inout fn preparedProjectionBound(id: U64, requestSite: Optional[U64] = <Optional.None />) -> Result[PreparedProjectionBound, CompileDiagnostic] {
         if id == 0U64 || id > self.projectionBoundClauses.count() { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "invalid source bound clause", failureDomain: <FailureDomain.Internal />) /> }
         val saved = self.projectionBoundClauses[id - 1U64]
-        val active = self.sourceTypeUses.currentScope()
+        val active = self.sourceTypeUses.projectionBoundScope()
         if active == 0U64 || saved.scope == 0U64 {
             return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "source bound clause has no declaration owner", failureDomain: <FailureDomain.Internal />) />
         }
-        if saved.scope != active {
+        if saved.scope != self.sourceTypeUses.currentScope() {
             val current = self.sourceTypeUses.scopeAt(token: active)
-            if !current.isSome() || current.unwrap().parent != saved.scope {
+            if saved.scope != active && (!current.isSome() || current.unwrap().parent != saved.scope) {
                 return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "foreign source bound clause", failureDomain: <FailureDomain.Internal />) />
             }
             match saved.state {
