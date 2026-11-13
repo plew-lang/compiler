@@ -1,0 +1,12 @@
+use @Std/Io only { print }
+trait Source[Input] { type Item }
+struct Number {}
+impl Number as Source[Bool] { type Item = I64 }
+struct Box[Key, Input, Item] { val item: Item }
+impl[T, Input] Box[T, Input, T#Source[Input].Item] where T: Source[Input] {
+    fn value() -> T#Source[Input].Item { return self.item }
+}
+fn inspect[T, Input](box: Box[T, Input, I64]) -> I64 where T: Source[Input, Item=I64] {
+    return box.value()
+}
+fn main() { print(inspect(box: <Box[Number, Bool, I64] item=42I64 />)) }

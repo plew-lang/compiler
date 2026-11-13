@@ -1153,3 +1153,14 @@ forwarding body. That body passes check and JIT on `03b9f51b`; the declaration's
 independent raw signature predicate rejects the delegated form. [com-6esv](com-6esv.md) owns the delegation repair under the source member
 selection epic. [com-ukzt](com-ukzt.md#dependent-receiver-counterexample)
 records the baseline and owns the remaining API audit.
+
+The retained callable-constraint reader enforced closed positional inputs
+during declaration replay. Declaration replay now accepts rigid terms and
+checks the selected proof against the retained equation context. Executable
+replay still enforces closedness. The new
+`inherent_receiver_projection_symbolic_argument` fails on `03b9f51b`
+with “associated binding projection has no matching retained conformance”.
+It passes check, JIT and linked native on `51fc3403` (fixed-input build
+`20261113T184419-build-c60e56`). The inherent receiver group and the
+associated interface condition control pass check/JIT. Replacing the
+caller's `Item=I64` with `Item=Bool` still rejects the member lookup.

@@ -4232,7 +4232,7 @@ impl Comp {
     // A clause reader consumes the exact admitted instance, not a fresh
     // interpretation of its original signature. Raw Arena issuance is trusted;
     // source admission validates these rows before publication.
-    inout fn readRetainedCallableConstraint(source: DeclarationBoundRef, receiver: U64, environment: InstanceEnvironment) -> Result[StaticProofInstantiation, CompileDiagnostic] {
+    inout fn readRetainedCallableConstraint(source: DeclarationBoundRef, receiver: U64, environment: InstanceEnvironment, declaration: Bool = false, normalizations: Array[ProjectionNormalizationStep] = []) -> Result[StaticProofInstantiation, CompileDiagnostic] {
         val evidence = match environment.constraints {
             Optional.Some(v: val evidence) => evidence,
             Optional.None => { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "call constraint has no retained declaration binding", failureDomain: <FailureDomain.Internal />) /> },
@@ -4277,11 +4277,10 @@ impl Comp {
         if selected == count { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "call constraint has no retained declaration binding", failureDomain: <FailureDomain.Internal />) /> }
         val bound = self.arena.callableConstraintBoundAt(evidence: evidence, index: selected)
         if !self.typeRefEq(a: self.typeRefWithoutOuterViews(ref: bound.subject), b: self.typeRefWithoutOuterViews(ref: receiver)) { return <Result.Err error=self.diagnosticAt(offset: bound.offset, msg: "call constraint has a foreign receiver", failureDomain: <FailureDomain.Internal />) /> }
-        for argument in bound.constraint.key.positionalArgs { if argument == 0U64 || !self.arena.typeIsClosed(ref: argument) { return <Result.Ok value=<StaticProofInstantiation.Deferred /> /> } }
-        for predicate in bound.constraint.assocPredicates { if predicate.value == 0U64 || !self.arena.typeIsClosed(ref: predicate.value) { return <Result.Ok value=<StaticProofInstantiation.Deferred /> /> } }
+        for argument in bound.constraint.key.positionalArgs { if argument == 0U64 || (!declaration && !self.arena.typeIsClosed(ref: argument)) { return <Result.Ok value=<StaticProofInstantiation.Deferred /> /> } }
+        for predicate in bound.constraint.assocPredicates { if predicate.value == 0U64 || (!declaration && !self.arena.typeIsClosed(ref: predicate.value)) { return <Result.Ok value=<StaticProofInstantiation.Deferred /> /> } }
         val proof = self.thawStaticConformanceProof(id: self.arena.callableConstraintProofAt(evidence: evidence, index: selected))
-        try self.checkStaticProofEvidence(proof: proof, offset: bound.offset)
-        try self.checkSelectedCallConstraintBoundary(expected: bound, proof: proof, offset: bound.offset)
+        try self.checkRetainedWitnessClause(expected: bound, proof: proof, normalizations: normalizations, offset: bound.offset)
         return <Result.Ok value=<StaticProofInstantiation.Ready proof=proof /> />
     }
 

@@ -363,7 +363,7 @@ impl Comp {
         match source {
             DeclarationBoundRef.Implementation(index: _) => {
                 if environment.constraints.isNone() { return <Result.Ok value=<ConstraintProofReplay.Deferred /> /> }
-                match (try self.readRetainedCallableConstraint(source: source, receiver: receiver, environment: environment)) {
+                match (try self.readRetainedCallableConstraint(source: source, receiver: receiver, environment: environment, declaration: true, normalizations: normalizations)) {
                     StaticProofInstantiation.Ready(proof: val proof) => { return <Result.Ok value=<ConstraintProofReplay.Universal proof=proof /> /> }
                     StaticProofInstantiation.Deferred => { return <Result.Ok value=<ConstraintProofReplay.Deferred /> /> }
                     StaticProofInstantiation.Missing => { return <Result.Ok value=<ConstraintProofReplay.Missing /> /> }
