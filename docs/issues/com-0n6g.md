@@ -174,3 +174,22 @@ matching erased receiver and trait arguments can accept a foreign
 witness using a different extension source if the row's own metadata
 was preserved. This needs a selected-source comparison at the reader.
 The independent review stopped before completing its follow-up.
+
+## Extension witness identity checkpoint
+
+Using the valid enum layout with `Number#First#Marker` and
+`Number#Second#Marker`, replacing only the second saved proof handle with
+the first still produced 42 before this increment (instrumented SHA
+`fd94305cf2d7`). After comparing the full proof receiver, including its
+extensions, and the complete trait instance, the identical verification
+rejects at the annotation (`a690c7253826`). The uninstrumented
+`2b4c8e27e7ae`, built by `20261113T093116-build-2f296a`, passed all nine
+nominal run fixtures in check, JIT and linked native modes.
+
+The independent review confirmed the tested repair and identified a
+stronger invariant to close. Validating the contents of a witness still
+allows a different declaration identity to be paired with the expected
+receiver in the same internal row. Retain the exact admitted proof
+identity through the reader, including the projection equation that uses
+it. Also verify whether semantic field/cast readers are dominated by
+checked underlying evidence or still take the raw declaration route.

@@ -1,0 +1,10 @@
+use @Std/Io only { print }
+trait Marker {}
+struct Number {}
+extension First { impl Number as Marker {} }
+extension Second { impl Number as Marker {} }
+enum Holder { Empty Full(values: (first: Number#First#Marker, second: Number#Second#Marker)) }
+fn main() {
+    val holder = <Holder.Empty />
+    print(42I64)
+}

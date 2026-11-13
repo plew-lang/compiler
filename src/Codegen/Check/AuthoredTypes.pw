@@ -917,11 +917,16 @@ impl Comp {
                 return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "nominal annotation has a foreign saved conformance", failureDomain: <FailureDomain.Internal />) />
             }
             val subject = try self.replayProjectionChildren(ref: receiver, normalizations: normalizations, offset: offset)
+            val proofSubject = if type.assocNameId == 0U64 { give self.authoredTraitViewSubject(ref: subject) } else { give subject }
             val constraint = <TraitConstraint key=selector.traitInstance assocPredicates=[] />
-            val expected = try self.replayBoundNormalizations(bound: <TraitBound subject=subject constraint=constraint offset=offset />, normalizations: normalizations)
-            if !(try self.retainedWitnessClauseMatches(expected: expected, proof: self.thawStaticConformanceProof(id: row.proof), normalizations: normalizations, offset: offset)) {
+            val expected = try self.replayBoundNormalizations(bound: <TraitBound subject=proofSubject constraint=constraint offset=offset />, normalizations: normalizations)
+            val proof = self.thawStaticConformanceProof(id: row.proof)
+            val traitIndex = self.decls.traitIndexByOffset(offset: selector.traitInstance.owner)
+            val bound = try self.replayBoundNormalizations(bound: (try self.staticProofBound(proof: proof, traitIdx: traitIndex)), normalizations: normalizations)
+            if bound.subject == 0U64 || !self.typeRefEq(a: expected.subject, b: bound.subject) || !self.sameTraitConstraint(a: expected.constraint, b: bound.constraint) {
                 return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "nominal annotation has a foreign saved conformance", failureDomain: <FailureDomain.Internal />) />
             }
+            try self.checkStaticProofEvidence(proof: proof, offset: occurrence.site)
         }
         return <Result.Ok value=() />
     }
