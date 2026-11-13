@@ -88,6 +88,11 @@ def main():
         if inputs() != snapshot:
             raise ValueError('source, dependencies, carrier or toolchain changed during measurement')
 
+    def artifact_digest(path):
+        if path.stat().st_size == 0:
+            raise ValueError(f'empty self-host artifact: {path.relative_to(output)}')
+        return digest(path)
+
     def compile_with(executable, name, link):
         directory = output / name
         state['current_artifact'] = name
@@ -100,7 +105,8 @@ def main():
         check_inputs()
         row = dict(artifact=name, compiler=str(executable), compiler_sha256=digest(executable),
                    wall_seconds=float(fields(directory / 'summary.txt')['wall_seconds']),
-                   llvm_sha256=digest(directory / 'compiler.ll'), runtime_sha256=digest(directory / 'runtime.c'))
+                   llvm_sha256=artifact_digest(directory / 'compiler.ll'),
+                   runtime_sha256=artifact_digest(directory / 'runtime.c'))
         state['current_artifact'] = name
         if link:
             print(f'[self-host] {name}: link successor', file=sys.stderr, flush=True)

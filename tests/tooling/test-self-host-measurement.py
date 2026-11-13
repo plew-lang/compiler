@@ -44,17 +44,20 @@ int main(int argc, char **argv) {
         path.write_text(code)
         subprocess.run([CLANG, '-S', '-emit-llvm', '-O0', str(path), '-o', str(work / (name + '.ll'))], check=True)
 
-    def run(label, first, expected=0, generation=None, runtime='\n'):
+    def run(label, first, expected=0, generation=None, runtime='\n', empty_artifact=None):
         carrier = work / ('carrier-' + label)
         carrier.write_text('#!/usr/bin/env python3\nimport sys\nfrom pathlib import Path\nif sys.argv[1] == "--runtime":\n sys.stdout.write(' + repr(runtime) + ')\nelse:\n sys.stderr.write("[trace-phase] fixture:start\\n")\n sys.stdout.write(Path(' + repr(str(work / (first + '.ll'))) + ').read_text())\n sys.stderr.write("[trace-phase] fixture:done\\n")\n')
         carrier.chmod(0o755)
         output = work / label
         result = subprocess.run(['./scripts/diagnostics/measure-self-host.sh'], env={**os.environ, 'CARRIER': str(carrier), 'SOURCE': str(source / '_.pw'), 'OUT_DIR': str(output), 'LLVM_CONFIG': CONFIG}, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
-        assert result.returncode == expected, (label, result.returncode, result.stderr)
+        assert result.returncode == expected, (label, result.returncode, result.stderr[-4000:])
         state = json.loads((output / 'summary.json').read_text())
         summary = (output / 'summary.txt').read_text()
         if expected:
             assert state['status'] == 'failed' and 'self_compile_median_seconds=' not in summary, state
+            if empty_artifact is not None:
+                assert state['current_artifact'] == 'generation-1', state
+                assert state['error'] == f'empty self-host artifact: generation-1/{empty_artifact}', state
         else:
             assert state['fixed_point_generation'] == generation, state
             assert len(state['measurements']) == 3, state
@@ -86,6 +89,9 @@ int main(int argc, char **argv) {
     compiler('failure', 'failure', failure=23)
     compiler('unstable', 'unstable', nondeterministic=True)
     compiler('mutation', 'mutation', mutate=True)
+    (work / 'empty.ll').touch()
+    run('empty-runtime', 'stable', expected=65, runtime='', empty_artifact='runtime.c')
+    run('empty-llvm', 'empty', expected=65, empty_artifact='compiler.ll')
     run('immediate', 'stable', generation=2)
     override = work / 'opt-override'
     override.symlink_to(shutil.which(os.environ.get('LLVM_OPT', str(Path(CLANG).with_name('opt')))))

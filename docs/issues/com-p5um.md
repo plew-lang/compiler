@@ -36,6 +36,12 @@ Entry points: `scripts/diagnostics/measure-self-host.sh`; `docs/issues/met-si6j.
 
 Use meta ./validate self-host with the explicitly recorded validated carrier and frozen G1 inputs. Preserve generation transition LLVM/runtime comparisons and all adopted-generation runs. Record the measured compiler/hash for G2b; no concurrent build/test or diagnostic instrumentation.
 
+Each generation and timed repeat must produce nonempty LLVM IR and runtime C.
+Empty output is a measurement failure before linking, comparison, or median
+publication, even when the compiler process reports success. The tooling
+regression covers both artifacts. Compiler-side output error propagation is
+tracked by [com-x386](com-x386.md).
+
 ## Exit and Evidence
 
 Standard gate exits0 with unchanged inputs, fixed point and formal median below 7 seconds. Investigate any observed regression with matching-source conditions, fix easy extra copies/searches and return repairs to their owning task; stop if the adopted limit cannot be repaired. Do not promote seed/carrier or merge main here.
