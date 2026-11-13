@@ -967,6 +967,8 @@ impl Comp {
                         val saved = try self.signatureOccurrenceView(proofs: proofs, occurrence: node.occurrence, selector: selectors[index], offset: occurrence.site)
                         val proofSubject = self.authoredTraitViewSubject(ref: receiver)
                         try self.readAuthoredOccurrenceProof(saved: saved, receiver: proofSubject, arguments: sourceViews[index].traitInstance.positionalArgs, environment: environment, offset: occurrence.site, normalizations: proofEquations, context: context)
+                    } else if selectors[index].surfaceId != 0U64 {
+                        (try self.requireAuthoredExtensionView(id: node.occurrence, source: selectors[index], offset: occurrence.site))
                     }
                     index += 1U64
                 }
@@ -2650,7 +2652,7 @@ impl Comp {
         val selectedProjection = if receiverOccurrence != 0U64 {
             give <Optional.Some v=(try self.retainedSignatureReceiverProjection(occurrence: receiverOccurrence, ref: receiver, proofs: proofs, offset: occurrence.site)) />
         } else { give <Optional.None /> }
-        (try self.admitTypeExtensionSources(subject: subject, sources: self.arena.typeViewSources(ref: subject), assumptions: assumptions, normalizations: context, selectedProjection: selectedProjection, offset: occurrence.site))
+        val extensions = try self.admitTypeExtensionSources(subject: subject, sources: self.arena.typeViewSources(ref: subject), assumptions: assumptions, normalizations: context, selectedProjection: selectedProjection, offset: occurrence.site)
         for selector in selectors {
             if selector.traitInstance.owner != 0U64 {
                 if self.decls.traitIndexByOffset(offset: selector.traitInstance.owner) >= self.decls.traitCount() { return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "authored view has no canonical trait owner", failureDomain: <FailureDomain.Internal />) /> }
@@ -2736,6 +2738,9 @@ impl Comp {
                 proofs.append(<AuthoredTypeViewProof occurrence=id receiver=receiver selector=selector proof=frozen lexicalEquations=lexicalEquations />)
             }
         }
+        if extensions.count() != 0U64 {
+            self.authoredExtensionViews[id] = extensions
+        }
         // The lexical recipe owns declaration view admission. The later
         // compatibility sweep has no access to these premises or equations.
         if sources.count() != 0U64 {
@@ -2745,6 +2750,20 @@ impl Comp {
             }
         }
         return <Result.Ok value=() />
+    }
+
+    inout fn requireAuthoredExtensionView(id: U64, source: ResolvedViewSource, offset: U64) -> Result[(), CompileDiagnostic] {
+        match self.authoredExtensionViews.get(key: id) {
+            Optional.Some(v: val admitted) => {
+                for proof in admitted {
+                    if proof.source.surfaceId == source.surfaceId && proof.receiver != 0U64 && proof.applicability.receiver != 0U64 {
+                        return <Result.Ok value=() />
+                    }
+                }
+            }
+            Optional.None => {}
+        }
+        return <Result.Err error=self.diagnosticAt(offset: offset, msg: "authored type extension has no retained applicability evidence", failureDomain: <FailureDomain.Internal />) />
     }
 
     inout fn requireAuthoredViewProof(subject: U64, instance: TraitInstanceKey, assumptions: Array[DeclarationBoundRef], offset: U64, selectedProjection: Optional[StaticConformanceProof] = <Optional.None />, normalizations: Array[ProjectionNormalizationStep] = [], missingMessage: String = "trait view requires a conformance for this receiver and exact trait instance (spec/09)") -> Result[StaticConformanceProof, CompileDiagnostic] {

@@ -1380,3 +1380,21 @@ sources. The known `Extra#Left.fromMatch()` probe still fails on both the
 precursor and this candidate: that probe remains a member-selection
 requirement in [com-4k31](com-4k31.md#composite-extension-and-trait-selector-call-control).
 The type-recipe producer still discards the returned extension evidence.
+
+### Retain authored type extension admissions by occurrence
+
+The source recipe publishes its extension results after the entire
+occurrence is admitted. Recipe reading requires the corresponding
+evidence before using each written extension. The compatibility sweep
+uses the same record where one already exists and still checks entries
+that have not reached recipe admission. Interned type equality alone
+does not authorize an occurrence.
+
+Build `20261113T205751-build-aed2da` used unchanged immutable inputs
+and produced `61c5bb6c`. The 80 extension/newtype positives passed
+check and JIT and four representative cases matched linked native
+output. Four existing negatives matched their check diagnostics. Three
+also reject in JIT, and the fourth is inside an uncalled body that
+both the precursor and candidate defer. The two preceding baseline
+failures reproduced. The parameter, local binding, and returned-value
+member lookup paths still need to consume the relevant type evidence.

@@ -122,20 +122,22 @@ pub impl Comp {
                 val lexical = if requested.isSome() && term.assocNameId == 0U64 {
                     give <Optional.Some v=self.lexicalSourceFactOwner(owner: requested.unwrap()) />
                 } else { give <Optional.None /> }
-                try self.checkAuthoredTypeView(receiver: receiver, offset: occurrence.site, lexical: lexical, admittedRecipe: self.admittedRecipeTypeUses.contains(id))
+                try self.checkAuthoredTypeView(receiver: receiver, offset: occurrence.site, lexical: lexical, admittedRecipe: self.admittedRecipeTypeUses.contains(id), occurrence: id)
             }
         }
         return <Result.Ok value=() />
     }
 
-    inout fn checkAuthoredTypeView(receiver: U64, offset: U64, lexical: Optional[SemanticCompletionOwner], admittedRecipe: Bool) -> Result[(), CompileDiagnostic] {
+    inout fn checkAuthoredTypeView(receiver: U64, offset: U64, lexical: Optional[SemanticCompletionOwner], admittedRecipe: Bool, occurrence: U64) -> Result[(), CompileDiagnostic] {
         val sources = self.arena.typeViewSources(ref: receiver)
         try self.checkTraitSubjectViewCycles(sources: sources, offset: offset)
         mut val selectedCount = 0U64
         for source in sources {
             if source.surfaceId != 0U64 {
-                // An admitted recipe already checked this trait selector.
-                // Extension validity still belongs to this sweep.
+                if source.traitInstance.owner == 0U64 && self.authoredExtensionViews.contains(key: occurrence) {
+                    try self.requireAuthoredExtensionView(id: occurrence, source: source, offset: offset)
+                    continue
+                }
                 if source.traitInstance.owner != 0U64 && admittedRecipe { continue }
                 if source.traitInstance.owner != 0U64 && lexical.isSome() {
                     val assumptions = try self.lexicalViewAssumptions(owner: lexical.unwrap())
