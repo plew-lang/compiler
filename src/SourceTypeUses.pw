@@ -113,8 +113,8 @@ pub struct SourceTypeUses {
     mut val requirementScopes: Array[U64] = []
     mut val requirementScopeByIndex: Dictionary[U64, U64] = [:]
     mut val methodScopes: Dictionary[U64, U64] = [:]
-    // Every parameterized value-view site has a row. The inner Optional
-    // distinguishes a body-authored recipe from a global or default site.
+    // Every parameterized value-view site has a write-once row. The inner
+    // Optional distinguishes a body recipe from an unowned source site.
     mut val viewArguments: Dictionary[U64, Optional[Array[U64]]] = [:]
     mut val deinitScopes: Dictionary[U64, U64] = [:]
     mut val defaultExpressionScopes: Dictionary[U64, U64] = [:]
@@ -233,8 +233,10 @@ pub impl SourceTypeUses {
         }
         return <Optional.None />
     }
-    inout fn bindValueViewArguments(origin: U64, arguments: Optional[Array[U64]]) {
+    inout fn bindValueViewArguments(origin: U64, arguments: Optional[Array[U64]]) -> Bool {
+        if origin == 0U64 || self.viewArguments.contains(key: origin) { return false }
         self.viewArguments[origin] = arguments
+        return true
     }
     fn valueViewArguments(origin: U64) -> Optional[Optional[Array[U64]]] {
         return self.viewArguments.get(key: origin)

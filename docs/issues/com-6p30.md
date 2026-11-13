@@ -163,3 +163,23 @@ terms of the initializer and its closures before publication. The
 probe rejects the bad and dependent requests as Source, repeats the
 original rejection, and prepares the sibling. All 47 lazy CLI cases
 and four targeted global check/JIT cases pass on this candidate.
+
+## Exact initializer evidence and saved binding reader
+
+The same-initializer local annotation substitution probe rejects
+Internal on `34ed5c45`: equal source types from different authored
+sites still have different occurrence terms. A separate probe showed
+that the value-view argument registry could overwrite a site's
+original arguments with another site's equal-typed occurrences.
+Make that registry write-once and preserve the original on rejection.
+Build `20261113T075817-build-941986` produced `d017c376`; six global
+check/JIT controls and the linked direct projected view pass.
+
+A scratch fault deleting an already checked initializer's binding
+shows that an unannotated dependent cannot fall back to expression
+inference. It fails Internal on the first and repeat requests while
+the independent sibling prepares. See the
+[probe inputs](../../../evidence/rejection-domains/diagnostic-domain-implementation/global-annotation-ownership/README.md).
+
+The native overwrite probe aborts on `34ed5c45`. On `d017c376`
+it rejects the write, reads the original ID and prepares the global.

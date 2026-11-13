@@ -174,7 +174,7 @@ impl Comp {
         return index < self.decls.traitOwnerCount() && self.decls.traitOwnerAt(index: index).arity != 0U64
     }
 
-    inout fn lowerBoundValueView(recv: U64, source: ResolvedViewSource, names: Array[Span], head: U64, strip: Bool, argumentOccurrences: Array[U64]) -> U64 {
+    inout fn lowerBoundValueView(recv: U64, source: ResolvedViewSource, names: Array[Span], head: U64, strip: Bool, argumentOccurrences: Array[U64]) -> Result[U64, CompileDiagnostic] {
         mut val authoredArguments: Optional[Array[U64]] = <Optional.None />
         if argumentOccurrences.count() != 0U64 && !strip {
             match self.sourceTypeUses.currentRole() {
@@ -185,7 +185,9 @@ impl Comp {
         mut val result = self.pushExpr(e: <Expr.ExtView recv=recv source=source strip=strip />)
         if !strip && source.traitInstance.positionalArgs.count() != 0U64 {
             val origin = self.arena.exprOriginSerial[result]
-            self.sourceTypeUses.bindValueViewArguments(origin: origin, arguments: authoredArguments)
+            if !self.sourceTypeUses.bindValueViewArguments(origin: origin, arguments: authoredArguments) {
+                return <Result.Err error=self.diagnosticAt(offset: source.writtenStart, msg: "invalid value view argument registration", failureDomain: <FailureDomain.Internal />) />
+            }
         }
         self.decls.registerPlaceSource(exprId: result, source: self.decls.placeSource(exprId: recv), expressionCount: self.arena.exprs.count())
         mut val index = head + 1U64
@@ -194,7 +196,7 @@ impl Comp {
             result = self.pushExpr(e: <Expr.Field base=result nameStart=name.start nameLen=name.end - name.start />)
             index += 1U64
         }
-        return result
+        return <Result.Ok value=result />
     }
 
     inout fn lowerSyntaxSourceSelection(expr: SyntaxExpr) -> Result[U64, CompileDiagnostic] {
@@ -233,7 +235,7 @@ impl Comp {
         }
         val source = try self.completeTypeViewSource(source: head.source, arguments: arguments, hasLabels: labels)
         val receiver = try self.lowerSyntaxExpr(id: expr.child0)
-        val viewed = self.lowerBoundValueView(recv: receiver, source: source, names: names, head: head.index, strip: expr.flag0, argumentOccurrences: argumentOccurrences)
+        val viewed = try self.lowerBoundValueView(recv: receiver, source: source, names: names, head: head.index, strip: expr.flag0, argumentOccurrences: argumentOccurrences)
         match key {
             Optional.Some(v: val expression) => { return self.lowerIndexRead(recv: viewed, key: (try self.lowerSyntaxExpr(id: expression))) }
             Optional.None => { return <Result.Ok value=viewed /> }
@@ -274,7 +276,7 @@ impl Comp {
         }
         val source = try self.completeTypeViewSource(source: head.source, arguments: arguments, hasLabels: labels)
         val receiver = try self.lowerExpr(e: recv)
-        val viewed = self.lowerBoundValueView(recv: receiver, source: source, names: names, head: head.index, strip: strip, argumentOccurrences: argumentOccurrences)
+        val viewed = try self.lowerBoundValueView(recv: receiver, source: source, names: names, head: head.index, strip: strip, argumentOccurrences: argumentOccurrences)
         match key {
             Optional.Some(v: val expression) => { return self.lowerIndexRead(recv: viewed, key: (try self.lowerExpr(e: expression))) }
             Optional.None => { return <Result.Ok value=viewed /> }
