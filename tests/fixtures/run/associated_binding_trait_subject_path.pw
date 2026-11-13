@@ -1,0 +1,8 @@
+use @Std/Io only { print }
+trait Root { type Input }
+trait Target { type Output }
+struct Worker {}
+impl Worker as Root { type Input = I64 }
+impl Root as Target { type Output = Self#Root.Input }
+fn read(x: Worker#Target.Output) -> I64 { return x }
+fn main() { print(read(x: 42I64)) }

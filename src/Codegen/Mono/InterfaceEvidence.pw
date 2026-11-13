@@ -329,10 +329,10 @@ impl Comp {
                 return <Result.Ok value=<ConstraintProofReplay.Universal proof=<StaticConformanceProof.TraitPath edges=grounded terminalConformIdx=terminal /> /> />
             }
             StaticConformanceProof.AssumedBound(source: val source) => {
-                return self.replayDeclarationAssumption(source: source, receiver: receiver, environment: environment)
+                return self.replayDeclarationAssumption(source: source, receiver: receiver, environment: environment, normalizations: normalizations)
             }
             StaticConformanceProof.AssumedSupertraitPath(source: val source, steps: val steps) => {
-                val state = try self.replayDeclarationAssumption(source: source, receiver: receiver, environment: environment)
+                val state = try self.replayDeclarationAssumption(source: source, receiver: receiver, environment: environment, normalizations: normalizations)
                 match state {
                     ConstraintProofReplay.Universal(proof: val root) => { return self.replaySelectedSupertraits(proof: root, steps: steps, receiver: receiver, normalizations: normalizations, declaration: true) }
                     _ => { return <Result.Ok value=state /> }
@@ -357,7 +357,7 @@ impl Comp {
         }
     }
 
-    inout fn replayDeclarationAssumption(source: DeclarationBoundRef, receiver: U64, environment: InstanceEnvironment) -> Result[ConstraintProofReplay, CompileDiagnostic] {
+    inout fn replayDeclarationAssumption(source: DeclarationBoundRef, receiver: U64, environment: InstanceEnvironment, normalizations: Array[ProjectionNormalizationStep]) -> Result[ConstraintProofReplay, CompileDiagnostic] {
         if !self.declarationBoundIsValid(source: source) { return <Result.Ok value=<ConstraintProofReplay.Missing /> /> }
         match source {
             DeclarationBoundRef.Conformance(index: val index) => {
@@ -372,9 +372,47 @@ impl Comp {
                     Optional.None => {}
                 }
             }
+            DeclarationBoundRef.TraitSubject(index: val index) => {
+                val terminal = self.retainedConstraintPathTerminal(proof: environment.proof)
+                if terminal.isNone() || terminal.unwrap().conformIdx != index + 1U64 { return <Result.Ok value=<ConstraintProofReplay.Deferred /> /> }
+                val predecessor = try self.retainedTraitSubjectPredecessor(proof: environment.proof)
+                val bound = self.declarationBound(source: source)
+                val substituted = self.substituteRetainedBound(bound: bound, environment: environment, selfRef: environment.receiverRef, itemRef: 0U64)
+                val expected = try self.replayBoundNormalizations(bound: substituted, normalizations: normalizations)
+                if !self.typeRefEq(a: self.typeRefWithoutOuterViews(ref: receiver), b: self.typeRefWithoutOuterViews(ref: expected.subject)) {
+                    return <Result.Err error=self.diagnosticAt(offset: bound.offset, msg: "retained trait subject has a different receiver", failureDomain: <FailureDomain.Internal />) />
+                }
+                try self.checkRetainedWitnessClause(expected: expected, proof: predecessor, normalizations: normalizations, offset: bound.offset)
+                return <Result.Ok value=<ConstraintProofReplay.Universal proof=predecessor /> />
+            }
             _ => {}
         }
         return <Result.Ok value=<ConstraintProofReplay.Deferred /> />
+    }
+
+    inout fn retainedTraitSubjectPredecessor(proof: StaticConformanceProof) -> Result[StaticConformanceProof, CompileDiagnostic] {
+        match proof {
+            StaticConformanceProof.TraitPath(edges: val edges, terminalConformIdx: val terminal) => {
+                if edges.count() >= 2U64 && edges[edges.count() - 1U64].conformIdx == terminal {
+                    mut val prefix = edges
+                    prefix.removeLast()
+                    val prior = prefix[prefix.count() - 1U64]
+                    if prefix.count() == 1U64 { return <Result.Ok value=<StaticConformanceProof.ConcreteWitness witness=prior /> /> }
+                    return <Result.Ok value=<StaticConformanceProof.TraitPath edges=prefix terminalConformIdx=prior.conformIdx /> />
+                }
+            }
+            StaticConformanceProof.AssumedTraitPath(source: val source, steps: val steps, edges: val edges) => {
+                if edges.count() != 0U64 {
+                    mut val prefix = edges
+                    prefix.removeLast()
+                    if prefix.count() != 0U64 { return <Result.Ok value=<StaticConformanceProof.AssumedTraitPath source=source steps=steps edges=prefix /> /> }
+                    if steps.count() != 0U64 { return <Result.Ok value=<StaticConformanceProof.AssumedSupertraitPath source=source steps=steps /> /> }
+                    return <Result.Ok value=<StaticConformanceProof.AssumedBound source=source /> />
+                }
+            }
+            _ => {}
+        }
+        return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "retained trait subject has no predecessor", failureDomain: <FailureDomain.Internal />) />
     }
 
     inout fn rebaseInterfaceBound(source: DeclarationBoundRef, context: InterfaceProofContext, selfRef: U64, itemRef: U64) -> Result[StaticConformanceProof, CompileDiagnostic] {

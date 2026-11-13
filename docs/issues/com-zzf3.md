@@ -443,8 +443,23 @@ Build `20261113T003905-build-b5f67e`, generation
 Same-source medians were 6.860850 s and 6.876053 s, with identical
 LLVM output in all eight runs.
 
-The two public cases remain open. The review also requires direct
+The direct trait requirement case remains open. The review also requires direct
 fault controls for incorrect normalizations and missing RHS evidence,
 a real abstract-zero contrast, and a non-idempotent caller substitution
 contrast. Verify the legacy adapter's handoff to the shared reader
 where its frontend continuation is supported.
+
+## Trait-subject predecessor replay
+
+`associated_binding_trait_subject_path` binds `Target.Output` to
+`Self#Root.Input` in `impl Root as Target`. `752239a5` rejects the
+signature with `associated binding projection has no matching retained
+conformance`. The declaration reader now consumes the exact predecessor
+of the owning terminal witness, checks it against the original receiver
+premise under the saved substitution, and retains any earlier path or
+assumption. It does not run a new conformance search.
+
+Candidate `d0e4a625` passed build `20261113T004644-build-cd8885`,
+generation `20261113T005039-gen-7a9b5d`, the new fixture and nine
+existing check/JIT/native controls. Same-source medians were 6.862344 s
+and 6.871131 s, with identical LLVM output across all eight runs.
