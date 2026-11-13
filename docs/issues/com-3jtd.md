@@ -1190,3 +1190,42 @@ also pass linked native. Later-extension and stripped-extension controls
 retain their exact rejection diagnostics. This increment concerns dependent
 inherent receiver matches; the overall source-formation handoff remains
 subject to independent review.
+
+### Second independent completion review
+
+Keep open at source `f2a966fc`, carrier `2f00cb3a`. The reviewer derived
+the guarantees from spec/08–09 and the source-proof contracts before
+checking the changed paths. The following reproduction families failed
+both check and JIT. Inputs from the review are preserved together in
+meta scratch `tmp/com-3jtd/review-formation`.
+
+- `dependent-{type-,}conformance-only`: the conformance-only bundle
+  uses raw receiver unification in `extAppliesToType`. The bare
+  projection-dependent conformance and simple conformance-only extension
+  accept independently. Replace the raw decision with the admitted
+  conformance receiver match and preserve its selected derivation.
+- `alternative-{extension-ambiguous-subject,inherent-ambiguous-clause}`:
+  an ambiguous premise on one candidate aborts extension applicability
+  even though a second candidate proves it. Reversing only the declaration
+  order passes with stdout 42. Carry candidate inapplicability as a query
+  outcome; lower-level invalid input, limits and internal failures still
+  propagate.
+- `extension-{composed,typed}-path-selector`: the composed and separately
+  assigned views disagree, although both extension orders denote the same
+  combination. The separated case prints 42. Establish an independently
+  justified trait selector in that same environment, without allowing a
+  source to authorize itself.
+- `empty-inherent-extension{,-value}`: spec/09 makes applicability depend
+  on the impl declaration, including one with no members. Function and
+  conformance walks miss an empty inherent impl. The catalog must keep the
+  impl receiver independent of whether members are emitted.
+
+Formation still erases its derivation at the Boolean boundary. The match
+table can reuse identical inputs, but pre-addition and post-addition types
+correctly compare differently. Keep the formation proof attached to its
+authored source use and carry it only when valid in the selected operation's
+context. Lookups involving different binder inputs or active recursive
+proof searches have unverified cache-key hazards, with no reproduced
+foreign evidence so far. Preserve the exact proof inputs while replacing
+the cache dependency. These are completion findings for existing
+com-3jtd guarantees; explicit delegation stays in com-6esv.
