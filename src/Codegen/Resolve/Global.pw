@@ -410,27 +410,11 @@ pub impl Comp {
     }
 
     inout fn rewriteFactoryConstruction() -> Result[(), CompileDiagnostic] {
-        val fromN: Bind = self.internBytes(s: "from")
         mut val i: U64 = 0
         while i < self.arena.exprs.count() {
             match self.arena.exprs[i] {
                 Expr.Make(typeStart: _, typeLen: _, variantStart: _, variantLen: _, isEnum: _, ty: _, fields: _) => {
                     try self.rewriteNamedFactoryConstructionAt(exprId: i)
-                }
-                Expr.Cast(val operand, val tyStart, val tyLen, ty: val ty) => {
-                    // `x as T` ⟺ `<T from=x/>` (spec/12): when `T` owns a `from` factory
-                    // (an anonymous `factory(from: …)`), route the cast to it. Numeric casts
-                    // are untouched (primitives have no `from` factory).
-                    if try self.typeHasAssocFn(typeStart: tyStart, typeLen: tyLen, nameStart: fromN.nameStart, nameLen: fromN.nameLen) {
-                        val recv: U64 = self.pushExpr(e: <Expr.Ident start=tyStart len=tyLen />)
-                        mut val cargs: Array[Arg] = []
-                        cargs.append(<Arg expr=operand isInout=false labelStart=fromN.nameStart labelLen=fromN.nameLen hasLabel=true />)
-                        self.arena.exprs[i] = <Expr.Method recv=recv nameStart=fromN.nameStart nameLen=fromN.nameLen args=self.pushArgs(args: cargs) />
-                        val receiverTerm = try self.factoryConstructionReceiver(writtenTerm: ty, typeStart: tyStart, typeLen: tyLen, offset: self.exprOffset(id: i))
-                        val origin = self.nextExprOriginSerial
-                        self.nextExprOriginSerial += 1U64
-                        try self.recordSyntheticCallSite(site: <SyntheticCallSite exprId=i kind=<SyntheticCallKind.Factory /> originSerial=origin receiverTerm=receiverTerm receiverIsType=true />)
-                    }
                 }
                 _ => {}
             }
@@ -613,11 +597,41 @@ pub impl Comp {
         return <Result.Ok value=selected />
     }
 
+    // An exact newtype retag takes precedence over From. Both operand
+    // evidence and the cast target are available in Record's lexical scope.
+    inout fn prepareCastFactory(exprId: U64, operand: U64, target: U64, typeStart: U64, typeLen: U64, chainHoleRef: U64) -> Result[(), CompileDiagnostic] {
+        val fromName = self.kwSpan(kw: "from", kwLen: 4U64)
+        if !(try self.typeHasAssocFn(typeStart: typeStart, typeLen: typeLen, nameStart: fromName.nameStart, nameLen: fromName.nameLen)) {
+            return <Result.Ok value=() />
+        }
+        val targetUnderlying = try self.checkedNominalUnderlying(ref: target)
+        val context = try self.castLiteralContextTerm(operand: operand, targetTerm: target)
+        try self.recordExpr(exprId: operand, chainHoleRef: chainHoleRef, expectedTerm: context, deferContext: true)
+        val source = self.parametricExprTerm(exprId: operand)
+        if source != 0U64 {
+            val sourceUnderlying = try self.checkedNominalUnderlying(ref: source)
+            if sourceUnderlying != 0U64 && self.typeRefEq(a: sourceUnderlying, b: target) || targetUnderlying != 0U64 && self.typeRefEq(a: source, b: targetUnderlying) {
+                return <Result.Ok value=() />
+            }
+        }
+        val offset = self.exprOffset(id: exprId)
+        val receiverTerm = try self.factoryConstructionReceiver(writtenTerm: target, typeStart: typeStart, typeLen: typeLen, offset: offset)
+        val receiver = self.pushExpr(e: <Expr.Ident start=typeStart len=typeLen />)
+        val args = self.pushArgs(args: [<Arg expr=operand isInout=false labelStart=fromName.nameStart labelLen=fromName.nameLen hasLabel=true />])
+        self.arena.exprs[exprId] = <Expr.Method recv=receiver nameStart=fromName.nameStart nameLen=fromName.nameLen args=args />
+        val origin = self.nextExprOriginSerial
+        self.nextExprOriginSerial += 1U64
+        return self.recordSyntheticCallSite(site: <SyntheticCallSite exprId=exprId kind=<SyntheticCallKind.Factory /> originSerial=origin receiverTerm=receiverTerm receiverIsType=true />)
+    }
+
     // Run under Record's lexical scope. The selected declaration is carried
     // by the synthetic call, so later passes never redo factory selection.
     inout fn prepareFactoryConstruction(exprId: U64, chainHoleRef: U64) -> Result[(), CompileDiagnostic] {
         val useOffset = self.exprOffset(id: exprId)
         match self.arena.exprs[exprId] {
+            Expr.Cast(val operand, val tyStart, val tyLen, val ty) => {
+                return self.prepareCastFactory(exprId: exprId, operand: operand, target: ty, typeStart: tyStart, typeLen: tyLen, chainHoleRef: chainHoleRef)
+            }
             Expr.Make(val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, val ty, val fields) => {
                 if self.arena.resolvedMemberwiseFactories.contains(exprId) { return <Result.Ok value=() /> }
                 // A record literal has no nominal factory receiver. Record owns

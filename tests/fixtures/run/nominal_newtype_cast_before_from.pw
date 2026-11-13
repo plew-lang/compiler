@@ -1,0 +1,22 @@
+use @Std/Io only { print }
+use @Std/Core only { From }
+
+trait Project { type Item }
+struct Projector {}
+struct Number { val value: I64 }
+impl Projector as Project { type Item = Number }
+impl Number as From[Bool] {
+    factory(from: Bool) { return <Number value=7I64 /> }
+}
+newtype Direct = Number
+newtype Projected = Projector#Project.Item
+
+fn main() {
+    val raw = <Number value=42I64 />
+    val direct: Direct = raw as Direct
+    val projected: Projected = raw as Projected
+    val converted: Projected = true as Projected
+    print((direct as Number).value)
+    print((projected as Number).value)
+    print(converted.value)
+}

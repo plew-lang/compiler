@@ -333,3 +333,21 @@ Six nominal reject fixtures returned exit 1 with the expected text in
 check and JIT, and the standard generation profile
 `20261113T104905-gen-633976` passed. The explicit failed-analysis state
 control and competing `as` rewrite remain open.
+
+## Newtype retag before conversion factory
+
+The exact immediate-underlying cast must win over an inherited `From`
+factory (spec/10 and spec/12). Both direct and projected fixtures failed
+with argument mismatch on `166def8af2d0` because the declaration-time
+rewrite knew the target spelling but not the operand's type. Record now
+chooses after checking the operand in its lexical scope, reusing ordinary
+factory call recording for the remaining conversions. The regression
+exercises both retag directions, direct and projected targets, and an
+actual inherited `From[Bool]` conversion.
+
+Fixed-input build `20261113T105153-build-20aac9` produced `8382892ef807`.
+Thirty-five user-language nominal/associated/newtype and From controls
+passed check, JIT and linked native execution. Lazy CLI passed all 47
+checks. Internal programs that import the compiler are separate from
+these counts. The final review, generation rerun and same-source
+comparison are still required.

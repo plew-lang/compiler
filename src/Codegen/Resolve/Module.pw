@@ -1179,7 +1179,11 @@ pub impl Comp {
     }
 
     inout fn checkedAssociatedReceiverName(start: U64, len: U64) -> Result[Bind, CompileDiagnostic] {
-        val identity = self.typeDeclIdentityAt(useMod: self.moduleOf(offset: start), start: start, len: len)
+        val useMod = self.moduleOf(offset: start)
+        if self.arena.newtypeCount() == 0U64 {
+            return <Result.Ok value=self.realTypeNameInModule(useMod: useMod, start: start, len: len) />
+        }
+        val identity = self.typeDeclIdentityAt(useMod: useMod, start: start, len: len)
         if identity.nameLen != 0U64 {
             match self.arena.newtypeByOffset(offset: identity.nameStart) {
                 Optional.Some(v: val declaration) => {
@@ -1190,7 +1194,7 @@ pub impl Comp {
                 Optional.None => {}
             }
         }
-        return <Result.Ok value=self.realTypeNameInModule(useMod: self.moduleOf(offset: start), start: start, len: len) />
+        return <Result.Ok value=self.realTypeNameInModule(useMod: useMod, start: start, len: len) />
     }
 
     inout fn typeHasAssocFn(typeStart: U64, typeLen: U64, nameStart: U64, nameLen: U64) -> Result[Bool, CompileDiagnostic] {

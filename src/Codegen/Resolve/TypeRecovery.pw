@@ -505,6 +505,7 @@ pub impl Comp {
         self.addKwSpan(kw: "fn")
         self.addKwSpan(kw: "iterator")
         self.addKwSpan(kw: "next")
+        self.addKwSpan(kw: "from")
         val langModule: U64 = self.modules.langModule
         val arrayName = self.kwSpan(kw: "Array", kwLen: 5U64)
         val arrayNameId = intern(c: inout self, start: arrayName.nameStart, len: arrayName.nameLen)
