@@ -914,3 +914,25 @@ still rejects during method lookup. Its next increment must use the
 impl scope's saved receiver recipe and the same callable constraint
 evidence later consumed by the selected body, rather than manufacture
 a conformance for the inherent impl.
+
+### Validate retained condition-plan identity before reuse
+
+Dependent conformance receiver matching can already carry a condition
+plan when the complete path is assembled. Reuse now verifies the plan
+index, exact witness substitution, and condition count before treating
+it as present. The existing recursive proof validation still owns
+validation of child evidence.
+
+Fixed-input build `20261113T162720-build-a0a762` produced `8d596334c89f`.
+Four dependent/conditional receiver controls retained check and JIT
+output. The mismatched projection and duplicate receiver continued to
+reject with the expected source diagnostics. The direct inherent
+receiver still rejects at lookup. There the selected-method signature
+must translate the original impl clause IDs to the callable's retained
+constraint plan before replaying the receiver; a separate trait
+conformance is not part of the inherent-method contract.
+
+The first same-source timing comparison generated empty LLVM files even
+though both processes exited successfully. Its timing and output
+equality are excluded from the performance record pending measurement
+with verified nonempty output.

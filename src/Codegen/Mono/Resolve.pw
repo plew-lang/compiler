@@ -256,7 +256,17 @@ pub impl Comp {
         if witness.conformIdx == 0U64 || witness.conformIdx > self.decls.conformCount() { return <Result.Ok value=<Optional.None /> /> }
         val source = self.decls.conformAt(index: witness.conformIdx - 1U64)
         if source.derived { return <Result.Ok value=<Optional.None /> /> }
-        if source.bounds.len == 0U64 || witness.conditions != 0U64 { return <Result.Ok value=<Optional.Some v=witness /> /> }
+        if witness.conditions != 0U64 {
+            if witness.conditions > self.arena.witnessConditionPlanCount() {
+                return <Result.Err error=self.diagnosticAt(offset: source.defOffset, msg: "selected conformance has an invalid retained condition plan", failureDomain: <FailureDomain.Internal />) />
+            }
+            val plan = self.arena.witnessConditionPlanAt(index: witness.conditions - 1U64)
+            if !self.sameWitnessSubstitution(a: plan.witness, b: witness) || plan.proofs.count() != source.bounds.len {
+                return <Result.Err error=self.diagnosticAt(offset: source.defOffset, msg: "selected conformance has a foreign retained condition plan", failureDomain: <FailureDomain.Internal />) />
+            }
+            return <Result.Ok value=<Optional.Some v=witness /> />
+        }
+        if source.bounds.len == 0U64 { return <Result.Ok value=<Optional.Some v=witness /> /> }
         for active in self.activeConformanceConditions {
             if self.sameWitnessSubstitution(a: active, b: witness) { return <Result.Ok value=<Optional.None /> /> }
         }
