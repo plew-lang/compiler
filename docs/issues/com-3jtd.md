@@ -1306,3 +1306,18 @@ a separately rejected selector, and removed enabling extension still
 reject. Value chains still move the trait selector outward during
 lowering, so their inner extension checks must consume the same
 composition context before this increment can close.
+
+For a chain ending in a trait selector, Record defers adjacent extension
+checks until the combined source set is available. The extensions then
+use the same admission loop as type annotations. An independent binding
+and a strip still end the chain. The selector itself retains the ordinary
+value-view proof and argument receipts.
+
+`extension_trait_selector_value_composition` was rejected by `a31d1213`.
+Both source orders now pass check, JIT and linked native on `ec9793da`
+(fixed-input build `20261113T202846-build-bb4549`). The separated, typed,
+mixed-source and projected receiver controls pass. Ambiguous unqualified
+extension, late enabling extension, stripped enabling extension, wrong
+trait instance and cyclic source sets still reject. The variant that strips
+the cyclic source remains accepted. Extension applicability decisions
+still need a retained evidence handoff to downstream consumers.

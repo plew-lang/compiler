@@ -1756,7 +1756,7 @@ pub impl Comp {
     // unique enclosing chain stage. The payload is a structural child input,
     // not Cursor state: ordinary expressions use 0, and every continuation
     // descendant receives the same explicit parametric term.
-    inout fn recordExpr(exprId: U64, chainHoleRef: U64 = 0U64, expectedTerm: U64 = 0U64, deferContext: Bool = false, needsValue: Bool = true, purpose: ExpressionRecordPurpose = <ExpressionRecordPurpose.Execution />, admittedContext: Bool = false) -> Result[(), CompileDiagnostic] {
+    inout fn recordExpr(exprId: U64, chainHoleRef: U64 = 0U64, expectedTerm: U64 = 0U64, deferContext: Bool = false, needsValue: Bool = true, purpose: ExpressionRecordPurpose = <ExpressionRecordPurpose.Execution />, admittedContext: Bool = false, composedView: Bool = false) -> Result[(), CompileDiagnostic] {
         if self.semanticExprConstructionClosed(exprId: exprId) {
             return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: completed source owner cannot record an expression") />
         }
@@ -2111,7 +2111,12 @@ pub impl Comp {
                 try self.recordArgumentAccessUses(parentExpr: exprId, callee: methodCallee, args: args)
             }
             Expr.ExtView(recv: val recv, source: val source, strip: val strip) => {
-                try self.recordExpr(exprId: recv, chainHoleRef: chainHoleRef)
+                val innerExtension = match self.arena.exprs[recv] {
+                    Expr.ExtView(recv: _, source: val inner, strip: val innerStrip) => !innerStrip && inner.traitInstance.owner == 0U64,
+                    _ => false,
+                }
+                val composes = !strip && source.traitInstance.owner != 0U64 && innerExtension
+                try self.recordExpr(exprId: recv, chainHoleRef: chainHoleRef, composedView: composes || (composedView && innerExtension))
                 // A view is a type-level facet of an existing value, not a
                 // method-resolution query.  Preserve the receiver's exact
                 // TypeTerm and apply the resolved source set once, matching
@@ -2126,7 +2131,8 @@ pub impl Comp {
                     if strip {
                         sources = []
                     } else {
-                        if source.traitInstance.owner == 0U64 && self.assocRecvName(recv: exprId).nameLen == 0U64 {
+                        val valueView = self.assocRecvName(recv: exprId).nameLen == 0U64
+                        if source.traitInstance.owner == 0U64 && !composedView && valueView {
                             try self.admitValueExtension(receiver: receiverTerm, source: source)
                         }
                         val selectedSource = if source.traitInstance.owner != 0U64 {
@@ -2142,6 +2148,11 @@ pub impl Comp {
                         }
                         if !(present) {
                             sources.append(selectedSource)
+                        }
+                        if composes && valueView {
+                            val owner = self.currentSourceOwner().unwrap()
+                            val assumptions = try self.lexicalViewAssumptions(owner: self.lexicalSourceFactOwner(owner: owner))
+                            try self.admitTypeExtensionSources(subject: receiverTerm, sources: sources, assumptions: assumptions, normalizations: [], selectedProjection: <Optional.None />, offset: source.writtenStart)
                         }
                     }
                     self.recordSemanticExprTerm(exprId: exprId, term: self.typeRefWithViewSources(ref: receiverTerm, sources: sources))
