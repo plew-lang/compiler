@@ -1,0 +1,52 @@
+// Both nominal adapters retain their exact binders and restore the source scope.
+use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use ../../../src/SourceAccess only { SourceAccess }
+use ../../../src/SourceTypeUses only { SourceTypeScopeKind, SourceTypeScopeState }
+use @Plew/Syntax only { parseItem, TopItemAst }
+use @Std/Io only { print }
+
+fn expectFailed(compiler~: Comp) {
+    if compiler.sourceTypeUses.currentScope() != 0U64 { panic("failed nominal lowering leaked its scope") }
+    val scope = compiler.sourceTypeUses.scopeAt(token: compiler.sourceTypeUses.scopeCount()).unwrap()
+    match scope.kind { SourceTypeScopeKind.Nominal => {} _ => { panic("failure lost nominal scope") } }
+    match scope.state { SourceTypeScopeState.Failed => {} _ => { panic("failed nominal scope marked complete") } }
+}
+
+fn main() {
+    val structure = "struct Holder[T] {{ val item: T }}"
+    val enumeration = "enum Event[T] {{ Item(value: T) }}"
+    val wrapper = "newtype Number = I64"
+    val bad = "struct Broken[T] {{ val item: T#Absent.Item }}"
+    mut val compiler = <Comp />
+    compiler.arena.reserveTypeSentinel()
+    compiler.appendSrc(from: " ".bytes())
+    for source in [structure, enumeration, wrapper] {
+        val start = compiler.arena.bytes.count()
+        compiler.appendSrc(from: source.bytes())
+        compiler.lowerTopItem(item: parseItem(source: source, start: start, end: compiler.arena.bytes.count())).unwrap()
+    }
+    val field = compiler.arena.structAt(index: 0U64).fields[0U64]
+    val payload = compiler.arena.enumAt(index: 0U64).variants[0U64].fields[0U64]
+    val base = compiler.arena.newtypeAt(index: 0U64)
+    val fieldUse = compiler.sourceTypeUses.useAt(index: field.authoredTypeUse - 1U64).unwrap()
+    val payloadUse = compiler.sourceTypeUses.useAt(index: payload.authoredTypeUse - 1U64).unwrap()
+    val baseUse = compiler.sourceTypeUses.useAt(index: base.authoredTypeUse - 1U64).unwrap()
+    if fieldUse.site != field.authoredTypeSite || payloadUse.site != payload.authoredTypeSite || baseUse.site != base.authoredTypeSite { panic("wrong nominal type site") }
+    if fieldUse.parameters.count() != 1U64 || payloadUse.parameters.count() != 1U64 || baseUse.parameters.count() != 0U64 { panic("wrong nominal binders") }
+    if fieldUse.parameters[0U64].paramId == payloadUse.parameters[0U64].paramId { panic("same-spelled nominal binders were merged") }
+    val start = compiler.arena.bytes.count()
+    compiler.appendSrc(from: bad.bytes())
+    match parseItem(source: bad, start: start, end: compiler.arena.bytes.count()) {
+        TopItemAst.Decl(d: val declaration) => {
+            if compiler.lowerStructDecl(d: declaration).isOk() { panic("invalid materialized declaration lowered") }
+        }
+        _ => { panic("expected a structure declaration") }
+    }
+    expectFailed(compiler)
+    mut val syntax = <Comp />
+    if analyzeFrontendForRequests(c: inout syntax, input: <FrontendInput.Text text=bad path="NominalProvenance.pw" />, sources: <SourceAccess stdRoot=[] />).isOk() {
+        panic("invalid syntax declaration lowered")
+    }
+    expectFailed(syntax)
+    print("1")
+}

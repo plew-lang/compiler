@@ -218,3 +218,20 @@ Remaining before closure: exercise missing and mismatched proof handles,
 failure restoration and the checked field/cast boundaries, compare
 same-source performance on the final candidate, and complete independent
 review. Struct/enum declaration `where` is outside supported syntax.
+
+The second independent review reproduced nine positive and four negative
+check/JIT outcomes on `1dd9f553` and identified unchecked newtype reads in
+struct patterns, cast-literal contextual typing, and zero-slot aggregates.
+Fixed-input build `20261113T094959-build-260ff3` produced `138ad47e4bc4`
+with the first two readers connected. The newtype literal, forward-view,
+projected-underlying view and generic field/payload JIT controls pass.
+The manual `NominalTypeUseProvenance.pw` probe passed on `1dd9f553`,
+covering value-AST field/payload/newtype provenance, distinct generic
+binders and failure-scope restoration for both adapters.
+
+Same-source development medians for `c5146239` and `1dd9f553` were
+7.112 s and 7.176 s, with identical LLVM hashes on all runs. This is
+not formal self-host timing. The review identified repeated recipe and
+projection-equation validation as a bounded performance candidate. The
+zero-slot aggregate path, missing-proof substitution controls and final
+review remain open.

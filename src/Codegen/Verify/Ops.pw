@@ -559,7 +559,7 @@ pub impl Comp {
         // A direct unsuffixed numeric literal is materialized in the explicit
         // cast context. Preserve that checked context for Record and Mid,
         // just as annotated values and selected call parameters already do.
-        val contextTerm: U64 = self.castLiteralContextTerm(operand: operand, targetTerm: targetTerm)
+        val contextTerm: U64 = try self.castLiteralContextTerm(operand: operand, targetTerm: targetTerm)
         if contextTerm != 0U64 {
             try self.checkLitTi(id: operand, ti: self.typeInfoOfRef(ref: contextTerm))
         }
