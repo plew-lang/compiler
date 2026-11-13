@@ -771,3 +771,30 @@ method” on both candidates, while the analogous concrete specialization
 runs. Trace how matching and later specialization consume the admitted
 receiver recipe, including projected receiver arguments. Source
 admission success alone does not establish that handoff.
+
+### Match a viewed receiver binder against a rigid caller type
+
+The shared pattern unifier previously treated a viewed binder as a
+rigid head, so its ParamId could not match a concrete type even when the
+nested views agreed. In directional matching against a rigid operand,
+it now matches view heads and their positional arguments before
+binding the undecorated receiver type. This applies to method candidate
+filtering and to the subsequent receiver environment computation.
+The existing outer-view rule for receiver dispatch remains in effect.
+
+Fixed-input build `20261113T153145-build-0b88c5` produced `5ee9ed5ac71a`.
+The old candidate rejects the new positive fixture at member lookup.
+The new candidate accepts it in check, JIT and linked native execution.
+The method accepts and returns the undecorated binder type and prints
+the returned field, so the control exercises the concrete substitution.
+A caller with a valid but different trait instance is still rejected in
+check and JIT. The inherent/conformance admission rejections and existing
+concrete, provided, generic and conditional controls also pass. The
+generation suite `20261113T153518-gen-aaee96` passed before strengthening
+the standalone positive fixture to inspect the binder substitution.
+
+Projected receiver arguments still need a check of the path from the
+saved declaration recipe to callable matching. A separate focused
+probe calling a free generic function with a viewed binder in its
+parameter reports `cannot infer all type arguments`; that path uses
+`matchTypeArgumentConstraints`, independently of receiver unification.

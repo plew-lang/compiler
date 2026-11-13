@@ -1,0 +1,10 @@
+use @Std/Io only { print }
+trait Mark[T] {}
+struct Number {}
+impl Number as Mark[I64] {}
+impl Number as Mark[Bool] {}
+struct Box[T] { val item: T }
+impl[T] Box[T#Mark[I64]] where T: Mark[I64] {
+    fn get() -> I64 { return 42I64 }
+}
+fn main() { print(<Box[Number#Mark[Bool]] item=(<Number />#Mark[Bool]) />.get()) }

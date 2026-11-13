@@ -501,6 +501,19 @@ pub impl Comp {
         if aSide != 0U64 { aScope = bParams }
         mut val bScope: PatternBindInput = aParams
         if bSide != 0U64 { bScope = bParams }
+        // A decorated binder constrains this position's views and binds
+        // only the base. Nested trait arguments still participate in matching.
+        if self.hasTopLevelView(ref: a) && self.typeParameterHeadIndex(ref: a, params: aScope) < aScope.count() && bScope.count() == 0U64 {
+            if !ignoreTopView {
+                if !self.arena.typeViewSourceHeadsEqual(a: a, b: b) { return false }
+                val count = self.arena.typeViewArgumentCount(ref: a)
+                if count != self.arena.typeViewArgumentCount(ref: b) { return false }
+                for index in 0U64..<count {
+                    if !self.unifyPatterns(a: self.arena.typeViewArgumentAt(ref: a, index: index), aSide: aSide, b: self.arena.typeViewArgumentAt(ref: b, index: index), bSide: bSide, aParams: aParams, bParams: bParams, binds: inout binds) { return false }
+                }
+            }
+            return self.unifyPatterns(a: self.typeRefWithoutOuterViews(ref: a), aSide: aSide, b: self.typeRefWithoutOuterViews(ref: b), bSide: bSide, aParams: aParams, bParams: bParams, binds: inout binds)
+        }
         val av: U64 = self.plainBinder(ref: a, params: aScope)
         val bv: U64 = self.plainBinder(ref: b, params: bScope)
         if av < aScope.count() && bv < bScope.count() {

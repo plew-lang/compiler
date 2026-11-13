@@ -1,0 +1,9 @@
+use @Std/Io only { print }
+trait Mark[T] {}
+struct Number { val count: I64 }
+impl Number as Mark[I64] {}
+struct Box[T] { val item: T }
+impl[T] Box[T#Mark[I64]] where T: Mark[I64] {
+    fn get(value: T) -> T { return value }
+}
+fn main() { print(<Box[Number#Mark[I64]] item=(<Number count=1I64 />#Mark[I64]) />.get(value: <Number count=42I64 />).count) }
