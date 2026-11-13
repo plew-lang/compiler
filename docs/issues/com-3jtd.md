@@ -268,3 +268,23 @@ The direct-bound control passes check and JIT. Removing the bound from
 the reachable call rejects in both modes at extension admission; the
 existing wrong-instance generic controls and the unrelated receiver
 control retain their rejection in whole-source check.
+
+### Explicit construction type arguments
+
+Both lowering adapters retain the argument position and exact authored
+occurrence when a constructor argument contains a view or projection.
+Record admits it using the existing body type recipe before type-use
+verification and field checking. Mono checks occurrence and recipe
+identity then replays the proof into the aggregate's concrete result type.
+
+Fixed-input build `20261113T122240-build-91daec` produced `a7272cf67889`.
+The extension-backed argument and the lexical projected argument pass check,
+JIT and linked native with output 42. The wrong positional trait instance
+now rejects during admission in check and JIT. The remaining Verify type
+compatibility path still needs an entry audit before this issue can close.
+
+The development same-source comparison used four alternating pairs with
+the first excluded. Median `c5146239` was 7.158 s and `a7272cf67889` was
+7.268 s. All eight LLVM outputs matched SHA-256
+`91c2113c95fd23af58e68f2cc57271e49d74f2f6d1934218946a9df7ca961ee1`.
+The parent fixed-point gate remains separate.

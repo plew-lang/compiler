@@ -21,6 +21,41 @@ impl Comp {
         return <Result.Ok value=proof.sourceTerm />
     }
 
+    inout fn recordConstructionArguments(exprId: U64, written: U64) -> Result[U64, CompileDiagnostic] {
+        val authored = self.authoredConstructionArguments.getOr(key: exprId, fallback: [])
+        if authored.count() == 0U64 { return <Result.Ok value=written /> }
+        val owner = match self.currentSourceOwner() {
+            Optional.Some(v: val owner) => owner,
+            Optional.None => { return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "authored construction has no lexical owner", failureDomain: <FailureDomain.Internal />) /> },
+        }
+        self.sourceFacts.activate(owner: owner)
+        val type = self.arena.typeAt(index: written)
+        mut val arguments = type.args
+        val proofs = match self.sourceFacts.activeBuilder.data.constructionArgumentProofs.get(key: exprId) {
+            Optional.Some(v: val saved) => saved,
+            Optional.None => {
+                mut val checked: Array[LocalAnnotationProof] = []
+                for argument in authored {
+                    if argument.index >= arguments.count() {
+                        return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "construction has an invalid type argument occurrence", failureDomain: <FailureDomain.Internal />) />
+                    }
+                    val proof = try self.admitBodyTypeUse(id: argument.occurrence, term: arguments[argument.index], owner: owner)
+                    self.markAdmittedRecipeTypeUses(recipe: proof.recipe)
+                    checked.append(proof)
+                }
+                self.sourceFacts.activeBuilder.data.constructionArgumentProofs[exprId] = checked
+                give checked
+            }
+        }
+        if proofs.count() != authored.count() {
+            return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "construction has incomplete type argument proofs", failureDomain: <FailureDomain.Internal />) />
+        }
+        for index in 0U64..<authored.count() {
+            arguments[authored[index].index] = proofs[index].sourceTerm
+        }
+        return <Result.Ok value=self.rebuildTypeTermChildren(ref: written, children: arguments) />
+    }
+
     inout fn recordBindingAnnotation(nameStart: U64, written: U64, occurrence: Optional[U64]) -> Result[Optional[LocalAnnotationProof], CompileDiagnostic] {
         match self.currentSourceOwner() {
             Optional.Some(v: val owner) => {
@@ -1775,6 +1810,10 @@ pub impl Comp {
             Expr.Cast(operand: _, tyStart: _, tyLen: _, val ty) => { give try self.recordCastTarget(exprId: exprId, written: ty) }
             _ => 0U64
         }
+        val construction = match self.arena.exprs[exprId] {
+            Expr.Make(typeStart: _, typeLen: _, variantStart: _, variantLen: _, isEnum: _, val ty, fields: _) => { give try self.recordConstructionArguments(exprId: exprId, written: ty) }
+            _ => 0U64
+        }
         match self.expressionTypeUses.get(key: exprId) {
             Optional.Some(v: val uses) => { try self.checkRequestedTypeUses(occurrences: uses) }
             Optional.None => {}
@@ -2088,7 +2127,7 @@ pub impl Comp {
                 // type. The lowered syntax may still contain an omitted type
                 // argument list; it cannot undo a prior contextual solution.
                 mut val instance = self.semanticExprTerm(exprId: exprId)
-                if instance == 0U64 { instance = ty }
+                if instance == 0U64 { instance = construction }
                 // Named construction producers retain their selected head,
                 // even when generic arguments still need field/context
                 // inference. Recreating a head from spelling here would lose

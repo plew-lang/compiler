@@ -23,19 +23,19 @@ pub impl Comp {
         return <Result.Ok value=call />
     }
 
-    inout fn castTargetNeedsAdmission(ref: U64) -> Bool {
+    inout fn bodyTypeNeedsViewAdmission(ref: U64) -> Bool {
         if ref == 0U64 { return false }
         val term = self.arena.typeTermAt(index: ref)
         if term.assocNameId != 0U64 || term.hasTopLevelView() { return true }
         for index in 0U64..<self.typeTermRefChildCount(ref: ref) {
-            if self.castTargetNeedsAdmission(ref: self.typeTermRefChildRef(ref: ref, index: index)) { return true }
+            if self.bodyTypeNeedsViewAdmission(ref: self.typeTermRefChildRef(ref: ref, index: index)) { return true }
         }
         return false
     }
 
     inout fn lowerCast(operand: U64, target: PType) -> U64 {
         val expression = self.pushExpr(e: <Expr.Cast operand=operand tyStart=target.start tyLen=target.len ty=target.ref />)
-        if self.castTargetNeedsAdmission(ref: target.ref) { self.authoredCastTargets[expression] = target.authoredUse }
+        if self.bodyTypeNeedsViewAdmission(ref: target.ref) { self.authoredCastTargets[expression] = target.authoredUse }
         return expression
     }
 
@@ -198,9 +198,12 @@ pub impl Comp {
                     }
                 }
                 mut val targs: Array[U64] = []
+                mut val authored: Array[(index: U64, occurrence: U64)] = []
                 mut val ti: U64 = 0U64
                 while ti < constructorArgs.count() {
-                    targs.append((try self.lowerType(t: constructorArgs[ti])).ref)
+                    val argument = try self.lowerType(t: constructorArgs[ti])
+                    targs.append(argument.ref)
+                    if self.bodyTypeNeedsViewAdmission(ref: argument.ref) { authored.append((index: ti, occurrence: argument.authoredUse)) }
                     ti += 1U64
                 }
                 val tyRef = try self.lowerConstructionType(nameStart: tn.nameStart, nameLen: tn.nameLen, args: targs, siteOffset: typeNameSpan.start)
@@ -213,6 +216,7 @@ pub impl Comp {
                 }
                 val fs: Array[MakeField] = (try self.lowerMakeFields(fields: fields))
                 result = self.pushExpr(e: <Expr.Make typeStart=tn.nameStart typeLen=tn.nameLen variantStart=vStart variantLen=vLen isEnum=constructionEnum ty=tyRef fields=self.pushMakeFields(fields: fs) />)
+                if authored.count() != 0U64 { self.authoredConstructionArguments[result] = authored }
                 if typeNameSpan.start == typeNameSpan.end && typeName.bytes().count() == 0U64 { self.pendingConstructionContexts.insert(result) }
             }
             ExprAst.ArrayLit(val elems, val span) => {
@@ -442,22 +446,28 @@ pub impl Comp {
                     }
                 }
                 mut val typeArgs: Array[U64] = []
+                mut val authored: Array[(index: U64, occurrence: U64)] = []
                 mut val i: U64 = 0U64
                 if e.typePath.count != 0U64 {
                     val head = syntaxExprTypeSegment(file: self.syntax, expr: e, index: headIndex)
                     while i < head.args.count {
-                        typeArgs.append((try self.lowerSyntaxType(id: syntaxNameSegmentArg(file: self.syntax, segment: head, index: i))).ref)
+                        val argument = try self.lowerSyntaxType(id: syntaxNameSegmentArg(file: self.syntax, segment: head, index: i))
+                        typeArgs.append(argument.ref)
+                        if self.bodyTypeNeedsViewAdmission(ref: argument.ref) { authored.append((index: i, occurrence: argument.authoredUse)) }
                         i += 1U64
                     }
                 } else {
                     while i < syntaxExprTypeArgCount(file: self.syntax, expr: e) {
-                        typeArgs.append((try self.lowerSyntaxType(id: syntaxExprTypeArg(file: self.syntax, expr: e, index: i))).ref)
+                        val argument = try self.lowerSyntaxType(id: syntaxExprTypeArg(file: self.syntax, expr: e, index: i))
+                        typeArgs.append(argument.ref)
+                        if self.bodyTypeNeedsViewAdmission(ref: argument.ref) { authored.append((index: i, occurrence: argument.authoredUse)) }
                         i += 1U64
                     }
                 }
                 val tyRef = try self.lowerConstructionType(nameStart: typeName.start, nameLen: typeName.end - typeName.start, args: typeArgs, siteOffset: e.name.start)
                 val fields: Array[MakeField] = (try self.lowerSyntaxMakeFields(expr: e))
                 result = self.pushExpr(e: <Expr.Make typeStart=typeName.start typeLen=typeName.end - typeName.start variantStart=variantName.start variantLen=variantName.end - variantName.start isEnum=constructionEnum ty=tyRef fields=self.pushMakeFields(fields: fields) />)
+                if authored.count() != 0U64 { self.authoredConstructionArguments[result] = authored }
                 if e.name.start == e.name.end { self.pendingConstructionContexts.insert(result) }
             }
             SyntaxExprKind.Range => {

@@ -1,0 +1,9 @@
+use @Std/Io only { print }
+trait Marker[T] {}
+struct Number {}
+extension Selection { impl Number as Marker[I64] {} }
+struct Box[T] { val n: I64 }
+fn main() {
+    val box = <Box[Number#Selection#Marker[I64]] n=42I64 />
+    print(box.n)
+}

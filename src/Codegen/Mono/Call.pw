@@ -3064,6 +3064,35 @@ pub impl Comp {
         self.arena.finalForIndexSlots.set(i: slot, value: self.arena.finalFors.count())
     }
 
+    inout fn replayConstructionArgumentProofs(exprId: U64, written: U64, bodyId: U64) -> Result[(), CompileDiagnostic] {
+        val authored = self.authoredConstructionArguments.getOr(key: exprId, fallback: [])
+        if authored.count() == 0U64 || bodyId == 0U64 { return <Result.Ok value=() /> }
+        val offset = self.exprOffset(id: exprId)
+        val facts = try self.preparedBodyFacts(bodyId: bodyId, globalInitializerTarget: self.cur.globalInitializerTarget)
+        val proofs = match facts.constructionArgumentProofs(exprId: exprId) {
+            Optional.Some(v: val proofs) => proofs,
+            Optional.None => { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "construction has no saved type argument proofs", failureDomain: <FailureDomain.Internal />) /> },
+        }
+        val arguments = self.arena.typeAt(index: written).args
+        if proofs.count() != authored.count() { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "construction has incomplete type argument proofs", failureDomain: <FailureDomain.Internal />) /> }
+        mut val memo: Dictionary[U64, AuthoredRecipeRead] = [:]
+        for index in 0U64..<authored.count() {
+            val argument = authored[index]
+            val proof = proofs[index]
+            val occurrence = try self.signatureOccurrence(id: argument.occurrence)
+            if argument.index >= arguments.count() || occurrence.term != arguments[argument.index] || proof.occurrence != argument.occurrence || proof.recipe != occurrence.recipe {
+                return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "construction has a foreign type argument proof", failureDomain: <FailureDomain.Internal />) />
+            }
+            val result = (try self.readAuthoredTypeRecipe(proofs: proof.proofs, recipe: proof.recipe, environment: self.cur.bodyEnvironment, memo: inout memo, context: <SignatureRecipeContext.Concrete />)).term
+            self.recordBodyTypeTermResult(bodyId: bodyId, source: proof.sourceTerm, result: result)
+        }
+        val expression = try self.preparedBodyExpression(bodyId: bodyId, exprId: exprId, globalInitializerTarget: self.cur.globalInitializerTarget)
+        val prepared = self.applyPublishedBodyTypeChildren(bodyId: bodyId, ref: expression.term)
+        val result = try self.groundAndRecordBodyType(ref: prepared, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: bodyId)
+        self.recordBodyTypeTermResult(bodyId: bodyId, source: expression.term, result: result)
+        return <Result.Ok value=() />
+    }
+
     // Freeze one aggregate only after its children have been finalized in the
     // active BodyInstance. The Record carrier supplies the source tree and
     // physical slots; this pass supplies the one concrete substitution and
@@ -6346,6 +6375,7 @@ pub impl Comp {
                 try self.scanExprInsts(exprId: index)
             }
             Expr.Make(val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, val ty, val fields) => {
+                try self.replayConstructionArgumentProofs(exprId: exprId, written: ty, bodyId: self.currentBodyInstanceId())
                 mut val i: U64 = 0
                 while i < fields.len {
                     try self.scanExprInsts(exprId: self.makeFieldAt(fields: fields, index: i).value)

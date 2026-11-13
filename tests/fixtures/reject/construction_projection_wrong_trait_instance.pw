@@ -1,0 +1,7 @@
+trait Marker[T] { type Item }
+struct Number {}
+impl Number as Marker[I64] { type Item = I64 }
+struct Box[T] { val n: I64 }
+fn main() {
+    val ignored = <Box[Number#Marker[Bool].Item] n=42I64 />
+}
