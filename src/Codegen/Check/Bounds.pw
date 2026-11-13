@@ -1934,35 +1934,52 @@ pub impl Comp {
 impl Comp {
     inout fn matchInherentReceiver(f: Func, receiver: U64, params: PatternBindInput) -> Result[WitnessMatch, CompileDiagnostic] {
         val caller = self.sourceLexicalFunction(fnIdx: self.cur.checkFn)
-        val cached = self.findInherentReceiverMatch(function: f, receiver: receiver, caller: caller)
-        if cached.isSome() { return <Result.Ok value=cached.unwrap().witness /> }
         val scope = try self.declarationTypeScope(owner: caller)
         val assumptions = try self.declarationScopeAssumptions(scope: scope)
-        val entry = try self.admitInherentReceiverMatch(f: f, receiver: receiver, caller: caller, params: params, assumptions: assumptions)
+        val entry = try self.queryInherentReceiverMatch(function: f, receiver: receiver, params: params, assumptions: assumptions)
         for proof in entry.proofs {
             try self.checkDeclarationCallProof(proof: self.thawStaticConformanceProof(id: proof), scope: scope, offset: f.defOffset)
         }
-        mut val updated = self.inherentReceiverMatches.getOr(key: f.dependentReceiverCallable, fallback: [])
-        updated.append(entry)
-        self.inherentReceiverMatches[f.dependentReceiverCallable] = updated
         return <Result.Ok value=entry.witness />
     }
 
-    inout fn findInherentReceiverMatch(function: Func, receiver: U64, caller: U64) -> Optional[InherentReceiverMatch] {
+    inout fn queryInherentReceiverMatch(function: Func, receiver: U64, params: PatternBindInput, assumptions: Array[DeclarationBoundRef]) -> Result[InherentReceiverMatch, CompileDiagnostic] {
+        // During nominal admission the declaration catalog can still change.
+        if self.newtypeAnnotationAdmissionOpen {
+            return self.admitInherentReceiverMatch(f: function, receiver: receiver, params: params, assumptions: assumptions)
+        }
+        val cached = self.findInherentReceiverMatch(function: function, receiver: receiver, assumptions: assumptions)
+        if cached.isSome() { return <Result.Ok value=cached.unwrap() /> }
+        val entry = try self.admitInherentReceiverMatch(f: function, receiver: receiver, params: params, assumptions: assumptions)
+        mut val updated = self.inherentReceiverMatches.getOr(key: function.dependentReceiverCallable, fallback: [])
+        updated.append(entry)
+        self.inherentReceiverMatches[function.dependentReceiverCallable] = updated
+        return <Result.Ok value=entry />
+    }
+
+    inout fn findInherentReceiverMatch(function: Func, receiver: U64, assumptions: Array[DeclarationBoundRef]) -> Optional[InherentReceiverMatch] {
         if function.dependentReceiverCallable == 0U64 { return <Optional.None /> }
         for entry in self.inherentReceiverMatches.getOr(key: function.dependentReceiverCallable, fallback: []) {
             // The complete semantic receiver includes view sources, nominal
             // owners and rigid binders. Its arena row need not be the same.
-            if entry.caller == caller && self.typeRefEq(a: entry.receiver, b: receiver) {
+            if self.typeRefEq(a: entry.receiver, b: receiver) && self.sameReceiverMatchAssumptions(a: entry.assumptions, b: assumptions) {
                 return <Optional.Some v=entry />
             }
         }
         return <Optional.None />
     }
 
-    inout fn admitInherentReceiverMatch(f: Func, receiver: U64, caller: U64, params: PatternBindInput, assumptions: Array[DeclarationBoundRef]) -> Result[InherentReceiverMatch, CompileDiagnostic] {
+    fn sameReceiverMatchAssumptions(a: Array[DeclarationBoundRef], b: Array[DeclarationBoundRef]) -> Bool {
+        if a.count() != b.count() { return false }
+        for index in 0U64..<a.count() {
+            if !self.sameDeclarationBound(a: a[index], b: b[index]) { return false }
+        }
+        return true
+    }
+
+    inout fn admitInherentReceiverMatch(f: Func, receiver: U64, params: PatternBindInput, assumptions: Array[DeclarationBoundRef]) -> Result[InherentReceiverMatch, CompileDiagnostic] {
         val physical = try self.conformancePhysicalSubject(typeRef: receiver)
-        val absent = <InherentReceiverMatch caller=caller receiver=receiver witness=<WitnessMatch /> />
+        val absent = <InherentReceiverMatch receiver=receiver assumptions=assumptions witness=<WitnessMatch /> />
         mut val binds: Array[UnifyBind] = []
         if !self.unifyPatterns(a: f.recvTy, aSide: 0U64, b: physical, bSide: 1U64, aParams: params, bParams: <PatternBindInput.Values values=[] />, binds: inout binds, ignoreTopView: true, deferPatternProjections: true) { return <Result.Ok value=absent /> }
         val candidate = self.witnessMatchFromUnify(conformIdx: 0U64, typeParams: params, binds: binds)
@@ -2007,14 +2024,14 @@ impl Comp {
         mut val memo: Dictionary[U64, AuthoredRecipeRead] = [:]
         val read = try self.readAuthoredTypeRecipe(proofs: saved.proofs, recipe: saved.recipe, environment: prepared, memo: inout memo, receiverEquations: normalizations, context: <SignatureRecipeContext.AssociatedBinding requirement=<Optional.None /> />)
         if !self.typeRefEq(a: self.typeRefWithoutOuterViews(ref: read.term), b: self.typeRefWithoutOuterViews(ref: physical)) { return <Result.Ok value=absent /> }
-        return <Result.Ok value=<InherentReceiverMatch caller=caller receiver=receiver witness=<WitnessMatch conformIdx=candidate.conformIdx binds=candidate.binds selfRef=receiver /> indices=indices bounds=bounds proofs=proofs normalizations=normalizations /> />
+        return <Result.Ok value=<InherentReceiverMatch receiver=receiver assumptions=assumptions witness=<WitnessMatch conformIdx=candidate.conformIdx binds=candidate.binds selfRef=receiver /> indices=indices bounds=bounds proofs=proofs normalizations=normalizations /> />
     }
 
 }
 
 pub impl Comp {
     inout fn dependentInherentReceiverApplies(f: Func, receiver: U64, assumptions: Array[DeclarationBoundRef]) -> Result[Bool, CompileDiagnostic] {
-        val matchResult = try self.admitInherentReceiverMatch(f: f, receiver: receiver, caller: self.arena.functionCount(), params: <PatternBindInput.Function range=f.typeParams />, assumptions: assumptions)
+        val matchResult = try self.queryInherentReceiverMatch(function: f, receiver: receiver, params: <PatternBindInput.Function range=f.typeParams />, assumptions: assumptions)
         return <Result.Ok value=matchResult.witness.conformIdx != 0U64 />
     }
 }

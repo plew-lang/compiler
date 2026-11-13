@@ -1337,7 +1337,7 @@ pub impl Comp {
         mut val normalizations: Array[ProjectionNormalizationStep] = []
         val retained = match template.kind {
             CallTemplateKind.Direct(callee: val callee, receiver: _, args: _, calleeTypeArgs: _, proofId: _) => {
-                val matchResult = self.findInherentReceiverMatch(function: self.arena.functionAt(index: callee), receiver: template.receiverTypeTerm, caller: self.sourceLexicalFunction(fnIdx: template.siteKey.ownerFnIdx))
+                val matchResult = self.findInherentReceiverMatch(function: self.arena.functionAt(index: callee), receiver: template.receiverTypeTerm, assumptions: assumptions)
                 give if matchResult.isSome() && matchResult.unwrap().witness.conformIdx != 0U64 {
                     give matchResult
                 } else { give <Optional.None /> }

@@ -1176,3 +1176,17 @@ receiver fixture group passed check/JIT and the extension signature passed
 native. This is a behavior-preserving increment. Extension applicability
 still calls the matcher separately and must distinguish the context before
 a view is added from the context with that view.
+
+Dependent inherent extension applicability now uses the same match table as
+member lookup and selected-call constraints. Entries distinguish the full
+receiver including views and the exact source premise references. A view
+cannot justify opening itself: formation still queries its pre-addition
+receiver, and that entry does not authorize a different viewed receiver.
+During nominal admission the evolving catalogs are queried directly.
+Fixed-input build `20261113T185528-build-ce2fc8` produced `2f00cb3a`.
+The inherent receiver group and conformance-only extension pass check/JIT.
+The signature, binding, direct extension, and symbolic-argument controls
+also pass linked native. Later-extension and stripped-extension controls
+retain their exact rejection diagnostics. This increment concerns dependent
+inherent receiver matches; the overall source-formation handoff remains
+subject to independent review.

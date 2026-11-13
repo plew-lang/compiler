@@ -472,8 +472,8 @@ struct RetainedCallableTypes {
 impl RetainedCallableTypes { factory }
 
 struct InherentReceiverMatch {
-    val caller: U64
     val receiver: U64
+    val assumptions: Array[DeclarationBoundRef]
     val witness: WitnessMatch
     val indices: Array[U64] = []
     val bounds: Array[TraitBound] = []
