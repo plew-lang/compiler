@@ -81,6 +81,13 @@ impl Comp {
             // while that binding is still awaiting its own admission.
             output = try self.associatedOutputTermInProof(proof: proof, traitOwner: traitOwner, assocId: assocId)
         }
+        if requirement.isSome() {
+            // Only an assumed output is still expressed in the requirement's
+            // lexical types. Selected bindings return in their own witness
+            // environment and may already contain caller-owned terms.
+            val environment = requirement.unwrap().environment
+            output = self.groundTermInEnvironment(ref: output, params: environment.params, values: environment.args, selfRef: environment.receiverRef)
+        }
         val term = try self.replayProjectionNormalizations(ref: output, normalizations: normalizations, offset: 0U64)
         return <Result.Ok value=<SelectedProjectionOutput immediate=output term=term normalizations=normalizations /> />
     }
@@ -411,6 +418,9 @@ impl Comp {
                             try self.appendRetainedProjectionEquation(step: <ProjectionNormalizationStep source=source proof=self.freezeStaticConformanceProof(proof: proof) output=immediate />, normalizations: inout normalizations)
                             if output.term != 0U64 {
                                 term = output.term
+                            } else if requirement.isSome() {
+                                val lexical = requirement.unwrap().environment
+                                term = self.groundTermInEnvironment(ref: source, params: lexical.params, values: lexical.args, selfRef: lexical.receiverRef)
                             } else {
                                 match context {
                                     SignatureRecipeContext.Concrete => { return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "saved signature projection is not instantiated", failureDomain: <FailureDomain.Internal />) /> }
@@ -1210,9 +1220,7 @@ impl Comp {
         if self.retainedConstraintPathTerminal(proof: proof).isSome() {
             val requirement = <AssociatedBindingRequirementRead signature=interface environment=environment />
             val output = try self.readSelectedProjectionOutput(proof: proof, traitOwner: selector.traitInstance.owner, assocId: member, requirement: <Optional.Some v=requirement />)
-            // A witness selected in the authored requirement still contains
-            // that requirement's rigid binders when its result is symbolic.
-            return <Result.Ok value=self.groundTermInEnvironment(ref: output.term, params: environment.params, values: environment.args, selfRef: environment.receiverRef) />
+            return <Result.Ok value=output.term />
         }
         return self.readLexicalSignatureProjection(proof: proof, owner: selector.traitInstance.owner, member: member, environment: environment)
     }

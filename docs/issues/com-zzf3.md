@@ -565,3 +565,12 @@ only to terms still owned by that declaration, before composing them with
 outputs already derived in the caller's environment. Use both the
 non-idempotent probe and the existing interface fixture as acceptance
 controls for the repair.
+
+Candidate `0feb30fe` applies the requirement map only to assumed
+outputs and unresolved projection heads, before composing the result.
+Outputs already read under a selected binding witness keep their type.
+The isolated `Array[A]` contrast and six public check/JIT/native
+controls, including `inherited_associated_interface_where`, passed.
+Build `20261113T012553-build-09123d`, generation
+`20261113T012958-gen-6e9229`, and same-source medians 6.873823 s and
+6.878970 s passed with identical LLVM output in all eight runs.
