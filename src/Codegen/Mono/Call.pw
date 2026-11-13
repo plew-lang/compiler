@@ -6104,9 +6104,9 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
-    inout fn requireFinalTraitValueView(exprId: U64, source: ResolvedViewSource, authoredArguments: Optional[Array[U64]] = <Optional.None />) -> Result[(), CompileDiagnostic] {
+    inout fn replayFinalTraitValueView(exprId: U64, source: ResolvedViewSource, authoredArguments: Optional[Array[U64]] = <Optional.None />, viewedTerm: U64 = 0U64) -> Result[U64, CompileDiagnostic] {
         val bodyId = self.currentBodyInstanceId()
-        if bodyId == 0U64 { return <Result.Ok value=() /> }
+        if bodyId == 0U64 { return <Result.Ok value=0U64 /> }
         val facts = try self.preparedBodyFacts(bodyId: bodyId, globalInitializerTarget: self.cur.globalInitializerTarget)
         val receipt = match facts.traitValueView(exprId: exprId) {
             Optional.Some(v: val saved) => saved,
@@ -6155,7 +6155,30 @@ pub impl Comp {
             }
         }
         (try self.instantiateAuthoredViewProof(saved: saved, receiver: subject, arguments: arguments, environment: environment, offset: source.writtenStart, normalizations: equations))
-        return <Result.Ok value=() />
+        if viewedTerm == 0U64 { return <Result.Ok value=0U64 /> }
+        // Preserve the extension facets recorded on the expression and any
+        // facets introduced by substitution. The saved trait instance supplies
+        // the only trait selector authored by this view.
+        val selected = source.withArguments(arguments: arguments)
+        val admitted = saved.selector.withArguments(arguments: saved.admittedArguments)
+        mut val additions: Array[ResolvedViewSource] = [selected]
+        mut val found = false
+        for facet in self.arena.typeViewSources(ref: viewedTerm) {
+            if facet.traitInstance.owner == 0U64 {
+                additions.append(facet)
+            } else if self.semanticViewSourceEq(a: facet, b: admitted) {
+                found = true
+            }
+        }
+        if !found {
+            return <Result.Err error=self.diagnosticAt(offset: source.writtenStart, msg: "trait value view differs from its recorded expression type", failureDomain: <FailureDomain.Internal />) />
+        }
+        val concrete = self.typeRefWithAddedViewSources(ref: subject, additions: additions)
+        if !self.arena.typeIsClosed(ref: concrete) {
+            return <Result.Err error=self.diagnosticAt(offset: source.writtenStart, msg: "trait value view replay did not produce a concrete type", failureDomain: <FailureDomain.Internal />) />
+        }
+        self.recordBodyTypeTermResult(bodyId: bodyId, source: viewedTerm, result: concrete)
+        return <Result.Ok value=concrete />
     }
 
     // Capturing is a use of a lexical binding, including a write-only place.
@@ -6230,7 +6253,7 @@ pub impl Comp {
             Expr.ExtMethod(val recv, val source, val nameStart, val nameLen, val args) => {
                 try self.scanExprInsts(exprId: recv)
                 if source.traitInstance.owner != 0U64 && self.assocRecvName(recv: recv).nameLen == 0U64 {
-                    try self.requireFinalTraitValueView(exprId: exprId, source: source)
+                    (try self.replayFinalTraitValueView(exprId: exprId, source: source))
                 }
                 val callArgs = (try self.callArgumentRangeForCurrentBody(exprId: exprId, authored: args))
                 mut val i: U64 = 0
@@ -6245,10 +6268,14 @@ pub impl Comp {
                 try self.scanExprInsts(exprId: recv)
                 // Every intermediate view is a typed value, even when only
                 // the outermost view reaches a call or storage boundary.
-                if !strip && source.traitInstance.owner != 0U64 && self.assocRecvName(recv: exprId).nameLen == 0U64 {
-                    try self.requireFinalTraitValueView(exprId: exprId, source: source, authoredArguments: self.sourceTypeUses.valueViewArguments(origin: self.arena.exprOriginSerial[exprId]))
+                val bodyId = self.currentBodyInstanceId()
+                if bodyId != 0U64 && !strip && source.traitInstance.owner != 0U64 && self.assocRecvName(recv: exprId).nameLen == 0U64 {
+                    val fact = try self.preparedBodyExpression(bodyId: bodyId, exprId: exprId, globalInitializerTarget: self.cur.globalInitializerTarget)
+                    val viewed = try self.replayFinalTraitValueView(exprId: exprId, source: source, authoredArguments: self.sourceTypeUses.valueViewArguments(origin: self.arena.exprOriginSerial[exprId]), viewedTerm: fact.term)
+                    try self.enqueueFinalDestruction(typeRef: viewed)
+                } else {
+                    try self.collectRecordedValueLayout(exprId: exprId)
                 }
-                try self.collectRecordedValueLayout(exprId: exprId)
             }
             Expr.Method(val recv, val nameStart, val nameLen, val args) => {
                 try self.scanExprInsts(exprId: recv)
