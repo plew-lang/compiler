@@ -1254,3 +1254,22 @@ and pass check, JIT and linked native on `b54c049c` (build
 `20261113T195829-build-2f6785`). The reversed declaration-order controls
 also pass check/JIT. An ambiguous required bound and an inapplicable
 conformance-only extension still reject.
+
+A follow-up to the ambiguity fix found a separate authority problem.
+`ExtensionUnselectedSignature.pw` and `ExtensionUnselectedPath.pw` in
+meta scratch `tmp/com-3jtd` contain only the ambiguous trait-receiver impl,
+without a valid alternative. Candidate `b54c049c` accepts both, including
+the unused signature; the call prints 42 in JIT. The composed, reversed
+and typed selection probes now pass too, so those positive cases alone
+cannot show the selector was used to establish applicability.
+
+The function sweep can reach derived `isProvided` concrete methods whose
+extension ID was copied from a trait provider, then accept their concrete
+receiver pattern without proving that provider's trait path. Applicability
+must originate from the authored impl declaration, including empty impls,
+with a trait selector admitted under compatible premises if needed. Keep
+the unselected rejection and selected, reversed, and separated acceptance
+as paired controls. Declared extension/trait source composition and
+retention remain open. The direct `#Extra#Left.fromMatch()` probe also
+reports no matching method. Record it as a final member-selection
+contrast distinct from field-only formation.
