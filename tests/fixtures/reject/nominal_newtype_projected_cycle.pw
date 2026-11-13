@@ -1,0 +1,6 @@
+trait Project { type Item }
+struct Projector {}
+impl Projector as Project { type Item = Alias }
+newtype Alias = Projector#Project.Item
+struct Holder { val value: Alias }
+fn main() {}

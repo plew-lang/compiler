@@ -653,24 +653,27 @@ pub impl Comp {
         return <WitnessMatch conformIdx=conformIdx + 1U64 binds=out />
     }
 
+    inout fn nominalNewtypeIndex(ref: U64) -> U64 {
+        val missing = self.arena.newtypeCount()
+        if ref == 0U64 || ref >= self.arena.typeCount() { return missing }
+        val term = self.arena.typeTermAt(index: ref)
+        if term.paramId != 0U64 || term.assocNameId != 0U64 || term.isAny || term.isRecord { return missing }
+        if term.hasDecl { return self.arena.newtypeIndexByOffset(offset: term.declOffset) }
+        if !self.newtypeAnnotationAdmissionOpen || term.siteOffset == 0U64 { return missing }
+        // Early admission can precede canonical identity publication. Use the
+        // same visible declaration identity at the written site.
+        val identity = self.typeDeclIdentityAt(useMod: self.moduleOf(offset: term.siteOffset), start: term.nameStart, len: term.nameLen)
+        if identity.nameLen == 0U64 { return missing }
+        return self.arena.newtypeIndexByOffset(offset: identity.nameStart)
+    }
+
     // A selected proof retains semantic Self, while inherited newtype
     // implementations match their physical underlying subject.
     inout fn conformancePhysicalSubject(typeRef: U64) -> Result[U64, CompileDiagnostic] {
         mut val matchRef: U64 = typeRef
         mut val depth: U64 = 0U64
         while matchRef != 0U64 && matchRef < self.arena.typeCount() && depth < self.arena.newtypeCount() {
-            val term = self.arena.typeTermAt(index: matchRef)
-            mut val owner = term.declOffset
-            if !term.hasDecl {
-                if !self.newtypeAnnotationAdmissionOpen || term.paramId != 0U64 || term.assocNameId != 0U64 || term.isAny || term.isRecord { break }
-                if term.siteOffset == 0U64 { break }
-                // The source binding uses the identifier span. Arena's
-                // canonical identity is the full declaration offset.
-                val identity = self.typeDeclIdentityAt(useMod: self.moduleOf(offset: term.siteOffset), start: term.nameStart, len: term.nameLen)
-                if identity.nameLen == 0U64 { break }
-                owner = identity.nameStart
-            }
-            val index = self.arena.newtypeIndexByOffset(offset: owner)
+            val index = self.nominalNewtypeIndex(ref: matchRef)
             if index >= self.arena.newtypeCount() { break }
             if self.newtypeAnnotationAdmissionOpen { try self.admitNewtypeAnnotation(index: index) }
             val underlying = try self.readAdmittedNewtypeUnderlying(declaration: self.arena.newtypeAt(index: index))

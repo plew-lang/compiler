@@ -223,7 +223,6 @@ pub impl Comp {
         }
         try self.checkLangItemRedef()
         try self.checkBlanketHeadless()
-        try self.checkNewtypeCycles()
         try self.checkDupParamLabels(sourceFuncLimit: sourceFuncLimit)
         mut val si: U64 = 0
         while si < self.arena.structCount() {
@@ -254,35 +253,6 @@ pub impl Comp {
                 }
             }
             ei += 1
-        }
-        return <Result.Ok value=() />
-    }
-
-    // A newtype whose underlying chain never reaches a concrete type (`newtype A = B` /
-    // `newtype B = A`) has no representation — resolution (llvmScalarTy and every other
-    // underlying-chase) would follow the chain forever, hanging the compiler on first
-    // use (audit-5 L5). Reject at declaration: more hops than there are newtypes is a
-    // cycle by pigeonhole.
-    inout fn checkNewtypeCycles() -> Result[(), CompileDiagnostic] {
-        mut val i: U64 = 0
-        while i < self.arena.newtypeCount() {
-            val nt: NewtypeDef = self.arena.newtypeAt(index: i)
-            mut val current = nt.underRef
-            mut val hops: U64 = 0U64
-            while current != 0U64 {
-                val type = self.arena.typeAt(index: current)
-                // Declaration checks run after registration. Resolve the
-                // authored span here as forward references may have been
-                // lowered before their target declaration was registered.
-                val next = self.newtypeUnderRef(start: type.nameStart, len: type.nameLen)
-                if next == 0U64 { break }
-                hops += 1U64
-                if hops > self.arena.newtypeCount() {
-                    return <Result.Err error=self.diagnosticAt(offset: nt.defOffset, msg: "newtype cycle: this newtype's underlying chain never reaches a concrete type (spec/10)") />
-                }
-                current = next
-            }
-            i += 1
         }
         return <Result.Ok value=() />
     }

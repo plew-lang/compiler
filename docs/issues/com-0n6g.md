@@ -293,3 +293,31 @@ its trait view during binding admission. Check and JIT reject the authored
 the first equation is available in this phase. The selected binding's
 authored recipe must supply the rest of the derivation before the newtype
 receipt is sealed.
+
+## Forward associated dependency and nominal cycle checkpoint
+
+The recoverable source-order rejection is covered by
+`nominal_newtype_chained_associated_binding`: while admitting the using
+binding, nominal admission requests and validates the recipes of the
+selected binding and its prerequisite. The regular sweep reuses these
+same receipts. Build `20261113T103313-build-345b03` (candidate
+`30c135bcb260`) accepted the previously rejected probe in check and JIT.
+
+The independent review of that candidate identified a second cycle route.
+If `Projector#Project.Item` normalizes to the newtype being admitted,
+the first ownership query can follow the loop before the late
+declaration-shape check. The candidate timed out after three seconds in
+both check and JIT. Newtype admission now requires a normalized newtype
+dependency before publishing its own receipt, and reuses the canonical
+newtype identity resolver used by conformance. The late name-based
+cycle check is superseded. Build `20261113T104206-build-f73518` (candidate
+`67386b9a5ebb`) passed twelve nominal fixtures in check, JIT and linked
+native, and all five nominal rejections in check and JIT, including the
+new projected-cycle diagnostic at line 4.
+
+Review also found an open admission permission on failure, unbounded
+expansion in an associated binding with ever-growing substitutions
+(SIGSEGV on `30c135bcb260` in check and JIT), and an inherited
+`factory(from: Bool)` overriding an exact, zero-cost newtype retag.
+The latter reproduces in both direct and projected newtypes in check
+and JIT. The independent review did not approve closure.

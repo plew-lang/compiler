@@ -83,10 +83,13 @@ impl Comp {
     inout fn readSelectedProjectionOutput(proof: StaticConformanceProof, traitOwner: U64, assocId: U64, requirement: Optional[AssociatedBindingRequirementRead] = <Optional.None />) -> Result[SelectedProjectionOutput, CompileDiagnostic] {
         val normalizations = try self.retainedProofProjectionContext(proof: proof)
         mut val output = 0U64
-        if self.associatedBindingAdmissionComplete {
+        if self.associatedBindingAdmissionComplete || self.activeNewtypeAnnotations.count() != 0U64 {
             val binding = try self.selectedAssociatedBinding(proof: proof, traitOwner: traitOwner, assocId: assocId)
             if binding.isSome() {
                 val selected = binding.unwrap()
+                if !self.associatedBindingAdmissionComplete {
+                    try self.admitAssociatedBindingRecipe(bindingIndex: selected.bindingIndex)
+                }
                 return self.readAssociatedBindingOutput(bindingIndex: selected.bindingIndex, proof: proof, witness: selected.witness, normalizations: normalizations, requirement: requirement)
             }
             output = try self.assumedProjectionOutput(proof: proof, traitOwner: traitOwner, assocId: assocId)
@@ -146,45 +149,64 @@ impl Comp {
 
     inout fn admitAssociatedBindingRecipes() -> Result[(), CompileDiagnostic] {
         for bindingIndex in 0U64..<self.decls.assocBindings.count() {
-            val binding = self.decls.assocBindings[bindingIndex]
-            val occurrence = try self.signatureOccurrence(id: binding.authoredTypeUse)
-            val source = match self.sourceTypeUses.scopeAt(token: occurrence.scope) {
-                Optional.Some(v: val source) => source,
-                Optional.None => { return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "associated binding lost its implementation scope", failureDomain: <FailureDomain.Internal />) /> },
-            }
-            val owner = match source.implementation {
-                Optional.Some(v: val owner) => owner,
-                Optional.None => { return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "associated binding lost its implementation owner", failureDomain: <FailureDomain.Internal />) /> },
-            }
-            match source.state {
-                SourceTypeScopeState.Lowered => {}
-                _ => { return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "associated binding implementation is not lowered", failureDomain: <FailureDomain.Internal />) /> }
-            }
-            val conformance = match owner.kind {
-                SourceImplementationKind.Conformance(index: val index) => index,
-                SourceImplementationKind.Inherent => { continue },
-            }
-            if conformance >= self.decls.conformCount() { return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "associated binding has an invalid conformance owner", failureDomain: <FailureDomain.Internal />) /> }
-            val declaration = self.decls.conformAt(index: conformance)
-            mut val ownsBinding = false
-            for index in 0U64..<declaration.assocBindingIds.count() {
-                if self.conformFuncIdAt(ids: declaration.assocBindingIds, index: index) == bindingIndex { ownsBinding = true }
-            }
-            if !ownsBinding || source.anchor != binding.implOffset || occurrence.site != binding.authoredTypeSite || declaration.traitStart != binding.traitOwner || !self.typeRefEq(a: occurrence.term, b: binding.ty) {
-                return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "associated binding has a foreign source occurrence", failureDomain: <FailureDomain.Internal />) />
-            }
-            val root = self.conformanceTraitBound(conformance: declaration)
-            val receiverTrait = self.decls.traitIndexByOffset(offset: owner.receiverTrait)
-            val selfParameter = if receiverTrait < self.decls.traitCount() { give self.decls.traitAt(index: receiverTrait).selfParamId } else { give 0U64 }
-            val scope = <DeclarationTypeScope origin=<DeclarationScopeOrigin.AssociatedBinding /> owner=conformance parameters=self.pushFuncBinds(binds: owner.parameters) selfParameter=selfParameter />
-            val assumptions = try self.declarationScopeAssumptions(scope: scope)
-            val scopes = <SignatureProofScopes local=scope assumptions=assumptions inherited=[] receiver=root.subject scopedBinders=true />
-            mut val validation = <SignatureRecipeValidation />
-            try self.checkAuthoredTypeRecipe(sourceScope: occurrence.scope, recipe: occurrence.recipe, edge: <AuthoredRecipeEdge.Source />, scopes: scopes, validation: inout validation, offset: occurrence.site)
-            self.authoredAssociatedBindings[bindingIndex] = <AuthoredAssociatedBinding conformance=conformance occurrence=binding.authoredTypeUse recipe=occurrence.recipe proofs=validation.proofs />
-            self.markAdmittedRecipeTypeUses(recipe: occurrence.recipe)
+            try self.admitAssociatedBindingRecipe(bindingIndex: bindingIndex)
         }
         self.associatedBindingAdmissionComplete = true
+        return <Result.Ok value=() />
+    }
+
+    // Nominal admission can demand a binding before the declaration sweep
+    // reaches it. Both callers publish the same checked recipe.
+    inout fn admitAssociatedBindingRecipe(bindingIndex: U64) -> Result[(), CompileDiagnostic] {
+        if self.authoredAssociatedBindings.contains(key: bindingIndex) { return <Result.Ok value=() /> }
+        if self.activeAssociatedBindingAdmissions.contains(bindingIndex) {
+            val binding = self.decls.assocBindings[bindingIndex]
+            return <Result.Err error=self.diagnosticAt(offset: binding.tyStart, msg: "associated binding output is cyclic", failureDomain: <FailureDomain.Source />) />
+        }
+        self.activeAssociatedBindingAdmissions.insert(bindingIndex)
+        val result = self.checkAndSaveAssociatedBindingRecipe(bindingIndex: bindingIndex)
+        self.activeAssociatedBindingAdmissions.remove(bindingIndex)
+        return result
+    }
+
+    inout fn checkAndSaveAssociatedBindingRecipe(bindingIndex: U64) -> Result[(), CompileDiagnostic] {
+        val binding = self.decls.assocBindings[bindingIndex]
+        val occurrence = try self.signatureOccurrence(id: binding.authoredTypeUse)
+        val source = match self.sourceTypeUses.scopeAt(token: occurrence.scope) {
+            Optional.Some(v: val source) => source,
+            Optional.None => { return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "associated binding lost its implementation scope", failureDomain: <FailureDomain.Internal />) /> },
+        }
+        val owner = match source.implementation {
+            Optional.Some(v: val owner) => owner,
+            Optional.None => { return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "associated binding lost its implementation owner", failureDomain: <FailureDomain.Internal />) /> },
+        }
+        match source.state {
+            SourceTypeScopeState.Lowered => {}
+            _ => { return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "associated binding implementation is not lowered", failureDomain: <FailureDomain.Internal />) /> }
+        }
+        val conformance = match owner.kind {
+            SourceImplementationKind.Conformance(index: val index) => index,
+            SourceImplementationKind.Inherent => { return <Result.Ok value=() /> },
+        }
+        if conformance >= self.decls.conformCount() { return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "associated binding has an invalid conformance owner", failureDomain: <FailureDomain.Internal />) /> }
+        val declaration = self.decls.conformAt(index: conformance)
+        mut val ownsBinding = false
+        for index in 0U64..<declaration.assocBindingIds.count() {
+            if self.conformFuncIdAt(ids: declaration.assocBindingIds, index: index) == bindingIndex { ownsBinding = true }
+        }
+        if !ownsBinding || source.anchor != binding.implOffset || occurrence.site != binding.authoredTypeSite || declaration.traitStart != binding.traitOwner || !self.typeRefEq(a: occurrence.term, b: binding.ty) {
+            return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "associated binding has a foreign source occurrence", failureDomain: <FailureDomain.Internal />) />
+        }
+        val root = self.conformanceTraitBound(conformance: declaration)
+        val receiverTrait = self.decls.traitIndexByOffset(offset: owner.receiverTrait)
+        val selfParameter = if receiverTrait < self.decls.traitCount() { give self.decls.traitAt(index: receiverTrait).selfParamId } else { give 0U64 }
+        val scope = <DeclarationTypeScope origin=<DeclarationScopeOrigin.AssociatedBinding /> owner=conformance parameters=self.pushFuncBinds(binds: owner.parameters) selfParameter=selfParameter />
+        val assumptions = try self.declarationScopeAssumptions(scope: scope)
+        val scopes = <SignatureProofScopes local=scope assumptions=assumptions inherited=[] receiver=root.subject scopedBinders=true />
+        mut val validation = <SignatureRecipeValidation />
+        try self.checkAuthoredTypeRecipe(sourceScope: occurrence.scope, recipe: occurrence.recipe, edge: <AuthoredRecipeEdge.Source />, scopes: scopes, validation: inout validation, offset: occurrence.site)
+        self.authoredAssociatedBindings[bindingIndex] = <AuthoredAssociatedBinding conformance=conformance occurrence=binding.authoredTypeUse recipe=occurrence.recipe proofs=validation.proofs />
+        self.markAdmittedRecipeTypeUses(recipe: occurrence.recipe)
         return <Result.Ok value=() />
     }
 
@@ -835,7 +857,7 @@ impl Comp {
         }
         self.activeNewtypeAnnotations.insert(index)
         val scope = <DeclarationTypeScope origin=<DeclarationScopeOrigin.Nominal /> owner=declaration.defOffset parameters=<FuncBindRange start=0U64 len=0U64 /> />
-        val result = self.admitNominalTypeAnnotation(id: declaration.authoredTypeUse, site: declaration.authoredTypeSite, term: declaration.underRef, token: declaration.sourceTypeScope, scope: scope)
+        val result = self.admitNominalTypeAnnotation(id: declaration.authoredTypeUse, site: declaration.authoredTypeSite, term: declaration.underRef, token: declaration.sourceTypeScope, scope: scope, admitUnderlying: true)
         self.activeNewtypeAnnotations.remove(index)
         val proof = try result
         if proof.sourceTerm != declaration.underRef {
@@ -923,7 +945,7 @@ impl Comp {
         return self.sourceTypeUses.useAt(index: id - 1U64).unwrap().term
     }
 
-    inout fn admitNominalTypeAnnotation(id: U64, site: U64, term: U64, token: U64, scope: DeclarationTypeScope) -> Result[LocalAnnotationProof, CompileDiagnostic] {
+    inout fn admitNominalTypeAnnotation(id: U64, site: U64, term: U64, token: U64, scope: DeclarationTypeScope, admitUnderlying: Bool = false) -> Result[LocalAnnotationProof, CompileDiagnostic] {
         val occurrence = try self.signatureOccurrence(id: id)
         val source = match self.sourceTypeUses.scopeAt(token: token) {
             Optional.Some(v: val source) => source,
@@ -945,6 +967,10 @@ impl Comp {
         try self.checkAuthoredTypeRecipe(sourceScope: token, recipe: occurrence.recipe, edge: <AuthoredRecipeEdge.Source />, scopes: scopes, validation: inout validation, offset: occurrence.site)
         val equations = validation.equations.getOr(key: occurrence.recipe, fallback: [])
         val sourceTerm = try self.replayProjectionNormalizations(ref: term, normalizations: equations, offset: occurrence.site)
+        if admitUnderlying {
+            val index = self.nominalNewtypeIndex(ref: sourceTerm)
+            if index < self.arena.newtypeCount() { try self.admitNewtypeAnnotation(index: index) }
+        }
         val proof = <LocalAnnotationProof occurrence=id recipe=occurrence.recipe sourceTerm=sourceTerm normalizations=equations proofs=validation.proofs />
         self.nominalAnnotationProofs[id] = proof
         self.nominalAnnotationSelections[occurrence.recipe] = <NominalAnnotationSelection sourceTerm=sourceTerm proofs=validation.proofs equations=equations />
@@ -2078,7 +2104,7 @@ impl Comp {
                     val projected = try self.replayProjectionChildren(ref: raw, normalizations: equations, offset: occurrence.site)
                     val output = match scope.origin {
                         DeclarationScopeOrigin.Nominal => {
-                            val selected = try self.readProjectionForNormalization(proof: proof, traitOwner: selector.traitInstance.owner, assocId: type.assocNameId)
+                            val selected = try self.readSelectedProjectionOutput(proof: proof, traitOwner: selector.traitInstance.owner, assocId: type.assocNameId)
                             for equation in selected.normalizations { try self.appendRetainedProjectionEquation(step: equation, normalizations: inout equations) }
                             give selected.immediate
                         }

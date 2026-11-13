@@ -1,0 +1,1 @@
+newtype underlying annotation has a cyclic dependency (spec/10)
