@@ -744,16 +744,21 @@ pub impl Comp {
         match self.arena.stmts[stmtId] {
             Stmt.Let(val mutable, val nameStart, val nameLen, val tyStart, val tyLen, val tyIsArray, val ty, val init) => {
                 try self.checkBoundsExpr(exprId: init)
+                val expected = try self.checkedLocalAnnotationType(stmtId: stmtId, written: ty)
                 if tyLen > 0U64 {
                     // checkGenericTypeMatch recurses into an array literal against Array[E].
-                    try self.checkGenericTypeMatch(expectedRef: ty, valueExpr: init)
+                    try self.checkGenericTypeMatch(expectedRef: expected, valueExpr: init)
                     // the annotated width bounds a context-typed integer literal here too: a
                     // generic body is NOT walked by the verify literal pass (Verify/Stmt), so
                     // without this `val x: U8 = 200 + 100` would skip the constant-range check
                     // and wrap at runtime instead of being rejected (spec/12: no wraparound).
-                    try self.checkLitSpanCtx(id: init, tyStart: tyStart, tyLen: tyLen, isArray: tyIsArray, ctxRef: ty)
+                    try self.checkLitSpanCtx(id: init, tyStart: tyStart, tyLen: tyLen, isArray: tyIsArray, ctxRef: expected)
                 }
-                try self.addLetLocal(nameStart: nameStart, nameLen: nameLen, tyStart: tyStart, tyLen: tyLen, tyIsArray: tyIsArray, ty: ty, init: init, mutable: mutable, owned: true)
+                if expected != ty {
+                    self.addLocal(nameStart: nameStart, nameLen: nameLen, tyStart: tyStart, tyLen: tyLen, isArray: tyIsArray, ty: expected, isInout: false, isMut: mutable, owned: true)
+                } else {
+                    try self.addLetLocal(nameStart: nameStart, nameLen: nameLen, tyStart: tyStart, tyLen: tyLen, tyIsArray: tyIsArray, ty: ty, init: init, mutable: mutable, owned: true)
+                }
             }
             Stmt.Assign(val target, val value) => {
                 try self.checkBoundsExpr(exprId: target)

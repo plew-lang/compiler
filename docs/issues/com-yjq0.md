@@ -251,3 +251,20 @@ value block and produces 255 on both carriers. Alternating same-source
 medians were 7.142997 s and 7.126682 s. Each carrier emitted the same
 nonempty LLVM in all eight runs. This compares the change against a
 baseline also above 7 s, with no increase attributable to this change.
+
+## Read the admitted local type during compatibility checking
+
+The ordinary and generic compatibility walks now acquire the
+owner-scoped binding and use its admitted source term for initializer
+compatibility. The occurrence map identifies the expected source use.
+A missing or foreign receipt is rejected instead of recovering a
+type from syntax. Existing global and synthesized bindings without
+an authored local occurrence retain their own paths.
+
+Fixed-input build `20261113T042841-build-73473e` produced `e692879e`.
+Compiler source check, seven existing runtime fixtures, projected
+literal control, lazy CLI and standard gen
+(`20261113T043203-gen-cfbe40`) passed. Six existing rejects matched the
+previous carrier's diagnostics. Alternating same-source medians were
+7.324725 s and 7.261029 s. LLVM was identical in all eight runs.
+This is a same-source comparison, not the formal fixed-point gate.

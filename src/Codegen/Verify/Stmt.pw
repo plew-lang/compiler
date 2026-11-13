@@ -5,9 +5,10 @@ pub impl Comp {
     inout fn verifyStmt(stmtId: U64) -> Result[(), CompileDiagnostic] {
         match self.arena.stmts[stmtId] {
             Stmt.Let(val mutable, val nameStart, val nameLen, val tyStart, val tyLen, val tyIsArray, val ty, val init) => {
+                val expected = try self.checkedLocalAnnotationType(stmtId: stmtId, written: ty)
                 // literal range against the annotation (or context-free if none).
                 if tyLen > 0U64 {
-                    try self.checkLitSpanCtx(id: init, tyStart: tyStart, tyLen: tyLen, isArray: tyIsArray, ctxRef: ty)
+                    try self.checkLitSpanCtx(id: init, tyStart: tyStart, tyLen: tyLen, isArray: tyIsArray, ctxRef: expected)
                 } else {
                     try self.checkLitCtx(id: init, eKind: 0, eBits: 0, eSgn: false)
                 }
@@ -36,7 +37,7 @@ pub impl Comp {
                     }
                 }
                 if tyLen > 0U64 {
-                    try self.tcCheckValue(expectedRef: ty, valueExpr: init, pos: "let")
+                    try self.tcCheckValue(expectedRef: expected, valueExpr: init, pos: "let")
                     // an array binding's literal elements (`Array[I64] = ["a", "b"]`):
                     // category-check each element against the declared element type (tyStart
                     // names the element for an array annotation).
@@ -47,8 +48,8 @@ pub impl Comp {
                                 // arg (`Array[I64]` -> I64) if structured, else by name.
                                 mut val elemRef: U64 = 0
                                 if ty != 0U64 {
-                                    if self.arena.typeAt(index: ty).args.count() > 0U64 {
-                                        elemRef = self.arena.typeAt(index: ty).args[0]
+                                    if self.arena.typeAt(index: expected).args.count() > 0U64 {
+                                        elemRef = self.arena.typeAt(index: expected).args[0]
                                     }
                                 }
                                 mut val ek: U64 = 0
@@ -65,8 +66,8 @@ pub impl Comp {
                                 // concrete primitives (a struct/generic element is left to the
                                 // existing machinery — conservative).
                                 if ty != 0U64 {
-                                    if self.arena.typeAt(index: ty).args.count() > 0U64 {
-                                        val de: TypeRef = self.arena.typeAt(index: self.arena.typeAt(index: ty).args[0])
+                                    if self.arena.typeAt(index: expected).args.count() > 0U64 {
+                                        val de: TypeRef = self.arena.typeAt(index: self.arena.typeAt(index: expected).args[0])
                                         val it: TypeInfo = (try self.typeOf(id: init))
                                         if it.kind == 3 {
                                             if it.nameLen > 0U64 {
@@ -87,7 +88,7 @@ pub impl Comp {
                 }
                 // register the binding (after the init, so it can't see itself) with its
                 // effective type and mutability, so later places resolve / check.
-                val le: LetEff = (try self.inferLetType(tyStart: tyStart, tyLen: tyLen, tyIsArray: tyIsArray, ty: ty, init: init))
+                val le: LetEff = (try self.inferLetType(tyStart: tyStart, tyLen: tyLen, tyIsArray: tyIsArray, ty: expected, init: init))
                 // an UN-annotated array-literal binding infers `Array[E]` from its FIRST
                 // element (inferLetType); the remaining elements must be checked against
                 // that E exactly like the annotated loop above — without this a

@@ -31,6 +31,31 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
+    // Compatibility checks within the source request use the same admitted
+    // type as the initializer. The occurrence map supplies identity only.
+    inout fn checkedLocalAnnotationType(stmtId: U64, written: U64) -> Result[U64, CompileDiagnostic] {
+        val occurrence = self.localAnnotationOccurrences.getOr(key: stmtId, fallback: 0U64)
+        if occurrence == 0U64 { return <Result.Ok value=written /> }
+        val site = self.stmtPrincipalOffset(sid: stmtId)
+        val owner = match self.currentSourceOwner() {
+            Optional.Some(v: val owner) => owner,
+            Optional.None => { return <Result.Err error=self.diagnosticAt(offset: site, msg: "checked local annotation has no source owner", failureDomain: <FailureDomain.Internal />) /> },
+        }
+        val binding = match self.sourceFacts.binding(owner: owner, stmtId: stmtId) {
+            Optional.Some(v: val binding) => binding,
+            Optional.None => { return <Result.Err error=self.diagnosticAt(offset: site, msg: "checked local annotation has no source binding", failureDomain: <FailureDomain.Internal />) /> },
+        }
+        match binding.annotation {
+            Optional.Some(v: val annotation) => {
+                if annotation.occurrence == occurrence && semanticCompletionOwnersEqual(recorded: binding.owner, prepared: owner) {
+                    return <Result.Ok value=annotation.sourceTerm />
+                }
+            }
+            Optional.None => {}
+        }
+        return <Result.Err error=self.diagnosticAt(offset: site, msg: "checked local annotation has no matching source proof", failureDomain: <FailureDomain.Internal />) />
+    }
+
     inout fn scopeMark() -> U64 {
         return self.cur.locals.count()
     }

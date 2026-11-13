@@ -339,6 +339,23 @@ impl SourceFactDirectory {
         }
         return <Optional.None />
     }
+    fn binding(owner: SemanticCompletionOwner, stmtId: U64) -> Optional[SourceBindingFact] {
+        if self.isActive(owner: owner) { return readSourceRow(rows: self.activeBuilder.data.bindings, keys: self.activeBuilder.data.bindingKeys, key: stmtId) }
+        match self.state(owner: owner) {
+            Optional.Some(v: val state) => {
+                match state {
+                    SourceBodyState.Building => {
+                        val builder = self.inactiveBuilder(owner: owner)
+                        return readSourceRow(rows: builder.data.bindings, keys: builder.data.bindingKeys, key: stmtId)
+                    }
+                    SourceBodyState.Succeeded(reader: val reader) => { return self.readers[reader].binding(stmtId: stmtId) }
+                    _ => {}
+                }
+            }
+            Optional.None => {}
+        }
+        return <Optional.None />
+    }
     fn statement(owner: SemanticCompletionOwner, stmtId: U64) -> Optional[SemanticExpressionCompletion] {
         if self.isActive(owner: owner) { return readSourceRow(rows: self.activeBuilder.data.statements, keys: self.activeBuilder.data.statementKeys, key: stmtId) }
         match self.state(owner: owner) {
