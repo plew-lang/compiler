@@ -596,3 +596,26 @@ entries have real declaration or body owners. In particular check the
 handoff of retained lexical operand equations under instantiation,
 including an associated-constraint consumer, rather than inferring it
 from the supertrait runtime cases.
+
+### Replay an associated constraint with open inherited Self
+
+On `0b42d25c39ee`, `type Output: Reader[Self#Kind.Item]` is admitted
+under its inherited Kind premise. A conformer binding Kind.Item to I64
+and Output to an actual Reader[I64] still rejects because conformance
+checking compares the Reader instance before normalizing the substituted
+arguments. Use the existing supertrait input-normalization protocol
+before SourceAdmission. The associated clause row keeps those equations
+for the selected Reader proof and later method call.
+
+Build `20261113T142440-build-7d17f7` produced `8dfbfd952d69`. The
+generic Reader call now returns 42 in check-accepted JIT and linked
+native execution. A Reader[Bool] on the same Output still rejects at
+the associated binding in check and JIT. Five existing controls pass
+in JIT, and fixed-input generation `20261113T142810-gen-24f4e4` passed.
+
+Two compatibility callers remain: the declaration sweep in Verify and
+the request-local sweep used by Record. The latter has a lexical fallback,
+while both still call a separate source resolver for extension
+applicability. Before removing either caller, cover explicit impl
+receiver arguments and type-qualified source arguments, then show that
+the same saved source recipe drives their consumers.

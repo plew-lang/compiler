@@ -1102,14 +1102,16 @@ pub impl Comp {
         while index < declaration.assocBounds.len {
             val clause = declaration.assocBounds.start + index
             val original = try self.conformanceAssociatedDeclarationBound(conformance: conformance, conformanceIndex: conformIndex, traitIndex: traitIndex, clause: clause, outputs: outputs)
-            val proof = try self.viewedTraitConstraintProof(demand: <ConformanceProofDemand.SourceAdmission />, ref: original.subject, constraint: original.constraint, assumptions: assumptions)
+            val demand = <ConformanceProofDemand.SourceAdmission />
+            mut val normalizations: Array[ProjectionNormalizationStep] = []
+            try self.recordBoundInputProjectionEquations(bound: original, assumptions: assumptions, normalizations: inout normalizations, demand: demand)
+            val expected = try self.replayBoundNormalizations(bound: original, normalizations: normalizations)
+            val proof = try self.viewedTraitConstraintProof(demand: demand, ref: expected.subject, constraint: expected.constraint, assumptions: assumptions)
             if self.proofIsMissing(proof: proof) {
                 return <Result.Err error=self.diagnosticAt(offset: original.offset, msg: "associated type does not satisfy its declared trait constraint") />
             }
-            // Preserve the exact SourceAdmission inputs. Recording afterward
-            // cannot change the selected proof or replace its source provenance.
-            val normalizations = try self.recordSelectedBoundNormalizations(bound: original, proof: proof, assumptions: assumptions)
-            val expected = try self.replayBoundNormalizations(bound: original, normalizations: normalizations)
+            try self.recordBoundPredicateEquations(bound: original, proof: proof, assumptions: assumptions, normalizations: inout normalizations)
+            try self.checkProjectionNormalizations(normalizations: normalizations, offset: original.offset, assumptions: assumptions)
             try self.checkRetainedWitnessClause(expected: expected, proof: proof, normalizations: normalizations, offset: original.offset, assumptions: assumptions)
             evidence.append(<ConformanceAssociatedEvidence clause=clause bound=original proof=self.freezeStaticConformanceProof(proof: proof) normalizations=normalizations />)
             index += 1U64
