@@ -870,3 +870,24 @@ conformance rejected in check and JIT with the existing missing-instance
 Source diagnostic. Generation `20261113T160002-gen-66a5e4` passed. The
 open `Box[T, T#Source.Item]` case still needs substitution before
 comparing its projected child.
+
+### Match a conformance receiver with a dependent argument
+
+For `Box[T, T#Source.Item]`, directional matching gathers the binders
+from structural positions and leaves the projection for the saved
+receiver recipe. Once the selected impl conditions have evidence, the
+recipe reads the output from that evidence and compares the entire
+receiver. Proof-driven method calls use the retained witness bindings.
+Mono publishes the closed receiver type for Mid's source Self term.
+
+Candidate `97e8e0b72474` rejected the positive call. Fixed-input build
+`20261113T161129-build-ad3f8c` produced `565d494399f2`. Both argument
+orders passed check and JIT. The fixture with the projection before
+its binder also passed native execution with output 42. A mismatched
+output and an absent Source witness still reject in check and JIT.
+Closed, forward, provided and conditional controls passed check and
+JIT. Generation `20261113T161501-gen-690fd9` passed.
+
+The same dependent receiver on a direct inherent call and conservative
+overlap checks for still-open subject arguments need separate
+verification before closing this task.

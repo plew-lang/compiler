@@ -340,7 +340,11 @@ impl Comp {
         if self.activeNominalReceiverAdmissions.count() >= 64U64 {
             return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "implementation receiver analysis limit exceeded", failureDomain: <FailureDomain.Limit />) />
         }
-        val scope = <DeclarationTypeScope origin=<DeclarationScopeOrigin.Implementation /> owner=token parameters=self.pushFuncBinds(binds: owner.parameters) />
+        val parameters = self.pushFuncBinds(binds: owner.parameters)
+        val scope = match owner.kind {
+            SourceImplementationKind.Conformance(index: val index) => <DeclarationTypeScope origin=<DeclarationScopeOrigin.AssociatedBinding /> owner=index parameters=parameters />,
+            SourceImplementationKind.Inherent => <DeclarationTypeScope origin=<DeclarationScopeOrigin.Implementation /> owner=token parameters=parameters />,
+        }
         val scopes = <SignatureProofScopes local=scope assumptions=(try self.declarationScopeAssumptions(scope: scope)) inherited=[] receiver=0U64 scopedBinders=true />
         self.activeNominalReceiverAdmissions.insert(token)
         val result = self.checkTraitConstraintOperand(recipe: occurrence.recipe, term: owner.receiver, sourceScope: token, scopes: scopes, closedOnly: false)

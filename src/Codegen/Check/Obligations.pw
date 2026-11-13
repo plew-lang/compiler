@@ -632,7 +632,11 @@ pub impl Comp {
         mut val arguments = self.providedProofArguments(f: function, proof: proof)
         while arguments.count() < function.typeParams.count() { arguments.append(0U64) }
         if function.typeParams.count() == 0U64 { return <Result.Ok value=arguments /> }
-        val bindings = try self.methodReceiverEnvironment(f: function, instRef: receiver)
+        val bindings = if function.originTraitOwner != 0U64 && self.nominalConformanceReceiverScopes.count() != 0U64 && self.selectedImplementationDeclarationMatches(function: function, proof: proof, receiverRef: receiver) {
+            give self.proofWitnessForTrait(proof: proof, traitIdx: self.decls.traitIndexByOffset(offset: function.originTraitOwner))
+        } else {
+            give try self.methodReceiverEnvironment(f: function, instRef: receiver)
+        }
         mut val index = 0U64
         while index < function.typeParams.count() {
             val parameter = self.funcBindAt(binds: function.typeParams, index: index)

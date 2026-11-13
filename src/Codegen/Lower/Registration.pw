@@ -496,7 +496,8 @@ pub impl Comp {
     // `ignoreTopView` is used only for receiver dispatch. A view chooses the
     // callable source; it does not replace the receiver's base type pattern.
     // Nested views remain ordinary type identity and must still match exactly.
-    inout fn unifyPatterns(a: U64, aSide: U64, b: U64, bSide: U64, aParams: PatternBindInput, bParams: PatternBindInput, binds: inout Array[UnifyBind], ignoreTopView: Bool = false) -> Bool {
+    inout fn unifyPatterns(a: U64, aSide: U64, b: U64, bSide: U64, aParams: PatternBindInput, bParams: PatternBindInput, binds: inout Array[UnifyBind], ignoreTopView: Bool = false, deferPatternProjections: Bool = false) -> Bool {
+        if deferPatternProjections && aSide == 0U64 && a < self.arena.typeCount() && self.arena.typeTermAt(index: a).assocNameId != 0U64 { return true }
         mut val aScope: PatternBindInput = aParams
         if aSide != 0U64 { aScope = bParams }
         mut val bScope: PatternBindInput = aParams
@@ -509,10 +510,10 @@ pub impl Comp {
                 val count = self.arena.typeViewArgumentCount(ref: a)
                 if count != self.arena.typeViewArgumentCount(ref: b) { return false }
                 for index in 0U64..<count {
-                    if !self.unifyPatterns(a: self.arena.typeViewArgumentAt(ref: a, index: index), aSide: aSide, b: self.arena.typeViewArgumentAt(ref: b, index: index), bSide: bSide, aParams: aParams, bParams: bParams, binds: inout binds) { return false }
+                    if !self.unifyPatterns(a: self.arena.typeViewArgumentAt(ref: a, index: index), aSide: aSide, b: self.arena.typeViewArgumentAt(ref: b, index: index), bSide: bSide, aParams: aParams, bParams: bParams, binds: inout binds, deferPatternProjections: deferPatternProjections) { return false }
                 }
             }
-            return self.unifyPatterns(a: self.typeRefWithoutOuterViews(ref: a), aSide: aSide, b: self.typeRefWithoutOuterViews(ref: b), bSide: bSide, aParams: aParams, bParams: bParams, binds: inout binds)
+            return self.unifyPatterns(a: self.typeRefWithoutOuterViews(ref: a), aSide: aSide, b: self.typeRefWithoutOuterViews(ref: b), bSide: bSide, aParams: aParams, bParams: bParams, binds: inout binds, deferPatternProjections: deferPatternProjections)
         }
         val av: U64 = self.plainBinder(ref: a, params: aScope)
         val bv: U64 = self.plainBinder(ref: b, params: bScope)
@@ -523,14 +524,14 @@ pub impl Comp {
             val binderId: U64 = self.binderIdentity(b: aScope.at(index: av, declarations: self.decls, functions: self.arena))
             val found: U64 = self.unificationBindingIndex(binds: binds, side: aSide, binderId: binderId)
             if found < binds.count() {
-                return self.unifyPatterns(a: binds[found].ref, aSide: binds[found].refSide, b: b, bSide: bSide, aParams: aParams, bParams: bParams, binds: inout binds, ignoreTopView: ignoreTopView)
+                return self.unifyPatterns(a: binds[found].ref, aSide: binds[found].refSide, b: b, bSide: bSide, aParams: aParams, bParams: bParams, binds: inout binds, ignoreTopView: ignoreTopView, deferPatternProjections: deferPatternProjections)
             }
             if self.occursInPattern(side: aSide, binderId: binderId, ref: b, refSide: bSide, aParams: aParams, bParams: bParams, binds: binds) { return false }
             binds.append(<UnifyBind side=aSide nameId=binderId ref=b refSide=bSide />)
             return true
         }
         if bv < bScope.count() {
-            return self.unifyPatterns(a: b, aSide: bSide, b: a, bSide: aSide, aParams: aParams, bParams: bParams, binds: inout binds, ignoreTopView: ignoreTopView)
+            return self.unifyPatterns(a: b, aSide: bSide, b: a, bSide: aSide, aParams: aParams, bParams: bParams, binds: inout binds, ignoreTopView: ignoreTopView, deferPatternProjections: deferPatternProjections)
         }
         if a == 0U64 || b == 0U64 || a >= self.arena.typeCount() || b >= self.arena.typeCount() { return a == b }
         val ta: TypeTerm = self.arena.typeTermAt(index: a)
@@ -541,7 +542,7 @@ pub impl Comp {
             if count != self.typeTermRefChildCount(ref: b) { return false }
             mut val child = 0U64
             while child < count {
-                if self.typeTermRefIdentityChildLabel(ref: a, index: child) != self.typeTermRefIdentityChildLabel(ref: b, index: child) || !self.unifyPatterns(a: self.typeTermRefChildRef(ref: a, index: child), aSide: aSide, b: self.typeTermRefChildRef(ref: b, index: child), bSide: bSide, aParams: aParams, bParams: bParams, binds: inout binds) { return false }
+                if self.typeTermRefIdentityChildLabel(ref: a, index: child) != self.typeTermRefIdentityChildLabel(ref: b, index: child) || !self.unifyPatterns(a: self.typeTermRefChildRef(ref: a, index: child), aSide: aSide, b: self.typeTermRefChildRef(ref: b, index: child), bSide: bSide, aParams: aParams, bParams: bParams, binds: inout binds, deferPatternProjections: deferPatternProjections) { return false }
                 child += 1U64
             }
             return true
@@ -554,7 +555,7 @@ pub impl Comp {
         if (!ignoreTopView && !(self.arena.typeViewSourceHeadsEqual(a: a, b: b))) || ta.isAny != tb.isAny || ta.isSendable != tb.isSendable || ta.isDiverging != tb.isDiverging || ta.assocTraitId != tb.assocTraitId || (ta.hasAssocTraitDecl && tb.hasAssocTraitDecl && ta.assocTraitDeclOffset != tb.assocTraitDeclOffset) || ta.assocNameId != tb.assocNameId || ta.args.len != tb.args.len || ta.assocTraitArgs.len != tb.assocTraitArgs.len { return false }
         mut val i: U64 = 0U64
         while i < ta.args.len {
-            if !(self.unifyPatterns(a: self.arena.typeArgumentAt(index: ta.args.start + i), aSide: aSide, b: self.arena.typeArgumentAt(index: tb.args.start + i), bSide: bSide, aParams: aParams, bParams: bParams, binds: inout binds)) { return false }
+            if !(self.unifyPatterns(a: self.arena.typeArgumentAt(index: ta.args.start + i), aSide: aSide, b: self.arena.typeArgumentAt(index: tb.args.start + i), bSide: bSide, aParams: aParams, bParams: bParams, binds: inout binds, deferPatternProjections: deferPatternProjections)) { return false }
             i += 1U64
         }
         i = 0U64
@@ -563,7 +564,7 @@ pub impl Comp {
             mut val bl: U64 = 0U64
             if i < ta.assocTraitArgLabels.len { al = self.arena.typeAssocArgumentLabelAt(index: ta.assocTraitArgLabels.start + i) }
             if i < tb.assocTraitArgLabels.len { bl = self.arena.typeAssocArgumentLabelAt(index: tb.assocTraitArgLabels.start + i) }
-            if al != bl || !(self.unifyPatterns(a: self.arena.typeAssocArgumentAt(index: ta.assocTraitArgs.start + i), aSide: aSide, b: self.arena.typeAssocArgumentAt(index: tb.assocTraitArgs.start + i), bSide: bSide, aParams: aParams, bParams: bParams, binds: inout binds)) { return false }
+            if al != bl || !(self.unifyPatterns(a: self.arena.typeAssocArgumentAt(index: ta.assocTraitArgs.start + i), aSide: aSide, b: self.arena.typeAssocArgumentAt(index: tb.assocTraitArgs.start + i), bSide: bSide, aParams: aParams, bParams: bParams, binds: inout binds, deferPatternProjections: deferPatternProjections)) { return false }
             i += 1U64
         }
         if !ignoreTopView && ta.assocNameId == 0U64 {
@@ -571,7 +572,7 @@ pub impl Comp {
             if count != self.arena.typeViewArgumentCount(ref: b) { return false }
             i = 0U64
             while i < count {
-                if !self.unifyPatterns(a: self.arena.typeViewArgumentAt(ref: a, index: i), aSide: aSide, b: self.arena.typeViewArgumentAt(ref: b, index: i), bSide: bSide, aParams: aParams, bParams: bParams, binds: inout binds) { return false }
+                if !self.unifyPatterns(a: self.arena.typeViewArgumentAt(ref: a, index: i), aSide: aSide, b: self.arena.typeViewArgumentAt(ref: b, index: i), bSide: bSide, aParams: aParams, bParams: bParams, binds: inout binds, deferPatternProjections: deferPatternProjections) { return false }
                 i += 1U64
             }
         }
@@ -759,7 +760,7 @@ pub impl Comp {
         return <Result.Ok value=(try self.conformancePatternMatchesTraitInstance(subjectId: cf.typeId, subjectTy: cf.subjectTy, subjectArgs: <PatternTypeInput.Conformance range=cf.subjectArgs />, typeParams: <PatternBindInput.Conformance range=cf.typeParams />, declaredTraitArgs: <PatternTypeInput.Conformance range=cf.traitArgs />, typeRef: typeRef, traitArgs: <PatternTypeInput.Values values=traitArgs />, traitArgsOpen: traitArgsOpen)) />
     }
 
-    inout fn conformanceWitnessMatch(conformIdx: U64, typeRef: U64, traitArgs: Array[U64], traitArgsOpen: Bool = false) -> Result[WitnessMatch, CompileDiagnostic] {
+    inout fn conformanceWitnessMatch(conformIdx: U64, typeRef: U64, traitArgs: Array[U64], traitArgsOpen: Bool = false, assumptions: Array[DeclarationBoundRef] = []) -> Result[WitnessMatch, CompileDiagnostic] {
         if conformIdx >= self.decls.conformCount() { return <Result.Ok value=<WitnessMatch /> />}
         if self.nominalConformanceReceiverScopes.count() != 0U64 {
             val token = self.nominalConformanceReceiverScopes.getOr(key: conformIdx, fallback: 0U64)
@@ -773,6 +774,26 @@ pub impl Comp {
             }
         }
         val cf: Conform = self.decls.conformAt(index: conformIdx)
+        if self.nominalConformanceReceiverScopes.count() != 0U64 && self.nominalConformanceReceiverScopes.contains(key: conformIdx) && self.arena.typeContainsAssociatedProjection(ref: cf.subjectTy) {
+            val matchRef = try self.conformancePhysicalSubject(typeRef: typeRef)
+            val params = <PatternBindInput.Conformance range=cf.typeParams />
+            mut val binds: Array[UnifyBind] = []
+            if !self.unifyPatterns(a: cf.subjectTy, aSide: 0U64, b: matchRef, bSide: 1U64, aParams: params, bParams: <PatternBindInput.Values values=[] />, binds: inout binds, ignoreTopView: true, deferPatternProjections: true) { return <Result.Ok value=<WitnessMatch /> /> }
+            val partial = self.witnessMatchFromUnify(conformIdx: conformIdx, typeParams: params, binds: binds)
+            if partial.binds.count() != cf.typeParams.count() { return <Result.Ok value=<WitnessMatch /> /> }
+            val witness = <WitnessMatch conformIdx=partial.conformIdx binds=partial.binds selfRef=typeRef />
+            match (try self.witnessWithConditions(witness: witness, assumptions: assumptions)) {
+                Optional.Some(v: val prepared) => {
+                    if !(try self.selectedNominalWitnessSubjectMatches(witness: prepared)) { return <Result.Ok value=<WitnessMatch /> /> }
+                    if !traitArgsOpen {
+                        val actual = try self.groundedWitnessTraitArgs(cf: cf, witness: prepared)
+                        if !self.sameResolvedTypeRefs(a: actual, b: traitArgs) { return <Result.Ok value=<WitnessMatch /> /> }
+                    }
+                    return <Result.Ok value=prepared />
+                }
+                Optional.None => { return <Result.Ok value=<WitnessMatch /> /> }
+            }
+        }
         return <Result.Ok value=(try self.conformancePatternWitnessMatch(conformIdx: conformIdx, subjectId: cf.typeId, subjectTy: cf.subjectTy, subjectArgs: <PatternTypeInput.Conformance range=cf.subjectArgs />, typeParams: <PatternBindInput.Conformance range=cf.typeParams />, declaredTraitArgs: <PatternTypeInput.Conformance range=cf.traitArgs />, typeRef: typeRef, traitArgs: <PatternTypeInput.Values values=traitArgs />, traitArgsOpen: traitArgsOpen)) />
     }
 

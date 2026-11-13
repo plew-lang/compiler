@@ -800,6 +800,15 @@ pub impl Comp {
                 if !self.traitNamespaceReceiverMatches(function: declaration, environment: environment) && !self.selectedImplementationDeclarationMatches(function: declaration, proof: environment.proof, receiverRef: receiver) { return false }
             }
         }
+        if function.originTraitOwner != 0U64 && self.nominalConformanceReceiverScopes.count() != 0U64 && self.selectedImplementationDeclarationMatches(function: function, proof: environment.proof, receiverRef: receiver) {
+            val witness = self.proofWitnessForTrait(proof: environment.proof, traitIdx: self.decls.traitIndexByOffset(offset: function.originTraitOwner))
+            if self.nominalConformanceReceiverScopes.contains(key: witness.conformIdx - 1U64) {
+                return match self.selectedNominalWitnessSubjectMatches(witness: witness) {
+                    Result.Ok(value: val matches) => matches,
+                    Result.Err(error: _) => false,
+                }
+            }
+        }
         val pattern = self.parametricSelfRef(f: function)
         if pattern == 0U64 || pattern >= self.arena.typeCount() { return false }
         val declared = self.groundTermInEnvironment(ref: pattern, params: environment.params, values: environment.args, selfRef: receiver)
@@ -4572,6 +4581,9 @@ pub impl Comp {
         val f = function
         match (try self.readRetainedCallableSignature(function: instance.fnIdx, environment: instance.environment)) {
             Optional.Some(v: val signature) => {
+                if f.hasRecv && self.nominalConformanceReceiverScopes.count() != 0U64 && self.arena.typeContainsAssociatedProjection(ref: f.recvTy) {
+                    self.recordBodyTypeTermResult(bodyId: bodyId, source: self.parametricSelfRef(f: f), result: signature.receiverType)
+                }
                 mut val index = 0U64
                 while index < f.params.count() {
                     self.recordBodyTypeTermResult(bodyId: bodyId, source: self.funcParamAt(params: f.params, index: index).ty, result: signature.parameterTypes[index])
