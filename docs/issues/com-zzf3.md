@@ -541,3 +541,17 @@ admission and selected output replay. The first `Parent[I64]` witness
 returned the exact legacy `Box[T]` binder. This exercises the shared
 continuation for the legacy route without exposing an internal API in
 the production compiler.
+
+## Requirement-associated substitution regression
+
+An isolated native control on `af4fa806` used a real admitted
+`Service[A]` requirement, its `Worker[Array[A]]: Service[Array[A]]`
+proof, and the requirement result reader. A nested `Source.Item`
+selected through `Parent.Input` already returns `Array[A]`. The
+reader then reapplies the requirement substitution and fails the
+exact `Array[A]` assertion. Removing the final substitution in the
+isolated control passes. A production repair must preserve substitution
+for still-lexical parts of a mixed RHS as well as already-instantiated
+children. The independent follow-up review also identified a possible
+same-shaped foreign condition premise, which needs an executable
+contrast at the boundary that owns the caller scope.
