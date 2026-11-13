@@ -936,3 +936,29 @@ The first same-source timing comparison generated empty LLVM files even
 though both processes exited successfully. Its timing and output
 equality are excluded from the performance record pending measurement
 with verified nonempty output.
+
+### Dependent inherent receiver lookup and body replay
+
+Candidate `8d596334c89f` checks a generic call whose receiver is still
+`Box[T, T#Source.Item]`, but JIT fails with an internal body-receiver
+mismatch after specializing it to `Box[Number, I64]`. A direct call on
+that concrete receiver instead fails during lookup. When both the inherent
+method and a trait-provided method are present, the same lookup defect
+selects the trait method (`7` rather than the inherent `42`). The control
+with an already-established `Item = I64` selects the inherent method and
+rejects a missing independent `Marker` bound without retrying the trait
+method. A different concrete `Item` continues to reject a call when no
+other method is present.
+
+The structural candidate match should obtain receiver binders first.
+Compare the receiver slot containing `T#Source.Item` using the relevant
+impl premise and the caller's evidence. Other `where` clauses are checked
+on the selected operation and cannot filter its priority. Publish the exact
+receiver substitution and proofs through the selected call, then replay
+the admitted receiver under that substitution during body instantiation.
+The source `DeclarationBoundRef.Implementation` clause and callable bound
+row are connected by `FuncBound.sourceClause` and the lexical impl owner.
+The final receiver check needs access to the retained callable constraints
+already present on the selected call. Currently `bodyInstanceEnvironment`
+compares the symbolic receiver before installing them. No repair or complete
+mode certification has been established for this increment.
