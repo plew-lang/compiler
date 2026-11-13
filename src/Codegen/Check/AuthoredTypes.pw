@@ -331,33 +331,47 @@ impl Comp {
         return self.checkTraitConstraintOperands(source: source, written: written, scopes: scopes, closedOnly: false)
     }
 
-    inout fn admitNominalImplementationReceivers() -> Result[Set[U64], CompileDiagnostic] {
-        mut val changed: Set[U64] = Set.new()
+    inout fn admitNominalImplementationReceiver(token: U64, owner: SourceImplementationOwner) -> Result[(), CompileDiagnostic] {
+        if self.authoredImplementationReceivers.contains(key: token) { return <Result.Ok value=() /> }
+        val occurrence = try self.signatureOccurrence(id: owner.receiverOccurrence)
+        if self.activeNominalReceiverAdmissions.contains(token) {
+            return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "implementation receiver depends on its own conformance", failureDomain: <FailureDomain.Source />) />
+        }
+        if self.activeNominalReceiverAdmissions.count() >= 64U64 {
+            return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "implementation receiver analysis limit exceeded", failureDomain: <FailureDomain.Limit />) />
+        }
+        val scope = <DeclarationTypeScope origin=<DeclarationScopeOrigin.Implementation /> owner=token parameters=self.pushFuncBinds(binds: owner.parameters) />
+        val scopes = <SignatureProofScopes local=scope assumptions=(try self.declarationScopeAssumptions(scope: scope)) inherited=[] receiver=0U64 scopedBinders=true />
+        self.activeNominalReceiverAdmissions.insert(token)
+        val result = self.checkTraitConstraintOperand(recipe: occurrence.recipe, term: owner.receiver, sourceScope: token, scopes: scopes, closedOnly: false)
+        self.activeNominalReceiverAdmissions.remove(token)
+        val proof = match (try result) {
+            Optional.Some(v: val proof) => proof,
+            Optional.None => { return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "implementation receiver lost its view admission", failureDomain: <FailureDomain.Internal />) /> },
+        }
+        self.authoredImplementationReceivers[token] = proof
+        self.markAdmittedRecipeTypeUses(recipe: proof.recipe)
+        match owner.kind {
+            SourceImplementationKind.Conformance(index: val index) => {
+                if !self.typeRefEq(a: owner.receiver, b: proof.sourceTerm) {
+                    val term = self.arena.typeAt(index: proof.sourceTerm)
+                    val arguments = self.pushConformTypes(types: term.args)
+                    self.decls.setAdmittedNominalConformanceSubject(index: index, term: proof.sourceTerm, arguments: arguments)
+                    self.changedNominalConformanceSubjects.insert(index)
+                }
+            }
+            SourceImplementationKind.Inherent => {}
+        }
+        return <Result.Ok value=() />
+    }
+
+    inout fn admitNominalImplementationReceivers() -> Result[(), CompileDiagnostic] {
         for token in 1U64..<(self.sourceTypeUses.scopeCount() + 1U64) {
             val source = self.sourceTypeUses.scopeAt(token: token).unwrap()
             if source.implementation.isNone() { continue }
             val owner = source.implementation.unwrap()
-            if owner.receiverOccurrence == 0U64 || !self.bodyTypeNeedsViewAdmission(ref: owner.receiver) { continue }
-            val occurrence = try self.signatureOccurrence(id: owner.receiverOccurrence)
-            val scope = <DeclarationTypeScope origin=<DeclarationScopeOrigin.Implementation /> owner=token parameters=self.pushFuncBinds(binds: owner.parameters) />
-            val scopes = <SignatureProofScopes local=scope assumptions=(try self.declarationScopeAssumptions(scope: scope)) inherited=[] receiver=0U64 scopedBinders=true />
-            match (try self.checkTraitConstraintOperand(recipe: occurrence.recipe, term: owner.receiver, sourceScope: token, scopes: scopes, closedOnly: false)) {
-                Optional.Some(v: val proof) => {
-                    self.authoredImplementationReceivers[token] = proof
-                    self.markAdmittedRecipeTypeUses(recipe: proof.recipe)
-                    match owner.kind {
-                        SourceImplementationKind.Conformance(index: val index) => {
-                            if !self.typeRefEq(a: owner.receiver, b: proof.sourceTerm) {
-                                val term = self.arena.typeAt(index: proof.sourceTerm)
-                                val arguments = self.pushConformTypes(types: term.args)
-                                self.decls.setAdmittedNominalConformanceSubject(index: index, term: proof.sourceTerm, arguments: arguments)
-                                changed.insert(index)
-                            }
-                        }
-                        SourceImplementationKind.Inherent => {}
-                    }
-                }
-                Optional.None => { return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "implementation receiver lost its view admission", failureDomain: <FailureDomain.Internal />) /> }
+            if owner.receiverOccurrence != 0U64 && self.bodyTypeNeedsViewAdmission(ref: owner.receiver) {
+                try self.admitNominalImplementationReceiver(token: token, owner: owner)
             }
         }
         if self.authoredImplementationReceivers.count() != 0U64 {
@@ -373,7 +387,7 @@ impl Comp {
                 }
             }
         }
-        return <Result.Ok value=changed />
+        return <Result.Ok value=() />
     }
 
     inout fn indexConformanceArgumentScopes() {
@@ -383,6 +397,9 @@ impl Comp {
             val owner = source.implementation.unwrap()
             match owner.kind {
                 SourceImplementationKind.Conformance(index: val index) => {
+                    if owner.receiverOccurrence != 0U64 && self.arena.typeContainsAssociatedProjection(ref: owner.receiver) {
+                        self.nominalConformanceReceiverScopes[index] = token
+                    }
                     for argument in owner.receiverArguments {
                         if owner.receiverTrait != 0U64 && self.bodyTypeNeedsViewAdmission(ref: argument) {
                             self.conformanceSubjectScopes[index] = token

@@ -1,0 +1,12 @@
+use @Std/Io only { print }
+trait Source { type Item }
+trait Answer { type Item }
+trait Mark[T] { fn read() -> I64 }
+struct Number {}
+struct Box[T] {}
+struct Value {}
+impl Value as Mark[Box[I64]#Answer.Item] { fn read() -> I64 { return 42I64 } }
+impl Box[Number#Source.Item] as Answer { type Item = I64 }
+impl Number as Source { type Item = I64 }
+fn read[T](value: T) -> I64 where T: Mark[I64] { return value.read() }
+fn main() { print(read(value: <Value />)) }

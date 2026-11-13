@@ -850,3 +850,23 @@ matching `Box[Number, I64]` despite `T: Source`. It needs the
 directional binder substitution and the saved projection recipe
 before comparing that part of the subject. Keep both controls under
 this task's declaration-to-consumer guarantee.
+
+### Admit a projected nominal subject before matching its witness
+
+Conformance registration indexes the authored scope for nominal subjects
+that contain a projection. Witness matching requests the existing recipe
+admission for a candidate with the same receiver head before matching its
+subject. Admission publishes the result once and skips an in-progress
+candidate during nested lookup, so a conformance cannot supply evidence
+for its own pending receiver. The ordinary declaration pass still admits
+all remaining receivers and checks normalized subject overlaps.
+
+Candidate `e58ae4f055f6` rejected the forward dependency. Fixed-input
+build `20261113T155635-build-9b419f` produced `97e8e0b72474`. The forward
+projection passed check, JIT and linked native execution with output 42.
+The prior projected witness and normalized duplicate retained their
+expected outcomes. An impl whose receiver requires its own unestablished
+conformance rejected in check and JIT with the existing missing-instance
+Source diagnostic. Generation `20261113T160002-gen-66a5e4` passed. The
+open `Box[T, T#Source.Item]` case still needs substitution before
+comparing its projected child.

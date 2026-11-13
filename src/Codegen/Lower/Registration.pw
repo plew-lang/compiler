@@ -761,6 +761,17 @@ pub impl Comp {
 
     inout fn conformanceWitnessMatch(conformIdx: U64, typeRef: U64, traitArgs: Array[U64], traitArgsOpen: Bool = false) -> Result[WitnessMatch, CompileDiagnostic] {
         if conformIdx >= self.decls.conformCount() { return <Result.Ok value=<WitnessMatch /> />}
+        if self.nominalConformanceReceiverScopes.count() != 0U64 {
+            val token = self.nominalConformanceReceiverScopes.getOr(key: conformIdx, fallback: 0U64)
+            if token != 0U64 && !self.authoredImplementationReceivers.contains(key: token) {
+                val owner = self.sourceTypeUses.scopeAt(token: token).unwrap().implementation.unwrap()
+                val physical = try self.conformancePhysicalSubject(typeRef: typeRef)
+                if !self.typeTermRefSameHead(a: owner.receiver, b: physical) || self.activeNominalReceiverAdmissions.contains(token) {
+                    return <Result.Ok value=<WitnessMatch /> />
+                }
+                try self.admitNominalImplementationReceiver(token: token, owner: owner)
+            }
+        }
         val cf: Conform = self.decls.conformAt(index: conformIdx)
         return <Result.Ok value=(try self.conformancePatternWitnessMatch(conformIdx: conformIdx, subjectId: cf.typeId, subjectTy: cf.subjectTy, subjectArgs: <PatternTypeInput.Conformance range=cf.subjectArgs />, typeParams: <PatternBindInput.Conformance range=cf.typeParams />, declaredTraitArgs: <PatternTypeInput.Conformance range=cf.traitArgs />, typeRef: typeRef, traitArgs: <PatternTypeInput.Values values=traitArgs />, traitArgsOpen: traitArgsOpen)) />
     }
