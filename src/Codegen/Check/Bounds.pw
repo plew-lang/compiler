@@ -192,7 +192,7 @@ pub impl Comp {
         path.append(owner)
         mut val clause = 0U64
         while clause < declaration.supertraits.count() {
-            val parent = self.traitConstraintInBound(constraint: self.traitConstraintAt(constraints: declaration.supertraits, index: clause), bound: bound, traitIndex: index)
+            val parent = self.traitConstraintInBound(constraint: self.semanticSupertraitConstraintAt(constraints: declaration.supertraits, index: clause), bound: bound, traitIndex: index)
             val item = self.existentialIterationItemInBound(bound: <TraitBound subject=bound.subject constraint=parent offset=bound.offset />, visited: path, requiredOwner: requiredOwner)
             if item != 0U64 { return item }
             clause += 1U64
@@ -407,7 +407,7 @@ pub impl Comp {
         val declaration = self.decls.traitAt(index: traitIdx)
         mut val index = 0U64
         while index < declaration.supertraits.count() {
-            val constraint = self.traitConstraintAt(constraints: declaration.supertraits, index: index)
+            val constraint = self.semanticSupertraitConstraintAt(constraints: declaration.supertraits, index: index)
             val target = self.decls.traitIndexByOffset(offset: constraint.key.owner)
             if target < self.decls.traitCount() {
                 mut val steps = path
@@ -667,7 +667,7 @@ pub impl Comp {
             if step.traitIndex >= self.decls.traitCount() { return self.missingTraitBound() }
             val declaration = self.decls.traitAt(index: step.traitIndex)
             if declaration.nameStart != bound.constraint.key.owner || step.boundIndex >= declaration.supertraits.count() { return self.missingTraitBound() }
-            val required = self.traitConstraintAt(constraints: declaration.supertraits, index: step.boundIndex)
+            val required = self.semanticSupertraitConstraintAt(constraints: declaration.supertraits, index: step.boundIndex)
             mut val constraint = self.traitConstraintInBound(constraint: required, bound: bound, traitIndex: step.traitIndex)
             if normalizeInstance {
                 val key = constraint.key
@@ -832,7 +832,7 @@ pub impl Comp {
         while index < declaration.supertraits.count() {
             // Preparing this edge uses only its source environment. Recursing
             // into inherited normalization here would re-enter this traversal.
-            val constraint = self.traitConstraintInShape(constraint: self.traitConstraintAt(constraints: declaration.supertraits, index: index), bound: bound, shape: declaration, includeInherited: false)
+            val constraint = self.traitConstraintInShape(constraint: self.semanticSupertraitConstraintAt(constraints: declaration.supertraits, index: index), bound: bound, shape: declaration, includeInherited: false)
             val parent = <TraitBound subject=bound.subject constraint=constraint offset=bound.offset />
             mut val nextSteps = steps
             if retainPath { nextSteps.append(<SupertraitRef traitIndex=traitIndex boundIndex=index />) }
@@ -1254,7 +1254,7 @@ pub impl Comp {
         val demand = <ConformanceProofDemand.SourceAdmission />
         mut val clause = 0U64
         while clause < traitDef.supertraits.count() {
-            val required = self.traitConstraintAt(constraints: traitDef.supertraits, index: clause)
+            val required = self.semanticSupertraitConstraintAt(constraints: traitDef.supertraits, index: clause)
             val constraint = self.traitConstraintInBound(constraint: required, bound: root, traitIndex: traitIndex)
             val original = <TraitBound subject=conformance.subjectTy constraint=constraint offset=conformance.typeStart />
             mut val normalizations: Array[ProjectionNormalizationStep] = []
@@ -1281,7 +1281,7 @@ pub impl Comp {
             Optional.Some(v: val evidence) => evidence,
             Optional.None => { return <Result.Err error=self.diagnosticAt(offset: owner.typeStart, msg: "supertrait edge has no retained declaration evidence", failureDomain: <FailureDomain.Internal />) /> },
         }
-        val required = self.traitConstraintAt(constraints: trait.supertraits, index: step.boundIndex)
+        val required = self.semanticSupertraitConstraintAt(constraints: trait.supertraits, index: step.boundIndex)
         // The producer has already substituted this clause in the impl's
         // declaration environment. Verify the exact slot and its shape;
         // reinterpret only the saved terms in the selected instance.

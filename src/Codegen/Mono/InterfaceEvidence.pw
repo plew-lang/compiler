@@ -475,7 +475,7 @@ impl Comp {
                             StaticConformanceProof.AssumedSupertraitPath(source: val source, steps: val steps) => self.assumedSupertraitBound(source: source, steps: steps),
                             _ => { return <Result.Err error=self.diagnosticAt(offset: saved.bound.offset, msg: "interface associated condition lost its original prerequisite") /> },
                         }
-                        val clause = self.decls.traitAssociatedBoundPool[saved.clause]
+                        val clause = self.semanticTraitAssociatedBound(index: saved.clause)
                         val output = try self.associatedOutputInProof(proof: prerequisite, traitOwner: parent.constraint.key.owner, assocId: clause.member)
                         if output == 0U64 { return <Result.Err error=self.diagnosticAt(offset: saved.bound.offset, msg: "selected interface prerequisite has no associated output") /> }
                         match (try self.replaySelectedAssociatedConstraint(index: index, selected: prerequisite, projectionRef: projection, receiverRef: output, context: <Optional.Some v=context />, inherited: context.normalizations)) {

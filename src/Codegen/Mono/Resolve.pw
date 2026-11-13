@@ -632,7 +632,7 @@ pub impl Comp {
         if clauseIndex < declaration.assocBounds.start || clauseIndex - declaration.assocBounds.start >= declaration.assocBounds.len || clauseIndex >= self.decls.traitAssociatedBoundPool.count() {
             return <Result.Err error=self.diagnosticAt(offset: offset, msg: "associated assumption has an invalid declaration clause") />
         }
-        val clause = self.decls.traitAssociatedBoundPool[clauseIndex]
+        val clause = self.semanticTraitAssociatedBound(index: clauseIndex)
         if clause.member != projection.assocNameId {
             return <Result.Err error=self.diagnosticAt(offset: offset, msg: "associated assumption has an invalid declaration clause") />
         }

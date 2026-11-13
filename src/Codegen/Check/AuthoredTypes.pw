@@ -158,6 +158,98 @@ impl Comp {
         return self.readAuthoredTypeRecipe(proofs: saved.proofs, recipe: saved.recipe, environment: environment, memo: inout memo, context: <SignatureRecipeContext.AssociatedBinding requirement=requirement />)
     }
 
+    inout fn admitClosedTraitConstraintOperands() -> Result[(), CompileDiagnostic] {
+        if self.authoredSupertraitOperands.count() == 0U64 && self.authoredAssociatedConstraintOperands.count() == 0U64 { return <Result.Ok value=() /> }
+        for index in 0U64..<self.decls.traitCount() {
+            val declaration = self.decls.traitAt(index: index)
+            for position in 0U64..<declaration.supertraits.count() {
+                val slot = declaration.supertraits.start + position
+                match self.authoredSupertraitOperands.get(key: slot) {
+                    Optional.Some(v: val source) => {
+                        val written = self.traitConstraintAt(constraints: declaration.supertraits, index: position)
+                        val admitted = try self.checkClosedTraitConstraintOperands(source: source, written: written, owner: declaration.nameStart)
+                        if admitted.checked.count() != 0U64 { self.admittedSupertraitOperands[slot] = admitted }
+                    }
+                    Optional.None => {}
+                }
+            }
+            for position in 0U64..<declaration.assocBounds.len {
+                val slot = declaration.assocBounds.start + position
+                match self.authoredAssociatedConstraintOperands.get(key: slot) {
+                    Optional.Some(v: val source) => {
+                        val written = self.decls.traitAssociatedBoundPool[slot].constraint
+                        val admitted = try self.checkClosedTraitConstraintOperands(source: source, written: written, owner: declaration.nameStart)
+                        if admitted.checked.count() != 0U64 { self.admittedAssociatedConstraintOperands[slot] = admitted }
+                    }
+                    Optional.None => {}
+                }
+            }
+        }
+        return <Result.Ok value=() />
+    }
+
+    inout fn checkClosedTraitConstraintOperands(source: AuthoredTraitConstraintOperands, written: TraitConstraint, owner: U64) -> Result[AdmittedTraitConstraintOperands, CompileDiagnostic] {
+        val scope = self.sourceTypeUses.scopeAt(token: source.scope)
+        if scope.isNone() || scope.unwrap().anchor != owner || written.key.positionalArgs.count() != source.arguments.count() || written.assocPredicates.count() != source.predicates.count() {
+            return <Result.Err error=self.diagnosticAt(offset: owner, msg: "trait constraint has foreign operands", failureDomain: <FailureDomain.Internal />) />
+        }
+        match scope.unwrap().kind {
+            SourceTypeScopeKind.TraitDeclaration => {}
+            _ => { return <Result.Err error=self.diagnosticAt(offset: owner, msg: "trait constraint has a foreign declaration scope", failureDomain: <FailureDomain.Internal />) /> }
+        }
+        match scope.unwrap().state {
+            SourceTypeScopeState.Lowered => {}
+            _ => { return <Result.Err error=self.diagnosticAt(offset: owner, msg: "trait constraint declaration scope is unfinished", failureDomain: <FailureDomain.Internal />) /> }
+        }
+        mut val arguments = written.key.positionalArgs
+        mut val predicates = written.assocPredicates
+        mut val checked: Array[LocalAnnotationProof] = []
+        for index in 0U64..<source.arguments.count() {
+            val proof = try self.checkClosedTraitConstraintOperand(recipe: source.arguments[index], term: arguments[index], sourceScope: source.scope, owner: owner)
+            if proof.isSome() {
+                arguments[index] = proof.unwrap().sourceTerm
+                checked.append(proof.unwrap())
+            }
+        }
+        for index in 0U64..<source.predicates.count() {
+            val predicate = predicates[index]
+            val proof = try self.checkClosedTraitConstraintOperand(recipe: source.predicates[index], term: predicate.value, sourceScope: source.scope, owner: owner)
+            if proof.isSome() {
+                predicates[index] = <TraitAssocPredicate member=predicate.member value=proof.unwrap().sourceTerm span=predicate.span />
+                checked.append(proof.unwrap())
+            }
+        }
+        for proof in checked { self.markAdmittedRecipeTypeUses(recipe: proof.recipe) }
+        val constraint = <TraitConstraint key=<TraitInstanceKey owner=written.key.owner positionalArgs=arguments /> positionalArgsOpen=written.positionalArgsOpen assocPredicates=predicates />
+        return <Result.Ok value=<AdmittedTraitConstraintOperands constraint=constraint checked=checked /> />
+    }
+
+    inout fn closedWithoutDeclarationBinders(ref: U64) -> Bool {
+        if self.arena.typeIsClosed(ref: ref) { return true }
+        val term = self.arena.typeTermAt(index: ref)
+        if term.assocNameId == 0U64 && (term.paramId != 0U64 || (!term.isAny && rangeEquals(bytes: self.arena.bytes, start: term.nameStart, len: term.nameLen, kw: "Self"))) { return false }
+        for position in 0U64..<self.typeTermRefChildCount(ref: ref) {
+            if !self.closedWithoutDeclarationBinders(ref: self.typeTermRefChildRef(ref: ref, index: position)) { return false }
+        }
+        return true
+    }
+
+    inout fn checkClosedTraitConstraintOperand(recipe: U64, term: U64, sourceScope: U64, owner: U64) -> Result[Optional[LocalAnnotationProof], CompileDiagnostic] {
+        try self.checkTraitConstraintOperandRecipe(recipe: recipe, term: term, scope: sourceScope)
+        if !self.bodyTypeNeedsViewAdmission(ref: term) || !self.closedWithoutDeclarationBinders(ref: term) { return <Result.Ok value=<Optional.None /> /> }
+        val occurrence = try self.signatureOccurrence(id: self.sourceTypeUses.recipeAt(id: recipe).unwrap().occurrence)
+        val header = self.traitLexicalHeaders[owner]
+        val parameters = self.pushFuncBinds(binds: self.copyTraitBinds(binds: header.typeParams))
+        val scope = <DeclarationTypeScope origin=<DeclarationScopeOrigin.Nominal /> owner=owner parameters=parameters selfParameter=header.selfParamId />
+        val scopes = <SignatureProofScopes local=scope assumptions=[] inherited=[] receiver=0U64 scopedBinders=true />
+        mut val validation = <SignatureRecipeValidation />
+        try self.checkAuthoredTypeRecipe(sourceScope: sourceScope, recipe: recipe, edge: <AuthoredRecipeEdge.Source />, scopes: scopes, validation: inout validation, offset: occurrence.site)
+        val equations = validation.equations.getOr(key: recipe, fallback: [])
+        val normalized = try self.replayProjectionNormalizations(ref: term, normalizations: equations, offset: occurrence.site)
+        val proof = <LocalAnnotationProof occurrence=self.sourceTypeUses.recipeAt(id: recipe).unwrap().occurrence recipe=recipe sourceTerm=normalized normalizations=equations proofs=validation.proofs />
+        return <Result.Ok value=<Optional.Some v=proof /> />
+    }
+
     inout fn indexConformanceTargetScopes() {
         for token in 1U64..<(self.sourceTypeUses.scopeCount() + 1U64) {
             val source = self.sourceTypeUses.scopeAt(token: token).unwrap()
@@ -1841,7 +1933,7 @@ impl Comp {
         if !self.arena.typeIsClosed(ref: receiver) { return <Result.Ok value=<Optional.None /> /> }
         // A caller-fixed associated value is independently known even when
         // the requirement's Self witness is abstract or erased.
-        val clause = self.decls.traitAssociatedBoundPool[associated.clause]
+        val clause = self.semanticTraitAssociatedBound(index: associated.clause)
         for predicate in bound.constraint.assocPredicates {
             if predicate.member == clause.member && self.typeRefEq(a: predicate.value, b: receiver) {
                 val traitIndex = self.decls.traitIndexByOffset(offset: bound.constraint.key.owner)

@@ -541,3 +541,29 @@ with positional and named arguments, and both run-mode placement controls
 pass check and JIT. Admission and replay still need to read the retained
 recipes. In particular, an unverified clause cannot supply the sole
 evidence for the selector it declares.
+
+### Concrete trait declaration operands
+
+Check concrete authored operands using the shared type-recipe admission
+before preparing conformance requirements and callable placements. Publish
+the normalized constraint and its receipts at the exact original clause
+index. Semantic readers share that constraint through substitution,
+supertrait paths and associated evidence. The written ranges still serve
+visibility and early lowering. The declaration keeps untouched operands
+that require a lexical trait premise until that path can admit them.
+
+Fixed-input build `20261113T140822-build-072000` produced
+`f195e9cd4489`. Both missing-instance declarations reject in check and
+JIT at their authored occurrence. Valid positional and named supertrait
+arguments travel to the inherited method result and print 42 in JIT and
+native code. The associated constraint accepts the corresponding concrete
+conformance in check, JIT and native. Five existing controls include the
+inherited cross-path equation and the repeated parent instances.
+Standard generation `20261113T141154-gen-273a80` passed.
+
+The next RED is `trait Child: Parent[Self#Source.Item] {}` without a
+Source premise, accepted on this candidate. A valid sibling path must
+remain usable. The lexical Self proof must track which inherited clauses
+supply evidence independently of the clause under admission. Consumers
+of abstract projected terms must carry that evidence when substituting
+the declaration's trait and Self binders.

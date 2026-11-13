@@ -557,6 +557,12 @@ struct AuthoredTraitConstraintOperands {
     val predicates: Array[U64]
 }
 impl AuthoredTraitConstraintOperands { factory }
+
+struct AdmittedTraitConstraintOperands {
+    val constraint: TraitConstraint
+    val checked: Array[LocalAnnotationProof]
+}
+impl AdmittedTraitConstraintOperands { factory }
 struct LoweredTypeViewRecipe {
     val source: ResolvedViewSource
     val arguments: Array[U64]
@@ -579,6 +585,8 @@ struct TraitBoundShape {
 }
 
 pub struct Comp {
+    mut val admittedSupertraitOperands: Dictionary[U64, AdmittedTraitConstraintOperands] = [:]
+    mut val admittedAssociatedConstraintOperands: Dictionary[U64, AdmittedTraitConstraintOperands] = [:]
     mut val authoredSupertraitOperands: Dictionary[U64, AuthoredTraitConstraintOperands] = [:]
     mut val authoredAssociatedConstraintOperands: Dictionary[U64, AuthoredTraitConstraintOperands] = [:]
     mut val traitLexicalHeaders: Dictionary[U64, TraitBoundShape] = [:]
@@ -958,7 +966,30 @@ pub impl Comp {
     }
 
     fn traitAssociatedBoundAt(bounds: TraitAssociatedBoundRange, index: U64) -> TraitAssociatedBound {
-        return self.decls.traitAssociatedBoundPool[bounds.start + index]
+        return self.semanticTraitAssociatedBound(index: bounds.start + index)
+    }
+
+    fn semanticTraitAssociatedBound(index: U64) -> TraitAssociatedBound {
+        val written = self.decls.traitAssociatedBoundPool[index]
+        if self.admittedAssociatedConstraintOperands.count() != 0U64 {
+            match self.admittedAssociatedConstraintOperands.get(key: index) {
+                Optional.Some(v: val admitted) => {
+                    return <TraitAssociatedBound member=written.member constraint=admitted.constraint offset=written.offset />
+                }
+                Optional.None => {}
+            }
+        }
+        return written
+    }
+
+    fn semanticSupertraitConstraintAt(constraints: TraitConstraintRange, index: U64) -> TraitConstraint {
+        if self.admittedSupertraitOperands.count() != 0U64 {
+            match self.admittedSupertraitOperands.get(key: constraints.start + index) {
+                Optional.Some(v: val admitted) => { return admitted.constraint }
+                Optional.None => {}
+            }
+        }
+        return self.traitConstraintAt(constraints: constraints, index: index)
     }
 
     inout fn pushTraitBinds(binds: Array[Bind]) -> TraitBindRange {
@@ -1739,6 +1770,7 @@ fn admitFrontendNominalDependencies(c: inout Comp) -> Result[(), CompileDiagnost
     c.indexConformanceTargetScopes()
     try c.admitAssociatedBindingRecipes()
     try c.admitConformanceTargets()
+    try c.admitClosedTraitConstraintOperands()
     // inter-trait conformance (spec/08,09): `impl B as A` makes every type
     // conforming to subject trait B also conform to A; copy the methods onto each
     // conforming concrete type (before provided methods, so A's own provided

@@ -361,7 +361,7 @@ pub impl Comp {
                 SourceTypeUseRole.Declaration => {
                     val source = self.sourceTypeUses.scopeAt(token: occurrence.scope).unwrap()
                     match source.kind {
-                        SourceTypeScopeKind.Global | SourceTypeScopeKind.Nominal | SourceTypeScopeKind.Implementation => {
+                        SourceTypeScopeKind.Global | SourceTypeScopeKind.Nominal | SourceTypeScopeKind.Implementation | SourceTypeScopeKind.TraitDeclaration => {
                             self.admittedRecipeTypeUses.insert(node.occurrence)
                         }
                         _ => { return }

@@ -1,0 +1,10 @@
+trait Source[T] { type Item }
+struct Number {}
+impl Number as Source[I64] { type Item=I64 }
+trait Parent[T] {}
+trait Child { type Output: Parent[Number#Source[I64].Item] }
+struct Value {}
+impl Value as Parent[I64] {}
+struct Receiver {}
+impl Receiver as Child { type Output=Value }
+fn main() {}
