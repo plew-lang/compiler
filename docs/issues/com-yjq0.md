@@ -210,3 +210,20 @@ gave 7.004045 s before and 6.989182 s after the destructor increment.
 All eight runs (including warm-up) emitted identical LLVM
 (72,485,130 bytes, SHA-256
 `4a72df6c326a959f2f77b5dbe24bcf1610215f62802baacaf7c29fc5c4f2335c`).
+
+## Retain annotations without an associated projection
+
+Every explicitly annotated local lowered within a body now gets the
+same source-occurrence handoff as a projected annotation. This includes
+the ordinary statement generated for a typed loop binding.
+
+In the isolated deletion probe, `val number: Number#Project =
+<Number />#Project` previously completed with the annotation receipt
+removed. With fixed-input build `20261113T041123-build-a535ad`
+(`5c8e3231`), the same probe reports Internal from the final local
+reader, and both intact controls pass. The compiler source check,
+lazy CLI and seven existing runtime fixtures passed. On the same
+source, alternating medians were 6.991954 s and 7.009900 s, with
+identical nonempty LLVM output (72,484,293 bytes, SHA-256
+`ac628e6b8a967afe435990a225b1fda427cf9b78b48764932051bdf9eb303991`).
+This is a three-sample comparison, separate from the fixed-point gate.

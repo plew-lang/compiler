@@ -41,8 +41,8 @@ pub struct SourceTypeScope {
     pub val traitOwner: U64 = 0U64
     pub val parent: U64
     pub val state: SourceTypeScopeState
-    // Only registered free functions, methods and extern signatures have a
-    // function identity. Raw trait requirements and impls never borrow one.
+    // Registered functions, methods, destructors and extern declarations own
+    // function identities. Trait requirements and impls have separate owners.
     pub val function: Optional[U64] = <Optional.None />
     pub val requirement: Optional[SourceRequirementOwner] = <Optional.None />
     pub val implementation: Optional[SourceImplementationOwner] = <Optional.None />

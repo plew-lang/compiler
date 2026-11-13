@@ -338,19 +338,17 @@ pub impl Comp {
         return <Result.Ok value=self.pushStmt(s: <Stmt.ExprStmt expr=call />) />
     }
 
-    // SyntaxFile counterpart of the direct statement lowerer. The block path
-    // owns compound-assignment, destructuring, and match desugaring; this
-    // function deliberately handles only the statement forms that have a
-    // one-to-one semantic IR representation.
     inout fn registerLocalAnnotation(statement: U64, occurrence: U64) {
         if occurrence == 0U64 { return }
         val written = self.sourceTypeUses.useAt(index: occurrence - 1U64).unwrap()
         match written.role { SourceTypeUseRole.Body => {} _ => { return } }
-        if self.arena.typeContainsAssociatedProjection(ref: written.term) {
-            self.localAnnotationOccurrences[statement] = occurrence
-        }
+        self.localAnnotationOccurrences[statement] = occurrence
     }
 
+    // SyntaxFile counterpart of the direct statement lowerer. The block path
+    // owns compound-assignment, destructuring, and match desugaring; this
+    // function deliberately handles only the statement forms that have a
+    // one-to-one semantic IR representation.
     inout fn lowerSyntaxStmt(id: StmtId) -> Result[U64, CompileDiagnostic] {
         val s: SyntaxStmt = syntaxStmt(file: self.syntax, id: id)
         match s.kind {
