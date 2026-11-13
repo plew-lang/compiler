@@ -2295,6 +2295,24 @@ pub impl Comp {
                 if methodCallee >= self.arena.functionCount() {
                     try self.recordUnresolvedMethodTemplate(exprId: exprId, receiver: (try self.writtenCallReceiverTemplate(exprId: exprId, receiverExpr: recv)), receiverExpr: recv, receiverTerm: receiverTerm, nameStart: nameStart, nameLen: nameLen, args: args, resolution: boundMember)
                 }
+                // The standard array Index witness returns the element type.
+                // Use the synthesized operation's origin and its checked result
+                // before transferring evidence from that element slot.
+                if requiredTraitOwner != 0U64 {
+                    val site = self.syntheticCallSiteIndex(exprId: exprId)
+                    if site < self.decls.syntheticCallSites.count() {
+                        match self.decls.syntheticCallSites[site].kind {
+                            SyntheticCallKind.IndexRead => {
+                                val result = self.parametricExprTerm(exprId: exprId)
+                                if self.bodyTypeNeedsViewAdmission(ref: result) && self.isLangArrayType(ref: receiverTerm) &&
+                                   self.typeRefEq(a: result, b: self.typeTermRefChildRef(ref: receiverTerm, index: 0U64)) {
+                                    self.recordStructuralProjectionEvidence(exprId: exprId, base: recv, baseTerm: receiverTerm, slot: 0U64, term: result)
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                }
                 if self.cur.recordCallTemplates && !self.cur.recordingAccessWriteFacet && requiredTraitOwner != 0U64 {
                     // Record publishes under the lexical checking declaration.
                     // bodyFnIdx belongs to emission and can name an unrelated

@@ -1846,3 +1846,22 @@ The three queries in `array_of_projected_trait_views` remain even though
 the ordinary structural child path now stores an admitted selector.
 Trace this synthetic index/protocol receiver back to its selected input
 before removing the shared fallback.
+
+### Carry array element evidence through the selected Index operation
+
+Value-position subscripts use a synthetic Index call, while the structural
+place lives on a separate node. When the selected standard Array Index
+result equals its element type, Record forwards the existing element-slot
+evidence to the call result. Ordinary named methods and custom Index
+witnesses do not use this rule.
+
+Build `20261113T235450-build-8a079d` produced `22fc4e90`.
+`array_of_projected_trait_views` passes check, JIT and native with its
+original output. The check trace shows three legacy trait queries on
+`f10a587d` and none on `22fc4e90`. Five neighboring controls pass check
+and JIT, including custom indexing and index evaluation through inout.
+
+The previously isolated positive probes now have no known legacy trait
+query. The shared resolver is still present. The next removal experiment
+must check the broader suite and preserve the separate associated-call
+boundary tracked by com-4k31.
