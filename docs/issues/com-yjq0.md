@@ -171,6 +171,8 @@ the lazy CLI suite pass. A generic closure binding and typed loop
 binding pass check, JIT and native with outputs `42` and `43`.
 An invalid projection remains deferred in an unrequested function and
 fails whole-target check.
+On the same compiler source, alternating medians were 6.946345 s
+before and 6.944309 s after this increment (three samples per carrier).
 
 Isolated deletion probes leave the production final readers unchanged.
 The standalone value view, viewed call and projected local binding all
@@ -182,3 +184,12 @@ Remaining coverage includes deinit and provided owners, proof
 publication for non-projection annotations, and foreign receipt and
 same-owner recovery probes. Source initializer context and compatibility
 verification can still normalize a written type through the old path.
+
+The concrete impl deinit and trait-provided method smoke controls
+both print `42`, but only the provided method currently goes through
+the authored body registration. Both impl deinit adapters lower the
+block in the enclosing implementation scope and register a bare
+function. Give the deinit its own lexical scope and bind that scope to
+the registered destructor before relying on its local annotation
+receipt. The two legacy struct-body deinit adapters are a separate
+source-entry shape to account for while preserving current behavior.
