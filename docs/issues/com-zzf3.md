@@ -312,3 +312,24 @@ After admission, output consumers require its receipt. Candidate
 `45e860c7` passed build `20261112T235211-build-16c253` and the new
 fixture plus four controls in check, JIT and native. Same-source
 medians were 6.866589 s and 6.867015 s, all eight LLVM outputs identical.
+
+## Conditional witness and binder integrity
+
+The fault fixture now obtains a real conditional witness from an
+existential conversion, then removes its plan or child proof and
+injects a surplus binder. The RHS is a plain binder, so it exercises
+conditions that the RHS itself would not otherwise read. The baseline
+`45e860c7` aborts with `accepted a missing witness condition plan`.
+Candidate `dde3a784` rejects each corruption and still reads the original.
+The retained context checks owner, plan, clause count, and proof
+presence. The environment requires exactly one valid binding per slot.
+Full premise matching stays with the boundary that owns the lexical
+assumptions, rather than recursively calling it from a predicate output
+read.
+
+Standard build `20261112T235826-build-280a92` passed. The native fault
+fixture and seven public check/JIT/native controls passed. Same-source
+medians were 6.876373 s and 6.875553 s, with all eight LLVM outputs
+identical. The matching of replacement requirement evidence, missing
+concrete versus abstract output, and provided-signature RHS reader are
+still pending from independent review.

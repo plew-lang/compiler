@@ -1137,10 +1137,25 @@ pub impl Comp {
     inout fn retainedProofProjectionContext(proof: StaticConformanceProof) -> Result[Array[ProjectionNormalizationStep], CompileDiagnostic] {
         match self.retainedConstraintPathTerminal(proof: proof) {
             Optional.Some(v: val witness) => {
+                if witness.conformIdx == 0U64 || witness.conformIdx > self.decls.conformCount() {
+                    return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "associated output has an invalid condition owner", failureDomain: <FailureDomain.Internal />) />
+                }
+                val declaration = self.decls.conformAt(index: witness.conformIdx - 1U64)
+                if witness.conditions == 0U64 && declaration.bounds.len != 0U64 {
+                    return <Result.Err error=self.diagnosticAt(offset: declaration.defOffset, msg: "associated output has no retained condition context", failureDomain: <FailureDomain.Internal />) />
+                }
                 if witness.conditions != 0U64 {
                     if witness.conditions > self.arena.witnessConditionPlanCount() { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "associated output has no retained condition context") /> }
                     val plan = self.arena.witnessConditionPlanAt(index: witness.conditions - 1U64)
                     if !self.sameWitnessSubstitution(a: witness, b: plan.witness) { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "associated output has a foreign retained context") /> }
+                    if plan.proofs.count() != declaration.bounds.len {
+                        return <Result.Err error=self.diagnosticAt(offset: declaration.defOffset, msg: "associated output has an incomplete condition context", failureDomain: <FailureDomain.Internal />) />
+                    }
+                    for child in plan.proofs {
+                        if !self.arena.hasStaticConformanceProof(id: child) || self.proofIsMissing(proof: self.thawStaticConformanceProof(id: child)) {
+                            return <Result.Err error=self.diagnosticAt(offset: declaration.defOffset, msg: "associated output has no retained condition proof", failureDomain: <FailureDomain.Internal />) />
+                        }
+                    }
                     return <Result.Ok value=plan.normalizations />
                 }
             }

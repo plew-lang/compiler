@@ -3995,6 +3995,9 @@ pub impl Comp {
     inout fn selectedConstraintEnvironment(witness: WitnessMatch, proof: StaticConformanceProof = <StaticConformanceProof.Missing />) -> Result[InstanceEnvironment, CompileDiagnostic] {
         if witness.conformIdx == 0U64 || witness.conformIdx > self.decls.conformCount() { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "constraint has no selected conformance") /> }
         val declaration = self.decls.conformAt(index: witness.conformIdx - 1U64)
+        if witness.binds.count() != declaration.typeParams.len {
+            return <Result.Err error=self.diagnosticAt(offset: declaration.typeStart, msg: "selected constraint has the wrong number of implementation parameters") />
+        }
         mut val params: Array[Bind] = []
         mut val values: Array[U64] = []
         mut val index = 0U64
@@ -4002,8 +4005,12 @@ pub impl Comp {
             val parameter = self.conformBindAt(binds: declaration.typeParams, index: index)
             val binding = self.witnessBindIndex(binds: witness.binds, binder: index)
             if binding >= witness.binds.count() || witness.binds[binding].paramId != parameter.paramId { return <Result.Err error=self.diagnosticAt(offset: declaration.typeStart, msg: "selected constraint has an unbound implementation parameter") /> }
+            val term = witness.binds[binding].term
+            if term == 0U64 || term >= self.arena.typeCount() {
+                return <Result.Err error=self.diagnosticAt(offset: declaration.typeStart, msg: "selected constraint has an invalid implementation parameter") />
+            }
             params.append(parameter)
-            values.append(witness.binds[binding].term)
+            values.append(term)
             index += 1U64
         }
         val selected = if self.proofIsMissing(proof: proof) { give <StaticConformanceProof.ConcreteWitness witness=witness /> } else { give proof }
