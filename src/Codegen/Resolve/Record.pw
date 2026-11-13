@@ -49,7 +49,7 @@ impl Comp {
                 return <Result.Err error=self.diagnosticAt(offset: source.writtenStart, msg: "a view may select at most one trait source; extension views compose but trait selection is singular (spec/09)", failureDomain: <FailureDomain.Source />) />
             }
         }
-        val proof = try self.requireAuthoredViewProof(subject: selectionSubject, instance: selectedSource.traitInstance, assumptions: assumptions, offset: source.writtenStart, missingMessage: missingMessage)
+        val proof = try self.requireAuthoredViewProof(subject: selectionSubject, instance: selectedSource.traitInstance, assumptions: assumptions, offset: source.writtenStart, normalizations: receiverEquations, missingMessage: missingMessage)
         val saved = <AuthoredTypeViewProof occurrence=exprId receiver=subject selector=source proof=self.freezeStaticConformanceProof(proof: proof) admittedArguments=arguments lexicalEquations=receiverEquations />
         self.sourceFacts.activeBuilder.data.traitValueViews[exprId] = saved
         return <Result.Ok value=selectedSource />

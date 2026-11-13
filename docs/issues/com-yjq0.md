@@ -407,3 +407,15 @@ The pre-existing nested provided receiver signature fixture also
 fails on the archived pre-task carrier. Its separate declaration
 formation boundary and last known passing carrier are recorded in
 [com-3jtd](com-3jtd.md#nested-projection-in-a-provided-receiver).
+
+## Match a selector under its retained equations
+
+The complete-instance query compares candidates' ordered argument terms
+under the equations already admitted at the selector. Proof paths keep
+their original declaration identities. Build
+`20261113T052203-build-109a51` produced `4fac5791`. The lexical-bound
+regression passes check, JIT and native with output 42. The older
+nested provided receiver signature fixture also passes check and JIT
+again, as do six additional target fixtures. Compiler source check and
+lazy CLI passed. Same-source medians were 7.028838 s and 7.030233 s
+with identical nonempty LLVM in all eight runs.

@@ -1,0 +1,12 @@
+use @Std/Io only { print }
+trait Projection { type Item }
+trait Marker[T] {}
+struct Obj {}
+struct Number {}
+impl Obj as Marker[I64] {}
+impl Number as Projection { type Item = I64 }
+fn test[T,U,V](n: T, other: U, third: V) where U: Projection[Item=V], T: Marker[U#Projection.Item] {
+    val view = n#Marker[U#Projection.Item]
+    print(42I64)
+}
+fn main() { test(n: <Obj />, other: <Number />, third: 0I64) }

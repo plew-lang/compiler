@@ -56,3 +56,7 @@ conformance itself uses `Token#Leaf.Kind` as a positional argument.
 The common instance-formation audit must cover this declaration case,
 preserve the earlier accepted fixture and bisect the first failure.
 The reproduced failure predates the local body work in com-yjq0.
+
+The example passes check and JIT with `4fac5791` after
+[retained-equation matching](com-yjq0.md#match-a-selector-under-its-retained-equations).
+Keep it as a declaration control for the common formation audit.
