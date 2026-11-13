@@ -533,5 +533,11 @@ declaration recipe reader. The supplied caller mapping was
 The result was `Array[Array[T]]`. Reapplying the same mapping to the
 output in the diagnostic harness failed the exact type assertion.
 This covers the plain declaration route. The requirement-associated
-rebasing route and legacy adapter continuation still need their own
-controls before closure.
+rebasing route still needs its own contrast.
+
+The isolated `associated_binding_rhs_occurrences` control also continued
+from the legacy adapter's `lowerTopItem` through shared associated RHS
+admission and selected output replay. The first `Parent[I64]` witness
+returned the exact legacy `Box[T]` binder. This exercises the shared
+continuation for the legacy route without exposing an internal API in
+the production compiler.
