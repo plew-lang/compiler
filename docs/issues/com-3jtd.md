@@ -982,3 +982,11 @@ Concrete source lookup still needs to publish an admitted receiver with
 the selected operation. Audit its preselection inference and omitted
 defaults paths before removing the split between provisional substitutions
 and published body evidence. Full test and closure evidence is pending.
+
+Final call verification now checks the published body signature against
+the selected receiver and substitution. For the dependent inherent
+receiver it consumes that checked signature instead of interpreting the
+same associated-type recipe on every descriptor. Build
+`20261113T170017-build-3d40f4` produced `96bc971b`; the inherent,
+conformance, provided-call and requirement-call controls passed check
+and JIT. Candidate selection still fails the direct-call control.

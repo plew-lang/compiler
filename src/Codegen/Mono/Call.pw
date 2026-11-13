@@ -3412,6 +3412,13 @@ pub impl Comp {
             if !self.typeRefEq(a: stored[index], b: arguments[index]) { return false }
             index += 1U64
         }
+        // The published signature has already checked a dependent inherent
+        // receiver with this body's callable constraints. Consume that
+        // result here instead of replaying its authored type recipe for
+        // every call descriptor that refers to the body.
+        val signature = self.arena.bodySignature(bodyId: bodyId)
+        if !signature.ready || !self.bodySignatureReceiverMatches(function: function, environment: instance.environment, signature: signature) { return false }
+        if function.hasRecv && self.dependentInherentReceiverScope(function: callee) != 0U64 { return true }
         return self.bodyReceiverMatchesDeclaration(function: function, environment: instance.environment)
     }
 
@@ -4898,8 +4905,6 @@ pub impl Comp {
                 return <Result.Ok value=false />
             }
             if e.receiverSignatureTypeRef != self.arena.bodySignature(bodyId: e.calleeBodyId).receiverType { return <Result.Ok value=false /> }
-            val instance = self.arena.bodyInstanceAt(index: e.calleeBodyId - 1U64)
-            if !self.bodySignatureReceiverMatches(function: f, environment: instance.environment, signature: self.arena.bodySignature(bodyId: e.calleeBodyId)) { return <Result.Ok value=false /> }
         } else if f.hasRecv || f.isAssoc {
             val environment = try self.withLexicalSelfBinding(f: f, environment: <InstanceEnvironment receiverRef=e.recvTypeRef params=self.copyFuncBinds(binds: f.typeParams) args=self.copyFinalCalleeTypeArgs(args: e.calleeTypeArgs) />)
             if !self.bodyReceiverMatchesDeclaration(function: f, environment: environment) { return <Result.Ok value=false /> }
