@@ -61,7 +61,15 @@ impl Comp {
             return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "authored expression type slots have no nominal term", failureDomain: <FailureDomain.Internal />) />
         }
         val arguments = try self.recordExpressionTypeSlots(exprId: exprId, written: self.arena.typeAt(index: written).args)
-        return <Result.Ok value=self.rebuildTypeTermChildren(ref: written, children: arguments) />
+        val term = self.rebuildTypeTermChildren(ref: written, children: arguments)
+        val authored = self.authoredExpressionTypeSlots.getOr(key: exprId, fallback: [])
+        val checked = self.sourceFacts.activeBuilder.data.expressionTypeSlotProofs.getOr(key: exprId, fallback: [])
+        mut val slots: Array[(index: U64, recipe: U64)] = []
+        for index in 0U64..<authored.count() {
+            slots.append((index: authored[index].index, recipe: checked[index].recipe))
+        }
+        self.recordExpressionTypeOrigin(exprId: exprId, origin: <SourceExpressionTypeOrigin.Construction term=term slots=slots />)
+        return <Result.Ok value=term />
     }
 
     inout fn recordBindingAnnotation(nameStart: U64, written: U64, occurrence: Optional[U64]) -> Result[Optional[LocalAnnotationProof], CompileDiagnostic] {
@@ -194,39 +202,41 @@ impl Comp {
         return <Result.Ok value=<Optional.Some v=saved /> />
     }
 
-    fn recordedTypeOccurrence(exprId: U64) -> U64 {
+    fn recordedExpressionTypeOrigin(exprId: U64) -> Optional[SourceExpressionTypeOrigin] {
         val owner = self.currentSourceOwner()
-        if owner.isNone() || !self.sourceFacts.isActive(owner: owner.unwrap()) { return 0U64 }
-        return self.sourceFacts.activeBuilder.data.expressionTypeOrigins.getOr(key: exprId, fallback: 0U64)
+        if owner.isNone() || !self.sourceFacts.isActive(owner: owner.unwrap()) { return <Optional.None /> }
+        return self.sourceFacts.activeBuilder.data.expressionTypeOrigins.get(key: exprId)
     }
 
-    inout fn recordTypeOccurrence(exprId: U64, occurrence: U64) {
-        if occurrence == 0U64 { return }
+    inout fn recordExpressionTypeOrigin(exprId: U64, origin: SourceExpressionTypeOrigin) {
         match self.currentSourceOwner() {
             Optional.Some(v: val owner) => {
                 self.sourceFacts.activate(owner: owner)
-                self.sourceFacts.activeBuilder.data.expressionTypeOrigins[exprId] = occurrence
+                self.sourceFacts.activeBuilder.data.expressionTypeOrigins[exprId] = origin
             }
             Optional.None => {}
         }
     }
 
-    fn authoredResultExtensionSources(occurrence: U64) -> Array[SourceExtensionViewProof] {
-        // Receiver facets of a projection do not become facets of its output.
-        // Follow only the selected associated definition's authored occurrence.
+    fn authoredResultTypeOccurrence(occurrence: U64) -> U64 {
+        // A projection contributes the selected associated output, never its receiver.
         mut val current = occurrence
         mut val depth = 0U64
         while current != 0U64 && depth < 64U64 {
             val output = self.projectedExtensionOrigins.getOr(key: current, fallback: 0U64)
             if output == 0U64 {
                 val authored = self.sourceTypeUses.useAt(index: current - 1U64)
-                if authored.isNone() || self.arena.typeTermAt(index: authored.unwrap().term).assocNameId != 0U64 { return [] }
-                return self.authoredExtensionViews.getOr(key: current, fallback: [])
+                if authored.isNone() || self.arena.typeTermAt(index: authored.unwrap().term).assocNameId != 0U64 { return 0U64 }
+                return current
             }
             current = output
             depth += 1U64
         }
-        return []
+        return 0U64
+    }
+
+    fn authoredResultExtensionSources(occurrence: U64) -> Array[SourceExtensionViewProof] {
+        return self.authoredExtensionViews.getOr(key: self.authoredResultTypeOccurrence(occurrence: occurrence), fallback: [])
     }
 
     inout fn recordExpressionExtensionSources(exprId: U64, proofs: Array[SourceExtensionViewProof]) {
@@ -250,19 +260,19 @@ impl Comp {
         return []
     }
 
-    fn lexicalBindingExtensionSources(declaration: U64) -> Array[SourceExtensionViewProof] {
+    fn lexicalBindingTypeEvidence(declaration: U64) -> Optional[SourceBindingTypeEvidence] {
         // The caller already selected the binding, including any shadowing.
         // Walk only its lexical owner chain to read the associated evidence.
         mut val owner = self.currentSourceOwner()
         while owner.isSome() {
             val current = owner.unwrap()
-            match self.sourceFacts.inferredBindingExtensions(owner: current, declaration: declaration) {
-                Optional.Some(v: val proofs) => { return proofs }
+            match self.sourceFacts.inferredBindingEvidence(owner: current, declaration: declaration) {
+                Optional.Some(v: val evidence) => { return <Optional.Some v=evidence /> }
                 Optional.None => {}
             }
             owner = self.sourceFacts.parent(owner: current)
         }
-        return []
+        return <Optional.None />
     }
 
     // Completeness is independent of concrete closedness: a lexical parameter
@@ -2014,17 +2024,26 @@ pub impl Comp {
                     val local: Local = (try self.typedLocal(index: localIdx))
                     if local.ty != 0U64 {
                         self.recordSemanticExprTerm(exprId: exprId, term: local.ty)
-                        if local.authoredTypeUse != 0U64 && self.arena.typeTermAt(index: local.ty).args.len != 0U64 {
-                            self.recordTypeOccurrence(exprId: exprId, occurrence: local.authoredTypeUse)
-                        }
-                        if self.arena.typeViewSourceCount(ref: local.ty) != 0U64 {
-                            mut val proofs: Array[SourceExtensionViewProof] = []
-                            if local.authoredTypeUse != 0U64 {
-                                proofs = self.authoredResultExtensionSources(occurrence: local.authoredTypeUse)
-                            } else {
-                                proofs = self.lexicalBindingExtensionSources(declaration: local.nameStart)
+                        val typeTerm = self.arena.typeTermAt(index: local.ty)
+                        val viewed = self.arena.typeViewSourceCount(ref: local.ty) != 0U64
+                        if local.authoredTypeUse != 0U64 {
+                            if typeTerm.args.len != 0U64 {
+                                self.recordExpressionTypeOrigin(exprId: exprId, origin: <SourceExpressionTypeOrigin.Authored occurrence=local.authoredTypeUse />)
                             }
-                            self.recordExpressionExtensionSources(exprId: exprId, proofs: proofs)
+                            if viewed {
+                                self.recordExpressionExtensionSources(exprId: exprId, proofs: self.authoredResultExtensionSources(occurrence: local.authoredTypeUse))
+                            }
+                        } else if viewed || typeTerm.args.len != 0U64 {
+                            match self.lexicalBindingTypeEvidence(declaration: local.nameStart) {
+                                Optional.Some(v: val evidence) => {
+                                    match evidence.origin {
+                                        Optional.Some(v: val origin) => { self.recordExpressionTypeOrigin(exprId: exprId, origin: origin) }
+                                        Optional.None => {}
+                                    }
+                                    if viewed { self.recordExpressionExtensionSources(exprId: exprId, proofs: evidence.extensions) }
+                                }
+                                Optional.None => {}
+                            }
                         }
                     }
                 }
@@ -2811,8 +2830,9 @@ pub impl Comp {
                     try self.addLetLocal(nameStart: nameStart, nameLen: nameLen, tyStart: tyStart, tyLen: tyLen, tyIsArray: tyIsArray, ty: ty, init: init, mutable: mutable, owned: true)
                     if ty == 0U64 {
                         val proofs = self.recordedExtensionSources(exprId: init)
-                        if proofs.count() != 0U64 {
-                            self.sourceFacts.activeBuilder.data.inferredBindingExtensionViews[nameStart] = proofs
+                        val origin = self.recordedExpressionTypeOrigin(exprId: init)
+                        if origin.isSome() || proofs.count() != 0U64 {
+                            self.sourceFacts.activeBuilder.data.inferredBindingTypeEvidence[nameStart] = <SourceBindingTypeEvidence origin=origin extensions=proofs />
                         }
                     }
                 }

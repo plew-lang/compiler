@@ -2872,6 +2872,17 @@ fn readSourceOperationConstraints(rows: Array[Optional[CallConstraintPlanState]]
     if index >= rows.count() { return <Optional.None /> }
     return rows[index]
 }
+enum SourceExpressionTypeOrigin {
+    Authored(occurrence: U64)
+    Construction(term: U64, slots: Array[(index: U64, recipe: U64)])
+}
+
+struct SourceBindingTypeEvidence {
+    val origin: Optional[SourceExpressionTypeOrigin]
+    val extensions: Array[SourceExtensionViewProof]
+}
+impl SourceBindingTypeEvidence { factory }
+
 struct SourceBodyData {
     val owner: SemanticCompletionOwner
     mut val operations: Array[CallTemplate] = []
@@ -2889,8 +2900,8 @@ struct SourceBodyData {
     mut val traitValueViews: Dictionary[U64, SourceValueViewProof] = [:]
     mut val extensionValueViews: Dictionary[U64, SourceExtensionViewProof] = [:]
     mut val expressionExtensionViews: Dictionary[U64, Array[SourceExtensionViewProof]] = [:]
-    mut val expressionTypeOrigins: Dictionary[U64, U64] = [:]
-    mut val inferredBindingExtensionViews: Dictionary[U64, Array[SourceExtensionViewProof]] = [:]
+    mut val expressionTypeOrigins: Dictionary[U64, SourceExpressionTypeOrigin] = [:]
+    mut val inferredBindingTypeEvidence: Dictionary[U64, SourceBindingTypeEvidence] = [:]
     mut val globalAddresses: Dictionary[U64, SemanticGlobalAddress] = [:]
     mut val bindings: Array[SourceBindingFact] = []
     mut val bindingKeys: Dictionary[U64, U64] = [:]

@@ -1556,3 +1556,24 @@ with conflicting same-name methods. A free call and a receiver-bound
 method both select the first child from a typed local and a parameter.
 The four `42` outputs match precursor check/JIT and candidate
 check/JIT/native.
+
+### Carry checked construction slots and projected child evidence
+
+Record pairs each explicit construction type-argument index with its already
+checked recipe. Inferred bindings retain that origin from their initializer
+under the selected declaration and preserve it through aliases. The result
+binder reader walks the matching nominal head and positional child, using the
+selected associated output recipe if a projection replaces the written type.
+Receiver facets of the projection do not become facets of its output.
+
+The fixed-input build `20261113T221601-build-464d57` produced `e85e5325`.
+The `generic_child_extension_evidence` fixture distinguishes 42 from 99
+through explicit construction, inferred bindings, an alias, the selected
+associated output and reversed child order. Precursor check and JIT passed
+via the compatibility path. Candidate check, JIT and native execution passed.
+Eight adjacent accepted fixtures matched their JIT goldens after check, and
+three rejection controls preserved their expected check diagnostics.
+
+This increment retains a new class of evidence before the compatibility
+path is removed. Declaration recipes for composite field/call results and
+evidence inferred from constituent expressions still require inventory.

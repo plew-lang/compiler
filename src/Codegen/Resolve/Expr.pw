@@ -2950,7 +2950,16 @@ impl Comp {
         if pattern == 0U64 || actual == 0U64 || recipe == 0U64 { return [] }
         val node = self.sourceTypeUses.recipeAt(id: recipe)
         if node.isNone() { return [] }
-        val authored = node.unwrap()
+        mut val authored = node.unwrap()
+        if authored.occurrence != 0U64 && self.projectedExtensionOrigins.contains(key: authored.occurrence) {
+            val output = self.authoredResultTypeOccurrence(occurrence: authored.occurrence)
+            if output == 0U64 { return [] }
+            val occurrence = self.sourceTypeUses.useAt(index: output - 1U64)
+            if occurrence.isNone() { return [] }
+            val selected = self.sourceTypeUses.recipeAt(id: occurrence.unwrap().recipe)
+            if selected.isNone() { return [] }
+            authored = selected.unwrap()
+        }
         if self.bareInferenceParamId(ref: pattern) == binder {
             if self.typeRefEq(a: actual, b: substituted) {
                 return self.authoredResultExtensionSources(occurrence: authored.occurrence)
@@ -2975,11 +2984,32 @@ impl Comp {
         if self.bareInferenceParamId(ref: pattern) == binder && self.typeRefEq(a: actual, b: substituted) {
             return self.recordedExtensionSources(exprId: exprId)
         }
-        val occurrence = self.recordedTypeOccurrence(exprId: exprId)
-        if occurrence == 0U64 { return [] }
-        val authored = self.sourceTypeUses.useAt(index: occurrence - 1U64)
-        if authored.isNone() { return [] }
-        return self.substitutionExtensionSources(pattern: pattern, actual: actual, recipe: authored.unwrap().recipe, binder: binder, substituted: substituted)
+        match self.recordedExpressionTypeOrigin(exprId: exprId) {
+            Optional.Some(v: val origin) => {
+                match origin {
+                    SourceExpressionTypeOrigin.Authored(val occurrence) => {
+                        val authored = self.sourceTypeUses.useAt(index: occurrence - 1U64)
+                        if authored.isNone() { return [] }
+                        return self.substitutionExtensionSources(pattern: pattern, actual: actual, recipe: authored.unwrap().recipe, binder: binder, substituted: substituted)
+                    }
+                    SourceExpressionTypeOrigin.Construction(val term, val slots) => {
+                        if !self.typeTermRefSameHead(a: pattern, b: actual) || !self.typeTermRefSameHead(a: term, b: actual) { return [] }
+                        val actualCount = self.typeTermRefChildCount(ref: actual)
+                        if actualCount != self.typeTermRefChildCount(ref: pattern) || actualCount != self.typeTermRefChildCount(ref: term) { return [] }
+                        for slot in slots {
+                            val index = slot.index
+                            if index >= actualCount { return [] }
+                            val selected = self.typeTermRefChildRef(ref: actual, index: index)
+                            if !self.typeRefEq(a: selected, b: self.typeTermRefChildRef(ref: term, index: index)) { continue }
+                            val proofs = self.substitutionExtensionSources(pattern: self.typeTermRefChildRef(ref: pattern, index: index), actual: selected, recipe: slot.recipe, binder: binder, substituted: substituted)
+                            if proofs.count() != 0U64 { return proofs }
+                        }
+                    }
+                }
+            }
+            Optional.None => {}
+        }
+        return []
     }
 
     inout fn resultSubstitutionExtensions(exprId: U64, declaration: Func, args: ArgRange, typeArguments: Array[U64], receiverTerm: U64) -> Array[SourceExtensionViewProof] {

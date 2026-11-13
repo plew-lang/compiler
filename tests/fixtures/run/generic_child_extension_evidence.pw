@@ -1,0 +1,24 @@
+use @Std/Io only { print }
+struct Counter { val n: I64 }
+impl Counter { fn get() -> I64 { return 0I64 } }
+extension Read { impl Counter { fn get() -> I64 { return self.n } } }
+extension Other { impl Counter { fn get() -> I64 { return 99I64 } } }
+struct Slot[T, U] { val item: T val other: U }
+impl[T, U] Slot[T, U] { fn read() -> T { return self.item } }
+fn take[T, U](value: Slot[T, U]) -> T { return value.item }
+fn useBoth(value: Slot[Counter#Read, Counter#Other]) {
+    print(take(value: value).get())
+    print(value.read().get())
+}
+trait Selection { type Output }
+struct Choice {}
+impl Choice as Selection { type Output = Slot[Counter#Read, Counter#Other] }
+fn main() {
+    val inferred = <Slot[Counter#Read, Counter#Other] item=<Counter n=42I64 />#Read other=<Counter n=8I64 />#Other />
+    val alias = inferred
+    val projected: Choice#Selection.Output = inferred
+    print(inferred.read().get())
+    print(take(value: alias).get())
+    print(take(value: projected).get())
+    print(take(value: <Slot[Counter#Other, Counter#Read] item=<Counter n=8I64 />#Other other=<Counter n=42I64 />#Read />).get())
+}
