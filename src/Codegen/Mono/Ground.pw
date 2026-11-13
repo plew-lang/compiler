@@ -1165,16 +1165,16 @@ pub impl Comp {
     }
 
     inout fn selectedAssociatedBinding(proof: StaticConformanceProof, traitOwner: U64, assocId: U64) -> Result[Optional[(bindingIndex: U64, witness: WitnessMatch)], CompileDiagnostic] {
-        val terminal = self.retainedConstraintPathTerminal(proof: proof)
-        if terminal.isNone() { return <Result.Ok value=<Optional.None /> /> }
-        val witness = terminal.unwrap()
-        if witness.conformIdx == 0U64 || witness.conformIdx > self.decls.conformCount() { return <Result.Ok value=<Optional.None /> /> }
         match proof {
-            StaticConformanceProof.TraitPath(edges: _, terminalConformIdx: val index) => {
-                if witness.conformIdx != index { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "associated output has a different path terminal", failureDomain: <FailureDomain.Internal />) /> }
+            StaticConformanceProof.TraitPath(edges: val edges, terminalConformIdx: val index) => {
+                if edges.count() == 0U64 || edges[edges.count() - 1U64].conformIdx != index { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "associated output has an invalid path terminal", failureDomain: <FailureDomain.Internal />) /> }
             }
             _ => {}
         }
+        val terminal = self.retainedConstraintPathTerminal(proof: proof)
+        if terminal.isNone() { return <Result.Ok value=<Optional.None /> /> }
+        val witness = terminal.unwrap()
+        if witness.conformIdx == 0U64 || witness.conformIdx > self.decls.conformCount() { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "associated output has an invalid conformance owner", failureDomain: <FailureDomain.Internal />) /> }
         val owner = self.decls.conformAt(index: witness.conformIdx - 1U64)
         if owner.traitStart != traitOwner { return <Result.Ok value=<Optional.None /> /> }
         mut val selected: Optional[(bindingIndex: U64, witness: WitnessMatch)] = <Optional.None />

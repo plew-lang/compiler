@@ -1728,7 +1728,7 @@ impl Comp {
             DeclarationScopeOrigin.InterfaceContract => {
                 match source {
                     DeclarationBoundRef.Interface(index: _) | DeclarationBoundRef.AssociatedType(index: _) => {}
-                    _ => { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "interface contract cannot borrow a caller declaration premise") /> }
+                    _ => { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "interface contract cannot borrow a caller declaration premise", failureDomain: <FailureDomain.Internal />) /> }
                 }
             }
             DeclarationScopeOrigin.RequirementSignature => {

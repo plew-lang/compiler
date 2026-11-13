@@ -608,3 +608,22 @@ Build `20261113T014204-build-ae61c6`, generation
 `20261113T014613-gen-ca2244` and ten public check/JIT/native controls
 passed. Same-source medians were 6.857982 s and 6.865882 s, with
 identical LLVM output in all eight runs.
+
+## Retained conditions on memberless views and invalid paths
+
+Independent review of `3b570dd7` identified a gap in replay of the
+saved condition under a memberless RHS view. An isolated native probe
+replaced the `I64: Marker` child proof of `Entry[I64]#View` with a real
+`I64: Other` witness. `17e89289` accepted it. `3d03fd5c` rejects it by
+comparing the rebased proof to the full substituted clause. The
+original succeeds before and after the fault. The same candidate
+rejects an empty concrete path as Internal instead of returning the
+abstract zero sentinel. The fixed-interface foreign-scope diagnostic
+is also explicitly Internal.
+
+Build `20261113T015652-build-4444bd` passed with frozen inputs. The
+preceding build changed fixture inputs while running and is excluded.
+Both native fault controls and eight check/JIT/native controls passed.
+Same-source medians were 6.903662 s and 6.898417 s, with identical
+LLVM output in all eight runs. Review also flagged pre-publication
+same-impl RHS occurrence swaps and binder diagnostic classification.

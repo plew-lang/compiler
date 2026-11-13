@@ -23,6 +23,16 @@ fn main() {
     assert(assumptions.count() == 1U64)
     val abstract = <StaticConformanceProof.AssumedBound source=<DeclarationBoundRef.Function index=assumptions[0U64] /> />
     assert(compiler.associatedOutputInProof(proof: abstract, traitOwner: first.traitOwner, assocId: first.nameId).unwrap() == 0U64)
+    val malformed = <StaticConformanceProof.TraitPath edges=[] terminalConformIdx=1U64 />
+    match compiler.associatedOutputInProof(proof: malformed, traitOwner: first.traitOwner, assocId: first.nameId) {
+        Result.Err(error: val diagnostic) => {
+            match diagnostic.failureDomain {
+                FailureDomain.Internal => {}
+                _ => { panic("malformed concrete path is not an internal evidence failure") }
+            }
+        }
+        Result.Ok(value: _) => { panic("accepted a malformed concrete path") }
+    }
     assert(compiler.associatedOutputInProof(proof: proof, traitOwner: first.traitOwner, assocId: 0U64).unwrap() == 0U64)
     compiler.decls.assocBindings[0U64] = <AssocBinding recvStart=first.recvStart recvLen=first.recvLen recvId=first.recvId nameStart=first.nameStart nameLen=first.nameLen nameId=0U64 traitId=first.traitId traitOwner=first.traitOwner implOffset=first.implOffset subjectTy=first.subjectTy subjectArgs=first.subjectArgs typeParams=first.typeParams traitArgs=first.traitArgs tyStart=first.tyStart tyLen=first.tyLen tyIsArray=first.tyIsArray ty=first.ty authoredTypeUse=first.authoredTypeUse />
     match compiler.associatedOutputInProof(proof: proof, traitOwner: first.traitOwner, assocId: first.nameId) {

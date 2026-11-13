@@ -255,14 +255,15 @@ impl Comp {
         }
         mut val index = 0U64
         while index < plan.proofs.count() {
-            val clause = self.conformBoundAt(bounds: owner.bounds, index: index)
-            val rawSubject = try self.groundWitnessTypeTerm(ref: clause.subject, params: <PatternBindInput.Conformance range=owner.typeParams />, matchResult: grounded)
-            val subject = try self.replayProjectionNormalizations(ref: rawSubject, normalizations: normalizations, offset: clause.offset)
+            val expected = try self.retainedWitnessClauseBound(witness: grounded, index: index, normalizations: normalizations, offset: owner.defOffset)
             val original = self.thawStaticConformanceProof(id: plan.proofs[index])
-            match (try self.replayConstraintProof(proof: original, receiver: subject, environment: environment, selfRef: selfRef, itemRef: itemRef, context: context, normalizations: normalizations, declaration: declaration)) {
-                ConstraintProofReplay.Missing => { return <Result.Err error=self.diagnosticAt(offset: clause.offset, msg: "selected conformance evidence does not satisfy its declaration conditions") /> }
+            match (try self.replayConstraintProof(proof: original, receiver: expected.subject, environment: environment, selfRef: selfRef, itemRef: itemRef, context: context, normalizations: normalizations, declaration: declaration)) {
+                ConstraintProofReplay.Missing => { return <Result.Err error=self.diagnosticAt(offset: expected.offset, msg: "selected conformance evidence does not satisfy its declaration conditions", failureDomain: <FailureDomain.Internal />) /> }
                 ConstraintProofReplay.Deferred => { return <Result.Ok value=<SelectedWitnessInstantiation.Deferred /> /> }
                 ConstraintProofReplay.Concrete(proof: val proof) | ConstraintProofReplay.Universal(proof: val proof) => {
+                    if !(try self.retainedWitnessClauseMatches(expected: expected, proof: proof, normalizations: normalizations, offset: expected.offset)) {
+                        return <Result.Err error=self.diagnosticAt(offset: expected.offset, msg: "replayed witness condition differs from its declaration", failureDomain: <FailureDomain.Internal />) />
+                    }
                     if self.sameStaticConformanceProof(a: original, b: proof) { proofs.append(plan.proofs[index]) }
                     else { proofs.append(self.freezeStaticConformanceProof(proof: proof)) changed = true }
                 }
