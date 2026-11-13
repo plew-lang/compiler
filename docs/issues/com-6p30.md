@@ -146,3 +146,20 @@ still reject the wrong instance at the selector in real programs.
 All 47 lazy CLI cases and five targeted global check/JIT controls
 pass. The unannotated forward-reference control prints 42 and 41
 under both JIT and native execution.
+
+The same-source alternating comparison for the request increment was
+7.180 s to 7.195 s, three measured runs per candidate after warm-up.
+LLVM output differed only by a consistent renaming of 1,670 internal
+body symbols across definitions and uses. The two outputs compared
+byte-for-byte equal after applying that bijection.
+
+Independent review found that the startup-only uniqueness check let
+the internal initializer request publish an inferred `Box[Unique]`.
+The regression probe also requests a dependent initializer and an
+independent sibling. On `86d90ea6` it aborts at the first unexpected
+success. Build `20261113T075148-build-51863b` produced `34ed5c45`.
+The shared uniqueness rule now checks retained expression and binding
+terms of the initializer and its closures before publication. The
+probe rejects the bad and dependent requests as Source, repeats the
+original rejection, and prepares the sibling. All 47 lazy CLI cases
+and four targeted global check/JIT cases pass on this candidate.

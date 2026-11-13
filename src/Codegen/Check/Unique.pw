@@ -548,37 +548,37 @@ pub impl Comp {
     // whole TypeRef arena (not just genInsts) so lang-item enums like Optional/Result
     // are covered too; generic templates carry type-param args (not unique) and pass.
     inout fn checkGenericUniqueArgs() -> Result[(), CompileDiagnostic] {
-        mut val i: U64 = 0
-        while i < self.arena.typeCount() {
-            val t: TypeRef = self.arena.typeAt(index: i)
-            if t.args.count() != 0 {
-                // Array is handled by checkArrayElemsNotUnique, which scans the RECORDED
-                // element list (real `Array[E]` annotations from lowerType), not the whole
-                // arena. An `Array[any P]` literal of unique concretes mints a PHANTOM
-                // `Array[unique]` ref during bottom-up element recovery (the concretes are
-                // boxed into the existential — never stored raw), so a whole-arena scan here
-                // would reject a valid `Array[any P] = [<UniqueConcrete/>, …]` (spec/08).
-                if rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Array") {
-                    i += 1
-                    continue
-                }
-                if !(self.isStrongRefInst(ref: i)) && !(self.isWeakRefLikeInst(ref: i)) && !(self.isStrongRefCellInst(ref: i)) && !(self.isWeakRefCellInst(ref: i)) {
-                    mut val j: U64 = 0
-                    while j < t.args.count() {
-                        val ai: TypeInfo = self.typeInfoOfRef(ref: t.args[j])
-                        if ai.kind == 2 {
-                            if self.arena.typeTermIsUnique(ref: t.args[j]) {
-                                // the arena TypeRef has no use-site offset — anchor at the
-                                // unique type's own DECLARATION (a real file:line) instead of
-                                // the interned arg span, which maps to no source file.
-                                return <Result.Err error=self.diagnosticAt(offset: self.arena.typeTermAt(index: t.args[j]).declOffset, msg: "a unique type cannot be a generic type argument (this unique type is used as one somewhere); wrap it in Ref[T]") />
-                            }
-                        }
-                        j += 1
-                    }
-                }
+        for ref in 0U64..<self.arena.typeCount() {
+            try self.checkGenericUniqueArguments(ref: ref)
+        }
+        return <Result.Ok value=() />
+    }
+
+    inout fn checkGenericUniqueArguments(ref: U64) -> Result[(), CompileDiagnostic] {
+        val type = self.arena.typeTermAt(index: ref)
+        if type.args.len == 0U64 { return <Result.Ok value=() /> }
+        // Array's authored-element check avoids rejecting temporary inference
+        // terms before existential boxing has fixed the actual element type.
+        if rangeEquals(bytes: self.arena.bytes, start: type.nameStart, len: type.nameLen, kw: "Array") ||
+           self.isStrongRefInst(ref: ref) || self.isWeakRefLikeInst(ref: ref) ||
+           self.isStrongRefCellInst(ref: ref) || self.isWeakRefCellInst(ref: ref) {
+            return <Result.Ok value=() />
+        }
+        for index in 0U64..<type.args.len {
+            val argument = self.arena.typeArgumentAt(index: type.args.start + index)
+            if self.typeInfoOfRef(ref: argument).kind == 2 && self.arena.typeTermIsUnique(ref: argument) {
+                return <Result.Err error=self.diagnosticAt(offset: self.arena.typeTermAt(index: argument).declOffset, msg: "a unique type cannot be a generic type argument (this unique type is used as one somewhere); wrap it in Ref[T]", failureDomain: <FailureDomain.Source />) />
             }
-            i += 1
+        }
+        return <Result.Ok value=() />
+    }
+
+    inout fn checkSourceGenericUniqueArguments(ref: U64, seen: inout Set[U64]) -> Result[(), CompileDiagnostic] {
+        if ref == 0U64 || seen.contains(ref) { return <Result.Ok value=() /> }
+        seen.insert(ref)
+        try self.checkGenericUniqueArguments(ref: ref)
+        for index in 0U64..<self.typeTermRefChildCount(ref: ref) {
+            try self.checkSourceGenericUniqueArguments(ref: self.typeTermRefChildRef(ref: ref, index: index), seen: inout seen)
         }
         return <Result.Ok value=() />
     }

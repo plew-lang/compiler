@@ -2489,7 +2489,7 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
-    inout fn checkSourceTypingObligations(owner: SemanticCompletionOwner) -> Result[(), CompileDiagnostic] {
+    inout fn checkSourceTypingObligations(owner: SemanticCompletionOwner, checkGenericOwnership: Bool = false) -> Result[(), CompileDiagnostic] {
         if !self.arena.typeDeclarationResolutionComplete() {
             return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: source publication requires completed type declaration resolution") />
         }
@@ -2515,6 +2515,18 @@ pub impl Comp {
             }
         }
         self.sourceFacts.activate(owner: owner)
+        if checkGenericOwnership {
+            mut val checkedTypes: Set[U64] = Set.new()
+            for fact in self.sourceFacts.activeBuilder.data.expressions {
+                match fact.typeState {
+                    SemanticExpressionTypeState.Pending | SemanticExpressionTypeState.Unrecorded => {}
+                    _ => { try self.checkSourceGenericUniqueArguments(ref: fact.term, seen: inout checkedTypes) }
+                }
+            }
+            for binding in self.sourceFacts.activeBuilder.data.bindings {
+                try self.checkSourceGenericUniqueArguments(ref: binding.typeTerm, seen: inout checkedTypes)
+            }
+        }
         for block in self.sourceFacts.activeBuilder.data.valueBlockIds {
             val fact = self.sourceFacts.activeBuilder.data.valueBlocks.get(key: block).unwrap()
             if fact.completion.source.normal() && fact.resultTerm == 0U64 && self.sourceFacts.activeBuilder.requiredKeys.contains(fact.expression) {

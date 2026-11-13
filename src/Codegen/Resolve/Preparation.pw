@@ -51,8 +51,8 @@ impl Comp {
         val admitted = try self.admitGlobalCallConstraints(target: target)
         try self.checkSourceConversionEvidence(owner: <SemanticCompletionOwner.Global target=target />)
         try self.checkSourceDiagnosticFailures(owner: <SemanticCompletionOwner.Global target=target />)
-        try self.checkSourceTypingObligations(owner: <SemanticCompletionOwner.Global target=target />)
-        try self.checkNestedSourceFacts(owner: <SemanticCompletionOwner.Global target=target />)
+        try self.checkSourceTypingObligations(owner: <SemanticCompletionOwner.Global target=target />, checkGenericOwnership: true)
+        try self.checkNestedSourceFacts(owner: <SemanticCompletionOwner.Global target=target />, checkGenericOwnership: true)
         self.finalizeGlobalCallStorage(target: target)
         for token in admitted { self.publishPreparedCallConstraints(admitted: token) }
         return <Result.Ok value=() />

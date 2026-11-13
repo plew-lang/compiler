@@ -745,14 +745,14 @@ impl Comp {
         self.sourceFacts.activate(owner: <SemanticCompletionOwner.Closure expression=expression />)
         self.sourceFacts.activeBuilder.data.parent = <Optional.Some v=parent />
     }
-    inout fn checkNestedSourceFacts(owner: SemanticCompletionOwner) -> Result[(), CompileDiagnostic] {
+    inout fn checkNestedSourceFacts(owner: SemanticCompletionOwner, checkGenericOwnership: Bool = false) -> Result[(), CompileDiagnostic] {
         val children = self.sourceFacts.children(owner: owner)
         for expression in children {
             val child = <SemanticCompletionOwner.Closure expression=expression />
             try self.checkSourceConversionEvidence(owner: child)
             try self.checkSourceDiagnosticFailures(owner: child)
-            try self.checkSourceTypingObligations(owner: child)
-            try self.checkNestedSourceFacts(owner: child)
+            try self.checkSourceTypingObligations(owner: child, checkGenericOwnership: checkGenericOwnership)
+            try self.checkNestedSourceFacts(owner: child, checkGenericOwnership: checkGenericOwnership)
         }
         return <Result.Ok value=() />
     }
