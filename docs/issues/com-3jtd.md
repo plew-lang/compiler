@@ -1056,6 +1056,14 @@ source=4130 substituted=5264`). Adding a second receiver spelling to the
 signature map did not resolve it and was discarded. Trace the provenance
 of the exact Mid operand/type before making a further change.
 
+Mid's parameter local comes from the prepared lexical body signature.
+Body finalization now records the concrete receiver against that exact
+source term, after lexical preparation. ABI signature requests still
+require no body preparation. Fixed-input build
+`20261113T175022-build-b8e7f4` (candidate `ce9e8baa`) passes. The
+extension regression now passes check, JIT, and linked native, and five
+nearby positive controls pass check and JIT.
+
 The nested trait-argument probe `T#Resolve[T#Source.Item].Output` passes
 check and JIT. A type-head associated call `Box.code(box: ...)` with
 a `Self` parameter still rejects with incomplete type inference. The

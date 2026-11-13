@@ -4666,9 +4666,6 @@ pub impl Comp {
         val f = function
         match (try self.readRetainedCallableSignature(function: instance.fnIdx, environment: instance.environment)) {
             Optional.Some(v: val signature) => {
-                if f.hasRecv && self.arena.typeContainsAssociatedProjection(ref: f.recvTy) && (self.nominalConformanceReceiverScopes.count() != 0U64 || self.dependentInherentReceiverScope(function: instance.fnIdx) != 0U64) {
-                    self.recordBodyTypeTermResult(bodyId: bodyId, source: self.parametricSelfRef(f: f), result: signature.receiverType)
-                }
                 mut val index = 0U64
                 while index < f.params.count() {
                     self.recordBodyTypeTermResult(bodyId: bodyId, source: self.funcParamAt(params: f.params, index: index).ty, result: signature.parameterTypes[index])
@@ -4805,6 +4802,10 @@ pub impl Comp {
         try self.enterFinalCallableEnvironment(bodyId: bodyId, instance: instance, function: f)
         if !self.arena.bodySignature(bodyId: bodyId).ready {
             try self.recordFinalCallableSignature(bodyId: bodyId, instance: instance, function: f)
+        }
+        if f.hasRecv && self.arena.typeContainsAssociatedProjection(ref: f.recvTy) && (self.nominalConformanceReceiverScopes.count() != 0U64 || self.dependentInherentReceiverScope(function: instance.fnIdx) != 0U64) {
+            val source = try self.preparedFunctionBodySignature(fnIdx: instance.fnIdx)
+            self.recordBodyTypeTermResult(bodyId: bodyId, source: source.receiverTerm, result: self.arena.bodySignature(bodyId: bodyId).receiverType)
         }
         mut val parameter = 0U64
         while parameter < f.params.count() {
