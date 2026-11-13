@@ -2825,7 +2825,7 @@ pub struct Func {
     // Full receiver type for a method/associated function. recvId is only the
     // head-name fast path; this preserves the generic arguments and # view that
     // are part of the declaration namespace.
-    pub val recvTy: U64 = 0
+    pub mut val recvTy: U64 = 0
     // Binder scope used only to match `recvTy`. A provided copy's receiver
     // pattern belongs to its source conformance, while its callable body keeps
     // its own nominal/method binder environment in `typeParams`.

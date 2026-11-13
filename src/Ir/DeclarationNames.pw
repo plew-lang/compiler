@@ -13,6 +13,10 @@ pub impl Arena {
     fn enumCount() -> U64 { return self.enums.count() }
     fn enumAt(index: U64) -> EnumDef { return self.enums[index] }
 
+    inout fn setAdmittedFunctionReceiver(index: U64, term: U64) {
+        self.funcs[index].recvTy = term
+    }
+
     inout fn setAdmittedStructFieldType(index: U64, field: U64, term: U64) {
         self.structs[index].fields[field].ty = term
     }

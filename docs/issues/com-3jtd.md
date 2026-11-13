@@ -798,3 +798,26 @@ saved declaration recipe to callable matching. A separate focused
 probe calling a free generic function with a viewed binder in its
 parameter reports `cannot infer all type arguments`; that path uses
 `matchTypeArgumentConstraints`, independently of receiver unification.
+
+### Publish the admitted receiver to nominal method consumers
+
+`impl Box[Number#Source.Item]` now publishes the normalized receiver
+from its saved recipe to its exact authored method rows before callable
+admission. Signature admission checks those rows against the same
+implementation receipt. Candidate filtering, method environments and
+body receiver checking then read the same receiver term.
+
+Baseline `5ee9ed5ac71a` rejected the call on `Box[I64]`. Fixed-input
+build `20261113T154249-build-d9adec` produced `c064a80d1cc3`. The new
+fixture returns `self.item` and prints 42 in check plus JIT and linked
+native verification (check validates the source without running it).
+The existing viewed-binder and concrete receiver controls pass check and
+JIT, and generation `20261113T154617-gen-da1180` passed.
+
+A direct call to a method declared by a conformance impl with the same
+projected receiver also runs, but a call through `where T: Answer`
+still rejects. The conformance row retains the written subject in
+`subjectTy`; its witness search and overlap checks need the same
+admitted subject. Keep the exact conformance identity and nominal head
+index while making the admitted subject authoritative. Open projections
+that need caller substitutions remain to be exercised separately.

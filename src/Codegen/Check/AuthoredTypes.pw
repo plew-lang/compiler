@@ -348,6 +348,19 @@ impl Comp {
                 Optional.None => { return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "implementation receiver lost its view admission", failureDomain: <FailureDomain.Internal />) /> }
             }
         }
+        if self.authoredImplementationReceivers.count() != 0U64 {
+            for function in 0U64..<self.arena.functionCount() {
+                match self.sourceTypeUses.methodScopeFor(function: function) {
+                    Optional.Some(v: val method) => {
+                        match self.authoredImplementationReceivers.get(key: method.parent) {
+                            Optional.Some(v: val proof) => { self.arena.setAdmittedFunctionReceiver(index: function, term: proof.sourceTerm) }
+                            Optional.None => {}
+                        }
+                    }
+                    Optional.None => {}
+                }
+            }
+        }
         return <Result.Ok value=() />
     }
 
@@ -1487,7 +1500,11 @@ impl Comp {
         if method.traitOwner != owner.receiverTrait || function.extId != owner.extensionId || self.moduleOf(offset: method.anchor) != owner.sourceModule || owner.parameters.count() > parameters.len {
             return <Result.Err error=self.diagnosticAt(offset: method.anchor, msg: "method signature lost its implementation identity", failureDomain: <FailureDomain.Internal />) />
         }
-        val receiver = self.receiverSubjectTerm(receiver: owner.receiver, traitOwner: owner.receiverTrait)
+        val receiverTerm = match self.authoredImplementationReceivers.get(key: method.parent) {
+            Optional.Some(v: val proof) => proof.sourceTerm,
+            Optional.None => owner.receiver,
+        }
+        val receiver = self.receiverSubjectTerm(receiver: receiverTerm, traitOwner: owner.receiverTrait)
         if receiver == 0U64 || !self.typeRefEq(a: receiver, b: function.recvTy) || !self.sameResolvedTypeRefs(a: owner.receiverArguments, b: self.copyFuncTypes(types: function.recvTraitArgs)) {
             return <Result.Err error=self.diagnosticAt(offset: method.anchor, msg: "method signature changed its implementation receiver", failureDomain: <FailureDomain.Internal />) />
         }
