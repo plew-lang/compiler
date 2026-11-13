@@ -501,3 +501,14 @@ Build `20261113T010459-build-3cb96c` passed. Same-source medians were
 first caller-substitution probe used an open caller type at the concrete
 signature entry and was deferred. It is not evidence for substitution
 count; use a declaration replay path for the non-idempotent contrast.
+
+## Normalization corruption through the associated output reader
+
+`witness_projection_normalization_evidence` now checks an associated RHS
+that is a plain binder in addition to verifying the condition plan.
+It exercises missing and replaced equations, proof IDs, output and
+projection source, and rereads the original witness in each case.
+The fixture compiled with candidate `5ff41be1` against an isolated
+`d0c81610` compiler source aborts with `associated output accepted a
+corrupt projection equation`. The same fixture against `42af5c3f`
+passes natively. No production code was changed in this checkpoint.

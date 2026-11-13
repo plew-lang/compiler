@@ -1,9 +1,9 @@
 use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
 use /SourceAccess only { SourceAccess }
-use /Ir only { WitnessConditionPlan, WitnessMatch, ProjectionNormalizationStep }
+use /Ir only { WitnessConditionPlan, WitnessMatch, ProjectionNormalizationStep, StaticConformanceProof }
 fn control(mode~: U64) {
     mut val compiler = <Comp />
-    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text text="trait Parser {{ type Output }}\ntrait Mark {{}}\ntrait Use {{ fn use() -> I64 }}\nstruct NoMark {{}}\nimpl NoMark as Mark {{}}\nstruct S {{}}\nimpl S as Parser {{ type Output = NoMark }}\nstruct Box[T] {{ val value: T }}\nimpl[T] Box[T] as Use where T#Parser.Output: Mark {{ fn use() -> I64 {{ return 1I64 }} }}\nfn needUse[T](value: T) where T: Use {{}}\nfn generic[T](value: Box[T]) where T: Parser, T#Parser.Output: Mark {{ needUse(value: value) }}\nfn main() {{ needUse(value: <Box[S] value=<S /> />) }}\n" path="condition-projection.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text text="trait Parser {{ type Output }}\ntrait Mark {{}}\ntrait Use {{ type Item\nfn use() -> I64 }}\nstruct NoMark {{}}\nimpl NoMark as Mark {{}}\nstruct S {{}}\nimpl S as Parser {{ type Output = NoMark }}\nstruct Box[T] {{ val value: T }}\nimpl[T] Box[T] as Use where T#Parser.Output: Mark {{ type Item = T\nfn use() -> I64 {{ return 1I64 }} }}\nfn needUse[T](value: T) where T: Use {{}}\nfn generic[T](value: Box[T]) where T: Parser, T#Parser.Output: Mark {{ needUse(value: value) }}\nfn main() {{ needUse(value: <Box[S] value=<S /> />) }}\n" path="condition-projection.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
     val owner = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "main").nameId)
     compiler.prepareLexicalBody(fnIdx: owner).unwrap()
     mut val selected = compiler.arena.witnessConditionPlanCount()
@@ -28,8 +28,22 @@ fn control(mode~: U64) {
     compiler.checkWitnessConditionEvidence(witness: witness, offset: 0U64).unwrap()
     val changedWitness = <WitnessMatch selfRef=parent.selfRef conformIdx=parent.conformIdx binds=parent.binds conditions=changed />
     if compiler.sameWitnessMatch(a: witness, b: changedWitness) != (mode == 0U64) { panic("witness identity lost retained projection evidence") }
-    val result = compiler.checkWitnessConditionEvidence(witness: changedWitness, offset: 0U64)
-    if mode == 0U64 { result.unwrap() }
-    else { if result.isOk() { panic("corrupt projection equation accepted") } }
+    val binding = compiler.decls.assocBindings[1U64]
+    val traitOwner: U64 = binding.traitOwner
+    val member: U64 = binding.nameId
+    val originalProof = <StaticConformanceProof.ConcreteWitness witness=witness />
+    val changedProof = <StaticConformanceProof.ConcreteWitness witness=changedWitness />
+    val expected = parent.binds[0U64].term
+    match compiler.associatedOutputInProof(proof: changedProof, traitOwner: traitOwner, assocId: member) {
+        Result.Ok(value: val value) => {
+            if mode != 0U64 { panic("associated output accepted a corrupt projection equation") }
+            if !compiler.typeRefEq(a: value, b: expected) { panic("selected witness changed its associated output") }
+        }
+        Result.Err(error: val diagnostic) => { if mode == 0U64 { panic(diagnostic.message) } }
+    }
+    if !compiler.typeRefEq(a: compiler.associatedOutputInProof(proof: originalProof, traitOwner: traitOwner, assocId: member).unwrap(), b: expected) { panic("original associated output did not recover") }
+    val validation = compiler.checkWitnessConditionEvidence(witness: changedWitness, offset: 0U64)
+    if mode == 0U64 { validation.unwrap() }
+    else { if validation.isOk() { panic("corrupt projection equation accepted") } }
 }
 fn main() { control(0U64) control(1U64) control(2U64) control(3U64) control(4U64) control(5U64) }
