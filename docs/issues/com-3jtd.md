@@ -821,3 +821,32 @@ still rejects. The conformance row retains the written subject in
 admitted subject. Keep the exact conformance identity and nominal head
 index while making the admitted subject authoritative. Open projections
 that need caller substitutions remain to be exercised separately.
+
+### Publish the admitted receiver to conformance consumers
+
+Nominal conformance rows now consume the admitted receiver term and its
+canonical arguments before completion of the declaration graph. The
+update preserves the registered row identity and nominal lookup key.
+The existing post-admission overlap check also compares the normalized
+subject, including when neither conformance needed target-argument
+admission.
+
+Candidate `c064a80d1cc3` rejected the projected receiver through a
+generic `where T: Answer` call and accepted an unused projected/literal
+duplicate. Build `20261113T154954-build-0c8092` produced `e58ae4f055f6`.
+The call now passes check, JIT and linked native with output 42. The
+duplicate rejects at declaration in check and JIT. Five executable
+controls and three rejection controls passed check and JIT. Generation
+`20261113T155321-gen-52881e` passed.
+
+Two finite order and substitution controls still fail. A conformance
+target that projects through a later nominal conformance sees its
+written subject because target admission runs before nominal subject
+publication. The reproduced graph is
+`Value: Mark[Box[I64]#Answer.Item]`, with
+`Box[Number#Source.Item]: Answer` and `Number: Source` later in the
+program. An open receiver `Box[T, T#Source.Item]` also fails when
+matching `Box[Number, I64]` despite `T: Source`. It needs the
+directional binder substitution and the saved projection recipe
+before comparing that part of the subject. Keep both controls under
+this task's declaration-to-consumer guarantee.

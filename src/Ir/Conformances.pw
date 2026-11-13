@@ -3,6 +3,10 @@
 pub impl Decls {
     fn conformCount() -> U64 { return self.conformRows.count() }
     fn conformAt(index: U64) -> Conform { return self.conformRows[index] }
+    inout fn setAdmittedNominalConformanceSubject(index: U64, term: U64, arguments: ConformTypeRange) {
+        self.conformRows[index].subjectTy = term
+        self.conformRows[index].subjectArgs = arguments
+    }
     fn traitSubjectConformCount() -> U64 { return self.traitSubjectConformIndices.count() }
     fn traitSubjectConformIndexAt(index: U64) -> U64 { return self.traitSubjectConformIndices[index] }
 

@@ -1283,13 +1283,14 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
-    inout fn checkAdmittedConformanceOverlap() -> Result[(), CompileDiagnostic] {
+    inout fn checkAdmittedConformanceOverlap(changedSubjects: Set[U64]) -> Result[(), CompileDiagnostic] {
+        if changedSubjects.count() == 0U64 && self.authoredConformanceTargets.count() == 0U64 && self.admittedConformanceSubjects.count() == 0U64 { return <Result.Ok value=() /> }
         for index in 0U64..<self.decls.conformCount() {
-            if !self.authoredConformanceTargets.contains(key: index) && !self.admittedConformanceSubjects.contains(key: index) { continue }
+            if !changedSubjects.contains(index) && !self.authoredConformanceTargets.contains(key: index) && !self.admittedConformanceSubjects.contains(key: index) { continue }
             val declaration = self.decls.conformAt(index: index)
             val arguments = <PatternTypeInput.Values values=self.conformanceDeclarationTargetArguments(index: index, declaration: declaration) />
             for otherIndex in 0U64..<self.decls.conformCount() {
-                if otherIndex == index || (otherIndex < index && (self.authoredConformanceTargets.contains(key: otherIndex) || self.admittedConformanceSubjects.contains(key: otherIndex))) { continue }
+                if otherIndex == index || (otherIndex < index && (changedSubjects.contains(otherIndex) || self.authoredConformanceTargets.contains(key: otherIndex) || self.admittedConformanceSubjects.contains(key: otherIndex))) { continue }
                 val other = self.decls.conformAt(index: otherIndex)
                 if !self.sameConformanceNamespace(left: declaration, right: other) { continue }
                 val comparison = <PatternTypeInput.Values values=self.conformanceDeclarationTargetArguments(index: otherIndex, declaration: other) />

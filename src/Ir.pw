@@ -1511,11 +1511,11 @@ pub struct Conform {
     // Full structured subject type. The legacy typeId/typeArity pair is kept for
     // older conformance walks, but declaration registration must distinguish
     // `Box[I64]` from `Box[String]` and alpha-equivalent generic subjects.
-    pub val subjectTy: U64 = 0
+    pub mut val subjectTy: U64 = 0
     // Structured arguments of the subject head. Kept separately because a trait
     // subject is not a value TypeRef and must not enter the value-type visibility
     // table merely to form a declaration key.
-    pub val subjectArgs: ConformTypeRange = <ConformTypeRange start=0U64 len=0U64 />
+    pub mut val subjectArgs: ConformTypeRange = <ConformTypeRange start=0U64 len=0U64 />
     // Binders introduced by `impl[T]`; used to compare subject keys modulo
     // spelling (`impl[T] Box[T]` == `impl[U] Box[U]`).
     pub val typeParams: ConformBindRange = <ConformBindRange start=0U64 len=0U64 />

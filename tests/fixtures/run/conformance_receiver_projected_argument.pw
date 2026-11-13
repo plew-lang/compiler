@@ -1,0 +1,9 @@
+use @Std/Io only { print }
+trait Source { type Item }
+struct Number {}
+impl Number as Source { type Item = I64 }
+struct Box[T] { val item: T }
+trait Answer { fn get() -> I64 }
+impl Box[Number#Source.Item] as Answer { fn get() -> I64 { return self.item } }
+fn answer[T](value: T) -> I64 where T: Answer { return value.get() }
+fn main() { print(answer(value: <Box[I64] item=42I64 />)) }

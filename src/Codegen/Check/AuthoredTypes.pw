@@ -331,7 +331,8 @@ impl Comp {
         return self.checkTraitConstraintOperands(source: source, written: written, scopes: scopes, closedOnly: false)
     }
 
-    inout fn admitNominalImplementationReceivers() -> Result[(), CompileDiagnostic] {
+    inout fn admitNominalImplementationReceivers() -> Result[Set[U64], CompileDiagnostic] {
+        mut val changed: Set[U64] = Set.new()
         for token in 1U64..<(self.sourceTypeUses.scopeCount() + 1U64) {
             val source = self.sourceTypeUses.scopeAt(token: token).unwrap()
             if source.implementation.isNone() { continue }
@@ -344,6 +345,17 @@ impl Comp {
                 Optional.Some(v: val proof) => {
                     self.authoredImplementationReceivers[token] = proof
                     self.markAdmittedRecipeTypeUses(recipe: proof.recipe)
+                    match owner.kind {
+                        SourceImplementationKind.Conformance(index: val index) => {
+                            if !self.typeRefEq(a: owner.receiver, b: proof.sourceTerm) {
+                                val term = self.arena.typeAt(index: proof.sourceTerm)
+                                val arguments = self.pushConformTypes(types: term.args)
+                                self.decls.setAdmittedNominalConformanceSubject(index: index, term: proof.sourceTerm, arguments: arguments)
+                                changed.insert(index)
+                            }
+                        }
+                        SourceImplementationKind.Inherent => {}
+                    }
                 }
                 Optional.None => { return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "implementation receiver lost its view admission", failureDomain: <FailureDomain.Internal />) /> }
             }
@@ -361,7 +373,7 @@ impl Comp {
                 }
             }
         }
-        return <Result.Ok value=() />
+        return <Result.Ok value=changed />
     }
 
     inout fn indexConformanceArgumentScopes() {
@@ -446,7 +458,7 @@ impl Comp {
         for index in 0U64..<self.decls.conformCount() {
             if self.conformanceTargetScopes.contains(key: index) { try self.admitConformanceTarget(index: index) }
         }
-        return self.checkAdmittedConformanceOverlap()
+        return <Result.Ok value=() />
     }
 
     inout fn conformanceDeclarationTargetArguments(index: U64, declaration: Conform) -> Array[U64] {
