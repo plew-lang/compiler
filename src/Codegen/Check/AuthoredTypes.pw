@@ -884,6 +884,30 @@ impl Comp {
         return <Result.Ok value=declaration.underRef />
     }
 
+    fn nominalWitnessSourceIsActive(witness: WitnessMatch, subject: U64) -> Bool {
+        if witness.conformIdx == 0U64 || witness.conformIdx > self.decls.conformCount() { return false }
+        val extension = self.decls.conformAt(index: witness.conformIdx - 1U64).extId
+        if extension == 0U64 { return true }
+        for source in self.arena.typeViewSources(ref: subject) {
+            if source.traitInstance.owner == 0U64 && source.surfaceId == extension { return true }
+        }
+        return false
+    }
+
+    fn nominalProofSourcesAreActive(proof: StaticConformanceProof, subject: U64) -> Bool {
+        match proof {
+            StaticConformanceProof.ConcreteWitness(witness: val witness) => { return self.nominalWitnessSourceIsActive(witness: witness, subject: subject) }
+            StaticConformanceProof.TraitPath(edges: val edges, terminalConformIdx: _) => {
+                if edges.count() == 0U64 { return false }
+                for witness in edges {
+                    if !self.nominalWitnessSourceIsActive(witness: witness, subject: subject) { return false }
+                }
+                return true
+            }
+            _ => { return false }
+        }
+    }
+
     // Walk the saved recipe in admission order. A valid proof for another
     // annotation, even one with the same term, cannot discharge this edge.
     inout fn checkNominalRecipeProofs(recipe: U64, proofs: Array[AuthoredTypeViewProof], normalizations: Array[ProjectionNormalizationStep], visited: inout Set[U64], next: inout U64, offset: U64) -> Result[(), CompileDiagnostic] {
@@ -923,10 +947,20 @@ impl Comp {
             val proof = self.thawStaticConformanceProof(id: row.proof)
             val traitIndex = self.decls.traitIndexByOffset(offset: selector.traitInstance.owner)
             val bound = try self.replayBoundNormalizations(bound: (try self.staticProofBound(proof: proof, traitIdx: traitIndex)), normalizations: normalizations)
-            if bound.subject == 0U64 || !self.typeRefEq(a: expected.subject, b: bound.subject) || !self.sameTraitConstraint(a: expected.constraint, b: bound.constraint) {
+            if bound.subject == 0U64 || !self.typeRefEq(a: expected.subject, b: bound.subject) || !self.sameTraitConstraint(a: expected.constraint, b: bound.constraint) || !self.nominalProofSourcesAreActive(proof: proof, subject: expected.subject) {
                 return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "nominal annotation has a foreign saved conformance", failureDomain: <FailureDomain.Internal />) />
             }
             try self.checkStaticProofEvidence(proof: proof, offset: occurrence.site)
+            if type.assocNameId != 0U64 && selector.traitInstance.owner == self.associatedProjectionTraitOwner(projection: type) && self.sameResolvedTypeRefs(a: selector.traitInstance.positionalArgs, b: type.assocTraitArgs) {
+                val projection = try self.replayProjectionChildren(ref: node.term, normalizations: normalizations, offset: offset)
+                mut val found = false
+                for equation in normalizations {
+                    if self.typeRefEq(a: equation.source, b: projection) && (equation.proof == row.proof || self.sameStaticConformanceProof(a: proof, b: self.thawStaticConformanceProof(id: equation.proof))) { found = true }
+                }
+                if !found {
+                    return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "nominal projection lost its selected conformance equation", failureDomain: <FailureDomain.Internal />) />
+                }
+            }
         }
         return <Result.Ok value=() />
     }

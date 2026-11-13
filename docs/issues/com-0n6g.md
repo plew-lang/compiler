@@ -193,3 +193,13 @@ receiver in the same internal row. Retain the exact admitted proof
 identity through the reader, including the projection equation that uses
 it. Also verify whether semantic field/cast readers are dominated by
 checked underlying evidence or still take the raw declaration route.
+
+Fixed-input build `20261113T093925-build-59f683` produced
+`139d826ac73629bb53444c4efad14c79b7e737a26d1b202d23d3012b5914f241`.
+The nominal reader now checks the source extension of each saved
+conformance path edge and requires the projection's retained equation to
+use that occurrence's selected proof. All nine nominal positive JIT
+fixtures plus the selected-extension, rigid-generic and unique-deinit
+controls passed. The additional internal substitutions identified by
+review still need direct verification. The proof-count shortcut and the
+semantic field/cast readers' raw underlying queries remain open.
