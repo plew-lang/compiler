@@ -326,7 +326,7 @@ pub impl Comp {
         // by finalization too. This stage fixes only receiver binders;
         // the shared candidate-local matcher below tentatively infers the
         // method-owned binders before final selected-call publication.
-        val receiverMatch: WitnessMatch = (try self.methodReceiverEnvironment(f: f, instRef: receiver))
+        val receiverMatch: WitnessMatch = (try self.methodReceiverEnvironment(f: f, instRef: receiver, sourceMatch: true))
         // A failed structural receiver match is not an empty substitution.
         // Provided members may instead be justified by a trait path; their
         // applicability is established by the static proof query.

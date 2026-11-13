@@ -1010,3 +1010,24 @@ admission still needs to consume this set and pass its instantiated
 proofs into the selected call. Standard build
 `20261113T171512-build-c5415b` produced `589aa04b`; the four existing
 check/JIT controls passed.
+
+#### Direct source selection and constraint reuse
+
+The source receiver match now binds the structural part, specializes
+only the impl premises the admitted receiver references, then compares
+the complete recipe. Argument ranking and inference reuse the match.
+Direct call-plan construction reuses its clause evidence by lexical
+owner, receiver and callable clause ID, and checks the other clauses
+after selection. Backend replay continues to use the selected plan.
+
+Fixed-input build `20261113T172836-build-4f2403`, candidate
+`4f5361cb`, passed. The direct and generic receiver fixtures passed
+check, JIT and native; the missing independent bound is rejected in
+check and JIT. Three existing conformance/provided/requirement controls
+passed check and JIT. A callable returning its receiver's projection,
+and an abstract caller that promises the output equality, also pass JIT.
+
+Closure remains pending. Audit candidate cache ownership and transfer
+across alternate source entries, in particular explicit extension,
+associated function, nested premise and default-argument forms, before
+treating this as the complete receiver contract.

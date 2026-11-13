@@ -16,6 +16,7 @@ pub impl Arena {
     inout fn setAdmittedFunctionReceiver(index: U64, term: U64, dependentScope: U64) {
         self.funcs[index].recvTy = term
         self.funcs[index].dependentReceiverScope = dependentScope
+        if dependentScope != 0U64 { self.funcs[index].dependentReceiverCallable = index + 1U64 }
     }
 
     inout fn setAdmittedStructFieldType(index: U64, field: U64, term: U64) {

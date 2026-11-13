@@ -1336,7 +1336,41 @@ pub impl Comp {
         val assumptions = try self.declarationScopeAssumptions(scope: scope)
         mut val proofs: Array[U64] = []
         mut val normalizations: Array[ProjectionNormalizationStep] = []
+        val retained = match template.kind {
+            CallTemplateKind.Direct(callee: val callee, receiver: _, args: _, calleeTypeArgs: _, proofId: _) => {
+                give self.retainedInherentCallMatch(callee: callee, receiver: template.receiverTypeTerm, caller: self.sourceLexicalFunction(fnIdx: template.siteKey.ownerFnIdx))
+            }
+            _ => <Optional.None />,
+        }
+        mut val declarationIndices: Array[U64] = []
+        if retained.isSome() {
+            match template.kind {
+                CallTemplateKind.Direct(callee: val callee, receiver: _, args: _, calleeTypeArgs: _, proofId: _) => {
+                    declarationIndices = self.sourceDeclarationCallBoundIndices(functionIndex: callee)
+                    normalizations = retained.unwrap().normalizations
+                }
+                _ => {}
+            }
+        }
         for bound in bounds {
+            if retained.isSome() {
+                val matchResult = retained.unwrap()
+                val declarationIndex = declarationIndices[proofs.count()]
+                mut val saved = matchResult.indices.count()
+                for index in 0U64..<matchResult.indices.count() {
+                    if matchResult.indices[index] == declarationIndex { saved = index }
+                }
+                if saved < matchResult.indices.count() {
+                    val expected = try self.replayBoundNormalizations(bound: bound, normalizations: normalizations)
+                    val premise = matchResult.bounds[saved]
+                    if !self.typeRefEq(a: expected.subject, b: premise.subject) || !self.sameTraitConstraint(a: expected.constraint, b: premise.constraint) {
+                        return <Result.Err error=self.diagnosticAt(offset: bound.offset, msg: "selected receiver evidence has a different substitution", failureDomain: <FailureDomain.Internal />) />
+                    }
+                    try self.checkDeclarationCallProof(proof: self.thawStaticConformanceProof(id: matchResult.proofs[saved]), scope: scope, offset: template.siteKey.originStart)
+                    proofs.append(matchResult.proofs[saved])
+                    continue
+                }
+            }
             val proof = try self.viewedTraitConstraintProof(demand: <ConformanceProofDemand.SourceAdmission />, ref: bound.subject, constraint: bound.constraint, assumptions: assumptions)
             if self.proofIsMissing(proof: proof) {
                 // An operator's impl bounds justify that source operation.
@@ -1365,6 +1399,23 @@ pub impl Comp {
         }
         return <Result.Ok value=() />
     }
+
+}
+
+impl Comp {
+    fn retainedInherentCallMatch(callee: U64, receiver: U64, caller: U64) -> Optional[InherentReceiverMatch] {
+        val function = self.arena.functionAt(index: callee)
+        if function.dependentReceiverCallable == 0U64 { return <Optional.None /> }
+        for entry in self.inherentReceiverMatches.getOr(key: function.dependentReceiverCallable, fallback: []) {
+            if entry.caller == caller && entry.receiver == receiver && entry.witness.conformIdx != 0U64 {
+                return <Optional.Some v=entry />
+            }
+        }
+        return <Optional.None />
+    }
+}
+
+pub impl Comp {
 
     inout fn checkRecordedCallConstraintEvidence(templateIndex: U64) -> Result[(), CompileDiagnostic] {
         val template = self.callTemplateAt(index: templateIndex)

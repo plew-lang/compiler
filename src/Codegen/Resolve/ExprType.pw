@@ -135,7 +135,7 @@ pub impl Comp {
         // They are lexical identities, not positional aliases. Finalization
         // retains the complete WitnessMatch here, including legacy binder
         // indexes while the ParamId migration is still in flight.
-        val receiverMatch: WitnessMatch = (try self.methodReceiverEnvironment(f: f, instRef: semanticReceiver))
+        val receiverMatch: WitnessMatch = (try self.methodReceiverEnvironment(f: f, instRef: semanticReceiver, sourceMatch: true))
         mut val proof = selectedProof
         if self.proofIsMissing(proof: proof) && f.isProvided { proof = try self.providedBodyProof(f: f, receiverRef: semanticReceiver, assumptions: self.functionBoundAssumptions(fnIdx: self.cur.checkFn)) }
         // A provided copy placed through a trait-subject edge is justified

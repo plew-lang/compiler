@@ -471,6 +471,17 @@ struct RetainedCallableTypes {
 }
 impl RetainedCallableTypes { factory }
 
+struct InherentReceiverMatch {
+    val caller: U64
+    val receiver: U64
+    val witness: WitnessMatch
+    val indices: Array[U64] = []
+    val bounds: Array[TraitBound] = []
+    val proofs: Array[U64] = []
+    val normalizations: Array[ProjectionNormalizationStep] = []
+}
+impl InherentReceiverMatch { factory }
+
 enum SignatureRecipeContext {
     Concrete
     Requirement(signature: RequirementSignatureRead)
@@ -731,6 +742,7 @@ pub struct Comp {
     mut val authoredSignatureViews: Dictionary[U64, AuthoredSignatureViews] = [:]
     mut val authoredImplementationReceivers: Dictionary[U64, LocalAnnotationProof] = [:]
     mut val inherentReceiverPremises: Dictionary[U64, Array[U64]] = [:]
+    mut val inherentReceiverMatches: Dictionary[U64, Array[InherentReceiverMatch]] = [:]
     mut val nominalConformanceReceiverScopes: Dictionary[U64, U64] = [:]
     mut val activeNominalReceiverAdmissions: Set[U64] = Set.new()
     mut val changedNominalConformanceSubjects: Set[U64] = Set.new()

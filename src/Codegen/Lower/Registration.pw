@@ -1285,6 +1285,10 @@ pub impl Comp {
         }
         if recvRef == 0U64 || f.recvTy == 0U64 { return <Result.Ok value=true />}
         if recvRef >= self.arena.typeCount() || f.recvTy >= self.arena.typeCount() { return <Result.Ok value=true />}
+        if f.dependentReceiverCallable != 0U64 {
+            val matchResult = try self.methodReceiverEnvironment(f: f, instRef: recvRef, sourceMatch: true)
+            return <Result.Ok value=matchResult.conformIdx != 0U64 />
+        }
         mut val binds: Array[UnifyBind] = []
         mut val patternParams: Array[Bind] = self.copyFuncBinds(binds: f.typeParams)
         if f.recvPatternParams.count() > 0U64 { patternParams = self.copyFuncBinds(binds: f.recvPatternParams) }

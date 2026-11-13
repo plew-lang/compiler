@@ -2829,6 +2829,7 @@ pub struct Func {
     // Nonzero only for a nominal inherent receiver whose admitted recipe
     // still needs substitution. The token is its authored impl scope.
     pub mut val dependentReceiverScope: U64 = 0U64
+    pub mut val dependentReceiverCallable: U64 = 0U64
     // Binder scope used only to match `recvTy`. A provided copy's receiver
     // pattern belongs to its source conformance, while its callable body keeps
     // its own nominal/method binder environment in `typeParams`.
