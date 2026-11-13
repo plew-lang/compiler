@@ -1489,3 +1489,14 @@ Seven existing controls matched check/JIT. The associated output probe in
 meta `tmp/com-3jtd/projected-extension/projected.pw` matches expected
 `42/42/0` through a typed binding, an immediate call result and a bare
 receiver. It passed precursor check/JIT and candidate check/JIT/native.
+
+### Chained lexical associated equality
+
+The com-nppi independent review reproduced that
+`U: Output[Item=Counter], T: Output[Item=U#Output.Item]` does not
+supply the terminal type to `get()` for a projected parameter or an
+equivalently annotated local on candidate `180bd891` (check/JIT).
+Include this control when tracing selected lexical equality RHS evidence.
+Check that the earlier equality is retained and consumed through the
+second equation before publishing the type or evidence. The shared
+parameter replay in com-nppi only consumes equations already admitted.

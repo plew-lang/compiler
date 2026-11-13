@@ -1,6 +1,6 @@
 ---
 id: com-nppi
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-11-13T21:39:46Z
@@ -79,3 +79,23 @@ check including its unused generic body, JIT, and linked native
 of three existing missing or wrong-instance controls matched the precursor
 in both modes. The bare projected-parameter scratch control also passes
 check. Closure requires an independent review of this candidate.
+
+## Outcome
+
+Resolved in `0d05ff1f`. Independent review confirmed exact slot ownership,
+shared Record/Verify consumption and no new conformance search. The
+reviewer's test-strength finding was addressed in `ae6c1a65`: swapping
+both parameter slots changes the expected `427/1`. The reviewer replayed
+precursor RED and candidate check/JIT/native GREEN on that final fixture.
+Additional controls preserved symbolic bounded success, missing/foreign
+equality and missing-proof rejection, and accepted inherited equality,
+provided-method lexical Self and a structurally nested Array output.
+The projection-only validation cost was bounded, and same-source medians
+were 7.762 s and 7.688 s with the same LLVM in all eight runs.
+Standard generation passed 25 accepts and 5 rejects with fixed inputs
+(`20261113T214557-gen-74e7cf`).
+
+The adjacent chain `U: Output[Item=Counter], T: Output[Item=U#Output.Item]`
+does not yet give either a local annotation or a parameter access to
+`Counter.get`. That upstream equation admission case is recorded in
+[com-3jtd](com-3jtd.md#chained-lexical-associated-equality).
