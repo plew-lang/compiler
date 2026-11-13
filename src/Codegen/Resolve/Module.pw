@@ -629,7 +629,7 @@ pub impl Comp {
     // `value#E#A` and `value#A#E` therefore carry the same extension source E
     // and trait selector A. A strip ends the inherited chain but not the call's
     // own trailing source.
-    inout fn collectViewSources(recv: U64, recvStart: U64, recvLen: U64, recvRef: U64, finalSourceId: U64 = 0U64, finalSourceOwner: U64 = 0U64, readReceiverSyntax: Bool = true) -> Result[Array[CallableSourceHead], CompileDiagnostic] {
+    inout fn collectViewSources(recv: U64, recvStart: U64, recvLen: U64, recvRef: U64, finalSourceId: U64 = 0U64, finalSourceOwner: U64 = 0U64, readReceiverSyntax: Bool = true, admittedExtension: U64 = 0U64) -> Result[Array[CallableSourceHead], CompileDiagnostic] {
         mut val sources: Array[CallableSourceHead] = []
         // A TypeRef caches the source selectors already written on this
         // expression. Keep those AST selectors distinct from inherited local
@@ -637,7 +637,12 @@ pub impl Comp {
         // weaker provenance and turns it into another same-named owner.
         mut val writtenIds: Array[ResolvedViewSource] = []
         if finalSourceId != 0U64 {
-            self.appendViewSource(sources: inout sources, source: (try self.resolveViewSourceKey(recvStart: recvStart, recvLen: recvLen, recvRef: recvRef, sourceId: finalSourceId, sourceOwner: finalSourceOwner)))
+            val source = if finalSourceOwner == 0U64 && admittedExtension == finalSourceId {
+                give <CallableSourceHead kind=1U64 id=admittedExtension owner=admittedExtension arity=0U64 />
+            } else {
+                give try self.resolveViewSourceKey(recvStart: recvStart, recvLen: recvLen, recvRef: recvRef, sourceId: finalSourceId, sourceOwner: finalSourceOwner)
+            }
+            self.appendViewSource(sources: inout sources, source: source)
             writtenIds.append(<ResolvedViewSource surfaceId=finalSourceId traitInstance=<TraitInstanceKey owner=finalSourceOwner positionalArgs=[] /> />)
         }
         mut val cur: U64 = recv
@@ -722,7 +727,7 @@ pub impl Comp {
     // grounded by a BodyInstance.  Candidate search, newtype normalization and
     // view-source normalization belong to the frontend resolver; Mono supplies
     // only the concrete receiver term it obtained from its environment.
-    inout fn resolveMethodForResolvedReceiver(recv: U64, surfaceRef: U64, sourceId: U64, sourceOwner: U64, nameStart: U64, nameLen: U64, args: ArgRange, useOffset: U64, readReceiverSyntax: Bool = true, requiredTraitOwner: U64 = 0U64) -> Result[U64, CompileDiagnostic] {
+    inout fn resolveMethodForResolvedReceiver(recv: U64, surfaceRef: U64, sourceId: U64, sourceOwner: U64, nameStart: U64, nameLen: U64, args: ArgRange, useOffset: U64, readReceiverSyntax: Bool = true, requiredTraitOwner: U64 = 0U64, admittedExtension: U64 = 0U64) -> Result[U64, CompileDiagnostic] {
         if surfaceRef == 0U64 || surfaceRef >= self.arena.typeCount() {
             return <Result.Ok value=self.arena.functionCount() />
         }
@@ -736,7 +741,7 @@ pub impl Comp {
             resolvedRef = underlying
         }
         val rt: TypeRef = self.arena.typeAt(index: resolvedRef)
-        mut val sources: Array[CallableSourceHead] = (try self.collectViewSources(recv: recv, recvStart: rt.nameStart, recvLen: rt.nameLen, recvRef: surfaceRef, finalSourceId: sourceId, finalSourceOwner: sourceOwner, readReceiverSyntax: readReceiverSyntax))
+        mut val sources: Array[CallableSourceHead] = (try self.collectViewSources(recv: recv, recvStart: rt.nameStart, recvLen: rt.nameLen, recvRef: surfaceRef, finalSourceId: sourceId, finalSourceOwner: sourceOwner, readReceiverSyntax: readReceiverSyntax, admittedExtension: admittedExtension))
         if !self.appendRequiredTraitSource(sources: inout sources, owner: requiredTraitOwner) { return <Result.Ok value=self.arena.functionCount() /> }
         mut val callee: U64 = self.arena.functionCount()
         if sources.count() > 0U64 {

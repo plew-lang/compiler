@@ -1341,3 +1341,23 @@ inheritance. The ambiguous extension receiver retained its diagnostic
 in both modes. This is an intermediate checkpoint. The source body and
 type-annotation owners still need to publish the result by authored
 occurrence, and lookup must consume it on the admitted path.
+
+### Carry the direct value selector into source call lookup
+
+Record stores direct value extension admission under its expression ID
+in the lexical body. A direct value-qualified call now supplies this
+already admitted bundle to candidate collection. The admission proves
+that the bundle participates, while member lookup still checks each
+candidate independently. An empty impl can admit a bundle without
+providing a member. The early compatibility resolver still serves
+unchecked inputs. Composed chains and the extension sources inherited
+from type annotations still need their own retained evidence handoffs.
+
+Build `20261113T204050-build-34f69e` succeeded with unchanged immutable
+inputs, producing carrier `cde1692d`. Of 82 existing extension/newtype
+fixtures, 80 matched their expected check and JIT behavior. The two
+failures, `extension_assoc_source_select` and
+`existential_newtype_condition_witness`, were already present in normal
+suite `20261113T185937-test-6b3c54`. Four controls also matched linked
+native output: a trait-subject extension, a dependent inherent receiver,
+value composition and extension trait provenance.

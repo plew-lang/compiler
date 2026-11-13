@@ -497,6 +497,13 @@ struct ExtensionApplicability {
 }
 impl ExtensionApplicability { factory }
 
+struct SourceExtensionViewProof {
+    val source: ResolvedViewSource
+    val receiver: U64
+    val applicability: ExtensionApplicability
+}
+impl SourceExtensionViewProof { factory }
+
 enum SignatureRecipeContext {
     Concrete
     Requirement(signature: RequirementSignatureRead)
@@ -2875,6 +2882,7 @@ struct SourceBodyData {
     mut val castTargetProofs: Dictionary[U64, LocalAnnotationProof] = [:]
     mut val expressionTypeSlotProofs: Dictionary[U64, Array[LocalAnnotationProof]] = [:]
     mut val traitValueViews: Dictionary[U64, SourceValueViewProof] = [:]
+    mut val extensionValueViews: Dictionary[U64, SourceExtensionViewProof] = [:]
     mut val globalAddresses: Dictionary[U64, SemanticGlobalAddress] = [:]
     mut val bindings: Array[SourceBindingFact] = []
     mut val bindingKeys: Dictionary[U64, U64] = [:]

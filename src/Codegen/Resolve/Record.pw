@@ -169,17 +169,29 @@ impl Comp {
         return <Result.Ok value=selectedSource />
     }
 
-    inout fn admitValueExtension(receiver: U64, source: ResolvedViewSource) -> Result[(), CompileDiagnostic] {
-        if receiver == 0U64 { return <Result.Ok value=() /> }
+    inout fn recordValueExtension(exprId: U64, receiver: U64, source: ResolvedViewSource) -> Result[Optional[SourceExtensionViewProof], CompileDiagnostic] {
+        if receiver == 0U64 { return <Result.Ok value=<Optional.None /> /> }
         val owner = match self.currentSourceOwner() {
             Optional.Some(v: val owner) => owner,
             Optional.None => { return <Result.Err error=self.diagnosticAt(offset: source.writtenStart, msg: "extension value view has no lexical body", failureDomain: <FailureDomain.Internal />) /> },
         }
-        val assumptions = try self.lexicalViewAssumptions(owner: self.lexicalSourceFactOwner(owner: owner))
-        if !(try self.extAppliesToType(extensionId: source.surfaceId, typeStart: 0U64, typeLen: 0U64, typeRef: receiver, assumptions: assumptions)) {
-            return <Result.Err error=self.diagnosticAt(offset: source.writtenStart, msg: "extension does not apply to this trait instance or concrete receiver (spec/09)", failureDomain: <FailureDomain.Source />) />
+        self.sourceFacts.activate(owner: owner)
+        match self.sourceFacts.activeBuilder.data.extensionValueViews.get(key: exprId) {
+            Optional.Some(v: val saved) => {
+                if saved.receiver == receiver && saved.source.surfaceId == source.surfaceId && saved.source.writtenStart == source.writtenStart {
+                    return <Result.Ok value=<Optional.Some v=saved /> />
+                }
+            }
+            Optional.None => {}
         }
-        return <Result.Ok value=() />
+        val assumptions = try self.lexicalViewAssumptions(owner: self.lexicalSourceFactOwner(owner: owner))
+        val applicability = match (try self.matchExtensionApplicability(extensionId: source.surfaceId, typeStart: 0U64, typeLen: 0U64, typeRef: receiver, assumptions: assumptions)) {
+            Optional.Some(v: val applicability) => applicability,
+            Optional.None => { return <Result.Err error=self.diagnosticAt(offset: source.writtenStart, msg: "extension does not apply to this trait instance or concrete receiver (spec/09)", failureDomain: <FailureDomain.Source />) /> },
+        }
+        val saved = <SourceExtensionViewProof source=source receiver=receiver applicability=applicability />
+        self.sourceFacts.activeBuilder.data.extensionValueViews[exprId] = saved
+        return <Result.Ok value=<Optional.Some v=saved /> />
     }
 
     // Completeness is independent of concrete closedness: a lexical parameter
@@ -2055,11 +2067,12 @@ pub impl Comp {
             }
             Expr.ExtMethod(recv: val recv, source: val source, nameStart: val nameStart, nameLen: val nameLen, args: val args) => {
                 try self.recordExpr(exprId: recv, chainHoleRef: chainHoleRef)
+                mut val extension: Optional[SourceExtensionViewProof] = <Optional.None />
                 if self.assocRecvName(recv: recv).nameLen == 0U64 {
                     if source.traitInstance.owner != 0U64 {
                         (try self.recordTraitValueView(exprId: exprId, receiver: self.parametricExprTerm(exprId: recv), source: source))
                     } else {
-                        try self.admitValueExtension(receiver: self.parametricExprTerm(exprId: recv), source: source)
+                        extension = try self.recordValueExtension(exprId: exprId, receiver: self.parametricExprTerm(exprId: recv), source: source)
                     }
                 }
                 mut val i: U64 = 0
@@ -2073,16 +2086,17 @@ pub impl Comp {
                     receiverTerm = self.typeRefWithAddedViewSources(ref: receiverTerm, additions: additions)
                 }
                 val receiverSource: CallTemplateReceiver = (try self.viewedReceiverTemplateForExpr(exprId: recv, viewedTerm: receiverTerm))
-                mut val methodCallee: U64 = (try self.resolvedCallee(id: exprId))
+                mut val methodCallee: U64 = if extension.isSome() { give self.arena.functionCount() } else { give try self.resolvedCallee(id: exprId) }
+                val admittedExtension = if extension.isSome() { give extension.unwrap().source.surfaceId } else { give 0U64 }
                 // `#` fixes a trait/view source at the syntax site.  Its
                 // selected member must be recorded while that source is still
                 // present in Record; the ordinary TypeCache intentionally
                 // leaves some extension-path selections unfilled because the
                 // final concrete receiver is not known during the early pass.
                 if methodCallee >= self.arena.functionCount() {
-                    methodCallee = (try self.resolveMethodForResolvedReceiver(recv: recv, surfaceRef: receiverTerm, sourceId: source.surfaceId, sourceOwner: source.traitInstance.owner, nameStart: nameStart, nameLen: nameLen, args: args, useOffset: self.exprOffset(id: exprId)))
+                    methodCallee = (try self.resolveMethodForResolvedReceiver(recv: recv, surfaceRef: receiverTerm, sourceId: source.surfaceId, sourceOwner: source.traitInstance.owner, nameStart: nameStart, nameLen: nameLen, args: args, useOffset: self.exprOffset(id: exprId), admittedExtension: admittedExtension))
                 }
-                if methodCallee >= self.arena.functionCount() && source.surfaceId != 0U64 {
+                if methodCallee >= self.arena.functionCount() && source.surfaceId != 0U64 && admittedExtension == 0U64 {
                         methodCallee = (try self.resolveExtMethodFinal(recv: recv, source: source, nameStart: nameStart, nameLen: nameLen, args: args))
                 }
                 try self.recordSelectedMethodArguments(callee: methodCallee, receiverTerm: receiverTerm, args: args, chainHoleRef: chainHoleRef, useOffset: self.exprOffset(id: exprId))
@@ -2133,7 +2147,7 @@ pub impl Comp {
                     } else {
                         val valueView = self.assocRecvName(recv: exprId).nameLen == 0U64
                         if source.traitInstance.owner == 0U64 && !composedView && valueView {
-                            try self.admitValueExtension(receiver: receiverTerm, source: source)
+                            (try self.recordValueExtension(exprId: exprId, receiver: receiverTerm, source: source))
                         }
                         val selectedSource = if source.traitInstance.owner != 0U64 {
                             give try self.recordTraitValueView(exprId: exprId, receiver: receiverTerm, source: source, authoredArguments: authored)
