@@ -95,7 +95,12 @@ pub impl Comp {
                 val expression = self.argAt(args: args, index: supplied).expr
                 if !self.expressionNeedsTypeContext(exprId: expression, allowPartialFunction: true) {
                     val argument = try self.inferenceArgumentType(exprId: expression)
-                    out = try self.extendCallTypeArguments(pattern: if parameterTypes.count() != 0U64 { give parameterTypes[index] } else { give parameter.ty }, argument: argument, params: f.typeParams, values: out, offset: self.exprOffset(id: expression))
+                    val pattern = if parameterTypes.count() != 0U64 { give parameterTypes[index] } else if f.isAssoc && f.recvTy != 0U64 {
+                        // Inference reads the declaration's Self pattern, not
+                        // the lexical Self of the caller evaluating the operand.
+                        give self.groundTermInEnvironment(ref: parameter.ty, params: [], values: [], selfRef: f.recvTy)
+                    } else { give parameter.ty }
+                    out = try self.extendCallTypeArguments(pattern: pattern, argument: argument, params: f.typeParams, values: out, offset: self.exprOffset(id: expression))
                 }
             }
             index += 1U64

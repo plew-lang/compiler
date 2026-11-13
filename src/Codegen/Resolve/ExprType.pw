@@ -295,6 +295,25 @@ pub impl Comp {
     // pattern before grounding Self in the public signature.
     inout fn associatedReceiverFromArguments(f: Func, args: ArgRange) -> Result[U64, CompileDiagnostic] {
         if f.recvTy == 0U64 || f.typeParams.count() == 0U64 { return <Result.Ok value=0U64 />}
+        if f.dependentReceiverScope != 0U64 {
+            // A bare Self parameter supplies the whole receiver term.
+            // Keep the operand's type when the declared receiver recipe
+            // matches it, including the concrete associated output.
+            for index in 0U64..<f.params.count() {
+                val parameter = self.funcParamAt(params: f.params, index: index)
+                if parameter.ty == 0U64 { continue }
+                val pattern = self.groundTermInEnvironment(ref: parameter.ty, params: [], values: [], selfRef: f.recvTy)
+                if !self.typeRefEq(a: pattern, b: f.recvTy) { continue }
+                val supplied = self.argIndexForParam(params: f.params, args: args, paramIdx: index)
+                if supplied >= args.len { continue }
+                val expression = self.argAt(args: args, index: supplied).expr
+                if self.expressionNeedsTypeContext(exprId: expression, allowPartialFunction: true) { continue }
+                val receiver = try self.inferenceArgumentType(exprId: expression)
+                if receiver == 0U64 { continue }
+                val matched = try self.methodReceiverEnvironment(f: f, instRef: receiver, sourceMatch: true)
+                if matched.conformIdx != 0U64 { return <Result.Ok value=receiver /> }
+            }
+        }
         val inferred = (try self.inferFnArgs(f: f, args: args))
         if inferred.count() != f.typeParams.count() || !self.fnArgsAllResolved(args: inferred) { return <Result.Ok value=0U64 />}
         return <Result.Ok value=self.groundTermInEnvironment(ref: f.recvTy, params: self.copyFuncBinds(binds: f.typeParams), values: inferred) />

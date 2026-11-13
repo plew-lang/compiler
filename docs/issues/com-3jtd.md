@@ -1069,3 +1069,12 @@ check and JIT. A type-head associated call `Box.code(box: ...)` with
 a `Self` parameter still rejects with incomplete type inference. The
 explicit `Box[Number, I64].code()` spelling fails in parsing and does not
 exercise the associated callable matcher.
+
+For a type-head associated call, inference now substitutes the declaration's
+receiver pattern for `Self`. When a supplied argument determines the whole
+dependent receiver, the source matcher validates and retains the argument's
+actual type, including its concrete projection output. Body finalization
+publishes the concrete parameter types against their lexical source terms.
+Build `20261113T180231-build-48b3fa` produced `d1aa0304` and passed. The
+new `inherent_receiver_projection_associated` control passed check, JIT and
+linked native. Seven nearby acceptance controls passed check and JIT.

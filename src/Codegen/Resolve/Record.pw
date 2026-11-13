@@ -835,14 +835,12 @@ pub impl Comp {
         // generic associated factory).  Do not discard that source selection.
         if receiverTerm == 0U64 {
             if f.isAssoc {
-                val inferred = try self.inferFnArgs(f: f, args: args)
-                if f.recvTy != 0U64 && self.fnArgsAllResolved(args: inferred) {
-                    val inferredReceiver = self.groundTermInEnvironment(ref: f.recvTy, params: self.copyFuncBinds(binds: f.typeParams), values: inferred)
-                    if inferredReceiver != 0U64 {
-                        try self.recordParametricMethodCall(exprId: exprId, callee: callee, receiverSource: <CallTemplateReceiver.Term term=inferredReceiver />, receiverTerm: inferredReceiver, args: args)
-                        return <Result.Ok value=() />
-                    }
+                val inferredReceiver = try self.associatedReceiverFromArguments(f: f, args: args)
+                if inferredReceiver != 0U64 {
+                    try self.recordParametricMethodCall(exprId: exprId, callee: callee, receiverSource: <CallTemplateReceiver.Term term=inferredReceiver />, receiverTerm: inferredReceiver, args: args)
+                    return <Result.Ok value=() />
                 }
+                val inferred = try self.inferFnArgs(f: f, args: args)
                 // A partial receiver does not erase a method-owned binder
                 // already determined by an explicit argument. Result context
                 // can complete only the remaining declared unknowns.
