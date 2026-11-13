@@ -178,7 +178,7 @@ pub impl Comp {
                 try self.verifyArgs(args: args)
                 try self.verifyRecordedMethodCall(exprId: id, recv: recv, args: args)
             }
-            Expr.ExtView(val recv, source: val sourceSelector, val strip) => {
+            Expr.ExtView(val recv, source: val sourceSelector, strip: _) => {
                 // When this node is the receiver of `Type#View.member()`, the
                 // parent Method verifies the type qualifier and its view
                 // source.  Descending here would turn the type name into an
@@ -187,7 +187,6 @@ pub impl Comp {
                 if self.assocRecvName(recv: id).nameLen != 0U64 {
                     return <Result.Ok value=() />
                 }
-                if !strip && sourceSelector.traitInstance.owner == 0U64 { try self.checkResolvedExtensionView(recv: recv, source: sourceSelector) }
                 if !(self.exprFeedsAnotherView(id: id)) {
                     val finalType: TypeInfo = (try self.typeOf(id: id))
                     try self.checkTraitSubjectViewCycles(sources: self.arena.typeViewSources(ref: finalType.ref), offset: sourceSelector.writtenStart)

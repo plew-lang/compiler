@@ -534,7 +534,7 @@ pub impl Comp {
         return false
     }
 
-    inout fn extAppliesToType(extensionId: U64, typeStart: U64, typeLen: U64, typeRef: U64 = 0U64) -> Result[Bool, CompileDiagnostic] {
+    inout fn extAppliesToType(extensionId: U64, typeStart: U64, typeLen: U64, typeRef: U64, assumptions: Array[DeclarationBoundRef]) -> Result[Bool, CompileDiagnostic] {
         val receiverHead = self.arena.typeHeadSpan(ref: typeRef, fallback: <InternedSpan start=typeStart len=typeLen />)
         val qType: U64 = intern(c: inout self, start: receiverHead.start, len: receiverHead.len)
         mut val i: U64 = 0
@@ -547,7 +547,7 @@ pub impl Comp {
                 // B[String].
                 if self.methodRecvIsTrait(f: f) && typeRef != 0U64 {
                     val traitOwner: U64 = self.canonicalTraitOwner(start: f.recvStart, len: f.recvLen)
-                    val proof: StaticConformanceProof = (try self.staticTraitPatternProof(receiverRef: typeRef, traitId: f.recvId, traitOwner: traitOwner, traitArgs: self.copyFuncTypes(types: f.recvTraitArgs), patternParams: <PatternBindInput.Function range=f.typeParams />))
+                    val proof = try self.traitPatternProof(demand: <ConformanceProofDemand.SourceAdmission />, baseRef: typeRef, traitId: f.recvId, traitOwner: traitOwner, traitArgs: <PatternTypeInput.Values values=self.copyFuncTypes(types: f.recvTraitArgs) />, patternParams: <PatternBindInput.Function range=f.typeParams />, assumptions: assumptions)
                     match proof {
                         StaticConformanceProof.Missing => {}
                         _ => { return <Result.Ok value=true />}
@@ -584,7 +584,7 @@ pub impl Comp {
                 // must not be compared to T.
                 if typeRef != 0U64 && cf.subjectTraitOwner != 0U64 {
                     val subjectOwner: U64 = cf.subjectTraitOwner
-                    val proof: StaticConformanceProof = (try self.staticTraitPatternProof(receiverRef: typeRef, traitId: cf.typeId, traitOwner: subjectOwner, traitArgs: self.copyConformTypes(types: cf.subjectArgs), patternParams: <PatternBindInput.Conformance range=cf.typeParams />))
+                    val proof = try self.traitPatternProof(demand: <ConformanceProofDemand.SourceAdmission />, baseRef: typeRef, traitId: cf.typeId, traitOwner: subjectOwner, traitArgs: <PatternTypeInput.Conformance range=cf.subjectArgs />, patternParams: <PatternBindInput.Conformance range=cf.typeParams />, assumptions: assumptions)
                     match proof {
                         StaticConformanceProof.Missing => {}
                         _ => { return <Result.Ok value=true />}
@@ -598,7 +598,7 @@ pub impl Comp {
         if typeRef != 0U64 {
             val underlying = try self.checkedNominalUnderlying(ref: typeRef)
             if underlying != 0U64 {
-                return self.extAppliesToType(extensionId: extensionId, typeStart: 0U64, typeLen: 0U64, typeRef: underlying)
+                return self.extAppliesToType(extensionId: extensionId, typeStart: 0U64, typeLen: 0U64, typeRef: underlying, assumptions: assumptions)
             }
         }
         return <Result.Ok value=false />

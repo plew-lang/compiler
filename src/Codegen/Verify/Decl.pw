@@ -164,17 +164,6 @@ pub impl Comp {
         }
     }
 
-    inout fn checkResolvedExtensionView(recv: U64, source: ResolvedViewSource) -> Result[(), CompileDiagnostic] {
-        val rt: TypeInfo = (try self.exprType(id: recv))
-        if rt.nameLen == 0U64 { return <Result.Ok value=() /> }
-        val selected = try self.resolveViewSourceKey(recvStart: rt.nameStart, recvLen: rt.nameLen, recvRef: rt.ref, sourceId: source.surfaceId)
-        if selected.kind != 0U64 { return <Result.Ok value=() /> }
-        if self.knownExtensionSource(identity: source.surfaceId) {
-            return <Result.Err error=self.diagnosticAt(offset: source.writtenStart, msg: "extension does not apply to this trait instance or concrete receiver (spec/09)") />
-        }
-        return <Result.Err error=self.diagnosticAt(offset: source.writtenStart, msg: "unknown view `#X`: the name is neither an extension that applies here nor a trait this type conforms to (spec/09)") />
-    }
-
     // Type terms carry the same semantic selector child as value views. A
     // trait selector is identified by declaration owner, never by its
     // content-interned spelling.

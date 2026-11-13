@@ -182,54 +182,6 @@ pub impl Comp {
         return false
     }
 
-    inout fn boundAllowsExtension(fnIdx: U64, tpStart: U64, tpLen: U64, extId: U64) -> Bool {
-        val tpId: U64 = intern(c: inout self, start: tpStart, len: tpLen)
-        mut val fi: U64 = 0U64
-        while fi < self.arena.functionCount() {
-            val f: Func = self.arena.functionAt(index: fi)
-            if f.extId == extId && self.methodRecvIsTrait(f: f) {
-                val recvArgs: Array[U64] = self.positionalTraitArgs(t: self.arena.typeAt(index: f.recvTy))
-                mut val bi: U64 = 0U64
-                while bi < self.decls.funcBounds.count() {
-                    val bound: FuncBound = self.decls.funcBounds.at(index: bi)
-                    if bound.fnIdx == fnIdx && bound.paramNameId == tpId {
-                        val boundOwner: U64 = bound.constraint.key.owner
-                        if boundOwner == f.provTraitOwner {
-                            if self.typeRefListPatternMatches(pattern: <PatternTypeInput.Values values=recvArgs />, patternParams: <PatternBindInput.Function range=f.typeParams />, actual: <PatternTypeInput.Values values=bound.constraint.key.positionalArgs />) { return true }
-                        }
-                    }
-                    bi += 1U64
-                }
-            }
-            fi += 1U64
-        }
-        // An extension can be justified by a trait-subject conformance even
-        // when it contributes no methods.  The abstract checker must ask the
-        // same source question as normal view formation, not infer it from a
-        // callable witness that happens to exist in the extension.
-        mut val ci: U64 = 0U64
-        while ci < self.decls.conformCount() {
-            val cf: Conform = self.decls.conformAt(index: ci)
-            if cf.extId == extId {
-                val subjectOwner: U64 = cf.subjectTraitOwner
-                mut val bi: U64 = 0U64
-                while bi < self.decls.funcBounds.count() {
-                    val bound: FuncBound = self.decls.funcBounds.at(index: bi)
-                    if bound.fnIdx == fnIdx && bound.paramNameId == tpId {
-                        // Both ids are resolved during lowering.  Compare them rather
-                        // than their source spans: a bound may use an imported alias.
-                        if subjectOwner != 0U64 && cf.typeStart == bound.constraint.key.owner {
-                            if self.typeRefListPatternMatches(pattern: <PatternTypeInput.Conformance range=cf.subjectArgs />, patternParams: <PatternBindInput.Conformance range=cf.typeParams />, actual: <PatternTypeInput.Values values=bound.constraint.key.positionalArgs />) { return true }
-                        }
-                    }
-                    bi += 1U64
-                }
-            }
-            ci += 1U64
-        }
-        return false
-    }
-
     // Signature TypeRefs are synthetic (siteOffset == 0) in generic bodies,
     // so Verify's authored-type walk intentionally skips them.  Visit the
     // complete type tree here: a view source-set nested in Array[T#E#F], a
@@ -312,15 +264,8 @@ pub impl Comp {
                 }
                 try self.checkRecordedDirectCallArguments(exprId: exprId, args: args)
             }
-            Expr.ExtMethod(val recv, val source, nameStart: _, nameLen: _, val args) => {
+            Expr.ExtMethod(val recv, source: _, nameStart: _, nameLen: _, val args) => {
                 try self.checkBoundsExpr(exprId: recv)
-                val rt: TypeInfo = (try self.typeOf(id: recv))
-
-                if source.traitInstance.owner == 0U64 && self.knownExtensionSource(identity: source.surfaceId) && rt.kind == 2 && self.isTypeParamOf(fnIdx: self.cur.checkFn, start: rt.nameStart, len: rt.nameLen) {
-                    if !(self.boundAllowsExtension(fnIdx: self.cur.checkFn, tpStart: rt.nameStart, tpLen: rt.nameLen, extId: source.surfaceId)) {
-                        return <Result.Err error=self.diagnosticAt(offset: source.writtenStart, msg: "extension does not apply to this trait instance") />
-                    }
-                }
                 mut val i: U64 = 0
                 while i < args.len {
                     try self.checkBoundsExpr(exprId: self.argAt(args: args, index: i).expr)
@@ -328,19 +273,9 @@ pub impl Comp {
                 }
                 try self.checkRecordedDirectCallArguments(exprId: exprId, args: args)
             }
-            Expr.ExtView(val recv, val source, val strip) => {
-                if self.assocRecvName(recv: exprId).nameLen != 0U64 {
-                    return <Result.Ok value=() />
-                }
-                try self.checkBoundsExpr(exprId: recv)
-                if !strip {
-                    val rt: TypeInfo = (try self.typeOf(id: recv))
-
-                    if source.traitInstance.owner == 0U64 && self.knownExtensionSource(identity: source.surfaceId) && rt.kind == 2 && self.isTypeParamOf(fnIdx: self.cur.checkFn, start: rt.nameStart, len: rt.nameLen) {
-                        if !(self.boundAllowsExtension(fnIdx: self.cur.checkFn, tpStart: rt.nameStart, tpLen: rt.nameLen, extId: source.surfaceId)) {
-                            return <Result.Err error=self.diagnosticAt(offset: source.writtenStart, msg: "extension view is not justified by this type parameter's bounds") />
-                        }
-                    }
+            Expr.ExtView(val recv, source: _, strip: _) => {
+                if self.assocRecvName(recv: exprId).nameLen == 0U64 {
+                    try self.checkBoundsExpr(exprId: recv)
                 }
             }
             Expr.Method(val recv, val nameStart, val nameLen, val args) => {

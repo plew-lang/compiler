@@ -564,7 +564,7 @@ pub impl Comp {
         mut val found: CallableSourceHead = <CallableSourceHead />
         // A retained trait owner already fixes the source kind. An applicable
         // same-spelled extension cannot compete with that lexical decision.
-        if sourceOwner == 0U64 && (try self.extAppliesToType(extensionId: sourceId, typeStart: receiverHead.start, typeLen: receiverHead.len, typeRef: recvRef)) {
+        if sourceOwner == 0U64 && (try self.extAppliesToType(extensionId: sourceId, typeStart: receiverHead.start, typeLen: receiverHead.len, typeRef: recvRef, assumptions: self.functionBoundAssumptions(fnIdx: self.cur.checkFn))) {
             found = <CallableSourceHead kind=1U64 id=sourceId owner=sourceId arity=0U64 />
         }
         // A trait selector is resolved while lowering at its lexical use site.

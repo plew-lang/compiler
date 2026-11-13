@@ -252,3 +252,19 @@ as part of the four-case composed fixture. The three rejected composition
 boundaries retained their exact selector diagnostic in check and JIT.
 A composed selector with a projected positional argument passes both
 check and JIT under its retained lexical equation.
+
+### Generic value extension source admission
+
+Record now verifies the extension on the complete recorded receiver with
+explicit lexical assumptions. Removed the competing spelling/direct-bound
+check from the generic walk and the expression-type recheck from Verify.
+Newtype descent preserves those assumptions. This increment changes
+expression admission; constructor arguments and declaration type-view
+compatibility remain open.
+
+Fixed-input build `20261113T120908-build-6648c6` produced `d5161ea252c3`.
+The inherited-bound RED now passes check, JIT and linked native (42).
+The direct-bound control passes check and JIT. Removing the bound from
+the reachable call rejects in both modes at extension admission; the
+existing wrong-instance generic controls and the unrelated receiver
+control retain their rejection in whole-source check.

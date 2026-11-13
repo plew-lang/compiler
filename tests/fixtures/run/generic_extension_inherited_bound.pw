@@ -1,0 +1,14 @@
+use @Std/Io only { print }
+trait Base {}
+trait Child: Base {}
+trait Marker {}
+struct Number {}
+impl Number as Base {}
+impl Number as Child {}
+extension Extra { impl Base as Marker {} }
+fn read[T](value: T) -> I64 where T: Marker { return 42I64 }
+fn f[T](x: T) -> I64 where T: Child {
+    val viewed = x#Extra
+    return read(value: viewed)
+}
+fn main() { print(f(x: <Number />)) }

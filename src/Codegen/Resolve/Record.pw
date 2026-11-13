@@ -126,6 +126,19 @@ impl Comp {
         return <Result.Ok value=selectedSource />
     }
 
+    inout fn admitValueExtension(receiver: U64, source: ResolvedViewSource) -> Result[(), CompileDiagnostic] {
+        if receiver == 0U64 { return <Result.Ok value=() /> }
+        val owner = match self.currentSourceOwner() {
+            Optional.Some(v: val owner) => owner,
+            Optional.None => { return <Result.Err error=self.diagnosticAt(offset: source.writtenStart, msg: "extension value view has no lexical body", failureDomain: <FailureDomain.Internal />) /> },
+        }
+        val assumptions = try self.lexicalViewAssumptions(owner: self.lexicalSourceFactOwner(owner: owner))
+        if !(try self.extAppliesToType(extensionId: source.surfaceId, typeStart: 0U64, typeLen: 0U64, typeRef: receiver, assumptions: assumptions)) {
+            return <Result.Err error=self.diagnosticAt(offset: source.writtenStart, msg: "extension does not apply to this trait instance or concrete receiver (spec/09)", failureDomain: <FailureDomain.Source />) />
+        }
+        return <Result.Ok value=() />
+    }
+
     // Completeness is independent of concrete closedness: a lexical parameter
     // or a justified projection is usable context, a bare generic head is not.
     // This only inspects the saved term's structure and declaration arity; it
@@ -1969,7 +1982,7 @@ pub impl Comp {
                     if source.traitInstance.owner != 0U64 {
                         (try self.recordTraitValueView(exprId: exprId, receiver: self.parametricExprTerm(exprId: recv), source: source))
                     } else {
-                        try self.checkResolvedExtensionView(recv: recv, source: source)
+                        try self.admitValueExtension(receiver: self.parametricExprTerm(exprId: recv), source: source)
                     }
                 }
                 mut val i: U64 = 0
@@ -2032,6 +2045,9 @@ pub impl Comp {
                     if strip {
                         sources = []
                     } else {
+                        if source.traitInstance.owner == 0U64 && self.assocRecvName(recv: exprId).nameLen == 0U64 {
+                            try self.admitValueExtension(receiver: receiverTerm, source: source)
+                        }
                         val selectedSource = if source.traitInstance.owner != 0U64 && self.assocRecvName(recv: exprId).nameLen == 0U64 {
                             give try self.recordTraitValueView(exprId: exprId, receiver: receiverTerm, source: source, authoredArguments: authored)
                         } else { give source }
