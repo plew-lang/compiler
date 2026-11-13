@@ -1534,3 +1534,25 @@ equalities (`42/0`), a chain of equalities (`84`), and a terminal
 supertrait equality (`84`). This increment covers the currently
 connected authored predicate roles. Type arguments flowing from nested
 or receiver substitutions still need their source evidence handoff.
+
+### Carry authored generic child evidence into returned values
+
+Source Record retains the exact annotation occurrence for an identifier
+with a parameterized type. A result binder can consume evidence from
+that occurrence's child recipe when the selected argument or receiver
+matches the declaration's binder at that position. Match canonical
+heads, child roles and the selected substituted type; a different child
+or a same-named binder does not authorize the result. The top-level
+argument handoff remains available without an authored recipe.
+Constructed and inferred aggregates do not yet publish their child
+evidence. A value whose annotation has been structurally replaced by an
+associated projection also needs a child-level handoff from that
+projection's selected result.
+
+Fixed-input build `20261113T220704-build-8e6b4b` produced `0bccfdf8`.
+Eight adjacent fixtures passed check and JIT. Scratch
+`tmp/com-3jtd/nested-extension/nested.pw` distinguishes viewed children
+with conflicting same-name methods. A free call and a receiver-bound
+method both select the first child from a typed local and a parameter.
+The four `42` outputs match precursor check/JIT and candidate
+check/JIT/native.

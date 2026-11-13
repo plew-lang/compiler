@@ -194,6 +194,23 @@ impl Comp {
         return <Result.Ok value=<Optional.Some v=saved /> />
     }
 
+    fn recordedTypeOccurrence(exprId: U64) -> U64 {
+        val owner = self.currentSourceOwner()
+        if owner.isNone() || !self.sourceFacts.isActive(owner: owner.unwrap()) { return 0U64 }
+        return self.sourceFacts.activeBuilder.data.expressionTypeOrigins.getOr(key: exprId, fallback: 0U64)
+    }
+
+    inout fn recordTypeOccurrence(exprId: U64, occurrence: U64) {
+        if occurrence == 0U64 { return }
+        match self.currentSourceOwner() {
+            Optional.Some(v: val owner) => {
+                self.sourceFacts.activate(owner: owner)
+                self.sourceFacts.activeBuilder.data.expressionTypeOrigins[exprId] = occurrence
+            }
+            Optional.None => {}
+        }
+    }
+
     fn authoredResultExtensionSources(occurrence: U64) -> Array[SourceExtensionViewProof] {
         // Receiver facets of a projection do not become facets of its output.
         // Follow only the selected associated definition's authored occurrence.
@@ -1997,6 +2014,9 @@ pub impl Comp {
                     val local: Local = (try self.typedLocal(index: localIdx))
                     if local.ty != 0U64 {
                         self.recordSemanticExprTerm(exprId: exprId, term: local.ty)
+                        if local.authoredTypeUse != 0U64 && self.arena.typeTermAt(index: local.ty).args.len != 0U64 {
+                            self.recordTypeOccurrence(exprId: exprId, occurrence: local.authoredTypeUse)
+                        }
                         if self.arena.typeViewSourceCount(ref: local.ty) != 0U64 {
                             mut val proofs: Array[SourceExtensionViewProof] = []
                             if local.authoredTypeUse != 0U64 {
