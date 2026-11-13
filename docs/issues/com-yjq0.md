@@ -84,9 +84,29 @@ CLI suite, including the new unused/requested/check/build controls, and
 checked the compiler's own source. A valid locally annotated generic
 view with a matching bound also printed `42` under JIT.
 
-Exact-instance admission remains open. The frozen baseline and this
+Generation `20261113T032010-gen-986660` passed. In a same-source
+alternating comparison, the medians were 6.902333 s before and
+6.821464 s after the timing change (three measured runs per carrier).
+
+## Exact instance for body annotations without projections
+
+The frozen baseline and request-timing
 candidate both accept `val values: Array[I64#Marker[I64]] = []` when
 the sole conformance is `I64 as Marker[Bool]`. The current head check
 compares trait owner and arity without checking positional arguments.
-Use this as the next RED. The owner-scoped publication and final-reader
-requirements are still open.
+The new rejection fixture confirmed this RED.
+
+Requested non-projection annotations now require the same exact
+instance query as authored signatures, with assumptions from the
+lexical declaration. Build `20261113T032208-build-d6ed26` passed.
+Candidate `plewc-com-yjq0-exact-local` (`f540d3b5`) rejects the RED
+input in check, build and run. The lazy CLI suite passes, and both a
+concrete and a generic view with a matching bound print `42`.
+
+Projection recipes, value views, owner-scoped proof publication and
+final readers still need migration. Mid already reads sealed local
+binding types. Mono's `scanLocalDeclarationType` grounds that binding
+through the general term reader, and its statement walk also scans the
+raw annotation. Both consumers need to take their input from the
+admitted occurrence under the same body owner. The common formation
+audit outside this body lifecycle remains under [com-3jtd](com-3jtd.md).

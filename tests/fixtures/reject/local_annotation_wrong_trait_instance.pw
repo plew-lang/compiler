@@ -1,0 +1,6 @@
+trait Marker[T] {}
+impl I64 as Marker[Bool] {}
+
+fn main() {
+    val values: Array[I64#Marker[I64]] = []
+}

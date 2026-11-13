@@ -107,27 +107,43 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
-    inout fn checkAuthoredTypeViews(occurrences: Array[U64]) -> Result[(), CompileDiagnostic] {
+    inout fn checkAuthoredTypeViews(occurrences: Array[U64], requested: Optional[SemanticCompletionOwner] = <Optional.None />) -> Result[(), CompileDiagnostic] {
         for id in occurrences {
             val occurrence = try self.signatureOccurrence(id: id)
             val term = self.arena.typeTermAt(index: occurrence.term)
             // A projection's views belong to its receiver, not its output.
             val receiver = if term.assocNameId != 0U64 { give term.projectionReceiver } else { give occurrence.term }
             if self.arena.typeViewSourceCount(ref: receiver) != 0U64 {
-                try self.checkAuthoredTypeView(receiver: receiver, offset: occurrence.site)
+                val lexical = if requested.isSome() && term.assocNameId == 0U64 {
+                    give <Optional.Some v=self.lexicalSourceFactOwner(owner: requested.unwrap()) />
+                } else { give <Optional.None /> }
+                try self.checkAuthoredTypeView(receiver: receiver, offset: occurrence.site, lexical: lexical)
             }
         }
         return <Result.Ok value=() />
     }
 
-    inout fn checkAuthoredTypeView(receiver: U64, offset: U64) -> Result[(), CompileDiagnostic] {
+    inout fn checkAuthoredTypeView(receiver: U64, offset: U64, lexical: Optional[SemanticCompletionOwner]) -> Result[(), CompileDiagnostic] {
         val sources = self.arena.typeViewSources(ref: receiver)
         try self.checkTraitSubjectViewCycles(sources: sources, offset: offset)
         mut val selectedCount = 0U64
         for source in sources {
             if source.surfaceId != 0U64 {
-                val selected = try self.checkedTypeViewSource(typeRef: receiver, source: source, offset: offset)
-                if selected.kind == 2U64 { selectedCount += 1U64 }
+                if source.traitInstance.owner != 0U64 && lexical.isSome() {
+                    val assumptions = match lexical.unwrap() {
+                        SemanticCompletionOwner.Function(index: val function) => {
+                            val scope = try self.declarationTypeScope(owner: function)
+                            give try self.declarationScopeAssumptions(scope: scope)
+                        }
+                        _ => { give [] }
+                    }
+                    val subject = self.typeRefWithoutOuterViews(ref: receiver)
+                    (try self.requireAuthoredViewProof(subject: subject, instance: source.traitInstance, assumptions: assumptions, offset: source.writtenStart))
+                    selectedCount += 1U64
+                } else {
+                    val selected = try self.checkedTypeViewSource(typeRef: receiver, source: source, offset: offset)
+                    if selected.kind == 2U64 { selectedCount += 1U64 }
+                }
             }
         }
         if selectedCount > 1U64 {
