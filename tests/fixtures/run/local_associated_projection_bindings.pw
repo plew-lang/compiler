@@ -1,0 +1,20 @@
+use @Std/Io only { print }
+
+trait Project { type Item }
+struct Number {}
+impl Number as Project { type Item = I64 }
+
+fn echo[T](marker: T, value: T#Project.Item) -> T#Project.Item where T: Project {
+    val body = fn() -> T#Project.Item {
+        val result: T#Project.Item = value
+        return result
+    }
+    return body()
+}
+
+fn main() {
+    print(echo(marker: <Number />, value: 42I64))
+    for val item: Number#Project.Item in [43I64] {
+        print(item)
+    }
+}

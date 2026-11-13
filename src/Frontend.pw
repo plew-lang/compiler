@@ -394,6 +394,7 @@ struct SignatureProofScopes {
     val inherited: Array[DeclarationBoundRef]
     val receiver: U64
     val scopedBinders: Bool = false
+    val body: Bool = false
     val lexicalTrait: U64 = 0U64
     val lexicalTraitArguments: Array[U64] = []
 }
@@ -719,6 +720,7 @@ pub struct Comp {
     pub mut val expressionTypeUses: Dictionary[U64, Array[U64]] = [:]
     pub mut val blockExitRequirements: Dictionary[U64, U64] = [:]
     pub mut val blockTypeUses: Dictionary[U64, Array[U64]] = [:]
+    mut val localAnnotationOccurrences: Dictionary[U64, U64] = [:]
     pub mut val checkedTypeUses: Set[U64] = Set.new()
     pub mut val sourceExpressionLimit: U64 = 0U64
     pub mut val globalCallTemplatesClosed: Bool = false
@@ -2897,8 +2899,16 @@ pub struct SourceBindingFact {
     pub val isMutable: Bool
     pub val typeTerm: U64
     pub val endedBinding: U64
+    val annotation: Optional[LocalAnnotationProof] = <Optional.None />
 }
 impl SourceBindingFact { factory }
+
+struct LocalAnnotationProof {
+    val occurrence: U64
+    val recipe: U64
+    val proofs: Array[AuthoredTypeViewProof]
+}
+impl LocalAnnotationProof { factory }
 
 // Navigation only: a declaration may have several accepted lowering rows
 // (for example a shared or-pattern body). Keep each reader's exact row order.

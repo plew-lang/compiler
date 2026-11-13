@@ -570,11 +570,11 @@ impl Comp {
             _ => {}
         }
     }
-    inout fn storeBuildingSemanticBinding(stmtId: U64, declarationTarget: U64, isMutable: Bool, typeTerm: U64, endedBinding: U64) {
+    inout fn storeBuildingSemanticBinding(stmtId: U64, declarationTarget: U64, isMutable: Bool, typeTerm: U64, endedBinding: U64, annotation: Optional[LocalAnnotationProof]) {
         match self.sourceRecordingOwner() {
             Optional.Some(v: val owner) => {
                 self.sourceFacts.activate(owner: owner)
-                self.sourceFacts.activeBuilder.data.putBinding(stmtId: stmtId, fact: <SourceBindingFact owner=owner declarationTarget=declarationTarget isMutable=isMutable typeTerm=typeTerm endedBinding=endedBinding />)
+                self.sourceFacts.activeBuilder.data.putBinding(stmtId: stmtId, fact: <SourceBindingFact owner=owner declarationTarget=declarationTarget isMutable=isMutable typeTerm=typeTerm endedBinding=endedBinding annotation=annotation />)
             }
             Optional.None => {}
         }

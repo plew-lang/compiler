@@ -570,7 +570,7 @@ impl Comp {
                     }
                     try self.checkSignatureOccurrence(occurrence: occurrence, scope: validation.parentScope, parameters: validation.parentParameters, selfParameter: validation.selfParameter, method: true)
                 } else {
-                    try self.checkSignatureOccurrence(occurrence: occurrence, scope: sourceScope, parameters: scopes.local.parameters, selfParameter: scopes.local.selfParameter, method: scopes.scopedBinders)
+                    try self.checkSignatureOccurrence(occurrence: occurrence, scope: sourceScope, parameters: scopes.local.parameters, selfParameter: scopes.local.selfParameter, method: scopes.scopedBinders, body: scopes.body)
                 }
                 if occurrence.recipe != recipe || !self.typeRefEq(a: occurrence.term, b: node.term) { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "authored type recipe changed its source occurrence", failureDomain: <FailureDomain.Internal />) /> }
             }
@@ -689,6 +689,30 @@ impl Comp {
         return <Result.Ok value=self.sourceTypeUses.useAt(index: id - 1U64).unwrap() />
     }
 
+    inout fn admitLocalAnnotation(id: U64, term: U64, owner: SemanticCompletionOwner) -> Result[LocalAnnotationProof, CompileDiagnostic] {
+        val occurrence = try self.signatureOccurrence(id: id)
+        val lexical = self.lexicalSourceFactOwner(owner: owner)
+        val function = match lexical {
+            SemanticCompletionOwner.Function(index: val index) => index,
+            _ => { return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "local annotation has no lexical declaration", failureDomain: <FailureDomain.Internal />) /> },
+        }
+        val signature = match self.sourceTypeUses.signatureFor(function: function) {
+            Optional.Some(v: val signature) => signature,
+            Optional.None => { return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "local annotation has no registered lexical declaration", failureDomain: <FailureDomain.Internal />) /> },
+        }
+        if occurrence.term != term || occurrence.scope != signature.scope {
+            return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "local annotation has a foreign occurrence", failureDomain: <FailureDomain.Internal />) />
+        }
+        val declaration = self.arena.functionAt(index: function)
+        val scope = try self.declarationTypeScope(owner: function)
+        val assumptions = try self.declarationScopeAssumptions(scope: scope)
+        val method = self.sourceTypeUses.methodScopeFor(function: function).isSome()
+        val scopes = <SignatureProofScopes local=scope assumptions=assumptions inherited=[] receiver=declaration.recvTy scopedBinders=method body=true />
+        mut val validation = <SignatureRecipeValidation />
+        try self.checkAuthoredTypeRecipe(sourceScope: signature.scope, recipe: occurrence.recipe, edge: <AuthoredRecipeEdge.Source />, scopes: scopes, validation: inout validation, offset: occurrence.site)
+        return <Result.Ok value=<LocalAnnotationProof occurrence=id recipe=occurrence.recipe proofs=validation.proofs /> />
+    }
+
     inout fn authoredSignatureOccurrence(signature: AuthoredFunctionSignature, id: U64) -> Result[AuthoredTypeUse, CompileDiagnostic] {
         val occurrence = try self.signatureOccurrence(id: id)
         val function = self.arena.functionAt(index: signature.function)
@@ -698,11 +722,15 @@ impl Comp {
         return <Result.Ok value=occurrence />
     }
 
-    inout fn checkSignatureOccurrence(occurrence: AuthoredTypeUse, scope: U64, parameters: FuncBindRange, selfParameter: U64, method: Bool) -> Result[(), CompileDiagnostic] {
+    inout fn checkSignatureOccurrence(occurrence: AuthoredTypeUse, scope: U64, parameters: FuncBindRange, selfParameter: U64, method: Bool, body: Bool = false) -> Result[(), CompileDiagnostic] {
         if occurrence.scope != scope { return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "authored signature has a foreign type occurrence", failureDomain: <FailureDomain.Internal />) /> }
-        match occurrence.role {
-            SourceTypeUseRole.Declaration => {}
-            _ => { return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "authored signature has a nondeclaration type occurrence", failureDomain: <FailureDomain.Internal />) /> }
+        val matchingRole = match occurrence.role {
+            SourceTypeUseRole.Declaration => !body,
+            SourceTypeUseRole.Body => body,
+            _ => false,
+        }
+        if !matchingRole {
+            return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "authored type occurrence does not belong to its checking phase", failureDomain: <FailureDomain.Internal />) />
         }
         if occurrence.term >= self.arena.typeCount() { return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "authored signature has an invalid type term", failureDomain: <FailureDomain.Internal />) /> }
         mut val index = 0U64

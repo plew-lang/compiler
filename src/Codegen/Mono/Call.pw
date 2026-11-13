@@ -6481,7 +6481,26 @@ pub impl Comp {
             Optional.Some(v: val binding) => binding
             Optional.None => { return <Result.Err error=self.diagnosticAt(offset: self.stmtPrincipalOffset(sid: stmtId), msg: "internal error: final local has no checked source binding") /> }
         }
-        val ref = try self.groundAndRecordBodyType(ref: binding.typeTerm, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: bodyId)
+        val annotationId = self.localAnnotationOccurrences.getOr(key: stmtId, fallback: 0U64)
+        val ref = match binding.annotation {
+            Optional.Some(v: val annotation) => {
+                val occurrence = try self.signatureOccurrence(id: annotationId)
+                if annotation.occurrence != annotationId || annotation.recipe != occurrence.recipe || occurrence.term != ty {
+                    return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "final local has a foreign annotation proof", failureDomain: <FailureDomain.Internal />) />
+                }
+                mut val memo: Dictionary[U64, AuthoredRecipeRead] = [:]
+                val result = (try self.readAuthoredTypeRecipe(proofs: annotation.proofs, recipe: annotation.recipe, environment: self.cur.bodyEnvironment, memo: inout memo, context: <SignatureRecipeContext.Concrete />)).term
+                self.recordBodyTypeTermResult(bodyId: bodyId, source: ty, result: result)
+                self.recordBodyTypeTermResult(bodyId: bodyId, source: binding.typeTerm, result: result)
+                give result
+            }
+            Optional.None => {
+                if annotationId != 0U64 {
+                    return <Result.Err error=self.diagnosticAt(offset: self.stmtPrincipalOffset(sid: stmtId), msg: "final local has no saved annotation proof", failureDomain: <FailureDomain.Internal />) />
+                }
+                give try self.groundAndRecordBodyType(ref: binding.typeTerm, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: bodyId)
+            }
+        }
         val info = self.typeInfoOfRef(ref: ref)
         return <Result.Ok value=<LetEff start=info.nameStart len=info.nameLen arr=info.kind == 3 ty=ref /> />
     }
@@ -6560,7 +6579,7 @@ pub impl Comp {
                 // grounded instance died as a null value at emission (mirrors the
                 // grounded param scanType above).
                 if ty != 0U64 {
-                    try self.scanType(ref: ty)
+                    try self.scanType(ref: le.ty)
                 }
             }
             Stmt.Assign(val target, val value) => {

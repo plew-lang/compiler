@@ -153,3 +153,32 @@ gave 6.878221 s and 7.086465 s on the first three measured pairs.
 An isolated repeat with four pairs gave 6.848379 s and 6.844556 s.
 The slowdown did not reproduce. These are throughput comparisons;
 the whole-program fixed-point gate remains with met-si6j.
+
+## Retain projection proofs on local bindings
+
+Both lowerers attach the authored occurrence of a projected local
+annotation to its binding statement, including the binding made for a
+typed loop. Record checks the canonical type recipe with the lexical
+function's premises and publishes the recipe and proofs with the
+binding in the exact source body. Mono's local type reader requires
+that receipt, replays the admitted recipe under the concrete instance,
+and publishes the result used by Mid. The local layout scan uses the
+resulting type instead of scanning the raw annotation again.
+
+Fixed-input build `20261113T034412-build-5f7ced` produced
+`plewc-com-yjq0-local-projection` (`227c12d9`). The compiler source and
+the lazy CLI suite pass. A generic closure binding and typed loop
+binding pass check, JIT and native with outputs `42` and `43`.
+An invalid projection remains deferred in an unrequested function and
+fails whole-target check.
+
+Isolated deletion probes leave the production final readers unchanged.
+The standalone value view, viewed call and projected local binding all
+fail Internal when their proof is withheld, and intact fresh compiler
+states succeed. See the meta evidence under
+`evidence/rejection-domains/diagnostic-domain-implementation/value-view-proof-replay/`.
+
+Remaining coverage includes deinit and provided owners, proof
+publication for non-projection annotations, and foreign receipt and
+same-owner recovery probes. Source initializer context and compatibility
+verification can still normalize a written type through the old path.
