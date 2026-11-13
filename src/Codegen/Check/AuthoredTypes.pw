@@ -31,7 +31,7 @@ impl Comp {
     inout fn associatedBindingOccurrence(binding: AssocBinding, witness: WitnessMatch) -> Result[AuthoredTypeUse, CompileDiagnostic] {
         val occurrence = try self.signatureOccurrence(id: binding.authoredTypeUse)
         val scope = self.sourceTypeUses.scopeAt(token: occurrence.scope)
-        if scope.isNone() || scope.unwrap().anchor != binding.implOffset || !self.typeRefEq(a: occurrence.term, b: binding.ty) {
+        if scope.isNone() || scope.unwrap().anchor != binding.implOffset || occurrence.site != binding.authoredTypeSite || !self.typeRefEq(a: occurrence.term, b: binding.ty) {
             return <Result.Err error=self.diagnosticAt(offset: binding.tyStart, msg: "associated output has a foreign source occurrence", failureDomain: <FailureDomain.Internal />) />
         }
         val owner = scope.unwrap().implementation
@@ -152,7 +152,7 @@ impl Comp {
             for index in 0U64..<declaration.assocBindingIds.count() {
                 if self.conformFuncIdAt(ids: declaration.assocBindingIds, index: index) == bindingIndex { ownsBinding = true }
             }
-            if !ownsBinding || source.anchor != binding.implOffset || declaration.traitStart != binding.traitOwner || !self.typeRefEq(a: occurrence.term, b: binding.ty) {
+            if !ownsBinding || source.anchor != binding.implOffset || occurrence.site != binding.authoredTypeSite || declaration.traitStart != binding.traitOwner || !self.typeRefEq(a: occurrence.term, b: binding.ty) {
                 return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "associated binding has a foreign source occurrence", failureDomain: <FailureDomain.Internal />) />
             }
             val root = self.conformanceTraitBound(conformance: declaration)

@@ -1,6 +1,6 @@
 ---
 id: com-fur3
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-11-12T21:36:22Z
@@ -100,3 +100,13 @@ the recipe. Both revisions return `Worker#Preferred` as the normalized
 parameter. With the `db463c14` witness substitution, the saved equation
 has bare `Worker` and fails the exact type check. With `3f09a219`, both
 the parameter and the saved immediate RHS are `Worker#Preferred`.
+
+## Outcome
+
+Resolved at `3f09a219`, independently re-reviewed at `7c45e421`.
+The review confirmed that binder replacement preserves the view without
+reselection or re-substitution and that all six positive check/JIT/native
+controls and six negative diagnostics match. The neighboring positives
+were `associated_binding_associated_prerequisite` and
+`retained_associated_interface_nested_conditions`. The isolated equation
+probe separately checks the normalized parameter and immediate equation.

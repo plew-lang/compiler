@@ -627,3 +627,18 @@ Both native fault controls and eight check/JIT/native controls passed.
 Same-source medians were 6.903662 s and 6.898417 s, with identical
 LLVM output in all eight runs. Review also flagged pre-publication
 same-impl RHS occurrence swaps and binder diagnostic classification.
+
+## Same-impl equal RHS occurrence identity
+
+The native pre-publication probe replaced `First = I64`'s occurrence
+with the occurrence of `Second = I64` in the same impl. The previous
+source accepted the swap. Both lowering adapters now retain the
+original RHS source site separately from the occurrence ID; admission
+and replay check that site. Candidate `e557ff09` rejects the swap and
+accepts the original declarations before and after it.
+
+Build `20261113T020835-build-1b5a50` passed, along with the two native
+occurrence/equation controls and seven check/JIT/native controls.
+Same-source medians were 6.925578 s and 6.909718 s with identical LLVM
+in all eight runs. One native link retry required removing older
+temporary compiler binaries after the filesystem ran out of space.

@@ -1477,6 +1477,7 @@ pub struct AssocBinding {
     pub val tyLen: U64
     pub val tyIsArray: Bool
     pub val ty: U64
+    pub val authoredTypeSite: U64
     pub val authoredTypeUse: U64
 }
 
