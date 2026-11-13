@@ -3,6 +3,30 @@
 // but take no value parameters and never capture `self` or another argument.
 // They are deliberately absent from the source callable surface.
 pub impl Comp {
+    inout fn defaultOriginExpression(origin: DefaultGeneratorOrigin, offset: U64) -> Result[U64, CompileDiagnostic] {
+        match origin {
+            DefaultGeneratorOrigin.Parameter(function: val function, parameter: val parameter) => {
+                if function < self.arena.functionCount() {
+                    val parameters = self.arena.functionAt(index: function).params
+                    if parameter < parameters.count() {
+                        val slot = self.funcParamAt(params: parameters, index: parameter)
+                        if slot.hasDefault && slot.defaultExpr < self.arena.exprs.count() { return <Result.Ok value=slot.defaultExpr /> }
+                    }
+                }
+            }
+            DefaultGeneratorOrigin.Field(structure: val structure, field: val field) => {
+                if structure < self.arena.structCount() {
+                    val fields = self.arena.structAt(index: structure).fields
+                    if field < fields.count() {
+                        val slot = fields[field]
+                        if slot.hasDefault && slot.defaultVal < self.arena.exprs.count() { return <Result.Ok value=slot.defaultVal /> }
+                    }
+                }
+            }
+        }
+        return <Result.Err error=self.diagnosticAt(offset: offset, msg: "default generator has no authored expression", failureDomain: <FailureDomain.Internal />) />
+    }
+
     // The frontier is frozen: newly appended zero-argument generator calls
     // are already complete and must not turn this walk into a growing queue.
     // Return the incomplete count so the pipeline cannot mistake a partial

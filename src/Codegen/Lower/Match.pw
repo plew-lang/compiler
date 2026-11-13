@@ -341,7 +341,7 @@ pub impl Comp {
     inout fn registerLocalAnnotation(statement: U64, occurrence: U64) {
         if occurrence == 0U64 { return }
         val written = self.sourceTypeUses.useAt(index: occurrence - 1U64).unwrap()
-        match written.role { SourceTypeUseRole.Body => {} _ => { return } }
+        match written.role { SourceTypeUseRole.Body | SourceTypeUseRole.DefaultArgument => {} _ => { return } }
         self.localAnnotationOccurrences[statement] = occurrence
         self.markBodyRecipeTypeUses(recipe: written.recipe)
     }
@@ -351,7 +351,7 @@ pub impl Comp {
         if node.occurrence != 0U64 {
             val occurrence = self.sourceTypeUses.useAt(index: node.occurrence - 1U64).unwrap()
             match occurrence.role {
-                SourceTypeUseRole.Body => { self.bodyRecipeTypeUses.insert(node.occurrence) }
+                SourceTypeUseRole.Body | SourceTypeUseRole.DefaultArgument => { self.bodyRecipeTypeUses.insert(node.occurrence) }
                 _ => { return }
             }
         }

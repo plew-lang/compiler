@@ -10,24 +10,28 @@ impl Comp {
         return <Result.Ok value=() />
     }
     inout fn lowerDefaultExpr(e: ExprAst) -> Result[U64, CompileDiagnostic] {
-        val scope = self.sourceTypeUses.currentScope()
-        val role = self.sourceTypeUses.currentRole()
         val site = exprAstSpan(e: e).start
+        val scope = self.sourceTypeUses.begin(kind: <SourceTypeScopeKind.DefaultExpression />, anchor: site)
         try self.setAuthoredTypeUseRole(role: <SourceTypeUseRole.DefaultArgument />, site: site)
         val result = self.lowerExpr(e: e)
-        if scope != 0U64 && !self.sourceTypeUses.setRole(token: scope, role: role) {
-            return <Result.Err error=self.diagnosticAt(offset: site, msg: "invalid default type use role restoration", failureDomain: <FailureDomain.Internal />) />
-        }
-        return result
+        return self.finishDefaultExpressionScope(scope: scope, site: site, result: result)
     }
     inout fn lowerSyntaxDefaultExpr(id: ExprId) -> Result[U64, CompileDiagnostic] {
-        val scope = self.sourceTypeUses.currentScope()
-        val role = self.sourceTypeUses.currentRole()
         val site = syntaxExpr(file: self.syntax, id: id).span.start
+        val scope = self.sourceTypeUses.begin(kind: <SourceTypeScopeKind.DefaultExpression />, anchor: site)
         try self.setAuthoredTypeUseRole(role: <SourceTypeUseRole.DefaultArgument />, site: site)
         val result = self.lowerSyntaxExpr(id: id)
-        if scope != 0U64 && !self.sourceTypeUses.setRole(token: scope, role: role) {
-            return <Result.Err error=self.diagnosticAt(offset: site, msg: "invalid default type use role restoration", failureDomain: <FailureDomain.Internal />) />
+        return self.finishDefaultExpressionScope(scope: scope, site: site, result: result)
+    }
+    inout fn finishDefaultExpressionScope(scope: U64, site: U64, result: Result[U64, CompileDiagnostic]) -> Result[U64, CompileDiagnostic] {
+        if !self.sourceTypeUses.finish(token: scope, succeeded: result.isOk()) {
+            return <Result.Err error=self.diagnosticAt(offset: site, msg: "invalid default expression scope completion", failureDomain: <FailureDomain.Internal />) />
+        }
+        match result {
+            Result.Ok(value: val expression) => {
+                self.sourceTypeUses.bindDefaultExpressionScope(origin: self.arena.exprOriginSerial[expression], token: scope)
+            }
+            Result.Err(error: _) => {}
         }
         return result
     }

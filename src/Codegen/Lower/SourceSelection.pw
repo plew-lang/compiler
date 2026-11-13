@@ -178,7 +178,7 @@ impl Comp {
         mut val authoredArguments: Optional[Array[U64]] = <Optional.None />
         if argumentOccurrences.count() != 0U64 && !strip {
             match self.sourceTypeUses.currentRole() {
-                SourceTypeUseRole.Body => { authoredArguments = <Optional.Some v=argumentOccurrences /> }
+                SourceTypeUseRole.Body | SourceTypeUseRole.DefaultArgument => { authoredArguments = <Optional.Some v=argumentOccurrences /> }
                 _ => {}
             }
         }

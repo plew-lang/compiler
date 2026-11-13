@@ -571,7 +571,7 @@ impl Comp {
                     }
                     try self.checkSignatureOccurrence(occurrence: occurrence, scope: validation.parentScope, parameters: validation.parentParameters, selfParameter: validation.selfParameter, method: true)
                 } else {
-                    try self.checkSignatureOccurrence(occurrence: occurrence, scope: sourceScope, parameters: scopes.local.parameters, selfParameter: scopes.local.selfParameter, method: scopes.scopedBinders, body: scopes.body)
+                    try self.checkSignatureOccurrence(occurrence: occurrence, scope: sourceScope, parameters: scopes.local.parameters, selfParameter: scopes.local.selfParameter, method: scopes.scopedBinders, useRole: scopes.useRole)
                 }
                 if occurrence.recipe != recipe || !self.typeRefEq(a: occurrence.term, b: node.term) { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "authored type recipe changed its source occurrence", failureDomain: <FailureDomain.Internal />) /> }
             }
@@ -697,10 +697,27 @@ impl Comp {
             SemanticCompletionOwner.Function(index: val index) => index,
             _ => { return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "authored body type has no lexical declaration", failureDomain: <FailureDomain.Internal />) /> },
         }
-        val token = match self.sourceTypeUses.signatureFor(function: function) {
-            Optional.Some(v: val signature) => signature.scope,
-            Optional.None => self.sourceTypeUses.deinitScopeToken(function: function),
+        mut val declarationFunction = function
+        mut val defaultToken: U64 = 0U64
+        match self.decls.defaultGeneratorOrigins.get(key: function) {
+            Optional.Some(v: val origin) => {
+                val expression = try self.defaultOriginExpression(origin: origin, offset: occurrence.site)
+                defaultToken = self.sourceTypeUses.defaultExpressionScope(origin: self.arena.exprOriginSerial[expression])
+                if defaultToken == 0U64 {
+                    return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "default generator has no authored expression scope", failureDomain: <FailureDomain.Internal />) />
+                }
+                match origin {
+                    DefaultGeneratorOrigin.Parameter(function: val parent, parameter: _) => { declarationFunction = parent }
+                    DefaultGeneratorOrigin.Field(structure: _, field: _) => {}
+                }
+            }
+            Optional.None => {}
         }
+        val signatureToken = match self.sourceTypeUses.signatureFor(function: declarationFunction) {
+            Optional.Some(v: val signature) => signature.scope,
+            Optional.None => self.sourceTypeUses.deinitScopeToken(function: declarationFunction),
+        }
+        val token = if defaultToken != 0U64 { give defaultToken } else { give signatureToken }
         val sourceScope = match self.sourceTypeUses.scopeAt(token: token) {
             Optional.Some(v: val scope) => scope,
             Optional.None => { return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "authored body type has no registered lexical declaration", failureDomain: <FailureDomain.Internal />) /> },
@@ -709,22 +726,26 @@ impl Comp {
             SourceTypeScopeState.Lowered => {}
             _ => { return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "authored body type belongs to an unfinished declaration", failureDomain: <FailureDomain.Internal />) /> }
         }
-        if occurrence.term != term || occurrence.scope != token || sourceScope.function.unwrapOr(fallback: 18446744073709551615U64) != function {
+        val matchesOwner = if defaultToken != 0U64 {
+            give sourceScope.parent == signatureToken
+        } else { give sourceScope.function.unwrapOr(fallback: 18446744073709551615U64) == function }
+        if occurrence.term != term || occurrence.scope != token || !matchesOwner {
             return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "authored body type has a foreign occurrence", failureDomain: <FailureDomain.Internal />) />
         }
-        val declaration = self.arena.functionAt(index: function)
+        val declaration = self.arena.functionAt(index: declarationFunction)
         val scope = try self.declarationTypeScope(owner: function)
         val assumptions = try self.declarationScopeAssumptions(scope: scope)
-        val method = self.sourceTypeUses.methodScopeFor(function: function).isSome()
-        val scopes = <SignatureProofScopes local=scope assumptions=assumptions inherited=[] receiver=declaration.recvTy scopedBinders=method body=true />
+        val method = self.sourceTypeUses.methodScopeFor(function: declarationFunction).isSome()
+        val role = if defaultToken != 0U64 { give <SourceTypeUseRole.DefaultArgument /> } else { give <SourceTypeUseRole.Body /> }
+        val scopes = <SignatureProofScopes local=scope assumptions=assumptions inherited=[] receiver=declaration.recvTy scopedBinders=method useRole=role />
         mut val validation = <SignatureRecipeValidation />
         // Short projections may link to a where-clause argument or a parent
         // receiver argument. Other annotations have only body-owned recipes.
         if self.arena.typeContainsAssociatedProjection(ref: term) {
-            try self.checkSignatureOccurrence(occurrence: occurrence, scope: token, parameters: scope.parameters, selfParameter: scope.selfParameter, method: method, body: true)
-            match self.authoredSignatureViews.get(key: function) {
+            try self.checkSignatureOccurrence(occurrence: occurrence, scope: token, parameters: scope.parameters, selfParameter: scope.selfParameter, method: method, useRole: role)
+            match self.authoredSignatureViews.get(key: declarationFunction) {
                 Optional.Some(v: val admitted) => {
-                    if admitted.signature.scope != token || admitted.signature.function != function {
+                    if admitted.signature.scope != signatureToken || admitted.signature.function != declarationFunction {
                         return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "authored body type has a foreign signature admission", failureDomain: <FailureDomain.Internal />) />
                     }
                     validation = <SignatureRecipeValidation admittedDeclarations=admitted.recipeChecks equations=admitted.recipeEquations receiverEquations=admitted.receiverEquations proofs=admitted.proofs />
@@ -748,11 +769,12 @@ impl Comp {
         return <Result.Ok value=occurrence />
     }
 
-    inout fn checkSignatureOccurrence(occurrence: AuthoredTypeUse, scope: U64, parameters: FuncBindRange, selfParameter: U64, method: Bool, body: Bool = false) -> Result[(), CompileDiagnostic] {
+    inout fn checkSignatureOccurrence(occurrence: AuthoredTypeUse, scope: U64, parameters: FuncBindRange, selfParameter: U64, method: Bool, useRole: SourceTypeUseRole = <SourceTypeUseRole.Declaration />) -> Result[(), CompileDiagnostic] {
         if occurrence.scope != scope { return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "authored signature has a foreign type occurrence", failureDomain: <FailureDomain.Internal />) /> }
         val matchingRole = match occurrence.role {
-            SourceTypeUseRole.Declaration => !body,
-            SourceTypeUseRole.Body => body,
+            SourceTypeUseRole.Declaration => match useRole { SourceTypeUseRole.Declaration => true, _ => false },
+            SourceTypeUseRole.Body => match useRole { SourceTypeUseRole.Body => true, _ => false },
+            SourceTypeUseRole.DefaultArgument => match useRole { SourceTypeUseRole.DefaultArgument => true, _ => false },
             _ => false,
         }
         if !matchingRole {

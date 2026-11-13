@@ -400,7 +400,7 @@ struct SignatureProofScopes {
     val inherited: Array[DeclarationBoundRef]
     val receiver: U64
     val scopedBinders: Bool = false
-    val body: Bool = false
+    val useRole: SourceTypeUseRole = <SourceTypeUseRole.Declaration />
     val lexicalTrait: U64 = 0U64
     val lexicalTraitArguments: Array[U64] = []
 }
