@@ -419,7 +419,7 @@ pub impl Comp {
         val scope = self.sourceTypeUses.begin(kind: <SourceTypeScopeKind.Nominal />, anchor: defOffset)
         val result = self.lowerType(t: ty)
         val binding = self.internBytes(s: name)
-        return self.finishLoweredNewtype(name: binding, result: result, defOffset: defOffset, scope: scope)
+        return self.finishLoweredNewtype(name: binding, result: result, typeSite: ty.span.start, defOffset: defOffset, scope: scope)
     }
 
     inout fn lowerSyntaxNewtype(id: NewtypeId) -> Result[(), CompileDiagnostic] {
@@ -428,20 +428,20 @@ pub impl Comp {
         val name: Bind = <Bind nameStart=item.name.start nameLen=nameLen fieldStart=item.name.start fieldLen=nameLen />
         val scope = self.sourceTypeUses.begin(kind: <SourceTypeScopeKind.Nominal />, anchor: item.span.start)
         val result = self.lowerSyntaxType(id: item.ty)
-        return self.finishLoweredNewtype(name: name, result: result, defOffset: item.span.start, scope: scope)
+        return self.finishLoweredNewtype(name: name, result: result, typeSite: syntaxType(file: self.syntax, id: item.ty).span.start, defOffset: item.span.start, scope: scope)
     }
 
-    inout fn finishLoweredNewtype(name: Bind, result: Result[PType, CompileDiagnostic], defOffset: U64, scope: U64) -> Result[(), CompileDiagnostic] {
+    inout fn finishLoweredNewtype(name: Bind, result: Result[PType, CompileDiagnostic], typeSite: U64, defOffset: U64, scope: U64) -> Result[(), CompileDiagnostic] {
         if !self.sourceTypeUses.finish(token: scope, succeeded: result.isOk()) {
             return <Result.Err error=self.diagnosticAt(offset: defOffset, msg: "invalid nominal source scope completion", failureDomain: <FailureDomain.Internal />) />
         }
         val under = try result
-        self.appendLoweredNewtype(name: name, under: under, defOffset: defOffset, scope: scope)
+        self.appendLoweredNewtype(name: name, under: under, typeSite: typeSite, defOffset: defOffset, scope: scope)
         return <Result.Ok value=() />
     }
 
-    inout fn appendLoweredNewtype(name: Bind, under: PType, defOffset: U64, scope: U64) {
-        self.arena.registerNewtype(<NewtypeDef sourceTypeScope=scope authoredTypeUse=under.authoredUse nameStart=name.nameStart nameLen=name.nameLen nameId=intern(c: inout self, start: name.nameStart, len: name.nameLen) underStart=under.start underLen=under.len underRef=under.ref defOffset=defOffset />)
+    inout fn appendLoweredNewtype(name: Bind, under: PType, typeSite: U64, defOffset: U64, scope: U64) {
+        self.arena.registerNewtype(<NewtypeDef sourceTypeScope=scope authoredTypeUse=under.authoredUse authoredTypeSite=typeSite nameStart=name.nameStart nameLen=name.nameLen nameId=intern(c: inout self, start: name.nameStart, len: name.nameLen) underStart=under.start underLen=under.len underRef=under.ref defOffset=defOffset />)
     }
 
     inout fn lowerGlobalVal(s: StmtAst) -> Result[(), CompileDiagnostic] {

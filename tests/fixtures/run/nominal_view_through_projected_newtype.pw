@@ -1,0 +1,13 @@
+use @Std/Io only { print }
+trait Project { type Item }
+trait Marker { fn number() -> I64 }
+struct Projector {}
+struct Number {}
+impl Projector as Project { type Item = Number }
+impl Number as Marker { fn number() -> I64 { return 42I64 } }
+newtype Box = Projector#Project.Item
+struct Holder { val box: Box#Marker }
+fn main() {
+    val holder = <Holder box=((<Number /> as Box)#Marker) />
+    print(42I64)
+}

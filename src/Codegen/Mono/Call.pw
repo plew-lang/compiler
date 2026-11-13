@@ -2236,14 +2236,12 @@ pub impl Comp {
         if !source.hasDecl || !target.hasDecl || source.declOffset != declaration.defOffset || target.declOffset != declaration.defOffset || source.args.count() != declaration.typeParams.count() || target.args.count() != declaration.typeParams.count() {
             return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "enum conversion has an invalid declaration boundary") />
         }
-        val sourceEnvironment = <InstanceEnvironment params=declaration.typeParams args=source.args receiverRef=sourceRef />
-        val targetEnvironment = <InstanceEnvironment params=declaration.typeParams args=target.args receiverRef=targetRef />
         mut val boundaries: Array[ValueConversionBoundary] = []
         mut val variant = 0U64
         while variant < declaration.variants.count() {
             for field in self.arena.enumVariantAt(enumIndex: enumIdx, variantIndex: variant).fields {
-                val sourceField = try self.groundTermForBody(ref: field.ty, environment: sourceEnvironment, selfRef: sourceRef, itemRef: 0U64)
-                val targetField = try self.groundTermForBody(ref: field.ty, environment: targetEnvironment, selfRef: targetRef, itemRef: 0U64)
+                val sourceField = try self.selectedNominalFieldType(field: field, token: declaration.sourceTypeScope, owner: declaration.defOffset, params: declaration.typeParams, receiver: sourceRef)
+                val targetField = try self.selectedNominalFieldType(field: field, token: declaration.sourceTypeScope, owner: declaration.defOffset, params: declaration.typeParams, receiver: targetRef)
                 boundaries.append(<ValueConversionBoundary sourceRef=sourceField targetRef=targetField />)
             }
             variant += 1U64
@@ -6928,7 +6926,7 @@ impl Comp {
             return <Result.Ok value=0U64 />
         }
         mut val adapterTarget: U64 = 0U64
-        val underlying: U64 = self.arena.newtypeUnderlying(ref: environment.receiverRef)
+        val underlying: U64 = try self.checkedNominalUnderlying(ref: environment.receiverRef)
         if underlying != 0U64 {
             val target = try self.inheritedBodyEnvironment(function: fnIdx, arguments: args, source: environment, receiver: underlying)
             adapterTarget = try self.enqueuePreparedFinalBody(fnIdx: fnIdx, args: args, recvInstRef: underlying, environment: target)

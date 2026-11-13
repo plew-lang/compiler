@@ -77,3 +77,13 @@ projected newtype can be reached even earlier in declaration preparation.
 Keep these examples as ordering probes. The baseline also accepts a bare
 source cast to a viewed newtype in check before failing Mid preparation;
 the passing regression uses the exact viewed source cast.
+
+Build `20261113T083350-build-52e21e` produced `db491d28559e`.
+The newtype-first admission order fixes the field-through-projected-newtype
+probe in JIT. The earlier three run fixtures, generic field defaults and
+the inherited newtype adapter also pass JIT. Final newtype body and
+destruction preparation now check the receipt, enum repacking reads the
+same selected slot as construction, and admission and selection compare
+the annotation source site as well as occurrence ID and owner. Arbitrary
+forward newtype dependencies, closed nested proof coverage, fault
+injection and the value-AST control remain open.

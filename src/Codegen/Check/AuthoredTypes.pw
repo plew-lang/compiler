@@ -769,13 +769,22 @@ impl Comp {
     }
 
     inout fn admitNominalTypeAnnotations() -> Result[(), CompileDiagnostic] {
+        for index in 0U64..<self.arena.newtypeCount() {
+            val declaration = self.arena.newtypeAt(index: index)
+            if declaration.sourceTypeScope == 0U64 { continue }
+            val scope = <DeclarationTypeScope origin=<DeclarationScopeOrigin.Nominal /> owner=declaration.defOffset parameters=<FuncBindRange start=0U64 len=0U64 /> />
+            val proof = try self.admitNominalTypeAnnotation(id: declaration.authoredTypeUse, site: declaration.authoredTypeSite, term: declaration.underRef, token: declaration.sourceTypeScope, scope: scope)
+            if proof.sourceTerm != declaration.underRef {
+                self.arena.setAdmittedNewtypeUnderlying(index: index, term: proof.sourceTerm)
+            }
+        }
         for index in 0U64..<self.arena.structCount() {
             val declaration = self.arena.structAt(index: index)
             if declaration.sourceTypeScope == 0U64 { continue }
             val scope = <DeclarationTypeScope origin=<DeclarationScopeOrigin.Nominal /> owner=declaration.defOffset parameters=self.pushFuncBinds(binds: declaration.typeParams) />
             for fieldIndex in 0U64..<declaration.fields.count() {
                 val field = declaration.fields[fieldIndex]
-                val proof = try self.admitNominalTypeAnnotation(id: field.authoredTypeUse, term: field.ty, token: declaration.sourceTypeScope, scope: scope)
+                val proof = try self.admitNominalTypeAnnotation(id: field.authoredTypeUse, site: field.authoredTypeSite, term: field.ty, token: declaration.sourceTypeScope, scope: scope)
                 if proof.sourceTerm != field.ty {
                     self.arena.setAdmittedStructFieldType(index: index, field: fieldIndex, term: proof.sourceTerm)
                 }
@@ -789,20 +798,11 @@ impl Comp {
                 val variant = declaration.variants[variantIndex]
                 for fieldIndex in 0U64..<variant.fields.count() {
                     val field = variant.fields[fieldIndex]
-                    val proof = try self.admitNominalTypeAnnotation(id: field.authoredTypeUse, term: field.ty, token: declaration.sourceTypeScope, scope: scope)
+                    val proof = try self.admitNominalTypeAnnotation(id: field.authoredTypeUse, site: field.authoredTypeSite, term: field.ty, token: declaration.sourceTypeScope, scope: scope)
                     if proof.sourceTerm != field.ty {
                         self.arena.setAdmittedEnumFieldType(index: index, variant: variantIndex, field: fieldIndex, term: proof.sourceTerm)
                     }
                 }
-            }
-        }
-        for index in 0U64..<self.arena.newtypeCount() {
-            val declaration = self.arena.newtypeAt(index: index)
-            if declaration.sourceTypeScope == 0U64 { continue }
-            val scope = <DeclarationTypeScope origin=<DeclarationScopeOrigin.Nominal /> owner=declaration.defOffset parameters=<FuncBindRange start=0U64 len=0U64 /> />
-            val proof = try self.admitNominalTypeAnnotation(id: declaration.authoredTypeUse, term: declaration.underRef, token: declaration.sourceTypeScope, scope: scope)
-            if proof.sourceTerm != declaration.underRef {
-                self.arena.setAdmittedNewtypeUnderlying(index: index, term: proof.sourceTerm)
             }
         }
         return <Result.Ok value=() />
@@ -813,7 +813,14 @@ impl Comp {
     // until a closed instance can interpret the saved conformance.
     inout fn selectedNominalFieldType(field: FieldDef, token: U64, owner: U64, params: Array[Bind], receiver: U64) -> Result[U64, CompileDiagnostic] {
         if token == 0U64 { return self.groundUnderInst(instRef: receiver, tyRef: field.ty) }
-        val saved = try self.requireNominalTypeAnnotation(id: field.authoredTypeUse, term: field.ty, token: token, owner: owner)
+        if receiver == 0U64 || receiver >= self.arena.typeCount() {
+            return <Result.Err error=self.diagnosticAt(offset: field.authoredTypeSite, msg: "nominal field has no selected receiver", failureDomain: <FailureDomain.Internal />) />
+        }
+        val head = self.arena.typeTermAt(index: receiver)
+        if head.hasDecl && head.declOffset != owner {
+            return <Result.Err error=self.diagnosticAt(offset: field.authoredTypeSite, msg: "nominal field has a foreign selected receiver", failureDomain: <FailureDomain.Internal />) />
+        }
+        val saved = try self.requireNominalTypeAnnotation(id: field.authoredTypeUse, site: field.authoredTypeSite, term: field.ty, token: token, owner: owner)
         if self.arena.typeIsClosed(ref: field.ty) { return <Result.Ok value=field.ty /> }
         val instance = self.arena.typeAt(index: receiver)
         if instance.args.count() != params.count() || !self.arena.typeIsClosed(ref: receiver) {
@@ -828,18 +835,30 @@ impl Comp {
         return <Result.Ok value=admitted.term />
     }
 
-    inout fn requireNominalTypeAnnotation(id: U64, term: U64, token: U64, owner: U64) -> Result[LocalAnnotationProof, CompileDiagnostic] {
+    inout fn requireNominalTypeAnnotation(id: U64, site: U64, term: U64, token: U64, owner: U64) -> Result[LocalAnnotationProof, CompileDiagnostic] {
         val occurrence = try self.signatureOccurrence(id: id)
         val source = self.sourceTypeUses.scopeAt(token: token)
         match self.nominalAnnotationProofs.get(key: id) {
             Optional.Some(v: val saved) => {
-                if saved.occurrence == id && saved.recipe == occurrence.recipe && saved.sourceTerm == term && occurrence.scope == token && source.isSome() && source.unwrap().anchor == owner {
+                if saved.occurrence == id && saved.recipe == occurrence.recipe && saved.sourceTerm == term && occurrence.site == site && occurrence.scope == token && source.isSome() && source.unwrap().anchor == owner {
                     return <Result.Ok value=saved />
                 }
             }
             Optional.None => {}
         }
         return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "nominal type has no matching saved annotation", failureDomain: <FailureDomain.Internal />) />
+    }
+
+    inout fn checkedNominalUnderlying(ref: U64) -> Result[U64, CompileDiagnostic] {
+        if ref == 0U64 || ref >= self.arena.typeCount() { return <Result.Ok value=0U64 /> }
+        val term = self.arena.typeTermAt(index: ref)
+        if !term.hasDecl { return <Result.Ok value=0U64 /> }
+        val declaration = match self.arena.newtypeByOffset(offset: term.declOffset) {
+            Optional.None => { return <Result.Ok value=0U64 /> }
+            Optional.Some(v: val declaration) => declaration,
+        }
+        (try self.requireNominalTypeAnnotation(id: declaration.authoredTypeUse, site: declaration.authoredTypeSite, term: declaration.underRef, token: declaration.sourceTypeScope, owner: declaration.defOffset))
+        return <Result.Ok value=declaration.underRef />
     }
 
     // Surface visibility examines what was written. Field and representation
@@ -849,7 +868,7 @@ impl Comp {
         return self.sourceTypeUses.useAt(index: id - 1U64).unwrap().term
     }
 
-    inout fn admitNominalTypeAnnotation(id: U64, term: U64, token: U64, scope: DeclarationTypeScope) -> Result[LocalAnnotationProof, CompileDiagnostic] {
+    inout fn admitNominalTypeAnnotation(id: U64, site: U64, term: U64, token: U64, scope: DeclarationTypeScope) -> Result[LocalAnnotationProof, CompileDiagnostic] {
         val occurrence = try self.signatureOccurrence(id: id)
         val source = match self.sourceTypeUses.scopeAt(token: token) {
             Optional.Some(v: val source) => source,
@@ -863,7 +882,7 @@ impl Comp {
             SourceTypeScopeState.Lowered => {}
             _ => { return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "nominal annotation belongs to an unfinished declaration", failureDomain: <FailureDomain.Internal />) /> }
         }
-        if source.anchor != scope.owner || occurrence.scope != token || occurrence.term != term || self.nominalAnnotationProofs.contains(key: id) {
+        if source.anchor != scope.owner || occurrence.site != site || occurrence.scope != token || occurrence.term != term || self.nominalAnnotationProofs.contains(key: id) {
             return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "nominal annotation has a foreign source occurrence", failureDomain: <FailureDomain.Internal />) />
         }
         val scopes = <SignatureProofScopes local=scope assumptions=[] inherited=[] receiver=0U64 />

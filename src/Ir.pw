@@ -1196,6 +1196,7 @@ pub struct Param {
 
 pub struct FieldDef {
     pub val authoredTypeUse: U64 = 0U64
+    pub val authoredTypeSite: U64 = 0U64
     pub val nameStart: U64
     pub val nameLen: U64
     // interned name id (Phase C): set by internAllDecls; 0 until then.
@@ -3117,6 +3118,7 @@ pub struct NewtypeDef {
     pub val underLen: U64
     pub(get) mut val underRef: U64
     pub val authoredTypeUse: U64 = 0U64
+    pub val authoredTypeSite: U64 = 0U64
     // original source offset of the declaration (see StructDef.defOffset): kept for
     // `moduleOf` (scoped type-visibility), since nameStart is re-interned. 0 if unknown.
     pub val defOffset: U64 = 0
