@@ -675,3 +675,27 @@ The diagnostic is not the formal fixed-point gate.
 Next confirm recipe ownership across the declaration and body
 compatibility callers, including stripped selectors and open
 type qualifiers. Keep final member selection tracked by com-4k31.
+
+### Written type arguments on a stripped selector
+
+Both expression lowering adapters retain the authored slots of a selector
+removed with `#!`. Record admits those slots in the containing body
+before legacy type-use checks, and Mono replays the same receipts.
+Replaying these inputs requires no resulting view type because stripping
+contributes no selector to the result.
+
+On `84d88a9bc5e7`, `value#!Marker[T#Source[Bool].Item]` passes check
+and executes despite the enclosing function establishing only
+`T: Source[I64]`. Fixed-input build `20261113T145141-build-61149c`
+produced `7ba01ac05383`. The invalid case now rejects in check and JIT
+at the authored projection. The I64 counterpart passes check, JIT and
+linked native execution with output 42. Existing value ARC, extension
+super, view-source-cycle removal and concrete qualifier controls pass
+in JIT. Fixed-input generation `20261113T145504-gen-bdd003` passed.
+
+The open qualifier RED is `T#Make[U#Source[I64].Item].value()` with
+`T: Make[I64]` and `U: Source[I64, Item=I64]`; both this call and the
+literal `T#Make[I64].value()` still reject as no matching method.
+The qualifier's type-parameter identity currently stops at Expr.Ident.
+Trace the viewed binder into a saved complete source before the
+associated-member selection boundary in com-4k31.

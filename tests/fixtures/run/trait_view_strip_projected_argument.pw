@@ -1,0 +1,12 @@
+use @Std/Io only { print }
+trait Source[T] { type Item }
+struct Number {}
+impl Number as Source[I64] { type Item=I64 }
+trait Marker[T] {}
+struct Value {}
+impl Value as Marker[I64] {}
+fn clear[T](value: Value#Marker[I64], source: T) where T: Source[I64] {
+    val plain: Value = value#!Marker[T#Source[I64].Item]
+    print(42I64)
+}
+fn main() { clear(value: <Value />#Marker[I64], source: <Number />) }

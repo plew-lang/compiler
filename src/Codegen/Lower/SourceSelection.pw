@@ -213,13 +213,22 @@ impl Comp {
 
     inout fn lowerBoundValueView(recv: U64, source: ResolvedViewSource, names: Array[Span], head: U64, strip: Bool, argumentOccurrences: Array[U64]) -> Result[U64, CompileDiagnostic] {
         mut val authoredArguments: Optional[Array[U64]] = <Optional.None />
-        if argumentOccurrences.count() != 0U64 && !strip {
+        if argumentOccurrences.count() != 0U64 {
             match self.sourceTypeUses.currentRole() {
                 SourceTypeUseRole.Body | SourceTypeUseRole.DefaultArgument => { authoredArguments = <Optional.Some v=argumentOccurrences /> }
                 _ => {}
             }
         }
         mut val result = try self.lowerValueView(recv: recv, source: source, strip: strip)
+        if strip && authoredArguments.isSome() {
+            mut val slots: Array[(index: U64, occurrence: U64)] = []
+            for index in 0U64..<argumentOccurrences.count() {
+                if self.bodyTypeNeedsViewAdmission(ref: source.traitInstance.positionalArgs[index]) {
+                    slots.append((index: index, occurrence: argumentOccurrences[index]))
+                }
+            }
+            if slots.count() != 0U64 { self.authoredExpressionTypeSlots[result] = slots }
+        }
         if !strip && source.traitInstance.positionalArgs.count() != 0U64 {
             if !self.sourceTypeUses.bindValueViewArguments(expression: result, arguments: authoredArguments) {
                 return <Result.Err error=self.diagnosticAt(offset: source.writtenStart, msg: "invalid value view argument registration", failureDomain: <FailureDomain.Internal />) />

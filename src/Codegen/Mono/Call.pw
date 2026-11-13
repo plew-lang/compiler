@@ -3085,6 +3085,7 @@ pub impl Comp {
             val result = (try self.readAuthoredTypeRecipe(proofs: proof.proofs, recipe: proof.recipe, environment: self.cur.bodyEnvironment, memo: inout memo, context: <SignatureRecipeContext.Concrete />)).term
             self.recordBodyTypeTermResult(bodyId: bodyId, source: proof.sourceTerm, result: result)
         }
+        if term == 0U64 { return <Result.Ok value=() /> }
         val prepared = self.applyPublishedBodyTypeChildren(bodyId: bodyId, ref: term)
         val result = try self.groundAndRecordBodyType(ref: prepared, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: bodyId)
         self.recordBodyTypeTermResult(bodyId: bodyId, source: term, result: result)
@@ -6321,9 +6322,13 @@ pub impl Comp {
             }
             Expr.ExtView(recv: val recv, source: val source, strip: val strip) => {
                 try self.scanExprInsts(exprId: recv)
+                // A stripped selector still owns its written type arguments.
+                val bodyId = self.currentBodyInstanceId()
+                if strip && self.authoredExpressionTypeSlots.contains(key: exprId) {
+                    try self.replayExpressionTypeSlotProofs(exprId: exprId, written: source.traitInstance.positionalArgs, term: 0U64, bodyId: bodyId, sourceBodyId: bodyId)
+                }
                 // Every intermediate view is a typed value, even when only
                 // the outermost view reaches a call or storage boundary.
-                val bodyId = self.currentBodyInstanceId()
                 if bodyId != 0U64 && !strip && source.traitInstance.owner != 0U64 {
                     val fact = try self.preparedBodyExpression(bodyId: bodyId, exprId: exprId, globalInitializerTarget: self.cur.globalInitializerTarget)
                     val owner = try self.bodySourceOwner(bodyId: bodyId, globalInitializerTarget: self.cur.globalInitializerTarget)
