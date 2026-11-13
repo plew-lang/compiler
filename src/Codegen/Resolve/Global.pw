@@ -387,7 +387,7 @@ pub impl Comp {
         match self.arena.exprs[exprId] {
             Expr.Make(val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, ty: val ty, val fields) => {
                 if isEnum {
-                    if self.typeHasAssocFn(typeStart: typeStart, typeLen: typeLen, nameStart: variantStart, nameLen: variantLen) {
+                    if try self.typeHasAssocFn(typeStart: typeStart, typeLen: typeLen, nameStart: variantStart, nameLen: variantLen) {
                         val recv: U64 = self.pushExpr(e: <Expr.Ident start=typeStart len=typeLen />)
                         mut val args: Array[Arg] = []
                         mut val fi: U64 = 0
@@ -421,7 +421,7 @@ pub impl Comp {
                     // `x as T` ⟺ `<T from=x/>` (spec/12): when `T` owns a `from` factory
                     // (an anonymous `factory(from: …)`), route the cast to it. Numeric casts
                     // are untouched (primitives have no `from` factory).
-                    if self.typeHasAssocFn(typeStart: tyStart, typeLen: tyLen, nameStart: fromN.nameStart, nameLen: fromN.nameLen) {
+                    if try self.typeHasAssocFn(typeStart: tyStart, typeLen: tyLen, nameStart: fromN.nameStart, nameLen: fromN.nameLen) {
                         val recv: U64 = self.pushExpr(e: <Expr.Ident start=tyStart len=tyLen />)
                         mut val cargs: Array[Arg] = []
                         cargs.append(<Arg expr=operand isInout=false labelStart=fromN.nameStart labelLen=fromN.nameLen hasLabel=true />)
@@ -525,20 +525,10 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
-    inout fn anonymousConstructionCandidates(typeStart: U64, typeLen: U64) -> Array[U64] {
-        val source = self.realTypeNameInModule(useMod: self.moduleOf(offset: typeStart), start: typeStart, len: typeLen)
-        val receiver = self.newtypeUnderName(start: source.nameStart, len: source.nameLen)
+    inout fn anonymousConstructionCandidates(typeStart: U64, typeLen: U64) -> Result[Array[U64], CompileDiagnostic] {
+        val receiver = try self.checkedAssociatedReceiverName(start: typeStart, len: typeLen)
         val name = intern(c: inout self, start: receiver.nameStart, len: receiver.nameLen)
-        return self.arena.anonymousFactoriesForReceiver(nameId: name)
-    }
-
-    inout fn constructionHasAnonymousFactories(exprId: U64) -> Bool {
-        match self.arena.exprs[exprId] {
-            Expr.Make(val typeStart, val typeLen, variantStart: _, variantLen: _, val isEnum, ty: _, fields: _) => {
-                return !isEnum && self.anonymousConstructionCandidates(typeStart: typeStart, typeLen: typeLen).count() != 0U64
-            }
-            _ => { return false }
-        }
+        return <Result.Ok value=self.arena.anonymousFactoriesForReceiver(nameId: name) />
     }
 
     // Memberwise construction participates with its declared field types, not
@@ -633,7 +623,7 @@ pub impl Comp {
                 // A record literal has no nominal factory receiver. Record owns
                 // its structural field/context checking through the normal path.
                 if typeLen == 0U64 && ty == 0U64 { return <Result.Ok value=() /> }
-                val candidates = self.anonymousConstructionCandidates(typeStart: typeStart, typeLen: typeLen)
+                val candidates = try self.anonymousConstructionCandidates(typeStart: typeStart, typeLen: typeLen)
                 val receiver = try self.factoryConstructionReceiver(writtenTerm: ty, typeStart: typeStart, typeLen: typeLen, offset: self.exprOffset(id: exprId))
                 val abstractReceiver = receiver != 0U64 && receiver < self.arena.typeCount() && (self.arena.typeTermAt(index: receiver).paramId != 0U64 || self.arena.typeTermAt(index: receiver).assocNameId != 0U64)
                 if isEnum && !abstractReceiver { return <Result.Ok value=() /> }

@@ -274,3 +274,22 @@ nominal positives pass check/JIT/linked native and four negatives pass
 check and lazy diagnostics. The existing newtype factory and adapter
 controls pass JIT. Final review, final same-source comparison and
 remaining internal substitution controls are open.
+
+## Associated consumer and chained projection checkpoint
+
+The named/anonymous factory and associated value presence checks now use
+the checked newtype RHS, as do the later selected callable readers. Nominal
+admission retains the selected associated binding's prerequisite equations
+along with its immediate result. The chained-factory fixture was rejected
+by development candidate `834eb063c5cc`; it now prints 42 as the exact
+newtype. Fixed-input build `20261113T102840-build-83e844` produced
+`a25c0d9846d3eae475f1eb15b760dcbd46c3df7b5768f34a3e0064db4f3ef458`.
+Eleven nominal fixtures pass check, JIT and linked native. An inherited
+anonymous-factory control prints 42 before and after the change.
+
+The same two-hop newtype still fails if another associated binding uses
+its trait view during binding admission. Check and JIT reject the authored
+`Wrapped#Marker` in the new chained-associated-binding probe because only
+the first equation is available in this phase. The selected binding's
+authored recipe must supply the rest of the derivation before the newtype
+receipt is sealed.

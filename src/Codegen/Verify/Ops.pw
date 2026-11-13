@@ -364,7 +364,7 @@ pub impl Comp {
         match self.arena.exprs[base] {
             Expr.Ident(val start, val len) => {
                 if self.identIsTypeQualifier(start: start, len: len, tpFn: self.arena.functionCount()) {
-                    if self.typeHasAssocFn(typeStart: start, typeLen: len, nameStart: nameStart, nameLen: nameLen) {
+                    if try self.typeHasAssocFn(typeStart: start, typeLen: len, nameStart: nameStart, nameLen: nameLen) {
                         return <Result.Err error=self.diagnosticAt(offset: nameStart, msg: "an associated function declaration cannot be used as a value; wrap the call in an explicit closure (e.g. `fn(...) {{ return Type.name(...) }}`) (spec/07)") />
                     } else {
                         return <Result.Err error=self.diagnosticAt(offset: nameStart, msg: "a type name has no fields; use `Type.fn(...)` to call an associated function, or construct a value before reading fields (spec/07)") />

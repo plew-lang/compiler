@@ -2076,7 +2076,14 @@ impl Comp {
                     // Replay matches a projection after its children have
                     // consumed their saved equations, at admission and run.
                     val projected = try self.replayProjectionChildren(ref: raw, normalizations: equations, offset: occurrence.site)
-                    val output = try self.associatedOutputTermInProof(proof: proof, traitOwner: selector.traitInstance.owner, assocId: type.assocNameId)
+                    val output = match scope.origin {
+                        DeclarationScopeOrigin.Nominal => {
+                            val selected = try self.readProjectionForNormalization(proof: proof, traitOwner: selector.traitInstance.owner, assocId: type.assocNameId)
+                            for equation in selected.normalizations { try self.appendRetainedProjectionEquation(step: equation, normalizations: inout equations) }
+                            give selected.immediate
+                        }
+                        _ => { give try self.associatedOutputTermInProof(proof: proof, traitOwner: selector.traitInstance.owner, assocId: type.assocNameId) }
+                    }
                     val immediate = if output != 0U64 && !self.typeRefEq(a: output, b: projected) { give output } else { give 0U64 }
                     if self.arena.typeContainsAssociatedProjection(ref: immediate) {
                         match proof {

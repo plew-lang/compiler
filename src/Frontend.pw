@@ -2274,7 +2274,7 @@ fn loadFrontendDeclarations(c: inout Comp, input: FrontendInput, sources: Source
     try c.admitNominalTypeAnnotations()
     // assoc-val reads (spec/05): rewrite `Type.NAME` (a Field on a type that owns an
     // `assoc fn NAME`) into a zero-arg assoc-fn call, before any analysis sees it.
-    c.rewriteAssocValReads()
+    try c.rewriteAssocValReads()
     // named factory calls (spec/05): rewrite `<Type.name attrs/>` to an assoc-fn call
     // when `name` is a named factory (not an enum variant).
     try c.rewriteFactoryConstruction()

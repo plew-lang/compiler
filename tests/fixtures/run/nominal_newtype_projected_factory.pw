@@ -8,6 +8,6 @@ impl Number {
 }
 newtype Wrapped = Source#Project.Item
 fn main() {
-    val number = <Wrapped.named value=42I64 />
+    val number: Wrapped = <Wrapped.named value=42I64 />
     print(number.value)
 }

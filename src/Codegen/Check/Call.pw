@@ -488,7 +488,7 @@ pub impl Comp {
                     }
                     return <Result.Ok value=() />
                 }
-                if self.typeHasAssocFn(typeStart: rStart, typeLen: rLen, nameStart: nameStart, nameLen: nameLen) {
+                if try self.typeHasAssocFn(typeStart: rStart, typeLen: rLen, nameStart: nameStart, nameLen: nameLen) {
                     if args.len == 0U64 {
                         return <Result.Err error=self.diagnosticAt(offset: nameStart, msg: "an associated function declaration cannot be used as a value; call it with the required arguments or wrap the call in an explicit closure (spec/07)") />
                     } else {

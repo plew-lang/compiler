@@ -1178,11 +1178,25 @@ pub impl Comp {
         return declaration.nameLen != 0U64
     }
 
-    inout fn typeHasAssocFn(typeStart: U64, typeLen: U64, nameStart: U64, nameLen: U64) -> Bool {
+    inout fn checkedAssociatedReceiverName(start: U64, len: U64) -> Result[Bind, CompileDiagnostic] {
+        val identity = self.typeDeclIdentityAt(useMod: self.moduleOf(offset: start), start: start, len: len)
+        if identity.nameLen != 0U64 {
+            match self.arena.newtypeByOffset(offset: identity.nameStart) {
+                Optional.Some(v: val declaration) => {
+                    val underlying = try self.readAdmittedNewtypeUnderlying(declaration: declaration)
+                    val type = self.arena.typeAt(index: underlying)
+                    return <Result.Ok value=<Bind nameStart=type.nameStart nameLen=type.nameLen fieldStart=0U64 fieldLen=0U64 /> />
+                }
+                Optional.None => {}
+            }
+        }
+        return <Result.Ok value=self.realTypeNameInModule(useMod: self.moduleOf(offset: start), start: start, len: len) />
+    }
+
+    inout fn typeHasAssocFn(typeStart: U64, typeLen: U64, nameStart: U64, nameLen: U64) -> Result[Bool, CompileDiagnostic] {
         // a newtype inherits the underlying type's factories/assoc fns (spec/10): resolve
         // to the underlying so `<Brand.checked …/>` finds Rgb's `checked` factory.
-        val source = self.realTypeNameInModule(useMod: self.moduleOf(offset: typeStart), start: typeStart, len: typeLen)
-        val tnu: Bind = self.newtypeUnderName(start: source.nameStart, len: source.nameLen)
+        val tnu = try self.checkedAssociatedReceiverName(start: typeStart, len: typeLen)
         val tId: U64 = intern(c: inout self, start: tnu.nameStart, len: tnu.nameLen)
         val nId: U64 = intern(c: inout self, start: nameStart, len: nameLen)
         mut val i: U64 = self.decls.firstCallableNamed(nameId: nId)
@@ -1192,13 +1206,13 @@ pub impl Comp {
             if f.isAssoc {
                 if f.recvId == tId {
                     if f.nameId == nId {
-                        return true
+                        return <Result.Ok value=true />
                     }
                 }
             }
             i = self.decls.nextCallableNamed(index: i)
         }
-        return false
+        return <Result.Ok value=false />
     }
 
     inout fn funcDeclLineHasAssocVal(f: Func) -> Bool {
@@ -1235,9 +1249,8 @@ pub impl Comp {
         return sawAssoc && sawVal
     }
 
-    inout fn typeHasAssocVal(typeStart: U64, typeLen: U64, nameStart: U64, nameLen: U64) -> Bool {
-        val source = self.realTypeNameInModule(useMod: self.moduleOf(offset: typeStart), start: typeStart, len: typeLen)
-        val tnu: Bind = self.newtypeUnderName(start: source.nameStart, len: source.nameLen)
+    inout fn typeHasAssocVal(typeStart: U64, typeLen: U64, nameStart: U64, nameLen: U64) -> Result[Bool, CompileDiagnostic] {
+        val tnu = try self.checkedAssociatedReceiverName(start: typeStart, len: typeLen)
         val tId: U64 = intern(c: inout self, start: tnu.nameStart, len: tnu.nameLen)
         val nId: U64 = intern(c: inout self, start: nameStart, len: nameLen)
         mut val i: U64 = self.decls.firstCallableNamed(nameId: nId)
@@ -1248,14 +1261,14 @@ pub impl Comp {
                 if f.recvId == tId {
                     if f.nameId == nId {
                         if self.funcDeclLineHasAssocVal(f: f) {
-                            return true
+                            return <Result.Ok value=true />
                         }
                     }
                 }
             }
             i = self.decls.nextCallableNamed(index: i)
         }
-        return false
+        return <Result.Ok value=false />
     }
 
     // Result is a reserved Lang declaration, not the spelling of a projection
@@ -1273,7 +1286,7 @@ pub impl Comp {
         return index
     }
 
-    inout fn rewriteAssocValReads() {
+    inout fn rewriteAssocValReads() -> Result[(), CompileDiagnostic] {
         mut val i: U64 = 0
         while i < self.arena.exprs.count() {
             match self.arena.exprs[i] {
@@ -1281,7 +1294,7 @@ pub impl Comp {
                     match self.arena.exprs[base] {
                         Expr.Ident(start: val tStart, len: val tLen) => {
                             if self.isTypeName(start: tStart, len: tLen) {
-                                if self.typeHasAssocVal(typeStart: tStart, typeLen: tLen, nameStart: nameStart, nameLen: nameLen) {
+                                if try self.typeHasAssocVal(typeStart: tStart, typeLen: tLen, nameStart: nameStart, nameLen: nameLen) {
                                     self.arena.exprs[i] = <Expr.Method recv=base nameStart=nameStart nameLen=nameLen args=<ArgRange start=0U64 len=0U64 /> />
                                 }
                             }
@@ -1293,5 +1306,6 @@ pub impl Comp {
             }
             i += 1
         }
+        return <Result.Ok value=() />
     }
 }
