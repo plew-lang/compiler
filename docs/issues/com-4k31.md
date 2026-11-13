@@ -78,3 +78,15 @@ fn main() {
     print(selected.number())
 }
 ```
+
+### Composite extension and trait-selector call control
+
+On compiler candidate `b54c049c`, `Number` conforms to `Left` and
+`Right`, which both conform to `Match`. In `extension Extra`, an
+`impl Match` provides `fromMatch`. The selected composition
+`number#Extra#Left` can be formed and used for a bare field read, but
+`number#Extra#Left.fromMatch()` reports no matching method in check and
+JIT. Scratch input: meta `tmp/com-3jtd/ExtensionSelectedPathCall.pw`.
+Use the existing complete-selector contract to verify the final call
+after [com-3jtd](com-3jtd.md#second-independent-completion-review) has
+established formation using the applicable trait path.
