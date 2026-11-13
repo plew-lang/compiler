@@ -1045,3 +1045,19 @@ control also passed JIT.
 The named-extension probe with `impl[T] Box[T, T#Source.Item]` still
 rejects at `value#Extra`. The extension applicability predicate compares
 the raw receiver pattern before the shared callable matcher can run.
+
+The extension predicate now uses the shared dependent receiver matcher
+with the lexical assumptions supplied by the view's caller. Build
+`20261113T173750-build-3aaa01` passes, and the same probe now passes
+source check and records the intended direct callee. Native and JIT still
+fail during Mid instantiation. Native trace reports a missing frontend
+type result for the instantiated body (`[mid-type] missing body=5
+source=4130 substituted=5264`). Adding a second receiver spelling to the
+signature map did not resolve it and was discarded. Trace the provenance
+of the exact Mid operand/type before making a further change.
+
+The nested trait-argument probe `T#Resolve[T#Source.Item].Output` passes
+check and JIT. A type-head associated call `Box.code(box: ...)` with
+a `Self` parameter still rejects with incomplete type inference. The
+explicit `Box[Number, I64].code()` spelling fails in parsing and does not
+exercise the associated callable matcher.

@@ -1938,14 +1938,19 @@ impl Comp {
         for entry in cached {
             if entry.caller == caller && entry.receiver == receiver { return <Result.Ok value=entry.witness /> }
         }
-        val entry = try self.admitInherentReceiverMatch(f: f, receiver: receiver, caller: caller, params: params)
+        val scope = try self.declarationTypeScope(owner: caller)
+        val assumptions = try self.declarationScopeAssumptions(scope: scope)
+        val entry = try self.admitInherentReceiverMatch(f: f, receiver: receiver, caller: caller, params: params, assumptions: assumptions)
+        for proof in entry.proofs {
+            try self.checkDeclarationCallProof(proof: self.thawStaticConformanceProof(id: proof), scope: scope, offset: f.defOffset)
+        }
         mut val updated = self.inherentReceiverMatches.getOr(key: f.dependentReceiverCallable, fallback: [])
         updated.append(entry)
         self.inherentReceiverMatches[f.dependentReceiverCallable] = updated
         return <Result.Ok value=entry.witness />
     }
 
-    inout fn admitInherentReceiverMatch(f: Func, receiver: U64, caller: U64, params: PatternBindInput) -> Result[InherentReceiverMatch, CompileDiagnostic] {
+    inout fn admitInherentReceiverMatch(f: Func, receiver: U64, caller: U64, params: PatternBindInput, assumptions: Array[DeclarationBoundRef]) -> Result[InherentReceiverMatch, CompileDiagnostic] {
         val physical = try self.conformancePhysicalSubject(typeRef: receiver)
         val absent = <InherentReceiverMatch caller=caller receiver=receiver witness=<WitnessMatch /> />
         mut val binds: Array[UnifyBind] = []
@@ -1960,8 +1965,6 @@ impl Comp {
             arguments.append(candidate.binds[index].term)
         }
         val environment = <InstanceEnvironment params=implementation.parameters args=arguments receiverRef=receiver />
-        val scope = try self.declarationTypeScope(owner: caller)
-        val assumptions = try self.declarationScopeAssumptions(scope: scope)
         val function = f.dependentReceiverCallable - 1U64
         mut val indices: Array[U64] = []
         mut val bounds: Array[TraitBound] = []
@@ -1974,7 +1977,7 @@ impl Comp {
             val expected = try self.replayBoundNormalizations(bound: bound, normalizations: normalizations)
             val proof = try self.viewedTraitConstraintProof(demand: <ConformanceProofDemand.SourceAdmission />, ref: expected.subject, constraint: expected.constraint, assumptions: assumptions)
             if self.proofIsMissing(proof: proof) { return <Result.Ok value=absent /> }
-            try self.checkDeclarationCallProof(proof: proof, scope: scope, offset: bound.offset)
+            try self.checkStaticProofEvidence(proof: proof, offset: bound.offset, assumptions: assumptions)
             try self.recordBoundPredicateEquations(bound: expected, proof: proof, assumptions: assumptions, normalizations: inout normalizations)
             try self.compareValidatedWitnessClause(expected: expected, proof: proof, normalizations: normalizations, offset: bound.offset)
             match (try self.retainedImplementationCallableClause(function: function, index: index)) {
@@ -1993,6 +1996,16 @@ impl Comp {
         return <Result.Ok value=<InherentReceiverMatch caller=caller receiver=receiver witness=<WitnessMatch conformIdx=candidate.conformIdx binds=candidate.binds selfRef=receiver /> indices=indices bounds=bounds proofs=proofs normalizations=normalizations /> />
     }
 
+}
+
+pub impl Comp {
+    inout fn dependentInherentReceiverApplies(f: Func, receiver: U64, assumptions: Array[DeclarationBoundRef]) -> Result[Bool, CompileDiagnostic] {
+        val matchResult = try self.admitInherentReceiverMatch(f: f, receiver: receiver, caller: self.arena.functionCount(), params: <PatternBindInput.Function range=f.typeParams />, assumptions: assumptions)
+        return <Result.Ok value=matchResult.witness.conformIdx != 0U64 />
+    }
+}
+
+impl Comp {
     inout fn conformanceRequirementMethodArguments(conformance: Conform, requirement: Func, witness: Func) -> Array[U64] {
         mut val arguments: Array[U64] = []
         for index in 0U64..<requirement.typeParams.count() {
