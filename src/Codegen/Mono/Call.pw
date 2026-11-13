@@ -5744,6 +5744,7 @@ pub impl Comp {
         }
         val functionType = (try self.groundAndRecordBodyType(ref: closure.functionTypeTerm, environment: environment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.cur.bodyId))
         if functionType == 0U64 || functionType >= self.arena.typeCount() { return <Result.Ok value=() /> }
+        self.recordBodyTypeTermResult(bodyId: enclosingBodyId, source: closure.functionTypeTerm, result: functionType)
         val signature = self.arena.typeAt(index: functionType)
         if signature.args.count() != closure.parameters.count() + 1U64 { return <Result.Ok value=() /> }
         mut val parameters: Array[U64] = []

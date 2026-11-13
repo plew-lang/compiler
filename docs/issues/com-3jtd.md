@@ -336,3 +336,30 @@ The wrong trait instance in a closure parameter now rejects at source
 admission in check and JIT. An explicitly projected parameter and result
 under a generic bound produce 42 in check-accepted JIT and linked native.
 The explicit constructor extension control still produces 42.
+
+### Ownership inventory for removing the type compatibility sweep
+
+The independent source audit separated the declaration sweep from its
+body adapter. Body coverage still needs the authored receiver arguments
+of named factories rewritten from Make to Method, type-qualified selector
+arguments, and the syntax/validation path for stripped selectors.
+
+On `46019f3cda73`, both a supertrait argument
+`Parent[Number#Marker[Bool].Item]` and a conformance target with that
+argument pass whole-source check despite Number implementing only
+`Marker[I64]`. Both occurrences need declaration-owned admission.
+Audit trait associated bounds and inherent associated aliases alongside
+them. Keep the existing `inherited_associated_cross_path_equation`
+fixture as a positive control for the heritage premise environment.
+Implementation arguments should be admitted by the implementation even
+when it declares no methods, then forwarded to consumers.
+
+The review also found that the syntax adapters accepted type arguments on
+an extension selector when the compatibility sweep skipped a generic
+receiver. `T#Extra[I64]` now rejects at the shared type-source lowerer.
+Mono publishes the same grounded closure function type to the enclosing
+body for closure construction and to the closure body for its signature.
+Fixed-input build `20261113T124107-build-1de25d` produced `e541d3e88517`.
+The new arity rejection passes check. Generic closures with a projected
+parameter and return pass check, JIT and linked native, both with a
+declared associated equality and with the output open until instantiation.

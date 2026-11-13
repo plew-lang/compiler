@@ -161,6 +161,9 @@ pub impl Comp {
     // Both syntax carriers decode children, then publish the same authored
     // source contract. Conformance is checked later, not inferred here.
     inout fn completeTypeViewSource(source: ResolvedViewSource, arguments: Array[U64], hasLabels: Bool) -> Result[ResolvedViewSource, CompileDiagnostic] {
+        if source.traitInstance.owner == 0U64 && arguments.count() != 0U64 {
+            return <Result.Err error=self.diagnosticAt(offset: source.writtenStart, msg: "an extension view does not take type arguments", failureDomain: <FailureDomain.Source />) />
+        }
         if hasLabels {
             return <Result.Err error=self.diagnosticAt(offset: source.writtenStart, msg: "trait view source accepts positional type arguments only", failureDomain: <FailureDomain.Source />) />
         }
