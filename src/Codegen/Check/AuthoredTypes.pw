@@ -381,7 +381,8 @@ impl Comp {
                 while index < selectors.count() {
                     if selectors[index].traitInstance.owner != 0U64 {
                         val saved = try self.signatureOccurrenceView(proofs: proofs, occurrence: node.occurrence, selector: selectors[index], offset: occurrence.site)
-                        try self.readAuthoredOccurrenceProof(saved: saved, receiver: receiver, arguments: sourceViews[index].traitInstance.positionalArgs, environment: environment, offset: occurrence.site, normalizations: proofEquations, context: context)
+                        val proofSubject = self.authoredTraitViewSubject(ref: receiver)
+                        try self.readAuthoredOccurrenceProof(saved: saved, receiver: proofSubject, arguments: sourceViews[index].traitInstance.positionalArgs, environment: environment, offset: occurrence.site, normalizations: proofEquations, context: context)
                     }
                     index += 1U64
                 }
@@ -889,9 +890,15 @@ impl Comp {
         // A generic field can already have a closed normalized output even
         // while its written receiver still contains declaration binders.
         // Those proofs were checked in the rigid declaration scope.
-        for proof in saved.proofs {
-            if !self.arena.hasStaticConformanceProof(id: proof.proof) {
+        for row in saved.proofs {
+            if !self.arena.hasStaticConformanceProof(id: row.proof) {
                 return <Result.Err error=self.diagnosticAt(offset: offset, msg: "nominal annotation lost its saved conformance", failureDomain: <FailureDomain.Internal />) />
+            }
+            val subject = try self.replayProjectionChildren(ref: row.receiver, normalizations: saved.normalizations, offset: offset)
+            val constraint = <TraitConstraint key=row.selector.traitInstance assocPredicates=[] />
+            val expected = try self.replayBoundNormalizations(bound: <TraitBound subject=subject constraint=constraint offset=offset />, normalizations: saved.normalizations)
+            if !(try self.retainedWitnessClauseMatches(expected: expected, proof: self.thawStaticConformanceProof(id: row.proof), normalizations: saved.normalizations, offset: offset)) {
+                return <Result.Err error=self.diagnosticAt(offset: offset, msg: "nominal annotation has a foreign saved conformance", failureDomain: <FailureDomain.Internal />) />
             }
         }
         return <Result.Ok value=() />
@@ -1954,6 +1961,21 @@ impl Comp {
         return <Result.Ok value=() />
     }
 
+    // The selected trait is the goal of the query. Extension views still
+    // supply its candidate sources, but the goal itself cannot enter Self.
+    inout fn authoredTraitViewSubject(ref: U64) -> U64 {
+        mut val extensions: Array[ResolvedViewSource] = []
+        mut val hasTrait = false
+        for source in self.arena.typeViewSources(ref: ref) {
+            if source.traitInstance.owner == 0U64 { extensions.append(source) }
+            else { hasTrait = true }
+        }
+        if !hasTrait { return ref }
+        val base = self.typeRefWithoutOuterViews(ref: ref)
+        if extensions.count() == 0U64 { return base }
+        return self.typeRefWithViewSources(ref: base, sources: extensions)
+    }
+
     inout fn admitSignatureOccurrence(id: U64, occurrence: AuthoredTypeUse, scope: DeclarationTypeScope, assumptions: Array[DeclarationBoundRef], receiverRef: U64, receiverEquations: Array[ProjectionNormalizationStep], equations: inout Array[ProjectionNormalizationStep], proofs: inout Array[AuthoredTypeViewProof], inheritedProjection: Bool, receiverOccurrence: U64) -> Result[(), CompileDiagnostic] {
         try self.checkAuthoredTypeBinders(ref: occurrence.term, scope: scope, offset: occurrence.site)
         val type = self.arena.typeAt(index: occurrence.term)
@@ -2019,7 +2041,8 @@ impl Comp {
                     arguments = normalized
                 }
                 val instance = <TraitInstanceKey owner=selector.traitInstance.owner positionalArgs=arguments />
-                mut val proof = try self.requireAuthoredViewProof(subject: subject, instance: instance, assumptions: projectionAssumptions, offset: selector.writtenStart, selectedProjection: selectedProjection, normalizations: context)
+                val proofSubject = if type.assocNameId == 0U64 { give self.authoredTraitViewSubject(ref: subject) } else { give subject }
+                mut val proof = try self.requireAuthoredViewProof(subject: proofSubject, instance: instance, assumptions: projectionAssumptions, offset: selector.writtenStart, selectedProjection: selectedProjection, normalizations: context)
                 if isProjection {
                     proof = try self.selectSignatureProjectionEquation(proof: proof, subject: subject, owner: selector.traitInstance.owner, arguments: arguments, member: type.assocNameId, assumptions: projectionAssumptions, offset: occurrence.site)
                 }

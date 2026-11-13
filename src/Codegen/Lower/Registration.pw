@@ -663,9 +663,12 @@ pub impl Comp {
             mut val owner = term.declOffset
             if !term.hasDecl {
                 if !self.newtypeAnnotationAdmissionOpen || term.paramId != 0U64 || term.assocNameId != 0U64 || term.isAny || term.isRecord { break }
-                val source = self.sourceNominalOwner(nameStart: term.nameStart, nameLen: term.nameLen, nameId: term.nameId, site: term.siteOffset)
-                if source.isNone() { break }
-                owner = source.unwrap()
+                if term.siteOffset == 0U64 { break }
+                // The source binding uses the identifier span. Arena's
+                // canonical identity is the full declaration offset.
+                val identity = self.typeDeclIdentityAt(useMod: self.moduleOf(offset: term.siteOffset), start: term.nameStart, len: term.nameLen)
+                if identity.nameLen == 0U64 { break }
+                owner = identity.nameStart
             }
             val index = self.arena.newtypeIndexByOffset(offset: owner)
             if index >= self.arena.newtypeCount() { break }

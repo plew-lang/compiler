@@ -1,0 +1,5 @@
+trait Marker[T] {}
+struct Number {}
+impl Number as Marker[Self] {}
+newtype Outer = Number#Marker[Number]
+fn main() {}

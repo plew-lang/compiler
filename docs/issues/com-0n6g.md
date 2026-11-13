@@ -121,3 +121,29 @@ forward-reference fix alone does not repair the inherited-conformance
 query used by associated bounds. Exact failure origin and responsibility
 still need to be established. Receipt corruption and restoration-on-error
 probes remain to be completed before closing this task.
+
+The next fixed-input build `20261113T090637-build-82dfed` produced
+`c4220a2dae0189776e1498fe2db01aa02d01a4ba960eef0d632188ea22dcfa6b`.
+Seven nominal fixtures pass check, JIT and linked native execution.
+The previously failing associated-bound case now uses the canonical
+newtype declaration offset while type rows are still being resolved.
+Independent review identified a regression for a trait instance with
+`Self` as a positional argument. The new fixture passes after keeping
+the trait being selected out of witness Self while preserving selected
+extensions as evidence sources. The extension, rigid generic, and unique
+deinit scratch controls still pass JIT.
+
+The follow-up review found that matching a proof handle to its receiver and
+trait instance cannot on its own detect replacement of a whole row by a
+different authored occurrence. The final receipt needs exact membership
+in the slot's recipe and verified projection equations. Also outstanding:
+the related but earlier associated-binding RHS `type Item = Wrapped#Marker`
+fails before the admission window opens. It reproduces with both direct
+and projected underlying types; this is separate from the now passing
+`type Item: Marker` requirement. Keep the task open pending those
+boundaries, failure-restoration controls and final independent review.
+
+A same-source development comparison on the preceding `6d107091a574`
+candidate measured medians 7.151 s (c5146239) and 7.180 s (candidate).
+The emitted LLVM hashes matched across all eight runs. This comparison
+does not establish formal self-host timing.

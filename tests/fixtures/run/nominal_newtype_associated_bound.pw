@@ -1,0 +1,11 @@
+trait Project { type Item }
+trait Marker {}
+trait Container { type Item: Marker }
+struct Projector {}
+struct Number {}
+struct Family {}
+impl Projector as Project { type Item = Number }
+impl Number as Marker {}
+newtype Wrapped = Projector#Project.Item
+impl Family as Container { type Item = Wrapped }
+fn main() {}
