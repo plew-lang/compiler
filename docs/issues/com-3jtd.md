@@ -1147,3 +1147,10 @@ linked native with `03b9f51b` (fixed-input build
 Changing the associated binding's receiver argument to Bool still rejects
 extension formation. The `via`, rigid positional/equality, and receiver
 evidence reuse findings remain open.
+
+The follow-up `via` control replaces only the delegation with its explicit
+forwarding body. That body passes check and JIT on `03b9f51b`; the declaration's
+independent raw signature predicate rejects the delegated form. Track the
+overlapping ownership and evidence under
+[com-ukzt](com-ukzt.md#dependent-receiver-counterexample) before deciding the
+behavioral repair boundary.

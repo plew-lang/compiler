@@ -33,3 +33,25 @@ Other J/C/O/optional/mainC scopes, source/solver/proof/conformance/selection/app
 [Scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-constraints.json) retains all main/mixed roles and normative grounds. via宣言のsignature compatibilityとtarget candidate検査はtrait satisfactionと通常callの共通applicability。source適合が終点なので工程3。
 
 Original audit-time independence does not waive this implementation admission. Preserve the original finite guarantee, actual callers/delegates, controls and excluded optional/new-feature scopes. Assignment is not product repair/GREEN.
+
+## Dependent Receiver Counterexample
+
+The [view formation review](com-3jtd.md#independent-completion-review) found
+that a projected inherent receiver can be called explicitly from a witness
+body but rejected as a `via` target. Candidate `03b9f51b` rejects
+`fn read() -> I64 via code` with “target signature does not match” for
+`impl Box[Number, I64] as Read` when `code` belongs to
+`impl[T] Box[T, T#Source.Item] where T: Source`, with
+`Number: Source[Item=I64]`. Replacing the delegation with
+`fn read() -> I64 { return self.code() }` passes check and runs with
+stdout `42`. The nonprojected target also passes check.
+
+`checkViaTargets` calls `viaSignatureMatches` on raw receiver and
+result terms, before the forwarding body's ordinary selection can use
+the dependent receiver evidence. A favorable precheck result is only a
+Boolean and cannot constrain the forwarding body's selection. The
+[applicability contract](../design/name-lookup.md#6-applicability-and-publication)
+requires shared selection and preservation of the result and receiver
+modes. Resolve ownership of that behavioral repair before implementing it:
+this issue's original audit scope excludes applicability algorithm redesign,
+and com-3jtd owns source view formation.
