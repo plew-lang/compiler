@@ -220,10 +220,6 @@ fn main() {
         print("1")
         return
     }
-    // Deliberately retained old adapter arrays must not become the empty fn's
-    // implicit bounds. The new frame must also restore them on every Err.
-    compiler.lowerWhereTypes = goodDeclaration.whereTypes
-    compiler.lowerWhereTraitTypes = goodDeclaration.whereTraitTypes
     match compiler.lowerFuncDecl(d: declaration(compiler, bad)) {
         Result.Err(error: val diagnostic) => {
             match diagnostic.failureDomain { FailureDomain.Limit => {} _ => { panic("recursive bound did not report typed Limit") } }
@@ -242,6 +238,5 @@ fn main() {
     compiler.lowerFuncDecl(d: goodDeclaration).unwrap()
     compiler.admitAuthoredFunctionViews().unwrap()
     if compiler.lowerProjectionDepth != 0U64 || compiler.sourceTypeUses.currentScope() != 0U64 || compiler.cur.typeParams.count() != 0U64 { panic("recovered declaration leaked lexical state") }
-    if compiler.lowerWhereTypes.count() != goodDeclaration.whereTypes.count() { panic("source frame did not restore the adapter context") }
     print("1")
 }

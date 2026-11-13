@@ -12,20 +12,6 @@ impl Comp {
         return <Result.Ok value=() />
     }
 
-    // Legacy value ASTs may provide only the displayed trait name. Preserve
-    // one row per subject, with its authored site, before combining scopes.
-    inout fn valueProjectionTraitTypes(subjects: Array[TypeAst], names: Array[String], types: Array[TypeAst]) -> Result[Array[TypeAst], CompileDiagnostic] {
-        mut val result: Array[TypeAst] = []
-        mut val index = 0U64
-        while index < subjects.count() {
-            if index < types.count() { result.append(types[index]) }
-            else if index < names.count() { result.append(<TypeAst name=names[index] args=[] span=subjects[index].span />) }
-            else { return <Result.Err error=self.diagnosticAt(offset: subjects[index].span.start, msg: "invalid projection bound input", failureDomain: <FailureDomain.Input />) /> }
-            index += 1U64
-        }
-        return <Result.Ok value=result />
-    }
-
     inout fn decodeValueTraitConstraintArguments(traitType: TypeAst, owner: U64, site: U64) -> Result[TraitConstraint, CompileDiagnostic] {
         return <Result.Ok value=(try self.lowerValueTraitConstraint(traitType: traitType, owner: owner, site: site)).constraint />
     }
@@ -104,30 +90,6 @@ pub impl Comp {
         }
         return false
     }
-
-    inout fn boundLhsMatchesType(lhs: TypeAst, t: TypeAst) -> Bool {
-        if lhs.projectionAssoc.bytes().count() > 0 {
-            return false
-        }
-        if lhs.extView.bytes().count() > 0 {
-            return false
-        }
-        if lhs.name != t.name {
-            return false
-        }
-        if lhs.args.count() != t.args.count() {
-            return false
-        }
-        mut val i: U64 = 0
-        while i < lhs.args.count() {
-            if !(self.boundLhsMatchesType(lhs: lhs.args[i], t: t.args[i])) {
-                return false
-            }
-            i += 1
-        }
-        return true
-    }
-
 }
 
 impl Comp {
@@ -149,79 +111,26 @@ impl Comp {
 
     inout fn uniqueProjectionSource(t: TypeAst, receiver: U64) -> Result[LoweredTypeViewRecipe, CompileDiagnostic] {
         try self.beginShortProjection(site: t.span.start)
-        val result = self.uniqueProjectionSourceCore(t: t, receiver: receiver)
+        val result = if self.activeProjectionBounds.isSome() {
+            give self.cachedValueProjectionSource(type: t, receiver: receiver)
+        } else {
+            give self.chooseShortProjectionSource(sources: [], member: self.internBytes(s: t.projectionAssoc).nameId, site: t.span.start)
+        }
         self.lowerProjectionDepth -= 1U64
         return result
     }
 
-    inout fn uniqueProjectionSourceCore(t: TypeAst, receiver: U64) -> Result[LoweredTypeViewRecipe, CompileDiagnostic] {
-        if self.activeProjectionBounds.isSome() { return self.cachedValueProjectionSource(type: t, receiver: receiver) }
-        mut val sources: Array[LoweredTypeViewRecipe] = []
-        mut val index = 0U64
-        while index < self.lowerWhereTypes.count() && index < self.lowerWhereTraitTypes.count() {
-            if self.boundLhsMatchesType(lhs: self.lowerWhereTypes[index], t: t) {
-                val bound = try self.normalizeProjectionType(t: self.lowerWhereTraitTypes[index])
-                val source = if bound.nameSpan.end > bound.nameSpan.start { give (try self.bindViewSourceName(siteOffset: bound.span.start, name: bound.nameSpan)) } else { give (try self.lowerViewSource(siteOffset: bound.span.start, text: bound.name)) }
-                if self.traitOwnerHasAssocId(owner: source.traitInstance.owner, assocId: self.internBytes(s: t.projectionAssoc).nameId) {
-                    val lowered = try self.lowerValueTraitConstraint(traitType: bound, owner: source.traitInstance.owner, site: bound.span.start)
-                    sources.append(<LoweredTypeViewRecipe source=source.withArguments(arguments: lowered.constraint.key.positionalArgs) arguments=lowered.arguments />)
-                }
-            }
-            index += 1U64
-        }
-        return self.chooseShortProjectionSource(sources: sources, member: self.internBytes(s: t.projectionAssoc).nameId, site: t.span.start)
-    }
-
-}
-
-pub impl Comp {
-    inout fn boundLhsMatchesSyntaxType(lhs: TypeId, t: SyntaxType) -> Bool {
-        val l: SyntaxType = syntaxType(file: self.syntax, id: lhs)
-        if l.projectionAssoc.end > l.projectionAssoc.start { return false }
-        if l.extView.end > l.extView.start { return false }
-        if !(spansEqual(c: inout self, aStart: l.name.start, aLen: l.name.end - l.name.start, bStart: t.name.start, bLen: t.name.end - t.name.start)) { return false }
-        if syntaxTypeArgCount(file: self.syntax, ty: l) != syntaxTypeArgCount(file: self.syntax, ty: t) { return false }
-        mut val i: U64 = 0U64
-        while i < syntaxTypeArgCount(file: self.syntax, ty: l) {
-            val right: SyntaxType = syntaxType(file: self.syntax, id: syntaxTypeArg(file: self.syntax, ty: t, index: i))
-            if !(self.boundLhsMatchesSyntaxType(lhs: syntaxTypeArg(file: self.syntax, ty: l, index: i), t: right)) { return false }
-            i += 1U64
-        }
-        return true
-    }
-
-    // Both syntax adapters decode complete lexical constraints and use one
-    // instance-level uniqueness decision. Raw syntax is not rewritten.
-}
-
-impl Comp {
     inout fn uniqueSyntaxProjectionSource(t: SyntaxType, receiver: U64) -> Result[LoweredTypeViewRecipe, CompileDiagnostic] {
         try self.beginShortProjection(site: t.span.start)
-        val result = self.uniqueSyntaxProjectionSourceCore(t: t, receiver: receiver)
+        val result = if self.activeProjectionBounds.isSome() {
+            give self.cachedSyntaxProjectionSource(type: t, receiver: receiver)
+        } else {
+            val member = intern(c: inout self, start: t.projectionAssoc.start, len: t.projectionAssoc.end - t.projectionAssoc.start)
+            give self.chooseShortProjectionSource(sources: [], member: member, site: t.span.start)
+        }
         self.lowerProjectionDepth -= 1U64
         return result
     }
-
-    inout fn uniqueSyntaxProjectionSourceCore(t: SyntaxType, receiver: U64) -> Result[LoweredTypeViewRecipe, CompileDiagnostic] {
-        if self.activeProjectionBounds.isSome() { return self.cachedSyntaxProjectionSource(type: t, receiver: receiver) }
-        mut val sources: Array[LoweredTypeViewRecipe] = []
-        mut val index = 0U64
-        while index < self.lowerWhereSyntaxTypes.count() && index < self.lowerWhereSyntaxTraitTypes.count() {
-            if self.boundLhsMatchesSyntaxType(lhs: self.lowerWhereSyntaxTypes[index], t: t) {
-                val bound = try self.resolveSyntaxTypePath(t: syntaxType(file: self.syntax, id: self.lowerWhereSyntaxTraitTypes[index]))
-                val source = try self.bindViewSourceName(siteOffset: bound.span.start, name: bound.name)
-                val member = intern(c: inout self, start: t.projectionAssoc.start, len: t.projectionAssoc.end - t.projectionAssoc.start)
-                if self.traitOwnerHasAssocId(owner: source.traitInstance.owner, assocId: member) {
-                    val lowered = try self.lowerSyntaxTraitConstraint(traitType: bound, owner: source.traitInstance.owner, site: bound.span.start)
-                    sources.append(<LoweredTypeViewRecipe source=source.withArguments(arguments: lowered.constraint.key.positionalArgs) arguments=lowered.arguments />)
-                }
-            }
-            index += 1U64
-        }
-        val member = intern(c: inout self, start: t.projectionAssoc.start, len: t.projectionAssoc.end - t.projectionAssoc.start)
-        return self.chooseShortProjectionSource(sources: sources, member: member, site: t.span.start)
-    }
-
 }
 
 pub impl Comp {
@@ -466,19 +375,11 @@ pub impl Comp {
         val savedBounds = self.activeProjectionBounds
         val savedParameters = self.cur.typeParams
         val savedReturn = self.cur.lowerRetTy
-        val savedValueSubjects = self.lowerWhereTypes
-        val savedValueTraits = self.lowerWhereTraitTypes
-        val savedSyntaxSubjects = self.lowerWhereSyntaxTypes
-        val savedSyntaxTraits = self.lowerWhereSyntaxTraitTypes
         val scope = self.sourceTypeUses.begin(kind: <SourceTypeScopeKind.FreeFunction />, anchor: d.name.start)
         val result = self.lowerSyntaxFuncDeclInSourceScope(d: d)
         self.activeProjectionBounds = savedBounds
         self.cur.typeParams = savedParameters
         self.cur.lowerRetTy = savedReturn
-        self.lowerWhereTypes = savedValueSubjects
-        self.lowerWhereTraitTypes = savedValueTraits
-        self.lowerWhereSyntaxTypes = savedSyntaxSubjects
-        self.lowerWhereSyntaxTraitTypes = savedSyntaxTraits
         if !self.sourceTypeUses.finish(token: scope, succeeded: result.isOk()) {
             return <Result.Err error=self.diagnosticAt(offset: d.name.start, msg: "invalid authored type scope restoration", failureDomain: <FailureDomain.Internal />) />
         }
@@ -494,19 +395,7 @@ impl Comp {
     inout fn lowerSyntaxFuncDeclInSourceScope(d: SyntaxDecl) -> Result[(), CompileDiagnostic] {
         val typeParams: Array[Bind] = (try self.lowerSyntaxDeclTypeParams(d: d))
         val savedTP: Array[Bind] = self.cur.typeParams
-        val savedWT: Array[TypeId] = self.lowerWhereSyntaxTypes
-        val savedWTr: Array[TypeId] = self.lowerWhereSyntaxTraitTypes
         self.cur.typeParams = typeParams
-        mut val whereTypes: Array[TypeId] = []
-        mut val whereTraits: Array[TypeId] = []
-        mut val i: U64 = 0U64
-        while i < syntaxDeclWhereCount(file: self.syntax, decl: d) {
-            whereTypes.append(syntaxDeclWhereType(file: self.syntax, decl: d, index: i))
-            whereTraits.append(syntaxDeclWhereTraitType(file: self.syntax, decl: d, index: i))
-            i += 1U64
-        }
-        self.lowerWhereSyntaxTypes = whereTypes
-        self.lowerWhereSyntaxTraitTypes = whereTraits
         try self.reserveSyntaxProjectionBounds(declaration: d)
         val params: Array[Param] = (try self.lowerSyntaxDeclParams(d: d))
         mut val retStart: U64 = 0U64
@@ -531,8 +420,6 @@ impl Comp {
         val fnIdx: U64 = (try self.registerAuthoredCallable(f: <Func nameStart=d.name.start nameLen=d.name.end - d.name.start nameId=intern(c: inout self, start: d.name.start, len: d.name.end - d.name.start) typeParams=self.pushFuncBinds(binds: typeParams) params=self.pushFuncParams(params: params) hasRet=d.hasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=body hasRecv=false recvStart=0U64 recvLen=0U64 selfInout=false selfMove=false isAssoc=false isAsync=d.isAsync isDiverging=d.isDiverging isExposed=d.isExposed isExtern=false defOffset=d.name.start />, result: retUse))
         try self.appendPreparedFunctionBounds(function: fnIdx)
         self.cur.typeParams = savedTP
-        self.lowerWhereSyntaxTypes = savedWT
-        self.lowerWhereSyntaxTraitTypes = savedWTr
         return <Result.Ok value=() />
     }
 }
@@ -609,19 +496,11 @@ pub impl Comp {
         val savedBounds = self.activeProjectionBounds
         val savedParameters = self.cur.typeParams
         val savedReturn = self.cur.lowerRetTy
-        val savedValueSubjects = self.lowerWhereTypes
-        val savedValueTraits = self.lowerWhereTraitTypes
-        val savedSyntaxSubjects = self.lowerWhereSyntaxTypes
-        val savedSyntaxTraits = self.lowerWhereSyntaxTraitTypes
         val scope = self.sourceTypeUses.begin(kind: <SourceTypeScopeKind.FreeFunction />, anchor: d.nameSpan.start)
         val result = self.lowerFuncDeclInSourceScope(d: d)
         self.activeProjectionBounds = savedBounds
         self.cur.typeParams = savedParameters
         self.cur.lowerRetTy = savedReturn
-        self.lowerWhereTypes = savedValueSubjects
-        self.lowerWhereTraitTypes = savedValueTraits
-        self.lowerWhereSyntaxTypes = savedSyntaxSubjects
-        self.lowerWhereSyntaxTraitTypes = savedSyntaxTraits
         if !self.sourceTypeUses.finish(token: scope, succeeded: result.isOk()) {
             return <Result.Err error=self.diagnosticAt(offset: d.nameSpan.start, msg: "invalid authored type scope restoration", failureDomain: <FailureDomain.Internal />) />
         }
@@ -641,11 +520,7 @@ impl Comp {
         // param / return / body-local types may reference `[T]` — make them the lowering-time
         // scope so lowerType marks type-parameter heads as skip (siteOffset 0).
         val savedTP: Array[Bind] = self.cur.typeParams
-        val savedWT: Array[TypeAst] = self.lowerWhereTypes
-        val savedWTr: Array[TypeAst] = self.lowerWhereTraitTypes
         self.cur.typeParams = typeParams
-        self.lowerWhereTypes = d.whereTypes
-        self.lowerWhereTraitTypes = (try self.valueProjectionTraitTypes(subjects: d.whereTypes, names: d.whereTraits, types: d.whereTraitTypes))
         try self.reserveValueProjectionBounds(parameters: d.whereParams, traits: d.whereTraits, subjects: d.whereTypes, traitTypes: d.whereTraitTypes, anchor: nameStart)
         val normParams: Array[ParamAst] = (try self.normalizeParams(params: d.params))
         val params: Array[Param] = (try self.lowerParams(params: normParams))
@@ -676,8 +551,6 @@ impl Comp {
         // such as a user-written trait `T` into a false type-visibility error.
         try self.appendPreparedFunctionBounds(function: fnIdx)
         self.cur.typeParams = savedTP
-        self.lowerWhereTypes = savedWT
-        self.lowerWhereTraitTypes = savedWTr
         // attach pending `@[...]` directives to this fn (a macro on a free function);
         // declStart/declEnd = the fn's source span for the gen harness slice.
         return <Result.Ok value=() />

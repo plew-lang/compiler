@@ -116,3 +116,31 @@ longer recovers an inherited receiver by spelling. Fixed-input build
 view positives and the projected trait value view passed check, JIT
 and native with output 42. Both wrong-underlying forms reject in check
 and JIT. Existing conformance-only and stored extension controls pass.
+
+## Scoped shorthand selection
+
+Removed both raw `boundLhsMatches` paths and the parallel mutable where
+arrays from Comp. Both declaration adapters now use only declaration-owned
+prepared clauses when selecting a short projection. A type-only call with
+no declaration context has no lexical premise to borrow. The existing
+short-projection test drives the materialized adapter using a real source
+declaration without registering a duplicate SyntaxFile declaration first.
+The legacy signature control now copies `whereTraitTypes` as well as the
+names so its original positional-argument assertions reach the intended
+adapter. No expectations were changed.
+
+Fixed-input build `20261113T112735-build-5870b3` produced `848b915e5dec`.
+Five public language controls pass check/JIT and the two multi-module
+negative controls retain their short-projection reasons in both modes.
+The updated internal `ShortProjectionBoundInstances` ran 15 checks,
+including materialized/legacy binders and complete positional arguments.
+`ProjectionBoundContextControls` passed all nine checks of scoped
+admission, bounded recursion, earlier/later clauses, and failure restoration.
+
+The next formation RED isolates a valid newtype retag from view-changing
+cast policy. With `newtype Viewed = Number#Marker[I64]`, unwrapping it as
+`Number#Marker[T#Project.Item]` under `T: Project[Item=I64]` fails at the
+cast target in both check and JIT on `848b915e5dec`. The corresponding
+ordinary value-view selection succeeds. Follow the cast target's original
+type-use occurrence through its lexical proof and then its checked
+conversion to final Mid.

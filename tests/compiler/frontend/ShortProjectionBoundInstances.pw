@@ -1,4 +1,4 @@
-use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontend }
+use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
 use ../../../src/SourceAccess only { SourceAccess }
 use ../../../src/Diag only { emitDiagnostic, FailureDomain }
 use @Plew/Syntax only { rangeEquals, parseItem, TopItemAst, SigAst }
@@ -9,9 +9,10 @@ fn main() {
     val bound = if scenario == "recursive" { give "Zero + P[T.Item]" } else if scenario == "dependent" { give "Zero + P[T.Item]" } else if scenario == "differentInstances" { give "P[I64] + P[Bool]" } else if scenario == "nested" { give "P[Array[I64]]" } else if scenario == "pair" { give "Pair[I64,Bool]" } else if scenario == "open" { give "P" } else if scenario == "zero" { give "Zero" } else { give "P[I64]" }
     val signature = "fn target[T](value: T.Item)" + (if scenario == "noBound" { give "" } else if scenario == "qualified" { give " where T: Types.P[I64]" } else { give " where T: " + bound }) + " {{}}"
     val prefix = if scenario == "dependent" { give "trait P[K] {{}} " } else { give "trait P[K] {{ type Item }} " }
-    val text = prefix + "trait Pair[K,L] {{ type Item }} trait Zero {{ type Item }} " + signature + " fn main() {{}}"
+    val adapter = argAt(2I64) == "adapter"
+    val text = prefix + "trait Pair[K,L] {{ type Item }} trait Zero {{ type Item }} " + (if adapter { give "\n// " + signature + "\n" } else { give signature }) + " fn main() {{}}"
     mut val compiler = <Comp />
-    match analyzeFrontend(c: inout compiler, input: (if scenario == "qualified" { give <FrontendInput.File path="tests/compiler/frontend/fixtures/ImplTraitInstances/QualifiedShorthandInstance.pw" /> } else { give <FrontendInput.Text text=text path="ShortProjectionInstances.pw" /> }), sources: <SourceAccess stdRoot="std/".bytes() />) {
+    match analyzeFrontendForRequests(c: inout compiler, input: (if scenario == "qualified" { give <FrontendInput.File path="tests/compiler/frontend/fixtures/ImplTraitInstances/QualifiedShorthandInstance.pw" /> } else { give <FrontendInput.Text text=text path="ShortProjectionInstances.pw" /> }), sources: <SourceAccess stdRoot="std/".bytes() />) {
         Result.Err(error: val diagnostic) => {
             if scenario == "recursive" {
                 match diagnostic.failureDomain { FailureDomain.Limit => { print(diagnostic.message == "associated-type short projection analysis limit exceeded") } _ => { print("0") } }
@@ -23,27 +24,29 @@ fn main() {
         Result.Ok(value: _) => {}
     }
     if scenario == "differentInstances" || scenario == "noBound" || scenario == "open" { print("0") return }
+    if adapter {
+        val length = signature.bytes().count()
+        mut val start = 0U64
+        while start + length <= compiler.arena.bytes.count() && !rangeEquals(bytes: compiler.arena.bytes, start: start, len: length, kw: signature) {
+            start += 1U64
+        }
+        if start + length > compiler.arena.bytes.count() { panic("value adapter source setup failed") }
+        match parseItem(source: signature, start: start, end: start + signature.bytes().count()) {
+            TopItemAst.Decl(d: val ast) => { compiler.lowerFuncDecl(d: ast).unwrap() }
+            _ => { panic("value adapter declaration setup failed") }
+        }
+    }
     val function = compiler.internBytes(s: "target")
     val declaration = compiler.arena.functionAt(index: compiler.arena.firstFunctionNamed(nameId: function.nameId))
     mut val term = compiler.funcParamAt(params: declaration.params, index: 0U64).ty
-    if argAt(2I64) == "adapter" || argAt(2I64) == "legacy" {
+    if argAt(2I64) == "legacy" {
         val start = declaration.defOffset - 3U64
         match parseItem(source: signature, start: start, end: start + signature.bytes().count()) {
             TopItemAst.Decl(d: val ast) => {
-                if argAt(2I64) == "legacy" {
-                    val signature = <SigAst name=ast.name nameSpan=ast.nameSpan typeParams=ast.typeParams typeParamSpans=ast.typeParamSpans params=ast.params hasRet=ast.hasRet ret=ast.ret isAssoc=false whereParams=ast.whereParams whereTypes=ast.whereTypes whereTraits=ast.whereTraits />
-                    match compiler.lowerSigToFunc(sig: signature, isExtern: false, isCExtern: false) {
-                        Result.Err(error: val diagnostic) => { emitDiagnostic(diagnostic: diagnostic) print("0") return }
-                        Result.Ok(value: val lowered) => { term = compiler.funcParamAt(params: lowered.function.params, index: 0U64).ty }
-                    }
-                } else {
-                compiler.cur.typeParams = [compiler.funcBindAt(binds: declaration.typeParams, index: 0U64)]
-                compiler.lowerWhereTypes = ast.whereTypes
-                compiler.lowerWhereTraitTypes = ast.whereTraitTypes
-                match compiler.lowerType(t: ast.params[0U64].ty) {
+                val signature = <SigAst name=ast.name nameSpan=ast.nameSpan typeParams=ast.typeParams typeParamSpans=ast.typeParamSpans params=ast.params hasRet=ast.hasRet ret=ast.ret isAssoc=false whereParams=ast.whereParams whereTypes=ast.whereTypes whereTraits=ast.whereTraits whereTraitTypes=ast.whereTraitTypes />
+                match compiler.lowerSigToFunc(sig: signature, isExtern: false, isCExtern: false) {
                     Result.Err(error: val diagnostic) => { emitDiagnostic(diagnostic: diagnostic) print("0") return }
-                    Result.Ok(value: val value) => { term = value.ref }
-                }
+                    Result.Ok(value: val lowered) => { term = compiler.funcParamAt(params: lowered.function.params, index: 0U64).ty }
                 }
             }
             _ => { print("0") return }
