@@ -46,3 +46,34 @@ projection, and check accepts it. Both native object generation and
 JIT fail with "destruction underlying type is not closed". Retain
 the exact RHS recipe and use its resolved type in inherited behavior,
 layout and destruction.
+
+## Declaration and final-use checkpoint
+
+Product increment `0fd73c12`, fixed-input build
+`20261113T082820-build-a43f50`, candidate SHA `5ff5ed07551a501ecd258a5eebd9078a71c1e7bd3a72cf66e18f8cf7c631ed65`.
+The three declaration rejections identify the exact trait instance at
+line 8. The projected newtype view (including inherited method execution),
+the projected newtype base, and generic struct construction/enum matching
+pass check, JIT and linked native execution. Field defaults and the
+existing newtype adapter fixture pass JIT. The newtype adapter uses the
+stored viewed underlying for selection and the selected callable's own
+receiver surface for execution.
+
+Independent review reproduced missing receipt checks at newtype final
+readers and at enum conversion, and identified that a same-owner sibling
+slot's occurrence could be substituted. Closed fields also need evidence
+for the admitted recipe, including nested views, even when their normalized
+type is already closed. The review independently ran the newtype JIT
+controls and a nested generated record layout. Generated source parts
+retain the existing prohibition on nominal top-level declarations. The
+value-AST compatibility adapter still needs direct coverage.
+
+The review also reproduced a forward-reference admission gap on both
+baseline and candidate: if a projected newtype's underlying conforms to
+`Marker`, declaring a field `Wrapped#Marker` requires the underlying to
+have been admitted already. Forward newtype-to-newtype views need the
+same dependency. An associated-binding conformance bound using that
+projected newtype can be reached even earlier in declaration preparation.
+Keep these examples as ordering probes. The baseline also accepts a bare
+source cast to a viewed newtype in check before failing Mid preparation;
+the passing regression uses the exact viewed source cast.
