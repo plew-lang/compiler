@@ -1958,13 +1958,17 @@ impl Comp {
         val candidate = self.witnessMatchFromUnify(conformIdx: 0U64, typeParams: params, binds: binds)
         val token = f.dependentReceiverScope
         val implementation = self.sourceTypeUses.scopeAt(token: token).unwrap().implementation.unwrap()
+        mut val parameters: Array[Bind] = []
         mut val arguments: Array[U64] = []
         for parameter in implementation.parameters {
             val index = self.witnessBindParamIndex(binds: candidate.binds, paramId: parameter.paramId)
-            if index >= candidate.binds.count() { return <Result.Ok value=absent /> }
+            // Other impl parameters can be determined by method arguments.
+            // Keep them open until ordinary argument inference.
+            if index >= candidate.binds.count() { continue }
+            parameters.append(parameter)
             arguments.append(candidate.binds[index].term)
         }
-        val environment = <InstanceEnvironment params=implementation.parameters args=arguments receiverRef=receiver />
+        val environment = <InstanceEnvironment params=parameters args=arguments receiverRef=receiver />
         val function = f.dependentReceiverCallable - 1U64
         mut val indices: Array[U64] = []
         mut val bounds: Array[TraitBound] = []

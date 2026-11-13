@@ -1109,3 +1109,11 @@ associated equality still fails selection. Removing the concrete-only
 guard in declaration replay alone did not resolve it and was discarded.
 Keep these as distinct failure controls for the next increment. The
 review found no foreign evidence accepted in the exercised closure cases.
+
+The receiver matcher now binds only impl parameters present in the
+directional match. Ordinary argument inference fills unrelated slots,
+and the selected-call check still enforces their clauses. The regression
+`inherent_receiver_projection_argument_binder` was rejected at lookup
+by `2328d912`. It passes check, JIT and linked native with `122ee116`
+(fixed-input build `20261113T181608-build-40930b`). Replacing its
+argument by `Bool` still diagnoses the missing independent conformance.
