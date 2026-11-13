@@ -134,6 +134,10 @@ field labels and field types. Additional scenarios `viewSame`, `viewDistinct`,
 unordered/deduplicated extension sets and receiver-owned projection views.
 `viewSameSpellingDistinct` loads the two actual same-named trait owners under
 `fixtures/TraitCycleViews/`; run from the compiler root.
+The `projectionDistinctInstances` and `projectionSameInstance` scenarios use
+symbolic projection terms as graph inputs and verify that different positional
+arguments keep the edges disjoint while equal arguments close the cycle.
+The ordinary source fixture supplies actual conformances to form those projections.
 `TraitCycleSourceInputs.pw` takes `unknownNominal`,
 `primitiveArity` or `missingProjectionMember` and checks the exact Source
 diagnostic for each authored error (no argument retains `unknownNominal`). Compile/link

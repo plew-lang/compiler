@@ -1,14 +1,14 @@
 use @Std/Io only { print }
 
-// Projection trait arguments are part of the type term.  The two B terms here
-// are distinct, so these edges do not form a trait-instance cycle.
 trait Projection[Kind] { type Item }
+struct Key {}
+impl Key as Projection[I64] { type Item = I64 }
+impl Key as Projection[String] { type Item = String }
+impl Key as Projection[Bool] { type Item = Bool }
 trait A[Item] {}
 trait B[Item] {}
 
-impl[T] A[T#Projection[I64].Item] as B[T#Projection[String].Item] {}
-impl[T] B[T#Projection[Bool].Item] as A[T#Projection[Bool].Item] {}
+impl A[Key#Projection[I64].Item] as B[Key#Projection[String].Item] {}
+impl B[Key#Projection[Bool].Item] as A[Key#Projection[Bool].Item] {}
 
-fn main() {
-    print(1I64)
-}
+fn main() { print(1I64) }

@@ -1,6 +1,6 @@
 ---
 id: com-1a3k
-status: open
+status: closed
 deps: []
 links: []
 created: 2026-11-09T08:54:17Z
@@ -30,3 +30,32 @@ Retain exact graph/equality assertions at the correct internal boundary when val
 Follow the parent [contract and closure rules](com-amjl.md#contract-and-closure) and task-start TDD. Confirm the actual old-candidate RED for new behavior, preserve valid controls, then build a fresh candidate and test the real source-to-final-consumer path. Pure refactors use existing GREEN. Record exact inputs/carrier, diagnostic origin, meaningful assertions, applicable modes, removed competing authorities and independent neutral review. Do not close from a table/check/helper-only result. Existing unsupported surfaces must retain their actual diagnostic and be recorded, not silently counted as acceptance.
 
 No new specification or general solver/SCC/unique/opening feature, API-wide authority extraction, main/seed promotion or whole-suite/ASan certification is included. Shared API names alone do not create whole-task prerequisites. Whole-program fixed-point/performance/full-suite gates remain with met-si6j; parent closure still requires the complete original guarantee map.
+
+## Outcome
+
+The [inherited-signature checkpoint](com-30u1.md#inherited-signature-equation-checkpoint)
+records the original declaration failure and the repaired setup. The missing
+instance remains a raw comparison, alongside the diamond equalities, foreign
+receiver, Conflict, known Unit and empty executable worklist assertions.
+
+The parameterized cycle fixture now forms all three projections from explicit
+conformances. Its original symbolic edge shapes remain in the native
+`TraitCycleCanonicalIdentity` probe. Different positional arguments pass;
+the same arguments close a cycle even when independently lowered on distinct
+binders. This pair detects both dropped positional children and equality by
+arena identity.
+
+Verified on development carrier `83b5baf2956f` from build
+`20261113T131109-build-325dd4`. Both corrected source fixtures pass
+check, JIT and linked native with their existing golden output. The two
+new graph scenarios and existing same/distinct controls pass native with
+exact output and empty stderr. Projection growth, binder duplication and
+the exact-cycle contrast reject with exit 1 and their existing structural
+diagnostics in check and JIT. The baselined compiler's acceptance of
+unpromised impl target projections remains tracked by [com-3jtd](com-3jtd.md).
+
+Independent review against `5cd03791` confirmed the source setups and
+unchanged diagnostic producers. The review identified that the paired
+graph tests initially reused the same binder and terms. Re-review
+confirmed that independently allocated terms and distinct binders now
+exercise semantic positional identity; the updated pair was rerun.
