@@ -2357,7 +2357,7 @@ pub impl Comp {
                     instance = try self.inferRecordMakeRef(fields: fields)
                 }
                 if !self.isGenericInst(ref: instance) {
-                    val inferred = try self.inferMakeInstance(typeStart: typeStart, typeLen: typeLen, typeRef: instance, isEnum: isEnum, variantStart: variantStart, variantLen: variantLen, fields: fields)
+                    val inferred = try self.inferMakeInstance(typeStart: typeStart, typeLen: typeLen, typeRef: instance, isEnum: isEnum, variantStart: variantStart, variantLen: variantLen, fields: fields, expression: <Optional.Some v=exprId />)
                     if inferred != 0U64 { instance = inferred }
                 }
                 mut val completedFields: Array[MakeField] = []

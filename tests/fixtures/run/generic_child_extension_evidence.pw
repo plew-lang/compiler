@@ -39,12 +39,14 @@ fn useSource[T](source: T) where T: PairSource {
 }
 fn main() {
     useSource(source: <PairMaker />)
-    val inferred = <Slot[Counter#Read, Counter#Other] item=<Counter n=42I64 />#Read other=<Counter n=8I64 />#Other />
+    val inferred = <Slot item=<Counter n=42I64 />#Read other=<Counter n=8I64 />#Other />
     val holder = <Holder pair=<Slot[Counter#Other, Counter#Read] item=<Counter n=8I64 />#Other other=<Counter n=42I64 />#Read /> />
     print(take(value: holder.pair).get())
     val returned = makePair()
     print(take(value: returned).get())
     val alias = inferred
+    val inferredReverse = <Slot other=<Counter n=42I64 />#Read item=<Counter n=8I64 />#Other />
+    print(take(value: inferredReverse).get())
     val wrapped = <Wrapped item=<Counter n=42I64 />#Read other=<Counter n=8I64 />#Other />
     print(take(value: wrapped as Slot[Counter#Read, Counter#Other]).get())
     val projected: Choice#Selection.Output = inferred

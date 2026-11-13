@@ -1625,3 +1625,29 @@ commits type arguments from successful field matches, but returns only
 the built term, so the exact field occurrence and matched child are lost.
 Retain that origin at the existing substitution decision, then test that
 the downstream call works with the corresponding lookup fallback disabled.
+
+### Keep evidence from inferred construction arguments
+
+Only the field match that first fills a type parameter can attach evidence
+for that inferred argument. The record is published only after the whole
+construction substitution succeeds. The selected argument position and
+exact term must still match when a later call extracts the argument.
+The generation-only flat inference walk does not publish body facts.
+
+Build `20261113T223803-build-21db1b` produced `785ec9f4`.
+The regression reverses the order of the written fields, uses two competing
+extension methods, and reads through an inferred binding. Check, JIT, and
+linked native match the golden output. Six nearby public controls passed
+check and JIT, and three rejected inputs kept their expected diagnostics.
+The existing compiler-internal enum fixture passed check; a focused JIT
+probe hit the same 12-second timeout on the old and new carriers.
+
+On the same regression, `--check --trace-codegen` counted three entries
+into the old view-source query on `f8c253d2` and zero on `785ec9f4`.
+This verifies that the changed input bypasses that query. The shared lookup
+fallback remains for other producers. The combined [same-source comparison](../../../evidence/rejection-domains/diagnostic-domain-implementation/trait-receiver-admission/inferred-construction-same-source.json)
+gave 7.823 s and 7.828 s with all eight nonempty LLVM outputs identical.
+
+The inference handoff currently retains proofs for a directly viewed
+inferred type argument. Composite inferred arguments and non-nominal result
+producers still need to be traced before removing the shared fallback.

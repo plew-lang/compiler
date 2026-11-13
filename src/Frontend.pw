@@ -2876,6 +2876,7 @@ fn readSourceOperationConstraints(rows: Array[Optional[CallConstraintPlanState]]
 enum SourceExpressionTypeOrigin {
     Authored(occurrence: U64)
     Construction(term: U64, slots: Array[(index: U64, recipe: U64)])
+    InferredConstruction(term: U64, slots: Array[(index: U64, proofs: Array[SourceExtensionViewProof])])
 }
 
 struct SourceBindingTypeEvidence {

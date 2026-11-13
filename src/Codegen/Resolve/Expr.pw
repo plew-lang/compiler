@@ -2801,7 +2801,7 @@ pub impl Comp {
         return fieldTerm
     }
 
-    inout fn inferMakeInstance(typeStart: U64, typeLen: U64, typeRef: U64, isEnum: Bool, variantStart: U64, variantLen: U64, fields: MakeFieldRange) -> Result[U64, CompileDiagnostic] {
+    inout fn inferMakeInstance(typeStart: U64, typeLen: U64, typeRef: U64, isEnum: Bool, variantStart: U64, variantLen: U64, fields: MakeFieldRange, expression: Optional[U64] = <Optional.None />) -> Result[U64, CompileDiagnostic] {
         // Argument inference refines the selected declaration; it cannot
         // replace it with a same-spelled generic from another module.
         mut val declaration = <Bind nameStart=0U64 nameLen=0U64 fieldStart=0U64 fieldLen=0U64 />
@@ -2832,13 +2832,24 @@ pub impl Comp {
         mut val args: Array[U64] = []
         while args.count() < typeParameters.count() { args.append(0U64) }
         val parameters = <PatternBindInput.Values values=typeParameters />
+        mut val origins: Array[(index: U64, proofs: Array[SourceExtensionViewProof])] = []
         mut val index = 0U64
         while index < declaredFields.count() {
             val field = declaredFields[index]
-            val argument = try self.makeFieldArgRef(fieldNameId: field.nameId, fields: fields)
+            val fieldExpression = self.makeFieldArgument(fieldNameId: field.nameId, fields: fields)
+            val argument = if fieldExpression.isSome() { give try self.inferenceArgumentType(exprId: fieldExpression.unwrap()) } else { give 0U64 }
             mut val candidate = args
             match self.matchTypeArgumentConstraints(pattern: field.ty, argument: argument, params: parameters, values: inout candidate) {
-                TypeArgumentMatch.Matched | TypeArgumentMatch.Deferred => { args = candidate }
+                TypeArgumentMatch.Matched | TypeArgumentMatch.Deferred => {
+                    if expression.isSome() && fieldExpression.isSome() {
+                        for slot in 0U64..<candidate.count() {
+                            if args[slot] != 0U64 || self.arena.typeViewSourceCount(ref: candidate[slot]) == 0U64 { continue }
+                            val proofs = self.expressionSubstitutionExtensions(exprId: fieldExpression.unwrap(), pattern: field.ty, actual: argument, binder: typeParameters[slot].paramId, substituted: candidate[slot])
+                            if proofs.count() != 0U64 { origins.append((index: slot, proofs: proofs)) }
+                        }
+                    }
+                    args = candidate
+                }
                 TypeArgumentMatch.Mismatch => {}
                 TypeArgumentMatch.Conflict => {
                     return <Result.Err error=self.diagnosticAt(offset: typeStart, msg: "type mismatch: this value's type does not match the type required here; cannot infer the type argument(s) of this generic construction; annotate it (e.g. `Type[Arg]`, or a typed binding / return type): constructor fields require conflicting type arguments") />
@@ -2850,26 +2861,31 @@ pub impl Comp {
         // Inference selects the arguments of this declaration; it must not
         // erase its nominal identity. Mid ownership classification and later
         // substitutions consume that identity without repeating name lookup.
-        if typeRef != 0U64 && typeRef < self.arena.typeCount() && self.arena.typeAt(index: typeRef).hasDecl {
+        val inferred = if typeRef != 0U64 && typeRef < self.arena.typeCount() && self.arena.typeAt(index: typeRef).hasDecl {
             val selected = self.arena.typeAt(index: typeRef)
-            return <Result.Ok value=self.rebuildTypeTerm(t: selected, args: args, assocTraitArgs: selected.assocTraitArgs) />
+            give self.rebuildTypeTerm(t: selected, args: args, assocTraitArgs: selected.assocTraitArgs)
+        } else {
+            give self.pushType(t: <TypeRef nameStart=typeStart nameLen=typeLen hasDecl=true declOffset=declaration.nameStart args=args isRecord=false recordFieldLabels=[] recordFieldTerms=[] />)
         }
-        return <Result.Ok value=self.pushType(t: <TypeRef nameStart=typeStart nameLen=typeLen hasDecl=true declOffset=declaration.nameStart args=args isRecord=false recordFieldLabels=[] recordFieldTerms=[] />) />
+        if origins.count() != 0U64 {
+            self.recordExpressionTypeOrigin(exprId: expression.unwrap(), origin: <SourceExpressionTypeOrigin.InferredConstruction term=inferred slots=origins />)
+        }
+        return <Result.Ok value=inferred />
     }
 
     // Field values use the same lexical type authority as call arguments.
     // Unknown/contextual values remain unknown; concrete body substitutions
     // and spelling-based TypeRef reconstruction cannot choose the result.
-    inout fn makeFieldArgRef(fieldNameId: U64, fields: MakeFieldRange) -> Result[U64, CompileDiagnostic] {
+    inout fn makeFieldArgument(fieldNameId: U64, fields: MakeFieldRange) -> Optional[U64] {
         mut val index = 0U64
         while index < fields.len {
             val field = self.makeFieldAt(fields: fields, index: index)
             if intern(c: inout self, start: field.nameStart, len: field.nameLen) == fieldNameId {
-                return self.inferenceArgumentType(exprId: field.value)
+                return <Optional.Some v=field.value />
             }
             index += 1U64
         }
-        return <Result.Ok value=0U64 />
+        return <Optional.None />
     }
 }
 
@@ -3022,6 +3038,21 @@ impl Comp {
                             if !self.typeRefEq(a: selected, b: self.typeTermRefChildRef(ref: term, index: index)) { continue }
                             val proofs = self.substitutionExtensionSources(pattern: self.typeTermRefChildRef(ref: pattern, index: index), actual: selected, recipe: slot.recipe, binder: binder, substituted: substituted)
                             if proofs.count() != 0U64 { return proofs }
+                        }
+                    }
+                    SourceExpressionTypeOrigin.InferredConstruction(val term, val slots) => {
+                        if !self.typeTermRefSameHead(a: pattern, b: actual) || !self.typeTermRefSameHead(a: term, b: actual) { return [] }
+                        val actualCount = self.typeTermRefChildCount(ref: actual)
+                        if actualCount != self.typeTermRefChildCount(ref: pattern) || actualCount != self.typeTermRefChildCount(ref: term) { return [] }
+                        for slot in slots {
+                            val index = slot.index
+                            if index >= actualCount { return [] }
+                            val child = self.typeTermRefChildRef(ref: actual, index: index)
+                            if self.bareInferenceParamId(ref: self.typeTermRefChildRef(ref: pattern, index: index)) == binder &&
+                               self.typeRefEq(a: child, b: substituted) &&
+                               self.typeRefEq(a: child, b: self.typeTermRefChildRef(ref: term, index: index)) {
+                                return slot.proofs
+                            }
                         }
                     }
                 }
