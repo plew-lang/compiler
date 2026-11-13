@@ -1,6 +1,6 @@
 ---
 id: com-0n6g
-status: open
+status: in_progress
 deps: []
 links: []
 created: 2026-11-09T08:54:17Z

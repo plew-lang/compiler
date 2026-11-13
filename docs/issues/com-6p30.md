@@ -1,6 +1,6 @@
 ---
 id: com-6p30
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-11-09T08:54:16Z
@@ -183,3 +183,30 @@ the independent sibling prepares. See the
 
 The native overwrite probe aborts on `34ed5c45`. On `d017c376`
 it rejects the write, reads the original ID and prepares the global.
+
+## Independent closure review
+
+Review also found that rewriting the parallel expression serial could
+redirect the lookup to a sibling's registered arguments. `ce169cab`
+indexes the write-once row directly by the expression ID used by both
+lowerers, Record and Mono. The final review confirmed that current
+expression rewrites preserve the view's ID and that Mono consumes its
+sealed receipt. The native serial-substitution and duplicate-registration
+probes both pass on `c5146239`. The serial-substitution probe on
+`d017c376` failed on the sibling's foreign argument.
+
+The final candidate passed fixed-input build
+`20261113T080453-build-2ab2f8`, generation
+`20261113T080806-gen-29336d`, six check/JIT/native controls,
+the wrong-instance rejection and 47 lazy CLI cases. Independent
+check/JIT covered 15 focused sources on the preceding candidate and
+the final expression-ID change was independently reviewed in source.
+The global closure invocation limitation remains with
+[com-za4f](com-za4f.md); the startup graph omissions remain with
+[com-fkxl](com-fkxl.md).
+
+Final same-source development medians were 7.136 s and 7.139 s for
+`d20eb1cc` and `c5146239`, respectively. Both were stable per carrier,
+with the same byte count and different LLVM hashes. The formal
+fixed-point and performance acceptance remains with met-si6j.
+Resolved at product revision `ce169cab`.
