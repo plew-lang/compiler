@@ -1,0 +1,11 @@
+use @Std/Io only { print }
+trait Source { type Item }
+struct Number {}
+struct Box[Key, Item] { val item: Item }
+extension Extra { pub impl[T] Box[T, T#Source.Item] where T: Source { fn value() -> I64 { return 42I64 } } }
+trait AnItem { type Out }
+struct Wrapped {}
+impl Wrapped as AnItem { type Out = Box[Number, I64]#Extra }
+impl Number as Source { type Item = I64 }
+fn read[T](owner: T, value: T#AnItem.Out) -> I64 where T: AnItem { return 42I64 }
+fn main() { print(read(owner: <Wrapped />, value: <Box[Number, I64] item=42I64 />#Extra)) }

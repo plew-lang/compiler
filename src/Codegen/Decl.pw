@@ -557,11 +557,14 @@ pub impl Comp {
                     if typeRef == 0U64 || f.recvTy == 0U64 {
                         return <Result.Ok value=true />
                     }
-                    if f.dependentReceiverCallable != 0U64 {
-                        if (try self.dependentInherentReceiverApplies(f: f, receiver: typeRef, assumptions: assumptions)) { return <Result.Ok value=true /> }
+                    val member = if f.dependentReceiverCallable == 0U64 && self.newtypeAnnotationAdmissionOpen {
+                        give try self.admitExtensionMethodReceiver(function: i, receiver: f.recvTy)
+                    } else { give f }
+                    if member.dependentReceiverCallable != 0U64 {
+                        if (try self.dependentInherentReceiverApplies(f: member, receiver: typeRef, assumptions: assumptions)) { return <Result.Ok value=true /> }
                     } else {
                         mut val binds: Array[UnifyBind] = []
-                        if self.unifyPatterns(a: f.recvTy, aSide: 0U64, b: typeRef, bSide: 1U64, aParams: <PatternBindInput.Function range=f.typeParams />, bParams: <PatternBindInput.Values values=[] />, binds: inout binds, ignoreTopView: true) {
+                        if self.unifyPatterns(a: member.recvTy, aSide: 0U64, b: typeRef, bSide: 1U64, aParams: <PatternBindInput.Function range=member.typeParams />, bParams: <PatternBindInput.Values values=[] />, binds: inout binds, ignoreTopView: true) {
                             return <Result.Ok value=true />
                         }
                     }

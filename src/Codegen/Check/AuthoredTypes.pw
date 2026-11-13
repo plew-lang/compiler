@@ -463,14 +463,7 @@ impl Comp {
                     Optional.Some(v: val method) => {
                         match self.authoredImplementationReceivers.get(key: method.parent) {
                             Optional.Some(v: val proof) => {
-                                val owner = self.sourceTypeUses.completedMethodImplementation(method: method)
-                                val dependentScope = if owner.isSome() && self.arena.typeContainsAssociatedProjection(ref: proof.sourceTerm) {
-                                    give match owner.unwrap().kind {
-                                        SourceImplementationKind.Inherent => method.parent,
-                                        _ => 0U64,
-                                    }
-                                } else { give 0U64 }
-                                self.arena.setAdmittedFunctionReceiver(index: function, term: proof.sourceTerm, dependentScope: dependentScope)
+                                self.publishAdmittedMethodReceiver(function: function, method: method, term: proof.sourceTerm)
                             }
                             Optional.None => {}
                         }
@@ -480,6 +473,35 @@ impl Comp {
             }
         }
         return <Result.Ok value=() />
+    }
+
+    inout fn publishAdmittedMethodReceiver(function: U64, method: SourceTypeScope, term: U64) {
+        val owner = self.sourceTypeUses.completedMethodImplementation(method: method)
+        val dependentScope = if owner.isSome() && self.arena.typeContainsAssociatedProjection(ref: term) {
+            give match owner.unwrap().kind {
+                SourceImplementationKind.Inherent => method.parent,
+                _ => 0U64,
+            }
+        } else { give 0U64 }
+        self.arena.setAdmittedFunctionReceiver(index: function, term: term, dependentScope: dependentScope)
+    }
+
+    // Source formation can demand an extension member before the nominal
+    // sweep publishes all callable receivers. Admit the same lexical recipe.
+    inout fn admitExtensionMethodReceiver(function: U64, receiver: U64) -> Result[Func, CompileDiagnostic] {
+        if !self.bodyTypeNeedsViewAdmission(ref: receiver) { return <Result.Ok value=self.arena.functionAt(index: function) /> }
+        val scope = self.sourceTypeUses.methodScopeFor(function: function)
+        if scope.isNone() { return <Result.Ok value=self.arena.functionAt(index: function) /> }
+        val method = scope.unwrap()
+        val implementation = self.sourceTypeUses.completedMethodImplementation(method: method)
+        if implementation.isNone() { return <Result.Ok value=self.arena.functionAt(index: function) /> }
+        val owner = implementation.unwrap()
+        if owner.receiverOccurrence != 0U64 {
+            try self.admitNominalImplementationReceiver(token: method.parent, owner: owner)
+            val proof = self.authoredImplementationReceivers[method.parent]
+            self.publishAdmittedMethodReceiver(function: function, method: method, term: proof.sourceTerm)
+        }
+        return <Result.Ok value=self.arena.functionAt(index: function) />
     }
 
     inout fn indexConformanceArgumentScopes() {

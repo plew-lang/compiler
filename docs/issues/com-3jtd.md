@@ -1136,3 +1136,14 @@ after checking all its sources. The sweep can then consume that result.
 acceptance controls and the missing/wrong trait-instance signature
 controls pass. An associated binding RHS can still require the extension
 before its implementation receiver is admitted.
+
+Extension lookup during nominal admission now prepares the relevant
+implementation receiver on demand through the same lexical recipe and
+publication path as the later sweep. The original associated binding
+positive fails on `e47907b0`; the forward-declared witness regression
+`inherent_receiver_projection_extension_binding` passes check, JIT and
+linked native with `03b9f51b` (fixed-input build
+`20261113T183426-build-f19faa`). Five receiver controls pass check and JIT.
+Changing the associated binding's receiver argument to Bool still rejects
+extension formation. The `via`, rigid positional/equality, and receiver
+evidence reuse findings remain open.
