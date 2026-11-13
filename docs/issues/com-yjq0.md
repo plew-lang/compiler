@@ -362,3 +362,29 @@ operator result hint. Source-selected call templates and saved local
 types still supply the final scanner's inputs. Fixed-input build
 `20261113T050954-build-ed0c9e` produced `9cf01e79`. Four projection
 runtime fixtures, compiler source check and the lazy CLI suite passed.
+
+## Independent recheck and remaining admission boundaries
+
+The independent review of `d57c7510` reproduced two source regressions.
+A provided method's explicit `Self: Projection[Item=I64]` premise
+must supply the equality for a view selecting
+`Project[Self#Projection.Item]`. The implicit receiver premise
+establishes conformance but has no associated equation. A generic
+function's bound `T: Marker[U#Projection.Item]` must also match the
+same selector after the lexical `U: Projection[Item=V]` equation is
+applied. The raw bound currently fails to match the normalized key.
+The meta replay directory preserves both inputs and carrier results.
+
+Make ordered argument occurrences mandatory at authored value-view
+sites. Bind each root to the actual view expression and slot before
+Record. Retain the argument receipts with the selected view and
+validate them at the final consumer. Distinguish source sites from
+global/default and static qualifier paths explicitly. Add deletion
+and same-type foreign-slot controls. Route the replayed type to the
+layout/call consumer where the current generic grounding path can
+search for projection evidence again.
+
+The independent recheck did not approve closure. Existing check/JIT
+successes for the earlier four regressions, ordered argument cases,
+provided-body separation and sibling closure timing remain valid
+controls for the next candidate.
