@@ -22,6 +22,21 @@ pub struct AuthoredAssociatedBinding {
 }
 pub impl AuthoredAssociatedBinding { factory }
 
+pub struct AuthoredConformanceArgument {
+    pub val occurrence: U64
+    pub val recipe: U64
+    pub val term: U64
+    pub val replay: Bool
+}
+pub impl AuthoredConformanceArgument { factory }
+
+pub struct AuthoredConformanceTarget {
+    pub val scope: U64
+    pub val arguments: Array[AuthoredConformanceArgument]
+    pub val proofs: Array[AuthoredTypeViewProof]
+}
+pub impl AuthoredConformanceTarget { factory }
+
 pub struct AuthoredProvidedClause {
     pub val assumption: U64
     pub val scope: U64

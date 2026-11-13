@@ -41,6 +41,22 @@ pub impl Comp {
     // declaration-local impl binders.  This is deliberately the same binder
     // map later used for its associated output.
     inout fn groundedWitnessTraitArgs(cf: Conform, witness: WitnessMatch) -> Result[Array[U64], CompileDiagnostic] {
+        if self.conformanceTargetScopes.count() != 0U64 && self.conformanceTargetScopes.contains(key: witness.conformIdx - 1U64) {
+            val index = witness.conformIdx - 1U64
+            try self.admitConformanceTarget(index: index)
+            for active in self.activeConformanceTargetReads {
+                if self.sameWitnessSubstitution(a: active, b: witness) {
+                    return <Result.Err error=self.diagnosticAt(offset: cf.defOffset, msg: "conformance target projection is cyclic", failureDomain: <FailureDomain.Source />) />
+                }
+            }
+            if self.activeConformanceTargetReads.count() >= 64U64 {
+                return <Result.Err error=self.diagnosticAt(offset: cf.defOffset, msg: "conformance target projection analysis limit exceeded", failureDomain: <FailureDomain.Limit />) />
+            }
+            self.activeConformanceTargetReads.append(witness)
+            val result = self.readConformanceTargetArguments(saved: self.authoredConformanceTargets[index], declaration: cf, witness: witness)
+            self.activeConformanceTargetReads.removeLast()
+            return result
+        }
         mut val out: Array[U64] = []
         mut val i: U64 = 0U64
         while i < cf.traitArgs.count() {
@@ -299,11 +315,19 @@ pub impl Comp {
             val candidate = self.decls.conformAt(index: index)
             if index + 1U64 != witness.conformIdx && !candidate.derived && candidate.extId != 0U64 && candidate.traitStart == source.traitStart && candidate.subjectTraitOwner == source.subjectTraitOwner && self.proofSourceIsActive(baseRef: witness.selfRef, extId: candidate.extId) {
                 mut val replacement = <WitnessMatch />
+                val authoredTarget = self.conformanceTargetScopes.contains(key: index)
                 if source.subjectTraitOwner == 0U64 {
-                    replacement = try self.conformanceWitnessMatch(conformIdx: index, typeRef: witness.selfRef, traitArgs: arguments)
+                    replacement = try self.conformanceWitnessMatch(conformIdx: index, typeRef: witness.selfRef, traitArgs: arguments, traitArgsOpen: authoredTarget)
                 } else {
                     replacement = self.traitSubjectWitnessMatch(conformIdx: index, subjectArgs: subjectArguments, selfRef: witness.selfRef)
-                    if replacement.conformIdx != 0U64 && !self.sameProofTraitArgs(a: (try self.groundedWitnessTraitArgs(cf: candidate, witness: replacement)), b: arguments) { replacement = <WitnessMatch /> }
+                }
+                if replacement.conformIdx != 0U64 && (authoredTarget || source.subjectTraitOwner != 0U64) {
+                    val prepared = try self.prepareWitnessTarget(witness: replacement, assumptions: assumptions)
+                    replacement = <WitnessMatch />
+                    if prepared.isSome() {
+                        val selected = prepared.unwrap()
+                        if self.sameProofTraitArgs(a: (try self.groundedWitnessTraitArgs(cf: candidate, witness: selected)), b: arguments) { replacement = selected }
+                    }
                 }
                 if replacement.conformIdx != 0U64 && (try self.witnessConditionsSatisfied(witness: replacement, assumptions: assumptions)) {
                     if source.extId == 0U64 { return <Result.Ok value=false /> }
@@ -666,6 +690,34 @@ pub impl Comp {
         return self.searchTraitPatternProofFromFacts(demand: demand, baseRef: baseRef, traitId: traitId, traitOwner: traitOwner, traitArgs: traitArgs, patternParams: patternParams, traitArgsOpen: traitArgsOpen, assocNames: assocNames, assocValues: assocValues, assumptions: assumptions, sourceOwners: sourceOwners, includeConcrete: includeConcrete, enumerateInstances: false, candidates: inout candidates, normalizations: normalizations)
     }
 
+    // Only an authored trait-subject edge can extend a concrete witness.
+    // Bound the candidate owners before opening any dependent target recipe.
+    inout fn viableWitnessOwners(target: U64) -> Set[U64] {
+        mut val owners: Set[U64] = Set.new()
+        if self.conformanceTargetScopes.count() == 0U64 { return owners }
+        owners.insert(target)
+        mut val pending: Array[U64] = [target]
+        mut val cursor = 0U64
+        while cursor < pending.count() {
+            val owner = pending[cursor]
+            for position in 0U64..<self.decls.traitSubjectConformCount() {
+                val edge = self.decls.conformAt(index: self.decls.traitSubjectConformIndexAt(index: position))
+                if !edge.derived && edge.traitStart == owner && !owners.contains(edge.subjectTraitOwner) {
+                    owners.insert(edge.subjectTraitOwner)
+                    pending.append(edge.subjectTraitOwner)
+                }
+            }
+            cursor += 1U64
+        }
+        return owners
+    }
+
+    inout fn prepareWitnessTarget(witness: WitnessMatch, assumptions: Array[DeclarationBoundRef]) -> Result[Optional[WitnessMatch], CompileDiagnostic] {
+        if !self.conformanceTargetScopes.contains(key: witness.conformIdx - 1U64) { return <Result.Ok value=<Optional.Some v=witness /> /> }
+        if self.activeConformanceTargetAdmissions.contains(witness.conformIdx - 1U64) { return <Result.Ok value=<Optional.None /> /> }
+        return self.witnessWithConditions(witness: witness, assumptions: assumptions)
+    }
+
     inout fn searchTraitPatternProofFromFacts(demand: ConformanceProofDemand, baseRef: U64, traitId: U64, traitOwner: U64, traitArgs: PatternTypeInput, patternParams: PatternBindInput, traitArgsOpen: Bool = false, assocNames: Array[U64] = [], assocValues: Array[U64] = [], assumptions: Array[DeclarationBoundRef] = [], sourceOwners: Array[U64] = [], includeConcrete: Bool = true, enumerateInstances: Bool, candidates: inout Array[StaticConformanceProof], normalizations: Array[ProjectionNormalizationStep] = []) -> Result[ConformanceProofResult, CompileDiagnostic] {
         if baseRef >= self.arena.typeCount() { return <Result.Ok value=<ConformanceProofResult.Missing /> />}
         mut val selection = <TraitProofSelection />
@@ -702,12 +754,17 @@ pub impl Comp {
         // An exact authored premise is opaque evidence for this instance;
         // another derivation must not replace it, including to guess outputs.
         if !enumerateInstances && !self.proofIsMissing(proof: direct.selected) { return self.finishTraitProofSelection(selection: inout direct, traitOwner: traitOwner, demand: demand) }
+        val viableOwners = self.viableWitnessOwners(target: traitOwner)
+        val filterOwners = !viableOwners.isEmpty()
         mut val ci: U64 = 0U64
         while includeConcrete && ci < self.decls.conformCount() {
             val cf: Conform = self.decls.conformAt(index: ci)
-            if !cf.derived && cf.subjectTraitOwner == 0U64 && self.proofSourceIsActive(baseRef: baseRef, extId: cf.extId) {
-                val witness: WitnessMatch = (try self.conformanceWitnessMatch(conformIdx: ci, typeRef: baseRef, traitArgs: [], traitArgsOpen: true))
-                if witness.conformIdx != 0U64 {
+            if !cf.derived && cf.subjectTraitOwner == 0U64 && (!filterOwners || viableOwners.contains(cf.traitStart)) && self.proofSourceIsActive(baseRef: baseRef, extId: cf.extId) {
+                val subject = try self.conformanceWitnessMatch(conformIdx: ci, typeRef: baseRef, traitArgs: [], traitArgsOpen: true)
+                if subject.conformIdx != 0U64 {
+                    val prepared = try self.prepareWitnessTarget(witness: subject, assumptions: assumptions)
+                    if prepared.isNone() { ci += 1U64 continue }
+                    val witness = prepared.unwrap()
                     mut val edges: Array[WitnessMatch] = []
                     edges.append(witness)
                     val start: TraitProofState = <TraitProofState traitOwner=cf.traitStart traitId=cf.traitId traitArgs=(try self.groundedWitnessTraitArgs(cf: cf, witness: witness)) edges=edges />
@@ -781,9 +838,12 @@ pub impl Comp {
             while extendSubjects && ci < self.decls.traitSubjectConformCount() {
                 val edgeIndex = self.decls.traitSubjectConformIndexAt(index: ci)
                 val edge: Conform = self.decls.conformAt(index: edgeIndex)
-                if edge.subjectTraitOwner != 0U64 && edge.typeStart == state.traitOwner && edge.typeId == state.traitId && self.proofSourceIsActive(baseRef: baseRef, extId: edge.extId) {
-                    val witness: WitnessMatch = self.traitSubjectWitnessMatch(conformIdx: edgeIndex, subjectArgs: state.traitArgs, selfRef: baseRef)
-                    if witness.conformIdx != 0U64 && !self.traitProofPathContains(edges: state.edges, witness: witness) {
+                if edge.subjectTraitOwner != 0U64 && edge.typeStart == state.traitOwner && edge.typeId == state.traitId && (!filterOwners || viableOwners.contains(edge.traitStart)) && self.proofSourceIsActive(baseRef: baseRef, extId: edge.extId) {
+                    val subject = self.traitSubjectWitnessMatch(conformIdx: edgeIndex, subjectArgs: state.traitArgs, selfRef: baseRef)
+                    if subject.conformIdx != 0U64 && !self.traitProofPathContains(edges: state.edges, witness: subject) {
+                        val prepared = try self.prepareWitnessTarget(witness: subject, assumptions: assumptions)
+                        if prepared.isNone() { ci += 1U64 continue }
+                        val witness = prepared.unwrap()
                         mut val edges: Array[WitnessMatch] = state.edges
                         edges.append(witness)
                         val next: TraitProofState = <TraitProofState origin=state.origin traitOwner=edge.traitStart traitId=edge.traitId traitArgs=(try self.groundedWitnessTraitArgs(cf: edge, witness: witness)) edges=edges />

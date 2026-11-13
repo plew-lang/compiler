@@ -3728,7 +3728,7 @@ pub impl Comp {
         if !conform.derived {
             return <Result.Ok value=self.arena.conformanceMethodPlan(conformance: witness.conformIdx - 1U64, traitIndex: traitIdx, requirement: slot, implementation: sourceIndex).isSome() />
         }
-        return <Result.Ok value=self.conformanceParameterTypesMatch(cf: conform, witness: source, requirement: requirement, parameters: source.params) />
+        return <Result.Ok value=self.conformanceParameterTypesMatch(cf: conform, conformanceIndex: witness.conformIdx - 1U64, witness: source, requirement: requirement, parameters: source.params) />
     }
 
 }

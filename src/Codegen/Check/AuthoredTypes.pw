@@ -158,6 +158,133 @@ impl Comp {
         return self.readAuthoredTypeRecipe(proofs: saved.proofs, recipe: saved.recipe, environment: environment, memo: inout memo, context: <SignatureRecipeContext.AssociatedBinding requirement=requirement />)
     }
 
+    inout fn indexConformanceTargetScopes() {
+        for token in 1U64..<(self.sourceTypeUses.scopeCount() + 1U64) {
+            val source = self.sourceTypeUses.scopeAt(token: token).unwrap()
+            if source.implementation.isNone() { continue }
+            val owner = source.implementation.unwrap()
+            match owner.kind {
+                SourceImplementationKind.Conformance(index: val index) => {
+                    for id in owner.targetArgumentOccurrences {
+                        val occurrence = self.sourceTypeUses.useAt(index: id - 1U64).unwrap()
+                        if self.bodyTypeNeedsViewAdmission(ref: occurrence.term) {
+                            self.conformanceTargetScopes[index] = token
+                            break
+                        }
+                    }
+                }
+                SourceImplementationKind.Inherent => {}
+            }
+        }
+    }
+
+    inout fn admitConformanceTargets() -> Result[(), CompileDiagnostic] {
+        if self.conformanceTargetScopes.count() == 0U64 { return <Result.Ok value=() /> }
+        for index in 0U64..<self.decls.conformCount() {
+            if self.conformanceTargetScopes.contains(key: index) { try self.admitConformanceTarget(index: index) }
+        }
+        return self.checkAdmittedConformanceOverlap()
+    }
+
+    inout fn conformanceDeclarationTargetArguments(index: U64, declaration: Conform) -> Array[U64] {
+        if self.authoredConformanceTargets.count() != 0U64 {
+            match self.authoredConformanceTargets.get(key: index) {
+                Optional.Some(v: val saved) => {
+                    mut val arguments: Array[U64] = []
+                    for argument in saved.arguments { arguments.append(argument.term) }
+                    return arguments
+                }
+                Optional.None => {}
+            }
+        }
+        return self.copyConformTypes(types: declaration.traitArgs)
+    }
+
+    inout fn admitConformanceTarget(index: U64) -> Result[(), CompileDiagnostic] {
+        if self.authoredConformanceTargets.contains(key: index) { return <Result.Ok value=() /> }
+        val token = self.conformanceTargetScopes[index]
+        val declaration = self.decls.conformAt(index: index)
+        if self.activeConformanceTargetAdmissions.contains(index) {
+            return <Result.Err error=self.diagnosticAt(offset: declaration.defOffset, msg: "conformance target depends on its own trait instance", failureDomain: <FailureDomain.Source />) />
+        }
+        if self.activeConformanceTargetAdmissions.count() >= 64U64 {
+            return <Result.Err error=self.diagnosticAt(offset: declaration.defOffset, msg: "conformance target analysis limit exceeded", failureDomain: <FailureDomain.Limit />) />
+        }
+        self.activeConformanceTargetAdmissions.insert(index)
+        val result = self.checkConformanceTarget(index: index, token: token, declaration: declaration)
+        self.activeConformanceTargetAdmissions.remove(index)
+        self.authoredConformanceTargets[index] = try result
+        return <Result.Ok value=() />
+    }
+
+    inout fn checkConformanceTarget(index: U64, token: U64, declaration: Conform) -> Result[AuthoredConformanceTarget, CompileDiagnostic] {
+        val source = self.sourceTypeUses.scopeAt(token: token).unwrap()
+        val owner = source.implementation.unwrap()
+        match source.state {
+            SourceTypeScopeState.Lowered => {}
+            _ => { return <Result.Err error=self.diagnosticAt(offset: source.anchor, msg: "conformance target owner is not lowered", failureDomain: <FailureDomain.Internal />) /> }
+        }
+        if declaration.traitArgs.count() != owner.targetArgumentOccurrences.count() {
+            return <Result.Err error=self.diagnosticAt(offset: source.anchor, msg: "conformance target lost its authored arguments", failureDomain: <FailureDomain.Internal />) />
+        }
+        val trait = self.decls.traitIndexByOffset(offset: owner.receiverTrait)
+        val selfParameter = if trait < self.decls.traitCount() { give self.decls.traitAt(index: trait).selfParamId } else { give 0U64 }
+        val scope = <DeclarationTypeScope origin=<DeclarationScopeOrigin.AssociatedBinding /> owner=index parameters=self.pushFuncBinds(binds: owner.parameters) selfParameter=selfParameter />
+        val receiver = self.receiverSubjectTerm(receiver: declaration.subjectTy, traitOwner: declaration.subjectTraitOwner)
+        val scopes = <SignatureProofScopes local=scope assumptions=self.conformanceDeclarationAssumptions(conformIndex: index) inherited=[] receiver=receiver scopedBinders=true />
+        mut val validation = <SignatureRecipeValidation />
+        mut val arguments: Array[AuthoredConformanceArgument] = []
+        for position in 0U64..<declaration.traitArgs.count() {
+            val term = self.conformTypeAt(types: declaration.traitArgs, index: position)
+            val id = owner.targetArgumentOccurrences[position]
+            val occurrence = try self.signatureOccurrence(id: id)
+            if occurrence.scope != token || occurrence.term != term {
+                return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "conformance target has a foreign argument occurrence", failureDomain: <FailureDomain.Internal />) />
+            }
+            if !self.bodyTypeNeedsViewAdmission(ref: term) {
+                arguments.append(<AuthoredConformanceArgument occurrence=id recipe=occurrence.recipe term=term replay=false />)
+                continue
+            }
+            try self.checkAuthoredTypeRecipe(sourceScope: token, recipe: occurrence.recipe, edge: <AuthoredRecipeEdge.Source />, scopes: scopes, validation: inout validation, offset: occurrence.site)
+            val equations = validation.equations.getOr(key: occurrence.recipe, fallback: [])
+            val grounded = self.groundTermInEnvironment(ref: term, params: [], values: [], selfRef: receiver)
+            val normalized = try self.replayProjectionNormalizations(ref: grounded, normalizations: equations, offset: occurrence.site)
+            val replay = !self.arena.typeIsClosed(ref: normalized) || self.arena.typeContainsAssociatedProjection(ref: normalized)
+            arguments.append(<AuthoredConformanceArgument occurrence=id recipe=occurrence.recipe term=normalized replay=replay />)
+        }
+        for argument in arguments { self.markAdmittedRecipeTypeUses(recipe: argument.recipe) }
+        return <Result.Ok value=<AuthoredConformanceTarget scope=token arguments=arguments proofs=validation.proofs /> />
+    }
+
+    inout fn readConformanceTargetArguments(saved: AuthoredConformanceTarget, declaration: Conform, witness: WitnessMatch) -> Result[Array[U64], CompileDiagnostic] {
+        mut val arguments: Array[U64] = []
+        mut val environment: Optional[InstanceEnvironment] = <Optional.None />
+        mut val memo: Dictionary[U64, AuthoredRecipeRead] = [:]
+        val source = self.sourceTypeUses.scopeAt(token: saved.scope).unwrap()
+        val owner = source.implementation.unwrap()
+        if saved.arguments.count() != owner.targetArgumentOccurrences.count() || saved.arguments.count() != declaration.traitArgs.count() {
+            return <Result.Err error=self.diagnosticAt(offset: declaration.defOffset, msg: "conformance target receipt changed its argument count", failureDomain: <FailureDomain.Internal />) />
+        }
+        for position in 0U64..<saved.arguments.count() {
+            val argument = saved.arguments[position]
+            val occurrence = try self.signatureOccurrence(id: argument.occurrence)
+            if owner.targetArgumentOccurrences[position] != argument.occurrence || occurrence.scope != saved.scope || occurrence.recipe != argument.recipe || occurrence.term != self.conformTypeAt(types: declaration.traitArgs, index: position) {
+                return <Result.Err error=self.diagnosticAt(offset: declaration.defOffset, msg: "conformance target has a foreign argument receipt", failureDomain: <FailureDomain.Internal />) />
+            }
+            if argument.replay {
+                if environment.isNone() {
+                    try self.checkWitnessConditionEvidence(witness: witness, offset: declaration.defOffset)
+                    environment = <Optional.Some v=(try self.selectedConstraintEnvironment(witness: witness)) />
+                }
+                val read = try self.readAuthoredTypeRecipe(proofs: saved.proofs, recipe: argument.recipe, environment: environment.unwrap(), memo: inout memo, context: <SignatureRecipeContext.AssociatedBinding requirement=<Optional.None /> />)
+                arguments.append(read.term)
+            } else {
+                arguments.append(try self.groundWitnessTypeTerm(ref: argument.term, params: <PatternBindInput.Conformance range=declaration.typeParams />, matchResult: witness))
+            }
+        }
+        return <Result.Ok value=arguments />
+    }
+
     inout fn admitAssociatedBindingRecipes() -> Result[(), CompileDiagnostic] {
         for bindingIndex in 0U64..<self.decls.assocBindings.count() {
             try self.admitAssociatedBindingRecipe(bindingIndex: bindingIndex)
@@ -208,12 +335,12 @@ impl Comp {
         if !ownsBinding || source.anchor != binding.implOffset || occurrence.site != binding.authoredTypeSite || declaration.traitStart != binding.traitOwner || !self.typeRefEq(a: occurrence.term, b: binding.ty) {
             return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "associated binding has a foreign source occurrence", failureDomain: <FailureDomain.Internal />) />
         }
-        val root = self.conformanceTraitBound(conformance: declaration)
+        val receiver = self.receiverSubjectTerm(receiver: declaration.subjectTy, traitOwner: declaration.subjectTraitOwner)
         val receiverTrait = self.decls.traitIndexByOffset(offset: owner.receiverTrait)
         val selfParameter = if receiverTrait < self.decls.traitCount() { give self.decls.traitAt(index: receiverTrait).selfParamId } else { give 0U64 }
         val scope = <DeclarationTypeScope origin=<DeclarationScopeOrigin.AssociatedBinding /> owner=conformance parameters=self.pushFuncBinds(binds: owner.parameters) selfParameter=selfParameter />
         val assumptions = try self.declarationScopeAssumptions(scope: scope)
-        val scopes = <SignatureProofScopes local=scope assumptions=assumptions inherited=[] receiver=root.subject scopedBinders=true />
+        val scopes = <SignatureProofScopes local=scope assumptions=assumptions inherited=[] receiver=receiver scopedBinders=true />
         mut val validation = <SignatureRecipeValidation />
         try self.checkAuthoredTypeRecipe(sourceScope: occurrence.scope, recipe: occurrence.recipe, edge: <AuthoredRecipeEdge.Source />, scopes: scopes, validation: inout validation, offset: occurrence.site)
         self.authoredAssociatedBindings[bindingIndex] = <AuthoredAssociatedBinding conformance=conformance occurrence=binding.authoredTypeUse recipe=occurrence.recipe proofs=validation.proofs />

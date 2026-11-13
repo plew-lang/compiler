@@ -704,13 +704,13 @@ pub impl Comp {
         }
     }
 
-    inout fn conformanceTraitBound(conformance: Conform) -> TraitBound {
+    inout fn conformanceTraitBound(conformance: Conform, index: U64) -> TraitBound {
         val subject = self.receiverSubjectTerm(receiver: conformance.subjectTy, traitOwner: conformance.subjectTraitOwner)
         // Positional inputs and associated outputs belong to the same
         // declaration subject. In particular Add[Self] names this conformer,
         // not an unrelated ungrounded Self in the requirement's projection.
         mut val arguments: Array[U64] = []
-        for argument in self.copyConformTypes(types: conformance.traitArgs) {
+        for argument in self.conformanceDeclarationTargetArguments(index: index, declaration: conformance) {
             arguments.append(self.groundTermInEnvironment(ref: argument, params: [], values: [], selfRef: subject))
         }
         mut val outputs: Array[TraitAssocPredicate] = []
@@ -758,6 +758,7 @@ pub impl Comp {
             StaticConformanceProof.ConcreteWitness(witness: val witness) => {
                 if witness.conformIdx != 0U64 && witness.conformIdx <= self.decls.conformCount() {
                     val conform = self.decls.conformAt(index: witness.conformIdx - 1U64)
+                    if conform.traitStart != traitDef.nameStart { return <Result.Ok value=self.missingTraitBound() /> }
                     mut val receiver = witness.selfRef
                     if receiver == 0U64 { receiver = try self.groundWitnessTypeTerm(ref: conform.subjectTy, params: <PatternBindInput.Conformance range=conform.typeParams />, matchResult: witness) }
                     bound = <TraitBound subject=receiver constraint=<TraitConstraint key=<TraitInstanceKey owner=conform.traitStart positionalArgs=(try self.groundedWitnessTraitArgs(cf: conform, witness: witness)) /> positionalArgsOpen=false assocPredicates=[] /> offset=conform.defOffset />
@@ -928,11 +929,11 @@ pub impl Comp {
     // associated type on its receiver (Add.Output and Pow.Output may differ).
     // Compare requirement types in the implementation's binder environment.
     // Method binder spelling is immaterial; conformance binders remain rigid.
-    inout fn conformanceParameterTypesMatch(cf: Conform, witness: Func, requirement: Func, parameters: FuncParamRange) -> Bool {
+    inout fn conformanceParameterTypesMatch(cf: Conform, conformanceIndex: U64, witness: Func, requirement: Func, parameters: FuncParamRange) -> Bool {
         if parameters.count() != requirement.params.count() || witness.typeParams.count() != cf.typeParams.count() + requirement.typeParams.count() { return false }
         val traitIndex = self.resolveTraitDef(cf: cf)
         if traitIndex >= self.decls.traitCount() { return false }
-        val bound = self.conformanceTraitBound(conformance: cf)
+        val bound = self.conformanceTraitBound(conformance: cf, index: conformanceIndex)
         mut val arguments: Array[U64] = []
         mut val index = 0U64
         while index < requirement.typeParams.count() {
@@ -1140,7 +1141,7 @@ pub impl Comp {
         val conformance = self.decls.conformAt(index: conformIndex)
         val trait = self.decls.traitAt(index: traitIndex)
         if trait.reqs.count() == 0U64 { return <Result.Ok value=() /> }
-        val traitBound = self.conformanceTraitBound(conformance: conformance)
+        val traitBound = self.conformanceTraitBound(conformance: conformance, index: conformIndex)
         val traitEnvironment = self.requirementSignatureEnvironment(bound: traitBound, traitIndex: traitIndex)
         mut val requirementIndex = 0U64
         while requirementIndex < trait.reqs.count() {
@@ -1248,7 +1249,7 @@ pub impl Comp {
             if !self.arena.publishConformanceSupertraits(conformance: conformIndex, evidence: []) { return <Result.Err error=self.diagnosticAt(offset: conformance.typeStart, msg: "conformance supertrait evidence could not be published") /> }
             return <Result.Ok value=() />
         }
-        val root = self.conformanceTraitBound(conformance: conformance)
+        val root = self.conformanceTraitBound(conformance: conformance, index: conformIndex)
         val assumptions = self.conformanceDeclarationAssumptions(conformIndex: conformIndex)
         val demand = <ConformanceProofDemand.SourceAdmission />
         mut val clause = 0U64
@@ -1925,7 +1926,7 @@ impl Comp {
         if parameters.count() != requirement.params.count() || witness.typeParams.count() != conformance.typeParams.count() + requirement.typeParams.count() { return <Result.Ok value=false /> }
         try self.prepareCallableFormEvidence(conformanceIndex: conformanceIndex, traitIndex: traitIndex, prepared: inout preparedParents)
         val scope = try self.requireAdmittedRawRequirement(traitIndex: traitIndex, slot: slot, offset: requirement.defOffset)
-        val signature = <RequirementSignatureRead scope=scope bound=self.conformanceTraitBound(conformance: conformance) evidence=<RequirementSelfEvidence.Conformance index=conformanceIndex /> />
+        val signature = <RequirementSignatureRead scope=scope bound=self.conformanceTraitBound(conformance: conformance, index: conformanceIndex) evidence=<RequirementSelfEvidence.Conformance index=conformanceIndex /> />
         val arguments = self.conformanceRequirementMethodArguments(conformance: conformance, requirement: requirement, witness: witness)
         val base = self.requirementSignatureEnvironment(bound: signature.bound, traitIndex: traitIndex)
         val environment = self.conformanceRequirementEnvironment(base: base, parameters: self.copyFuncBinds(binds: requirement.typeParams), arguments: arguments)

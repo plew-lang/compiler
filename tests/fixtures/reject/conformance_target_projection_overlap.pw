@@ -1,0 +1,8 @@
+trait Source[Kind] { type Item }
+struct Number {}
+impl Number as Source[I64] { type Item = I64 }
+trait Marker[Kind] {}
+struct Other {}
+impl Other as Marker[I64] {}
+impl Other as Marker[Number#Source[I64].Item] {}
+fn main() {}

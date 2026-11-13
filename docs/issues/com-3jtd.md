@@ -438,3 +438,28 @@ declaration role. Build `20261113T132233-build-e56568` produced
 and the existing nested projected receiver signature passes check.
 This is the provenance producer. The target admission and witness
 readers still need to consume it.
+
+### Admitted target arguments in witness and requirement checking
+
+The declaration keeps the written target terms for structural validation
+and retains a separate checked target recipe on its original impl scope.
+Witness search limits dependent target admission to the requested trait
+and its incoming trait-subject paths. It establishes the candidate's
+conditions before replaying an open projection. The same admitted terms
+feed the requirement signature and the declaration overlap check.
+
+Fixed-input build `20261113T133709-build-d8ef41` produced
+`58c239c4cd0e`. Five valid probes passed check, lazy execution and
+linked native execution with output 42, including same-receiver and
+different-receiver forward dependencies, an open where-bound projection,
+and a method whose return type is the projected trait argument. Missing
+exact-instance evidence and a literal/projected duplicate reject in
+check and lazy modes at the expected declaration diagnostic. A
+conditional impl with no applicable witness still rejects at the caller's
+where clause.
+
+Keep this issue open. Audit remaining consumers of conformance target
+terms, especially associated bounds and inter-trait callable
+materialization, then inspect the supertrait-argument producer and the
+compatibility sweep entries. This checkpoint has no independent closure
+review or formal self-host measurement.

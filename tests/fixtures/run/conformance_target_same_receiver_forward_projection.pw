@@ -1,0 +1,10 @@
+use @Std/Io only { print }
+trait Source[T] { type Item }
+trait A[T] { type Item }
+trait B[T] {}
+struct X {}
+impl X as A[X#Source[I64].Item] { type Item=I64 }
+impl X as B[X#A[I64].Item] {}
+impl X as Source[I64] { type Item=I64 }
+fn requireB[T](value: T) -> I64 where T: B[I64] { return 42I64 }
+fn main() { print(requireB(value: <X />)) }
