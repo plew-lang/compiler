@@ -404,3 +404,29 @@ instances still pass check. The implementation's target arguments flow
 from `registerDeclaredConformance` into witness argument matching
 without an authored recipe; trait constraints likewise retain terms but
 drop the argument and predicate recipes in their lowering wrapper.
+
+### Conformance target admission experiments
+
+The fixed baseline `83b5baf2956f` accepts an impl targeting
+`Marker[Number#Source[Bool].Item]` without the required Source instance.
+It also rejects a use of `Marker[I64]` when the declaration writes
+`Marker[Number#Source[I64].Item]` and the selected output is I64.
+
+Prototype `2a9a5df8e393` corrected those two cases. Prototype
+`3d05a28819d3` also handled a forward reference on a different receiver.
+Independent review and probes exposed three remaining correctness
+requirements. With the same receiver, an acyclic Source → A → B chain
+fails because the Source query eagerly opens the unrelated B target.
+A literal `Marker[I64]` and the projected equivalent still escape
+declaration overlap detection. An open `T#Source.Item` justified by the
+impl's where clause is not replayed under the concrete witness.
+
+Both prototypes were withdrawn from the worktree. The next implementation
+must keep authored graph terms intact for both declaration and view
+cycle checks, and save the implementation-owned recipe, exact proof and
+equations for semantic witness matching. Establish witness premises
+before interpreting open outputs. Use the same admitted target for
+overlap, extension precedence and final witness consumers. Keep target
+admission dependencies tied to the requested trait path, with a bounded
+active stack. The fixture correction for unbounded structural cycle
+projections remains assigned to [com-1a3k](com-1a3k.md).
