@@ -29,7 +29,9 @@ impl Comp {
         }
         match result {
             Result.Ok(value: val expression) => {
-                self.sourceTypeUses.bindDefaultExpressionScope(origin: self.arena.exprOriginSerial[expression], token: scope)
+                if !self.sourceTypeUses.bindDefaultExpressionScope(origin: self.arena.exprOriginSerial[expression], token: scope) {
+                    return <Result.Err error=self.diagnosticAt(offset: site, msg: "invalid default expression scope origin", failureDomain: <FailureDomain.Internal />) />
+                }
             }
             Result.Err(error: _) => {}
         }

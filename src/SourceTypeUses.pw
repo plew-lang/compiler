@@ -40,6 +40,7 @@ pub struct SourceTypeScope {
     pub val anchor: U64
     pub val traitOwner: U64 = 0U64
     pub val parent: U64
+    pub val defaultExpressionOrigin: U64 = 0U64
     pub val state: SourceTypeScopeState
     // Registered functions, methods, destructors and extern declarations own
     // function identities. Trait requirements and impls have separate owners.
@@ -172,11 +173,30 @@ pub impl SourceTypeUses {
     fn deinitScopeToken(function: U64) -> U64 {
         return self.deinitScopes.getOr(key: function, fallback: 0U64)
     }
-    inout fn bindDefaultExpressionScope(origin: U64, token: U64) {
+    inout fn bindDefaultExpressionScope(origin: U64, token: U64) -> Bool {
+        if origin == 0U64 || self.defaultExpressionScopes.contains(key: origin) { return false }
+        val scope = match self.scopeAt(token: token) {
+            Optional.Some(v: val scope) => scope,
+            Optional.None => { return false }
+        }
+        match scope.kind { SourceTypeScopeKind.DefaultExpression => {} _ => { return false } }
+        match scope.state { SourceTypeScopeState.Lowered => {} _ => { return false } }
+        if scope.defaultExpressionOrigin != 0U64 { return false }
+        self.scopes[token - 1U64] = <SourceTypeScope kind=scope.kind anchor=scope.anchor parent=scope.parent state=scope.state defaultExpressionOrigin=origin />
         self.defaultExpressionScopes[origin] = token
+        return true
     }
     fn defaultExpressionScope(origin: U64) -> U64 {
-        return self.defaultExpressionScopes.getOr(key: origin, fallback: 0U64)
+        if origin == 0U64 { return 0U64 }
+        val token = self.defaultExpressionScopes.getOr(key: origin, fallback: 0U64)
+        match self.scopeAt(token: token) {
+            Optional.Some(v: val scope) => {
+                if scope.defaultExpressionOrigin != origin { return 0U64 }
+                match scope.kind { SourceTypeScopeKind.DefaultExpression => {} _ => { return 0U64 } }
+                match scope.state { SourceTypeScopeState.Lowered => { return token } _ => { return 0U64 } }
+            }
+            Optional.None => { return 0U64 }
+        }
     }
 
     fn completedMethodImplementation(method: SourceTypeScope) -> Optional[SourceImplementationOwner] {
