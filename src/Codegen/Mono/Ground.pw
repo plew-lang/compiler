@@ -1182,9 +1182,12 @@ pub impl Comp {
             val binding = self.conformFuncIdAt(ids: owner.assocBindingIds, index: index)
             if binding >= self.decls.assocBindings.count() { return <Result.Err error=self.diagnosticAt(offset: owner.defOffset, msg: "associated output has an invalid binding slot", failureDomain: <FailureDomain.Internal />) /> }
             if self.decls.assocBindings[binding].nameId == assocId {
-                if selected.isSome() { return <Result.Ok value=<Optional.None /> /> }
+                if selected.isSome() { return <Result.Err error=self.diagnosticAt(offset: owner.defOffset, msg: "associated output has duplicate binding slots", failureDomain: <FailureDomain.Internal />) /> }
                 selected = <Optional.Some v=(bindingIndex: binding, witness: witness) />
             }
+        }
+        if selected.isNone() && self.associatedBindingAdmissionComplete && self.traitOwnerHasAssocId(owner: traitOwner, assocId: assocId) {
+            return <Result.Err error=self.diagnosticAt(offset: owner.defOffset, msg: "associated-type projection names an associated type that is not bound by the selected conformance (spec/08)", failureDomain: <FailureDomain.Source />) />
         }
         return <Result.Ok value=selected />
     }

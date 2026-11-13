@@ -17,5 +17,13 @@ fn main() {
     assert(compiler.associatedOutputTermInProof(proof: proof, traitOwner: first.traitOwner, assocId: first.nameId).isErr())
     compiler.decls.assocBindings[0U64] = first
     assert(compiler.associatedOutputTermInProof(proof: proof, traitOwner: first.traitOwner, assocId: first.nameId).unwrap() == first.ty)
+    val traitIndex = compiler.decls.traitIndexByOffset(offset: first.traitOwner)
+    val abstract = <StaticConformanceProof.TraitSelf traitIdx=traitIndex receiverRef=first.subjectTy traitArgs=[] />
+    assert(compiler.associatedOutputInProof(proof: abstract, traitOwner: first.traitOwner, assocId: first.nameId).unwrap() == 0U64)
+    assert(compiler.associatedOutputInProof(proof: proof, traitOwner: first.traitOwner, assocId: 0U64).unwrap() == 0U64)
+    compiler.decls.assocBindings[0U64] = <AssocBinding recvStart=first.recvStart recvLen=first.recvLen recvId=first.recvId nameStart=first.nameStart nameLen=first.nameLen nameId=0U64 traitId=first.traitId traitOwner=first.traitOwner implOffset=first.implOffset subjectTy=first.subjectTy subjectArgs=first.subjectArgs typeParams=first.typeParams traitArgs=first.traitArgs tyStart=first.tyStart tyLen=first.tyLen tyIsArray=first.tyIsArray ty=first.ty authoredTypeUse=first.authoredTypeUse />
+    if !compiler.associatedOutputInProof(proof: proof, traitOwner: first.traitOwner, assocId: first.nameId).isErr() { panic("accepted a missing concrete associated binding") }
+    compiler.decls.assocBindings[0U64] = first
+    assert(compiler.typeRefEq(a: compiler.associatedOutputInProof(proof: proof, traitOwner: first.traitOwner, assocId: first.nameId).unwrap(), b: first.ty))
     print("associated-binding-equation-origin")
 }

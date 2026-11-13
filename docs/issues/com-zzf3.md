@@ -333,3 +333,19 @@ medians were 6.876373 s and 6.875553 s, with all eight LLVM outputs
 identical. The matching of replacement requirement evidence, missing
 concrete versus abstract output, and provided-signature RHS reader are
 still pending from independent review.
+
+## Concrete output absence
+
+The native equation-origin fixture now checks three boundaries.
+An abstract proof without an equality retains an unknown output, an
+optional read for an undeclared member can return no output, and a
+selected concrete witness missing its declared binding fails. It
+restores the original binding and verifies recovery. The public Unit
+fixture separately exercises a bound Unit output.
+
+The baseline `dde3a784` aborts with `accepted a missing concrete
+associated binding`. Candidate `97fd3623` rejects the corruption.
+The concrete slot reader also rejects duplicate bindings. Standard
+build `20261113T000442-build-774f37`, the native fault fixture and six
+public check/JIT/native controls passed. Same-source medians were
+6.873550 s and 6.870970 s with all eight LLVM outputs identical.
