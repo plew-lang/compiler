@@ -112,7 +112,7 @@ impl Comp {
         }
         mut val memo: Dictionary[U64, AuthoredRecipeRead] = [:]
         self.activeAssociatedBindingReads.append((binding: bindingIndex, witness: witness))
-        val result = self.readValidatedAssociatedBindingRecipe(saved: saved, witness: witness, environment: environment, memo: inout memo, requirement: requirement, offset: binding.tyStart)
+        val result = self.readValidatedAssociatedBindingRecipe(saved: saved, witness: witness, proof: proof, environment: environment, memo: inout memo, requirement: requirement, offset: binding.tyStart)
         self.activeAssociatedBindingReads.removeLast()
         val read = try result
         val immediate = try self.groundWitnessTypeTerm(ref: binding.ty, params: <PatternBindInput.Conformance range=binding.typeParams />, matchResult: witness)
@@ -121,8 +121,11 @@ impl Comp {
         return <Result.Ok value=<SelectedProjectionOutput immediate=immediate term=read.term normalizations=equations fromBinding=true /> />
     }
 
-    inout fn readValidatedAssociatedBindingRecipe(saved: AuthoredAssociatedBinding, witness: WitnessMatch, environment: InstanceEnvironment, memo: inout Dictionary[U64, AuthoredRecipeRead], requirement: Optional[AssociatedBindingRequirementRead], offset: U64) -> Result[AuthoredRecipeRead, CompileDiagnostic] {
-        try self.checkWitnessConditionEvidence(witness: witness, offset: offset)
+    inout fn readValidatedAssociatedBindingRecipe(saved: AuthoredAssociatedBinding, witness: WitnessMatch, proof: StaticConformanceProof, environment: InstanceEnvironment, memo: inout Dictionary[U64, AuthoredRecipeRead], requirement: Optional[AssociatedBindingRequirementRead], offset: U64) -> Result[AuthoredRecipeRead, CompileDiagnostic] {
+        match proof {
+            StaticConformanceProof.TraitPath | StaticConformanceProof.AssumedTraitPath => { try self.checkStaticProofEvidence(proof: proof, offset: offset) }
+            _ => { try self.checkWitnessConditionEvidence(witness: witness, offset: offset) }
+        }
         return self.readAuthoredTypeRecipe(proofs: saved.proofs, recipe: saved.recipe, environment: environment, memo: inout memo, context: <SignatureRecipeContext.AssociatedBinding requirement=requirement />)
     }
 

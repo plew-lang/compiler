@@ -1,6 +1,6 @@
 ---
 id: com-zzf3
-status: in_progress
+status: closed
 deps: [com-erlx]
 links: []
 created: 2026-11-09T08:54:16Z
@@ -662,3 +662,21 @@ Build `20261113T021917-build-400fd9`, generation
 `20261113T022341-gen-3c592a`, both native fault controls, and nine
 check/JIT/native controls passed. Same-source medians were 6.909925 s
 and 6.912062 s with identical LLVM in all eight runs.
+
+## Outcome
+
+Resolved on candidate `7719ee9f`. The final outer-witness control uses
+an `I64` RHS and replaces only the path predecessor. `b12435f9`
+accepted the fault. The shared path verifier now checks both concrete
+and assumed paths before evaluating the RHS and rejects the replacement.
+Both original controls succeed. Build `20261113T022702-build-73b5cf`,
+generation `20261113T023114-gen-933eab` and ten public check/JIT/native
+controls passed. Same-source medians were 6.909795 s and 6.900625 s,
+with identical LLVM in all eight runs.
+
+Independent re-review confirmed the final path check, guarded cleanup,
+and output evidence, and approved closure. Earlier controls above
+cover both lowering adapters, exact source owner and occurrence,
+caller substitution, malformed evidence and recovery, and abstract
+output versus concrete binding and Unit. Final whole-program gates
+remain with the parent.
