@@ -523,3 +523,15 @@ projection proofs. The selected output reader reported Internal
 no saved proof`, respectively. It recovered `I64` after restoring
 the saved row after each fault. The diagnostic harness did not add a
 production mutation API.
+
+## Caller substitution through an authored signature
+
+An isolated native probe of `99f8b77f` interpreted the authored
+`Box[T]#Parent.Item` parameter, with `Item = Array[T]`, through the
+declaration recipe reader. The supplied caller mapping was
+`T -> Array[T]`, retaining the same caller ParamId in the replacement.
+The result was `Array[Array[T]]`. Reapplying the same mapping to the
+output in the diagnostic harness failed the exact type assertion.
+This covers the plain declaration route. The requirement-associated
+rebasing route and legacy adapter continuation still need their own
+controls before closure.
