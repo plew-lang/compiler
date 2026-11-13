@@ -1,0 +1,13 @@
+use @Std/Io only { print }
+trait Marker { type Type }
+trait Parent { type Item }
+trait Service {}
+struct Worker {}
+impl Worker as Marker { type Type = I64 }
+impl Worker as Parent { type Item = Worker#Marker.Type }
+pub impl Service {
+    fn echo(value: Worker#Parent.Item) -> Worker#Parent.Item { return value }
+}
+struct Receiver {}
+impl Receiver as Service {}
+fn main() { print(<Receiver />.echo(value: 42I64)) }

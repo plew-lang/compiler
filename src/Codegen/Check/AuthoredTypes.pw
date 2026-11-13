@@ -1121,7 +1121,7 @@ impl Comp {
     }
 
     inout fn readLexicalSignatureProjection(proof: StaticConformanceProof, owner: U64, member: U64, environment: InstanceEnvironment) -> Result[U64, CompileDiagnostic] {
-        val output = try self.associatedOutputTermInProof(proof: proof, traitOwner: owner, assocId: member)
+        val output = try self.associatedOutputInProof(proof: proof, traitOwner: owner, assocId: member)
         if output == 0U64 { return <Result.Ok value=0U64 /> }
         return <Result.Ok value=self.groundTermInEnvironment(ref: output, params: environment.params, values: environment.args, selfRef: environment.receiverRef) />
     }
@@ -1263,7 +1263,25 @@ impl Comp {
             RequirementSelfEvidence.Conformance(index: val conformance) => {
                 val row = self.arena.conformanceAssociatedClause(conformance: conformance, clause: associated.clause)
                 if row.isNone() { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "conformance signature lost its associated clause evidence", failureDomain: <FailureDomain.Internal />) /> }
-                return <Result.Ok value=<Optional.Some v=self.thawStaticConformanceProof(id: row.unwrap().proof) /> />
+                val saved = row.unwrap()
+                val original = self.decls.traitAssociatedBoundPool[associated.clause]
+                if saved.bound.constraint.key.owner != original.constraint.key.owner || saved.bound.constraint.positionalArgsOpen != original.constraint.positionalArgsOpen || saved.bound.constraint.key.positionalArgs.count() != original.constraint.key.positionalArgs.count() || saved.bound.constraint.assocPredicates.count() != original.constraint.assocPredicates.count() {
+                    return <Result.Err error=self.diagnosticAt(offset: offset, msg: "conformance signature has a foreign associated clause", failureDomain: <FailureDomain.Internal />) />
+                }
+                for position in 0U64..<original.constraint.assocPredicates.count() {
+                    if saved.bound.constraint.assocPredicates[position].member != original.constraint.assocPredicates[position].member {
+                        return <Result.Err error=self.diagnosticAt(offset: offset, msg: "conformance signature has a foreign associated predicate", failureDomain: <FailureDomain.Internal />) />
+                    }
+                }
+                val assumptions = self.conformanceDeclarationAssumptions(conformIndex: conformance)
+                try self.checkProjectionNormalizations(normalizations: saved.normalizations, offset: offset, assumptions: assumptions)
+                val expected = try self.replayBoundNormalizations(bound: saved.bound, normalizations: saved.normalizations)
+                if !self.typeRefEq(a: self.typeRefWithoutOuterViews(ref: expected.subject), b: self.typeRefWithoutOuterViews(ref: receiver)) {
+                    return <Result.Err error=self.diagnosticAt(offset: offset, msg: "conformance signature has a different associated clause subject", failureDomain: <FailureDomain.Internal />) />
+                }
+                val proof = self.thawStaticConformanceProof(id: saved.proof)
+                try self.checkRetainedWitnessClause(expected: expected, proof: proof, normalizations: saved.normalizations, offset: offset, assumptions: assumptions)
+                return <Result.Ok value=<Optional.Some v=proof /> />
             }
             RequirementSelfEvidence.Static(proof: val proof) => {
                 if self.selectedConstraintWitness(proof: proof).isSome() {

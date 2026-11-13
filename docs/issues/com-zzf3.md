@@ -349,3 +349,24 @@ The concrete slot reader also rejects duplicate bindings. Standard
 build `20261113T000442-build-774f37`, the native fault fixture and six
 public check/JIT/native controls passed. Same-source medians were
 6.873550 s and 6.870970 s with all eight LLVM outputs identical.
+
+## Requirement clause validation
+
+The requirement's conformance-associated clause reader checks the
+stored clause shape, predicate member identities and normalization
+proofs before validating the selected proof against the normalized
+bound. The bound's subject must agree with the requirement's selected
+associated output. Provided source signatures now consume the shared
+associated output reader for selected proofs.
+
+Candidate `2ff432b1` passed build `20261113T001036-build-29ae0d`,
+generation `20261113T001432-gen-741515` and eleven check/JIT/native
+controls. The new provided-signature fixture is a behavior-preservation
+control and also passed check and JIT before the change. Same-source
+medians were 6.865532 s and 6.856540 s, all eight LLVM outputs identical.
+
+The direct replacement fault for the private conformance clause table
+is still unverified. Verify a valid but foreign proof and restore the
+original through an internal test without expanding the production
+mutation API. Confirm remaining evidence cases and re-review before
+closing.
