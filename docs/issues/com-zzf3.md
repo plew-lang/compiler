@@ -463,3 +463,21 @@ Candidate `d0e4a625` passed build `20261113T004644-build-cd8885`,
 generation `20261113T005039-gen-7a9b5d`, the new fixture and nine
 existing check/JIT/native controls. Same-source medians were 6.862344 s
 and 6.871131 s, with identical LLVM output across all eight runs.
+
+## Direct requirement output in the owning impl
+
+`associated_binding_direct_requirement` declares `get() -> Item`
+on `Parent` and implements it as `get() -> I64` with
+`Item = Worker#Marker.Type`. Candidate `d0e4a625` rejected the return
+type comparison. The requirement reader now interprets the admitted
+binding in the owning impl with its identity substitution and lexical
+conditions. The unnormalized predicate mirror no longer supplies the
+result for this route.
+
+Candidate `84eef38a` passed build `20261113T005530-build-4187b7`,
+generation `20261113T010005-gen-aa6a39`, the new fixture and seven
+existing check/JIT/native controls. Generic and trait-subject forms
+whose method uses the same projection also passed `--check`.
+Same-source medians were 6.881091 s and 6.869889 s. The complete
+LLVM outputs differed only in TypeTerm numbers in generic-body symbol
+names. The final fixed-point check belongs to the parent gate.

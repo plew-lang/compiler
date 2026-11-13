@@ -1,0 +1,11 @@
+use @Std/Io only { print }
+trait Marker { type Type }
+trait Parent { type Item
+    fn get() -> Item }
+struct Worker {}
+impl Worker as Marker { type Type = I64 }
+impl Worker as Parent {
+    type Item = Worker#Marker.Type
+    fn get() -> I64 { return 42I64 }
+}
+fn main() { print(<Worker />.get()) }

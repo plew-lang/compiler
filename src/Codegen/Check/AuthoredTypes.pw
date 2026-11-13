@@ -1048,6 +1048,17 @@ impl Comp {
     inout fn readSignatureSelfProjection(root: TraitBound, evidence: RequirementSelfEvidence, steps: Array[SupertraitRef], receiver: U64, selector: ResolvedViewSource, arguments: Array[U64], member: U64, offset: U64) -> Result[U64, CompileDiagnostic] {
         val bound = self.supertraitBoundThroughSteps(root: root, steps: steps)
         val lexicalInstance = self.sameResolvedTypeRefs(a: bound.constraint.key.positionalArgs, b: arguments)
+        match evidence {
+            RequirementSelfEvidence.Conformance(index: val conformance) => {
+                if steps.count() == 0U64 && lexicalInstance {
+                    val proof = try self.conformanceDeclarationWitness(conformance: conformance, receiver: bound.subject)
+                    val selected = <Optional.Some v=proof />
+                    val checked = <TraitBound subject=bound.subject constraint=<TraitConstraint key=bound.constraint.key assocPredicates=[] /> offset=bound.offset />
+                    return self.readSelectedSignatureProjection(bound: checked, selected: selected, receiver: receiver, selector: selector, arguments: arguments, member: member, offset: offset)
+                }
+            }
+            _ => {}
+        }
         if lexicalInstance {
             val promised = try self.readSelectedSignatureProjection(bound: bound, selected: <Optional.None />, receiver: receiver, selector: selector, arguments: arguments, member: member, offset: offset)
             if promised != 0U64 { return <Result.Ok value=promised /> }
@@ -1061,6 +1072,30 @@ impl Comp {
             return self.readSelectedSignatureProjection(bound: actual, selected: selected, receiver: receiver, selector: selector, arguments: arguments, member: member, offset: offset)
         }
         return self.readSelectedSignatureProjection(bound: bound, selected: selected, receiver: receiver, selector: selector, arguments: arguments, member: member, offset: offset)
+    }
+
+    inout fn conformanceDeclarationWitness(conformance: U64, receiver: U64) -> Result[StaticConformanceProof, CompileDiagnostic] {
+        val declaration = self.decls.conformAt(index: conformance)
+        mut val bindings: Array[WitnessBind] = []
+        for index in 0U64..<declaration.typeParams.count() {
+            val parameter = self.conformBindAt(binds: declaration.typeParams, index: index)
+            val term = self.pushType(t: <TypeRef nameStart=parameter.nameStart nameLen=parameter.nameLen paramId=parameter.paramId args=[] />)
+            bindings.append(<WitnessBind binder=index paramId=parameter.paramId term=term />)
+        }
+        val substitution = <WitnessMatch conformIdx=conformance + 1U64 selfRef=receiver binds=bindings />
+        mut val witness = substitution
+        if declaration.bounds.len != 0U64 {
+            mut val proofs: Array[U64] = []
+            for assumption in self.conformanceBoundAssumptions(bounds: declaration.bounds) {
+                proofs.append(self.freezeStaticConformanceProof(proof: <StaticConformanceProof.AssumedBound source=assumption />))
+            }
+            val plan = self.arena.publishWitnessConditionPlan(plan: <WitnessConditionPlan witness=substitution proofs=proofs normalizations=[] />)
+            witness = <WitnessMatch conformIdx=substitution.conformIdx selfRef=receiver binds=bindings conditions=plan />
+        }
+        if declaration.subjectTraitOwner != 0U64 {
+            return <Result.Ok value=<StaticConformanceProof.AssumedTraitPath source=<DeclarationBoundRef.TraitSubject index=conformance /> steps=[] edges=[witness] /> />
+        }
+        return <Result.Ok value=<StaticConformanceProof.ConcreteWitness witness=witness /> />
     }
 
     inout fn readSignatureSelfWitness(root: TraitBound, evidence: RequirementSelfEvidence, steps: Array[SupertraitRef], receiver: U64, offset: U64) -> Result[Optional[StaticConformanceProof], CompileDiagnostic] {
