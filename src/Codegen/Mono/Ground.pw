@@ -1230,7 +1230,8 @@ impl Comp {
         val selection = try self.selectedAssociatedBinding(proof: proof, traitOwner: traitOwner, assocId: assocId)
         if selection.isNone() {
             val term = try self.assumedProjectionOutput(proof: proof, traitOwner: traitOwner, assocId: assocId)
-            return <Result.Ok value=<SelectedProjectionOutput immediate=term term=term normalizations=[] /> />
+            val occurrence = self.assumedOutputTypeOccurrence(proof: proof, owner: traitOwner, member: assocId, term: term)
+            return <Result.Ok value=<SelectedProjectionOutput immediate=term term=term normalizations=[] outputOccurrence=occurrence /> />
         }
         val selected = selection.unwrap()
         val binding = self.decls.assocBindings[selected.bindingIndex]
@@ -1240,7 +1241,7 @@ impl Comp {
             try self.associatedBindingOccurrence(binding: binding, witness: selected.witness)
         }
         val term = try self.groundWitnessTypeTerm(ref: binding.ty, params: <PatternBindInput.Conformance range=binding.typeParams />, matchResult: selected.witness)
-        return <Result.Ok value=<SelectedProjectionOutput immediate=term term=term normalizations=[] fromBinding=true bindingOccurrence=binding.authoredTypeUse /> />
+        return <Result.Ok value=<SelectedProjectionOutput immediate=term term=term normalizations=[] fromBinding=true outputOccurrence=binding.authoredTypeUse /> />
     }
 
 }

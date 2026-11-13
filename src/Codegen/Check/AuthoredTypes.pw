@@ -115,7 +115,8 @@ impl Comp {
             output = self.groundTermInEnvironment(ref: output, params: environment.params, values: environment.args, selfRef: environment.receiverRef)
         }
         val term = try self.replayProjectionNormalizations(ref: output, normalizations: normalizations, offset: 0U64)
-        return <Result.Ok value=<SelectedProjectionOutput immediate=output term=term normalizations=normalizations /> />
+        val occurrence = self.assumedOutputTypeOccurrence(proof: proof, owner: traitOwner, member: assocId, term: output)
+        return <Result.Ok value=<SelectedProjectionOutput immediate=output term=term normalizations=normalizations outputOccurrence=occurrence /> />
     }
 
     inout fn readAssociatedBindingOutput(bindingIndex: U64, proof: StaticConformanceProof, witness: WitnessMatch, normalizations: Array[ProjectionNormalizationStep], requirement: Optional[AssociatedBindingRequirementRead]) -> Result[SelectedProjectionOutput, CompileDiagnostic] {
@@ -147,7 +148,7 @@ impl Comp {
         val immediate = try self.groundWitnessTypeTerm(ref: binding.ty, params: <PatternBindInput.Conformance range=binding.typeParams />, matchResult: witness)
         mut val equations = normalizations
         for equation in read.normalizations { try self.appendRetainedProjectionEquation(step: equation, normalizations: inout equations) }
-        return <Result.Ok value=<SelectedProjectionOutput immediate=immediate term=read.term normalizations=equations fromBinding=true bindingOccurrence=saved.occurrence /> />
+        return <Result.Ok value=<SelectedProjectionOutput immediate=immediate term=read.term normalizations=equations fromBinding=true outputOccurrence=saved.occurrence /> />
     }
 
     inout fn readValidatedAssociatedBindingRecipe(saved: AuthoredAssociatedBinding, witness: WitnessMatch, proof: StaticConformanceProof, environment: InstanceEnvironment, memo: inout Dictionary[U64, AuthoredRecipeRead], requirement: Optional[AssociatedBindingRequirementRead], offset: U64) -> Result[AuthoredRecipeRead, CompileDiagnostic] {
@@ -2518,6 +2519,54 @@ impl Comp {
         return <Result.Ok value=(try self.readAuthoredTypeRecipe(proofs: proofs, recipe: recipe, environment: environment, memo: inout memo, context: context)).term />
     }
 
+    fn assumedOutputTypeOccurrence(proof: StaticConformanceProof, owner: U64, member: U64, term: U64) -> U64 {
+        if term == 0U64 || (self.arena.typeViewSourceCount(ref: term) == 0U64 && !self.arena.typeContainsAssociatedProjection(ref: term)) { return 0U64 }
+        match proof {
+            StaticConformanceProof.AssumedBound(source: val source) => {
+                val clause = match source {
+                    DeclarationBoundRef.Function(index: val index) => self.decls.funcBounds.at(index: index).sourceClause,
+                    DeclarationBoundRef.RawRequirement(index: val index) => self.rawRequirementPremises[index].sourceClause,
+                    DeclarationBoundRef.Implementation(index: val index) => index + 1U64,
+                    _ => 0U64,
+                }
+                if clause == 0U64 || clause > self.projectionBoundClauses.count() { return 0U64 }
+                match self.projectionBoundClauses[clause - 1U64].state {
+                    ProjectionBoundState.Ready(bound: val bound) => {
+                        return self.associatedPredicateTypeOccurrence(constraint: bound.constraint, recipes: bound.predicateRecipes, owner: owner, member: member)
+                    }
+                    _ => {}
+                }
+            }
+            StaticConformanceProof.AssumedSupertraitPath(source: _, steps: val steps) => {
+                if steps.count() == 0U64 { return 0U64 }
+                val step = steps[steps.count() - 1U64]
+                if step.traitIndex >= self.decls.traitCount() { return 0U64 }
+                val declaration = self.decls.traitAt(index: step.traitIndex)
+                if step.boundIndex >= declaration.supertraits.count() { return 0U64 }
+                match self.authoredSupertraitOperands.get(key: declaration.supertraits.start + step.boundIndex) {
+                    Optional.Some(v: val operands) => {
+                        return self.associatedPredicateTypeOccurrence(constraint: self.semanticSupertraitConstraintAt(constraints: declaration.supertraits, index: step.boundIndex), recipes: operands.predicates, owner: owner, member: member)
+                    }
+                    Optional.None => {}
+                }
+            }
+            _ => {}
+        }
+        return 0U64
+    }
+
+    fn associatedPredicateTypeOccurrence(constraint: TraitConstraint, recipes: Array[U64], owner: U64, member: U64) -> U64 {
+        if constraint.key.owner != owner || constraint.assocPredicates.count() != recipes.count() { return 0U64 }
+        for index in 0U64..<recipes.count() {
+            if constraint.assocPredicates[index].member != member { continue }
+            match self.sourceTypeUses.recipeAt(id: recipes[index]) {
+                Optional.Some(v: val recipe) => { return recipe.occurrence }
+                Optional.None => { return 0U64 }
+            }
+        }
+        return 0U64
+    }
+
     inout fn retainedSignatureClause(scope: U64, id: U64, offset: U64) -> Result[PreparedProjectionBound, CompileDiagnostic] {
         if id == 0U64 || id > self.projectionBoundClauses.count() || self.projectionBoundClauses[id - 1U64].scope != scope {
             return <Result.Err error=self.diagnosticAt(offset: offset, msg: "signature clause has no original source identity", failureDomain: <FailureDomain.Internal />) />
@@ -2738,7 +2787,7 @@ impl Comp {
                     val selected = try output
                     for equation in selected.normalizations { try self.appendRetainedProjectionEquation(step: equation, normalizations: inout equations) }
                     val immediate = if selected.immediate != 0U64 && !self.typeRefEq(a: selected.immediate, b: projected) { give selected.immediate } else { give 0U64 }
-                    if immediate != 0U64 { outputOccurrence = selected.bindingOccurrence }
+                    if immediate != 0U64 { outputOccurrence = selected.outputOccurrence }
                     if self.arena.typeContainsAssociatedProjection(ref: immediate) {
                         match proof {
                             StaticConformanceProof.AssumedBound(source: _) | StaticConformanceProof.AssumedSupertraitPath(source: _, steps: _) => {

@@ -539,7 +539,7 @@ struct SelectedProjectionOutput {
     val term: U64
     val normalizations: Array[ProjectionNormalizationStep]
     val fromBinding: Bool = false
-    val bindingOccurrence: U64 = 0U64
+    val outputOccurrence: U64 = 0U64
 }
 impl SelectedProjectionOutput { factory }
 

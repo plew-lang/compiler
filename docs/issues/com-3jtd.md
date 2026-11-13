@@ -1516,3 +1516,21 @@ supertrait, associated declaration and projection fixtures passed
 check/JIT. Scratch controls preserved the symbolic missing-method
 rejection and diagnosed the cyclic equality. RHS source provenance for
 extension lookup is still a separate handoff.
+
+### Preserve extension origins of lexical output equalities
+
+The selected assumed proof can now carry an output occurrence alongside
+the output term. Direct lexical proofs read the selected constraint's
+prepared predicate recipe. An inherited proof reads the predicate recipe
+of its retained terminal supertrait edge. The projected type keeps that
+occurrence as its source, so a chain can follow the intermediate RHS
+occurrence to the authored extension admission. This uses the selected
+owner and member and does not search declarations by normalized output.
+
+Fixed-input build `20261113T220119-build-96abe2` produced `fbb8adb1`.
+Under check, JIT and linked native, the four scratch controls in
+`tmp/com-3jtd/projected-extension` tested direct parameter and local
+equalities (`42/0`), a chain of equalities (`84`), and a terminal
+supertrait equality (`84`). This increment covers the currently
+connected authored predicate roles. Type arguments flowing from nested
+or receiver substitutions still need their source evidence handoff.
