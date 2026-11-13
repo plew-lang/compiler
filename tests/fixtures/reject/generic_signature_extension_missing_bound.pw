@@ -1,0 +1,5 @@
+trait Base {}
+trait Marker {}
+extension Extra { impl Base as Marker {} }
+fn f[T](value: T#Extra) {}
+fn main() {}

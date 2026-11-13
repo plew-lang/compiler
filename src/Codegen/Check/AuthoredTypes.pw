@@ -2045,16 +2045,48 @@ impl Comp {
         return <Result.Ok value=selectors />
     }
 
+    // Prove a bundle against the bare subject or an already applicable
+    // bundle. A selector cannot supply the evidence for opening itself.
+    inout fn admitTypeExtensionSources(subject: U64, sources: Array[ResolvedViewSource], assumptions: Array[DeclarationBoundRef], offset: U64) -> Result[(), CompileDiagnostic] {
+        try self.checkTraitSubjectViewCycles(sources: sources, offset: offset)
+        mut val pending: Array[ResolvedViewSource] = []
+        for source in sources {
+            if source.traitInstance.owner == 0U64 { pending.append(source) }
+        }
+        if pending.count() == 0U64 { return <Result.Ok value=() /> }
+        mut val receiver = self.typeRefWithoutOuterViews(ref: subject)
+        while pending.count() != 0U64 {
+            mut val additions: Array[ResolvedViewSource] = []
+            mut val remaining: Array[ResolvedViewSource] = []
+            for source in pending {
+                if try self.extAppliesToType(extensionId: source.surfaceId, typeStart: 0U64, typeLen: 0U64, typeRef: receiver, assumptions: assumptions) {
+                    additions.append(source)
+                } else {
+                    remaining.append(source)
+                }
+            }
+            if remaining.count() == 0U64 { return <Result.Ok value=() /> }
+            if additions.count() == 0U64 {
+                return <Result.Err error=self.diagnosticAt(offset: remaining[0U64].writtenStart, msg: "extension does not apply to this trait instance or concrete receiver (spec/09)", failureDomain: <FailureDomain.Source />) />
+            }
+            receiver = self.typeRefWithAddedViewSources(ref: receiver, additions: additions)
+            pending = remaining
+        }
+        return <Result.Ok value=() />
+    }
+
     inout fn admitSignatureOccurrence(id: U64, occurrence: AuthoredTypeUse, scope: DeclarationTypeScope, assumptions: Array[DeclarationBoundRef], receiverRef: U64, receiverEquations: Array[ProjectionNormalizationStep], equations: inout Array[ProjectionNormalizationStep], proofs: inout Array[AuthoredTypeViewProof], inheritedProjection: Bool, receiverOccurrence: U64) -> Result[(), CompileDiagnostic] {
         try self.checkAuthoredTypeBinders(ref: occurrence.term, scope: scope, offset: occurrence.site)
         val type = self.arena.typeAt(index: occurrence.term)
         val receiver = if type.assocNameId == 0U64 { give occurrence.term } else { give self.typeTermProjectionReceiver(t: type) }
         val selectors = try self.authoredTraitSelectors(type: type, receiver: receiver, site: occurrence.site)
-        if selectors.count() == 0U64 { return <Result.Ok value=() /> }
+        val sources = self.arena.typeViewSources(ref: receiver)
+        if selectors.count() == 0U64 && sources.count() == 0U64 { return <Result.Ok value=() /> }
         val writtenSubject = if receiverRef != 0U64 { give self.groundTermInEnvironment(ref: receiver, params: [], values: [], selfRef: receiverRef) } else { give receiver }
         mut val context = equations
         for equation in receiverEquations { try self.appendRetainedProjectionEquation(step: equation, normalizations: inout context) }
         val subject = if context.count() != 0U64 { give (try self.replayProjectionChildren(ref: writtenSubject, normalizations: context, offset: occurrence.site)) } else { give writtenSubject }
+        try self.admitTypeExtensionSources(subject: subject, sources: sources, assumptions: assumptions, offset: occurrence.site)
         val selectedProjection = if receiverOccurrence != 0U64 {
             give <Optional.Some v=(try self.retainedSignatureReceiverProjection(occurrence: receiverOccurrence, ref: receiver, proofs: proofs, offset: occurrence.site)) />
         } else { give <Optional.None /> }

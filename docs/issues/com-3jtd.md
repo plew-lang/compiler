@@ -304,3 +304,20 @@ admission should have failed. Compare closure parameter and return
 producers with the exact constructor and cast recipe readers. Establish
 what each remaining type occurrence is owned by before removing the
 compatibility check, and keep the structural cycle controls.
+
+### Extension applicability in authored type recipes
+
+The authored recipe admits the final extension source set before selecting
+the trait instance. Its structural cycle check runs first. Each bundle
+must apply under the declaration's premises and the already admitted
+extension set, starting from the bare receiver. Iteration follows only
+successful additions and does not use a bundle to justify opening itself.
+This also checks extension-only annotations that previously skipped trait
+recipe admission.
+
+Fixed-input build `20261113T122955-build-473161` produced `a8098c98d377`.
+The no-bound generic signature now rejects in check. The existing nested
+signature cycle still reports its original diagnostic. Both generic
+extension-backed associated result controls, the concrete signature
+control, explicit construction and conditional witness fallback pass
+check and JIT with their expected outputs.
