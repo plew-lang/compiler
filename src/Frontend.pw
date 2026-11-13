@@ -1729,6 +1729,50 @@ pub fn analyzeFrontend(c: inout Comp, input: FrontendInput, sources: SourceAcces
     return finalizeFrontendExecutables(c: inout c)
 }
 
+// The admission window covers roots which may require a newtype before
+// declaration identity resolution, as well as the final nominal sweep.
+fn admitFrontendNominalDependencies(c: inout Comp) -> Result[(), CompileDiagnostic] {
+    try c.admitAssociatedBindingRecipes()
+    // inter-trait conformance (spec/08,09): `impl B as A` makes every type
+    // conforming to subject trait B also conform to A; copy the methods onto each
+    // conforming concrete type (before provided methods, so A's own provided
+    // methods also reach the newly-conforming types). The headless form
+    // `impl[T] T as A where T: B` is rejected separately (Verify.checkBlanketHeadless).
+    try c.prepareConformanceCallableForms()
+    try c.instantiateTraitSubjectConforms()
+    // trait provided methods (spec/08): copy each `impl Trait { }` provided
+    // method onto every conforming type, so they ride normal method resolution.
+    try c.instantiateProvidedMethods()
+    // `deinit` only on a unique struct (spec/03,05). `unique enum` is legal, but an
+    // enum's own explicit deinit body is v1-rejected; active payloads still drop.
+    // (Distinct generic type-param names are checked per-bracket in lowerTypeParamNames,
+    // before impl++method lists merge.)
+    // Return and pattern checks belong to lexical body preparation in every
+    // mode. Generation requests macro dependencies, not application bodies.
+    // trait conformance is explicit and complete (spec/08): every requirement of
+    // each `impl Type as Trait` must be witnessed (a body method or a `via` alias).
+    try c.checkConformances()
+    // Existential formation (spec/08) requires a known trait and complete
+    // type-argument/associated-type bindings; operations are checked at use.
+    if c.genMode { try c.checkAnyFormation() }
+    try c.checkImplOnBuiltin()
+    try c.checkImplOnNewtype()
+    // module visibility (spec/15): a name brought in by `use … only { }` must be
+    // part of its module's public surface (`pub`). Importing from the wrong
+    // module also fails here — that module doesn't get loaded, so the name isn't
+    // among the exported (loaded) declarations.
+    try c.checkImports()
+    try c.detectImportCycles()
+    if c.genMode {
+        try c.checkUseVisibility()
+        try c.checkTypeVisibility()
+    } else {
+        try c.checkSourceTypeUses(occurrences: c.loweringTypeUses)
+    }
+    try c.resolveTypeDeclIdentities()
+    return c.admitNominalTypeAnnotations()
+}
+
 // Source roots are explicit: analysis never consults argv or reads stdin.
 // Produces declaration-time types, bindings and call templates, without
 // closing the executable BodyInstance/destruction worklist.
@@ -2234,45 +2278,9 @@ fn loadFrontendDeclarations(c: inout Comp, input: FrontendInput, sources: Source
     try c.checkTraitSubjectCycles(activeExtIds: [])
     try c.checkTraitSubjectCycleBundles()
     c.newtypeAnnotationAdmissionOpen = true
-    try c.admitAssociatedBindingRecipes()
-    // inter-trait conformance (spec/08,09): `impl B as A` makes every type
-    // conforming to subject trait B also conform to A; copy the methods onto each
-    // conforming concrete type (before provided methods, so A's own provided
-    // methods also reach the newly-conforming types). The headless form
-    // `impl[T] T as A where T: B` is rejected separately (Verify.checkBlanketHeadless).
-    try c.prepareConformanceCallableForms()
-    try c.instantiateTraitSubjectConforms()
-    // trait provided methods (spec/08): copy each `impl Trait { }` provided
-    // method onto every conforming type, so they ride normal method resolution.
-    try c.instantiateProvidedMethods()
-    // `deinit` only on a unique struct (spec/03,05). `unique enum` is legal, but an
-    // enum's own explicit deinit body is v1-rejected; active payloads still drop.
-    // (Distinct generic type-param names are checked per-bracket in lowerTypeParamNames,
-    // before impl++method lists merge.)
-    // Return and pattern checks belong to lexical body preparation in every
-    // mode. Generation requests macro dependencies, not application bodies.
-    // trait conformance is explicit and complete (spec/08): every requirement of
-    // each `impl Type as Trait` must be witnessed (a body method or a `via` alias).
-    try c.checkConformances()
-    // Existential formation (spec/08) requires a known trait and complete
-    // type-argument/associated-type bindings; operations are checked at use.
-    if c.genMode { try c.checkAnyFormation() }
-    try c.checkImplOnBuiltin()
-    try c.checkImplOnNewtype()
-    // module visibility (spec/15): a name brought in by `use … only { }` must be
-    // part of its module's public surface (`pub`). Importing from the wrong
-    // module also fails here — that module doesn't get loaded, so the name isn't
-    // among the exported (loaded) declarations.
-    try c.checkImports()
-    try c.detectImportCycles()
-    if c.genMode {
-        try c.checkUseVisibility()
-        try c.checkTypeVisibility()
-    } else {
-        try c.checkSourceTypeUses(occurrences: c.loweringTypeUses)
-    }
-    try c.resolveTypeDeclIdentities()
-    try c.admitNominalTypeAnnotations()
+    val nominalAdmission = admitFrontendNominalDependencies(c: inout c)
+    c.newtypeAnnotationAdmissionOpen = false
+    try nominalAdmission
     // assoc-val reads (spec/05): rewrite `Type.NAME` (a Field on a type that owns an
     // `assoc fn NAME`) into a zero-arg assoc-fn call, before any analysis sees it.
     try c.rewriteAssocValReads()

@@ -321,3 +321,15 @@ expansion in an associated binding with ever-growing substitutions
 `factory(from: Bool)` overriding an exact, zero-cost newtype retag.
 The latter reproduces in both direct and projected newtypes in check
 and JIT. The independent review did not approve closure.
+
+## Failed admission and projection expansion checkpoint
+
+Build `20261113T104606-build-9f20a3` (candidate `166def8af2d0`) closes
+the early nominal admission permission on both success and failure.
+The selected associated output reader reports its analysis limit
+when expansion reaches 64 active bindings with changing substitutions.
+Exact repeated witness cycles retain their distinct cycle diagnostic.
+Six nominal reject fixtures returned exit 1 with the expected text in
+check and JIT, and the standard generation profile
+`20261113T104905-gen-633976` passed. The explicit failed-analysis state
+control and competing `as` rewrite remain open.

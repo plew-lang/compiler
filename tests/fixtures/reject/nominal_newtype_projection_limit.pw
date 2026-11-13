@@ -1,0 +1,5 @@
+trait P { type Item }
+struct Box[T] {}
+impl[T] Box[T] as P { type Item = Box[Box[T]]#P.Item }
+newtype Wrapped = Box[I64]#P.Item
+fn main() {}

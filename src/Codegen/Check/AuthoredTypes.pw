@@ -118,6 +118,9 @@ impl Comp {
                 return <Result.Err error=self.diagnosticAt(offset: binding.tyStart, msg: "associated binding output is cyclic", failureDomain: <FailureDomain.Source />) />
             }
         }
+        if self.activeAssociatedBindingReads.count() >= 64U64 {
+            return <Result.Err error=self.diagnosticAt(offset: binding.tyStart, msg: "associated binding projection analysis limit exceeded", failureDomain: <FailureDomain.Limit />) />
+        }
         val environment = try self.selectedConstraintEnvironment(witness: witness, proof: proof)
         val declaration = self.decls.conformAt(index: saved.conformance)
         if declaration.subjectTraitOwner == 0U64 {
