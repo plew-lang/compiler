@@ -279,11 +279,21 @@ pub impl SourceTypeUses {
         match occurrence.role { SourceTypeUseRole.Declaration => { return true } _ => { return false } }
     }
     inout fn bindSignature(token: U64, function: U64, parameters: Array[U64], result: U64, factoryError: U64 = 0U64) -> Bool {
-        if token == 0U64 || token != self.active || token > self.scopes.count() || self.functionSignatures.contains(key: function) { return false }
+        if token == 0U64 || token > self.scopes.count() || self.functionSignatures.contains(key: function) { return false }
         val scope = self.scopes[token - 1U64]
-        match scope.kind { SourceTypeScopeKind.FreeFunction => { if factoryError != 0U64 { return false } } SourceTypeScopeKind.Method => {} _ => { return false } }
+        match scope.kind {
+            SourceTypeScopeKind.ExternSignature => {
+                if factoryError != 0U64 { return false }
+                match scope.state { SourceTypeScopeState.Lowered => {} _ => { return false } }
+            }
+            SourceTypeScopeKind.FreeFunction | SourceTypeScopeKind.Method => {
+                if token != self.active { return false }
+                match scope.kind { SourceTypeScopeKind.FreeFunction => { if factoryError != 0U64 { return false } } _ => {} }
+                match scope.state { SourceTypeScopeState.Lowering => {} _ => { return false } }
+            }
+            _ => { return false }
+        }
         if result != 0U64 && factoryError != 0U64 { return false }
-        match scope.state { SourceTypeScopeState.Lowering => {} _ => { return false } }
         if scope.function.unwrapOr(fallback: 18446744073709551615U64) != function { return false }
         mut val index = 0U64
         while index < parameters.count() {

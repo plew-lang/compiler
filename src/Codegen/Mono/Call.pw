@@ -363,6 +363,9 @@ impl Comp {
         val source = match self.sourceTypeUses.signatureFor(function: owner) {
             Optional.Some(v: val source) => source,
             Optional.None => {
+                if declaration.isExtern {
+                    return <Result.Err error=self.diagnosticAt(offset: declaration.defOffset, msg: "extern function has no registered signature", failureDomain: <FailureDomain.Internal />) />
+                }
                 if self.sourceTypeUses.methodScopeFor(function: owner).isSome() {
                     return <Result.Err error=self.diagnosticAt(offset: self.arena.functionAt(index: function).defOffset, msg: "authored method has no registered signature", failureDomain: <FailureDomain.Internal />) />
                 }

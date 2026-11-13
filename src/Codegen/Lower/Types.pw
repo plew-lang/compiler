@@ -29,16 +29,22 @@ impl Comp {
     inout fn registerAuthoredCallable(f: Func, result: U64, factoryError: U64 = 0U64, registerSurface: Bool = true) -> Result[U64, CompileDiagnostic] {
         val scope = self.sourceTypeUses.currentScope()
         val function = try self.registerDeclaredFunc(f: f, registerSurface: registerSurface, authoredScope: scope)
+        try self.bindAuthoredCallableSignature(signature: <LoweredSourceSignature function=f scope=scope result=result factoryError=factoryError />, function: function)
+        return <Result.Ok value=function />
+    }
+
+    inout fn bindAuthoredCallableSignature(signature: LoweredSourceSignature, function: U64) -> Result[(), CompileDiagnostic] {
+        val f = signature.function
         mut val uses: Array[U64] = []
         mut val index = 0U64
         while index < f.params.len {
             uses.append(self.funcParamAt(params: f.params, index: index).authoredTypeUse)
             index += 1U64
         }
-        if !self.sourceTypeUses.bindSignature(token: scope, function: function, parameters: uses, result: result, factoryError: factoryError) {
+        if !self.sourceTypeUses.bindSignature(token: signature.scope, function: function, parameters: uses, result: signature.result, factoryError: signature.factoryError) {
             return <Result.Err error=self.diagnosticAt(offset: f.defOffset, msg: "invalid authored signature binding", failureDomain: <FailureDomain.Internal />) />
         }
-        return <Result.Ok value=function />
+        return <Result.Ok value=() />
     }
 
     inout fn recordAuthoredTypeUse(ref: U64, site: U64, children: Array[U64] = []) -> U64 {

@@ -31,6 +31,7 @@ pub impl Comp {
             val signature = try self.lowerSigToFunc(sig: e.fns[fi], isExtern: true, isCExtern: e.abiC)
             val function = try self.registerDeclaredFunc(f: signature.function)
             try self.bindAuthoredFunctionScope(scope: signature.scope, function: function, site: signature.function.defOffset)
+            try self.bindAuthoredCallableSignature(signature: signature, function: function)
             fi += 1
         }
         mut val si: U64 = 0
@@ -107,6 +108,7 @@ pub impl Comp {
             val signature = try self.lowerSyntaxSigToFunc(sig: sig, isExtern: true, isCExtern: ext.abiC)
             val function = try self.registerDeclaredFunc(f: signature.function)
             try self.bindAuthoredFunctionScope(scope: signature.scope, function: function, site: signature.function.defOffset)
+            try self.bindAuthoredCallableSignature(signature: signature, function: function)
             i += 1U64
         }
         i = 0U64

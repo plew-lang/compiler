@@ -1,0 +1,44 @@
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use /Ir only { InstanceEnvironment }
+use /SourceAccess only { SourceAccess }
+use /SourceTypeAdmissions only { SourceSignatureSlot }
+use @Plew/Syntax as Syntax
+use @Std/Core only { assert }
+use @Std/Io only { print }
+
+fn check(compiler: inout Comp) {
+    val name = compiler.internBytes(s: "llabs").nameId
+    val function = compiler.arena.firstFunctionNamed(nameId: name)
+    val signature = match compiler.sourceTypeUses.signatureFor(function: function) {
+        Optional.Some(v: val signature) => signature,
+        Optional.None => { panic("extern function has no authored signature") },
+    }
+    val declaration = compiler.arena.functionAt(index: function)
+    assert(declaration.isCExtern && signature.function == function)
+    assert(signature.parameters.count() == 1U64)
+    assert(signature.parameters[0U64] == compiler.funcParamAt(params: declaration.params, index: 0U64).authoredTypeUse)
+    assert(signature.result != 0U64 && signature.result != signature.parameters[0U64])
+    val occurrence = compiler.sourceTypeUses.useAt(index: signature.result - 1U64).unwrap()
+    assert(occurrence.scope == signature.scope)
+    assert(compiler.typeRefEq(a: occurrence.term, b: declaration.retTy))
+    compiler.admitAuthoredFunctionViews().unwrap()
+    val result = compiler.readAdmittedSignatureRoot(function: function, slot: <SourceSignatureSlot.Result />, environment: <InstanceEnvironment />).unwrap()
+    assert(compiler.typeRefEq(a: result, b: declaration.retTy))
+}
+
+fn main() {
+    val source = "extern(c) {{ fn llabs(value~: I64) -> I64 }}\n"
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text text=source path="extern-slots.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
+    check(compiler: inout compiler)
+
+    mut val lexer = <Syntax.Lexer bytes=source.bytes() pos=0U64 toks=[] depth=0I64 />
+    Syntax.lex(lx: inout lexer)
+    mut val parser = <Syntax.P bytes=source.bytes() toks=lexer.toks pos=0U64 base=0U64 />
+    val items = Syntax.parseProgramAst(p: inout parser)
+    mut val legacy = <Comp />
+    legacy.appendSrc(from: source.bytes())
+    for item in items { legacy.lowerTopItem(item: item).unwrap() }
+    check(compiler: inout legacy)
+    print("authored-extern-signature-slots")
+}

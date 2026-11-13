@@ -1,0 +1,6 @@
+use @Std/Io only { print }
+trait Carrier { type Value }
+struct Number {}
+impl Number as Carrier { type Value = I64 }
+extern(c) { fn llabs(value~: Number#Carrier.Value) -> Number#Carrier.Value }
+fn main() { print(llabs(-42I64)) }
