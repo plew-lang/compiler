@@ -2694,6 +2694,14 @@ impl Comp {
                 proofs.append(<AuthoredTypeViewProof occurrence=id receiver=receiver selector=selector proof=frozen lexicalEquations=lexicalEquations />)
             }
         }
+        // The lexical recipe owns declaration view admission. The later
+        // compatibility sweep has no access to these premises or equations.
+        if sources.count() != 0U64 {
+            match occurrence.role {
+                SourceTypeUseRole.Declaration => { self.admittedRecipeTypeUses.insert(id) }
+                _ => {}
+            }
+        }
         return <Result.Ok value=() />
     }
 

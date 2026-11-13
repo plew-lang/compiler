@@ -1125,3 +1125,14 @@ clause evidence before replaying the receiver. The previously failing
 bare inheritance control passes check, JIT and linked native with
 `d67db168` (fixed-input build `20261113T182015-build-2a7d0a`).
 Four nearby receiver controls pass check and JIT.
+
+The generic extension type passed lexical recipe admission but the later
+compatibility sweep looked it up again without the declaration's premises.
+Record successful admission on the exact authored declaration occurrence
+after checking all its sources. The sweep can then consume that result.
+`inherent_receiver_projection_extension_signature` fails with
+`d67db168` and passes check, JIT and linked native with `e47907b0`
+(fixed-input build `20261113T182833-build-8cb849`). Four receiver
+acceptance controls and the missing/wrong trait-instance signature
+controls pass. An associated binding RHS can still require the extension
+before its implementation receiver is admitted.
