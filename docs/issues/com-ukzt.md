@@ -1,7 +1,7 @@
 ---
 id: com-ukzt
 status: open
-deps: []
+deps: [com-6esv]
 links: [com-mmk9]
 created: 2026-10-30T14:58:25Z
 type: task
@@ -52,6 +52,5 @@ the dependent receiver evidence. A favorable precheck result is only a
 Boolean and cannot constrain the forwarding body's selection. The
 [applicability contract](../design/name-lookup.md#6-applicability-and-publication)
 requires shared selection and preservation of the result and receiver
-modes. Resolve ownership of that behavioral repair before implementing it:
-this issue's original audit scope excludes applicability algorithm redesign,
-and com-3jtd owns source view formation.
+modes. [com-6esv](com-6esv.md) owns that behavioral repair and is a prerequisite.
+Reconcile this audit scope against the surviving entries after that change.

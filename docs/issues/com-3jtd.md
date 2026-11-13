@@ -2,7 +2,7 @@
 id: com-3jtd
 status: in_progress
 deps: [com-v5zn]
-links: []
+links: [com-6esv]
 created: 2026-11-09T08:54:16Z
 type: task
 priority: 1
@@ -1150,7 +1150,6 @@ evidence reuse findings remain open.
 
 The follow-up `via` control replaces only the delegation with its explicit
 forwarding body. That body passes check and JIT on `03b9f51b`; the declaration's
-independent raw signature predicate rejects the delegated form. Track the
-overlapping ownership and evidence under
-[com-ukzt](com-ukzt.md#dependent-receiver-counterexample) before deciding the
-behavioral repair boundary.
+independent raw signature predicate rejects the delegated form. [com-6esv](com-6esv.md) owns the delegation repair under the source member
+selection epic. [com-ukzt](com-ukzt.md#dependent-receiver-counterexample)
+records the baseline and owns the remaining API audit.
