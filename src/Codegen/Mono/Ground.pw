@@ -1219,8 +1219,19 @@ pub impl Comp {
     // normalized. Read its exact occurrence under the witness substitution.
     // Declaration admission can inspect source before the receipt is published.
     inout fn associatedOutputTermInProof(proof: StaticConformanceProof, traitOwner: U64, assocId: U64) -> Result[U64, CompileDiagnostic] {
+        val output = try self.immediateAssociatedOutputInProof(proof: proof, traitOwner: traitOwner, assocId: assocId)
+        return <Result.Ok value=output.immediate />
+    }
+
+}
+
+impl Comp {
+    inout fn immediateAssociatedOutputInProof(proof: StaticConformanceProof, traitOwner: U64, assocId: U64) -> Result[SelectedProjectionOutput, CompileDiagnostic] {
         val selection = try self.selectedAssociatedBinding(proof: proof, traitOwner: traitOwner, assocId: assocId)
-        if selection.isNone() { return self.assumedProjectionOutput(proof: proof, traitOwner: traitOwner, assocId: assocId) }
+        if selection.isNone() {
+            val term = try self.assumedProjectionOutput(proof: proof, traitOwner: traitOwner, assocId: assocId)
+            return <Result.Ok value=<SelectedProjectionOutput immediate=term term=term normalizations=[] /> />
+        }
         val selected = selection.unwrap()
         val binding = self.decls.assocBindings[selected.bindingIndex]
         if self.associatedBindingAdmissionComplete {
@@ -1228,9 +1239,13 @@ pub impl Comp {
         } else {
             try self.associatedBindingOccurrence(binding: binding, witness: selected.witness)
         }
-        return self.groundWitnessTypeTerm(ref: binding.ty, params: <PatternBindInput.Conformance range=binding.typeParams />, matchResult: selected.witness)
+        val term = try self.groundWitnessTypeTerm(ref: binding.ty, params: <PatternBindInput.Conformance range=binding.typeParams />, matchResult: selected.witness)
+        return <Result.Ok value=<SelectedProjectionOutput immediate=term term=term normalizations=[] fromBinding=true bindingOccurrence=binding.authoredTypeUse /> />
     }
 
+}
+
+pub impl Comp {
     inout fn assumedProjectionOutput(proof: StaticConformanceProof, traitOwner: U64, assocId: U64) -> Result[U64, CompileDiagnostic] {
         match proof {
             StaticConformanceProof.AssumedBound(val source) => {

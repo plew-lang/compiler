@@ -147,7 +147,7 @@ impl Comp {
         val immediate = try self.groundWitnessTypeTerm(ref: binding.ty, params: <PatternBindInput.Conformance range=binding.typeParams />, matchResult: witness)
         mut val equations = normalizations
         for equation in read.normalizations { try self.appendRetainedProjectionEquation(step: equation, normalizations: inout equations) }
-        return <Result.Ok value=<SelectedProjectionOutput immediate=immediate term=read.term normalizations=equations fromBinding=true /> />
+        return <Result.Ok value=<SelectedProjectionOutput immediate=immediate term=read.term normalizations=equations fromBinding=true bindingOccurrence=saved.occurrence /> />
     }
 
     inout fn readValidatedAssociatedBindingRecipe(saved: AuthoredAssociatedBinding, witness: WitnessMatch, proof: StaticConformanceProof, environment: InstanceEnvironment, memo: inout Dictionary[U64, AuthoredRecipeRead], requirement: Optional[AssociatedBindingRequirementRead], offset: U64) -> Result[AuthoredRecipeRead, CompileDiagnostic] {
@@ -2653,6 +2653,7 @@ impl Comp {
             give <Optional.Some v=(try self.retainedSignatureReceiverProjection(occurrence: receiverOccurrence, ref: receiver, proofs: proofs, offset: occurrence.site)) />
         } else { give <Optional.None /> }
         val extensions = try self.admitTypeExtensionSources(subject: subject, sources: self.arena.typeViewSources(ref: subject), assumptions: assumptions, normalizations: context, selectedProjection: selectedProjection, offset: occurrence.site)
+        mut val outputOccurrence = 0U64
         for selector in selectors {
             if selector.traitInstance.owner != 0U64 {
                 if self.decls.traitIndexByOffset(offset: selector.traitInstance.owner) >= self.decls.traitCount() { return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "authored view has no canonical trait owner", failureDomain: <FailureDomain.Internal />) /> }
@@ -2709,14 +2710,13 @@ impl Comp {
                     // consumed their saved equations, at admission and run.
                     val projected = try self.replayProjectionChildren(ref: raw, normalizations: equations, offset: occurrence.site)
                     val output = match scope.origin {
-                        DeclarationScopeOrigin.Nominal => {
-                            val selected = try self.readSelectedProjectionOutput(proof: proof, traitOwner: selector.traitInstance.owner, assocId: type.assocNameId)
-                            for equation in selected.normalizations { try self.appendRetainedProjectionEquation(step: equation, normalizations: inout equations) }
-                            give selected.immediate
-                        }
-                        _ => { give try self.associatedOutputTermInProof(proof: proof, traitOwner: selector.traitInstance.owner, assocId: type.assocNameId) }
+                        DeclarationScopeOrigin.Nominal => self.readSelectedProjectionOutput(proof: proof, traitOwner: selector.traitInstance.owner, assocId: type.assocNameId),
+                        _ => self.immediateAssociatedOutputInProof(proof: proof, traitOwner: selector.traitInstance.owner, assocId: type.assocNameId),
                     }
-                    val immediate = if output != 0U64 && !self.typeRefEq(a: output, b: projected) { give output } else { give 0U64 }
+                    val selected = try output
+                    for equation in selected.normalizations { try self.appendRetainedProjectionEquation(step: equation, normalizations: inout equations) }
+                    val immediate = if selected.immediate != 0U64 && !self.typeRefEq(a: selected.immediate, b: projected) { give selected.immediate } else { give 0U64 }
+                    if immediate != 0U64 { outputOccurrence = selected.bindingOccurrence }
                     if self.arena.typeContainsAssociatedProjection(ref: immediate) {
                         match proof {
                             StaticConformanceProof.AssumedSupertraitPath(source: val source, steps: _) => {
@@ -2740,6 +2740,9 @@ impl Comp {
         }
         if extensions.count() != 0U64 {
             self.authoredExtensionViews[id] = extensions
+        }
+        if outputOccurrence != 0U64 && outputOccurrence != id {
+            self.projectedExtensionOrigins[id] = outputOccurrence
         }
         // The lexical recipe owns declaration view admission. The later
         // compatibility sweep has no access to these premises or equations.

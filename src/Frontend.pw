@@ -539,6 +539,7 @@ struct SelectedProjectionOutput {
     val term: U64
     val normalizations: Array[ProjectionNormalizationStep]
     val fromBinding: Bool = false
+    val bindingOccurrence: U64 = 0U64
 }
 impl SelectedProjectionOutput { factory }
 
@@ -794,6 +795,7 @@ pub struct Comp {
     // Indexed by the exact authored occurrence, never by the interned TypeTerm.
     // The compatibility sweep and recipe reader consume only completed rows.
     mut val authoredExtensionViews: Dictionary[U64, Array[SourceExtensionViewProof]] = [:]
+    mut val projectedExtensionOrigins: Dictionary[U64, U64] = [:]
     mut val nominalAnnotationProofs: Dictionary[U64, LocalAnnotationProof] = [:]
     // Canonical selection by root recipe. Handles reference append-only proofs.
     mut val nominalAnnotationSelections: Dictionary[U64, NominalAnnotationSelection] = [:]

@@ -194,6 +194,24 @@ impl Comp {
         return <Result.Ok value=<Optional.Some v=saved /> />
     }
 
+    fn authoredResultExtensionSources(occurrence: U64) -> Array[SourceExtensionViewProof] {
+        // Receiver facets of a projection do not become facets of its output.
+        // Follow only the selected associated definition's authored occurrence.
+        mut val current = occurrence
+        mut val depth = 0U64
+        while current != 0U64 && depth < 64U64 {
+            val output = self.projectedExtensionOrigins.getOr(key: current, fallback: 0U64)
+            if output == 0U64 {
+                val authored = self.sourceTypeUses.useAt(index: current - 1U64)
+                if authored.isNone() || self.arena.typeTermAt(index: authored.unwrap().term).assocNameId != 0U64 { return [] }
+                return self.authoredExtensionViews.getOr(key: current, fallback: [])
+            }
+            current = output
+            depth += 1U64
+        }
+        return []
+    }
+
     inout fn recordExpressionExtensionSources(exprId: U64, proofs: Array[SourceExtensionViewProof]) {
         if proofs.count() == 0U64 { return }
         if self.currentSourceOwner().isNone() { return }
@@ -1592,7 +1610,7 @@ pub impl Comp {
                         val field = self.arena.structFieldAt(structIndex: structIndex, fieldIndex: fieldIndex)
                         isBoxed = self.fieldIsBoxed(f: field)
                         if field.authoredTypeUse != 0U64 && self.arena.typeViewSourceCount(ref: fieldTerm) != 0U64 {
-                            self.recordExpressionExtensionSources(exprId: exprId, proofs: self.authoredExtensionViews.getOr(key: field.authoredTypeUse, fallback: []))
+                            self.recordExpressionExtensionSources(exprId: exprId, proofs: self.authoredResultExtensionSources(occurrence: field.authoredTypeUse))
                         }
                     }
                 }
@@ -1982,7 +2000,7 @@ pub impl Comp {
                         if self.arena.typeViewSourceCount(ref: local.ty) != 0U64 {
                             mut val proofs: Array[SourceExtensionViewProof] = []
                             if local.authoredTypeUse != 0U64 {
-                                proofs = self.authoredExtensionViews.getOr(key: local.authoredTypeUse, fallback: [])
+                                proofs = self.authoredResultExtensionSources(occurrence: local.authoredTypeUse)
                             } else {
                                 proofs = self.lexicalBindingExtensionSources(declaration: local.nameStart)
                             }
@@ -2415,6 +2433,10 @@ pub impl Comp {
                     try self.recordExpr(exprId: operand, chainHoleRef: chainHoleRef, expectedTerm: operandContext)
                 }
                 self.recordSemanticExprTerm(exprId: exprId, term: castTarget)
+                if self.arena.typeViewSourceCount(ref: castTarget) != 0U64 {
+                    val occurrence = self.authoredCastTargets.getOr(key: exprId, fallback: 0U64)
+                    self.recordExpressionExtensionSources(exprId: exprId, proofs: self.authoredResultExtensionSources(occurrence: occurrence))
+                }
             }
             Expr.MatchExpr(val scrut, val arms) => {
                 // Validate labels before publishing lexical pattern bindings.

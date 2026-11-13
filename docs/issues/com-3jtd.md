@@ -1471,3 +1471,21 @@ and candidate check/JIT. The probe with two distinct binders and an
 omitted default also matched linked native output `42/99/0`. This
 preserves existing behavior while making the saved evidence available
 to Record's candidate collection for these results.
+
+### Forward extension origins from selected associated output bindings
+
+The existing projection reader now returns the selected binding's authored
+occurrence with the immediate output, including when reading a declaration
+before all associated binding recipes are admitted. Source type admission
+links the projection occurrence to that exact output occurrence. Record
+follows the saved links for viewed call results, typed bindings, fields and
+cast targets. The view used to select an associated member stays on the
+projection receiver and cannot authorize an extension on its output.
+An output determined by a lexical associated equality still needs the
+provenance of that equality's right-hand type.
+
+Fixed-input build `20261113T213329-build-5c720a` produced `98a78601`.
+Seven existing controls matched check/JIT. The associated output probe in
+meta `tmp/com-3jtd/projected-extension/projected.pw` matches expected
+`42/42/0` through a typed binding, an immediate call result and a bare
+receiver. It passed precursor check/JIT and candidate check/JIT/native.

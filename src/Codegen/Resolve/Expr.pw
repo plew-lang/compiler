@@ -3027,7 +3027,7 @@ impl Comp {
             mut val proofs = self.directResultSubstitutionExtensions(declaration: declaration, args: args, typeArguments: calleeTypeArgs)
             match self.sourceTypeUses.signatureFor(function: source) {
                 Optional.Some(v: val signature) => {
-                    for proof in self.authoredExtensionViews.getOr(key: signature.result, fallback: []) { proofs.append(proof) }
+                    for proof in self.authoredResultExtensionSources(occurrence: signature.result) { proofs.append(proof) }
                 }
                 Optional.None => {}
             }
