@@ -24,6 +24,14 @@ Selected source declaration/signature -> common CAbi scalar/integer/F32/inout cl
 
 ## Completion and Verification
 
+The imported managed-parameter diagnostic still needs a concrete refusal
+control. On `7719ee9f` and `4e635d8d`, a called
+`extern(c) { fn printString(value~: String) }` passes `--check` but
+fails AOT and lazy emission with `main requires verified Mid lowering`.
+Trace the first unsupported import classification and preserve the
+specific ABI refusal to the command boundary. This does not authorize
+passing managed values through C. See [com-ab7u](com-ab7u.md).
+
 Two-way C controls on the current host for permitted widths/signs, Float, pointer, inout writeback, exposed names and labels, signature mismatches and unsupported boundary rejection; compare AOT/JIT entry failure/lifetime. Aggregate-layout absence remains in the parent and does not become an asserted supported feature.
 
 Close with exact revision/scope, final-consumer evidence, removed competing paths and applicable correctness/performance gates. Preserve matching-input baseline evidence; the approved formal self-compilation target is below 7 seconds. This task does not close the mixed/new-feature parent automatically.
