@@ -309,3 +309,12 @@ check. Fixed-input build `20261113T044402-build-a7bfcc` produced
 `8f8d0bb7`, which checks both fixtures and prints 42 in JIT and
 native execution. The compiler source check, four additional runtime
 fixtures and the lazy CLI suite passed.
+
+The first candidate increased the three-pair same-source median from
+7.023867 s to 7.136208 s. Declaration-recipe state was being acquired
+for every local annotation. Limit that lookup to terms containing a
+projection, where a declaration-origin recipe can occur. Fixed-input
+build `20261113T044855-build-e79797` produced `14fc222b`; the same six
+check/JIT controls pass. Comparing the optimized candidate to the
+same pre-fix carrier gave 7.026079 s and 7.008201 s with identical
+nonempty LLVM across all eight runs.

@@ -716,17 +716,21 @@ impl Comp {
         val scope = try self.declarationTypeScope(owner: function)
         val assumptions = try self.declarationScopeAssumptions(scope: scope)
         val method = self.sourceTypeUses.methodScopeFor(function: function).isSome()
-        try self.checkSignatureOccurrence(occurrence: occurrence, scope: token, parameters: scope.parameters, selfParameter: scope.selfParameter, method: method, body: true)
         val scopes = <SignatureProofScopes local=scope assumptions=assumptions inherited=[] receiver=declaration.recvTy scopedBinders=method body=true />
         mut val validation = <SignatureRecipeValidation />
-        match self.authoredSignatureViews.get(key: function) {
-            Optional.Some(v: val admitted) => {
-                if admitted.signature.scope != token || admitted.signature.function != function {
-                    return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "local annotation has a foreign signature admission", failureDomain: <FailureDomain.Internal />) />
+        // Short projections may link to a where-clause argument or a parent
+        // receiver argument. Other annotations have only body-owned recipes.
+        if self.arena.typeContainsAssociatedProjection(ref: term) {
+            try self.checkSignatureOccurrence(occurrence: occurrence, scope: token, parameters: scope.parameters, selfParameter: scope.selfParameter, method: method, body: true)
+            match self.authoredSignatureViews.get(key: function) {
+                Optional.Some(v: val admitted) => {
+                    if admitted.signature.scope != token || admitted.signature.function != function {
+                        return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "local annotation has a foreign signature admission", failureDomain: <FailureDomain.Internal />) />
+                    }
+                    validation = <SignatureRecipeValidation admittedDeclarations=admitted.recipeChecks equations=admitted.recipeEquations receiverEquations=admitted.receiverEquations proofs=admitted.proofs />
                 }
-                validation = <SignatureRecipeValidation admittedDeclarations=admitted.recipeChecks equations=admitted.recipeEquations receiverEquations=admitted.receiverEquations proofs=admitted.proofs />
+                Optional.None => {}
             }
-            Optional.None => {}
         }
         try self.checkAuthoredTypeRecipe(sourceScope: token, recipe: occurrence.recipe, edge: <AuthoredRecipeEdge.Source />, scopes: scopes, validation: inout validation, offset: occurrence.site)
         val receiverType = self.groundTermInEnvironment(ref: term, params: [], values: [], selfRef: scopes.receiver)
