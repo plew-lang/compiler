@@ -288,3 +288,19 @@ the first excluded. Median `c5146239` was 7.158 s and `a7272cf67889` was
 7.268 s. All eight LLVM outputs matched SHA-256
 `91c2113c95fd23af58e68f2cc57271e49d74f2f6d1934218946a9df7ca961ee1`.
 The parent fixed-point gate remains separate.
+
+### Remaining type compatibility sweep
+
+On candidate `a7272cf67889`, `fn f[T](value: T#Extra) {}` passes check
+even though Extra only extends Base and the signature has no Base
+premise. The same source includes a concrete entry point so declaration
+analysis runs without JIT reachability. The generic signature's zero
+site-offset reaches the compatibility exemption; the authored recipe
+selects trait views but does not admit extension-only selectors.
+
+A closure parameter using `Number#Marker[Bool].Item` with only a
+`Marker[I64]` witness rejects at associated-output lookup, after source
+admission should have failed. Compare closure parameter and return
+producers with the exact constructor and cast recipe readers. Establish
+what each remaining type occurrence is owned by before removing the
+compatibility check, and keep the structural cycle controls.
