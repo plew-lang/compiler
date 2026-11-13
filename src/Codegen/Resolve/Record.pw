@@ -1602,12 +1602,12 @@ pub impl Comp {
     // unique enclosing chain stage. The payload is a structural child input,
     // not Cursor state: ordinary expressions use 0, and every continuation
     // descendant receives the same explicit parametric term.
-    inout fn recordExpr(exprId: U64, chainHoleRef: U64 = 0U64, expectedTerm: U64 = 0U64, deferContext: Bool = false, needsValue: Bool = true, purpose: ExpressionRecordPurpose = <ExpressionRecordPurpose.Execution />) -> Result[(), CompileDiagnostic] {
+    inout fn recordExpr(exprId: U64, chainHoleRef: U64 = 0U64, expectedTerm: U64 = 0U64, deferContext: Bool = false, needsValue: Bool = true, purpose: ExpressionRecordPurpose = <ExpressionRecordPurpose.Execution />, admittedContext: Bool = false) -> Result[(), CompileDiagnostic] {
         if self.semanticExprConstructionClosed(exprId: exprId) {
             return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: completed source owner cannot record an expression") />
         }
         // Normalize at the context boundary before inspecting expression shape.
-        val requestedContext = try self.normalizedSourceTypeContext(expectedTerm: expectedTerm)
+        val requestedContext = if admittedContext { give expectedTerm } else { give try self.normalizedSourceTypeContext(expectedTerm: expectedTerm) }
         val normalizedContext = try self.effectiveSourceTypeContext(exprId: exprId, requested: requestedContext)
         // A deferred value block must be recorded again in its lexical scope
         // once the selected parameter supplies its result context.
@@ -2451,8 +2451,9 @@ pub impl Comp {
                     }
                     Optional.None => { give <Optional.None /> }
                 }
-                try self.collectRecordedType(ref: ty)
-                try self.recordExpr(exprId: init, expectedTerm: ty)
+                val expected = if annotation.isSome() { give annotation.unwrap().sourceTerm } else { give ty }
+                try self.collectRecordedType(ref: expected)
+                try self.recordExpr(exprId: init, expectedTerm: expected, admittedContext: annotation.isSome())
                 mut val endedBinding: U64 = 0U64
                 val previous = self.localIndexByName(start: nameStart, len: nameLen)
                 if previous < self.cur.locals.count() {
@@ -2461,7 +2462,11 @@ pub impl Comp {
                         endedBinding = prior.nameStart
                     }
                 }
-                try self.addLetLocal(nameStart: nameStart, nameLen: nameLen, tyStart: tyStart, tyLen: tyLen, tyIsArray: tyIsArray, ty: ty, init: init, mutable: mutable, owned: true)
+                if annotation.isSome() {
+                    self.addLocal(nameStart: nameStart, nameLen: nameLen, tyStart: tyStart, tyLen: tyLen, isArray: tyIsArray, ty: expected, isInout: false, isMut: mutable, owned: true)
+                } else {
+                    try self.addLetLocal(nameStart: nameStart, nameLen: nameLen, tyStart: tyStart, tyLen: tyLen, tyIsArray: tyIsArray, ty: ty, init: init, mutable: mutable, owned: true)
+                }
                 self.storeBuildingSemanticBinding(stmtId: stmtId, declarationTarget: nameStart, isMutable: mutable, typeTerm: self.cur.locals[self.cur.locals.count() - 1U64].ty, endedBinding: endedBinding, annotation: annotation)
                 self.commitSourceTypeContext(exprId: init)
             }

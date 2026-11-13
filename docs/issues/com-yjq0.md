@@ -200,11 +200,6 @@ the deinit annotation receipt fails Internal with
 Conditional generic deinit selection is tracked by [met-b2la](met-b2la.md).
 Removal of legacy struct-body deinit is tracked by [met-2t3l](met-2t3l.md).
 
-Remaining work covers proof publication for non-projection annotations,
-foreign receipt and same-owner recovery probes, and removal of
-duplicate source annotation normalization for initializer context and
-compatibility verification.
-
 Alternating three measured compilations per carrier on the same source
 gave 7.004045 s before and 6.989182 s after the destructor increment.
 All eight runs (including warm-up) emitted identical LLVM
@@ -227,3 +222,32 @@ source, alternating medians were 6.991954 s and 7.009900 s, with
 identical nonempty LLVM output (72,484,293 bytes, SHA-256
 `ac628e6b8a967afe435990a225b1fda427cf9b78b48764932051bdf9eb303991`).
 This is a three-sample comparison, separate from the fixed-point gate.
+
+## Reject a receipt from a sibling binding
+
+Under carrier `5c8e3231`, a scratch-only writer substitute copied the
+previous local's annotation receipt into a second binding with the
+same semantic type and a different occurrence. Finalization returned
+Internal with `final local has a foreign annotation proof`. Both
+intact controls passed. Two requests for the same corrupted body in
+the same session retained the diagnostic and restored the caller
+cursor. The test replays unchanged inputs; the request state remains
+failed per the compiler-state contract.
+
+
+## Supply the initializer with its admitted annotation type
+
+The authored recipe admission supplies the lexical receiver substitution
+and proven projection equations. Record replays those equations once
+and uses the resulting source term as both the initializer expectation
+and local binding type. Abstract outputs stay symbolic until
+instantiation. The compatibility walks still consume the written term
+and require migration to the saved binding type.
+
+Fixed-input build `20261113T042234-build-1c960f` produced `76bf830b`.
+The compiler source check, lazy CLI and seven runtime fixtures passed.
+A projected U8 expectation reaches an unsuffixed literal through a
+value block and produces 255 on both carriers. Alternating same-source
+medians were 7.142997 s and 7.126682 s. Each carrier emitted the same
+nonempty LLVM in all eight runs. This compares the change against a
+baseline also above 7 s, with no increase attributable to this change.

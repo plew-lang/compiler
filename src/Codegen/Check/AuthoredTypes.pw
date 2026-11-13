@@ -718,7 +718,10 @@ impl Comp {
         val scopes = <SignatureProofScopes local=scope assumptions=assumptions inherited=[] receiver=declaration.recvTy scopedBinders=method body=true />
         mut val validation = <SignatureRecipeValidation />
         try self.checkAuthoredTypeRecipe(sourceScope: token, recipe: occurrence.recipe, edge: <AuthoredRecipeEdge.Source />, scopes: scopes, validation: inout validation, offset: occurrence.site)
-        return <Result.Ok value=<LocalAnnotationProof occurrence=id recipe=occurrence.recipe proofs=validation.proofs /> />
+        val receiverType = self.groundTermInEnvironment(ref: term, params: [], values: [], selfRef: scopes.receiver)
+        val equations = validation.equations.getOr(key: occurrence.recipe, fallback: [])
+        val sourceTerm = try self.replayProjectionNormalizations(ref: receiverType, normalizations: equations, offset: occurrence.site)
+        return <Result.Ok value=<LocalAnnotationProof occurrence=id recipe=occurrence.recipe sourceTerm=sourceTerm proofs=validation.proofs /> />
     }
 
     inout fn authoredSignatureOccurrence(signature: AuthoredFunctionSignature, id: U64) -> Result[AuthoredTypeUse, CompileDiagnostic] {
