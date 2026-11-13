@@ -134,7 +134,10 @@ pub impl Comp {
         if typeArgValues.count() > 0U64 && !self.fnArgsAllResolved(args: typeArgValues) { return <Result.Ok value=false />}
         if (function.hasRecv || function.isAssoc) && receiverTerm == 0U64 { return <Result.Ok value=false />}
         val proof = selected.proof
-        val environment = (try self.bodyInstanceEnvironment(fnIdx: callee, args: typeArgValues, recvInstRef: receiverTerm, selectedProof: proof))
+        // A dependent receiver still needs the completed call's clause
+        // evidence for body admission. Default expansion only substitutes
+        // the already selected declaration and publishes its extra operands.
+        val environment = (try self.bodyInstanceEnvironment(fnIdx: callee, args: typeArgValues, recvInstRef: receiverTerm, selectedProof: proof, pendingInherentReceiver: self.dependentInherentReceiverScope(function: callee) != 0U64))
         val item = (try self.bodyProvidedItemTerm(f: function, environment: environment))
         mut val parameterTerms: Array[U64] = []
         mut val index: U64 = 0U64

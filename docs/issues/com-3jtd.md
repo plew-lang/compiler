@@ -1031,3 +1031,17 @@ Closure remains pending. Audit candidate cache ownership and transfer
 across alternate source entries, in particular explicit extension,
 associated function, nested premise and default-argument forms, before
 treating this as the complete receiver contract.
+
+#### Alternate call entries
+
+The default-argument control failed on `4f5361cb`: source default
+completion required the concrete receiver before the call plan was ready.
+Default completion now uses the selected type substitutions and leaves
+dependent receiver validation to body admission with the completed plan.
+Build `20261113T173343-build-5e69ec`, candidate `64506cf5`, passed
+check, JIT and linked native for this fixture. The generic-caller default
+control also passed JIT.
+
+The named-extension probe with `impl[T] Box[T, T#Source.Item]` still
+rejects at `value#Extra`. The extension applicability predicate compares
+the raw receiver pattern before the shared callable matcher can run.
