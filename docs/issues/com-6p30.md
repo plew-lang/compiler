@@ -92,3 +92,38 @@ distinct values and one execution of each initializer.
 Remaining: test missing and foreign annotations and initializer
 facts independently, verify the request and compatibility boundaries,
 run the targeted suites and comparison, and obtain independent review.
+
+Candidate `39d67842` also passed standard generation
+`20261113T072811-gen-155438` and all 47 lazy CLI cases. The native
+same-type foreign annotation probe rejects as Internal on initial
+request and retry, preserves the cursor, and leaves the sibling usable.
+Same-source alternating development medians over three measured runs
+after one warm-up were 7.120 s for `f14e6539` and 7.148 s for `39d67842`.
+All eight runs emitted identical LLVM (SHA-256 `e1f6015fc88b`).
+
+## Scope and binding fault checks
+
+Review found that deleting only the root annotation ID after
+declaration admission still let Record reuse the raw type. The native
+probe on `39d67842` aborts with "missing global annotation accepted".
+The scope guard requires the exact declaration before opening an
+initializer. Record requires the annotation ID for an explicitly
+typed global, and Mid reads the storage binding through its
+session/reader/target/owner identity. Build
+`20261113T073356-build-28969e` produced `d20eb1cc`. The same probe
+rejects twice as Internal, restores the caller cursor and leaves the
+sibling usable. Five check/JIT controls and the distinct-declaration
+native control pass.
+
+The independent reviewer reproduced closure-local projected recipes,
+nested arrays, mutable assignment, and direct projected member use in
+check/JIT/native. Pre-existing direct global closure invocation
+still fails Mid verification on both carriers. Startup dependency
+omissions reproduce on both and belong to [com-fkxl](com-fkxl.md).
+The [probe inputs](../../../evidence/rejection-domains/diagnostic-domain-implementation/global-annotation-ownership/README.md)
+also preserve the remaining request RED. Preliminary initializer
+recording rejects the wrong view during declaration registration.
+The repair must preserve unannotated forward-reference typing and
+keep final generic uniqueness checking. Exact occurrence substitution
+within one owner and loss of published initializer evidence still need
+their own controls.

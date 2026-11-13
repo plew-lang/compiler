@@ -783,13 +783,18 @@ impl Comp {
         return <Result.Ok value=() />
     }
 
-    inout fn requireGlobalAnnotation(target: U64, id: U64, written: U64) -> Result[LocalAnnotationProof, CompileDiagnostic] {
-        val occurrence = try self.signatureOccurrence(id: id)
+    inout fn requireGlobalAnnotation(target: U64, id: Optional[U64], written: U64) -> Result[LocalAnnotationProof, CompileDiagnostic] {
+        val annotation = match id {
+            Optional.Some(v: val annotation) => annotation,
+            Optional.None => { return <Result.Err error=self.diagnosticAt(offset: target, msg: "global declaration has no authored annotation occurrence", failureDomain: <FailureDomain.Internal />) /> }
+        }
+        val occurrence = try self.signatureOccurrence(id: annotation)
         val proof = match self.globalAnnotationProofs.get(key: target) {
             Optional.Some(v: val proof) => proof,
             Optional.None => { return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "global declaration has no admitted annotation", failureDomain: <FailureDomain.Internal />) /> }
         }
-        if occurrence.scope != self.sourceTypeUses.globalScope(target: target) || proof.occurrence != id || proof.recipe != occurrence.recipe || occurrence.term != written {
+        val token = self.sourceTypeUses.globalScope(target: target)
+        if token == 0U64 || occurrence.scope != token || proof.occurrence != annotation || proof.recipe != occurrence.recipe || occurrence.term != written {
             return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "global declaration has a foreign annotation proof", failureDomain: <FailureDomain.Internal />) />
         }
         return <Result.Ok value=proof />

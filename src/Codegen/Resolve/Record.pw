@@ -3,6 +3,31 @@
 // facts under a BodyInstance; they do not repeat lexical type inference.
 
 impl Comp {
+    inout fn recordBindingAnnotation(nameStart: U64, written: U64, occurrence: Optional[U64]) -> Result[Optional[LocalAnnotationProof], CompileDiagnostic] {
+        match self.currentSourceOwner() {
+            Optional.Some(v: val owner) => {
+                match owner {
+                    SemanticCompletionOwner.Global(target: val target) => {
+                        if target == nameStart && (written != 0U64 || occurrence.isSome()) {
+                            return <Result.Ok value=<Optional.Some v=(try self.requireGlobalAnnotation(target: target, id: occurrence, written: written)) /> />
+                        }
+                    }
+                    _ => {}
+                }
+                match occurrence {
+                    Optional.Some(v: val id) => { return <Result.Ok value=<Optional.Some v=(try self.admitBodyTypeUse(id: id, term: written, owner: owner)) /> /> }
+                    Optional.None => {}
+                }
+            }
+            Optional.None => {
+                if occurrence.isSome() {
+                    return <Result.Err error=self.diagnosticAt(offset: nameStart, msg: "authored binding has no source owner", failureDomain: <FailureDomain.Internal />) />
+                }
+            }
+        }
+        return <Result.Ok value=<Optional.None /> />
+    }
+
     inout fn requiredBodyValueViewArguments(exprId: U64, selector: ResolvedViewSource, owner: Optional[SemanticCompletionOwner]) -> Result[Optional[Array[U64]], CompileDiagnostic] {
         if selector.traitInstance.positionalArgs.count() == 0U64 { return <Result.Ok value=<Optional.None /> /> }
         val origin = self.arena.exprOriginSerial[exprId]
@@ -2508,20 +2533,7 @@ pub impl Comp {
         }
         match self.arena.stmts[stmtId] {
             Stmt.Let(val mutable, val nameStart, val nameLen, val tyStart, val tyLen, val tyIsArray, val ty, val init, val annotationOccurrence) => {
-                val annotation = match annotationOccurrence {
-                    Optional.Some(v: val occurrence) => {
-                        val owner = self.currentSourceOwner().unwrap()
-                        val declaration = match owner {
-                            SemanticCompletionOwner.Global(target: val target) => target == nameStart,
-                            _ => false,
-                        }
-                        val proof = if declaration {
-                            give try self.requireGlobalAnnotation(target: nameStart, id: occurrence, written: ty)
-                        } else { give try self.admitBodyTypeUse(id: occurrence, term: ty, owner: owner) }
-                        give <Optional.Some v=proof />
-                    }
-                    Optional.None => { give <Optional.None /> }
-                }
+                val annotation = try self.recordBindingAnnotation(nameStart: nameStart, written: ty, occurrence: annotationOccurrence)
                 val expected = if annotation.isSome() { give annotation.unwrap().sourceTerm } else { give ty }
                 try self.collectRecordedType(ref: expected)
                 try self.recordExpr(exprId: init, expectedTerm: expected, admittedContext: annotation.isSome())

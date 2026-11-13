@@ -35,3 +35,12 @@ Close with exact revision/scope, final-consumer evidence, removed competing path
 - `GLOBAL-STARTUP`: com-fkxl explicitly owns summary producers through current startup, no unassigned producer excuse.
 
 Exact scopes/scenarios/exclusions are in [finite intake](../../../evidence/compiler-failure-audit/frontend-syntax-owner-candidates.json); adopted paths are in [assignment](../../../evidence/compiler-failure-audit/frontend-syntax-owner-adoption.json). Preserve existing owner scope and unresolved policy boundaries. This is audit intake, not product completion.
+
+## Reproduced startup dependency omissions
+
+During [com-6p30](com-6p30.md), an earlier-declared global that reads a
+later global inside either a value block or a called function printed 0
+in JIT on both `f14e6539` and `39d67842`. The later initializer writes
+42 and is a prerequisite under the startup contract. Use the
+[block and call probes](../../../evidence/rejection-domains/diagnostic-domain-implementation/global-annotation-ownership/README.md)
+as ordering regressions for the selected-effect dependency graph.

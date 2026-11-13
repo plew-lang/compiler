@@ -31,8 +31,11 @@ impl Comp {
     }
 
     inout fn prepareGlobalInitializerUncached(target: U64) -> Result[(), CompileDiagnostic] {
-        try self.enterGlobalInitializer(target: target)
         val index: U64 = self.globalIndexForDeclarationTarget(target: target)
+        if index >= self.arena.globals.count() || self.sourceTypeUses.globalScope(target: target) == 0U64 {
+            return <Result.Err error=self.diagnosticAt(offset: target, msg: "global initializer has no registered declaration scope", failureDomain: <FailureDomain.Internal />) />
+        }
+        try self.enterGlobalInitializer(target: target)
         val stmt: U64 = self.arena.globals[index].letStmt
         self.cur.recordCallTemplates = true
         try self.recordStmt(stmtId: stmt)

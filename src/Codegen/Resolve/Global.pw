@@ -142,7 +142,7 @@ pub impl Comp {
         match self.arena.stmts[self.arena.globals[globalIndex].letStmt] {
             Stmt.Let(mutable: _, nameStart: _, nameLen: _, val tyStart, val tyLen, val tyIsArray, val ty, val init, val annotationOccurrence) => {
                 val inferred = if ty != 0U64 || annotationOccurrence.isSome() {
-                    val admitted = try self.requireGlobalAnnotation(target: local.nameStart, id: annotationOccurrence.unwrapOr(fallback: 0U64), written: ty)
+                    val admitted = try self.requireGlobalAnnotation(target: local.nameStart, id: annotationOccurrence, written: ty)
                     val info = self.typeInfoOfRef(ref: admitted.sourceTerm)
                     give <LetEff start=info.nameStart len=info.nameLen arr=info.kind == 3 ty=admitted.sourceTerm />
                 } else {
