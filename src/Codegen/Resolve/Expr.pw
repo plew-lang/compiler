@@ -206,13 +206,17 @@ pub impl Comp {
         return <Result.Ok value=[] />
     }
 
-    inout fn resolveWrittenMethod(exprId: U64, recv: U64, nameStart: U64, nameLen: U64, args: ArgRange) -> Result[U64, CompileDiagnostic] {
+    inout fn resolveWrittenMethod(exprId: U64, recv: U64, nameStart: U64, nameLen: U64, args: ArgRange, admittedReceiver: U64 = 0U64) -> Result[U64, CompileDiagnostic] {
         val synthetic = self.syntheticCallSiteIndex(exprId: exprId)
         if synthetic < self.decls.syntheticCallSites.count() {
             match self.decls.syntheticCallSites[synthetic].selectedDeclaration {
                 Optional.Some(v: val declaration) => { return <Result.Ok value=declaration /> }
                 Optional.None => {}
             }
+        }
+        if admittedReceiver != 0U64 {
+            val qualifier = self.assocRecvName(recv: recv)
+            return self.findAssoc(recvStart: qualifier.nameStart, recvLen: qualifier.nameLen, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: admittedReceiver)
         }
         val requiredTraitOwner = self.syntheticRequiredTraitOwner(exprId: exprId)
         val method = try self.resolveMethodFinalForType(recv: recv, receiverType: (try self.typeOf(id: recv)), nameStart: nameStart, nameLen: nameLen, args: args, requiredTraitOwner: requiredTraitOwner)

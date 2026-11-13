@@ -1863,7 +1863,8 @@ pub impl Comp {
         // written the exact term.  This keeps type recovery a compatibility
         // boundary rather than the universal source of semantic truth.
         try self.prepareInterpolationWrite(exprId: exprId)
-        try self.prepareFactoryConstruction(exprId: exprId, chainHoleRef: chainHoleRef)
+        val admittedFactoryReceiver = if self.authoredExpressionTypeSlots.contains(key: exprId) { give construction } else { give 0U64 }
+        try self.prepareFactoryConstruction(exprId: exprId, chainHoleRef: chainHoleRef, admittedReceiver: admittedFactoryReceiver)
         val hasPreparedCastOperand = match self.arena.exprs[exprId] {
             Expr.Cast(val operand, val tyStart, val tyLen, ty: _) => { give try self.prepareCastFactory(exprId: exprId, operand: operand, target: castTarget, typeStart: tyStart, typeLen: tyLen, chainHoleRef: chainHoleRef) }
             _ => false
@@ -1952,14 +1953,13 @@ pub impl Comp {
                     try self.recordExpr(exprId: self.argAt(args: args, index: i).expr, chainHoleRef: chainHoleRef, deferContext: true)
                     i += 1
                 }
-                val receiverTerm = if construction != 0U64 { give construction } else { give self.syntheticCallReceiverTerm(exprId: exprId, fallback: (try self.methodReceiverTerm(exprId: recv))) }
+                val receiverTerm = if admittedFactoryReceiver != 0U64 { give admittedFactoryReceiver } else { give self.syntheticCallReceiverTerm(exprId: exprId, fallback: (try self.methodReceiverTerm(exprId: recv))) }
                 val requiredTraitOwner = self.syntheticRequiredTraitOwner(exprId: exprId)
                 // The construction query preserves the synthetic requirement on its
                 // selected cache entry.
                 // Only unresolved receivers need the parametric Record query.
-                mut val methodCallee = if construction != 0U64 {
-                    val qualifier = self.assocRecvName(recv: recv)
-                    give try self.findAssoc(recvStart: qualifier.nameStart, recvLen: qualifier.nameLen, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: construction)
+                mut val methodCallee = if admittedFactoryReceiver != 0U64 {
+                    give try self.resolveWrittenMethod(exprId: exprId, recv: recv, nameStart: nameStart, nameLen: nameLen, args: args, admittedReceiver: admittedFactoryReceiver)
                 } else { give try self.resolvedCallee(id: exprId) }
                 if requiredTraitOwner != 0U64 && methodCallee >= self.arena.functionCount() {
                     methodCallee = (try self.resolveMethodFinalForType(recv: recv, receiverType: self.typeInfoOfRef(ref: receiverTerm), nameStart: nameStart, nameLen: nameLen, args: args, requiredTraitOwner: requiredTraitOwner))

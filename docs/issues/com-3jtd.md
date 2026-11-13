@@ -380,3 +380,15 @@ extension-backed argument and a generic argument with an open projected
 type pass check, JIT and native, both printing 42. The wrong instance
 rejects at admission in check and JIT. The existing concrete factory,
 contextual construction and optional-chain controls retain their output.
+
+The first candidate failed to self-compile at the anonymous `<Comp />`
+factory. A Make-to-Method rewrite can already carry the selected
+declaration even when there are no authored argument slots. Record now
+uses the slot handoff only when present and reads the synthetic
+declaration before further lookup. Anonymous matching receives the
+admitted type when present, while the synthetic call keeps the written
+type for occurrence validation. Build `20261113T125316-build-42c838`
+produced `83b5baf2956f`. Named extension-backed and projected arguments
+and an anonymous factory with the same extension-backed argument all
+pass check, JIT and native with output 42. The named wrong-instance
+contrast preserves its exact admission error in check and JIT.

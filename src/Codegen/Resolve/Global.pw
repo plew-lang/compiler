@@ -622,7 +622,7 @@ pub impl Comp {
 
     // Run under Record's lexical scope. The selected declaration is carried
     // by the synthetic call, so later passes never redo factory selection.
-    inout fn prepareFactoryConstruction(exprId: U64, chainHoleRef: U64) -> Result[(), CompileDiagnostic] {
+    inout fn prepareFactoryConstruction(exprId: U64, chainHoleRef: U64, admittedReceiver: U64) -> Result[(), CompileDiagnostic] {
         val useOffset = self.exprOffset(id: exprId)
         match self.arena.exprs[exprId] {
             Expr.Make(val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, val ty, val fields) => {
@@ -631,7 +631,8 @@ pub impl Comp {
                 // its structural field/context checking through the normal path.
                 if typeLen == 0U64 && ty == 0U64 { return <Result.Ok value=() /> }
                 val candidates = try self.anonymousConstructionCandidates(typeStart: typeStart, typeLen: typeLen)
-                val receiver = try self.factoryConstructionReceiver(writtenTerm: ty, typeStart: typeStart, typeLen: typeLen, offset: self.exprOffset(id: exprId))
+                val written = try self.factoryConstructionReceiver(writtenTerm: ty, typeStart: typeStart, typeLen: typeLen, offset: useOffset)
+                val receiver = if admittedReceiver != 0U64 { give admittedReceiver } else { give written }
                 val abstractReceiver = receiver != 0U64 && receiver < self.arena.typeCount() && (self.arena.typeTermAt(index: receiver).paramId != 0U64 || self.arena.typeTermAt(index: receiver).assocNameId != 0U64)
                 if isEnum && !abstractReceiver { return <Result.Ok value=() /> }
                 if candidates.count() == 0U64 && !abstractReceiver {
@@ -674,7 +675,7 @@ pub impl Comp {
                     self.arena.exprs[exprId] = <Expr.Method recv=recv nameStart=callStart nameLen=callLen args=args />
                     val origin = self.nextExprOriginSerial
                     self.nextExprOriginSerial += 1U64
-                    try self.recordSyntheticCallSite(site: <SyntheticCallSite exprId=exprId kind=<SyntheticCallKind.Factory /> originSerial=origin receiverTerm=receiver receiverIsType=true />)
+                    try self.recordSyntheticCallSite(site: <SyntheticCallSite exprId=exprId kind=<SyntheticCallKind.Factory /> originSerial=origin receiverTerm=written receiverIsType=true />)
                     return <Result.Ok value=() />
                 }
                 val memberwise = (try self.memberwiseConstructionMatches(receiver: receiver, fields: fields, offset: useOffset))
@@ -727,7 +728,7 @@ pub impl Comp {
                     self.arena.exprs[exprId] = <Expr.Method recv=recv nameStart=callStart nameLen=callLen args=args />
                     val origin = self.nextExprOriginSerial
                     self.nextExprOriginSerial += 1U64
-                    try self.recordSyntheticCallSite(site: <SyntheticCallSite exprId=exprId kind=<SyntheticCallKind.Factory /> originSerial=origin receiverTerm=receiver receiverIsType=true selectedDeclaration=<Optional.Some v=selected /> />)
+                    try self.recordSyntheticCallSite(site: <SyntheticCallSite exprId=exprId kind=<SyntheticCallKind.Factory /> originSerial=origin receiverTerm=written receiverIsType=true selectedDeclaration=<Optional.Some v=selected /> />)
                 } else {
                     self.arena.resolvedMemberwiseFactories.insert(exprId)
                     self.normalizeMemberwiseDefaultsAt(exprId: exprId)
