@@ -1119,6 +1119,11 @@ pub impl Comp {
         if fnIdx >= self.arena.functionCount() { return <Result.Ok value=0U64 />}
         // A call contract exists even when its implementation has no Plew
         // body. Admit the grounded signature before deciding body demand.
+        val environment = try self.prepareSelectedCallableEnvironment(fnIdx: fnIdx, args: args, recvInstRef: recvInstRef, selectedProof: selectedProof, constraints: constraints)
+        return self.enqueuePreparedFinalBody(fnIdx: fnIdx, args: args, recvInstRef: recvInstRef, environment: environment)
+    }
+
+    inout fn prepareSelectedCallableEnvironment(fnIdx: U64, args: Array[U64], recvInstRef: U64, selectedProof: StaticConformanceProof, constraints: CallableConstraintEvidence) -> Result[InstanceEnvironment, CompileDiagnostic] {
         val receiverScope = self.dependentInherentReceiverScope(function: fnIdx)
         val substitution: InstanceEnvironment = (try self.bodyInstanceEnvironment(fnIdx: fnIdx, args: args, recvInstRef: recvInstRef, selectedProof: selectedProof, pendingInherentReceiver: receiverScope != 0U64))
         val environment = try self.environmentWithCallableConstraints(fnIdx: fnIdx, environment: substitution, evidence: constraints)
@@ -1128,7 +1133,7 @@ pub impl Comp {
                 return <Result.Err error=self.diagnosticAt(offset: self.arena.functionAt(index: fnIdx).nameStart, msg: "internal error: body receiver does not match its selected declaration") />
             }
         }
-        return self.enqueuePreparedFinalBody(fnIdx: fnIdx, args: args, recvInstRef: recvInstRef, environment: environment)
+        return <Result.Ok value=environment />
     }
 
     // The selected conformance edge owns provided-body binders. Match its

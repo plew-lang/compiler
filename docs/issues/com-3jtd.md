@@ -1078,3 +1078,34 @@ publishes the concrete parameter types against their lexical source terms.
 Build `20261113T180231-build-48b3fa` produced `d1aa0304` and passed. The
 new `inherent_receiver_projection_associated` control passed check, JIT and
 linked native. Seven nearby acceptance controls passed check and JIT.
+
+### Independent completion review
+
+Keep open. The review of `a5daadf2` found three reproducible receiver
+failures:
+
+- Same-impl `self.code()` passed JIT but failed check and native, because
+  obligation discovery validated the receiver before attaching the selected
+  constraints. The obligation worklist and executable finalization now
+  share the same callable-environment preparation. The regression
+  `inherent_receiver_projection_self_call` passes all three modes in build
+  `20261113T181133-build-78beb1`, candidate `2328d912`.
+- An impl binder appearing only in a method argument is still required
+  during receiver matching. The same call succeeds without the projection.
+- A bare method inherited by a newtype passes check but fails JIT/native:
+  candidate matching uses the physical receiver but body replay compares
+  the projected receiver to the nominal wrapper. The physical body path
+  also validates before transferring the selected constraint evidence.
+
+Additional source controls found generic extension-type and associated
+binding RHS rejection where the corresponding extension value or plain
+type works, and dependent `via` rejection where the nonprojected target
+works. The RHS check runs before the dependent receiver is published.
+Candidate lookup and selected-call reuse also require the same raw
+receiver ID. Equivalent terms can miss and trigger proof lookup again;
+the extension entry discards its proof after answering applicability.
+A generic proof with both a rigid positional argument and an explicit
+associated equality still fails selection. Removing the concrete-only
+guard in declaration replay alone did not resolve it and was discarded.
+Keep these as distinct failure controls for the next increment. The
+review found no foreign evidence accepted in the exercised closure cases.

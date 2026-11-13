@@ -620,8 +620,7 @@ pub impl Comp {
         val owner = try self.semanticBodyOwner(fnIdx: function)
         if owner >= relevant.count() || !relevant[owner] { return <Result.Ok value=<DeclarationObligationState.Complete /> /> }
         if (try self.callConstraintSubstitutionState(function: function, arguments: arguments, receiver: receiver)).isDeferred() { return <Result.Ok value=<DeclarationObligationState.Deferred /> /> }
-        val substitution = try self.bodyInstanceEnvironment(fnIdx: function, args: arguments, recvInstRef: receiver, selectedProof: proof)
-        val environment = try self.environmentWithCallableConstraints(fnIdx: function, environment: substitution, evidence: constraints)
+        val environment = try self.prepareSelectedCallableEnvironment(fnIdx: function, args: arguments, recvInstRef: receiver, selectedProof: proof, constraints: constraints)
         return self.appendPreparedCallConstraintInstance(function: function, arguments: arguments, receiver: receiver, environment: environment, depth: depth, requests: inout requests, heads: inout heads, relevant: relevant)
     }
 
