@@ -891,3 +891,26 @@ JIT. Generation `20261113T161501-gen-690fd9` passed.
 The same dependent receiver on a direct inherent call and conservative
 overlap checks for still-open subject arguments need separate
 verification before closing this task.
+
+### Check overlap of dependent nominal conformance receivers
+
+An empty trait isolates the conformance registration check from callable
+overload admission. The previous candidate accepted a generic receiver
+`Box[T, T#Source.Item]` alongside `Box[Number, I64]`, even though
+`Number#Source.Item` is I64. Post-admission overlap now uses the bounded
+structural relation when a nominal subject still contains a projection.
+An unresolved projection cannot establish disjointness. Other structural
+positions and the target arguments can still prove disjointness.
+
+Fixed-input build `20261113T161814-build-282cf7` produced `af730bf1bab9`.
+The empty-trait duplicate rejects in check and JIT. The disjoint
+Optional/Array receiver pair passes check, JIT and linked native;
+both calls exercise the actual conformance. Existing open and forward
+receiver controls also pass JIT. Generation `20261113T162134-gen-c425f8`
+passed.
+
+The positive direct inherent probe `Box[T, T#Source.Item].value()`
+still rejects during method lookup. Its next increment must use the
+impl scope's saved receiver recipe and the same callable constraint
+evidence later consumed by the selected body, rather than manufacture
+a conformance for the inherent impl.

@@ -1,0 +1,8 @@
+trait Source { type Item }
+trait Answer {}
+struct Number {}
+impl Number as Source { type Item = I64 }
+struct Box[Key, Item] {}
+impl[T] Box[T, T#Source.Item] as Answer where T: Source {}
+impl Box[Number, I64] as Answer {}
+fn main() {}

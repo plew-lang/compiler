@@ -1316,23 +1316,48 @@ pub impl Comp {
     }
 
     inout fn checkAdmittedConformanceOverlap(changedSubjects: Set[U64]) -> Result[(), CompileDiagnostic] {
-        if changedSubjects.count() == 0U64 && self.authoredConformanceTargets.count() == 0U64 && self.admittedConformanceSubjects.count() == 0U64 { return <Result.Ok value=() /> }
+        if changedSubjects.count() == 0U64 && self.nominalConformanceReceiverScopes.count() == 0U64 && self.authoredConformanceTargets.count() == 0U64 && self.admittedConformanceSubjects.count() == 0U64 { return <Result.Ok value=() /> }
         for index in 0U64..<self.decls.conformCount() {
-            if !changedSubjects.contains(index) && !self.authoredConformanceTargets.contains(key: index) && !self.admittedConformanceSubjects.contains(key: index) { continue }
+            if !changedSubjects.contains(index) && !self.nominalConformanceReceiverScopes.contains(key: index) && !self.authoredConformanceTargets.contains(key: index) && !self.admittedConformanceSubjects.contains(key: index) { continue }
             val declaration = self.decls.conformAt(index: index)
             val arguments = <PatternTypeInput.Values values=self.conformanceDeclarationTargetArguments(index: index, declaration: declaration) />
             for otherIndex in 0U64..<self.decls.conformCount() {
-                if otherIndex == index || (otherIndex < index && (changedSubjects.contains(otherIndex) || self.authoredConformanceTargets.contains(key: otherIndex) || self.admittedConformanceSubjects.contains(key: otherIndex))) { continue }
+                if otherIndex == index || (otherIndex < index && (changedSubjects.contains(otherIndex) || self.nominalConformanceReceiverScopes.contains(key: otherIndex) || self.authoredConformanceTargets.contains(key: otherIndex) || self.admittedConformanceSubjects.contains(key: otherIndex))) { continue }
                 val other = self.decls.conformAt(index: otherIndex)
                 if !self.sameConformanceNamespace(left: declaration, right: other) { continue }
                 val comparison = <PatternTypeInput.Values values=self.conformanceDeclarationTargetArguments(index: otherIndex, declaration: other) />
-                if self.conformancePatternsMayOverlap(a: declaration, b: other, leftArguments: arguments, rightArguments: comparison, leftSubject: self.conformanceDeclarationSubjectTerms(index: index, written: declaration.subjectArgs), rightSubject: self.conformanceDeclarationSubjectTerms(index: otherIndex, written: other.subjectArgs)) {
-                    val offset = if index < otherIndex { give other.defOffset } else { give declaration.defOffset }
+                val offset = if index < otherIndex { give other.defOffset } else { give declaration.defOffset }
+                val dependentReceiver = (self.nominalConformanceReceiverScopes.contains(key: index) && self.arena.typeContainsAssociatedProjection(ref: declaration.subjectTy)) || (self.nominalConformanceReceiverScopes.contains(key: otherIndex) && self.arena.typeContainsAssociatedProjection(ref: other.subjectTy))
+                if dependentReceiver {
+                    if try self.dependentConformanceSubjectsMayOverlap(left: declaration.subjectTy, right: other.subjectTy, arguments: arguments, comparison: comparison, offset: offset) {
+                        return <Result.Err error=self.overlappingConformanceDiagnostic(offset: offset) />
+                    }
+                } else if self.conformancePatternsMayOverlap(a: declaration, b: other, leftArguments: arguments, rightArguments: comparison, leftSubject: self.conformanceDeclarationSubjectTerms(index: index, written: declaration.subjectArgs), rightSubject: self.conformanceDeclarationSubjectTerms(index: otherIndex, written: other.subjectArgs)) {
                     return <Result.Err error=self.overlappingConformanceDiagnostic(offset: offset) />
                 }
             }
         }
         return <Result.Ok value=() />
+    }
+
+    // An undecided projection gives no proof of disjointness. The
+    // structural relation can still prove a mismatch in another position.
+    inout fn dependentConformanceSubjectsMayOverlap(left: U64, right: U64, arguments: PatternTypeInput, comparison: PatternTypeInput, offset: U64) -> Result[Bool, CompileDiagnostic] {
+        if arguments.count() != comparison.count() { return <Result.Ok value=false /> }
+        mut val bindings: Array[StructuralBinding] = []
+        match self.structuralOverlap(a: self.typeRefWithoutOuterViews(ref: left), b: self.typeRefWithoutOuterViews(ref: right), bindings: inout bindings, depth: 0U64) {
+            StructuralOverlap.Disjoint => { return <Result.Ok value=false /> }
+            StructuralOverlap.AnalysisLimit => { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "conformance overlap analysis limit exceeded", failureDomain: <FailureDomain.Limit />) /> }
+            StructuralOverlap.Possible | StructuralOverlap.Unproved => {}
+        }
+        for index in 0U64..<arguments.count() {
+            match self.structuralOverlap(a: arguments.at(index: index, declarations: self.decls), b: comparison.at(index: index, declarations: self.decls), bindings: inout bindings, depth: 0U64) {
+                StructuralOverlap.Disjoint => { return <Result.Ok value=false /> }
+                StructuralOverlap.AnalysisLimit => { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "conformance overlap analysis limit exceeded", failureDomain: <FailureDomain.Limit />) /> }
+                StructuralOverlap.Possible | StructuralOverlap.Unproved => {}
+            }
+        }
+        return <Result.Ok value=true />
     }
 
     inout fn overlappingConformanceDiagnostic(offset: U64) -> CompileDiagnostic {

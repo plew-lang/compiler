@@ -1,0 +1,10 @@
+use @Std/Io only { print }
+trait Source { type Item }
+trait Answer {}
+struct Number {}
+impl Number as Source { type Item = I64 }
+struct Box[Key, Item] {}
+impl[T] Box[Optional[T], T#Source.Item] as Answer where T: Source {}
+impl Box[Array[Number], I64] as Answer {}
+fn check[T](value: T) -> I64 where T: Answer { return 42I64 }
+fn main() { print(check(value: <Box[Optional[Number], I64] />)) print(check(value: <Box[Array[Number], I64] />)) }
