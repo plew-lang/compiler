@@ -1,6 +1,6 @@
 ---
 id: com-yjq0
-status: open
+status: in_progress
 deps: []
 links: []
 created: 2026-11-09T08:54:16Z
@@ -30,3 +30,38 @@ An unused enclosing signature is not permission to eagerly check its body. Do no
 Follow the parent [contract and closure rules](com-amjl.md#contract-and-closure) and task-start TDD. Confirm the actual old-candidate RED for new behavior, preserve valid controls, then build a fresh candidate and test the real source-to-final-consumer path. Pure refactors use existing GREEN. Record exact inputs/carrier, diagnostic origin, meaningful assertions, applicable modes, removed competing authorities and independent neutral review. Do not close from a table/check/helper-only result. Existing unsupported surfaces must retain their actual diagnostic and be recorded, not silently counted as acceptance.
 
 No new specification or general solver/SCC/unique/opening feature, API-wide authority extraction, main/seed promotion or whole-suite/ASan certification is included. Shared API names alone do not create whole-task prerequisites. Whole-program fixed-point/performance/full-suite gates remain with met-si6j; parent closure still requires the complete original guarantee map.
+
+## First reproduction and work boundary
+
+Candidate `plewc-com-ab7u-final` (`381d515a`, product `428ce8ca`)
+rejects the following before starting `main` in both `--check` and
+`--run`:
+
+```plew
+use @Std/Io only { print }
+trait Marker {}
+fn unused() {
+    val number = 42I64
+    val value: I64#Marker = number
+}
+fn main() {
+    print("main")
+}
+```
+
+Replacing the annotation with `val value = number#Marker` preserves the
+whole-target rejection and allows lazy `main` to print `main`. The
+annotation failure comes from `verifyProgram(includeBodies: false)`
+calling `checkTypeViewSources`, which scans every interned TypeRef.
+Lowering records an authored type use under a body role but both local
+statement adapters keep only its TypeRef in the statement. Interned
+type identity cannot distinguish a declaration from an unrequested
+local or closure occurrence.
+
+Start with a paired local annotation fixture for declaration-only,
+whole-target and requested-body checking. Trace which remaining
+consumers require the exact local annotation and remove their
+dependence on the global scan as that authority moves to lexical body
+preparation. Then trace the closure, provided/deinit and concrete
+consumers against the same owner contract. Keep type-view source
+formation distinct from discovering or publishing executable bodies.
