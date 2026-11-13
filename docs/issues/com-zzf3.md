@@ -555,3 +555,13 @@ for still-lexical parts of a mixed RHS as well as already-instantiated
 children. The independent follow-up review also identified a possible
 same-shaped foreign condition premise, which needs an executable
 contrast at the boundary that owns the caller scope.
+
+Removing the final substitution in a standalone candidate
+(`8577a806`, build `20261113T012104-build-751466`) passed
+`inherited_associated_symbolic_signature` in all three modes but failed
+the check of `inherited_associated_interface_where`. The experimental
+change was discarded. The RHS reader must apply the requirement mapping
+only to terms still owned by that declaration, before composing them with
+outputs already derived in the caller's environment. Use both the
+non-idempotent probe and the existing interface fixture as acceptance
+controls for the repair.
