@@ -2992,6 +2992,17 @@ impl Comp {
             }
         }
         try self.recordCallTemplate(exprId: exprId, callee: callee, receiver: receiver, args: args, calleeTypeArgs: calleeTypeArgs, proof: selectedProof, receiverTypeTerm: receiverTypeTerm)
+        if callee < self.arena.functionCount() && resultTerm != 0U64 && self.arena.typeViewSourceCount(ref: resultTerm) != 0U64 {
+            val declaration = self.arena.functionAt(index: callee)
+            val source = if declaration.lexicalOwnerFnId == 0U64 { give callee } else { give declaration.lexicalOwnerFnId - 1U64 }
+            match self.sourceTypeUses.signatureFor(function: source) {
+                Optional.Some(v: val signature) => {
+                    val proofs = self.authoredExtensionViews.getOr(key: signature.result, fallback: [])
+                    self.recordExpressionExtensionSources(exprId: exprId, proofs: proofs)
+                }
+                Optional.None => {}
+            }
+        }
         return <Result.Ok value=() />
     }
 }

@@ -1398,3 +1398,21 @@ also reject in JIT, and the fourth is inside an uncalled body that
 both the precursor and candidate defer. The two preceding baseline
 failures reproduced. The parameter, local binding, and returned-value
 member lookup paths still need to consume the relevant type evidence.
+
+### Carry authored receiver evidence into method candidate collection
+
+The lexical binding carries its annotation occurrence. Record can therefore
+attach the saved evidence to a reference to the selected parameter or local
+without guessing from the receiver type. The selected callable's authored
+result occurrence supplies the same handoff for an immediate call result.
+The candidate collector reads the same expression evidence used for composed
+views and considers only extensions present in the receiver's source set.
+
+Build `20261113T211023-build-81c299` kept immutable inputs unchanged and
+produced `14c0222a`. The same 80 extension/newtype run fixtures passed check
+and JIT and the two tracked baseline failures reproduced. Three fixtures
+matched linked native output. The additional immediate result probe
+`asView(p: p).greet()` selected the extension and printed 5 in JIT.
+Derived types whose evidence comes through other producers (including an
+inferred binding, a projected field or result, and generic substitution)
+still need provenance tracing before removing the compatibility lookup.

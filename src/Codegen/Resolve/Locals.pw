@@ -2,12 +2,12 @@
 // method / construct visibility checks.
 
 pub impl Comp {
-    inout fn addLocal(nameStart: U64, nameLen: U64, tyStart: U64, tyLen: U64, isArray: Bool, ty: U64, isInout: Bool, isMut: Bool, owned: Bool) {
-        self.addLocalCn(nameStart: nameStart, nameLen: nameLen, tyStart: tyStart, tyLen: tyLen, isArray: isArray, ty: ty, isInout: isInout, isMut: isMut, owned: owned, cnum: 0)
+    inout fn addLocal(nameStart: U64, nameLen: U64, tyStart: U64, tyLen: U64, isArray: Bool, ty: U64, isInout: Bool, isMut: Bool, owned: Bool, authoredTypeUse: U64 = 0U64) {
+        self.addLocalCn(nameStart: nameStart, nameLen: nameLen, tyStart: tyStart, tyLen: tyLen, isArray: isArray, ty: ty, isInout: isInout, isMut: isMut, owned: owned, cnum: 0, authoredTypeUse: authoredTypeUse)
     }
 
-    inout fn addLocalCn(nameStart: U64, nameLen: U64, tyStart: U64, tyLen: U64, isArray: Bool, ty: U64, isInout: Bool, isMut: Bool, owned: Bool, cnum: U64, isGlobal: Bool = false) {
-        self.cur.locals.append(<Local isGlobal=isGlobal nameStart=nameStart nameLen=nameLen nameId=intern(c: inout self, start: nameStart, len: nameLen) tyStart=tyStart tyLen=tyLen tyNameId=intern(c: inout self, start: tyStart, len: tyLen) isArray=isArray ty=ty isInout=isInout isMut=isMut owned=owned moved=false cnum=cnum />)
+    inout fn addLocalCn(nameStart: U64, nameLen: U64, tyStart: U64, tyLen: U64, isArray: Bool, ty: U64, isInout: Bool, isMut: Bool, owned: Bool, cnum: U64, isGlobal: Bool = false, authoredTypeUse: U64 = 0U64) {
+        self.cur.locals.append(<Local isGlobal=isGlobal nameStart=nameStart nameLen=nameLen nameId=intern(c: inout self, start: nameStart, len: nameLen) tyStart=tyStart tyLen=tyLen tyNameId=intern(c: inout self, start: tyStart, len: tyLen) isArray=isArray ty=ty authoredTypeUse=authoredTypeUse isInout=isInout isMut=isMut owned=owned moved=false cnum=cnum />)
     }
 
     // A let binding owns one semantic TypeTerm.  For an annotation that is the

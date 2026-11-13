@@ -2886,7 +2886,7 @@ struct SourceBodyData {
     mut val expressionTypeSlotProofs: Dictionary[U64, Array[LocalAnnotationProof]] = [:]
     mut val traitValueViews: Dictionary[U64, SourceValueViewProof] = [:]
     mut val extensionValueViews: Dictionary[U64, SourceExtensionViewProof] = [:]
-    mut val composedExtensionViews: Dictionary[U64, Array[SourceExtensionViewProof]] = [:]
+    mut val expressionExtensionViews: Dictionary[U64, Array[SourceExtensionViewProof]] = [:]
     mut val globalAddresses: Dictionary[U64, SemanticGlobalAddress] = [:]
     mut val bindings: Array[SourceBindingFact] = []
     mut val bindingKeys: Dictionary[U64, U64] = [:]

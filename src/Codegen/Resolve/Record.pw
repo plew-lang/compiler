@@ -194,10 +194,25 @@ impl Comp {
         return <Result.Ok value=<Optional.Some v=saved /> />
     }
 
+    inout fn recordExpressionExtensionSources(exprId: U64, proofs: Array[SourceExtensionViewProof]) {
+        if proofs.count() == 0U64 { return }
+        if self.currentSourceOwner().isNone() { return }
+        self.sourceFacts.activate(owner: self.currentSourceOwner().unwrap())
+        self.sourceFacts.activeBuilder.data.expressionExtensionViews[exprId] = proofs
+    }
+
     fn recordedExtensionSources(exprId: U64) -> Array[SourceExtensionViewProof] {
         val owner = self.currentSourceOwner()
         if owner.isNone() || !self.sourceFacts.isActive(owner: owner.unwrap()) { return [] }
-        return self.sourceFacts.activeBuilder.data.composedExtensionViews.getOr(key: exprId, fallback: [])
+        match self.sourceFacts.activeBuilder.data.expressionExtensionViews.get(key: exprId) {
+            Optional.Some(v: val proofs) => { return proofs }
+            Optional.None => {}
+        }
+        match self.sourceFacts.activeBuilder.data.extensionValueViews.get(key: exprId) {
+            Optional.Some(v: val proof) => { return [proof] }
+            Optional.None => {}
+        }
+        return []
     }
 
     // Completeness is independent of concrete closedness: a lexical parameter
@@ -1943,6 +1958,10 @@ pub impl Comp {
                     val local: Local = (try self.typedLocal(index: localIdx))
                     if local.ty != 0U64 {
                         self.recordSemanticExprTerm(exprId: exprId, term: local.ty)
+                        if local.authoredTypeUse != 0U64 && self.arena.typeViewSourceCount(ref: local.ty) != 0U64 {
+                            val proofs = self.authoredExtensionViews.getOr(key: local.authoredTypeUse, fallback: [])
+                            self.recordExpressionExtensionSources(exprId: exprId, proofs: proofs)
+                        }
                     }
                 }
             }
@@ -2177,7 +2196,7 @@ pub impl Comp {
                             val owner = self.currentSourceOwner().unwrap()
                             val assumptions = try self.lexicalViewAssumptions(owner: self.lexicalSourceFactOwner(owner: owner))
                             val proofs = try self.admitTypeExtensionSources(subject: receiverTerm, sources: sources, assumptions: assumptions, normalizations: [], selectedProjection: <Optional.None />, offset: source.writtenStart)
-                            self.sourceFacts.activeBuilder.data.composedExtensionViews[exprId] = proofs
+                            self.recordExpressionExtensionSources(exprId: exprId, proofs: proofs)
                         }
                     }
                     self.recordSemanticExprTerm(exprId: exprId, term: self.typeRefWithViewSources(ref: receiverTerm, sources: sources))
@@ -2714,7 +2733,7 @@ pub impl Comp {
                     }
                 }
                 if annotation.isSome() {
-                    self.addLocal(nameStart: nameStart, nameLen: nameLen, tyStart: tyStart, tyLen: tyLen, isArray: tyIsArray, ty: expected, isInout: false, isMut: mutable, owned: true)
+                    self.addLocal(nameStart: nameStart, nameLen: nameLen, tyStart: tyStart, tyLen: tyLen, isArray: tyIsArray, ty: expected, isInout: false, isMut: mutable, owned: true, authoredTypeUse: annotation.unwrap().occurrence)
                 } else {
                     try self.addLetLocal(nameStart: nameStart, nameLen: nameLen, tyStart: tyStart, tyLen: tyLen, tyIsArray: tyIsArray, ty: ty, init: init, mutable: mutable, owned: true)
                 }
@@ -2952,7 +2971,7 @@ pub impl Comp {
                     Optional.None => self.groundTermInEnvironment(ref: p.ty, params: [], values: [], selfRef: self.cur.selfRef),
                 }
                 if recordCallTemplates { parameters.append(<SourceBodyParameter declarationTarget=p.nameStart typeTerm=parameterTerm isInout=p.isInout isMove=p.isMove isBorrow=p.isBorrow />) }
-                self.addLocal(nameStart: p.nameStart, nameLen: p.nameLen, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray, ty: parameterTerm, isInout: p.isInout, isMut: false, owned: false)
+                self.addLocal(nameStart: p.nameStart, nameLen: p.nameLen, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray, ty: parameterTerm, isInout: p.isInout, isMut: false, owned: false, authoredTypeUse: p.authoredTypeUse)
                 // After preparation the generator is the sole Record
                 // owner of this expression and of its lexical locals.
                 if p.hasDefault && self.decls.defaultGeneratorRanges.count() == 0U64 {

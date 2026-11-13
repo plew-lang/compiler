@@ -459,6 +459,7 @@ pub struct Local {
     // structured type (Comp.arena.types index); carries generic type arguments that
     // the (tyStart,tyLen,isArray) head view cannot.
     pub val ty: U64
+    pub val authoredTypeUse: U64 = 0U64
     pub val isInout: Bool
     // assignable? `mut val` locals and `inout` params are; plain `val` locals,
     // function params, for-loop vars and match binds are immutable (spec: `val`
