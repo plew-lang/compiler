@@ -1435,3 +1435,20 @@ The change preserves behavior while removing the need to re-admit these
 saved extensions in Record's candidate lookup. Closure-crossing inferred
 bindings, generic-substituted fields and other derived terms still require
 an explicit evidence handoff before removing compatibility lookup.
+
+### Preserve extension evidence on captured bindings and additive views
+
+An identifier already carries the selected binding's declaration identity.
+Use the registered lexical ownership chain to read the initializer's
+evidence from that declaration's body, including a suspended parent builder.
+An additive value view carries the existing extension evidence alongside
+its own result. Strip still clears the receiver source set, and an unresolved
+composite chain waits for the combined admission.
+
+Build `20261113T212206-build-de091f` produced `42980da6`. The capture
+probe `tmp/com-3jtd/captured-extension/capture.pw` in meta checks a captured
+inferred binding, further view addition and a separate bare capture.
+Output `50/0` matched in precursor check/JIT and candidate check/JIT/native.
+Nine existing closure and extension controls matched in check and JIT.
+The probe exercises the supported single closure boundary. Generic result
+substitution and associated output provenance remain to be connected.

@@ -339,6 +339,23 @@ impl SourceFactDirectory {
         }
         return <Optional.None />
     }
+    fn inferredBindingExtensions(owner: SemanticCompletionOwner, declaration: U64) -> Optional[Array[SourceExtensionViewProof]] {
+        if self.isActive(owner: owner) {
+            return self.activeBuilder.data.inferredBindingExtensionViews.get(key: declaration)
+        }
+        match self.state(owner: owner) {
+            Optional.Some(v: val state) => {
+                match state {
+                    SourceBodyState.Building => { return self.inactiveBuilder(owner: owner).data.inferredBindingExtensionViews.get(key: declaration) }
+                    SourceBodyState.Succeeded(reader: val reader) => { return self.readers[reader].payload->inferredBindingExtensionViews.get(key: declaration) }
+                    _ => {}
+                }
+            }
+            Optional.None => {}
+        }
+        return <Optional.None />
+    }
+
     fn binding(owner: SemanticCompletionOwner, stmtId: U64) -> Optional[SourceBindingFact] {
         if self.isActive(owner: owner) { return readSourceRow(rows: self.activeBuilder.data.bindings, keys: self.activeBuilder.data.bindingKeys, key: stmtId) }
         match self.state(owner: owner) {

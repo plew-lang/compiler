@@ -215,6 +215,21 @@ impl Comp {
         return []
     }
 
+    fn lexicalBindingExtensionSources(declaration: U64) -> Array[SourceExtensionViewProof] {
+        // The caller already selected the binding, including any shadowing.
+        // Walk only its lexical owner chain to read the associated evidence.
+        mut val owner = self.currentSourceOwner()
+        while owner.isSome() {
+            val current = owner.unwrap()
+            match self.sourceFacts.inferredBindingExtensions(owner: current, declaration: declaration) {
+                Optional.Some(v: val proofs) => { return proofs }
+                Optional.None => {}
+            }
+            owner = self.sourceFacts.parent(owner: current)
+        }
+        return []
+    }
+
     // Completeness is independent of concrete closedness: a lexical parameter
     // or a justified projection is usable context, a bare generic head is not.
     // This only inspects the saved term's structure and declaration arity; it
@@ -1969,10 +1984,7 @@ pub impl Comp {
                             if local.authoredTypeUse != 0U64 {
                                 proofs = self.authoredExtensionViews.getOr(key: local.authoredTypeUse, fallback: [])
                             } else {
-                                val owner = self.currentSourceOwner()
-                                if owner.isSome() && self.sourceFacts.isActive(owner: owner.unwrap()) {
-                                    proofs = self.sourceFacts.activeBuilder.data.inferredBindingExtensionViews.getOr(key: local.nameStart, fallback: [])
-                                }
+                                proofs = self.lexicalBindingExtensionSources(declaration: local.nameStart)
                             }
                             self.recordExpressionExtensionSources(exprId: exprId, proofs: proofs)
                         }
@@ -2189,8 +2201,13 @@ pub impl Comp {
                         sources = []
                     } else {
                         val valueView = self.assocRecvName(recv: exprId).nameLen == 0U64
-                        if source.traitInstance.owner == 0U64 && !composedView && valueView {
-                            (try self.recordValueExtension(exprId: exprId, receiver: receiverTerm, source: source))
+                        if !composedView && !composes && valueView {
+                            mut val extensionProofs = self.recordedExtensionSources(exprId: recv)
+                            if source.traitInstance.owner == 0U64 {
+                                val added = try self.recordValueExtension(exprId: exprId, receiver: receiverTerm, source: source)
+                                if added.isSome() { extensionProofs.append(added.unwrap()) }
+                            }
+                            self.recordExpressionExtensionSources(exprId: exprId, proofs: extensionProofs)
                         }
                         val selectedSource = if source.traitInstance.owner != 0U64 {
                             give try self.recordTraitValueView(exprId: exprId, receiver: receiverTerm, source: source, authoredArguments: authored)
