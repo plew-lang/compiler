@@ -1811,7 +1811,7 @@ pub impl Comp {
             }
             _ => {}
         }
-        if authored.isSome() && self.assocRecvName(recv: exprId).nameLen == 0U64 {
+        if authored.isSome() {
             for id in authored.unwrap() { self.markAdmittedRecipeTypeUses(recipe: (try self.signatureOccurrence(id: id)).recipe) }
         }
         val castTarget = match self.arena.exprs[exprId] {
@@ -2110,7 +2110,11 @@ pub impl Comp {
                 // method-resolution query.  Preserve the receiver's exact
                 // TypeTerm and apply the resolved source set once, matching
                 // the canonical TypeRef representation used everywhere else.
-                val receiverTerm: U64 = self.parametricExprTerm(exprId: recv)
+                mut val receiverTerm = self.parametricExprTerm(exprId: recv)
+                val qualification = self.assocRecvName(recv: exprId).nameLen != 0U64
+                if receiverTerm == 0U64 && qualification && !strip && source.traitInstance.owner != 0U64 {
+                    receiverTerm = try self.concreteTypeQualifierTerm(exprId: recv)
+                }
                 if receiverTerm != 0U64 && receiverTerm < self.arena.typeCount() {
                     mut val sources: Array[ResolvedViewSource] = self.arena.typeViewSources(ref: receiverTerm)
                     if strip {
@@ -2119,7 +2123,7 @@ pub impl Comp {
                         if source.traitInstance.owner == 0U64 && self.assocRecvName(recv: exprId).nameLen == 0U64 {
                             try self.admitValueExtension(receiver: receiverTerm, source: source)
                         }
-                        val selectedSource = if source.traitInstance.owner != 0U64 && self.assocRecvName(recv: exprId).nameLen == 0U64 {
+                        val selectedSource = if source.traitInstance.owner != 0U64 {
                             give try self.recordTraitValueView(exprId: exprId, receiver: receiverTerm, source: source, authoredArguments: authored)
                         } else { give source }
                         mut val present: Bool = false

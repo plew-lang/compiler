@@ -645,3 +645,33 @@ compatibility sweep. The new receiver tests cover concrete normalization
 and do not establish replay for every open impl pattern or inherent impl
 receiver. Measure the accumulated changes with the same source before
 claiming performance neutrality.
+
+### Type-qualified trait selector admission
+
+On `0436298b3524`, a literal `Receiver#Make[I64].value()` and a
+projected `Receiver#Make[Number#Source[I64].Item].value()` both fail to
+produce a type fact. Record now builds the concrete type qualifier term
+and admits its complete trait selector through the existing view recipe.
+Mono replays the receipt without treating the qualifier as a runtime
+value requiring destruction.
+
+Build `20261113T144436-build-bc3db7` produced `84d88a9bc5e7`.
+Both accepted calls print 42 in JIT and the projected call prints 42
+in linked native execution. Missing conformance for either the nested
+projection or the outer complete trait instance rejects with the
+source diagnostic in check and JIT. The existing extension-associated
+control still fails on the prior candidate and belongs to
+[com-4k31](com-4k31.md#concrete-associated-extension-control).
+Two value/extension controls and fixed-input generation
+`20261113T144819-gen-9f3196` passed.
+
+The same-source diagnostic preceding this change compared candidates
+`0b42d25c39ee` and `0436298b3524` over four alternating pairs, excluding
+the first pair from the medians. Medians were 7.922 s and 7.568 s, all
+eight LLVM files were identical, and hashed inputs remained fixed.
+See the [raw comparison summary](../../../evidence/rejection-domains/diagnostic-domain-implementation/trait-receiver-admission/same-source.json).
+The diagnostic is not the formal fixed-point gate.
+
+Next confirm recipe ownership across the declaration and body
+compatibility callers, including stripped selectors and open
+type qualifiers. Keep final member selection tracked by com-4k31.
