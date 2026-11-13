@@ -1734,3 +1734,27 @@ Six adjacent run controls and three check rejection controls passed.
 Inventory the remaining legacy callers before deleting the compatibility
 query. Test callers with no receipt separately from those still passing
 only a selector spelling or invoking a legacy lookup before Record.
+
+### Use the declaring extension for lexical self
+
+The enclosing extension declaration establishes the implicit self view.
+Candidate collection now takes that extension directly and skips its
+duplicate in the retained receiver type. The explicit strip still ends
+inheritance. Neither operation asks whether the lexical extension applies
+to its own receiver again.
+
+Fixed-input build `20261113T231502-build-3f9efa` produced `4b7f11a6`.
+The focused `lexical-self.pw` input prints 42 for the extension and 7
+after stripping it in check-accepted JIT and native. Its legacy queries
+drop from two to zero and the existing `extension_super_chain` also
+drops from two to zero. Six accepted and three rejection controls passed.
+[Same-source comparison](../../../evidence/rejection-domains/diagnostic-domain-implementation/trait-receiver-admission/lexical-self-same-source.json):
+7.847 s versus 7.823 s, eight identical nonempty LLVM outputs.
+
+Remaining readers partition into authored type occurrence validation
+(`Verify/Decl.checkedTypeViewSource`), source-call candidate collection
+when a receiver receipt is absent, and early expression/callee lookup
+(`resolvedCallee`, `resolveExtMethodFinal`, `resolveMethodFinalForType`
+and its local-type recovery). Associated entry points also use the same
+collector but have no value receipt. `extension_type_view` still records
+one legacy query. Isolate that query before removing the shared fallback.

@@ -687,15 +687,15 @@ impl Comp {
                 _ => { go = false }
             }
         }
-        // During verification of an extension template, `self` has not yet
-        // been materialized as a view-bearing TypeRef (that happens again for
-        // each backend instance). Its source is nevertheless lexical and must
-        // join the same source set as an explicit `self#Ext`.
+        // The enclosing extension declaration establishes the implicit self
+        // view, even before the receiver has a view-bearing type term.
+        mut val lexicalExtension = 0U64
         if readReceiverSyntax && !stripped {
             match self.arena.exprs[cur] {
                 Expr.Ident(start: val selfStart, len: val selfLen) => {
                     if self.isSelfRef(start: selfStart, len: selfLen) && self.cur.extId != 0U64 {
-                        self.appendViewSource(sources: inout sources, source: (try self.resolveViewSourceKey(recvStart: recvStart, recvLen: recvLen, recvRef: recvRef, sourceId: self.cur.extId)))
+                        lexicalExtension = self.cur.extId
+                        self.appendViewSource(sources: inout sources, source: <CallableSourceHead kind=1U64 id=lexicalExtension owner=lexicalExtension />)
                     }
                 }
                 _ => {}
@@ -711,7 +711,8 @@ impl Comp {
                     if writtenIds[wi].sameHead(other: staticSources[si]) { written = true }
                     wi += 1U64
                 }
-                if !written {
+                val inheritedLexical = staticSources[si].traitInstance.owner == 0U64 && staticSources[si].surfaceId == lexicalExtension
+                if !written && !inheritedLexical {
                     self.appendViewSource(sources: inout sources, source: (try self.collectCallableViewSource(recvStart: recvStart, recvLen: recvLen, recvRef: recvRef, sourceId: staticSources[si].surfaceId, sourceOwner: staticSources[si].traitInstance.owner, extensionProofs: extensionProofs)))
                 }
                 si += 1U64
