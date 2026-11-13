@@ -160,7 +160,7 @@ pub impl Comp {
         val dlN: Bind = self.internTmpName(prefix: "$dictionary", n: self.arena.exprs.count())
         mut val stmts: Array[U64] = []
         val initMake: U64 = (try self.synthEmptyDict(ctxRef: ctxRef))
-        stmts.append(self.pushStmt(s: <Stmt.Let mutable=true nameStart=dlN.nameStart nameLen=dlN.nameLen tyStart=ct.nameStart tyLen=ct.nameLen tyIsArray=false ty=ctxRef init=initMake />))
+        stmts.append(self.pushStmt(s: <Stmt.Let mutable=true nameStart=dlN.nameStart nameLen=dlN.nameLen tyStart=ct.nameStart tyLen=ct.nameLen tyIsArray=false ty=ctxRef init=initMake annotationOccurrence=<Optional.None /> />))
         val insN: Bind = self.internBytes(s: "insert")
         val keyL: Bind = self.internBytes(s: "key")
         val valL: Bind = self.internBytes(s: "value")
@@ -2504,8 +2504,8 @@ pub impl Comp {
             return <Result.Err error=self.diagnosticAt(offset: self.stmtPrincipalOffset(sid: stmtId), msg: "internal error: completed source owner cannot record a statement") />
         }
         match self.arena.stmts[stmtId] {
-            Stmt.Let(val mutable, val nameStart, val nameLen, val tyStart, val tyLen, val tyIsArray, val ty, val init) => {
-                val annotation = match self.localAnnotationOccurrences.get(key: stmtId) {
+            Stmt.Let(val mutable, val nameStart, val nameLen, val tyStart, val tyLen, val tyIsArray, val ty, val init, val annotationOccurrence) => {
+                val annotation = match annotationOccurrence {
                     Optional.Some(v: val occurrence) => {
                         val owner = self.currentSourceOwner().unwrap()
                         give <Optional.Some v=(try self.admitBodyTypeUse(id: occurrence, term: ty, owner: owner)) />

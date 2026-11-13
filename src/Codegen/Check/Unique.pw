@@ -359,7 +359,7 @@ pub impl Comp {
 
     inout fn stmtContainsAwait(stmtId: U64) -> Bool {
         match self.arena.stmts[stmtId] {
-            Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, val init) => { return self.exprContainsAwait(exprId: init) }
+            Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, val init, annotationOccurrence: _) => { return self.exprContainsAwait(exprId: init) }
             Stmt.Assign(val target, val value) => {
                 if self.exprContainsAwait(exprId: target) { return true }
                 return self.exprContainsAwait(exprId: value)

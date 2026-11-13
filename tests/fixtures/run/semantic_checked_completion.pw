@@ -24,7 +24,7 @@ fn main() {
     val source = owner(compiler: inout compiler, name: "sample")
     val body = compiler.arena.functionAt(index: source).body
     val expression = match compiler.arena.stmts[compiler.blockStmtAt(blkId: body, index: 0U64)] {
-        Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, init: val init) => init
+        Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, init: val init, annotationOccurrence: _) => init
         _ => { panic "missing completion expression" }
     }
     match compiler.checkedSemanticExprCompletion(exprId: expression) {
@@ -70,7 +70,7 @@ fn main() {
     val looping = owner(compiler: inout compiler, name: "loopValue")
     val loopBody = compiler.arena.functionAt(index: looping).body
     val loopExpression = match compiler.arena.stmts[compiler.blockStmtAt(blkId: loopBody, index: 0U64)] {
-        Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, init: val init) => init
+        Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, init: val init, annotationOccurrence: _) => init
         _ => { panic "missing loop expression" }
     }
     compiler.prepareLexicalBody(fnIdx: looping).unwrap()
@@ -101,7 +101,7 @@ fn main() {
         sources: <SourceAccess stdRoot=[] />).unwrap()
     val global = globals.arena.globals[0U64]
     val initializer = match globals.arena.stmts[global.letStmt] {
-        Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, init: val init) => init
+        Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, init: val init, annotationOccurrence: _) => init
         _ => { panic "missing global expression" }
     }
     match globals.checkedSemanticExprCompletion(exprId: initializer) {

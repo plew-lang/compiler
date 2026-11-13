@@ -22,7 +22,7 @@ fn main() {
     val broken = compiler.arena.globals[0U64]
     val good = compiler.arena.globals[1U64]
     val initializer = match compiler.arena.stmts[broken.letStmt] {
-        Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, init: val init) => init
+        Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, init: val init, annotationOccurrence: _) => init
         _ => { panic("missing fixture initializer") }
     }
     // Admission has already succeeded. Corrupt only this internal owner's

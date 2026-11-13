@@ -727,7 +727,6 @@ pub struct Comp {
     pub mut val expressionTypeUses: Dictionary[U64, Array[U64]] = [:]
     pub mut val blockExitRequirements: Dictionary[U64, U64] = [:]
     pub mut val blockTypeUses: Dictionary[U64, Array[U64]] = [:]
-    mut val localAnnotationOccurrences: Dictionary[U64, U64] = [:]
     mut val bodyRecipeTypeUses: Set[U64] = Set.new()
     pub mut val checkedTypeUses: Set[U64] = Set.new()
     pub mut val sourceExpressionLimit: U64 = 0U64

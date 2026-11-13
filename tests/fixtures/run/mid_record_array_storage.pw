@@ -17,7 +17,7 @@ fn main() {
     val owner = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "probe").nameId)
     val statement = compiler.blockStmtAt(blkId: compiler.arena.functionAt(index: owner).body, index: 0U64)
     val parent = match compiler.arena.stmts[statement] {
-        Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, init: val expression) => expression,
+        Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, init: val expression, annotationOccurrence: _) => expression,
         _ => { panic("missing array initializer") },
     }
     val child = match compiler.arena.exprs[parent] {

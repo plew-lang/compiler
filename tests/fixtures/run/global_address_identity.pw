@@ -12,10 +12,10 @@ fn main() {
     val writable = c.arena.globals[1U64].nameStart
     val owner = c.arena.firstFunctionNamed(nameId: c.internBytes(s: "probe").nameId)
     val body = c.arena.functionAt(index: owner).body
-    val expression = match c.arena.stmts[c.blockStmtAt(blkId: body, index: 0U64)] { Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, init: val init) => init _ => { panic("missing global initializer") } }
-    val local = match c.arena.stmts[c.blockStmtAt(blkId: body, index: 1U64)] { Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, init: val init) => init _ => { panic("missing local initializer") } }
+    val expression = match c.arena.stmts[c.blockStmtAt(blkId: body, index: 0U64)] { Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, init: val init, annotationOccurrence: _) => init _ => { panic("missing global initializer") } }
+    val local = match c.arena.stmts[c.blockStmtAt(blkId: body, index: 1U64)] { Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, init: val init, annotationOccurrence: _) => init _ => { panic("missing local initializer") } }
     val callable = match c.arena.stmts[c.blockStmtAt(blkId: body, index: 2U64)] { Stmt.ExprStmt(expr: val expr) => expr _ => { panic("missing function call") } }
-    val immutable = match c.arena.stmts[c.blockStmtAt(blkId: body, index: 3U64)] { Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, init: val init) => init _ => { panic("missing readonly initializer") } }
+    val immutable = match c.arena.stmts[c.blockStmtAt(blkId: body, index: 3U64)] { Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, init: val init, annotationOccurrence: _) => init _ => { panic("missing readonly initializer") } }
     c.prepareLexicalBody(fnIdx: owner).unwrap()
     val facts = c.preparedFunctionSemanticFacts(fnIdx: owner).unwrap()
     val term = facts.expression(exprId: expression).unwrap().term

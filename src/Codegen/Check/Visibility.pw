@@ -732,7 +732,7 @@ pub impl Comp {
     inout fn checkGlobalSurfaceInModule(surfaces: inout PublicSurfaceIndex, surfaceMod: U64, g: Global) -> Result[(), CompileDiagnostic] {
         if g.letStmt >= self.arena.stmts.count() { return <Result.Ok value=() /> }
         match self.arena.stmts[g.letStmt] {
-            Stmt.Let(mutable: _, nameStart: _, nameLen: _, val tyStart, val tyLen, val tyIsArray, val ty, val init) => {
+            Stmt.Let(mutable: _, nameStart: _, nameLen: _, val tyStart, val tyLen, val tyIsArray, val ty, val init, annotationOccurrence: _) => {
                 val eff: LetEff = (try self.inferLetType(tyStart: tyStart, tyLen: tyLen, tyIsArray: tyIsArray, ty: ty, init: init))
                 try self.checkSurfaceType(surfaces: inout surfaces, surfaceMod: surfaceMod, ref: eff.ty, offset: g.nameStart)
             }

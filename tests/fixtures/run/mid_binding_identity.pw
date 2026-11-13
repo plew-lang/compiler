@@ -17,7 +17,7 @@ fn main() {
     val secondBinding = c.blockStmtAt(blkId: function.body, index: 1U64)
     c.prepareLexicalBody(fnIdx: owner).unwrap()
     val facts = c.preparedFunctionSemanticFacts(fnIdx: owner).unwrap()
-    val firstTarget = match c.arena.stmts[firstBinding] { Stmt.Let(mutable: _, nameStart: val start, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, init: _) => start _ => { panic("missing first binding") } }
+    val firstTarget = match c.arena.stmts[firstBinding] { Stmt.Let(mutable: _, nameStart: val start, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, init: _, annotationOccurrence: _) => start _ => { panic("missing first binding") } }
     mut val state: MidBuildState = (prepareMidSourceState(c: inout c, sourceFunction: owner, facts: facts)).unwrap()
     val firstLocal = addMidLocal(state: inout state, declarationTarget: parameter.nameStart, typeTerm: valueTerm, isUnique: true, isParameter: false, ownsAtEntry: false)
     val secondLocal = addMidLocal(state: inout state, declarationTarget: firstTarget, typeTerm: valueTerm, isUnique: true, isParameter: false, ownsAtEntry: false)
@@ -26,7 +26,7 @@ fn main() {
     val missing = midLocalForBinding(state: state, declarationTarget: 30U64)
     // Use a real recorded identifier. Mid cannot acquire semantic authority
     // from a fabricated AST node or a mutable TypeCache row.
-    val initializer = match c.arena.stmts[firstBinding] { Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, init: val init) => init _ => { panic("missing initializer") } }
+    val initializer = match c.arena.stmts[firstBinding] { Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, init: val init, annotationOccurrence: _) => init _ => { panic("missing initializer") } }
     val bindingProbe = match c.arena.exprs[initializer] { Expr.Move(operand: val operand, isBorrow: _) => operand _ => { panic("missing move") } }
     val place = midPlaceForRecordedIdent(c: inout c, state: state, exprId: bindingProbe, typeTerm: valueTerm)
     val absentState = (prepareMidSourceState(c: inout c, sourceFunction: owner, facts: facts)).unwrap()

@@ -21,7 +21,7 @@ fn check(binding: Bool, entry: U64) {
     if !compiler.isLangArrayType(ref: target) { panic("missing target Array setup") }
     val statement = compiler.blockStmtAt(blkId: function.body, index: 0U64)
     val expression = match compiler.arena.stmts[statement] {
-        Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, init: val init) => init
+        Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, init: val init, annotationOccurrence: _) => init
         _ => { panic("missing source binding") }
     }
     compiler.cur.checkFn = owner

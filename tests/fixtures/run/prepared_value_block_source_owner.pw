@@ -6,7 +6,7 @@ use @Std/Io only { print }
 fn expression(compiler: inout Comp, statement: U64) -> U64 {
     return match compiler.arena.stmts[statement] {
         Stmt.Return(value: val value, hasValue: _, offset: _) => value
-        Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, init: val value) => value
+        Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, init: val value, annotationOccurrence: _) => value
         _ => { panic("missing value expression") }
     }
 }

@@ -41,7 +41,7 @@ fn main() {
     compiler.prepareGlobalInitializer(target: global.nameStart).unwrap()
     compiler.prepareGlobalInitializer(target: otherGlobal.nameStart).unwrap()
     val initializer = match compiler.arena.stmts[global.letStmt] {
-        Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, init: val expression) => expression
+        Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, init: val expression, annotationOccurrence: _) => expression
         _ => { panic("missing global initializer") }
     }
     val globalKey = <MatchSource.Expression exprId=initializer />

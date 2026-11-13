@@ -32,10 +32,12 @@ pub impl Comp {
     }
 
     // Compatibility checks within the source request use the same admitted
-    // type as the initializer. The occurrence map supplies identity only.
-    inout fn checkedLocalAnnotationType(stmtId: U64, written: U64) -> Result[U64, CompileDiagnostic] {
-        val occurrence = self.localAnnotationOccurrences.getOr(key: stmtId, fallback: 0U64)
-        if occurrence == 0U64 { return <Result.Ok value=written /> }
+    // type as the initializer. The declaration supplies the occurrence identity.
+    inout fn checkedLocalAnnotationType(stmtId: U64, written: U64, annotationOccurrence: Optional[U64]) -> Result[U64, CompileDiagnostic] {
+        val occurrence = match annotationOccurrence {
+            Optional.Some(v: val occurrence) => occurrence,
+            Optional.None => { return <Result.Ok value=written /> }
+        }
         val site = self.stmtPrincipalOffset(sid: stmtId)
         val owner = match self.currentSourceOwner() {
             Optional.Some(v: val owner) => owner,
@@ -130,7 +132,7 @@ pub impl Comp {
         // A declaration slot is not a new lexical binding. A later bare name
         // still resolves through its own module/use provenance.
         match self.arena.stmts[global.letStmt] {
-            Stmt.Let(val mutable, val nameStart, val nameLen, val tyStart, val tyLen, val tyIsArray, val ty, init: _) => {
+            Stmt.Let(val mutable, val nameStart, val nameLen, val tyStart, val tyLen, val tyIsArray, val ty, init: _, annotationOccurrence: _) => {
                 self.cur.locals.append(<Local isGlobal=true globalTypePending=true nameStart=nameStart nameLen=nameLen nameId=intern(c: inout self, start: nameStart, len: nameLen) tyStart=tyStart tyLen=tyLen isArray=tyIsArray ty=ty isInout=false isMut=mutable owned=false moved=false cnum=0U64 />)
             }
             _ => {}

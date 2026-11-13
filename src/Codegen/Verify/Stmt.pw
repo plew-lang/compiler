@@ -4,8 +4,8 @@
 pub impl Comp {
     inout fn verifyStmt(stmtId: U64) -> Result[(), CompileDiagnostic] {
         match self.arena.stmts[stmtId] {
-            Stmt.Let(val mutable, val nameStart, val nameLen, val tyStart, val tyLen, val tyIsArray, val ty, val init) => {
-                val expected = try self.checkedLocalAnnotationType(stmtId: stmtId, written: ty)
+            Stmt.Let(val mutable, val nameStart, val nameLen, val tyStart, val tyLen, val tyIsArray, val ty, val init, val annotationOccurrence) => {
+                val expected = try self.checkedLocalAnnotationType(stmtId: stmtId, written: ty, annotationOccurrence: annotationOccurrence)
                 // literal range against the annotation (or context-free if none).
                 if tyLen > 0U64 {
                     try self.checkLitSpanCtx(id: init, tyStart: tyStart, tyLen: tyLen, isArray: tyIsArray, ctxRef: expected)

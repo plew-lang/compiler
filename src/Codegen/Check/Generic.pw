@@ -742,9 +742,9 @@ pub impl Comp {
     // same complete term shape as grounding, equality, and monomorphization.
     inout fn checkBoundsStmt(stmtId: U64) -> Result[(), CompileDiagnostic] {
         match self.arena.stmts[stmtId] {
-            Stmt.Let(val mutable, val nameStart, val nameLen, val tyStart, val tyLen, val tyIsArray, val ty, val init) => {
+            Stmt.Let(val mutable, val nameStart, val nameLen, val tyStart, val tyLen, val tyIsArray, val ty, val init, val annotationOccurrence) => {
                 try self.checkBoundsExpr(exprId: init)
-                val expected = try self.checkedLocalAnnotationType(stmtId: stmtId, written: ty)
+                val expected = try self.checkedLocalAnnotationType(stmtId: stmtId, written: ty, annotationOccurrence: annotationOccurrence)
                 if tyLen > 0U64 {
                     // checkGenericTypeMatch recurses into an array literal against Array[E].
                     try self.checkGenericTypeMatch(expectedRef: expected, valueExpr: init)

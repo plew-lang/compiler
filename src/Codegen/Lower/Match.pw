@@ -202,7 +202,7 @@ pub impl Comp {
         self.cur.lowerTmpSeq += 1U64
         val tmp: Bind = self.internTmpName(prefix: "__gm", n: self.cur.lowerTmpSeq)
         val read: U64 = (try self.loweredPlaceRead(id: base))
-        stmts.append(self.pushStmt(s: <Stmt.Let mutable=true nameStart=tmp.nameStart nameLen=tmp.nameLen tyStart=0 tyLen=0 tyIsArray=false ty=0 init=read />))
+        stmts.append(self.pushStmt(s: <Stmt.Let mutable=true nameStart=tmp.nameStart nameLen=tmp.nameLen tyStart=0 tyLen=0 tyIsArray=false ty=0 init=read annotationOccurrence=<Optional.None /> />))
         val tmpId: U64 = self.pushExpr(e: <Expr.Ident start=tmp.nameStart len=tmp.nameLen />)
         mut val modified: U64 = target
         match self.arena.exprs[target] {
@@ -252,7 +252,7 @@ pub impl Comp {
                 val value: U64 = (try self.lowerSyntaxExpr(id: id))
                 self.cur.lowerTmpSeq += 1U64
                 val tmp: Bind = self.internTmpName(prefix: "__ce", n: self.cur.lowerTmpSeq)
-                stmts.append(self.pushStmt(s: <Stmt.Let mutable=false nameStart=tmp.nameStart nameLen=tmp.nameLen tyStart=0U64 tyLen=0U64 tyIsArray=false ty=0U64 init=value />))
+                stmts.append(self.pushStmt(s: <Stmt.Let mutable=false nameStart=tmp.nameStart nameLen=tmp.nameLen tyStart=0U64 tyLen=0U64 tyIsArray=false ty=0U64 init=value annotationOccurrence=<Optional.None /> />))
                 return <Result.Ok value=self.pushExpr(e: <Expr.Ident start=tmp.nameStart len=tmp.nameLen />) />
             }
         }
@@ -321,7 +321,7 @@ pub impl Comp {
                 val iv: U64 = (try self.lowerExpr(e: e))
                 self.cur.lowerTmpSeq += 1U64
                 val tmp: Bind = self.internTmpName(prefix: "__ce", n: self.cur.lowerTmpSeq)
-                stmts.append(self.pushStmt(s: <Stmt.Let mutable=false nameStart=tmp.nameStart nameLen=tmp.nameLen tyStart=0 tyLen=0 tyIsArray=false ty=0 init=iv />))
+                stmts.append(self.pushStmt(s: <Stmt.Let mutable=false nameStart=tmp.nameStart nameLen=tmp.nameLen tyStart=0 tyLen=0 tyIsArray=false ty=0 init=iv annotationOccurrence=<Optional.None /> />))
                 return <Result.Ok value=self.pushExpr(e: <Expr.Ident start=tmp.nameStart len=tmp.nameLen />) />
             }
         }
@@ -338,12 +338,18 @@ pub impl Comp {
         return <Result.Ok value=self.pushStmt(s: <Stmt.ExprStmt expr=call />) />
     }
 
-    inout fn registerLocalAnnotation(statement: U64, occurrence: U64) {
-        if occurrence == 0U64 { return }
-        val written = self.sourceTypeUses.useAt(index: occurrence - 1U64).unwrap()
-        match written.role { SourceTypeUseRole.Body | SourceTypeUseRole.DefaultArgument => {} _ => { return } }
-        self.localAnnotationOccurrences[statement] = occurrence
-        self.markBodyRecipeTypeUses(recipe: written.recipe)
+    // Only source body annotations belong to this admission path.
+    // A synthesized type or a separately owned declaration has no such occurrence.
+    inout fn lowerLocalAnnotation(written: Bool, occurrence: U64) -> Result[Optional[U64], CompileDiagnostic] {
+        if !written { return <Result.Ok value=<Optional.None /> /> }
+        match self.sourceTypeUses.currentRole() {
+            SourceTypeUseRole.Body | SourceTypeUseRole.DefaultArgument => {
+                val typeUse = try self.signatureOccurrence(id: occurrence)
+                self.markBodyRecipeTypeUses(recipe: typeUse.recipe)
+                return <Result.Ok value=<Optional.Some v=occurrence /> />
+            }
+            _ => { return <Result.Ok value=<Optional.None /> /> }
+        }
     }
 
     inout fn markBodyRecipeTypeUses(recipe: U64) {
@@ -380,8 +386,8 @@ pub impl Comp {
                     tyRef = ty.ref
                     authoredUse = ty.authoredUse
                 }
-                val statement = self.pushStmt(s: <Stmt.Let mutable=s.flag0 nameStart=s.name.start nameLen=s.name.end - s.name.start tyStart=tyStart tyLen=tyLen tyIsArray=tyIsArray ty=tyRef init=(try self.lowerSyntaxExpr(id: s.child0)) />)
-                self.registerLocalAnnotation(statement: statement, occurrence: authoredUse)
+                val annotation = try self.lowerLocalAnnotation(written: s.flag1, occurrence: authoredUse)
+                val statement = self.pushStmt(s: <Stmt.Let mutable=s.flag0 nameStart=s.name.start nameLen=s.name.end - s.name.start tyStart=tyStart tyLen=tyLen tyIsArray=tyIsArray ty=tyRef init=(try self.lowerSyntaxExpr(id: s.child0)) annotationOccurrence=annotation />)
                 return <Result.Ok value=statement />
             }
             SyntaxStmtKind.ExprStmt => { return <Result.Ok value=self.pushStmt(s: <Stmt.ExprStmt expr=(try self.lowerSyntaxExpr(id: s.child0)) />) />}
@@ -474,8 +480,8 @@ pub impl Comp {
                     authoredUse = pt.authoredUse
                 }
                 val iv: U64 = (try self.lowerExpr(e: init))
-                result = self.pushStmt(s: <Stmt.Let mutable=mutable nameStart=nm.nameStart nameLen=nm.nameLen tyStart=tyStart tyLen=tyLen tyIsArray=tyIsArray ty=tyRef init=iv />)
-                self.registerLocalAnnotation(statement: result, occurrence: authoredUse)
+                val annotation = try self.lowerLocalAnnotation(written: hasTy, occurrence: authoredUse)
+                result = self.pushStmt(s: <Stmt.Let mutable=mutable nameStart=nm.nameStart nameLen=nm.nameLen tyStart=tyStart tyLen=tyLen tyIsArray=tyIsArray ty=tyRef init=iv annotationOccurrence=annotation />)
             }
             StmtAst.Assign(val op, val target, val value, val span) => {
                 // The block path (lowerBlock) desugars a compound `place OP= v` with
@@ -560,7 +566,7 @@ pub impl Comp {
                     lo = try self.lowerRangeConstruction(low: lo, high: hi, inclusive: inclusive, span: <Span start=exprAstSpan(e: iter).start end=exprAstSpan(e: rangeHi).end />)
                 }
                 val bd: U64 = (try self.lowerBlock(b: body))
-                result = self.lowerForBinding(nameStart: vStart, nameLen: vLen, typeStart: vtStart, typeLen: vtLen, typeRef: elementRef, occurrence: authoredUse, iter: lo, body: bd)
+                result = (try self.lowerForBinding(nameStart: vStart, nameLen: vLen, typeStart: vtStart, typeLen: vtLen, typeRef: elementRef, occurrence: authoredUse, iter: lo, body: bd))
             }
             StmtAst.Match(val scrut, val arms, val span) => {
                 val sc: U64 = (try self.lowerExpr(e: scrut))
@@ -601,7 +607,7 @@ pub impl Comp {
         self.cur.lowerTmpSeq += 1U64
         val tmp: Bind = self.internTmpName(prefix: "__dt", n: self.cur.lowerTmpSeq)
         val iv: U64 = (try self.lowerExpr(e: init))
-        stmts.append(self.pushStmt(s: <Stmt.Let mutable=false nameStart=tmp.nameStart nameLen=tmp.nameLen tyStart=0 tyLen=0 tyIsArray=false ty=0 init=iv />))
+        stmts.append(self.pushStmt(s: <Stmt.Let mutable=false nameStart=tmp.nameStart nameLen=tmp.nameLen tyStart=0 tyLen=0 tyIsArray=false ty=0 init=iv annotationOccurrence=<Optional.None /> />))
         // the struct form's declared type name — Verify checks it against the
         // initializer's actual type (len 0 = record form, no name to check).
         mut val tyB: Bind = <Bind nameStart=0 nameLen=0 fieldStart=0 fieldLen=0 />
@@ -633,7 +639,7 @@ pub impl Comp {
                 self.arena.exprSpanStart[tgt] = binds[bi].span.start
                 stmts.append(self.pushStmt(s: <Stmt.Assign target=tgt value=fld />))
             } else {
-                stmts.append(self.pushStmt(s: <Stmt.Let mutable=false nameStart=nameB.nameStart nameLen=nameB.nameLen tyStart=0 tyLen=0 tyIsArray=false ty=0 init=fld />))
+                stmts.append(self.pushStmt(s: <Stmt.Let mutable=false nameStart=nameB.nameStart nameLen=nameB.nameLen tyStart=0 tyLen=0 tyIsArray=false ty=0 init=fld annotationOccurrence=<Optional.None /> />))
             }
             bi += 1
         }
@@ -677,7 +683,7 @@ pub impl Comp {
         self.cur.lowerTmpSeq += 1U64
         val tmp: Bind = self.internTmpName(prefix: "__dt", n: self.cur.lowerTmpSeq)
         val init: U64 = (try self.lowerSyntaxExpr(id: stmt.child0))
-        stmts.append(self.pushStmt(s: <Stmt.Let mutable=false nameStart=tmp.nameStart nameLen=tmp.nameLen tyStart=0U64 tyLen=0U64 tyIsArray=false ty=0U64 init=init />))
+        stmts.append(self.pushStmt(s: <Stmt.Let mutable=false nameStart=tmp.nameStart nameLen=tmp.nameLen tyStart=0U64 tyLen=0U64 tyIsArray=false ty=0U64 init=init annotationOccurrence=<Optional.None /> />))
         self.decls.destructureSites.append(<DestructureSite initId=init offset=stmt.span.start isElem=false typeStart=stmt.typeName.start typeLen=stmt.typeName.end - stmt.typeName.start binds=self.syntaxDestructureSiteBinds(stmt: stmt) />)
         mut val i: U64 = 0U64
         while i < syntaxStmtBindCount(file: self.syntax, stmt: stmt) {
@@ -692,7 +698,7 @@ pub impl Comp {
                     self.arena.exprSpanStart[target] = bind.span.start
                     stmts.append(self.pushStmt(s: <Stmt.Assign target=target value=field />))
                 } else {
-                    stmts.append(self.pushStmt(s: <Stmt.Let mutable=bind.isMutable nameStart=bind.name.start nameLen=bind.name.end - bind.name.start tyStart=0U64 tyLen=0U64 tyIsArray=false ty=0U64 init=field />))
+                    stmts.append(self.pushStmt(s: <Stmt.Let mutable=bind.isMutable nameStart=bind.name.start nameLen=bind.name.end - bind.name.start tyStart=0U64 tyLen=0U64 tyIsArray=false ty=0U64 init=field annotationOccurrence=<Optional.None /> />))
                 }
             }
             i += 1U64
@@ -716,7 +722,7 @@ pub impl Comp {
                 val field: U64 = self.pushExpr(e: <Expr.Field base=receiver nameStart=binding.fieldStart nameLen=binding.fieldLen />)
                 self.arena.exprSpanStart[receiver] = binding.offset
                 self.arena.exprSpanStart[field] = binding.offset
-                statements.append(self.pushStmt(s: <Stmt.Let mutable=binding.isMutable nameStart=binding.nameStart nameLen=binding.nameLen tyStart=0U64 tyLen=0U64 tyIsArray=false ty=0U64 init=field />))
+                statements.append(self.pushStmt(s: <Stmt.Let mutable=binding.isMutable nameStart=binding.nameStart nameLen=binding.nameLen tyStart=0U64 tyLen=0U64 tyIsArray=false ty=0U64 init=field annotationOccurrence=<Optional.None /> />))
             }
             index += 1U64
         }
@@ -735,7 +741,7 @@ pub impl Comp {
 
     // A typed loop binding is an ordinary typed declaration initialized from
     // the iterator's Item. Reuse its checking, conversion and ownership path.
-    inout fn lowerForBinding(nameStart: U64, nameLen: U64, typeStart: U64, typeLen: U64, typeRef: U64, occurrence: U64, iter: U64, body: U64) -> U64 {
+    inout fn lowerForBinding(nameStart: U64, nameLen: U64, typeStart: U64, typeLen: U64, typeRef: U64, occurrence: U64, iter: U64, body: U64) -> Result[U64, CompileDiagnostic] {
         mut val element = <Bind nameStart=nameStart nameLen=nameLen fieldStart=0U64 fieldLen=0U64 />
         mut val expanded = body
         if typeRef != 0U64 {
@@ -743,8 +749,8 @@ pub impl Comp {
             element = self.internTmpName(prefix: "$forBinding", n: self.cur.lowerTmpSeq)
             val value = self.pushExpr(e: <Expr.Ident start=element.nameStart len=element.nameLen />)
             self.arena.exprSpanStart[value] = nameStart
-            val binding = self.pushStmt(s: <Stmt.Let mutable=false nameStart=nameStart nameLen=nameLen tyStart=typeStart tyLen=typeLen tyIsArray=false ty=typeRef init=value />)
-            self.registerLocalAnnotation(statement: binding, occurrence: occurrence)
+            val annotation = try self.lowerLocalAnnotation(written: true, occurrence: occurrence)
+            val binding = self.pushStmt(s: <Stmt.Let mutable=false nameStart=nameStart nameLen=nameLen tyStart=typeStart tyLen=typeLen tyIsArray=false ty=typeRef init=value annotationOccurrence=annotation />)
             mut val statements: Array[U64] = [binding]
             mut val index = 0U64
             while index < self.blockStmtCount(blkId: body) {
@@ -757,7 +763,7 @@ pub impl Comp {
                 Optional.None => {}
             }
         }
-        return self.pushStmt(s: <Stmt.For varStart=element.nameStart varLen=element.nameLen varTyStart=typeStart varTyLen=typeLen varTy=typeRef iter=iter body=expanded isStruct=false patStart=0U64 patLen=0U64 binds=<BindRange start=0U64 len=0U64 /> />)
+        return <Result.Ok value=self.pushStmt(s: <Stmt.For varStart=element.nameStart varLen=element.nameLen varTyStart=typeStart varTyLen=typeLen varTy=typeRef iter=iter body=expanded isStruct=false patStart=0U64 patLen=0U64 binds=<BindRange start=0U64 len=0U64 /> />) />
     }
 
     inout fn lowerSyntaxFor(stmt: SyntaxStmt) -> Result[U64, CompileDiagnostic] {
@@ -789,7 +795,7 @@ pub impl Comp {
             val rangeSpan: Span = <Span start=syntaxExpr(file: self.syntax, id: stmt.child0).span.start end=syntaxExpr(file: self.syntax, id: stmt.child1).span.end />
             iter = try self.lowerRangeConstruction(low: iter, high: rangeHi, inclusive: stmt.flag2, span: rangeSpan)
         }
-        return <Result.Ok value=self.lowerForBinding(nameStart: stmt.name.start, nameLen: stmt.name.end - stmt.name.start, typeStart: varTyStart, typeLen: varTyLen, typeRef: elementRef, occurrence: authoredUse, iter: iter, body: (try self.lowerSyntaxBlock(id: stmt.block0))) />
+        return self.lowerForBinding(nameStart: stmt.name.start, nameLen: stmt.name.end - stmt.name.start, typeStart: varTyStart, typeLen: varTyLen, typeRef: elementRef, occurrence: authoredUse, iter: iter, body: (try self.lowerSyntaxBlock(id: stmt.block0)))
     }
 
     inout fn lowerBlock(b: BlockAst) -> Result[U64, CompileDiagnostic] {

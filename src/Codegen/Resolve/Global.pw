@@ -140,7 +140,7 @@ pub impl Comp {
         try self.enterGlobalInitializer(target: local.nameStart)
         mut val result: Local = local
         match self.arena.stmts[self.arena.globals[globalIndex].letStmt] {
-            Stmt.Let(mutable: _, nameStart: _, nameLen: _, val tyStart, val tyLen, val tyIsArray, val ty, val init) => {
+            Stmt.Let(mutable: _, nameStart: _, nameLen: _, val tyStart, val tyLen, val tyIsArray, val ty, val init, annotationOccurrence: _) => {
                 val inferred = (try self.inferLetType(tyStart: tyStart, tyLen: tyLen, tyIsArray: tyIsArray, ty: ty, init: init))
                 result = <Local isGlobal=local.isGlobal nameStart=local.nameStart nameLen=local.nameLen nameId=local.nameId tyStart=inferred.start tyLen=inferred.len tyNameId=intern(c: inout self, start: inferred.start, len: inferred.len) isArray=inferred.arr ty=inferred.ty isInout=local.isInout isMut=local.isMut owned=local.owned moved=local.moved cnum=local.cnum />
             }
@@ -234,7 +234,7 @@ pub impl Comp {
 
     inout fn globalInitExpr(g: Global) -> U64 {
         match self.arena.stmts[g.letStmt] {
-            Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, val init) => { return init }
+            Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, val init, annotationOccurrence: _) => { return init }
             _ => { return 0 }
         }
     }

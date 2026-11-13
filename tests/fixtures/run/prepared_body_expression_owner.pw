@@ -58,7 +58,7 @@ fn main() {
     val global = compiler.arena.globals[0U64]
     val unrelatedGlobal = compiler.arena.globals[1U64]
     val initializer = match compiler.arena.stmts[global.letStmt] {
-        Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, init: val initializer) => initializer
+        Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, init: val initializer, annotationOccurrence: _) => initializer
         _ => { panic("missing global initializer") }
     }
     val globalBody = compiler.internBodyInstance(fnIdx: 18446744073709551615U64, environment: <InstanceEnvironment />)

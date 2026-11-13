@@ -2520,7 +2520,7 @@ pub fn buildMidLet(c: inout Comp, state: inout MidBuildState, stmtId: U64, compl
 fn buildMidLetAdmitted(c: inout Comp, state: inout MidBuildState, stmtId: U64, completeEvaluation: Bool = true) -> MidBuildError {
     if stmtId >= c.arena.stmts.count() { return <MidBuildError.InvalidStatement /> }
     match c.arena.stmts[stmtId] {
-        Stmt.Let(mutable: val mutable, nameStart: val nameStart, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, init: val init) => {
+        Stmt.Let(mutable: val mutable, nameStart: val nameStart, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, init: val init, annotationOccurrence: _) => {
             val facts = match state.sourceFacts {
                 Optional.Some(v: val facts) => { give facts }
                 Optional.None => { return <MidBuildError.MissingSemanticType /> }
@@ -2728,7 +2728,7 @@ fn buildMidBlockInto(c: inout Comp, state: inout MidBuildState, blockId: U64, bl
         val stmtId: U64 = c.arena.blockStmtPool[block.stmtStart + i]
         if !midSourceStatementAdmitted(c: c, state: state, stmtId: stmtId) { return <MidBuildError.MissingSemanticType /> }
         match c.arena.stmts[stmtId] {
-            Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, init: _) => {
+            Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, init: _, annotationOccurrence: _) => {
                 result = buildMidLetAdmitted(c: inout c, state: inout state, stmtId: stmtId, completeEvaluation: !expressionSequence)
             }
             Stmt.If(cond: _, thenBlk: _, elseBlk: _, hasElse: _) => {
@@ -3733,7 +3733,7 @@ pub fn buildParametricMidGlobalInit(c: inout Comp) -> MidBodyBuild {
         }
         if global.letStmt >= c.arena.stmts.count() { return <MidBodyBuild body=<MidBody sourceFunction=globalOwner locals=state.locals scopes=state.scopes blocks=state.blocks entry=0U64 /> error=<MidBuildError.InvalidStatement /> /> }
         match c.arena.stmts[global.letStmt] {
-            Stmt.Let(nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: val declaredTerm, init: val init, mutable: _) => {
+            Stmt.Let(nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: val declaredTerm, init: val init, mutable: _, annotationOccurrence: _) => {
                 val sourceTerm: U64 = (match midSourceSemanticTerm(c: inout c, facts: state.sourceFacts, sourceFunction: state.sourceFunction, exprId: init) { Result.Ok(value: val term) => { give term } Result.Err(error: val error) => { return <MidBodyBuild body=emptyMidBody(sourceFunction: globalOwner) error=error /> } })
                 mut val term: U64 = declaredTerm
                 if term == 0U64 { term = sourceTerm }

@@ -1120,7 +1120,7 @@ pub struct IdentBinding {
 }
 
 pub enum Stmt {
-    Let(mutable: Bool, nameStart: U64, nameLen: U64, tyStart: U64, tyLen: U64, tyIsArray: Bool, ty: U64, init: U64)
+    Let(mutable: Bool, nameStart: U64, nameLen: U64, tyStart: U64, tyLen: U64, tyIsArray: Bool, ty: U64, init: U64, annotationOccurrence: Optional[U64])
     // A plain `place = value`. Compound `place OP= v` is desugared to `place = place OP v`
     // in the Lower pass (spec/12, place-once), so the IR has no compound form — the OP rides
     // its operator-trait witness like any binary. There is no `op` field.

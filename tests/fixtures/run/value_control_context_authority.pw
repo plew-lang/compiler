@@ -32,7 +32,7 @@ fn check(mode: U64, entry: U64) -> Bool {
     if mode >= 2U64 && (!compiler.isLangArrayType(ref: narrow) || !compiler.isLangArrayType(ref: wide)) { panic("missing ambient Array setup") }
     val statement = compiler.blockStmtAt(blkId: function.body, index: mode)
     val expression = match compiler.arena.stmts[statement] {
-        Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, init: val init) => init
+        Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, init: val init, annotationOccurrence: _) => init
         _ => { panic("missing source initializer") }
     }
     val wrapped = mode == 1U64 || mode == 3U64

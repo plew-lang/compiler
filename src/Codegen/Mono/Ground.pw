@@ -1563,7 +1563,7 @@ pub impl Comp {
         while sti < self.arena.stmts.count() {
             tracePhaseProgress(c: inout self, label: "instantiation-collection:statement", count: sti, stride: 256U64)
             match self.arena.stmts[sti] {
-                Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, val ty, init: _) => {
+                Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, val ty, init: _, annotationOccurrence: _) => {
                     // annotations only: un-annotated lets register their INFERRED types
                     // via inferLetType's collection-time side effects inside the proper
                     // walks (scanStmtInsts — fn bodies, worklist template bodies, and the

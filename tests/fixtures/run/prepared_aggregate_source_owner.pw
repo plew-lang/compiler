@@ -6,7 +6,7 @@ use /Ir only { InstanceEnvironment, Stmt }
 fn expression(statement: Stmt) -> U64 {
     match statement {
         Stmt.Return(value: val value, hasValue: _, offset: _) => { return value }
-        Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, init: val value) => { return value }
+        Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, init: val value, annotationOccurrence: _) => { return value }
         _ => { panic("missing aggregate expression") }
     }
 }

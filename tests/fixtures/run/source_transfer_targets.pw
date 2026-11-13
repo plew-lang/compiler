@@ -28,7 +28,7 @@ fn function(compiler: inout Comp, name: String) -> U64 {
 
 fn initializer(compiler: Comp, statement: U64) -> U64 {
     return match compiler.arena.stmts[statement] {
-        Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, init: val expression) => expression
+        Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, init: val expression, annotationOccurrence: _) => expression
         _ => { panic("expected transfer probe binding") }
     }
 }

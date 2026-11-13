@@ -20,7 +20,7 @@ pub impl Comp {
         val byteRef = self.stringCoreType(name: "U8")
         val buffer = try self.synthBufferNew(elemRef: byteRef)
         val initial = self.stringStorageMake(typeRef: typeRef, buffer: buffer, offset: span.start)
-        stmts.append(self.pushStmt(s: <Stmt.Let mutable=true nameStart=output.nameStart nameLen=output.nameLen tyStart=0U64 tyLen=0U64 tyIsArray=false ty=typeRef init=initial />))
+        stmts.append(self.pushStmt(s: <Stmt.Let mutable=true nameStart=output.nameStart nameLen=output.nameLen tyStart=0U64 tyLen=0U64 tyIsArray=false ty=typeRef init=initial annotationOccurrence=<Optional.None /> />))
         return <Result.Ok value=() />
     }
 

@@ -201,7 +201,7 @@ pub impl Comp {
         match self.arena.stmts[stmtId] {
             Stmt.ExprStmt(val expr) => { return self.exprCompletion(exprId: expr) }
             Stmt.Give(val value) => { return completionThen(prefix: self.exprCompletion(exprId: value), next: completionTransfer(transfer: <CompletionTransfer.Give />)) }
-            Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, val init) => { return self.exprCompletion(exprId: init) }
+            Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, val init, annotationOccurrence: _) => { return self.exprCompletion(exprId: init) }
             Stmt.Assign(val target, val value) => { return completionThen(prefix: self.exprCompletion(exprId: target), next: self.exprCompletion(exprId: value)) }
             Stmt.Return(val value, val hasValue, offset: _) => {
                 mut val flow = <SourceCompletion />

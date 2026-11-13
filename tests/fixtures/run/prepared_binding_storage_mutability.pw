@@ -20,7 +20,7 @@ fn main() {
         val statement = compiler.blockStmtAt(blkId: block, index: index)
         val fact = facts.binding(stmtId: statement).unwrap()
         val target = match compiler.arena.stmts[statement] {
-            Stmt.Let(mutable: _, nameStart: val target, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, init: _) => target
+            Stmt.Let(mutable: _, nameStart: val target, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, init: _, annotationOccurrence: _) => target
             _ => { panic("expected binding declaration") }
         }
         if fact.declarationTarget != target { panic("binding declaration identity lost") }

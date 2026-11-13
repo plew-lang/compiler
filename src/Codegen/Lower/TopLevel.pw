@@ -443,7 +443,7 @@ pub impl Comp {
 
     inout fn appendLoweredGlobal(letStmt: U64) {
         match self.arena.stmts[letStmt] {
-            Stmt.Let(val mutable, val nameStart, val nameLen, tyStart: _, tyLen: _, tyIsArray: _, ty: _, init: _) => {
+            Stmt.Let(val mutable, val nameStart, val nameLen, tyStart: _, tyLen: _, tyIsArray: _, ty: _, init: _, annotationOccurrence: _) => {
                 self.arena.globals.append(<Global nameStart=nameStart nameLen=nameLen letStmt=letStmt mutable=mutable />)
             }
             _ => {}

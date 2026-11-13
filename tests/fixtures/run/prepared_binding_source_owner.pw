@@ -54,7 +54,7 @@ fn main() {
     val second = compiler.blockStmtAt(blkId: block, index: 1U64)
     val ended = shadowFacts.binding(stmtId: second).unwrap().endedBinding
     val declaration = match compiler.arena.stmts[first] {
-        Stmt.Let(mutable: _, nameStart: val declaration, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, init: _) => declaration
+        Stmt.Let(mutable: _, nameStart: val declaration, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, init: _, annotationOccurrence: _) => declaration
         _ => { panic("missing shadow declaration") }
     }
     if ended != declaration { panic("shadow end lost declaration identity") }

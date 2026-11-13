@@ -171,7 +171,7 @@ pub impl Comp {
         mut val index = 0U64
         while index < self.blockStmtCount(blkId: blockId) {
             match self.arena.stmts[self.blockStmtAt(blkId: blockId, index: index)] {
-                Stmt.Let(mutable: _, val nameStart, val nameLen, tyStart: _, tyLen: _, tyIsArray: _, ty: _, val init) => {
+                Stmt.Let(mutable: _, val nameStart, val nameLen, tyStart: _, tyLen: _, tyIsArray: _, ty: _, val init, annotationOccurrence: _) => {
                     self.resolveLexicalModuleExpr(id: init, names: inout names)
                     names.append(intern(c: inout self, start: nameStart, len: nameLen))
                 }

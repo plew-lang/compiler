@@ -17,7 +17,7 @@ pub impl Comp {
 
     inout fn stmtPrincipalOffset(sid: U64) -> U64 {
         match self.arena.stmts[sid] {
-            Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, val init) => { return self.exprOffset(id: init) }
+            Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, val init, annotationOccurrence: _) => { return self.exprOffset(id: init) }
             Stmt.Assign(val target, value: _) => { return self.exprOffset(id: target) }
             Stmt.ExprStmt(val expr) => { return self.exprOffset(id: expr) }
             Stmt.Return(val value, val hasValue, val offset) => { if hasValue { return self.exprOffset(id: value) } return offset }

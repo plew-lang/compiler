@@ -6542,7 +6542,7 @@ pub impl Comp {
     // scope loses lexical binders and can disagree with the storage operand.
     // Annotation checking and the earlier declaration walk keep their own
     // source-level inference phase; this reader does not repeat that phase.
-    inout fn scanLocalDeclarationType(stmtId: U64, tyStart: U64, tyLen: U64, tyIsArray: Bool, ty: U64, init: U64) -> Result[LetEff, CompileDiagnostic] {
+    inout fn scanLocalDeclarationType(stmtId: U64, tyStart: U64, tyLen: U64, tyIsArray: Bool, ty: U64, init: U64, annotationOccurrence: Optional[U64]) -> Result[LetEff, CompileDiagnostic] {
         val bodyId = self.currentBodyInstanceId()
         if bodyId == 0U64 {
             return self.inferLetType(tyStart: tyStart, tyLen: tyLen, tyIsArray: tyIsArray, ty: ty, init: init)
@@ -6552,9 +6552,9 @@ pub impl Comp {
             Optional.Some(v: val binding) => binding
             Optional.None => { return <Result.Err error=self.diagnosticAt(offset: self.stmtPrincipalOffset(sid: stmtId), msg: "internal error: final local has no checked source binding") /> }
         }
-        val annotationId = self.localAnnotationOccurrences.getOr(key: stmtId, fallback: 0U64)
         val ref = match binding.annotation {
             Optional.Some(v: val annotation) => {
+                val annotationId = annotationOccurrence.unwrapOr(fallback: 0U64)
                 val occurrence = try self.signatureOccurrence(id: annotationId)
                 if annotation.occurrence != annotationId || annotation.recipe != occurrence.recipe || occurrence.term != ty {
                     return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "final local has a foreign annotation proof", failureDomain: <FailureDomain.Internal />) />
@@ -6566,7 +6566,7 @@ pub impl Comp {
                 give result
             }
             Optional.None => {
-                if annotationId != 0U64 {
+                if annotationOccurrence.isSome() {
                     return <Result.Err error=self.diagnosticAt(offset: self.stmtPrincipalOffset(sid: stmtId), msg: "final local has no saved annotation proof", failureDomain: <FailureDomain.Internal />) />
                 }
                 give try self.groundAndRecordBodyType(ref: binding.typeTerm, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: bodyId)
@@ -6619,13 +6619,13 @@ pub impl Comp {
 
     inout fn scanStmtInsts(stmtId: U64) -> Result[(), CompileDiagnostic] {
         match self.arena.stmts[stmtId] {
-            Stmt.Let(val mutable, val nameStart, val nameLen, val tyStart, val tyLen, val tyIsArray, val ty, val init) => {
+            Stmt.Let(val mutable, val nameStart, val nameLen, val tyStart, val tyLen, val tyIsArray, val ty, val init, val annotationOccurrence) => {
                 try self.scanExprInsts(exprId: init)
                 // register the local with its EFFECTIVE type (inferred when there is no
                 // annotation), mirroring codegen — otherwise a later `p.x` on an
                 // inferred-typed `val p = <P …/>` can't recover its type, so a generic
                 // call like `print(p.x + p.y)` fails to discover its instantiation.
-                val le: LetEff = (try self.scanLocalDeclarationType(stmtId: stmtId, tyStart: tyStart, tyLen: tyLen, tyIsArray: tyIsArray, ty: ty, init: init))
+                val le: LetEff = (try self.scanLocalDeclarationType(stmtId: stmtId, tyStart: tyStart, tyLen: tyLen, tyIsArray: tyIsArray, ty: ty, init: init, annotationOccurrence: annotationOccurrence))
                 try self.finalizeStorageConversion(stmtId: stmtId, exprId: init, targetTerm: le.ty)
                 self.addLocal(nameStart: nameStart, nameLen: nameLen, tyStart: le.start, tyLen: le.len, isArray: le.arr, ty: le.ty, isInout: false, isMut: mutable, owned: true)
                 // an INFERRED non-literal type registers its instance the same way an
