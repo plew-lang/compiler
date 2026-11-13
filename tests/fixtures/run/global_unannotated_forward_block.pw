@@ -1,0 +1,4 @@
+use @Std/Io only { print }
+val earlier = later + 1I64
+val later = { val answer = 41I64 give answer }
+fn main() { print(earlier) print(later) }

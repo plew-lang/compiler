@@ -137,22 +137,31 @@ pub impl Comp {
     }
 
     inout fn inferPendingGlobalLocal(local: Local, globalIndex: U64) -> Result[Local, CompileDiagnostic] {
-        try self.enterGlobalInitializer(target: local.nameStart)
-        mut val result: Local = local
-        match self.arena.stmts[self.arena.globals[globalIndex].letStmt] {
-            Stmt.Let(mutable: _, nameStart: _, nameLen: _, val tyStart, val tyLen, val tyIsArray, val ty, val init, val annotationOccurrence) => {
-                val inferred = if ty != 0U64 || annotationOccurrence.isSome() {
-                    val admitted = try self.requireGlobalAnnotation(target: local.nameStart, id: annotationOccurrence, written: ty)
-                    val info = self.typeInfoOfRef(ref: admitted.sourceTerm)
-                    give <LetEff start=info.nameStart len=info.nameLen arr=info.kind == 3 ty=admitted.sourceTerm />
+        val declaration = self.arena.globals[globalIndex]
+        match self.arena.stmts[declaration.letStmt] {
+            Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, val ty, init: _, val annotationOccurrence) => {
+                val term = if ty != 0U64 || annotationOccurrence.isSome() {
+                    give (try self.requireGlobalAnnotation(target: local.nameStart, id: annotationOccurrence, written: ty)).sourceTerm
                 } else {
-                    give try self.inferLetType(tyStart: tyStart, tyLen: tyLen, tyIsArray: tyIsArray, ty: ty, init: init)
+                    give try self.inferredGlobalBindingType(declaration: declaration)
                 }
-                result = <Local isGlobal=local.isGlobal nameStart=local.nameStart nameLen=local.nameLen nameId=local.nameId tyStart=inferred.start tyLen=inferred.len tyNameId=intern(c: inout self, start: inferred.start, len: inferred.len) isArray=inferred.arr ty=inferred.ty isInout=local.isInout isMut=local.isMut owned=local.owned moved=local.moved cnum=local.cnum />
+                val info = self.typeInfoOfRef(ref: term)
+                return <Result.Ok value=<Local isGlobal=local.isGlobal nameStart=local.nameStart nameLen=local.nameLen nameId=local.nameId tyStart=info.nameStart tyLen=info.nameLen tyNameId=intern(c: inout self, start: info.nameStart, len: info.nameLen) isArray=info.kind == 3 ty=term isInout=local.isInout isMut=local.isMut owned=local.owned moved=local.moved cnum=local.cnum /> />
             }
-            _ => {}
+            _ => { return <Result.Err error=self.diagnosticAt(offset: local.nameStart, msg: "global declaration has no binding", failureDomain: <FailureDomain.Internal />) /> }
         }
-        return <Result.Ok value=result />
+    }
+
+    inout fn inferredGlobalBindingType(declaration: Global) -> Result[U64, CompileDiagnostic] {
+        val target = declaration.nameStart
+        try self.prepareGlobalInitializer(target: target)
+        val facts = try self.preparedGlobalSemanticFacts(target: target)
+        val origin = facts.bindingStorage(stmtId: declaration.letStmt)
+        if origin.isSome() {
+            val binding = facts.bindingStorageFact(origin: origin.unwrap(), declarationTarget: target)
+            if binding.isSome() { return <Result.Ok value=binding.unwrap().typeTerm /> }
+        }
+        return <Result.Err error=self.diagnosticAt(offset: target, msg: "global initializer has no saved binding type", failureDomain: <FailureDomain.Internal />) />
     }
 
     inout fn enterGlobalInitializer(target: U64) -> Result[(), CompileDiagnostic] {
@@ -185,7 +194,7 @@ pub impl Comp {
             Optional.None => {}
         }
         val owner = <SemanticCompletionOwner.Global target=target />
-        if !self.sourceFacts.begin(owner: owner) { return <Result.Err error=self.diagnosticAt(offset: target, msg: "internal error: cyclic global source preparation") /> }
+        if !self.sourceFacts.begin(owner: owner) { return <Result.Err error=self.diagnosticAt(offset: target, msg: "cyclic global type inference", failureDomain: <FailureDomain.Source />) /> }
         val saved = self.cur
         val result = self.prepareGlobalInitializerUncached(target: target)
         self.cur = saved

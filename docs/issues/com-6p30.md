@@ -127,3 +127,22 @@ The repair must preserve unannotated forward-reference typing and
 keep final generic uniqueness checking. Exact occurrence substitution
 within one owner and loss of published initializer evidence still need
 their own controls.
+
+## Initializer request owns type discovery
+
+Declaration registration no longer walks initializer expressions to
+discover their types. A read of an unannotated global requests its
+initializer and obtains the published binding via its storage origin.
+An annotated global still exposes the admitted declaration type without
+forcing its initializer. Whole check and executable startup retain
+their respective request boundaries. Generic argument uniqueness is
+checked after startup source requests have admitted their types.
+
+Fixed-input build `20261113T074206-build-dff532` produced `86d90ea6`.
+The native request probe registers the source, prepares the valid
+sibling, and reports Source at the wrong view only when requested.
+The previous candidate rejected during registration. Check and JIT
+still reject the wrong instance at the selector in real programs.
+All 47 lazy CLI cases and five targeted global check/JIT controls
+pass. The unannotated forward-reference control prints 42 and 41
+under both JIT and native execution.

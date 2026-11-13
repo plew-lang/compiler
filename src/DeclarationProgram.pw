@@ -55,6 +55,10 @@ pub impl DeclarationBodyRequests {
             }
             index += 1U64
         }
+        match c.checkGenericUniqueArgs() {
+            Result.Ok(value: _) => {}
+            Result.Err(error: val diagnostic) => { return <Result.Err error=<DeclarationAccessError.Frontend diagnostic=diagnostic /> /> }
+        }
         val built = templates.globalInitializer(c: inout c)
         return self.body(c: inout c, owner: <DeclarationAccessNode.GlobalInitializer />, built: built)
     }
