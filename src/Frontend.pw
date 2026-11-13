@@ -482,6 +482,21 @@ struct InherentReceiverMatch {
 }
 impl InherentReceiverMatch { factory }
 
+enum ExtensionReceiverEvidence {
+    UnresolvedHead
+    Nominal(binds: Array[UnifyBind])
+    Dependent(matchResult: InherentReceiverMatch)
+    Trait(proof: StaticConformanceProof)
+    Conformance(witness: WitnessMatch)
+}
+
+struct ExtensionApplicability {
+    val implementationScope: U64
+    val receiver: U64
+    val evidence: ExtensionReceiverEvidence
+}
+impl ExtensionApplicability { factory }
+
 enum SignatureRecipeContext {
     Concrete
     Requirement(signature: RequirementSignatureRead)

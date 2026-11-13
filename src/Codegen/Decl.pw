@@ -535,6 +535,14 @@ pub impl Comp {
     }
 
     inout fn extAppliesToType(extensionId: U64, typeStart: U64, typeLen: U64, typeRef: U64, assumptions: Array[DeclarationBoundRef]) -> Result[Bool, CompileDiagnostic] {
+        val applicability = try self.matchExtensionApplicability(extensionId: extensionId, typeStart: typeStart, typeLen: typeLen, typeRef: typeRef, assumptions: assumptions)
+        return <Result.Ok value=applicability.isSome() />
+    }
+
+}
+
+impl Comp {
+    inout fn matchExtensionApplicability(extensionId: U64, typeStart: U64, typeLen: U64, typeRef: U64, assumptions: Array[DeclarationBoundRef]) -> Result[Optional[ExtensionApplicability], CompileDiagnostic] {
         val receiverHead = self.arena.typeHeadSpan(ref: typeRef, fallback: <InternedSpan start=typeStart len=typeLen />)
         val qType: U64 = intern(c: inout self, start: receiverHead.start, len: receiverHead.len)
         for token in self.sourceTypeUses.implementationScopes(extensionId: extensionId) {
@@ -549,7 +557,9 @@ pub impl Comp {
                 }
                 val traitId = self.decls.traitOwnerAt(index: traitIndex).nameId
                 if typeRef == 0U64 {
-                    if traitId == qType { return <Result.Ok value=true /> }
+                    if traitId == qType {
+                        return <Result.Ok value=<Optional.Some v=<ExtensionApplicability implementationScope=token receiver=typeRef evidence=<ExtensionReceiverEvidence.UnresolvedHead /> /> /> />
+                    }
                     continue
                 }
                 val traitArgs = match implementation.kind {
@@ -557,22 +567,35 @@ pub impl Comp {
                     SourceImplementationKind.Inherent => <PatternTypeInput.Values values=implementation.receiverArguments />,
                 }
                 val answer = try self.queryTraitPatternProof(demand: <ConformanceProofDemand.SourceAdmission />, baseRef: typeRef, traitId: traitId, traitOwner: traitOwner, traitArgs: traitArgs, patternParams: <PatternBindInput.Values values=implementation.parameters />, assumptions: assumptions)
-                if self.conformanceQueryFound(answer: answer) { return <Result.Ok value=true /> }
+                match answer {
+                    ConformanceProofResult.Found(proof: val proof) => {
+                        return <Result.Ok value=<Optional.Some v=<ExtensionApplicability implementationScope=token receiver=typeRef evidence=<ExtensionReceiverEvidence.Trait proof=proof /> /> /> />
+                    }
+                    _ => {}
+                }
                 continue
             }
             val pattern = self.arena.typeAt(index: implementation.receiver)
             if pattern.nameId != qType { continue }
-            if typeRef == 0U64 { return <Result.Ok value=true /> }
+            if typeRef == 0U64 {
+                return <Result.Ok value=<Optional.Some v=<ExtensionApplicability implementationScope=token receiver=typeRef evidence=<ExtensionReceiverEvidence.UnresolvedHead /> /> /> />
+            }
             match implementation.kind {
                 SourceImplementationKind.Conformance(index: val index) => {
                     val matchResult = try self.conformanceWitnessMatch(conformIdx: index, typeRef: typeRef, traitArgs: [], traitArgsOpen: true, assumptions: assumptions)
-                    if matchResult.conformIdx != 0U64 && (try self.witnessConditionsSatisfied(witness: matchResult, assumptions: assumptions)) {
-                        return <Result.Ok value=true />
+                    match (try self.witnessWithConditions(witness: matchResult, assumptions: assumptions)) {
+                        Optional.Some(v: val witness) => {
+                            return <Result.Ok value=<Optional.Some v=<ExtensionApplicability implementationScope=token receiver=typeRef evidence=<ExtensionReceiverEvidence.Conformance witness=witness /> /> /> />
+                        }
+                        Optional.None => {}
                     }
                 }
                 SourceImplementationKind.Inherent => {
-                    if try self.extensionInherentReceiverApplies(token: token, implementation: implementation, receiver: typeRef, assumptions: assumptions) {
-                        return <Result.Ok value=true />
+                    match (try self.matchExtensionInherentReceiver(token: token, implementation: implementation, receiver: typeRef, assumptions: assumptions)) {
+                        Optional.Some(v: val evidence) => {
+                            return <Result.Ok value=<Optional.Some v=<ExtensionApplicability implementationScope=token receiver=typeRef evidence=evidence /> /> />
+                        }
+                        Optional.None => {}
                     }
                 }
             }
@@ -582,12 +605,15 @@ pub impl Comp {
         if typeRef != 0U64 {
             val underlying = try self.checkedNominalUnderlying(ref: typeRef)
             if underlying != 0U64 {
-                return self.extAppliesToType(extensionId: extensionId, typeStart: 0U64, typeLen: 0U64, typeRef: underlying, assumptions: assumptions)
+                return self.matchExtensionApplicability(extensionId: extensionId, typeStart: 0U64, typeLen: 0U64, typeRef: underlying, assumptions: assumptions)
             }
         }
-        return <Result.Ok value=false />
+        return <Result.Ok value=<Optional.None /> />
     }
 
+}
+
+pub impl Comp {
     inout fn subjectPathCount(typeRef: U64, traitOwner: U64, aTraitArgs: PatternTypeInput, patternParams: PatternBindInput) -> U64 {
         mut val count: U64 = 0
         mut val i: U64 = 0

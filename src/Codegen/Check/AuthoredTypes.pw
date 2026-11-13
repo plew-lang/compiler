@@ -486,18 +486,24 @@ impl Comp {
         self.arena.setAdmittedFunctionReceiver(index: function, term: term, dependentScope: dependentScope)
     }
 
-    inout fn extensionInherentReceiverApplies(token: U64, implementation: SourceImplementationOwner, receiver: U64, assumptions: Array[DeclarationBoundRef]) -> Result[Bool, CompileDiagnostic] {
+    inout fn matchExtensionInherentReceiver(token: U64, implementation: SourceImplementationOwner, receiver: U64, assumptions: Array[DeclarationBoundRef]) -> Result[Optional[ExtensionReceiverEvidence], CompileDiagnostic] {
         mut val pattern = implementation.receiver
         if implementation.receiverOccurrence != 0U64 && self.bodyTypeNeedsViewAdmission(ref: pattern) {
             try self.admitNominalImplementationReceiver(token: token, owner: implementation)
             pattern = self.authoredImplementationReceivers[token].sourceTerm
             if self.arena.typeContainsAssociatedProjection(ref: pattern) {
                 val matchResult = try self.admitInherentReceiverMatch(token: token, pattern: pattern, receiver: receiver, params: <PatternBindInput.Values values=implementation.parameters />, assumptions: assumptions)
-                return <Result.Ok value=matchResult.witness.conformIdx != 0U64 />
+                if matchResult.witness.conformIdx != 0U64 {
+                    return <Result.Ok value=<Optional.Some v=<ExtensionReceiverEvidence.Dependent matchResult=matchResult /> /> />
+                }
+                return <Result.Ok value=<Optional.None /> />
             }
         }
         mut val binds: Array[UnifyBind] = []
-        return <Result.Ok value=self.unifyPatterns(a: pattern, aSide: 0U64, b: receiver, bSide: 1U64, aParams: <PatternBindInput.Values values=implementation.parameters />, bParams: <PatternBindInput.Values values=[] />, binds: inout binds, ignoreTopView: true) />
+        if self.unifyPatterns(a: pattern, aSide: 0U64, b: receiver, bSide: 1U64, aParams: <PatternBindInput.Values values=implementation.parameters />, bParams: <PatternBindInput.Values values=[] />, binds: inout binds, ignoreTopView: true) {
+            return <Result.Ok value=<Optional.Some v=<ExtensionReceiverEvidence.Nominal binds=binds /> /> />
+        }
+        return <Result.Ok value=<Optional.None /> />
     }
 
     inout fn indexConformanceArgumentScopes() {

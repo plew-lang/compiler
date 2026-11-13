@@ -1321,3 +1321,23 @@ extension, late enabling extension, stripped enabling extension, wrong
 trait instance and cyclic source sets still reject. The variant that strips
 the cyclic source remains accepted. Extension applicability decisions
 still need a retained evidence handoff to downstream consumers.
+
+### Return the applicability evidence from the source query
+
+The extension query now returns the authored implementation scope, the
+matched receiver (including the inherited receiver for a newtype), and
+the evidence that made it applicable. Nominal implementation matching
+returns its binder substitutions, dependent receiver matching returns
+its projection and premise evidence, and trait and conformance matching
+return the proof and conditional witness respectively. The existing
+boolean callers still project applicability from this result. Head-only
+legacy lookup is distinguishable from a match against a semantic receiver.
+
+Fixed-input build `20261113T203553-build-5dcc11` produced carrier
+`96309ad6`. Nine existing acceptance fixtures passed check and JIT with
+their expected output, covering type and value composition, empty and
+dependent implementations, trait-receiver extension and newtype
+inheritance. The ambiguous extension receiver retained its diagnostic
+in both modes. This is an intermediate checkpoint. The source body and
+type-annotation owners still need to publish the result by authored
+occurrence, and lookup must consume it on the admitted path.
