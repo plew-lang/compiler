@@ -235,3 +235,10 @@ not formal self-host timing. The review identified repeated recipe and
 projection-equation validation as a bounded performance candidate. The
 zero-slot aggregate path, missing-proof substitution controls and final
 review remain open.
+
+Fixed-input build `20261113T095340-build-6526be` produced
+`8a65d98d5d62b2eb1b67ca148476c2b3d4a43b3092149b71aa68d6a0ca8efa0e`.
+Record now selects checked aggregate storage once before the slot loop,
+covering zero-slot constructions and eliminating repeated RHS checks
+per field in that loop. All nine nominal JIT fixtures and the existing
+newtype literal/adapter controls pass on this candidate.

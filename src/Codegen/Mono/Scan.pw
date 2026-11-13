@@ -205,15 +205,13 @@ pub impl Comp {
 
     // The physical destination type of one already-selected aggregate slot.
     // Record has consumed the authored field/variant spelling to choose
-    // `fieldIndex`; from here on the aggregate result TypeTerm plus that slot
+    // `fieldIndex`; from here on the checked storage TypeTerm plus that slot
     // identity are sufficient.  In particular this must not route through
     // Check.makeFieldType/TypeInfo: those are contextual checking adapters and
     // reopening them while freezing semantic facts changes the recording
     // environment.
-    inout fn aggregateSlotTypeRef(resultRef: U64, isEnum: Bool, isArrayLiteral: Bool, variantIndex: U64, fieldIndex: U64) -> Result[U64, CompileDiagnostic] {
-        if resultRef == 0U64 || resultRef >= self.arena.typeCount() { return <Result.Ok value=0U64 />}
-        val storage = try self.readFieldStorageType(receiverRef: resultRef, requireEvidence: true)
-        if storage == 0U64 { return <Result.Ok value=0U64 />}
+    inout fn aggregateSlotTypeRef(storage: U64, isEnum: Bool, isArrayLiteral: Bool, variantIndex: U64, fieldIndex: U64) -> Result[U64, CompileDiagnostic] {
+        if storage == 0U64 || storage >= self.arena.typeCount() { return <Result.Ok value=0U64 />}
         val result: TypeRef = self.arena.typeAt(index: storage)
         if result.isRecord {
             if fieldIndex < result.recordFieldTerms.count() { return <Result.Ok value=result.recordFieldTerms[fieldIndex] />}
