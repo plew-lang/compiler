@@ -1,6 +1,19 @@
 // Declaration success must establish the exact trait-view premise while the
 // originating function's rigid binders are available. No body cursor is used.
 pub impl Comp {
+    inout fn checkedNominalUnderlying(ref: U64) -> Result[U64, CompileDiagnostic] {
+        if ref == 0U64 || ref >= self.arena.typeCount() { return <Result.Ok value=0U64 /> }
+        val term = self.arena.typeTermAt(index: ref)
+        if !term.hasDecl { return <Result.Ok value=0U64 /> }
+        val declaration = match self.arena.newtypeByOffset(offset: term.declOffset) {
+            Optional.None => { return <Result.Ok value=0U64 /> }
+            Optional.Some(v: val declaration) => declaration,
+        }
+        val saved = try self.requireNominalTypeAnnotation(id: declaration.authoredTypeUse, site: declaration.authoredTypeSite, term: declaration.underRef, token: declaration.sourceTypeScope, owner: declaration.defOffset)
+        try self.checkNominalAnnotationEvidence(saved: saved, offset: declaration.authoredTypeSite)
+        return <Result.Ok value=declaration.underRef />
+    }
+
     inout fn admitAuthoredFunctionViews() -> Result[(), CompileDiagnostic] {
         match self.authoredSignatureAdmission {
             AuthoredSignatureAdmissionPhase.Open => {}
@@ -860,28 +873,16 @@ impl Comp {
     inout fn requireNominalTypeAnnotation(id: U64, site: U64, term: U64, token: U64, owner: U64) -> Result[LocalAnnotationProof, CompileDiagnostic] {
         val occurrence = try self.signatureOccurrence(id: id)
         val source = self.sourceTypeUses.scopeAt(token: token)
+        val expectedProofCount = self.nominalAnnotationEvidenceCounts.getOr(key: occurrence.recipe, fallback: 18446744073709551615U64)
         match self.nominalAnnotationProofs.get(key: id) {
             Optional.Some(v: val saved) => {
-                if saved.occurrence == id && saved.recipe == occurrence.recipe && saved.sourceTerm == term && saved.proofs.count() == saved.requiredProofs && occurrence.site == site && occurrence.scope == token && source.isSome() && source.unwrap().anchor == owner {
+                if saved.occurrence == id && saved.recipe == occurrence.recipe && saved.sourceTerm == term && saved.proofs.count() == expectedProofCount && occurrence.site == site && occurrence.scope == token && source.isSome() && source.unwrap().anchor == owner {
                     return <Result.Ok value=saved />
                 }
             }
             Optional.None => {}
         }
         return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "nominal type has no matching saved annotation", failureDomain: <FailureDomain.Internal />) />
-    }
-
-    inout fn checkedNominalUnderlying(ref: U64) -> Result[U64, CompileDiagnostic] {
-        if ref == 0U64 || ref >= self.arena.typeCount() { return <Result.Ok value=0U64 /> }
-        val term = self.arena.typeTermAt(index: ref)
-        if !term.hasDecl { return <Result.Ok value=0U64 /> }
-        val declaration = match self.arena.newtypeByOffset(offset: term.declOffset) {
-            Optional.None => { return <Result.Ok value=0U64 /> }
-            Optional.Some(v: val declaration) => declaration,
-        }
-        val saved = try self.requireNominalTypeAnnotation(id: declaration.authoredTypeUse, site: declaration.authoredTypeSite, term: declaration.underRef, token: declaration.sourceTypeScope, owner: declaration.defOffset)
-        try self.checkNominalAnnotationEvidence(saved: saved, offset: declaration.authoredTypeSite)
-        return <Result.Ok value=declaration.underRef />
     }
 
     fn nominalWitnessSourceIsActive(witness: WitnessMatch, subject: U64) -> Bool {
@@ -966,7 +967,7 @@ impl Comp {
     }
 
     inout fn checkNominalAnnotationEvidence(saved: LocalAnnotationProof, offset: U64) -> Result[(), CompileDiagnostic] {
-        if saved.requiredProofs == 0U64 { return <Result.Ok value=() /> }
+        if saved.proofs.count() == 0U64 { return <Result.Ok value=() /> }
         try self.checkProjectionNormalizations(normalizations: saved.normalizations, offset: offset)
         mut val visited: Set[U64] = Set.new()
         mut val next = 0U64
@@ -1008,8 +1009,9 @@ impl Comp {
         try self.checkAuthoredTypeRecipe(sourceScope: token, recipe: occurrence.recipe, edge: <AuthoredRecipeEdge.Source />, scopes: scopes, validation: inout validation, offset: occurrence.site)
         val equations = validation.equations.getOr(key: occurrence.recipe, fallback: [])
         val sourceTerm = try self.replayProjectionNormalizations(ref: term, normalizations: equations, offset: occurrence.site)
-        val proof = <LocalAnnotationProof occurrence=id recipe=occurrence.recipe sourceTerm=sourceTerm normalizations=equations proofs=validation.proofs requiredProofs=validation.proofs.count() />
+        val proof = <LocalAnnotationProof occurrence=id recipe=occurrence.recipe sourceTerm=sourceTerm normalizations=equations proofs=validation.proofs />
         self.nominalAnnotationProofs[id] = proof
+        self.nominalAnnotationEvidenceCounts[occurrence.recipe] = validation.proofs.count()
         self.markAdmittedRecipeTypeUses(recipe: proof.recipe)
         return <Result.Ok value=proof />
     }

@@ -1450,7 +1450,7 @@ pub impl Comp {
     // receiver term is its pointee; Mid must not repeat this layout lookup.
     inout fn recordFieldSelection(exprId: U64, receiverTerm: U64, nameStart: U64, nameLen: U64) -> Result[(), CompileDiagnostic] {
         val layoutReceiver: U64 = self.lexicalLayoutReceiver(receiverTerm: receiverTerm)
-        val storageRef: U64 = self.fieldStorageTypeRef(receiverRef: layoutReceiver)
+        val storageRef: U64 = try self.readFieldStorageType(receiverRef: layoutReceiver, requireEvidence: true)
         val fieldTerm: U64 = (try self.fieldTypeRefOfReceiver(receiverRef: storageRef, fieldStart: nameStart, fieldLen: nameLen))
         if fieldTerm != 0U64 {
             self.recordSemanticExprTerm(exprId: exprId, term: fieldTerm)

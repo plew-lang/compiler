@@ -118,25 +118,30 @@ pub impl Comp {
     // nominal value type. Follow declaration identity, never a same-spelled
     // type from another module. The declaration count bounds malformed cycles.
     inout fn fieldStorageTypeRef(receiverRef: U64) -> U64 {
+        return self.readFieldStorageType(receiverRef: receiverRef, requireEvidence: false).unwrap()
+    }
+
+    inout fn readFieldStorageType(receiverRef: U64, requireEvidence: Bool) -> Result[U64, CompileDiagnostic] {
         mut val current: U64 = receiverRef
         mut val depth: U64 = 0U64
         while current != 0U64 && current < self.arena.typeCount() {
             val term = self.arena.typeAt(index: current)
-            if !term.hasDecl { return current }
-            val underlying = self.arena.newtypeUnderlyingByOffset(offset: term.declOffset)
-            if underlying == 0U64 { return current }
-            if depth >= self.arena.newtypeCount() { return 0U64 }
+            if !term.hasDecl { return <Result.Ok value=current /> }
+            val underlying = if requireEvidence { give try self.checkedNominalUnderlying(ref: current) }
+              else { give self.arena.newtypeUnderlyingByOffset(offset: term.declOffset) }
+            if underlying == 0U64 { return <Result.Ok value=current /> }
+            if depth >= self.arena.newtypeCount() { return <Result.Ok value=0U64 /> }
             current = underlying
             depth += 1U64
         }
-        return 0U64
+        return <Result.Ok value=0U64 />
     }
 
     // Exact semantic field term. Unlike the legacy projection above, this is
     // suitable for a later field selection: `Holder[I32].pair.a` retains the
     // already-grounded record term instead of re-reading its declaration `T`.
     inout fn fieldTypeRefOfReceiver(receiverRef: U64, fieldStart: U64, fieldLen: U64) -> Result[U64, CompileDiagnostic] {
-        val storageRef: U64 = self.fieldStorageTypeRef(receiverRef: receiverRef)
+        val storageRef: U64 = try self.readFieldStorageType(receiverRef: receiverRef, requireEvidence: true)
         if storageRef == 0U64 || storageRef >= self.arena.typeCount() { return <Result.Ok value=0U64 />}
         val t: TypeRef = self.arena.typeAt(index: storageRef)
         // Record selection is a direct TypeTerm child query.  In particular,
@@ -207,7 +212,7 @@ pub impl Comp {
     // environment.
     inout fn aggregateSlotTypeRef(resultRef: U64, isEnum: Bool, isArrayLiteral: Bool, variantIndex: U64, fieldIndex: U64) -> Result[U64, CompileDiagnostic] {
         if resultRef == 0U64 || resultRef >= self.arena.typeCount() { return <Result.Ok value=0U64 />}
-        val storage = self.fieldStorageTypeRef(receiverRef: resultRef)
+        val storage = try self.readFieldStorageType(receiverRef: resultRef, requireEvidence: true)
         if storage == 0U64 { return <Result.Ok value=0U64 />}
         val result: TypeRef = self.arena.typeAt(index: storage)
         if result.isRecord {

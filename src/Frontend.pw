@@ -729,6 +729,7 @@ pub struct Comp {
     pub mut val blockTypeUses: Dictionary[U64, Array[U64]] = [:]
     mut val admittedRecipeTypeUses: Set[U64] = Set.new()
     mut val nominalAnnotationProofs: Dictionary[U64, LocalAnnotationProof] = [:]
+    mut val nominalAnnotationEvidenceCounts: Dictionary[U64, U64] = [:]
     mut val activeNewtypeAnnotations: Set[U64] = Set.new()
     mut val newtypeAnnotationAdmissionOpen: Bool = false
     mut val globalAnnotationProofs: Dictionary[U64, LocalAnnotationProof] = [:]
@@ -2917,7 +2918,6 @@ struct LocalAnnotationProof {
     val occurrence: U64
     val recipe: U64
     val sourceTerm: U64
-    val requiredProofs: U64 = 0U64
     val normalizations: Array[ProjectionNormalizationStep] = []
     val proofs: Array[AuthoredTypeViewProof]
 }

@@ -203,3 +203,18 @@ fixtures plus the selected-extension, rigid-generic and unique-deinit
 controls passed. The additional internal substitutions identified by
 review still need direct verification. The proof-count shortcut and the
 semantic field/cast readers' raw underlying queries remain open.
+
+Fixed-input build `20261113T094322-build-4b7ee4` produced
+`1dd9f553a4b5dde55f32ddce6402f215d690011580d451e44b29b46de380b030`.
+All nine positive fixtures passed check, JIT and native. Four negative
+fixtures produced their required diagnostics in check and JIT. The source
+recipe's expected proof count is recorded at admission independently of
+the consumed payload. Semantic field selection/aggregate preparation and
+Mid cast instantiation now read the checked newtype RHS. The preliminary
+layout helper retains the declaration-shape read required by matching;
+the executable consumers use the checked path.
+
+Remaining before closure: exercise missing and mismatched proof handles,
+failure restoration and the checked field/cast boundaries, compare
+same-source performance on the final candidate, and complete independent
+review. Struct/enum declaration `where` is outside supported syntax.
