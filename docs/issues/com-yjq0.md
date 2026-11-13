@@ -204,3 +204,9 @@ Remaining work covers proof publication for non-projection annotations,
 foreign receipt and same-owner recovery probes, and removal of
 duplicate source annotation normalization for initializer context and
 compatibility verification.
+
+Alternating three measured compilations per carrier on the same source
+gave 7.004045 s before and 6.989182 s after the destructor increment.
+All eight runs (including warm-up) emitted identical LLVM
+(72,485,130 bytes, SHA-256
+`4a72df6c326a959f2f77b5dbe24bcf1610215f62802baacaf7c29fc5c4f2335c`).
