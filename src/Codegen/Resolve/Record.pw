@@ -194,6 +194,12 @@ impl Comp {
         return <Result.Ok value=<Optional.Some v=saved /> />
     }
 
+    fn recordedExtensionSources(exprId: U64) -> Array[SourceExtensionViewProof] {
+        val owner = self.currentSourceOwner()
+        if owner.isNone() || !self.sourceFacts.isActive(owner: owner.unwrap()) { return [] }
+        return self.sourceFacts.activeBuilder.data.composedExtensionViews.getOr(key: exprId, fallback: [])
+    }
+
     // Completeness is independent of concrete closedness: a lexical parameter
     // or a justified projection is usable context, a bare generic head is not.
     // This only inspects the saved term's structure and declaration arity; it
@@ -1973,15 +1979,18 @@ pub impl Comp {
                 }
                 val receiverTerm = if admittedFactoryReceiver != 0U64 { give admittedFactoryReceiver } else { give self.syntheticCallReceiverTerm(exprId: exprId, fallback: (try self.methodReceiverTerm(exprId: recv))) }
                 val requiredTraitOwner = self.syntheticRequiredTraitOwner(exprId: exprId)
+                val extensionProofs = self.recordedExtensionSources(exprId: recv)
                 // The construction query preserves the synthetic requirement on its
                 // selected cache entry.
                 // Only unresolved receivers need the parametric Record query.
                 mut val methodCallee = if admittedFactoryReceiver != 0U64 {
                     give try self.resolveWrittenMethod(exprId: exprId, recv: recv, nameStart: nameStart, nameLen: nameLen, args: args, admittedReceiver: admittedFactoryReceiver)
+                } else if extensionProofs.count() != 0U64 {
+                    give try self.resolveMethodForResolvedReceiver(recv: recv, surfaceRef: receiverTerm, sourceId: 0U64, sourceOwner: 0U64, nameStart: nameStart, nameLen: nameLen, args: args, useOffset: self.exprOffset(id: exprId), requiredTraitOwner: requiredTraitOwner, extensionProofs: extensionProofs)
                 } else { give try self.resolvedCallee(id: exprId) }
-                if requiredTraitOwner != 0U64 && methodCallee >= self.arena.functionCount() {
+                if extensionProofs.count() == 0U64 && requiredTraitOwner != 0U64 && methodCallee >= self.arena.functionCount() {
                     methodCallee = (try self.resolveMethodFinalForType(recv: recv, receiverType: self.typeInfoOfRef(ref: receiverTerm), nameStart: nameStart, nameLen: nameLen, args: args, requiredTraitOwner: requiredTraitOwner))
-                } else if requiredTraitOwner == 0U64 {
+                } else if extensionProofs.count() == 0U64 && requiredTraitOwner == 0U64 {
                     // A factory is lowered to Expr.Method but its receiver is a
                     // type spelling, not a value receiver.  Select its associated
                     // callable here while Record still owns that lexical/type-name
@@ -2086,17 +2095,18 @@ pub impl Comp {
                     receiverTerm = self.typeRefWithAddedViewSources(ref: receiverTerm, additions: additions)
                 }
                 val receiverSource: CallTemplateReceiver = (try self.viewedReceiverTemplateForExpr(exprId: recv, viewedTerm: receiverTerm))
-                mut val methodCallee: U64 = if extension.isSome() { give self.arena.functionCount() } else { give try self.resolvedCallee(id: exprId) }
-                val admittedExtension = if extension.isSome() { give extension.unwrap().source.surfaceId } else { give 0U64 }
+                mut val extensionProofs = self.recordedExtensionSources(exprId: recv)
+                if extension.isSome() { extensionProofs.append(extension.unwrap()) }
+                mut val methodCallee: U64 = if extensionProofs.count() != 0U64 { give self.arena.functionCount() } else { give try self.resolvedCallee(id: exprId) }
                 // `#` fixes a trait/view source at the syntax site.  Its
                 // selected member must be recorded while that source is still
                 // present in Record; the ordinary TypeCache intentionally
                 // leaves some extension-path selections unfilled because the
                 // final concrete receiver is not known during the early pass.
                 if methodCallee >= self.arena.functionCount() {
-                    methodCallee = (try self.resolveMethodForResolvedReceiver(recv: recv, surfaceRef: receiverTerm, sourceId: source.surfaceId, sourceOwner: source.traitInstance.owner, nameStart: nameStart, nameLen: nameLen, args: args, useOffset: self.exprOffset(id: exprId), admittedExtension: admittedExtension))
+                    methodCallee = (try self.resolveMethodForResolvedReceiver(recv: recv, surfaceRef: receiverTerm, sourceId: source.surfaceId, sourceOwner: source.traitInstance.owner, nameStart: nameStart, nameLen: nameLen, args: args, useOffset: self.exprOffset(id: exprId), extensionProofs: extensionProofs))
                 }
-                if methodCallee >= self.arena.functionCount() && source.surfaceId != 0U64 && admittedExtension == 0U64 {
+                if methodCallee >= self.arena.functionCount() && source.surfaceId != 0U64 && extensionProofs.count() == 0U64 {
                         methodCallee = (try self.resolveExtMethodFinal(recv: recv, source: source, nameStart: nameStart, nameLen: nameLen, args: args))
                 }
                 try self.recordSelectedMethodArguments(callee: methodCallee, receiverTerm: receiverTerm, args: args, chainHoleRef: chainHoleRef, useOffset: self.exprOffset(id: exprId))
@@ -2166,7 +2176,8 @@ pub impl Comp {
                         if composes && valueView {
                             val owner = self.currentSourceOwner().unwrap()
                             val assumptions = try self.lexicalViewAssumptions(owner: self.lexicalSourceFactOwner(owner: owner))
-                            try self.admitTypeExtensionSources(subject: receiverTerm, sources: sources, assumptions: assumptions, normalizations: [], selectedProjection: <Optional.None />, offset: source.writtenStart)
+                            val proofs = try self.admitTypeExtensionSources(subject: receiverTerm, sources: sources, assumptions: assumptions, normalizations: [], selectedProjection: <Optional.None />, offset: source.writtenStart)
+                            self.sourceFacts.activeBuilder.data.composedExtensionViews[exprId] = proofs
                         }
                     }
                     self.recordSemanticExprTerm(exprId: exprId, term: self.typeRefWithViewSources(ref: receiverTerm, sources: sources))

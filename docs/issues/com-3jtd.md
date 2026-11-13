@@ -1361,3 +1361,22 @@ failures, `extension_assoc_source_select` and
 suite `20261113T185937-test-6b3c54`. Four controls also matched linked
 native output: a trait-subject extension, a dependent inherent receiver,
 value composition and extension trait provenance.
+
+### Carry composed value admissions into member lookup
+
+The source admission loop returns each accepted extension with the receiver
+and proof at the round in which it became available. Record retains that
+set under the completed composite expression. Calls on that expression
+supply its saved extensions to candidate collection, which no longer
+rechecks those bundles against the final receiver. Other sources still go
+through their existing admission path, and candidate applicability remains
+independent from bundle admission.
+
+Build `20261113T204943-build-069c4b` used fixed inputs and produced
+`a2a988d8`. The same 80 extension/newtype fixtures matched check and JIT;
+the two preceding baseline failures reproduced. Linked native output
+matched for value composition, trait provenance and multiple extension
+sources. The known `Extra#Left.fromMatch()` probe still fails on both the
+precursor and this candidate: that probe remains a member-selection
+requirement in [com-4k31](com-4k31.md#composite-extension-and-trait-selector-call-control).
+The type-recipe producer still discards the returned extension evidence.

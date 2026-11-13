@@ -2591,7 +2591,7 @@ impl Comp {
     // Admit each source against only the sources established so far.
     // A trait selector can disambiguate the premise for an extension, and
     // an already applicable extension can establish the selector's trait.
-    inout fn admitTypeExtensionSources(subject: U64, sources: Array[ResolvedViewSource], assumptions: Array[DeclarationBoundRef], normalizations: Array[ProjectionNormalizationStep], selectedProjection: Optional[StaticConformanceProof], offset: U64) -> Result[(), CompileDiagnostic] {
+    inout fn admitTypeExtensionSources(subject: U64, sources: Array[ResolvedViewSource], assumptions: Array[DeclarationBoundRef], normalizations: Array[ProjectionNormalizationStep], selectedProjection: Optional[StaticConformanceProof], offset: U64) -> Result[Array[SourceExtensionViewProof], CompileDiagnostic] {
         try self.checkTraitSubjectViewCycles(sources: sources, offset: offset)
         mut val pending: Array[ResolvedViewSource] = []
         mut val traitSelector: Optional[ResolvedViewSource] = <Optional.None />
@@ -2599,19 +2599,22 @@ impl Comp {
             if source.traitInstance.owner == 0U64 { pending.append(source) }
             else { traitSelector = <Optional.Some v=source /> }
         }
-        if pending.count() == 0U64 { return <Result.Ok value=() /> }
+        if pending.count() == 0U64 { return <Result.Ok value=[] /> }
+        mut val proofs: Array[SourceExtensionViewProof] = []
         mut val receiver = self.typeRefWithoutOuterViews(ref: subject)
         while pending.count() != 0U64 {
             mut val additions: Array[ResolvedViewSource] = []
             mut val remaining: Array[ResolvedViewSource] = []
             for source in pending {
-                if try self.extAppliesToType(extensionId: source.surfaceId, typeStart: 0U64, typeLen: 0U64, typeRef: receiver, assumptions: assumptions) {
-                    additions.append(source)
-                } else {
-                    remaining.append(source)
+                match (try self.matchExtensionApplicability(extensionId: source.surfaceId, typeStart: 0U64, typeLen: 0U64, typeRef: receiver, assumptions: assumptions)) {
+                    Optional.Some(v: val applicability) => {
+                        proofs.append(<SourceExtensionViewProof source=source receiver=receiver applicability=applicability />)
+                        additions.append(source)
+                    }
+                    Optional.None => { remaining.append(source) }
                 }
             }
-            if remaining.count() == 0U64 { return <Result.Ok value=() /> }
+            if remaining.count() == 0U64 { return <Result.Ok value=proofs /> }
             if traitSelector.isSome() {
                 val selector = traitSelector.unwrap()
                 val instance = selector.traitInstance
@@ -2630,7 +2633,7 @@ impl Comp {
             receiver = self.typeRefWithAddedViewSources(ref: receiver, additions: additions)
             pending = remaining
         }
-        return <Result.Ok value=() />
+        return <Result.Ok value=proofs />
     }
 
     inout fn admitSignatureOccurrence(id: U64, occurrence: AuthoredTypeUse, scope: DeclarationTypeScope, assumptions: Array[DeclarationBoundRef], receiverRef: U64, receiverEquations: Array[ProjectionNormalizationStep], equations: inout Array[ProjectionNormalizationStep], proofs: inout Array[AuthoredTypeViewProof], inheritedProjection: Bool, receiverOccurrence: U64) -> Result[(), CompileDiagnostic] {
@@ -2647,7 +2650,7 @@ impl Comp {
         val selectedProjection = if receiverOccurrence != 0U64 {
             give <Optional.Some v=(try self.retainedSignatureReceiverProjection(occurrence: receiverOccurrence, ref: receiver, proofs: proofs, offset: occurrence.site)) />
         } else { give <Optional.None /> }
-        try self.admitTypeExtensionSources(subject: subject, sources: self.arena.typeViewSources(ref: subject), assumptions: assumptions, normalizations: context, selectedProjection: selectedProjection, offset: occurrence.site)
+        (try self.admitTypeExtensionSources(subject: subject, sources: self.arena.typeViewSources(ref: subject), assumptions: assumptions, normalizations: context, selectedProjection: selectedProjection, offset: occurrence.site))
         for selector in selectors {
             if selector.traitInstance.owner != 0U64 {
                 if self.decls.traitIndexByOffset(offset: selector.traitInstance.owner) >= self.decls.traitCount() { return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "authored view has no canonical trait owner", failureDomain: <FailureDomain.Internal />) /> }
