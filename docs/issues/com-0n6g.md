@@ -1,6 +1,6 @@
 ---
 id: com-0n6g
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-11-09T08:54:17Z
@@ -376,3 +376,32 @@ returned exit 0 and matched its golden on `d666607fcba1`. After nominal
 admission fails, public conformance lookup refuses to create evidence
 for a later declaration. The latest fixed-input build
 `20261113T111036-build-729084` produced `92b3cf006403`.
+
+## Independent closure review
+
+Implemented through `2d90d8d0`; fixed-input candidate
+`92b3cf00640375a5ac045b01a57fa5ad6786553d0340831d44823807cb2511e9`.
+An independent follow-up checked the manifest, operand walk, checked
+retag rule, and intermediate destruction dependency. The findings on
+projected cycles, failed admission permission, growing substitutions,
+retag precedence, and repeated operand walks were addressed and rechecked.
+It found no remaining confirmed blocker within this task.
+
+The final candidate passed 37 targeted check/JIT/linked-native cases,
+eight diagnostic controls in check and JIT, 47 lazy CLI checks, and
+standard gen (`20261113T111433-gen-5c0e06`, 25 positive and five reject).
+The prior checkpoints record both lowering adapters and failure recovery,
+and substitutions of missing or foreign saved evidence through the real
+read path. Scoped closure covers authored nominal slots and their
+consumers. Shared extension applicability/receiver recursion remains with
+[com-3jtd](com-3jtd.md).
+
+The same-source development comparison used `c5146239` and `92b3cf006403`,
+four interleaved pairs, with the first pair excluded as warmup. The
+medians were 7.128 s and 7.235 s. All eight LLVM outputs were identical
+(SHA-256 `ec7763e6ec47712d724be7f5448cf32faf667fb15430a257dd4a43c9c2f7c0e3`).
+Two repeated derivation paths were removed before the final comparison.
+The residual comparison difference is about 0.107 s and remains visible.
+This development comparison is not the formal fixed-point median.
+The full performance and fixed-point gates remain with
+[met-si6j](met-si6j.md).
