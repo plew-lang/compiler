@@ -147,3 +147,9 @@ rejects and existing missing-conformance diagnostic match, both
 closures print `42`, and the four restored controls pass check and
 JIT with the original expected output. A fault test at the final
 body reader and full annotation-recipe publication remain open.
+
+Same-source comparison against the preceding exact-local candidate
+gave 6.878221 s and 7.086465 s on the first three measured pairs.
+An isolated repeat with four pairs gave 6.848379 s and 6.844556 s.
+The slowdown did not reproduce. These are throughput comparisons;
+the whole-program fixed-point gate remains with met-si6j.
