@@ -1,0 +1,6 @@
+trait Marker[T] {}
+struct Number {}
+extension Selection { impl Number as Marker[I64] {} }
+fn main() {
+    val invalid = (<Number />#Selection)#!Selection#Marker[I64]
+}

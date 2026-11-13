@@ -174,6 +174,38 @@ impl Comp {
         return index < self.decls.traitOwnerCount() && self.decls.traitOwnerAt(index: index).arity != 0U64
     }
 
+    // Extension additions and the trait selector compose into one source
+    // set. Put the trait selection after its extension inputs before any
+    // lexical or executable consumer observes an intermediate expression.
+    inout fn lowerValueView(recv: U64, source: ResolvedViewSource, strip: Bool) -> Result[U64, CompileDiagnostic] {
+        if !strip && source.traitInstance.owner == 0U64 {
+            match self.arena.exprs[recv] {
+                Expr.ExtView(recv: val subject, source: val selector, strip: val stripped) => {
+                    if !stripped && selector.traitInstance.owner != 0U64 {
+                        self.arena.exprs[recv] = <Expr.ExtView recv=subject source=source strip=false />
+                        val selected = self.pushExpr(e: <Expr.ExtView recv=recv source=selector strip=false />)
+                        if !self.sourceTypeUses.moveValueViewArguments(from: recv, to: selected) {
+                            return <Result.Err error=self.diagnosticAt(offset: selector.writtenStart, msg: "invalid composed value view argument registration", failureDomain: <FailureDomain.Internal />) />
+                        }
+                        match self.expressionTypeUses.get(key: recv) {
+                            Optional.Some(v: val uses) => {
+                                self.expressionTypeUses[selected] = uses
+                                self.expressionTypeUses.remove(key: recv)
+                            }
+                            Optional.None => {}
+                        }
+                        self.decls.registerPlaceSource(exprId: selected, source: self.decls.placeSource(exprId: recv), expressionCount: self.arena.exprs.count())
+                        return <Result.Ok value=selected />
+                    }
+                }
+                _ => {}
+            }
+        }
+        val viewed = self.pushExpr(e: <Expr.ExtView recv=recv source=source strip=strip />)
+        self.decls.registerPlaceSource(exprId: viewed, source: self.decls.placeSource(exprId: recv), expressionCount: self.arena.exprs.count())
+        return <Result.Ok value=viewed />
+    }
+
     inout fn lowerBoundValueView(recv: U64, source: ResolvedViewSource, names: Array[Span], head: U64, strip: Bool, argumentOccurrences: Array[U64]) -> Result[U64, CompileDiagnostic] {
         mut val authoredArguments: Optional[Array[U64]] = <Optional.None />
         if argumentOccurrences.count() != 0U64 && !strip {
@@ -182,13 +214,12 @@ impl Comp {
                 _ => {}
             }
         }
-        mut val result = self.pushExpr(e: <Expr.ExtView recv=recv source=source strip=strip />)
+        mut val result = try self.lowerValueView(recv: recv, source: source, strip: strip)
         if !strip && source.traitInstance.positionalArgs.count() != 0U64 {
             if !self.sourceTypeUses.bindValueViewArguments(expression: result, arguments: authoredArguments) {
                 return <Result.Err error=self.diagnosticAt(offset: source.writtenStart, msg: "invalid value view argument registration", failureDomain: <FailureDomain.Internal />) />
             }
         }
-        self.decls.registerPlaceSource(exprId: result, source: self.decls.placeSource(exprId: recv), expressionCount: self.arena.exprs.count())
         mut val index = head + 1U64
         while index < names.count() {
             val name = names[index]

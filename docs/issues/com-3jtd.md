@@ -203,3 +203,19 @@ on the source at `619e0292` used four alternating pairs and excluded the
 first pair as warmup. Medians were 7.111 s and 7.152 s; all eight LLVM
 outputs matched SHA-256
 `0cd5566502474f59f393acb471c25aab1eba0a9b825a030f87df0ac1588b0533`.
+
+### Composed expression normalization
+
+Both syntax adapters normalize adjacent value extension and trait additions
+before Record. Moving the trait selection outward also moves its exact
+argument occurrences and source-use checks. The view on an independently
+stored value and a strip remain explicit composition boundaries. No later
+phase selects an intermediate trait witness for the reordered chain.
+
+Fixed-input build `20261113T115525-build-f6ca16` produced `f547663c2e7d`.
+The forward, reverse and parenthesized additions in the composed fixture
+all print 42 in JIT and linked native. Stripping the enabling extension,
+adding an extension after a separate binding, and choosing a different
+trait instance still reject in check and JIT. Existing extension cycle
+removal, extension super calls, stacked views and projected cast controls
+also pass.

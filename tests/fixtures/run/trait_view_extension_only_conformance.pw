@@ -6,4 +6,8 @@ fn read[T](value: T) -> I64 where T: Marker[I64] { return 42I64 }
 fn main() {
     val value: Number#Selection#Marker[I64] = (<Number />#Selection)#Marker[I64]
     print(read(value: value))
+    val reversed: Number#Marker[I64]#Selection = <Number />#Marker[I64]#Selection
+    print(read(value: reversed))
+    val grouped = (<Number />#Marker[I64])#Selection
+    print(read(value: grouped))
 }
