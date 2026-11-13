@@ -622,6 +622,7 @@ pub struct Comp {
     // Source/synthetic call-origin allocator.  It never participates in AST
     // indexing and remains stable even if the arena representation changes.
     pub mut val nextExprOriginSerial: U64 = 1U64
+    mut val bodiesWithReplayedTraitViews: Set[U64] = Set.new()
     // declaration / conformance / name side-tables built during loading & analysis
     // (see `Decls`): traits, conformances, method aliases,
     // derive requests, where-bounds, deinits, assoc bindings, pub factories, and
@@ -1315,7 +1316,7 @@ pub impl Comp {
         // not a second authored type annotation.  Structural source-set checks
         // run at the authored syntax node (or the outermost value-view), so an
         // intermediate `T#E#F` erased later by `#!F` must not be rechecked.
-        return self.pushType(t: <TypeRef nameStart=base.nameStart nameLen=base.nameLen nameId=base.nameId paramId=base.paramId args=base.args isRecord=base.isRecord recordFieldLabels=base.recordFieldLabels recordFieldTerms=base.recordFieldTerms viewExtId=mirror viewIds=ids viewSources=normalized isAny=base.isAny argLabels=base.argLabels assocTraitStart=base.assocTraitStart assocTraitLen=base.assocTraitLen assocTraitId=base.assocTraitId assocTraitArgs=base.assocTraitArgs assocTraitArgLabels=base.assocTraitArgLabels assocNameStart=base.assocNameStart assocNameLen=base.assocNameLen assocNameId=base.assocNameId isSendable=base.isSendable isDiverging=base.isDiverging hasDecl=base.hasDecl declOffset=base.declOffset hasAssocTraitDecl=base.hasAssocTraitDecl assocTraitDeclOffset=base.assocTraitDeclOffset siteOffset=0U64 />)
+        return self.pushType(t: <TypeRef nameStart=base.nameStart nameLen=base.nameLen nameId=base.nameId paramId=base.paramId args=base.args isRecord=base.isRecord recordFieldLabels=base.recordFieldLabels recordFieldTerms=base.recordFieldTerms viewExtId=mirror viewIds=ids viewSources=normalized isAny=base.isAny argLabels=base.argLabels assocTraitStart=base.assocTraitStart assocTraitLen=base.assocTraitLen assocTraitId=base.assocTraitId assocTraitArgs=base.assocTraitArgs assocTraitArgLabels=base.assocTraitArgLabels assocNameStart=base.assocNameStart assocNameLen=base.assocNameLen assocNameId=base.assocNameId projectionReceiver=base.projectionReceiver isSendable=base.isSendable isDiverging=base.isDiverging hasDecl=base.hasDecl declOffset=base.declOffset hasAssocTraitDecl=base.hasAssocTraitDecl assocTraitDeclOffset=base.assocTraitDeclOffset siteOffset=0U64 />)
     }
 
     // A view augments the outer receiver surface without invalidating a bound
@@ -1327,7 +1328,7 @@ pub impl Comp {
         val term = self.arena.typeTermAt(index: ref)
         if term.viewExtId == 0U64 && term.viewIds.len == 0U64 && term.viewSources.len == 0U64 { return ref }
         val base: TypeRef = self.arena.typeAt(index: ref)
-        return self.pushType(t: <TypeRef nameStart=base.nameStart nameLen=base.nameLen nameId=base.nameId paramId=base.paramId args=base.args isRecord=base.isRecord recordFieldLabels=base.recordFieldLabels recordFieldTerms=base.recordFieldTerms isAny=base.isAny argLabels=base.argLabels assocTraitStart=base.assocTraitStart assocTraitLen=base.assocTraitLen assocTraitId=base.assocTraitId assocTraitArgs=base.assocTraitArgs assocTraitArgLabels=base.assocTraitArgLabels assocNameStart=base.assocNameStart assocNameLen=base.assocNameLen assocNameId=base.assocNameId isSendable=base.isSendable isDiverging=base.isDiverging hasDecl=base.hasDecl declOffset=base.declOffset hasAssocTraitDecl=base.hasAssocTraitDecl assocTraitDeclOffset=base.assocTraitDeclOffset siteOffset=base.siteOffset />)
+        return self.pushType(t: <TypeRef nameStart=base.nameStart nameLen=base.nameLen nameId=base.nameId paramId=base.paramId args=base.args isRecord=base.isRecord recordFieldLabels=base.recordFieldLabels recordFieldTerms=base.recordFieldTerms isAny=base.isAny argLabels=base.argLabels assocTraitStart=base.assocTraitStart assocTraitLen=base.assocTraitLen assocTraitId=base.assocTraitId assocTraitArgs=base.assocTraitArgs assocTraitArgLabels=base.assocTraitArgLabels assocNameStart=base.assocNameStart assocNameLen=base.assocNameLen assocNameId=base.assocNameId projectionReceiver=base.projectionReceiver isSendable=base.isSendable isDiverging=base.isDiverging hasDecl=base.hasDecl declOffset=base.declOffset hasAssocTraitDecl=base.hasAssocTraitDecl assocTraitDeclOffset=base.assocTraitDeclOffset siteOffset=base.siteOffset />)
     }
 
     inout fn typeRefWithViews(ref: U64, viewExtId: U64, viewIds: Array[U64]) -> U64 {

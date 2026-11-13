@@ -24,6 +24,22 @@ pub impl Comp {
         // of closedness: unbound parameters and projections remain untouched.
         if (params.count() == 0U64 || values.count() == 0U64) && selfRef == 0U64 && itemRef == 0U64 { return ref }
         val t = self.arena.typeTermAt(index: ref)
+        if t.assocNameId != 0U64 && t.viewSources.len != 0U64 {
+            val resultSources = self.projectionResultViewSources(ref: ref)
+            if resultSources.count() != 0U64 {
+                val projection = self.projectionWithoutResultViews(ref: ref)
+                val grounded = self.groundTermInEnvironment(ref: projection, params: params, values: values, selfRef: selfRef, itemRef: itemRef)
+                mut val sources: Array[ResolvedViewSource] = []
+                for source in resultSources {
+                    mut val arguments: Array[U64] = []
+                    for argument in source.traitInstance.positionalArgs {
+                        arguments.append(self.groundTermInEnvironment(ref: argument, params: params, values: values, selfRef: selfRef, itemRef: itemRef))
+                    }
+                    sources.append(source.withArguments(arguments: arguments))
+                }
+                return self.typeRefWithAddedViewSources(ref: grounded, additions: sources)
+            }
+        }
         if t.assocNameId == 0U64 && t.viewSources.len != 0U64 && self.arena.typeViewArgumentCount(ref: ref) != 0U64 {
             mut val arguments: Array[U64] = []
             mut val index = 0U64
@@ -129,9 +145,34 @@ pub impl Comp {
     inout fn groundAndRecordBodyType(ref: U64, environment: InstanceEnvironment, selfRef: U64, itemRef: U64, bodyId: U64) -> Result[U64, CompileDiagnostic] {
         val published = self.arena.bodyTypeTermResult(bodyId: bodyId, typeTerm: ref)
         if published.bodyId != 0U64 { return <Result.Ok value=published.resultType />}
-        val result = (try self.groundTermForBody(ref: ref, environment: environment, selfRef: selfRef, itemRef: itemRef))
+        val term = if self.bodiesWithReplayedTraitViews.contains(bodyId) && !self.arena.typeIsClosed(ref: ref) {
+            give self.applyPublishedBodyTypeChildren(bodyId: bodyId, ref: ref)
+        } else { give ref }
+        val result = (try self.groundTermForBody(ref: term, environment: environment, selfRef: selfRef, itemRef: itemRef))
         self.recordBodyTypeTermResult(bodyId: bodyId, source: ref, result: result)
         return <Result.Ok value=result />
+    }
+
+    // Reuse finished children before substitution changes their source IDs.
+    // A composite type may share a viewed child with an earlier expression.
+    inout fn applyPublishedBodyTypeChildren(bodyId: U64, ref: U64) -> U64 {
+        val count = self.typeTermRefChildCount(ref: ref)
+        if count == 0U64 { return ref }
+        mut val children: Array[U64] = []
+        mut val changed = false
+        for index in 0U64..<count {
+            val child = self.typeTermRefChildRef(ref: ref, index: index)
+            val published = self.arena.bodyTypeTermResult(bodyId: bodyId, typeTerm: child)
+            val selected = if published.bodyId != 0U64 {
+                give published.resultType
+            } else if !self.arena.typeIsClosed(ref: child) {
+                give self.applyPublishedBodyTypeChildren(bodyId: bodyId, ref: child)
+            } else { give child }
+            if selected != child { changed = true }
+            children.append(selected)
+        }
+        if !changed { return ref }
+        return self.rebuildTypeTermChildren(ref: ref, children: children)
     }
 
     inout fn recordBodyTypeTermResult(bodyId: U64, source: U64, result: U64) {
@@ -212,6 +253,22 @@ pub impl Comp {
         // A non-projection leaf has no children to close. Read its scalar
         // shape before materializing any owning compatibility type record.
         val term = self.arena.typeTermAt(index: ref)
+        if term.assocNameId != 0U64 && term.viewSources.len != 0U64 {
+            val resultSources = self.projectionResultViewSources(ref: ref)
+            if resultSources.count() != 0U64 {
+                val projection = self.projectionWithoutResultViews(ref: ref)
+                val grounded = try self.closeBodyProjectionTermsRecording(ref: projection, environment: environment, selfRef: selfRef, itemRef: itemRef, assumptions: assumptions, normalizations: inout normalizations, recording: recording, demand: demand)
+                mut val sources: Array[ResolvedViewSource] = []
+                for source in resultSources {
+                    mut val arguments: Array[U64] = []
+                    for argument in source.traitInstance.positionalArgs {
+                        arguments.append(try self.closeBodyProjectionTermsRecording(ref: argument, environment: environment, selfRef: selfRef, itemRef: itemRef, assumptions: assumptions, normalizations: inout normalizations, recording: recording, demand: demand))
+                    }
+                    sources.append(source.withArguments(arguments: arguments))
+                }
+                return <Result.Ok value=self.typeRefWithAddedViewSources(ref: grounded, additions: sources) />
+            }
+        }
         if term.assocNameId == 0U64 && term.viewSources.len != 0U64 && self.arena.typeViewArgumentCount(ref: ref) != 0U64 {
             mut val arguments: Array[U64] = []
             mut val index = 0U64
@@ -344,6 +401,27 @@ pub impl Comp {
     inout fn typeTermProjectionReceiver(t: TypeRef) -> U64 {
         if t.projectionReceiver != 0U64 { return t.projectionReceiver }
         return self.pushType(t: <TypeRef nameStart=t.nameStart nameLen=t.nameLen paramId=t.paramId args=t.args isRecord=t.isRecord recordFieldLabels=t.recordFieldLabels recordFieldTerms=t.recordFieldTerms viewExtId=t.viewExtId viewIds=t.viewIds viewSources=t.viewSources isAny=t.isAny argLabels=t.argLabels isSendable=t.isSendable isDiverging=t.isDiverging hasDecl=t.hasDecl declOffset=t.declOffset siteOffset=t.siteOffset />)
+    }
+
+    // The flat projection row mirrors the receiver's facets. A value view
+    // written on the projected result adds a separate facet to that row.
+    inout fn projectionResultViewSources(ref: U64) -> Array[ResolvedViewSource] {
+        val receiver = self.arena.typeTermAt(index: ref).projectionReceiver
+        val receiverSources = self.arena.typeViewSources(ref: receiver)
+        mut val result: Array[ResolvedViewSource] = []
+        for source in self.arena.typeViewSources(ref: ref) {
+            mut val mirrored = false
+            for existing in receiverSources {
+                if self.semanticViewSourceEq(a: source, b: existing) { mirrored = true break }
+            }
+            if !mirrored { result.append(source) }
+        }
+        return result
+    }
+
+    inout fn projectionWithoutResultViews(ref: U64) -> U64 {
+        val receiver = self.arena.typeTermAt(index: ref).projectionReceiver
+        return self.typeRefWithViewSources(ref: ref, sources: self.arena.typeViewSources(ref: receiver))
     }
 
     // The closed semantic child view of a TypeTerm.  Record fields, a

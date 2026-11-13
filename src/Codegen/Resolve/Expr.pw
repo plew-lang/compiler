@@ -2568,12 +2568,12 @@ pub impl Comp {
     // TypeTerm.  This is the direct producer→consumer handoff for generic free
     // calls; Mono must not re-infer a body-local `self` from AST/TypeInfo when
     // the parametric template already selected it.
-    inout fn groundCallTemplateTypeArgs(arguments: CallTemplateTypeArgumentRange, environment: InstanceEnvironment, selfRef: U64, itemRef: U64) -> Result[Array[U64], CompileDiagnostic] {
+    inout fn groundCallTemplateTypeArgs(arguments: CallTemplateTypeArgumentRange, environment: InstanceEnvironment, selfRef: U64, itemRef: U64, bodyId: U64) -> Result[Array[U64], CompileDiagnostic] {
         mut val out: Array[U64] = []
         val args = self.callTemplateTypeArgs(range: arguments)
         mut val i: U64 = 0U64
         while i < args.count() {
-            out.append((try self.groundTermForBody(ref: args[i], environment: environment, selfRef: selfRef, itemRef: itemRef)))
+            out.append((try self.groundAndRecordBodyType(ref: args[i], environment: environment, selfRef: selfRef, itemRef: itemRef, bodyId: bodyId)))
             i += 1U64
         }
         return <Result.Ok value=out />

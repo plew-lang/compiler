@@ -3560,7 +3560,7 @@ pub impl Comp {
 
     inout fn selectDirectTemplateCall(exprId: U64, callee: U64, receiver: CallTemplateReceiver, receiverTypeTerm: U64, expectedResultTerm: U64, calleeTypeArgs: CallTemplateTypeArgumentRange, arguments: Array[CallTemplateArgument], proof: StaticConformanceProof = <StaticConformanceProof.Missing />) -> Result[CallSiteSelection, CompileDiagnostic] {
         val expected: U64 = (try self.groundCallTemplateExpectedResult(expectedResultTerm: expectedResultTerm, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef))
-        val calleeArgs: Array[U64] = (try self.groundCallTemplateTypeArgs(arguments: calleeTypeArgs, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef))
+        val calleeArgs: Array[U64] = (try self.groundCallTemplateTypeArgs(arguments: calleeTypeArgs, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.currentBodyInstanceId()))
         val receiverRef = try self.groundSelectedDirectReceiver(receiver: receiver, receiverTypeTerm: receiverTypeTerm)
         mut val concreteProof: StaticConformanceProof = proof
         // A Direct template has already selected its callable.  When that
@@ -5087,6 +5087,7 @@ pub impl Comp {
         self.arena.finalDestructionNominalNext = []
         self.arena.finalDestructionNext = []
         self.arena.clearBodyTypeResults()
+        self.bodiesWithReplayedTraitViews = Set.new()
         self.arena.finalAggregates = []
         self.arena.finalAggregateIndexSlots = []
         self.arena.finalExistentials = []
@@ -5687,8 +5688,9 @@ pub impl Comp {
     }
 
     // Finalization freezes the closure ABI under the same lexical instance
-    // as its return/call descriptors. Abstract scans do not publish an ABI.
-    inout fn finalizeClosureSignature(ownerFnIdx: U64, closureId: U64) -> Result[(), CompileDiagnostic] {
+    // as its return/call descriptors. Captures consume types already prepared
+    // by the enclosing body for the recorded binding identities.
+    inout fn finalizeClosureSignature(ownerFnIdx: U64, closureId: U64, enclosingBodyId: U64) -> Result[(), CompileDiagnostic] {
         val index = (try self.semanticClosureIndex(ownerFnIdx: ownerFnIdx, exprId: closureId))
         if index >= self.semanticClosures.count() { return <Result.Ok value=() /> }
         val closure = try self.preparedSemanticClosureAt(index: index)
@@ -5723,8 +5725,9 @@ pub impl Comp {
         mut val captureI: U64 = 0U64
         while captureI < closure.captures.count() {
             val capture = closure.captures[captureI]
-            val type = (try self.groundAndRecordBodyType(ref: capture.typeTerm, environment: environment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.cur.bodyId))
+            val type = try self.finalClosureCaptureType(capture: capture, enclosingBodyId: enclosingBodyId)
             if type == 0U64 || !(try self.tyRefIsGround(ref: type)) { return <Result.Ok value=() /> }
+            self.recordBodyTypeTermResult(bodyId: closureBodyId, source: capture.typeTerm, result: type)
             val info = self.typeInfoOfRef(ref: type)
             val mutable = match capture.mode { SemanticClosureCaptureMode.CellBorrow => { give true } _ => { give false } }
             val local = <Local nameStart=capture.bindingTarget nameLen=0U64 tyStart=info.nameStart tyLen=info.nameLen isArray=info.kind == 3 ty=type isInout=false isMut=mutable owned=false moved=false cnum=0U64 />
@@ -5762,6 +5765,21 @@ pub impl Comp {
         captureI = 0U64
         while captureI < captures.count() { try self.scanType(ref: captures[captureI].typeTerm) captureI += 1U64 }
         return <Result.Ok value=() />
+    }
+
+    inout fn finalClosureCaptureType(capture: SemanticClosureCapture, enclosingBodyId: U64) -> Result[U64, CompileDiagnostic] {
+        // The enclosing binding stack remains installed while preparing the
+        // closure signature. Match the declaration offset, never its name.
+        for local in self.cur.locals {
+            if !local.isGlobal && local.nameStart == capture.bindingTarget && local.nameLen == capture.nameLen {
+                val type = try self.groundAndRecordBodyType(ref: local.ty, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: enclosingBodyId)
+                if !self.publishedBodyTypeMatches(bodyId: enclosingBodyId, source: capture.typeTerm, concrete: type) {
+                    return <Result.Err error=self.diagnosticAt(offset: capture.bindingTarget, msg: "closure capture differs from its enclosing binding type", failureDomain: <FailureDomain.Internal />) />
+                }
+                return <Result.Ok value=type />
+            }
+        }
+        return <Result.Err error=self.diagnosticAt(offset: capture.bindingTarget, msg: "closure capture has no enclosing binding", failureDomain: <FailureDomain.Internal />) />
     }
 
     // Reconstruct a closure's concrete lexical environment from its instance
@@ -6178,6 +6196,7 @@ pub impl Comp {
             return <Result.Err error=self.diagnosticAt(offset: source.writtenStart, msg: "trait value view replay did not produce a concrete type", failureDomain: <FailureDomain.Internal />) />
         }
         self.recordBodyTypeTermResult(bodyId: bodyId, source: viewedTerm, result: concrete)
+        if !self.arena.typeIsClosed(ref: viewedTerm) { self.bodiesWithReplayedTraitViews.insert(bodyId) }
         return <Result.Ok value=concrete />
     }
 
@@ -6218,7 +6237,7 @@ pub impl Comp {
                 val closureBodyId = self.currentBodyInstanceId()
                 self.cur.bodyId = closureBodyId
                 val ready = self.arena.bodySignature(bodyId: closureBodyId).ready
-                val result = self.finalizeClosureSignature(ownerFnIdx: saved.bodyFnIdx, closureId: exprId)
+                val result = self.finalizeClosureSignature(ownerFnIdx: saved.bodyFnIdx, closureId: exprId, enclosingBodyId: saved.bodyId)
                 self.cur = saved
                 try result
                 if !ready && self.arena.bodySignature(bodyId: closureBodyId).ready {
@@ -6271,7 +6290,8 @@ pub impl Comp {
                 val bodyId = self.currentBodyInstanceId()
                 if bodyId != 0U64 && !strip && source.traitInstance.owner != 0U64 && self.assocRecvName(recv: exprId).nameLen == 0U64 {
                     val fact = try self.preparedBodyExpression(bodyId: bodyId, exprId: exprId, globalInitializerTarget: self.cur.globalInitializerTarget)
-                    val viewed = try self.replayFinalTraitValueView(exprId: exprId, source: source, authoredArguments: self.sourceTypeUses.valueViewArguments(origin: self.arena.exprOriginSerial[exprId]), viewedTerm: fact.term)
+                    val authored = try self.requiredBodyValueViewArguments(exprId: exprId, selector: source)
+                    val viewed = try self.replayFinalTraitValueView(exprId: exprId, source: source, authoredArguments: authored, viewedTerm: fact.term)
                     try self.enqueueFinalDestruction(typeRef: viewed)
                 } else {
                     try self.collectRecordedValueLayout(exprId: exprId)

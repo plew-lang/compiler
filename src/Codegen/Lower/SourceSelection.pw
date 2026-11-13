@@ -183,8 +183,9 @@ impl Comp {
             }
         }
         mut val result = self.pushExpr(e: <Expr.ExtView recv=recv source=source strip=strip />)
-        if authoredArguments.isSome() {
-            self.sourceTypeUses.bindValueViewArguments(origin: self.arena.exprOriginSerial[result], arguments: authoredArguments.unwrap())
+        if !strip && source.traitInstance.positionalArgs.count() != 0U64 {
+            val origin = self.arena.exprOriginSerial[result]
+            self.sourceTypeUses.bindValueViewArguments(origin: origin, arguments: authoredArguments)
         }
         self.decls.registerPlaceSource(exprId: result, source: self.decls.placeSource(exprId: recv), expressionCount: self.arena.exprs.count())
         mut val index = head + 1U64

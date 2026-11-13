@@ -389,6 +389,23 @@ pub impl Comp {
     inout fn replayProjectionNormalizations(ref: U64, normalizations: Array[ProjectionNormalizationStep], offset: U64, active: Array[U64] = []) -> Result[U64, CompileDiagnostic] {
         if normalizations.count() == 0U64 || !self.arena.typeContainsAssociatedProjection(ref: ref) { return <Result.Ok value=ref /> }
         if ref == 0U64 || ref >= self.arena.typeCount() { return <Result.Ok value=ref /> }
+        val node = self.arena.typeTermAt(index: ref)
+        if node.assocNameId != 0U64 && node.viewSources.len != 0U64 {
+            val resultSources = self.projectionResultViewSources(ref: ref)
+            if resultSources.count() != 0U64 {
+                val projection = self.projectionWithoutResultViews(ref: ref)
+                val output = try self.replayProjectionNormalizations(ref: projection, normalizations: normalizations, offset: offset, active: active)
+                mut val sources: Array[ResolvedViewSource] = []
+                for source in resultSources {
+                    mut val arguments: Array[U64] = []
+                    for argument in source.traitInstance.positionalArgs {
+                        arguments.append(try self.replayProjectionNormalizations(ref: argument, normalizations: normalizations, offset: offset, active: active))
+                    }
+                    sources.append(source.withArguments(arguments: arguments))
+                }
+                return <Result.Ok value=self.typeRefWithAddedViewSources(ref: output, additions: sources) />
+            }
+        }
         mut val children: Array[U64] = []
         mut val changed = false
         mut val index = 0U64

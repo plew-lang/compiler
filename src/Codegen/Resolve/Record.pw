@@ -3,6 +3,15 @@
 // facts under a BodyInstance; they do not repeat lexical type inference.
 
 impl Comp {
+    inout fn requiredBodyValueViewArguments(exprId: U64, selector: ResolvedViewSource) -> Result[Optional[Array[U64]], CompileDiagnostic] {
+        if selector.traitInstance.positionalArgs.count() == 0U64 { return <Result.Ok value=<Optional.None /> /> }
+        val origin = self.arena.exprOriginSerial[exprId]
+        match self.sourceTypeUses.valueViewArguments(origin: origin) {
+            Optional.Some(v: val arguments) => { return <Result.Ok value=arguments /> }
+            Optional.None => { return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "trait value view has no matching lowered argument occurrences", failureDomain: <FailureDomain.Internal />) /> }
+        }
+    }
+
     inout fn recordTraitValueView(exprId: U64, receiver: U64, source: ResolvedViewSource, authoredArguments: Optional[Array[U64]] = <Optional.None />) -> Result[ResolvedViewSource, CompileDiagnostic] {
         if receiver == 0U64 { return <Result.Ok value=source /> }
         val owner = match self.currentSourceOwner() {
@@ -1680,7 +1689,15 @@ pub impl Comp {
             try self.resolveConstructionContext(exprId: exprId, context: context)
         }
         if !self.genMode && exprId < self.sourceExpressionLimit { try self.checkExpressionVisibility(exprId: exprId) }
-        val authored = self.sourceTypeUses.valueViewArguments(origin: self.arena.exprOriginSerial[exprId])
+        mut val authored: Optional[Array[U64]] = <Optional.None />
+        match self.arena.exprs[exprId] {
+            Expr.ExtView(recv: _, source: val selector, strip: val strip) => {
+                if !strip && selector.traitInstance.positionalArgs.count() != 0U64 {
+                    authored = try self.requiredBodyValueViewArguments(exprId: exprId, selector: selector)
+                }
+            }
+            _ => {}
+        }
         if authored.isSome() && self.assocRecvName(recv: exprId).nameLen == 0U64 {
             for id in authored.unwrap() { self.markBodyRecipeTypeUses(recipe: (try self.signatureOccurrence(id: id)).recipe) }
         }

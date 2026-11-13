@@ -1,0 +1,16 @@
+use @Std/Io only { print }
+trait Projection { type Item fn value() -> Item }
+trait Project[T] { fn item() -> I64 }
+struct Number {}
+struct Payload {}
+impl Number as Projection {
+    type Item = Payload
+    fn value() -> Payload { return <Payload /> }
+}
+impl Payload as Project[I64] { fn item() -> I64 { return 42I64 } }
+fn test[T](owner: T) where T: Projection, T#Projection.Item: Project[I64] {
+    val viewed = owner.value()#Project[I64]
+    val read = fn() -> I64 { return viewed.item() }
+    print(read())
+}
+fn main() { test(owner: <Number />) }
