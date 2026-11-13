@@ -180,16 +180,27 @@ fail Internal when their proof is withheld, and intact fresh compiler
 states succeed. See the meta evidence under
 `evidence/rejection-domains/diagnostic-domain-implementation/value-view-proof-replay/`.
 
-Remaining coverage includes deinit and provided owners, proof
-publication for non-projection annotations, and foreign receipt and
-same-owner recovery probes. Source initializer context and compatibility
-verification can still normalize a written type through the old path.
+## Bind deinit annotations to their source body
 
-The concrete impl deinit and trait-provided method smoke controls
-both print `42`, but only the provided method currently goes through
-the authored body registration. Both impl deinit adapters lower the
-block in the enclosing implementation scope and register a bare
-function. Give the deinit its own lexical scope and bind that scope to
-the registered destructor before relying on its local annotation
-receipt. The two legacy struct-body deinit adapters are a separate
-source-entry shape to account for while preserving current behavior.
+The two source adapters for impl deinit and the two legacy struct-body
+adapters now open a deinit body scope and bind it to the registered
+destructor. A projected annotation uses that scope at admission and its
+saved receipt at finalization. The destructor keeps its existing
+instantiation path, with no authored callable signature. The
+trait-provided method already uses authored method registration.
+
+The same native owner fixture fails on the archived pre-change source
+with `deinit has no authored body scope` and passes on the changed source
+for both declaration forms. Fixed-input build
+`20261113T040320-build-f4da04` produced `fd67b3c2`. Lazy CLI, generic
+deinit and six other runtime fixtures passed. An isolated deletion of
+the deinit annotation receipt fails Internal with
+`final local has no saved annotation proof`; the intact controls pass.
+
+Conditional generic deinit selection is tracked by [met-b2la](met-b2la.md).
+Removal of legacy struct-body deinit is tracked by [met-2t3l](met-2t3l.md).
+
+Remaining work covers proof publication for non-projection annotations,
+foreign receipt and same-owner recovery probes, and removal of
+duplicate source annotation normalization for initializer context and
+compatibility verification.

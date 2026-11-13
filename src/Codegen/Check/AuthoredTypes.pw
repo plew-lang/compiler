@@ -696,11 +696,19 @@ impl Comp {
             SemanticCompletionOwner.Function(index: val index) => index,
             _ => { return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "local annotation has no lexical declaration", failureDomain: <FailureDomain.Internal />) /> },
         }
-        val signature = match self.sourceTypeUses.signatureFor(function: function) {
-            Optional.Some(v: val signature) => signature,
+        val token = match self.sourceTypeUses.signatureFor(function: function) {
+            Optional.Some(v: val signature) => signature.scope,
+            Optional.None => self.sourceTypeUses.deinitScopeToken(function: function),
+        }
+        val sourceScope = match self.sourceTypeUses.scopeAt(token: token) {
+            Optional.Some(v: val scope) => scope,
             Optional.None => { return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "local annotation has no registered lexical declaration", failureDomain: <FailureDomain.Internal />) /> },
         }
-        if occurrence.term != term || occurrence.scope != signature.scope {
+        match sourceScope.state {
+            SourceTypeScopeState.Lowered => {}
+            _ => { return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "local annotation belongs to an unfinished declaration", failureDomain: <FailureDomain.Internal />) /> }
+        }
+        if occurrence.term != term || occurrence.scope != token || sourceScope.function.unwrapOr(fallback: 18446744073709551615U64) != function {
             return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "local annotation has a foreign occurrence", failureDomain: <FailureDomain.Internal />) />
         }
         val declaration = self.arena.functionAt(index: function)
@@ -709,7 +717,7 @@ impl Comp {
         val method = self.sourceTypeUses.methodScopeFor(function: function).isSome()
         val scopes = <SignatureProofScopes local=scope assumptions=assumptions inherited=[] receiver=declaration.recvTy scopedBinders=method body=true />
         mut val validation = <SignatureRecipeValidation />
-        try self.checkAuthoredTypeRecipe(sourceScope: signature.scope, recipe: occurrence.recipe, edge: <AuthoredRecipeEdge.Source />, scopes: scopes, validation: inout validation, offset: occurrence.site)
+        try self.checkAuthoredTypeRecipe(sourceScope: token, recipe: occurrence.recipe, edge: <AuthoredRecipeEdge.Source />, scopes: scopes, validation: inout validation, offset: occurrence.site)
         return <Result.Ok value=<LocalAnnotationProof occurrence=id recipe=occurrence.recipe proofs=validation.proofs /> />
     }
 

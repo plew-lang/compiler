@@ -63,3 +63,14 @@ allowunique/unique binders, autounique, capability-qualified existential/associa
 ## Explicit Legacy Unique-Marker Negative
 
 Batch0031 adds exactly reject/type_param_unique_marker.pw. Its historical marker rejection is a current unsupported Syntax lane, not an adopted ban on [unique T]. The actual ordinary struct Box owning a unique T violates adopted ownership classification; a unique struct with the same binder is a distinct future positive. Reconcile this exact negative purpose and reason when implementing capability markers without weakening old guards before end-to-end ownership exists. No new feature implementation or actual compilation was done in audit.
+
+## Conditional deinit controls
+
+At `f6f5ad3e`, the carrier `227c12d9` ran the destructor of
+`Resource[I64]` from `impl[T] Resource[T] where T: Project` even
+though `I64` had no `Project` conformance. A second control passed a
+conforming `Number` as `T`, but a destructor body using
+`val item: T#Project.Item = self.value.item()` was rejected because its
+lexical check could not use the impl bound. Verify both selection and
+lexical evidence together so a bound used in the body is also enforced
+at destructor selection.

@@ -400,11 +400,9 @@ pub impl Comp {
             i += 1U64
         }
         if d.hasDeinit {
-            val deinitName: Bind = self.internBytes(s: "deinit")
-            val noParams: Array[Param] = []
-            val body: U64 = (try self.lowerSyntaxBlock(id: d.deinitBody))
-            val destructor = (try self.registerDeclaredFunc(f: <Func nameStart=deinitName.nameStart nameLen=deinitName.nameLen nameId=intern(c: inout self, start: deinitName.nameStart, len: deinitName.nameLen) recvId=intern(c: inout self, start: d.name.start, len: d.name.end - d.name.start) recvTy=self.lowerDeclaredReceiver(nameStart: d.name.start, nameLen: d.name.end - d.name.start, parameters: typeParams, siteOffset: d.name.start) typeParams=self.pushFuncBinds(binds: typeParams) params=self.pushFuncParams(params: noParams) hasRet=false retStart=0U64 retLen=0U64 retIsArray=false retTy=0U64 body=body hasRecv=true recvStart=d.name.start recvLen=d.name.end - d.name.start selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false defOffset=d.span.start />))
-            self.decls.deinits.append(destructor)
+            val receiver = <Bind nameStart=d.name.start nameLen=d.name.end - d.name.start nameId=intern(c: inout self, start: d.name.start, len: d.name.end - d.name.start) fieldStart=0U64 fieldLen=0U64 />
+            val receiverType = self.lowerDeclaredReceiver(nameStart: receiver.nameStart, nameLen: receiver.nameLen, parameters: typeParams, siteOffset: d.name.start)
+            try self.lowerAuthoredDeinit(input: <DeinitBodyInput.Syntax block=d.deinitBody />, receiver: receiver, receiverType: receiverType, parameters: typeParams, offset: d.span.start)
         }
         self.arena.registerStruct(<StructDef nameStart=d.name.start nameLen=d.name.end - d.name.start nameId=intern(c: inout self, start: d.name.start, len: d.name.end - d.name.start) typeParams=typeParams fields=fields isUnique=d.isUnique isNonsendable=d.isNonsendable isExtern=false defOffset=d.span.start />)
         self.drainDerives(typeStart: d.name.start, typeLen: d.name.end - d.name.start, isEnum: false, declStart: d.span.start, declEnd: d.span.end)
@@ -545,11 +543,9 @@ pub impl Comp {
         // fire it. Appended at the same point in self.arena.funcs as the native parser (during
         // this struct's processing), so the function stream order is preserved.
         if d.hasDeinit {
-            val deinitN: Bind = self.internBytes(s: "deinit")
-            val body: U64 = (try self.lowerBlock(b: d.deinitBody))
-            val noParams: Array[Param] = []
-            val destructor = (try self.registerDeclaredFunc(f: <Func nameStart=deinitN.nameStart nameLen=deinitN.nameLen nameId=intern(c: inout self, start: deinitN.nameStart, len: deinitN.nameLen) recvId=intern(c: inout self, start: nm.nameStart, len: nm.nameLen) recvTy=self.lowerDeclaredReceiver(nameStart: nm.nameStart, nameLen: nm.nameLen, parameters: typeParams, siteOffset: d.nameSpan.start) typeParams=self.pushFuncBinds(binds: typeParams) params=self.pushFuncParams(params: noParams) hasRet=false retStart=0 retLen=0 retIsArray=false retTy=0 body=body hasRecv=true recvStart=nm.nameStart recvLen=nm.nameLen selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false defOffset=d.span.start />))
-            self.decls.deinits.append(destructor)
+            val receiver = <Bind nameStart=nm.nameStart nameLen=nm.nameLen nameId=intern(c: inout self, start: nm.nameStart, len: nm.nameLen) fieldStart=0U64 fieldLen=0U64 />
+            val receiverType = self.lowerDeclaredReceiver(nameStart: receiver.nameStart, nameLen: receiver.nameLen, parameters: typeParams, siteOffset: d.nameSpan.start)
+            try self.lowerAuthoredDeinit(input: <DeinitBodyInput.Ast block=d.deinitBody />, receiver: receiver, receiverType: receiverType, parameters: typeParams, offset: d.span.start)
         }
         self.arena.registerStruct(<StructDef nameStart=nm.nameStart nameLen=nm.nameLen nameId=intern(c: inout self, start: nm.nameStart, len: nm.nameLen) typeParams=typeParams fields=fields isUnique=d.isUnique isNonsendable=d.isNonsendable isExtern=false defOffset=d.span.start />)
         self.drainDerives(typeStart: nm.nameStart, typeLen: nm.nameLen, isEnum: false, declStart: d.span.start, declEnd: d.span.end)

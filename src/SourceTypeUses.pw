@@ -2,7 +2,7 @@
 // scope completed syntax lowering only; it has not admitted any source proof.
 use ./Ir only { Bind, Func }
 
-pub enum SourceTypeScopeKind { FreeFunction Method Implementation RequirementSignature ExternSignature }
+pub enum SourceTypeScopeKind { FreeFunction Method Deinit Implementation RequirementSignature ExternSignature }
 pub enum SourceTypeScopeState { Lowering Lowered Failed }
 pub enum SourceTypeUseRole { Unowned Declaration DefaultArgument Body }
 
@@ -112,6 +112,7 @@ pub struct SourceTypeUses {
     mut val requirementScopes: Array[U64] = []
     mut val requirementScopeByIndex: Dictionary[U64, U64] = [:]
     mut val methodScopes: Dictionary[U64, U64] = [:]
+    mut val deinitScopes: Dictionary[U64, U64] = [:]
 }
 pub impl SourceTypeUses {
     factory
@@ -148,6 +149,9 @@ pub impl SourceTypeUses {
     fn methodScopeFor(function: U64) -> Optional[SourceTypeScope] {
         return self.scopeAt(token: self.methodScopes.getOr(key: function, fallback: 0U64))
     }
+    fn deinitScopeToken(function: U64) -> U64 {
+        return self.deinitScopes.getOr(key: function, fallback: 0U64)
+    }
 
     fn completedMethodImplementation(method: SourceTypeScope) -> Optional[SourceImplementationOwner] {
         match method.state { SourceTypeScopeState.Lowered => {} _ => { return <Optional.None /> } }
@@ -178,6 +182,11 @@ pub impl SourceTypeUses {
             SourceTypeScopeKind.FreeFunction => {
                 if token != self.active { return false }
                 match scope.state { SourceTypeScopeState.Lowering => {} _ => { return false } }
+            }
+            SourceTypeScopeKind.Deinit => {
+                if token != self.active || self.deinitScopes.contains(key: function) { return false }
+                match scope.state { SourceTypeScopeState.Lowering => {} _ => { return false } }
+                self.deinitScopes[function] = token
             }
             SourceTypeScopeKind.Method => {
                 if token != self.active || scope.parent == 0U64 || self.methodScopes.contains(key: function) { return false }

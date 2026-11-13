@@ -1,0 +1,43 @@
+use /Frontend only { Comp, FrontendInput, analyzeFrontend }
+use /SourceAccess only { SourceAccess }
+use /SourceTypeUses only { SourceTypeUseRole }
+use @Std/Core only { assert }
+use @Std/Io only { print }
+
+fn check(declaration: String) {
+    mut val compiler = <Comp />
+    val source = "trait Project {{ type Item }}\nstruct Number {{}}\nimpl Number as Project {{ type Item = I64 }}\n" + declaration + "\nfn main() {{ val resource = <Resource /> }}\n"
+    analyzeFrontend(c: inout compiler, input: <FrontendInput.Text text=source path="deinit-scope.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
+    assert(compiler.decls.deinits.count() == 1U64)
+    val function = compiler.decls.deinits[0U64]
+    mut val token = 0U64
+    for index in 0U64..<compiler.sourceTypeUses.scopeCount() {
+        val candidate = index + 1U64
+        val scope = compiler.sourceTypeUses.scopeAt(token: candidate).unwrap()
+        if scope.function.unwrapOr(fallback: 18446744073709551615U64) == function {
+            assert(token == 0U64)
+            token = candidate
+        }
+    }
+    if token == 0U64 { panic("deinit has no authored body scope") }
+    val scope = compiler.sourceTypeUses.scopeAt(token: token).unwrap()
+    assert(scope.function.unwrap() == function)
+    mut val projections = 0U64
+    for index in 0U64..<compiler.sourceTypeUses.useCount() {
+        val occurrence = compiler.sourceTypeUses.useAt(index: index).unwrap()
+        if compiler.arena.typeContainsAssociatedProjection(ref: occurrence.term) {
+            assert(occurrence.scope == token)
+            match occurrence.role {
+                SourceTypeUseRole.Body => { projections += 1U64 }
+                _ => { panic("deinit annotation escaped its body role") }
+            }
+        }
+    }
+    assert(projections == 1U64)
+}
+
+fn main() {
+    check(declaration: "unique struct Resource {{}}\nimpl Resource {{ deinit {{ val number: Number#Project.Item = 42I64 }} }}")
+    check(declaration: "unique struct Resource {{ deinit {{ val number: Number#Project.Item = 42I64 }} }}")
+    print("deinit-authored-body-scope")
+}

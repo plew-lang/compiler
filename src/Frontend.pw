@@ -367,6 +367,11 @@ enum ProjectionBoundState {
     Ready(bound: PreparedProjectionBound)
     Failed(diagnostic: CompileDiagnostic)
 }
+enum DeinitBodyInput {
+    Syntax(block: BlockId)
+    Ast(block: BlockAst)
+}
+
 enum AuthoredRecipeEdge { Source ProjectionReceiver FunctionResult LexicalTraitArgument InheritedTraitArgument }
 struct SignatureRecipeValidation {
     val parentScope: U64 = 0U64
