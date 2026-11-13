@@ -1,6 +1,6 @@
 ---
 id: com-ab7u
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-11-09T08:54:16Z
@@ -89,3 +89,30 @@ Initial owner-check build `20261113T024932-build-91c49f` compiled and
 linked, but its fixture inputs changed during the run. The fixed-input
 retry `20261113T025235-build-2f5957` reached link and ran out of disk
 space. Neither is accepted as the final fixed-input build.
+
+## Final verification
+
+Product revision `428ce8ca` passed the fixed-input build
+`20261113T025852-build-a98fdc`. Final candidate
+`plewc-com-ab7u-final` has SHA-256
+`381d515aa9d769fb81c2fbc52a8397bc2a5c48f658392a696b53acfae3b0a3c3`.
+The native owner/slot fixture passed both lowering adapters, failed and
+duplicate bindings, and two unused memberless annotations with typed
+Source diagnostics. Direct and nested associated types both yielded
+`42` in JIT and native and used the same C scalar declaration and call.
+The existing projection rejects were preserved in check, JIT and
+object modes. The unused valid declaration and the existing expose
+and ORC first-call/callback tests also passed.
+Generation `20261113T030633-gen-1df6a2` passed. The same-source
+comparison against `plewc-com-fur3-ground-view` gave medians of 7.029639 s
+and 6.985054 s. All eight LLVM outputs match after the same generic
+body symbol normalization recorded above. This is a throughput
+comparison. The whole-program fixed-point gate belongs to met-si6j.
+
+The independent re-review approved the exact occurrence check and the
+unchanged final-call replay path. The three final fault probes rejected
+a missing proof, a foreign function receipt, and a foreign result
+occurrence under the original owner. Each restored the receipt and
+successfully retried the same publication in the same compiler state.
+The replay inputs are recorded in the meta repository under
+`evidence/rejection-domains/diagnostic-domain-implementation/extern-signature-replay/`.
