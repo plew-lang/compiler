@@ -512,3 +512,14 @@ The fixture compiled with candidate `5ff41be1` against an isolated
 `d0c81610` compiler source aborts with `associated output accepted a
 corrupt projection equation`. The same fixture against `42af5c3f`
 passes natively. No production code was changed in this checkpoint.
+
+## Missing binding receipt and missing RHS proof
+
+An isolated native build of `99f8b77f` against `5ff41be1` used
+`Worker as Parent { type Item = Worker#Marker.Value }`. The probe
+removed the private binding receipt, then separately removed its RHS
+projection proofs. The selected output reader reported Internal
+`associated output lost its admitted binding` and `signature view has
+no saved proof`, respectively. It recovered `I64` after restoring
+the saved row after each fault. The diagnostic harness did not add a
+production mutation API.
