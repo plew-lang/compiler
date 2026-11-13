@@ -87,3 +87,14 @@ same selected slot as construction, and admission and selection compare
 the annotation source site as well as occurrence ID and owner. Arbitrary
 forward newtype dependencies, closed nested proof coverage, fault
 injection and the value-AST control remain open.
+
+Fixed-input build `20261113T084222-build-6afca4` produced `7b74205e6e76`;
+the four nominal run fixtures and the generic-default and adapter controls
+pass JIT. The nominal receipt now records the required number of proof
+rows and checks their stored handles for a closed output. The value-AST
+scratch control ran `lowerTopItem` for a generic structure, generic enum
+and newtype and verified distinct recorded occurrences and scope restoration
+on success. Receipt substitution, lowering-failure restoration and forward
+newtype admission still require final verification. An earlier build was
+excluded because the scratch test file changed during validation. The
+fixed-input rerun produced the same binary.

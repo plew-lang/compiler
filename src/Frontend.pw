@@ -2914,6 +2914,7 @@ struct LocalAnnotationProof {
     val occurrence: U64
     val recipe: U64
     val sourceTerm: U64
+    val requiredProofs: U64 = 0U64
     val normalizations: Array[ProjectionNormalizationStep] = []
     val proofs: Array[AuthoredTypeViewProof]
 }

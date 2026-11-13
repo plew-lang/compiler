@@ -821,7 +821,10 @@ impl Comp {
             return <Result.Err error=self.diagnosticAt(offset: field.authoredTypeSite, msg: "nominal field has a foreign selected receiver", failureDomain: <FailureDomain.Internal />) />
         }
         val saved = try self.requireNominalTypeAnnotation(id: field.authoredTypeUse, site: field.authoredTypeSite, term: field.ty, token: token, owner: owner)
-        if self.arena.typeIsClosed(ref: field.ty) { return <Result.Ok value=field.ty /> }
+        if self.arena.typeIsClosed(ref: field.ty) {
+            try self.checkClosedNominalAnnotation(saved: saved, offset: field.authoredTypeSite)
+            return <Result.Ok value=field.ty />
+        }
         val instance = self.arena.typeAt(index: receiver)
         if instance.args.count() != params.count() || !self.arena.typeIsClosed(ref: receiver) {
             return self.groundUnderInst(instRef: receiver, tyRef: field.ty)
@@ -840,7 +843,7 @@ impl Comp {
         val source = self.sourceTypeUses.scopeAt(token: token)
         match self.nominalAnnotationProofs.get(key: id) {
             Optional.Some(v: val saved) => {
-                if saved.occurrence == id && saved.recipe == occurrence.recipe && saved.sourceTerm == term && occurrence.site == site && occurrence.scope == token && source.isSome() && source.unwrap().anchor == owner {
+                if saved.occurrence == id && saved.recipe == occurrence.recipe && saved.sourceTerm == term && saved.proofs.count() == saved.requiredProofs && occurrence.site == site && occurrence.scope == token && source.isSome() && source.unwrap().anchor == owner {
                     return <Result.Ok value=saved />
                 }
             }
@@ -857,8 +860,24 @@ impl Comp {
             Optional.None => { return <Result.Ok value=0U64 /> }
             Optional.Some(v: val declaration) => declaration,
         }
-        (try self.requireNominalTypeAnnotation(id: declaration.authoredTypeUse, site: declaration.authoredTypeSite, term: declaration.underRef, token: declaration.sourceTypeScope, owner: declaration.defOffset))
+        val saved = try self.requireNominalTypeAnnotation(id: declaration.authoredTypeUse, site: declaration.authoredTypeSite, term: declaration.underRef, token: declaration.sourceTypeScope, owner: declaration.defOffset)
+        try self.checkClosedNominalAnnotation(saved: saved, offset: declaration.authoredTypeSite)
         return <Result.Ok value=declaration.underRef />
+    }
+
+    // A normalized result cannot justify its own projection or view. Read
+    // the exact saved evidence whenever the authored term depended on it.
+    inout fn checkClosedNominalAnnotation(saved: LocalAnnotationProof, offset: U64) -> Result[(), CompileDiagnostic] {
+        if saved.requiredProofs == 0U64 { return <Result.Ok value=() /> }
+        // A generic field can already have a closed normalized output even
+        // while its written receiver still contains declaration binders.
+        // Those proofs were checked in the rigid declaration scope.
+        for proof in saved.proofs {
+            if !self.arena.hasStaticConformanceProof(id: proof.proof) {
+                return <Result.Err error=self.diagnosticAt(offset: offset, msg: "nominal annotation lost its saved conformance", failureDomain: <FailureDomain.Internal />) />
+            }
+        }
+        return <Result.Ok value=() />
     }
 
     // Surface visibility examines what was written. Field and representation
@@ -890,7 +909,7 @@ impl Comp {
         try self.checkAuthoredTypeRecipe(sourceScope: token, recipe: occurrence.recipe, edge: <AuthoredRecipeEdge.Source />, scopes: scopes, validation: inout validation, offset: occurrence.site)
         val equations = validation.equations.getOr(key: occurrence.recipe, fallback: [])
         val sourceTerm = try self.replayProjectionNormalizations(ref: term, normalizations: equations, offset: occurrence.site)
-        val proof = <LocalAnnotationProof occurrence=id recipe=occurrence.recipe sourceTerm=sourceTerm normalizations=equations proofs=validation.proofs />
+        val proof = <LocalAnnotationProof occurrence=id recipe=occurrence.recipe sourceTerm=sourceTerm normalizations=equations proofs=validation.proofs requiredProofs=validation.proofs.count() />
         self.nominalAnnotationProofs[id] = proof
         self.markBodyRecipeTypeUses(recipe: proof.recipe)
         return <Result.Ok value=proof />
