@@ -392,3 +392,15 @@ produced `83b5baf2956f`. Named extension-backed and projected arguments
 and an anonymous factory with the same extension-backed argument all
 pass check, JIT and native with output 42. The named wrong-instance
 contrast preserves its exact admission error in check and JIT.
+
+Standard generation `20261113T125725-gen-3ce122` passed. Alternating
+same-source compiles against `c5146239` gave medians of 7.183 s and
+7.261 s, excluding the first pair. The eight emitted LLVM files matched
+SHA-256 `e0582c308db4d9ee6c1c8af8d68628725b3ca4ea44da28589a3bf37f98f15fc3`.
+The formal fixed-point gate is still open.
+
+On this candidate the supertrait and implementation-argument wrong
+instances still pass check. The implementation's target arguments flow
+from `registerDeclaredConformance` into witness argument matching
+without an authored recipe; trait constraints likewise retain terms but
+drop the argument and predicate recipes in their lowering wrapper.
