@@ -1887,3 +1887,11 @@ verification (`checkedTypeViewSource`) and pre-Record local identifier
 recovery (`resolveMethodFinalForType`). Trace these callers to their sources of
 admitted evidence before removing the query itself. Associated callable
 dispatch remains owned by [com-4k31](com-4k31.md).
+
+For the same final candidate, paired `--check` runs on 3,118 fixture entry
+files (run, reject, panic, part and partreject) matched exit status and error
+lines in every case: 1,866 successful checks and 1,252 rejections. Emitted
+LLVM matched on 61 of 62 named view/extension fixtures; both candidates
+gave the same known rejection on `extension_assoc_source_select`.
+This comparison checks behavior against the previous candidate. Whole-suite
+pass and formal fixed-point timing are separate gates.
