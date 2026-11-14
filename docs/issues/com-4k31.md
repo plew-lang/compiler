@@ -90,3 +90,15 @@ JIT. Scratch input: meta `tmp/com-3jtd/ExtensionSelectedPathCall.pw`.
 Use the existing complete-selector contract to verify the final call
 after [com-3jtd](com-3jtd.md#second-independent-completion-review) has
 established formation using the applicable trait path.
+
+### Concrete qualified trait call with a projected argument
+
+`tests/fixtures/run/type_qualified_selector_projected_argument.pw`
+passes a valid concrete associated projection to a trait selector on a
+type qualifier. It expects 42 from
+`Receiver#Make[Number#Source[I64].Item].value()`. Both `79f67302` and
+`b22021fb` report no matching method at line 8 in check, LLVM emission
+and lazy run. The open generic counterpart
+`open_type_qualified_selector_projected_argument.pw` runs with its
+expected output and emits identical LLVM. Add the concrete fixture to
+the final dispatch controls without changing that expectation.

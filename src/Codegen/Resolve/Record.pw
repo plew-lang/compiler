@@ -16,7 +16,6 @@ impl Comp {
             Optional.None => {}
         }
         val proof = try self.admitBodyTypeUse(id: occurrenceId, term: written, owner: owner)
-        self.markAdmittedRecipeTypeUses(recipe: proof.recipe)
         self.sourceFacts.activeBuilder.data.castTargetProofs[exprId] = proof
         return <Result.Ok value=proof.sourceTerm />
     }
@@ -39,7 +38,6 @@ impl Comp {
                         return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "expression has an invalid type slot occurrence", failureDomain: <FailureDomain.Internal />) />
                     }
                     val proof = try self.admitBodyTypeUse(id: argument.occurrence, term: arguments[argument.index], owner: owner)
-                    self.markAdmittedRecipeTypeUses(recipe: proof.recipe)
                     checked.append(proof)
                 }
                 self.sourceFacts.activeBuilder.data.expressionTypeSlotProofs[exprId] = checked
@@ -86,7 +84,6 @@ impl Comp {
                 match occurrence {
                     Optional.Some(v: val id) => {
                         val proof = try self.admitBodyTypeUse(id: id, term: written, owner: owner)
-                        self.markAdmittedRecipeTypeUses(recipe: proof.recipe)
                         return <Result.Ok value=<Optional.Some v=proof /> />
                     }
                     Optional.None => {}
@@ -2055,9 +2052,6 @@ pub impl Comp {
                 }
             }
             _ => {}
-        }
-        if authored.isSome() {
-            for id in authored.unwrap() { self.markAdmittedRecipeTypeUses(recipe: (try self.signatureOccurrence(id: id)).recipe) }
         }
         val castTarget = match self.arena.exprs[exprId] {
             Expr.Cast(operand: _, tyStart: _, tyLen: _, val ty) => { give try self.recordCastTarget(exprId: exprId, written: ty) }

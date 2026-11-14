@@ -534,10 +534,6 @@ pub impl Comp {
         return false
     }
 
-    inout fn extAppliesToType(extensionId: U64, typeStart: U64, typeLen: U64, typeRef: U64, assumptions: Array[DeclarationBoundRef]) -> Result[Bool, CompileDiagnostic] {
-        val applicability = try self.matchExtensionApplicability(extensionId: extensionId, typeStart: typeStart, typeLen: typeLen, typeRef: typeRef, assumptions: assumptions)
-        return <Result.Ok value=applicability.isSome() />
-    }
 
 }
 

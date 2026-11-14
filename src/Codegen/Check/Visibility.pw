@@ -331,8 +331,8 @@ pub impl Comp {
     }
 
     inout fn checkRequestedTypeUses(occurrences: Array[U64]) -> Result[(), CompileDiagnostic] {
-        if !self.genMode { try self.checkSourceTypeUses(occurrences: occurrences) }
-        return self.checkAuthoredTypeViews(occurrences: occurrences, requested: self.currentSourceOwner())
+        if self.genMode { return <Result.Ok value=() /> }
+        return self.checkSourceTypeUses(occurrences: occurrences)
     }
 
     inout fn checkTypeUseVisibility(ref: U64) -> Result[(), CompileDiagnostic] {

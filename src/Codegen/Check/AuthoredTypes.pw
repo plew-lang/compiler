@@ -230,7 +230,6 @@ impl Comp {
                 checked.append(proof.unwrap())
             } else if self.bodyTypeNeedsViewAdmission(ref: predicate.value) { complete = false }
         }
-        for proof in checked { self.markAdmittedRecipeTypeUses(recipe: proof.recipe) }
         val constraint = <TraitConstraint key=<TraitInstanceKey owner=written.key.owner positionalArgs=arguments /> positionalArgsOpen=written.positionalArgsOpen assocPredicates=predicates />
         return <Result.Ok value=<AdmittedTraitConstraintOperands complete=complete constraint=constraint checked=checked /> />
     }
@@ -379,7 +378,6 @@ impl Comp {
             }
         }
         self.authoredImplementationReceivers[token] = proof
-        self.markAdmittedRecipeTypeUses(recipe: proof.recipe)
         return <Result.Ok value=() />
     }
 
@@ -573,7 +571,6 @@ impl Comp {
                 proofs.append(admitted)
             } else { terms.append(written) }
         }
-        for proof in proofs { self.markAdmittedRecipeTypeUses(recipe: proof.recipe) }
         return <Result.Ok value=<AdmittedConformanceSubject terms=self.pushConformTypes(types: terms) proofs=proofs /> />
     }
 
@@ -663,7 +660,6 @@ impl Comp {
         }
         mut val terms: Array[U64] = []
         for argument in arguments {
-            self.markAdmittedRecipeTypeUses(recipe: argument.recipe)
             terms.append(argument.term)
         }
         return <Result.Ok value=<AuthoredConformanceTarget scope=token terms=self.pushConformTypes(types: terms) arguments=arguments proofs=validation.proofs /> />
@@ -757,7 +753,6 @@ impl Comp {
         mut val validation = <SignatureRecipeValidation />
         try self.checkAuthoredTypeRecipe(sourceScope: occurrence.scope, recipe: occurrence.recipe, edge: <AuthoredRecipeEdge.Source />, scopes: scopes, validation: inout validation, offset: occurrence.site)
         self.authoredAssociatedBindings[bindingIndex] = <AuthoredAssociatedBinding conformance=conformance occurrence=binding.authoredTypeUse recipe=occurrence.recipe proofs=validation.proofs />
-        self.markAdmittedRecipeTypeUses(recipe: occurrence.recipe)
         return <Result.Ok value=() />
     }
 
@@ -1548,7 +1543,6 @@ impl Comp {
         val proof = <LocalAnnotationProof occurrence=id recipe=occurrence.recipe sourceTerm=sourceTerm normalizations=equations proofs=validation.proofs />
         self.nominalAnnotationProofs[id] = proof
         self.nominalAnnotationSelections[occurrence.recipe] = <NominalAnnotationSelection sourceTerm=sourceTerm proofs=validation.proofs equations=equations />
-        self.markAdmittedRecipeTypeUses(recipe: proof.recipe)
         return <Result.Ok value=proof />
     }
 
@@ -1561,7 +1555,6 @@ impl Comp {
                     val occurrence = try self.signatureOccurrence(id: id)
                     val token = self.sourceTypeUses.globalScope(target: global.nameStart)
                     val proof = try self.admitGlobalTypeUse(occurrence: occurrence, id: id, term: ty, target: global.nameStart, token: token, role: <SourceTypeUseRole.Declaration />)
-                    self.markAdmittedRecipeTypeUses(recipe: proof.recipe)
                     self.globalAnnotationProofs[global.nameStart] = proof
                 }
                 _ => { return <Result.Err error=self.diagnosticAt(offset: global.nameStart, msg: "global declaration has no binding", failureDomain: <FailureDomain.Internal />) /> }
@@ -2822,14 +2815,6 @@ impl Comp {
         }
         if outputOccurrence != 0U64 && outputOccurrence != id {
             self.projectedExtensionOrigins[id] = outputOccurrence
-        }
-        // The lexical recipe owns declaration view admission. The later
-        // compatibility sweep has no access to these premises or equations.
-        if sources.count() != 0U64 {
-            match occurrence.role {
-                SourceTypeUseRole.Declaration => { self.admittedRecipeTypeUses.insert(id) }
-                _ => {}
-            }
         }
         return <Result.Ok value=() />
     }

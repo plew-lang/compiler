@@ -29,7 +29,6 @@ pub impl Comp {
         self.cur.locals = []
         self.cur.verifyMovedIdx = []
         try self.admitAuthoredFunctionViews()
-        try self.checkAuthoredTypeViews(occurrences: self.loweringTypeUses)
         mut val gvi: U64 = 0
         while includeBodies && !self.genMode && gvi < self.arena.globals.count() {
             if self.tracePhases {
@@ -107,56 +106,6 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
-    inout fn checkAuthoredTypeViews(occurrences: Array[U64], requested: Optional[SemanticCompletionOwner] = <Optional.None />) -> Result[(), CompileDiagnostic] {
-        for id in occurrences {
-            if self.localAnnotationTypeUses.contains(id) { continue }
-            // Declaration-owned recipes already validated their entire view
-            // set in the correct scope, including extension applicability.
-            if requested.isNone() && self.admittedRecipeTypeUses.contains(id) { continue }
-            val occurrence = try self.signatureOccurrence(id: id)
-            val term = self.arena.typeTermAt(index: occurrence.term)
-            // A projection's views belong to its receiver, not its output.
-            val receiver = if term.assocNameId != 0U64 { give term.projectionReceiver } else { give occurrence.term }
-            // Declaration binders already use their signature/impl admission.
-            // The compatibility check has no lexical premises for them.
-            if (term.siteOffset != 0U64 || (requested.isSome() && term.assocNameId == 0U64)) && self.arena.typeViewSourceCount(ref: receiver) != 0U64 {
-                val lexical = if requested.isSome() && term.assocNameId == 0U64 {
-                    give <Optional.Some v=self.lexicalSourceFactOwner(owner: requested.unwrap()) />
-                } else { give <Optional.None /> }
-                try self.checkAuthoredTypeView(receiver: receiver, offset: occurrence.site, lexical: lexical, admittedRecipe: self.admittedRecipeTypeUses.contains(id), occurrence: id)
-            }
-        }
-        return <Result.Ok value=() />
-    }
-
-    inout fn checkAuthoredTypeView(receiver: U64, offset: U64, lexical: Optional[SemanticCompletionOwner], admittedRecipe: Bool, occurrence: U64) -> Result[(), CompileDiagnostic] {
-        val sources = self.arena.typeViewSources(ref: receiver)
-        try self.checkTraitSubjectViewCycles(sources: sources, offset: offset)
-        mut val selectedCount = 0U64
-        for source in sources {
-            if source.surfaceId != 0U64 {
-                if source.traitInstance.owner == 0U64 && self.authoredExtensionViews.contains(key: occurrence) {
-                    try self.requireAuthoredExtensionView(id: occurrence, source: source, offset: offset)
-                    continue
-                }
-                if source.traitInstance.owner != 0U64 && admittedRecipe { continue }
-                if source.traitInstance.owner != 0U64 && lexical.isSome() {
-                    val assumptions = try self.lexicalViewAssumptions(owner: lexical.unwrap())
-                    val subject = self.typeRefWithoutOuterViews(ref: receiver)
-                    (try self.requireAuthoredViewProof(subject: subject, instance: source.traitInstance, assumptions: assumptions, offset: source.writtenStart))
-                    selectedCount += 1U64
-                } else {
-                    val selected = try self.checkedTypeViewSource(typeRef: receiver, source: source, offset: offset)
-                    if selected.kind == 2U64 { selectedCount += 1U64 }
-                }
-            }
-        }
-        if selectedCount > 1U64 {
-            return <Result.Err error=self.diagnosticAt(offset: offset, msg: "a type view may select at most one trait source; extension views compose but trait selection is singular (spec/09)", failureDomain: <FailureDomain.Source />) />
-        }
-        return <Result.Ok value=() />
-    }
-
     inout fn lexicalViewAssumptions(owner: SemanticCompletionOwner) -> Result[Array[DeclarationBoundRef], CompileDiagnostic] {
         match owner {
             SemanticCompletionOwner.Function(index: val function) => {
@@ -168,29 +117,6 @@ pub impl Comp {
                 return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "trait view closure has no lexical owner", failureDomain: <FailureDomain.Internal />) />
             }
         }
-    }
-
-    // Type terms carry the same semantic selector child as value views. A
-    // trait selector is identified by declaration owner, never by its
-    // content-interned spelling.
-    inout fn checkedTypeViewSource(typeRef: U64, source: ResolvedViewSource, offset: U64) -> Result[CallableSourceHead, CompileDiagnostic] {
-        val t: TypeRef = self.arena.typeAt(index: typeRef)
-        if source.traitInstance.owner == 0U64 && source.traitInstance.positionalArgs.count() != 0U64 {
-
-            if self.knownExtensionSource(identity: source.surfaceId) {
-                return <Result.Err error=self.diagnosticAt(offset: source.writtenStart, msg: "an extension view does not take type arguments", failureDomain: <FailureDomain.Source />) />
-            }
-        }
-        val selected: CallableSourceHead = (try self.resolveViewSourceKey(recvStart: t.nameStart, recvLen: t.nameLen, recvRef: typeRef, sourceId: source.surfaceId, sourceOwner: source.traitInstance.owner))
-        if selected.kind != 0U64 { return <Result.Ok value=selected /> }
-        if source.traitInstance.owner != 0U64 {
-            return <Result.Err error=self.diagnosticAt(offset: offset, msg: "cannot view this type through that trait: its instance does not conform to the selected trait (spec/09)", failureDomain: <FailureDomain.Source />) />
-        }
-
-        if self.knownExtensionSource(identity: source.surfaceId) {
-            return <Result.Err error=self.diagnosticAt(offset: offset, msg: "extension does not apply to this trait instance or concrete receiver (spec/09)") />
-        }
-        return <Result.Err error=self.diagnosticAt(offset: offset, msg: "unknown view `#X`: the name is neither an extension that applies here nor a trait this type conforms to (spec/09)", failureDomain: <FailureDomain.Source />) />
     }
 
     // A chain of `Expr.ExtView` nodes represents one normalized view, not a

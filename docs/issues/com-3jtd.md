@@ -1944,3 +1944,26 @@ eight runs). This comparison is not the formal fixed-point benchmark.
 The remaining direct caller of the legacy lookup is authored type
 verification. Its declaration and requested-body entries still need
 separate coverage and ownership checks before removing that lookup.
+
+### Remove the authored-type compatibility sweep
+
+The authored type recipe checks the complete trait instance and checks
+extension applicability and cycles for the normalized source set.
+Signatures, constraints, nominal declarations, global annotations and
+associated bindings enter through their declaration owners. Local and
+typed loop bindings, casts, constructors, closure signatures and view
+arguments enter at their request or binding. Keep visibility and existential
+formation checks on the existing source-use paths.
+
+The isolated sweep-removal build `20261114T005648-build-9b4380`
+matched the previous candidate on all 474 traced checks. Build
+`20261114T010239-build-3e3ae3` then removed the sweep, its fallback
+search, and the maps that only marked entries for that sweep.
+Candidate `b22021fb` matches all 474 checks (305 successes and 169
+rejections, identical error lines), ten focused JIT and nonempty LLVM
+comparisons, and nine rejection diagnostics including cycles, missing
+extension bounds and wrong trait instances. The concrete qualified
+associated call described in [com-4k31](com-4k31.md#concrete-qualified-trait-call-with-a-projected-argument)
+still fails at call selection on both candidates.
+
+Generation gate `20261114T010656-gen-f87422` passed on the final candidate.
