@@ -2064,3 +2064,23 @@ query in check. Fixed-input build `20261114T013316-build-972176` produced
 `c581e15b`, which passes check, JIT and linked native with zero legacy
 extension queries on this case. Five nearby enum, generic-match and
 view-handoff controls also match their JIT outputs.
+
+### Retain viewed results from selected function-value types
+
+Record retains an explicit closure result annotation as evidence for slot
+zero of the checked function type. Inferred locals read the selected
+binding's stored origin, annotated locals read their annotation, and
+closure-field calls read the selected field declaration. All three project
+the function result using the same child-evidence operation used by
+structural projections. Dynamic dispatch does not consult the executed body
+to discover the result view.
+
+The three cases in `closure_result_extension_evidence` silently printed
+11 on removal candidate `79f67302`. Immediate baseline `c581e15b`
+printed 22 but needed three legacy extension searches in check.
+Fixed-input build `20261114T014017-build-58492b` produced `8fd053c3`.
+All three calls print 22 in JIT and linked native execution with zero
+legacy searches in check. Four adjacent closure and enum controls pass
+check and JIT. [Same-source comparison](../../../evidence/rejection-domains/diagnostic-domain-implementation/trait-receiver-admission/closure-result-same-source.json):
+7.912 s to 7.899 s, all eight nonempty LLVM outputs identical. The
+formal fixed-point benchmark remains separate.

@@ -1,0 +1,17 @@
+// Local and field closure calls carry the view of the selected function result.
+use @Std/Io only { print }
+struct S { val n: I64 }
+impl S { fn number() -> I64 { return 11I64 } }
+extension Alt { impl S { fn number() -> I64 { return 22I64 } } }
+struct Handler { val get: fn() -> S#Alt }
+fn main() {
+    val f = fn() -> S#Alt { return <S n=0I64 />#Alt }
+    val v = f()
+    print(v.number())
+    val typed: fn() -> S#Alt = f
+    val typedResult = typed()
+    print(typedResult.number())
+    val handler = <Handler get=f />
+    val fieldResult = handler.get()
+    print(fieldResult.number())
+}
