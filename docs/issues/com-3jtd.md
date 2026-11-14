@@ -1865,3 +1865,25 @@ The previously isolated positive probes now have no known legacy trait
 query. The shared resolver is still present. The next removal experiment
 must check the broader suite and preserve the separate associated-call
 boundary tracked by com-4k31.
+
+### Remove legacy re-resolution from view candidate collection
+
+The shared collector accepts the admitted trait instance, matching extension
+proofs and the declaring extension for lexical `self`. An unresolved
+selector adds no candidate through this path. The extension proof matcher
+has no compiler receiver or type inputs, and the collector no longer takes
+receiver-name spans or returns a diagnostic. Source admission owns rejection.
+
+The successful fixed-carrier build `20261114T002057-build-24a373` used
+`22fc4e90` and produced `90cf02c6`. Five targeted fixtures match their
+expected output in JIT and linked native execution: projected Array
+elements, extension/trait provenance, additive trait views, extension-only
+conformance and a type-annotated extension view. The old and new candidates
+emit byte-identical, nonempty LLVM on the same compiler source
+(SHA-256 `f338f59036ad03d9c959d8a1ec1abe5e990310b7de6f0e5b877e6092433e3914`).
+
+Two direct callers of the compatibility query remain: authored-type
+verification (`checkedTypeViewSource`) and pre-Record local identifier
+recovery (`resolveMethodFinalForType`). Trace these callers to their sources of
+admitted evidence before removing the query itself. Associated callable
+dispatch remains owned by [com-4k31](com-4k31.md).
