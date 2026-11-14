@@ -1895,3 +1895,30 @@ LLVM matched on 61 of 62 named view/extension fixtures; both candidates
 gave the same known rejection on `extension_assoc_source_select`.
 This comparison checks behavior against the previous candidate. Whole-suite
 pass and formal fixed-point timing are separate gates.
+
+### Preserve admitted views on casts and global binding reads
+
+A trace of the 474 fixture entry points containing view syntax (or a hash
+character) found six remaining legacy trait queries in four positive
+cases. They came from method selection with a viewed cast result, a
+globally inferred view, or a global annotation. Record now attaches the
+cast target's admitted trait selector alongside its extension evidence.
+A global slot keeps its annotation occurrence when its type is filled in,
+and an inferred global read uses the initializer's binding evidence by
+global declaration identity. A local read continues to use its lexical
+owner chain.
+
+Build `20261114T004336-build-204820` used `90cf02c6` and produced
+`f3b65f18`. The four affected fixtures now issue zero legacy queries and
+match their checked, JIT and linked native expectations. Three existing
+wrong-instance and multiple-selector rejections keep their diagnostics.
+All four emitted fixture LLVM files and same-source compiler LLVM match
+byte for byte (compiler LLVM SHA-256
+`7d4f8ab3951cd905ebeff0472a98699d62b51f6188e2f7eeb4e35c9e6bc86330`).
+
+Re-running the 474 traced checks on the new candidate gave identical
+exit codes and diagnostic lines (305 successes and 169 rejections), with
+no legacy query hits. Next, isolate removal of the remaining local
+method recovery and type checks independently. The former needs to read
+the selected binding, and the latter needs to preserve source-set cycle
+checks and the body/declaration admission boundary.

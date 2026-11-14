@@ -146,7 +146,7 @@ pub impl Comp {
                     give try self.inferredGlobalBindingType(declaration: declaration)
                 }
                 val info = self.typeInfoOfRef(ref: term)
-                return <Result.Ok value=<Local isGlobal=local.isGlobal nameStart=local.nameStart nameLen=local.nameLen nameId=local.nameId tyStart=info.nameStart tyLen=info.nameLen tyNameId=intern(c: inout self, start: info.nameStart, len: info.nameLen) isArray=info.kind == 3 ty=term isInout=local.isInout isMut=local.isMut owned=local.owned moved=local.moved cnum=local.cnum /> />
+                return <Result.Ok value=<Local isGlobal=local.isGlobal nameStart=local.nameStart nameLen=local.nameLen nameId=local.nameId tyStart=info.nameStart tyLen=info.nameLen tyNameId=intern(c: inout self, start: info.nameStart, len: info.nameLen) isArray=info.kind == 3 ty=term authoredTypeUse=annotationOccurrence.unwrapOr(fallback: 0U64) isInout=local.isInout isMut=local.isMut owned=local.owned moved=local.moved cnum=local.cnum /> />
             }
             _ => { return <Result.Err error=self.diagnosticAt(offset: local.nameStart, msg: "global declaration has no binding", failureDomain: <FailureDomain.Internal />) /> }
         }
