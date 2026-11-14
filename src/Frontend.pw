@@ -792,7 +792,10 @@ pub struct Comp {
     pub mut val expressionTypeUses: Dictionary[U64, Array[U64]] = [:]
     pub mut val blockExitRequirements: Dictionary[U64, U64] = [:]
     pub mut val blockTypeUses: Dictionary[U64, Array[U64]] = [:]
+    mut val admittedRecipeTypeUses: Set[U64] = Set.new()
+    mut val localAnnotationTypeUses: Set[U64] = Set.new()
     // Indexed by the exact authored occurrence, never by the interned TypeTerm.
+    // The compatibility sweep and recipe reader consume only completed rows.
     mut val authoredTraitSelectors: Dictionary[U64, ResolvedViewSource] = [:]
     mut val authoredExtensionViews: Dictionary[U64, Array[SourceExtensionViewProof]] = [:]
     mut val constructionSlotEvidence: Array[SourceBindingTypeEvidence] = []

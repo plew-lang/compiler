@@ -1967,3 +1967,48 @@ associated call described in [com-4k31](com-4k31.md#concrete-qualified-trait-cal
 still fails at call selection on both candidates.
 
 Generation gate `20261114T010656-gen-f87422` passed on the final candidate.
+
+### Independent closure review and rollback
+
+Two independent reviewers examined `d6862217`. Closure was rejected.
+The three lookup removals (`eb854630`, `f835da6a`, `d6862217`) are
+rolled back together. The evidence added on casts, globals and earlier
+expression paths is retained. The 474 check comparisons and focused
+runtime controls did not cover the following producer-to-consumer cases.
+
+| Producer | Required behavior | Confirmed failure |
+| --- | --- | --- |
+| Block and if result | A binding initialized by branches yielding `S#A` selects A's `number()` (11) when B also provides it. | `f3b65f18` runs with 11. `79f67302` and `b22021fb` report an ambiguous bare call in check and JIT. |
+| Free function result | `fn make() -> S#A` returning `<S />#A` preserves A when its result is bound and called. | Same result and ambiguity as the block and if controls. |
+| Closure result and enum pattern binding | `S#Alt` selects the extension override (22) through an inferred closure-call result or an annotated enum payload matched into a binding. The base method returns 11. | `f3b65f18` prints 22. `79f67302` and `b22021fb` successfully compile but print 11. |
+| Nominal field read | `struct Wrap { val item: S#A }` preserves A in `wrap.item.number()`. | `22fc4e90` prints 11. The first removal, `90cf02c6`, already rejects as an ambiguous bare call. |
+| Unused implementation where clause | With `trait Mark[A] {}`, unqualified `struct Number {}`, and `trait Need[A] {}`, `impl[T] Box[T] where T: Need[Number#Mark[I64]] {}` must reject at declaration admission. | `79f67302` rejects in check and JIT. `b22021fb` accepts and runs main. Also reproduced for conformance impls, extension-owned impls, viewed where subjects and associated equality RHSs. |
+| Empty provided impl receiver | With the same nonconforming Number, `trait Top[T] {}; impl Top[Number#Mark[I64]] {}` must reject without a method. | Same regression. Adding a method triggers the method-side check on both candidates. |
+| Inherent associated type RHS | `impl Other { type Item = Number#Mark[I64] }` loses the prior spec/09 rejection. | Same regression. The inherent type member itself has no defined contract in spec/07–08. Preserve the existing rejection while its owner/diagnostic is resolved. |
+
+Value controls use two empty traits with public provided `number()`
+methods (11 for A, 22 for B), and `S` conforms to both. For the extension
+controls use a separate setup with an inherent `S.number()` and
+`extension Alt { impl S { fn number() -> I64 { return 22I64 } } }`.
+Keep these as final-output assertions when fixing the evidence transfer.
+
+Record currently drops the selected trait at value-region joins, nominal
+field reads and some callable results. Dynamic closure results and enum
+pattern bindings also need the selected result/payload source carried from
+their checked producer. Admit impl-owned bound operands and provided
+receiver arguments at the impl, including empty declarations, before
+removing the authored sweep again. Verify internal Limit and recovery
+assertions on the next deletion candidate as well. These are formation and
+handoff defects under this ticket, before final dispatch in com-4k31.
+
+Review also found decorated trait impl roots that were silently discarded
+on both carriers: `impl ActualTrait#Anything {}` and
+`impl Subject as Target#Marker {}`. Both need an input-shape audit before
+the compatibility path can be declared closed. The normal gate for the
+rejected candidate (`20261114T010856-test-c678cb`) was interrupted after
+review confirmed these regressions.
+
+Restoration build `20261114T011354-build-7d4c73` produced `69831090`.
+All six newly exposed value controls recover their expected JIT output,
+four declaration controls recover the original spec/09 error in check and
+JIT, and the four cast/global controls still pass in both modes.

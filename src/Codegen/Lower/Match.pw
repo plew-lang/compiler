@@ -340,14 +340,53 @@ pub impl Comp {
 
     // Only source body annotations belong to this admission path.
     // A synthesized type or a separately owned declaration has no such occurrence.
-    inout fn lowerLocalAnnotation(written: Bool, occurrence: U64) -> Optional[U64] {
-        if !written { return <Optional.None /> }
+    inout fn lowerLocalAnnotation(written: Bool, occurrence: U64) -> Result[Optional[U64], CompileDiagnostic] {
+        if !written { return <Result.Ok value=<Optional.None /> /> }
         match self.sourceTypeUses.currentRole() {
             SourceTypeUseRole.Body | SourceTypeUseRole.DefaultArgument => {
-                return <Optional.Some v=occurrence />
+                val typeUse = try self.signatureOccurrence(id: occurrence)
+                self.registerLocalAnnotationTypeUses(recipe: typeUse.recipe)
+                return <Result.Ok value=<Optional.Some v=occurrence /> />
             }
-            _ => { return <Optional.None /> }
+            _ => { return <Result.Ok value=<Optional.None /> /> }
         }
+    }
+
+    // These occurrences have a dedicated checker at the binding. Registration
+    // during lowering routes them there without claiming successful admission.
+    inout fn registerLocalAnnotationTypeUses(recipe: U64) {
+        val node = self.sourceTypeUses.recipeAt(id: recipe).unwrap()
+        if node.occurrence != 0U64 {
+            val occurrence = self.sourceTypeUses.useAt(index: node.occurrence - 1U64).unwrap()
+            match occurrence.role {
+                SourceTypeUseRole.Body | SourceTypeUseRole.DefaultArgument => { self.localAnnotationTypeUses.insert(node.occurrence) }
+                _ => { return }
+            }
+        }
+        for child in node.children { self.registerLocalAnnotationTypeUses(recipe: child) }
+        if node.sourceRecipe != 0U64 { self.registerLocalAnnotationTypeUses(recipe: node.sourceRecipe) }
+    }
+
+    inout fn markAdmittedRecipeTypeUses(recipe: U64) {
+        val node = self.sourceTypeUses.recipeAt(id: recipe).unwrap()
+        if node.occurrence != 0U64 {
+            val occurrence = self.sourceTypeUses.useAt(index: node.occurrence - 1U64).unwrap()
+            match occurrence.role {
+                SourceTypeUseRole.Body | SourceTypeUseRole.DefaultArgument => { self.admittedRecipeTypeUses.insert(node.occurrence) }
+                SourceTypeUseRole.Declaration => {
+                    val source = self.sourceTypeUses.scopeAt(token: occurrence.scope).unwrap()
+                    match source.kind {
+                        SourceTypeScopeKind.Global | SourceTypeScopeKind.Nominal | SourceTypeScopeKind.Implementation | SourceTypeScopeKind.TraitDeclaration => {
+                            self.admittedRecipeTypeUses.insert(node.occurrence)
+                        }
+                        _ => { return }
+                    }
+                }
+                _ => { return }
+            }
+        }
+        for child in node.children { self.markAdmittedRecipeTypeUses(recipe: child) }
+        if node.sourceRecipe != 0U64 { self.markAdmittedRecipeTypeUses(recipe: node.sourceRecipe) }
     }
 
     // SyntaxFile counterpart of the direct statement lowerer. The block path
@@ -373,7 +412,7 @@ pub impl Comp {
                 }
                 val annotation = if global && s.flag1 {
                     give <Optional.Some v=authoredUse />
-                } else { give self.lowerLocalAnnotation(written: s.flag1, occurrence: authoredUse) }
+                } else { give try self.lowerLocalAnnotation(written: s.flag1, occurrence: authoredUse) }
                 if global { try self.setAuthoredTypeUseRole(role: <SourceTypeUseRole.Body />, site: s.name.start) }
                 val statement = self.pushStmt(s: <Stmt.Let mutable=s.flag0 nameStart=s.name.start nameLen=s.name.end - s.name.start tyStart=tyStart tyLen=tyLen tyIsArray=tyIsArray ty=tyRef init=(try self.lowerSyntaxExpr(id: s.child0)) annotationOccurrence=annotation />)
                 return <Result.Ok value=statement />
@@ -472,7 +511,7 @@ pub impl Comp {
                 }
                 val annotation = if globalTarget.isSome() && hasTy {
                     give <Optional.Some v=authoredUse />
-                } else { give self.lowerLocalAnnotation(written: hasTy, occurrence: authoredUse) }
+                } else { give try self.lowerLocalAnnotation(written: hasTy, occurrence: authoredUse) }
                 if globalTarget.isSome() { try self.setAuthoredTypeUseRole(role: <SourceTypeUseRole.Body />, site: nm.nameStart) }
                 val iv: U64 = (try self.lowerExpr(e: init))
                 result = self.pushStmt(s: <Stmt.Let mutable=mutable nameStart=nm.nameStart nameLen=nm.nameLen tyStart=tyStart tyLen=tyLen tyIsArray=tyIsArray ty=tyRef init=iv annotationOccurrence=annotation />)
@@ -743,7 +782,7 @@ pub impl Comp {
             element = self.internTmpName(prefix: "$forBinding", n: self.cur.lowerTmpSeq)
             val value = self.pushExpr(e: <Expr.Ident start=element.nameStart len=element.nameLen />)
             self.arena.exprSpanStart[value] = nameStart
-            val annotation = self.lowerLocalAnnotation(written: true, occurrence: occurrence)
+            val annotation = try self.lowerLocalAnnotation(written: true, occurrence: occurrence)
             val binding = self.pushStmt(s: <Stmt.Let mutable=false nameStart=nameStart nameLen=nameLen tyStart=typeStart tyLen=typeLen tyIsArray=false ty=typeRef init=value annotationOccurrence=annotation />)
             mut val statements: Array[U64] = [binding]
             mut val index = 0U64
