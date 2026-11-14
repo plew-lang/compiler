@@ -526,7 +526,7 @@ pub impl Comp {
             }
         }
         val owner = (try self.semanticBodyOwner(fnIdx: fnIdx))
-        return <Result.Ok value=owner < self.closedCallTemplateBodies.count() && self.closedCallTemplateBodies[owner] />
+        return <Result.Ok value=self.callTemplatesClosedForOwner(owner: owner) />
     }
 
     // A selection can be published before its substitution is complete.
@@ -682,6 +682,19 @@ pub impl Comp {
         return <Result.Err error=self.diagnosticAt(offset: offset, msg: "internal error: static call has no selected declaration and proof") />
     }
 
+    inout fn closeCallTemplatesForBody(fnIdx: U64) -> Result[(), CompileDiagnostic] {
+        if fnIdx >= self.arena.functionCount() {
+            return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: lexical call closure has no declaration") />
+        }
+        val owner = (try self.semanticBodyOwner(fnIdx: fnIdx))
+        if self.callTemplatesClosedForOwner(owner: owner) { return <Result.Ok value=() /> }
+        try self.checkBodyCallTemplateSelections(owner: owner)
+        self.markCallTemplatesClosed(owner: owner)
+        return <Result.Ok value=() />
+    }
+}
+
+impl Comp {
     inout fn checkBodyCallTemplateSelections(owner: U64) -> Result[(), CompileDiagnostic] {
         mut val row = self.firstLexicalCallTemplate(owner: owner)
         while row != 0U64 {
@@ -692,20 +705,19 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
-    inout fn closeCallTemplatesForBody(fnIdx: U64) -> Result[(), CompileDiagnostic] {
-        if fnIdx >= self.arena.functionCount() {
-            return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: lexical call closure has no declaration") />
-        }
-        val owner = (try self.semanticBodyOwner(fnIdx: fnIdx))
-        if owner < self.closedCallTemplateBodies.count() && self.closedCallTemplateBodies[owner] { return <Result.Ok value=() /> }
-        try self.checkBodyCallTemplateSelections(owner: owner)
+    fn callTemplatesClosedForOwner(owner: U64) -> Bool {
+        return owner < self.closedCallTemplateBodies.count() && self.closedCallTemplateBodies[owner]
+    }
+
+    inout fn markCallTemplatesClosed(owner: U64) {
         while self.closedCallTemplateBodies.count() <= owner {
             self.closedCallTemplateBodies.append(false)
         }
         self.closedCallTemplateBodies.set(i: owner, value: true)
-        return <Result.Ok value=() />
     }
+}
 
+pub impl Comp {
     // Ordinary compilation completes the entire source frontier before Mono.
     // There is deliberately no operation that reopens a completed owner.
     inout fn closeProgramCallTemplates() -> Result[(), CompileDiagnostic] {

@@ -64,11 +64,18 @@ impl Comp {
     }
 
     inout fn admitRecordedBodyCallConstraints(owner: U64) -> Result[Array[AdmittedCallConstraints], CompileDiagnostic] {
+        // Reuse selection checks only when this request closed the current
+        // rows. An earlier close can predate body recording.
+        val wasClosed = self.callTemplatesClosedForOwner(owner: owner)
+        if !wasClosed {
+            try self.checkBodyCallTemplateSelections(owner: owner)
+            self.markCallTemplatesClosed(owner: owner)
+        }
         mut val admitted: Array[AdmittedCallConstraints] = []
         mut val row = self.firstLexicalCallTemplate(owner: owner)
         while row != 0U64 && row <= self.callTemplateLocations.count() {
             val index = row - 1U64
-            try self.checkCallTemplateSelection(templateIndex: index)
+            if wasClosed { try self.checkCallTemplateSelection(templateIndex: index) }
             admitted.append((try self.admitSelectedCallConstraints(templateIndex: index)))
             try self.checkClosedIterationProtocol(templateIndex: index)
             row = self.callTemplateBodyNext[index]
