@@ -984,31 +984,6 @@ pub impl Comp {
         // has no legacy `viewExtId`, so using that scalar as the gate would silently
         // turn `T#E#F` back into a bare `T` at this one call-site shape.
         mut val sources: Array[CallableSourceHead] = self.collectViewSources(recv: recv, recvRef: rt.ref)
-        // An identifier's declared view is authoritative even when an earlier
-        // context-free recovery filled its expression cache before this body's
-        // locals were installed. Keep this repair at the resolver boundary rather
-        // than teaching each caller a separate static-view special case.
-        if sources.count() == 0U64 {
-            match self.arena.exprs[recv] {
-                Expr.Ident(start: val localStart, len: val localLen) => {
-                    val li = self.localIndexByName(start: localStart, len: localLen)
-                    if li < self.cur.locals.count() {
-                        val lo = (try self.typedLocal(index: li))
-                        if lo.ty != 0U64 && lo.ty < self.arena.typeCount() {
-                            val localTy: TypeRef = self.arena.typeAt(index: lo.ty)
-                            val localSources: Array[ResolvedViewSource] = self.arena.typeViewSources(ref: lo.ty)
-                            mut val vi: U64 = 0U64
-                            while vi < localSources.count() {
-                                val localSource: ResolvedViewSource = localSources[vi]
-                                self.appendViewSource(sources: inout sources, source: (try self.resolveViewSourceKey(recvStart: recvStart, recvLen: recvLen, recvRef: lo.ty, sourceId: localSource.surfaceId, sourceOwner: localSource.traitInstance.owner)))
-                                vi += 1U64
-                            }
-                        }
-                    }
-                }
-                _ => {}
-            }
-        }
         if !self.appendRequiredTraitSource(sources: inout sources, owner: requiredTraitOwner) { return <Result.Ok value=self.arena.functionCount() /> }
         if sources.count() > 0U64 {
             mfi = (try self.findMethodInViewSet(recvStart: recvStart, recvLen: recvLen, sources: sources, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: rt.ref, requiredTraitOwner: requiredTraitOwner))

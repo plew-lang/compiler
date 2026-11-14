@@ -1922,3 +1922,25 @@ no legacy query hits. Next, isolate removal of the remaining local
 method recovery and type checks independently. The former needs to read
 the selected binding, and the latter needs to preserve source-set cycle
 checks and the body/declaration admission boundary.
+
+### Remove identifier-based view recovery from method selection
+
+With cast and global evidence carried to the method call, the method
+resolver no longer restarts identifier lookup when the view candidate set
+is empty. The checked receiver path consumes the published view evidence.
+The early compatibility resolver still handles the receiver's lexical
+`self` and synthetic protocol requirements; it does not rediscover views
+from a local type.
+
+Fixed-input build `20261114T004952-build-d5442f` used `f3b65f18` and
+produced `79f67302`. All 474 targeted paired checks match, including
+diagnostics. Eight positive controls match check, JIT and emitted LLVM;
+the four cast/global controls also match linked-native expectations.
+Three invalid-instance or multiple-selector controls retain their
+rejections. [Same-source comparison](../../../evidence/rejection-domains/diagnostic-domain-implementation/trait-receiver-admission/remove-view-identifier-recovery-same-source.json):
+7.896 s to 7.850 s (three pairs after warmup, identical LLVM from all
+eight runs). This comparison is not the formal fixed-point benchmark.
+
+The remaining direct caller of the legacy lookup is authored type
+verification. Its declaration and requested-body entries still need
+separate coverage and ownership checks before removing that lookup.
