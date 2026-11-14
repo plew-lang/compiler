@@ -25,7 +25,7 @@ struct Box[T] {
     pub val value: T
 }
 pub impl[T] Box[T] { factory }
-pub impl[T] Box[T] as Use where T#Parser.Output: Mark {
+pub impl[T] Box[T] as Use where T: Parser, T#Parser.Output: Mark {
     fn use() -> I64 { return 1I64 }
 }
 

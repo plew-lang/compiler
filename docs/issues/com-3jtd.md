@@ -2128,3 +2128,12 @@ declaring `T: Parser` in that impl. Under the adopted exact-view rule,
 the projection requires that premise independently of its own Mark
 constraint. The source corrections preserve the intended assertions
 and expected companions. No tracked fixture was changed.
+
+The three tracked inputs now declare `T: Parser` on the implementation.
+On `61678d9e`, the two positive fixtures pass check, JIT (matching their
+existing output), and LLVM emission. The existing negative fixture retains
+its where-clause diagnostic in all three modes. The two new negative
+fixtures still reject at the implementation with the exact-instance
+diagnostic in all three modes. Next, admit provided impl receiver arguments
+even when there are no methods, then recheck the remaining compatibility
+sweep.
