@@ -2108,3 +2108,23 @@ retains the original generic call being tested. The tracked positive
 test is unchanged pending the existing-test decision. Four nearby
 positive fixtures retain check success. The existing compatibility
 sweep is still active, and full validation has not been completed.
+
+#### Existing fixture impact of impl where admission
+
+A paired check of 481 shared fixture entries containing a hash character
+found two success-to-rejection changes and three changed error lines.
+Two changed rejection lines are the newly added impl where controls.
+A focused scan for impl where projections, including short-form
+spellings, exposed the same differences. Neither comparison timed out.
+
+| Existing fixture | Original assertion | Result after adding only `T: Parser` to the impl in scratch |
+| --- | --- | --- |
+| `associated_condition_normalization_generic` (`d15dcfeb`) | An abstract caller proves a conditional conformance using its own projected bound. | Check and JIT succeed on both carriers with unchanged expected output. |
+| `associated_projection_impl_bound` (`649a6fe9`) | A concrete associated output with `Mark` satisfies the conditional impl; the caller prints 1. | Check and JIT succeed on both carriers; expected output stays 1. |
+| `assoc_type_projection_conditional_bound` (`f3a42250`) | A concrete caller is rejected because the associated output lacks `Mark`, even though the projection receiver itself has `Mark`. | Check and JIT give the original where-clause rejection on both carriers. |
+
+All three write `where T#Parser.Output: Mark` on the impl without
+declaring `T: Parser` in that impl. Under the adopted exact-view rule,
+the projection requires that premise independently of its own Mark
+constraint. The source corrections preserve the intended assertions
+and expected companions. No tracked fixture was changed.
