@@ -2012,3 +2012,22 @@ Restoration build `20261114T011354-build-7d4c73` produced `69831090`.
 All six newly exposed value controls recover their expected JIT output,
 four declaration controls recover the original spec/09 error in check and
 JIT, and the four cast/global controls still pass in both modes.
+
+### Preserve the trait selector at a value-region join
+
+The shared value-region recorder forwards a normally yielding producer's
+selected trait instance only when the checked producer and result terms
+match. Single blocks, if branches and match arms use this operation. A
+source-diverging branch does not publish result evidence. Conversions
+remain governed by the existing result typing.
+
+`tests/fixtures/run/value_region_trait_selector.pw` asserts both provided
+method outputs and the value/return branch distinction. The old removal
+candidate `79f67302` rejected its first call as ambiguous. The restored
+candidate `69831090` printed the expected output but performed four
+legacy trait queries in check. Fixed-input build
+`20261114T011918-build-11c572` produced `8828a587`, with the same
+expected output in JIT and linked native and zero legacy trait queries.
+`value_region_extension_evidence` and `source_value_region_production`
+pass check and JIT with unchanged output. The shared legacy path remains
+while the other reviewed producers are fixed.

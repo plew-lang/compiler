@@ -1,0 +1,30 @@
+// Each value region must preserve the selected trait through its result binding.
+// Without that selection, the two provided methods make the bare call ambiguous.
+use @Std/Io only { print }
+
+trait First {}
+trait Second {}
+pub impl First { fn number() -> I64 { return 11I64 } }
+pub impl Second { fn number() -> I64 { return 22I64 } }
+struct Counter {}
+impl Counter as First {}
+impl Counter as Second {}
+
+fn readOrReturn(flag: Bool) -> I64 {
+    val value = if flag { return 7I64 } else { give <Counter />#First }
+    return value.number()
+}
+
+fn main() {
+    val block = { give <Counter />#First }
+    print(block.number())
+    val joined = if false { give <Counter />#First } else { give <Counter />#First }
+    print(joined.number())
+    val matched = match false {
+        true => { give <Counter />#Second }
+        false => { give <Counter />#Second }
+    }
+    print(matched.number())
+    print(readOrReturn(flag: false))
+    print(readOrReturn(flag: true))
+}

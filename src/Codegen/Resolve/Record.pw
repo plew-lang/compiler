@@ -1613,8 +1613,11 @@ pub impl Comp {
                     }
                     Optional.None => {}
                 }
-                if self.arena.typeViewSourceCount(ref: resultTerm) != 0U64 && self.recordedExtensionSources(exprId: exprId).count() == 0U64 {
-                    self.recordExpressionExtensionSources(exprId: exprId, proofs: self.recordedExtensionSources(exprId: value))
+                if self.arena.typeViewSourceCount(ref: resultTerm) != 0U64 {
+                    self.recordExpressionTraitSelector(exprId: exprId, selection: self.recordedTraitSelector(exprId: value, receiver: resultTerm))
+                    if self.recordedExtensionSources(exprId: exprId).count() == 0U64 {
+                        self.recordExpressionExtensionSources(exprId: exprId, proofs: self.recordedExtensionSources(exprId: value))
+                    }
                 }
             }
         }
