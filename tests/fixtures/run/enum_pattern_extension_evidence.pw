@@ -1,0 +1,12 @@
+// The selected enum payload carries its authored extension view into the arm binding.
+use @Std/Io only { print }
+struct S { val n: I64 }
+impl S { fn number() -> I64 { return 11I64 } }
+extension Alt { impl S { fn number() -> I64 { return 22I64 } } }
+enum Value { Present(item: S#Alt) }
+fn main() {
+    val value = <Value.Present item=(<S n=0I64 />#Alt) />
+    match value {
+        Value.Present(item: val v) => { print(v.number()) }
+    }
+}

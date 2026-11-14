@@ -242,10 +242,16 @@ pub impl Comp {
     }
 
     inout fn genericEnumFieldTypeInfo(instRef: U64, variantStart: U64, variantLen: U64, fieldStart: U64, fieldLen: U64) -> Result[TypeInfo, CompileDiagnostic] {
+        val field = try self.genericEnumFieldType(instRef: instRef, variantStart: variantStart, variantLen: variantLen, fieldStart: fieldStart, fieldLen: fieldLen)
+        if field.term == 0U64 { return <Result.Ok value=scalarInfo() /> }
+        return <Result.Ok value=self.typeInfoOfRef(ref: field.term) />
+    }
+
+    inout fn genericEnumFieldType(instRef: U64, variantStart: U64, variantLen: U64, fieldStart: U64, fieldLen: U64) -> Result[(term: U64, occurrence: U64), CompileDiagnostic] {
         val layoutReceiver: U64 = self.lexicalLayoutReceiver(receiverTerm: instRef)
         val ei: U64 = self.enumIndexForType(ref: layoutReceiver)
         if ei >= self.arena.enumCount() {
-            return <Result.Ok value=scalarInfo() />
+            return <Result.Ok value=(term: 0U64, occurrence: 0U64) />
         }
         val e: EnumDef = self.arena.enumAt(index: ei)
         val vars: Array[Variant] = e.variants
@@ -265,14 +271,14 @@ pub impl Comp {
                         // `nameId` loop here made reconstructed `T` refs (whose
                         // cache id is 0) escape only through match bindings.
                         val term = try self.selectedNominalFieldType(field: fd, token: e.sourceTypeScope, owner: e.defOffset, params: e.typeParams, receiver: layoutReceiver)
-                        return <Result.Ok value=self.typeInfoOfRef(ref: term) />
+                        return <Result.Ok value=(term: term, occurrence: fd.authoredTypeUse) />
                     }
                     fi += 1
                 }
             }
             vi += 1
         }
-        return <Result.Ok value=scalarInfo() />
+        return <Result.Ok value=(term: 0U64, occurrence: 0U64) />
     }
 
     inout fn methodMatchesInst(f: Func, instRef: U64) -> Bool {

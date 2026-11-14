@@ -2049,3 +2049,18 @@ check, JIT and linked native execution, with no legacy trait query in
 check. Both value-region controls also pass check and JIT. Old and new
 candidates emit identical nonempty LLVM on the same compiler source
 (SHA-256 `8281c829d7c00b1a893fc3958b2e25147c97934e25cf025cc870ee5715eeaf62`).
+
+### Retain the authored enum payload annotation on pattern bindings
+
+The existing payload type lookup now returns the checked term and the exact
+field annotation occurrence from the same declaration lookup. The arm local
+retains that occurrence, so the ordinary identifier recorder publishes its
+view evidence. Consumers that only need TypeInfo still use the same lookup.
+
+`enum_pattern_extension_evidence` prints the extension method's 22.
+The earlier removal candidate `79f67302` silently printed the bare method's
+11. The immediate baseline `7d623149` printed 22 with one legacy extension
+query in check. Fixed-input build `20261114T013316-build-972176` produced
+`c581e15b`, which passes check, JIT and linked native with zero legacy
+extension queries on this case. Five nearby enum, generic-match and
+view-handoff controls also match their JIT outputs.

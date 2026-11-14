@@ -6669,8 +6669,9 @@ pub impl Comp {
         while bi < a.binds.len {
             val bd: Bind = self.bindAt(binds: a.binds, index: bi)
             if bd.nameLen != 0U64 {
-                val bti: TypeInfo = (try self.genericEnumFieldTypeInfo(instRef: self.typedIrRefOfInfo(ti: scrutTi), variantStart: a.variantStart, variantLen: a.variantLen, fieldStart: bd.fieldStart, fieldLen: bd.fieldLen))
-                self.addLocal(nameStart: bd.nameStart, nameLen: bd.nameLen, tyStart: bti.nameStart, tyLen: bti.nameLen, isArray: bti.kind == 3, ty: self.typedIrRefOfInfo(ti: bti), isInout: false, isMut: bd.isMutable, owned: false)
+                val field = (try self.genericEnumFieldType(instRef: self.typedIrRefOfInfo(ti: scrutTi), variantStart: a.variantStart, variantLen: a.variantLen, fieldStart: bd.fieldStart, fieldLen: bd.fieldLen))
+                val bti = if field.term == 0U64 { give scalarInfo() } else { give self.typeInfoOfRef(ref: field.term) }
+                self.addLocal(nameStart: bd.nameStart, nameLen: bd.nameLen, tyStart: bti.nameStart, tyLen: bti.nameLen, isArray: bti.kind == 3, ty: self.typedIrRefOfInfo(ti: bti), isInout: false, isMut: bd.isMutable, owned: false, authoredTypeUse: field.occurrence)
             }
             bi += 1U64
         }
