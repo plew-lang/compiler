@@ -2031,3 +2031,21 @@ expected output in JIT and linked native and zero legacy trait queries.
 `value_region_extension_evidence` and `source_value_region_production`
 pass check and JIT with unchanged output. The shared legacy path remains
 while the other reviewed producers are fixed.
+
+### Preserve selectors on direct call results and nominal fields
+
+Direct call publication and nominal field selection already retain the
+authored result or field occurrence. Use that occurrence's admitted
+selector when it matches the checked value type. This covers the
+two provided-method ambiguities exposed by the rollback review without
+reopening the conformance lookup.
+
+The new `direct_call_result_trait_selector` and
+`nominal_field_trait_selector` fixtures reproduce the ambiguity in
+`79f67302` and `90cf02c6`, respectively. The direct call uses one legacy
+trait lookup on the immediate baseline `8828a587`. Fixed-input build
+`20261114T012731-build-3555cd` produced `7d623149`; both fixtures pass
+check, JIT and linked native execution, with no legacy trait query in
+check. Both value-region controls also pass check and JIT. Old and new
+candidates emit identical nonempty LLVM on the same compiler source
+(SHA-256 `8281c829d7c00b1a893fc3958b2e25147c97934e25cf025cc870ee5715eeaf62`).

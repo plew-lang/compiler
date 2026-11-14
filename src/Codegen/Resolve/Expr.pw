@@ -3199,6 +3199,7 @@ impl Comp {
                 }
                 self.recordAuthoredCompositeOrigin(exprId: exprId, term: resultTerm, occurrence: occurrence)
                 if viewed {
+                    self.recordAuthoredTraitSelector(exprId: exprId, occurrence: occurrence, term: resultTerm)
                     mut val proofs = self.resultSubstitutionExtensions(exprId: exprId, declaration: declaration, args: args, typeArguments: calleeTypeArgs, receiverTerm: receiverTypeTerm)
                     for proof in self.authoredResultExtensionSources(occurrence: occurrence) { proofs.append(proof) }
                     self.recordExpressionExtensionSources(exprId: exprId, proofs: proofs)

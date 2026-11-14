@@ -1,0 +1,14 @@
+// A nominal field read preserves the field declaration’s selected trait instance.
+use @Std/Io only { print }
+trait A {}
+trait B {}
+pub impl A { fn number() -> I64 { return 11I64 } }
+pub impl B { fn number() -> I64 { return 22I64 } }
+struct S {}
+impl S as A {}
+impl S as B {}
+struct Wrap { val item: S#A }
+fn main() {
+    val v = <Wrap item=(<S />#A) />
+    print(v.item.number())
+}

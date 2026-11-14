@@ -1777,6 +1777,7 @@ pub impl Comp {
                         isBoxed = self.fieldIsBoxed(f: field)
                         self.recordAuthoredCompositeOrigin(exprId: exprId, term: fieldTerm, occurrence: field.authoredTypeUse)
                         if field.authoredTypeUse != 0U64 && self.arena.typeViewSourceCount(ref: fieldTerm) != 0U64 {
+                            self.recordAuthoredTraitSelector(exprId: exprId, occurrence: field.authoredTypeUse, term: fieldTerm)
                             self.recordExpressionExtensionSources(exprId: exprId, proofs: self.authoredResultExtensionSources(occurrence: field.authoredTypeUse))
                         }
                     }
