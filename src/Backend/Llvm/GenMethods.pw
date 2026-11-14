@@ -74,11 +74,10 @@ pub impl LlvmCtx {
     }
 
     fn genMethSlotFor(bodyId: U64) -> U64 {
-        mut val slot: U64 = 0U64
-        while slot < self.genMethBody.count() {
-            if self.genMethBody[slot] == bodyId { return slot }
-            slot += 1U64
-        }
+        if bodyId >= self.genMethSlots.count() || self.genMethSlots[bodyId] == 0U64 { return self.genMethBody.count() }
+        val slot = self.genMethSlots[bodyId] - 1U64
+        if slot >= self.genMethBody.count() { return self.genMethBody.count() }
+        if self.genMethBody[slot] == bodyId { return slot }
         return self.genMethBody.count()
     }
 
@@ -128,6 +127,8 @@ pub impl LlvmCtx {
         self.genMethVal.append(fv)
         self.genMethTy.append(fty)
         self.genMethBody.append(bodyId)
+        while self.genMethSlots.count() <= bodyId { self.genMethSlots.append(0U64) }
+        self.genMethSlots.set(i: bodyId, value: self.genMethBody.count())
         self.traceGenMethod(c: inout c, event: "registered", mfi: mfi, instRef: instRef, bodyId: bodyId)
         return <Result.Ok value=() />
     }

@@ -40,6 +40,8 @@ pub impl LlvmCtx {
                         try self.emitExposedEntry(c: inout c, bodyId: bodyId, target: fv, signature: fty)
                     }
                     self.genFnK.append(bodyId)
+                    while self.genFnSlots.count() <= bodyId { self.genFnSlots.append(0U64) }
+                    self.genFnSlots.set(i: bodyId, value: self.genFnK.count())
                     self.genFnVal.append(fv)
                     self.genFnTy.append(fty)
                     self.genFnEmit.append(self.genFnK.count() - 1U64)

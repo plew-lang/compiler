@@ -463,6 +463,8 @@ struct LlvmCtx {
     // Physical method slots keyed only by the finalized semantic BodyInstance.
     pub mut val genMethVal: Array[LLVMValueRef]
     pub mut val genMethTy: Array[LLVMTypeRef]
+    mut val genMethSlots: Array[U64] = []
+    mut val genFnSlots: Array[U64] = []
     pub mut val genMethBody: Array[U64]
     // local environment (parallel arrays). `nLocals` is the logical count: blocks
     // save it on entry and restore it on exit (lexical scope), so a shadowing
@@ -1480,11 +1482,9 @@ fn appendU64Le(into: inout Array[LLVMValueRef], n: U64, i8ty: LLVMTypeRef) {
 // Unlike the old `(fnIdx, args, receiver)` lookup, this cannot collapse two provided
 // bodies that share source syntax but carry different conformance evidence.
 fn genFnSlotForBody(bodyId: U64, st: inout LlvmCtx) -> U64 {
-    mut val slot: U64 = 0
-    while slot < st.genFnK.count() {
-        if st.genFnK[slot] == bodyId { return slot }
-        slot += 1
-    }
+    if bodyId >= st.genFnSlots.count() || st.genFnSlots[bodyId] == 0U64 { return st.genFnK.count() }
+    val slot = st.genFnSlots[bodyId] - 1U64
+    if slot < st.genFnK.count() && st.genFnK[slot] == bodyId { return slot }
     return st.genFnK.count()
 }
 
