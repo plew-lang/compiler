@@ -1,0 +1,8 @@
+use @Std/Io only { print }
+trait Mark[A] {}
+trait Need[A] {}
+trait Other {}
+struct Number {}
+struct Box[T] {}
+impl[T] Box[T] as Other where T: Need[Number#Mark[I64]] {}
+fn main() { print(42I64) }

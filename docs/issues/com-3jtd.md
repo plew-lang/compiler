@@ -2084,3 +2084,27 @@ legacy searches in check. Four adjacent closure and enum controls pass
 check and JIT. [Same-source comparison](../../../evidence/rejection-domains/diagnostic-domain-implementation/trait-receiver-admission/closure-result-same-source.json):
 7.912 s to 7.899 s, all eight nonempty LLVM outputs identical. The
 formal fixed-point benchmark remains separate.
+
+### Implementation-owned where operand admission
+
+The working change checks the viewed or projected subject, positional
+arguments and associated equality RHSs of each impl-owned clause under
+that impl's binders and premises. It checks empty impls through the same
+declaration pass. Before the change, the restored carrier rejected the
+two new `impl_where_view_missing_premise_*` fixtures only in the legacy
+sweep and the earlier removal candidate accepted them. Build
+`20261114T014815-build-0bd46c` produced `61678d9e`; both now reject with
+the exact-instance diagnostic in check and JIT.
+
+The new check exposes an existing success-test setup problem.
+`associated_condition_normalization_generic` (introduced in `d15dcfeb`)
+asserts conditional conformance normalization under a generic caller.
+Its caller has `T: Parser`, but the impl itself writes only
+`where T#Parser.Output: Mark`. The caller's premise cannot authorize
+the impl's declaration. The prior candidate accepts; this candidate
+rejects at the projection on line 9. A scratch copy that adds
+`T: Parser` to the impl passes check and JIT on both carriers and
+retains the original generic call being tested. The tracked positive
+test is unchanged pending the existing-test decision. Four nearby
+positive fixtures retain check success. The existing compatibility
+sweep is still active, and full validation has not been completed.

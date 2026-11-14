@@ -332,6 +332,43 @@ impl Comp {
         return self.checkTraitConstraintOperands(source: source, written: written, scopes: scopes, closedOnly: false)
     }
 
+    // Implementation bounds are authored by the impl even when it declares
+    // no methods. Their operands use its binders and declaration premises.
+    inout fn admitImplementationBoundViews(token: U64, owner: SourceImplementationOwner, range: SourceBoundRange, offset: U64) -> Result[(), CompileDiagnostic] {
+        if range.count == 0U64 { return <Result.Ok value=() /> }
+        mut val recipes: Array[U64] = []
+        for index in 0U64..<range.count {
+            val bound = try self.retainedSignatureClause(scope: token, id: range.first + index, offset: offset)
+            if bound.subjectRecipe != 0U64 && self.bodyTypeNeedsViewAdmission(ref: bound.subject) {
+                recipes.append(bound.subjectRecipe)
+            }
+            for position in 0U64..<bound.arguments.count() {
+                if self.bodyTypeNeedsViewAdmission(ref: bound.constraint.key.positionalArgs[position]) {
+                    recipes.append(bound.arguments[position])
+                }
+            }
+            for position in 0U64..<bound.predicateRecipes.count() {
+                if self.bodyTypeNeedsViewAdmission(ref: bound.constraint.assocPredicates[position].value) {
+                    recipes.append(bound.predicateRecipes[position])
+                }
+            }
+        }
+        if recipes.count() == 0U64 { return <Result.Ok value=() /> }
+        val receiver = self.receiverSubjectTerm(receiver: owner.receiver, traitOwner: owner.receiverTrait)
+        val selfParameter = if owner.receiverTrait == 0U64 { give 0U64 } else { give self.arena.typeTermAt(index: receiver).paramId }
+        val parameters = self.pushFuncBinds(binds: owner.parameters)
+        val scope = match owner.kind {
+            SourceImplementationKind.Conformance(index: val index) => <DeclarationTypeScope origin=<DeclarationScopeOrigin.AssociatedBinding /> owner=index parameters=parameters selfParameter=selfParameter />,
+            SourceImplementationKind.Inherent => <DeclarationTypeScope origin=<DeclarationScopeOrigin.Implementation /> owner=token parameters=parameters selfParameter=selfParameter />,
+        }
+        val scopes = <SignatureProofScopes local=scope assumptions=(try self.declarationScopeAssumptions(scope: scope)) inherited=[] receiver=receiver scopedBinders=true />
+        mut val validation = <SignatureRecipeValidation />
+        for recipe in recipes {
+            try self.checkAuthoredTypeRecipe(sourceScope: token, recipe: recipe, edge: <AuthoredRecipeEdge.Source />, scopes: scopes, validation: inout validation, offset: offset)
+        }
+        return <Result.Ok value=() />
+    }
+
     inout fn admitNominalImplementationReceiver(token: U64, owner: SourceImplementationOwner) -> Result[(), CompileDiagnostic] {
         if self.authoredImplementationReceivers.contains(key: token) { return <Result.Ok value=() /> }
         val occurrence = try self.signatureOccurrence(id: owner.receiverOccurrence)
@@ -449,7 +486,7 @@ impl Comp {
         return <Result.Ok value=() />
     }
 
-    inout fn admitNominalImplementationReceivers() -> Result[(), CompileDiagnostic] {
+    inout fn admitImplementationTypeViews() -> Result[(), CompileDiagnostic] {
         for token in 1U64..<(self.sourceTypeUses.scopeCount() + 1U64) {
             val source = self.sourceTypeUses.scopeAt(token: token).unwrap()
             if source.implementation.isNone() { continue }
@@ -457,6 +494,7 @@ impl Comp {
             if owner.receiverOccurrence != 0U64 && self.bodyTypeNeedsViewAdmission(ref: owner.receiver) {
                 try self.admitNominalImplementationReceiver(token: token, owner: owner)
             }
+            try self.admitImplementationBoundViews(token: token, owner: owner, range: source.bounds.unwrapOr(fallback: <SourceBoundRange />), offset: source.anchor)
         }
         if self.authoredImplementationReceivers.count() != 0U64 {
             for function in 0U64..<self.arena.functionCount() {
