@@ -1,0 +1,3 @@
+trait Projection { type First type Second }
+impl (x: I64) as Projection { type First = I64 type Second = Bool }
+fn main() {}

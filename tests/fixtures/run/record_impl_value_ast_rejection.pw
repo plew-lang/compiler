@@ -1,0 +1,26 @@
+use /Frontend only { Comp }
+use @Plew/Syntax as Syntax
+use @Std/Io only { print }
+
+fn main() {
+    val source = "impl (point: I64) {{ fn number() -> I64 {{ return 17I64 }} }}"
+    mut val lexer = <Syntax.Lexer bytes=source.bytes() pos=0U64 toks=[] depth=0I64 />
+    Syntax.lex(lx: inout lexer)
+    mut val parser = <Syntax.P bytes=source.bytes() toks=lexer.toks pos=0U64 base=0U64 />
+    val items = Syntax.parseProgramAst(p: inout parser)
+    if items.count() != 1U64 { panic("expected one impl") }
+    mut val compiler = <Comp />
+    compiler.arena.reserveTypeSentinel()
+    compiler.appendSrc(from: source.bytes())
+    val functionCount = compiler.arena.functionCount()
+    match compiler.lowerTopItem(item: items[0U64]) {
+        Result.Ok(value: _) => { panic("record impl was accepted") }
+        Result.Err(error: val diagnostic) => {
+            if !diagnostic.isSourceRejection() || diagnostic.message != "cannot declare an impl for an anonymous record (spec/02)" {
+                panic("expected an anonymous record impl rejection")
+            }
+            if compiler.arena.functionCount() != functionCount { panic("impl member was registered") }
+            print("record impl rejected before member registration")
+        }
+    }
+}

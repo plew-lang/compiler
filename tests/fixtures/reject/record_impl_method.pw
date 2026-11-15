@@ -1,0 +1,4 @@
+impl (point: I64) {
+    fn number() -> I64 { return 17I64 }
+}
+fn main() {}

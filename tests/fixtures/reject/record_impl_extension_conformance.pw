@@ -1,0 +1,3 @@
+trait Projection { type Item }
+extension Extra { impl (x: I64) as Projection { type Item = I64 } }
+fn main() {}

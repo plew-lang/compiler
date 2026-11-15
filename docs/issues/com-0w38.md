@@ -1,6 +1,6 @@
 ---
 id: com-0w38
-status: open
+status: in_progress
 deps: []
 links: [com-z4ns, com-wka4, com-amjl, com-bvc8, com-cuoy]
 created: 2026-11-06T17:52:14Z
@@ -17,9 +17,7 @@ tags: [frontend, generics, verification]
 Spec02's labelled anonymous records are pure data: impls, conformance and methods
 are forbidden. The user reaffirmed that boundary, including named extensions;
 there is no new record-extension language feature. [Executed investigation](../../../evidence/rejection-domains/diagnostic-domain-implementation/record-projection-investigation.json) proves bare record
-conformance and generic-bound use are accepted. Extension acceptance, empty
-impls and other member forms have not yet been executed; classify them by tests,
-not by assumption.
+conformance and generic-bound use are accepted. [Fixed-point REDs](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-record-subject-red.json) also cover named extensions, methods, empty impls, generic record subjects and unit.
 
 ## Actions and Guarantees
 
@@ -54,3 +52,26 @@ structural projection identity. Links coordinate shared admission APIs but do
 not force a serial prerequisite before investigation. Required phase-three
 acceptance is connected to met-si6j and met-ia09. No new record methods,
 conformance, factory semantics or broader unsupported-feature implementation.
+
+
+## Verified implementation increment
+
+Both declaration lowering routes call the same record subject check immediately
+after type lowering, before registering members, conformance or the impl owner.
+It reads the top-level semantic TypeTerm kind; nested record arguments and
+synthetic record layouts remain valid data.
+
+The f20fc36c fixed-point carrier accepted the seven source rejection fixtures.
+A native value-AST fixture linked against f20fc36c source failed with
+`record impl was accepted` (134), and the same fixture linked against the fixed
+source passed, checking the Source diagnostic, message and unchanged function
+count. The rebuilt candidate rejects all seven cases in check, run, LLVM text
+and gen modes. It also rejects an actual auto-parted generated record impl
+previously accepted. The nominal wrapper test passes lazy execution and observes
+the record field under permuted initialization labels.
+
+Independent review found no contract violation or unchecked entry route.
+It requested distinguishing the intended Source diagnostic from any other
+rejection in the value-AST fixture; the final fixture checks both and the
+reviewer rechecked it. Same-source alternating six pairs produced identical
+LLVM in all twelve runs (median 7.275s to 7.285s). Whole normal suite pending.

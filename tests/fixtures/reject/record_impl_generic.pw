@@ -1,0 +1,2 @@
+impl[T] (point: T, count: U64) {}
+fn main() {}

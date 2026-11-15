@@ -1,0 +1,12 @@
+use @Std/Io only { print }
+
+struct Wrapper[T] { val value: T }
+
+impl Wrapper[(point: I64, count: U64)] {
+    fn number() -> I64 { return self.value.point }
+}
+
+fn main() {
+    val wrapper: Wrapper[(point: I64, count: U64)] = <Wrapper value=(count: 2U64, point: 17I64) />
+    print(wrapper.number())
+}
