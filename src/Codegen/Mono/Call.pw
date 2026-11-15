@@ -4833,7 +4833,6 @@ pub impl Comp {
         self.cur.reachedDirectCalls = reachedDirectCalls
         self.cur.checkedLocalStorage = checkedLocalStorage
         self.cur.checkedLocalStorageOrder = checkedLocalStorageOrder
-        self.cur.checkedLocalStorageTargets = [:]
         val result = self.prepareFinalBodyRequest(bodyId: bodyId)
         self.cur = saved
         self.inCollection = collecting
@@ -6043,7 +6042,11 @@ pub impl Comp {
                             if request.declarationTarget != capture.bindingTarget {
                                 return <Result.Err error=self.diagnosticAt(offset: capture.bindingTarget, msg: "closure capture has a foreign checked binding", failureDomain: <FailureDomain.Internal />) />
                             }
-                            val target = try self.groundCheckedLocalStorageTarget(stmtId: statement, request: request, bodyId: enclosingBodyId)
+                            val index = self.finalStorageIndex(bodyId: enclosingBodyId, stmtId: statement)
+                            if index >= self.arena.finalStorages.count() {
+                                return <Result.Err error=self.diagnosticAt(offset: capture.bindingTarget, msg: "closure capture used before checked storage was finalized", failureDomain: <FailureDomain.Internal />) />
+                            }
+                            val target = self.arena.finalStorages[index].targetTypeRef
                             if !self.publishedBodyTypeMatches(bodyId: enclosingBodyId, source: capture.typeTerm, concrete: target) {
                                 return <Result.Err error=self.diagnosticAt(offset: capture.bindingTarget, msg: "closure capture differs from its enclosing binding type", failureDomain: <FailureDomain.Internal />) />
                             }
@@ -6948,10 +6951,6 @@ pub impl Comp {
     }
 
     inout fn groundCheckedLocalStorageTarget(stmtId: U64, request: CheckedLocalStorageRequest, bodyId: U64) -> Result[U64, CompileDiagnostic] {
-        match self.cur.checkedLocalStorageTargets.get(key: stmtId) {
-            Optional.Some(v: val target) => { return <Result.Ok value=target /> }
-            Optional.None => {}
-        }
         val facts = try self.preparedBodyFacts(bodyId: bodyId, globalInitializerTarget: self.cur.globalInitializerTarget)
         val expectedOrigin = facts.bindingStorage(stmtId: stmtId)
         if expectedOrigin.isNone() || !expectedOrigin.unwrap().matches(origin: request.binding) {
@@ -6974,7 +6973,6 @@ pub impl Comp {
         }
         val target = try self.groundCheckedLocalBinding(binding: binding, authoredTerm: authoredTerm, bodyId: bodyId)
         try self.scanType(ref: target)
-        self.cur.checkedLocalStorageTargets[stmtId] = target
         return <Result.Ok value=target />
     }
 

@@ -192,3 +192,7 @@ The post-body sweep now verifies checked Mid storage descriptors rather than pub
 **2026-11-15T16:16:14Z**
 
 Checked local call arguments now only read the finalized body+statement descriptor. A missing descriptor is an internal ordering error. The initializer is the only checked descriptor publisher. Six lazy controls, including captured mutation, passed and full same-source AOT LLVM matched. Closure capture can still ground the destination type independently; that narrower route needs separate verification.
+
+**2026-11-15T16:19:32Z**
+
+Checked closure captures read the enclosing body storage descriptor, retaining binding and concrete-type consistency checks. Removed the separate per-body target cache; initializer publication now owns destination grounding. Seven lazy controls covering capture cells, unused captures, receiver captures, global initializer isolation and associated locals passed; full same-source AOT LLVM matched. The remaining issue is producer scheduling through shared statement and expression preparation.
