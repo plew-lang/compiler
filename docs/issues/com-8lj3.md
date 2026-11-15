@@ -324,3 +324,7 @@ Nested try and await now prepare the saved operand call before publishing the tr
 **2026-11-15T19:15:39Z**
 
 Casts in local initializers and nested expressions use the saved producer call before replaying the existing cast target proof and registering layout. Seven lazy cast fixtures, a direct and nested call-cast order probe, two AOT controls, and full same-source AOT LLVM matched. Shapes without a saved call still use residual operand preparation. No optimized timing claim.
+
+**2026-11-15T19:18:57Z**
+
+Nested if and match expressions now use the same recorded value region and completion handling as local initializer roots. Fallback remains for bodies/expressions without a region. Six lazy controls, two AOT controls and full same-source compiler LLVM matched. Link retried from the same object after removing superseded diagnostic binaries. No optimized timing claim.

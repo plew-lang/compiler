@@ -6712,12 +6712,12 @@ pub impl Comp {
             }
             Expr.IfChain(val conditions, val thenBlk, val elseBlk) => { try self.scanConditionChain(conditions: conditions, thenBlk: thenBlk, elseBlk: elseBlk) }
             Expr.IfExpr(val cond, val thenBlk, val elseBlk) => {
-                if !(try self.scanValueContinuation(exprId: cond)) { return <Result.Ok value=() /> }
-                try self.scanBlockInsts(blkId: thenBlk)
-                try self.scanBlockInsts(blkId: elseBlk)
+                val region = try self.finalizationValueRegion(expression: exprId, fallback: <SourceValueRegion.If condition=<CallArgumentSource.Expression exprId=cond /> thenBlock=thenBlk elseBlock=elseBlk />)
+                return self.prepareCheckedValueRegion(expression: exprId, region: region)
             }
             Expr.MatchExpr(val scrut, val arms) => {
-                return self.prepareValueMatch(expression: exprId, scrutinee: <CallArgumentSource.Expression exprId=scrut />, arms: arms)
+                val region = try self.finalizationValueRegion(expression: exprId, fallback: <SourceValueRegion.Match scrutinee=<CallArgumentSource.Expression exprId=scrut /> arms=arms />)
+                return self.prepareCheckedValueRegion(expression: exprId, region: region)
             }
             Expr.Move(val operand, val isBorrow) => { try self.scanExprInsts(exprId: operand) }
             // `await` changes control flow at LLVM lowering, but its operand is an
@@ -7032,6 +7032,14 @@ pub impl Comp {
             self.popLocals(mark: mark)
         }
         return <Result.Ok value=() />
+    }
+
+    inout fn finalizationValueRegion(expression: U64, fallback: SourceValueRegion) -> Result[SourceValueRegion, CompileDiagnostic] {
+        if self.cur.checkedLocalStorage.isSome() {
+            val facts = try self.preparedBodyFacts(bodyId: self.cur.bodyId, globalInitializerTarget: self.cur.globalInitializerTarget)
+            return <Result.Ok value=facts.valueRegion(exprId: expression).unwrapOr(fallback: fallback) />
+        }
+        return <Result.Ok value=fallback />
     }
 
     inout fn prepareCheckedValueRegion(expression: U64, region: SourceValueRegion) -> Result[(), CompileDiagnostic] {
