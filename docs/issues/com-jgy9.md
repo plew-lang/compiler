@@ -1,6 +1,6 @@
 ---
 id: com-jgy9
-status: open
+status: in_progress
 deps: [com-1a6q]
 links: []
 created: 2026-11-15T06:28:19Z
@@ -28,3 +28,17 @@ shortcut. Keep signature-derived ownership/type closure available for
 descriptor-only registrations, and preserve stable identity and signature
 validation for both ends of inherited newtype adapters. Exercise a direct
 generic function and an inherited adapter as controls.
+
+## Implementation checkpoint
+
+`prepareSelectedCalleeDescriptor` prepares the selected environment, callable
+identity/signature and final descriptor. The compatibility caller requests the
+body through `demandFinalBody`; inherited adapter targets enter the execution
+queue before their wrappers. Signature preparation reads the signature's own
+readiness. The fixed compiler plewc-phase3-backend-index-fixed accepted the
+updated compiler source with both --check and compile-to-LLVM.
+
+Before completion, exercise descriptor-only requests through a scoped control,
+including signature-derived ownership closure, adapter ordering and any
+secondary body demand produced during descriptor conversion. Compare native
+candidate output and performance and obtain independent review.

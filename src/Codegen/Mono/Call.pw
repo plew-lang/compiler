@@ -1288,9 +1288,15 @@ pub impl Comp {
     }
 
     inout fn enqueueSelectedCallee(selection: CallSiteSelection, template: CallTemplate) -> Result[(), CompileDiagnostic] {
+        val bodyId = try self.prepareSelectedCalleeDescriptor(selection: selection, template: template)
+        self.demandFinalBody(bodyId: bodyId)
+        return <Result.Ok value=() />
+    }
+
+    inout fn prepareSelectedCalleeDescriptor(selection: CallSiteSelection, template: CallTemplate) -> Result[U64, CompileDiagnostic] {
         val substitution = match (try self.selectedCallableSubstitution(selection: selection)) {
             Optional.Some(v: val value) => { give value }
-            Optional.None => { return <Result.Ok value=() /> }
+            Optional.None => { return <Result.Ok value=0U64 /> }
         }
         val exprId = selection.exprId
         val callee = selection.callee
@@ -1304,11 +1310,12 @@ pub impl Comp {
         // Root and mechanically synthesized bodies use enqueueFinalBody's
         // separate declaration producer; this entry cannot fall back to it.
         val constraints = try self.selectedCallConstraintEvidence(template: template, callee: callee, proof: calleeProof, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
-        val calleeBodyId: U64 = (try self.enqueueFinalBody(fnIdx: callee, args: finalArgs, recvInstRef: recvInst, selectedProof: calleeProof, constraints: constraints))
+        val environment = try self.prepareSelectedCallableEnvironment(fnIdx: callee, args: finalArgs, recvInstRef: recvInst, selectedProof: calleeProof, constraints: constraints)
+        val calleeBodyId = try self.prepareFinalBodyIdentity(fnIdx: callee, args: finalArgs, recvInstRef: recvInst, environment: environment)
         try self.completeStaticBodyCallee(exprId: exprId, callee: callee, recvRef: recvInst, calleeArgs: finalArgs, argumentSources: selection.argumentSources, resultRef: selection.resultRef, resultProjection: selection.resultProjection, siteIsStmt: siteIsStmt, slot: slot, calleeBodyId: calleeBodyId)
         val finalResult: U64 = (try self.bodyCalleeResultRef(exprId: exprId, siteIsStmt: siteIsStmt, slot: slot))
         self.traceProvidedFinalCallee(f: f, args: finalArgs, recvRef: recvInst, resultRef: finalResult)
-        return <Result.Ok value=() />
+        return <Result.Ok value=calleeBodyId />
     }
 
     // `try`'s error conversion is an implicit associated call.  It must enter
@@ -7096,6 +7103,19 @@ impl Comp {
     // Admission owns the proof interpretation. Signature checking and worklist
     // publication consume that same environment; neither replays its clauses.
     inout fn enqueuePreparedFinalBody(fnIdx: U64, args: Array[U64], recvInstRef: U64, environment: InstanceEnvironment) -> Result[U64, CompileDiagnostic] {
+        val bodyId = try self.prepareFinalBodyIdentity(fnIdx: fnIdx, args: args, recvInstRef: recvInstRef, environment: environment)
+        self.demandFinalBody(bodyId: bodyId)
+        return <Result.Ok value=bodyId />
+    }
+
+    inout fn demandFinalBody(bodyId: U64) {
+        if bodyId == 0U64 || self.monoWork.containsBody(bodyId: bodyId) { return }
+        val instance = self.arena.bodyInstanceAt(index: bodyId - 1U64)
+        self.demandFinalBody(bodyId: instance.adapterTargetBodyId)
+        self.monoWork.appendBody(bodyId: bodyId)
+    }
+
+    inout fn prepareFinalBodyIdentity(fnIdx: U64, args: Array[U64], recvInstRef: U64, environment: InstanceEnvironment) -> Result[U64, CompileDiagnostic] {
         val f = self.arena.functionAt(index: fnIdx)
         if f.isExtern || f.body == 0U64 {
             if self.traceCodegen && !f.isExtern {
@@ -7130,15 +7150,13 @@ impl Comp {
         val underlying: U64 = try self.checkedNominalUnderlying(ref: environment.receiverRef)
         if underlying != 0U64 {
             val target = try self.inheritedBodyEnvironment(function: fnIdx, arguments: args, source: environment, receiver: underlying)
-            adapterTarget = try self.enqueuePreparedFinalBody(fnIdx: fnIdx, args: args, recvInstRef: underlying, environment: target)
+            adapterTarget = try self.prepareFinalBodyIdentity(fnIdx: fnIdx, args: args, recvInstRef: underlying, environment: target)
             if adapterTarget == 0U64 {
                 return <Result.Err error=self.diagnosticAt(offset: f.defOffset, msg: "internal error: inherited body has no executable target") />
             }
         }
         val bodyId: U64 = self.internBodyInstance(fnIdx: fnIdx, environment: environment)
         if adapterTarget != 0U64 { self.arena.setBodyAdapter(bodyId: bodyId, targetBodyId: adapterTarget) }
-        if self.monoWork.containsBody(bodyId: bodyId) { return <Result.Ok value=bodyId /> }
-        self.monoWork.appendBody(bodyId: bodyId)
         try self.prepareFinalCallableSignature(bodyId: bodyId)
         return <Result.Ok value=bodyId />
     }
