@@ -442,6 +442,8 @@ pub struct CaptureEntry {
 }
 
 pub struct Local {
+    // One-based checked Let statement ID; zero for other lexical bindings.
+    pub val bindingStatement: U64 = 0U64
     pub val isGlobal: Bool = false
     pub val globalTypePending: Bool = false
     pub val nameStart: U64
@@ -3645,7 +3647,7 @@ pub enum CallArgumentSource {
     // `declarationTarget` is the declaration source offset, independent of
     // on-demand global slots or lexical walk order; `term` is the declaration-time
     // fallback for synthetic/incomplete scopes.
-    Local(exprId: U64, declarationTarget: U64, term: U64)
+    Local(exprId: U64, declarationTarget: U64, term: U64, bindingStatement: U64)
     PriorCallResult(exprId: U64, siteKey: CallSiteKey)
     // Context can complete after template creation. Read the owning source
     // expression fact rather than copying a second type representation.

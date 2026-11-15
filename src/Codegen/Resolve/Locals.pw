@@ -2,12 +2,12 @@
 // method / construct visibility checks.
 
 pub impl Comp {
-    inout fn addLocal(nameStart: U64, nameLen: U64, tyStart: U64, tyLen: U64, isArray: Bool, ty: U64, isInout: Bool, isMut: Bool, owned: Bool, authoredTypeUse: U64 = 0U64) {
-        self.addLocalCn(nameStart: nameStart, nameLen: nameLen, tyStart: tyStart, tyLen: tyLen, isArray: isArray, ty: ty, isInout: isInout, isMut: isMut, owned: owned, cnum: 0, authoredTypeUse: authoredTypeUse)
+    inout fn addLocal(nameStart: U64, nameLen: U64, tyStart: U64, tyLen: U64, isArray: Bool, ty: U64, isInout: Bool, isMut: Bool, owned: Bool, authoredTypeUse: U64 = 0U64, bindingStatement: U64 = 0U64) {
+        self.addLocalCn(nameStart: nameStart, nameLen: nameLen, tyStart: tyStart, tyLen: tyLen, isArray: isArray, ty: ty, isInout: isInout, isMut: isMut, owned: owned, cnum: 0, authoredTypeUse: authoredTypeUse, bindingStatement: bindingStatement)
     }
 
-    inout fn addLocalCn(nameStart: U64, nameLen: U64, tyStart: U64, tyLen: U64, isArray: Bool, ty: U64, isInout: Bool, isMut: Bool, owned: Bool, cnum: U64, isGlobal: Bool = false, authoredTypeUse: U64 = 0U64) {
-        self.cur.locals.append(<Local isGlobal=isGlobal nameStart=nameStart nameLen=nameLen nameId=intern(c: inout self, start: nameStart, len: nameLen) tyStart=tyStart tyLen=tyLen tyNameId=intern(c: inout self, start: tyStart, len: tyLen) isArray=isArray ty=ty authoredTypeUse=authoredTypeUse isInout=isInout isMut=isMut owned=owned moved=false cnum=cnum />)
+    inout fn addLocalCn(nameStart: U64, nameLen: U64, tyStart: U64, tyLen: U64, isArray: Bool, ty: U64, isInout: Bool, isMut: Bool, owned: Bool, cnum: U64, isGlobal: Bool = false, authoredTypeUse: U64 = 0U64, bindingStatement: U64 = 0U64) {
+        self.cur.locals.append(<Local isGlobal=isGlobal bindingStatement=bindingStatement nameStart=nameStart nameLen=nameLen nameId=intern(c: inout self, start: nameStart, len: nameLen) tyStart=tyStart tyLen=tyLen tyNameId=intern(c: inout self, start: tyStart, len: tyLen) isArray=isArray ty=ty authoredTypeUse=authoredTypeUse isInout=isInout isMut=isMut owned=owned moved=false cnum=cnum />)
     }
 
     // A let binding owns one semantic TypeTerm.  For an annotation that is the
@@ -17,7 +17,7 @@ pub impl Comp {
     // unannotated `val it = self` in a provided trait method must remain
     // abstract `Self`, rather than degrading to a name-shaped fallback during
     // the later checker walk.
-    inout fn addLetLocal(nameStart: U64, nameLen: U64, tyStart: U64, tyLen: U64, tyIsArray: Bool, ty: U64, init: U64, mutable: Bool, owned: Bool) -> Result[(), CompileDiagnostic] {
+    inout fn addLetLocal(nameStart: U64, nameLen: U64, tyStart: U64, tyLen: U64, tyIsArray: Bool, ty: U64, init: U64, mutable: Bool, owned: Bool, bindingStatement: U64 = 0U64) -> Result[(), CompileDiagnostic] {
         val inferred: LetEff = (try self.inferLetType(tyStart: tyStart, tyLen: tyLen, tyIsArray: tyIsArray, ty: ty, init: init))
         // An annotation can contain abstract associated types below a nominal
         // constructor. Store Array[Self#Iterator.Item], not the unresolved
@@ -27,7 +27,7 @@ pub impl Comp {
             val initializerTerm: U64 = self.parametricExprTerm(exprId: init)
             if initializerTerm != 0U64 { term = initializerTerm }
         }
-        self.addLocal(nameStart: nameStart, nameLen: nameLen, tyStart: inferred.start, tyLen: inferred.len, isArray: inferred.arr, ty: term, isInout: false, isMut: mutable, owned: owned)
+        self.addLocal(nameStart: nameStart, nameLen: nameLen, tyStart: inferred.start, tyLen: inferred.len, isArray: inferred.arr, ty: term, isInout: false, isMut: mutable, owned: owned, bindingStatement: bindingStatement)
         return <Result.Ok value=() />
     }
 

@@ -1412,7 +1412,27 @@ pub impl Comp {
             CallArgumentSource.Term(exprId: _, val term) => {
                 return <Result.Ok value=(try self.groundAndRecordBodyType(ref: term, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.cur.bodyId)) />
             }
-            CallArgumentSource.Local(exprId: _, declarationTarget: val declarationTarget, term: val term) => {
+            CallArgumentSource.Local(exprId: _, declarationTarget: val declarationTarget, term: val term, bindingStatement: val statement) => {
+                if statement != 0U64 {
+                    match self.cur.checkedLocalStorage {
+                        Optional.Some(v: val storage) => {
+                            match storage.get(key: statement - 1U64) {
+                                Optional.Some(v: val request) => {
+                                    if request.declarationTarget != declarationTarget {
+                                        return <Result.Err error=self.diagnosticAt(offset: declarationTarget, msg: "local argument has a foreign checked binding", failureDomain: <FailureDomain.Internal />) />
+                                    }
+                                    val index = self.finalStorageIndex(bodyId: self.cur.bodyId, stmtId: statement - 1U64)
+                                    if index >= self.arena.finalStorages.count() {
+                                        return <Result.Err error=self.diagnosticAt(offset: declarationTarget, msg: "local argument storage was not finalized", failureDomain: <FailureDomain.Internal />) />
+                                    }
+                                    return <Result.Ok value=self.arena.finalStorages[index].targetTypeRef />
+                                }
+                                Optional.None => {}
+                            }
+                        }
+                        Optional.None => {}
+                    }
+                }
                 mut val localIndex = self.cur.locals.count()
                 while localIndex > 0U64 {
                     localIndex -= 1U64
@@ -1439,7 +1459,7 @@ pub impl Comp {
     fn callArgumentExprId(source: CallArgumentSource) -> U64 {
         match source {
             CallArgumentSource.Term(val exprId, term: _) => { return exprId }
-            CallArgumentSource.Local(val exprId, declarationTarget: _, term: _) => { return exprId }
+            CallArgumentSource.Local(val exprId, declarationTarget: _, term: _, bindingStatement: _) => { return exprId }
             CallArgumentSource.PriorCallResult(val exprId, siteKey: _) => { return exprId }
             CallArgumentSource.Expression(val exprId) => { return exprId }
         }

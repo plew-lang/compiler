@@ -3070,9 +3070,9 @@ pub impl Comp {
                     }
                 }
                 if annotation.isSome() {
-                    self.addLocal(nameStart: nameStart, nameLen: nameLen, tyStart: tyStart, tyLen: tyLen, isArray: tyIsArray, ty: expected, isInout: false, isMut: mutable, owned: true, authoredTypeUse: annotation.unwrap().occurrence)
+                    self.addLocal(nameStart: nameStart, nameLen: nameLen, tyStart: tyStart, tyLen: tyLen, isArray: tyIsArray, ty: expected, isInout: false, isMut: mutable, owned: true, authoredTypeUse: annotation.unwrap().occurrence, bindingStatement: stmtId + 1U64)
                 } else {
-                    try self.addLetLocal(nameStart: nameStart, nameLen: nameLen, tyStart: tyStart, tyLen: tyLen, tyIsArray: tyIsArray, ty: ty, init: init, mutable: mutable, owned: true)
+                    try self.addLetLocal(nameStart: nameStart, nameLen: nameLen, tyStart: tyStart, tyLen: tyLen, tyIsArray: tyIsArray, ty: ty, init: init, mutable: mutable, owned: true, bindingStatement: stmtId + 1U64)
                     if ty == 0U64 {
                         val proofs = self.recordedExtensionSources(exprId: init)
                         val origin = self.recordedExpressionTypeOrigin(exprId: init)

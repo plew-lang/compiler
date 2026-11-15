@@ -951,7 +951,7 @@ pub impl Comp {
     fn callSourceUsesStorage(source: CallArgumentSource) -> Bool {
         match source {
             CallArgumentSource.Term(exprId: val exprId, term: _) => { return self.sourceArgumentUsesStorage(exprId: exprId) }
-            CallArgumentSource.Local(exprId: val exprId, declarationTarget: _, term: _) => { return self.sourceArgumentUsesStorage(exprId: exprId) }
+            CallArgumentSource.Local(exprId: val exprId, declarationTarget: _, term: _, bindingStatement: _) => { return self.sourceArgumentUsesStorage(exprId: exprId) }
             CallArgumentSource.PriorCallResult(exprId: val exprId, siteKey: _) => { return self.sourceArgumentUsesStorage(exprId: exprId) }
             CallArgumentSource.Expression(exprId: _) => { return true }
         }
@@ -1555,7 +1555,7 @@ pub impl Comp {
                     if local.isGlobal {
                         return <Result.Ok value=<CallArgumentSource.Term exprId=exprId term=local.ty /> />
                     }
-                    return <Result.Ok value=<CallArgumentSource.Local exprId=exprId declarationTarget=local.nameStart term=self.parametricExprTerm(exprId: exprId) /> />
+                    return <Result.Ok value=<CallArgumentSource.Local exprId=exprId declarationTarget=local.nameStart term=self.parametricExprTerm(exprId: exprId) bindingStatement=local.bindingStatement /> />
                 }
             }
             Expr.Call(nameStart: _, nameLen: _, args: _) => {

@@ -52,3 +52,7 @@ Use an explicit optional Mid request set for the whole body. When selected, miss
 **2026-11-15T12:16:51Z**
 
 Rejected lookup prototype: keying the Mid request by declaration source offset so CallArgumentSource.Local could read a FinalStorageResolution directly does not preserve occurrence identity. The rebuilt diagnostic carrier failed full-source compilation at Resolve/Lexical.pw:123 (final local has a foreign Mid binding occurrence). That source is in a shared arm over Array/Dictionary/Range; lowered occurrences must retain distinct checked statement/binding-row identities even at equal location. Restored the statement-keyed route. Next carry exact checked binding identity at argument production; do not replace the occurrence key with a source offset or weaken validation.
+
+**2026-11-15T12:20:49Z**
+
+Record the selected Let statement ID at lexical argument production, keeping zero for parameters and other bindings. Routed local arguments now use the body+statement final storage descriptor instead of searching the scope table. Statement identity preserves shared-arm duplicates with the same source offset. After removing generated scratch binaries to recover from a linker ENOSPC, the diagnostic candidate compiled the same full source to identical LLVM (e0c3cc3cf8c5a38233be1613dc5444a6b70e8d94c8548653cb230603c1c4b1c5). Eight lazy controls passed. Other binding kinds and non-routed entries keep their established lookup. Residual scheduling still uses source traversal.

@@ -1022,7 +1022,7 @@ pub impl Comp {
     inout fn sourceCallArgumentType(source: CallArgumentSource) -> U64 {
         match source {
             CallArgumentSource.Term(exprId: _, term: val term) => { return term }
-            CallArgumentSource.Local(exprId: val expression, declarationTarget: _, term: val term) => {
+            CallArgumentSource.Local(exprId: val expression, declarationTarget: _, term: val term, bindingStatement: _) => {
                 if term != 0U64 { return term }
                 return self.recordedSourceExpressionTerm(exprId: expression)
             }
