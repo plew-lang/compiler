@@ -2,7 +2,7 @@
 // the older callee cache, even before a body is marked closed.
 use @Std/Io only { print }
 use /Frontend only { Comp }
-use /Ir only { CachedCallee, CallTemplate, CallTemplateKind, CallTemplateReceiver, Expr, Func }
+use /Ir only { BodyInstance, InstanceEnvironment, CallSiteKey, SemanticTypeRecipe, CachedCallee, CallTemplate, CallTemplateKind, CallTemplateReceiver, Expr, Func }
 
 fn rejected(compiler: inout Comp, expression: U64) {
     val template = compiler.callTemplateForCurrentBody(exprId: expression).unwrap()
@@ -13,6 +13,25 @@ fn rejected(compiler: inout Comp, expression: U64) {
         Result.Ok(value: _) => { panic "final call reselected without a lexical record" }
     }
     if compiler.arena.finalCalleeCount() != 0U64 { panic "failed selection published a final call" }
+}
+
+fn rejectRecipe(compiler: inout Comp, recipe: U64, body: U64, message: String) {
+    match compiler.groundSemanticTypeRecipeForBody(recipeId: recipe, bodyId: body, selfRef: 0U64, itemRef: 0U64, requireProducer: true) {
+        Result.Err(error: val diagnostic) => {
+            if diagnostic.message != message { panic diagnostic.message }
+        }
+        Result.Ok(value: _) => { panic "invalid checked recipe produced a result" }
+    }
+}
+
+fn rejectDependency(compiler: inout Comp, expression: U64, site: CallSiteKey, message: String) {
+    match compiler.prepareCheckedResultCall(expression: expression, site: site) {
+        Result.Err(error: val diagnostic) => {
+            if diagnostic.message != message { panic diagnostic.message }
+        }
+        Result.Ok(value: _) => { panic "invalid checked dependency was accepted" }
+    }
+    if compiler.arena.finalCalleeCount() != 0U64 { panic "invalid dependency published a final call" }
 }
 
 fn main() {
@@ -28,7 +47,14 @@ fn main() {
     while compiler.typeCache.callee.count() <= expression { compiler.typeCache.callee.append(<CachedCallee.Selected callee=0U64 />) }
     rejected(compiler: inout compiler, expression: expression)
     val site = compiler.templateCallSiteKey(fnIdx: 0U64, exprId: expression).unwrap()
-    compiler.appendCallTemplate(template: <CallTemplate siteKey=site kind=<CallTemplateKind.Pending /> />)
+    rejectDependency(compiler: inout compiler, expression: expression, site: site, message: "checked result dependency has no selected call")
+    val body = compiler.arena.registerBodyInstance(<BodyInstance fnIdx=0U64 environment=<InstanceEnvironment /> />)
+    val missing = compiler.pushSemanticTypeRecipe(recipe: <SemanticTypeRecipe kind=2U64 callSite=site />)
+    rejectRecipe(compiler: inout compiler, recipe: missing, body: body, message: "local initializer depends on an unprepared call result")
+    val invalidPayload = compiler.pushSemanticTypeRecipe(recipe: <SemanticTypeRecipe kind=4U64 input=0U64 />)
+    rejectRecipe(compiler: inout compiler, recipe: invalidPayload, body: body, message: "local initializer has an invalid type recipe or body")
+    compiler.appendCallTemplate(template: <CallTemplate siteKey=site kind=<CallTemplateKind.Pending /> />, resultExpression: <Optional.Some v=expression />)
+    rejectDependency(compiler: inout compiler, expression: expression + 1U64, site: site, message: "checked result dependency has a foreign call occurrence")
     rejected(compiler: inout compiler, expression: expression)
     val arguments = compiler.publishCallTemplateArguments(args: [])
     val types = compiler.publishCallTemplateTypeArgs(args: [])

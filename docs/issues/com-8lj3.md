@@ -128,3 +128,7 @@ Method and extension-method receivers that are direct prior call results now pre
 **2026-11-15T14:00:29Z**
 
 View-decorated call receivers now use the same retained base call dependency as plain receivers. The ExtMethod continues to replay view evidence after the base descriptor. Five lazy fixtures and the explicit make()#Source.value() witness control passed. Same-source AOT LLVM matched 2735a8db9f15ed4953d7255e31104e57c75f6dd7d00c78f599c3ea71e9955eba. Two older internal fixtures failed to compile with the new explicit-template API; adapted their calls while retaining the rejection assertions and verified both by native execution.
+
+**2026-11-15T14:04:14Z**
+
+Native final_call_requires_record now verifies missing selected call, mismatched source occurrence, missing final descriptor and an OptionalPayload recipe whose child ID is invalid. The old compiler passed the missing/foreign controls but the expanded fixture aborted with invalid checked recipe produced a result on the invalid child. Checked evaluation now rejects an invalid recipe or body instead of returning zero; all controls then passed in native execution. No performance run in this change.

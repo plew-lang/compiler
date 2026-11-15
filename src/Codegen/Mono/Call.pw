@@ -60,7 +60,12 @@ pub impl Comp {
     // This producer belongs to frontend finalization. Mid reads the published
     // body-specific result and never evaluates a recipe or selects its proof.
     inout fn evaluateSemanticTypeRecipeForBody(recipeId: U64, bodyId: U64, selfRef: U64, itemRef: U64, requireProducer: Bool = false) -> Result[U64, CompileDiagnostic] {
-        if recipeId == 0U64 || recipeId > self.arena.semanticTypeRecipes.count() || bodyId == 0U64 || bodyId > self.arena.bodyInstanceCount() { return <Result.Ok value=0U64 />}
+        if recipeId == 0U64 || recipeId > self.arena.semanticTypeRecipes.count() || bodyId == 0U64 || bodyId > self.arena.bodyInstanceCount() {
+            if requireProducer {
+                return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "local initializer has an invalid type recipe or body", failureDomain: <FailureDomain.Internal />) />
+            }
+            return <Result.Ok value=0U64 />
+        }
         val kind: U64 = self.arena.semanticTypeRecipes[recipeId - 1U64].kind
         if kind == 1U64 {
             return <Result.Ok value=(try self.groundAndRecordBodyType(ref: self.arena.semanticTypeRecipes[recipeId - 1U64].term, environment: self.arena.bodyInstanceAt(index: bodyId - 1U64).environment, selfRef: selfRef, itemRef: itemRef, bodyId: bodyId)) />
