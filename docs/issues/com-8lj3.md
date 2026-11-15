@@ -56,3 +56,7 @@ Rejected lookup prototype: keying the Mid request by declaration source offset s
 **2026-11-15T12:20:49Z**
 
 Record the selected Let statement ID at lexical argument production, keeping zero for parameters and other bindings. Routed local arguments now use the body+statement final storage descriptor instead of searching the scope table. Statement identity preserves shared-arm duplicates with the same source offset. After removing generated scratch binaries to recover from a linker ENOSPC, the diagnostic candidate compiled the same full source to identical LLVM (e0c3cc3cf8c5a38233be1613dc5444a6b70e8d94c8548653cb230603c1c4b1c5). Eight lazy controls passed. Other binding kinds and non-routed entries keep their established lookup. Residual scheduling still uses source traversal.
+
+**2026-11-15T12:30:37Z**
+
+Mid-derived local storage requests now retain the checked initializer type source as a term or a call-result recipe. Selection occurs once per cached function; concrete publication consumes the saved source and shares the conversion writer with existing entries. Full same-source AOT LLVM SHA-256 matched de47b010786d829175c3ca10f2e85d5dbb747501d9c4761f36bb7e64f6bd2ba2. Seven lazy controls passed, including chained default-result, generic array return, captures and non-continuation. Recipe producer request ordering and removal of residual traversal remain outstanding; performance not measured.

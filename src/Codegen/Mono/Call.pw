@@ -2756,13 +2756,29 @@ pub impl Comp {
         return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "source value conversion lacks recorded evidence") />
     }
 
+    inout fn recordedStorageValueType(facts: PreparedSemanticFacts, function: U64, expression: U64) -> Result[RecordedStorageValueType, CompileDiagnostic] {
+        val fact = match facts.expression(exprId: expression) {
+            Optional.Some(v: val fact) => fact
+            Optional.None => { return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: expression), msg: "checked storage has no initializer type", failureDomain: <FailureDomain.Internal />) /> }
+        }
+        val template = try self.callTemplateForSourceBody(fnIdx: function, exprId: expression)
+        match template.kind {
+            CallTemplateKind.Pending | CallTemplateKind.ExpectedValue => { return <Result.Ok value=<RecordedStorageValueType.Term ref=fact.term /> /> }
+            _ => { return <Result.Ok value=<RecordedStorageValueType.Recipe id=template.resultTypeRecipe /> /> }
+        }
+    }
+
+    inout fn publishStorageConversion(stmtId: U64, exprId: U64, sourceRef: U64, targetRef: U64) -> Result[(), CompileDiagnostic] {
+        val conversion = try self.finalValueConversion(sourceRef: sourceRef, targetRef: targetRef, exprId: exprId)
+        self.putFinalStorage(fact: <FinalStorageResolution bodyId=self.currentBodyInstanceId() stmtId=stmtId sourceTypeRef=sourceRef targetTypeRef=targetRef conversion=self.freezeValueConversionProof(proof: conversion) />)
+        return <Result.Ok value=() />
+    }
+
     inout fn finalizeStorageConversion(stmtId: U64, exprId: U64, targetTerm: U64) -> Result[(), CompileDiagnostic] {
         if self.currentBodyInstanceId() == 0U64 { return <Result.Ok value=() /> }
         val sourceRef: U64 = (try self.groundRecordedValueTypeForBody(bodyId: self.currentBodyInstanceId(), exprId: exprId, globalInitializerTarget: self.cur.globalInitializerTarget, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef))
         val targetRef: U64 = (try self.groundAndRecordBodyType(ref: targetTerm, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.cur.bodyId))
-        val conversion: ValueConversionProof = (try self.finalValueConversion(sourceRef: sourceRef, targetRef: targetRef, exprId: exprId))
-        self.putFinalStorage(fact: <FinalStorageResolution bodyId=self.currentBodyInstanceId() stmtId=stmtId sourceTypeRef=sourceRef targetTypeRef=targetRef conversion=self.freezeValueConversionProof(proof: conversion) />)
-        return <Result.Ok value=() />
+        return self.publishStorageConversion(stmtId: stmtId, exprId: exprId, sourceRef: sourceRef, targetRef: targetRef)
     }
 
     // Source checking already completed argument context before publication.
@@ -6869,7 +6885,12 @@ pub impl Comp {
             Optional.None => {}
         }
         val ref = try self.groundCheckedLocalBinding(binding: binding, authoredTerm: authoredTerm)
-        try self.finalizeStorageConversion(stmtId: stmtId, exprId: request.expression, targetTerm: ref)
+        val sourceRef = match request.valueType {
+            RecordedStorageValueType.Term(ref: val term) => try self.groundAndRecordBodyType(ref: term, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.cur.bodyId)
+            RecordedStorageValueType.Recipe(id: val recipe) => try self.groundSemanticTypeRecipeForBody(recipeId: recipe, bodyId: self.cur.bodyId, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
+        }
+        val targetRef = try self.groundAndRecordBodyType(ref: ref, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.cur.bodyId)
+        try self.publishStorageConversion(stmtId: stmtId, exprId: request.expression, sourceRef: sourceRef, targetRef: targetRef)
         val info = self.typeInfoOfRef(ref: ref)
         return <Result.Ok value=<LetEff start=info.nameStart len=info.nameLen arr=info.kind == 3 ty=ref /> />
     }

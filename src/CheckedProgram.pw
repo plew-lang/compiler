@@ -375,6 +375,7 @@ impl CompilerSession {
         }
         val body = self.compiler.mid.bodies[built.canonical.body - 1U64]
         val reached = canonicalMidReachable(arena: self.compiler.mid, body: body)
+        val facts = try self.compiler.preparedFunctionSemanticFacts(fnIdx: function)
         mut val calls: Dictionary[U64, Bool] = [:]
         mut val storage: Dictionary[U64, CheckedLocalStorageRequest] = [:]
         for index in 0U64..<body.blocks.len {
@@ -388,7 +389,8 @@ impl CompilerSession {
                 if destination.rootTag != 1U64 || destination.projections.len != 0U64 { continue }
                 val local = self.compiler.mid.locals[body.locals.start + destination.local]
                 if !local.sourceBinding.isUnproved() {
-                    storage[value.sourceStmt] = <CheckedLocalStorageRequest expression=value.exprId declarationTarget=local.sourceNameStart binding=local.sourceBinding />
+                    val valueType = try self.compiler.recordedStorageValueType(facts: facts, function: function, expression: value.exprId)
+                    storage[value.sourceStmt] = <CheckedLocalStorageRequest expression=value.exprId declarationTarget=local.sourceNameStart binding=local.sourceBinding valueType=valueType />
                 }
             }
             if reached[index] {
