@@ -6761,7 +6761,7 @@ pub impl Comp {
                 try self.scanBlockInsts(blkId: elseBlk)
             }
             Expr.MatchExpr(val scrut, val arms) => {
-                return self.prepareValueMatch(expression: exprId, scrutinee: scrut, arms: arms)
+                return self.prepareValueMatch(expression: exprId, scrutinee: <CallArgumentSource.Expression exprId=scrut />, arms: arms)
             }
             Expr.Move(val operand, val isBorrow) => { try self.scanExprInsts(exprId: operand) }
             // `await` changes control flow at LLVM lowering, but its operand is an
@@ -6990,6 +6990,11 @@ pub impl Comp {
     // Record has already checked source syntax and types. Executable
     // finalization follows only normal continuation after evaluating a value.
     inout fn scanValueContinuation(exprId: U64) -> Result[Bool, CompileDiagnostic] {
+        return self.prepareValueContinuation(source: <CallArgumentSource.Expression exprId=exprId />)
+    }
+
+    inout fn prepareValueContinuation(source: CallArgumentSource) -> Result[Bool, CompileDiagnostic] {
+        val exprId = self.callArgumentExprId(source: source)
         val completion = if self.cur.bodyId == 0U64 {
             give self.exprCompletion(exprId: exprId)
         } else {
@@ -6999,7 +7004,7 @@ pub impl Comp {
                 Optional.None => { return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: prepared source value has no completion") /> }
             }
         }
-        try self.scanExprInsts(exprId: exprId)
+        try self.prepareCheckedCallOperand(source: source)
         return <Result.Ok value=completion.execution.normal() />
     }
 
@@ -7030,10 +7035,10 @@ pub impl Comp {
 
     // The checked initialization supplies the selected call template. The
     // expression walk still prepares operands and replays receiver evidence.
-    inout fn prepareValueMatch(expression: U64, scrutinee: U64, arms: MatchArmRange) -> Result[(), CompileDiagnostic] {
+    inout fn prepareValueMatch(expression: U64, scrutinee: CallArgumentSource, arms: MatchArmRange) -> Result[(), CompileDiagnostic] {
         // A lowered optional chain also owns its intermediate result type.
         try self.registerChainSiteInsts(exprId: expression)
-        if !(try self.scanValueContinuation(exprId: scrutinee)) { return <Result.Ok value=() /> }
+        if !(try self.prepareValueContinuation(source: scrutinee)) { return <Result.Ok value=() /> }
         val source = <MatchSource.Expression exprId=expression />
         try self.finalizeCurrentBodyMatch(matchSource: source)
         for index in 0U64..<arms.len {
@@ -7051,7 +7056,7 @@ pub impl Comp {
         match region {
             SourceValueRegion.Block(body: val body, sequence: _) => { return self.scanBlockInsts(blkId: body) }
             SourceValueRegion.If(condition: val condition, thenBlock: val thenBlock, elseBlock: val elseBlock) => {
-                if try self.scanValueContinuation(exprId: condition) {
+                if try self.prepareValueContinuation(source: condition) {
                     try self.scanBlockInsts(blkId: thenBlock)
                     try self.scanBlockInsts(blkId: elseBlock)
                 }

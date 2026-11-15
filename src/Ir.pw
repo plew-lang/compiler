@@ -1173,9 +1173,9 @@ pub enum Stmt {
 // Checked evaluation edges for a value-producing block or conditional.
 pub enum SourceValueRegion {
     Block(body: U64, sequence: Bool)
-    If(condition: U64, thenBlock: U64, elseBlock: U64)
+    If(condition: CallArgumentSource, thenBlock: U64, elseBlock: U64)
     IfChain(conditions: ConditionClauseRange, thenBlock: U64, elseBlock: U64)
-    Match(scrutinee: U64, arms: MatchArmRange)
+    Match(scrutinee: CallArgumentSource, arms: MatchArmRange)
 }
 
 // An admitted lexical prefix of the immutable block statement pool.

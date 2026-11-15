@@ -176,3 +176,7 @@ Canonical local initialization now retains the checked value-region edge selecti
 **2026-11-15T16:00:22Z**
 
 Value match now retains its scrutinee and arm range with the same checked region representation as block and if; stored local initialization consumes it and Mid uses the common region lowering helper. Arm pattern/operand preparation and optional-chain layout registration are shared with the residual path. Seven lazy controls passed (value and enum patterns, rvalue scrutinee, optional chain and generic local conversions); full same-source AOT LLVM matched b9d9f0bd92298ef932d8475519dcc910d6115b9ee850caaaba8ba2711793d86c. Initial link ran out of disk; stale diagnostic binaries were removed and the same LLVM was successfully relinked.
+
+**2026-11-15T16:03:53Z**
+
+Checked local value if conditions and match scrutinees now retain their CallArgumentSource. PriorCallResult uses the saved call occurrence in routed bodies. Six lazy fixtures and a branch order probe passed; full same-source AOT LLVM SHA-256 matched. Condition chains, give values, and residual block traversal remain. No timing claim.

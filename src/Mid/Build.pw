@@ -1628,9 +1628,9 @@ fn midValueRegionOperand(c: inout Comp, state: inout MidBuildState, expression: 
     val result = <MidBlockResult.Value destination=destination />
     val error = match region {
         SourceValueRegion.Block(body: val body, sequence: val sequence) => buildMidBlockInto(c: inout c, state: inout state, blockId: body, blockResult: result, expressionSequence: sequence)
-        SourceValueRegion.If(condition: val condition, thenBlock: val thenBlock, elseBlock: val elseBlock) => buildMidIfCfg(c: inout c, state: inout state, cond: condition, thenBlk: thenBlock, elseBlk: elseBlock, hasElse: true, blockResult: result)
+        SourceValueRegion.If(condition: val condition, thenBlock: val thenBlock, elseBlock: val elseBlock) => buildMidIfCfg(c: inout c, state: inout state, cond: c.callArgumentExprId(source: condition), thenBlk: thenBlock, elseBlk: elseBlock, hasElse: true, blockResult: result)
         SourceValueRegion.IfChain(conditions: val conditions, thenBlock: val thenBlock, elseBlock: val elseBlock) => buildMidConditionChain(c: inout c, state: inout state, conditions: conditions, thenBlk: thenBlock, elseBlk: elseBlock, blockResult: result)
-        SourceValueRegion.Match(scrutinee: val scrutinee, arms: val arms) => buildMidPatternMatch(c: inout c, state: inout state, matchSource: <MatchSource.Expression exprId=expression />, scrut: scrutinee, continuation: <MidPatternContinuation.Arms arms=arms />, blockResult: result, traceId: expression)
+        SourceValueRegion.Match(scrutinee: val scrutinee, arms: val arms) => buildMidPatternMatch(c: inout c, state: inout state, matchSource: <MatchSource.Expression exprId=expression />, scrut: c.callArgumentExprId(source: scrutinee), continuation: <MidPatternContinuation.Arms arms=arms />, blockResult: result, traceId: expression)
     }
     return midBlockOperandResult(state: state, place: destination, error: error)
 }
@@ -1798,7 +1798,7 @@ fn midValueOperandForSourceExpr(c: inout Comp, state: inout MidBuildState, exprI
             return midValueRegionOperand(c: inout c, state: inout state, expression: exprId, region: region, sourceType: sourceType)
         }
         Expr.IfExpr(cond: val cond, thenBlk: val thenBlk, elseBlk: val elseBlk) => {
-            val region = midValueRegionForExpr(state: state, expression: exprId, fallback: <SourceValueRegion.If condition=cond thenBlock=thenBlk elseBlock=elseBlk />)
+            val region = midValueRegionForExpr(state: state, expression: exprId, fallback: <SourceValueRegion.If condition=<CallArgumentSource.Expression exprId=cond /> thenBlock=thenBlk elseBlock=elseBlk />)
             return midValueRegionOperand(c: inout c, state: inout state, expression: exprId, region: region, sourceType: sourceType)
         }
         Expr.IfChain(conditions: val conditions, thenBlk: val thenBlk, elseBlk: val elseBlk) => {
@@ -1806,7 +1806,7 @@ fn midValueOperandForSourceExpr(c: inout Comp, state: inout MidBuildState, exprI
             return midValueRegionOperand(c: inout c, state: inout state, expression: exprId, region: region, sourceType: sourceType)
         }
         Expr.MatchExpr(scrut: val scrut, arms: val arms) => {
-            val region = midValueRegionForExpr(state: state, expression: exprId, fallback: <SourceValueRegion.Match scrutinee=scrut arms=arms />)
+            val region = midValueRegionForExpr(state: state, expression: exprId, fallback: <SourceValueRegion.Match scrutinee=<CallArgumentSource.Expression exprId=scrut /> arms=arms />)
             return midValueRegionOperand(c: inout c, state: inout state, expression: exprId, region: region, sourceType: sourceType)
         }
         Expr.Await(operand: val operandExpr) => {

@@ -2725,7 +2725,7 @@ pub impl Comp {
                     self.popLocals(mark: mark)
                     ai += 1
                 }
-                if self.cur.recordCallTemplates { self.storeBuildingValueRegion(exprId: exprId, region: <SourceValueRegion.Match scrutinee=scrut arms=arms />) }
+                if self.cur.recordCallTemplates { self.storeBuildingValueRegion(exprId: exprId, region: <SourceValueRegion.Match scrutinee=try self.callArgumentSource(exprId: scrut) arms=arms />) }
             }
             Expr.Sequence(val body) => {
                 try self.recordValueBlock(exprId: exprId, blockId: body, expectedTerm: normalizedContext)
@@ -2747,7 +2747,7 @@ pub impl Comp {
                 try self.recordExpr(exprId: cond, chainHoleRef: chainHoleRef)
                 try self.recordValueBlock(exprId: exprId, blockId: thenBlk, expectedTerm: normalizedContext)
                 try self.recordValueBlock(exprId: exprId, blockId: elseBlk, expectedTerm: normalizedContext)
-                if self.cur.recordCallTemplates { self.storeBuildingValueRegion(exprId: exprId, region: <SourceValueRegion.If condition=cond thenBlock=thenBlk elseBlock=elseBlk />) }
+                if self.cur.recordCallTemplates { self.storeBuildingValueRegion(exprId: exprId, region: <SourceValueRegion.If condition=try self.callArgumentSource(exprId: cond) thenBlock=thenBlk elseBlock=elseBlk />) }
             }
             Expr.OptChain(val base, val cont) => {
                 // Check the children before committing the chain result. The
