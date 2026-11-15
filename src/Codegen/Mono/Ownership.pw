@@ -110,7 +110,7 @@ pub impl Comp {
         if typeRef == 0U64 || typeRef >= self.arena.typeCount() { return <Result.Ok value=() /> }
         if self.finalDestructionIndex(typeRef: typeRef) != 0U64 { return <Result.Ok value=() /> }
         val start = self.arena.finalDestructions.count()
-        try self.collectFinalDestruction(typeRef: typeRef)
+        try self.collectUnregisteredFinalDestruction(typeRef: typeRef)
         val count = self.arena.finalDestructions.count() - start
         mut val needs: Array[Bool] = []
         mut val heads: Array[U64] = []
@@ -320,6 +320,10 @@ pub impl Comp {
     inout fn collectFinalDestruction(typeRef: U64) -> Result[(), CompileDiagnostic] {
         if typeRef == 0U64 || typeRef >= self.arena.typeCount() { return <Result.Ok value=() /> }
         if self.finalDestructionIndex(typeRef: typeRef) != 0U64 { return <Result.Ok value=() /> }
+        return self.collectUnregisteredFinalDestruction(typeRef: typeRef)
+    }
+
+    inout fn collectUnregisteredFinalDestruction(typeRef: U64) -> Result[(), CompileDiagnostic] {
         val shape = try self.closedDestructionShape(typeRef: typeRef)
         val type = self.arena.typeAt(index: typeRef)
         val term = self.arena.typeTermAt(index: typeRef)

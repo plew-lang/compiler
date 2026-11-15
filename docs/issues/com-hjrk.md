@@ -35,3 +35,9 @@ Other prior mainC/J/O/optional/API scopes; no language/destruction/interface/pro
 Required narrowed producer prerequisites: com-rad4, com-tfz7. Chosen implementation-order prerequisites for the exact narrowed producer/reader interfaces identified in the accepted closure. Close these existing finite producer scopes before replacing this caller; do not infer arbitrary graph-wide callee ordering. Source preparation/ready/publication distinctions remain unchanged.
 
 Original audit-time independence does not waive this implementation admission. Preserve the original finite guarantee, actual callers/delegates, controls and excluded optional/new-feature scopes. Assignment is not product repair/GREEN.
+
+## Notes
+
+**2026-11-15T20:32:35Z**
+
+Performance increment: enqueueFinalDestruction forwards a root already proven absent directly into shape collection, avoiding the duplicate lookup at the public recursive entry. Recursive children still use the ordinary cycle-safe lookup and publication order. Six lazy drop/deinit controls passed and full same-source LLVM matched c7575fe14fccb885afbf528fc686332f478bf4214a710b1e686610ff40487f0e. Matched optimized timing and scope closure remain pending.
