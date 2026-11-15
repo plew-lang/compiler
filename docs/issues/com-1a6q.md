@@ -26,7 +26,8 @@ Publish an evidence-backed map from producer through final consumer for direct a
 
 - AOT and generation: `Frontend.finalizeFrontendExecutableRequests` enters
   `completeFinalCallables`. Selected globals, the entry (the generated harness
-  in generation mode), and exposed functions seed the worklist. It interleaves
+  in generation mode), and exposed functions outside generation mode seed the
+  worklist. It interleaves
   `requestFinalBody` with `advanceFinalDependencies` before publishing.
 - Lazy: `CheckedProgram.prepareBodyInSession` requires a registered signature,
   requests declaration analysis, then uses the same `requestFinalBody` and
@@ -163,3 +164,25 @@ enough evidence to define the initial implementation boundary. Before closing
 this investigation, reconcile the remaining rows against the corresponding
 synthetic and concrete consumers, assign confirmed gaps to tickets, and obtain
 independent review. Record fixture paths for the assigned slices.
+
+## Independent review of the migration boundary
+
+The review of compiler revision a13fe2df identified two prerequisites for the
+first implementation task:
+
+- Mid Build imports Frontend. Dependency discovery that reads parametric Mid
+  must obtain a narrow operation view from the session coordinator or run at
+  that boundary. The Frontend scanner cannot import its Mid consumer. Account
+  for both session callers and the direct Frontend finalization entry points.
+- The selected-call registration currently combines descriptor publication,
+  constraint handling, and executable-body demand. Establish those obligations
+  separately before replacing discovery. Tests must observe actual body demand
+  as well as output, and distinguish a non-emitted outer call from a reached
+  diverging callee.
+
+The review also confirmed that ready closure literals enter the AOT body
+worklist. Closure creation has no execution-effect edge to the body, but this
+is distinct from whether AOT prepares its code. Related tickets com-eatt,
+com-59sf, com-qb05, com-e6zm and com-j2oe carry adjacent contracts and should be
+checked for overlap. Link confirmed required repairs into the final gate before
+closing the inventory.
