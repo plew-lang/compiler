@@ -2,13 +2,17 @@
 // navigation while avoiding selection payload copies. This is not a new store.
 use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
 use /SourceAccess only { SourceAccess }
-use /Ir only { CallTemplateReceiver, Expr, Func, Param, InstanceEnvironment }
+use /Ir only { CallTemplateKind, CallTemplateReceiver, Expr, Func, Param, InstanceEnvironment }
 use @Std/Io only { print }
 
 fn compare(compiler: inout Comp, index: U64) {
     val full = compiler.callTemplateAt(index: index)
     val head = compiler.callTemplateHeadAt(index: index)
-    if !full.siteKey.sameKey(other: head.siteKey) || full.resultTypeRecipe != head.resultTypeRecipe || full.mayHaveStorageArguments != head.mayHaveStorageArguments {
+    val selected = match full.kind {
+        CallTemplateKind.Pending | CallTemplateKind.ExpectedValue => false
+        _ => true
+    }
+    if !full.siteKey.sameKey(other: head.siteKey) || full.resultTypeRecipe != head.resultTypeRecipe || full.mayHaveStorageArguments != head.mayHaveStorageArguments || selected != head.isSelected {
         panic("operation projection changed a saved field")
     }
 }
@@ -34,7 +38,7 @@ fn construction() {
     val missing = compiler.pushExpr(e: <Expr.Int value=9U64 offset=0U64 isBool=false tyStart=integer.nameStart tyLen=integer.nameLen isNeg=false />)
     val absent = compiler.callTemplateHeadForSourceBody(fnIdx: 0U64, exprId: missing).unwrap()
     val absentFull = compiler.callTemplateForSourceBody(fnIdx: 0U64, exprId: missing).unwrap()
-    if !absent.siteKey.sameKey(other: absentFull.siteKey) || absent.resultTypeRecipe != 0U64 || !absent.mayHaveStorageArguments { panic("missing row no longer has the same explicit defaults") }
+    if !absent.siteKey.sameKey(other: absentFull.siteKey) || absent.resultTypeRecipe != 0U64 || !absent.mayHaveStorageArguments || absent.isSelected { panic("missing row no longer has the same explicit defaults") }
 }
 
 fn main() {

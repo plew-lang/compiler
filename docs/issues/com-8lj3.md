@@ -336,3 +336,7 @@ The residual selected-call walker receives the already validated CallTemplate di
 **2026-11-15T19:25:21Z**
 
 Nested short-circuit expressions use the same recorded operand preparation as local roots. The existing Mid branch and RHS runtime skip are unchanged. Four lazy controls, two AOT short-circuit controls, and full same-source compiler LLVM matched. No optimized timing claim.
+
+**2026-11-15T21:26:59Z**
+
+Lexical preparation: recordedCallIsSelected now reads selection state from the existing owner-checked SourceOperationHead view rather than transferring the full template. The projection is derived from the same stored variant. Extended the existing projection fixture and ran it using the retained fixed-point compiler against modified source, including building/sealed/foreign reader and missing controls. Five lazy fixtures plus full same-source LLVM matched. Optimized timing pending.

@@ -2860,6 +2860,7 @@ pub struct SourceOperationHead {
     pub val siteKey: CallSiteKey
     pub val resultTypeRecipe: U64 = 0U64
     pub val mayHaveStorageArguments: Bool = true
+    pub val isSelected: Bool = false
 }
 impl SourceOperationHead { factory }
 
@@ -2883,7 +2884,11 @@ fn readSourceOperationTemplate(rows: Array[CallTemplate], index: U64) -> Optiona
 }
 fn readSourceOperationHead(rows: Array[CallTemplate], index: U64) -> Optional[SourceOperationHead] {
     if index >= rows.count() { return <Optional.None /> }
-    return <Optional.Some v=<SourceOperationHead siteKey=rows[index].siteKey resultTypeRecipe=rows[index].resultTypeRecipe mayHaveStorageArguments=rows[index].mayHaveStorageArguments /> />
+    val isSelected = match rows[index].kind {
+        CallTemplateKind.Pending | CallTemplateKind.ExpectedValue => false
+        _ => true
+    }
+    return <Optional.Some v=<SourceOperationHead siteKey=rows[index].siteKey resultTypeRecipe=rows[index].resultTypeRecipe mayHaveStorageArguments=rows[index].mayHaveStorageArguments isSelected=isSelected /> />
 }
 fn readSourceOperationConstraints(rows: Array[Optional[CallConstraintPlanState]], index: U64) -> Optional[CallConstraintPlanState] {
     if index >= rows.count() { return <Optional.None /> }

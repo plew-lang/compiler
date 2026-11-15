@@ -871,11 +871,7 @@ pub impl Comp {
         val site = try self.templateCallSiteKey(fnIdx: self.cur.checkFn, exprId: exprId)
         val index = self.callTemplateIndex(siteKey: site)
         if index >= self.callTemplateLocations.count() { return <Result.Ok value=false /> }
-        match self.callTemplateAt(index: index).kind {
-            CallTemplateKind.Pending => { return <Result.Ok value=false /> }
-            CallTemplateKind.ExpectedValue => { return <Result.Ok value=false /> }
-            _ => { return <Result.Ok value=true /> }
-        }
+        return <Result.Ok value=self.callTemplateHeadAt(index: index).isSelected />
     }
 
     // Resolve the lexical closure target while Record owns the source scope.
