@@ -3235,6 +3235,10 @@ pub impl Comp {
             Optional.Some(v: val aggregate) => { give aggregate }
             Optional.None => { return <Result.Ok value=() /> }
         }
+        return self.finalizeBodyAggregate(bodyId: bodyId, aggregate: aggregate)
+    }
+
+    inout fn finalizeBodyAggregate(bodyId: U64, aggregate: SemanticAggregate) -> Result[(), CompileDiagnostic] {
         match aggregate.kind {
             SemanticAggregateKind.EvaluationOnly => { return <Result.Ok value=() /> }
             _ => {}
@@ -3250,7 +3254,7 @@ pub impl Comp {
             conversions.append((try self.finalValueConversion(sourceRef: sourceRef, targetRef: targetRef, exprId: element.exprId)))
             i += 1U64
         }
-        self.putFinalAggregate(fact: <FinalAggregateResolution bodyId=bodyId exprId=exprId resultTypeRef=(try self.groundAndRecordBodyType(ref: aggregate.resultTerm, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.cur.bodyId)) elementTargetRefs=targets elementConversions=conversions />)
+        self.putFinalAggregate(fact: <FinalAggregateResolution bodyId=bodyId exprId=aggregate.exprId resultTypeRef=(try self.groundAndRecordBodyType(ref: aggregate.resultTerm, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.cur.bodyId)) elementTargetRefs=targets elementConversions=conversions />)
         return <Result.Ok value=() />
     }
 
@@ -6516,6 +6520,22 @@ pub impl Comp {
         return self.scanExprInsts(exprId: expression)
     }
 
+    // In checked bodies use the same evaluation order as parametric Mid.
+    // Keep the recorded aggregate through conversion publication.
+    inout fn prepareCheckedAggregateChildren(expression: U64) -> Result[Optional[SemanticAggregate], CompileDiagnostic] {
+        if self.cur.checkedLocalStorage.isNone() { return <Result.Ok value=<Optional.None /> /> }
+        val aggregate = try self.preparedBodyAggregate(bodyId: self.cur.bodyId, exprId: expression, globalInitializerTarget: self.cur.globalInitializerTarget)
+        match aggregate {
+            Optional.Some(v: val saved) => {
+                for element in saved.elements {
+                    try self.scanExprInsts(exprId: element.exprId)
+                }
+            }
+            Optional.None => {}
+        }
+        return <Result.Ok value=aggregate />
+    }
+
     inout fn finalizationCallTemplate(exprId: U64, selected: U64) -> Result[CallTemplate, CompileDiagnostic] {
         if selected != 0U64 { return <Result.Ok value=self.callTemplateAt(index: selected - 1U64) /> }
         return self.callTemplateForCurrentBody(exprId: exprId)
@@ -6665,10 +6685,11 @@ pub impl Comp {
                     val expression = try self.preparedBodyExpression(bodyId: bodyId, exprId: exprId, globalInitializerTarget: self.cur.globalInitializerTarget)
                     try self.replayExpressionTypeSlotProofs(exprId: exprId, written: self.arena.typeAt(index: ty).args, term: expression.term, bodyId: bodyId, sourceBodyId: bodyId)
                 }
-                mut val i: U64 = 0
-                while i < fields.len {
-                    try self.scanExprInsts(exprId: self.makeFieldAt(fields: fields, index: i).value)
-                    i += 1
+                val aggregate = try self.prepareCheckedAggregateChildren(expression: exprId)
+                if aggregate.isNone() {
+                    for index in 0U64..<fields.len {
+                        try self.scanExprInsts(exprId: self.makeFieldAt(fields: fields, index: index).value)
+                    }
                 }
                 // The declaration records the construction's nominal type and
                 // substitution. Mono instantiates that fact; field values do
@@ -6677,15 +6698,21 @@ pub impl Comp {
                 if gty != 0U64 {
                     try self.scanType(ref: gty)
                 }
-                try self.finalizeCurrentBodyAggregate(exprId: exprId)
+                match aggregate {
+                    Optional.Some(v: val saved) => { try self.finalizeBodyAggregate(bodyId: self.cur.bodyId, aggregate: saved) }
+                    Optional.None => { try self.finalizeCurrentBodyAggregate(exprId: exprId) }
+                }
             }
             Expr.Array(val elems) => {
-                mut val i: U64 = 0
-                while i < elems.len {
-                    try self.scanExprInsts(exprId: self.exprAt(exprs: elems, index: i))
-                    i += 1
+                match (try self.prepareCheckedAggregateChildren(expression: exprId)) {
+                    Optional.Some(v: val saved) => { try self.finalizeBodyAggregate(bodyId: self.cur.bodyId, aggregate: saved) }
+                    Optional.None => {
+                        for index in 0U64..<elems.len {
+                            try self.scanExprInsts(exprId: self.exprAt(exprs: elems, index: index))
+                        }
+                        try self.finalizeCurrentBodyAggregate(exprId: exprId)
+                    }
                 }
-                try self.finalizeCurrentBodyAggregate(exprId: exprId)
             }
             Expr.Cast(val operand, tyStart: _, tyLen: _, val ty) => {
                 try self.scanExprInsts(exprId: operand)

@@ -148,3 +148,7 @@ The native binding-control reproducer supplied a valid origin with a same-typed 
 **2026-11-15T14:31:59Z**
 
 Routed local arguments and closure captures with a recorded Let identity now reject an absent request. The native mutation control kept the old scope row deliberately: the old compiler recovered the argument type; the new one reports both precise internal failures. Real closure captures and unused closures, generic conversion and non-continuation passed in four lazy runs; full same-source diagnostic AOT LLVM matched 80b1e65ca7b3651de428b7c93d3d17bc393c4ca3ec483f125020ff1cfcc8d410.
+
+**2026-11-15T14:36:58Z**
+
+For checked ordinary bodies, Make and Array finalization now prepares children in the same saved SemanticAggregate order used by parametric Mid and uses that aggregate for conversion publication. Non-published forms retain their old path. Twelve lazy controls passed, including enum and generic field defaults, contextual constructions, nested aggregates and non-continuation. Same-source diagnostic AOT LLVM matched 715af294e50a70c69ab00956734b9a3c533d7409d67c8bdc3c16d2f482e375bf. Residual child traversal and block/branch scheduling still remain.
