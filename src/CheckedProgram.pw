@@ -1,6 +1,6 @@
 // A whole-target static-check result owns the exact compiler snapshot it proves.
 // No public factory or mutable arena accessor can attach it to another input.
-use ./Frontend only { Comp, FrontendInput, FrontendOptions, analyzeFrontendForRequests, completeFrontendDeclarations, traceFinalCallableStart, traceFinalCallableFinish, FinalBodyRequests, FinalDependencies, FinalizationPublication }
+use ./Frontend only { Comp, FrontendInput, FrontendOptions, analyzeFrontendForRequests, completeFrontendDeclarations, traceFinalCallableStart, traceFinalCallableFinish, FinalBodyRequests, FinalDependencies, FinalizationPublication, PreparedSemanticFacts }
 use ./Ir only { StaticConformanceProof, BodyOrigin, InstanceEnvironment, CallSiteKey, CheckedLocalStorageRequest }
 use ./Backend only { LlvmLoweringResult, LlvmTargetDescription, lowerRequestedLlvm, lowerGlobalStorageLlvm, lowerCallableDeclarationsLlvm }
 use ./SourceAccess only { SourceAccess }
@@ -376,22 +376,27 @@ impl CompilerSession {
         }
         val body = self.compiler.mid.bodies[built.canonical.body - 1U64]
         val reached = canonicalMidReachable(arena: self.compiler.mid, body: body)
-        val facts = try self.compiler.preparedFunctionSemanticFacts(fnIdx: function)
+        val collectStorage = !self.compiler.arena.functionAt(index: function).isDefaultGenerator
+        val storageFacts: Optional[PreparedSemanticFacts] = if collectStorage {
+            give <Optional.Some v=try self.compiler.preparedFunctionSemanticFacts(fnIdx: function) />
+        } else { give <Optional.None /> }
         mut val calls: Dictionary[U64, Bool] = [:]
         mut val storage: Dictionary[U64, CheckedLocalStorageRequest] = [:]
         for index in 0U64..<body.blocks.len {
             val block = self.compiler.mid.blocks[body.blocks.start + index]
-            for statementIndex in 0U64..<block.statements.len {
-                val statement = self.compiler.mid.statements[block.statements.start + statementIndex]
-                if (statement.tag != 1U64 && statement.tag != 9U64) || statement.value == 0U64 { continue }
-                val value = self.compiler.mid.rvalues[statement.value - 1U64]
-                if value.tag != 20U64 { continue }
-                val destination = self.compiler.mid.places[statement.destination - 1U64]
-                if destination.rootTag != 1U64 || destination.projections.len != 0U64 { continue }
-                val local = self.compiler.mid.locals[body.locals.start + destination.local]
-                if !local.sourceBinding.isUnproved() {
-                    val valueType = try self.compiler.recordedStorageValueType(facts: facts, function: function, expression: value.exprId)
-                    storage[value.sourceStmt] = <CheckedLocalStorageRequest expression=value.exprId declarationTarget=local.sourceNameStart binding=local.sourceBinding valueType=valueType />
+            if collectStorage {
+                for statementIndex in 0U64..<block.statements.len {
+                    val statement = self.compiler.mid.statements[block.statements.start + statementIndex]
+                    if (statement.tag != 1U64 && statement.tag != 9U64) || statement.value == 0U64 { continue }
+                    val value = self.compiler.mid.rvalues[statement.value - 1U64]
+                    if value.tag != 20U64 { continue }
+                    val destination = self.compiler.mid.places[statement.destination - 1U64]
+                    if destination.rootTag != 1U64 || destination.projections.len != 0U64 { continue }
+                    val local = self.compiler.mid.locals[body.locals.start + destination.local]
+                    if !local.sourceBinding.isUnproved() {
+                        val valueType = try self.compiler.recordedStorageValueType(facts: storageFacts.unwrap(), function: function, expression: value.exprId)
+                        storage[value.sourceStmt] = <CheckedLocalStorageRequest expression=value.exprId declarationTarget=local.sourceNameStart binding=local.sourceBinding valueType=valueType />
+                    }
                 }
             }
             if reached[index] {
@@ -410,7 +415,7 @@ impl CompilerSession {
             }
         }
         mut val storageOrder: Array[U64] = []
-        for index in 0U64..<body.storageOrder.len {
+        for index in 0U64..<(if collectStorage { give body.storageOrder.len } else { give 0U64 }) {
             val statement = self.compiler.mid.storageStatements[body.storageOrder.start + index]
             if !storage.contains(key: statement) {
                 return <Result.Err error=self.compiler.diagnosticAt(offset: self.compiler.stmtPrincipalOffset(sid: statement), msg: "checked Mid storage order has no initial value", failureDomain: <FailureDomain.Internal />) />

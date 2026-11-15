@@ -88,3 +88,7 @@ Independent read-only completion review at 1318bd5d: not ready to close. Both en
 **2026-11-15T12:59:45Z**
 
 Address the physical block order review finding by recording local storage order at Mid initialization emission and freezing it in the canonical body. Session checks the recorded order against its storage requests. Native mid_binding_identity fixture now exercises a branch call initializer whose physical block sorts after the join initializer, and verifies the retained order is the reverse of that layout. Full same-source LLVM matched 3785dd83eca4814a3cb544b94434116edbf5ed946cc6f023421a5dc89c2141a1. This orders the remainder sweep; it does not move initializer call producer scheduling or prove first diagnostic order.
+
+**2026-11-15T13:03:35Z**
+
+Checked local storage now rejects a missing call-result descriptor explicitly (including through an Optional payload recipe). Default generators skip checked storage collection and retain their existing preparation route. Full same-source AOT LLVM matched c741b91f6c2d0e4d313a5dd75df533efaa1c5b98629ff0b9b196784bd9ddeff9; five lazy fixtures matched their expected outputs. This is a diagnostic build. The prior producer is still supplied by source traversal; independent scheduling and negative descriptor coverage remain.
