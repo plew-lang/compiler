@@ -4760,7 +4760,7 @@ pub impl Comp {
     // registered bodies; a lazy driver can request individual descriptors.
     // A failed scan poisons this request state because partial arena rows are
     // diagnostic-only and must never be reused as executable preparation.
-    inout fn requestFinalBody(bodyId: U64, requests: inout FinalBodyRequests, reachedDirectCalls: Optional[Dictionary[U64, Bool]] = <Optional.None />, checkedLocalStorage: Dictionary[U64, CheckedLocalStorageRequest] = [:]) -> Result[(), CompileDiagnostic] {
+    inout fn requestFinalBody(bodyId: U64, requests: inout FinalBodyRequests, reachedDirectCalls: Optional[Dictionary[U64, Bool]] = <Optional.None />, checkedLocalStorage: Optional[Dictionary[U64, CheckedLocalStorageRequest]] = <Optional.None />) -> Result[(), CompileDiagnostic] {
         match requests.failure {
             Optional.Some(v: val diagnostic) => { return <Result.Err error=diagnostic /> }
             Optional.None => {}
@@ -6903,8 +6903,18 @@ pub impl Comp {
                 // annotation), mirroring codegen — otherwise a later `p.x` on an
                 // inferred-typed `val p = <P …/>` can't recover its type, so a generic
                 // call like `print(p.x + p.y)` fails to discover its instantiation.
-                val le = match self.cur.checkedLocalStorage.get(key: stmtId) {
-                    Optional.Some(v: val request) => { give try self.prepareCheckedLocalStorage(stmtId: stmtId, request: request) }
+                val le = match self.cur.checkedLocalStorage {
+                    Optional.Some(v: val storage) => {
+                        give match storage.get(key: stmtId) {
+                            Optional.Some(v: val request) => try self.prepareCheckedLocalStorage(stmtId: stmtId, request: request)
+                            Optional.None => {
+                                val facts = try self.preparedBodyFacts(bodyId: self.cur.bodyId, globalInitializerTarget: self.cur.globalInitializerTarget)
+                                val completion = try self.semanticStmtCompletionInOwner(stmtId: stmtId, owner: facts)
+                                if !completion.execution.normal() { return <Result.Ok value=() /> }
+                                return <Result.Err error=self.diagnosticAt(offset: nameStart, msg: "normally completing local has no checked Mid storage", failureDomain: <FailureDomain.Internal />) />
+                            }
+                        }
+                    }
                     Optional.None => {
                         val legacy = try self.scanLocalDeclarationType(stmtId: stmtId, tyStart: tyStart, tyLen: tyLen, tyIsArray: tyIsArray, ty: ty, init: init, annotationOccurrence: annotationOccurrence)
                         try self.finalizeStorageConversion(stmtId: stmtId, exprId: init, targetTerm: legacy.ty)

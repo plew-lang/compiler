@@ -354,7 +354,10 @@ impl CompilerSession {
         val instance = self.compiler.arena.bodyInstanceAt(index: bodyId - 1U64)
         if self.compiler.arena.bodyIsCallable(bodyId: bodyId) && instance.adapterTargetBodyId == 0U64 && instance.fnIdx < self.compiler.arena.functionCount() {
             val inputs = try self.finalizationInputsFor(function: instance.fnIdx, bodyId: bodyId)
-            return self.compiler.requestFinalBody(bodyId: bodyId, requests: inout self.finalBodies, reachedDirectCalls: <Optional.Some v=inputs.calls />, checkedLocalStorage: inputs.storage)
+            val storage: Optional[Dictionary[U64, CheckedLocalStorageRequest]] = if self.compiler.arena.functionAt(index: instance.fnIdx).isDefaultGenerator {
+                give <Optional.None />
+            } else { give <Optional.Some v=inputs.storage /> }
+            return self.compiler.requestFinalBody(bodyId: bodyId, requests: inout self.finalBodies, reachedDirectCalls: <Optional.Some v=inputs.calls />, checkedLocalStorage: storage)
         }
         return self.compiler.requestFinalBody(bodyId: bodyId, requests: inout self.finalBodies)
     }

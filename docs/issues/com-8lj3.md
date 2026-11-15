@@ -44,3 +44,7 @@ WIP: CompilerSession collects canonical ordinary local storage requests alongsid
 **2026-11-15T12:09:55Z**
 
 Canonical capture-cell initialization now joins normal local assignment in Mid storage requests. The concrete reader checks the origin against the exact checked statement row before reading the binding, rejecting another occurrence even within the same owner. Diagnostic build passed six lazy controls including mutable capture, unused closure capture, associated local types, Optional erasure, and projected global initialization. The per-instance source traversal still supplies execution order and fallback coverage; no performance or completion claim.
+
+**2026-11-15T12:13:55Z**
+
+Use an explicit optional Mid request set for the whole body. When selected, missing storage on a normally completing reached Let is an internal failure; a non-completing Let publishes no local. The legacy producer is selected only for entries outside this routing, including default generators. The diagnostic carrier reproduced byte-identical full compiler LLVM and passed six lazy controls including analytical non-continuation, dead move, captures, associated local, Optional conversion, and projected global. Residual AST traversal still supplies order; the task remains open.
