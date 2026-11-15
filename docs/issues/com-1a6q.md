@@ -127,3 +127,24 @@ call.
   recipes and inout writeback before retiring any source-scan branch. For
   example, instantiation can read a call-result descriptor while resolving a
   place or local type, independently of instantiating the call terminator.
+
+## Dependencies beyond the call terminator
+
+- `PriorCallResult` arguments read an earlier descriptor by its selected
+  site key in [Call.pw](../../src/Codegen/Mono/Call.pw). Result type recipes
+  can also be consumed through [Mid instantiation](../../src/Mid/Instantiate.pw).
+  A collection walk must distinguish descriptor demand from executable-body
+  demand and satisfy producer descriptors before resolving dependent recipes.
+  The block storage order alone does not prove this dependency order.
+- `finalizeAccessWriteFacets` follows saved access uses for a parent call.
+  A detached setter may itself have an inner writeback edge, which the
+  current routine closes recursively. [Mid Access](../../src/Mid/Access.pw)
+  reads the published setter resolution to allocate its result local and
+  elaborate the operation. Collecting only explicit Mid call terminators
+  would omit these dependencies.
+- The first migration must therefore account for result-recipe edges and
+  selected writeback edges as well as reached calls. Preserve the complete
+  body/site key and existing missing-evidence diagnostics. Exercise a prior
+  call result feeding another call, a nested indexed inout writeback, and a
+  noncontinuing argument alongside the plain direct-call control. Assess the
+  narrower input-boundary tickets separately from this discovery change.
