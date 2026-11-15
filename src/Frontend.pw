@@ -2916,7 +2916,7 @@ struct SourceBodyData {
     mut val expressionIndexSlots: Array[U64] = []
     mut val expressionIds: Array[U64] = []
     mut val requiredExpressions: Array[U64] = []
-    mut val controlOperandCalls: Dictionary[U64, CallSiteKey] = [:]
+    mut val valueOperandCalls: Dictionary[U64, CallSiteKey] = [:]
     mut val valueRegions: Dictionary[U64, SourceValueRegion] = [:]
     mut val valueBlocks: Dictionary[U64, SourceValueBlockFact] = [:]
     mut val valueBlockIds: Array[U64] = []
@@ -3149,7 +3149,7 @@ pub impl PreparedSemanticFacts {
     fn operationHeadAt(index: U64) -> Optional[SourceOperationHead] { return readSourceOperationHead(rows: self.payload->operations, index: index) }
     fn expression(exprId: U64) -> Optional[SemanticExprType] { return readSourceExpression(rows: self.payload->expressions, identities: self.payload->expressionIds, indexSlots: self.payload->expressionIndexSlots, exprId: exprId) }
     fn executableBlockRange(blockId: U64) -> Optional[SourceStatementRange] { return self.payload->executableBlockRanges.get(key: blockId) }
-    fn controlOperandCall(exprId: U64) -> Optional[CallSiteKey] { return self.payload->controlOperandCalls.get(key: exprId) }
+    fn valueOperandCall(exprId: U64) -> Optional[CallSiteKey] { return self.payload->valueOperandCalls.get(key: exprId) }
     fn valueRegion(exprId: U64) -> Optional[SourceValueRegion] { return self.payload->valueRegions.get(key: exprId) }
     fn valueBlock(blockId: U64) -> Optional[SourceValueBlockFact] { return self.payload->valueBlocks.get(key: blockId) }
     fn identifierTarget(exprId: U64) -> Optional[U64] { return self.payload->identifierTargets.get(key: exprId) }

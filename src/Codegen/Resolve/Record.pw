@@ -1284,6 +1284,7 @@ pub impl Comp {
             mut val elements: Array[SemanticAggregateElement] = []
             mut val index = 0U64
             while index < values.count() {
+                try self.recordValueOperandCall(exprId: values[index])
                 elements.append(<SemanticAggregateElement fieldIndex=index exprId=values[index] targetTerm=0U64 isBoxed=false term=self.parametricExprTerm(exprId: values[index]) />)
                 index += 1U64
             }
@@ -1349,6 +1350,7 @@ pub impl Comp {
                             if fieldIndex < declaredFields.count() { isBoxed = self.fieldIsBoxed(f: declaredFields[fieldIndex]) }
                         }
                     }
+                    try self.recordValueOperandCall(exprId: field.value)
                     elements.append(<SemanticAggregateElement fieldIndex=fieldIndex exprId=field.value targetTerm=(try self.aggregateSlotTypeRef(storage: storage, isEnum: isEnum, isArrayLiteral: false, variantIndex: variantIndex, fieldIndex: fieldIndex)) isBoxed=isBoxed term=self.parametricExprTerm(exprId: field.value) />)
                     i += 1U64
                 }
@@ -1396,6 +1398,7 @@ pub impl Comp {
                 mut val i: U64 = 0U64
                 while i < elems.len {
                     val child: U64 = self.exprAt(exprs: elems, index: i)
+                    try self.recordValueOperandCall(exprId: child)
                     elements.append(<SemanticAggregateElement fieldIndex=i exprId=child targetTerm=(try self.aggregateSlotTypeRef(storage: resultTerm, isEnum: false, isArrayLiteral: true, variantIndex: 0U64, fieldIndex: i)) isBoxed=false term=self.parametricExprTerm(exprId: child) />)
                     i += 1U64
                 }
@@ -1482,7 +1485,7 @@ pub impl Comp {
         while index < conditions.len {
             val clause = self.conditionClauseAt(conditions: conditions, index: index)
             try self.recordExpr(exprId: clause.value)
-            try self.recordControlOperandCall(exprId: clause.value)
+            try self.recordValueOperandCall(exprId: clause.value)
             if clause.isBinding {
                 try self.checkEnumPatternSubject(scrut: clause.value, pattern: clause.pattern)
                 try self.checkPatternBinds(a: clause.pattern)
@@ -3183,7 +3186,7 @@ pub impl Comp {
             Stmt.Panic(val msg, offset: _) => { try self.recordExpr(exprId: msg) }
             Stmt.Give(val value) => {
                 try self.recordExpr(exprId: value, expectedTerm: expectedTerm, needsValue: explicitResult)
-                try self.recordControlOperandCall(exprId: value)
+                try self.recordValueOperandCall(exprId: value)
             }
             Stmt.Break(offset: _) => {}
             Stmt.Continue(offset: _) => {}

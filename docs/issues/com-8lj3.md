@@ -216,3 +216,7 @@ For local array initializers, retain the checked aggregate used by Mid and consu
 **2026-11-15T16:42:59Z**
 
 Extend the checked aggregate request from arrays to other memberwise constructions, including records and enum variants. Carry the written construction type for authored-slot proof replay; retain child order, layout registration and conversion publication. Six lazy controls plus the array evaluation-order probe passed; full same-source AOT LLVM matched. Child expressions and other unclassified initializer terms still use shared preparation. Timing was not measured.
+
+**2026-11-15T16:46:42Z**
+
+Aggregate element call results now use the same sealed owner-scoped occurrence table as condition and give operands. The local aggregate request prepares each saved producer in aggregate element order. Six lazy controls, observable array ordering, and full same-source AOT LLVM matched. The sparse table adds a lookup for each aggregate element on this path; no timing claim.
