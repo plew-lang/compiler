@@ -312,3 +312,7 @@ Method-shaped index reads now pass the already selected template directly to sha
 **2026-11-15T19:04:35Z**
 
 Finalization no longer rewrites a selected Index read into Expr.Method. Mid distinguishes structural index projections from calls using the checked template, and uses the original base expression for receiver navigation. Six lazy fixtures and three AOT controls passed; full same-source compiler LLVM matched. File-backed linker output hit ENOSPC and succeeded on retry after removing two superseded diagnostic binaries. The argument compatibility adapter and residual composite operand scan remain. No optimized timing claim.
+
+**2026-11-15T19:09:11Z**
+
+Selected index reads no longer allocate a temporary argument range. Closed templates scan their saved argument rows; fallback preparation visits the already known key directly. Six lazy controls and three AOT index outputs matched; full same-source compiler LLVM matched. No optimized timing claim. Residual composite operand preparation remains.

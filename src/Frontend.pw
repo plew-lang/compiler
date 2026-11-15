@@ -122,6 +122,11 @@ pub struct FinalizationPublication {
 }
 pub impl FinalizationPublication { factory }
 
+enum AuthoredCallArguments {
+    Written(range: ArgRange)
+    Index(key: U64)
+}
+
 // Concrete descriptor requests share one arena and never reopen a completed
 // body. This is preparation state, not a proof that execution is permitted.
 pub struct FinalBodyRequests {
