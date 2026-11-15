@@ -1,6 +1,6 @@
 ---
 id: com-0w38
-status: in_progress
+status: closed
 deps: []
 links: [com-z4ns, com-wka4, com-amjl, com-bvc8, com-cuoy]
 created: 2026-11-06T17:52:14Z
@@ -74,4 +74,19 @@ Independent review found no contract violation or unchecked entry route.
 It requested distinguishing the intended Source diagnostic from any other
 rejection in the value-AST fixture; the final fixture checks both and the
 reviewer rechecked it. Same-source alternating six pairs produced identical
-LLVM in all twelve runs (median 7.275s to 7.285s). Whole normal suite pending.
+LLVM in all twelve runs (median 7.275s to 7.285s).
+
+
+## Closure
+
+Resolved in a086ac26. Normal suite 20261115T224510-test-d61556 finished with
+immutable inputs, exit 1 and 784 failures. Both new success fixtures and all
+seven new rejection fixtures passed in the suite. The 778 failures shared with
+the previous archived suite plus six separately reproduced against the fixed
+f20fc36c carrier account for all failures. The latter include one native
+runtime panic reproduced with the exact old source, and one expected-diagnostic
+mismatch on an inapplicable extension view. Those original failures remain
+visible. This closure applies to the record-subject guarantee. Phase three
+retains the whole-suite and performance requirements.
+
+[Normal suite and targeted results](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-record-subject-green.json)
