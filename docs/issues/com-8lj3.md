@@ -252,3 +252,7 @@ Independent source review of f2c08e2e: AOT and lazy converge, body/statement des
 **2026-11-15T17:24:22Z**
 
 Checked Mid now retains the conversion occurrence key with each local initialization and passes it to finalization. Legacy boundaries retain their existing key lookup; selection among same-site rows and conversion proof replay are unchanged. Six lazy controls and full same-source AOT LLVM matched. Noncontinuing initializer dependencies and layout/diagnostic ordering remain.
+
+**2026-11-15T17:27:45Z**
+
+Prepare storage conversion before destination layout registration, preserving the legacy relative diagnostic order. Publish the descriptor after both succeed. Six lazy controls and full same-source AOT LLVM matched. This validates healthy inputs and the ordering by inspection; no legal source that exhibits competing conversion and layout failures was identified.
