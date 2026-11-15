@@ -1395,13 +1395,7 @@ pub impl Comp {
         }
         if self.isGenericInst(ref: ref) {
             if (try self.tyRefIsGround(ref: ref)) {
-                mut val j: U64 = 0
-                while j < self.monoWork.genInsts.count() {
-                    if self.typeRefEq(a: self.monoWork.genInsts[j], b: ref) {
-                        return <Result.Ok value=() />
-                    }
-                    j += 1
-                }
+                if self.hasGenericLayout(ref: ref) { return <Result.Ok value=() /> }
                 // gen mode: don't instantiate a generic over a to-be-derived type (spec/16).
                 if self.genMode {
                     if self.refArgNamesADeriveTarget(ref: ref) {
@@ -1409,7 +1403,7 @@ pub impl Comp {
                     }
                 }
                 try self.checkInstDepth(ref: ref)
-                self.monoWork.genInsts.append(ref)
+                self.monoWork.appendGenericLayout(ref: ref)
                 // scan the generic struct's fields under this instantiation's env so an
                 // `Array[T]` field registers its concrete element (`Array[I32]`) — the
                 // runtime is keyed off the instantiation, not the `PlewArray_T` template.
@@ -1417,6 +1411,27 @@ pub impl Comp {
             }
         }
         return <Result.Ok value=() />
+    }
+
+    inout fn hasGenericLayout(ref: U64) -> Bool {
+        if self.arena.typeDeclarationResolutionComplete() {
+            // Rows collected before declaration resolution acquire their
+            // stable keys only after the declaration identities are sealed.
+            while self.monoWork.indexedGenericLayoutCount() < self.monoWork.genericLayoutCount() {
+                val pending = self.monoWork.genericLayoutAt(index: self.monoWork.indexedGenericLayoutCount())
+                self.monoWork.indexNextGenericLayout(key: self.arena.genericLayoutKey(ref: pending))
+            }
+            mut val row = self.monoWork.firstGenericLayout(key: self.arena.genericLayoutKey(ref: ref))
+            while row != 0U64 {
+                if self.typeRefEq(a: self.monoWork.genericLayoutAt(index: row - 1U64), b: ref) { return true }
+                row = self.monoWork.nextGenericLayout(row: row)
+            }
+            return false
+        }
+        for index in 0U64..<self.monoWork.genericLayoutCount() {
+            if self.typeRefEq(a: self.monoWork.genericLayoutAt(index: index), b: ref) { return true }
+        }
+        return false
     }
 
     inout fn scanGenInstFields(instRef: U64) -> Result[(), CompileDiagnostic] {

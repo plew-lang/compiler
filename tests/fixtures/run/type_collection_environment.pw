@@ -10,7 +10,7 @@ fn main() {
     analyzeFrontendDeclarations(c: inout compiler, input: <FrontendInput.Text text=source path="collection.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
     val name = compiler.internBytes(s: "Box")
     mut val instance = 0U64
-    for val candidate in compiler.monoWork.genInsts {
+    for val candidate in compiler.monoWork.genericLayoutList() {
         val term = compiler.arena.typeAt(index: candidate)
         if term.nameId == name.nameId && term.args.count() == 1U64 { instance = candidate }
     }

@@ -143,6 +143,14 @@ pub impl Arena {
         return id
     }
 
+    // Only published nominal identity is used to exclude candidates.
+    // Structural and ownerless representations share the zero bucket.
+    fn genericLayoutKey(ref: U64) -> U64 {
+        val term = self.typeTermAt(index: ref)
+        if term.hasDecl && !term.isRecord { return term.declOffset }
+        return 0U64
+    }
+
     // Declaration resolution cannot change the fields used by the name index.
     fn typeDeclarationResolutionComplete() -> Bool { return self.typeDeclarationResolutionFinished }
 

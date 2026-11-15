@@ -41,3 +41,7 @@ Original audit-time independence does not waive this implementation admission. P
 **2026-11-15T19:56:35Z**
 
 Performance evidence at eca80ef6: scanType compares all registered generic layouts for 14,544,675 of the 22,855,712 unequal-ID head comparisons in finalization. See meta evidence phase3-finalization-type-comparison-origins.json. Preserve ordered registration, derive and depth checks, first diagnostic and full structural identity when evaluating a candidate index. This measurement does not close or extend the API-boundary task.
+
+**2026-11-15T20:03:15Z**
+
+WIP performance step: MonoWork owns the ordered generic layout rows and an index by sealed nominal declaration. Before declaration identity publication, membership uses the original equality walk. After publication, unindexed rows are enrolled once, also covering pre-seal registrations. Candidate equality, derive and depth checks, registration-before-recursion, and insertion order remain. Four lazy generic controls and full same-source AOT LLVM matched. Updated two internal fixtures to use the read API and confirmed both check successfully; runtime and matched optimized timing are pending. This does not complete the API-boundary repair.

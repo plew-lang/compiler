@@ -4027,7 +4027,9 @@ pub impl Modules { factory empty() { return <Modules /> } }
 // semantics); keyed by the field decl's nameStart.
 pub struct MonoWork {
     mut val entryBodies: Dictionary[U64, U64] = [:]
-    pub mut val genInsts: Array[U64] = []
+    mut val genericLayouts: Array[U64] = []
+    mut val genericLayoutHeads: Dictionary[U64, U64] = [:]
+    mut val genericLayoutNext: Array[U64] = []
     pub mut val fnInsts: Array[FnInst] = []
     pub mut val fnTypes: Array[U64] = []
     pub mut val fnThunks: Array[U64] = []
