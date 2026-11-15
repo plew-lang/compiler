@@ -56,3 +56,9 @@ errno trace identifies the exact failed operation. This is additional evidence
 for this existing output-status task, not a completed disk-failure reproduction,
 new semantic rejection, or com-1hd3 prerequisite. The output failure must remain
 a failed validation rather than being hidden by compiler exit0.
+
+## Notes
+
+**2026-11-15T15:42:11Z**
+
+Observed on 4e6b0256 in the optimized scratch self-compile A/B: under low available disk, both compilers exited 0 after backend:write:done but produced zero-byte stdout LLVM in all 18 trials. With additional free space, the exact same binaries and source emitted 78,200,624 bytes, matching the fixed-point LLVM hash on all rerun outputs. The benchmark now rejects empty output. This is an observed failure, without an errno trace from the compiler itself.
