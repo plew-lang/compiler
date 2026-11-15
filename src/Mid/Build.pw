@@ -2578,7 +2578,7 @@ fn buildMidLetAdmitted(c: inout Comp, state: inout MidBuildState, stmtId: U64, c
             midInitializeBinding(state: inout state, destination: destination, value: <MidRvalue.StorageBoundary stmtId=stmtId exprId=init targetTerm=term operand=midReturnOperand(c: inout c, operand: operandValue, typeTerm: (match midSourceSemanticTerm(c: inout c, facts: state.sourceFacts, sourceFunction: state.sourceFunction, exprId: init) { Result.Ok(value: val term) => { give term } Result.Err(error: val error) => { return error } })) />)
             val function = state.sourceFunction
             if function < c.arena.functionCount() && !c.arena.functionAt(index: function).isDefaultGenerator {
-                val valueType = match midRecordedStorageValueType(c: inout c, facts: facts, function: function, expression: init, operand: operandValue) {
+                val valueType = match midRecordedStorageValueType(c: inout c, facts: facts, function: function, expression: init, operand: operandValue, aggregate: aggregate) {
                     Result.Ok(value: val valueType) => valueType
                     Result.Err(error: val error) => { return error }
                 }
@@ -2599,7 +2599,7 @@ fn buildMidLetAdmitted(c: inout Comp, state: inout MidBuildState, stmtId: U64, c
 
 // Preserve the checked source side of the conversion independently from the
 // storage destination. Selected call recipes name the exact result producer.
-fn midRecordedStorageValueType(c: inout Comp, facts: PreparedSemanticFacts, function: U64, expression: U64, operand: MidOperand) -> Result[RecordedStorageValueType, MidBuildError] {
+fn midRecordedStorageValueType(c: inout Comp, facts: PreparedSemanticFacts, function: U64, expression: U64, operand: MidOperand, aggregate: MidAggregateLookup) -> Result[RecordedStorageValueType, MidBuildError] {
     val fact = match facts.expression(exprId: expression) {
         Optional.Some(v: val fact) => fact
         Optional.None => { return <Result.Err error=<MidBuildError.MissingSemanticType /> /> }
@@ -2607,6 +2607,12 @@ fn midRecordedStorageValueType(c: inout Comp, facts: PreparedSemanticFacts, func
     match operand {
         MidOperand.Constant(value: _) => { return <Result.Ok value=<RecordedStorageValueType.Constant ref=fact.term /> /> }
         _ => {}
+    }
+    if aggregate.found {
+        match aggregate.aggregate.kind {
+            SemanticAggregateKind.Array => { return <Result.Ok value=<RecordedStorageValueType.Array ref=fact.term aggregate=aggregate.aggregate /> /> }
+            _ => {}
+        }
     }
     match facts.valueRegion(exprId: expression) {
         Optional.Some(v: val region) => { return <Result.Ok value=<RecordedStorageValueType.Region ref=fact.term region=region /> /> }

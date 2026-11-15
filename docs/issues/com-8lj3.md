@@ -208,3 +208,7 @@ Restrict the Mid request dispatch lookup to Let statements. The per-source-funct
 **2026-11-15T16:35:39Z**
 
 Use the retained Mid constant operand to prepare literal storage via its checked term, preserving destruction dependency registration. Native mid_binding_identity and seven lazy controls passed and full same-source AOT LLVM matched. The native diagnostic-order control exposed that moving the foreign-expression check to the session allowed invalid direct finalization input; restored the check at the preparation boundary.
+
+**2026-11-15T16:39:08Z**
+
+For local array initializers, retain the checked aggregate used by Mid and consume its ordered elements directly in finalization. Six lazy controls and an observable two-element order probe passed; full same-source AOT LLVM matched. Element operations still use shared preparation; nominal constructions require authored type-slot proof replay. Performance not measured.
