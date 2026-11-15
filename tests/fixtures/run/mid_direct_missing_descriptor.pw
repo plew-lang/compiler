@@ -1,0 +1,29 @@
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use /Ir only { InstanceEnvironment }
+use /Mid/Build only { buildParametricMidBody, MidBuildError }
+use /Mid/Instantiate only { instantiateCanonicalMidBody, MidInstantiateError }
+use /SourceAccess only { SourceAccess }
+use @Std/Core only { assert }
+use @Std/Io only { print }
+
+fn main() {
+    mut val compiler = <Comp />
+    val source = "fn caller() {{ reached() }} fn reached() {{}}"
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text path="missing-call.pw" text=source />, sources: <SourceAccess />).unwrap()
+    compiler.initializeFinalCallables().unwrap()
+    compiler.prepareLexicalBody(fnIdx: 0U64).unwrap()
+    val built = buildParametricMidBody(c: inout compiler, fnIdx: 0U64)
+    match built.error {
+        MidBuildError.None => {}
+        _ => { panic "cannot build the checked call fixture" }
+    }
+    val bodyId = compiler.internBodyInstance(fnIdx: 0U64, environment: <InstanceEnvironment />)
+    compiler.prepareFinalCallableSignature(bodyId: bodyId).unwrap()
+    assert(compiler.arena.finalCalleeCount() == 0U64)
+    val missing = instantiateCanonicalMidBody(c: inout compiler, body: built.canonical, bodyId: bodyId)
+    match missing.error {
+        MidInstantiateError.MissingCallResolution => {}
+        _ => { panic "expected missing call resolution" }
+    }
+    print("ok")
+}

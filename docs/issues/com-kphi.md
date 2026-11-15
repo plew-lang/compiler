@@ -1,6 +1,6 @@
 ---
 id: com-kphi
-status: in_progress
+status: closed
 deps: [com-jgy9]
 links: []
 created: 2026-11-15T06:29:15Z
@@ -110,3 +110,11 @@ The AOT trace again declared stop and omitted identity, sink and update.
 gave 8.018 s to 7.885 s and all ten LLVM digests matched. This is not a
 formal fixed-point run. Missing-descriptor and combined diverging indexed
 writeback controls are still outstanding.
+
+Final controls passed and received independent re-review.
+[Missing direct descriptor](../../tests/fixtures/run/mid_direct_missing_descriptor.pw)
+asserts the exact typed instantiation failure despite valid checked Mid and
+signature. The indexed inout probe recorded in the comparison evidence emits
+the getter and callee panic, with no setter output, under AOT and lazy.
+The probe checks execution. Detached setter demand remains on the existing
+lane as specified above. Formal performance remains with com-p5um.
