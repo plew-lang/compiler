@@ -380,19 +380,22 @@ The [activation-input plan](ownership-and-access.md#async-activation-inputs)
 connects that requirement to initial Mid owners and source cleanup. Operand/frame
 storage and successful async signature registration do not establish it alone.
 
-Body checking publishes a typed body that records selected calls, trait
-requirements and conformance evidence, with explicit evaluation order and
-control flow. Finalization follows reachable operations in that body and
-substitutes the concrete instance environment. When static dispatch requires a
-concrete implementation, finalization resolves it within the selected trait
+Body checking publishes a typed body with selected calls, trait requirements,
+conformance evidence, and checked facts about evaluation order, completion, and
+exit targets. Mid construction realizes those facts as an instruction sequence
+and control-flow edges. Finalization discovers dependencies from checked
+operations under their execution-reachability facts or from the corresponding
+Mid control flow, and substitutes the concrete instance environment. When
+static dispatch requires a concrete implementation, finalization resolves it within the selected trait
 requirement and its evidence. Source name lookup and overload selection end
 at body checking.
 
 Finalization collects executable dependencies from calls, globals, storage and
 aggregate layouts, and implicit destruction. It may walk the typed body directly.
-A dependency index, when warranted by measurement, is derived from that body
-and preserves its control flow and evaluation order. Repeated requests for the
-same instance reuse its registered identity and preparation state.
+A dependency index, when warranted by measurement, is derived from the typed
+body and preserves the reachability and ordering needed by its readers.
+Repeated requests for the same instance reuse its registered identity and
+preparation state.
 
 Destruction visits fields, enum payloads, Buffer elements,
 and strong references with structural type identity and a cycle-safe worklist;
@@ -409,7 +412,12 @@ and illegal moves remain rejected. Rust's [THIR](https://rustc-dev-guide.rust-la
 StaticRef/Deref split and Swift's [SIL](https://github.com/swiftlang/swift/blob/main/docs/SIL/SIL.md#global-variables)
 `global_addr` are references for that distinction.
 
-Finalization publication closes added call/destruction dependencies before Access.
+Before Access, finalization closes the call and destruction dependencies
+required to prepare the body, including those derived from concrete types.
+Access and drop elaboration determine where cleanup is required, including at
+replacement and conditional exits. Before executable publication, account for
+the dependencies introduced by that cleanup under the applicable eager or lazy
+readiness contract.
 Append preserves existing IDs, repeats are idempotent, and failed partial work is
 not executable. Resetting finalization after calls exist must fail before clearing
 other state. Provisional reachability is not final reachability: descriptor/type
