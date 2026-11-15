@@ -308,3 +308,7 @@ A local await initializer with a recorded Promise-producing call now carries tha
 **2026-11-15T19:00:26Z**
 
 Method-shaped index reads now pass the already selected template directly to shared method preparation. The existing AST compatibility rewrite and place/write paths remain. Seven lazy index/evaluation controls passed; three representative AOT index fixtures and the full same compiler source produced matching LLVM (full SHA-256 880173b27dbd74b10a2b3e5af3736e0a7e902e871a275ed1dac18e0c92f2f44d). No optimized timing claim. Remaining: receiver and key shapes without saved dependencies, and the AST compatibility rewrite.
+
+**2026-11-15T19:04:35Z**
+
+Finalization no longer rewrites a selected Index read into Expr.Method. Mid distinguishes structural index projections from calls using the checked template, and uses the original base expression for receiver navigation. Six lazy fixtures and three AOT controls passed; full same-source compiler LLVM matched. File-backed linker output hit ENOSPC and succeeded on retry after removing two superseded diagnostic binaries. The argument compatibility adapter and residual composite operand scan remain. No optimized timing claim.

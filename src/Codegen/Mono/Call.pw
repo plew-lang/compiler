@@ -6676,36 +6676,15 @@ pub impl Comp {
             }
             Expr.Field(val base, val nameStart, val nameLen) => { try self.scanExprInsts(exprId: base) }
             Expr.Index(val base, val index) => {
-                // Record selected every non-structural subscript while the
-                // lexical body was still parametric.  Here we only lower that
-                // frozen choice to the method-shaped execution form consumed
-                // by the existing call ABI; no type/name lookup is allowed
-                // after CallTemplates close.
-                val template: CallTemplate = (try self.finalizationCallTemplate(exprId: exprId, selected: selected))
-                mut val callee: U64 = self.arena.functionCount()
-                mut val selectedName: Bind = self.kwSpan(kw: "index", kwLen: 5U64)
-                mut val hasSelectedCall: Bool = false
-                match template.kind {
-                    CallTemplateKind.Direct(callee: val direct, receiver: _, args: _, calleeTypeArgs: _, proofId: _) => {
-                        callee = direct
-                        if callee < self.arena.functionCount() {
-                            selectedName = <Bind nameStart=self.arena.functionAt(index: callee).nameStart nameLen=self.arena.functionAt(index: callee).nameLen fieldStart=self.arena.functionAt(index: callee).nameStart fieldLen=self.arena.functionAt(index: callee).nameLen />
-                            hasSelectedCall = true
-                        }
-                    }
-                    // A generic `T: Index` or `any Index` keeps a proof/dynamic
-                    // target rather than a declaration callee. The authored
-                    // Index surface is still fixed by Record, so use its
-                    // canonical execution spelling without reopening lookup.
-                    CallTemplateKind.StaticMethod(receiver: _, args: _, resolution: _, methodTypeArgs: _, resultTerm: _) => { hasSelectedCall = true }
-                    CallTemplateKind.Dynamic(receiver: _, args: _, target: _) => { hasSelectedCall = true }
-                    _ => {}
+                val template = try self.finalizationCallTemplate(exprId: exprId, selected: selected)
+                val hasSelectedCall = match template.kind {
+                    CallTemplateKind.Direct(callee: val callee, receiver: _, args: _, calleeTypeArgs: _, proofId: _) => callee < self.arena.functionCount()
+                    CallTemplateKind.StaticMethod(receiver: _, args: _, resolution: _, methodTypeArgs: _, resultTerm: _) |
+                    CallTemplateKind.Dynamic(receiver: _, args: _, target: _) => true
+                    _ => false
                 }
                 if hasSelectedCall {
-                    val label: Bind = self.kwSpan(kw: "key", kwLen: 3U64)
-                    val args: ArgRange = self.pushArgs(args: [<Arg expr=index isInout=false labelStart=label.nameStart labelLen=label.nameLen hasLabel=true />])
-                    self.arena.exprs.set(i: exprId, value: <Expr.Method recv=base nameStart=selectedName.nameStart nameLen=selectedName.nameLen args=args />)
-                    return self.prepareMethodCall(exprId: exprId, receiver: base, arguments: args, template: template)
+                    return self.prepareMethodCall(exprId: exprId, receiver: base, arguments: self.indexCallArgs(key: index), template: template)
                 }
                 try self.scanExprInsts(exprId: base)
                 try self.scanExprInsts(exprId: index)
@@ -6811,8 +6790,7 @@ pub impl Comp {
 
     // Assignment targets are places, not value reads.  In particular an Index
     // nested below a field (`xs[i].field = …`) must remain an Index so LLVM can
-    // take its storage address; scanExprInsts intentionally rewrites value
-    // indexes to their resolved `index` method.  Walk only the navigation path
+    // take its storage address. Walk only the navigation path
     // here, while still scanning an index key as an ordinary value expression.
     inout fn scanPlaceInsts(exprId: U64) -> Result[(), CompileDiagnostic] {
         match self.arena.exprs[exprId] {

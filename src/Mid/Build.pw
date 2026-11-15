@@ -1817,6 +1817,13 @@ fn midValueOperandForSourceExpr(c: inout Comp, state: inout MidBuildState, exprI
             return materializeMidTry(c: inout c, state: inout state, exprId: exprId, operandExpr: operandExpr, resultTerm: valueTypeTerm)
         }
         Expr.Index(base: _, index: _) => {
+            val template = match c.callTemplateForSourceBody(fnIdx: state.sourceFunction, exprId: exprId) {
+                Result.Ok(value: val template) => template
+                Result.Err(error: val diagnostic) => { return midFrontendOperandFailure(diagnostic: diagnostic) }
+            }
+            if midTemplateIsCallable(template: template) {
+                return materializeMidCallValue(c: inout c, state: inout state, exprId: exprId, siteKey: template.siteKey)
+            }
             return materializeMidIndexValue(c: inout c, state: inout state, exprId: exprId, typeTerm: valueTypeTerm)
         }
         Expr.Field(base: val base, nameStart: _, nameLen: _) => {
@@ -2194,6 +2201,7 @@ fn midMethodReceiverExpr(expressions: Array[Expr], exprId: U64) -> U64 {
     match expressions[exprId] {
         Expr.Method(recv: val recv, nameStart: _, nameLen: _, args: _) => { return recv }
         Expr.ExtMethod(recv: val recv, source: _, nameStart: _, nameLen: _, args: _) => { return recv }
+        Expr.Index(base: val recv, index: _) => { return recv }
         _ => { return expressions.count() }
     }
 }
