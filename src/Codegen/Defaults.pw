@@ -121,14 +121,16 @@ pub impl Comp {
         val typeArgs = selected.typeArgs
         if callee >= self.arena.functionCount() { return <Result.Ok value=false />}
         val function = self.arena.functionAt(index: callee)
-        val argumentValues: Array[CallTemplateArgument] = self.callTemplateArguments(range: arguments)
-        val typeArgValues: Array[U64] = self.callTemplateTypeArgs(range: typeArgs)
-        if argumentValues.count() != arguments.len || typeArgValues.count() != typeArgs.len { return <Result.Ok value=false />}
+        val argumentCount = self.callTemplateArgumentPool.count()
+        val typeArgumentCount = self.callTemplateTypeArgumentPool.count()
+        if arguments.len != 0U64 && (arguments.start >= argumentCount || arguments.len > argumentCount - arguments.start) { return <Result.Ok value=false /> }
+        if typeArgs.len != 0U64 && (typeArgs.start >= typeArgumentCount || typeArgs.len > typeArgumentCount - typeArgs.start) { return <Result.Ok value=false /> }
         // This also makes completion idempotent: the saved ordinary
         // default calls are not reclassified as omitted arguments.
-        if argumentValues.count() == function.params.count() { return <Result.Ok value=true />}
-        if argumentValues.count() > function.params.count() || self.decls.defaultGeneratorRanges.count() == 0U64 { return <Result.Ok value=false />}
-        if typeArgValues.count() != function.typeParams.count() { return <Result.Ok value=false />}
+        if arguments.len == function.params.count() { return <Result.Ok value=true />}
+        if arguments.len > function.params.count() || self.decls.defaultGeneratorRanges.count() == 0U64 { return <Result.Ok value=false />}
+        if typeArgs.len != function.typeParams.count() { return <Result.Ok value=false />}
+        val typeArgValues: Array[U64] = self.callTemplateTypeArgs(range: typeArgs)
         // Empty substitutions are complete for a zero-binder callable.
         // The inference helper also uses empty to mean no inference.
         if typeArgValues.count() > 0U64 && !self.fnArgsAllResolved(args: typeArgValues) { return <Result.Ok value=false />}
@@ -152,6 +154,7 @@ pub impl Comp {
         val previousRecording = self.cur.recordCallTemplates
         self.cur.checkFn = template.siteKey.ownerFnIdx
         self.cur.recordCallTemplates = true
+        val argumentValues = self.callTemplateArguments(range: arguments)
         val completed = (try self.recordBoundCallArguments(callee: callee, args: argumentValues, receiver: receiver, calleeTypeArgs: typeArgValues, parameterTerms: parameterTerms, proof: environment.proof, receiverTypeTerm: receiverTerm))
         self.cur.checkFn = previousOwner
         self.cur.recordCallTemplates = previousRecording
