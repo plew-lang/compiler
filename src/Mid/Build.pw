@@ -195,6 +195,7 @@ struct MidSourceLoopTarget {
 impl MidSourceLoopTarget { factory }
 
 pub struct MidBuildState {
+    mut val storageOrder: Array[U64] = []
     mut val sourceFacts: Optional[PreparedSemanticFacts] = <Optional.None />
     pub mut val locals: Array[MidLocalDecl] = []
     pub mut val scopes: Array[MidScope] = []
@@ -2565,6 +2566,7 @@ fn buildMidLetAdmitted(c: inout Comp, state: inout MidBuildState, stmtId: U64, c
             }
             if term == 0U64 { return <MidBuildError.MissingSemanticType /> }
             midInitializeBinding(state: inout state, destination: destination, value: <MidRvalue.StorageBoundary stmtId=stmtId exprId=init targetTerm=term operand=midReturnOperand(c: inout c, operand: operandValue, typeTerm: (match midSourceSemanticTerm(c: inout c, facts: state.sourceFacts, sourceFunction: state.sourceFunction, exprId: init) { Result.Ok(value: val term) => { give term } Result.Err(error: val error) => { return error } })) />)
+            state.storageOrder.append(stmtId)
             if completeEvaluation { midFinishEvaluationScope(state: inout state, scope: evaluation) }
             val ended = binding.endedBinding
             if ended != 0U64 {
@@ -3575,7 +3577,7 @@ pub fn buildParametricMidBody(c: inout Comp, fnIdx: U64) -> MidBodyBuild {
         midEmitScopeExit(state: inout state, scope: 0U64)
         midSetTerminator(state: inout state, terminator: <MidTerminator.Return />)
     }
-    val body: MidBody = <MidBody sourceFunction=fnIdx locals=state.locals scopes=state.scopes blocks=state.blocks callArgumentProjections=state.callArgumentProjections entry=0U64 />
+    val body: MidBody = <MidBody sourceFunction=fnIdx locals=state.locals scopes=state.scopes blocks=state.blocks callArgumentProjections=state.callArgumentProjections storageOrder=state.storageOrder entry=0U64 />
     val canonical: MidCanonicalBody = c.mid.store(body: body)
     if !c.mid.isWellFormed(body: canonical) {
         // A builder-produced canonical snapshot must be internally closed

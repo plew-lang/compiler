@@ -26,6 +26,7 @@ pub impl MidRange {
 }
 
 pub struct MidBodyNode {
+    pub val storageOrder: MidRange = <MidRange start=0U64 len=0U64 />
     pub val bodyInstance: U64 = 0U64
     pub val sourceFunction: U64 = 0U64
     pub val locals: MidRange = <MidRange start=0U64 len=0U64 />
@@ -253,6 +254,7 @@ pub struct MidClosureBody {
 pub impl MidClosureBody { factory }
 
 pub struct MidCanonicalArena {
+    pub mut val storageStatements: Array[U64] = []
     pub mut val globalAccessState: U64 = 0U64
     pub mut val globalAccessBodies: Array[U64] = []
     pub mut val bodies: Array[MidBodyNode] = []
@@ -772,6 +774,8 @@ pub struct MidScope {
 pub impl MidScope { factory }
 
 pub struct MidBody {
+    // Source evaluation order recorded as initialized locals are emitted.
+    pub val storageOrder: Array[U64] = []
     // Index into the immutable frontend BodyInstance table.  A body is
     // parametric while built and receives concrete TypeRefs only on
     // instantiation; this field is nonzero for an instantiated body.
@@ -1142,7 +1146,9 @@ fn storeMidCanonicalBody(arena: inout MidCanonicalArena, body: MidBody) -> MidCa
         arena.blocks.append(<MidBlockNode statements=<MidRange start=statementStart len=block.statements.count() /> terminator=terminator />)
         i = i + 1U64
     }
-    arena.bodies.append(<MidBodyNode bodyInstance=body.bodyInstance sourceFunction=body.sourceFunction locals=<MidRange start=localStart len=body.locals.count() /> scopes=<MidRange start=scopeStart len=body.scopes.count() /> blocks=<MidRange start=blockStart len=body.blocks.count() /> entry=body.entry />)
+    val storageStart = arena.storageStatements.count()
+    for statement in body.storageOrder { arena.storageStatements.append(statement) }
+    arena.bodies.append(<MidBodyNode storageOrder=<MidRange start=storageStart len=body.storageOrder.count() /> bodyInstance=body.bodyInstance sourceFunction=body.sourceFunction locals=<MidRange start=localStart len=body.locals.count() /> scopes=<MidRange start=scopeStart len=body.scopes.count() /> blocks=<MidRange start=blockStart len=body.blocks.count() /> entry=body.entry />)
     return <MidCanonicalBody body=arena.bodies.count() />
 }
 

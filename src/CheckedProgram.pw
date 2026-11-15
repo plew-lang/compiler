@@ -379,7 +379,6 @@ impl CompilerSession {
         val facts = try self.compiler.preparedFunctionSemanticFacts(fnIdx: function)
         mut val calls: Dictionary[U64, Bool] = [:]
         mut val storage: Dictionary[U64, CheckedLocalStorageRequest] = [:]
-        mut val storageOrder: Array[U64] = []
         for index in 0U64..<body.blocks.len {
             val block = self.compiler.mid.blocks[body.blocks.start + index]
             for statementIndex in 0U64..<block.statements.len {
@@ -392,7 +391,6 @@ impl CompilerSession {
                 val local = self.compiler.mid.locals[body.locals.start + destination.local]
                 if !local.sourceBinding.isUnproved() {
                     val valueType = try self.compiler.recordedStorageValueType(facts: facts, function: function, expression: value.exprId)
-                    if !storage.contains(key: value.sourceStmt) { storageOrder.append(value.sourceStmt) }
                     storage[value.sourceStmt] = <CheckedLocalStorageRequest expression=value.exprId declarationTarget=local.sourceNameStart binding=local.sourceBinding valueType=valueType />
                 }
             }
@@ -410,6 +408,17 @@ impl CompilerSession {
                     }
                 }
             }
+        }
+        mut val storageOrder: Array[U64] = []
+        for index in 0U64..<body.storageOrder.len {
+            val statement = self.compiler.mid.storageStatements[body.storageOrder.start + index]
+            if !storage.contains(key: statement) {
+                return <Result.Err error=self.compiler.diagnosticAt(offset: self.compiler.stmtPrincipalOffset(sid: statement), msg: "checked Mid storage order has no initial value", failureDomain: <FailureDomain.Internal />) />
+            }
+            storageOrder.append(statement)
+        }
+        if storageOrder.count() != storage.count() {
+            return <Result.Err error=self.compiler.diagnosticAt(offset: 0U64, msg: "checked Mid storage order is incomplete", failureDomain: <FailureDomain.Internal />) />
         }
         val inputs = <MidFinalizationInputs calls=calls storage=storage storageOrder=storageOrder />
         self.midFinalizationInputs[function] = inputs

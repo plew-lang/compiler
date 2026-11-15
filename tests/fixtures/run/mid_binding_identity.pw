@@ -4,7 +4,35 @@ use /SourceAccess only { SourceAccess }
 use /Ir only { Expr, Stmt }
 use /Mid only { prepareMidSourceState, MidBuildState, MidBuildError, MidOperand, MidRvalue, MidStatement, addMidLocal, midLocalForBinding, midPlaceForRecordedIdent, buildMidLet, buildParametricMidBody }
 
+fn verifyStorageEmissionOrder() {
+    mut val c: Comp = <Comp />
+    analyzeFrontendForRequests(c: inout c,
+        input: <FrontendInput.Text path="binding-order.pw" text="fn produce() -> I64 {{ return 1I64 }} fn probe(flag: Bool) {{ if flag {{ val branch = produce() }} val after = 2I64 }}" />,
+        sources: <SourceAccess stdRoot=[] />).unwrap()
+    val owner = c.arena.firstFunctionNamed(nameId: c.internBytes(s: "probe").nameId)
+    c.prepareLexicalBody(fnIdx: owner).unwrap()
+    val built = buildParametricMidBody(c: inout c, fnIdx: owner)
+    if built.canonical.body == 0U64 { panic("missing canonical body") }
+    val body = c.mid.bodies[built.canonical.body - 1U64]
+    mut val blockOrder: Array[U64] = []
+    for index in 0U64..<body.blocks.len {
+        val block = c.mid.blocks[body.blocks.start + index]
+        for statementIndex in 0U64..<block.statements.len {
+            val statement = c.mid.statements[block.statements.start + statementIndex]
+            if statement.value == 0U64 { continue }
+            val value = c.mid.rvalues[statement.value - 1U64]
+            if value.tag == 20U64 { blockOrder.append(value.sourceStmt) }
+        }
+    }
+    if blockOrder.count() != 2U64 || body.storageOrder.len != 2U64 { panic("missing local storage order") }
+    if c.mid.storageStatements[body.storageOrder.start] != blockOrder[1U64] ||
+        c.mid.storageStatements[body.storageOrder.start + 1U64] != blockOrder[0U64] {
+        panic("local storage order follows block layout instead of initialization")
+    }
+}
+
 fn main() {
+    verifyStorageEmissionOrder()
     mut val c: Comp = <Comp />
     analyzeFrontendForRequests(c: inout c,
         input: <FrontendInput.Text path="binding-cfg.pw" text="unique struct File {{}} fn probe(file: move File) {{ val first = move file val second = move first }}" />,
