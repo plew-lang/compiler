@@ -7110,8 +7110,8 @@ impl Comp {
 
     inout fn demandFinalBody(bodyId: U64) {
         if bodyId == 0U64 || self.monoWork.containsBody(bodyId: bodyId) { return }
-        val instance = self.arena.bodyInstanceAt(index: bodyId - 1U64)
-        self.demandFinalBody(bodyId: instance.adapterTargetBodyId)
+        val target = self.arena.bodyAdapterTarget(bodyId: bodyId)
+        if target != 0U64 { self.demandFinalBody(bodyId: target) }
         self.monoWork.appendBody(bodyId: bodyId)
     }
 

@@ -3,6 +3,7 @@
 pub impl Arena {
     fn bodyInstanceCount() -> U64 { return self.bodyInstances.count() }
     fn bodyInstanceAt(index: U64) -> BodyInstance { return self.bodyInstances[index] }
+    fn bodyAdapterTarget(bodyId: U64) -> U64 { return self.bodyInstances[bodyId - 1U64].adapterTargetBodyId }
 
     fn bodyOrigin(bodyId: U64) -> BodyOrigin { return self.bodyOrigins[bodyId - 1U64] }
     fn bodyIsCallable(bodyId: U64) -> Bool {
