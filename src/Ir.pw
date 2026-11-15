@@ -3357,6 +3357,7 @@ pub struct Arena {
     mut val readyBodySignatures: Array[U64] = []
     mut val bodyTypeResults: BodyTypeResultTable = <BodyTypeResultTable />
     mut val closureSignatures: Array[ClosureSignature] = []
+    mut val bodyReceiverShapeKeys: Array[U64] = []
     mut val bodyFunctionHeads: Dictionary[U64, U64] = [:]
     mut val bodyFunctionTails: Dictionary[U64, U64] = [:]
     mut val bodyFunctionNext: Array[U64] = []

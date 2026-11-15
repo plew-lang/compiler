@@ -47,3 +47,9 @@ Optional components stay optional and must not become mandatory merely because t
 [Scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-selected-instances.json) retains all main/mixed roles and normative grounds. Selected declaration/receiver/ParamId/environment/proof and source/body identity readers preserve evidence through final instances. Limit exact canonical, registry/index and specified cursor-cache writes; interning does not establish success.
 
 Original audit-time independence does not waive this implementation admission. Preserve the original finite guarantee, actual callers/delegates, controls and excluded optional/new-feature scopes. Assignment is not product repair/GREEN.
+
+## Notes
+
+**2026-11-15T20:58:17Z**
+
+WIP performance increment: body-instance candidates with two known, distinct sealed receiver shape keys are rejected before reading the body environment. Zero keys retain the original equality path, including pre-seal/direct registrations. Rows and traversal order remain unchanged; every remaining candidate compares receiver, proof, bounds, binders and arguments. Shape key derivation is shared with destruction lookup. Six lazy controls and full same-source LLVM matched; optimized timing pending.

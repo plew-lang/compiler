@@ -523,6 +523,32 @@ pub impl Comp {
         return self.semanticViewSourceSetsEqual(a: self.arena.typeViewSources(ref: a), b: self.arena.typeViewSources(ref: b))
     }
 
+    // A coarse key for a declared nominal head and immediate semantic
+    // child heads. Equal types have equal keys; collisions require equality.
+    inout fn immediateTypeShapeKey(typeRef: U64, declaration: U64) -> U64 {
+        val modulus = 4294967291U64
+        val count = self.typeTermRefChildCount(ref: typeRef)
+        mut val key = (declaration % modulus + count % modulus) % modulus
+        for index in 0U64..<count {
+            val childRef = self.typeTermRefChildRef(ref: typeRef, index: index)
+            if childRef >= self.arena.typeTermCount() {
+                key = (key * 65537U64) % modulus
+                continue
+            }
+            val child = self.arena.typeTermAt(index: childRef)
+            mut val head = 1U64
+            if !child.isRecord {
+                head = (child.paramId % modulus + child.assocTraitId % modulus + child.assocNameId % modulus + 2U64) % modulus
+                if child.hasDecl { head = (head * 65537U64 + child.declOffset % modulus) % modulus }
+                if child.isAny { head += 3U64 }
+            }
+            if child.isSendable { head += 5U64 }
+            if child.isDiverging { head += 7U64 }
+            key = (key * 65537U64 + head) % modulus
+        }
+        return key + 1U64
+    }
+
     inout fn typeTermRefSameHead(a: U64, b: U64, sourceTerms: Bool = false) -> Bool {
         if a >= self.arena.typeTermCount() || b >= self.arena.typeTermCount() { return false }
         if a == b { return true }
