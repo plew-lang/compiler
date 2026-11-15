@@ -6983,7 +6983,7 @@ pub impl Comp {
         }
         val ref = try self.groundCheckedLocalStorageTarget(stmtId: stmtId, request: request, bodyId: self.cur.bodyId)
         val sourceRef = match request.valueType {
-            RecordedStorageValueType.Aggregate(ref: val term, aggregate: _, writtenConstruction: _) | RecordedStorageValueType.Constant(ref: val term) | RecordedStorageValueType.Binding(ref: val term, rootExpression: _) | RecordedStorageValueType.Term(ref: val term) | RecordedStorageValueType.Region(ref: val term, region: _) => try self.groundAndRecordBodyType(ref: term, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.cur.bodyId)
+            RecordedStorageValueType.Aggregate(ref: val term, aggregate: _, writtenConstruction: _) | RecordedStorageValueType.Constant(ref: val term) | RecordedStorageValueType.Binding(ref: val term, rootExpression: _) | RecordedStorageValueType.ProjectedCall(ref: val term, rootExpression: _, site: _) | RecordedStorageValueType.Term(ref: val term) | RecordedStorageValueType.Region(ref: val term, region: _) => try self.groundAndRecordBodyType(ref: term, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.cur.bodyId)
             RecordedStorageValueType.Recipe(id: val recipe) => try self.groundSemanticTypeRecipeForBody(recipeId: recipe, bodyId: self.cur.bodyId, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, requireProducer: true)
         }
         val targetRef = try self.groundAndRecordBodyType(ref: ref, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.cur.bodyId)
@@ -7095,6 +7095,7 @@ pub impl Comp {
                 return self.enqueueFinalDestruction(typeRef: type)
             }
             RecordedStorageValueType.Binding(ref: _, rootExpression: val root) => { return self.scanBindingInsts(exprId: root) }
+            RecordedStorageValueType.ProjectedCall(ref: _, rootExpression: val root, site: val site) => { return self.prepareCheckedResultCall(expression: root, site: site) }
             RecordedStorageValueType.Aggregate(ref: val term, aggregate: val aggregate, writtenConstruction: val written) => {
                 match written {
                     Optional.Some(v: val type) => {

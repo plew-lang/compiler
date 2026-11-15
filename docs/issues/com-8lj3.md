@@ -228,3 +228,7 @@ Prepare direct binding-read initializers from the checked type and Mid copy oper
 **2026-11-15T16:54:01Z**
 
 Carry the underlying binding occurrence for initializer places formed through fields, pointer projection and move/borrow. A chain rooted in anything other than an identifier keeps the existing dependency preparation. Six lazy controls and full same-source AOT LLVM matched. Timing not measured.
+
+**2026-11-15T16:57:23Z**
+
+Projection-only initializer wrappers now retain their checked root call occurrence, including an index when its selected template has a call-result recipe. The complete projected value keeps its own type. Six lazy controls, call/index evaluation order and same-source AOT LLVM matched. No formal timing.

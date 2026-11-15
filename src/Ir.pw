@@ -567,6 +567,7 @@ pub impl SourceBindingOrigin {
 pub enum RecordedStorageValueType {
     Constant(ref: U64)
     Binding(ref: U64, rootExpression: U64)
+    ProjectedCall(ref: U64, rootExpression: U64, site: CallSiteKey)
     Aggregate(ref: U64, aggregate: SemanticAggregate, writtenConstruction: Optional[U64])
     Term(ref: U64)
     Region(ref: U64, region: SourceValueRegion)
