@@ -2933,6 +2933,7 @@ struct SourceBodyData {
     // Navigation to the same sealed rows, not another mutability authority.
     mut val statements: Array[SemanticExpressionCompletion] = []
     mut val statementKeys: Dictionary[U64, U64] = [:]
+    mut val executableBlockLengths: Dictionary[U64, U64] = [:]
     mut val transfers: Array[SourceTransferFact] = []
     mut val transferKeys: Dictionary[U64, U64] = [:]
     mut val aggregates: Array[SemanticAggregate] = []
@@ -3145,6 +3146,7 @@ pub impl PreparedSemanticFacts {
     fn operationAt(index: U64) -> Optional[CallTemplate] { return readSourceOperationTemplate(rows: self.payload->operations, index: index) }
     fn operationHeadAt(index: U64) -> Optional[SourceOperationHead] { return readSourceOperationHead(rows: self.payload->operations, index: index) }
     fn expression(exprId: U64) -> Optional[SemanticExprType] { return readSourceExpression(rows: self.payload->expressions, identities: self.payload->expressionIds, indexSlots: self.payload->expressionIndexSlots, exprId: exprId) }
+    fn executableBlockLength(blockId: U64) -> Optional[U64] { return self.payload->executableBlockLengths.get(key: blockId) }
     fn valueBlock(blockId: U64) -> Optional[SourceValueBlockFact] { return self.payload->valueBlocks.get(key: blockId) }
     fn identifierTarget(exprId: U64) -> Optional[U64] { return self.payload->identifierTargets.get(key: exprId) }
     fn traitValueView(exprId: U64) -> Optional[SourceValueViewProof] { return self.payload->traitValueViews.get(key: exprId) }

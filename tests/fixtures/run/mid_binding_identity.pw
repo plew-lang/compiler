@@ -105,8 +105,23 @@ fn verifyStorageDiagnosticOrder() {
 
 }
 
+fn verifyCheckedExecutionPrefix() {
+    mut val c: Comp = <Comp />
+    analyzeFrontendForRequests(c: inout c,
+        input: <FrontendInput.Text path="binding-prefix.pw" text="fn probe() {{ val before = 1I64 while true {{}} val after = 2I64 }}" />,
+        sources: <SourceAccess stdRoot=[] />).unwrap()
+    val owner = c.arena.firstFunctionNamed(nameId: c.internBytes(s: "probe").nameId)
+    c.prepareLexicalBody(fnIdx: owner).unwrap()
+    val block = c.arena.functionAt(index: owner).body
+    val facts = c.preparedFunctionSemanticFacts(fnIdx: owner).unwrap()
+    if c.blockStmtCount(blkId: block) != 3U64 || facts.executableBlockLength(blockId: block).unwrap() != 2U64 {
+        panic("checked execution prefix lost the terminating statement or included unreachable code")
+    }
+}
+
 fn main() {
     verifyStorageEmissionOrder()
+    verifyCheckedExecutionPrefix()
     verifyStorageDiagnosticOrder()
     mut val c: Comp = <Comp />
     analyzeFrontendForRequests(c: inout c,

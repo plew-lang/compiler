@@ -3225,11 +3225,13 @@ pub impl Comp {
         mut val i: U64 = 0
         mut val flow = <SourceCompletion />
         mut val warned = false
+        mut val executableLength = 0U64
         while i < self.blockStmtCount(blkId: blkId) {
             val statement = self.blockStmtAt(blkId: blkId, index: i)
             if !flow.source.normal() {
                 return <Result.Err error=self.diagnosticAt(offset: self.stmtPrincipalOffset(sid: statement), msg: "code after a source control transfer is not allowed (spec/11)") />
             }
+            if flow.execution.normal() { executableLength = i + 1U64 }
             if !flow.execution.normal() && !warned {
                 self.warnUnreachableStatement(stmtId: statement)
                 warned = true
@@ -3266,6 +3268,7 @@ pub impl Comp {
             }
             Optional.None => {}
         }
+        if self.cur.recordCallTemplates { self.storeBuildingExecutableBlock(blockId: blkId, length: executableLength) }
         return <Result.Ok value=completion />
     }
 

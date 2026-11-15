@@ -613,6 +613,16 @@ impl Comp {
             Optional.None => {}
         }
     }
+    inout fn storeBuildingExecutableBlock(blockId: U64, length: U64) {
+        match self.sourceRecordingOwner() {
+            Optional.Some(v: val owner) => {
+                self.sourceFacts.activate(owner: owner)
+                self.sourceFacts.activeBuilder.data.executableBlockLengths[blockId] = length
+            }
+            Optional.None => {}
+        }
+    }
+
     inout fn storeBuildingSemanticStmtCompletion(stmtId: U64, fact: SemanticExpressionCompletion) -> Result[(), CompileDiagnostic] {
         self.sourceFacts.activate(owner: fact.owner)
         // This is the sole statement publication entry. A direct transfer

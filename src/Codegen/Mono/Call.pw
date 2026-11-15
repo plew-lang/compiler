@@ -7238,6 +7238,27 @@ pub impl Comp {
         } else {
             give <Optional.None />
         }
+        if self.cur.checkedLocalStorage.isSome() {
+            match owner {
+                Optional.Some(v: val prepared) => {
+                    match prepared.executableBlockLength(blockId: blkId) {
+                        Optional.Some(v: val length) => {
+                            if length > self.blockStmtCount(blkId: blkId) {
+                                return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "checked block has an invalid execution range", failureDomain: <FailureDomain.Internal />) />
+                            }
+                            val mark = self.scopeMark()
+                            for index in 0U64..<length {
+                                try self.scanStmtInsts(stmtId: self.blockStmtAt(blkId: blkId, index: index))
+                            }
+                            self.popLocals(mark: mark)
+                            return <Result.Ok value=() />
+                        }
+                        Optional.None => {}
+                    }
+                }
+                Optional.None => {}
+            }
+        }
         val mark: U64 = self.scopeMark()
         mut val i: U64 = 0
         while i < self.blockStmtCount(blkId: blkId) {

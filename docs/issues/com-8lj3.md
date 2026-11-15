@@ -152,3 +152,7 @@ Routed local arguments and closure captures with a recorded Let identity now rej
 **2026-11-15T14:36:58Z**
 
 For checked ordinary bodies, Make and Array finalization now prepares children in the same saved SemanticAggregate order used by parametric Mid and uses that aggregate for conversion publication. Non-published forms retain their old path. Twelve lazy controls passed, including enum and generic field defaults, contextual constructions, nested aggregates and non-continuation. Same-source diagnostic AOT LLVM matched 715af294e50a70c69ab00956734b9a3c533d7409d67c8bdc3c16d2f482e375bf. Residual child traversal and block/branch scheduling still remain.
+
+**2026-11-15T14:52:39Z**
+
+Record retains the executable prefix of each checked source block; routed finalization consumes it without rechecking completion one statement at a time. Empty or unrecorded synthetic ranges keep the old path. This records the prefix into the existing statement pool, not a copy of the statement sequence. Native control verifies the terminating analytical loop is retained and its unreachable suffix is excluded. Six lazy controls passed and full same-source AOT LLVM matched 288a7d941cc9b2045d45928f961b55f43bdc38bfd2d2fa81827201464db5c8ad. Mid building and finalization still need a shared admission path for checked blocks and operand/branch topology remains navigated by source.
