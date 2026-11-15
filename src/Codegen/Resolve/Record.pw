@@ -1482,6 +1482,7 @@ pub impl Comp {
         while index < conditions.len {
             val clause = self.conditionClauseAt(conditions: conditions, index: index)
             try self.recordExpr(exprId: clause.value)
+            try self.recordControlOperandCall(exprId: clause.value)
             if clause.isBinding {
                 try self.checkEnumPatternSubject(scrut: clause.value, pattern: clause.pattern)
                 try self.checkPatternBinds(a: clause.pattern)
@@ -3182,6 +3183,7 @@ pub impl Comp {
             Stmt.Panic(val msg, offset: _) => { try self.recordExpr(exprId: msg) }
             Stmt.Give(val value) => {
                 try self.recordExpr(exprId: value, expectedTerm: expectedTerm, needsValue: explicitResult)
+                try self.recordControlOperandCall(exprId: value)
             }
             Stmt.Break(offset: _) => {}
             Stmt.Continue(offset: _) => {}

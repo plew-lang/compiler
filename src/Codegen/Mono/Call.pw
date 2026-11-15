@@ -6993,6 +6993,17 @@ pub impl Comp {
         return self.prepareValueContinuation(source: <CallArgumentSource.Expression exprId=exprId />)
     }
 
+    inout fn checkedControlOperand(exprId: U64) -> Result[CallArgumentSource, CompileDiagnostic] {
+        if self.cur.checkedLocalStorage.isSome() {
+            val facts = try self.preparedBodyFacts(bodyId: self.cur.bodyId, globalInitializerTarget: self.cur.globalInitializerTarget)
+            match facts.controlOperandCall(exprId: exprId) {
+                Optional.Some(v: val site) => { return <Result.Ok value=<CallArgumentSource.PriorCallResult exprId=exprId siteKey=site /> /> }
+                Optional.None => {}
+            }
+        }
+        return <Result.Ok value=<CallArgumentSource.Expression exprId=exprId /> />
+    }
+
     inout fn prepareValueContinuation(source: CallArgumentSource) -> Result[Bool, CompileDiagnostic] {
         val exprId = self.callArgumentExprId(source: source)
         val completion = if self.cur.bodyId == 0U64 {
@@ -7013,7 +7024,8 @@ pub impl Comp {
         mut val index = 0U64
         while index < conditions.len {
             val clause = self.conditionClauseAt(conditions: conditions, index: index)
-            if !(try self.scanValueContinuation(exprId: clause.value)) {
+            val operand = try self.checkedControlOperand(exprId: clause.value)
+            if !(try self.prepareValueContinuation(source: operand)) {
                 self.popLocals(mark: mark)
                 // Earlier clauses can still fail before reaching this value.
                 if index > 0U64 { try self.scanBlockInsts(blkId: elseBlk) }
@@ -7251,7 +7263,7 @@ pub impl Comp {
                 }
             }
             Stmt.Panic(val msg, val offset) => { try self.scanExprInsts(exprId: msg) }
-            Stmt.Give(val value) => { try self.scanExprInsts(exprId: value) }
+            Stmt.Give(val value) => { try self.prepareCheckedCallOperand(source: try self.checkedControlOperand(exprId: value)) }
             Stmt.Break(offset: _) => {}
             Stmt.Continue(offset: _) => {}
         }

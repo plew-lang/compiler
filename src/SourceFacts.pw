@@ -613,6 +613,24 @@ impl Comp {
             Optional.None => {}
         }
     }
+    inout fn recordControlOperandCall(exprId: U64) -> Result[(), CompileDiagnostic] {
+        if self.cur.recordCallTemplates {
+            match (try self.callArgumentSource(exprId: exprId)) {
+                CallArgumentSource.PriorCallResult(exprId: _, siteKey: val site) => {
+                    match self.sourceRecordingOwner() {
+                        Optional.Some(v: val owner) => {
+                            self.sourceFacts.activate(owner: owner)
+                            self.sourceFacts.activeBuilder.data.controlOperandCalls[exprId] = site
+                        }
+                        Optional.None => {}
+                    }
+                }
+                _ => {}
+            }
+        }
+        return <Result.Ok value=() />
+    }
+
     inout fn storeBuildingValueRegion(exprId: U64, region: SourceValueRegion) {
         match self.sourceRecordingOwner() {
             Optional.Some(v: val owner) => {
