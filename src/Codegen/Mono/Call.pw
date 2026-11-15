@@ -2757,18 +2757,6 @@ pub impl Comp {
         return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "source value conversion lacks recorded evidence") />
     }
 
-    inout fn recordedStorageValueType(facts: PreparedSemanticFacts, function: U64, expression: U64) -> Result[RecordedStorageValueType, CompileDiagnostic] {
-        val fact = match facts.expression(exprId: expression) {
-            Optional.Some(v: val fact) => fact
-            Optional.None => { return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: expression), msg: "checked storage has no initializer type", failureDomain: <FailureDomain.Internal />) /> }
-        }
-        val template = try self.callTemplateForSourceBody(fnIdx: function, exprId: expression)
-        match template.kind {
-            CallTemplateKind.Pending | CallTemplateKind.ExpectedValue => { return <Result.Ok value=<RecordedStorageValueType.Term ref=fact.term /> /> }
-            _ => { return <Result.Ok value=<RecordedStorageValueType.Recipe id=template.resultTypeRecipe /> /> }
-        }
-    }
-
     inout fn publishStorageConversion(stmtId: U64, exprId: U64, sourceRef: U64, targetRef: U64) -> Result[(), CompileDiagnostic] {
         val conversion = try self.finalValueConversion(sourceRef: sourceRef, targetRef: targetRef, exprId: exprId)
         self.putFinalStorage(fact: <FinalStorageResolution bodyId=self.currentBodyInstanceId() stmtId=stmtId sourceTypeRef=sourceRef targetTypeRef=targetRef conversion=self.freezeValueConversionProof(proof: conversion) />)

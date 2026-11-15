@@ -398,10 +398,9 @@ impl CompilerSession {
         mut val storage: Dictionary[U64, CheckedLocalStorageRequest] = [:]
         mut val storageOrder: Array[U64] = []
         if collectStorage && body.storageOrder.len != 0U64 {
-            val facts = try self.compiler.preparedFunctionSemanticFacts(fnIdx: function)
             for index in 0U64..<body.storageOrder.len {
-                val statementIndex = self.compiler.mid.storageStatements[body.storageOrder.start + index]
-                val statement = self.compiler.mid.statements[statementIndex]
+                val initialization = self.compiler.mid.storageStatements[body.storageOrder.start + index]
+                val statement = self.compiler.mid.statements[initialization.statement]
                 if (statement.tag != 1U64 && statement.tag != 9U64) || statement.value == 0U64 {
                     return <Result.Err error=self.compiler.diagnosticAt(offset: 0U64, msg: "checked Mid storage order points to a non-initialization", failureDomain: <FailureDomain.Internal />) />
                 }
@@ -414,8 +413,7 @@ impl CompilerSession {
                 if local.sourceBinding.isUnproved() || storage.contains(key: value.sourceStmt) {
                     return <Result.Err error=self.compiler.diagnosticAt(offset: local.sourceNameStart, msg: "checked Mid storage order has an invalid binding occurrence", failureDomain: <FailureDomain.Internal />) />
                 }
-                val valueType = try self.compiler.recordedStorageValueType(facts: facts, function: function, expression: value.exprId)
-                storage[value.sourceStmt] = <CheckedLocalStorageRequest expression=value.exprId declarationTarget=local.sourceNameStart binding=local.sourceBinding valueType=valueType />
+                storage[value.sourceStmt] = <CheckedLocalStorageRequest expression=value.exprId declarationTarget=local.sourceNameStart binding=local.sourceBinding valueType=initialization.valueType />
                 storageOrder.append(value.sourceStmt)
             }
         }

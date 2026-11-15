@@ -1,7 +1,7 @@
 use @Std/Io only { write }
 use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
 use /SourceAccess only { SourceAccess }
-use /Ir only { Expr, Stmt }
+use /Ir only { Expr, Stmt, RecordedStorageValueType }
 use /Mid only { prepareMidSourceState, MidBuildState, MidBuildError, MidOperand, MidRvalue, MidStatement, addMidLocal, midLocalForBinding, midPlaceForRecordedIdent, buildMidLet, buildParametricMidBody }
 
 fn verifyStorageEmissionOrder() {
@@ -25,9 +25,22 @@ fn verifyStorageEmissionOrder() {
         }
     }
     if blockOrder.count() != 2U64 || body.storageOrder.len != 2U64 { panic("missing local storage order") }
-    if c.mid.storageStatements[body.storageOrder.start] != blockOrder[1U64] ||
-        c.mid.storageStatements[body.storageOrder.start + 1U64] != blockOrder[0U64] {
+    val branch = c.mid.storageStatements[body.storageOrder.start]
+    val after = c.mid.storageStatements[body.storageOrder.start + 1U64]
+    if branch.statement != blockOrder[1U64] || after.statement != blockOrder[0U64] {
         panic("local storage order follows block layout instead of initialization")
+    }
+    match branch.valueType {
+        RecordedStorageValueType.Recipe(id: val recipe) => {
+            if recipe == 0U64 { panic("call initializer has no checked result recipe") }
+        }
+        _ => { panic("call initializer lost its result recipe") }
+    }
+    match after.valueType {
+        RecordedStorageValueType.Term(ref: val term) => {
+            if term == 0U64 { panic("literal initializer has no checked term") }
+        }
+        _ => { panic("literal initializer acquired a call recipe") }
     }
 }
 

@@ -100,3 +100,7 @@ Canonical storage order now indexes the emitted initialization instructions dire
 **2026-11-15T13:21:40Z**
 
 Written call preparation now walks the retained argument rows directly and carries the same selected template into descriptor production. It no longer creates a transient AST argument range for that walk or reopens the selection after it. The scanner still supplies execution order and receiver/proof preparation. Ten lazy controls passed, including default evaluation order, writeback and trait views. Full same-source diagnostic AOT LLVM matched 882cea2b1aef5e7b848d93e7fac22eabcd056b9c05e29c4dbeacf4fc9ad75f81. Follow-up: move the storage source recipe admission to the checked Mid initialization boundary and index exact call-result producers; preserve first diagnostic ordering while moving production.
+
+**2026-11-15T13:26:58Z**
+
+Ordinary local initialization now retains its checked source term or selected result recipe alongside the canonical instruction index. Finalization reads this payload without reopening the expression/template. The native binding-identity fixture distinguishes a call initializer recipe from a literal term in retained emission order. Five lazy controls passed and same-source diagnostic AOT LLVM matched 33c458dcb4cda8a415e579f30e977d128ac2c0044500ff92bf704a68421b3d99. The recipe already carries CallSiteKey and source-expression navigation. Producer scheduling still uses the residual walk. Preserve receiver/argument dependencies, descriptor-only demand and diagnostic ordering when switching the scheduler.
