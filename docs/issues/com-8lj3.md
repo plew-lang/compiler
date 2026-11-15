@@ -320,3 +320,7 @@ Selected index reads no longer allocate a temporary argument range. Closed templ
 **2026-11-15T19:12:25Z**
 
 Nested try and await now prepare the saved operand call before publishing the try conversion or await descriptor. Unrecorded operand shapes and bodies outside this routing keep their original preparation. Six lazy controls, two AOT controls, and full same-source compiler LLVM matched. Link retried from the same object after freeing superseded diagnostic executables. No optimized timing claim.
+
+**2026-11-15T19:15:39Z**
+
+Casts in local initializers and nested expressions use the saved producer call before replaying the existing cast target proof and registering layout. Seven lazy cast fixtures, a direct and nested call-cast order probe, two AOT controls, and full same-source AOT LLVM matched. Shapes without a saved call still use residual operand preparation. No optimized timing claim.

@@ -2693,6 +2693,14 @@ fn midRecordedStorageValueType(c: inout Comp, facts: PreparedSemanticFacts, func
                 return <Result.Ok value=<RecordedStorageValueType.ShortCircuit ref=fact.term lhs=lhs rhs=rhs /> />
             }
         }
+        Expr.Cast(operand: val input, tyStart: _, tyLen: _, ty: val written) => {
+            match facts.valueOperandCall(exprId: input) {
+                Optional.Some(v: val site) => {
+                    return <Result.Ok value=<RecordedStorageValueType.Cast ref=fact.term operand=<CallArgumentSource.PriorCallResult exprId=input siteKey=site /> written=written /> />
+                }
+                Optional.None => {}
+            }
+        }
         Expr.Try(expr: val input) => {
             val source: CallArgumentSource = match facts.valueOperandCall(exprId: input) {
                 Optional.Some(v: val site) => <CallArgumentSource.PriorCallResult exprId=input siteKey=site />

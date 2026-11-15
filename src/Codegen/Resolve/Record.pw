@@ -2720,6 +2720,7 @@ pub impl Comp {
                     val operandContext = try self.castLiteralContextTerm(operand: operand, targetTerm: castTarget)
                     try self.recordExpr(exprId: operand, chainHoleRef: chainHoleRef, expectedTerm: operandContext)
                 }
+                try self.recordValueOperandCall(exprId: operand)
                 self.recordSemanticExprTerm(exprId: exprId, term: castTarget)
                 val occurrence = self.authoredCastTargets.getOr(key: exprId, fallback: 0U64)
                 self.recordAuthoredCompositeOrigin(exprId: exprId, term: castTarget, occurrence: occurrence)

@@ -568,6 +568,7 @@ pub enum RecordedStorageValueType {
     Constant(ref: U64)
     Binding(ref: U64, rootExpression: U64)
     Projection(ref: U64, root: CallArgumentSource)
+    Cast(ref: U64, operand: CallArgumentSource, written: U64)
     Try(ref: U64, operand: CallArgumentSource)
     Await(ref: U64, operand: CallArgumentSource)
     ShortCircuit(ref: U64, lhs: U64, rhs: U64)

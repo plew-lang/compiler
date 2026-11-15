@@ -6689,26 +6689,8 @@ pub impl Comp {
                 }
             }
             Expr.Cast(val operand, tyStart: _, tyLen: _, val ty) => {
-                try self.scanExprInsts(exprId: operand)
-                val occurrenceId = self.authoredCastTargets.getOr(key: exprId, fallback: 0U64)
-                val bodyId = self.currentBodyInstanceId()
-                if occurrenceId != 0U64 && bodyId != 0U64 {
-                    val occurrence = try self.signatureOccurrence(id: occurrenceId)
-                    val facts = try self.preparedBodyFacts(bodyId: bodyId, globalInitializerTarget: self.cur.globalInitializerTarget)
-                    val saved = match facts.castTargetProof(exprId: exprId) {
-                        Optional.Some(v: val proof) => proof,
-                        Optional.None => { return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "cast target has no saved annotation proof", failureDomain: <FailureDomain.Internal />) /> },
-                    }
-                    if saved.occurrence != occurrenceId || saved.recipe != occurrence.recipe || occurrence.term != ty {
-                        return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "cast target has a foreign annotation proof", failureDomain: <FailureDomain.Internal />) />
-                    }
-                    mut val memo: Dictionary[U64, AuthoredRecipeRead] = [:]
-                    val result = (try self.readAuthoredTypeRecipe(proofs: saved.proofs, recipe: saved.recipe, environment: self.cur.bodyEnvironment, memo: inout memo, context: <SignatureRecipeContext.Concrete />)).term
-                    self.recordBodyTypeTermResult(bodyId: bodyId, source: saved.sourceTerm, result: result)
-                }
-                // A nested cast can own an intermediate Mid temporary even
-                // when no binding or call independently roots its type.
-                try self.collectRecordedValueLayout(exprId: exprId)
+                try self.prepareCheckedCallOperand(source: try self.checkedValueOperand(exprId: operand))
+                return self.prepareCast(exprId: exprId, written: ty)
             }
             Expr.OptChain(val base, val cont) => {
                 try self.scanExprInsts(exprId: base)
@@ -6945,7 +6927,7 @@ pub impl Comp {
         }
         val ref = try self.groundCheckedLocalStorageTarget(stmtId: stmtId, request: request, bodyId: self.cur.bodyId)
         val sourceRef = match request.valueType {
-            RecordedStorageValueType.Aggregate(ref: val term, aggregate: _, writtenConstruction: _) | RecordedStorageValueType.Constant(ref: val term) | RecordedStorageValueType.Binding(ref: val term, rootExpression: _) | RecordedStorageValueType.Projection(ref: val term, root: _) | RecordedStorageValueType.Try(ref: val term, operand: _) | RecordedStorageValueType.Await(ref: val term, operand: _) | RecordedStorageValueType.ShortCircuit(ref: val term, lhs: _, rhs: _) | RecordedStorageValueType.Term(ref: val term) | RecordedStorageValueType.Region(ref: val term, region: _) => try self.groundAndRecordBodyType(ref: term, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.cur.bodyId)
+            RecordedStorageValueType.Aggregate(ref: val term, aggregate: _, writtenConstruction: _) | RecordedStorageValueType.Constant(ref: val term) | RecordedStorageValueType.Binding(ref: val term, rootExpression: _) | RecordedStorageValueType.Projection(ref: val term, root: _) | RecordedStorageValueType.Cast(ref: val term, operand: _, written: _) | RecordedStorageValueType.Try(ref: val term, operand: _) | RecordedStorageValueType.Await(ref: val term, operand: _) | RecordedStorageValueType.ShortCircuit(ref: val term, lhs: _, rhs: _) | RecordedStorageValueType.Term(ref: val term) | RecordedStorageValueType.Region(ref: val term, region: _) => try self.groundAndRecordBodyType(ref: term, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.cur.bodyId)
             RecordedStorageValueType.Recipe(id: val recipe) => try self.groundSemanticTypeRecipeForBody(recipeId: recipe, bodyId: self.cur.bodyId, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, requireProducer: true)
         }
         val targetRef = try self.groundAndRecordBodyType(ref: ref, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.cur.bodyId)
@@ -6957,6 +6939,28 @@ pub impl Comp {
     // finalization follows only normal continuation after evaluating a value.
     inout fn scanValueContinuation(exprId: U64) -> Result[Bool, CompileDiagnostic] {
         return self.prepareValueContinuation(source: <CallArgumentSource.Expression exprId=exprId />)
+    }
+
+    inout fn prepareCast(exprId: U64, written: U64) -> Result[(), CompileDiagnostic] {
+        val occurrenceId = self.authoredCastTargets.getOr(key: exprId, fallback: 0U64)
+        val bodyId = self.currentBodyInstanceId()
+        if occurrenceId != 0U64 && bodyId != 0U64 {
+            val occurrence = try self.signatureOccurrence(id: occurrenceId)
+            val facts = try self.preparedBodyFacts(bodyId: bodyId, globalInitializerTarget: self.cur.globalInitializerTarget)
+            val saved = match facts.castTargetProof(exprId: exprId) {
+                Optional.Some(v: val proof) => proof,
+                Optional.None => { return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "cast target has no saved annotation proof", failureDomain: <FailureDomain.Internal />) /> },
+            }
+            if saved.occurrence != occurrenceId || saved.recipe != occurrence.recipe || occurrence.term != written {
+                return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "cast target has a foreign annotation proof", failureDomain: <FailureDomain.Internal />) />
+            }
+            mut val memo: Dictionary[U64, AuthoredRecipeRead] = [:]
+            val result = (try self.readAuthoredTypeRecipe(proofs: saved.proofs, recipe: saved.recipe, environment: self.cur.bodyEnvironment, memo: inout memo, context: <SignatureRecipeContext.Concrete />)).term
+            self.recordBodyTypeTermResult(bodyId: bodyId, source: saved.sourceTerm, result: result)
+        }
+        // A nested cast can own an intermediate Mid temporary even
+        // when no binding or call independently roots its type.
+        return self.collectRecordedValueLayout(exprId: exprId)
     }
 
     inout fn checkedValueOperand(exprId: U64) -> Result[CallArgumentSource, CompileDiagnostic] {
@@ -7076,6 +7080,10 @@ pub impl Comp {
                     if layout != 0U64 { try self.scanType(ref: layout) }
                 }
                 return self.finalizeBodyAggregate(bodyId: self.cur.bodyId, aggregate: aggregate)
+            }
+            RecordedStorageValueType.Cast(ref: _, operand: val operand, written: val written) => {
+                try self.prepareCheckedCallOperand(source: operand)
+                return self.prepareCast(exprId: request.expression, written: written)
             }
             RecordedStorageValueType.Try(ref: _, operand: val operand) => {
                 try self.prepareCheckedCallOperand(source: operand)
