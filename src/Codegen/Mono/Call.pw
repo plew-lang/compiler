@@ -6787,28 +6787,43 @@ pub impl Comp {
             Optional.Some(v: val binding) => binding
             Optional.None => { return <Result.Err error=self.diagnosticAt(offset: self.stmtPrincipalOffset(sid: stmtId), msg: "internal error: final local has no checked source binding") /> }
         }
-        val ref = match binding.annotation {
+        mut val authoredTerm = 0U64
+        match binding.annotation {
             Optional.Some(v: val annotation) => {
                 val annotationId = annotationOccurrence.unwrapOr(fallback: 0U64)
                 val occurrence = try self.signatureOccurrence(id: annotationId)
                 if annotation.occurrence != annotationId || annotation.recipe != occurrence.recipe || occurrence.term != ty {
                     return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "final local has a foreign annotation proof", failureDomain: <FailureDomain.Internal />) />
                 }
-                mut val memo: Dictionary[U64, AuthoredRecipeRead] = [:]
-                val result = (try self.readAuthoredTypeRecipe(proofs: annotation.proofs, recipe: annotation.recipe, environment: self.cur.bodyEnvironment, memo: inout memo, context: <SignatureRecipeContext.Concrete />)).term
-                self.recordBodyTypeTermResult(bodyId: bodyId, source: ty, result: result)
-                self.recordBodyTypeTermResult(bodyId: bodyId, source: binding.typeTerm, result: result)
-                give result
+                authoredTerm = occurrence.term
             }
             Optional.None => {
                 if annotationOccurrence.isSome() {
                     return <Result.Err error=self.diagnosticAt(offset: self.stmtPrincipalOffset(sid: stmtId), msg: "final local has no saved annotation proof", failureDomain: <FailureDomain.Internal />) />
                 }
-                give try self.groundAndRecordBodyType(ref: binding.typeTerm, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: bodyId)
             }
         }
+        val ref = try self.groundCheckedLocalBinding(binding: binding, authoredTerm: authoredTerm)
         val info = self.typeInfoOfRef(ref: ref)
         return <Result.Ok value=<LetEff start=info.nameStart len=info.nameLen arr=info.kind == 3 ty=ref /> />
+    }
+
+    // The checked binding owns the source term and the annotation proof.
+    // Concrete preparation supplies the current body environment.
+    inout fn groundCheckedLocalBinding(binding: SourceBindingFact, authoredTerm: U64) -> Result[U64, CompileDiagnostic] {
+        val bodyId = self.currentBodyInstanceId()
+        match binding.annotation {
+            Optional.Some(v: val annotation) => {
+                mut val memo: Dictionary[U64, AuthoredRecipeRead] = [:]
+                val result = (try self.readAuthoredTypeRecipe(proofs: annotation.proofs, recipe: annotation.recipe, environment: self.cur.bodyEnvironment, memo: inout memo, context: <SignatureRecipeContext.Concrete />)).term
+                self.recordBodyTypeTermResult(bodyId: bodyId, source: authoredTerm, result: result)
+                self.recordBodyTypeTermResult(bodyId: bodyId, source: binding.typeTerm, result: result)
+                return <Result.Ok value=result />
+            }
+            Optional.None => {
+                return self.groundAndRecordBodyType(ref: binding.typeTerm, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: bodyId)
+            }
+        }
     }
 
     // Record has already checked source syntax and types. Executable

@@ -32,3 +32,7 @@ Scenario inventory: prove the frozen local initialization retains its exact sour
 **2026-11-15T12:00:10Z**
 
 First increment: canonical StorageBoundary retains the exact initializer expression ID along with statement ID, destination type and operand. Existing mid_binding_identity extended with two distinct real initializers; native baseline fixed carrier exits 134 with canonical storage lost its initializer identity; rebuilt diagnostic carrier exits 0 with binding-identity. The finalizer still uses the existing dependency discovery path. Next wire the saved occurrence and binding origin through the ordinary local descriptor producer and verify actual consumer use.
+
+**2026-11-15T12:04:08Z**
+
+Concrete local type application is now separate from the legacy source-statement adapter. The adapter still checks exact annotation occurrence, recipe and authored term; groundCheckedLocalBinding applies checked evidence under the active body environment. The diagnostic -O0 carrier rebuilt and passed lazy local_associated_projection_bindings, mid_default_argument_result_context, generic_array_ret_infer and mid_storage_optional_conversion. The larger compiler-internal call_template_result_arguments lazy probe was stopped by the no-progress watchdog and is not counted. Next supply the checked binding and saved authored term from the Mid storage request. No performance claim.
