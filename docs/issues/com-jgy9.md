@@ -1,6 +1,6 @@
 ---
 id: com-jgy9
-status: in_progress
+status: closed
 deps: [com-1a6q]
 links: []
 created: 2026-11-15T06:28:19Z
@@ -89,3 +89,13 @@ before closing conversions. This also keeps destructor demand through
 descriptor. Other conversion entry points retain their execution policy.
 Fixed-carrier check and LLVM generation passed. The fresh-box execution control,
 independent re-review and performance comparison remain pending.
+
+At a6d1ed62 the [fresh boxing control](../../tests/fixtures/run/final_call_descriptor_conversion_demand.pw)
+asserts an empty execution queue and frozen conversion proof after descriptor
+preparation. Explicit conversion demand queues witness and adapter once.
+Independent re-review found no remaining structural blocker. The
+[fixed-source comparison](../../../evidence/rejection-domains/diagnostic-domain-implementation/trait-receiver-admission/phase3-direct-demand-boxing.json)
+gave 8.634 s to 8.648 s (two faster pairs, two slower, identical LLVM in all
+ten runs), ten passing native controls, matching lazy boxed-return output, and
+a passing standard generation run. Formal fixed point/performance remains
+with com-p5um.
