@@ -304,3 +304,7 @@ Nested aggregate preparation now uses each sealed element occurrence and its sav
 **2026-11-15T18:56:58Z**
 
 A local await initializer with a recorded Promise-producing call now carries that exact operand into checked Mid storage preparation. The consumer prepares the call first and uses the existing await publication, preserving suspension and layout semantics. Six async lazy controls passed; three representative async AOT fixtures and the same full compiler source produced matching LLVM (full SHA-256 2ee3e0d71049d1058aa9fe5f2967dd5f27237a458813b66460d7f415e498fd02). Await of an already bound Promise keeps existing behavior. A diagnostic link hit ENOSPC; freeing two superseded scratch binaries allowed the same object to link. No optimized timing claim.
+
+**2026-11-15T19:00:26Z**
+
+Method-shaped index reads now pass the already selected template directly to shared method preparation. The existing AST compatibility rewrite and place/write paths remain. Seven lazy index/evaluation controls passed; three representative AOT index fixtures and the full same compiler source produced matching LLVM (full SHA-256 880173b27dbd74b10a2b3e5af3736e0a7e902e871a275ed1dac18e0c92f2f44d). No optimized timing claim. Remaining: receiver and key shapes without saved dependencies, and the AST compatibility rewrite.

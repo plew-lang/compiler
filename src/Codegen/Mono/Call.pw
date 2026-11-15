@@ -6568,6 +6568,19 @@ pub impl Comp {
         return self.callTemplateForCurrentBody(exprId: exprId)
     }
 
+    inout fn prepareMethodCall(exprId: U64, receiver: U64, arguments: ArgRange, template: CallTemplate) -> Result[(), CompileDiagnostic] {
+        if self.authoredExpressionTypeSlots.contains(key: exprId) {
+            val bodyId = self.currentBodyInstanceId()
+            val written = self.syntheticCallReceiverTerm(exprId: exprId, fallback: 0U64)
+            try self.replayExpressionTypeSlotProofs(exprId: exprId, written: self.arena.typeAt(index: written).args, term: template.receiverTypeTerm, bodyId: bodyId, sourceBodyId: bodyId)
+        }
+        try self.prepareSelectedReceiver(expression: receiver, template: template)
+        try self.scanSelectedCallArguments(template: template, authored: arguments)
+        val finalIdx = try self.resolveBodyCallee(exprId: exprId, template: template)
+        try self.registerMethodInst(callId: exprId, finalIdx: finalIdx)
+        return self.finalizeAccessWriteFacets(parentExpr: exprId)
+    }
+
     inout fn scanExprInsts(exprId: U64) -> Result[(), CompileDiagnostic] {
         return self.scanExprInstsWithTemplate(exprId: exprId, selected: 0U64)
     }
@@ -6659,16 +6672,7 @@ pub impl Comp {
             }
             Expr.Method(val recv, nameStart: _, nameLen: _, val args) => {
                 val template = try self.finalizationCallTemplate(exprId: exprId, selected: selected)
-                if self.authoredExpressionTypeSlots.contains(key: exprId) {
-                    val bodyId = self.currentBodyInstanceId()
-                    val written = self.syntheticCallReceiverTerm(exprId: exprId, fallback: 0U64)
-                    try self.replayExpressionTypeSlotProofs(exprId: exprId, written: self.arena.typeAt(index: written).args, term: template.receiverTypeTerm, bodyId: bodyId, sourceBodyId: bodyId)
-                }
-                try self.prepareSelectedReceiver(expression: recv, template: template)
-                try self.scanSelectedCallArguments(template: template, authored: args)
-                val finalIdx: U64 = (try self.resolveBodyCallee(exprId: exprId, template: template))
-                try self.registerMethodInst(callId: exprId, finalIdx: finalIdx)
-                try self.finalizeAccessWriteFacets(parentExpr: exprId)
+                return self.prepareMethodCall(exprId: exprId, receiver: recv, arguments: args, template: template)
             }
             Expr.Field(val base, val nameStart, val nameLen) => { try self.scanExprInsts(exprId: base) }
             Expr.Index(val base, val index) => {
@@ -6701,7 +6705,7 @@ pub impl Comp {
                     val label: Bind = self.kwSpan(kw: "key", kwLen: 3U64)
                     val args: ArgRange = self.pushArgs(args: [<Arg expr=index isInout=false labelStart=label.nameStart labelLen=label.nameLen hasLabel=true />])
                     self.arena.exprs.set(i: exprId, value: <Expr.Method recv=base nameStart=selectedName.nameStart nameLen=selectedName.nameLen args=args />)
-                    return self.scanExprInstsWithTemplate(exprId: exprId, selected: selected)
+                    return self.prepareMethodCall(exprId: exprId, receiver: base, arguments: args, template: template)
                 }
                 try self.scanExprInsts(exprId: base)
                 try self.scanExprInsts(exprId: index)
