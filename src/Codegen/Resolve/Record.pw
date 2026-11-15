@@ -1702,19 +1702,23 @@ pub impl Comp {
         val candidateIndex: U64 = self.accessCandidateIndex(readExpr: readExpr)
         if candidateIndex >= self.decls.accessCandidateCount() { return <Result.Ok value=() /> }
         val parent: CallSiteKey = (try self.templateCallSiteKey(fnIdx: self.cur.checkFn, exprId: parentExpr))
+        val bucket = parent.lookupHash()
+        mut val uses = self.accessUses.getOr(key: bucket, fallback: [])
         mut val i: U64 = 0U64
-        while i < self.accessUses.count() {
-            val prior: AccessUse = self.accessUses[i]
+        while i < uses.count() {
+            val prior: AccessUse = uses[i]
             if prior.candidateIndex == candidateIndex && prior.role == role && prior.argIndex == argIndex && self.sameCallSiteKey(a: prior.parent, b: parent) {
                 if !semanticCompletionOwnersEqual(recorded: prior.sourceOwner, prepared: owner) {
                     return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: parentExpr), msg: "internal error: access use changed its source owner") />
                 }
-                self.accessUses.set(i: i, value: <AccessUse sourceOwner=owner candidateIndex=candidateIndex accessExpr=readExpr parent=parent role=role argIndex=argIndex parameterIndex=parameterIndex modeKnown=modeKnown write=write />)
+                uses.set(i: i, value: <AccessUse sourceOwner=owner candidateIndex=candidateIndex accessExpr=readExpr parent=parent role=role argIndex=argIndex parameterIndex=parameterIndex modeKnown=modeKnown write=write />)
+                self.accessUses[bucket] = uses
                 return <Result.Ok value=() />
             }
             i += 1U64
         }
-        self.accessUses.append(<AccessUse sourceOwner=owner candidateIndex=candidateIndex accessExpr=readExpr parent=parent role=role argIndex=argIndex parameterIndex=parameterIndex modeKnown=modeKnown write=write />)
+        uses.append(<AccessUse sourceOwner=owner candidateIndex=candidateIndex accessExpr=readExpr parent=parent role=role argIndex=argIndex parameterIndex=parameterIndex modeKnown=modeKnown write=write />)
+        self.accessUses[bucket] = uses
         return <Result.Ok value=() />
     }
 

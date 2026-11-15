@@ -4646,9 +4646,8 @@ pub impl Comp {
     // ordinary final-callable worklist, without a post-freeze name lookup.
     inout fn finalizeAccessWriteFacets(parentExpr: U64) -> Result[(), CompileDiagnostic] {
         val parent: CallSiteKey = (try self.currentCallSiteKey(exprId: parentExpr, siteIsStmt: false, slot: 0U64))
-        mut val useIndex: U64 = 0U64
-        while useIndex < self.accessUses.count() {
-            val use: AccessUse = self.accessUses[useIndex]
+        if self.accessUses.count() == 0U64 { return <Result.Ok value=() /> }
+        for use in self.accessUses.getOr(key: parent.lookupHash(), fallback: []) {
             if use.write && self.sameCallSiteKey(a: parent, b: use.parent) {
                 if use.candidateIndex < self.decls.accessCandidateCount() {
                     val writeExpr: U64 = self.decls.accessCandidateAt(index: use.candidateIndex).writeExpr
@@ -4663,7 +4662,6 @@ pub impl Comp {
                     }
                 }
             }
-            useIndex += 1U64
         }
         return <Result.Ok value=() />
     }
@@ -5256,12 +5254,11 @@ pub impl Comp {
     // Older access/input IDs remain valid for already prepared Mid bodies.
     // Joining selected calls does not reopen Index/IndexSet resolution.
     inout fn freezeFinalAccesses(start: U64 = 0U64) -> Result[(), CompileDiagnostic] {
+        if self.accessUses.count() == 0U64 { return <Result.Ok value=() /> }
         mut val parentIndex: U64 = start
         while parentIndex < self.arena.finalCalleeCount() {
             val parent: CallResolution = self.arena.finalCalleeAt(index: parentIndex)
-            mut val useIndex: U64 = 0U64
-            while useIndex < self.accessUses.count() {
-                val use = self.accessUses[useIndex]
+            for use in self.accessUses.getOr(key: parent.siteKey.lookupHash(), fallback: []) {
                 if self.sameCallSiteKey(a: parent.siteKey, b: use.parent) {
                     val facts = try self.preparedAccessUseFacts(use: use, parent: parent)
                     val readResolution: U64 = (try self.finalAccessReadResolution(bodyId: parent.bodyId, candidateIndex: use.candidateIndex, parent: parent))
@@ -5309,7 +5306,6 @@ pub impl Comp {
                         }
                     }
                 }
-                useIndex += 1U64
             }
             parentIndex += 1U64
         }

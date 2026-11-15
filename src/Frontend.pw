@@ -815,7 +815,8 @@ pub struct Comp {
     pub mut val sourceExpressionLimit: U64 = 0U64
     pub mut val globalCallTemplatesClosed: Bool = false
     pub mut val selectedGlobalTargets: Array[U64] = []
-    mut val accessUses: Array[AccessUse] = []
+    // The hash selects a bucket; consumers compare the complete parent key.
+    mut val accessUses: Dictionary[U64, Array[AccessUse]] = [:]
     pub mut val resolvingGlobalTypes: Array[U64] = []
     // ASan mode (`plewc --asan <file>`): the backend tags the module with the host target
     // triple and marks every DEFINED function `sanitize_address`, so a downstream
