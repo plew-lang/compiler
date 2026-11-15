@@ -1,7 +1,7 @@
 ---
 id: com-wka4
 status: open
-deps: []
+deps: [com-cpvo]
 links: [com-z4ns, com-0w38, com-amjl]
 created: 2026-11-06T17:52:13Z
 type: bug
