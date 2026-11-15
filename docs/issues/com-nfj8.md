@@ -35,3 +35,9 @@ No product repair/execution/GREEN in this audit. No language, derive policy, gen
 [Scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-source-queries.json) retains all main/mixed roles and normative grounds. Current type scanning/generic member/recorded-type dependency collection owns coherent Array/function/layout worksets and conditional query operations. Preserve exact legacy4-field context and source/canonical identities without hidden whole compiler access.
 
 Original audit-time independence does not waive this implementation admission. Preserve the original finite guarantee, actual callers/delegates, controls and excluded optional/new-feature scopes. Assignment is not product repair/GREEN.
+
+## Notes
+
+**2026-11-15T19:56:35Z**
+
+Performance evidence at eca80ef6: scanType compares all registered generic layouts for 14,544,675 of the 22,855,712 unequal-ID head comparisons in finalization. See meta evidence phase3-finalization-type-comparison-origins.json. Preserve ordered registration, derive and depth checks, first diagnostic and full structural identity when evaluating a candidate index. This measurement does not close or extend the API-boundary task.
