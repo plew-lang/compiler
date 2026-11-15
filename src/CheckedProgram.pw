@@ -10,7 +10,7 @@ use ./Mid/Build only { MidFunctionTemplates, MidBuildError }
 use ./Mid/Verify only { canonicalMidReachable }
 use ./Mid/DeclarationAccess only { DeclarationAccessAnalysis, DeclarationAccessNode }
 use ./PreparedProgram only { PreparedProgram, ProgramPreparationError, programPreparationDiagnostic }
-use ./Mid/Program only { MidExecutableRequests, MidExecutableProgram }
+use ./Mid/Program only { MidExecutableRequests, MidExecutableProgram, MidProgramError }
 use ./Mid/Prepare only { MidExecutableBody }
 use ./Mid/GlobalAccess only { analyzeMidGlobalAccess }
 use ./Mid/Ambient only { MidAmbientProgram }
@@ -348,12 +348,12 @@ impl CompilerSession {
         val instance = self.compiler.arena.bodyInstanceAt(index: bodyId - 1U64)
         mut val reached: Optional[Dictionary[U64, Bool]] = <Optional.None />
         if self.compiler.arena.bodyIsCallable(bodyId: bodyId) && instance.adapterTargetBodyId == 0U64 && instance.fnIdx < self.compiler.arena.functionCount() {
-            reached = <Optional.Some v=try self.reachedDirectCallsFor(function: instance.fnIdx) />
+            reached = <Optional.Some v=try self.reachedDirectCallsFor(function: instance.fnIdx, bodyId: bodyId) />
         }
         return self.compiler.requestFinalBody(bodyId: bodyId, requests: inout self.finalBodies, reachedDirectCalls: reached)
     }
 
-    inout fn reachedDirectCallsFor(function: U64) -> Result[Dictionary[U64, Bool], CompileDiagnostic] {
+    inout fn reachedDirectCallsFor(function: U64, bodyId: U64) -> Result[Dictionary[U64, Bool], CompileDiagnostic] {
         match self.reachedDirectCalls.get(key: function) {
             Optional.Some(v: val cached) => { return <Result.Ok value=cached /> }
             Optional.None => {}
@@ -362,8 +362,7 @@ impl CompilerSession {
         val built = self.templates.body(c: inout self.compiler, function: function)
         match built.error {
             MidBuildError.None => {}
-            MidBuildError.Frontend(diagnostic: val diagnostic) => { return <Result.Err error=diagnostic /> }
-            _ => { return <Result.Err error=self.compiler.diagnosticAt(offset: self.compiler.arena.functionAt(index: function).defOffset, msg: "cannot build checked Mid call demand", failureDomain: <FailureDomain.Internal />) /> }
+            _ => { return <Result.Err error=programPreparationDiagnostic(c: inout self.compiler, error: <ProgramPreparationError.Mid error=<MidProgramError.Build bodyId=bodyId error=built.error /> />) /> }
         }
         val body = self.compiler.mid.bodies[built.canonical.body - 1U64]
         val reached = canonicalMidReachable(arena: self.compiler.mid, body: body)

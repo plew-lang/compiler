@@ -82,3 +82,12 @@ point. Compatibility callers use the default policy. The fixed previous
 candidate accepted the changed sources and emitted LLVM. Native candidate
 execution, targeted demand assertions, and performance comparison remain
 pending. The residual scanner still traverses authored operands.
+
+Independent review at f7598453 found that an early Mid build error lost its
+normal diagnostic mapping. Use `programPreparationDiagnostic` with the
+existing Mid build error and instance identity. The candidate accepted the
+fixed source in check mode. Eight native fixtures passed on f7598453.
+On `mid_call_reached_completion`, final body scans fell from 46 to 42.
+Same-source compiler medians were 8.402 s to 8.370 s, with identical LLVM
+in all ten runs. This is a diagnostic comparison. Verify per-callee demand
+in both modes and re-review the diagnostic fix before closure.
