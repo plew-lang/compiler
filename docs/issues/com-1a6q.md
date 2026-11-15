@@ -49,3 +49,29 @@ argument evaluation recipe to the actual Mid call emission before choosing the
 migration: a selected signature alone does not establish that argument
 evaluation reaches the call. Keep this separate from the type/proof work done
 for trait methods and cleanup introduced during Mid elaboration.
+
+## Direct call handoff
+
+- [Call.pw](../../src/Codegen/Mono/Call.pw): `resolveBodyCallee` reads the
+  lexical `CallTemplate`. Its direct branch keeps the selected function,
+  receiver, type arguments, and proof, builds a concrete descriptor, and
+  enqueues the selected body. This is not a second source overload lookup.
+  The work to remove is the argument-range reconstruction and the dependence
+  of discovery on walking the source call node.
+- `scanExprInsts` currently builds an AST argument range from the template
+  pool, visits each argument, and then registers the enclosing call. Its
+  argument loop does not use the continuation gate used for conditions.
+  [Mid Build](../../src/Mid/Build.pw) instead orders template inputs by
+  `evaluationOrder`, evaluates the receiver and arguments, and emits a
+  template call terminator only if each input reaches its continuation.
+  An emitted call to a diverging callee has a different contract from an
+  outer call that was never emitted.
+- This establishes a difference between discovery and executable Mid, not
+  by itself a language bug. Determine which non-emitted calls still need
+  descriptor, validation or effect obligations. The direct-call migration must
+  preserve default-argument order, prior-call values, accessor writeback and
+  synthetic call identity, and demonstrate cut-off at a noncontinuing input
+  without dropping required diagnostics. Existing controls include
+  `default_argument_call_templates`, `call_template_result_arguments` and
+  `semantic_call_completion_boundary`; none alone proves that a non-emitted
+  outer call is excluded from executable demand.
