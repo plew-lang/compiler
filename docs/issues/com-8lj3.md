@@ -292,3 +292,7 @@ Related performance investigation: integer span classification and bit width now
 **2026-11-15T18:36:39Z**
 
 Related lexical preparation change: identifier resolution returns its immediately usable scope index with its stable target, so Record uses one lookup for both binding and type/capture recording. The direct receiver path keeps its existing capture lookup. Six lazy shadow/capture/global/projection controls and full same-source AOT LLVM matched. Timing not measured; a scratch link ran out of disk and was retried using the same IR after cleanup.
+
+**2026-11-15T18:47:53Z**
+
+Verify reuses the local index from its own identifier resolution for use-after-move checks. The old dedicated receiver lookup remains. Three rejection diagnostics and three lazy output controls matched, and same-source AOT LLVM matched acbb4de9182443f41113444ceb3ffb4f271178797d3b264dba4d4b2e25e06916. No optimized timing claim. This does not change storage dependency production.

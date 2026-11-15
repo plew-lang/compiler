@@ -509,13 +509,16 @@ pub impl Comp {
                 // value position: a bare type / primitive name reaching here is NOT a value
                 // (an assoc-fn receiver `Buffer.new()` / `I64.fromBytes(...)` is rerouted via
                 // verifyRecv) — so it is an undefined-identifier misuse (`val x = SomeType`).
-                // recordIdent stores the binding (value/fn/type-qual/undef) the backend reads;
-                // a non-generic body has no type params, so pass the funcs.count() sentinel.
-                val bindCode: I64 = self.recordIdent(id: id, start: start, len: len, tpFn: self.cur.checkFn)
-                try self.checkIdentifierValueBinding(binding: bindCode, offset: start)
+                val binding = self.recordIdentBinding(id: id, start: start, len: len, tpFn: self.cur.checkFn)
+                try self.checkIdentifierValueBinding(binding: binding.code, offset: start)
                 // use-after-move (spec/03): reading a local whose value was `move`d away.
                 if self.cur.verifyMovedIdx.count() > 0U64 {
-                    if self.verifyIsMoved(idx: self.localIndexByName(start: start, len: len)) {
+                    val index = match binding.localIndex {
+                        Optional.Some(v: val localIndex) => localIndex
+                        // The receiver has a dedicated binding target.
+                        Optional.None => self.localIndexByName(start: start, len: len)
+                    }
+                    if self.verifyIsMoved(idx: index) {
                         return <Result.Err error=self.diagnosticAt(offset: start, msg: "use of a value after it was moved (`move` transfers ownership away — the variable is dead; bind a fresh value to use it again) (spec/03)") />
                     }
                 }
