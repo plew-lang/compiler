@@ -260,3 +260,7 @@ Prepare storage conversion before destination layout registration, preserving th
 **2026-11-15T17:32:44Z**
 
 Parametric Mid retains terminating local initializers as dependency requests without destination or conversion. Finalization prepares them in the checked statement order, never publishes storage, and rejects a missing initializer request before scanning. Five lazy fixtures, the existing descriptor-only probe, and full same-source AOT LLVM matched. Initial linking hit disk exhaustion; reused the same verified LLVM, removed two stale diagnostic binaries and linked in separate object steps. Remaining shared preparation for nested operands is unchanged.
+
+**2026-11-15T17:35:21Z**
+
+Native mid_binding_identity now proves a terminating local initializer retains exactly one control-region dependency, no storage row, and the same statement/expression identity. Direct finalization rejects a missing dependency and prepares the valid request without publishing storage. The fixture compiled and ran to its expected output using the c6344b83 diagnostic carrier. No production source change.

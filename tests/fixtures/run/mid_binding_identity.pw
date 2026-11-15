@@ -120,9 +120,54 @@ fn verifyCheckedExecutionPrefix() {
     }
 }
 
+fn verifyTerminatingInitializerDependency() {
+    mut val c: Comp = <Comp />
+    analyzeFrontendForRequests(c: inout c,
+        input: <FrontendInput.Text path="terminating-initializer.pw" text="fn probe() {{ val unfinished = {{ while true {{}} give 1I64 }} }}" />,
+        sources: <SourceAccess stdRoot=[] />).unwrap()
+    val owner = c.arena.firstFunctionNamed(nameId: c.internBytes(s: "probe").nameId)
+    c.prepareLexicalBody(fnIdx: owner).unwrap()
+    val block = c.arena.functionAt(index: owner).body
+    val statement = c.blockStmtAt(blkId: block, index: 0U64)
+    val initializer = match c.arena.stmts[statement] {
+        Stmt.Let(init: val init, mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, annotationOccurrence: _) => init
+        _ => { panic("fixture is missing its terminating initializer") }
+    }
+    val built = buildParametricMidBody(c: inout c, fnIdx: owner)
+    if built.canonical.body == 0U64 { panic("missing canonical body") }
+    val body = c.mid.bodies[built.canonical.body - 1U64]
+    if body.storageOrder.len != 0U64 || body.terminatingInitializers.len != 1U64 {
+        panic("terminating initializer must retain only a dependency")
+    }
+    val dependency = c.mid.terminatingInitializers[body.terminatingInitializers.start]
+    if dependency.statement != statement || dependency.expression != initializer {
+        panic("terminating dependency lost its source occurrence")
+    }
+    match dependency.valueType {
+        RecordedStorageValueType.Region(ref: _, region: _) => {}
+        _ => { panic("terminating initializer lost its checked control region") }
+    }
+    c.cur.bodyFnIdx = owner
+    c.cur.bodyId = c.arena.registerBodyInstance(<BodyInstance fnIdx=owner environment=<InstanceEnvironment /> />)
+    c.cur.checkedLocalStorage = <Optional.Some v=[:] />
+    match c.scanBlockInsts(blkId: block) {
+        Result.Err(error: val diagnostic) => {
+            if diagnostic.message != "local initializer has no checked Mid dependency" { panic(diagnostic.message) }
+        }
+        Result.Ok(value: _) => { panic("missing terminating dependency was accepted") }
+    }
+    val request = <CheckedLocalStorageRequest expression=initializer declarationTarget=c.stmtPrincipalOffset(sid: statement) binding=<SourceBindingOrigin /> valueType=dependency.valueType producesStorage=false />
+    c.cur.checkedLocalStorage = <Optional.Some v=[statement: request] />
+    c.scanBlockInsts(blkId: block).unwrap()
+    if c.finalStorageIndex(bodyId: c.cur.bodyId, stmtId: statement) < c.arena.finalStorages.count() {
+        panic("terminating initializer unexpectedly published storage")
+    }
+}
+
 fn main() {
     verifyStorageEmissionOrder()
     verifyCheckedExecutionPrefix()
+    verifyTerminatingInitializerDependency()
     verifyStorageDiagnosticOrder()
     mut val c: Comp = <Comp />
     analyzeFrontendForRequests(c: inout c,
