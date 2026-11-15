@@ -284,3 +284,7 @@ Performance investigation reduced repeated callTemplateAt reads during source se
 **2026-11-15T18:15:06Z**
 
 Reuse the selected source template in the closed iteration protocol check and in generic bound checks that already read the row. This removes another navigation and full template read while keeping diagnostics and predicate order. Six lazy iteration controls, two unchanged --check rejections and same-source AOT LLVM matched. No timing claim for this increment.
+
+**2026-11-15T18:18:50Z**
+
+Related performance investigation: integer span classification and bit width now share one byte decoder; float width only reads the matching span once. Retained the legacy width fallback, primitive recognition and range checks. Seven lazy numeric/newtype controls, four unchanged rejection diagnostics and full same-source AOT LLVM matched. No timing claim; the sample does not yet attribute most inlined rangeEquals callers.

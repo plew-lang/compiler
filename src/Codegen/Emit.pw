@@ -8,49 +8,47 @@
 pub impl Comp {
 
     inout fn isPrimType(start: U64, len: U64) -> Bool {
-        if rangeEquals(bytes: self.arena.bytes, start: start, len: len, kw: "I8") { return true }
-        if rangeEquals(bytes: self.arena.bytes, start: start, len: len, kw: "I16") { return true }
-        if rangeEquals(bytes: self.arena.bytes, start: start, len: len, kw: "I32") { return true }
-        if rangeEquals(bytes: self.arena.bytes, start: start, len: len, kw: "I64") { return true }
-        if rangeEquals(bytes: self.arena.bytes, start: start, len: len, kw: "U8") { return true }
-        if rangeEquals(bytes: self.arena.bytes, start: start, len: len, kw: "U16") { return true }
-        if rangeEquals(bytes: self.arena.bytes, start: start, len: len, kw: "U32") { return true }
-        if rangeEquals(bytes: self.arena.bytes, start: start, len: len, kw: "U64") { return true }
-        if rangeEquals(bytes: self.arena.bytes, start: start, len: len, kw: "Bool") { return true }
-        if rangeEquals(bytes: self.arena.bytes, start: start, len: len, kw: "F32") { return true }
-        if rangeEquals(bytes: self.arena.bytes, start: start, len: len, kw: "F64") { return true }
-        return false
+        if len == 4U64 {
+            return rangeEquals(bytes: self.arena.bytes, start: start, len: len, kw: "Bool")
+        }
+        return self.isIntType(start: start, len: len) || self.isFloatType(start: start, len: len)
     }
 
     // Whether a type-name span names a float type (F32 / F64).
     inout fn isFloatType(start: U64, len: U64) -> Bool {
-        if rangeEquals(bytes: self.arena.bytes, start: start, len: len, kw: "F32") { return true }
-        if rangeEquals(bytes: self.arena.bytes, start: start, len: len, kw: "F64") { return true }
-        return false
+        if len != 3U64 || self.arena.bytes[start] != 'F' { return false }
+        val first = self.arena.bytes[start + 1U64]
+        val second = self.arena.bytes[start + 2U64]
+        return (first == '3' && second == '2') || (first == '6' && second == '4')
     }
 
-    // Whether a type-name span is one of the 8 integer types (excludes Bool/String).
+    // Whether a type-name span is one of the eight integer types.
     inout fn isIntType(start: U64, len: U64) -> Bool {
-        if rangeEquals(bytes: self.arena.bytes, start: start, len: len, kw: "I8") { return true }
-        if rangeEquals(bytes: self.arena.bytes, start: start, len: len, kw: "I16") { return true }
-        if rangeEquals(bytes: self.arena.bytes, start: start, len: len, kw: "I32") { return true }
-        if rangeEquals(bytes: self.arena.bytes, start: start, len: len, kw: "I64") { return true }
-        if rangeEquals(bytes: self.arena.bytes, start: start, len: len, kw: "U8") { return true }
-        if rangeEquals(bytes: self.arena.bytes, start: start, len: len, kw: "U16") { return true }
-        if rangeEquals(bytes: self.arena.bytes, start: start, len: len, kw: "U32") { return true }
-        if rangeEquals(bytes: self.arena.bytes, start: start, len: len, kw: "U64") { return true }
-        return false
+        return self.integerSpanWidth(start: start, len: len) != 0U64
     }
 
-    // Bit width of an integer type-name span (0 if not an integer type).
+    // Bit width of an integer type name, or zero for another name.
+    inout fn integerSpanWidth(start: U64, len: U64) -> U64 {
+        if len != 2U64 && len != 3U64 { return 0U64 }
+        val prefix = self.arena.bytes[start]
+        if prefix != 'I' && prefix != 'U' { return 0U64 }
+        val first = self.arena.bytes[start + 1U64]
+        if len == 2U64 {
+            if first == '8' { return 8U64 }
+            return 0U64
+        }
+        val second = self.arena.bytes[start + 2U64]
+        if first == '1' && second == '6' { return 16U64 }
+        if first == '3' && second == '2' { return 32U64 }
+        if first == '6' && second == '4' { return 64U64 }
+        return 0U64
+    }
+
+    // Existing emission callers use 64 as the default machine width.
     inout fn intBits(start: U64, len: U64) -> U64 {
-        if rangeEquals(bytes: self.arena.bytes, start: start, len: len, kw: "I8") { return 8 }
-        if rangeEquals(bytes: self.arena.bytes, start: start, len: len, kw: "U8") { return 8 }
-        if rangeEquals(bytes: self.arena.bytes, start: start, len: len, kw: "I16") { return 16 }
-        if rangeEquals(bytes: self.arena.bytes, start: start, len: len, kw: "U16") { return 16 }
-        if rangeEquals(bytes: self.arena.bytes, start: start, len: len, kw: "I32") { return 32 }
-        if rangeEquals(bytes: self.arena.bytes, start: start, len: len, kw: "U32") { return 32 }
-        return 64
+        val width = self.integerSpanWidth(start: start, len: len)
+        if width == 0U64 { return 64U64 }
+        return width
     }
 
     // Whether an integer type-name span is signed (`I*`). Assumes isIntType.
