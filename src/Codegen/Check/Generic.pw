@@ -108,7 +108,7 @@ pub impl Comp {
         }
         val li: U64 = self.localIndexByName(start: start, len: len)
         if li < self.cur.locals.count() {
-            return <IdentBinding code=identValueCode() target=self.cur.locals[li].nameStart />
+            return <IdentBinding code=identValueCode() target=self.cur.locals[li].nameStart localIndex=<Optional.Some v=li /> />
         }
         val fi: U64 = self.firstVisibleFuncByName(useMod: self.moduleOf(offset: start), nameStart: start, nameLen: len)
         if fi < self.arena.functionCount() {
@@ -146,11 +146,15 @@ pub impl Comp {
     // backend never fills locals, so it only reads this record). A node past the table
     // (synthesized after buildExprTyTable) is classified but not cached.
     inout fn recordIdent(id: U64, start: U64, len: U64, tpFn: U64) -> I64 {
-        val b: IdentBinding = self.resolveIdent(start: start, len: len, tpFn: tpFn)
+        return self.recordIdentBinding(id: id, start: start, len: len, tpFn: tpFn).code
+    }
+
+    inout fn recordIdentBinding(id: U64, start: U64, len: U64, tpFn: U64) -> IdentBinding {
+        val b = self.resolveIdent(start: start, len: len, tpFn: tpFn)
         self.ensureExprTySlot(exprId: id)
         self.typeCache.identBind.set(i: id, value: b.code)
         self.typeCache.identTarget.set(i: id, value: b.target)
-        return b.code
+        return b
     }
 
     // Whether a resolved binding code (a classifyIdent / recordIdent result) is a

@@ -288,3 +288,7 @@ Reuse the selected source template in the closed iteration protocol check and in
 **2026-11-15T18:18:50Z**
 
 Related performance investigation: integer span classification and bit width now share one byte decoder; float width only reads the matching span once. Retained the legacy width fallback, primitive recognition and range checks. Seven lazy numeric/newtype controls, four unchanged rejection diagnostics and full same-source AOT LLVM matched. No timing claim; the sample does not yet attribute most inlined rangeEquals callers.
+
+**2026-11-15T18:36:39Z**
+
+Related lexical preparation change: identifier resolution returns its immediately usable scope index with its stable target, so Record uses one lookup for both binding and type/capture recording. The direct receiver path keeps its existing capture lookup. Six lazy shadow/capture/global/projection controls and full same-source AOT LLVM matched. Timing not measured; a scratch link ran out of disk and was retried using the same IR after cleanup.

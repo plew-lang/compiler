@@ -1143,6 +1143,7 @@ pub struct PatInfo {
 pub struct IdentBinding {
     pub val code: I64
     pub val target: U64
+    pub val localIndex: Optional[U64] = <Optional.None />
 }
 
 pub enum Stmt {

@@ -2192,18 +2192,23 @@ pub impl Comp {
             Expr.Ident(val start, val len) => {
                 // Record owns the complete lexical walk, including generic
                 // closure bodies that the declaration checker does not enter.
-                val binding: I64 = self.recordIdent(id: exprId, start: start, len: len, tpFn: self.cur.checkFn)
-                if binding == identUndefCode() { try self.checkIdentifierValueBinding(binding: binding, offset: start) }
+                val binding = self.recordIdentBinding(id: exprId, start: start, len: len, tpFn: self.cur.checkFn)
+                if binding.code == identUndefCode() { try self.checkIdentifierValueBinding(binding: binding.code, offset: start) }
                 // `self` is the receiver's declaration-time TypeTerm, not an
                 // ordinary local. Recording that lexical source is what lets
                 // a structural projection such as `self.items` retain
                 // `Array[T]`, so a following `.set(...)` can publish one
                 // parametric CallTemplate. Falling back to `typeOf` here
                 // loses the receiver argument and forces Mono to reopen AST.
-                if self.isSelfRef(start: start, len: len) && self.cur.selfRef != 0U64 {
+                val isReceiver = binding.code == identValueCode() && binding.target == identSelfTarget()
+                if isReceiver && self.cur.selfRef != 0U64 {
                     self.recordSemanticExprTerm(exprId: exprId, term: self.cur.selfRef)
                 }
-                val localIdx: U64 = self.localIndexByName(start: start, len: len)
+                val localIdx = if isReceiver {
+                    give self.localIndexByName(start: start, len: len)
+                } else {
+                    give binding.localIndex.unwrapOr(fallback: self.cur.locals.count())
+                }
                 if localIdx < self.cur.locals.count() {
                     try self.recordDeclarationCapture(localIndex: localIdx)
                     val local: Local = (try self.typedLocal(index: localIdx))
