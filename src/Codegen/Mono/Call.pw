@@ -1430,7 +1430,11 @@ pub impl Comp {
                                     if request.declarationTarget != declarationTarget {
                                         return <Result.Err error=self.diagnosticAt(offset: declarationTarget, msg: "local argument has a foreign checked binding", failureDomain: <FailureDomain.Internal />) />
                                     }
-                                    return self.requireCheckedLocalStorage(stmtId: statement - 1U64, request: request)
+                                    val index = self.finalStorageIndex(bodyId: self.cur.bodyId, stmtId: statement - 1U64)
+                                    if index >= self.arena.finalStorages.count() {
+                                        return <Result.Err error=self.diagnosticAt(offset: declarationTarget, msg: "local argument used before checked storage was finalized", failureDomain: <FailureDomain.Internal />) />
+                                    }
+                                    return <Result.Ok value=self.arena.finalStorages[index].targetTypeRef />
                                 }
                                 Optional.None => {
                                     return <Result.Err error=self.diagnosticAt(offset: declarationTarget, msg: "local argument has no checked storage request", failureDomain: <FailureDomain.Internal />) />
@@ -6974,7 +6978,7 @@ pub impl Comp {
         return <Result.Ok value=target />
     }
 
-    inout fn requireCheckedLocalStorage(stmtId: U64, request: CheckedLocalStorageRequest) -> Result[U64, CompileDiagnostic] {
+    inout fn publishCheckedLocalStorage(stmtId: U64, request: CheckedLocalStorageRequest) -> Result[U64, CompileDiagnostic] {
         val existing = self.finalStorageIndex(bodyId: self.cur.bodyId, stmtId: stmtId)
         if existing < self.arena.finalStorages.count() {
             return <Result.Ok value=self.arena.finalStorages[existing].targetTypeRef />
@@ -7158,7 +7162,7 @@ pub impl Comp {
                                 try self.prepareCheckedInitializer(request: request)
                                 // Publish at the checked operation's execution position
                                 // so deferred consumers cannot reorder its diagnostics.
-                                try self.requireCheckedLocalStorage(stmtId: stmtId, request: request)
+                                try self.publishCheckedLocalStorage(stmtId: stmtId, request: request)
                                 return <Result.Ok value=() />
                             }
                             Optional.None => {}

@@ -188,3 +188,7 @@ Record the selected call dependency for a condition-chain operand or give value 
 **2026-11-15T16:13:06Z**
 
 The post-body sweep now verifies checked Mid storage descriptors rather than publishing missing ones. This removes late recovery in a different execution position. Six lazy fixtures and the branch/condition order probe passed, and full same-source AOT LLVM matched. The checked local call-argument consumer can still publish on cache miss; audit and remove that writer separately, including capture and descriptor-only paths.
+
+**2026-11-15T16:16:14Z**
+
+Checked local call arguments now only read the finalized body+statement descriptor. A missing descriptor is an internal ordering error. The initializer is the only checked descriptor publisher. Six lazy controls, including captured mutation, passed and full same-source AOT LLVM matched. Closure capture can still ground the destination type independently; that narrower route needs separate verification.
