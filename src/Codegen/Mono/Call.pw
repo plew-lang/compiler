@@ -2746,13 +2746,16 @@ pub impl Comp {
         }
     }
 
-    inout fn finalValueConversion(sourceRef: U64, targetRef: U64, exprId: U64, deferDependencies: Bool = false) -> Result[ValueConversionProof, CompileDiagnostic] {
+    inout fn finalValueConversion(sourceRef: U64, targetRef: U64, exprId: U64, deferDependencies: Bool = false, recordedSite: Optional[CallSiteKey] = <Optional.None />) -> Result[ValueConversionProof, CompileDiagnostic] {
         val sameType = sourceRef != 0U64 && self.typeRefEq(a: sourceRef, b: targetRef)
         // Recorded evidence is authoritative even if the supplied concrete
         // types now compare equal. An identity shortcut must not conceal a
         // disagreement with the source boundary that selected the conversion.
         if self.decls.declarationConversions.count() != 0U64 && exprId < self.arena.exprs.count() {
-            val site = try self.templateCallSiteKey(fnIdx: self.cur.bodyFnIdx, exprId: exprId)
+            val site = match recordedSite {
+                Optional.Some(v: val site) => site
+                Optional.None => try self.templateCallSiteKey(fnIdx: self.cur.bodyFnIdx, exprId: exprId)
+            }
             val owner = self.callTemplateLexicalRoots.getOr(key: site.ownerFnIdx, fallback: site.ownerFnIdx)
             for index in self.decls.declarationConversionOwners.getOr(key: owner, fallback: []) {
                 val recorded = self.decls.declarationConversions[index]
@@ -2783,8 +2786,8 @@ pub impl Comp {
         return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "source value conversion lacks recorded evidence") />
     }
 
-    inout fn publishStorageConversion(stmtId: U64, exprId: U64, sourceRef: U64, targetRef: U64) -> Result[(), CompileDiagnostic] {
-        val conversion = try self.finalValueConversion(sourceRef: sourceRef, targetRef: targetRef, exprId: exprId)
+    inout fn publishStorageConversion(stmtId: U64, exprId: U64, sourceRef: U64, targetRef: U64, recordedSite: Optional[CallSiteKey] = <Optional.None />) -> Result[(), CompileDiagnostic] {
+        val conversion = try self.finalValueConversion(sourceRef: sourceRef, targetRef: targetRef, exprId: exprId, recordedSite: recordedSite)
         self.putFinalStorage(fact: <FinalStorageResolution bodyId=self.currentBodyInstanceId() stmtId=stmtId exprId=exprId sourceTypeRef=sourceRef targetTypeRef=targetRef conversion=self.freezeValueConversionProof(proof: conversion) />)
         return <Result.Ok value=() />
     }
@@ -6987,7 +6990,7 @@ pub impl Comp {
             RecordedStorageValueType.Recipe(id: val recipe) => try self.groundSemanticTypeRecipeForBody(recipeId: recipe, bodyId: self.cur.bodyId, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, requireProducer: true)
         }
         val targetRef = try self.groundAndRecordBodyType(ref: ref, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.cur.bodyId)
-        try self.publishStorageConversion(stmtId: stmtId, exprId: request.expression, sourceRef: sourceRef, targetRef: targetRef)
+        try self.publishStorageConversion(stmtId: stmtId, exprId: request.expression, sourceRef: sourceRef, targetRef: targetRef, recordedSite: request.conversionSite)
         return <Result.Ok value=targetRef />
     }
 

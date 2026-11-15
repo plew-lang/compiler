@@ -29,6 +29,7 @@ pub struct MidStorageInitialization {
     pub val block: U64
     pub val statement: U64
     pub val valueType: RecordedStorageValueType
+    pub val conversionSite: CallSiteKey
 }
 pub impl MidStorageInitialization { factory }
 
@@ -261,7 +262,7 @@ pub struct MidClosureBody {
 pub impl MidClosureBody { factory }
 
 pub struct MidCanonicalArena {
-    pub mut val storageStatements: Array[(statement: U64, valueType: RecordedStorageValueType)] = []
+    pub mut val storageStatements: Array[(statement: U64, valueType: RecordedStorageValueType, conversionSite: CallSiteKey)] = []
     pub mut val globalAccessState: U64 = 0U64
     pub mut val globalAccessBodies: Array[U64] = []
     pub mut val bodies: Array[MidBodyNode] = []
@@ -1156,7 +1157,7 @@ fn storeMidCanonicalBody(arena: inout MidCanonicalArena, body: MidBody) -> MidCa
     val storageStart = arena.storageStatements.count()
     for location in body.storageOrder {
         val block = arena.blocks[blockStart + location.block]
-        arena.storageStatements.append((statement: block.statements.start + location.statement, valueType: location.valueType))
+        arena.storageStatements.append((statement: block.statements.start + location.statement, valueType: location.valueType, conversionSite: location.conversionSite))
     }
     arena.bodies.append(<MidBodyNode storageOrder=<MidRange start=storageStart len=body.storageOrder.count() /> bodyInstance=body.bodyInstance sourceFunction=body.sourceFunction locals=<MidRange start=localStart len=body.locals.count() /> scopes=<MidRange start=scopeStart len=body.scopes.count() /> blocks=<MidRange start=blockStart len=body.blocks.count() /> entry=body.entry />)
     return <MidCanonicalBody body=arena.bodies.count() />

@@ -248,3 +248,7 @@ Retain the root operand of a local projection even when the root has no call-res
 **2026-11-15T17:20:49Z**
 
 Independent source review of f2c08e2e: AOT and lazy converge, body/statement descriptor consumption remains exact, and seed physical-block order no longer determines publication. Keep open: normal initializer Term and non-call recipes, nested receiver/index operands and non-continuing Lets still rely on source scanning. Conversion site is reconstructed per instance. The checked path also schedules a fallible type-layout registration before conversion; legacy schedules it after conversion, with no legal source diagnostic difference demonstrated. Preserve shared checked statement dispatch and move initializer dependency scheduling and conversion occurrence as a coherent boundary. On this revision, AOT and lazy stdout matched seven controls (two generic local instances and shadow reuse via mid_storage_optional_conversion, two newtype adapter cases, projected global, mutable capture, divergence and default evaluation order). The larger default_generator_environment lazy attempt stalled and was excluded. No completion or timing claim.
+
+**2026-11-15T17:24:22Z**
+
+Checked Mid now retains the conversion occurrence key with each local initialization and passes it to finalization. Legacy boundaries retain their existing key lookup; selection among same-site rows and conversion proof replay are unchanged. Six lazy controls and full same-source AOT LLVM matched. Noncontinuing initializer dependencies and layout/diagnostic ordering remain.

@@ -2582,7 +2582,11 @@ fn buildMidLetAdmitted(c: inout Comp, state: inout MidBuildState, stmtId: U64, c
                     Result.Ok(value: val valueType) => valueType
                     Result.Err(error: val error) => { return error }
                 }
-                state.storageOrder.append(<MidStorageInitialization block=blockIndex statement=statementIndex valueType=valueType />)
+                val conversionSite = match c.templateCallSiteKey(fnIdx: function, exprId: init) {
+                    Result.Ok(value: val site) => site
+                    Result.Err(error: val error) => { return <MidBuildError.Frontend diagnostic=error /> }
+                }
+                state.storageOrder.append(<MidStorageInitialization block=blockIndex statement=statementIndex valueType=valueType conversionSite=conversionSite />)
             }
             if completeEvaluation { midFinishEvaluationScope(state: inout state, scope: evaluation) }
             val ended = binding.endedBinding

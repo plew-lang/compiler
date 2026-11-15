@@ -413,7 +413,7 @@ impl CompilerSession {
                 if local.sourceBinding.isUnproved() || storage.contains(key: value.sourceStmt) {
                     return <Result.Err error=self.compiler.diagnosticAt(offset: local.sourceNameStart, msg: "checked Mid storage order has an invalid binding occurrence", failureDomain: <FailureDomain.Internal />) />
                 }
-                storage[value.sourceStmt] = <CheckedLocalStorageRequest expression=value.exprId declarationTarget=local.sourceNameStart binding=local.sourceBinding valueType=initialization.valueType />
+                storage[value.sourceStmt] = <CheckedLocalStorageRequest expression=value.exprId declarationTarget=local.sourceNameStart binding=local.sourceBinding valueType=initialization.valueType conversionSite=<Optional.Some v=initialization.conversionSite /> />
                 storageOrder.append(value.sourceStmt)
             }
         }
