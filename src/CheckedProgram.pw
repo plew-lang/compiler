@@ -1,12 +1,13 @@
 // A whole-target static-check result owns the exact compiler snapshot it proves.
 // No public factory or mutable arena accessor can attach it to another input.
 use ./Frontend only { Comp, FrontendInput, FrontendOptions, analyzeFrontendForRequests, completeFrontendDeclarations, traceFinalCallableStart, traceFinalCallableFinish, FinalBodyRequests, FinalDependencies, FinalizationPublication }
-use ./Ir only { StaticConformanceProof, BodyOrigin, InstanceEnvironment }
+use ./Ir only { StaticConformanceProof, BodyOrigin, InstanceEnvironment, CallSiteKey }
 use ./Backend only { LlvmLoweringResult, LlvmTargetDescription, lowerRequestedLlvm, lowerGlobalStorageLlvm, lowerCallableDeclarationsLlvm }
 use ./SourceAccess only { SourceAccess }
 use ./Diag only { CompileDiagnostic, DiagnosticLocation, FailureDomain }
 use ./DeclarationProgram only { prepareDeclarationProgramWithRequests, prepareDeclarationRoot, DeclarationBodyRequests, declarationProgramDiagnostic }
-use ./Mid/Build only { MidFunctionTemplates }
+use ./Mid/Build only { MidFunctionTemplates, MidBuildError }
+use ./Mid/Verify only { canonicalMidReachable }
 use ./Mid/DeclarationAccess only { DeclarationAccessAnalysis, DeclarationAccessNode }
 use ./PreparedProgram only { PreparedProgram, ProgramPreparationError, programPreparationDiagnostic }
 use ./Mid/Program only { MidExecutableRequests, MidExecutableProgram }
@@ -54,6 +55,7 @@ pub unique struct CompilerSession {
     mut val midRequests: MidExecutableRequests = <MidExecutableRequests />
     mut val executionFailure: Optional[CompileDiagnostic] = <Optional.None />
     mut val templates: MidFunctionTemplates = <MidFunctionTemplates />
+    mut val reachedDirectCalls: Dictionary[U64, Dictionary[U64, Bool]] = [:]
     mut val requests: DeclarationBodyRequests = <DeclarationBodyRequests />
     mut val functionResults: Dictionary[U64, Result[DeclarationAccessAnalysis, CompileDiagnostic]] = [:]
     mut val closureResults: Dictionary[U64, Result[DeclarationAccessAnalysis, CompileDiagnostic]] = [:]
@@ -334,12 +336,57 @@ impl CompilerSession {
         while index < self.compiler.monoWork.bodyCount() || self.compiler.hasFinalDependencies(state: self.finalDependencies) {
             if index < self.compiler.monoWork.bodyCount() {
                 val body = self.compiler.monoWork.bodyAt(index: index)
-                try self.compiler.requestFinalBody(bodyId: body, requests: inout self.finalBodies)
+                try self.requestExecutableDependencies(bodyId: body)
                 index += 1U64
             }
             try self.compiler.advanceFinalDependencies(state: inout self.finalDependencies)
         }
         return self.compiler.finishFinalCallables(publication: inout self.finalPublication)
+    }
+
+    inout fn requestExecutableDependencies(bodyId: U64) -> Result[(), CompileDiagnostic] {
+        val instance = self.compiler.arena.bodyInstanceAt(index: bodyId - 1U64)
+        mut val reached: Optional[Dictionary[U64, Bool]] = <Optional.None />
+        if self.compiler.arena.bodyIsCallable(bodyId: bodyId) && instance.adapterTargetBodyId == 0U64 && instance.fnIdx < self.compiler.arena.functionCount() {
+            reached = <Optional.Some v=try self.reachedDirectCallsFor(function: instance.fnIdx) />
+        }
+        return self.compiler.requestFinalBody(bodyId: bodyId, requests: inout self.finalBodies, reachedDirectCalls: reached)
+    }
+
+    inout fn reachedDirectCallsFor(function: U64) -> Result[Dictionary[U64, Bool], CompileDiagnostic] {
+        match self.reachedDirectCalls.get(key: function) {
+            Optional.Some(v: val cached) => { return <Result.Ok value=cached /> }
+            Optional.None => {}
+        }
+        try self.compiler.prepareLexicalBody(fnIdx: function)
+        val built = self.templates.body(c: inout self.compiler, function: function)
+        match built.error {
+            MidBuildError.None => {}
+            MidBuildError.Frontend(diagnostic: val diagnostic) => { return <Result.Err error=diagnostic /> }
+            _ => { return <Result.Err error=self.compiler.diagnosticAt(offset: self.compiler.arena.functionAt(index: function).defOffset, msg: "cannot build checked Mid call demand", failureDomain: <FailureDomain.Internal />) /> }
+        }
+        val body = self.compiler.mid.bodies[built.canonical.body - 1U64]
+        val reached = canonicalMidReachable(arena: self.compiler.mid, body: body)
+        mut val calls: Dictionary[U64, Bool] = [:]
+        for index in 0U64..<body.blocks.len {
+            if reached[index] {
+                val block = self.compiler.mid.blocks[body.blocks.start + index]
+                val term = self.compiler.mid.terminators[block.terminator - 1U64]
+                if term.tag == 4U64 {
+                    val target = self.compiler.mid.callTargets[term.callTarget - 1U64]
+                    if target.tag == 1U64 && target.originKind == 1U64 {
+                        val key = <CallSiteKey ownerFnIdx=target.ownerFnIdx originKind=target.originKind originStart=target.originStart originEnd=target.originEnd originSerial=target.originSerial slot=target.slot />
+                        val template = self.compiler.callTemplateIndex(siteKey: key)
+                        if template >= self.compiler.callTemplateCount() {
+                            return <Result.Err error=self.compiler.diagnosticAt(offset: key.originStart, msg: "internal error: reached Mid call has no checked template", failureDomain: <FailureDomain.Internal />) />
+                        }
+                        calls[template] = true
+                    }
+                }
+            }
+        }
+        self.reachedDirectCalls[function] = calls
+        return <Result.Ok value=calls />
     }
 
     inout fn prepareBodyInSession(bodyId: U64) -> Result[BodyDescriptors, CompileDiagnostic] {
@@ -357,7 +404,7 @@ impl CompilerSession {
         }
         val instance = self.compiler.arena.bodyInstanceAt(index: bodyId - 1U64)
         if instance.fnIdx != 18446744073709551615U64 {
-            try self.compiler.requestFinalBody(bodyId: bodyId, requests: inout self.finalBodies)
+            try self.requestExecutableDependencies(bodyId: bodyId)
         }
         try self.compiler.closeFinalDependencies(state: inout self.finalDependencies)
         try self.compiler.publishFinalCallables(state: inout self.finalPublication)

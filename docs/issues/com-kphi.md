@@ -74,3 +74,11 @@ context restoration. The direct Frontend entry keeps the existing loop.
 Finalization traces share the same counters and markers. The fixed candidate
 accepted the changed compiler source in check mode. Reachability is not yet
 connected to requests in this checkpoint.
+
+AOT and lazy sessions now supply a per-authored-function view of reached
+parametric Mid template sites. Written free direct calls use this view for
+executable demand and retain descriptor preparation at the existing scan
+point. Compatibility callers use the default policy. The fixed previous
+candidate accepted the changed sources and emitted LLVM. Native candidate
+execution, targeted demand assertions, and performance comparison remain
+pending. The residual scanner still traverses authored operands.

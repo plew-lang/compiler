@@ -4198,6 +4198,7 @@ pub struct Cursor {
     pub mut val closureCallTemplatesClosed: Bool = false
     pub mut val globalInitializerTarget: Optional[U64] = <Optional.None />
     pub mut val bodyFnIdx: U64 = 18446744073709551615U64
+    pub mut val reachedDirectCalls: Optional[Dictionary[U64, Bool]] = <Optional.None />
     // 1-based Arena.bodyInstances identity for the active semantic body.
     // It is set whenever a body context is entered and lets final-callee lookup
     // avoid re-comparing the complete InstanceEnvironment on every call.

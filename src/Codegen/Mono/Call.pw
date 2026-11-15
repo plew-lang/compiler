@@ -4537,7 +4537,7 @@ pub impl Comp {
         return <Result.Ok value=<CallableConstraintEvidence.Requirement plan=plan bounds=publicEvidence.bounds proofs=publicEvidence.proofs normalizations=publicEvidence.normalizations /> />
     }
 
-    inout fn resolveBodyCallee(exprId: U64) -> Result[U64, CompileDiagnostic] {
+    inout fn resolveBodyCallee(exprId: U64, authoredFreeCall: Bool = false) -> Result[U64, CompileDiagnostic] {
         val template: CallTemplate = (try self.callTemplateForCurrentBody(exprId: exprId))
         // Record selects written and synthesized calls alike. Their Direct
         // template is authoritative for the concrete BodyInstance: reopening
@@ -4548,7 +4548,15 @@ pub impl Comp {
                 if storedCallee < self.arena.functionCount() {
                     val selection: CallSiteSelection = (try self.selectDirectTemplateCall(exprId: exprId, callee: storedCallee, receiver: receiver, receiverTypeTerm: template.receiverTypeTerm, expectedResultTerm: template.expectedResultTerm, calleeTypeArgs: calleeTypeArgs, arguments: self.callTemplateArguments(range: arguments), proof: self.thawStaticConformanceProof(id: proofId)))
                     try self.recordSelectedBodyCallee(selection: selection)
-                    try self.enqueueSelectedCallee(selection: selection, template: template)
+                    val reached = match self.cur.reachedDirectCalls {
+                        Optional.Some(v: val calls) => !authoredFreeCall || template.siteKey.originKind != 1U64 || calls.contains(key: self.callTemplateIndex(siteKey: template.siteKey)),
+                        Optional.None => true,
+                    }
+                    if reached {
+                        try self.enqueueSelectedCallee(selection: selection, template: template)
+                    } else {
+                        (try self.prepareSelectedCalleeDescriptor(selection: selection, template: template))
+                    }
                     return <Result.Ok value=storedCallee />
                 }
             }
@@ -4752,7 +4760,7 @@ pub impl Comp {
     // registered bodies; a lazy driver can request individual descriptors.
     // A failed scan poisons this request state because partial arena rows are
     // diagnostic-only and must never be reused as executable preparation.
-    inout fn requestFinalBody(bodyId: U64, requests: inout FinalBodyRequests) -> Result[(), CompileDiagnostic] {
+    inout fn requestFinalBody(bodyId: U64, requests: inout FinalBodyRequests, reachedDirectCalls: Optional[Dictionary[U64, Bool]] = <Optional.None />) -> Result[(), CompileDiagnostic] {
         match requests.failure {
             Optional.Some(v: val diagnostic) => { return <Result.Err error=diagnostic /> }
             Optional.None => {}
@@ -4768,6 +4776,7 @@ pub impl Comp {
         val saved = self.cur
         val collecting = self.inCollection
         self.inCollection = true
+        self.cur.reachedDirectCalls = reachedDirectCalls
         val result = self.prepareFinalBodyRequest(bodyId: bodyId)
         self.cur = saved
         self.inCollection = collecting
@@ -6453,7 +6462,7 @@ pub impl Comp {
                     try self.scanExprInsts(exprId: self.argAt(args: callArgs, index: i).expr)
                     i += 1
                 }
-                try self.registerCallInst(id: exprId, nameStart: nameStart, nameLen: nameLen, args: callArgs, finalIdx: (try self.resolveBodyCallee(exprId: exprId)))
+                try self.registerCallInst(id: exprId, nameStart: nameStart, nameLen: nameLen, args: callArgs, finalIdx: (try self.resolveBodyCallee(exprId: exprId, authoredFreeCall: true)))
                 try self.finalizeAccessWriteFacets(parentExpr: exprId)
             }
             Expr.ExtMethod(val recv, val source, val nameStart, val nameLen, val args) => {
