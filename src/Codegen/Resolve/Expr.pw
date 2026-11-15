@@ -529,11 +529,14 @@ pub impl Comp {
         return <Result.Ok value=self.callTemplatesClosedForOwner(owner: owner) />
     }
 
+    inout fn checkCallTemplateSelection(templateIndex: U64) -> Result[(), CompileDiagnostic] {
+        return self.checkCallTemplateSelection(template: self.callTemplateAt(index: templateIndex))
+    }
+
     // A selection can be published before its substitution is complete.
     // Closing the owner proves the descriptor is ready; it never turns a
     // missing substitution into a successful semantic check.
-    inout fn checkCallTemplateSelection(templateIndex: U64) -> Result[(), CompileDiagnostic] {
-        val template = self.callTemplateAt(index: templateIndex)
+    inout fn checkCallTemplateSelection(template: CallTemplate) -> Result[(), CompileDiagnostic] {
         val offset = template.siteKey.originStart
         match template.kind {
             CallTemplateKind.Pending => {

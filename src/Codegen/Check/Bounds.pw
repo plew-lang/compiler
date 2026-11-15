@@ -1863,8 +1863,9 @@ pub impl Comp {
     // Check one selected source call without scanning other bodies or
     // discovering executable instances. The caller owns demand/iteration.
     inout fn checkRecordedCallTemplateBound(templateIndex: U64) -> Result[(), CompileDiagnostic] {
-        try self.checkCallTemplateSelection(templateIndex: templateIndex)
-        return self.checkRecordedCallConstraintEvidence(templateIndex: templateIndex)
+        val template = self.callTemplateAt(index: templateIndex)
+        try self.checkCallTemplateSelection(template: template)
+        return self.checkRecordedCallConstraintEvidence(templateIndex: templateIndex, template: template)
     }
 
     // Unused source calls still impose constraints. Symbolic substitutions

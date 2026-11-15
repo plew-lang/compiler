@@ -41,13 +41,12 @@ impl Comp {
 
 // Only frontend admission can publish a successful source snapshot.
 impl Comp {
-    inout fn admitSelectedCallConstraints(templateIndex: U64) -> Result[AdmittedCallConstraints, CompileDiagnostic] {
-        try self.checkRecordedCallConstraintEvidence(templateIndex: templateIndex)
+    inout fn admitSelectedCallConstraints(templateIndex: U64, template: CallTemplate) -> Result[AdmittedCallConstraints, CompileDiagnostic] {
+        try self.checkRecordedCallConstraintEvidence(templateIndex: templateIndex, template: template)
         val plan = match self.selectedCallConstraintPlan(index: templateIndex) {
             // Admission already checked this plan against its declaration scope.
             Optional.Some(v: val selected) => selected
             Optional.None => {
-                val template = self.callTemplateAt(index: templateIndex)
                 val scope = try self.declarationTypeScope(owner: template.siteKey.ownerFnIdx)
                 give <SelectedCallConstraints owner=scope.owner bounds=[] proofs=[] />
             }
@@ -75,8 +74,9 @@ impl Comp {
         mut val row = self.firstLexicalCallTemplate(owner: owner)
         while row != 0U64 && row <= self.callTemplateLocations.count() {
             val index = row - 1U64
-            if wasClosed { try self.checkCallTemplateSelection(templateIndex: index) }
-            admitted.append((try self.admitSelectedCallConstraints(templateIndex: index)))
+            val template = self.callTemplateAt(index: index)
+            if wasClosed { try self.checkCallTemplateSelection(template: template) }
+            admitted.append((try self.admitSelectedCallConstraints(templateIndex: index, template: template)))
             try self.checkClosedIterationProtocol(templateIndex: index)
             row = self.callTemplateBodyNext[index]
         }
@@ -86,7 +86,7 @@ impl Comp {
     inout fn admitGlobalCallConstraints(target: U64) -> Result[Array[AdmittedCallConstraints], CompileDiagnostic] {
         mut val admitted: Array[AdmittedCallConstraints] = []
         for index in self.globalCallTemplateOwners.getOr(key: target, fallback: []) {
-            admitted.append((try self.admitSelectedCallConstraints(templateIndex: index)))
+            admitted.append((try self.admitSelectedCallConstraints(templateIndex: index, template: self.callTemplateAt(index: index))))
         }
         return <Result.Ok value=admitted />
     }

@@ -1321,8 +1321,8 @@ pub impl Comp {
     // This is the construction frontier. A repeated request consumes the
     // existing plan; it cannot repair a missing or inconsistent selected proof.
     inout fn prepareCallTemplateConstraints(templateIndex: U64) -> Result[(), CompileDiagnostic] {
-        try self.checkCallTemplateSelection(templateIndex: templateIndex)
         val template = self.callTemplateAt(index: templateIndex)
+        try self.checkCallTemplateSelection(template: template)
         val bounds = try self.sourceSelectedCallBounds(template: template)
         match self.selectedCallConstraintPlan(index: templateIndex) {
             Optional.Some(v: val plan) => { return self.checkSelectedCallConstraintPlan(template: template, expected: bounds, plan: plan) }
@@ -1406,8 +1406,7 @@ pub impl Comp {
 
 pub impl Comp {
 
-    inout fn checkRecordedCallConstraintEvidence(templateIndex: U64) -> Result[(), CompileDiagnostic] {
-        val template = self.callTemplateAt(index: templateIndex)
+    inout fn checkRecordedCallConstraintEvidence(templateIndex: U64, template: CallTemplate) -> Result[(), CompileDiagnostic] {
         val bounds = try self.sourceSelectedCallBounds(template: template)
         match self.selectedCallConstraintPlan(index: templateIndex) {
             Optional.Some(v: val plan) => { return self.checkSelectedCallConstraintPlan(template: template, expected: bounds, plan: plan) }

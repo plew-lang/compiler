@@ -276,3 +276,7 @@ For checked identifier receivers, use the sealed binding fact and retain generat
 **2026-11-15T17:46:06Z**
 
 Record identifier receiver provenance in the selected template. Concrete preparation reads the saved expression without per-instance binding lookup, and Mid uses it for receiver navigation; authored view and type evidence are retained. Six lazy controls, generation with a global receiver, and full same-source AOT LLVM matched. No timing claim; other composite receiver expressions still need their preparation dependencies.
+
+**2026-11-15T18:04:31Z**
+
+Performance investigation reduced repeated callTemplateAt reads during source selection/constraint admission by passing the same retrieved template through both checks. The index-based selection API remains for internal clients. Five lazy controls and same-source AOT LLVM matched for the production path before restoring that wrapper. Native source_call_constraint_evidence compiled with the wrapper; both changed and unchanged source abort with the pre-existing selected conformance evidence does not satisfy its declaration conditions diagnostic, so it is excluded from successes. Timing has not been measured.
