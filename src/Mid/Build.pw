@@ -2564,7 +2564,7 @@ fn buildMidLetAdmitted(c: inout Comp, state: inout MidBuildState, stmtId: U64, c
                 }
             }
             if term == 0U64 { return <MidBuildError.MissingSemanticType /> }
-            midInitializeBinding(state: inout state, destination: destination, value: <MidRvalue.StorageBoundary stmtId=stmtId targetTerm=term operand=midReturnOperand(c: inout c, operand: operandValue, typeTerm: (match midSourceSemanticTerm(c: inout c, facts: state.sourceFacts, sourceFunction: state.sourceFunction, exprId: init) { Result.Ok(value: val term) => { give term } Result.Err(error: val error) => { return error } })) />)
+            midInitializeBinding(state: inout state, destination: destination, value: <MidRvalue.StorageBoundary stmtId=stmtId exprId=init targetTerm=term operand=midReturnOperand(c: inout c, operand: operandValue, typeTerm: (match midSourceSemanticTerm(c: inout c, facts: state.sourceFacts, sourceFunction: state.sourceFunction, exprId: init) { Result.Ok(value: val term) => { give term } Result.Err(error: val error) => { return error } })) />)
             if completeEvaluation { midFinishEvaluationScope(state: inout state, scope: evaluation) }
             val ended = binding.endedBinding
             if ended != 0U64 {
@@ -2634,7 +2634,7 @@ fn buildMidAssignAdmitted(c: inout Comp, state: inout MidBuildState, stmtId: U64
                 MidOperandBuild.NoContinuation => { return <MidBuildError.None /> }
                 MidOperandBuild.Error(error: val error) => { return error }
             }
-            midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=temporary value=<MidRvalue.StorageBoundary stmtId=stmtId targetTerm=term operand=midReturnOperand(c: inout c, operand: operandValue, typeTerm: (match midSourceSemanticTerm(c: inout c, facts: state.sourceFacts, sourceFunction: state.sourceFunction, exprId: value) { Result.Ok(value: val term) => { give term } Result.Err(error: val error) => { return error } })) /> />)
+            midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=temporary value=<MidRvalue.StorageBoundary stmtId=stmtId exprId=value targetTerm=term operand=midReturnOperand(c: inout c, operand: operandValue, typeTerm: (match midSourceSemanticTerm(c: inout c, facts: state.sourceFacts, sourceFunction: state.sourceFunction, exprId: value) { Result.Ok(value: val term) => { give term } Result.Err(error: val error) => { return error } })) /> />)
             midAppendStatement(state: inout state, statement: <MidStatement.Overwrite destination=destinationLookup.place source=temporary />)
             return <MidBuildError.None />
         }
@@ -3756,7 +3756,7 @@ pub fn buildParametricMidGlobalInit(c: inout Comp) -> MidBodyBuild {
                 else { give midValueOperandForSourceExpr(c: inout c, state: inout state, exprId: init, allowAccessMarker: false) }
                 match operand {
                     MidOperandBuild.Value(operand: val value) => {
-                        midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=temporary value=<MidRvalue.StorageBoundary stmtId=global.letStmt targetTerm=term operand=midReturnOperand(c: inout c, operand: value, typeTerm: sourceTerm) /> />)
+                        midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=temporary value=<MidRvalue.StorageBoundary stmtId=global.letStmt exprId=init targetTerm=term operand=midReturnOperand(c: inout c, operand: value, typeTerm: sourceTerm) /> />)
                         val destination: MidPlace = <MidPlace rootTag=2U64 local=0U64 globalTarget=global.nameStart globalMutable=global.mutable typeTerm=term />
                         midAppendStatement(state: inout state, statement: <MidStatement.InitializeGlobal destination=destination source=temporary />)
                         midFinishEvaluationScope(state: inout state, scope: evaluation)

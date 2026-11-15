@@ -1,6 +1,6 @@
 ---
 id: com-8lj3
-status: open
+status: in_progress
 deps: [com-kphi]
 links: []
 created: 2026-11-15T11:49:39Z
@@ -22,3 +22,13 @@ Carry the checked binding origin, selected conversion occurrence and initializer
 
 Trace checked binding and conversion production through both AOT and lazy preparation to actual Mid instantiation and execution. Exercise annotated and inferred locals, prior and subsequent calls, shadowing, two distinct generic instances, non-continuing initialization and missing/foreign facts. Verify preserved global, closure, generated and adapter paths. Compare fixed-input LLVM/runtime, scan counts and timing, document the result and obtain independent review. The standard fixed-point and seven-second checks belong to com-p5um.
 
+
+## Notes
+
+**2026-11-15T11:54:09Z**
+
+Scenario inventory: prove the frozen local initialization retains its exact source initializer for conversion evidence and the checked destination binding. Exercise prior call → inferred/annotated binding → later call for distinct generic instances, shadowing, non-continuing initializers, foreign/missing facts and unchanged global/closure/generated/adapter paths. First structural control: inspect the canonical storage statements for two different initializer expressions in mid_binding_identity.
+
+**2026-11-15T12:00:10Z**
+
+First increment: canonical StorageBoundary retains the exact initializer expression ID along with statement ID, destination type and operand. Existing mid_binding_identity extended with two distinct real initializers; native baseline fixed carrier exits 134 with canonical storage lost its initializer identity; rebuilt diagnostic carrier exits 0 with binding-identity. The finalizer still uses the existing dependency discovery path. Next wire the saved occurrence and binding origin through the ordinary local descriptor producer and verify actual consumer use.

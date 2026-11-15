@@ -148,7 +148,7 @@ fn checkLoop() {
             match statement {
                 MidStatement.Assign(destination: val destination, value: val value) => {
                     match value {
-                        MidRvalue.StorageBoundary(stmtId: _, targetTerm: _, operand: val operand) => {
+                        MidRvalue.StorageBoundary(stmtId: _, exprId: _, targetTerm: _, operand: val operand) => {
                             if destination.local == root {
                                 match operand { MidOperand.Copy(place: val place) => { if place.rootTag != 1U64 || place.local != 0U64 { panic("loop root acquisition changed source") } } _ => { panic("loop owner acquisition removed") } }
                                 acquisitions += 1U64

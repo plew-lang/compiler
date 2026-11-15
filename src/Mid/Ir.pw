@@ -505,7 +505,8 @@ pub impl MidClosureCapture { factory }
 
 pub enum MidRvalue {
     Use(operand: MidOperand)
-    StorageBoundary(stmtId: U64, targetTerm: U64, operand: MidOperand)
+    // Retain the source value occurrence before the operand is lowered to a temporary.
+    StorageBoundary(stmtId: U64, exprId: U64, targetTerm: U64, operand: MidOperand)
     // The ABI return boundary is distinct from an ordinary assignment. Its
     // source ExprId navigates to a frontend-frozen FinalReturnResolution during
     // instantiation; backend lowering must never see this parametric form.
@@ -928,8 +929,8 @@ fn midFreezeRvalue(arena: inout MidCanonicalArena, value: MidRvalue) -> U64 {
         MidRvalue.Use(operand: val operand) => {
             arena.rvalues.append(<MidRvalueNode tag=1U64 operand=midFreezeOperand(arena: inout arena, operand: operand) />)
         }
-        MidRvalue.StorageBoundary(stmtId: val stmtId, targetTerm: val targetTerm, operand: val operand) => {
-            arena.rvalues.append(<MidRvalueNode tag=20U64 operand=midFreezeOperand(arena: inout arena, operand: operand) sourceStmt=stmtId targetTerm=targetTerm />)
+        MidRvalue.StorageBoundary(stmtId: val stmtId, exprId: val exprId, targetTerm: val targetTerm, operand: val operand) => {
+            arena.rvalues.append(<MidRvalueNode tag=20U64 operand=midFreezeOperand(arena: inout arena, operand: operand) sourceStmt=stmtId exprId=exprId targetTerm=targetTerm />)
         }
         MidRvalue.ReturnBoundary(exprId: val exprId, targetTerm: val targetTerm, operand: val operand) => {
             arena.rvalues.append(<MidRvalueNode tag=2U64 operand=midFreezeOperand(arena: inout arena, operand: operand) exprId=exprId targetTerm=targetTerm />)

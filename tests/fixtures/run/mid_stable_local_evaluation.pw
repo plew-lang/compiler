@@ -75,7 +75,7 @@ fn check(name: String, snapshot: Bool) {
             match statement {
                 MidStatement.Assign(destination: val destination, value: val value) => {
                     match value {
-                        MidRvalue.StorageBoundary(stmtId: _, targetTerm: _, operand: val operand) => {
+                        MidRvalue.StorageBoundary(stmtId: _, exprId: _, targetTerm: _, operand: val operand) => {
                             match operand {
                                 MidOperand.Copy(place: val place) => {
                                     if destination.local == named[0U64] && place.local == 0U64 { initialized += 1U64 }

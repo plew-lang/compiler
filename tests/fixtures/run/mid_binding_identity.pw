@@ -2,7 +2,7 @@ use @Std/Io only { write }
 use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
 use /SourceAccess only { SourceAccess }
 use /Ir only { Expr, Stmt }
-use /Mid only { prepareMidSourceState, MidBuildState, MidBuildError, MidOperand, MidRvalue, MidStatement, addMidLocal, midLocalForBinding, midPlaceForRecordedIdent, buildMidLet }
+use /Mid only { prepareMidSourceState, MidBuildState, MidBuildError, MidOperand, MidRvalue, MidStatement, addMidLocal, midLocalForBinding, midPlaceForRecordedIdent, buildMidLet, buildParametricMidBody }
 
 fn main() {
     mut val c: Comp = <Comp />
@@ -38,7 +38,7 @@ fn main() {
     match letState.blocks[0U64].statements[0U64] {
         MidStatement.Assign(destination: val destination, value: val value) => {
             match value {
-                MidRvalue.StorageBoundary(stmtId: val statement, targetTerm: val target, operand: val operand) => {
+                MidRvalue.StorageBoundary(stmtId: val statement, exprId: _, targetTerm: val target, operand: val operand) => {
                     match operand {
                         MidOperand.Move(place: val source) => { hasAssign = statement == firstBinding && target == valueTerm && destination.local == 1U64 && source.local == input }
                         _ => {}
@@ -55,7 +55,7 @@ fn main() {
     match letState.blocks[0U64].statements[secondStart] {
         MidStatement.Assign(destination: val destination, value: val value) => {
             match value {
-                MidRvalue.StorageBoundary(stmtId: val statement, targetTerm: val target, operand: val operand) => {
+                MidRvalue.StorageBoundary(stmtId: val statement, exprId: _, targetTerm: val target, operand: val operand) => {
                     match operand {
                         MidOperand.Move(place: val moved) => { hasMove = statement == secondBinding && target == valueTerm && destination.local == 2U64 && moved.local == 1U64 }
                         _ => {}
@@ -70,6 +70,29 @@ fn main() {
     match letResult { MidBuildError.None => { letBuilt = true } _ => {} }
     mut val moveBuilt: Bool = false
     match moveResult { MidBuildError.None => { moveBuilt = true } _ => {} }
+    val secondInitializer = match c.arena.stmts[secondBinding] {
+        Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, init: val init, annotationOccurrence: _) => init
+        _ => { panic("missing second initializer") }
+    }
+    val built = buildParametricMidBody(c: inout c, fnIdx: owner)
+    if built.canonical.body == 0U64 { panic("missing canonical body") }
+    val body = c.mid.bodies[built.canonical.body - 1U64]
+    mut val firstRecorded = false
+    mut val secondRecorded = false
+    for blockIndex in 0U64..<body.blocks.len {
+        val block = c.mid.blocks[body.blocks.start + blockIndex]
+        for statementIndex in 0U64..<block.statements.len {
+            val statement = c.mid.statements[block.statements.start + statementIndex]
+            if statement.value != 0U64 {
+                val value = c.mid.rvalues[statement.value - 1U64]
+                if value.tag == 20U64 {
+                    if value.sourceStmt == firstBinding && value.exprId == initializer { firstRecorded = true }
+                    if value.sourceStmt == secondBinding && value.exprId == secondInitializer { secondRecorded = true }
+                }
+            }
+        }
+    }
+    if !firstRecorded || !secondRecorded { panic("canonical storage lost its initializer identity") }
     if firstLocal == 0U64 && secondLocal == 1U64 && outer.found && outer.local == 0U64 && inner.found && inner.local == 1U64 && !missing.found && place.found && place.place.local == 0U64 && !absentPlace.found && letBuilt && moveBuilt && input == 0U64 && letState.locals.count() == 3U64 && hasAssign && hasMove && letState.locals[1U64].isUnique && letState.locals[2U64].isUnique {
         write(s: "binding-identity\n")
     } else {

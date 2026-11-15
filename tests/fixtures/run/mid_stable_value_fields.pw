@@ -64,7 +64,7 @@ fn check(name: String, localRoot: Bool, snapshot: Bool, receiver: Bool = false) 
                                 _ => {}
                             }
                         }
-                        MidRvalue.StorageBoundary(stmtId: _, targetTerm: _, operand: val operand) => {
+                        MidRvalue.StorageBoundary(stmtId: _, exprId: _, targetTerm: _, operand: val operand) => {
                             if localRoot && destination.local == root {
                                 match operand { MidOperand.Copy(place: val source) => { if source.local != 0U64 || source.projections.count() != 0U64 { panic("authored field root copy changed") } initializations += 1U64 } _ => { panic("authored field root copy removed") } }
                             }
