@@ -6717,7 +6717,7 @@ pub impl Comp {
                 // one destructive normalization after it has that term.
             }
             Expr.Try(val expr) => {
-                try self.scanExprInsts(exprId: expr)
+                try self.prepareCheckedCallOperand(source: try self.checkedValueOperand(exprId: expr))
                 try self.registerTryConversion(exprId: exprId, operand: expr)
             }
             Expr.Arrow(val base, val nameStart, val nameLen) => { try self.scanExprInsts(exprId: base) }
@@ -6744,7 +6744,7 @@ pub impl Comp {
             // completed descriptor; skipping it made `await sleep(...)` look like
             // an unrecorded call solely because it crossed the async lowering seam.
             Expr.Await(val operand) => {
-                try self.scanExprInsts(exprId: operand)
+                try self.prepareCheckedCallOperand(source: try self.checkedValueOperand(exprId: operand))
                 try self.finalizeCurrentBodyAwait(exprId: exprId, operandExprId: operand)
             }
             _ => {}

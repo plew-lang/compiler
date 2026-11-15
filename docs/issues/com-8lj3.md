@@ -316,3 +316,7 @@ Finalization no longer rewrites a selected Index read into Expr.Method. Mid dist
 **2026-11-15T19:09:11Z**
 
 Selected index reads no longer allocate a temporary argument range. Closed templates scan their saved argument rows; fallback preparation visits the already known key directly. Six lazy controls and three AOT index outputs matched; full same-source compiler LLVM matched. No optimized timing claim. Residual composite operand preparation remains.
+
+**2026-11-15T19:12:25Z**
+
+Nested try and await now prepare the saved operand call before publishing the try conversion or await descriptor. Unrecorded operand shapes and bodies outside this routing keep their original preparation. Six lazy controls, two AOT controls, and full same-source compiler LLVM matched. Link retried from the same object after freeing superseded diagnostic executables. No optimized timing claim.
