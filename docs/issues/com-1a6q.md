@@ -148,3 +148,18 @@ call.
   call result feeding another call, a nested indexed inout writeback, and a
   noncontinuing argument alongside the plain direct-call control. Assess the
   narrower input-boundary tickets separately from this discovery change.
+
+## Remaining dependency families
+
+| Family | Producer and consumer | Migration boundary |
+| --- | --- | --- |
+| Trait or existential call | The lexical template records the selected requirement and proof. `selectStaticMethodTemplateCall` applies the concrete receiver environment. Interface witness preparation publishes a distinct synthetic body with its own signature. | Keep concrete witness selection and synthetic registration in finalization. Source lookup stays closed. The initial direct-call change does not replace this path. |
+| Closure | Checked captures feed `finalizeClosureSignature`; `scanFinalBodyInstance` dispatches a registered closure to its own scanner. Synthetic environment drop has its own origin and Mid builder. | Distinguish signature and capture cleanup from the effects of invoking the closure. Preserve body identity per enclosing instance. |
+| Aggregate and layout | `finalizeCurrentBodyAggregate` reads the saved aggregate recipe, grounds the result and element terms and finalizes conversions. Mid instantiation consumes the resulting descriptor. | Move navigation to the typed construction operation only after its operand type recipes are ready. Evaluation-only aggregate operands still contribute their own dependencies. |
+| Destruction | The signature and concrete descriptor frontiers and the body scan feed `enqueueFinalDestruction`; `collectFinalDestruction` follows concrete type and deinit dependencies. Mid Access and drop elaboration determine actual cleanup sites. | Keep type dependency closure ahead of its consumers. Validate replacement and conditional cleanup on the elaborated execution path. A source call inventory cannot cover these sites. |
+
+Entry roots, ordinary direct calls and their recipe/writeback dependencies have
+enough evidence to define the initial implementation boundary. Before closing
+this investigation, reconcile the remaining rows against the corresponding
+synthetic and concrete consumers, assign confirmed gaps to tickets, and obtain
+independent review. Record fixture paths for the assigned slices.
