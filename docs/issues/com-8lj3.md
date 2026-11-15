@@ -72,3 +72,7 @@ Share concrete local target grounding per body request and checked statement. Th
 **2026-11-15T12:41:06Z**
 
 Capture records now retain the selected Let statement identity. While preparing a closure signature for a routed enclosing body, read the exact cached target and verify the enclosing BodyInstance type agreement. Keep the existing scope reader for parameter, pattern, and non-routed bindings. Same-source full AOT LLVM matched f9983e00bba4a87df2b55a2556ab95be85fccafb4498f5ce907dc6c77cc5e907; six lazy outputs matched, including mutable, shadowed and unused closure cases. Next identify whether any other finalization consumer still reads the residual Let local row before removing it.
+
+**2026-11-15T12:44:31Z**
+
+Routed Let no longer reconstructs a Local scope row. Only legacy entry adds it. Residual traversal still verifies normal completion on missing Mid storage and supplies initializer-call ordering and layout registration. Eight lazy outputs including captures, shadowing, associated type and analytical non-continuation matched. Full AOT LLVM matched 2b52f763072e785f5ee9331a8c2906c1d3279648153bca5dacfef33a36995cb5. Next move target grounding and layout registration to the same checked request after verifying call/closure producer ordering, then optimize and measure.

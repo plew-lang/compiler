@@ -6988,18 +6988,10 @@ pub impl Comp {
         match self.arena.stmts[stmtId] {
             Stmt.Let(val mutable, val nameStart, val nameLen, val tyStart, val tyLen, val tyIsArray, val ty, val init, val annotationOccurrence) => {
                 try self.scanExprInsts(exprId: init)
-                // register the local with its EFFECTIVE type (inferred when there is no
-                // annotation), mirroring codegen — otherwise a later `p.x` on an
-                // inferred-typed `val p = <P …/>` can't recover its type, so a generic
-                // call like `print(p.x + p.y)` fails to discover its instantiation.
-                val le = match self.cur.checkedLocalStorage {
+                val localType = match self.cur.checkedLocalStorage {
                     Optional.Some(v: val storage) => {
                         give match storage.get(key: stmtId) {
-                            Optional.Some(v: val request) => {
-                                val ref = try self.groundCheckedLocalStorageTarget(stmtId: stmtId, request: request)
-                                val info = self.typeInfoOfRef(ref: ref)
-                                give <LetEff start=info.nameStart len=info.nameLen arr=info.kind == 3 ty=ref />
-                            }
+                            Optional.Some(v: val request) => try self.groundCheckedLocalStorageTarget(stmtId: stmtId, request: request)
                             Optional.None => {
                                 val facts = try self.preparedBodyFacts(bodyId: self.cur.bodyId, globalInitializerTarget: self.cur.globalInitializerTarget)
                                 val completion = try self.semanticStmtCompletionInOwner(stmtId: stmtId, owner: facts)
@@ -7011,16 +7003,16 @@ pub impl Comp {
                     Optional.None => {
                         val legacy = try self.scanLocalDeclarationType(stmtId: stmtId, tyStart: tyStart, tyLen: tyLen, tyIsArray: tyIsArray, ty: ty, init: init, annotationOccurrence: annotationOccurrence)
                         try self.finalizeStorageConversion(stmtId: stmtId, exprId: init, targetTerm: legacy.ty)
-                        give legacy
+                        self.addLocal(nameStart: nameStart, nameLen: nameLen, tyStart: legacy.start, tyLen: legacy.len, isArray: legacy.arr, ty: legacy.ty, isInout: false, isMut: mutable, owned: true)
+                        give legacy.ty
                     }
                 }
-                self.addLocal(nameStart: nameStart, nameLen: nameLen, tyStart: le.start, tyLen: le.len, isArray: le.arr, ty: le.ty, isInout: false, isMut: mutable, owned: true)
                 // an INFERRED non-literal type registers its instance the same way an
                 // annotation does: `val r = makeBox()` reaches Box[I64] just like
                 // `val r: Box[I64] = …`. (An array-literal let registers inside
                 // inferLetType itself — shared with the flat module-level walk.)
-                if tyLen == 0U64 && le.ty != ty {
-                    try self.scanType(ref: le.ty)
+                if tyLen == 0U64 && localType != ty {
+                    try self.scanType(ref: localType)
                 }
                 // an ANNOTATED let inside a generic body needs its type scanned UNDER
                 // the active instance env (scanType grounds): `val xs: Array[Box[T]]`
@@ -7029,7 +7021,7 @@ pub impl Comp {
                 // grounded instance died as a null value at emission (mirrors the
                 // grounded param scanType above).
                 if ty != 0U64 {
-                    try self.scanType(ref: le.ty)
+                    try self.scanType(ref: localType)
                 }
             }
             Stmt.Assign(val target, val value) => {
