@@ -17,14 +17,14 @@ pub impl Counts { factory }
 
 fn counts(compiler: inout Comp) -> Counts {
     return <Counts bodies=compiler.arena.bodyInstanceCount() work=compiler.monoWork.bodyCount()
-        instances=compiler.monoWork.genericLayoutCount() functionInstances=compiler.monoWork.fnInsts.count() structures=compiler.arena.structCount()
+        instances=compiler.monoWork.genInsts.count() functionInstances=compiler.monoWork.fnInsts.count() structures=compiler.arena.structCount()
         destructions=compiler.arena.finalDestructions.count() />
 }
 
 fn unchanged(compiler: inout Comp, before: Counts) {
     assert(compiler.arena.bodyInstanceCount() == before.bodies)
     assert(compiler.monoWork.bodyCount() == before.work)
-    assert(compiler.monoWork.genericLayoutCount() == before.instances)
+    assert(compiler.monoWork.genInsts.count() == before.instances)
     assert(compiler.monoWork.fnInsts.count() == before.functionInstances)
     assert(compiler.arena.structCount() == before.structures)
     assert(compiler.arena.finalDestructions.count() == before.destructions)
