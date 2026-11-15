@@ -569,6 +569,7 @@ pub enum RecordedStorageValueType {
     Binding(ref: U64, rootExpression: U64)
     Projection(ref: U64, root: CallArgumentSource)
     Try(ref: U64, operand: CallArgumentSource)
+    Await(ref: U64, operand: CallArgumentSource)
     ShortCircuit(ref: U64, lhs: U64, rhs: U64)
     Aggregate(ref: U64, aggregate: SemanticAggregate, writtenConstruction: Optional[U64])
     Term(ref: U64)

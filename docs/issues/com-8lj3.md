@@ -300,3 +300,7 @@ Verify reuses the local index from its own identifier resolution for use-after-m
 **2026-11-15T18:53:12Z**
 
 Nested aggregate preparation now uses each sealed element occurrence and its saved call dependency, through the same operand reader used by the initializer root. Other expressions still use the residual walker. Five lazy fixtures and a nested array call order probe passed; full same-source AOT LLVM matched 69ca89455aa248e95e59d43b01fa1193632a7b18a7ca08b124035b9e3cd832c9. File-backed diagnostic compilation hit ENOSPC; streaming LLVM to clang succeeded. No optimized timing claim.
+
+**2026-11-15T18:56:58Z**
+
+A local await initializer with a recorded Promise-producing call now carries that exact operand into checked Mid storage preparation. The consumer prepares the call first and uses the existing await publication, preserving suspension and layout semantics. Six async lazy controls passed; three representative async AOT fixtures and the same full compiler source produced matching LLVM (full SHA-256 2ee3e0d71049d1058aa9fe5f2967dd5f27237a458813b66460d7f415e498fd02). Await of an already bound Promise keeps existing behavior. A diagnostic link hit ENOSPC; freeing two superseded scratch binaries allowed the same object to link. No optimized timing claim.

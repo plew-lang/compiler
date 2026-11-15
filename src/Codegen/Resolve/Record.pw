@@ -2851,6 +2851,7 @@ pub impl Comp {
             }
             Expr.Await(val operand) => {
                 try self.recordExpr(exprId: operand, chainHoleRef: chainHoleRef)
+                try self.recordValueOperandCall(exprId: operand)
                 val promiseTerm: U64 = self.parametricExprTerm(exprId: operand)
                 if promiseTerm != 0U64 && promiseTerm < self.arena.typeCount() {
                     val promise: TypeRef = self.arena.typeAt(index: promiseTerm)
