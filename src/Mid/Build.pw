@@ -11,7 +11,7 @@ use ../Ir only { BodyOrigin, CallReceiverPassing, CallArgumentPassing, ForTypeRe
 use ../Diag only { eprintU64, CompileDiagnostic }
 use @Std/Io only { eprint }
 use ../Ops only { opAnd, opOr }
-use ./Ir only { midLocalIsOwnedTemporary, MidEnumDestination, MidRange, MidCanonicalBody, MidClosureBody, MidProjection, MidPlace, MidBorrowCapability, MidConstant, MidOperand, MidCallArgument, MidAggregateKind, MidAggregateElement, MidClosureCapture, MidRvalue, MidCallTarget, MidCallReceiver, MidStatement, MidTerminator, MidLocalDecl, MidValueHomeStability, MidScope, MidBlock, MidBody }
+use ./Ir only { MidStatementLocation, midLocalIsOwnedTemporary, MidEnumDestination, MidRange, MidCanonicalBody, MidClosureBody, MidProjection, MidPlace, MidBorrowCapability, MidConstant, MidOperand, MidCallArgument, MidAggregateKind, MidAggregateElement, MidClosureCapture, MidRvalue, MidCallTarget, MidCallReceiver, MidStatement, MidTerminator, MidLocalDecl, MidValueHomeStability, MidScope, MidBlock, MidBody }
 
 // A successful give transfers its value to the enclosing expression owner.
 enum MidBlockResult {
@@ -195,7 +195,7 @@ struct MidSourceLoopTarget {
 impl MidSourceLoopTarget { factory }
 
 pub struct MidBuildState {
-    mut val storageOrder: Array[U64] = []
+    mut val storageOrder: Array[MidStatementLocation] = []
     mut val sourceFacts: Optional[PreparedSemanticFacts] = <Optional.None />
     pub mut val locals: Array[MidLocalDecl] = []
     pub mut val scopes: Array[MidScope] = []
@@ -2565,8 +2565,9 @@ fn buildMidLetAdmitted(c: inout Comp, state: inout MidBuildState, stmtId: U64, c
                 }
             }
             if term == 0U64 { return <MidBuildError.MissingSemanticType /> }
+            val location = <MidStatementLocation block=state.currentBlock statement=state.blocks[state.currentBlock].statements.count() />
             midInitializeBinding(state: inout state, destination: destination, value: <MidRvalue.StorageBoundary stmtId=stmtId exprId=init targetTerm=term operand=midReturnOperand(c: inout c, operand: operandValue, typeTerm: (match midSourceSemanticTerm(c: inout c, facts: state.sourceFacts, sourceFunction: state.sourceFunction, exprId: init) { Result.Ok(value: val term) => { give term } Result.Err(error: val error) => { return error } })) />)
-            state.storageOrder.append(stmtId)
+            state.storageOrder.append(location)
             if completeEvaluation { midFinishEvaluationScope(state: inout state, scope: evaluation) }
             val ended = binding.endedBinding
             if ended != 0U64 {

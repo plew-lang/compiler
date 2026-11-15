@@ -92,3 +92,7 @@ Address the physical block order review finding by recording local storage order
 **2026-11-15T13:03:35Z**
 
 Checked local storage now rejects a missing call-result descriptor explicitly (including through an Optional payload recipe). Default generators skip checked storage collection and retain their existing preparation route. Full same-source AOT LLVM matched c741b91f6c2d0e4d313a5dd75df533efaa1c5b98629ff0b9b196784bd9ddeff9; five lazy fixtures matched their expected outputs. This is a diagnostic build. The prior producer is still supplied by source traversal; independent scheduling and negative descriptor coverage remain.
+
+**2026-11-15T13:15:32Z**
+
+Canonical storage order now indexes the emitted initialization instructions directly. Preparation visits the indexed operations in emission order and reads their binding and initializer identity at the same instruction, eliminating the full statement scan and the second lookup by source statement. Native mid_binding_identity and five lazy controls passed. Same-source diagnostic AOT LLVM matched c18ae4bab28cb8b83391642e0d193443280c391f160f63a99dc4475c883892f5. Next retain producer call operations in a compatible dependency order and route descriptor production through that typed data.

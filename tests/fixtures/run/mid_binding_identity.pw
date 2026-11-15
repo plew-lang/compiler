@@ -21,7 +21,7 @@ fn verifyStorageEmissionOrder() {
             val statement = c.mid.statements[block.statements.start + statementIndex]
             if statement.value == 0U64 { continue }
             val value = c.mid.rvalues[statement.value - 1U64]
-            if value.tag == 20U64 { blockOrder.append(value.sourceStmt) }
+            if value.tag == 20U64 { blockOrder.append(block.statements.start + statementIndex) }
         }
     }
     if blockOrder.count() != 2U64 || body.storageOrder.len != 2U64 { panic("missing local storage order") }
