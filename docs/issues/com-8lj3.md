@@ -60,3 +60,7 @@ Record the selected Let statement ID at lexical argument production, keeping zer
 **2026-11-15T12:30:37Z**
 
 Mid-derived local storage requests now retain the checked initializer type source as a term or a call-result recipe. Selection occurs once per cached function; concrete publication consumes the saved source and shares the conversion writer with existing entries. Full same-source AOT LLVM SHA-256 matched de47b010786d829175c3ca10f2e85d5dbb747501d9c4761f36bb7e64f6bd2ba2. Seven lazy controls passed, including chained default-result, generic array return, captures and non-continuation. Recipe producer request ordering and removal of residual traversal remain outstanding; performance not measured.
+
+**2026-11-15T12:34:30Z**
+
+Separate local conversion descriptor publication from the residual source Let traversal. The first call argument that consumes a routed local requests its descriptor by body+statement. The body epilogue requests remaining canonical storage in retained order, and repeated requests reuse the published result. Legacy Let still supplies grounded type to remaining cursor consumers (including closure capture), and calls producing initializer results still run through source traversal. Same-source full AOT LLVM hashes agreed (c782c7817549bb1d295fa09c2444697c2ae0b169f78ff66fc4d74c6ffd57941d). Eight lazy control outputs matched. Diagnostic carrier only; measure optimized pair and audit dependency and diagnostic ordering before closure.

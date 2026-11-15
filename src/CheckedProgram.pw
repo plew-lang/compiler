@@ -47,6 +47,7 @@ pub struct MidAccessPreparation {
 struct MidFinalizationInputs {
     val calls: Dictionary[U64, Bool]
     val storage: Dictionary[U64, CheckedLocalStorageRequest]
+    val storageOrder: Array[U64]
 }
 impl MidFinalizationInputs { factory }
 
@@ -357,7 +358,7 @@ impl CompilerSession {
             val storage: Optional[Dictionary[U64, CheckedLocalStorageRequest]] = if self.compiler.arena.functionAt(index: instance.fnIdx).isDefaultGenerator {
                 give <Optional.None />
             } else { give <Optional.Some v=inputs.storage /> }
-            return self.compiler.requestFinalBody(bodyId: bodyId, requests: inout self.finalBodies, reachedDirectCalls: <Optional.Some v=inputs.calls />, checkedLocalStorage: storage)
+            return self.compiler.requestFinalBody(bodyId: bodyId, requests: inout self.finalBodies, reachedDirectCalls: <Optional.Some v=inputs.calls />, checkedLocalStorage: storage, checkedLocalStorageOrder: inputs.storageOrder)
         }
         return self.compiler.requestFinalBody(bodyId: bodyId, requests: inout self.finalBodies)
     }
@@ -378,6 +379,7 @@ impl CompilerSession {
         val facts = try self.compiler.preparedFunctionSemanticFacts(fnIdx: function)
         mut val calls: Dictionary[U64, Bool] = [:]
         mut val storage: Dictionary[U64, CheckedLocalStorageRequest] = [:]
+        mut val storageOrder: Array[U64] = []
         for index in 0U64..<body.blocks.len {
             val block = self.compiler.mid.blocks[body.blocks.start + index]
             for statementIndex in 0U64..<block.statements.len {
@@ -390,6 +392,7 @@ impl CompilerSession {
                 val local = self.compiler.mid.locals[body.locals.start + destination.local]
                 if !local.sourceBinding.isUnproved() {
                     val valueType = try self.compiler.recordedStorageValueType(facts: facts, function: function, expression: value.exprId)
+                    if !storage.contains(key: value.sourceStmt) { storageOrder.append(value.sourceStmt) }
                     storage[value.sourceStmt] = <CheckedLocalStorageRequest expression=value.exprId declarationTarget=local.sourceNameStart binding=local.sourceBinding valueType=valueType />
                 }
             }
@@ -408,7 +411,7 @@ impl CompilerSession {
                 }
             }
         }
-        val inputs = <MidFinalizationInputs calls=calls storage=storage />
+        val inputs = <MidFinalizationInputs calls=calls storage=storage storageOrder=storageOrder />
         self.midFinalizationInputs[function] = inputs
         return <Result.Ok value=inputs />
     }

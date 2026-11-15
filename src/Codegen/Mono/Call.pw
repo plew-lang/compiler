@@ -1421,11 +1421,7 @@ pub impl Comp {
                                     if request.declarationTarget != declarationTarget {
                                         return <Result.Err error=self.diagnosticAt(offset: declarationTarget, msg: "local argument has a foreign checked binding", failureDomain: <FailureDomain.Internal />) />
                                     }
-                                    val index = self.finalStorageIndex(bodyId: self.cur.bodyId, stmtId: statement - 1U64)
-                                    if index >= self.arena.finalStorages.count() {
-                                        return <Result.Err error=self.diagnosticAt(offset: declarationTarget, msg: "local argument storage was not finalized", failureDomain: <FailureDomain.Internal />) />
-                                    }
-                                    return <Result.Ok value=self.arena.finalStorages[index].targetTypeRef />
+                                    return self.requireCheckedLocalStorage(stmtId: statement - 1U64, request: request)
                                 }
                                 Optional.None => {}
                             }
@@ -4796,7 +4792,7 @@ pub impl Comp {
     // registered bodies; a lazy driver can request individual descriptors.
     // A failed scan poisons this request state because partial arena rows are
     // diagnostic-only and must never be reused as executable preparation.
-    inout fn requestFinalBody(bodyId: U64, requests: inout FinalBodyRequests, reachedDirectCalls: Optional[Dictionary[U64, Bool]] = <Optional.None />, checkedLocalStorage: Optional[Dictionary[U64, CheckedLocalStorageRequest]] = <Optional.None />) -> Result[(), CompileDiagnostic] {
+    inout fn requestFinalBody(bodyId: U64, requests: inout FinalBodyRequests, reachedDirectCalls: Optional[Dictionary[U64, Bool]] = <Optional.None />, checkedLocalStorage: Optional[Dictionary[U64, CheckedLocalStorageRequest]] = <Optional.None />, checkedLocalStorageOrder: Array[U64] = []) -> Result[(), CompileDiagnostic] {
         match requests.failure {
             Optional.Some(v: val diagnostic) => { return <Result.Err error=diagnostic /> }
             Optional.None => {}
@@ -4814,6 +4810,7 @@ pub impl Comp {
         self.inCollection = true
         self.cur.reachedDirectCalls = reachedDirectCalls
         self.cur.checkedLocalStorage = checkedLocalStorage
+        self.cur.checkedLocalStorageOrder = checkedLocalStorageOrder
         val result = self.prepareFinalBodyRequest(bodyId: bodyId)
         self.cur = saved
         self.inCollection = collecting
@@ -4908,7 +4905,18 @@ pub impl Comp {
         }
         if instance.adapterTargetBodyId != 0U64 {
             try self.finalizeNewtypeAdapter(bodyId: bodyId)
-        } else { try self.scanBlockInsts(blkId: f.body) }
+        } else {
+            try self.scanBlockInsts(blkId: f.body)
+            match self.cur.checkedLocalStorage {
+                Optional.Some(v: val storage) => {
+                    for statement in self.cur.checkedLocalStorageOrder {
+                        val request = storage.get(key: statement).unwrap()
+                        try self.requireCheckedLocalStorage(stmtId: statement, request: request)
+                    }
+                }
+                Optional.None => {}
+            }
+        }
         if f.hasRecv || f.isAssoc { self.clearSelfItemEnv() }
         return <Result.Ok value=() />
     }
@@ -6863,7 +6871,7 @@ pub impl Comp {
         }
     }
 
-    inout fn prepareCheckedLocalStorage(stmtId: U64, request: CheckedLocalStorageRequest) -> Result[LetEff, CompileDiagnostic] {
+    inout fn groundCheckedLocalStorageTarget(stmtId: U64, request: CheckedLocalStorageRequest) -> Result[U64, CompileDiagnostic] {
         val facts = try self.preparedBodyFacts(bodyId: self.cur.bodyId, globalInitializerTarget: self.cur.globalInitializerTarget)
         val expectedOrigin = facts.bindingStorage(stmtId: stmtId)
         if expectedOrigin.isNone() || !expectedOrigin.unwrap().matches(origin: request.binding) {
@@ -6884,15 +6892,22 @@ pub impl Comp {
             }
             Optional.None => {}
         }
-        val ref = try self.groundCheckedLocalBinding(binding: binding, authoredTerm: authoredTerm)
+        return self.groundCheckedLocalBinding(binding: binding, authoredTerm: authoredTerm)
+    }
+
+    inout fn requireCheckedLocalStorage(stmtId: U64, request: CheckedLocalStorageRequest) -> Result[U64, CompileDiagnostic] {
+        val existing = self.finalStorageIndex(bodyId: self.cur.bodyId, stmtId: stmtId)
+        if existing < self.arena.finalStorages.count() {
+            return <Result.Ok value=self.arena.finalStorages[existing].targetTypeRef />
+        }
+        val ref = try self.groundCheckedLocalStorageTarget(stmtId: stmtId, request: request)
         val sourceRef = match request.valueType {
             RecordedStorageValueType.Term(ref: val term) => try self.groundAndRecordBodyType(ref: term, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.cur.bodyId)
             RecordedStorageValueType.Recipe(id: val recipe) => try self.groundSemanticTypeRecipeForBody(recipeId: recipe, bodyId: self.cur.bodyId, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
         }
         val targetRef = try self.groundAndRecordBodyType(ref: ref, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.cur.bodyId)
         try self.publishStorageConversion(stmtId: stmtId, exprId: request.expression, sourceRef: sourceRef, targetRef: targetRef)
-        val info = self.typeInfoOfRef(ref: ref)
-        return <Result.Ok value=<LetEff start=info.nameStart len=info.nameLen arr=info.kind == 3 ty=ref /> />
+        return <Result.Ok value=targetRef />
     }
 
     // Record has already checked source syntax and types. Executable
@@ -6947,7 +6962,11 @@ pub impl Comp {
                 val le = match self.cur.checkedLocalStorage {
                     Optional.Some(v: val storage) => {
                         give match storage.get(key: stmtId) {
-                            Optional.Some(v: val request) => try self.prepareCheckedLocalStorage(stmtId: stmtId, request: request)
+                            Optional.Some(v: val request) => {
+                                val ref = try self.groundCheckedLocalStorageTarget(stmtId: stmtId, request: request)
+                                val info = self.typeInfoOfRef(ref: ref)
+                                give <LetEff start=info.nameStart len=info.nameLen arr=info.kind == 3 ty=ref />
+                            }
                             Optional.None => {
                                 val facts = try self.preparedBodyFacts(bodyId: self.cur.bodyId, globalInitializerTarget: self.cur.globalInitializerTarget)
                                 val completion = try self.semanticStmtCompletionInOwner(stmtId: stmtId, owner: facts)
