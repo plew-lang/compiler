@@ -212,3 +212,7 @@ Use the retained Mid constant operand to prepare literal storage via its checked
 **2026-11-15T16:39:08Z**
 
 For local array initializers, retain the checked aggregate used by Mid and consume its ordered elements directly in finalization. Six lazy controls and an observable two-element order probe passed; full same-source AOT LLVM matched. Element operations still use shared preparation; nominal constructions require authored type-slot proof replay. Performance not measured.
+
+**2026-11-15T16:42:59Z**
+
+Extend the checked aggregate request from arrays to other memberwise constructions, including records and enum variants. Carry the written construction type for authored-slot proof replay; retain child order, layout registration and conversion publication. Six lazy controls plus the array evaluation-order probe passed; full same-source AOT LLVM matched. Child expressions and other unclassified initializer terms still use shared preparation. Timing was not measured.

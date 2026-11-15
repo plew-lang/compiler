@@ -2609,10 +2609,11 @@ fn midRecordedStorageValueType(c: inout Comp, facts: PreparedSemanticFacts, func
         _ => {}
     }
     if aggregate.found {
-        match aggregate.aggregate.kind {
-            SemanticAggregateKind.Array => { return <Result.Ok value=<RecordedStorageValueType.Array ref=fact.term aggregate=aggregate.aggregate /> /> }
-            _ => {}
+        val written: Optional[U64] = match c.arena.exprs[expression] {
+            Expr.Make(ty: val type, typeStart: _, typeLen: _, variantStart: _, variantLen: _, isEnum: _, fields: _) => <Optional.Some v=type />
+            _ => <Optional.None />
         }
+        return <Result.Ok value=<RecordedStorageValueType.Aggregate ref=fact.term aggregate=aggregate.aggregate writtenConstruction=written /> />
     }
     match facts.valueRegion(exprId: expression) {
         Optional.Some(v: val region) => { return <Result.Ok value=<RecordedStorageValueType.Region ref=fact.term region=region /> /> }

@@ -566,7 +566,7 @@ pub impl SourceBindingOrigin {
 
 pub enum RecordedStorageValueType {
     Constant(ref: U64)
-    Array(ref: U64, aggregate: SemanticAggregate)
+    Aggregate(ref: U64, aggregate: SemanticAggregate, writtenConstruction: Optional[U64])
     Term(ref: U64)
     Region(ref: U64, region: SourceValueRegion)
     Recipe(id: U64)
