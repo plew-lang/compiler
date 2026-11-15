@@ -7241,14 +7241,15 @@ pub impl Comp {
         if self.cur.checkedLocalStorage.isSome() {
             match owner {
                 Optional.Some(v: val prepared) => {
-                    match prepared.executableBlockLength(blockId: blkId) {
-                        Optional.Some(v: val length) => {
-                            if length > self.blockStmtCount(blkId: blkId) {
+                    match prepared.executableBlockRange(blockId: blkId) {
+                        Optional.Some(v: val range) => {
+                            val poolLength = self.arena.blockStmtPool.count()
+                            if range.start > poolLength || range.length > poolLength - range.start {
                                 return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "checked block has an invalid execution range", failureDomain: <FailureDomain.Internal />) />
                             }
                             val mark = self.scopeMark()
-                            for index in 0U64..<length {
-                                try self.scanStmtInsts(stmtId: self.blockStmtAt(blkId: blkId, index: index))
+                            for index in 0U64..<range.length {
+                                try self.scanStmtInsts(stmtId: self.arena.blockStmtPool[range.start + index])
                             }
                             self.popLocals(mark: mark)
                             return <Result.Ok value=() />

@@ -160,3 +160,7 @@ Record retains the executable prefix of each checked source block; routed finali
 **2026-11-15T14:57:15Z**
 
 Parametric Mid construction and finalization now consume the same Record-published block prefix. Mid verifies the reader session and length, and preserves CFG termination; only blocks without a published prefix retain per-statement admission. Five lazy controls passed, including diverging and analytically non-continuing value blocks, and full same-source diagnostic AOT LLVM matched 786fe8cbba3123db5e91709e6f4e946373eb25918f40a6ed526a0e52be1e0764. AST still supplies branch/operand navigation.
+
+**2026-11-15T15:47:58Z**
+
+Record now publishes the first statement-pool index as well as the length of the admitted block prefix. Both Mid construction and routed finalization index the immutable pool from the saved range and validate its bounds. This eliminates looking up the AST block again to navigate the prefix; individual statement and branch handlers are still shared with the residual source traversal. Native range control and five lazy fixtures passed; full same-source AOT LLVM matched 66793e023eec0d13d835ef85f5b9842c534d590d099b1166d475c98ab1dc9f52.

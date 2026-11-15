@@ -114,7 +114,8 @@ fn verifyCheckedExecutionPrefix() {
     c.prepareLexicalBody(fnIdx: owner).unwrap()
     val block = c.arena.functionAt(index: owner).body
     val facts = c.preparedFunctionSemanticFacts(fnIdx: owner).unwrap()
-    if c.blockStmtCount(blkId: block) != 3U64 || facts.executableBlockLength(blockId: block).unwrap() != 2U64 {
+    val range = facts.executableBlockRange(blockId: block).unwrap()
+    if c.blockStmtCount(blkId: block) != 3U64 || range.length != 2U64 || range.start != c.arena.blocks[block].stmtStart {
         panic("checked execution prefix lost the terminating statement or included unreachable code")
     }
 }

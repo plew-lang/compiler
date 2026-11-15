@@ -1166,6 +1166,13 @@ pub enum Stmt {
     Continue(offset: U64)
 }
 
+// An admitted lexical prefix of the immutable block statement pool.
+pub struct SourceStatementRange {
+    pub val start: U64
+    pub val length: U64
+}
+pub impl SourceStatementRange { factory }
+
 // A block owns no Array value. Its statement sequence lives in Arena.blockStmtPool
 // and is addressed by this immutable slice. AST walks routinely copy/match blocks;
 // embedding Array[U64] here made every such read retain/drop the child buffer even

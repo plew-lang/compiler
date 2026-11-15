@@ -617,7 +617,7 @@ impl Comp {
         match self.sourceRecordingOwner() {
             Optional.Some(v: val owner) => {
                 self.sourceFacts.activate(owner: owner)
-                self.sourceFacts.activeBuilder.data.executableBlockLengths[blockId] = length
+                self.sourceFacts.activeBuilder.data.executableBlockRanges[blockId] = <SourceStatementRange start=self.arena.blocks[blockId].stmtStart length=length />
             }
             Optional.None => {}
         }

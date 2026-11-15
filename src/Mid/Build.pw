@@ -1,4 +1,4 @@
-use ../Ir only { SourceBindingOrigin, RecordedStorageValueType }
+use ../Ir only { SourceBindingOrigin, SourceStatementRange, RecordedStorageValueType }
 use ../SourceCompletion only { CompletionTransfer }
 use ../Ir only { SourceExitTarget, SourceTransferFact }
 use ../Diag only { CompileDiagnostic }
@@ -2739,16 +2739,23 @@ fn buildMidReturnAdmitted(c: inout Comp, state: inout MidBuildState, stmtId: U64
 // through the legacy LLVM emitter.
 fn buildMidBlockInto(c: inout Comp, state: inout MidBuildState, blockId: U64, blockResult: MidBlockResult, expressionSequence: Bool = false) -> MidBuildError {
     if blockId >= c.arena.blocks.count() { return <MidBuildError.InvalidBlock /> }
-    val block = c.arena.blocks[blockId]
-    val checkedLength: Optional[U64] = match state.sourceFacts {
+    val checkedRange: Optional[SourceStatementRange] = match state.sourceFacts {
         Optional.Some(v: val facts) => {
             if !facts.belongsToSession(session: c.sourceFactSession()) { return <MidBuildError.MissingSemanticType /> }
-            give facts.executableBlockLength(blockId: blockId)
+            give facts.executableBlockRange(blockId: blockId)
         }
         Optional.None => <Optional.None />
     }
-    val length = checkedLength.unwrapOr(fallback: block.stmtLen)
-    if length > block.stmtLen { return <MidBuildError.InvalidBlock /> }
+    val range = match checkedRange {
+        Optional.Some(v: val range) => range
+        Optional.None => {
+            val block = c.arena.blocks[blockId]
+            give <SourceStatementRange start=block.stmtStart length=block.stmtLen />
+        }
+    }
+    val poolLength = c.arena.blockStmtPool.count()
+    if range.start > poolLength || range.length > poolLength - range.start { return <MidBuildError.InvalidBlock /> }
+    val length = range.length
     mut val scope = state.currentScope
     if !expressionSequence { scope = midOpenScope(state: inout state) }
     mut val result: MidBuildError = <MidBuildError.None />
@@ -2760,8 +2767,8 @@ fn buildMidBlockInto(c: inout Comp, state: inout MidBuildState, blockId: U64, bl
             state.callValues = []
             state.aggregateValues = []
         }
-        val stmtId: U64 = c.arena.blockStmtPool[block.stmtStart + i]
-        if checkedLength.isNone() && !midSourceStatementAdmitted(c: c, state: state, stmtId: stmtId) { return <MidBuildError.MissingSemanticType /> }
+        val stmtId: U64 = c.arena.blockStmtPool[range.start + i]
+        if checkedRange.isNone() && !midSourceStatementAdmitted(c: c, state: state, stmtId: stmtId) { return <MidBuildError.MissingSemanticType /> }
         match c.arena.stmts[stmtId] {
             Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, init: _, annotationOccurrence: _) => {
                 result = buildMidLetAdmitted(c: inout c, state: inout state, stmtId: stmtId, completeEvaluation: !expressionSequence)
