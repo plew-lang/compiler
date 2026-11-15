@@ -63,3 +63,11 @@ gave medians 7.965 s and 7.978 s, faster in two of four measured pairs and
 identical LLVM in all ten runs. The prior 0.13 s difference did not recur at
 that magnitude. Seven targeted native fixtures passed. A descriptor-only
 control, independent review and formal fixed point remain pending.
+
+The internal fixture
+[final_signature_demand](../../tests/fixtures/run/final_signature_demand.pw)
+prepares a String signature with an empty execution queue. Dependency closure
+publishes its destruction contract, leaves the queue empty and is idempotent
+on repeat. It passed with both the fixed and candidate carriers compiling the
+updated compiler module. This exercises signature closure, not the complete
+selected-call conversion path.

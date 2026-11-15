@@ -1,0 +1,29 @@
+use /Frontend only { Comp, FrontendInput, FinalDependencies, analyzeFrontendForRequests }
+use /Ir only { InstanceEnvironment }
+use /SourceAccess only { SourceAccess }
+use @Std/Core only { assert }
+use @Std/Io only { print }
+
+fn main() {
+    mut val compiler = <Comp />
+    val source = "fn keep(value: String) -> String {{ return value }} fn main() {{}}"
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text path="signature.pw" text=source />, sources: <SourceAccess />).unwrap()
+    compiler.initializeFinalCallables().unwrap()
+    val body = compiler.internBodyInstance(fnIdx: 0U64, environment: <InstanceEnvironment />)
+    compiler.prepareFinalCallableSignature(bodyId: body).unwrap()
+    val signature = compiler.arena.bodySignature(bodyId: body)
+    assert(signature.ready)
+    assert(signature.parameterTypes.count() == 1U64)
+    assert(compiler.monoWork.bodyCount() == 0U64)
+    val parameter = signature.parameterTypes[0U64]
+    assert(compiler.finalDestructionIndex(typeRef: parameter) == 0U64)
+    mut val dependencies = <FinalDependencies />
+    compiler.closeFinalDependencies(state: inout dependencies).unwrap()
+    assert(compiler.finalDestructionIndex(typeRef: parameter) != 0U64)
+    assert(compiler.monoWork.bodyCount() == 0U64)
+    val count = compiler.arena.finalDestructions.count()
+    compiler.prepareFinalCallableSignature(bodyId: body).unwrap()
+    compiler.closeFinalDependencies(state: inout dependencies).unwrap()
+    assert(compiler.arena.finalDestructions.count() == count)
+    print("ok")
+}
