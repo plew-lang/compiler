@@ -1291,13 +1291,16 @@ pub impl Comp {
         val bodyId = try self.prepareSelectedCalleeDescriptor(selection: selection, template: template)
         self.demandFinalBody(bodyId: bodyId)
         val index = try self.bodyCalleeIndex(exprId: selection.exprId, siteIsStmt: selection.siteIsStmt, slot: selection.slot)
-        if index < self.arena.finalCalleeCount() {
-            val conversions = self.arena.finalCalleeAt(index: index).argumentConversions
-            for offset in 0U64..<conversions.len {
-                val proof = self.arena.finalCalleeConversionAt(conversions: conversions, index: offset)
-                if proof != 0U64 && !self.conversionProofIsIdentity(id: proof) && !self.conversionProofIsMissing(id: proof) {
-                    try self.finalizeConversionDependencies(conversion: self.thawValueConversionProof(id: proof))
-                }
+        if index < self.arena.finalCalleeCount() { try self.demandFinalCallConversions(index: index) }
+        return <Result.Ok value=() />
+    }
+
+    inout fn demandFinalCallConversions(index: U64) -> Result[(), CompileDiagnostic] {
+        val conversions = self.arena.finalCalleeAt(index: index).argumentConversions
+        for offset in 0U64..<conversions.len {
+            val proof = self.arena.finalCalleeConversionAt(conversions: conversions, index: offset)
+            if proof != 0U64 && !self.conversionProofIsIdentity(id: proof) && !self.conversionProofIsMissing(id: proof) {
+                try self.finalizeConversionDependencies(conversion: self.thawValueConversionProof(id: proof))
             }
         }
         return <Result.Ok value=() />

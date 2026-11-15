@@ -1,0 +1,46 @@
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use /Ir only { CallTemplateKind, Stmt, ValueConversionProof }
+use /SourceAccess only { SourceAccess }
+use @Std/Core only { assert }
+use @Std/Io only { print }
+
+fn main() {
+    mut val compiler = <Comp />
+    val source = "fn caller(value: Sample) {{ useValue(value: value) }} fn useValue(value: any Readable) {{}} trait Readable {{ fn read() -> I64 }} struct Sample {{}} impl Sample as Readable {{ fn read() -> I64 {{ return 1I64 }} }}"
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text path="box-demand.pw" text=source />, sources: <SourceAccess />).unwrap()
+    compiler.initializeFinalCallables().unwrap()
+    compiler.prepareLexicalBody(fnIdx: 0U64).unwrap()
+    val caller = compiler.arena.functionAt(index: 0U64)
+    val expression = match compiler.arena.stmts[compiler.blockStmtAt(blkId: caller.body, index: 0U64)] {
+        Stmt.ExprStmt(expr: val expression) => expression,
+        _ => { panic "missing direct call" },
+    }
+    val environment = compiler.bodyInstanceEnvironment(fnIdx: 0U64, args: [], recvInstRef: 0U64).unwrap()
+    val callerBody = compiler.internBodyInstance(fnIdx: 0U64, environment: environment)
+    compiler.enterFinalCallableEnvironment(bodyId: callerBody, instance: compiler.arena.bodyInstanceAt(index: callerBody - 1U64), function: caller).unwrap()
+    val template = compiler.callTemplateForSourceBody(fnIdx: 0U64, exprId: expression).unwrap()
+    match template.kind {
+        CallTemplateKind.Direct(callee: val callee, receiver: val receiver, args: val arguments, calleeTypeArgs: val typeArguments, proofId: val proof) => {
+            val selection = compiler.selectDirectTemplateCall(exprId: expression, callee: callee, receiver: receiver, receiverTypeTerm: template.receiverTypeTerm, expectedResultTerm: template.expectedResultTerm, calleeTypeArgs: typeArguments, arguments: compiler.callTemplateArguments(range: arguments), proof: compiler.thawStaticConformanceProof(id: proof)).unwrap()
+            val calleeBody = compiler.prepareSelectedCalleeDescriptor(selection: selection, template: template).unwrap()
+            assert(calleeBody != 0U64 && compiler.monoWork.bodyCount() == 0U64)
+            assert(compiler.arena.finalExistentials.count() == 0U64)
+            val index = compiler.bodyCalleeIndex(exprId: expression).unwrap()
+            val conversions = compiler.arena.finalCalleeAt(index: index).argumentConversions
+            val proofId = compiler.arena.finalCalleeConversionAt(conversions: conversions, index: 0U64)
+            match compiler.thawValueConversionProof(id: proofId) {
+                ValueConversionProof.ExistentialBox(sourceRef: _, targetRef: _, traitIdx: _, proof: _) => {}
+                _ => { panic "missing frozen box conversion" }
+            }
+            compiler.demandFinalCallConversions(index: index).unwrap()
+            val member = compiler.arena.finalExistentials[0U64].members[0U64]
+            assert(compiler.monoWork.containsBody(bodyId: member.bodyId))
+            assert(compiler.monoWork.containsBody(bodyId: member.adapterBodyId))
+            val count = compiler.monoWork.bodyCount()
+            compiler.demandFinalCallConversions(index: index).unwrap()
+            assert(compiler.monoWork.bodyCount() == count)
+        }
+        _ => { panic "missing selected direct call" }
+    }
+    print("ok")
+}
