@@ -380,8 +380,21 @@ The [activation-input plan](ownership-and-access.md#async-activation-inputs)
 connects that requirement to initial Mid owners and source cleanup. Operand/frame
 storage and successful async signature registration do not establish it alone.
 
-Final dependencies follow selected calls, globals, aggregate/storage types, and
-implicit destruction. Destruction visits fields, enum payloads, Buffer elements,
+Body checking publishes a typed body that records selected calls, trait
+requirements and conformance evidence, with explicit evaluation order and
+control flow. Finalization follows reachable operations in that body and
+substitutes the concrete instance environment. When static dispatch requires a
+concrete implementation, finalization resolves it within the selected trait
+requirement and its evidence. Source name lookup and overload selection end
+at body checking.
+
+Finalization collects executable dependencies from calls, globals, storage and
+aggregate layouts, and implicit destruction. It may walk the typed body directly.
+A dependency index, when warranted by measurement, is derived from that body
+and preserves its control flow and evaluation order. Repeated requests for the
+same instance reuse its registered identity and preparation state.
+
+Destruction visits fields, enum payloads, Buffer elements,
 and strong references with structural type identity and a cycle-safe worklist;
 weak references do not drop pointees. Closure creation prepares environment/drop
 metadata without making its body effectful execution. Signature registration and
