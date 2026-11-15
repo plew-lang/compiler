@@ -56,3 +56,10 @@ runs. The four measured pairs after warmup gave medians 7.901 s and 8.030 s.
 The candidate was slower in three of four pairs. Investigate adapter target
 reads and repeated signature preparation, and repeat the comparison before
 admitting this candidate. This was not a formal fixed-point run.
+
+Candidate 5c8be191 reads only the adapter target ID in the demand path.
+[Fixed-source repeat](../../../evidence/rejection-domains/diagnostic-domain-implementation/trait-receiver-admission/phase3-direct-demand-accessor.json)
+gave medians 7.965 s and 7.978 s, faster in two of four measured pairs and
+identical LLVM in all ten runs. The prior 0.13 s difference did not recur at
+that magnitude. Seven targeted native fixtures passed. A descriptor-only
+control, independent review and formal fixed point remain pending.
