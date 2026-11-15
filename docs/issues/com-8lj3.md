@@ -112,3 +112,7 @@ Direct free-call initializers now prepare the result producer from the checked s
 **2026-11-15T13:38:09Z**
 
 Pass the exact template index retained by checked initialization into method, dynamic, operator and subscript finalization. Preserve direct free-call preparation and receiver/evidence and argument ordering. The typed index replaces expression-based selection lookup, while operand traversal and preparation order still depend on the residual walk. Ten targeted lazy controls passed and full same-source AOT LLVM matched b58f859a7d2b9f246adcbc0026c796ee332eb73a7ef4d18f43a8ed58239a4d8e. Next move operator and nested call operands to selected dependency inputs and verify the final scheduling, diagnostic and timing requirements.
+
+**2026-11-15T13:43:17Z**
+
+Top-level operator initializers now prepare operands from the retained operand range in evaluation order before publishing the selected result descriptor. Operand expressions still use residual preparation. Short-circuit expressions keep their control-flow path because Record publishes no operator template for them. Eight lazy fixtures and an observable left/right call-order comparison passed; same-source AOT LLVM matched 506ddb008230111fc149347611c551dc10c92bfb6d6699b687dda2fc433c10c5.

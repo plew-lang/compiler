@@ -7007,6 +7007,16 @@ pub impl Comp {
                     _ => {}
                 }
             }
+            CallTemplateKind.Operator(op: _, operands: val operands, resolution: _, resultTerm: _) => {
+                if operands.start > self.callTemplateOperandPool.count() || operands.len > self.callTemplateOperandPool.count() - operands.start {
+                    return <Result.Err error=self.diagnosticAt(offset: recipe.callSite.originStart, msg: "selected operator has an invalid checked operand range", failureDomain: <FailureDomain.Internal />) />
+                }
+                for offset in 0U64..<operands.len {
+                    val source = self.callTemplateOperandPool[operands.start + offset]
+                    try self.scanExprInsts(exprId: self.callArgumentExprId(source: source))
+                }
+                return self.recordBodyOperatorCallee(exprId: request.expression, template: template)
+            }
             _ => {}
         }
         return self.scanExprInstsWithTemplate(exprId: request.expression, selected: index + 1U64)
