@@ -2573,6 +2573,7 @@ pub impl FinalExistentialResolution { factory }
 pub struct FinalStorageResolution {
     pub val bodyId: U64
     pub val stmtId: U64
+    pub val exprId: U64
     pub val sourceTypeRef: U64
     pub val targetTypeRef: U64
     pub val conversion: U64

@@ -2779,7 +2779,7 @@ pub impl Comp {
 
     inout fn publishStorageConversion(stmtId: U64, exprId: U64, sourceRef: U64, targetRef: U64) -> Result[(), CompileDiagnostic] {
         val conversion = try self.finalValueConversion(sourceRef: sourceRef, targetRef: targetRef, exprId: exprId)
-        self.putFinalStorage(fact: <FinalStorageResolution bodyId=self.currentBodyInstanceId() stmtId=stmtId sourceTypeRef=sourceRef targetTypeRef=targetRef conversion=self.freezeValueConversionProof(proof: conversion) />)
+        self.putFinalStorage(fact: <FinalStorageResolution bodyId=self.currentBodyInstanceId() stmtId=stmtId exprId=exprId sourceTypeRef=sourceRef targetTypeRef=targetRef conversion=self.freezeValueConversionProof(proof: conversion) />)
         return <Result.Ok value=() />
     }
 
@@ -7080,6 +7080,9 @@ pub impl Comp {
                     Optional.Some(v: val storage) => {
                         match storage.get(key: stmtId) {
                             Optional.Some(v: val request) => {
+                                if request.expression != init {
+                                    return <Result.Err error=self.diagnosticAt(offset: nameStart, msg: "checked local has a foreign initializer occurrence", failureDomain: <FailureDomain.Internal />) />
+                                }
                                 try self.prepareCheckedInitializer(request: request)
                                 // Publish at the checked operation's execution position
                                 // so deferred consumers cannot reorder its diagnostics.

@@ -31,7 +31,17 @@ fn main() {
     // frontend fact and instantiate before drop elaboration and verification.
     val instance = c.internBodyInstance(fnIdx: owner, environment: <InstanceEnvironment />)
     val identity = c.freezeValueConversionProof(proof: <ValueConversionProof.Identity />)
-    c.putFinalStorage(fact: <FinalStorageResolution bodyId=instance stmtId=bindingStatement sourceTypeRef=fileTerm targetTypeRef=fileTerm conversion=identity />)
+    val expression = match c.arena.stmts[bindingStatement] {
+        Stmt.Let(init: val init, mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, annotationOccurrence: _) => init
+        _ => { panic("missing checked binding") }
+    }
+    c.putFinalStorage(fact: <FinalStorageResolution bodyId=instance stmtId=bindingStatement exprId=expression + 1U64 sourceTypeRef=fileTerm targetTypeRef=fileTerm conversion=identity />)
+    val foreign = instantiateCanonicalMidBody(c: inout c, body: frozen, bodyId: instance)
+    match foreign.error {
+        MidInstantiateError.InvalidFinalResolution => {}
+        _ => { panic("foreign storage expression was accepted") }
+    }
+    c.putFinalStorage(fact: <FinalStorageResolution bodyId=instance stmtId=bindingStatement exprId=expression sourceTypeRef=fileTerm targetTypeRef=fileTerm conversion=identity />)
     val concrete = instantiateCanonicalMidBody(c: inout c, body: c.mid.store(body: body), bodyId: instance)
     mut val instantiated: Bool = false
     match concrete.error { MidInstantiateError.None => { instantiated = true } _ => {} }

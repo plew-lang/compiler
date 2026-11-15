@@ -202,6 +202,10 @@ fn instantiateCanonicalStorageBoundary(c: inout Comp, rvalueId: U64, environment
         return 0U64
     }
     val resolution: FinalStorageResolution = c.arena.finalStorages[index]
+    if resolution.exprId != source.exprId {
+        if !midInstantiateHasError(error: error) { error = <MidInstantiateError.InvalidFinalResolution /> }
+        return 0U64
+    }
     val operand: U64 = instantiateCanonicalOperand(c: inout c, bodyId: bodyId, operandId: source.operand, environment: environment, error: inout error)
     val target: U64 = instantiateMidTerm(c: inout c, typeTerm: source.targetTerm, bodyId: bodyId, environment: environment, error: inout error)
     if operand == 0U64 || !c.typeRefEq(a: target, b: resolution.targetTypeRef) || !c.typeRefEq(a: canonicalMidOperandTypeRef(c: c, operandId: operand), b: resolution.sourceTypeRef) || c.conversionProofIsMissing(id: resolution.conversion) {

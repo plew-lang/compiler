@@ -140,3 +140,7 @@ Extended mid_storage_optional_conversion with the same generic local initializer
 **2026-11-15T14:15:38Z**
 
 RED: a native mutation control in mid_binding_identity reported the later initializer's invalid recipe before the earlier initializer's foreign binding. GREEN: publish ordinary checked local storage at its initialization after preparing its dependencies; the same fixture reports the earlier error. Six lazy controls passed, and full same-source diagnostic AOT LLVM matched 7a96dd36a87269d5696cffc88e4df5507698ea52282852085eed02da582df172. Independent review found remaining residual AST traversal for block/aggregate/wrapped initializers, missing routed Let request fallbacks in argument and closure capture readers, and an unverified initializer expression identity in the storage hand-off. It also noted that target layout registration still precedes conversion grounding within an occurrence. Task remains open.
+
+**2026-11-15T14:24:32Z**
+
+The native binding-control reproducer supplied a valid origin with a same-typed later initializer; the old candidate passed the foreign initializer and then reported the later malformed recipe. Checked requests now reject that mismatch before scanning the expression. FinalStorageResolution retains the expression ID, and canonical Mid instantiation rejects a wrong-expression row even with matching body, statement and types (mid_if_cfg control). Both native fixtures passed and full same-source diagnostic AOT LLVM matched e9ebe898db669eda43e03faf94ab5fe89536e0e8e7cee9fd073ceb134fd5a467.

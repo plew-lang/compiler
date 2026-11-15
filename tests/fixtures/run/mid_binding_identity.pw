@@ -71,6 +71,20 @@ fn verifyStorageDiagnosticOrder() {
         }
         Result.Ok(value: _) => { panic("invalid initializations were accepted") }
     }
+    val laterValue = match c.arena.stmts[later] {
+        Stmt.Let(init: val init, mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, annotationOccurrence: _) => init
+        _ => { panic("fixture is missing the later local") }
+    }
+    val binding = facts.binding(stmtId: first).unwrap()
+    val foreign = <CheckedLocalStorageRequest expression=laterValue declarationTarget=binding.declarationTarget binding=facts.bindingStorage(stmtId: first).unwrap() valueType=<RecordedStorageValueType.Term ref=term /> />
+    c.cur.checkedLocalStorage = <Optional.Some v=[first: foreign, later: laterRequest] />
+    match c.scanBlockInsts(blkId: block) {
+        Result.Err(error: val diagnostic) => {
+            if diagnostic.message != "checked local has a foreign initializer occurrence" { panic(diagnostic.message) }
+        }
+        Result.Ok(value: _) => { panic("foreign initializer was accepted") }
+    }
+
 }
 
 fn main() {
