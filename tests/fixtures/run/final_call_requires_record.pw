@@ -5,7 +5,8 @@ use /Frontend only { Comp }
 use /Ir only { CachedCallee, CallTemplate, CallTemplateKind, CallTemplateReceiver, Expr, Func }
 
 fn rejected(compiler: inout Comp, expression: U64) {
-    match compiler.resolveBodyCallee(exprId: expression) {
+    val template = compiler.callTemplateForCurrentBody(exprId: expression).unwrap()
+    match compiler.resolveBodyCallee(exprId: expression, template: template) {
         Result.Err(error: val diagnostic) => {
             if diagnostic.message != "internal error: written call CallTemplate was not recorded" { panic diagnostic.message }
         }

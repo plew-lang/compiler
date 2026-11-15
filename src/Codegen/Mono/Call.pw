@@ -6491,7 +6491,11 @@ pub impl Comp {
                 _ => <CallTemplateReceiver.None />
             }
             match receiver {
-                CallTemplateReceiver.PriorCallResult(exprId: val producer, siteKey: val site) => {
+                // An ExtMethod owns its view separately from the receiver
+                // expression. Prepare the base call here; the method applies
+                // the view after the result descriptor is available.
+                CallTemplateReceiver.PriorCallResult(exprId: val producer, siteKey: val site) |
+                CallTemplateReceiver.PriorCallResultWithViews(exprId: val producer, siteKey: val site, views: _) => {
                     if producer != expression {
                         return <Result.Err error=self.diagnosticAt(offset: site.originStart, msg: "checked receiver dependency has a foreign source expression", failureDomain: <FailureDomain.Internal />) />
                     }

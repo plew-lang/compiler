@@ -28,7 +28,8 @@ fn check(start: U64, length: U64) {
         panic("missing operator builder")
     }
     compiler.cur.bodyFnIdx = owner
-    match compiler.recordBodyOperatorCallee(exprId: expression) {
+    val recorded = compiler.callTemplateForCurrentBody(exprId: expression).unwrap()
+    match compiler.recordBodyOperatorCallee(exprId: expression, template: recorded) {
         Result.Err(error: val diagnostic) => {
             if diagnostic.message != "internal error: selected operator has an invalid operand range" { panic(diagnostic.message) }
         }

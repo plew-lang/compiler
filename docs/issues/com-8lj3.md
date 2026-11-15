@@ -124,3 +124,7 @@ Nested PriorCallResult arguments and operator operands in routed ordinary bodies
 **2026-11-15T13:52:29Z**
 
 Method and extension-method receivers that are direct prior call results now prepare their producer from the checked receiver key, before explicit and default arguments. A standalone control verifies receiver/explicit/default order. Twelve lazy fixtures passed and full same-source AOT LLVM matched f5633b20d16eba2aa55f1ae5d5892a8bfe767d68cb53ae4aa004b33b7cb44a9e. Receivers wrapped by value views still need the residual proof walk; next preserve its postorder proof replay while routing the base call by its exact dependency.
+
+**2026-11-15T14:00:29Z**
+
+View-decorated call receivers now use the same retained base call dependency as plain receivers. The ExtMethod continues to replay view evidence after the base descriptor. Five lazy fixtures and the explicit make()#Source.value() witness control passed. Same-source AOT LLVM matched 2735a8db9f15ed4953d7255e31104e57c75f6dd7d00c78f599c3ea71e9955eba. Two older internal fixtures failed to compile with the new explicit-template API; adapted their calls while retaining the rejection assertions and verified both by native execution.
