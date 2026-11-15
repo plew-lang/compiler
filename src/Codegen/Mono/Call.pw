@@ -1432,7 +1432,9 @@ pub impl Comp {
                                     }
                                     return self.requireCheckedLocalStorage(stmtId: statement - 1U64, request: request)
                                 }
-                                Optional.None => {}
+                                Optional.None => {
+                                    return <Result.Err error=self.diagnosticAt(offset: declarationTarget, msg: "local argument has no checked storage request", failureDomain: <FailureDomain.Internal />) />
+                                }
                             }
                         }
                         Optional.None => {}
@@ -6037,7 +6039,9 @@ pub impl Comp {
                             }
                             return <Result.Ok value=target />
                         }
-                        Optional.None => {}
+                        Optional.None => {
+                            return <Result.Err error=self.diagnosticAt(offset: capture.bindingTarget, msg: "closure capture has no checked storage request", failureDomain: <FailureDomain.Internal />) />
+                        }
                     }
                 }
                 Optional.None => {}

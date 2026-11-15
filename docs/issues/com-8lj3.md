@@ -144,3 +144,7 @@ RED: a native mutation control in mid_binding_identity reported the later initia
 **2026-11-15T14:24:32Z**
 
 The native binding-control reproducer supplied a valid origin with a same-typed later initializer; the old candidate passed the foreign initializer and then reported the later malformed recipe. Checked requests now reject that mismatch before scanning the expression. FinalStorageResolution retains the expression ID, and canonical Mid instantiation rejects a wrong-expression row even with matching body, statement and types (mid_if_cfg control). Both native fixtures passed and full same-source diagnostic AOT LLVM matched e9ebe898db669eda43e03faf94ab5fe89536e0e8e7cee9fd073ceb134fd5a467.
+
+**2026-11-15T14:31:59Z**
+
+Routed local arguments and closure captures with a recorded Let identity now reject an absent request. The native mutation control kept the old scope row deliberately: the old compiler recovered the argument type; the new one reports both precise internal failures. Real closure captures and unused closures, generic conversion and non-continuation passed in four lazy runs; full same-source diagnostic AOT LLVM matched 80b1e65ca7b3651de428b7c93d3d17bc393c4ca3ec483f125020ff1cfcc8d410.

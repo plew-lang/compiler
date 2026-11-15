@@ -1,7 +1,7 @@
 use @Std/Io only { write }
 use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
 use /SourceAccess only { SourceAccess }
-use /Ir only { Expr, Stmt, RecordedStorageValueType, CheckedLocalStorageRequest, SourceBindingOrigin, BodyInstance, InstanceEnvironment }
+use /Ir only { Expr, Stmt, RecordedStorageValueType, CheckedLocalStorageRequest, SourceBindingOrigin, BodyInstance, InstanceEnvironment, CallArgumentSource, SemanticClosureCapture }
 use /Mid only { prepareMidSourceState, MidBuildState, MidBuildError, MidOperand, MidRvalue, MidStatement, addMidLocal, midLocalForBinding, midPlaceForRecordedIdent, buildMidLet, buildParametricMidBody }
 
 fn verifyStorageEmissionOrder() {
@@ -83,6 +83,24 @@ fn verifyStorageDiagnosticOrder() {
             if diagnostic.message != "checked local has a foreign initializer occurrence" { panic(diagnostic.message) }
         }
         Result.Ok(value: _) => { panic("foreign initializer was accepted") }
+    }
+    c.cur.checkedLocalStorage = <Optional.Some v=[:] />
+    c.addLocal(nameStart: binding.declarationTarget, nameLen: 5U64, tyStart: 0U64, tyLen: 0U64, isArray: false, ty: term, isInout: false, isMut: false, owned: true)
+    val argument = <CallArgumentSource.Local exprId=firstValue declarationTarget=binding.declarationTarget term=term bindingStatement=first + 1U64 />
+    val capture = <SemanticClosureCapture bindingStatement=first + 1U64 bindingTarget=binding.declarationTarget nameLen=5U64 typeTerm=term />
+    val argumentResult = c.groundCallArgumentSource(source: argument)
+    val captureResult = c.finalClosureCaptureType(capture: capture, enclosingBodyId: c.cur.bodyId)
+    match argumentResult {
+        Result.Err(error: val diagnostic) => {
+            if diagnostic.message != "local argument has no checked storage request" { panic(diagnostic.message) }
+        }
+        Result.Ok(value: _) => { panic("local argument recovered a missing checked request") }
+    }
+    match captureResult {
+        Result.Err(error: val diagnostic) => {
+            if diagnostic.message != "closure capture has no checked storage request" { panic(diagnostic.message) }
+        }
+        Result.Ok(value: _) => { panic("closure capture recovered a missing checked request") }
     }
 
 }
