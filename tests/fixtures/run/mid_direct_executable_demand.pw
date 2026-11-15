@@ -1,0 +1,45 @@
+use /CheckedProgram only { CompilerSession, CompilerSessionResult }
+use /Frontend only { FrontendInput }
+use /Mid/DeclarationAccess only { DeclarationAccessNode }
+use /SourceAccess only { SourceAccess, SourceResource }
+use @Std/Core only { assert }
+use @Std/Io only { print }
+
+fn main() {
+    val source = "fn caller(flag: Bool) {{ if flag {{ skipped(value: {{ while true {{}} give 1I64 }}) }} stop(value: if flag {{ give 1I64 }} else {{ return }}) }} fn skipped(value: I64) {{}} diverge fn stop(value: I64) {{ panic \"stop\" }} fn main() {{}}"
+    val sources = <SourceAccess stdRoot="plew:std/".bytes() resources=[
+        <SourceResource path="plew:std/Lang.pw".bytes() text="pub extern(plewIntrinsic) {{ struct String }}" />,
+        <SourceResource path="plew:std/Demand.pw".bytes() text=source />,
+    ] />
+    match CompilerSession.open(input: <FrontendInput.File path="plew:std/Demand.pw" />, sources: sources) {
+        CompilerSessionResult.Failure(diagnostic: val diagnostic) => { panic diagnostic.message }
+        CompilerSessionResult.Success(session: val opened) => {
+            mut val session = move opened
+            val root = match session.prepareFunction(function: 0U64) {
+                Result.Ok(value: val prepared) => prepared,
+                Result.Err(error: val diagnostic) => { panic diagnostic.message },
+            }
+            val requested = session.registeredBodies()
+            mut val reached = false
+            for body in requested {
+                val prepared = match session.prepareBody(bodyId: body) {
+                    Result.Ok(value: val value) => value,
+                    Result.Err(error: val diagnostic) => { panic diagnostic.message },
+                }
+                for declaration in prepared.declarations {
+                    match declaration.root {
+                        DeclarationAccessNode.Function(function: val function) => {
+                            assert(function != 1U64)
+                            if function == 2U64 { reached = true }
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            assert(reached)
+            assert(session.prepareFunction(function: 0U64).unwrap().bodyId == root.bodyId)
+            assert(session.registeredBodies().count() == requested.count())
+        }
+    }
+    print("ok")
+}

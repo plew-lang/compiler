@@ -91,3 +91,12 @@ On `mid_call_reached_completion`, final body scans fell from 46 to 42.
 Same-source compiler medians were 8.402 s to 8.370 s, with identical LLVM
 in all ten runs. This is a diagnostic comparison. Verify per-callee demand
 in both modes and re-review the diagnostic fix before closure.
+
+Per-callee AOT diagnostic on `mid_call_reached_completion`: the baseline
+declares frozen bodies for identity, sink, update and stop. The f7598453
+candidate declares stop and omits the other three. The instance summary still
+records all four identities, as expected for descriptor retention.
+The [session demand fixture](../../tests/fixtures/run/mid_direct_executable_demand.pw)
+also passed when built against the current sources. It observes the actual
+lazy worklist, requires the reached diverging callee, excludes the blocked
+outer call, and checks repeated requests preserve body identity and count.
