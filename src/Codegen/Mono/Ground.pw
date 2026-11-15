@@ -1395,12 +1395,15 @@ pub impl Comp {
         }
         if self.isGenericInst(ref: ref) {
             if (try self.tyRefIsGround(ref: ref)) {
-                mut val j: U64 = 0
-                while j < self.monoWork.genInsts.count() {
-                    if self.typeRefEq(a: self.monoWork.genInsts[j], b: ref) {
+                val identitiesSealed = self.arena.typeDeclarationResolutionComplete()
+                // An exact ID already matched a registered immutable type.
+                // Newly seen IDs still require structural equality.
+                if identitiesSealed && self.monoWork.hasConfirmedGenericLayout(ref: ref) { return <Result.Ok value=() /> }
+                for index in 0U64..<self.monoWork.genericLayoutCount() {
+                    if self.typeRefEq(a: self.monoWork.genericLayoutAt(index: index), b: ref) {
+                        if identitiesSealed { self.monoWork.confirmGenericLayout(ref: ref) }
                         return <Result.Ok value=() />
                     }
-                    j += 1
                 }
                 // gen mode: don't instantiate a generic over a to-be-derived type (spec/16).
                 if self.genMode {
@@ -1409,7 +1412,8 @@ pub impl Comp {
                     }
                 }
                 try self.checkInstDepth(ref: ref)
-                self.monoWork.genInsts.append(ref)
+                self.monoWork.appendGenericLayout(ref: ref)
+                if identitiesSealed { self.monoWork.confirmGenericLayout(ref: ref) }
                 // scan the generic struct's fields under this instantiation's env so an
                 // `Array[T]` field registers its concrete element (`Array[I32]`) — the
                 // runtime is keyed off the instantiation, not the `PlewArray_T` template.

@@ -45,3 +45,7 @@ Performance evidence at eca80ef6: scanType compares all registered generic layou
 **2026-11-15T20:06:57Z**
 
 Rejected candidate 18daa3c5: on the same source, same retained 4e6b0256 gen2 object build, and LLVM20 dynamic link, six alternating pairs measured 7.865 s baseline and 8.029 s indexed candidate; candidate slower in all six, identical LLVM in all twelve. Reverted the product and fixture changes. The benchmark does not attribute the regression to a particular part of the index. Next evaluate exact-ref reuse or a cheaper sealed-key index under a matched build. Existing API-boundary work remains open.
+
+**2026-11-15T20:13:48Z**
+
+Exact-ref probe on eca80ef6: 30,935 of 42,209 generic registration queries revisit an ID already proven registered in finalization. Those queries account for 8,002,769 candidate equality calls and 9,824,474 unequal-ID head comparisons. Candidate reuses only a positive result for the same immutable TypeTerm ID after declaration sealing, preserving structural search for new IDs, insertion order and recursion/depth gates. Four lazy controls and same-source LLVM passed. Matched optimized timing and internal runtime checks are pending.

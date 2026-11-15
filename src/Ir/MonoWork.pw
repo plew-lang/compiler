@@ -7,6 +7,18 @@ pub impl MonoWork {
         if bodyId == 0U64 || (prior != 0U64 && prior != bodyId) { panic("inconsistent executable entry body") }
         self.entryBodies[function] = bodyId
     }
+    fn genericLayoutCount() -> U64 { return self.genericLayouts.count() }
+    fn genericLayoutAt(index: U64) -> U64 { return self.genericLayouts[index] }
+    fn genericLayoutList() -> Array[U64] { return self.genericLayouts }
+    fn hasConfirmedGenericLayout(ref: U64) -> Bool {
+        return ref < self.confirmedGenericLayouts.count() && self.confirmedGenericLayouts[ref]
+    }
+    inout fn confirmGenericLayout(ref: U64) {
+        while self.confirmedGenericLayouts.count() <= ref { self.confirmedGenericLayouts.append(false) }
+        self.confirmedGenericLayouts[ref] = true
+    }
+    inout fn appendGenericLayout(ref: U64) { self.genericLayouts.append(ref) }
+
     fn bodyCount() -> U64 { return self.bodyRows.count() }
     fn bodyAt(index: U64) -> U64 { return self.bodyRows[index] }
     fn bodies() -> Array[U64] { return self.bodyRows }
