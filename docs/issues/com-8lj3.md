@@ -132,3 +132,7 @@ View-decorated call receivers now use the same retained base call dependency as 
 **2026-11-15T14:04:14Z**
 
 Native final_call_requires_record now verifies missing selected call, mismatched source occurrence, missing final descriptor and an OptionalPayload recipe whose child ID is invalid. The old compiler passed the missing/foreign controls but the expanded fixture aborted with invalid checked recipe produced a result on the invalid child. Checked evaluation now rejects an invalid recipe or body instead of returning zero; all controls then passed in native execution. No performance run in this change.
+
+**2026-11-15T14:07:28Z**
+
+Extended mid_storage_optional_conversion with the same generic local initializer instantiated as Optional[Person] and Optional[Group] (String and Array payloads), followed by a second Person request. AOT and lazy stdout matched Grace/team/Lin after the existing controls. A diagnostic probe with val unused = skipped(value: { while true {} give 1I64 }) in an untaken branch ran as 42 in both modes. The AOT trace retained the skipped instance identity but declared only the reachable probe, not skipped. These controls used the retained 9f182da2 diagnostic carrier; strict malformed-recipe behavior is tested separately at 45b76fde.

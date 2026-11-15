@@ -17,6 +17,19 @@ fn describe(o: Optional[any Named]) {
 fn person() -> Optional[Person] {
     return <Optional[Person].Some v=<Person name="Ada" /> />
 }
+struct Group { pub val labels: Array[String] }
+pub impl Group { factory }
+pub impl Group as Named { fn label() -> String { return self.labels[0U64] } }
+
+fn some[T](value: T) -> Optional[T] {
+    return <Optional[T].Some v=value />
+}
+
+fn describeErased[T](value: T) where T: Named {
+    val erased: Optional[any Named] = some(value: value)
+    describe(o: erased)
+}
+
 fn main() {
     mut val value: Optional[any Named] = person()
     describe(o: value)
@@ -25,4 +38,7 @@ fn main() {
     describe(o: value)
     value = person()
     describe(o: value)
+    describeErased(value: <Person name="Grace" />)
+    describeErased(value: <Group labels=["team"] />)
+    describeErased(value: <Person name="Lin" />)
 }
