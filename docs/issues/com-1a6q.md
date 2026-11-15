@@ -220,3 +220,23 @@ through the session boundary. Current controls include
 `nested_field_array_inout` and `mid_inout_shared_writeback_pin`. A scoped
 control must still observe actual body demand when a selected outer call is
 not emitted.
+
+[com-kphi](com-kphi.md) owns the first end-to-end discovery migration after
+descriptor separation. The final performance gate depends on both tasks.
+
+The source-navigation gaps confirmed for ordinary direct calls are assigned to
+the two tasks above. The remaining families are accounted for as follows.
+
+- Gen global selection remains on the existing checked binding path. The
+  migration keeps this path and exercises the generation suite.
+- Static trait and existential descriptors already apply retained evidence.
+  Preserve those paths and use the
+  [existential evidence fixture](../../tests/fixtures/run/existential_implementation_evidence.pw).
+- Closure preparation stays on its existing body-origin path. Verify capture
+  cleanup with [closure environment drop](../../tests/fixtures/run/mid_closure_environment_drop.pw).
+- Aggregate conversion and destruction already consume saved recipes and
+  concrete shapes in the paths listed above. Keep their navigation during this
+  slice and run [symbolic drops](../../tests/fixtures/run/mid_symbolic_drops.pw)
+  and the [drop verifier control](../../tests/fixtures/run/mid_drop_contract_verify.pw).
+  Narrowing their inputs remains with com-vdp1 and com-rad4. The inventory
+  establishes no mandatory separate traversal replacement for these families.
