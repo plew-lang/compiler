@@ -42,3 +42,9 @@ Before completion, exercise descriptor-only requests through a scoped control,
 including signature-derived ownership closure, adapter ordering and any
 secondary body demand produced during descriptor conversion. Compare native
 candidate output and performance and obtain independent review.
+
+The signature frontier now reads the Arena's first-ready signature order.
+Ordinary and closure signature setters publish only the first readiness
+transition, so descriptor-only signatures contribute type/ownership closure
+without entering the executable worklist. Fixed-carrier compile-to-LLVM
+succeeded for this slice. Native linking and focused controls are pending.
