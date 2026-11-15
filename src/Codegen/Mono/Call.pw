@@ -7080,7 +7080,11 @@ pub impl Comp {
                     Optional.Some(v: val storage) => {
                         match storage.get(key: stmtId) {
                             Optional.Some(v: val request) => {
-                                return self.prepareCheckedInitializer(request: request)
+                                try self.prepareCheckedInitializer(request: request)
+                                // Publish at the checked operation's execution position
+                                // so deferred consumers cannot reorder its diagnostics.
+                                try self.requireCheckedLocalStorage(stmtId: stmtId, request: request)
+                                return <Result.Ok value=() />
                             }
                             Optional.None => {}
                         }

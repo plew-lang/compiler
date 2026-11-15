@@ -1,7 +1,7 @@
 use @Std/Io only { write }
 use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
 use /SourceAccess only { SourceAccess }
-use /Ir only { Expr, Stmt, RecordedStorageValueType }
+use /Ir only { Expr, Stmt, RecordedStorageValueType, CheckedLocalStorageRequest, SourceBindingOrigin, BodyInstance, InstanceEnvironment }
 use /Mid only { prepareMidSourceState, MidBuildState, MidBuildError, MidOperand, MidRvalue, MidStatement, addMidLocal, midLocalForBinding, midPlaceForRecordedIdent, buildMidLet, buildParametricMidBody }
 
 fn verifyStorageEmissionOrder() {
@@ -44,8 +44,38 @@ fn verifyStorageEmissionOrder() {
     }
 }
 
+fn verifyStorageDiagnosticOrder() {
+    mut val c: Comp = <Comp />
+    analyzeFrontendForRequests(c: inout c,
+        input: <FrontendInput.Text path="binding-diagnostic-order.pw" text="fn probe() {{ val first = 1I64 val later = 2I64 }}" />,
+        sources: <SourceAccess stdRoot=[] />).unwrap()
+    val owner = c.arena.firstFunctionNamed(nameId: c.internBytes(s: "probe").nameId)
+    c.prepareLexicalBody(fnIdx: owner).unwrap()
+    val block = c.arena.functionAt(index: owner).body
+    val first = c.blockStmtAt(blkId: block, index: 0U64)
+    val later = c.blockStmtAt(blkId: block, index: 1U64)
+    val facts = c.preparedFunctionSemanticFacts(fnIdx: owner).unwrap()
+    val firstValue = match c.arena.stmts[first] {
+        Stmt.Let(init: val init, mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, annotationOccurrence: _) => init
+        _ => { panic("fixture is missing the first local") }
+    }
+    val term = facts.expression(exprId: firstValue).unwrap().term
+    val firstRequest = <CheckedLocalStorageRequest expression=firstValue declarationTarget=c.stmtPrincipalOffset(sid: first) binding=<SourceBindingOrigin /> valueType=<RecordedStorageValueType.Term ref=term /> />
+    val laterRequest = <CheckedLocalStorageRequest expression=0U64 declarationTarget=c.stmtPrincipalOffset(sid: later) binding=<SourceBindingOrigin /> valueType=<RecordedStorageValueType.Recipe id=0U64 /> />
+    c.cur.bodyFnIdx = owner
+    c.cur.bodyId = c.arena.registerBodyInstance(<BodyInstance fnIdx=owner environment=<InstanceEnvironment /> />)
+    c.cur.checkedLocalStorage = <Optional.Some v=[first: firstRequest, later: laterRequest] />
+    match c.scanBlockInsts(blkId: block) {
+        Result.Err(error: val diagnostic) => {
+            if diagnostic.message != "final local has a foreign Mid binding occurrence" { panic(diagnostic.message) }
+        }
+        Result.Ok(value: _) => { panic("invalid initializations were accepted") }
+    }
+}
+
 fn main() {
     verifyStorageEmissionOrder()
+    verifyStorageDiagnosticOrder()
     mut val c: Comp = <Comp />
     analyzeFrontendForRequests(c: inout c,
         input: <FrontendInput.Text path="binding-cfg.pw" text="unique struct File {{}} fn probe(file: move File) {{ val first = move file val second = move first }}" />,
