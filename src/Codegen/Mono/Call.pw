@@ -6496,7 +6496,7 @@ pub impl Comp {
     // Capturing is a use of a lexical binding, including a write-only place.
     // Keep value and place traversal distinct; only their binding bookkeeping
     // is shared so assignment indexes are never rewritten as value reads.
-    inout fn scanBindingInsts(exprId: U64, start: U64, len: U64) -> Result[(), CompileDiagnostic] {
+    inout fn scanBindingInsts(exprId: U64) -> Result[(), CompileDiagnostic] {
         if self.genMode {
             val facts = try self.preparedBodyFacts(bodyId: self.cur.bodyId, globalInitializerTarget: self.cur.globalInitializerTarget)
             try self.selectReferencedGlobal(exprId: exprId, facts: facts)
@@ -6567,7 +6567,7 @@ pub impl Comp {
             }
             Expr.Str(start: _, len: _) => { try self.collectRecordedValueLayout(exprId: exprId) }
             Expr.Float(start: _, len: _, tyStart: _, tyLen: _) => { try self.collectRecordedValueLayout(exprId: exprId) }
-            Expr.Ident(val start, val len) => { try self.scanBindingInsts(exprId: exprId, start: start, len: len) }
+            Expr.Ident(start: _, len: _) => { try self.scanBindingInsts(exprId: exprId) }
             Expr.Closure(val params, val hasRet, val retStart, val retLen, val retIsArray, val retTy, val body, isDiverging: _) => {
                 if self.cur.inClosure {
                     return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "v1 rejects nested closure literals; use a named helper or a single closure boundary") />
@@ -6794,7 +6794,7 @@ pub impl Comp {
     // here, while still scanning an index key as an ordinary value expression.
     inout fn scanPlaceInsts(exprId: U64) -> Result[(), CompileDiagnostic] {
         match self.arena.exprs[exprId] {
-            Expr.Ident(val start, val len) => { try self.scanBindingInsts(exprId: exprId, start: start, len: len) }
+            Expr.Ident(start: _, len: _) => { try self.scanBindingInsts(exprId: exprId) }
             Expr.Field(val base, nameStart: _, nameLen: _) => {
                 try self.scanPlaceInsts(exprId: base)
             }
@@ -6983,7 +6983,7 @@ pub impl Comp {
         }
         val ref = try self.groundCheckedLocalStorageTarget(stmtId: stmtId, request: request, bodyId: self.cur.bodyId)
         val sourceRef = match request.valueType {
-            RecordedStorageValueType.Aggregate(ref: val term, aggregate: _, writtenConstruction: _) | RecordedStorageValueType.Constant(ref: val term) | RecordedStorageValueType.Term(ref: val term) | RecordedStorageValueType.Region(ref: val term, region: _) => try self.groundAndRecordBodyType(ref: term, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.cur.bodyId)
+            RecordedStorageValueType.Aggregate(ref: val term, aggregate: _, writtenConstruction: _) | RecordedStorageValueType.Constant(ref: val term) | RecordedStorageValueType.Binding(ref: val term) | RecordedStorageValueType.Term(ref: val term) | RecordedStorageValueType.Region(ref: val term, region: _) => try self.groundAndRecordBodyType(ref: term, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.cur.bodyId)
             RecordedStorageValueType.Recipe(id: val recipe) => try self.groundSemanticTypeRecipeForBody(recipeId: recipe, bodyId: self.cur.bodyId, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, requireProducer: true)
         }
         val targetRef = try self.groundAndRecordBodyType(ref: ref, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.cur.bodyId)
@@ -7094,6 +7094,7 @@ pub impl Comp {
                 val type = try self.groundAndRecordBodyType(ref: term, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.cur.bodyId)
                 return self.enqueueFinalDestruction(typeRef: type)
             }
+            RecordedStorageValueType.Binding(ref: _) => { return self.scanBindingInsts(exprId: request.expression) }
             RecordedStorageValueType.Aggregate(ref: val term, aggregate: val aggregate, writtenConstruction: val written) => {
                 match written {
                     Optional.Some(v: val type) => {

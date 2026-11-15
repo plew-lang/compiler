@@ -220,3 +220,7 @@ Extend the checked aggregate request from arrays to other memberwise constructio
 **2026-11-15T16:46:42Z**
 
 Aggregate element call results now use the same sealed owner-scoped occurrence table as condition and give operands. The local aggregate request prepares each saved producer in aggregate element order. Six lazy controls, observable array ordering, and full same-source AOT LLVM matched. The sparse table adds a lookup for each aggregate element on this path; no timing claim.
+
+**2026-11-15T16:50:12Z**
+
+Prepare direct binding-read initializers from the checked type and Mid copy operand, skipping the expression walker. Generation still selects referenced globals through the existing checked binding reader. Six lazy fixtures, same-source full AOT LLVM, and the globaltransitive generation LLVM comparison passed. Composite places and other expression shapes still retain the shared preparation path.
