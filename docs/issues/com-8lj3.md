@@ -80,3 +80,7 @@ Routed Let no longer reconstructs a Local scope row. Only legacy entry adds it. 
 **2026-11-15T12:47:45Z**
 
 Routed Let now only walks the initializer for residual operation dependencies and checks whether its Mid storage requirement is present; it no longer grounds or registers the local target. Those operations run on the checked request from a call, enclosing capture, or the final body request sweep. Closure uses explicit enclosing body ID. Six lazy outputs matched and full AOT LLVM agreed at 98b439208e56a1e5eb0e1c3671dfa436a8d6efbd5ad7e37bc6069395db5bca4b. Before closure verify diagnostics, non-interference, and timing and obtain independent review.
+
+**2026-11-15T12:54:24Z**
+
+Independent read-only completion review at 1318bd5d: not ready to close. Both entries converge and body+statement descriptor consumption is sound in the inspected path. Confirmed gaps: prior call descriptors still depend on source traversal; physical Mid block order can publish an unused branch Let after a later join Let; delayed publication can shift the first finalization error (legal reproducer not executed); an absent exact request can still fall back in argument/capture readers; default generators pay a discarded storage preflight. Add targeted descriptor-only, two-instance, foreign/missing and diagnostic-order controls. Fixed-source trace measured unchanged 304238 expressions, 9005 bodies, 10506 body IDs and 80974 call descriptors; LLVM and runtime matched. Raw timing was confounded by repeat position; see meta evidence phase3-checked-mid-local-storage-demand.json.
