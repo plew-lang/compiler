@@ -264,3 +264,7 @@ Parametric Mid retains terminating local initializers as dependency requests wit
 **2026-11-15T17:35:21Z**
 
 Native mid_binding_identity now proves a terminating local initializer retains exactly one control-region dependency, no storage row, and the same statement/expression identity. Direct finalization rejects a missing dependency and prepares the valid request without publishing storage. The fixture compiled and ran to its expected output using the c6344b83 diagnostic carrier. No production source change.
+
+**2026-11-15T17:38:36Z**
+
+Checked Local operand already identifies a lexical binding, so call preparation no longer re-enters the source expression walker for it. Six lazy fixtures, full same-source AOT LLVM and generation with transitive global references matched. Relative to the retained 30ef976b carrier, cumulative finalization scans on the same source fell from 293792 to 254738; this comparison includes intermediate changes and is not a duration measurement.

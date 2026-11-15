@@ -1506,6 +1506,11 @@ pub impl Comp {
                     return self.prepareCheckedResultCall(expression: expression, site: site)
                 }
             }
+            CallArgumentSource.Local(exprId: _, declarationTarget: _, term: _, bindingStatement: _) => {
+                // The checked source already identifies a lexical binding.
+                // Only global references need discovery during generation.
+                return <Result.Ok value=() />
+            }
             _ => {}
         }
         return self.scanExprInsts(exprId: self.callArgumentExprId(source: source))
