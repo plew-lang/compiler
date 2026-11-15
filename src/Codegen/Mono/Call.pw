@@ -1477,20 +1477,24 @@ pub impl Comp {
             }
             match arguments {
                 Optional.Some(v: val range) => {
-                    if range.len > 0U64 && (range.start >= self.callTemplateArgumentPool.count() || range.len > self.callTemplateArgumentPool.count() - range.start) {
-                        return <Result.Err error=self.diagnosticAt(offset: template.siteKey.originStart, msg: "selected call has an invalid checked argument range", failureDomain: <FailureDomain.Internal />) />
-                    }
-                    for index in 0U64..<range.len {
-                        val source = self.callTemplateArgumentPool[range.start + index].source
-                        try self.scanExprInsts(exprId: self.callArgumentExprId(source: source))
-                    }
-                    return <Result.Ok value=() />
+                    return self.scanCheckedCallArgumentRows(range: range, site: template.siteKey)
                 }
                 Optional.None => {}
             }
         }
         for index in 0U64..<authored.len {
             try self.scanExprInsts(exprId: self.argAt(args: authored, index: index).expr)
+        }
+        return <Result.Ok value=() />
+    }
+
+    inout fn scanCheckedCallArgumentRows(range: CallTemplateArgumentRange, site: CallSiteKey) -> Result[(), CompileDiagnostic] {
+        if range.len > 0U64 && (range.start >= self.callTemplateArgumentPool.count() || range.len > self.callTemplateArgumentPool.count() - range.start) {
+            return <Result.Err error=self.diagnosticAt(offset: site.originStart, msg: "selected call has an invalid checked argument range", failureDomain: <FailureDomain.Internal />) />
+        }
+        for index in 0U64..<range.len {
+            val source = self.callTemplateArgumentPool[range.start + index].source
+            try self.scanExprInsts(exprId: self.callArgumentExprId(source: source))
         }
         return <Result.Ok value=() />
     }
@@ -6959,13 +6963,63 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
+    // For a direct free-call initializer the checked recipe owns the call
+    // operation. The residual expression walk is only needed for its arguments.
+    inout fn prepareCheckedInitializerCall(request: CheckedLocalStorageRequest) -> Result[Bool, CompileDiagnostic] {
+        val recipeId = match request.valueType {
+            RecordedStorageValueType.Recipe(id: val recipe) => recipe
+            RecordedStorageValueType.Term(ref: _) => { return <Result.Ok value=false /> }
+        }
+        if recipeId == 0U64 || recipeId > self.arena.semanticTypeRecipes.count() {
+            return <Result.Err error=self.diagnosticAt(offset: request.declarationTarget, msg: "checked local has an invalid initializer recipe", failureDomain: <FailureDomain.Internal />) />
+        }
+        val recipe = self.arena.semanticTypeRecipes[recipeId - 1U64]
+        if recipe.kind != 2U64 { return <Result.Ok value=false /> }
+        val index = self.callTemplateIndex(siteKey: recipe.callSite)
+        if index >= self.callTemplateCount() {
+            return <Result.Err error=self.diagnosticAt(offset: request.declarationTarget, msg: "initializer recipe has no selected call", failureDomain: <FailureDomain.Internal />) />
+        }
+        val template = self.callTemplateAt(index: index)
+        if template.resultTypeRecipe != recipeId || recipe.sourceExpression.unwrapOr(fallback: self.arena.exprs.count()) != request.expression {
+            return <Result.Err error=self.diagnosticAt(offset: request.declarationTarget, msg: "initializer recipe has a foreign call occurrence", failureDomain: <FailureDomain.Internal />) />
+        }
+        match template.kind {
+            CallTemplateKind.Direct(callee: val callee, receiver: val receiver, args: val arguments, calleeTypeArgs: _, proofId: _) => {
+                match receiver {
+                    CallTemplateReceiver.None => {}
+                    _ => { return <Result.Ok value=false /> }
+                }
+                if callee < self.arena.functionCount() {
+                    val function = self.arena.functionAt(index: callee)
+                    if !function.hasRecv && !function.isAssoc && !function.isFactory {
+                        try self.scanCheckedCallArgumentRows(range: arguments, site: recipe.callSite)
+                        val selected = try self.resolveBodyCallee(exprId: request.expression, template: template, authoredFreeCall: true)
+                        try self.registerCallInst(id: request.expression, finalIdx: selected)
+                        try self.finalizeAccessWriteFacets(parentExpr: request.expression)
+                        return <Result.Ok value=true />
+                    }
+                }
+            }
+            _ => {}
+        }
+        return <Result.Ok value=false />
+    }
+
     inout fn scanStmtInsts(stmtId: U64) -> Result[(), CompileDiagnostic] {
         match self.arena.stmts[stmtId] {
             Stmt.Let(val mutable, val nameStart, val nameLen, val tyStart, val tyLen, val tyIsArray, val ty, val init, val annotationOccurrence) => {
-                try self.scanExprInsts(exprId: init)
                 match self.cur.checkedLocalStorage {
                     Optional.Some(v: val storage) => {
-                        if storage.contains(key: stmtId) { return <Result.Ok value=() /> }
+                        match storage.get(key: stmtId) {
+                            Optional.Some(v: val request) => {
+                                if !(try self.prepareCheckedInitializerCall(request: request)) {
+                                    try self.scanExprInsts(exprId: init)
+                                }
+                                return <Result.Ok value=() />
+                            }
+                            Optional.None => {}
+                        }
+                        try self.scanExprInsts(exprId: init)
                         val facts = try self.preparedBodyFacts(bodyId: self.cur.bodyId, globalInitializerTarget: self.cur.globalInitializerTarget)
                         val completion = try self.semanticStmtCompletionInOwner(stmtId: stmtId, owner: facts)
                         if !completion.execution.normal() { return <Result.Ok value=() /> }
@@ -6973,6 +7027,7 @@ pub impl Comp {
                     }
                     Optional.None => {}
                 }
+                try self.scanExprInsts(exprId: init)
                 val legacy = try self.scanLocalDeclarationType(stmtId: stmtId, tyStart: tyStart, tyLen: tyLen, tyIsArray: tyIsArray, ty: ty, init: init, annotationOccurrence: annotationOccurrence)
                 try self.finalizeStorageConversion(stmtId: stmtId, exprId: init, targetTerm: legacy.ty)
                 self.addLocal(nameStart: nameStart, nameLen: nameLen, tyStart: legacy.start, tyLen: legacy.len, isArray: legacy.arr, ty: legacy.ty, isInout: false, isMut: mutable, owned: true)

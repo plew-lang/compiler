@@ -104,3 +104,7 @@ Written call preparation now walks the retained argument rows directly and carri
 **2026-11-15T13:26:58Z**
 
 Ordinary local initialization now retains its checked source term or selected result recipe alongside the canonical instruction index. Finalization reads this payload without reopening the expression/template. The native binding-identity fixture distinguishes a call initializer recipe from a literal term in retained emission order. Five lazy controls passed and same-source diagnostic AOT LLVM matched 33c458dcb4cda8a415e579f30e977d128ac2c0044500ff92bf704a68421b3d99. The recipe already carries CallSiteKey and source-expression navigation. Producer scheduling still uses the residual walk. Preserve receiver/argument dependencies, descriptor-only demand and diagnostic ordering when switching the scheduler.
+
+**2026-11-15T13:32:57Z**
+
+Direct free-call initializers now prepare the result producer from the checked storage recipe using the exact CallSiteKey and source occurrence. The producer consumes retained arguments in the prior order, retaining reachability, instance demand and writeback. The outer call no longer goes through the expression scanner; arguments and other initializer kinds retain their prior route. Nine lazy controls passed; same-source AOT LLVM matched bbface3ac6c9b586828437ecde661b487e599849cd38e3a2f39bdce23fecec32. Remaining: receiver/operator/dynamic producers, nesting and first diagnostic ordering, missing/foreign descriptor controls and optimized timing.
