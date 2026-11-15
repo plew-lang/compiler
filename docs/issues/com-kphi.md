@@ -1,6 +1,6 @@
 ---
 id: com-kphi
-status: open
+status: in_progress
 deps: [com-jgy9]
 links: []
 created: 2026-11-15T06:29:15Z
@@ -43,3 +43,22 @@ Existing controls cover [default result context](../../tests/fixtures/run/mid_de
 and [diverging calls](../../tests/fixtures/run/diverging_call_flow.pw).
 Add a scoped assertion for actual body demand where these fixtures only observe
 source or output behavior.
+
+## Implementation entry
+
+The canonical call terminator contains the full template key. Use that key to
+associate reached operations with the existing checked template registry.
+`DeclarationAccessAnalysis.obligations` cannot supply the complete demand view:
+`analyzeDeclarationGlobalAccessRoots` can return an empty analysis when the
+program has no mutable globals. Read the cached parametric body's CFG instead.
+Build this view once per authored function in the session as bodies are
+requested, including when declaration effect collection did not walk that CFG.
+
+The AOT root/frontier loop currently lives in the Frontend compatibility
+entry, which cannot read Mid. Factor the common root/frontier operations so
+the session can select the per-body checked view without importing Mid into
+Frontend. Keep the direct Frontend entry's compatibility behavior. Integrate
+the view at the written direct call's demand point so lexical locals,
+dependencies of result recipes, descriptor validation, and Access writeback
+still run at their existing scope points. Synthetic sites and other operation
+families keep their current demand path.
