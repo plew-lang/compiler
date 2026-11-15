@@ -2587,21 +2587,29 @@ pub fn finalizeFrontendExecutableRequests(c: inout Comp, requests: inout FinalBo
     // typed-IR recording are available.  This semantic worklist is independent
     // of LLVM's lazy declaration queues: all backend call emission consumes the
     // resulting entries and never runs overload/source resolution itself.
-    tracePhase(c: inout c, label: "finalize-callables:start")
-    c.traceExprInstScans = 0U64
-    c.traceFinalBodyScans = 0U64
+    traceFinalCallableStart(c: inout c)
     val collecting = c.inCollection
     c.inCollection = true
     val result = c.completeFinalCallables(requests: inout requests, dependencies: inout dependencies, publication: inout publication)
     c.inCollection = collecting
     try result
+    traceFinalCallableFinish(c: inout c)
+    return <Result.Ok value=() />
+}
+
+pub fn traceFinalCallableStart(c: inout Comp) {
+    tracePhase(c: inout c, label: "finalize-callables:start")
+    c.traceExprInstScans = 0U64
+    c.traceFinalBodyScans = 0U64
+}
+
+pub fn traceFinalCallableFinish(c: inout Comp) {
     tracePhaseCount(c: inout c, label: "finalize-callables:scan-exprs", count: c.traceExprInstScans)
     tracePhaseCount(c: inout c, label: "finalize-callables:body-scans", count: c.traceFinalBodyScans)
     tracePhaseCount(c: inout c, label: "finalize-callables:body-identities", count: c.arena.bodyInstanceCount())
     tracePhaseCount(c: inout c, label: "finalize-callables:descriptors", count: c.arena.finalCalleeCount())
     c.traceFinalBodyInstanceSummary()
     tracePhase(c: inout c, label: "finalize-callables:done")
-    return <Result.Ok value=() />
 }
 // Whether the literal (non-negative magnitude `value`, negated when `neg`) fits
 // an integer type of the given width and signedness. Span-free core of

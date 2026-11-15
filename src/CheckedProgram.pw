@@ -1,6 +1,6 @@
 // A whole-target static-check result owns the exact compiler snapshot it proves.
 // No public factory or mutable arena accessor can attach it to another input.
-use ./Frontend only { Comp, FrontendInput, FrontendOptions, analyzeFrontendForRequests, completeFrontendDeclarations, finalizeFrontendExecutableRequests, FinalBodyRequests, FinalDependencies, FinalizationPublication }
+use ./Frontend only { Comp, FrontendInput, FrontendOptions, analyzeFrontendForRequests, completeFrontendDeclarations, traceFinalCallableStart, traceFinalCallableFinish, FinalBodyRequests, FinalDependencies, FinalizationPublication }
 use ./Ir only { StaticConformanceProof, BodyOrigin, InstanceEnvironment }
 use ./Backend only { LlvmLoweringResult, LlvmTargetDescription, lowerRequestedLlvm, lowerGlobalStorageLlvm, lowerCallableDeclarationsLlvm }
 use ./SourceAccess only { SourceAccess }
@@ -317,6 +317,31 @@ impl CompilerSession {
         return self.prepareBodyInSession(bodyId: bodyId)
     }
 
+    inout fn completeExecutableDependencies() -> Result[(), CompileDiagnostic] {
+        traceFinalCallableStart(c: inout self.compiler)
+        val collecting = self.compiler.inCollection
+        self.compiler.inCollection = true
+        val result = self.completeExecutableDependenciesInContext()
+        self.compiler.inCollection = collecting
+        try result
+        traceFinalCallableFinish(c: inout self.compiler)
+        return <Result.Ok value=() />
+    }
+
+    inout fn completeExecutableDependenciesInContext() -> Result[(), CompileDiagnostic] {
+        try self.compiler.prepareFinalCallableRoots(dependencies: inout self.finalDependencies)
+        mut val index = 0U64
+        while index < self.compiler.monoWork.bodyCount() || self.compiler.hasFinalDependencies(state: self.finalDependencies) {
+            if index < self.compiler.monoWork.bodyCount() {
+                val body = self.compiler.monoWork.bodyAt(index: index)
+                try self.compiler.requestFinalBody(bodyId: body, requests: inout self.finalBodies)
+                index += 1U64
+            }
+            try self.compiler.advanceFinalDependencies(state: inout self.finalDependencies)
+        }
+        return self.compiler.finishFinalCallables(publication: inout self.finalPublication)
+    }
+
     inout fn prepareBodyInSession(bodyId: U64) -> Result[BodyDescriptors, CompileDiagnostic] {
         if !self.finalizationStarted || bodyId == 0U64 || bodyId > self.compiler.arena.bodyInstanceCount() || !self.compiler.arena.bodySignature(bodyId: bodyId).ready {
             return <Result.Err error=self.compiler.diagnosticAt(offset: 0U64, msg: "internal error: body request requires a registered signature in this session") />
@@ -460,8 +485,7 @@ pub fn prepareCheckedProgram(checked: move CheckedProgram) -> ExecutableCompilat
         Result.Ok(value: _) => {}
         Result.Err(error: val diagnostic) => { return <ExecutableCompilationResult.Failure diagnostic=diagnostic /> }
     }
-    match finalizeFrontendExecutableRequests(c: inout program.session.compiler, requests: inout program.session.finalBodies,
-        dependencies: inout program.session.finalDependencies, publication: inout program.session.finalPublication) {
+    match program.session.completeExecutableDependencies() {
         Result.Ok(value: _) => {}
         Result.Err(error: val diagnostic) => { return <ExecutableCompilationResult.Failure diagnostic=diagnostic /> }
     }

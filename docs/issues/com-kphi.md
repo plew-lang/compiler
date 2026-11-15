@@ -67,3 +67,10 @@ The common finalization entry now exposes root preparation and final
 publication separately, with the existing compatibility loop between them.
 The previous candidate accepted the changed sources in check and LLVM output
 modes. The session loop and Mid demand view still need to be connected.
+
+The AOT session now owns its dependency loop, using the shared Frontend root
+and publication phases. It preserves dependency interleaving and collection
+context restoration. The direct Frontend entry keeps the existing loop.
+Finalization traces share the same counters and markers. The fixed candidate
+accepted the changed compiler source in check mode. Reachability is not yet
+connected to requests in this checkpoint.
