@@ -378,7 +378,7 @@ impl CompilerSession {
             val block = self.compiler.mid.blocks[body.blocks.start + index]
             for statementIndex in 0U64..<block.statements.len {
                 val statement = self.compiler.mid.statements[block.statements.start + statementIndex]
-                if statement.tag != 1U64 || statement.value == 0U64 { continue }
+                if (statement.tag != 1U64 && statement.tag != 9U64) || statement.value == 0U64 { continue }
                 val value = self.compiler.mid.rvalues[statement.value - 1U64]
                 if value.tag != 20U64 { continue }
                 val destination = self.compiler.mid.places[statement.destination - 1U64]

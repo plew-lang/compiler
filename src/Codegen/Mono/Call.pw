@@ -6829,6 +6829,10 @@ pub impl Comp {
 
     inout fn prepareCheckedLocalStorage(stmtId: U64, request: CheckedLocalStorageRequest) -> Result[LetEff, CompileDiagnostic] {
         val facts = try self.preparedBodyFacts(bodyId: self.cur.bodyId, globalInitializerTarget: self.cur.globalInitializerTarget)
+        val expectedOrigin = facts.bindingStorage(stmtId: stmtId)
+        if expectedOrigin.isNone() || !expectedOrigin.unwrap().matches(origin: request.binding) {
+            return <Result.Err error=self.diagnosticAt(offset: request.declarationTarget, msg: "final local has a foreign Mid binding occurrence", failureDomain: <FailureDomain.Internal />) />
+        }
         val binding = match facts.bindingStorageFact(origin: request.binding, declarationTarget: request.declarationTarget) {
             Optional.Some(v: val binding) => binding
             Optional.None => { return <Result.Err error=self.diagnosticAt(offset: request.declarationTarget, msg: "final local has a foreign Mid binding", failureDomain: <FailureDomain.Internal />) /> }
