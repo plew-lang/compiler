@@ -2635,11 +2635,14 @@ fn midRecordedStorageValueType(c: inout Comp, facts: PreparedSemanticFacts, func
                             Result.Err(error: val diagnostic) => { return <Result.Err error=<MidBuildError.Frontend diagnostic=diagnostic /> /> }
                         }
                         if head.resultTypeRecipe > 0U64 && head.resultTypeRecipe <= c.arena.semanticTypeRecipes.count() && c.arena.semanticTypeRecipes[head.resultTypeRecipe - 1U64].kind == 2U64 {
-                            return <Result.Ok value=<RecordedStorageValueType.ProjectedCall ref=fact.term rootExpression=root site=head.siteKey /> />
+                            return <Result.Ok value=<RecordedStorageValueType.Projection ref=fact.term root=<CallArgumentSource.PriorCallResult exprId=root siteKey=head.siteKey /> /> />
                         }
                     }
                 }
                 _ => {}
+            }
+            if root != expression {
+                return <Result.Ok value=<RecordedStorageValueType.Projection ref=fact.term root=<CallArgumentSource.Expression exprId=root /> /> />
             }
         }
         _ => {}

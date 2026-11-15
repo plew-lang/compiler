@@ -567,7 +567,7 @@ pub impl SourceBindingOrigin {
 pub enum RecordedStorageValueType {
     Constant(ref: U64)
     Binding(ref: U64, rootExpression: U64)
-    ProjectedCall(ref: U64, rootExpression: U64, site: CallSiteKey)
+    Projection(ref: U64, root: CallArgumentSource)
     Try(ref: U64, operand: CallArgumentSource)
     ShortCircuit(ref: U64, lhs: U64, rhs: U64)
     Aggregate(ref: U64, aggregate: SemanticAggregate, writtenConstruction: Optional[U64])

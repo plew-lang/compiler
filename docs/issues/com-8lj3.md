@@ -240,3 +240,7 @@ Retain the checked operand of try local initializers, preparing its saved call b
 **2026-11-15T17:14:25Z**
 
 Retain both checked operand occurrences for short-circuit local initializers. Finalization prepares selected call dependencies in order; Mid keeps runtime short-circuit control. Six lazy fixtures and an observable RHS suppression probe passed; full same-source AOT LLVM matched. Remaining field fallback needs classification before completion review.
+
+**2026-11-15T17:17:39Z**
+
+Retain the root operand of a local projection even when the root has no call-result recipe. Finalization prepares the root rather than revisiting its field/deref wrappers. Six lazy controls, call/index evaluation order and same-source AOT LLVM matched. This reduces the expression entry points; it leaves root expression fallback and does not justify closure of the full task.
