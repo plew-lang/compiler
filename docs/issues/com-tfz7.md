@@ -38,3 +38,9 @@ Optional components stay optional and must not become mandatory merely because t
 [Scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-source-verification.json) retains all main/mixed roles and normative grounds. Selected destructor Unit/receiver/body-signature readiness, retained alias index and ready destruction readers are independent concrete ownership admission. They do not collect missing contracts or fabricate source call sites; native ownership belongs to caller. Canonical Mid declaration/effect/typed-readiness consumers also require the exact narrowed descriptor/dependency interface; retain their separate Mid-area admission.
 
 Original audit-time independence does not waive this implementation admission. Preserve the original finite guarantee, actual callers/delegates, controls and excluded optional/new-feature scopes. Assignment is not product repair/GREEN.
+
+## Notes
+
+**2026-11-15T20:47:32Z**
+
+WIP performance candidate: sealed finalization partitions nominal destruction candidates by a coarse hash of the ordered immediate semantic child heads. Equality remains structural in the candidate chain. Separate name fallback remains for ownerless/record queries and pre-seal initialization. Six lazy controls and full same-source LLVM matched. Matched optimized timing is pending; this does not close the API-boundary task.

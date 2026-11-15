@@ -5319,6 +5319,8 @@ pub impl Comp {
         self.arena.finalDestructionIds = []
         val noDestructionHeads: Dictionary[U64, U64] = [:]
         self.arena.finalDestructionHeads = noDestructionHeads
+        self.arena.finalDestructionShapeIndex = self.arena.typeDeclarationResolutionComplete()
+        self.arena.finalDestructionShapeKeys = []
         self.arena.finalDestructionNominalHeads = noDestructionHeads
         self.arena.finalDestructionNominalNext = []
         self.arena.finalDestructionNext = []
