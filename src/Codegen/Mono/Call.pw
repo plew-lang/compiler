@@ -4929,8 +4929,10 @@ pub impl Comp {
             match self.cur.checkedLocalStorage {
                 Optional.Some(v: val storage) => {
                     for statement in self.cur.checkedLocalStorageOrder {
-                        val request = storage.get(key: statement).unwrap()
-                        try self.requireCheckedLocalStorage(stmtId: statement, request: request)
+                        if self.finalStorageIndex(bodyId: bodyId, stmtId: statement) >= self.arena.finalStorages.count() {
+                            val request = storage.get(key: statement).unwrap()
+                            return <Result.Err error=self.diagnosticAt(offset: request.declarationTarget, msg: "checked Mid local was not finalized at its initializer", failureDomain: <FailureDomain.Internal />) />
+                        }
                     }
                 }
                 Optional.None => {}

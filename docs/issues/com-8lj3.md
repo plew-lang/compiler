@@ -184,3 +184,7 @@ Checked local value if conditions and match scrutinees now retain their CallArgu
 **2026-11-15T16:09:31Z**
 
 Record the selected call dependency for a condition-chain operand or give value under its checked source owner. Routed bodies use that occurrence for call preparation. Seven lazy fixtures and a two-branch evaluation-order probe passed, and full same-source AOT LLVM matched. Unselected value shapes and block statement scheduling still walk source. No timing claim.
+
+**2026-11-15T16:13:06Z**
+
+The post-body sweep now verifies checked Mid storage descriptors rather than publishing missing ones. This removes late recovery in a different execution position. Six lazy fixtures and the branch/condition order probe passed, and full same-source AOT LLVM matched. The checked local call-argument consumer can still publish on cache miss; audit and remove that writer separately, including capture and descriptor-only paths.
