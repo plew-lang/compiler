@@ -1,7 +1,7 @@
 // A whole-target static-check result owns the exact compiler snapshot it proves.
 // No public factory or mutable arena accessor can attach it to another input.
 use ./Frontend only { Comp, FrontendInput, FrontendOptions, analyzeFrontendForRequests, completeFrontendDeclarations, traceFinalCallableStart, traceFinalCallableFinish, FinalBodyRequests, FinalDependencies, FinalizationPublication }
-use ./Ir only { StaticConformanceProof, BodyOrigin, InstanceEnvironment, CallSiteKey }
+use ./Ir only { StaticConformanceProof, BodyOrigin, InstanceEnvironment, CallSiteKey, CheckedLocalStorageRequest }
 use ./Backend only { LlvmLoweringResult, LlvmTargetDescription, lowerRequestedLlvm, lowerGlobalStorageLlvm, lowerCallableDeclarationsLlvm }
 use ./SourceAccess only { SourceAccess }
 use ./Diag only { CompileDiagnostic, DiagnosticLocation, FailureDomain }
@@ -44,6 +44,12 @@ pub struct MidAccessPreparation {
 
 // The admitted source and every cache belong to one session. No mutable Comp
 // escapes; later requests cannot reload edited files or borrow another arena.
+struct MidFinalizationInputs {
+    val calls: Dictionary[U64, Bool]
+    val storage: Dictionary[U64, CheckedLocalStorageRequest]
+}
+impl MidFinalizationInputs { factory }
+
 pub unique struct CompilerSession {
     mut val compiler: Comp
     mut val llvmTarget: Optional[LlvmTargetDescription] = <Optional.None />
@@ -55,7 +61,7 @@ pub unique struct CompilerSession {
     mut val midRequests: MidExecutableRequests = <MidExecutableRequests />
     mut val executionFailure: Optional[CompileDiagnostic] = <Optional.None />
     mut val templates: MidFunctionTemplates = <MidFunctionTemplates />
-    mut val reachedDirectCalls: Dictionary[U64, Dictionary[U64, Bool]] = [:]
+    mut val midFinalizationInputs: Dictionary[U64, MidFinalizationInputs] = [:]
     mut val requests: DeclarationBodyRequests = <DeclarationBodyRequests />
     mut val functionResults: Dictionary[U64, Result[DeclarationAccessAnalysis, CompileDiagnostic]] = [:]
     mut val closureResults: Dictionary[U64, Result[DeclarationAccessAnalysis, CompileDiagnostic]] = [:]
@@ -346,15 +352,15 @@ impl CompilerSession {
 
     inout fn requestExecutableDependencies(bodyId: U64) -> Result[(), CompileDiagnostic] {
         val instance = self.compiler.arena.bodyInstanceAt(index: bodyId - 1U64)
-        mut val reached: Optional[Dictionary[U64, Bool]] = <Optional.None />
         if self.compiler.arena.bodyIsCallable(bodyId: bodyId) && instance.adapterTargetBodyId == 0U64 && instance.fnIdx < self.compiler.arena.functionCount() {
-            reached = <Optional.Some v=try self.reachedDirectCallsFor(function: instance.fnIdx, bodyId: bodyId) />
+            val inputs = try self.finalizationInputsFor(function: instance.fnIdx, bodyId: bodyId)
+            return self.compiler.requestFinalBody(bodyId: bodyId, requests: inout self.finalBodies, reachedDirectCalls: <Optional.Some v=inputs.calls />, checkedLocalStorage: inputs.storage)
         }
-        return self.compiler.requestFinalBody(bodyId: bodyId, requests: inout self.finalBodies, reachedDirectCalls: reached)
+        return self.compiler.requestFinalBody(bodyId: bodyId, requests: inout self.finalBodies)
     }
 
-    inout fn reachedDirectCallsFor(function: U64, bodyId: U64) -> Result[Dictionary[U64, Bool], CompileDiagnostic] {
-        match self.reachedDirectCalls.get(key: function) {
+    inout fn finalizationInputsFor(function: U64, bodyId: U64) -> Result[MidFinalizationInputs, CompileDiagnostic] {
+        match self.midFinalizationInputs.get(key: function) {
             Optional.Some(v: val cached) => { return <Result.Ok value=cached /> }
             Optional.None => {}
         }
@@ -367,9 +373,22 @@ impl CompilerSession {
         val body = self.compiler.mid.bodies[built.canonical.body - 1U64]
         val reached = canonicalMidReachable(arena: self.compiler.mid, body: body)
         mut val calls: Dictionary[U64, Bool] = [:]
+        mut val storage: Dictionary[U64, CheckedLocalStorageRequest] = [:]
         for index in 0U64..<body.blocks.len {
+            val block = self.compiler.mid.blocks[body.blocks.start + index]
+            for statementIndex in 0U64..<block.statements.len {
+                val statement = self.compiler.mid.statements[block.statements.start + statementIndex]
+                if statement.tag != 1U64 || statement.value == 0U64 { continue }
+                val value = self.compiler.mid.rvalues[statement.value - 1U64]
+                if value.tag != 20U64 { continue }
+                val destination = self.compiler.mid.places[statement.destination - 1U64]
+                if destination.rootTag != 1U64 || destination.projections.len != 0U64 { continue }
+                val local = self.compiler.mid.locals[body.locals.start + destination.local]
+                if !local.sourceBinding.isUnproved() {
+                    storage[value.sourceStmt] = <CheckedLocalStorageRequest expression=value.exprId declarationTarget=local.sourceNameStart binding=local.sourceBinding />
+                }
+            }
             if reached[index] {
-                val block = self.compiler.mid.blocks[body.blocks.start + index]
                 val term = self.compiler.mid.terminators[block.terminator - 1U64]
                 if term.tag == 4U64 {
                     val target = self.compiler.mid.callTargets[term.callTarget - 1U64]
@@ -384,8 +403,9 @@ impl CompilerSession {
                 }
             }
         }
-        self.reachedDirectCalls[function] = calls
-        return <Result.Ok value=calls />
+        val inputs = <MidFinalizationInputs calls=calls storage=storage />
+        self.midFinalizationInputs[function] = inputs
+        return <Result.Ok value=inputs />
     }
 
     inout fn prepareBodyInSession(bodyId: U64) -> Result[BodyDescriptors, CompileDiagnostic] {

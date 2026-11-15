@@ -4760,7 +4760,7 @@ pub impl Comp {
     // registered bodies; a lazy driver can request individual descriptors.
     // A failed scan poisons this request state because partial arena rows are
     // diagnostic-only and must never be reused as executable preparation.
-    inout fn requestFinalBody(bodyId: U64, requests: inout FinalBodyRequests, reachedDirectCalls: Optional[Dictionary[U64, Bool]] = <Optional.None />) -> Result[(), CompileDiagnostic] {
+    inout fn requestFinalBody(bodyId: U64, requests: inout FinalBodyRequests, reachedDirectCalls: Optional[Dictionary[U64, Bool]] = <Optional.None />, checkedLocalStorage: Dictionary[U64, CheckedLocalStorageRequest] = [:]) -> Result[(), CompileDiagnostic] {
         match requests.failure {
             Optional.Some(v: val diagnostic) => { return <Result.Err error=diagnostic /> }
             Optional.None => {}
@@ -4777,6 +4777,7 @@ pub impl Comp {
         val collecting = self.inCollection
         self.inCollection = true
         self.cur.reachedDirectCalls = reachedDirectCalls
+        self.cur.checkedLocalStorage = checkedLocalStorage
         val result = self.prepareFinalBodyRequest(bodyId: bodyId)
         self.cur = saved
         self.inCollection = collecting
@@ -6826,6 +6827,29 @@ pub impl Comp {
         }
     }
 
+    inout fn prepareCheckedLocalStorage(stmtId: U64, request: CheckedLocalStorageRequest) -> Result[LetEff, CompileDiagnostic] {
+        val facts = try self.preparedBodyFacts(bodyId: self.cur.bodyId, globalInitializerTarget: self.cur.globalInitializerTarget)
+        val binding = match facts.bindingStorageFact(origin: request.binding, declarationTarget: request.declarationTarget) {
+            Optional.Some(v: val binding) => binding
+            Optional.None => { return <Result.Err error=self.diagnosticAt(offset: request.declarationTarget, msg: "final local has a foreign Mid binding", failureDomain: <FailureDomain.Internal />) /> }
+        }
+        mut val authoredTerm = 0U64
+        match binding.annotation {
+            Optional.Some(v: val annotation) => {
+                val occurrence = try self.signatureOccurrence(id: annotation.occurrence)
+                if annotation.recipe != occurrence.recipe {
+                    return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "final local has a foreign annotation proof", failureDomain: <FailureDomain.Internal />) />
+                }
+                authoredTerm = occurrence.term
+            }
+            Optional.None => {}
+        }
+        val ref = try self.groundCheckedLocalBinding(binding: binding, authoredTerm: authoredTerm)
+        try self.finalizeStorageConversion(stmtId: stmtId, exprId: request.expression, targetTerm: ref)
+        val info = self.typeInfoOfRef(ref: ref)
+        return <Result.Ok value=<LetEff start=info.nameStart len=info.nameLen arr=info.kind == 3 ty=ref /> />
+    }
+
     // Record has already checked source syntax and types. Executable
     // finalization follows only normal continuation after evaluating a value.
     inout fn scanValueContinuation(exprId: U64) -> Result[Bool, CompileDiagnostic] {
@@ -6875,8 +6899,14 @@ pub impl Comp {
                 // annotation), mirroring codegen — otherwise a later `p.x` on an
                 // inferred-typed `val p = <P …/>` can't recover its type, so a generic
                 // call like `print(p.x + p.y)` fails to discover its instantiation.
-                val le: LetEff = (try self.scanLocalDeclarationType(stmtId: stmtId, tyStart: tyStart, tyLen: tyLen, tyIsArray: tyIsArray, ty: ty, init: init, annotationOccurrence: annotationOccurrence))
-                try self.finalizeStorageConversion(stmtId: stmtId, exprId: init, targetTerm: le.ty)
+                val le = match self.cur.checkedLocalStorage.get(key: stmtId) {
+                    Optional.Some(v: val request) => { give try self.prepareCheckedLocalStorage(stmtId: stmtId, request: request) }
+                    Optional.None => {
+                        val legacy = try self.scanLocalDeclarationType(stmtId: stmtId, tyStart: tyStart, tyLen: tyLen, tyIsArray: tyIsArray, ty: ty, init: init, annotationOccurrence: annotationOccurrence)
+                        try self.finalizeStorageConversion(stmtId: stmtId, exprId: init, targetTerm: legacy.ty)
+                        give legacy
+                    }
+                }
                 self.addLocal(nameStart: nameStart, nameLen: nameLen, tyStart: le.start, tyLen: le.len, isArray: le.arr, ty: le.ty, isInout: false, isMut: mutable, owned: true)
                 // an INFERRED non-literal type registers its instance the same way an
                 // annotation does: `val r = makeBox()` reaches Box[I64] just like

@@ -1,4 +1,4 @@
-use ./Ir only { SourceBindingOrigin }
+use ./Ir only { SourceBindingOrigin, CheckedLocalStorageRequest }
 use ./SourceTypeUses only { SourceTypeRecipe, SourceTypeRecipeOrigin, SourceTypeUses, SourceTypeScope, SourceTypeScopeKind, SourceTypeScopeState, SourceTypeUseRole, AuthoredTypeUse, AuthoredFunctionSignature, LoweredSourceSignature, SourceRequirementOwner, SourceImplementationOwner, SourceImplementationKind, SourceBoundRange }
 use ./SourceTypeAdmissions only { AuthoredTypeViewProof, AuthoredSignatureViews, AuthoredProvidedClause, AuthoredAssociatedBinding, AuthoredConformanceArgument, AuthoredConformanceTarget, SourceSignatureSlot }
 use ./ModuleScopeBindings only { ModuleScopeBindings, AdmittedModuleScopeBindings, ScopeBindingKind, ScopeBindingFailure, ScopeBinding }
