@@ -103,3 +103,27 @@ read while instantiating Mid and obligations that must survive without a call
 terminator. This source inspection establishes the consumer split; it does not
 yet establish that the old registration may be skipped for every non-emitted
 call.
+
+## Ordering boundary for a Mid-based traversal
+
+- [Mid Build](../../src/Mid/Build.pw) constructs the parametric authored body
+  from prepared source facts and a checked signature. Its template cache is
+  keyed by source function. Declaration effect collection already uses this
+  cache; the AOT and lazy executable preparation paths in
+  [CheckedProgram](../../src/CheckedProgram.pw) carry it forward.
+  Ordinary call terminators retain the selected site key at this stage.
+- [Mid Instantiate](../../src/Mid/Instantiate.pw) requires concrete call,
+  storage and aggregate descriptors to produce the instantiated body. Therefore
+  dependency discovery can start from **parametric** Mid operations. Waiting
+  for instantiated Mid would put the descriptors after their own consumers.
+- [Mid Build](../../src/Mid/Build.pw) also has synthetic body origins for
+  existential witnesses and closure environment drops, and handles newtype
+  adapters through established signatures and an adapter call resolution.
+  These use distinct prerequisite ordering and cannot be assumed to have an
+  authored parametric body keyed by source function.
+- An initial direct-call slice should reuse the session's parametric body,
+  demand descriptors for reached direct call sites in dependency order, and
+  leave source checking and cleanup obligations intact. Verify call-result
+  recipes and inout writeback before retiring any source-scan branch. For
+  example, instantiation can read a call-result descriptor while resolving a
+  place or local type, independently of instantiating the call terminator.
