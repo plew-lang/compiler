@@ -35,7 +35,11 @@ pub impl Arena {
 
     fn finalAggregateHash(bodyId: U64, exprId: U64) -> U64 {
         val modulus: U64 = 4294967291U64
-        return (((bodyId % modulus + exprId % modulus) * 65537U64) + 17U64) % modulus
+        // Mix each component separately so adjacent body and occurrence IDs
+        // cannot cancel each other before hashing. Each product fits in U64.
+        val bodyHash = ((bodyId % modulus) * 2654435761U64) % modulus
+        val occurrenceHash = ((exprId % modulus) * 2246822519U64) % modulus
+        return (bodyHash + occurrenceHash + 17U64) % modulus
     }
 
     fn finalTryIndex(bodyId: U64, exprId: U64) -> U64 {
