@@ -11,7 +11,7 @@ use ../Ir only { BodyOrigin, CallReceiverPassing, CallArgumentPassing, ForTypeRe
 use ../Diag only { eprintU64, CompileDiagnostic }
 use @Std/Io only { eprint }
 use ../Ops only { opAnd, opOr }
-use ./Ir only { MidStorageInitialization, midLocalIsOwnedTemporary, MidEnumDestination, MidRange, MidCanonicalBody, MidClosureBody, MidProjection, MidPlace, MidBorrowCapability, MidConstant, MidOperand, MidCallArgument, MidAggregateKind, MidAggregateElement, MidClosureCapture, MidRvalue, MidCallTarget, MidCallReceiver, MidStatement, MidTerminator, MidLocalDecl, MidValueHomeStability, MidScope, MidBlock, MidBody }
+use ./Ir only { MidStorageInitialization, MidTerminatingInitializer, midLocalIsOwnedTemporary, MidEnumDestination, MidRange, MidCanonicalBody, MidClosureBody, MidProjection, MidPlace, MidBorrowCapability, MidConstant, MidOperand, MidCallArgument, MidAggregateKind, MidAggregateElement, MidClosureCapture, MidRvalue, MidCallTarget, MidCallReceiver, MidStatement, MidTerminator, MidLocalDecl, MidValueHomeStability, MidScope, MidBlock, MidBody }
 
 // A successful give transfers its value to the enclosing expression owner.
 enum MidBlockResult {
@@ -196,6 +196,7 @@ impl MidSourceLoopTarget { factory }
 
 pub struct MidBuildState {
     mut val storageOrder: Array[MidStorageInitialization] = []
+    mut val terminatingInitializers: Array[MidTerminatingInitializer] = []
     mut val sourceFacts: Optional[PreparedSemanticFacts] = <Optional.None />
     pub mut val locals: Array[MidLocalDecl] = []
     pub mut val scopes: Array[MidScope] = []
@@ -2561,10 +2562,19 @@ fn buildMidLetAdmitted(c: inout Comp, state: inout MidBuildState, stmtId: U64, c
             } else {
                 give midValueOperandForSourceExpr(c: inout c, state: inout state, exprId: init, allowAccessMarker: false)
             }
+            val function = state.sourceFunction
+            val collect = function < c.arena.functionCount() && !c.arena.functionAt(index: function).isDefaultGenerator
             val operandValue = match operandResult {
                 MidOperandBuild.Value(operand: val operand) => { give operand }
                 MidOperandBuild.NoContinuation => {
                     if completeEvaluation { midFinishEvaluationScope(state: inout state, scope: evaluation) }
+                    if collect {
+                        val dependency = match midRecordedStorageValueType(c: inout c, facts: facts, function: function, expression: init, operand: <Optional.None />, aggregate: aggregate) {
+                            Result.Ok(value: val dependency) => dependency
+                            Result.Err(error: val error) => { return error }
+                        }
+                        state.terminatingInitializers.append(<MidTerminatingInitializer statement=stmtId expression=init valueType=dependency />)
+                    }
                     return <MidBuildError.None />
                 }
                 MidOperandBuild.Error(error: val error) => {
@@ -2576,9 +2586,8 @@ fn buildMidLetAdmitted(c: inout Comp, state: inout MidBuildState, stmtId: U64, c
             val blockIndex = state.currentBlock
             val statementIndex = state.blocks[blockIndex].statements.count()
             midInitializeBinding(state: inout state, destination: destination, value: <MidRvalue.StorageBoundary stmtId=stmtId exprId=init targetTerm=term operand=midReturnOperand(c: inout c, operand: operandValue, typeTerm: (match midSourceSemanticTerm(c: inout c, facts: state.sourceFacts, sourceFunction: state.sourceFunction, exprId: init) { Result.Ok(value: val term) => { give term } Result.Err(error: val error) => { return error } })) />)
-            val function = state.sourceFunction
-            if function < c.arena.functionCount() && !c.arena.functionAt(index: function).isDefaultGenerator {
-                val valueType = match midRecordedStorageValueType(c: inout c, facts: facts, function: function, expression: init, operand: operandValue, aggregate: aggregate) {
+            if collect {
+                val valueType = match midRecordedStorageValueType(c: inout c, facts: facts, function: function, expression: init, operand: <Optional.Some v=operandValue />, aggregate: aggregate) {
                     Result.Ok(value: val valueType) => valueType
                     Result.Err(error: val error) => { return error }
                 }
@@ -2618,38 +2627,43 @@ fn midStorageProjectionRoot(c: Comp, expression: U64) -> U64 {
 
 // Preserve the checked source side of the conversion independently from the
 // storage destination. Selected call recipes name the exact result producer.
-fn midRecordedStorageValueType(c: inout Comp, facts: PreparedSemanticFacts, function: U64, expression: U64, operand: MidOperand, aggregate: MidAggregateLookup) -> Result[RecordedStorageValueType, MidBuildError] {
+fn midRecordedStorageValueType(c: inout Comp, facts: PreparedSemanticFacts, function: U64, expression: U64, operand: Optional[MidOperand], aggregate: MidAggregateLookup) -> Result[RecordedStorageValueType, MidBuildError] {
     val fact = match facts.expression(exprId: expression) {
         Optional.Some(v: val fact) => fact
         Optional.None => { return <Result.Err error=<MidBuildError.MissingSemanticType /> /> }
     }
     match operand {
-        MidOperand.Constant(value: _) => { return <Result.Ok value=<RecordedStorageValueType.Constant ref=fact.term /> /> }
-        MidOperand.Copy(place: _) | MidOperand.Move(place: _) | MidOperand.Borrow(place: _, capability: _) => {
-            val root = midStorageProjectionRoot(c: c, expression: expression)
-            match c.arena.exprs[root] {
-                Expr.Ident(start: _, len: _) => { return <Result.Ok value=<RecordedStorageValueType.Binding ref=fact.term rootExpression=root /> /> }
-                Expr.Call(nameStart: _, nameLen: _, args: _) |
-                Expr.Method(recv: _, nameStart: _, nameLen: _, args: _) |
-                Expr.ExtMethod(recv: _, source: _, nameStart: _, nameLen: _, args: _) |
-                Expr.Index(base: _, index: _) => {
+        Optional.Some(v: val value) => {
+            match value {
+                MidOperand.Constant(value: _) => { return <Result.Ok value=<RecordedStorageValueType.Constant ref=fact.term /> /> }
+                MidOperand.Copy(place: _) | MidOperand.Move(place: _) | MidOperand.Borrow(place: _, capability: _) => {
+                    val root = midStorageProjectionRoot(c: c, expression: expression)
+                    match c.arena.exprs[root] {
+                        Expr.Ident(start: _, len: _) => { return <Result.Ok value=<RecordedStorageValueType.Binding ref=fact.term rootExpression=root /> /> }
+                        Expr.Call(nameStart: _, nameLen: _, args: _) |
+                        Expr.Method(recv: _, nameStart: _, nameLen: _, args: _) |
+                        Expr.ExtMethod(recv: _, source: _, nameStart: _, nameLen: _, args: _) |
+                        Expr.Index(base: _, index: _) => {
+                            if root != expression {
+                                val head = match c.callTemplateHeadForSourceBody(fnIdx: function, exprId: root) {
+                                    Result.Ok(value: val head) => head
+                                    Result.Err(error: val diagnostic) => { return <Result.Err error=<MidBuildError.Frontend diagnostic=diagnostic /> /> }
+                                }
+                                if head.resultTypeRecipe > 0U64 && head.resultTypeRecipe <= c.arena.semanticTypeRecipes.count() && c.arena.semanticTypeRecipes[head.resultTypeRecipe - 1U64].kind == 2U64 {
+                                    return <Result.Ok value=<RecordedStorageValueType.Projection ref=fact.term root=<CallArgumentSource.PriorCallResult exprId=root siteKey=head.siteKey /> /> />
+                                }
+                            }
+                        }
+                        _ => {}
+                    }
                     if root != expression {
-                        val head = match c.callTemplateHeadForSourceBody(fnIdx: function, exprId: root) {
-                            Result.Ok(value: val head) => head
-                            Result.Err(error: val diagnostic) => { return <Result.Err error=<MidBuildError.Frontend diagnostic=diagnostic /> /> }
-                        }
-                        if head.resultTypeRecipe > 0U64 && head.resultTypeRecipe <= c.arena.semanticTypeRecipes.count() && c.arena.semanticTypeRecipes[head.resultTypeRecipe - 1U64].kind == 2U64 {
-                            return <Result.Ok value=<RecordedStorageValueType.Projection ref=fact.term root=<CallArgumentSource.PriorCallResult exprId=root siteKey=head.siteKey /> /> />
-                        }
+                        return <Result.Ok value=<RecordedStorageValueType.Projection ref=fact.term root=<CallArgumentSource.Expression exprId=root /> /> />
                     }
                 }
                 _ => {}
             }
-            if root != expression {
-                return <Result.Ok value=<RecordedStorageValueType.Projection ref=fact.term root=<CallArgumentSource.Expression exprId=root /> /> />
-            }
         }
-        _ => {}
+        Optional.None => {}
     }
     if aggregate.found {
         val written: Optional[U64] = match c.arena.exprs[expression] {
@@ -3700,7 +3714,7 @@ pub fn buildParametricMidBody(c: inout Comp, fnIdx: U64) -> MidBodyBuild {
         midEmitScopeExit(state: inout state, scope: 0U64)
         midSetTerminator(state: inout state, terminator: <MidTerminator.Return />)
     }
-    val body: MidBody = <MidBody sourceFunction=fnIdx locals=state.locals scopes=state.scopes blocks=state.blocks callArgumentProjections=state.callArgumentProjections storageOrder=state.storageOrder entry=0U64 />
+    val body: MidBody = <MidBody sourceFunction=fnIdx locals=state.locals scopes=state.scopes blocks=state.blocks callArgumentProjections=state.callArgumentProjections storageOrder=state.storageOrder terminatingInitializers=state.terminatingInitializers entry=0U64 />
     val canonical: MidCanonicalBody = c.mid.store(body: body)
     if !c.mid.isWellFormed(body: canonical) {
         // A builder-produced canonical snapshot must be internally closed

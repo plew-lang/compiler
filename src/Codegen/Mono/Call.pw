@@ -7196,16 +7196,12 @@ pub impl Comp {
                                     return <Result.Err error=self.diagnosticAt(offset: nameStart, msg: "checked local has a foreign initializer occurrence", failureDomain: <FailureDomain.Internal />) />
                                 }
                                 try self.prepareCheckedInitializer(request: request)
-                                try self.publishCheckedLocalStorage(stmtId: stmtId, request: request)
+                                if request.producesStorage { try self.publishCheckedLocalStorage(stmtId: stmtId, request: request) }
                                 return <Result.Ok value=() />
                             }
                             Optional.None => {}
                         }
-                        try self.scanExprInsts(exprId: init)
-                        val facts = try self.preparedBodyFacts(bodyId: self.cur.bodyId, globalInitializerTarget: self.cur.globalInitializerTarget)
-                        val completion = try self.semanticStmtCompletionInOwner(stmtId: stmtId, owner: facts)
-                        if !completion.execution.normal() { return <Result.Ok value=() /> }
-                        return <Result.Err error=self.diagnosticAt(offset: nameStart, msg: "normally completing local has no checked Mid storage", failureDomain: <FailureDomain.Internal />) />
+                        return <Result.Err error=self.diagnosticAt(offset: nameStart, msg: "local initializer has no checked Mid dependency", failureDomain: <FailureDomain.Internal />) />
                     }
                     Optional.None => {}
                 }

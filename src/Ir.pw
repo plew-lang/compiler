@@ -582,6 +582,7 @@ pub struct CheckedLocalStorageRequest {
     pub val binding: SourceBindingOrigin
     pub val valueType: RecordedStorageValueType
     pub val conversionSite: Optional[CallSiteKey] = <Optional.None />
+    pub val producesStorage: Bool = true
 }
 pub impl CheckedLocalStorageRequest { factory }
 

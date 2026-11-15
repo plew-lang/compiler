@@ -1,7 +1,7 @@
 // A whole-target static-check result owns the exact compiler snapshot it proves.
 // No public factory or mutable arena accessor can attach it to another input.
 use ./Frontend only { Comp, FrontendInput, FrontendOptions, analyzeFrontendForRequests, completeFrontendDeclarations, traceFinalCallableStart, traceFinalCallableFinish, FinalBodyRequests, FinalDependencies, FinalizationPublication }
-use ./Ir only { StaticConformanceProof, BodyOrigin, InstanceEnvironment, CallSiteKey, CheckedLocalStorageRequest }
+use ./Ir only { StaticConformanceProof, BodyOrigin, InstanceEnvironment, CallSiteKey, CheckedLocalStorageRequest, SourceBindingOrigin }
 use ./Backend only { LlvmLoweringResult, LlvmTargetDescription, lowerRequestedLlvm, lowerGlobalStorageLlvm, lowerCallableDeclarationsLlvm }
 use ./SourceAccess only { SourceAccess }
 use ./Diag only { CompileDiagnostic, DiagnosticLocation, FailureDomain }
@@ -415,6 +415,15 @@ impl CompilerSession {
                 }
                 storage[value.sourceStmt] = <CheckedLocalStorageRequest expression=value.exprId declarationTarget=local.sourceNameStart binding=local.sourceBinding valueType=initialization.valueType conversionSite=<Optional.Some v=initialization.conversionSite /> />
                 storageOrder.append(value.sourceStmt)
+            }
+        }
+        if collectStorage {
+            for index in 0U64..<body.terminatingInitializers.len {
+                val initializer = self.compiler.mid.terminatingInitializers[body.terminatingInitializers.start + index]
+                if storage.contains(key: initializer.statement) {
+                    return <Result.Err error=self.compiler.diagnosticAt(offset: 0U64, msg: "checked Mid has a duplicate initializer dependency", failureDomain: <FailureDomain.Internal />) />
+                }
+                storage[initializer.statement] = <CheckedLocalStorageRequest expression=initializer.expression declarationTarget=self.compiler.stmtPrincipalOffset(sid: initializer.statement) binding=<SourceBindingOrigin /> valueType=initializer.valueType producesStorage=false />
             }
         }
         val inputs = <MidFinalizationInputs calls=calls storage=storage storageOrder=storageOrder />

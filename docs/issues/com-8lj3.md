@@ -256,3 +256,7 @@ Checked Mid now retains the conversion occurrence key with each local initializa
 **2026-11-15T17:27:45Z**
 
 Prepare storage conversion before destination layout registration, preserving the legacy relative diagnostic order. Publish the descriptor after both succeed. Six lazy controls and full same-source AOT LLVM matched. This validates healthy inputs and the ordering by inspection; no legal source that exhibits competing conversion and layout failures was identified.
+
+**2026-11-15T17:32:44Z**
+
+Parametric Mid retains terminating local initializers as dependency requests without destination or conversion. Finalization prepares them in the checked statement order, never publishes storage, and rejects a missing initializer request before scanning. Five lazy fixtures, the existing descriptor-only probe, and full same-source AOT LLVM matched. Initial linking hit disk exhaustion; reused the same verified LLVM, removed two stale diagnostic binaries and linked in separate object steps. Remaining shared preparation for nested operands is unchanged.
