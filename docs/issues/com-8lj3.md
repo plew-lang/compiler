@@ -164,3 +164,7 @@ Parametric Mid construction and finalization now consume the same Record-publish
 **2026-11-15T15:47:58Z**
 
 Record now publishes the first statement-pool index as well as the length of the admitted block prefix. Both Mid construction and routed finalization index the immutable pool from the saved range and validate its bounds. This eliminates looking up the AST block again to navigate the prefix; individual statement and branch handlers are still shared with the residual source traversal. Native range control and five lazy fixtures passed; full same-source AOT LLVM matched 66793e023eec0d13d835ef85f5b9842c534d590d099b1166d475c98ab1dc9f52.
+
+**2026-11-15T15:52:50Z**
+
+Record now publishes value-region edges for blocks, lowered sequences, if expressions and condition chains. Checked initializers consume those edges directly; Mid uses the same selection and one lowering helper. Child expressions and statements still use their existing preparation routes. Six lazy fixtures, a nested block and both branches with observable condition order passed. Full same-source diagnostic AOT LLVM matched 19e61d80a4ba714e70f838e867a1ac150de333ad58486e9bd2fc79d4c6844d3e. Next preserve the selected region in the initializer request to avoid fetching these facts again per instance, and audit remaining match and operand boundaries.

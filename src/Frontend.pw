@@ -1,4 +1,4 @@
-use ./Ir only { SourceBindingOrigin, SourceStatementRange, CheckedLocalStorageRequest, RecordedStorageValueType }
+use ./Ir only { SourceBindingOrigin, SourceStatementRange, SourceValueRegion, CheckedLocalStorageRequest, RecordedStorageValueType }
 use ./SourceTypeUses only { SourceTypeRecipe, SourceTypeRecipeOrigin, SourceTypeUses, SourceTypeScope, SourceTypeScopeKind, SourceTypeScopeState, SourceTypeUseRole, AuthoredTypeUse, AuthoredFunctionSignature, LoweredSourceSignature, SourceRequirementOwner, SourceImplementationOwner, SourceImplementationKind, SourceBoundRange }
 use ./SourceTypeAdmissions only { AuthoredTypeViewProof, AuthoredSignatureViews, AuthoredProvidedClause, AuthoredAssociatedBinding, AuthoredConformanceArgument, AuthoredConformanceTarget, SourceSignatureSlot }
 use ./ModuleScopeBindings only { ModuleScopeBindings, AdmittedModuleScopeBindings, ScopeBindingKind, ScopeBindingFailure, ScopeBinding }
@@ -2916,6 +2916,7 @@ struct SourceBodyData {
     mut val expressionIndexSlots: Array[U64] = []
     mut val expressionIds: Array[U64] = []
     mut val requiredExpressions: Array[U64] = []
+    mut val valueRegions: Dictionary[U64, SourceValueRegion] = [:]
     mut val valueBlocks: Dictionary[U64, SourceValueBlockFact] = [:]
     mut val valueBlockIds: Array[U64] = []
     mut val identifierTargets: Dictionary[U64, U64] = [:]
@@ -3147,6 +3148,7 @@ pub impl PreparedSemanticFacts {
     fn operationHeadAt(index: U64) -> Optional[SourceOperationHead] { return readSourceOperationHead(rows: self.payload->operations, index: index) }
     fn expression(exprId: U64) -> Optional[SemanticExprType] { return readSourceExpression(rows: self.payload->expressions, identities: self.payload->expressionIds, indexSlots: self.payload->expressionIndexSlots, exprId: exprId) }
     fn executableBlockRange(blockId: U64) -> Optional[SourceStatementRange] { return self.payload->executableBlockRanges.get(key: blockId) }
+    fn valueRegion(exprId: U64) -> Optional[SourceValueRegion] { return self.payload->valueRegions.get(key: exprId) }
     fn valueBlock(blockId: U64) -> Optional[SourceValueBlockFact] { return self.payload->valueBlocks.get(key: blockId) }
     fn identifierTarget(exprId: U64) -> Optional[U64] { return self.payload->identifierTargets.get(key: exprId) }
     fn traitValueView(exprId: U64) -> Optional[SourceValueViewProof] { return self.payload->traitValueViews.get(key: exprId) }

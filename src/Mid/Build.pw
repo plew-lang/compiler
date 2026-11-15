@@ -1,4 +1,4 @@
-use ../Ir only { SourceBindingOrigin, SourceStatementRange, RecordedStorageValueType }
+use ../Ir only { SourceBindingOrigin, SourceStatementRange, SourceValueRegion, RecordedStorageValueType }
 use ../SourceCompletion only { CompletionTransfer }
 use ../Ir only { SourceExitTarget, SourceTransferFact }
 use ../Diag only { CompileDiagnostic }
@@ -1620,6 +1620,27 @@ fn midBlockOperandResult(state: MidBuildState, place: MidPlace, error: MidBuildE
     return <MidOperandBuild.Value operand=<MidOperand.Copy place=place /> />
 }
 
+fn midValueRegionOperand(c: inout Comp, state: inout MidBuildState, region: SourceValueRegion, sourceType: MidSourceExpressionType) -> MidOperandBuild {
+    val term = sourceType.typeTerm()
+    val recipe = sourceType.resultRecipe()
+    val local = addMidTemporary(state: inout state, typeTerm: term, typeRecipe: recipe)
+    val destination = <MidPlace local=local typeTerm=term typeRecipe=recipe />
+    val result = <MidBlockResult.Value destination=destination />
+    val error = match region {
+        SourceValueRegion.Block(body: val body, sequence: val sequence) => buildMidBlockInto(c: inout c, state: inout state, blockId: body, blockResult: result, expressionSequence: sequence)
+        SourceValueRegion.If(condition: val condition, thenBlock: val thenBlock, elseBlock: val elseBlock) => buildMidIfCfg(c: inout c, state: inout state, cond: condition, thenBlk: thenBlock, elseBlk: elseBlock, hasElse: true, blockResult: result)
+        SourceValueRegion.IfChain(conditions: val conditions, thenBlock: val thenBlock, elseBlock: val elseBlock) => buildMidConditionChain(c: inout c, state: inout state, conditions: conditions, thenBlk: thenBlock, elseBlk: elseBlock, blockResult: result)
+    }
+    return midBlockOperandResult(state: state, place: destination, error: error)
+}
+
+fn midValueRegionForExpr(state: MidBuildState, expression: U64, fallback: SourceValueRegion) -> SourceValueRegion {
+    match state.sourceFacts {
+        Optional.Some(v: val facts) => { return facts.valueRegion(exprId: expression).unwrapOr(fallback: fallback) }
+        Optional.None => { return fallback }
+    }
+}
+
 fn midValueOperandForSourceExpr(c: inout Comp, state: inout MidBuildState, exprId: U64, allowAccessMarker: Bool) -> MidOperandBuild {
     if exprId >= c.arena.exprs.count() {
         return <MidOperandBuild.Error error=<MidBuildError.InvalidStatement /> />
@@ -1768,32 +1789,20 @@ fn midValueOperandForSourceExpr(c: inout Comp, state: inout MidBuildState, exprI
             return <MidOperandBuild.Value operand=<MidOperand.Copy place=destination /> />
         }
         Expr.Block(body: val body, offset: _) => {
-            val resultLocal = addMidTemporary(state: inout state, typeTerm: valueTypeTerm, typeRecipe: sourceType.resultRecipe())
-            val resultPlace = <MidPlace local=resultLocal typeTerm=valueTypeTerm typeRecipe=sourceType.resultRecipe() />
-            val error = buildMidBlockInto(c: inout c, state: inout state, blockId: body, blockResult: <MidBlockResult.Value destination=resultPlace />)
-            return midBlockOperandResult(state: state, place: resultPlace, error: error)
+            val region = midValueRegionForExpr(state: state, expression: exprId, fallback: <SourceValueRegion.Block body=body sequence=false />)
+            return midValueRegionOperand(c: inout c, state: inout state, region: region, sourceType: sourceType)
         }
         Expr.Sequence(body: val body) => {
-            val resultLocal = addMidTemporary(state: inout state, typeTerm: valueTypeTerm, typeRecipe: sourceType.resultRecipe())
-            val resultPlace = <MidPlace local=resultLocal typeTerm=valueTypeTerm typeRecipe=sourceType.resultRecipe() />
-            val error = buildMidBlockInto(c: inout c, state: inout state, blockId: body, blockResult: <MidBlockResult.Value destination=resultPlace />, expressionSequence: true)
-            return midBlockOperandResult(state: state, place: resultPlace, error: error)
+            val region = midValueRegionForExpr(state: state, expression: exprId, fallback: <SourceValueRegion.Block body=body sequence=true />)
+            return midValueRegionOperand(c: inout c, state: inout state, region: region, sourceType: sourceType)
         }
         Expr.IfExpr(cond: val cond, thenBlk: val thenBlk, elseBlk: val elseBlk) => {
-            // Value `if` uses the same ordinary CFG as statement `if`. Each
-            // normally completing arm writes this one place; all-diverging
-            // arms leave the retained join Unreachable, so no enclosing
-            // consumer may materialize an uninitialized result.
-            val resultLocal: U64 = addMidTemporary(state: inout state, typeTerm: valueTypeTerm, typeRecipe: sourceType.resultRecipe())
-            val resultPlace: MidPlace = <MidPlace local=resultLocal typeTerm=valueTypeTerm typeRecipe=sourceType.resultRecipe() />
-            val lowered: MidBuildError = buildMidIfCfg(c: inout c, state: inout state, cond: cond, thenBlk: thenBlk, elseBlk: elseBlk, hasElse: true, blockResult: <MidBlockResult.Value destination=resultPlace />)
-            return midBlockOperandResult(state: state, place: resultPlace, error: lowered)
+            val region = midValueRegionForExpr(state: state, expression: exprId, fallback: <SourceValueRegion.If condition=cond thenBlock=thenBlk elseBlock=elseBlk />)
+            return midValueRegionOperand(c: inout c, state: inout state, region: region, sourceType: sourceType)
         }
         Expr.IfChain(conditions: val conditions, thenBlk: val thenBlk, elseBlk: val elseBlk) => {
-            val resultLocal = addMidTemporary(state: inout state, typeTerm: valueTypeTerm, typeRecipe: sourceType.resultRecipe())
-            val resultPlace = <MidPlace local=resultLocal typeTerm=valueTypeTerm typeRecipe=sourceType.resultRecipe() />
-            val error = buildMidConditionChain(c: inout c, state: inout state, conditions: conditions, thenBlk: thenBlk, elseBlk: elseBlk, blockResult: <MidBlockResult.Value destination=resultPlace />)
-            return midBlockOperandResult(state: state, place: resultPlace, error: error)
+            val region = midValueRegionForExpr(state: state, expression: exprId, fallback: <SourceValueRegion.IfChain conditions=conditions thenBlock=thenBlk elseBlock=elseBlk />)
+            return midValueRegionOperand(c: inout c, state: inout state, region: region, sourceType: sourceType)
         }
         Expr.MatchExpr(scrut: val scrut, arms: val arms) => {
             val resultLocal: U64 = addMidTemporary(state: inout state, typeTerm: valueTypeTerm, typeRecipe: sourceType.resultRecipe())

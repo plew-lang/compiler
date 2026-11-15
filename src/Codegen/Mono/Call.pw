@@ -7045,10 +7045,35 @@ pub impl Comp {
 
     // The checked initialization supplies the selected call template. The
     // expression walk still prepares operands and replays receiver evidence.
+    inout fn prepareCheckedValueRegion(region: SourceValueRegion) -> Result[(), CompileDiagnostic] {
+        match region {
+            SourceValueRegion.Block(body: val body, sequence: _) => { return self.scanBlockInsts(blkId: body) }
+            SourceValueRegion.If(condition: val condition, thenBlock: val thenBlock, elseBlock: val elseBlock) => {
+                if try self.scanValueContinuation(exprId: condition) {
+                    try self.scanBlockInsts(blkId: thenBlock)
+                    try self.scanBlockInsts(blkId: elseBlock)
+                }
+                return <Result.Ok value=() />
+            }
+            SourceValueRegion.IfChain(conditions: val conditions, thenBlock: val thenBlock, elseBlock: val elseBlock) => {
+                return self.scanConditionChain(conditions: conditions, thenBlk: thenBlock, elseBlk: elseBlock)
+            }
+        }
+    }
+
     inout fn prepareCheckedInitializer(request: CheckedLocalStorageRequest) -> Result[(), CompileDiagnostic] {
         val recipeId = match request.valueType {
             RecordedStorageValueType.Recipe(id: val recipe) => recipe
-            RecordedStorageValueType.Term(ref: _) => { return self.scanExprInsts(exprId: request.expression) }
+            RecordedStorageValueType.Term(ref: _) => {
+                if self.cur.bodyId != 0U64 {
+                    val facts = try self.preparedBodyFacts(bodyId: self.cur.bodyId, globalInitializerTarget: self.cur.globalInitializerTarget)
+                    match facts.valueRegion(exprId: request.expression) {
+                        Optional.Some(v: val region) => { return self.prepareCheckedValueRegion(region: region) }
+                        Optional.None => {}
+                    }
+                }
+                return self.scanExprInsts(exprId: request.expression)
+            }
         }
         if recipeId == 0U64 || recipeId > self.arena.semanticTypeRecipes.count() {
             return <Result.Err error=self.diagnosticAt(offset: request.declarationTarget, msg: "checked local has an invalid initializer recipe", failureDomain: <FailureDomain.Internal />) />

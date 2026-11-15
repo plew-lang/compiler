@@ -613,6 +613,16 @@ impl Comp {
             Optional.None => {}
         }
     }
+    inout fn storeBuildingValueRegion(exprId: U64, region: SourceValueRegion) {
+        match self.sourceRecordingOwner() {
+            Optional.Some(v: val owner) => {
+                self.sourceFacts.activate(owner: owner)
+                self.sourceFacts.activeBuilder.data.valueRegions[exprId] = region
+            }
+            Optional.None => {}
+        }
+    }
+
     inout fn storeBuildingExecutableBlock(blockId: U64, length: U64) {
         match self.sourceRecordingOwner() {
             Optional.Some(v: val owner) => {

@@ -2728,9 +2728,11 @@ pub impl Comp {
             }
             Expr.Sequence(val body) => {
                 try self.recordValueBlock(exprId: exprId, blockId: body, expectedTerm: normalizedContext)
+                if self.cur.recordCallTemplates { self.storeBuildingValueRegion(exprId: exprId, region: <SourceValueRegion.Block body=body sequence=true />) }
             }
             Expr.Block(val body, offset: _) => {
                 try self.recordValueBlock(exprId: exprId, blockId: body, expectedTerm: normalizedContext)
+                if self.cur.recordCallTemplates { self.storeBuildingValueRegion(exprId: exprId, region: <SourceValueRegion.Block body=body sequence=false />) }
             }
             Expr.IfChain(val conditions, val thenBlk, val elseBlk) => {
                 val mark = self.scopeMark()
@@ -2738,11 +2740,13 @@ pub impl Comp {
                 try self.recordValueBlock(exprId: exprId, blockId: thenBlk, expectedTerm: normalizedContext)
                 self.popLocals(mark: mark)
                 try self.recordValueBlock(exprId: exprId, blockId: elseBlk, expectedTerm: normalizedContext)
+                if self.cur.recordCallTemplates { self.storeBuildingValueRegion(exprId: exprId, region: <SourceValueRegion.IfChain conditions=conditions thenBlock=thenBlk elseBlock=elseBlk />) }
             }
             Expr.IfExpr(val cond, val thenBlk, val elseBlk) => {
                 try self.recordExpr(exprId: cond, chainHoleRef: chainHoleRef)
                 try self.recordValueBlock(exprId: exprId, blockId: thenBlk, expectedTerm: normalizedContext)
                 try self.recordValueBlock(exprId: exprId, blockId: elseBlk, expectedTerm: normalizedContext)
+                if self.cur.recordCallTemplates { self.storeBuildingValueRegion(exprId: exprId, region: <SourceValueRegion.If condition=cond thenBlock=thenBlk elseBlock=elseBlk />) }
             }
             Expr.OptChain(val base, val cont) => {
                 // Check the children before committing the chain result. The
