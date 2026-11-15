@@ -224,3 +224,7 @@ Aggregate element call results now use the same sealed owner-scoped occurrence t
 **2026-11-15T16:50:12Z**
 
 Prepare direct binding-read initializers from the checked type and Mid copy operand, skipping the expression walker. Generation still selects referenced globals through the existing checked binding reader. Six lazy fixtures, same-source full AOT LLVM, and the globaltransitive generation LLVM comparison passed. Composite places and other expression shapes still retain the shared preparation path.
+
+**2026-11-15T16:54:01Z**
+
+Carry the underlying binding occurrence for initializer places formed through fields, pointer projection and move/borrow. A chain rooted in anything other than an identifier keeps the existing dependency preparation. Six lazy controls and full same-source AOT LLVM matched. Timing not measured.

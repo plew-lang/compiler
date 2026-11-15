@@ -2597,6 +2597,22 @@ fn buildMidLetAdmitted(c: inout Comp, state: inout MidBuildState, stmtId: U64, c
     }
 }
 
+// These source forms add no finalization work between the place and its
+// lexical/global root. An index, call or view must keep its own dependency.
+fn midStorageBindingRoot(c: Comp, expression: U64) -> Optional[U64] {
+    mut val root = expression
+    while true {
+        match c.arena.exprs[root] {
+            Expr.Ident(start: _, len: _) => { return <Optional.Some v=root /> }
+            Expr.Field(base: val base, nameStart: _, nameLen: _) |
+            Expr.Arrow(base: val base, nameStart: _, nameLen: _) |
+            Expr.Deref(base: val base) => { root = base }
+            Expr.Move(operand: val operand, isBorrow: _) => { root = operand }
+            _ => { return <Optional.None /> }
+        }
+    }
+}
+
 // Preserve the checked source side of the conversion independently from the
 // storage destination. Selected call recipes name the exact result producer.
 fn midRecordedStorageValueType(c: inout Comp, facts: PreparedSemanticFacts, function: U64, expression: U64, operand: MidOperand, aggregate: MidAggregateLookup) -> Result[RecordedStorageValueType, MidBuildError] {
@@ -2606,10 +2622,10 @@ fn midRecordedStorageValueType(c: inout Comp, facts: PreparedSemanticFacts, func
     }
     match operand {
         MidOperand.Constant(value: _) => { return <Result.Ok value=<RecordedStorageValueType.Constant ref=fact.term /> /> }
-        MidOperand.Copy(place: _) => {
-            match c.arena.exprs[expression] {
-                Expr.Ident(start: _, len: _) => { return <Result.Ok value=<RecordedStorageValueType.Binding ref=fact.term /> /> }
-                _ => {}
+        MidOperand.Copy(place: _) | MidOperand.Move(place: _) | MidOperand.Borrow(place: _, capability: _) => {
+            match midStorageBindingRoot(c: c, expression: expression) {
+                Optional.Some(v: val root) => { return <Result.Ok value=<RecordedStorageValueType.Binding ref=fact.term rootExpression=root /> /> }
+                Optional.None => {}
             }
         }
         _ => {}
