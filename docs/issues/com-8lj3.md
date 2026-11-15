@@ -76,3 +76,7 @@ Capture records now retain the selected Let statement identity. While preparing 
 **2026-11-15T12:44:31Z**
 
 Routed Let no longer reconstructs a Local scope row. Only legacy entry adds it. Residual traversal still verifies normal completion on missing Mid storage and supplies initializer-call ordering and layout registration. Eight lazy outputs including captures, shadowing, associated type and analytical non-continuation matched. Full AOT LLVM matched 2b52f763072e785f5ee9331a8c2906c1d3279648153bca5dacfef33a36995cb5. Next move target grounding and layout registration to the same checked request after verifying call/closure producer ordering, then optimize and measure.
+
+**2026-11-15T12:47:45Z**
+
+Routed Let now only walks the initializer for residual operation dependencies and checks whether its Mid storage requirement is present; it no longer grounds or registers the local target. Those operations run on the checked request from a call, enclosing capture, or the final body request sweep. Closure uses explicit enclosing body ID. Six lazy outputs matched and full AOT LLVM agreed at 98b439208e56a1e5eb0e1c3671dfa436a8d6efbd5ad7e37bc6069395db5bca4b. Before closure verify diagnostics, non-interference, and timing and obtain independent review.

@@ -6019,15 +6019,11 @@ pub impl Comp {
                             if request.declarationTarget != capture.bindingTarget {
                                 return <Result.Err error=self.diagnosticAt(offset: capture.bindingTarget, msg: "closure capture has a foreign checked binding", failureDomain: <FailureDomain.Internal />) />
                             }
-                            match self.cur.checkedLocalStorageTargets.get(key: statement) {
-                                Optional.Some(v: val target) => {
-                                    if !self.publishedBodyTypeMatches(bodyId: enclosingBodyId, source: capture.typeTerm, concrete: target) {
-                                        return <Result.Err error=self.diagnosticAt(offset: capture.bindingTarget, msg: "closure capture differs from its enclosing binding type", failureDomain: <FailureDomain.Internal />) />
-                                    }
-                                    return <Result.Ok value=target />
-                                }
-                                Optional.None => { return <Result.Err error=self.diagnosticAt(offset: capture.bindingTarget, msg: "closure capture binding type was not finalized", failureDomain: <FailureDomain.Internal />) /> }
+                            val target = try self.groundCheckedLocalStorageTarget(stmtId: statement, request: request, bodyId: enclosingBodyId)
+                            if !self.publishedBodyTypeMatches(bodyId: enclosingBodyId, source: capture.typeTerm, concrete: target) {
+                                return <Result.Err error=self.diagnosticAt(offset: capture.bindingTarget, msg: "closure capture differs from its enclosing binding type", failureDomain: <FailureDomain.Internal />) />
                             }
+                            return <Result.Ok value=target />
                         }
                         Optional.None => {}
                     }
@@ -6875,15 +6871,14 @@ pub impl Comp {
                 }
             }
         }
-        val ref = try self.groundCheckedLocalBinding(binding: binding, authoredTerm: authoredTerm)
+        val ref = try self.groundCheckedLocalBinding(binding: binding, authoredTerm: authoredTerm, bodyId: bodyId)
         val info = self.typeInfoOfRef(ref: ref)
         return <Result.Ok value=<LetEff start=info.nameStart len=info.nameLen arr=info.kind == 3 ty=ref /> />
     }
 
     // The checked binding owns the source term and the annotation proof.
     // Concrete preparation supplies the current body environment.
-    inout fn groundCheckedLocalBinding(binding: SourceBindingFact, authoredTerm: U64) -> Result[U64, CompileDiagnostic] {
-        val bodyId = self.currentBodyInstanceId()
+    inout fn groundCheckedLocalBinding(binding: SourceBindingFact, authoredTerm: U64, bodyId: U64) -> Result[U64, CompileDiagnostic] {
         match binding.annotation {
             Optional.Some(v: val annotation) => {
                 mut val memo: Dictionary[U64, AuthoredRecipeRead] = [:]
@@ -6898,12 +6893,12 @@ pub impl Comp {
         }
     }
 
-    inout fn groundCheckedLocalStorageTarget(stmtId: U64, request: CheckedLocalStorageRequest) -> Result[U64, CompileDiagnostic] {
+    inout fn groundCheckedLocalStorageTarget(stmtId: U64, request: CheckedLocalStorageRequest, bodyId: U64) -> Result[U64, CompileDiagnostic] {
         match self.cur.checkedLocalStorageTargets.get(key: stmtId) {
             Optional.Some(v: val target) => { return <Result.Ok value=target /> }
             Optional.None => {}
         }
-        val facts = try self.preparedBodyFacts(bodyId: self.cur.bodyId, globalInitializerTarget: self.cur.globalInitializerTarget)
+        val facts = try self.preparedBodyFacts(bodyId: bodyId, globalInitializerTarget: self.cur.globalInitializerTarget)
         val expectedOrigin = facts.bindingStorage(stmtId: stmtId)
         if expectedOrigin.isNone() || !expectedOrigin.unwrap().matches(origin: request.binding) {
             return <Result.Err error=self.diagnosticAt(offset: request.declarationTarget, msg: "final local has a foreign Mid binding occurrence", failureDomain: <FailureDomain.Internal />) />
@@ -6923,7 +6918,8 @@ pub impl Comp {
             }
             Optional.None => {}
         }
-        val target = try self.groundCheckedLocalBinding(binding: binding, authoredTerm: authoredTerm)
+        val target = try self.groundCheckedLocalBinding(binding: binding, authoredTerm: authoredTerm, bodyId: bodyId)
+        try self.scanType(ref: target)
         self.cur.checkedLocalStorageTargets[stmtId] = target
         return <Result.Ok value=target />
     }
@@ -6933,7 +6929,7 @@ pub impl Comp {
         if existing < self.arena.finalStorages.count() {
             return <Result.Ok value=self.arena.finalStorages[existing].targetTypeRef />
         }
-        val ref = try self.groundCheckedLocalStorageTarget(stmtId: stmtId, request: request)
+        val ref = try self.groundCheckedLocalStorageTarget(stmtId: stmtId, request: request, bodyId: self.cur.bodyId)
         val sourceRef = match request.valueType {
             RecordedStorageValueType.Term(ref: val term) => try self.groundAndRecordBodyType(ref: term, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.cur.bodyId)
             RecordedStorageValueType.Recipe(id: val recipe) => try self.groundSemanticTypeRecipeForBody(recipeId: recipe, bodyId: self.cur.bodyId, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
@@ -6988,25 +6984,20 @@ pub impl Comp {
         match self.arena.stmts[stmtId] {
             Stmt.Let(val mutable, val nameStart, val nameLen, val tyStart, val tyLen, val tyIsArray, val ty, val init, val annotationOccurrence) => {
                 try self.scanExprInsts(exprId: init)
-                val localType = match self.cur.checkedLocalStorage {
+                match self.cur.checkedLocalStorage {
                     Optional.Some(v: val storage) => {
-                        give match storage.get(key: stmtId) {
-                            Optional.Some(v: val request) => try self.groundCheckedLocalStorageTarget(stmtId: stmtId, request: request)
-                            Optional.None => {
-                                val facts = try self.preparedBodyFacts(bodyId: self.cur.bodyId, globalInitializerTarget: self.cur.globalInitializerTarget)
-                                val completion = try self.semanticStmtCompletionInOwner(stmtId: stmtId, owner: facts)
-                                if !completion.execution.normal() { return <Result.Ok value=() /> }
-                                return <Result.Err error=self.diagnosticAt(offset: nameStart, msg: "normally completing local has no checked Mid storage", failureDomain: <FailureDomain.Internal />) />
-                            }
-                        }
+                        if storage.contains(key: stmtId) { return <Result.Ok value=() /> }
+                        val facts = try self.preparedBodyFacts(bodyId: self.cur.bodyId, globalInitializerTarget: self.cur.globalInitializerTarget)
+                        val completion = try self.semanticStmtCompletionInOwner(stmtId: stmtId, owner: facts)
+                        if !completion.execution.normal() { return <Result.Ok value=() /> }
+                        return <Result.Err error=self.diagnosticAt(offset: nameStart, msg: "normally completing local has no checked Mid storage", failureDomain: <FailureDomain.Internal />) />
                     }
-                    Optional.None => {
-                        val legacy = try self.scanLocalDeclarationType(stmtId: stmtId, tyStart: tyStart, tyLen: tyLen, tyIsArray: tyIsArray, ty: ty, init: init, annotationOccurrence: annotationOccurrence)
-                        try self.finalizeStorageConversion(stmtId: stmtId, exprId: init, targetTerm: legacy.ty)
-                        self.addLocal(nameStart: nameStart, nameLen: nameLen, tyStart: legacy.start, tyLen: legacy.len, isArray: legacy.arr, ty: legacy.ty, isInout: false, isMut: mutable, owned: true)
-                        give legacy.ty
-                    }
+                    Optional.None => {}
                 }
+                val legacy = try self.scanLocalDeclarationType(stmtId: stmtId, tyStart: tyStart, tyLen: tyLen, tyIsArray: tyIsArray, ty: ty, init: init, annotationOccurrence: annotationOccurrence)
+                try self.finalizeStorageConversion(stmtId: stmtId, exprId: init, targetTerm: legacy.ty)
+                self.addLocal(nameStart: nameStart, nameLen: nameLen, tyStart: legacy.start, tyLen: legacy.len, isArray: legacy.arr, ty: legacy.ty, isInout: false, isMut: mutable, owned: true)
+                val localType = legacy.ty
                 // an INFERRED non-literal type registers its instance the same way an
                 // annotation does: `val r = makeBox()` reaches Box[I64] just like
                 // `val r: Box[I64] = …`. (An array-literal let registers inside
