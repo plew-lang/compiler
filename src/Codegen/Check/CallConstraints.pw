@@ -77,7 +77,7 @@ impl Comp {
             val template = self.callTemplateAt(index: index)
             if wasClosed { try self.checkCallTemplateSelection(template: template) }
             admitted.append((try self.admitSelectedCallConstraints(templateIndex: index, template: template)))
-            try self.checkClosedIterationProtocol(templateIndex: index)
+            try self.checkClosedIterationProtocol(template: template)
             row = self.callTemplateBodyNext[index]
         }
         return <Result.Ok value=admitted />

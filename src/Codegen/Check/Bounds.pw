@@ -1784,14 +1784,13 @@ pub impl Comp {
         val count = self.callTemplateLocations.count()
         mut val index = 0U64
         while index < count {
-            try self.checkClosedIterationProtocol(templateIndex: index)
+            try self.checkClosedIterationProtocol(template: self.callTemplateAt(index: index))
             index += 1U64
         }
         return <Result.Ok value=() />
     }
 
-    inout fn checkClosedIterationProtocol(templateIndex: U64) -> Result[(), CompileDiagnostic] {
-        val template = self.callTemplateAt(index: templateIndex)
+    inout fn checkClosedIterationProtocol(template: CallTemplate) -> Result[(), CompileDiagnostic] {
         match template.kind {
             CallTemplateKind.Protocol(receiver: _, selection: val selection, resultTerm: _) => {
                 match selection {
@@ -1853,8 +1852,9 @@ pub impl Comp {
         mut val row = self.firstLexicalCallTemplate(owner: owner)
         while row != 0U64 && row <= limit {
             val index = row - 1U64
-            try self.checkRecordedCallTemplateBound(templateIndex: index)
-            try self.checkClosedIterationProtocol(templateIndex: index)
+            val template = self.callTemplateAt(index: index)
+            try self.checkRecordedCallTemplateBound(templateIndex: index, template: template)
+            try self.checkClosedIterationProtocol(template: template)
             row = self.callTemplateBodyNext[index]
         }
         return <Result.Ok value=() />
@@ -1863,7 +1863,10 @@ pub impl Comp {
     // Check one selected source call without scanning other bodies or
     // discovering executable instances. The caller owns demand/iteration.
     inout fn checkRecordedCallTemplateBound(templateIndex: U64) -> Result[(), CompileDiagnostic] {
-        val template = self.callTemplateAt(index: templateIndex)
+        return self.checkRecordedCallTemplateBound(templateIndex: templateIndex, template: self.callTemplateAt(index: templateIndex))
+    }
+
+    inout fn checkRecordedCallTemplateBound(templateIndex: U64, template: CallTemplate) -> Result[(), CompileDiagnostic] {
         try self.checkCallTemplateSelection(template: template)
         return self.checkRecordedCallConstraintEvidence(templateIndex: templateIndex, template: template)
     }
@@ -1895,13 +1898,13 @@ pub impl Comp {
             match template.kind {
                 CallTemplateKind.Direct(callee: val callee, receiver: _, args: _, calleeTypeArgs: _, proofId: _) => {
                     if callee < constrained.count() && constrained[callee] {
-                        try self.checkRecordedCallTemplateBound(templateIndex: index)
+                        try self.checkRecordedCallTemplateBound(templateIndex: index, template: template)
                     }
                 }
                 CallTemplateKind.StaticMethod(receiver: _, args: _, resolution: val resolution, methodTypeArgs: _, resultTerm: _) => {
                     match resolution {
                         StaticMemberResolution.Provided(proof: _, traitIdx: _, callee: val callee) => {
-                            if callee < constrained.count() && constrained[callee] { try self.checkRecordedCallTemplateBound(templateIndex: index) }
+                            if callee < constrained.count() && constrained[callee] { try self.checkRecordedCallTemplateBound(templateIndex: index, template: template) }
                         }
                         _ => {}
                     }

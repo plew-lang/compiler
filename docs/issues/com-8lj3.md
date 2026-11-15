@@ -280,3 +280,7 @@ Record identifier receiver provenance in the selected template. Concrete prepara
 **2026-11-15T18:04:31Z**
 
 Performance investigation reduced repeated callTemplateAt reads during source selection/constraint admission by passing the same retrieved template through both checks. The index-based selection API remains for internal clients. Five lazy controls and same-source AOT LLVM matched for the production path before restoring that wrapper. Native source_call_constraint_evidence compiled with the wrapper; both changed and unchanged source abort with the pre-existing selected conformance evidence does not satisfy its declaration conditions diagnostic, so it is excluded from successes. Timing has not been measured.
+
+**2026-11-15T18:15:06Z**
+
+Reuse the selected source template in the closed iteration protocol check and in generic bound checks that already read the row. This removes another navigation and full template read while keeping diagnostics and predicate order. Six lazy iteration controls, two unchanged --check rejections and same-source AOT LLVM matched. No timing claim for this increment.
