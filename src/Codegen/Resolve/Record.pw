@@ -2807,6 +2807,7 @@ pub impl Comp {
             Expr.Try(val expr) => {
                 try self.recordExpr(exprId: expr, chainHoleRef: chainHoleRef)
                 try self.recordTryExpression(exprId: exprId, operand: expr)
+                try self.recordValueOperandCall(exprId: expr)
             }
             Expr.Arrow(val base, val nameStart, val nameLen) => {
                 try self.recordExpr(exprId: base, chainHoleRef: chainHoleRef)

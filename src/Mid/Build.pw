@@ -2655,6 +2655,16 @@ fn midRecordedStorageValueType(c: inout Comp, facts: PreparedSemanticFacts, func
         Optional.Some(v: val region) => { return <Result.Ok value=<RecordedStorageValueType.Region ref=fact.term region=region /> /> }
         Optional.None => {}
     }
+    match c.arena.exprs[expression] {
+        Expr.Try(expr: val input) => {
+            val source: CallArgumentSource = match facts.valueOperandCall(exprId: input) {
+                Optional.Some(v: val site) => <CallArgumentSource.PriorCallResult exprId=input siteKey=site />
+                Optional.None => <CallArgumentSource.Expression exprId=input />
+            }
+            return <Result.Ok value=<RecordedStorageValueType.Try ref=fact.term operand=source /> />
+        }
+        _ => {}
+    }
     val template = match c.callTemplateForSourceBody(fnIdx: function, exprId: expression) {
         Result.Ok(value: val template) => template
         Result.Err(error: val diagnostic) => { return <Result.Err error=<MidBuildError.Frontend diagnostic=diagnostic /> /> }

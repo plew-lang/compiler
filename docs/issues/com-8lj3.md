@@ -232,3 +232,7 @@ Carry the underlying binding occurrence for initializer places formed through fi
 **2026-11-15T16:57:23Z**
 
 Projection-only initializer wrappers now retain their checked root call occurrence, including an index when its selected template has a call-result recipe. The complete projected value keeps its own type. Six lazy controls, call/index evaluation order and same-source AOT LLVM matched. No formal timing.
+
+**2026-11-15T17:11:03Z**
+
+Retain the checked operand of try local initializers, preparing its saved call before publishing the recorded success/error decomposition. Seven lazy controls cover generic conversion, error overload, associated results and place/ARC input. Full same-source AOT LLVM matched; this is an expression-visit comparison and not a timing result.

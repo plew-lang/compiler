@@ -6983,7 +6983,7 @@ pub impl Comp {
         }
         val ref = try self.groundCheckedLocalStorageTarget(stmtId: stmtId, request: request, bodyId: self.cur.bodyId)
         val sourceRef = match request.valueType {
-            RecordedStorageValueType.Aggregate(ref: val term, aggregate: _, writtenConstruction: _) | RecordedStorageValueType.Constant(ref: val term) | RecordedStorageValueType.Binding(ref: val term, rootExpression: _) | RecordedStorageValueType.ProjectedCall(ref: val term, rootExpression: _, site: _) | RecordedStorageValueType.Term(ref: val term) | RecordedStorageValueType.Region(ref: val term, region: _) => try self.groundAndRecordBodyType(ref: term, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.cur.bodyId)
+            RecordedStorageValueType.Aggregate(ref: val term, aggregate: _, writtenConstruction: _) | RecordedStorageValueType.Constant(ref: val term) | RecordedStorageValueType.Binding(ref: val term, rootExpression: _) | RecordedStorageValueType.ProjectedCall(ref: val term, rootExpression: _, site: _) | RecordedStorageValueType.Try(ref: val term, operand: _) | RecordedStorageValueType.Term(ref: val term) | RecordedStorageValueType.Region(ref: val term, region: _) => try self.groundAndRecordBodyType(ref: term, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.cur.bodyId)
             RecordedStorageValueType.Recipe(id: val recipe) => try self.groundSemanticTypeRecipeForBody(recipeId: recipe, bodyId: self.cur.bodyId, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, requireProducer: true)
         }
         val targetRef = try self.groundAndRecordBodyType(ref: ref, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.cur.bodyId)
@@ -7114,6 +7114,10 @@ pub impl Comp {
                     if layout != 0U64 { try self.scanType(ref: layout) }
                 }
                 return self.finalizeBodyAggregate(bodyId: self.cur.bodyId, aggregate: aggregate)
+            }
+            RecordedStorageValueType.Try(ref: _, operand: val operand) => {
+                try self.prepareCheckedCallOperand(source: operand)
+                return self.registerTryConversion(exprId: request.expression, operand: self.callArgumentExprId(source: operand))
             }
             RecordedStorageValueType.Term(ref: _) => { return self.scanExprInsts(exprId: request.expression) }
             RecordedStorageValueType.Region(ref: _, region: val region) => { return self.prepareCheckedValueRegion(expression: request.expression, region: region) }
