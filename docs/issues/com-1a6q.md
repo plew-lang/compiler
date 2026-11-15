@@ -75,3 +75,31 @@ for trait methods and cleanup introduced during Mid elaboration.
   `default_argument_call_templates`, `call_template_result_arguments` and
   `semantic_call_completion_boundary`; none alone proves that a non-emitted
   outer call is excluded from executable demand.
+
+## Effect and executable-call consumers
+
+- [Declaration access](../../src/Mid/DeclarationAccess.pw) scans reachable
+  canonical Mid blocks. It reads the call template named by each emitted
+  terminator, records the selected obligation, and follows non-async,
+  non-extern direct declaration edges. It also records destruction obligations
+  for typed places and can defer them until their recipes are concrete.
+- [Mid instantiation](../../src/Mid/Instantiate.pw) maps each emitted template
+  target by the full site key and body ID to its final descriptor. A missing
+  descriptor fails instantiation. [Concrete global access](../../src/Mid/GlobalAccess.pw)
+  follows reachable instantiated call terminators and adds destruction edges
+  from typed places. Lazy Access preparation can demand a missing direct body.
+  Neither traversal depends on an outer call terminator that Mid never emits.
+- [FreeFn](../../src/Codegen/Mono/FreeFn.pw) additionally writes provisional
+  generic registrations through `registerCallInst`. The function reads type
+  arguments from the final descriptor and does not read its name or AST argument
+  parameters. Keep its depth checks accounted for when changing discovery.
+  [LLVM provided-function emission](../../src/Backend/Llvm/ProvidedFns.pw) does
+  not use this provisional list as its body source.
+
+A likely migration boundary is the already-built canonical Mid call terminator
+and its selected site key. The prerequisite is to identify the required
+pre-Access descriptor and type-recipe ordering, including concrete descriptors
+read while instantiating Mid and obligations that must survive without a call
+terminator. This source inspection establishes the consumer split; it does not
+yet establish that the old registration may be skipped for every non-emitted
+call.
