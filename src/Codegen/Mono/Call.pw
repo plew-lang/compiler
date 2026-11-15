@@ -1465,33 +1465,34 @@ pub impl Comp {
         }
     }
 
-    // Navigation adapter for the remaining AST consumers. Once a written
-    // call has a Record template, its argument plan is authoritative, including
-    // ordinary generator calls for omitted defaults. Never recover that plan
-    // from the declaration's default Expr. Before Record, and for non-call
-    // templates handled by other paths, retain the existing authored range.
-    inout fn callArgumentRangeForCurrentBody(exprId: U64, authored: ArgRange) -> Result[ArgRange, CompileDiagnostic] {
-        if (try self.callTemplatesClosedForBody(fnIdx: self.cur.bodyFnIdx)) {
-            match (try self.callTemplateForCurrentBody(exprId: exprId)).kind {
-                CallTemplateKind.Direct(callee: _, receiver: _, args: val args, calleeTypeArgs: _, proofId: _) => { return <Result.Ok value=self.templateArgumentRange(arguments: args) />}
-                CallTemplateKind.StaticMethod(receiver: _, args: val args, resolution: _, methodTypeArgs: _, resultTerm: _) => { return <Result.Ok value=self.templateArgumentRange(arguments: args) />}
-                CallTemplateKind.Dynamic(receiver: _, args: val args, target: _) => { return <Result.Ok value=self.templateArgumentRange(arguments: args) />}
-                _ => {}
+    // Walk the checked argument order without rebuilding an AST argument range.
+    // The authored range is retained only for legacy bodies and other templates.
+    inout fn scanSelectedCallArguments(template: CallTemplate, authored: ArgRange) -> Result[(), CompileDiagnostic] {
+        if try self.callTemplatesClosedForBody(fnIdx: self.cur.bodyFnIdx) {
+            val arguments: Optional[CallTemplateArgumentRange] = match template.kind {
+                CallTemplateKind.Direct(callee: _, receiver: _, args: val args, calleeTypeArgs: _, proofId: _) => <Optional.Some v=args />
+                CallTemplateKind.StaticMethod(receiver: _, args: val args, resolution: _, methodTypeArgs: _, resultTerm: _) => <Optional.Some v=args />
+                CallTemplateKind.Dynamic(receiver: _, args: val args, target: _) => <Optional.Some v=args />
+                _ => <Optional.None />
+            }
+            match arguments {
+                Optional.Some(v: val range) => {
+                    if range.len > 0U64 && (range.start >= self.callTemplateArgumentPool.count() || range.len > self.callTemplateArgumentPool.count() - range.start) {
+                        return <Result.Err error=self.diagnosticAt(offset: template.siteKey.originStart, msg: "selected call has an invalid checked argument range", failureDomain: <FailureDomain.Internal />) />
+                    }
+                    for index in 0U64..<range.len {
+                        val source = self.callTemplateArgumentPool[range.start + index].source
+                        try self.scanExprInsts(exprId: self.callArgumentExprId(source: source))
+                    }
+                    return <Result.Ok value=() />
+                }
+                Optional.None => {}
             }
         }
-        return <Result.Ok value=authored />
-    }
-
-    inout fn templateArgumentRange(arguments: CallTemplateArgumentRange) -> ArgRange {
-        mut val args: Array[Arg] = []
-        mut val i: U64 = 0U64
-        while i < arguments.len {
-            if arguments.start + i >= self.callTemplateArgumentPool.count() { return self.pushArgs(args: []) }
-            val argument: CallTemplateArgument = self.callTemplateArgumentPool[arguments.start + i]
-            args.append(<Arg expr=self.callArgumentExprId(source: argument.source) isInout=argument.isInout labelStart=argument.labelStart labelLen=argument.labelLen hasLabel=argument.hasLabel />)
-            i += 1U64
+        for index in 0U64..<authored.len {
+            try self.scanExprInsts(exprId: self.argAt(args: authored, index: index).expr)
         }
-        return self.pushArgs(args: args)
+        return <Result.Ok value=() />
     }
 
     inout fn templateArgumentRangeFromValues(arguments: Array[CallTemplateArgument]) -> ArgRange {
@@ -4573,8 +4574,7 @@ pub impl Comp {
         return <Result.Ok value=<CallableConstraintEvidence.Requirement plan=plan bounds=publicEvidence.bounds proofs=publicEvidence.proofs normalizations=publicEvidence.normalizations /> />
     }
 
-    inout fn resolveBodyCallee(exprId: U64, authoredFreeCall: Bool = false) -> Result[U64, CompileDiagnostic] {
-        val template: CallTemplate = (try self.callTemplateForCurrentBody(exprId: exprId))
+    inout fn resolveBodyCallee(exprId: U64, template: CallTemplate, authoredFreeCall: Bool = false) -> Result[U64, CompileDiagnostic] {
         // Record selects written and synthesized calls alike. Their Direct
         // template is authoritative for the concrete BodyInstance: reopening
         // Expr.Call/Method/ExtMethod here would duplicate candidate selection
@@ -4629,7 +4629,7 @@ pub impl Comp {
                 if use.candidateIndex < self.decls.accessCandidateCount() {
                     val writeExpr: U64 = self.decls.accessCandidateAt(index: use.candidateIndex).writeExpr
                     if writeExpr < self.arena.exprs.count() {
-                        (try self.resolveBodyCallee(exprId: writeExpr))
+                        (try self.resolveBodyCallee(exprId: writeExpr, template: try self.callTemplateForCurrentBody(exprId: writeExpr)))
                         // A detached setter is itself an ordinary selected call.
                         // If its receiver is another indexed read, it owns the
                         // inner writeback edge. Close that edge here rather than
@@ -6527,14 +6527,10 @@ pub impl Comp {
                     try self.recordBodyOperatorCallee(exprId: exprId)
                 }
             }
-            Expr.Call(val nameStart, val nameLen, val args) => {
-                val callArgs = (try self.callArgumentRangeForCurrentBody(exprId: exprId, authored: args))
-                mut val i: U64 = 0
-                while i < callArgs.len {
-                    try self.scanExprInsts(exprId: self.argAt(args: callArgs, index: i).expr)
-                    i += 1
-                }
-                try self.registerCallInst(id: exprId, nameStart: nameStart, nameLen: nameLen, args: callArgs, finalIdx: (try self.resolveBodyCallee(exprId: exprId, authoredFreeCall: true)))
+            Expr.Call(nameStart: _, nameLen: _, val args) => {
+                val template = try self.callTemplateForCurrentBody(exprId: exprId)
+                try self.scanSelectedCallArguments(template: template, authored: args)
+                try self.registerCallInst(id: exprId, finalIdx: (try self.resolveBodyCallee(exprId: exprId, template: template, authoredFreeCall: true)))
                 try self.finalizeAccessWriteFacets(parentExpr: exprId)
             }
             Expr.ExtMethod(val recv, val source, val nameStart, val nameLen, val args) => {
@@ -6542,13 +6538,9 @@ pub impl Comp {
                 if source.traitInstance.owner != 0U64 && self.assocRecvName(recv: recv).nameLen == 0U64 {
                     (try self.replayFinalTraitValueView(exprId: exprId, source: source))
                 }
-                val callArgs = (try self.callArgumentRangeForCurrentBody(exprId: exprId, authored: args))
-                mut val i: U64 = 0
-                while i < callArgs.len {
-                    try self.scanExprInsts(exprId: self.argAt(args: callArgs, index: i).expr)
-                    i += 1
-                }
-                try self.registerMethodInst(callId: exprId, finalIdx: (try self.resolveBodyCallee(exprId: exprId)))
+                val template = try self.callTemplateForCurrentBody(exprId: exprId)
+                try self.scanSelectedCallArguments(template: template, authored: args)
+                try self.registerMethodInst(callId: exprId, finalIdx: (try self.resolveBodyCallee(exprId: exprId, template: template)))
                 try self.finalizeAccessWriteFacets(parentExpr: exprId)
             }
             Expr.ExtView(recv: val recv, source: val source, strip: val strip) => {
@@ -6572,21 +6564,16 @@ pub impl Comp {
                     try self.collectRecordedValueLayout(exprId: exprId)
                 }
             }
-            Expr.Method(val recv, val nameStart, val nameLen, val args) => {
+            Expr.Method(val recv, nameStart: _, nameLen: _, val args) => {
+                val template = try self.callTemplateForCurrentBody(exprId: exprId)
                 if self.authoredExpressionTypeSlots.contains(key: exprId) {
                     val bodyId = self.currentBodyInstanceId()
-                    val template = try self.callTemplateForCurrentBody(exprId: exprId)
                     val written = self.syntheticCallReceiverTerm(exprId: exprId, fallback: 0U64)
                     try self.replayExpressionTypeSlotProofs(exprId: exprId, written: self.arena.typeAt(index: written).args, term: template.receiverTypeTerm, bodyId: bodyId, sourceBodyId: bodyId)
                 }
                 try self.scanExprInsts(exprId: recv)
-                val callArgs = (try self.callArgumentRangeForCurrentBody(exprId: exprId, authored: args))
-                mut val i: U64 = 0
-                while i < callArgs.len {
-                    try self.scanExprInsts(exprId: self.argAt(args: callArgs, index: i).expr)
-                    i += 1
-                }
-                val finalIdx: U64 = (try self.resolveBodyCallee(exprId: exprId))
+                try self.scanSelectedCallArguments(template: template, authored: args)
+                val finalIdx: U64 = (try self.resolveBodyCallee(exprId: exprId, template: template))
                 try self.registerMethodInst(callId: exprId, finalIdx: finalIdx)
                 try self.finalizeAccessWriteFacets(parentExpr: exprId)
             }

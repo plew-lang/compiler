@@ -155,7 +155,7 @@ pub impl Comp {
         return false
     }
 
-    inout fn registerCallInst(id: U64, nameStart: U64, nameLen: U64, args: ArgRange, finalIdx: U64) -> Result[(), CompileDiagnostic] {
+    inout fn registerCallInst(id: U64, finalIdx: U64) -> Result[(), CompileDiagnostic] {
         val fi: U64 = finalIdx
         if fi < self.arena.functionCount() {
             if self.arena.functionAt(index: fi).isExtern {

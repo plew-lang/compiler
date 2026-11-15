@@ -96,3 +96,7 @@ Checked local storage now rejects a missing call-result descriptor explicitly (i
 **2026-11-15T13:15:32Z**
 
 Canonical storage order now indexes the emitted initialization instructions directly. Preparation visits the indexed operations in emission order and reads their binding and initializer identity at the same instruction, eliminating the full statement scan and the second lookup by source statement. Native mid_binding_identity and five lazy controls passed. Same-source diagnostic AOT LLVM matched c18ae4bab28cb8b83391642e0d193443280c391f160f63a99dc4475c883892f5. Next retain producer call operations in a compatible dependency order and route descriptor production through that typed data.
+
+**2026-11-15T13:21:40Z**
+
+Written call preparation now walks the retained argument rows directly and carries the same selected template into descriptor production. It no longer creates a transient AST argument range for that walk or reopens the selection after it. The scanner still supplies execution order and receiver/proof preparation. Ten lazy controls passed, including default evaluation order, writeback and trait views. Full same-source diagnostic AOT LLVM matched 882cea2b1aef5e7b848d93e7fac22eabcd056b9c05e29c4dbeacf4fc9ad75f81. Follow-up: move the storage source recipe admission to the checked Mid initialization boundary and index exact call-result producers; preserve first diagnostic ordering while moving production.
