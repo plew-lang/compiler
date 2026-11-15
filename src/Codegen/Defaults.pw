@@ -58,7 +58,7 @@ pub impl Comp {
         while index < limit {
             tracePhaseProgress(c: inout self, label: "default-call-completion:template", count: index, stride: 64U64)
             val template = self.callTemplateAt(index: index)
-            if !(try self.completeRecordedCallableDefaults(templateIndex: index, receiverTerm: template.receiverTypeTerm)) {
+            if !(try self.completeRecordedCallableDefaults(templateIndex: index, template: template)) {
                 incomplete += 1U64
                 tracePhaseCount(c: inout self, label: "default-call-completion:incomplete-owner", count: template.siteKey.ownerFnIdx)
             }
@@ -76,7 +76,7 @@ pub impl Comp {
         while row != 0U64 && row <= limit {
             val index = row - 1U64
             val template = self.callTemplateAt(index: index)
-            if !(try self.completeRecordedCallableDefaults(templateIndex: index, receiverTerm: template.receiverTypeTerm)) { incomplete += 1U64 }
+            if !(try self.completeRecordedCallableDefaults(templateIndex: index, template: template)) { incomplete += 1U64 }
             row = self.callTemplateBodyNext[index]
         }
         return <Result.Ok value=incomplete />
@@ -89,18 +89,17 @@ pub impl Comp {
         mut val incomplete = 0U64
         for index in indices {
             val template = self.callTemplateAt(index: index)
-            if !(try self.completeRecordedCallableDefaults(templateIndex: index, receiverTerm: template.receiverTypeTerm)) { incomplete += 1U64 }
+            if !(try self.completeRecordedCallableDefaults(templateIndex: index, template: template)) { incomplete += 1U64 }
         }
         return <Result.Ok value=incomplete />
     }
 
     // Complete an already selected call after Record has joined its argument
-    // and expected-result evidence. `receiverTerm` is the recorded receiver
-    // recipe's result in the caller environment, never a fresh name lookup.
+    // and expected-result evidence. The template supplies the recorded
+    // receiver recipe's result in the caller environment.
     // The parent row is published only once every parameter has an operand.
-    inout fn completeRecordedCallableDefaults(templateIndex: U64, receiverTerm: U64) -> Result[Bool, CompileDiagnostic] {
-        if templateIndex >= self.callTemplateLocations.count() { return <Result.Ok value=false />}
-        val template = self.callTemplateAt(index: templateIndex)
+    inout fn completeRecordedCallableDefaults(templateIndex: U64, template: CallTemplate) -> Result[Bool, CompileDiagnostic] {
+        val receiverTerm = template.receiverTypeTerm
         val selected = match template.kind {
             CallTemplateKind.Direct(callee: val callee, receiver: val receiver, args: val arguments, calleeTypeArgs: val typeArgs, proofId: val proofId) => {
                 give (callee: callee, receiver: receiver, arguments: arguments, typeArgs: typeArgs, proof: self.thawStaticConformanceProof(id: proofId))
