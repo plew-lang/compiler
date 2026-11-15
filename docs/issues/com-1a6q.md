@@ -1,6 +1,6 @@
 ---
 id: com-1a6q
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-11-15T03:14:30Z
@@ -240,3 +240,9 @@ the two tasks above. The remaining families are accounted for as follows.
   and the [drop verifier control](../../tests/fixtures/run/mid_drop_contract_verify.pw).
   Narrowing their inputs remains with com-vdp1 and com-rad4. The inventory
   establishes no mandatory separate traversal replacement for these families.
+
+## Notes
+
+**2026-11-15T06:30:33Z**
+
+Investigation complete at 1fe22538 after independent re-review. Entry, synthetic, descriptor and executable consumers are mapped. Confirmed migration work is owned by com-jgy9 and com-kphi. Existing residual paths and controls remain documented above. No compiler behavior or performance was certified by this investigation.
