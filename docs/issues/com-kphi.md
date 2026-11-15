@@ -62,3 +62,8 @@ the view at the written direct call's demand point so lexical locals,
 dependencies of result recipes, descriptor validation, and Access writeback
 still run at their existing scope points. Synthetic sites and other operation
 families keep their current demand path.
+
+The common finalization entry now exposes root preparation and final
+publication separately, with the existing compatibility loop between them.
+The previous candidate accepted the changed sources in check and LLVM output
+modes. The session loop and Mid demand view still need to be connected.

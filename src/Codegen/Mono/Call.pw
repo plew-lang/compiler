@@ -5453,8 +5453,24 @@ pub impl Comp {
     }
 
     inout fn completeFinalCallables(requests: inout FinalBodyRequests, dependencies: inout FinalDependencies, publication: inout FinalizationPublication) -> Result[(), CompileDiagnostic] {
-        val noParams: Array[Bind] = []
-        val noArgs: Array[U64] = []
+        try self.prepareFinalCallableRoots(dependencies: inout dependencies)
+        // `genInsts` is a layout-demand collection, not an executable-body
+        // root set.  A method or witness becomes reachable only through a
+        // finalized call or proof below.  Mixing the two made every method on
+        // every discovered type executable and reintroduced imported macro
+        // parser bodies through their incidental collection-time layouts.
+        mut val bodyI = 0U64
+        while bodyI < self.monoWork.bodyCount() || self.hasFinalDependencies(state: dependencies) {
+            if bodyI < self.monoWork.bodyCount() {
+                try self.requestFinalBody(bodyId: self.monoWork.bodyAt(index: bodyI), requests: inout requests)
+                bodyI += 1U64
+            }
+            try self.advanceFinalDependencies(state: inout dependencies)
+        }
+        return self.finishFinalCallables(publication: inout publication)
+    }
+
+    inout fn prepareFinalCallableRoots(dependencies: inout FinalDependencies) -> Result[(), CompileDiagnostic] {
         try self.prepareFinalInitializers(state: inout dependencies)
         // The selected entry and explicitly exposed functions are roots. Other
         // sync and async callees join through their finalized call sites.
@@ -5485,19 +5501,10 @@ pub impl Comp {
             }
             fi += 1U64
         }
-        // `genInsts` is a layout-demand collection, not an executable-body
-        // root set.  A method or witness becomes reachable only through a
-        // finalized call or proof below.  Mixing the two made every method on
-        // every discovered type executable and reintroduced imported macro
-        // parser bodies through their incidental collection-time layouts.
-        mut val bodyI = 0U64
-        while bodyI < self.monoWork.bodyCount() || self.hasFinalDependencies(state: dependencies) {
-            if bodyI < self.monoWork.bodyCount() {
-                try self.requestFinalBody(bodyId: self.monoWork.bodyAt(index: bodyI), requests: inout requests)
-                bodyI += 1U64
-            }
-            try self.advanceFinalDependencies(state: inout dependencies)
-        }
+        return <Result.Ok value=() />
+    }
+
+    inout fn finishFinalCallables(publication: inout FinalizationPublication) -> Result[(), CompileDiagnostic] {
         if self.genMode {
             self.retainSelectedGlobals()
             self.globalCallTemplatesClosed = true
@@ -5511,8 +5518,8 @@ pub impl Comp {
         self.cur.hasRecv = false
         self.cur.extId = 0U64
         self.cur.recvInstRef = 0U64
-        self.cur.typeParams = noParams
-        self.cur.typeArgs = noArgs
+        self.cur.typeParams = []
+        self.cur.typeArgs = []
         self.cur.selfRef = 0U64
         self.cur.itemRef = 0U64
         self.enterBodyInstance(fnIdx: 18446744073709551615U64, environment: <InstanceEnvironment />)
