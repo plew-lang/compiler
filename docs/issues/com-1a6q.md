@@ -194,3 +194,29 @@ cross-family producers (operator, trait, default) before dependent direct
 calls. Source divergence rejection fixtures are controls for admission only.
 Use a proven legal source path or an internal Mid fixture to observe a selected
 call whose input prevents emission.
+
+## Residual scanner and implementation assignment
+
+- Generation mode: `scanBindingInsts` follows the selected global binding
+  and may add a global root. Keep that traversal for nested operands until
+  global dependency discovery has an equivalent typed input.
+- Implicit operations: operators use `recordBodyOperatorCallee`; `try`
+  uses `registerTryConversion`; `for` publishes protocol slots through
+  `freezeForResolution`; `await` finalizes the checked Promise and payload
+  through `finalizeCurrentBodyAwait`. Defaults and formatting can contribute
+  ordinary selected templates. Each remains on the residual path while direct
+  calls migrate.
+- Current local binding terms are installed by the lexical walk. A prepass
+  cannot replace those terms with the fallback template terms without proof.
+  `freezeFinalAccesses` also reads the getter and setter resolutions for
+  published parent descriptors even when a parent is not emitted. Preserve
+  required descriptors independently from demanding executable code.
+
+[com-jgy9](com-jgy9.md) owns the first prerequisite: separate descriptor
+publication from executable-body demand at the existing lexical points.
+The later discovery task can then consume the reached parametric operations
+through the session boundary. Current controls include
+`mid_default_argument_result_context`, `call_template_result_arguments`,
+`nested_field_array_inout` and `mid_inout_shared_writeback_pin`. A scoped
+control must still observe actual body demand when a selected outer call is
+not emitted.
