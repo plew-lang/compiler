@@ -68,3 +68,7 @@ Separate local conversion descriptor publication from the residual source Let tr
 **2026-11-15T12:37:54Z**
 
 Share concrete local target grounding per body request and checked statement. The residual scanner and lazy conversion producer reuse that exact target; the memo is not keyed by source offset or structural type. The diagnostic carrier emitted identical full-source AOT LLVM (061fcb53cf84941df4943e8ad5b540890ca25a44c20498a679445b8a69c18ec6) and matched five lazy fixture outputs. The closure signature consumer still looks up enclosing local types by offset; next trace how capture construction can preserve the exact binding identity and use the same target.
+
+**2026-11-15T12:41:06Z**
+
+Capture records now retain the selected Let statement identity. While preparing a closure signature for a routed enclosing body, read the exact cached target and verify the enclosing BodyInstance type agreement. Keep the existing scope reader for parameter, pattern, and non-routed bindings. Same-source full AOT LLVM matched f9983e00bba4a87df2b55a2556ab95be85fccafb4498f5ce907dc6c77cc5e907; six lazy outputs matched, including mutable, shadowed and unused closure cases. Next identify whether any other finalization consumer still reads the residual Let local row before removing it.

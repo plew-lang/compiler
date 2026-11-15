@@ -708,6 +708,7 @@ pub enum SemanticClosureCaptureMode {
 }
 
 pub struct SemanticClosureCapture {
+    pub val bindingStatement: U64 = 0U64
     pub val nameLen: U64 = 0U64
     pub val bindingTarget: U64 = 0U64
     pub val typeTerm: U64 = 0U64

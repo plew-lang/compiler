@@ -5774,7 +5774,7 @@ impl Comp {
         }
         val boxed = try self.checkedCaptureCell(lo: local)
         val mode = if boxed { give <SemanticClosureCaptureMode.CellBorrow /> } else { give <SemanticClosureCaptureMode.ValueCopy /> }
-        captures.append(<SemanticClosureCapture bindingTarget=local.nameStart nameLen=local.nameLen typeTerm=local.ty mode=mode />)
+        captures.append(<SemanticClosureCapture bindingStatement=local.bindingStatement bindingTarget=local.nameStart nameLen=local.nameLen typeTerm=local.ty mode=mode />)
         self.sourceFacts.activate(owner: self.semanticClosureOwners[index])
         self.sourceFacts.activeBuilder.data.putClosure(closure: <SemanticClosure ownerFnIdx=closure.ownerFnIdx exprId=closure.exprId bodyKey=closure.bodyKey functionTypeTerm=closure.functionTypeTerm bodyBlock=closure.bodyBlock parameters=closure.parameters hasReturn=closure.hasReturn returnTypeTerm=closure.returnTypeTerm captures=captures />)
         return <Result.Ok value=() />
@@ -5974,7 +5974,7 @@ pub impl Comp {
             val mutable = match capture.mode { SemanticClosureCaptureMode.CellBorrow => { give true } _ => { give false } }
             val local = <Local nameStart=capture.bindingTarget nameLen=0U64 tyStart=info.nameStart tyLen=info.nameLen isArray=info.kind == 3 ty=type isInout=false isMut=mutable owned=false moved=false cnum=0U64 />
             val boxed = try self.checkedCaptureCell(lo: local)
-            captures.append(<SemanticClosureCapture bindingTarget=capture.bindingTarget nameLen=capture.nameLen typeTerm=type mode=capture.mode />)
+            captures.append(<SemanticClosureCapture bindingStatement=capture.bindingStatement bindingTarget=capture.bindingTarget nameLen=capture.nameLen typeTerm=type mode=capture.mode />)
             captureI += 1U64
         }
         mut val dropBodyId = self.arena.closureSignature(bodyId: closureBodyId).environmentDropBodyId
@@ -6010,6 +6010,32 @@ pub impl Comp {
     }
 
     inout fn finalClosureCaptureType(capture: SemanticClosureCapture, enclosingBodyId: U64) -> Result[U64, CompileDiagnostic] {
+        if capture.bindingStatement != 0U64 {
+            val statement = capture.bindingStatement - 1U64
+            match self.cur.checkedLocalStorage {
+                Optional.Some(v: val requests) => {
+                    match requests.get(key: statement) {
+                        Optional.Some(v: val request) => {
+                            if request.declarationTarget != capture.bindingTarget {
+                                return <Result.Err error=self.diagnosticAt(offset: capture.bindingTarget, msg: "closure capture has a foreign checked binding", failureDomain: <FailureDomain.Internal />) />
+                            }
+                            match self.cur.checkedLocalStorageTargets.get(key: statement) {
+                                Optional.Some(v: val target) => {
+                                    if !self.publishedBodyTypeMatches(bodyId: enclosingBodyId, source: capture.typeTerm, concrete: target) {
+                                        return <Result.Err error=self.diagnosticAt(offset: capture.bindingTarget, msg: "closure capture differs from its enclosing binding type", failureDomain: <FailureDomain.Internal />) />
+                                    }
+                                    return <Result.Ok value=target />
+                                }
+                                Optional.None => { return <Result.Err error=self.diagnosticAt(offset: capture.bindingTarget, msg: "closure capture binding type was not finalized", failureDomain: <FailureDomain.Internal />) /> }
+                            }
+                        }
+                        Optional.None => {}
+                    }
+                }
+                Optional.None => {}
+            }
+        }
+
         // The enclosing binding stack remains installed while preparing the
         // closure signature. Match the declaration offset, never its name.
         for local in self.cur.locals {
