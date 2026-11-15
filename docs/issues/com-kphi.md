@@ -100,3 +100,13 @@ The [session demand fixture](../../tests/fixtures/run/mid_direct_executable_dema
 also passed when built against the current sources. It observes the actual
 lazy worklist, requires the reached diverging callee, excludes the blocked
 outer call, and checks repeated requests preserve body identity and count.
+
+Independent re-review at 77d6cf59 confirmed the original diagnostic mapping.
+The native candidate for that revision passed eleven targeted AOT tests, the
+lazy operand-exit fixture, both source rejection controls with identical
+baseline diagnostics, and generation (20261115T074340-gen-5bec66).
+The AOT trace again declared stop and omitted identity, sink and update.
+[Fixed-source comparison](../../../evidence/rejection-domains/diagnostic-domain-implementation/trait-receiver-admission/phase3-parametric-mid-demand-final.json)
+gave 8.018 s to 7.885 s and all ten LLVM digests matched. This is not a
+formal fixed-point run. Missing-descriptor and combined diverging indexed
+writeback controls are still outstanding.
