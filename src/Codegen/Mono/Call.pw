@@ -6994,7 +6994,7 @@ pub impl Comp {
         }
         val ref = try self.groundCheckedLocalStorageTarget(stmtId: stmtId, request: request, bodyId: self.cur.bodyId)
         val sourceRef = match request.valueType {
-            RecordedStorageValueType.Term(ref: val term) => try self.groundAndRecordBodyType(ref: term, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.cur.bodyId)
+            RecordedStorageValueType.Term(ref: val term) | RecordedStorageValueType.Region(ref: val term, region: _) => try self.groundAndRecordBodyType(ref: term, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.cur.bodyId)
             RecordedStorageValueType.Recipe(id: val recipe) => try self.groundSemanticTypeRecipeForBody(recipeId: recipe, bodyId: self.cur.bodyId, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, requireProducer: true)
         }
         val targetRef = try self.groundAndRecordBodyType(ref: ref, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.cur.bodyId)
@@ -7064,16 +7064,8 @@ pub impl Comp {
     inout fn prepareCheckedInitializer(request: CheckedLocalStorageRequest) -> Result[(), CompileDiagnostic] {
         val recipeId = match request.valueType {
             RecordedStorageValueType.Recipe(id: val recipe) => recipe
-            RecordedStorageValueType.Term(ref: _) => {
-                if self.cur.bodyId != 0U64 {
-                    val facts = try self.preparedBodyFacts(bodyId: self.cur.bodyId, globalInitializerTarget: self.cur.globalInitializerTarget)
-                    match facts.valueRegion(exprId: request.expression) {
-                        Optional.Some(v: val region) => { return self.prepareCheckedValueRegion(region: region) }
-                        Optional.None => {}
-                    }
-                }
-                return self.scanExprInsts(exprId: request.expression)
-            }
+            RecordedStorageValueType.Term(ref: _) => { return self.scanExprInsts(exprId: request.expression) }
+            RecordedStorageValueType.Region(ref: _, region: val region) => { return self.prepareCheckedValueRegion(region: region) }
         }
         if recipeId == 0U64 || recipeId > self.arena.semanticTypeRecipes.count() {
             return <Result.Err error=self.diagnosticAt(offset: request.declarationTarget, msg: "checked local has an invalid initializer recipe", failureDomain: <FailureDomain.Internal />) />

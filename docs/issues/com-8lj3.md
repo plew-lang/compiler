@@ -168,3 +168,7 @@ Record now publishes the first statement-pool index as well as the length of the
 **2026-11-15T15:52:50Z**
 
 Record now publishes value-region edges for blocks, lowered sequences, if expressions and condition chains. Checked initializers consume those edges directly; Mid uses the same selection and one lowering helper. Child expressions and statements still use their existing preparation routes. Six lazy fixtures, a nested block and both branches with observable condition order passed. Full same-source diagnostic AOT LLVM matched 19e61d80a4ba714e70f838e867a1ac150de333ad58486e9bd2fc79d4c6844d3e. Next preserve the selected region in the initializer request to avoid fetching these facts again per instance, and audit remaining match and operand boundaries.
+
+**2026-11-15T15:56:10Z**
+
+Canonical local initialization now retains the checked value-region edge selection alongside its concrete source type term. Finalization consumes it from the per-function request rather than reopening the owner facts for every concrete instance. Non-region terms keep the prior path. Seven lazy controls passed, including condition/branch effects, and full same-source diagnostic AOT LLVM matched ec2271918e56d8c02b619726e8a28325acadeaa7962660a1b8c1aae18fa8bcc7.

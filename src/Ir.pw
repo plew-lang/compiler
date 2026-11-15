@@ -564,7 +564,11 @@ pub impl SourceBindingOrigin {
     fn matches(origin: Self) -> Bool { return self.session == origin.session && self.readerIndex == origin.readerIndex && self.bindingIndex == origin.bindingIndex }
 }
 
-pub enum RecordedStorageValueType { Term(ref: U64) Recipe(id: U64) }
+pub enum RecordedStorageValueType {
+    Term(ref: U64)
+    Region(ref: U64, region: SourceValueRegion)
+    Recipe(id: U64)
+}
 
 pub struct CheckedLocalStorageRequest {
     pub val expression: U64

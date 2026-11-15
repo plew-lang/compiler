@@ -2605,6 +2605,10 @@ fn midRecordedStorageValueType(c: inout Comp, facts: PreparedSemanticFacts, func
         Optional.Some(v: val fact) => fact
         Optional.None => { return <Result.Err error=<MidBuildError.MissingSemanticType /> /> }
     }
+    match facts.valueRegion(exprId: expression) {
+        Optional.Some(v: val region) => { return <Result.Ok value=<RecordedStorageValueType.Region ref=fact.term region=region /> /> }
+        Optional.None => {}
+    }
     val template = match c.callTemplateForSourceBody(fnIdx: function, exprId: expression) {
         Result.Ok(value: val template) => template
         Result.Err(error: val diagnostic) => { return <Result.Err error=<MidBuildError.Frontend diagnostic=diagnostic /> /> }
