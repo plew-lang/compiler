@@ -6593,11 +6593,12 @@ pub impl Comp {
                 try self.recordBodyOperatorCallee(exprId: exprId, template: try self.finalizationCallTemplate(exprId: exprId, selected: selected))
             }
             Expr.Binary(val op, val lhs, val rhs) => {
+                if op == opAnd() || op == opOr() {
+                    return self.prepareShortCircuitOperands(lhs: lhs, rhs: rhs)
+                }
                 try self.scanExprInsts(exprId: lhs)
                 try self.scanExprInsts(exprId: rhs)
-                if op != opAnd() && op != opOr() {
-                    try self.recordBodyOperatorCallee(exprId: exprId, template: try self.finalizationCallTemplate(exprId: exprId, selected: selected))
-                }
+                try self.recordBodyOperatorCallee(exprId: exprId, template: try self.finalizationCallTemplate(exprId: exprId, selected: selected))
             }
             Expr.Call(nameStart: _, nameLen: _, val args) => {
                 val template = try self.finalizationCallTemplate(exprId: exprId, selected: selected)
@@ -7063,6 +7064,11 @@ pub impl Comp {
         }
     }
 
+    inout fn prepareShortCircuitOperands(lhs: U64, rhs: U64) -> Result[(), CompileDiagnostic] {
+        try self.prepareCheckedCallOperand(source: try self.checkedValueOperand(exprId: lhs))
+        return self.prepareCheckedCallOperand(source: try self.checkedValueOperand(exprId: rhs))
+    }
+
     inout fn prepareCheckedInitializer(request: CheckedLocalStorageRequest) -> Result[(), CompileDiagnostic] {
         val recipeId = match request.valueType {
             RecordedStorageValueType.Recipe(id: val recipe) => recipe
@@ -7104,8 +7110,7 @@ pub impl Comp {
                 return self.finalizeCurrentBodyAwait(exprId: request.expression, operandExprId: self.callArgumentExprId(source: operand))
             }
             RecordedStorageValueType.ShortCircuit(ref: _, lhs: val lhs, rhs: val rhs) => {
-                try self.prepareCheckedCallOperand(source: try self.checkedValueOperand(exprId: lhs))
-                return self.prepareCheckedCallOperand(source: try self.checkedValueOperand(exprId: rhs))
+                return self.prepareShortCircuitOperands(lhs: lhs, rhs: rhs)
             }
             RecordedStorageValueType.Term(ref: _) => { return self.scanExprInsts(exprId: request.expression) }
             RecordedStorageValueType.Region(ref: _, region: val region) => { return self.prepareCheckedValueRegion(expression: request.expression, region: region) }

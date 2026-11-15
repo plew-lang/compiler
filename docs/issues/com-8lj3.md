@@ -332,3 +332,7 @@ Nested if and match expressions now use the same recorded value region and compl
 **2026-11-15T19:22:09Z**
 
 The residual selected-call walker receives the already validated CallTemplate directly, eliminating its second table row read. Six lazy controls and full same-source compiler LLVM matched. This preserves the remaining AST navigation and has no optimized timing result; assess the value transfer when measuring the accumulated changes.
+
+**2026-11-15T19:25:21Z**
+
+Nested short-circuit expressions use the same recorded operand preparation as local roots. The existing Mid branch and RHS runtime skip are unchanged. Four lazy controls, two AOT short-circuit controls, and full same-source compiler LLVM matched. No optimized timing claim.
