@@ -71,3 +71,12 @@ publishes its destruction contract, leaves the queue empty and is idempotent
 on repeat. It passed with both the fixed and candidate carriers compiling the
 updated compiler module. This exercises signature closure, not the complete
 selected-call conversion path.
+
+Independent review found that argument conversion can still demand an
+executable body while building a selected descriptor. A fresh existential
+box passes through `finalizeConversionDependencies`, which queues the
+concrete witnesses and their adapters. The earlier enqueue order also put the
+selected callee ahead of those witness requests. Preserve the witness metadata
+contract while separating its body demand, and exercise a fresh existential
+argument conversion in the descriptor-only control. The String signature test
+does not cover this path.
