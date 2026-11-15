@@ -268,3 +268,7 @@ Native mid_binding_identity now proves a terminating local initializer retains e
 **2026-11-15T17:38:36Z**
 
 Checked Local operand already identifies a lexical binding, so call preparation no longer re-enters the source expression walker for it. Six lazy fixtures, full same-source AOT LLVM and generation with transitive global references matched. Relative to the retained 30ef976b carrier, cumulative finalization scans on the same source fell from 293792 to 254738; this comparison includes intermediate changes and is not a duration measurement.
+
+**2026-11-15T17:42:20Z**
+
+For checked identifier receivers, use the sealed binding fact and retain generation-mode global registration. Six lazy controls, full same-source AOT LLVM, and a generator that calls a method on a global receiver matched. Cumulative finalization visits are 293826 to 232969 against 30ef976b on this source. A per-instance binding fact lookup remains, so this count cannot establish a speed improvement. Consider retaining the receiver preparation in the template before the optimized comparison.

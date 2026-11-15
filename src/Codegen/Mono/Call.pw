@@ -6535,6 +6535,12 @@ pub impl Comp {
                     }
                     return self.prepareCheckedResultCall(expression: producer, site: site)
                 }
+                CallTemplateReceiver.Term(term: _) | CallTemplateReceiver.Opaque => {
+                    val facts = try self.preparedBodyFacts(bodyId: self.cur.bodyId, globalInitializerTarget: self.cur.globalInitializerTarget)
+                    if facts.identifierTarget(exprId: expression).isSome() {
+                        return self.selectReferencedGlobal(exprId: expression, facts: facts)
+                    }
+                }
                 _ => {}
             }
         }
