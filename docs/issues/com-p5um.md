@@ -1,7 +1,7 @@
 ---
 id: com-p5um
 status: open
-deps: [com-61jt, com-auvx, com-jy25, com-nqiq]
+deps: [com-61jt, com-auvx, com-jy25, com-nqiq, com-1a6q]
 links: []
 created: 2026-10-23T10:41:59Z
 type: task
