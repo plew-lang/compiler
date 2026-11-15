@@ -2725,6 +2725,7 @@ pub impl Comp {
                     self.popLocals(mark: mark)
                     ai += 1
                 }
+                if self.cur.recordCallTemplates { self.storeBuildingValueRegion(exprId: exprId, region: <SourceValueRegion.Match scrutinee=scrut arms=arms />) }
             }
             Expr.Sequence(val body) => {
                 try self.recordValueBlock(exprId: exprId, blockId: body, expectedTerm: normalizedContext)

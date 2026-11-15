@@ -172,3 +172,7 @@ Record now publishes value-region edges for blocks, lowered sequences, if expres
 **2026-11-15T15:56:10Z**
 
 Canonical local initialization now retains the checked value-region edge selection alongside its concrete source type term. Finalization consumes it from the per-function request rather than reopening the owner facts for every concrete instance. Non-region terms keep the prior path. Seven lazy controls passed, including condition/branch effects, and full same-source diagnostic AOT LLVM matched ec2271918e56d8c02b619726e8a28325acadeaa7962660a1b8c1aae18fa8bcc7.
+
+**2026-11-15T16:00:22Z**
+
+Value match now retains its scrutinee and arm range with the same checked region representation as block and if; stored local initialization consumes it and Mid uses the common region lowering helper. Arm pattern/operand preparation and optional-chain layout registration are shared with the residual path. Seven lazy controls passed (value and enum patterns, rvalue scrutinee, optional chain and generic local conversions); full same-source AOT LLVM matched b9d9f0bd92298ef932d8475519dcc910d6115b9ee850caaaba8ba2711793d86c. Initial link ran out of disk; stale diagnostic binaries were removed and the same LLVM was successfully relinked.
