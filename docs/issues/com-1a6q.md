@@ -186,3 +186,11 @@ is distinct from whether AOT prepares its code. Related tickets com-eatt,
 com-59sf, com-qb05, com-e6zm and com-j2oe carry adjacent contracts and should be
 checked for overlap. Link confirmed required repairs into the final gate before
 closing the inventory.
+
+Mid instantiation also traverses stored blocks and locals beyond the CFG-reachable
+subset inspected by declaration effects. Preserve descriptor consumers in that
+storage or prove that pruning/remapping happens before they are read. Schedule
+cross-family producers (operator, trait, default) before dependent direct
+calls. Source divergence rejection fixtures are controls for admission only.
+Use a proven legal source path or an internal Mid fixture to observe a selected
+call whose input prevents emission.
