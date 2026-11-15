@@ -156,3 +156,7 @@ For checked ordinary bodies, Make and Array finalization now prepares children i
 **2026-11-15T14:52:39Z**
 
 Record retains the executable prefix of each checked source block; routed finalization consumes it without rechecking completion one statement at a time. Empty or unrecorded synthetic ranges keep the old path. This records the prefix into the existing statement pool, not a copy of the statement sequence. Native control verifies the terminating analytical loop is retained and its unreachable suffix is excluded. Six lazy controls passed and full same-source AOT LLVM matched 288a7d941cc9b2045d45928f961b55f43bdc38bfd2d2fa81827201464db5c8ad. Mid building and finalization still need a shared admission path for checked blocks and operand/branch topology remains navigated by source.
+
+**2026-11-15T14:57:15Z**
+
+Parametric Mid construction and finalization now consume the same Record-published block prefix. Mid verifies the reader session and length, and preserves CFG termination; only blocks without a published prefix retain per-statement admission. Five lazy controls passed, including diverging and analytically non-continuing value blocks, and full same-source diagnostic AOT LLVM matched 786fe8cbba3123db5e91709e6f4e946373eb25918f40a6ed526a0e52be1e0764. AST still supplies branch/operand navigation.

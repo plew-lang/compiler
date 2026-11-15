@@ -2739,12 +2739,21 @@ fn buildMidReturnAdmitted(c: inout Comp, state: inout MidBuildState, stmtId: U64
 // through the legacy LLVM emitter.
 fn buildMidBlockInto(c: inout Comp, state: inout MidBuildState, blockId: U64, blockResult: MidBlockResult, expressionSequence: Bool = false) -> MidBuildError {
     if blockId >= c.arena.blocks.count() { return <MidBuildError.InvalidBlock /> }
+    val block = c.arena.blocks[blockId]
+    val checkedLength: Optional[U64] = match state.sourceFacts {
+        Optional.Some(v: val facts) => {
+            if !facts.belongsToSession(session: c.sourceFactSession()) { return <MidBuildError.MissingSemanticType /> }
+            give facts.executableBlockLength(blockId: blockId)
+        }
+        Optional.None => <Optional.None />
+    }
+    val length = checkedLength.unwrapOr(fallback: block.stmtLen)
+    if length > block.stmtLen { return <MidBuildError.InvalidBlock /> }
     mut val scope = state.currentScope
     if !expressionSequence { scope = midOpenScope(state: inout state) }
-    val block = c.arena.blocks[blockId]
     mut val result: MidBuildError = <MidBuildError.None />
     mut val i: U64 = 0U64
-    while i < block.stmtLen {
+    while i < length {
         // A completed value from an earlier statement is not an operand of
         // this evaluation. Lexical variables live in bindings/locals instead.
         if !expressionSequence {
@@ -2752,7 +2761,7 @@ fn buildMidBlockInto(c: inout Comp, state: inout MidBuildState, blockId: U64, bl
             state.aggregateValues = []
         }
         val stmtId: U64 = c.arena.blockStmtPool[block.stmtStart + i]
-        if !midSourceStatementAdmitted(c: c, state: state, stmtId: stmtId) { return <MidBuildError.MissingSemanticType /> }
+        if checkedLength.isNone() && !midSourceStatementAdmitted(c: c, state: state, stmtId: stmtId) { return <MidBuildError.MissingSemanticType /> }
         match c.arena.stmts[stmtId] {
             Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, init: _, annotationOccurrence: _) => {
                 result = buildMidLetAdmitted(c: inout c, state: inout state, stmtId: stmtId, completeEvaluation: !expressionSequence)
@@ -2829,15 +2838,15 @@ fn buildMidBlockInto(c: inout Comp, state: inout MidBuildState, blockId: U64, bl
                 }
                 // The shared block epilogue disposes locals before the caller
                 // connects this result to the enclosing expression's join.
-                i = block.stmtLen
+                i = length
             }
             Stmt.Break(offset: _) => { result = buildMidLoopExit(c: inout c, state: inout state, stmtId: stmtId, isContinue: false) }
             Stmt.Continue(offset: _) => { result = buildMidLoopExit(c: inout c, state: inout state, stmtId: stmtId, isContinue: true) }
         }
         if !midTerminatorIsOpen(terminator: state.blocks[state.currentBlock].terminator) {
-            i = block.stmtLen
+            i = length
         }
-        match result { MidBuildError.None => {} _ => { i = block.stmtLen } }
+        match result { MidBuildError.None => {} _ => { i = length } }
         i += 1U64
     }
     match blockResult {
