@@ -4811,6 +4811,7 @@ pub impl Comp {
         self.cur.reachedDirectCalls = reachedDirectCalls
         self.cur.checkedLocalStorage = checkedLocalStorage
         self.cur.checkedLocalStorageOrder = checkedLocalStorageOrder
+        self.cur.checkedLocalStorageTargets = [:]
         val result = self.prepareFinalBodyRequest(bodyId: bodyId)
         self.cur = saved
         self.inCollection = collecting
@@ -6872,6 +6873,10 @@ pub impl Comp {
     }
 
     inout fn groundCheckedLocalStorageTarget(stmtId: U64, request: CheckedLocalStorageRequest) -> Result[U64, CompileDiagnostic] {
+        match self.cur.checkedLocalStorageTargets.get(key: stmtId) {
+            Optional.Some(v: val target) => { return <Result.Ok value=target /> }
+            Optional.None => {}
+        }
         val facts = try self.preparedBodyFacts(bodyId: self.cur.bodyId, globalInitializerTarget: self.cur.globalInitializerTarget)
         val expectedOrigin = facts.bindingStorage(stmtId: stmtId)
         if expectedOrigin.isNone() || !expectedOrigin.unwrap().matches(origin: request.binding) {
@@ -6892,7 +6897,9 @@ pub impl Comp {
             }
             Optional.None => {}
         }
-        return self.groundCheckedLocalBinding(binding: binding, authoredTerm: authoredTerm)
+        val target = try self.groundCheckedLocalBinding(binding: binding, authoredTerm: authoredTerm)
+        self.cur.checkedLocalStorageTargets[stmtId] = target
+        return <Result.Ok value=target />
     }
 
     inout fn requireCheckedLocalStorage(stmtId: U64, request: CheckedLocalStorageRequest) -> Result[U64, CompileDiagnostic] {

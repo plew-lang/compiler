@@ -4213,6 +4213,7 @@ pub struct Cursor {
     pub mut val reachedDirectCalls: Optional[Dictionary[U64, Bool]] = <Optional.None />
     pub mut val checkedLocalStorage: Optional[Dictionary[U64, CheckedLocalStorageRequest]] = <Optional.None />
     pub mut val checkedLocalStorageOrder: Array[U64] = []
+    pub mut val checkedLocalStorageTargets: Dictionary[U64, U64] = [:]
     // 1-based Arena.bodyInstances identity for the active semantic body.
     // It is set whenever a body context is entered and lets final-callee lookup
     // avoid re-comparing the complete InstanceEnvironment on every call.
