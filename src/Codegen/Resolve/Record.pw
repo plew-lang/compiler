@@ -615,7 +615,11 @@ pub impl Comp {
             }
             _ => {}
         }
-        return <Result.Ok value=<CallTemplateReceiver.Term term=self.parametricExprTerm(exprId: exprId) /> />
+        val term = self.parametricExprTerm(exprId: exprId)
+        if exprId < self.typeCache.identBind.count() && self.typeCache.identBind[exprId] == identValueCode() {
+            return <Result.Ok value=<CallTemplateReceiver.Binding term=term exprId=exprId /> />
+        }
+        return <Result.Ok value=<CallTemplateReceiver.Term term=term /> />
     }
 
     // Written direct methods have exactly the same receiver provenance as a
@@ -697,6 +701,7 @@ pub impl Comp {
         val base: CallTemplateReceiver = (try self.directReceiverTemplateForExpr(exprId: exprId))
         match base {
             CallTemplateReceiver.Term(term: _) => { return <Result.Ok value=<CallTemplateReceiver.Term term=viewedTerm /> />}
+            CallTemplateReceiver.Binding(term: _, exprId: val binding) => { return <Result.Ok value=<CallTemplateReceiver.Binding term=viewedTerm exprId=binding /> /> }
             CallTemplateReceiver.PriorCallResult(exprId: val priorExpr, siteKey: val priorKey) => {
                 return <Result.Ok value=<CallTemplateReceiver.PriorCallResultWithViews exprId=priorExpr siteKey=priorKey views=self.publishCallTemplateViews(views: self.arena.typeViewSources(ref: viewedTerm)) /> />
             }

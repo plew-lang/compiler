@@ -200,7 +200,7 @@ pub impl Comp {
         match template.kind {
             CallTemplateKind.Protocol(receiver: val receiver, selection: _, resultTerm: _) => {
                 match receiver {
-                    CallTemplateReceiver.Term(val term) => {
+                    CallTemplateReceiver.Term(term: val term) | CallTemplateReceiver.Binding(term: val term, exprId: _) => {
                         return <Result.Ok value=(try self.groundAndRecordBodyType(ref: term, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.cur.bodyId)) />
                     }
                     CallTemplateReceiver.PriorCallResult(exprId: val exprId, siteKey: val dependency) => {
@@ -242,7 +242,7 @@ pub impl Comp {
         match receiver {
             CallTemplateReceiver.None => { return <Result.Ok value=0U64 />}
             CallTemplateReceiver.Opaque => { return <Result.Ok value=0U64 />}
-            CallTemplateReceiver.Term(val term) => {
+            CallTemplateReceiver.Term(term: val term) | CallTemplateReceiver.Binding(term: val term, exprId: _) => {
                 return <Result.Ok value=(try self.groundAndRecordBodyType(ref: term, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.cur.bodyId)) />
             }
             CallTemplateReceiver.PriorCallResult(exprId: val exprId, siteKey: val siteKey) => {
@@ -3726,7 +3726,7 @@ pub impl Comp {
             give try self.groundAndRecordBodyType(ref: receiverTypeTerm, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.currentBodyInstanceId())
         } else { give 0U64 }
         match receiver {
-            CallTemplateReceiver.None | CallTemplateReceiver.Opaque | CallTemplateReceiver.Term(term: _) => {
+            CallTemplateReceiver.None | CallTemplateReceiver.Opaque | CallTemplateReceiver.Term(term: _) | CallTemplateReceiver.Binding(term: _, exprId: _) => {
                 if selected != 0U64 { return <Result.Ok value=selected /> }
                 return self.groundCallTemplateReceiver(receiver: receiver)
             }
@@ -6535,11 +6535,11 @@ pub impl Comp {
                     }
                     return self.prepareCheckedResultCall(expression: producer, site: site)
                 }
-                CallTemplateReceiver.Term(term: _) | CallTemplateReceiver.Opaque => {
-                    val facts = try self.preparedBodyFacts(bodyId: self.cur.bodyId, globalInitializerTarget: self.cur.globalInitializerTarget)
-                    if facts.identifierTarget(exprId: expression).isSome() {
-                        return self.selectReferencedGlobal(exprId: expression, facts: facts)
+                CallTemplateReceiver.Binding(term: _, exprId: val binding) => {
+                    if binding != expression {
+                        return <Result.Err error=self.diagnosticAt(offset: template.siteKey.originStart, msg: "checked receiver binding has a foreign expression", failureDomain: <FailureDomain.Internal />) />
                     }
+                    return self.scanBindingInsts(exprId: binding)
                 }
                 _ => {}
             }

@@ -272,3 +272,7 @@ Checked Local operand already identifies a lexical binding, so call preparation 
 **2026-11-15T17:42:20Z**
 
 For checked identifier receivers, use the sealed binding fact and retain generation-mode global registration. Six lazy controls, full same-source AOT LLVM, and a generator that calls a method on a global receiver matched. Cumulative finalization visits are 293826 to 232969 against 30ef976b on this source. A per-instance binding fact lookup remains, so this count cannot establish a speed improvement. Consider retaining the receiver preparation in the template before the optimized comparison.
+
+**2026-11-15T17:46:06Z**
+
+Record identifier receiver provenance in the selected template. Concrete preparation reads the saved expression without per-instance binding lookup, and Mid uses it for receiver navigation; authored view and type evidence are retained. Six lazy controls, generation with a global receiver, and full same-source AOT LLVM matched. No timing claim; other composite receiver expressions still need their preparation dependencies.

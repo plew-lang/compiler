@@ -3656,6 +3656,7 @@ pub enum CallTemplateReceiver {
     // an associated/static call with no value receiver at all.
     Opaque
     Term(term: U64)
+    Binding(term: U64, exprId: U64)
     PriorCallResult(exprId: U64, siteKey: CallSiteKey)
     PriorProtocolResult(slot: U64)
     // `#Source` decorates the value yielded by an earlier call; it is not a

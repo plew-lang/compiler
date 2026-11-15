@@ -2316,12 +2316,15 @@ fn midSourceCallReceiver(c: inout Comp, state: inout MidBuildState, exprId: U64,
         CallTemplateReceiver.PriorProtocolResultWithViews(slot: _, views: _) => { return <MidReceiverBuild.Error error=<MidBuildError.UnsupportedCallTemplate /> /> }
         _ => {}
     }
-    val receiverExpr: U64 = midMethodReceiverExpr(expressions: c.arena.exprs, exprId: exprId)
+    val receiverExpr: U64 = match templateReceiver {
+        CallTemplateReceiver.Binding(term: _, exprId: val binding) => binding
+        _ => midMethodReceiverExpr(expressions: c.arena.exprs, exprId: exprId)
+    }
     if receiverExpr >= c.arena.exprs.count() {
         return <MidReceiverBuild.Error error=<MidBuildError.UnsupportedCallTemplate /> />
     }
     val receiverTerm: U64 = match templateReceiver {
-        CallTemplateReceiver.Term(term: val term) => { give term }
+        CallTemplateReceiver.Term(term: val term) | CallTemplateReceiver.Binding(term: val term, exprId: _) => { give term }
         CallTemplateReceiver.Opaque => { give (match midSourceSemanticTerm(c: inout c, facts: state.sourceFacts, sourceFunction: state.sourceFunction, exprId: receiverExpr) { Result.Ok(value: val term) => { give term } Result.Err(error: val error) => { return <MidReceiverBuild.Error error=error /> } }) }
         _ => { give 0U64 }
     }

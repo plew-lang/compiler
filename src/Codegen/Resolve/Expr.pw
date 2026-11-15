@@ -1169,7 +1169,7 @@ pub impl Comp {
     inout fn recordCallTemplate(exprId: U64, callee: U64, receiver: CallTemplateReceiver, args: ArgRange, calleeTypeArgs: Array[U64], proof: StaticConformanceProof = <StaticConformanceProof.Missing />, receiverTypeTerm: U64 = 0U64) -> Result[(), CompileDiagnostic] {
         mut val receiverTerm = receiverTypeTerm
         if receiverTerm == 0U64 {
-            match receiver { CallTemplateReceiver.Term(term: val term) => { receiverTerm = term } _ => {} }
+            match receiver { CallTemplateReceiver.Term(term: val term) | CallTemplateReceiver.Binding(term: val term, exprId: _) => { receiverTerm = term } _ => {} }
         }
         val siteKey: CallSiteKey = (try self.templateCallSiteKey(fnIdx: self.cur.checkFn, exprId: exprId))
         val templateArgs: CallTemplateArgumentRange = (try self.directCallTemplateArgs(args: args))
@@ -1961,7 +1961,7 @@ pub impl Comp {
         mut val selectedReceiver = receiverTerm
         if selectedReceiver == 0U64 {
             match receiver {
-                CallTemplateReceiver.Term(term: val term) => { selectedReceiver = term }
+                CallTemplateReceiver.Term(term: val term) | CallTemplateReceiver.Binding(term: val term, exprId: _) => { selectedReceiver = term }
                 _ => {}
             }
         }
@@ -3186,7 +3186,7 @@ impl Comp {
             val f: Func = self.arena.functionAt(index: callee)
             if f.isProvided {
                 match receiver {
-                    CallTemplateReceiver.Term(term: val receiverTerm) => {
+                    CallTemplateReceiver.Term(term: val receiverTerm) | CallTemplateReceiver.Binding(term: val receiverTerm, exprId: _) => {
                         val resolution: StaticMemberResolution = (try self.staticMemberResolution(fnIdx: self.cur.checkFn, receiverRef: receiverTerm, nameStart: f.nameStart, nameLen: f.nameLen, args: args))
                         match resolution {
                             StaticMemberResolution.Requirement(proof: val resolved, traitIdx: _, reqIdx: _) => { selectedProof = resolved }

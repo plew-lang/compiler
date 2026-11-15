@@ -1769,7 +1769,7 @@ pub impl Comp {
 
     inout fn closedProtocolReceiver(receiver: CallTemplateReceiver) -> Result[U64, CompileDiagnostic] {
         match receiver {
-            CallTemplateReceiver.Term(term: val term) => { return <Result.Ok value=term /> }
+            CallTemplateReceiver.Term(term: val term) | CallTemplateReceiver.Binding(term: val term, exprId: _) => { return <Result.Ok value=term /> }
             CallTemplateReceiver.PriorCallResult(exprId: _, siteKey: val dependency) => { return self.closedSelectedCallResult(siteKey: dependency) }
             CallTemplateReceiver.PriorCallResultWithViews(exprId: _, siteKey: val dependency, views: val views) => {
                 val term = try self.closedSelectedCallResult(siteKey: dependency)
