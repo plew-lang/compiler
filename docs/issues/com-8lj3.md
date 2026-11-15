@@ -296,3 +296,7 @@ Related lexical preparation change: identifier resolution returns its immediatel
 **2026-11-15T18:47:53Z**
 
 Verify reuses the local index from its own identifier resolution for use-after-move checks. The old dedicated receiver lookup remains. Three rejection diagnostics and three lazy output controls matched, and same-source AOT LLVM matched acbb4de9182443f41113444ceb3ffb4f271178797d3b264dba4d4b2e25e06916. No optimized timing claim. This does not change storage dependency production.
+
+**2026-11-15T18:53:12Z**
+
+Nested aggregate preparation now uses each sealed element occurrence and its saved call dependency, through the same operand reader used by the initializer root. Other expressions still use the residual walker. Five lazy fixtures and a nested array call order probe passed; full same-source AOT LLVM matched 69ca89455aa248e95e59d43b01fa1193632a7b18a7ca08b124035b9e3cd832c9. File-backed diagnostic compilation hit ENOSPC; streaming LLVM to clang succeeded. No optimized timing claim.

@@ -6555,7 +6555,7 @@ pub impl Comp {
         match aggregate {
             Optional.Some(v: val saved) => {
                 for element in saved.elements {
-                    try self.scanExprInsts(exprId: element.exprId)
+                    try self.prepareCheckedCallOperand(source: try self.checkedValueOperand(exprId: element.exprId))
                 }
             }
             Optional.None => {}
