@@ -1488,13 +1488,25 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
+    inout fn prepareCheckedCallOperand(source: CallArgumentSource) -> Result[(), CompileDiagnostic] {
+        match source {
+            CallArgumentSource.PriorCallResult(exprId: val expression, siteKey: val site) => {
+                if self.cur.checkedLocalStorage.isSome() {
+                    return self.prepareCheckedResultCall(expression: expression, site: site)
+                }
+            }
+            _ => {}
+        }
+        return self.scanExprInsts(exprId: self.callArgumentExprId(source: source))
+    }
+
     inout fn scanCheckedCallArgumentRows(range: CallTemplateArgumentRange, site: CallSiteKey) -> Result[(), CompileDiagnostic] {
         if range.len > 0U64 && (range.start >= self.callTemplateArgumentPool.count() || range.len > self.callTemplateArgumentPool.count() - range.start) {
             return <Result.Err error=self.diagnosticAt(offset: site.originStart, msg: "selected call has an invalid checked argument range", failureDomain: <FailureDomain.Internal />) />
         }
         for index in 0U64..<range.len {
             val source = self.callTemplateArgumentPool[range.start + index].source
-            try self.scanExprInsts(exprId: self.callArgumentExprId(source: source))
+            try self.prepareCheckedCallOperand(source: source)
         }
         return <Result.Ok value=() />
     }
@@ -6982,13 +6994,22 @@ pub impl Comp {
         }
         val recipe = self.arena.semanticTypeRecipes[recipeId - 1U64]
         if recipe.kind != 2U64 { return self.scanExprInsts(exprId: request.expression) }
-        val index = self.callTemplateIndex(siteKey: recipe.callSite)
+        return self.prepareCheckedResultCall(expression: request.expression, site: recipe.callSite, expectedRecipe: recipeId)
+    }
+
+    inout fn prepareCheckedResultCall(expression: U64, site: CallSiteKey, expectedRecipe: U64 = 0U64) -> Result[(), CompileDiagnostic] {
+        val index = self.callTemplateIndex(siteKey: site)
         if index >= self.callTemplateCount() {
-            return <Result.Err error=self.diagnosticAt(offset: request.declarationTarget, msg: "initializer recipe has no selected call", failureDomain: <FailureDomain.Internal />) />
+            return <Result.Err error=self.diagnosticAt(offset: site.originStart, msg: "checked result dependency has no selected call", failureDomain: <FailureDomain.Internal />) />
         }
         val template = self.callTemplateAt(index: index)
-        if template.resultTypeRecipe != recipeId || recipe.sourceExpression.unwrapOr(fallback: self.arena.exprs.count()) != request.expression {
-            return <Result.Err error=self.diagnosticAt(offset: request.declarationTarget, msg: "initializer recipe has a foreign call occurrence", failureDomain: <FailureDomain.Internal />) />
+        val recipeId = template.resultTypeRecipe
+        if recipeId == 0U64 || recipeId > self.arena.semanticTypeRecipes.count() || (expectedRecipe != 0U64 && expectedRecipe != recipeId) {
+            return <Result.Err error=self.diagnosticAt(offset: site.originStart, msg: "checked result dependency has an invalid recipe", failureDomain: <FailureDomain.Internal />) />
+        }
+        val recipe = self.arena.semanticTypeRecipes[recipeId - 1U64]
+        if recipe.kind != 2U64 || !recipe.callSite.sameKey(other: site) || recipe.sourceExpression.unwrapOr(fallback: self.arena.exprs.count()) != expression {
+            return <Result.Err error=self.diagnosticAt(offset: site.originStart, msg: "checked result dependency has a foreign call occurrence", failureDomain: <FailureDomain.Internal />) />
         }
         match template.kind {
             CallTemplateKind.Direct(callee: val callee, receiver: val receiver, args: val arguments, calleeTypeArgs: _, proofId: _) => {
@@ -6998,9 +7019,9 @@ pub impl Comp {
                             val function = self.arena.functionAt(index: callee)
                             if !function.hasRecv && !function.isAssoc && !function.isFactory {
                                 try self.scanCheckedCallArgumentRows(range: arguments, site: recipe.callSite)
-                                val selected = try self.resolveBodyCallee(exprId: request.expression, template: template, authoredFreeCall: true)
-                                try self.registerCallInst(id: request.expression, finalIdx: selected)
-                                return self.finalizeAccessWriteFacets(parentExpr: request.expression)
+                                val selected = try self.resolveBodyCallee(exprId: expression, template: template, authoredFreeCall: true)
+                                try self.registerCallInst(id: expression, finalIdx: selected)
+                                return self.finalizeAccessWriteFacets(parentExpr: expression)
                             }
                         }
                     }
@@ -7013,13 +7034,13 @@ pub impl Comp {
                 }
                 for offset in 0U64..<operands.len {
                     val source = self.callTemplateOperandPool[operands.start + offset]
-                    try self.scanExprInsts(exprId: self.callArgumentExprId(source: source))
+                    try self.prepareCheckedCallOperand(source: source)
                 }
-                return self.recordBodyOperatorCallee(exprId: request.expression, template: template)
+                return self.recordBodyOperatorCallee(exprId: expression, template: template)
             }
             _ => {}
         }
-        return self.scanExprInstsWithTemplate(exprId: request.expression, selected: index + 1U64)
+        return self.scanExprInstsWithTemplate(exprId: expression, selected: index + 1U64)
     }
 
     inout fn scanStmtInsts(stmtId: U64) -> Result[(), CompileDiagnostic] {

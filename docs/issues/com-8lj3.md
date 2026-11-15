@@ -116,3 +116,7 @@ Pass the exact template index retained by checked initialization into method, dy
 **2026-11-15T13:43:17Z**
 
 Top-level operator initializers now prepare operands from the retained operand range in evaluation order before publishing the selected result descriptor. Operand expressions still use residual preparation. Short-circuit expressions keep their control-flow path because Record publishes no operator template for them. Eight lazy fixtures and an observable left/right call-order comparison passed; same-source AOT LLVM matched 506ddb008230111fc149347611c551dc10c92bfb6d6699b687dda2fc433c10c5.
+
+**2026-11-15T13:47:48Z**
+
+Nested PriorCallResult arguments and operator operands in routed ordinary bodies now prepare the saved site before the parent call using the same checked result producer as the initializer root. The producer checks the recipe and source occurrence against the selected site. Receiver and non-call expressions still use the residual walk. Ten lazy controls and observable operator operand order passed; same-source diagnostic AOT LLVM matched 518bb5247bdcbc48bf17fba49d169ce08c67b7717590708f4f2ee10c811aa44b.
