@@ -1,7 +1,7 @@
 // A whole-target static-check result owns the exact compiler snapshot it proves.
 // No public factory or mutable arena accessor can attach it to another input.
 use ./Frontend only { Comp, FrontendInput, FrontendOptions, analyzeFrontendForRequests, completeFrontendDeclarations, traceFinalCallableStart, traceFinalCallableFinish, FinalBodyRequests, FinalDependencies, FinalizationPublication }
-use ./Ir only { StaticConformanceProof, BodyOrigin, InstanceEnvironment, CallSiteKey, CheckedLocalStorageRequest, Stmt }
+use ./Ir only { StaticConformanceProof, BodyOrigin, InstanceEnvironment, CallSiteKey, CheckedLocalStorageRequest }
 use ./Backend only { LlvmLoweringResult, LlvmTargetDescription, lowerRequestedLlvm, lowerGlobalStorageLlvm, lowerCallableDeclarationsLlvm }
 use ./SourceAccess only { SourceAccess }
 use ./Diag only { CompileDiagnostic, DiagnosticLocation, FailureDomain }
@@ -412,17 +412,6 @@ impl CompilerSession {
                 val local = self.compiler.mid.locals[body.locals.start + destination.local]
                 if local.sourceBinding.isUnproved() || storage.contains(key: value.sourceStmt) {
                     return <Result.Err error=self.compiler.diagnosticAt(offset: local.sourceNameStart, msg: "checked Mid storage order has an invalid binding occurrence", failureDomain: <FailureDomain.Internal />) />
-                }
-                if value.sourceStmt >= self.compiler.arena.stmts.count() {
-                    return <Result.Err error=self.compiler.diagnosticAt(offset: local.sourceNameStart, msg: "checked Mid storage has an invalid source statement", failureDomain: <FailureDomain.Internal />) />
-                }
-                match self.compiler.arena.stmts[value.sourceStmt] {
-                    Stmt.Let(init: val initializer, nameStart: val target, mutable: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, annotationOccurrence: _) => {
-                        if initializer != value.exprId || target != local.sourceNameStart {
-                            return <Result.Err error=self.compiler.diagnosticAt(offset: local.sourceNameStart, msg: "checked Mid storage has a foreign initializer occurrence", failureDomain: <FailureDomain.Internal />) />
-                        }
-                    }
-                    _ => { return <Result.Err error=self.compiler.diagnosticAt(offset: local.sourceNameStart, msg: "checked Mid storage does not identify a local declaration", failureDomain: <FailureDomain.Internal />) /> }
                 }
                 storage[value.sourceStmt] = <CheckedLocalStorageRequest expression=value.exprId declarationTarget=local.sourceNameStart binding=local.sourceBinding valueType=initialization.valueType />
                 storageOrder.append(value.sourceStmt)

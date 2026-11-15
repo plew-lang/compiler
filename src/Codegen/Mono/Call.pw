@@ -6983,7 +6983,7 @@ pub impl Comp {
         }
         val ref = try self.groundCheckedLocalStorageTarget(stmtId: stmtId, request: request, bodyId: self.cur.bodyId)
         val sourceRef = match request.valueType {
-            RecordedStorageValueType.Term(ref: val term) | RecordedStorageValueType.Region(ref: val term, region: _) => try self.groundAndRecordBodyType(ref: term, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.cur.bodyId)
+            RecordedStorageValueType.Constant(ref: val term) | RecordedStorageValueType.Term(ref: val term) | RecordedStorageValueType.Region(ref: val term, region: _) => try self.groundAndRecordBodyType(ref: term, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.cur.bodyId)
             RecordedStorageValueType.Recipe(id: val recipe) => try self.groundSemanticTypeRecipeForBody(recipeId: recipe, bodyId: self.cur.bodyId, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, requireProducer: true)
         }
         val targetRef = try self.groundAndRecordBodyType(ref: ref, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.cur.bodyId)
@@ -7090,6 +7090,10 @@ pub impl Comp {
     inout fn prepareCheckedInitializer(request: CheckedLocalStorageRequest) -> Result[(), CompileDiagnostic] {
         val recipeId = match request.valueType {
             RecordedStorageValueType.Recipe(id: val recipe) => recipe
+            RecordedStorageValueType.Constant(ref: val term) => {
+                val type = try self.groundAndRecordBodyType(ref: term, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.cur.bodyId)
+                return self.enqueueFinalDestruction(typeRef: type)
+            }
             RecordedStorageValueType.Term(ref: _) => { return self.scanExprInsts(exprId: request.expression) }
             RecordedStorageValueType.Region(ref: _, region: val region) => { return self.prepareCheckedValueRegion(expression: request.expression, region: region) }
         }
@@ -7154,6 +7158,9 @@ pub impl Comp {
                     Optional.Some(v: val storage) => {
                         match storage.get(key: stmtId) {
                             Optional.Some(v: val request) => {
+                                if request.expression != init {
+                                    return <Result.Err error=self.diagnosticAt(offset: nameStart, msg: "checked local has a foreign initializer occurrence", failureDomain: <FailureDomain.Internal />) />
+                                }
                                 try self.prepareCheckedInitializer(request: request)
                                 try self.publishCheckedLocalStorage(stmtId: stmtId, request: request)
                                 return <Result.Ok value=() />

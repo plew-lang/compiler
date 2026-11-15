@@ -565,6 +565,7 @@ pub impl SourceBindingOrigin {
 }
 
 pub enum RecordedStorageValueType {
+    Constant(ref: U64)
     Term(ref: U64)
     Region(ref: U64, region: SourceValueRegion)
     Recipe(id: U64)

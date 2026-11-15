@@ -37,7 +37,7 @@ fn verifyStorageEmissionOrder() {
         _ => { panic("call initializer lost its result recipe") }
     }
     match after.valueType {
-        RecordedStorageValueType.Term(ref: val term) => {
+        RecordedStorageValueType.Constant(ref: val term) => {
             if term == 0U64 { panic("literal initializer has no checked term") }
         }
         _ => { panic("literal initializer acquired a call recipe") }

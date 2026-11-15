@@ -204,3 +204,7 @@ The block walker now dispatches a checked initialization request directly in exe
 **2026-11-15T16:26:27Z**
 
 Restrict the Mid request dispatch lookup to Let statements. The per-source-function validation remains, and the checked branch still uses only the saved request to prepare and publish its initializer. This removes the additional lookup from all other statements by construction. Seven lazy controls and full same-source AOT LLVM matched. Diagnostic carrier only; no speed claim.
+
+**2026-11-15T16:35:39Z**
+
+Use the retained Mid constant operand to prepare literal storage via its checked term, preserving destruction dependency registration. Native mid_binding_identity and seven lazy controls passed and full same-source AOT LLVM matched. The native diagnostic-order control exposed that moving the foreign-expression check to the session allowed invalid direct finalization input; restored the check at the preparation boundary.
