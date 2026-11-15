@@ -80,3 +80,12 @@ selected callee ahead of those witness requests. Preserve the witness metadata
 contract while separating its body demand, and exercise a fresh existential
 argument conversion in the descriptor-only control. The String signature test
 does not cover this path.
+
+The selected descriptor now keeps grounded argument conversion evidence while
+deferring executable conversion dependency closure to the compatibility demand
+path. That path uses the published descriptor and requests the selected body
+before closing conversions. This also keeps destructor demand through
+`collectFinalDestruction` out of argument conversion while preparing the
+descriptor. Other conversion entry points retain their execution policy.
+Fixed-carrier check and LLVM generation passed. The fresh-box execution control,
+independent re-review and performance comparison remain pending.

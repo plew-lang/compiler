@@ -1290,6 +1290,16 @@ pub impl Comp {
     inout fn enqueueSelectedCallee(selection: CallSiteSelection, template: CallTemplate) -> Result[(), CompileDiagnostic] {
         val bodyId = try self.prepareSelectedCalleeDescriptor(selection: selection, template: template)
         self.demandFinalBody(bodyId: bodyId)
+        val index = try self.bodyCalleeIndex(exprId: selection.exprId, siteIsStmt: selection.siteIsStmt, slot: selection.slot)
+        if index < self.arena.finalCalleeCount() {
+            val conversions = self.arena.finalCalleeAt(index: index).argumentConversions
+            for offset in 0U64..<conversions.len {
+                val proof = self.arena.finalCalleeConversionAt(conversions: conversions, index: offset)
+                if proof != 0U64 && !self.conversionProofIsIdentity(id: proof) && !self.conversionProofIsMissing(id: proof) {
+                    try self.finalizeConversionDependencies(conversion: self.thawValueConversionProof(id: proof))
+                }
+            }
+        }
         return <Result.Ok value=() />
     }
 
@@ -1312,7 +1322,7 @@ pub impl Comp {
         val constraints = try self.selectedCallConstraintEvidence(template: template, callee: callee, proof: calleeProof, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
         val environment = try self.prepareSelectedCallableEnvironment(fnIdx: callee, args: finalArgs, recvInstRef: recvInst, selectedProof: calleeProof, constraints: constraints)
         val calleeBodyId = try self.prepareFinalBodyIdentity(fnIdx: callee, args: finalArgs, recvInstRef: recvInst, environment: environment)
-        try self.completeStaticBodyCallee(exprId: exprId, callee: callee, recvRef: recvInst, calleeArgs: finalArgs, argumentSources: selection.argumentSources, resultRef: selection.resultRef, resultProjection: selection.resultProjection, siteIsStmt: siteIsStmt, slot: slot, calleeBodyId: calleeBodyId)
+        try self.completeStaticBodyCallee(exprId: exprId, callee: callee, recvRef: recvInst, calleeArgs: finalArgs, argumentSources: selection.argumentSources, resultRef: selection.resultRef, resultProjection: selection.resultProjection, siteIsStmt: siteIsStmt, slot: slot, calleeBodyId: calleeBodyId, deferConversionDependencies: true)
         val finalResult: U64 = (try self.bodyCalleeResultRef(exprId: exprId, siteIsStmt: siteIsStmt, slot: slot))
         self.traceProvidedFinalCallee(f: f, args: finalArgs, recvRef: recvInst, resultRef: finalResult)
         return <Result.Ok value=calleeBodyId />
@@ -2686,7 +2696,7 @@ pub impl Comp {
         }
     }
 
-    inout fn finalValueConversion(sourceRef: U64, targetRef: U64, exprId: U64) -> Result[ValueConversionProof, CompileDiagnostic] {
+    inout fn finalValueConversion(sourceRef: U64, targetRef: U64, exprId: U64, deferDependencies: Bool = false) -> Result[ValueConversionProof, CompileDiagnostic] {
         val sameType = sourceRef != 0U64 && self.typeRefEq(a: sourceRef, b: targetRef)
         // Recorded evidence is authoritative even if the supplied concrete
         // types now compare equal. An identity shortcut must not conceal a
@@ -2710,7 +2720,7 @@ pub impl Comp {
                         if !self.declarationBoxPreparationComplete {
                             try self.prepareConversionDependencies(conversion: conversion)
                         }
-                        try self.finalizeConversionDependencies(conversion: conversion)
+                        if !deferDependencies { try self.finalizeConversionDependencies(conversion: conversion) }
                         return <Result.Ok value=conversion />
                     }
                 }
@@ -2743,7 +2753,7 @@ pub impl Comp {
         return <Result.Ok value=types />
     }
 
-    inout fn callArgumentConversions(sources: Array[CallTemplateArgument], parameterTypeRefs: Array[U64], sourceTypes: Array[U64]) -> Result[Array[ValueConversionProof], CompileDiagnostic] {
+    inout fn callArgumentConversions(sources: Array[CallTemplateArgument], parameterTypeRefs: Array[U64], sourceTypes: Array[U64], deferDependencies: Bool = false) -> Result[Array[ValueConversionProof], CompileDiagnostic] {
         if sourceTypes.count() != sources.count() { panic "call conversion source type count mismatch" }
         mut val conversions: Array[ValueConversionProof] = []
         mut val i: U64 = 0U64
@@ -2756,7 +2766,7 @@ pub impl Comp {
                 val conversion = if sources[i].isDispatchReceiver && source != 0U64 && parameterTypeRefs[i] != 0U64 && self.typeRefEq(a: self.runtimeTypeRef(ref: source), b: self.runtimeTypeRef(ref: parameterTypeRefs[i])) {
                     give <ValueConversionProof.Identity />
                 } else {
-                    give try self.finalValueConversion(sourceRef: source, targetRef: parameterTypeRefs[i], exprId: self.callArgumentExprId(source: sources[i].source))
+                    give try self.finalValueConversion(sourceRef: source, targetRef: parameterTypeRefs[i], exprId: self.callArgumentExprId(source: sources[i].source), deferDependencies: deferDependencies)
                 }
                 match conversion {
                     ValueConversionProof.Missing => {
@@ -3440,7 +3450,7 @@ pub impl Comp {
         return self.bodyReceiverMatchesDeclaration(function: function, environment: instance.environment)
     }
 
-    inout fn completeStaticBodyCallee(exprId: U64, callee: U64, recvRef: U64, calleeArgs: Array[U64], argumentSources: Array[CallTemplateArgument] = [], resultRef: U64 = 0U64, resultProjection: CallResultProjection = <CallResultProjection.Identity />, siteIsStmt: Bool = false, slot: U64 = 0U64, calleeBodyId: U64 = 0U64) -> Result[(), CompileDiagnostic] {
+    inout fn completeStaticBodyCallee(exprId: U64, callee: U64, recvRef: U64, calleeArgs: Array[U64], argumentSources: Array[CallTemplateArgument] = [], resultRef: U64 = 0U64, resultProjection: CallResultProjection = <CallResultProjection.Identity />, siteIsStmt: Bool = false, slot: U64 = 0U64, calleeBodyId: U64 = 0U64, deferConversionDependencies: Bool = false) -> Result[(), CompileDiagnostic] {
         val i: U64 = (try self.bodyCalleeIndex(exprId: exprId, siteIsStmt: siteIsStmt, slot: slot))
         // An executable body already owns its closed ABI signature. Consume
         // that selected fact; grounding its declaration again duplicates work
@@ -3472,7 +3482,7 @@ pub impl Comp {
         }
         val params = signature.parameterTypes
         val sourceTypes = (try self.finalCallArgumentTypes(arguments: argumentSources))
-        val conversions: Array[ValueConversionProof] = (try self.callArgumentConversions(sources: argumentSources, parameterTypeRefs: params, sourceTypes: sourceTypes))
+        val conversions: Array[ValueConversionProof] = (try self.callArgumentConversions(sources: argumentSources, parameterTypeRefs: params, sourceTypes: sourceTypes, deferDependencies: deferConversionDependencies))
         val receiverPassing = signature.receiverPassing
         val argumentPassings = signature.parameterPassings
         val carrierResult = signature.resultType
