@@ -48,3 +48,7 @@ Canonical capture-cell initialization now joins normal local assignment in Mid s
 **2026-11-15T12:13:55Z**
 
 Use an explicit optional Mid request set for the whole body. When selected, missing storage on a normally completing reached Let is an internal failure; a non-completing Let publishes no local. The legacy producer is selected only for entries outside this routing, including default generators. The diagnostic carrier reproduced byte-identical full compiler LLVM and passed six lazy controls including analytical non-continuation, dead move, captures, associated local, Optional conversion, and projected global. Residual AST traversal still supplies order; the task remains open.
+
+**2026-11-15T12:16:51Z**
+
+Rejected lookup prototype: keying the Mid request by declaration source offset so CallArgumentSource.Local could read a FinalStorageResolution directly does not preserve occurrence identity. The rebuilt diagnostic carrier failed full-source compilation at Resolve/Lexical.pw:123 (final local has a foreign Mid binding occurrence). That source is in a shared arm over Array/Dictionary/Range; lowered occurrences must retain distinct checked statement/binding-row identities even at equal location. Restored the statement-keyed route. Next carry exact checked binding identity at argument production; do not replace the occurrence key with a source offset or weaken validation.
