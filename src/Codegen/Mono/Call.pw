@@ -6540,16 +6540,18 @@ pub impl Comp {
         return <Result.Ok value=aggregate />
     }
 
-    inout fn finalizationCallTemplate(exprId: U64, selected: U64) -> Result[CallTemplate, CompileDiagnostic] {
-        if selected != 0U64 { return <Result.Ok value=self.callTemplateAt(index: selected - 1U64) /> }
-        return self.callTemplateForCurrentBody(exprId: exprId)
+    inout fn finalizationCallTemplate(exprId: U64, selected: Optional[CallTemplate]) -> Result[CallTemplate, CompileDiagnostic] {
+        match selected {
+            Optional.Some(v: val template) => { return <Result.Ok value=template /> }
+            Optional.None => { return self.callTemplateForCurrentBody(exprId: exprId) }
+        }
     }
 
     inout fn scanExprInsts(exprId: U64) -> Result[(), CompileDiagnostic] {
-        return self.scanExprInstsWithTemplate(exprId: exprId, selected: 0U64)
+        return self.scanExprInstsWithTemplate(exprId: exprId, selected: <Optional.None />)
     }
 
-    inout fn scanExprInstsWithTemplate(exprId: U64, selected: U64) -> Result[(), CompileDiagnostic] {
+    inout fn scanExprInstsWithTemplate(exprId: U64, selected: Optional[CallTemplate]) -> Result[(), CompileDiagnostic] {
         if self.tracePhases {
             self.traceExprInstScans += 1U64
             tracePhaseProgress(c: inout self, label: "finalize-callables:expression", count: self.traceExprInstScans, stride: 256U64)
@@ -7159,7 +7161,7 @@ pub impl Comp {
             }
             _ => {}
         }
-        return self.scanExprInstsWithTemplate(exprId: expression, selected: index + 1U64)
+        return self.scanExprInstsWithTemplate(exprId: expression, selected: <Optional.Some v=template />)
     }
 
     inout fn scanStmtInsts(stmtId: U64) -> Result[(), CompileDiagnostic] {

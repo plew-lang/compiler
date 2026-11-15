@@ -328,3 +328,7 @@ Casts in local initializers and nested expressions use the saved producer call b
 **2026-11-15T19:18:57Z**
 
 Nested if and match expressions now use the same recorded value region and completion handling as local initializer roots. Fallback remains for bodies/expressions without a region. Six lazy controls, two AOT controls and full same-source compiler LLVM matched. Link retried from the same object after removing superseded diagnostic binaries. No optimized timing claim.
+
+**2026-11-15T19:22:09Z**
+
+The residual selected-call walker receives the already validated CallTemplate directly, eliminating its second table row read. Six lazy controls and full same-source compiler LLVM matched. This preserves the remaining AST navigation and has no optimized timing result; assess the value transfer when measuring the accumulated changes.
