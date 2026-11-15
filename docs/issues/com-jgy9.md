@@ -48,3 +48,11 @@ Ordinary and closure signature setters publish only the first readiness
 transition, so descriptor-only signatures contribute type/ownership closure
 without entering the executable worklist. Fixed-carrier compile-to-LLVM
 succeeded for this slice. Native linking and focused controls are pending.
+
+Native candidate for 2d34224d linked successfully with the standard LLVM
+pipeline. [Fixed-source comparison](../../../evidence/rejection-domains/diagnostic-domain-implementation/trait-receiver-admission/phase3-direct-demand-split.json)
+against plewc-phase3-backend-index-fixed emitted identical LLVM in all ten
+runs. The four measured pairs after warmup gave medians 7.901 s and 8.030 s.
+The candidate was slower in three of four pairs. Investigate adapter target
+reads and repeated signature preparation, and repeat the comparison before
+admitting this candidate. This was not a formal fixed-point run.
