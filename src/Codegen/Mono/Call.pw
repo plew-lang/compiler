@@ -6482,6 +6482,27 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
+    inout fn prepareSelectedReceiver(expression: U64, template: CallTemplate) -> Result[(), CompileDiagnostic] {
+        if self.cur.checkedLocalStorage.isSome() {
+            val receiver = match template.kind {
+                CallTemplateKind.Direct(receiver: val receiver, callee: _, args: _, calleeTypeArgs: _, proofId: _) |
+                CallTemplateKind.StaticMethod(receiver: val receiver, args: _, resolution: _, methodTypeArgs: _, resultTerm: _) |
+                CallTemplateKind.Dynamic(receiver: val receiver, args: _, target: _) => receiver
+                _ => <CallTemplateReceiver.None />
+            }
+            match receiver {
+                CallTemplateReceiver.PriorCallResult(exprId: val producer, siteKey: val site) => {
+                    if producer != expression {
+                        return <Result.Err error=self.diagnosticAt(offset: site.originStart, msg: "checked receiver dependency has a foreign source expression", failureDomain: <FailureDomain.Internal />) />
+                    }
+                    return self.prepareCheckedResultCall(expression: producer, site: site)
+                }
+                _ => {}
+            }
+        }
+        return self.scanExprInsts(exprId: expression)
+    }
+
     inout fn finalizationCallTemplate(exprId: U64, selected: U64) -> Result[CallTemplate, CompileDiagnostic] {
         if selected != 0U64 { return <Result.Ok value=self.callTemplateAt(index: selected - 1U64) /> }
         return self.callTemplateForCurrentBody(exprId: exprId)
@@ -6546,11 +6567,11 @@ pub impl Comp {
                 try self.finalizeAccessWriteFacets(parentExpr: exprId)
             }
             Expr.ExtMethod(val recv, val source, val nameStart, val nameLen, val args) => {
-                try self.scanExprInsts(exprId: recv)
+                val template = try self.finalizationCallTemplate(exprId: exprId, selected: selected)
+                try self.prepareSelectedReceiver(expression: recv, template: template)
                 if source.traitInstance.owner != 0U64 && self.assocRecvName(recv: recv).nameLen == 0U64 {
                     (try self.replayFinalTraitValueView(exprId: exprId, source: source))
                 }
-                val template = try self.finalizationCallTemplate(exprId: exprId, selected: selected)
                 try self.scanSelectedCallArguments(template: template, authored: args)
                 try self.registerMethodInst(callId: exprId, finalIdx: (try self.resolveBodyCallee(exprId: exprId, template: template)))
                 try self.finalizeAccessWriteFacets(parentExpr: exprId)
@@ -6583,7 +6604,7 @@ pub impl Comp {
                     val written = self.syntheticCallReceiverTerm(exprId: exprId, fallback: 0U64)
                     try self.replayExpressionTypeSlotProofs(exprId: exprId, written: self.arena.typeAt(index: written).args, term: template.receiverTypeTerm, bodyId: bodyId, sourceBodyId: bodyId)
                 }
-                try self.scanExprInsts(exprId: recv)
+                try self.prepareSelectedReceiver(expression: recv, template: template)
                 try self.scanSelectedCallArguments(template: template, authored: args)
                 val finalIdx: U64 = (try self.resolveBodyCallee(exprId: exprId, template: template))
                 try self.registerMethodInst(callId: exprId, finalIdx: finalIdx)

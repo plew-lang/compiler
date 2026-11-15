@@ -120,3 +120,7 @@ Top-level operator initializers now prepare operands from the retained operand r
 **2026-11-15T13:47:48Z**
 
 Nested PriorCallResult arguments and operator operands in routed ordinary bodies now prepare the saved site before the parent call using the same checked result producer as the initializer root. The producer checks the recipe and source occurrence against the selected site. Receiver and non-call expressions still use the residual walk. Ten lazy controls and observable operator operand order passed; same-source diagnostic AOT LLVM matched 518bb5247bdcbc48bf17fba49d169ce08c67b7717590708f4f2ee10c811aa44b.
+
+**2026-11-15T13:52:29Z**
+
+Method and extension-method receivers that are direct prior call results now prepare their producer from the checked receiver key, before explicit and default arguments. A standalone control verifies receiver/explicit/default order. Twelve lazy fixtures passed and full same-source AOT LLVM matched f5633b20d16eba2aa55f1ae5d5892a8bfe767d68cb53ae4aa004b33b7cb44a9e. Receivers wrapped by value views still need the residual proof walk; next preserve its postorder proof replay while routing the base call by its exact dependency.
