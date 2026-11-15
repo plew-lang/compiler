@@ -2245,6 +2245,10 @@ pub impl Comp {
             Expr.Binary(val op, val lhs, val rhs) => {
                 try self.recordExpr(exprId: lhs, chainHoleRef: chainHoleRef)
                 try self.recordExpr(exprId: rhs, chainHoleRef: chainHoleRef)
+                if op == opAnd() || op == opOr() {
+                    try self.recordValueOperandCall(exprId: lhs)
+                    try self.recordValueOperandCall(exprId: rhs)
+                }
                 if isBinTraitOp(op: op) || op == opEq() || op == opNe() || op == opLt() || op == opLe() || op == opGt() || op == opGe() {
                     val contextual = (try self.recordFloatingOperandContext(lhs: lhs, rhs: rhs))
                     if contextual && isBinTraitOp(op: op) {

@@ -236,3 +236,7 @@ Projection-only initializer wrappers now retain their checked root call occurren
 **2026-11-15T17:11:03Z**
 
 Retain the checked operand of try local initializers, preparing its saved call before publishing the recorded success/error decomposition. Seven lazy controls cover generic conversion, error overload, associated results and place/ARC input. Full same-source AOT LLVM matched; this is an expression-visit comparison and not a timing result.
+
+**2026-11-15T17:14:25Z**
+
+Retain both checked operand occurrences for short-circuit local initializers. Finalization prepares selected call dependencies in order; Mid keeps runtime short-circuit control. Six lazy fixtures and an observable RHS suppression probe passed; full same-source AOT LLVM matched. Remaining field fallback needs classification before completion review.

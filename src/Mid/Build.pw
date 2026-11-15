@@ -2656,6 +2656,11 @@ fn midRecordedStorageValueType(c: inout Comp, facts: PreparedSemanticFacts, func
         Optional.None => {}
     }
     match c.arena.exprs[expression] {
+        Expr.Binary(op: val op, lhs: val lhs, rhs: val rhs) => {
+            if op == opAnd() || op == opOr() {
+                return <Result.Ok value=<RecordedStorageValueType.ShortCircuit ref=fact.term lhs=lhs rhs=rhs /> />
+            }
+        }
         Expr.Try(expr: val input) => {
             val source: CallArgumentSource = match facts.valueOperandCall(exprId: input) {
                 Optional.Some(v: val site) => <CallArgumentSource.PriorCallResult exprId=input siteKey=site />
