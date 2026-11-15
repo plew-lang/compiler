@@ -196,3 +196,7 @@ Checked local call arguments now only read the finalized body+statement descript
 **2026-11-15T16:19:32Z**
 
 Checked closure captures read the enclosing body storage descriptor, retaining binding and concrete-type consistency checks. Removed the separate per-body target cache; initializer publication now owns destination grounding. Seven lazy controls covering capture cells, unused captures, receiver captures, global initializer isolation and associated locals passed; full same-source AOT LLVM matched. The remaining issue is producer scheduling through shared statement and expression preparation.
+
+**2026-11-15T16:23:20Z**
+
+The block walker now dispatches a checked initialization request directly in execution order, bypassing its legacy Let handler. The session validates source statement and initializer identity once per source function before caching requests. Seven lazy fixtures and full same-source AOT LLVM matched. The request dispatch adds a lookup on other statements of routed bodies; measure this increment before making a speed claim. The non-call initializer operand fallback still walks source.

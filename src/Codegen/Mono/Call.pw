@@ -7150,30 +7150,13 @@ pub impl Comp {
     inout fn scanStmtInsts(stmtId: U64) -> Result[(), CompileDiagnostic] {
         match self.arena.stmts[stmtId] {
             Stmt.Let(val mutable, val nameStart, val nameLen, val tyStart, val tyLen, val tyIsArray, val ty, val init, val annotationOccurrence) => {
-                match self.cur.checkedLocalStorage {
-                    Optional.Some(v: val storage) => {
-                        match storage.get(key: stmtId) {
-                            Optional.Some(v: val request) => {
-                                if request.expression != init {
-                                    return <Result.Err error=self.diagnosticAt(offset: nameStart, msg: "checked local has a foreign initializer occurrence", failureDomain: <FailureDomain.Internal />) />
-                                }
-                                try self.prepareCheckedInitializer(request: request)
-                                // Publish at the checked operation's execution position
-                                // so deferred consumers cannot reorder its diagnostics.
-                                try self.publishCheckedLocalStorage(stmtId: stmtId, request: request)
-                                return <Result.Ok value=() />
-                            }
-                            Optional.None => {}
-                        }
-                        try self.scanExprInsts(exprId: init)
-                        val facts = try self.preparedBodyFacts(bodyId: self.cur.bodyId, globalInitializerTarget: self.cur.globalInitializerTarget)
-                        val completion = try self.semanticStmtCompletionInOwner(stmtId: stmtId, owner: facts)
-                        if !completion.execution.normal() { return <Result.Ok value=() /> }
-                        return <Result.Err error=self.diagnosticAt(offset: nameStart, msg: "normally completing local has no checked Mid storage", failureDomain: <FailureDomain.Internal />) />
-                    }
-                    Optional.None => {}
-                }
                 try self.scanExprInsts(exprId: init)
+                if self.cur.checkedLocalStorage.isSome() {
+                    val facts = try self.preparedBodyFacts(bodyId: self.cur.bodyId, globalInitializerTarget: self.cur.globalInitializerTarget)
+                    val completion = try self.semanticStmtCompletionInOwner(stmtId: stmtId, owner: facts)
+                    if !completion.execution.normal() { return <Result.Ok value=() /> }
+                    return <Result.Err error=self.diagnosticAt(offset: nameStart, msg: "normally completing local has no checked Mid storage", failureDomain: <FailureDomain.Internal />) />
+                }
                 val legacy = try self.scanLocalDeclarationType(stmtId: stmtId, tyStart: tyStart, tyLen: tyLen, tyIsArray: tyIsArray, ty: ty, init: init, annotationOccurrence: annotationOccurrence)
                 try self.finalizeStorageConversion(stmtId: stmtId, exprId: init, targetTerm: legacy.ty)
                 self.addLocal(nameStart: nameStart, nameLen: nameLen, tyStart: legacy.start, tyLen: legacy.len, isArray: legacy.arr, ty: legacy.ty, isInout: false, isMut: mutable, owned: true)
@@ -7274,6 +7257,23 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
+    inout fn prepareStatementInsts(stmtId: U64) -> Result[(), CompileDiagnostic] {
+        match self.cur.checkedLocalStorage {
+            Optional.Some(v: val storage) => {
+                match storage.get(key: stmtId) {
+                    Optional.Some(v: val request) => {
+                        try self.prepareCheckedInitializer(request: request)
+                        try self.publishCheckedLocalStorage(stmtId: stmtId, request: request)
+                        return <Result.Ok value=() />
+                    }
+                    Optional.None => {}
+                }
+            }
+            Optional.None => {}
+        }
+        return self.scanStmtInsts(stmtId: stmtId)
+    }
+
     inout fn scanBlockInsts(blkId: U64) -> Result[(), CompileDiagnostic] {
         val owner: Optional[PreparedSemanticFacts] = if self.cur.bodyId != 0U64 && self.blockStmtCount(blkId: blkId) != 0U64 {
             val source = try self.bodySourceOwner(bodyId: self.cur.bodyId, globalInitializerTarget: self.cur.globalInitializerTarget)
@@ -7292,7 +7292,7 @@ pub impl Comp {
                             }
                             val mark = self.scopeMark()
                             for index in 0U64..<range.length {
-                                try self.scanStmtInsts(stmtId: self.arena.blockStmtPool[range.start + index])
+                                try self.prepareStatementInsts(stmtId: self.arena.blockStmtPool[range.start + index])
                             }
                             self.popLocals(mark: mark)
                             return <Result.Ok value=() />
@@ -7311,7 +7311,7 @@ pub impl Comp {
                 Optional.Some(v: val prepared) => { give try self.semanticStmtCompletionInOwner(stmtId: statement, owner: prepared) }
                 Optional.None => { give self.stmtCompletion(stmtId: statement) }
             }
-            try self.scanStmtInsts(stmtId: statement)
+            try self.prepareStatementInsts(stmtId: statement)
             if !completion.execution.normal() { break }
             i += 1
         }
