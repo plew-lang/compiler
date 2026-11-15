@@ -108,3 +108,7 @@ Ordinary local initialization now retains its checked source term or selected re
 **2026-11-15T13:32:57Z**
 
 Direct free-call initializers now prepare the result producer from the checked storage recipe using the exact CallSiteKey and source occurrence. The producer consumes retained arguments in the prior order, retaining reachability, instance demand and writeback. The outer call no longer goes through the expression scanner; arguments and other initializer kinds retain their prior route. Nine lazy controls passed; same-source AOT LLVM matched bbface3ac6c9b586828437ecde661b487e599849cd38e3a2f39bdce23fecec32. Remaining: receiver/operator/dynamic producers, nesting and first diagnostic ordering, missing/foreign descriptor controls and optimized timing.
+
+**2026-11-15T13:38:09Z**
+
+Pass the exact template index retained by checked initialization into method, dynamic, operator and subscript finalization. Preserve direct free-call preparation and receiver/evidence and argument ordering. The typed index replaces expression-based selection lookup, while operand traversal and preparation order still depend on the residual walk. Ten targeted lazy controls passed and full same-source AOT LLVM matched b58f859a7d2b9f246adcbc0026c796ee332eb73a7ef4d18f43a8ed58239a4d8e. Next move operator and nested call operands to selected dependency inputs and verify the final scheduling, diagnostic and timing requirements.

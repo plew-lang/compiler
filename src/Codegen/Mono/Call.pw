@@ -1527,8 +1527,7 @@ pub impl Comp {
     // Operators are source-level calls to their selected associated witnesses.
     // The CallTemplate is the sole semantic input; Expr remains only a backend
     // navigation anchor after this final descriptor is published.
-    inout fn recordBodyOperatorCallee(exprId: U64) -> Result[(), CompileDiagnostic] {
-        val template: CallTemplate = (try self.callTemplateForCurrentBody(exprId: exprId))
+    inout fn recordBodyOperatorCallee(exprId: U64, template: CallTemplate) -> Result[(), CompileDiagnostic] {
         mut val op: I64 = 0
         mut val operands: Array[CallArgumentSource] = []
         mut val resolution: OperatorSelection = <OperatorSelection.Pending />
@@ -6471,7 +6470,16 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
+    inout fn finalizationCallTemplate(exprId: U64, selected: U64) -> Result[CallTemplate, CompileDiagnostic] {
+        if selected != 0U64 { return <Result.Ok value=self.callTemplateAt(index: selected - 1U64) /> }
+        return self.callTemplateForCurrentBody(exprId: exprId)
+    }
+
     inout fn scanExprInsts(exprId: U64) -> Result[(), CompileDiagnostic] {
+        return self.scanExprInstsWithTemplate(exprId: exprId, selected: 0U64)
+    }
+
+    inout fn scanExprInstsWithTemplate(exprId: U64, selected: U64) -> Result[(), CompileDiagnostic] {
         if self.tracePhases {
             self.traceExprInstScans += 1U64
             tracePhaseProgress(c: inout self, label: "finalize-callables:expression", count: self.traceExprInstScans, stride: 256U64)
@@ -6510,17 +6518,17 @@ pub impl Comp {
                 // `!` is a primitive Bool operation, but Mono must still record
                 // its explicit no-user-callable result so LLVM never confuses it
                 // with an absent finalization entry.
-                try self.recordBodyOperatorCallee(exprId: exprId)
+                try self.recordBodyOperatorCallee(exprId: exprId, template: try self.finalizationCallTemplate(exprId: exprId, selected: selected))
             }
             Expr.Binary(val op, val lhs, val rhs) => {
                 try self.scanExprInsts(exprId: lhs)
                 try self.scanExprInsts(exprId: rhs)
                 if op != opAnd() && op != opOr() {
-                    try self.recordBodyOperatorCallee(exprId: exprId)
+                    try self.recordBodyOperatorCallee(exprId: exprId, template: try self.finalizationCallTemplate(exprId: exprId, selected: selected))
                 }
             }
             Expr.Call(nameStart: _, nameLen: _, val args) => {
-                val template = try self.callTemplateForCurrentBody(exprId: exprId)
+                val template = try self.finalizationCallTemplate(exprId: exprId, selected: selected)
                 try self.scanSelectedCallArguments(template: template, authored: args)
                 try self.registerCallInst(id: exprId, finalIdx: (try self.resolveBodyCallee(exprId: exprId, template: template, authoredFreeCall: true)))
                 try self.finalizeAccessWriteFacets(parentExpr: exprId)
@@ -6530,7 +6538,7 @@ pub impl Comp {
                 if source.traitInstance.owner != 0U64 && self.assocRecvName(recv: recv).nameLen == 0U64 {
                     (try self.replayFinalTraitValueView(exprId: exprId, source: source))
                 }
-                val template = try self.callTemplateForCurrentBody(exprId: exprId)
+                val template = try self.finalizationCallTemplate(exprId: exprId, selected: selected)
                 try self.scanSelectedCallArguments(template: template, authored: args)
                 try self.registerMethodInst(callId: exprId, finalIdx: (try self.resolveBodyCallee(exprId: exprId, template: template)))
                 try self.finalizeAccessWriteFacets(parentExpr: exprId)
@@ -6557,7 +6565,7 @@ pub impl Comp {
                 }
             }
             Expr.Method(val recv, nameStart: _, nameLen: _, val args) => {
-                val template = try self.callTemplateForCurrentBody(exprId: exprId)
+                val template = try self.finalizationCallTemplate(exprId: exprId, selected: selected)
                 if self.authoredExpressionTypeSlots.contains(key: exprId) {
                     val bodyId = self.currentBodyInstanceId()
                     val written = self.syntheticCallReceiverTerm(exprId: exprId, fallback: 0U64)
@@ -6576,15 +6584,15 @@ pub impl Comp {
                 // frozen choice to the method-shaped execution form consumed
                 // by the existing call ABI; no type/name lookup is allowed
                 // after CallTemplates close.
-                val template: CallTemplate = (try self.callTemplateForCurrentBody(exprId: exprId))
-                mut val selected: U64 = self.arena.functionCount()
+                val template: CallTemplate = (try self.finalizationCallTemplate(exprId: exprId, selected: selected))
+                mut val callee: U64 = self.arena.functionCount()
                 mut val selectedName: Bind = self.kwSpan(kw: "index", kwLen: 5U64)
                 mut val hasSelectedCall: Bool = false
                 match template.kind {
-                    CallTemplateKind.Direct(callee: val callee, receiver: _, args: _, calleeTypeArgs: _, proofId: _) => {
-                        selected = callee
-                        if selected < self.arena.functionCount() {
-                            selectedName = <Bind nameStart=self.arena.functionAt(index: selected).nameStart nameLen=self.arena.functionAt(index: selected).nameLen fieldStart=self.arena.functionAt(index: selected).nameStart fieldLen=self.arena.functionAt(index: selected).nameLen />
+                    CallTemplateKind.Direct(callee: val direct, receiver: _, args: _, calleeTypeArgs: _, proofId: _) => {
+                        callee = direct
+                        if callee < self.arena.functionCount() {
+                            selectedName = <Bind nameStart=self.arena.functionAt(index: callee).nameStart nameLen=self.arena.functionAt(index: callee).nameLen fieldStart=self.arena.functionAt(index: callee).nameStart fieldLen=self.arena.functionAt(index: callee).nameLen />
                             hasSelectedCall = true
                         }
                     }
@@ -6600,8 +6608,7 @@ pub impl Comp {
                     val label: Bind = self.kwSpan(kw: "key", kwLen: 3U64)
                     val args: ArgRange = self.pushArgs(args: [<Arg expr=index isInout=false labelStart=label.nameStart labelLen=label.nameLen hasLabel=true />])
                     self.arena.exprs.set(i: exprId, value: <Expr.Method recv=base nameStart=selectedName.nameStart nameLen=selectedName.nameLen args=args />)
-                    try self.scanExprInsts(exprId: exprId)
-                    return <Result.Ok value=() />
+                    return self.scanExprInstsWithTemplate(exprId: exprId, selected: selected)
                 }
                 try self.scanExprInsts(exprId: base)
                 try self.scanExprInsts(exprId: index)
@@ -6963,18 +6970,18 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
-    // For a direct free-call initializer the checked recipe owns the call
-    // operation. The residual expression walk is only needed for its arguments.
-    inout fn prepareCheckedInitializerCall(request: CheckedLocalStorageRequest) -> Result[Bool, CompileDiagnostic] {
+    // The checked initialization supplies the selected call template. The
+    // expression walk still prepares operands and replays receiver evidence.
+    inout fn prepareCheckedInitializer(request: CheckedLocalStorageRequest) -> Result[(), CompileDiagnostic] {
         val recipeId = match request.valueType {
             RecordedStorageValueType.Recipe(id: val recipe) => recipe
-            RecordedStorageValueType.Term(ref: _) => { return <Result.Ok value=false /> }
+            RecordedStorageValueType.Term(ref: _) => { return self.scanExprInsts(exprId: request.expression) }
         }
         if recipeId == 0U64 || recipeId > self.arena.semanticTypeRecipes.count() {
             return <Result.Err error=self.diagnosticAt(offset: request.declarationTarget, msg: "checked local has an invalid initializer recipe", failureDomain: <FailureDomain.Internal />) />
         }
         val recipe = self.arena.semanticTypeRecipes[recipeId - 1U64]
-        if recipe.kind != 2U64 { return <Result.Ok value=false /> }
+        if recipe.kind != 2U64 { return self.scanExprInsts(exprId: request.expression) }
         val index = self.callTemplateIndex(siteKey: recipe.callSite)
         if index >= self.callTemplateCount() {
             return <Result.Err error=self.diagnosticAt(offset: request.declarationTarget, msg: "initializer recipe has no selected call", failureDomain: <FailureDomain.Internal />) />
@@ -6986,23 +6993,23 @@ pub impl Comp {
         match template.kind {
             CallTemplateKind.Direct(callee: val callee, receiver: val receiver, args: val arguments, calleeTypeArgs: _, proofId: _) => {
                 match receiver {
-                    CallTemplateReceiver.None => {}
-                    _ => { return <Result.Ok value=false /> }
-                }
-                if callee < self.arena.functionCount() {
-                    val function = self.arena.functionAt(index: callee)
-                    if !function.hasRecv && !function.isAssoc && !function.isFactory {
-                        try self.scanCheckedCallArgumentRows(range: arguments, site: recipe.callSite)
-                        val selected = try self.resolveBodyCallee(exprId: request.expression, template: template, authoredFreeCall: true)
-                        try self.registerCallInst(id: request.expression, finalIdx: selected)
-                        try self.finalizeAccessWriteFacets(parentExpr: request.expression)
-                        return <Result.Ok value=true />
+                    CallTemplateReceiver.None => {
+                        if callee < self.arena.functionCount() {
+                            val function = self.arena.functionAt(index: callee)
+                            if !function.hasRecv && !function.isAssoc && !function.isFactory {
+                                try self.scanCheckedCallArgumentRows(range: arguments, site: recipe.callSite)
+                                val selected = try self.resolveBodyCallee(exprId: request.expression, template: template, authoredFreeCall: true)
+                                try self.registerCallInst(id: request.expression, finalIdx: selected)
+                                return self.finalizeAccessWriteFacets(parentExpr: request.expression)
+                            }
+                        }
                     }
+                    _ => {}
                 }
             }
             _ => {}
         }
-        return <Result.Ok value=false />
+        return self.scanExprInstsWithTemplate(exprId: request.expression, selected: index + 1U64)
     }
 
     inout fn scanStmtInsts(stmtId: U64) -> Result[(), CompileDiagnostic] {
@@ -7012,10 +7019,7 @@ pub impl Comp {
                     Optional.Some(v: val storage) => {
                         match storage.get(key: stmtId) {
                             Optional.Some(v: val request) => {
-                                if !(try self.prepareCheckedInitializerCall(request: request)) {
-                                    try self.scanExprInsts(exprId: init)
-                                }
-                                return <Result.Ok value=() />
+                                return self.prepareCheckedInitializer(request: request)
                             }
                             Optional.None => {}
                         }
