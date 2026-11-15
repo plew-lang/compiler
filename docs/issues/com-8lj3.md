@@ -200,3 +200,7 @@ Checked closure captures read the enclosing body storage descriptor, retaining b
 **2026-11-15T16:23:20Z**
 
 The block walker now dispatches a checked initialization request directly in execution order, bypassing its legacy Let handler. The session validates source statement and initializer identity once per source function before caching requests. Seven lazy fixtures and full same-source AOT LLVM matched. The request dispatch adds a lookup on other statements of routed bodies; measure this increment before making a speed claim. The non-call initializer operand fallback still walks source.
+
+**2026-11-15T16:26:27Z**
+
+Restrict the Mid request dispatch lookup to Let statements. The per-source-function validation remains, and the checked branch still uses only the saved request to prepare and publish its initializer. This removes the additional lookup from all other statements by construction. Seven lazy controls and full same-source AOT LLVM matched. Diagnostic carrier only; no speed claim.
