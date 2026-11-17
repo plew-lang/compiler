@@ -3010,6 +3010,12 @@ impl Comp {
         val node = self.sourceTypeUses.recipeAt(id: recipe)
         if node.isNone() { return [] }
         mut val authored = node.unwrap()
+        if self.bareInferenceParamId(ref: pattern) == binder {
+            if self.typeRefEq(a: actual, b: substituted) {
+                return self.authoredResultExtensionSources(occurrence: authored.occurrence)
+            }
+            return []
+        }
         if authored.occurrence != 0U64 && self.projectedExtensionOrigins.contains(key: authored.occurrence) {
             val output = self.authoredResultTypeOccurrence(occurrence: authored.occurrence)
             if output == 0U64 { return [] }
@@ -3018,12 +3024,6 @@ impl Comp {
             val selected = self.sourceTypeUses.recipeAt(id: occurrence.unwrap().recipe)
             if selected.isNone() { return [] }
             authored = selected.unwrap()
-        }
-        if self.bareInferenceParamId(ref: pattern) == binder {
-            if self.typeRefEq(a: actual, b: substituted) {
-                return self.authoredResultExtensionSources(occurrence: authored.occurrence)
-            }
-            return []
         }
         if !self.typeTermRefSameHead(a: pattern, b: actual) || !self.typeTermRefSameHead(a: authored.term, b: actual) { return [] }
         val count = self.typeTermRefChildCount(ref: pattern)

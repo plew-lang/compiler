@@ -1099,7 +1099,8 @@ impl Comp {
                             val outputSelector = outputSelectors[index]
                             if outputSelector.traitInstance.owner != 0U64 {
                                 val outputProof = try self.signatureOccurrenceView(proofs: proofs, occurrence: node.occurrence, selector: outputSelector, offset: occurrence.site, projectionOutput: true)
-                                val subject = self.authoredTraitViewSubject(ref: term)
+                                val viewedOutput = self.typeRefWithAddedViewSources(ref: term, additions: instantiated)
+                                val subject = self.authoredTraitViewSubject(ref: viewedOutput)
                                 try self.readAuthoredOccurrenceProof(saved: outputProof, receiver: subject, arguments: instantiated[index].traitInstance.positionalArgs, environment: environment, offset: occurrence.site, normalizations: proofEquations, context: context)
                             } else {
                                 try self.requireAuthoredExtensionView(id: node.occurrence, source: outputSelector, offset: occurrence.site, projectionOutput: true)
@@ -2888,6 +2889,7 @@ impl Comp {
                             try self.checkStaticProofEvidence(proof: viewProof, offset: occurrence.site, assumptions: assumptions)
                             try self.requireDeclarationProofSupport(dependencies: (try self.scopedProofDependencies(proof: viewProof, scope: scope, offset: occurrence.site, normalizations: equations)), offset: occurrence.site)
                             proofs.append(<AuthoredTypeViewProof occurrence=id projectionOutput=true receiver=outputSubject selector=outputSources[index] proof=self.freezeStaticConformanceProof(proof: viewProof) admittedArguments=view.traitInstance.positionalArgs />)
+                            self.authoredTraitSelectors[id] = view
                         }
                     }
                 }

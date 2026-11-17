@@ -255,11 +255,20 @@ impl Comp {
 
     inout fn matchRecordedAuthoredTraitSelector(occurrence: U64, term: U64) -> Optional[ResolvedViewSource] {
         if occurrence == 0U64 || self.arena.typeViewSourceCount(ref: term) == 0U64 { return <Optional.None /> }
-        val selected = self.authoredResultTypeOccurrence(occurrence: occurrence)
-        match self.authoredTraitSelectors.get(key: selected) {
-            Optional.Some(v: val selector) => { return self.matchRecordedTraitSelector(selected: selector, receiver: term) }
-            Optional.None => { return <Optional.None /> }
+        mut val current = occurrence
+        mut val depth = 0U64
+        while current != 0U64 && depth < 64U64 {
+            match self.authoredTraitSelectors.get(key: current) {
+                Optional.Some(v: val selector) => {
+                    val matched = self.matchRecordedTraitSelector(selected: selector, receiver: term)
+                    if matched.isSome() { return matched }
+                }
+                Optional.None => {}
+            }
+            current = self.projectedExtensionOrigins.getOr(key: current, fallback: 0U64)
+            depth += 1U64
         }
+        return <Optional.None />
     }
 
     fn recordedExpressionTypeOrigin(exprId: U64) -> Optional[SourceExpressionTypeOrigin] {
@@ -363,7 +372,27 @@ impl Comp {
     }
 
     fn authoredResultExtensionSources(occurrence: U64) -> Array[SourceExtensionViewProof] {
-        return self.authoredExtensionViews.getOr(key: self.authoredResultTypeOccurrence(occurrence: occurrence), fallback: [])
+        mut val current = occurrence
+        mut val depth = 0U64
+        mut val retained: Array[SourceExtensionViewProof] = []
+        while current != 0U64 && depth < 64U64 {
+            val authored = self.sourceTypeUses.useAt(index: current - 1U64)
+            if authored.isNone() { return [] }
+            val term = self.arena.typeTermAt(index: authored.unwrap().term)
+            val proofs = self.authoredExtensionViews.getOr(key: current, fallback: [])
+            if !term.isProjection() {
+                if retained.count() == 0U64 { return proofs }
+                for proof in proofs { retained.append(proof) }
+                if current != 0U64 { return [] }
+        return retained
+            }
+            for proof in proofs {
+                if proof.projectionOutput { retained.append(proof) }
+            }
+            current = self.projectedExtensionOrigins.getOr(key: current, fallback: 0U64)
+            depth += 1U64
+        }
+        return retained
     }
 
     inout fn recordExpressionExtensionSources(exprId: U64, proofs: Array[SourceExtensionViewProof]) {

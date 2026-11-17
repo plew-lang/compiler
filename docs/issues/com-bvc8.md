@@ -345,3 +345,20 @@ a projection before following the associated binding's occurrence.
 Structural type information alone allowed the new runtime case to pass;
 this is not evidence that candidates consumed the retained view proof.
 Follow and verify that consumer boundary before closing.
+
+## Retained View Proofs at Method Candidate Collection
+
+Result evidence now follows the associated-output occurrence chain without
+discarding proofs attached to the output itself. Extension lookup keeps only
+output-role proofs at projection nodes. The trait selector store publishes the
+admitted output selector; consumers still require an exact match to the
+result type. A direct inferred-binder substitution uses the original authored
+occurrence before following the selected output's structural recipe.
+
+An instrumented native compile of associated_output_extension_view observed
+two consumptions of a projection-output extension proof at candidate
+collection, then the generated program matched both expected lines. The
+trait-view fixture now also invokes a method directly on the forwarded
+output and succeeds in JIT. The two output-view fixtures and the existing
+projected-conformance extension case passed JIT. Temporary instrumentation
+was removed, and the final source passed compiler check.

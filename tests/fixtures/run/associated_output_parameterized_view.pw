@@ -14,6 +14,7 @@ trait Source[K] {
 }
 pub impl Source[I64] {
     fn read(value: Item#Mark[Bool]) -> I64 { return value.number() }
+    fn forward(value: Item#Mark[Bool]) -> Item#Mark[Bool] { return value }
 }
 
 struct Provider {}
@@ -21,5 +22,8 @@ pub impl Provider { factory }
 impl Provider as Source[I64] { type Item = Value }
 
 fn main() {
-    print(<Provider />.read(value: <Value />#Mark[Bool]))
+    val receiver = <Provider />
+    val value = <Value />#Mark[Bool]
+    print(receiver.read(value: value))
+    print(receiver.forward(value: value).number())
 }
