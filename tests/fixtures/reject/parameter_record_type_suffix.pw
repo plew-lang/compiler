@@ -1,0 +1,2 @@
+fn inspect(value: (x: I64)#Projection.First, other: I64) {}
+fn main() {}

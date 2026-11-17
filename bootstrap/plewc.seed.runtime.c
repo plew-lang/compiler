@@ -2,6 +2,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
+#include <stddef.h>
+#include <limits.h>
 #include <sys/wait.h>
 void plew_exit(long long code){ exit((int)code); }
 void plew_write_raw(const char* d, long long n){ fwrite(d,1,(size_t)n,stdout); }
@@ -13,7 +15,7 @@ void plew_print_f64(double v){ printf("%g\n", v); }
 void plew_print_u64(unsigned long long v){ printf("%llu\n", v); }
 void plew_print_bool(long long v){ fputs(v?"1":"0",stdout); fputc('\n',stdout); }
 long long plew_str_eq(const char* a, long long na, const char* b, long long nb){ if(na!=nb) return 0; for(long long i=0;i<na;i++) if(a[i]!=b[i]) return 0; return 1; }
-void* plew_rawbuf_alloc(long long elemSize, long long cap);
+void* plew_rawbuf_alloc(unsigned long long elemSize, unsigned long long cap);
 void plew_rawbuf_set_count(void* p, long long n);
 static char* plew_str_buf(long long n){ return (char*)plew_rawbuf_alloc(1, n+1); }
 static char* plew_str_empty(void){ static char* e=0; if(!e){ e=(char*)plew_rawbuf_alloc(1,1); e[0]=0; ((long long*)e)[-1]=(long long)1<<62; } return e; }
@@ -23,11 +25,17 @@ char* plew_readStdin(void){ size_t cap=4096,len=0; char* buf=(char*)malloc(cap);
 unsigned char* plew_cString(char* d, long long n){ unsigned char* b=(unsigned char*)malloc((size_t)n+1); if(n) memcpy(b,d,(size_t)n); b[n]=0; return b; }
 void plew_cFree(unsigned char* p){ free(p); }
 char* plew_stringFromCString(unsigned char* p){ if(!p) return plew_str_empty(); size_t n=strlen((const char*)p); char* b=plew_str_buf((long long)n); memcpy(b,p,n); b[n]=0; plew_rawbuf_set_count(b,(long long)n); return b; }
-void* plew_rawbuf_alloc(long long elemSize, long long cap){ long long* h=(long long*)malloc(3*sizeof(long long)+(elemSize*cap ? (size_t)(elemSize*cap) : 1)); h[0]=cap; h[1]=0; h[2]=1; return (void*)(h+3); }
+__attribute__((noreturn)) static void plew_buffer_capacity_panic(void){ plew_panic_raw("buffer capacity overflow",24); }
+static unsigned long long plew_buffer_capacity_limit(unsigned long long elemSize){ size_t limit=PTRDIFF_MAX; if(limit>(unsigned long long)LLONG_MAX) limit=LLONG_MAX; size_t payload=limit-3*sizeof(long long); return elemSize ? payload/elemSize : (unsigned long long)LLONG_MAX; }
+static unsigned long long plew_buffer_required(unsigned long long count, unsigned long long additional){ if(count>(unsigned long long)LLONG_MAX || additional>(unsigned long long)LLONG_MAX-count) plew_buffer_capacity_panic(); return count+additional; }
+static size_t plew_buffer_allocation_size(unsigned long long elemSize, unsigned long long cap){ if(cap>(unsigned long long)LLONG_MAX || cap>plew_buffer_capacity_limit(elemSize)) plew_buffer_capacity_panic(); size_t payload=(size_t)(elemSize*cap); return 3*sizeof(long long)+(payload ? payload : 1); }
+void* plew_rawbuf_alloc(unsigned long long elemSize, unsigned long long cap){ size_t bytes=plew_buffer_allocation_size(elemSize,cap); long long* h=(long long*)malloc(bytes); if(!h) plew_panic_raw("buffer allocation failed",24); h[0]=(long long)cap; h[1]=0; h[2]=1; return (void*)(h+3); }
 long long plew_rawbuf_cap(void* p){ return p?((long long*)p)[-3]:0; }
 long long plew_rawbuf_count(void* p){ return p?((long long*)p)[-2]:0; }
 void plew_rawbuf_set_count(void* p, long long n){ if(p) ((long long*)p)[-2]=n; }
-void* plew_arr_grow(void* data, long long elemSize, long long count){ long long cap=plew_rawbuf_cap(data); if(count<cap) return data; long long nc=cap<8?8:cap*2; void* nd=plew_rawbuf_alloc(elemSize,nc); if(count){ memcpy(nd,data,(size_t)(elemSize*count)); ((long long*)nd)[-2]=((long long*)data)[-2]; } if(data){ if(((long long*)data)[-1]<=1) free((long long*)data-3); else ((long long*)data)[-1]--; } return nd; }
+static unsigned long long plew_buffer_growth(unsigned long long elemSize, unsigned long long cap, unsigned long long required){ unsigned long long limit=plew_buffer_capacity_limit(elemSize); if(required>limit) plew_buffer_capacity_panic(); unsigned long long grown=cap<8 ? 8 : (cap<=limit/2 ? cap*2 : required); return grown>=required && grown<=limit ? grown : required; }
+static void* plew_arr_reallocate(void* data, unsigned long long elemSize, unsigned long long count, unsigned long long capacity){ void* nd=plew_rawbuf_alloc(elemSize,capacity); if(count){ memcpy(nd,data,(size_t)(elemSize*count)); ((long long*)nd)[-2]=(long long)count; } if(data){ if(((long long*)data)[-1]<=1) free((long long*)data-3); else ((long long*)data)[-1]--; } return nd; }
+void* plew_arr_prepare(void* data, unsigned long long elemSize, unsigned long long additional, long long geometric){ unsigned long long count=(unsigned long long)plew_rawbuf_count(data), cap=(unsigned long long)plew_rawbuf_cap(data), required=plew_buffer_required(count,additional); if(required>plew_buffer_capacity_limit(elemSize)) plew_buffer_capacity_panic(); int shared=data && ((long long*)data)[-1]>1; if(required<=cap && !shared) return data; unsigned long long capacity=cap>=required ? cap : required; if(required>cap && geometric) capacity=plew_buffer_growth(elemSize,cap,required); return plew_arr_reallocate(data,elemSize,count,capacity); }
 void* plew_arr_copy(void* data, long long elemSize, long long count){ void* nd=plew_rawbuf_alloc(elemSize,count<1?1:count); if(count){ memcpy(nd,data,(size_t)(elemSize*count)); ((long long*)nd)[-2]=((long long*)data)[-2]; } return nd; }
 void plew_rawbuf_retain(void* p){ if(p) ((long long*)p)[-1]++; }
 long long plew_rawbuf_release(void* p){ if(!p) return 0; return --((long long*)p)[-1]; }
@@ -38,8 +46,6 @@ void* plew_ref_upgrade(void* p){ if(p && ((long long*)p)[-1]>0){ ((long long*)p)
 long long plew_ref_strong(void* p){ return p ? ((long long*)p)[-1] : 0; }
 void plew_ref_dispose_strong(void* p){ if(!p) return; if(((long long*)p)[-2]==0) free((long long*)p-3); }
 void plew_weak_release(void* p){ if(!p) return; if(--((long long*)p)[-2]==0 && ((long long*)p)[-1]==0) free((long long*)p-3); }
-void* plew_arr_cow(void* data, long long elemSize, long long count){ if(data && ((long long*)data)[-1]>1){ void* nd=plew_rawbuf_alloc(elemSize,count<1?1:count); if(count){ memcpy(nd,data,(size_t)(elemSize*count)); ((long long*)nd)[-2]=((long long*)data)[-2]; } ((long long*)data)[-1]--; return nd; } return data; }
-void* plew_arr_reserve(void* data, long long elemSize, long long mincap){ long long cap=plew_rawbuf_cap(data); if(cap>=mincap) return data; void* nd=plew_rawbuf_alloc(elemSize,mincap); long long cnt=plew_rawbuf_count(data); if(cnt){ memcpy(nd,data,(size_t)(elemSize*cnt)); ((long long*)nd)[-2]=cnt; } if(data){ if(((long long*)data)[-1]<=1) free((long long*)data-3); else ((long long*)data)[-1]--; } return nd; }
 void plew_rawbuf_move(void* data, long long elemSize, long long dst, long long src, long long n){ if(n>0) memmove((char*)data+(size_t)(elemSize*dst),(char*)data+(size_t)(elemSize*src),(size_t)(elemSize*n)); }
 void plew_bounds(long long i, long long n){ if(i<0||i>=n) plew_panic_raw("index out of bounds",19); }
 void plew_inout_overlap(void* a, void* b){ if(a&&a==b) plew_panic_raw("overlapping inout: two inout positions of one call overlap in the same shared cell",82); }
