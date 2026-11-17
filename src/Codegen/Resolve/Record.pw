@@ -383,8 +383,7 @@ impl Comp {
             if !term.isProjection() {
                 if retained.count() == 0U64 { return proofs }
                 for proof in proofs { retained.append(proof) }
-                if current != 0U64 { return [] }
-        return retained
+                return retained
             }
             for proof in proofs {
                 if proof.projectionOutput { retained.append(proof) }
@@ -392,6 +391,7 @@ impl Comp {
             current = self.projectedExtensionOrigins.getOr(key: current, fallback: 0U64)
             depth += 1U64
         }
+        if current != 0U64 { return [] }
         return retained
     }
 
