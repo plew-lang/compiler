@@ -6,6 +6,7 @@ use ./SourceTypeUses only { AuthoredFunctionSignature }
 
 pub struct AuthoredTypeViewProof {
     pub val occurrence: U64
+    pub val projectionOutput: Bool = false
     pub val receiver: U64
     pub val selector: ResolvedViewSource
     pub val proof: U64

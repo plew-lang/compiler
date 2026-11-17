@@ -1,0 +1,25 @@
+use @Std/Io only { print }
+
+trait Mark[K] {
+    fn number() -> I64
+}
+
+struct Value {}
+impl Value as Mark[I64] {
+    fn number() -> I64 { return 42I64 }
+}
+
+trait Source {
+    type Item
+}
+pub impl Source {
+    fn read(value: Item#Mark[I64]) -> I64 { return 42I64 }
+}
+
+struct Provider {}
+pub impl Provider { factory }
+impl Provider as Source { type Item = Value }
+
+fn main() {
+    print(42I64)
+}

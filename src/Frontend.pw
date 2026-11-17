@@ -504,6 +504,7 @@ struct ExtensionApplicability {
 impl ExtensionApplicability { factory }
 
 struct SourceExtensionViewProof {
+    val projectionOutput: Bool = false
     val source: ResolvedViewSource
     val receiver: U64
     val applicability: ExtensionApplicability

@@ -306,3 +306,20 @@ the reader must consume that proof against the output and retain the
 instantiated view on it. The unused/no-premise declaration must reject
 at admission, with a source diagnostic. The existing receiver proof
 paths remain preservation controls.
+
+## Output View Evidence Increment
+
+Lowering records output selector argument recipes after the receiver and the
+projection trait arguments. Admission saves output proofs with a distinct
+subject role, backed by the projection's selected prerequisite, and places
+a source diagnostic on failure. The reader uses the projection argument
+range and replays the output proof against the instantiated output before
+attaching its view.
+
+The diagnostic candidate rejects an unused declaration without the required
+associated-type premise with the expected spec/09 diagnostic. A provided
+method with Source[I64] and Item#Mark[Bool] succeeds in check, JIT and native
+execution and prints 42. The edited compiler source passes check; the final
+extension-role hardening was source-checked after that diagnostic build.
+Additional extension result-use coverage, broader preservation controls,
+fresh optimized gates, and independent review remain required.

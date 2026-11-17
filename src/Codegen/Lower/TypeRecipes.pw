@@ -127,6 +127,7 @@ impl Comp {
                 children.append(self.sourceTypeUses.deriveRecipe(term: argument, children: [], labels: [], origin: <SourceTypeRecipeOrigin.LexicalParameter />))
             }
         }
+        try self.appendViewArgumentRecipes(ref: ref, sources: sources, children: inout children)
         return <Result.Ok value=children />
     }
 }

@@ -992,7 +992,7 @@ impl Comp {
                 index += 1U64
             }
         }
-        val sourceViews = if original.assocNameId == 0U64 { give self.viewSourcesWithArguments(ref: node.term, arguments: viewArguments) } else { give reads[0U64].views }
+        mut val sourceViews = if original.assocNameId == 0U64 { give self.viewSourcesWithArguments(ref: node.term, arguments: viewArguments) } else { give reads[0U64].views }
         mut val term = rebuilt
         if original.assocNameId == 0U64 {
             match self.typeTermHeadReplacement(ref: node.term, params: environment.params, values: environment.args, selfRef: environment.receiverRef, itemRef: 0U64) {
@@ -1028,7 +1028,7 @@ impl Comp {
                     val owner = if original.assocTraitDeclOffset != 0U64 { give original.assocTraitDeclOffset } else { give original.assocTraitStart }
                     mut val arguments: Array[U64] = []
                     index = 1U64
-                    while index < children.count() {
+                    while index <= original.assocTraitArgs.count() {
                         arguments.append(children[index])
                         index += 1U64
                     }
@@ -1040,7 +1040,9 @@ impl Comp {
                             arguments[index] = try self.replayProjectionNormalizations(ref: arguments[index], normalizations: lexicalEquations, offset: occurrence.site)
                         }
                     }
-                    val projected = self.rebuildProjectionTerm(source: original.projectionRebuildSource(), receiver: receiver, traitArgs: arguments)
+                    // The shared reconstruction already attached instantiated
+                    // output-view arguments after the projection arguments.
+                    val projected = self.rebuildProjectionTerm(source: self.arena.typeAt(index: rebuilt).projectionRebuildSource(), receiver: receiver, traitArgs: arguments)
                     term = projected
                     val proof = try self.readAuthoredOccurrenceProof(saved: saved, receiver: receiver, arguments: arguments, environment: environment, offset: occurrence.site, normalizations: proofEquations, context: context)
                     match context {
@@ -1063,7 +1065,7 @@ impl Comp {
                             val source = if requirement.isSome() {
                                 val bound = try self.staticProofBound(proof: proof, traitIdx: self.decls.traitIndexByOffset(offset: owner))
                                 if bound.subject == 0U64 { return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "associated binding projection lost its requirement subject", failureDomain: <FailureDomain.Internal />) /> }
-                                give self.rebuildProjectionTerm(source: original.projectionRebuildSource(), receiver: bound.subject, traitArgs: bound.constraint.key.positionalArgs)
+                                give self.rebuildProjectionTerm(source: self.arena.typeAt(index: projected).projectionRebuildSource(), receiver: bound.subject, traitArgs: bound.constraint.key.positionalArgs)
                             } else { give projected }
                             term = source
                             val output = try self.readSelectedProjectionOutput(proof: proof, traitOwner: owner, assocId: original.assocNameId, requirement: requirement)
@@ -1089,6 +1091,22 @@ impl Comp {
                         val outputEquations = try self.substituteSignatureEquations(equations: saved.outputEquations, environment: environment, offset: occurrence.site)
                         term = try self.replayProjectionNormalizations(ref: term, normalizations: outputEquations, offset: occurrence.site)
                     }
+                    val outputSelectors = self.arena.typeViewSources(ref: node.term)
+                    if outputSelectors.count() != 0U64 {
+                        val instantiated = self.arena.typeViewSources(ref: projected)
+                        for index in 0U64..<outputSelectors.count() {
+                            val outputSelector = outputSelectors[index]
+                            if outputSelector.traitInstance.owner != 0U64 {
+                                val outputProof = try self.signatureOccurrenceView(proofs: proofs, occurrence: node.occurrence, selector: outputSelector, offset: occurrence.site, projectionOutput: true)
+                                val subject = self.authoredTraitViewSubject(ref: term)
+                                try self.readAuthoredOccurrenceProof(saved: outputProof, receiver: subject, arguments: instantiated[index].traitInstance.positionalArgs, environment: environment, offset: occurrence.site, normalizations: proofEquations, context: context)
+                            } else {
+                                try self.requireAuthoredExtensionView(id: node.occurrence, source: outputSelector, offset: occurrence.site, projectionOutput: true)
+                            }
+                        }
+                        term = self.typeRefWithAddedViewSources(ref: term, additions: instantiated)
+                    }
+                    sourceViews = self.arena.typeViewSources(ref: term)
                 }
             }
             SourceTypeRecipeOrigin.ResultRepresentation => {
@@ -1104,9 +1122,9 @@ impl Comp {
         return <Result.Ok value=read />
     }
 
-    inout fn signatureOccurrenceView(proofs: Array[AuthoredTypeViewProof], occurrence: U64, selector: ResolvedViewSource, offset: U64) -> Result[AuthoredTypeViewProof, CompileDiagnostic] {
+    inout fn signatureOccurrenceView(proofs: Array[AuthoredTypeViewProof], occurrence: U64, selector: ResolvedViewSource, offset: U64, projectionOutput: Bool = false) -> Result[AuthoredTypeViewProof, CompileDiagnostic] {
         for saved in proofs {
-            if saved.occurrence == occurrence && self.semanticViewSourceEq(a: saved.selector, b: selector) { return <Result.Ok value=saved /> }
+            if saved.occurrence == occurrence && saved.projectionOutput == projectionOutput && self.semanticViewSourceEq(a: saved.selector, b: selector) { return <Result.Ok value=saved /> }
         }
         return <Result.Err error=self.diagnosticAt(offset: offset, msg: "signature view has no saved proof", failureDomain: <FailureDomain.Internal />) />
     }
@@ -1536,7 +1554,7 @@ impl Comp {
         for index in 0U64..<selection.proofs.count() {
             val proof = saved.proofs[index]
             val expected = selection.proofs[index]
-            if proof.proof != expected.proof || proof.occurrence != expected.occurrence || proof.receiver != expected.receiver || proof.lexicalEquations.count() != 0U64 || !self.semanticViewSourceEq(a: proof.selector, b: expected.selector) || !self.arena.hasStaticConformanceProof(id: proof.proof) {
+            if proof.proof != expected.proof || proof.occurrence != expected.occurrence || proof.projectionOutput != expected.projectionOutput || proof.receiver != expected.receiver || proof.lexicalEquations.count() != 0U64 || !self.semanticViewSourceEq(a: proof.selector, b: expected.selector) || !self.arena.hasStaticConformanceProof(id: proof.proof) {
                 return <Result.Err error=self.diagnosticAt(offset: offset, msg: "nominal annotation has a foreign saved conformance", failureDomain: <FailureDomain.Internal />) />
             }
         }
@@ -2706,7 +2724,7 @@ impl Comp {
     // Admit each source against only the sources established so far.
     // A trait selector can disambiguate the premise for an extension, and
     // an already applicable extension can establish the selector's trait.
-    inout fn admitTypeExtensionSources(subject: U64, sources: Array[ResolvedViewSource], assumptions: Array[DeclarationBoundRef], normalizations: Array[ProjectionNormalizationStep], selectedProjection: Optional[StaticConformanceProof], offset: U64) -> Result[Array[SourceExtensionViewProof], CompileDiagnostic] {
+    inout fn admitTypeExtensionSources(subject: U64, sources: Array[ResolvedViewSource], assumptions: Array[DeclarationBoundRef], normalizations: Array[ProjectionNormalizationStep], selectedProjection: Optional[StaticConformanceProof], offset: U64, projectionOutput: Bool = false) -> Result[Array[SourceExtensionViewProof], CompileDiagnostic] {
         try self.checkTraitSubjectViewCycles(sources: sources, offset: offset)
         mut val pending: Array[ResolvedViewSource] = []
         mut val traitSelector: Optional[ResolvedViewSource] = <Optional.None />
@@ -2723,7 +2741,7 @@ impl Comp {
             for source in pending {
                 match (try self.matchExtensionApplicability(extensionId: source.surfaceId, typeStart: 0U64, typeLen: 0U64, typeRef: receiver, assumptions: assumptions)) {
                     Optional.Some(v: val applicability) => {
-                        proofs.append(<SourceExtensionViewProof source=source receiver=receiver applicability=applicability />)
+                        proofs.append(<SourceExtensionViewProof projectionOutput=projectionOutput source=source receiver=receiver applicability=applicability />)
                         additions.append(source)
                     }
                     Optional.None => { remaining.append(source) }
@@ -2757,7 +2775,8 @@ impl Comp {
         val receiver = if type.assocNameId == 0U64 { give occurrence.term } else { give self.typeTermProjectionReceiver(t: type) }
         val selectors = try self.authoredTraitSelectors(type: type, receiver: receiver, site: occurrence.site)
         val sources = self.arena.typeViewSources(ref: receiver)
-        if selectors.count() == 0U64 && sources.count() == 0U64 { return <Result.Ok value=() /> }
+        val outputSources = if type.assocNameId != 0U64 { give self.arena.typeViewSources(ref: occurrence.term) } else { give [] }
+        if selectors.count() == 0U64 && sources.count() == 0U64 && outputSources.count() == 0U64 { return <Result.Ok value=() /> }
         val writtenSubject = if receiverRef != 0U64 { give self.groundTermInEnvironment(ref: receiver, params: [], values: [], selfRef: receiverRef) } else { give receiver }
         mut val context = equations
         for equation in receiverEquations { try self.appendRetainedProjectionEquation(step: equation, normalizations: inout context) }
@@ -2765,7 +2784,7 @@ impl Comp {
         val selectedProjection = if receiverOccurrence != 0U64 {
             give <Optional.Some v=(try self.retainedSignatureReceiverProjection(occurrence: receiverOccurrence, ref: receiver, proofs: proofs, offset: occurrence.site)) />
         } else { give <Optional.None /> }
-        val extensions = try self.admitTypeExtensionSources(subject: subject, sources: self.arena.typeViewSources(ref: subject), assumptions: assumptions, normalizations: context, selectedProjection: selectedProjection, offset: occurrence.site)
+        mut val extensions = try self.admitTypeExtensionSources(subject: subject, sources: self.arena.typeViewSources(ref: subject), assumptions: assumptions, normalizations: context, selectedProjection: selectedProjection, offset: occurrence.site)
         mut val outputOccurrence = 0U64
         for selector in selectors {
             if selector.traitInstance.owner != 0U64 {
@@ -2848,6 +2867,27 @@ impl Comp {
                         }
                     }
                     try self.appendRetainedProjectionEquation(step: <ProjectionNormalizationStep source=projected proof=frozen output=immediate />, normalizations: inout equations)
+                    if outputSources.count() != 0U64 {
+                        val outputSubject = self.typeRefWithoutOuterViews(ref: projected)
+                        val outputViews = self.arena.typeViewSources(ref: projected)
+                        val projectionProof = <Optional.Some v=proof />
+                        val outputExtensions = try self.admitTypeExtensionSources(subject: outputSubject, sources: outputViews, assumptions: assumptions, normalizations: equations, selectedProjection: projectionProof, offset: occurrence.site, projectionOutput: true)
+                        for extension in outputExtensions { extensions.append(extension) }
+                        mut val traitSelections = 0U64
+                        for view in outputViews {
+                            if view.traitInstance.owner != 0U64 { traitSelections += 1U64 }
+                        }
+                        if traitSelections > 1U64 { return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "a type view may select at most one trait source (spec/09)", failureDomain: <FailureDomain.Source />) /> }
+                        for index in 0U64..<outputViews.count() {
+                            val view = outputViews[index]
+                            if view.traitInstance.owner == 0U64 { continue }
+                            val target = self.authoredTraitViewSubject(ref: projected)
+                            val viewProof = try self.requireAuthoredViewProof(subject: target, instance: view.traitInstance, assumptions: assumptions, offset: view.writtenStart, selectedProjection: projectionProof, normalizations: equations)
+                            try self.checkStaticProofEvidence(proof: viewProof, offset: occurrence.site, assumptions: assumptions)
+                            try self.requireDeclarationProofSupport(dependencies: (try self.scopedProofDependencies(proof: viewProof, scope: scope, offset: occurrence.site, normalizations: equations)), offset: occurrence.site)
+                            proofs.append(<AuthoredTypeViewProof occurrence=id projectionOutput=true receiver=outputSubject selector=outputSources[index] proof=self.freezeStaticConformanceProof(proof: viewProof) admittedArguments=view.traitInstance.positionalArgs />)
+                        }
+                    }
                 }
                 proofs.append(<AuthoredTypeViewProof occurrence=id receiver=receiver selector=selector proof=frozen lexicalEquations=lexicalEquations outputEquations=outputEquations />)
                 if type.assocNameId == 0U64 {
@@ -2863,7 +2903,7 @@ impl Comp {
         }
         // The lexical recipe owns declaration view admission. The later
         // compatibility sweep has no access to these premises or equations.
-        if sources.count() != 0U64 {
+        if sources.count() != 0U64 || outputSources.count() != 0U64 {
             match occurrence.role {
                 SourceTypeUseRole.Declaration => { self.admittedRecipeTypeUses.insert(id) }
                 _ => {}
@@ -2872,11 +2912,11 @@ impl Comp {
         return <Result.Ok value=() />
     }
 
-    inout fn requireAuthoredExtensionView(id: U64, source: ResolvedViewSource, offset: U64) -> Result[(), CompileDiagnostic] {
+    inout fn requireAuthoredExtensionView(id: U64, source: ResolvedViewSource, offset: U64, projectionOutput: Bool = false) -> Result[(), CompileDiagnostic] {
         match self.authoredExtensionViews.get(key: id) {
             Optional.Some(v: val admitted) => {
                 for proof in admitted {
-                    if proof.source.surfaceId == source.surfaceId && proof.receiver != 0U64 && proof.applicability.receiver != 0U64 {
+                    if proof.projectionOutput == projectionOutput && proof.source.surfaceId == source.surfaceId && proof.receiver != 0U64 && proof.applicability.receiver != 0U64 {
                         return <Result.Ok value=() />
                     }
                 }
@@ -3018,7 +3058,7 @@ impl Comp {
         val receiver = self.typeTermProjectionReceiver(t: projection)
         val owner = self.associatedProjectionTraitOwner(projection: projection)
         for proof in proofs {
-            if proof.occurrence == occurrence && proof.selector.traitInstance.owner == owner && self.typeRefEq(a: proof.receiver, b: receiver) && self.sameResolvedTypeRefs(a: proof.selector.traitInstance.positionalArgs, b: projection.assocTraitArgs) {
+            if !proof.projectionOutput && proof.occurrence == occurrence && proof.selector.traitInstance.owner == owner && self.typeRefEq(a: proof.receiver, b: receiver) && self.sameResolvedTypeRefs(a: proof.selector.traitInstance.positionalArgs, b: projection.assocTraitArgs) {
                 return <Result.Ok value=self.thawStaticConformanceProof(id: proof.proof) />
             }
         }
