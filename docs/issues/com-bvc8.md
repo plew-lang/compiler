@@ -323,3 +323,25 @@ execution and prints 42. The edited compiler source passes check; the final
 extension-role hardening was source-checked after that diagnostic build.
 Additional extension result-use coverage, broader preservation controls,
 fresh optimized gates, and independent review remain required.
+
+## Output View Normalization and Extension Controls
+
+Independent follow-up of 2fe4bbc0 found an equation-key mismatch: the
+projection equation was saved with its output view attached, but replay
+matches the projection after removing that view. Admission and reading
+now retain the bare projection as the equation source and handle the
+output views separately. Extension applicability receives the output of
+the saved normalization, when available.
+
+The exact diagnostic compiler passed both parameterized output cases in
+JIT, the extension case in native execution, two neighboring selected
+projection/extension JIT cases, and both missing-premise diagnostics.
+The extension test exercises the view as an argument and as a method
+result used immediately for a second call.
+
+Independent review also traced an evidence propagation gap to the
+result-occurrence traversal, which skips output-view proofs attached to
+a projection before following the associated binding's occurrence.
+Structural type information alone allowed the new runtime case to pass;
+this is not evidence that candidates consumed the retained view proof.
+Follow and verify that consumer boundary before closing.

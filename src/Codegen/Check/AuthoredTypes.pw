@@ -1040,9 +1040,10 @@ impl Comp {
                             arguments[index] = try self.replayProjectionNormalizations(ref: arguments[index], normalizations: lexicalEquations, offset: occurrence.site)
                         }
                     }
-                    // The shared reconstruction already attached instantiated
-                    // output-view arguments after the projection arguments.
-                    val projected = self.rebuildProjectionTerm(source: self.arena.typeAt(index: rebuilt).projectionRebuildSource(), receiver: receiver, traitArgs: arguments)
+                    // Equation keys describe the associated output before its
+                    // own view is applied. Replay adds that view separately.
+                    val bare = self.typeRefWithoutOuterViews(ref: rebuilt)
+                    val projected = self.rebuildProjectionTerm(source: self.arena.typeAt(index: bare).projectionRebuildSource(), receiver: receiver, traitArgs: arguments)
                     term = projected
                     val proof = try self.readAuthoredOccurrenceProof(saved: saved, receiver: receiver, arguments: arguments, environment: environment, offset: occurrence.site, normalizations: proofEquations, context: context)
                     match context {
@@ -1093,7 +1094,7 @@ impl Comp {
                     }
                     val outputSelectors = self.arena.typeViewSources(ref: node.term)
                     if outputSelectors.count() != 0U64 {
-                        val instantiated = self.arena.typeViewSources(ref: projected)
+                        val instantiated = self.arena.typeViewSources(ref: rebuilt)
                         for index in 0U64..<outputSelectors.count() {
                             val outputSelector = outputSelectors[index]
                             if outputSelector.traitInstance.owner != 0U64 {
@@ -2841,7 +2842,8 @@ impl Comp {
                     val raw = self.groundTermInEnvironment(ref: occurrence.term, params: [], values: [], selfRef: receiverRef)
                     // Replay matches a projection after its children have
                     // consumed their saved equations, at admission and run.
-                    val projected = try self.replayProjectionChildren(ref: raw, normalizations: equations, offset: occurrence.site)
+                    val viewedProjection = try self.replayProjectionChildren(ref: raw, normalizations: equations, offset: occurrence.site)
+                    val projected = self.typeRefWithoutOuterViews(ref: viewedProjection)
                     val output = match scope.origin {
                         DeclarationScopeOrigin.Nominal => self.readSelectedProjectionOutput(proof: proof, traitOwner: selector.traitInstance.owner, assocId: type.assocNameId),
                         _ => self.immediateAssociatedOutputInProof(proof: proof, traitOwner: selector.traitInstance.owner, assocId: type.assocNameId),
@@ -2868,8 +2870,8 @@ impl Comp {
                     }
                     try self.appendRetainedProjectionEquation(step: <ProjectionNormalizationStep source=projected proof=frozen output=immediate />, normalizations: inout equations)
                     if outputSources.count() != 0U64 {
-                        val outputSubject = self.typeRefWithoutOuterViews(ref: projected)
-                        val outputViews = self.arena.typeViewSources(ref: projected)
+                        val outputSubject = try self.replayProjectionNormalizations(ref: projected, normalizations: equations, offset: occurrence.site)
+                        val outputViews = self.arena.typeViewSources(ref: viewedProjection)
                         val projectionProof = <Optional.Some v=proof />
                         val outputExtensions = try self.admitTypeExtensionSources(subject: outputSubject, sources: outputViews, assumptions: assumptions, normalizations: equations, selectedProjection: projectionProof, offset: occurrence.site, projectionOutput: true)
                         for extension in outputExtensions { extensions.append(extension) }
@@ -2881,7 +2883,7 @@ impl Comp {
                         for index in 0U64..<outputViews.count() {
                             val view = outputViews[index]
                             if view.traitInstance.owner == 0U64 { continue }
-                            val target = self.authoredTraitViewSubject(ref: projected)
+                            val target = self.authoredTraitViewSubject(ref: self.typeRefWithAddedViewSources(ref: outputSubject, additions: outputViews))
                             val viewProof = try self.requireAuthoredViewProof(subject: target, instance: view.traitInstance, assumptions: assumptions, offset: view.writtenStart, selectedProjection: projectionProof, normalizations: equations)
                             try self.checkStaticProofEvidence(proof: viewProof, offset: occurrence.site, assumptions: assumptions)
                             try self.requireDeclarationProofSupport(dependencies: (try self.scopedProofDependencies(proof: viewProof, scope: scope, offset: occurrence.site, normalizations: equations)), offset: occurrence.site)
