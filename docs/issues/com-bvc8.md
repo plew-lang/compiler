@@ -125,3 +125,20 @@ selector identity and record layout-name independence, tracing any qualified
 comparison and materialization consumers that still interpret mirrors,
 fresh-candidate gates, and independent review. The migration TypeRef payload
 still contains compatibility fields.
+
+## Published Receiver Reads
+
+The primary Arena registration caller publishes a projection's explicit
+receiver before inserting the row. The only other production caller
+registers the non-projection sentinel. Environment substitution, reification
+and runtime-side projection resolution now read that stored receiver directly.
+The removed witness branch duplicated the earlier projection traversal and
+could never handle a projection. Syntax/legacy formation still adapts
+flattened input at publication. Existing TypeRef readers outside these paths
+remain part of the compatibility audit.
+
+The expanded native regression also verifies record layout-name independence
+both directly and through a projection, plus distinct output-view identity.
+The exact-pin carrier compiles current compiler source and the expanded
+fixture, whose output matches the golden. Six nearby fixtures passed check
+on the previous diagnostic binary built from f26bb1a5.

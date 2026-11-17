@@ -2137,7 +2137,7 @@ impl Comp {
             nextProjectionPath.append(ref)
             // A written projection and the associated binder denote the same
             // output only for this exact subject and trait instance.
-            val receiver = self.reifyBoundAssociatedTerms(ref: self.typeTermProjectionReceiver(t: raw), shape: shape, receiverRef: receiverRef, traitOwner: traitOwner, traitArgs: traitArgs, predicates: predicates, includeInherited: includeInherited, projectionPath: projectionPath)
+            val receiver = self.reifyBoundAssociatedTerms(ref: raw.projectionReceiver, shape: shape, receiverRef: receiverRef, traitOwner: traitOwner, traitArgs: traitArgs, predicates: predicates, includeInherited: includeInherited, projectionPath: projectionPath)
             mut val arguments: Array[U64] = []
             for argument in raw.assocTraitArgs {
                 arguments.append(self.reifyBoundAssociatedTerms(ref: argument, shape: shape, receiverRef: receiverRef, traitOwner: traitOwner, traitArgs: traitArgs, predicates: predicates, includeInherited: includeInherited, projectionPath: projectionPath))
@@ -2159,7 +2159,7 @@ impl Comp {
                     if predicate.member == raw.assocNameId { return predicate.value }
                 }
             }
-            if receiver != self.typeTermProjectionReceiver(t: raw) || !self.sameResolvedTypeRefs(a: arguments, b: raw.assocTraitArgs) {
+            if receiver != raw.projectionReceiver || !self.sameResolvedTypeRefs(a: arguments, b: raw.assocTraitArgs) {
                 return self.rebuildProjectionTerm(t: raw, receiver: receiver, traitArgs: arguments)
             }
             return ref

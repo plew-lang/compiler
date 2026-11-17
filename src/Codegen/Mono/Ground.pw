@@ -72,7 +72,7 @@ pub impl Comp {
         // This is also why a closed TypeTerm traversal has to treat the
         // receiver and trait-instance arguments as children together.
         if t.assocNameId != 0U64 {
-            val receiver: U64 = if t.projectionReceiver != 0U64 { give t.projectionReceiver } else { give self.typeTermProjectionReceiver(t: self.arena.typeAt(index: ref)) }
+            val receiver = t.projectionReceiver
             val groundedReceiver: U64 = self.groundTermInEnvironment(ref: receiver, params: params, values: values, selfRef: selfRef, itemRef: itemRef)
             mut val traitArgs: Array[U64] = []
             mut val argumentsChanged: Bool = false
@@ -677,15 +677,6 @@ pub impl Comp {
             if next != t.assocTraitArgs[i] { changed = true }
             assocArgs.append(next)
             i += 1U64
-        }
-        if t.assocNameId != 0U64 {
-            val receiver: U64 = self.typeTermProjectionReceiver(t: t)
-            val groundedReceiver: U64 = (try self.groundWitnessTypeTerm(ref: receiver, params: params, matchResult: matchResult))
-            if groundedReceiver != receiver {
-                val rebuilt: U64 = self.rebuildProjectionTerm(t: t, receiver: groundedReceiver, traitArgs: assocArgs)
-                if rebuilt != 0U64 { return <Result.Ok value=rebuilt />}
-                return <Result.Ok value=ref />
-            }
         }
         // The legacy arena stores an anonymous record's component terms in its
         // StructDef rather than in TypeRef.args.  A witness substitution must

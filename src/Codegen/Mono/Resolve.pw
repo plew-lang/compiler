@@ -11,10 +11,6 @@ pub impl Comp {
         return self.typeRefWithoutOuterViews(ref: ref)
     }
 
-    inout fn plainRefOfProjection(t: TypeRef) -> U64 {
-        return self.typeTermProjectionReceiver(t: t)
-    }
-
     // Is one conformance source visible on this concrete type term?  A bare
     // conformance is always present; an extension conformance participates
     // only when the same extension occurs in the normalized view source set.
@@ -1036,7 +1032,7 @@ pub impl Comp {
         // law in the general substitution operation makes every consumer --
         // projections, ordinary extension calls, and final descriptors --
         // agree on the same source provenance.
-        val baseRef: U64 = (try self.groundTypeRef(ref: self.plainRefOfProjection(t: t)))
+        val baseRef: U64 = (try self.groundTypeRef(ref: t.projectionReceiver))
         if baseRef >= self.arena.typeCount() {
             return <Result.Ok value=tyRef />
         }

@@ -1,6 +1,7 @@
 // Structural identity must distinguish members even when a projection is rebuilt with a record receiver.
 use /Frontend only { Comp, FrontendInput, analyzeFrontend }
 use /SourceAccess only { SourceAccess }
+use /Ir only { TypeRef, ResolvedViewSource, TraitInstanceKey }
 use @Std/Io only { print }
 fn main() {
     mut val compiler = <Comp />
@@ -42,6 +43,18 @@ fn main() {
     val projectedSecondArgument = compiler.rebuildProjectionTerm(t: secondArgument, receiver: receiver, traitArgs: secondArgument.assocTraitArgs)
     print("changing the trait argument changes projection identity")
     print(!compiler.typeRefEq(a: projectedFirstArgument, b: projectedSecondArgument))
+    val record = compiler.arena.typeAt(index: receiver)
+    val layout = compiler.internBytes(s: "SeparateLayout")
+    val otherLayout = compiler.pushType(t: <TypeRef nameStart=layout.nameStart nameLen=layout.nameLen args=[] isRecord=true recordFieldLabels=record.recordFieldLabels recordFieldTerms=record.recordFieldTerms />)
+    print("record identity ignores the layout name")
+    print(compiler.typeRefEq(a: receiver, b: otherLayout))
+    val otherLayoutProjection = compiler.rebuildProjectionTerm(t: term, receiver: otherLayout, traitArgs: [])
+    print("projection identity ignores the receiver layout name")
+    print(compiler.typeRefEq(a: rebuiltFirst, b: otherLayoutProjection))
+    val view = <ResolvedViewSource writtenStart=0U64 surfaceId=123U64 traitInstance=<TraitInstanceKey owner=0U64 positionalArgs=[] /> />
+    val viewedProjection = compiler.typeRefWithAddedViewSources(ref: rebuiltFirst, additions: [view])
+    print("changing the output view changes projection identity")
+    print(!compiler.typeRefEq(a: rebuiltFirst, b: viewedProjection))
     val binder = compiler.funcBindAt(binds: function.typeParams, index: 0U64)
     val mappedFirst = compiler.groundTermInEnvironment(ref: first, params: [binder], values: [receiver])
     val mappedSecond = compiler.groundTermInEnvironment(ref: second, params: [binder], values: [receiver])

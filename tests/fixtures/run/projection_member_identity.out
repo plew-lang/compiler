@@ -14,6 +14,12 @@ changing the trait owner changes projection identity
 1
 changing the trait argument changes projection identity
 1
+record identity ignores the layout name
+1
+projection identity ignores the receiver layout name
+1
+changing the output view changes projection identity
+1
 substitution record projection equal
 0
 the mapped terms retain their projection receiver
