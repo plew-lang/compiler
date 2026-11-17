@@ -286,3 +286,23 @@ count-only repair would leave the projection's own argument range and the
 output-view proof unverified. Cover distinct projection and output selector
 arguments, selector proof evaluated on the associated output, and ordinary
 receiver views.
+
+## Output View Partition Experiment
+
+A scratch implementation added the output-view argument to the lowering
+recipe, then limited the reader's projection argument range and preserved
+the rebuilt output-view argument metadata. It built successfully. The
+positive source advanced from recipe coverage to argument type mismatch at
+the call site. A negative control removed the associated-type bound and
+made the provided method and its argument unused. The scratch compiler
+accepted that declaration, demonstrating that child partition alone
+does not enforce the output-view prerequisite.
+
+The experiment was reverted from source and its diff retained in scratch.
+The next implementation must save the output selector's proof separately
+from receiver selectors and the associated member's own proof, even if
+their trait instance keys match. After normalizing the associated output,
+the reader must consume that proof against the output and retain the
+instantiated view on it. The unused/no-premise declaration must reject
+at admission, with a source diagnostic. The existing receiver proof
+paths remain preservation controls.
