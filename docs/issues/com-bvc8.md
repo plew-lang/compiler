@@ -400,3 +400,25 @@ and returning no result for a cyclic chain. The optimized fixed-point
 compiler also accepted and executed the generic Source[K] / Item#Mark[K]
 fixture, printing 42 twice. Runtime output does not by itself demonstrate
 which selector path supplied the concrete proof.
+
+## Remaining Compatibility Boundary and Group Gate
+
+The projection producer owns the receiver-derived compatibility fields of
+TypeRef. Semantic comparison and traversal use projection owner, member,
+receiver and arguments through the common term APIs. Layout and ownership
+readers require a grounded output or explicitly defer. Existing low-level
+legacy publication still carries the mirror. com-vh0x owns migration of the
+listed reconstruction, compatibility child, canonical identity and layout
+APIs. Remove the receiver mirror from legacy TypeRef publication once its
+remaining clients read the explicit projection receiver and owned source
+fields, with the identity, grounding and physical layout controls preserved.
+
+Both required child repairs passed independent review and scoped runtime
+and structural verification. The cceb9631 candidate reached the second
+generation fixed point and matched both native expected-result outputs,
+eight JIT outputs and two missing-premise diagnostics. See com-f18l and
+com-fgck for the individual source-to-consumer assertions. Independent
+audit found no remaining scoped implementation defect and requires the
+completed group's ordinary suite to be reconciled before closure.
+Exact-source suite 20261117T113819-test-2fabfb is in progress; compare
+its failure signatures with 20261117T091050-test-7de352.

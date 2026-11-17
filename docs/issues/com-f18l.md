@@ -1,6 +1,6 @@
 ---
 id: com-f18l
-status: in_progress
+status: closed
 deps: []
 links: [com-j2i7]
 created: 2026-11-17T10:39:00Z
@@ -126,3 +126,21 @@ expected outputs, reached all three completions, and supplied their
 retained selectors. The existing nested, generic, and extension-backed
 JIT fixtures also passed. Formal verification of the new revision is
 pending.
+
+## Closure Evidence
+
+On cceb9631 the diagnostic candidate read the selector back from the
+initializer expression against the completed result term and matched the
+selector's authored source position in all three late-completion cases.
+Typed binding annotations can independently supply the later method
+candidate; the readback is the assertion for the completion handoff.
+The existing unannotated forwarded-result case covers consumption at
+candidate collection. Independent review confirmed the distinction.
+
+The optimized fixed-point candidate matched all eight scoped JIT outputs,
+both missing-premise diagnostics, and native outputs for both new fixtures.
+Isolated self-host 20261117T112124-self-host-9c1635 reached its second-generation
+fixed point with unchanged inputs and a 7.500079-second median. A six-pair
+comparison on cceb9631 source gave medians 7.354675 seconds before and
+7.364672 seconds after, with identical LLVM in all trials. The phase-wide
+performance target remains with com-p5um.
