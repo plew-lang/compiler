@@ -362,3 +362,15 @@ trait-view fixture now also invokes a method directly on the forwarded
 output and succeeds in JIT. The two output-view fixtures and the existing
 projected-conformance extension case passed JIT. Temporary instrumentation
 was removed, and the final source passed compiler check.
+
+The closure re-review of f226c1f3 caught a final traversal guard in the
+wrong branch: reaching a non-projection authored output after accumulating
+direct projection proofs incorrectly returned an empty array. Commit
+fd53521e returns the accumulated and leaf proofs at that boundary and
+retains fail-closed behavior for depth exhaustion. The earlier
+instrumented execution is evidence for the abstract-output path only.
+A direct concrete-origin proof-count control remains to be confirmed.
+
+Formal self-host validation 20261117T101817-self-host-fd9ec5 started on
+fd53521e in an isolated checkout using the exact pinned manifest and the
+adopted exact-pin carrier. No result is claimed while that run is active.
