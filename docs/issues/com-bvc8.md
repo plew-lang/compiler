@@ -225,3 +225,19 @@ modes, and the extended same-spelled owner fixture passes JIT with a fresh
 diagnostic compiler. The materialized control verifies foreign owner
 selection itself; the same-spelled alias sealing regression uses the ordinary
 file path.
+
+## Type Collection and Remaining Reader Review
+
+The independent follow-up found that scanType can ground an input to a
+still-abstract projection, then enqueue its receiver's function layout. The
+native record-layout fixture demonstrated that publication on 337560b8.
+Collection now defers an unresolved projection before reading its ABI
+metadata. The fixture verifies the projection adds no layout and the actual
+function type adds one. The native fixture passes. A reified bound-associated
+term also uses the shared projection constructor instead of copying the
+receiver's mirror in a second constructor.
+
+The follow-up found two further paths to verify: alpha equality and
+directional unification can compare a record receiver's ABI name instead of
+fields, and the authored-recipe reader appears to group output-view arguments
+with the projection trait arguments. Reproduce both paths before closing.

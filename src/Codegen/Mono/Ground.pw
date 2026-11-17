@@ -867,7 +867,7 @@ pub impl Comp {
     // boundary. Grounding itself may already have happened in a BodyInstance;
     // neither a changed child nor an attached template is a prerequisite here.
     inout fn collectRecordLayout(ref: U64) -> Result[(), CompileDiagnostic] {
-        if !self.inCollection || !(try self.tyRefIsGround(ref: ref)) { return <Result.Ok value=() /> }
+        if !self.inCollection || ref >= self.arena.typeTermCount() || !self.arena.typeTermAt(index: ref).isStructuralRecord() || !(try self.tyRefIsGround(ref: ref)) { return <Result.Ok value=() /> }
         val existingLayout = self.recordStructIndex(ref: ref)
         if existingLayout < self.arena.structCount() {
             self.arena.recordTypeByLayout[existingLayout] = ref
@@ -1371,6 +1371,9 @@ pub impl Comp {
             return <Result.Ok value=() />
         }
         val t: TypeRef = self.arena.typeAt(index: ref)
+        // An abstract projection can survive grounding. Its receiver's
+        // compatibility fields do not describe the associated output's ABI.
+        if t.assocNameId != 0U64 { return <Result.Ok value=() /> }
         mut val i: U64 = 0
         while i < t.args.count() {
             try self.scanType(ref: t.args[i])

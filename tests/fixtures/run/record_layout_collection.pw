@@ -39,6 +39,14 @@ fn main() {
     val string = compiler.pushType(t: <TypeRef nameStart=stringName.nameStart nameLen=stringName.nameLen args=[] />)
     val symbolic = compiler.rebuildProjectionTerm(source: <ProjectionRebuildSource assocTraitId=owner.nameId assocNameId=member.nameId />, receiver: string, traitArgs: [])
     if !compiler.arcClassOfRef(ref: symbolic).isErr() { panic "projection acquired its receiver ownership class" }
+    val functionName = compiler.internBytes(s: "fn")
+    val function = compiler.pushType(t: <TypeRef nameStart=functionName.nameStart nameLen=functionName.nameLen args=[integerRef] />)
+    val functionProjection = compiler.rebuildProjectionTerm(source: <ProjectionRebuildSource assocTraitId=owner.nameId assocNameId=member.nameId />, receiver: function, traitArgs: [])
+    val functionCount = compiler.monoWork.fnTypes.count()
+    compiler.scanType(ref: functionProjection).unwrap()
+    if compiler.monoWork.fnTypes.count() != functionCount { panic "projection registered its receiver's function layout" }
+    compiler.scanType(ref: function).unwrap()
+    if compiler.monoWork.fnTypes.count() != functionCount + 1U64 { panic "concrete function layout missing" }
     val count = compiler.arena.structCount()
     compiler.scanType(ref: record).unwrap()
     if compiler.arena.structCount() != count { panic "record layout not deduplicated" }

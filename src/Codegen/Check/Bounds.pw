@@ -2177,10 +2177,11 @@ impl Comp {
                         if predicate.member == rawName { return predicate.value }
                         pi += 1U64
                     }
-                    if receiverRef >= self.arena.typeCount() { return ref }
-                    val receiver: TypeRef = self.arena.typeAt(index: receiverRef)
-                    val noLabels: Array[U64] = []
-                    return self.pushType(t: <TypeRef nameStart=receiver.nameStart nameLen=receiver.nameLen paramId=receiver.paramId args=receiver.args isRecord=receiver.isRecord recordFieldLabels=receiver.recordFieldLabels recordFieldTerms=receiver.recordFieldTerms isAny=receiver.isAny argLabels=receiver.argLabels projectionReceiver=receiverRef assocTraitStart=traitOwner assocTraitLen=self.traitNameLenByOwner(owner: traitOwner) assocTraitId=intern(c: inout self, start: traitOwner, len: self.traitNameLenByOwner(owner: traitOwner)) assocTraitArgs=traitArgs assocTraitArgLabels=noLabels assocNameStart=assoc.nameStart assocNameLen=assoc.nameLen assocNameId=assoc.nameId isSendable=receiver.isSendable isDiverging=receiver.isDiverging hasDecl=receiver.hasDecl declOffset=receiver.declOffset hasAssocTraitDecl=true assocTraitDeclOffset=traitOwner siteOffset=0U64 />)
+                    val ownerLength = self.traitNameLenByOwner(owner: traitOwner)
+                    val ownerName = intern(c: inout self, start: traitOwner, len: ownerLength)
+                    val source = <ProjectionRebuildSource assocTraitStart=traitOwner assocTraitLen=ownerLength assocTraitId=ownerName assocNameStart=assoc.nameStart assocNameLen=assoc.nameLen assocNameId=assoc.nameId hasAssocTraitDecl=true assocTraitDeclOffset=traitOwner />
+                    val projection = self.rebuildProjectionTerm(source: source, receiver: receiverRef, traitArgs: traitArgs)
+                    return if projection == 0U64 { give ref } else { give projection }
                 }
                 ai += 1U64
             }
