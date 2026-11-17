@@ -252,3 +252,37 @@ fields with distinct layout names, and inequality for distinct fields with
 the same name. Top-level receiver-dispatch relaxation still excludes only
 outer view children; the recursive receiver and all nested views stay exact.
 Native RED and GREEN were observed with the same fixed carrier.
+
+## Source RED for a Parameterized Output View
+
+The following source reproduces a child-coverage failure on the exact-pin
+fixed-point carrier and on the diagnostic compiler built from 337560b8.
+Removing both `#Mark[I64]` qualifiers makes check and JIT succeed; JIT
+prints 42. The visible error on the authored argument type is
+“source recipe does not cover canonical type children”.
+
+```plew
+use @Std/Io only { print }
+trait Mark[K] { fn number() -> I64 }
+struct Value {}
+impl Value as Mark[I64] { fn number() -> I64 { return 42I64 } }
+trait Source { type Item: Mark[I64] }
+pub impl Source {
+    fn read(value: Item#Mark[I64]) -> I64 { return value.number() }
+}
+struct Provider {}
+pub impl Provider { factory }
+impl Provider as Source { type Item = Value }
+fn main() { print(<Provider />.read(value: <Value />#Mark[I64])) }
+```
+
+The lowering path adds Mark[I64] to the lexical projection's output, then
+builds its argument recipe against the receiver's view set, so the canonical
+output-view child has no recipe. The signature reader has a related gap: it
+takes every child after the receiver as a projection trait argument and
+reconsumes only the receiver's view evidence. Fix the producer and the
+reader through the existing projection/selector ownership rules. A recipe
+count-only repair would leave the projection's own argument range and the
+output-view proof unverified. Cover distinct projection and output selector
+arguments, selector proof evaluated on the associated output, and ordinary
+receiver views.
