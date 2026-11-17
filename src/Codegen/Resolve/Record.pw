@@ -3294,7 +3294,7 @@ pub impl Comp {
         while i < self.blockStmtCount(blkId: blkId) {
             val statement = self.blockStmtAt(blkId: blkId, index: i)
             if !flow.source.normal() {
-                return <Result.Err error=self.diagnosticAt(offset: self.stmtPrincipalOffset(sid: statement), msg: "code after a source control transfer is not allowed (spec/11)") />
+                return <Result.Err error=self.diagnosticAt(offset: self.stmtPrincipalOffset(sid: statement), msg: "code after a source control transfer is not allowed (spec/11)", failureDomain: <FailureDomain.Source />) />
             }
             if flow.execution.normal() { executableLength = i + 1U64 }
             if !flow.execution.normal() && !warned {

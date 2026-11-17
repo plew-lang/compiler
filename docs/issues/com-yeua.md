@@ -230,3 +230,19 @@ fixture changed from Unclassified to Source with identical diagnostics.
 Three positive controls preserved their outputs. Independent review
 confirmed both producer routes and the redundant reread removal.
 The full candidate gate and broader producer work remain open.
+
+## Source Control Transfer Producers
+
+Two existing lexical checks now classify proved source violations at their
+owners: an explicit return in a declared diverging function or closure, and a
+statement following a source control transfer. Owners, completion facts and
+diagnostics are unchanged. The analytical execution path still uses its warning
+and records source-valid statements.
+
+The exact c41653f1 candidate and the diagnostic rebuild were compared with
+the negative worker's owned channel. All 25 existing targeted fixtures
+changed from Unclassified to Source and kept byte-identical stderr and
+their required diagnostic reason. Four JIT output controls passed,
+including warning-only loop reachability and a covered match arm.
+Independent review confirmed that synthetic/analytical branches do not
+become source errors and no internal-context branch changes domain.

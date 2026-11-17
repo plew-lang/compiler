@@ -81,7 +81,7 @@ impl Comp {
             }
         }
         if diverging {
-            return <Result.Err error=self.diagnosticAt(offset: offset, msg: "a diverging function cannot return to its caller (spec/04)") />
+            return <Result.Err error=self.diagnosticAt(offset: offset, msg: "a diverging function cannot return to its caller (spec/04)", failureDomain: <FailureDomain.Source />) />
         }
         return <Result.Ok value=<SourceExitTarget.Function /> />
     }
