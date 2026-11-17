@@ -3,7 +3,8 @@ use ./A only { Convert as TextConvert }
 use ./B only { Convert as BytesConvert }
 
 // The aliases resolve distinct trait declarations with the same spelling and
-// arity.  Their projection sources must select distinct instance witnesses.
+// arity. A third same-spelled local trait must not replace either imported owner.
+trait Convert[From] { type Output }
 struct Parser {}
 pub impl Parser { factory }
 pub impl Parser as TextConvert[String] {
@@ -13,9 +14,13 @@ pub impl Parser as BytesConvert[String] {
     type Output = Bool
 }
 
+impl Parser as Convert[String] { type Output = String }
+
 fn main() {
     val text: Parser#TextConvert[String].Output = 7I64
     val bytes: Parser#BytesConvert[String].Output = true
     print(text)
     print(bytes)
+    val local: Parser#Convert[String].Output = "local"
+    print(local)
 }

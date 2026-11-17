@@ -545,13 +545,17 @@ pub impl Comp {
             if (t.siteOffset != 0U64 && self.offsetIsLoaded(offset: t.siteOffset)) || qualifiedConstruction {
                 val useMod: U64 = self.moduleOf(offset: t.siteOffset)
                 val decl: Bind = self.typeDeclIdentityAt(useMod: useMod, start: t.nameStart, len: t.nameLen)
-                mut val assoc: Bind = self.missingDeclIdentity()
-                if t.assocTraitLen != 0U64 {
-                    assoc = self.typeDeclIdentityAt(useMod: useMod, start: t.assocTraitStart, len: t.assocTraitLen)
-                }
+                // Projection lowering already chose the owner. Looking up its
+                // declaration spelling in the use module can select a local
+                // homonym in place of a qualified or aliased import.
+                val assocOwner = if t.hasAssocTraitDecl {
+                    give t.assocTraitDeclOffset
+                } else if t.assocTraitLen != 0U64 {
+                    give self.canonicalTraitOwner(start: t.assocTraitStart, len: t.assocTraitLen)
+                } else { give 0U64 }
                 // Resolve both representations at the same declaration boundary.
                 // The scalar reader must never observe pre-resolution identity.
-                resolutions.append(<ResolvedTypeDeclaration index=i hasDecl=decl.nameLen != 0U64 declOffset=decl.nameStart hasAssocTraitDecl=assoc.nameLen != 0U64 assocTraitDeclOffset=assoc.nameStart />)
+                resolutions.append(<ResolvedTypeDeclaration index=i hasDecl=decl.nameLen != 0U64 declOffset=decl.nameStart hasAssocTraitDecl=assocOwner != 0U64 assocTraitDeclOffset=assocOwner />)
             }
             i += 1
         }

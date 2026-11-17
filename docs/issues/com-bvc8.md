@@ -180,3 +180,20 @@ The next boundary is declaration sealing: trace an owner selected by both
 lowering inputs through later declaration registration, including same-spelled
 foreign owners, before deciding whether the existing canonical stamp is
 sufficient. Recheck remaining ABI entry and construction payload reads.
+
+## Preserve Lowered Trait Owners Through Declaration Sealing
+
+Extending the existing imported-trait alias fixture with a local homonym
+reproduced a public type mismatch on the exact-pin fixed-point carrier. The
+source selected the imported owner correctly, then declaration sealing used
+the canonical name's spelling to look up the trait again in the use module.
+Sealing now preserves an existing stamp or validates the selected declaration
+span by indexed offset. It does not perform trait-name lookup.
+
+An isolated diagnostic compiler passed check, JIT and native execution for the
+extended fixture, printing the distinct values from both imported owners and
+the local owner. Both lowering implementations produce the selected declaration
+span; the isolated CLI check exercises the ordinary file path. After skipping
+owner lookup for rows without a trait span, compiler source also passed the
+exact-pin carrier's check. Fresh optimized gates and independent completion
+review remain open.
