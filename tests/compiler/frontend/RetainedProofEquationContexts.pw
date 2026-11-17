@@ -75,7 +75,7 @@ fn main() {
         val step = equations[0U64]
         val boolean = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "boolean").nameId)
         val boolType = compiler.funcParamAt(params: compiler.arena.functionAt(index: boolean).params, index: 0U64).ty
-        val source = if scenario == "foreignEquation" { give compiler.rebuildProjectionTerm(t: compiler.arena.typeAt(index: step.source), receiver: receiver, traitArgs: []) } else { give step.source }
+        val source = if scenario == "foreignEquation" { give compiler.rebuildProjectionTerm(source: compiler.arena.typeAt(index: step.source).projectionRebuildSource(), receiver: receiver, traitArgs: []) } else { give step.source }
         equationInput = [<ProjectionNormalizationStep source=source proof=step.proof output=if scenario == "wrongOutput" { give boolType } else { give step.output } />]
     }
     if scenario == "cycle" {

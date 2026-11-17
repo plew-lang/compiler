@@ -434,6 +434,25 @@ pub struct TypeRef {
     pub val siteOffset: U64 = 0
 }
 
+// Projection-owned metadata retained when its receiver and arguments change.
+pub struct ProjectionRebuildSource {
+    pub val viewExtId: U64 = 0U64
+    pub val viewIds: Array[U64] = []
+    pub val viewSources: Array[ResolvedViewSource] = []
+    pub val assocTraitStart: U64 = 0U64
+    pub val assocTraitLen: U64 = 0U64
+    pub val assocTraitId: U64 = 0U64
+    pub val assocTraitArgLabels: Array[U64] = []
+    pub val assocNameStart: U64 = 0U64
+    pub val assocNameLen: U64 = 0U64
+    pub val assocNameId: U64 = 0U64
+    pub val hasAssocTraitDecl: Bool = false
+    pub val assocTraitDeclOffset: U64 = 0U64
+    pub val siteOffset: U64 = 0U64
+}
+
+pub impl ProjectionRebuildSource { factory }
+
 // A variable binding in scope during codegen (param, let, or match bind), used
 // to recover an expression's type for monomorphization and `.bytes()` dispatch.
 // One enclosing local captured by a closure (value capture, immutable scalars
@@ -4305,7 +4324,27 @@ pub impl Cursor { factory }
 // `<Bind …/>`, `<StructDef …/>`, …), so the default-private memberwise factory
 // must be exposed. (The arena/table sub-structs above declare theirs inline.)
 pub impl PType { factory }
-pub impl TypeRef { factory }
+pub impl TypeRef {
+    factory
+
+    fn projectionRebuildSource() -> ProjectionRebuildSource {
+        return <ProjectionRebuildSource
+            viewExtId=self.viewExtId
+            viewIds=self.viewIds
+            viewSources=self.viewSources
+            assocTraitStart=self.assocTraitStart
+            assocTraitLen=self.assocTraitLen
+            assocTraitId=self.assocTraitId
+            assocTraitArgLabels=self.assocTraitArgLabels
+            assocNameStart=self.assocNameStart
+            assocNameLen=self.assocNameLen
+            assocNameId=self.assocNameId
+            hasAssocTraitDecl=self.hasAssocTraitDecl
+            assocTraitDeclOffset=self.assocTraitDeclOffset
+            siteOffset=self.siteOffset
+        />
+    }
+}
 pub impl CaptureEntry { factory }
 pub impl Local { factory }
 pub impl TypeInfo { factory }

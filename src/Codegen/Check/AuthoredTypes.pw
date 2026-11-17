@@ -1040,7 +1040,7 @@ impl Comp {
                             arguments[index] = try self.replayProjectionNormalizations(ref: arguments[index], normalizations: lexicalEquations, offset: occurrence.site)
                         }
                     }
-                    val projected = self.rebuildProjectionTerm(t: original, receiver: receiver, traitArgs: arguments)
+                    val projected = self.rebuildProjectionTerm(source: original.projectionRebuildSource(), receiver: receiver, traitArgs: arguments)
                     term = projected
                     val proof = try self.readAuthoredOccurrenceProof(saved: saved, receiver: receiver, arguments: arguments, environment: environment, offset: occurrence.site, normalizations: proofEquations, context: context)
                     match context {
@@ -1063,7 +1063,7 @@ impl Comp {
                             val source = if requirement.isSome() {
                                 val bound = try self.staticProofBound(proof: proof, traitIdx: self.decls.traitIndexByOffset(offset: owner))
                                 if bound.subject == 0U64 { return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "associated binding projection lost its requirement subject", failureDomain: <FailureDomain.Internal />) /> }
-                                give self.rebuildProjectionTerm(t: original, receiver: bound.subject, traitArgs: bound.constraint.key.positionalArgs)
+                                give self.rebuildProjectionTerm(source: original.projectionRebuildSource(), receiver: bound.subject, traitArgs: bound.constraint.key.positionalArgs)
                             } else { give projected }
                             term = source
                             val output = try self.readSelectedProjectionOutput(proof: proof, traitOwner: owner, assocId: original.assocNameId, requirement: requirement)
@@ -2285,7 +2285,7 @@ impl Comp {
         // A validated abstract clause can establish the projection without an
         // equality. Keep the member on the subject from the selected clause.
         if output == 0U64 && unresolvedProjection != 0U64 {
-            return <Result.Ok value=self.rebuildProjectionTerm(t: self.arena.typeAt(index: unresolvedProjection), receiver: receiver, traitArgs: arguments) />
+            return <Result.Ok value=self.rebuildProjectionTerm(source: self.arena.typeAt(index: unresolvedProjection).projectionRebuildSource(), receiver: receiver, traitArgs: arguments) />
         }
         return <Result.Ok value=output />
     }

@@ -1,7 +1,7 @@
 // Structural identity must distinguish members even when a projection is rebuilt with a record receiver.
 use /Frontend only { Comp, FrontendInput, analyzeFrontend }
 use /SourceAccess only { SourceAccess }
-use /Ir only { TypeRef, ResolvedViewSource, TraitInstanceKey, PatternBindInput, UnifyBind }
+use /Ir only { TypeRef, ProjectionRebuildSource, ResolvedViewSource, TraitInstanceKey, PatternBindInput, UnifyBind }
 use @Std/Io only { print }
 fn main() {
     mut val compiler = <Comp />
@@ -23,14 +23,14 @@ fn main() {
     val term = compiler.arena.typeAt(index: first)
     // Use an actual record term rather than manually stamping isRecord on a projection.
     val receiver = firstRecord
-    val rebuiltFirst = compiler.rebuildProjectionTerm(t: term, receiver: receiver, traitArgs: [])
-    val rebuiltSecond = compiler.rebuildProjectionTerm(t: compiler.arena.typeAt(index: second), receiver: receiver, traitArgs: [])
+    val rebuiltFirst = compiler.rebuildProjectionTerm(source: term.projectionRebuildSource(), receiver: receiver, traitArgs: [])
+    val rebuiltSecond = compiler.rebuildProjectionTerm(source: compiler.arena.typeAt(index: second).projectionRebuildSource(), receiver: receiver, traitArgs: [])
     print("rebuilder record projection equal")
     print(compiler.typeRefEq(a: rebuiltFirst, b: rebuiltSecond))
-    val anotherReceiver = compiler.rebuildProjectionTerm(t: term, receiver: secondRecord, traitArgs: [])
-    val sameMemberAndReceiver = compiler.rebuildProjectionTerm(t: term, receiver: receiver, traitArgs: [])
+    val anotherReceiver = compiler.rebuildProjectionTerm(source: term.projectionRebuildSource(), receiver: secondRecord, traitArgs: [])
+    val sameMemberAndReceiver = compiler.rebuildProjectionTerm(source: term.projectionRebuildSource(), receiver: receiver, traitArgs: [])
     val other = compiler.funcParamAt(params: function.params, index: 4U64).ty
-    val otherOwner = compiler.rebuildProjectionTerm(t: compiler.arena.typeAt(index: other), receiver: receiver, traitArgs: [])
+    val otherOwner = compiler.rebuildProjectionTerm(source: compiler.arena.typeAt(index: other).projectionRebuildSource(), receiver: receiver, traitArgs: [])
     print("rebuilders with the same projection identity compare equal")
     print(compiler.typeRefEq(a: rebuiltFirst, b: sameMemberAndReceiver))
     print("changing the receiver changes projection identity")
@@ -39,14 +39,14 @@ fn main() {
     print(!compiler.typeRefEq(a: rebuiltFirst, b: otherOwner))
     val firstArgument = compiler.arena.typeAt(index: compiler.funcParamAt(params: function.params, index: 5U64).ty)
     val secondArgument = compiler.arena.typeAt(index: compiler.funcParamAt(params: function.params, index: 6U64).ty)
-    val projectedFirstArgument = compiler.rebuildProjectionTerm(t: firstArgument, receiver: receiver, traitArgs: firstArgument.assocTraitArgs)
-    val projectedSecondArgument = compiler.rebuildProjectionTerm(t: secondArgument, receiver: receiver, traitArgs: secondArgument.assocTraitArgs)
+    val projectedFirstArgument = compiler.rebuildProjectionTerm(source: firstArgument.projectionRebuildSource(), receiver: receiver, traitArgs: firstArgument.assocTraitArgs)
+    val projectedSecondArgument = compiler.rebuildProjectionTerm(source: secondArgument.projectionRebuildSource(), receiver: receiver, traitArgs: secondArgument.assocTraitArgs)
     print("changing the trait argument changes projection identity")
     print(!compiler.typeRefEq(a: projectedFirstArgument, b: projectedSecondArgument))
-    val firstOwner = compiler.rebuildProjectionTerm(t: <TypeRef nameStart=0U64 nameLen=0U64 args=[] assocTraitId=term.assocTraitId assocNameId=term.assocNameId hasAssocTraitDecl=true assocTraitDeclOffset=100U64 />, receiver: receiver, traitArgs: [])
-    val secondOwner = compiler.rebuildProjectionTerm(t: <TypeRef nameStart=0U64 nameLen=0U64 args=[] assocTraitId=term.assocTraitId assocNameId=term.assocNameId hasAssocTraitDecl=true assocTraitDeclOffset=200U64 />, receiver: receiver, traitArgs: [])
-    val unresolvedOwner = compiler.rebuildProjectionTerm(t: <TypeRef nameStart=0U64 nameLen=0U64 args=[] assocTraitId=term.assocTraitId assocNameId=term.assocNameId />, receiver: receiver, traitArgs: [])
-    val aliasedOwner = compiler.rebuildProjectionTerm(t: <TypeRef nameStart=0U64 nameLen=0U64 args=[] assocTraitId=compiler.arena.typeAt(index: other).assocTraitId assocNameId=term.assocNameId hasAssocTraitDecl=true assocTraitDeclOffset=100U64 />, receiver: receiver, traitArgs: [])
+    val firstOwner = compiler.rebuildProjectionTerm(source: <ProjectionRebuildSource assocTraitId=term.assocTraitId assocNameId=term.assocNameId hasAssocTraitDecl=true assocTraitDeclOffset=100U64 />, receiver: receiver, traitArgs: [])
+    val secondOwner = compiler.rebuildProjectionTerm(source: <ProjectionRebuildSource assocTraitId=term.assocTraitId assocNameId=term.assocNameId hasAssocTraitDecl=true assocTraitDeclOffset=200U64 />, receiver: receiver, traitArgs: [])
+    val unresolvedOwner = compiler.rebuildProjectionTerm(source: <ProjectionRebuildSource assocTraitId=term.assocTraitId assocNameId=term.assocNameId />, receiver: receiver, traitArgs: [])
+    val aliasedOwner = compiler.rebuildProjectionTerm(source: <ProjectionRebuildSource assocTraitId=compiler.arena.typeAt(index: other).assocTraitId assocNameId=term.assocNameId hasAssocTraitDecl=true assocTraitDeclOffset=100U64 />, receiver: receiver, traitArgs: [])
     print("the same spelling does not merge different canonical owners")
     print(!compiler.typeRefEq(a: firstOwner, b: secondOwner))
     print("an unresolved owner cannot match either canonical owner")
@@ -58,7 +58,7 @@ fn main() {
     val otherLayout = compiler.pushType(t: <TypeRef nameStart=layout.nameStart nameLen=layout.nameLen args=[] isRecord=true recordFieldLabels=record.recordFieldLabels recordFieldTerms=record.recordFieldTerms />)
     print("record identity ignores the layout name")
     print(compiler.typeRefEq(a: receiver, b: otherLayout))
-    val otherLayoutProjection = compiler.rebuildProjectionTerm(t: term, receiver: otherLayout, traitArgs: [])
+    val otherLayoutProjection = compiler.rebuildProjectionTerm(source: term.projectionRebuildSource(), receiver: otherLayout, traitArgs: [])
     print("projection identity ignores the receiver layout name")
     print(compiler.typeRefEq(a: rebuiltFirst, b: otherLayoutProjection))
     val view = <ResolvedViewSource writtenStart=0U64 surfaceId=123U64 traitInstance=<TraitInstanceKey owner=0U64 positionalArgs=[] /> />
@@ -74,9 +74,9 @@ fn main() {
     print("receiver dispatch can ignore the outer output view")
     print(compiler.unifyPatterns(a: rebuiltFirst, aSide: 0U64, b: viewedProjection, bSide: 1U64, aParams: noBinders, bParams: noBinders, binds: inout bindings, ignoreTopView: true))
     val beforeInvalidRebuilds = compiler.arena.typeCount()
-    val missingReceiver = compiler.rebuildProjectionTerm(t: term, receiver: 0U64, traitArgs: [])
-    val missingMember = compiler.rebuildProjectionTerm(t: record, receiver: receiver, traitArgs: [])
-    val invalidReceiver = compiler.rebuildProjectionTerm(t: term, receiver: beforeInvalidRebuilds, traitArgs: [])
+    val missingReceiver = compiler.rebuildProjectionTerm(source: term.projectionRebuildSource(), receiver: 0U64, traitArgs: [])
+    val missingMember = compiler.rebuildProjectionTerm(source: record.projectionRebuildSource(), receiver: receiver, traitArgs: [])
+    val invalidReceiver = compiler.rebuildProjectionTerm(source: term.projectionRebuildSource(), receiver: beforeInvalidRebuilds, traitArgs: [])
     print("invalid projection components do not publish a term")
     print(missingReceiver == 0U64 && missingMember == 0U64 && invalidReceiver == 0U64 && compiler.arena.typeCount() == beforeInvalidRebuilds)
     val binder = compiler.funcBindAt(binds: function.typeParams, index: 0U64)

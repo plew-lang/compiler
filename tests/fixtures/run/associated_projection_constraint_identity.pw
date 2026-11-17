@@ -32,7 +32,7 @@ fn main() {
         index += 1U64
     }
     val original = compiler.arena.typeAt(index: own)
-    val foreignReceiver = compiler.rebuildProjectionTerm(t: original, receiver: other, traitArgs: original.assocTraitArgs)
+    val foreignReceiver = compiler.rebuildProjectionTerm(source: original.projectionRebuildSource(), receiver: other, traitArgs: original.assocTraitArgs)
     val distinct = compiler.traitBoundTypeTerm(ref: foreignReceiver, bound: bound, traitIndex: traitIndex)
     assert(compiler.arena.typeAt(index: distinct).assocNameId != 0U64)
     assert(!compiler.typeRefEq(a: distinct, b: result))

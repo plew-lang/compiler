@@ -83,9 +83,9 @@ fn main() {
         val boolean = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "boolean").nameId)
         val boolType = compiler.funcParamAt(params: compiler.arena.functionAt(index: boolean).params, index: 0U64).ty
         val source = if scenario == "wrongReceiver" {
-            give compiler.rebuildProjectionTerm(t: compiler.arena.typeAt(index: step.source), receiver: subject, traitArgs: [])
+            give compiler.rebuildProjectionTerm(source: compiler.arena.typeAt(index: step.source).projectionRebuildSource(), receiver: subject, traitArgs: [])
         } else if scenario == "wrongArguments" {
-            give compiler.rebuildProjectionTerm(t: compiler.arena.typeAt(index: step.source), receiver: compiler.typeTermProjectionReceiver(t: compiler.arena.typeAt(index: step.source)), traitArgs: [step.output])
+            give compiler.rebuildProjectionTerm(source: compiler.arena.typeAt(index: step.source).projectionRebuildSource(), receiver: compiler.typeTermProjectionReceiver(t: compiler.arena.typeAt(index: step.source)), traitArgs: [step.output])
         } else { give step.source }
         val proof = if scenario == "wrongProof" { give plan.proofs[0U64] } else { give step.proof }
         val output = if scenario == "wrongOutput" { give boolType } else if scenario == "cycle" { give step.source } else { give step.output }

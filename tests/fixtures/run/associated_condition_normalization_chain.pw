@@ -20,7 +20,7 @@ fn main() {
     val leafDeclaration = compiler.arena.structAt(index: compiler.arena.firstStructNamed(nameId: leafName.nameId))
     val leaf = compiler.pushType(t: <TypeRef nameStart=leafDeclaration.nameStart nameLen=leafDeclaration.nameLen args=[] hasDecl=true declOffset=leafDeclaration.defOffset />)
     val first = compiler.pushType(t: <TypeRef nameStart=sourceDeclaration.nameStart nameLen=sourceDeclaration.nameLen args=[] hasDecl=true declOffset=sourceDeclaration.defOffset projectionReceiver=source assocTraitStart=parser.nameStart assocTraitLen=parser.nameLen assocTraitId=parser.nameId hasAssocTraitDecl=true assocTraitDeclOffset=parser.nameStart assocNameStart=output.nameStart assocNameLen=output.nameLen assocNameId=output.nameId />)
-    val second = compiler.rebuildProjectionTerm(t: compiler.arena.typeAt(index: first), receiver: first, traitArgs: [])
+    val second = compiler.rebuildProjectionTerm(source: compiler.arena.typeAt(index: first).projectionRebuildSource(), receiver: first, traitArgs: [])
     mut val equations: Array[ProjectionNormalizationStep] = []
     val normalized = compiler.recordConditionTypeNormalization(ref: second, assumptions: [], normalizations: inout equations).unwrap()
     if !compiler.typeRefEq(a: normalized, b: leaf) || equations.count() != 2U64 { panic("chain did not normalize through both outputs") }

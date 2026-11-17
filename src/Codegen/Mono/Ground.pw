@@ -89,7 +89,7 @@ pub impl Comp {
             if !argumentsChanged && groundedReceiver == receiver { return ref }
             val original = self.arena.typeAt(index: ref)
             if !argumentsChanged { traitArgs = original.assocTraitArgs }
-            return self.rebuildProjectionTerm(t: original, receiver: groundedReceiver, traitArgs: traitArgs)
+            return self.rebuildProjectionTerm(source: original.projectionRebuildSource(), receiver: groundedReceiver, traitArgs: traitArgs)
         }
         mut val args: Array[U64] = []
         mut val assocArgs: Array[U64] = []
@@ -278,7 +278,7 @@ pub impl Comp {
             }
             mut val projection: U64 = ref
             if changed {
-                projection = self.rebuildProjectionTerm(t: t, receiver: receiver, traitArgs: traitArgs)
+                projection = self.rebuildProjectionTerm(source: t.projectionRebuildSource(), receiver: receiver, traitArgs: traitArgs)
             }
             if projection == 0U64 || projection >= self.arena.typeCount() { return <Result.Ok value=ref />}
             val p: TypeRef = self.arena.typeAt(index: projection)
@@ -591,10 +591,10 @@ pub impl Comp {
     // receiver and/or positional trait arguments.  Keeping the receiver
     // replacement here prevents each substitution path from accidentally
     // treating a projection's flattened legacy head as the whole term.
-    inout fn rebuildProjectionTerm(t: TypeRef, receiver: U64, traitArgs: Array[U64]) -> U64 {
-        if t.assocNameId == 0U64 || receiver == 0U64 || receiver >= self.arena.typeCount() { return 0U64 }
+    inout fn rebuildProjectionTerm(source: ProjectionRebuildSource, receiver: U64, traitArgs: Array[U64]) -> U64 {
+        if source.assocNameId == 0U64 || receiver == 0U64 || receiver >= self.arena.typeCount() { return 0U64 }
         val base: TypeRef = self.arena.typeAt(index: receiver)
-        return self.pushType(t: <TypeRef nameStart=base.nameStart nameLen=base.nameLen paramId=base.paramId args=base.args isRecord=base.isRecord recordFieldLabels=base.recordFieldLabels recordFieldTerms=base.recordFieldTerms viewExtId=t.viewExtId viewIds=t.viewIds viewSources=t.viewSources isAny=base.isAny argLabels=base.argLabels projectionReceiver=receiver assocTraitStart=t.assocTraitStart assocTraitLen=t.assocTraitLen assocTraitId=t.assocTraitId assocTraitArgs=traitArgs assocTraitArgLabels=t.assocTraitArgLabels assocNameStart=t.assocNameStart assocNameLen=t.assocNameLen assocNameId=t.assocNameId isSendable=base.isSendable isDiverging=base.isDiverging hasDecl=base.hasDecl declOffset=base.declOffset hasAssocTraitDecl=t.hasAssocTraitDecl assocTraitDeclOffset=t.assocTraitDeclOffset siteOffset=t.siteOffset />)
+        return self.pushType(t: <TypeRef nameStart=base.nameStart nameLen=base.nameLen paramId=base.paramId args=base.args isRecord=base.isRecord recordFieldLabels=base.recordFieldLabels recordFieldTerms=base.recordFieldTerms viewExtId=source.viewExtId viewIds=source.viewIds viewSources=source.viewSources isAny=base.isAny argLabels=base.argLabels projectionReceiver=receiver assocTraitStart=source.assocTraitStart assocTraitLen=source.assocTraitLen assocTraitId=source.assocTraitId assocTraitArgs=traitArgs assocTraitArgLabels=source.assocTraitArgLabels assocNameStart=source.assocNameStart assocNameLen=source.assocNameLen assocNameId=source.assocNameId isSendable=base.isSendable isDiverging=base.isDiverging hasDecl=base.hasDecl declOffset=base.declOffset hasAssocTraitDecl=source.hasAssocTraitDecl assocTraitDeclOffset=source.assocTraitDeclOffset siteOffset=source.siteOffset />)
     }
 
     // Apply exactly one concrete witness's impl-binder substitution. Query
@@ -623,7 +623,7 @@ pub impl Comp {
                 traitArgs.append((try self.groundWitnessTypeTerm(ref: semantic.assocTraitArgs[argument], params: params, matchResult: matchResult)))
                 argument += 1U64
             }
-            return <Result.Ok value=self.rebuildProjectionTerm(t: semantic, receiver: receiver, traitArgs: traitArgs) />
+            return <Result.Ok value=self.rebuildProjectionTerm(source: semantic.projectionRebuildSource(), receiver: receiver, traitArgs: traitArgs) />
         }
         if matchResult.selfRef != 0U64 && semantic.args.count() == 0U64 && rangeEquals(bytes: self.arena.bytes, start: semantic.nameStart, len: semantic.nameLen, kw: "Self") {
             return <Result.Ok value=self.typeRefWithAddedViewSources(ref: matchResult.selfRef, additions: self.arena.typeViewSources(ref: ref)) />
@@ -1667,7 +1667,7 @@ impl Comp {
                 arguments.append(children[index])
                 index += 1U64
             }
-            val projected = self.rebuildProjectionTerm(t: type, receiver: children[0U64], traitArgs: arguments)
+            val projected = self.rebuildProjectionTerm(source: type.projectionRebuildSource(), receiver: children[0U64], traitArgs: arguments)
             if index == children.count() { return projected }
             mut val viewArguments: Array[U64] = []
             while index < children.count() {

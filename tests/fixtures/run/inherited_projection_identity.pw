@@ -24,10 +24,10 @@ fn main() {
     // An unavailable trait instance can only reach this comparison through
     // an internal term. Declaration admission rejects writing it in a signature.
     val projection = compiler.arena.typeAt(index: first)
-    val missing = compiler.rebuildProjectionTerm(t: projection, receiver: compiler.typeTermProjectionReceiver(t: projection), traitArgs: [absent])
+    val missing = compiler.rebuildProjectionTerm(source: projection.projectionRebuildSource(), receiver: compiler.typeTermProjectionReceiver(t: projection), traitArgs: [absent])
     val unresolved = compiler.traitBoundTypeTerm(ref: missing, bound: bound, traitIndex: traitIndex)
     assert(compiler.arena.typeAt(index: unresolved).assocNameId != 0U64)
-    val foreign = compiler.rebuildProjectionTerm(t: projection, receiver: other, traitArgs: projection.assocTraitArgs)
+    val foreign = compiler.rebuildProjectionTerm(source: projection.projectionRebuildSource(), receiver: other, traitArgs: projection.assocTraitArgs)
     assert(compiler.arena.typeAt(index: compiler.traitBoundTypeTerm(ref: foreign, bound: bound, traitIndex: traitIndex)).assocNameId != 0U64)
     match compiler.mergeTraitProjectionEquality(selected: <TraitProjectionEquality.Value term=boolean steps=[] />, candidate: <TraitProjectionEquality.Value term=integer steps=[] />) {
         TraitProjectionEquality.Conflict => {}

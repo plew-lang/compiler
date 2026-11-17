@@ -94,7 +94,7 @@ fn main() {
         if scenario == "wrongMember" || scenario == "wrongTrait" {
             val function = compiler.arena.functionAt(index: compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "foreign").nameId))
             val template = compiler.funcParamAt(params: function.params, index: if scenario == "wrongMember" { give 0U64 } else { give 1U64 }).ty
-            projection = compiler.rebuildProjectionTerm(t: compiler.arena.typeAt(index: template), receiver: compiler.typeTermProjectionReceiver(t: compiler.arena.typeAt(index: original.projection)), traitArgs: [])
+            projection = compiler.rebuildProjectionTerm(source: compiler.arena.typeAt(index: template).projectionRebuildSource(), receiver: compiler.typeTermProjectionReceiver(t: compiler.arena.typeAt(index: original.projection)), traitArgs: [])
         }
         if scenario == "foreignClause" { clause += 100U64 }
         if scenario == "cycle" { prerequisite = <StaticConformanceProof.AssumedBound source=<DeclarationBoundRef.AssociatedType index=compiler.arena.associatedBoundEvidenceCount() /> /> }

@@ -2160,7 +2160,7 @@ impl Comp {
                 }
             }
             if receiver != raw.projectionReceiver || !self.sameResolvedTypeRefs(a: arguments, b: raw.assocTraitArgs) {
-                return self.rebuildProjectionTerm(t: raw, receiver: receiver, traitArgs: arguments)
+                return self.rebuildProjectionTerm(source: raw.projectionRebuildSource(), receiver: receiver, traitArgs: arguments)
             }
             return ref
         }

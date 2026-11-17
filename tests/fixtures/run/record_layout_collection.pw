@@ -2,7 +2,7 @@
 // left an opaque template name attached. Equal records share a layout; equal
 // spellings with different nominal owners must not share one.
 use /Frontend only { Comp }
-use /Ir only { TypeRef, Bind }
+use /Ir only { TypeRef, ProjectionRebuildSource, Bind }
 use @Std/Io only { write }
 
 fn main() {
@@ -32,7 +32,7 @@ fn main() {
     if layout >= compiler.arena.structCount() { panic "ground record layout missing" }
     val owner = compiler.internBytes(s: "Projection")
     val member = compiler.internBytes(s: "Item")
-    val projection = compiler.rebuildProjectionTerm(t: <TypeRef nameStart=0U64 nameLen=0U64 args=[] assocTraitId=owner.nameId assocNameId=member.nameId />, receiver: record, traitArgs: [])
+    val projection = compiler.rebuildProjectionTerm(source: <ProjectionRebuildSource assocTraitId=owner.nameId assocNameId=member.nameId />, receiver: record, traitArgs: [])
     if compiler.recordLayoutMatches(ref: projection, structIndex: layout) { panic "projection matched its receiver layout" }
     if compiler.recordStructIndex(ref: projection) < compiler.arena.structCount() { panic "projection acquired its receiver layout" }
     val count = compiler.arena.structCount()

@@ -197,3 +197,16 @@ span; the isolated CLI check exercises the ordinary file path. After skipping
 owner lookup for rows without a trait span, compiler source also passed the
 exact-pin carrier's check. Fresh optimized gates and independent completion
 review remain open.
+
+## Narrow Reconstruction Inputs
+
+Projection reconstruction now receives ProjectionRebuildSource, which owns
+member and trait identity, positional argument labels, output-view metadata
+and diagnostic location. The replacement receiver and positional arguments
+are explicit inputs. Existing-row callers project the owned metadata; the
+inherited-equation synthetic caller constructs it directly. The replacement
+receiver remains the sole source of fields used to write the compatibility
+mirror on TypeRef. Its old contents cannot be passed as reconstruction input.
+
+The exact-pin carrier passed compiler check, checks of all eleven adjusted
+internal fixtures and native execution of projection_member_identity.

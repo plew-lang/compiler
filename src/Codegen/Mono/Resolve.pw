@@ -421,8 +421,8 @@ pub impl Comp {
                 for memberIndex in 0U64..<declaration.assocTypes.count() {
                     val associated = self.traitBindAt(binds: declaration.assocTypes, index: memberIndex)
                     if associated.nameId == member {
-                        val head = <TypeRef nameStart=0U64 nameLen=0U64 args=[] assocTraitStart=owner assocTraitLen=declaration.nameLen assocTraitId=declaration.nameId assocNameStart=associated.nameStart assocNameLen=associated.nameLen assocNameId=member hasAssocTraitDecl=true assocTraitDeclOffset=owner siteOffset=offset />
-                        val projection = self.rebuildProjectionTerm(t: head, receiver: bound.subject, traitArgs: bound.constraint.key.positionalArgs)
+                        val head = <ProjectionRebuildSource assocTraitStart=owner assocTraitLen=declaration.nameLen assocTraitId=declaration.nameId assocNameStart=associated.nameStart assocNameLen=associated.nameLen assocNameId=member hasAssocTraitDecl=true assocTraitDeclOffset=owner siteOffset=offset />
+                        val projection = self.rebuildProjectionTerm(source: head, receiver: bound.subject, traitArgs: bound.constraint.key.positionalArgs)
                         try self.recordLexicalProjectionEquations(ref: projection, lexical: source, bound: self.declarationBound(source: source), equations: inout normalizations, offset: offset, sourceOwners: sourceOwners)
                         return self.retainedPredicateOutput(proof: proof, owner: owner, member: member, normalizations: normalizations, offset: offset, sourceOwners: sourceOwners)
                     }

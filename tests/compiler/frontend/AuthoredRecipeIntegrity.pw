@@ -66,7 +66,7 @@ fn main() {
         val root = compiler.sourceTypeUses.signatureFor(function: inner).unwrap().parameters[0U64]
         val original = compiler.sourceTypeUses.recipeAt(id: compiler.sourceTypeUses.useAt(index: root - 1U64).unwrap().recipe).unwrap()
         child = compiler.sourceTypeUses.deriveRecipe(term: innerType, children: original.children, labels: original.labels, origin: <SourceTypeRecipeOrigin.ProjectionReceiver />)
-        aggregate = compiler.rebuildProjectionTerm(t: compiler.arena.typeAt(index: outerType), receiver: innerType, traitArgs: [])
+        aggregate = compiler.rebuildProjectionTerm(source: compiler.arena.typeAt(index: outerType).projectionRebuildSource(), receiver: innerType, traitArgs: [])
     }
     val children: Array[U64] = if scenario == "shape" { give [] } else { give [child] }
     val labels: Array[U64] = if scenario == "shape" { give [] } else if scenario == "label" { give [123U64] } else { give [0U64] }
