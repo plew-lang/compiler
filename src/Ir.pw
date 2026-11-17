@@ -229,6 +229,23 @@ impl TypeTerm {
     }
 }
 pub impl TypeTerm {
+    fn isProjection() -> Bool { return self.assocNameId != 0U64 }
+
+    // A legacy row can mirror record metadata from its projection receiver.
+    fn isStructuralRecord() -> Bool { return !self.isProjection() && self.isRecord }
+
+    fn hasNominalIdentity() -> Bool {
+        return !self.isProjection() && !self.isRecord && self.hasDecl
+    }
+
+    fn projectionHeadEquals(other: TypeTerm) -> Bool {
+        if self.assocNameId != other.assocNameId { return false }
+        if self.hasAssocTraitDecl && other.hasAssocTraitDecl {
+            return self.assocTraitDeclOffset == other.assocTraitDeclOffset
+        }
+        return self.assocTraitId == other.assocTraitId
+    }
+
     // A pattern projection's receiver is a child, not its head. The legacy
     // owner bridge here is not exact equality or source-proof admission.
     fn patternProjectionHeadMatches(other: TypeTerm) -> Bool {

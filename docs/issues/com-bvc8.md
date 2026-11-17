@@ -103,3 +103,25 @@ projections. The shared head compare returns from its record branch before it
 checks either the trait or the associated member. The immediate shape key and
 the body/destructor nominal-key guards also read those legacy fields. Track
 their compatibility with structural equality before changing the key or head.
+
+## Semantic Reader Increment
+
+The initial implementation gives pooled type readers an explicit projection
+classification. Projection heads compare associated members and trait owners,
+and their children carry the receiver and positional arguments. The coarse
+candidate key uses the member for projection children and leaves full identity
+to equality. Body/destruction nominal-index eligibility and grounding's
+structural-record branches no longer derive the projection's category from
+the receiver mirror.
+
+The extended native RED builds the same fixture with the same exact-pin compiler
+against archived source at b679f553. Member comparison fails through rebuilding
+and substitution; the distinct trait-owner assertion also fails. Same-member,
+receiver and trait-argument controls match. Compiling and running the fixture
+with that carrier against the changed source matches the full golden.
+
+Remaining work includes auditing data passed by construction paths, testing
+selector identity and record layout-name independence, tracing any qualified
+comparison and materialization consumers that still interpret mirrors,
+fresh-candidate gates, and independent review. The migration TypeRef payload
+still contains compatibility fields.

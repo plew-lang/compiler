@@ -48,7 +48,7 @@ pub impl Comp {
             }
             Optional.None => {}
         }
-        if t.isRecord {
+        if t.isStructuralRecord() {
             if t.recordFieldLabels.len != t.recordFieldTerms.len { return ref }
             mut val fields: Array[U64] = []
             mut val changed: Bool = false
@@ -248,9 +248,9 @@ pub impl Comp {
             val grounded = (try self.closeBodyProjectionTermsRecording(ref: underlying, environment: environment, selfRef: selfRef, itemRef: itemRef, assumptions: assumptions, normalizations: inout normalizations, recording: recording, demand: demand))
             return <Result.Ok value=self.typeRefWithAddedViewSources(ref: grounded, additions: self.viewSourcesWithArguments(ref: ref, arguments: arguments)) />
         }
-        if !term.isRecord && term.assocNameId == 0U64 && term.args.len == 0U64 && term.assocTraitArgs.len == 0U64 { return <Result.Ok value=ref />}
+        if !term.isStructuralRecord() && !term.isProjection() && term.args.len == 0U64 && term.assocTraitArgs.len == 0U64 { return <Result.Ok value=ref />}
         val t: TypeRef = self.arena.typeAt(index: ref)
-        if t.isRecord {
+        if term.isStructuralRecord() {
             if t.recordFieldLabels.count() != t.recordFieldTerms.count() { return <Result.Ok value=ref />}
             mut val fields: Array[U64] = []
             mut val changed: Bool = false
@@ -468,8 +468,8 @@ pub impl Comp {
     inout fn typeTermRefChildCount(ref: U64) -> U64 {
         if ref >= self.arena.typeTermCount() { return 0U64 }
         val t = self.arena.typeTermAt(index: ref)
-        if t.assocNameId != 0U64 { return 1U64 + t.assocTraitArgs.len + self.arena.typeViewArgumentCount(sources: t.viewSources) }
-        if t.isRecord { return t.recordFieldTerms.len + self.arena.typeViewArgumentCount(sources: t.viewSources) }
+        if t.isProjection() { return 1U64 + t.assocTraitArgs.len + self.arena.typeViewArgumentCount(sources: t.viewSources) }
+        if t.isStructuralRecord() { return t.recordFieldTerms.len + self.arena.typeViewArgumentCount(sources: t.viewSources) }
         return t.args.len + t.assocTraitArgs.len + self.arena.typeViewArgumentCount(sources: t.viewSources)
     }
 
@@ -481,13 +481,13 @@ pub impl Comp {
     inout fn typeTermRefChildRef(ref: U64, index: U64) -> U64 {
         if ref >= self.arena.typeTermCount() { return 0U64 }
         val t = self.arena.typeTermAt(index: ref)
-        if t.assocNameId != 0U64 {
+        if t.isProjection() {
             if index == 0U64 { return self.typeTermRefProjectionReceiver(ref: ref) }
             val traitIndex: U64 = index - 1U64
             if traitIndex < t.assocTraitArgs.len { return self.arena.typeAssocArgumentAt(index: t.assocTraitArgs.start + traitIndex) }
             return self.arena.typeViewArgumentAt(ref: ref, index: traitIndex - t.assocTraitArgs.len)
         }
-        if t.isRecord {
+        if t.isStructuralRecord() {
             if index < t.recordFieldTerms.len { return self.arena.typeRecordFieldAt(index: t.recordFieldTerms.start + index) }
             return self.arena.typeViewArgumentAt(ref: ref, index: index - t.recordFieldTerms.len)
         }
@@ -500,13 +500,13 @@ pub impl Comp {
     inout fn typeTermRefIdentityChildLabel(ref: U64, index: U64) -> U64 {
         if ref >= self.arena.typeTermCount() { return 0U64 }
         val t = self.arena.typeTermAt(index: ref)
-        if t.assocNameId != 0U64 {
+        if t.isProjection() {
             if index == 0U64 { return 0U64 }
             val traitIndex: U64 = index - 1U64
             if traitIndex < t.assocTraitArgLabels.len { return self.arena.typeAssocArgumentLabelAt(index: t.assocTraitArgLabels.start + traitIndex) }
             return 0U64
         }
-        if t.isRecord {
+        if t.isStructuralRecord() {
             if index < t.recordFieldLabels.len { return self.arena.typeRecordLabelAt(index: t.recordFieldLabels.start + index) }
             return 0U64
         }
@@ -537,7 +537,14 @@ pub impl Comp {
             }
             val child = self.arena.typeTermAt(index: childRef)
             mut val head = 1U64
-            if !child.isRecord {
+            if child.isProjection() {
+                // Owner metadata can be filled in after publication. The member
+                // alone is a stable filter; complete equality checks the owner.
+                head = (child.assocNameId % modulus + 2U64) % modulus
+                key = (key * 65537U64 + head) % modulus
+                continue
+            }
+            if !child.isStructuralRecord() {
                 head = (child.paramId % modulus + child.assocTraitId % modulus + child.assocNameId % modulus + 2U64) % modulus
                 if child.hasDecl { head = (head * 65537U64 + child.declOffset % modulus) % modulus }
                 if child.isAny { head += 3U64 }
@@ -559,7 +566,12 @@ pub impl Comp {
         if ta.viewExtId != 0U64 || ta.viewIds.len != 0U64 || ta.viewSources.len != 0U64 || tb.viewExtId != 0U64 || tb.viewIds.len != 0U64 || tb.viewSources.len != 0U64 {
             if !(self.arena.typeViewSourceHeadsEqual(a: a, b: b)) { return false }
         }
-        if ta.isRecord || tb.isRecord { return ta.isRecord && tb.isRecord && ta.isSendable == tb.isSendable && ta.isDiverging == tb.isDiverging }
+        if ta.isProjection() || tb.isProjection() {
+            return ta.isProjection() && tb.isProjection() && ta.projectionHeadEquals(other: tb)
+        }
+        if ta.isStructuralRecord() || tb.isStructuralRecord() {
+            return ta.isStructuralRecord() && tb.isStructuralRecord() && ta.isSendable == tb.isSendable && ta.isDiverging == tb.isDiverging
+        }
         if ta.isAny != tb.isAny || ta.isSendable != tb.isSendable || ta.isDiverging != tb.isDiverging || ta.paramId != tb.paramId { return false }
         if ta.assocTraitId != tb.assocTraitId || (ta.hasAssocTraitDecl && tb.hasAssocTraitDecl && ta.assocTraitDeclOffset != tb.assocTraitDeclOffset) || ta.assocNameId != tb.assocNameId { return false }
         if sourceTerms && ta.paramId == 0U64 {
@@ -1017,7 +1029,7 @@ pub impl Comp {
             val grounded = (try self.groundTypeRef(ref: underlying))
             return <Result.Ok value=self.typeRefWithAddedViewSources(ref: grounded, additions: self.viewSourcesWithArguments(ref: ref, arguments: arguments)) />
         }
-        if t.isRecord {
+        if t.isStructuralRecord() {
             if t.recordFieldLabels.len != t.recordFieldTerms.len { return <Result.Ok value=ref />}
             mut val fields: Array[U64] = []
             mut val changed: Bool = false

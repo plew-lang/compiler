@@ -4,7 +4,7 @@ use /SourceAccess only { SourceAccess }
 use @Std/Io only { print }
 fn main() {
     mut val compiler = <Comp />
-    analyzeFrontend(c: inout compiler, input: <FrontendInput.Text text="trait Projection {{ type First type Second }}\nstruct Sample {{}}\nimpl Sample as Projection {{ type First = I64 type Second = Bool }}\nfn inspect[T](first: T#Projection.First, second: T#Projection.Second, firstRecord: (value: T#Projection.First), secondRecord: (value: T#Projection.Second)) where T: Projection {{}}\nfn concrete(first: Sample#Projection.First, second: Sample#Projection.Second) {{}}\nfn main() {{}}\n" path="ValidInput.pw" />, sources: <SourceAccess />).unwrap()
+    analyzeFrontend(c: inout compiler, input: <FrontendInput.Text text="trait Projection {{ type First type Second }}\ntrait Other {{ type First }}\ntrait WithArgument[A] {{ type Item }}\nstruct Sample {{}}\nimpl Sample as Projection {{ type First = I64 type Second = Bool }}\nfn inspect[T](first: T#Projection.First, second: T#Projection.Second, firstRecord: (value: T#Projection.First), secondRecord: (value: T#Projection.Second), other: T#Other.First, firstArgument: T#WithArgument[I64].Item, secondArgument: T#WithArgument[Bool].Item) where T: Projection, T: Other, T: WithArgument[I64], T: WithArgument[Bool] {{}}\nfn concrete(first: Sample#Projection.First, second: Sample#Projection.Second) {{}}\nfn main() {{}}\n" path="ValidInput.pw" />, sources: <SourceAccess />).unwrap()
     val name = compiler.internBytes(s: "inspect")
     val function = compiler.arena.functionAt(index: compiler.arena.firstFunctionNamed(nameId: name.nameId))
     val first = compiler.funcParamAt(params: function.params, index: 0U64).ty
@@ -26,6 +26,22 @@ fn main() {
     val rebuiltSecond = compiler.rebuildProjectionTerm(t: compiler.arena.typeAt(index: second), receiver: receiver, traitArgs: [])
     print("rebuilder record projection equal")
     print(compiler.typeRefEq(a: rebuiltFirst, b: rebuiltSecond))
+    val anotherReceiver = compiler.rebuildProjectionTerm(t: term, receiver: secondRecord, traitArgs: [])
+    val sameMemberAndReceiver = compiler.rebuildProjectionTerm(t: term, receiver: receiver, traitArgs: [])
+    val other = compiler.funcParamAt(params: function.params, index: 4U64).ty
+    val otherOwner = compiler.rebuildProjectionTerm(t: compiler.arena.typeAt(index: other), receiver: receiver, traitArgs: [])
+    print("rebuilders with the same projection identity compare equal")
+    print(compiler.typeRefEq(a: rebuiltFirst, b: sameMemberAndReceiver))
+    print("changing the receiver changes projection identity")
+    print(!compiler.typeRefEq(a: rebuiltFirst, b: anotherReceiver))
+    print("changing the trait owner changes projection identity")
+    print(!compiler.typeRefEq(a: rebuiltFirst, b: otherOwner))
+    val firstArgument = compiler.arena.typeAt(index: compiler.funcParamAt(params: function.params, index: 5U64).ty)
+    val secondArgument = compiler.arena.typeAt(index: compiler.funcParamAt(params: function.params, index: 6U64).ty)
+    val projectedFirstArgument = compiler.rebuildProjectionTerm(t: firstArgument, receiver: receiver, traitArgs: firstArgument.assocTraitArgs)
+    val projectedSecondArgument = compiler.rebuildProjectionTerm(t: secondArgument, receiver: receiver, traitArgs: secondArgument.assocTraitArgs)
+    print("changing the trait argument changes projection identity")
+    print(!compiler.typeRefEq(a: projectedFirstArgument, b: projectedSecondArgument))
     val binder = compiler.funcBindAt(binds: function.typeParams, index: 0U64)
     val mappedFirst = compiler.groundTermInEnvironment(ref: first, params: [binder], values: [receiver])
     val mappedSecond = compiler.groundTermInEnvironment(ref: second, params: [binder], values: [receiver])

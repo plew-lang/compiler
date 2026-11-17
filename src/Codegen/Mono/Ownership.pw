@@ -72,7 +72,7 @@ pub impl Comp {
             if known != 0U64 { return known }
         }
         val term = self.arena.typeTermAt(index: typeRef)
-        if term.hasDecl && !term.isRecord {
+        if term.hasNominalIdentity() {
             val key = self.destructionNominalKey(typeRef: typeRef, declaration: term.declOffset)
             mut val candidate = self.arena.finalDestructionNominalHeads.getOr(key: key, fallback: 0U64)
             while candidate != 0U64 {
@@ -86,7 +86,7 @@ pub impl Comp {
             if self.arena.finalDestructionShapeIndex { return 0U64 }
         }
         mut val bucket = term.nameId
-        if term.isRecord { bucket = 0U64 }
+        if term.isStructuralRecord() || term.isProjection() { bucket = 0U64 }
         mut val candidate = self.arena.finalDestructionHeads.getOr(key: bucket, fallback: 0U64)
         while candidate != 0U64 {
             if self.typeRefEq(a: self.arena.finalDestructions[candidate - 1U64].typeRef, b: typeRef) {
@@ -344,17 +344,17 @@ pub impl Comp {
         val type = self.arena.typeAt(index: typeRef)
         val term = self.arena.typeTermAt(index: typeRef)
         mut val bucket = term.nameId
-        if term.isRecord { bucket = 0U64 }
+        if term.isStructuralRecord() || term.isProjection() { bucket = 0U64 }
         val contract = self.arena.finalDestructions.count() + 1U64
         self.arena.finalDestructions.append(<FinalDestruction typeRef=typeRef />)
         mut val nominalNext = 0U64
         mut val nameNext = 0U64
-        if term.hasDecl && !term.isRecord {
+        if term.hasNominalIdentity() {
             val key = self.destructionNominalKey(typeRef: typeRef, declaration: term.declOffset)
             nominalNext = self.arena.finalDestructionNominalHeads.getOr(key: key, fallback: 0U64)
             self.arena.finalDestructionNominalHeads[key] = contract
         }
-        if !self.arena.finalDestructionShapeIndex || !term.hasDecl || term.isRecord {
+        if !self.arena.finalDestructionShapeIndex || !term.hasNominalIdentity() {
             nameNext = self.arena.finalDestructionHeads.getOr(key: bucket, fallback: 0U64)
             self.arena.finalDestructionHeads[bucket] = contract
         }
