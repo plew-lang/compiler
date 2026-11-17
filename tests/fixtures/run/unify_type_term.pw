@@ -64,7 +64,12 @@ fn main() {
     check(compiler: inout compiler, pattern: associated, actual: associatedZero, expected: true, ignoreTopView: false)
     check(compiler: inout compiler, pattern: associated, actual: associatedLabel, expected: false, ignoreTopView: false)
     check(compiler: inout compiler, pattern: associated, actual: associatedOther, expected: false, ignoreTopView: false)
-    check(compiler: inout compiler, pattern: associated, actual: associatedOwner, expected: true, ignoreTopView: false)
+    // An unresolved owner cannot borrow the identity of a same-spelled trait.
+    check(compiler: inout compiler, pattern: associated, actual: associatedOwner, expected: false, ignoreTopView: false)
+    check(compiler: inout compiler, pattern: associatedOwner, actual: associated, expected: false, ignoreTopView: false)
+    val associatedOwnerAlias = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] assocTraitId=9U64 assocNameId=8U64 assocTraitArgs=[bare] hasAssocTraitDecl=true assocTraitDeclOffset=10U64 />)
+    if associatedOwnerAlias == associatedOwner { panic "canonical owner control requires separate terms" }
+    check(compiler: inout compiler, pattern: associatedOwner, actual: associatedOwnerAlias, expected: true, ignoreTopView: false)
     check(compiler: inout compiler, pattern: associatedOwner, actual: associatedOwnerOther, expected: false, ignoreTopView: false)
     check(compiler: inout compiler, pattern: 0U64, actual: 0U64, expected: true)
     check(compiler: inout compiler, pattern: 0U64, actual: bare, expected: false)

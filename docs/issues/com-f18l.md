@@ -1,6 +1,6 @@
 ---
 id: com-f18l
-status: in_progress
+status: closed
 deps: []
 links: [com-j2i7]
 created: 2026-11-17T10:39:00Z
@@ -158,3 +158,12 @@ Its two callers are in parts of Frontend. The helper now uses a module-private
 impl while the U64-returning public entry remains public. All three fixture
 checks pass with the same fixed carrier against the repaired sources.
 The task stays open for the fixed candidate and group regression gate.
+
+The c41653f1 candidate reached its second-generation fixed point with
+unchanged inputs (7.487978-second formal median). The complete normal
+rerun 20261117T125218-test-27e144 no longer contains the package visibility
+regressions. It retains the 782 baseline signatures and adds only the
+legacy internal unifier expectation reconciled in com-bvc8. The private
+signature adjustment and all exact failure differences received independent
+review. This scoped outcome leaves the phase-wide gates and performance
+target open.

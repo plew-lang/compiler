@@ -1,6 +1,6 @@
 ---
 id: com-bvc8
-status: in_progress
+status: closed
 deps: [com-f18l, com-fgck]
 links: [com-vh0x, com-j2i7, met-c1pg, com-cuoy, com-0w38, com-zdod]
 created: 2026-11-06T17:52:14Z
@@ -422,3 +422,25 @@ audit found no remaining scoped implementation defect and requires the
 completed group's ordinary suite to be reconciled before closure.
 Exact-source suite 20261117T113819-test-2fabfb is in progress; compare
 its failure signatures with 20261117T091050-test-7de352.
+
+## Group Reconciliation
+
+The cceb9631 normal run exposed a public signature leak in the selector
+child. The c41653f1 follow-up moved the method returning internal selector
+evidence into the Frontend module's private impl. The exact optimized
+successor reached its second-generation fixed point with unchanged inputs;
+the formal median was 7.487978 seconds.
+
+The completed normal rerun 20261117T125218-test-27e144 retains exactly the
+782 known baseline failure signatures and adds only unify_type_term(exit:134).
+The baseline has no removed signatures. Inputs were unchanged; the run
+itself exits 1. The failing internal assertion compared an unstamped
+projection with a distinct term whose trait owner was already resolved.
+This expected the old spelling bridge and contradicts the repaired
+same-owner contract. The corrected test asserts mismatch in both
+directions, preserves the distinct resolved owners control and tests
+equality on distinct raw references with the same canonical owner.
+The corrected case passed native execution on the same frozen compiler
+and source. Independent review verified the exact normal-run comparison,
+the internal expectation's intent and the scope of the targeted rerun.
+Phase-wide normal, sanitizer and seven-second completion gates remain open.
