@@ -1,6 +1,6 @@
 ---
 id: com-bvc8
-status: open
+status: in_progress
 deps: []
 links: [com-vh0x, com-j2i7, met-c1pg, com-cuoy, com-0w38, com-zdod]
 created: 2026-11-06T17:52:14Z
@@ -87,3 +87,19 @@ repair; link and coordinate rather than duplicating their whole scope. met-c1pg
 owns cycle graph admission/private comparisons, not non-cycle equality. No new
 projection policy, conformance solver, record extension feature or main/seed
 promotion. Required area intake is met-6e6k and met-ia09, plus met-si6j directly.
+
+## Reproduction on the Pinned Compiler
+
+The fixed-point carrier built with Syntax 0.1.11-dev.32 compiled and ran
+[projection_member_identity](../../tests/fixtures/run/projection_member_identity.pw)
+natively. The builder and environment substitution each reported equality for
+distinct members (expected 0, observed 1). The generic, nested record and
+concrete controls matched their goldens. The mapped receiver was preserved.
+
+Both a direct rebuild and substitution publish through Comp.pushType and
+Arena.registerType, which currently copy the receiver-derived classification
+and pools into the scalar term. The shared child reader handles these rows as
+projections. The shared head compare returns from its record branch before it
+checks either the trait or the associated member. The immediate shape key and
+the body/destructor nominal-key guards also read those legacy fields. Track
+their compatibility with structural equality before changing the key or head.

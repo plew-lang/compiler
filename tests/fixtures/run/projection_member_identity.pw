@@ -1,0 +1,36 @@
+// Structural identity must distinguish members even when a projection is rebuilt with a record receiver.
+use /Frontend only { Comp, FrontendInput, analyzeFrontend }
+use /SourceAccess only { SourceAccess }
+use @Std/Io only { print }
+fn main() {
+    mut val compiler = <Comp />
+    analyzeFrontend(c: inout compiler, input: <FrontendInput.Text text="trait Projection {{ type First type Second }}\nstruct Sample {{}}\nimpl Sample as Projection {{ type First = I64 type Second = Bool }}\nfn inspect[T](first: T#Projection.First, second: T#Projection.Second, firstRecord: (value: T#Projection.First), secondRecord: (value: T#Projection.Second)) where T: Projection {{}}\nfn concrete(first: Sample#Projection.First, second: Sample#Projection.Second) {{}}\nfn main() {{}}\n" path="ValidInput.pw" />, sources: <SourceAccess />).unwrap()
+    val name = compiler.internBytes(s: "inspect")
+    val function = compiler.arena.functionAt(index: compiler.arena.firstFunctionNamed(nameId: name.nameId))
+    val first = compiler.funcParamAt(params: function.params, index: 0U64).ty
+    val second = compiler.funcParamAt(params: function.params, index: 1U64).ty
+    val firstRecord = compiler.funcParamAt(params: function.params, index: 2U64).ty
+    val secondRecord = compiler.funcParamAt(params: function.params, index: 3U64).ty
+    print("valid generic projection equal")
+    print(compiler.typeRefEq(a: first, b: second))
+    print("valid nested record equal")
+    print(compiler.typeRefEq(a: firstRecord, b: secondRecord))
+    val concreteName = compiler.internBytes(s: "concrete")
+    val concrete = compiler.arena.functionAt(index: compiler.arena.firstFunctionNamed(nameId: concreteName.nameId))
+    print("valid concrete projection equal")
+    print(compiler.typeRefEq(a: compiler.funcParamAt(params: concrete.params, index: 0U64).ty, b: compiler.funcParamAt(params: concrete.params, index: 1U64).ty))
+    val term = compiler.arena.typeAt(index: first)
+    // Use an actual record term rather than manually stamping isRecord on a projection.
+    val receiver = firstRecord
+    val rebuiltFirst = compiler.rebuildProjectionTerm(t: term, receiver: receiver, traitArgs: [])
+    val rebuiltSecond = compiler.rebuildProjectionTerm(t: compiler.arena.typeAt(index: second), receiver: receiver, traitArgs: [])
+    print("rebuilder record projection equal")
+    print(compiler.typeRefEq(a: rebuiltFirst, b: rebuiltSecond))
+    val binder = compiler.funcBindAt(binds: function.typeParams, index: 0U64)
+    val mappedFirst = compiler.groundTermInEnvironment(ref: first, params: [binder], values: [receiver])
+    val mappedSecond = compiler.groundTermInEnvironment(ref: second, params: [binder], values: [receiver])
+    print("substitution record projection equal")
+    print(compiler.typeRefEq(a: mappedFirst, b: mappedSecond))
+    print("the mapped terms retain their projection receiver")
+    print(compiler.arena.typeAt(index: mappedFirst).projectionReceiver == receiver && compiler.arena.typeAt(index: mappedSecond).projectionReceiver == receiver)
+}
