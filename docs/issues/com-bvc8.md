@@ -383,3 +383,20 @@ requires exact instantiated arguments. The concrete Bool fixture cannot
 answer it. A scratch generic Source[K] / Item#Mark[K] case and a direct
 concrete-leaf proof-count probe are prepared for execution after the
 isolated formal self-host run. The review was read-only.
+
+## Fixed Point and Concrete Origin Control
+
+The formal isolated run 20261117T101817-self-host-fd9ec5 reached the second
+generation fixed point with identical LLVM, runtime and successor binaries.
+Inputs remained unchanged. Its three measurements were 7.992284, 7.414190
+and 7.495634 seconds (median 7.495634). The phase-three seven-second target
+is outstanding.
+
+A native scratch probe called the internal result-evidence reader with a
+projection occurrence pointing at a non-projection leaf. The same probe
+failed on f226c1f3 and passed on fd53521e. It verifies keeping the direct
+output proof with and without a leaf proof, excluding receiver-role proofs,
+and returning no result for a cyclic chain. The optimized fixed-point
+compiler also accepted and executed the generic Source[K] / Item#Mark[K]
+fixture, printing 42 twice. Runtime output does not by itself demonstrate
+which selector path supplied the concrete proof.
