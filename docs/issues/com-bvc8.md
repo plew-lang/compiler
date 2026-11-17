@@ -241,3 +241,14 @@ The follow-up found two further paths to verify: alpha equality and
 directional unification can compare a record receiver's ABI name instead of
 fields, and the authored-recipe reader appears to group output-view arguments
 with the projection trait arguments. Reproduce both paths before closing.
+
+## Structural Record Receivers in Declaration Matching
+
+The expanded native projection fixture reproduced divergent declaration
+equality and unification on records that differ only by ABI layout name.
+Both comparators now visit record fields using the same head, child and
+label readers as exact equality. The fixture verifies equality for equal
+fields with distinct layout names, and inequality for distinct fields with
+the same name. Top-level receiver-dispatch relaxation still excludes only
+outer view children; the recursive receiver and all nested views stay exact.
+Native RED and GREEN were observed with the same fixed carrier.

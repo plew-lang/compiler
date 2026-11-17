@@ -382,7 +382,7 @@ pub impl Comp {
         if a >= self.arena.typeCount() || b >= self.arena.typeCount() { return false }
         val ta: TypeRef = self.arena.typeAt(index: a)
         val tb: TypeRef = self.arena.typeAt(index: b)
-        if ta.assocNameId != 0U64 || tb.assocNameId != 0U64 {
+        if ta.assocNameId != 0U64 || tb.assocNameId != 0U64 || ta.isRecord || tb.isRecord {
             if !self.typeTermRefSameHead(a: a, b: b) { return false }
             val count = self.typeTermRefChildCount(ref: a)
             if count != self.typeTermRefChildCount(ref: b) { return false }
@@ -536,16 +536,15 @@ pub impl Comp {
         if a == 0U64 || b == 0U64 || a >= self.arena.typeCount() || b >= self.arena.typeCount() { return a == b }
         val ta: TypeTerm = self.arena.typeTermAt(index: a)
         val tb: TypeTerm = self.arena.typeTermAt(index: b)
-        if ta.assocNameId != 0U64 || tb.assocNameId != 0U64 {
-            if !ta.isProjection() || !tb.isProjection() || !ta.projectionHeadEquals(other: tb) { return false }
-            if ta.assocTraitArgs.len != tb.assocTraitArgs.len { return false }
-            mut val count = 1U64 + ta.assocTraitArgs.len
-            if !ignoreTopView {
-                if !self.arena.typeViewSourceHeadsEqual(a: a, b: b) { return false }
-                val viewArguments = self.arena.typeViewArgumentCount(ref: a)
-                if viewArguments != self.arena.typeViewArgumentCount(ref: b) { return false }
-                count += viewArguments
+        if ta.isProjection() || tb.isProjection() || ta.isStructuralRecord() || tb.isStructuralRecord() {
+            if !self.typeTermRefSameHead(a: a, b: b, ignoreTopView: ignoreTopView) { return false }
+            mut val count = self.typeTermRefChildCount(ref: a)
+            mut val otherCount = self.typeTermRefChildCount(ref: b)
+            if ignoreTopView {
+                count -= self.arena.typeViewArgumentCount(ref: a)
+                otherCount -= self.arena.typeViewArgumentCount(ref: b)
             }
+            if count != otherCount { return false }
             mut val child = 0U64
             while child < count {
                 if self.typeTermRefIdentityChildLabel(ref: a, index: child) != self.typeTermRefIdentityChildLabel(ref: b, index: child) || !self.unifyPatterns(a: self.typeTermRefChildRef(ref: a, index: child), aSide: aSide, b: self.typeTermRefChildRef(ref: b, index: child), bSide: bSide, aParams: aParams, bParams: bParams, binds: inout binds, deferPatternProjections: deferPatternProjections) { return false }

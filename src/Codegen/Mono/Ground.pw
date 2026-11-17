@@ -556,14 +556,14 @@ pub impl Comp {
         return key + 1U64
     }
 
-    inout fn typeTermRefSameHead(a: U64, b: U64, sourceTerms: Bool = false) -> Bool {
+    inout fn typeTermRefSameHead(a: U64, b: U64, sourceTerms: Bool = false, ignoreTopView: Bool = false) -> Bool {
         if a >= self.arena.typeTermCount() || b >= self.arena.typeTermCount() { return false }
         if a == b { return true }
         val ta = self.arena.typeTermAt(index: a)
         val tb = self.arena.typeTermAt(index: b)
         // Selector identity belongs to every type head, including records.
         // All empty representations match without another pooled read.
-        if ta.viewExtId != 0U64 || ta.viewIds.len != 0U64 || ta.viewSources.len != 0U64 || tb.viewExtId != 0U64 || tb.viewIds.len != 0U64 || tb.viewSources.len != 0U64 {
+        if !ignoreTopView && (ta.viewExtId != 0U64 || ta.viewIds.len != 0U64 || ta.viewSources.len != 0U64 || tb.viewExtId != 0U64 || tb.viewIds.len != 0U64 || tb.viewSources.len != 0U64) {
             if !(self.arena.typeViewSourceHeadsEqual(a: a, b: b)) { return false }
         }
         if ta.isProjection() || tb.isProjection() {

@@ -32,6 +32,10 @@ pattern matching compares output views
 1
 receiver dispatch can ignore the outer output view
 1
+declaration equality follows record fields through the receiver
+1
+pattern matching follows record fields through the receiver
+1
 invalid projection components do not publish a term
 1
 substitution record projection equal
