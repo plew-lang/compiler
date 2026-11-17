@@ -374,3 +374,12 @@ A direct concrete-origin proof-count control remains to be confirmed.
 Formal self-host validation 20261117T101817-self-host-fd9ec5 started on
 fd53521e in an isolated checkout using the exact pinned manifest and the
 adopted exact-pin carrier. No result is claimed while that run is active.
+
+Re-review of fd53521e confirmed the normal leaf merge, the fail-closed
+traversal limit and the bare equation key on both sides. The reviewer
+raised a verification concern about a generic output-view argument:
+the declaration admission may save a symbolic selector while final lookup
+requires exact instantiated arguments. The concrete Bool fixture cannot
+answer it. A scratch generic Source[K] / Item#Mark[K] case and a direct
+concrete-leaf proof-count probe are prepared for execution after the
+isolated formal self-host run. The review was read-only.
