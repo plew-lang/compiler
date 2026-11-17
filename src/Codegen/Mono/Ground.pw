@@ -837,7 +837,7 @@ pub impl Comp {
         if ref >= self.arena.typeCount() || structIndex >= self.arena.structCount() { return false }
         val term: TypeRef = self.arena.typeAt(index: ref)
         val layout: StructDef = self.arena.structAt(index: structIndex)
-        if !term.isRecord || term.recordFieldLabels.count() != term.recordFieldTerms.count() { return false }
+        if !self.arena.typeTermAt(index: ref).isStructuralRecord() || term.recordFieldLabels.count() != term.recordFieldTerms.count() { return false }
         if layout.nameLen == 0U64 || layout.isExtern || layout.typeParams.count() != 0U64 { return false }
         if self.arena.bytes[layout.nameStart] != 40U8 || layout.fields.count() != term.recordFieldTerms.count() { return false }
         mut val index: U64 = 0U64
@@ -852,7 +852,7 @@ pub impl Comp {
     inout fn recordStructIndex(ref: U64) -> U64 {
         if ref >= self.arena.typeCount() { return self.arena.structCount() }
         val term: TypeRef = self.arena.typeAt(index: ref)
-        if !term.isRecord { return self.arena.structCount() }
+        if !self.arena.typeTermAt(index: ref).isStructuralRecord() { return self.arena.structCount() }
         val attached: U64 = self.structIndexByName(start: term.nameStart, len: term.nameLen)
         if self.recordLayoutMatches(ref: ref, structIndex: attached) { return attached }
         mut val index: U64 = 0U64

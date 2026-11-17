@@ -142,3 +142,20 @@ both directly and through a projection, plus distinct output-view identity.
 The exact-pin carrier compiles current compiler source and the expanded
 fixture, whose output matches the golden. Six nearby fixtures passed check
 on the previous diagnostic binary built from f26bb1a5.
+
+## Independent Review and Follow-up
+
+Read-only review of 2ea64ae0 found a spelling fallback could bridge an
+ownerless projection to two distinct, same-spelled owners. It also found
+that record layout lookup accepted a projection by reading the receiver's
+mirror fields. Native RED reproduced both on 2ea64ae0 (owner assertion false;
+record layout assertion diagnosed “projection matched its receiver layout”).
+Both fixtures pass after comparison uses the saved canonical owner or the
+lowered owner offset, and both ABI lookup entry points require a structural
+record per the shared semantic category.
+
+The review also identified separate projection matching in declaration alpha
+equality and unification, possible owner overwrites during declaration sealing,
+unchecked receiver and member inputs in reconstruction, and remaining layout
+callers that branch on compatibility mirrors. Those paths still require audit,
+regression cases and a follow-up independent review.

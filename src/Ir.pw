@@ -240,9 +240,10 @@ pub impl TypeTerm {
 
     fn projectionHeadEquals(other: TypeTerm) -> Bool {
         if self.assocNameId != other.assocNameId { return false }
-        if self.hasAssocTraitDecl && other.hasAssocTraitDecl {
-            return self.assocTraitDeclOffset == other.assocTraitDeclOffset
-        }
+        // Lowering stores the selected owner in the declaration span.
+        val owner = if self.hasAssocTraitDecl { give self.assocTraitDeclOffset } else { give self.assocTraitStart }
+        val otherOwner = if other.hasAssocTraitDecl { give other.assocTraitDeclOffset } else { give other.assocTraitStart }
+        if owner != 0U64 || otherOwner != 0U64 { return owner == otherOwner }
         return self.assocTraitId == other.assocTraitId
     }
 

@@ -14,6 +14,12 @@ changing the trait owner changes projection identity
 1
 changing the trait argument changes projection identity
 1
+the same spelling does not merge different canonical owners
+1
+an unresolved owner cannot match either canonical owner
+1
+a different spelling does not split the same canonical owner
+1
 record identity ignores the layout name
 1
 projection identity ignores the receiver layout name

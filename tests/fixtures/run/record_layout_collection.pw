@@ -30,6 +30,11 @@ fn main() {
     compiler.scanType(ref: grounded).unwrap()
     val layout = compiler.recordStructIndex(ref: record)
     if layout >= compiler.arena.structCount() { panic "ground record layout missing" }
+    val owner = compiler.internBytes(s: "Projection")
+    val member = compiler.internBytes(s: "Item")
+    val projection = compiler.rebuildProjectionTerm(t: <TypeRef nameStart=0U64 nameLen=0U64 args=[] assocTraitId=owner.nameId assocNameId=member.nameId />, receiver: record, traitArgs: [])
+    if compiler.recordLayoutMatches(ref: projection, structIndex: layout) { panic "projection matched its receiver layout" }
+    if compiler.recordStructIndex(ref: projection) < compiler.arena.structCount() { panic "projection acquired its receiver layout" }
     val count = compiler.arena.structCount()
     compiler.scanType(ref: record).unwrap()
     if compiler.arena.structCount() != count { panic "record layout not deduplicated" }
