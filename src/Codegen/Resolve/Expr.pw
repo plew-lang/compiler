@@ -1347,6 +1347,7 @@ pub impl Comp {
         mut val selectedResult = resultTerm
         mut val selectedEnvironment = <InstanceEnvironment />
         mut val providedParameters: Array[U64] = []
+        mut val resultSelector: Optional[ResolvedViewSource] = <Optional.None />
         match resolution {
             StaticMemberResolution.Requirement(proof: _, traitIdx: _, reqIdx: _) => {
                 methodArguments = try self.staticRequirementCallArguments(resolution: resolution, args: args)
@@ -1360,6 +1361,7 @@ pub impl Comp {
                 val signature = try self.providedSourceSignature(function: callee, environment: environment)
                 selectedResult = signature.resultType
                 resultOccurrence = signature.resultOccurrence
+                resultSelector = signature.resultSelector
                 providedParameters = signature.parameterTypes
             }
             _ => {}
@@ -1396,6 +1398,7 @@ pub impl Comp {
         if selectedResult != 0U64 && resultOccurrence != 0U64 {
             self.recordAuthoredCompositeOrigin(exprId: exprId, term: selectedResult, occurrence: resultOccurrence)
             if self.arena.typeViewSourceCount(ref: selectedResult) != 0U64 {
+                self.recordSelectedResultTraitSelector(exprId: exprId, occurrence: resultOccurrence, term: selectedResult, selector: resultSelector)
                 self.recordExpressionExtensionSources(exprId: exprId, proofs: self.authoredResultExtensionSources(occurrence: resultOccurrence))
             }
         }
@@ -1874,7 +1877,11 @@ pub impl Comp {
                     StaticMemberResolution.Provided(proof: _, traitIdx: _, callee: val callee) => {
                         give if self.isAuthoredProvidedDeclaration(function: callee) {
                             val lexical = try self.withLexicalSelfBinding(f: function, environment: environment)
-                            give (try self.providedSourceSignature(function: callee, environment: lexical, read: <CallableSignatureRead.SourceResult />)).resultType
+                            val signature = try self.providedSourceSignature(function: callee, environment: lexical, read: <CallableSignatureRead.SourceResult />)
+                            if self.arena.typeViewSourceCount(ref: signature.resultType) != 0U64 {
+                                self.recordSelectedResultTraitSelector(exprId: exprId, occurrence: signature.resultOccurrence, term: signature.resultType, selector: signature.resultSelector)
+                            }
+                            give signature.resultType
                         } else {
                             give try self.groundTermForBody(ref: pattern, environment: environment, selfRef: receiverTerm, itemRef: 0U64)
                         }
@@ -3214,11 +3221,7 @@ impl Comp {
                 }
                 self.recordAuthoredCompositeOrigin(exprId: exprId, term: resultTerm, occurrence: occurrence)
                 if viewed {
-                    if resultSelector.isSome() {
-                        self.recordExpressionTraitSelector(exprId: exprId, selection: self.matchRecordedTraitSelector(selected: resultSelector.unwrap(), receiver: resultTerm))
-                    } else {
-                        self.recordAuthoredTraitSelector(exprId: exprId, occurrence: occurrence, term: resultTerm)
-                    }
+                    self.recordSelectedResultTraitSelector(exprId: exprId, occurrence: occurrence, term: resultTerm, selector: resultSelector)
                     mut val proofs = self.resultSubstitutionExtensions(exprId: exprId, declaration: declaration, args: args, typeArguments: calleeTypeArgs, receiverTerm: receiverTypeTerm)
                     for proof in self.authoredResultExtensionSources(occurrence: occurrence) { proofs.append(proof) }
                     self.recordExpressionExtensionSources(exprId: exprId, proofs: proofs)

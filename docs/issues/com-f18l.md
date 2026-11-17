@@ -73,3 +73,16 @@ The two-instance native compiler input produced two publications and matched
 still prints 42, with no publication of an authored output selector.
 Instrumentation exists only in scratch. Independent review and optimized
 verification remain pending.
+
+## Static Provided Call Follow-up
+
+The independent d4456ebb review identified two readers that consumed only
+the result type: static provided calls and expected-result completion.
+Both now publish the selected result through the same recorder as direct
+calls. A traced nested provided call observed static signature result
+selection, exact recording and subsequent candidate collection.
+
+The nested program still fails in Mid after the verified selection. The
+failure and its unviewed control are assigned to com-fgck, a separate
+required dependency of com-bvc8. This trace demonstrates lexical selection,
+not successful Mid execution. Optimized verification remains pending.

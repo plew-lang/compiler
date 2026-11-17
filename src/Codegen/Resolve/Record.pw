@@ -253,6 +253,15 @@ impl Comp {
         self.recordExpressionTraitSelector(exprId: exprId, selection: self.matchRecordedAuthoredTraitSelector(occurrence: occurrence, term: term))
     }
 
+    inout fn recordSelectedResultTraitSelector(exprId: U64, occurrence: U64, term: U64, selector: Optional[ResolvedViewSource]) {
+        match selector {
+            Optional.Some(v: val selected) => {
+                self.recordExpressionTraitSelector(exprId: exprId, selection: self.matchRecordedTraitSelector(selected: selected, receiver: term))
+            }
+            Optional.None => { self.recordAuthoredTraitSelector(exprId: exprId, occurrence: occurrence, term: term) }
+        }
+    }
+
     inout fn matchRecordedAuthoredTraitSelector(occurrence: U64, term: U64) -> Optional[ResolvedViewSource] {
         if occurrence == 0U64 || self.arena.typeViewSourceCount(ref: term) == 0U64 { return <Optional.None /> }
         mut val current = occurrence

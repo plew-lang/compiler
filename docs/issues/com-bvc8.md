@@ -1,7 +1,7 @@
 ---
 id: com-bvc8
 status: in_progress
-deps: [com-f18l]
+deps: [com-f18l, com-fgck]
 links: [com-vh0x, com-j2i7, met-c1pg, com-cuoy, com-0w38, com-zdod]
 created: 2026-11-06T17:52:14Z
 type: bug
