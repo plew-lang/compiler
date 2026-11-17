@@ -1,6 +1,6 @@
 ---
 id: com-cuoy
-status: in_progress
+status: closed
 deps: []
 links: [com-bvc8, com-0w38, com-nudy]
 created: 2026-11-06T17:52:14Z
@@ -77,3 +77,15 @@ reconstructed seed and CLI rejection controls.
 [Fixed-point and bootstrap evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-parameter-pin-self-host.json).
 Normal suite 20261117T091050-test-7de352 is pending; retain in-progress status
 until its failures are accounted for.
+
+## Normal Suite Reconciliation
+
+The immutable-input normal run 20261117T091050-test-7de352 exercised the
+exact-pin bootstrap binary and passed all three new parameter rejection
+fixtures. Its 782 failure signatures are a strict subset of the 784 from
+20261115T224510-test-d61556. The two removed failures are
+conformance_source_selection_conditional and reject/conditional_conformance_view,
+both corrected fixture cases. No new failure signature was found. This
+closes the task's parser and compiler admission scope with the prior
+independent review. It does not close the project's failing normal gate
+or phase-three performance requirement.
