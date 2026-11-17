@@ -55,3 +55,20 @@ proof, not impl ownership. These are related, not automatic implementation
 prerequisites. No new ownership language, blanket nominal impl prohibition,
 solver redesign or main/seed promotion. Required phase-three acceptance is
 connected to met-si6j and met-ia09. Product implementation remains open.
+
+## Bare Type Parameter Subject Controls
+
+The c41653f1 fixed candidate returns Internal ("authored signature changed its
+binder scope") for the existing blanket_headless fixture instead of the
+spec/09 subject refusal. Independent source probes with an empty
+`impl[T] T as Mark {}` and a method-only `impl[T] T { fn local() {} }`
+both pass --check. The legal `impl Named as Mark {}` control passes too.
+
+The legacy checkBlanketHeadless runs during declaration shape verification
+after authored type/conformance work has begun. isBlanketConform searches
+registered functions for a receiver-name/type-parameter-name coincidence,
+so it cannot prove subject eligibility for empty or member-only headers.
+The existing nondeclaration-subject requirement covers these inputs.
+Check the retained typed subject at both lower entrances before publication,
+preserve nominal generic heads and trait subjects, and remove the competing
+late function scan. The standard Hash ownership prerequisite is unchanged.

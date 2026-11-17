@@ -1078,7 +1078,7 @@ pub impl Comp {
                             return <Result.Err error=self.diagnosticAt(offset: f.defOffset, msg: "duplicate function name: extern declarations and ordinary functions share one top-level namespace in a module") />
                         }
                         if try self.callableDeclarationConflict(a: prior, b: f) {
-                            return <Result.Err error=self.diagnosticAt(offset: f.defOffset, msg: "duplicate or overlapping callable form in one declaration namespace: no provably distinct argument type (spec/04,07,09)") />
+                            return <Result.Err error=self.diagnosticAt(offset: f.defOffset, msg: "duplicate or overlapping callable form in one declaration namespace: no provably distinct argument type (spec/04,07,09)", failureDomain: <FailureDomain.Source />) />
                         }
                     }
                 }

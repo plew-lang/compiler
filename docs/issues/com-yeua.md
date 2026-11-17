@@ -246,3 +246,20 @@ their required diagnostic reason. Four JIT output controls passed,
 including warning-only loop reachability and a covered match arm.
 Independent review confirmed that synthetic/analytical branches do not
 become source errors and no internal-context branch changes domain.
+
+## Callable Registration Conflict Producer
+
+The shared declaration registration now reports Source only when the
+comparison produces Possible overlap in the same callable bucket. The
+Unproved, AnalysisLimit, and preexisting assembly/provided-copy routes do
+not use the new classification. On the revised diagnostic build all 14
+affected negative fixtures kept their exact diagnostics and became Source.
+The ordinary and trait dependent-structural positive overload fixtures
+kept their output. Independent review accepted the registration boundary.
+
+A separate trial on the default-factory diagnostics passed its 15 matching
+fixture reasons, but review found that a synthesized empty construction may
+lack a written construction site. The trial is not adopted. Retain the
+nominal owner's proof and the written construction's actual lexical origin
+before classifying this missing-access case. Keep the unproved cases out
+of the Source lane.
