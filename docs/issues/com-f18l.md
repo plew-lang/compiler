@@ -86,3 +86,16 @@ The nested program still fails in Mid after the verified selection. The
 failure and its unviewed control are assigned to com-fgck, a separate
 required dependency of com-bvc8. This trace demonstrates lexical selection,
 not successful Mid execution. Optimized verification remains pending.
+
+## Optimized Verification
+
+The fixed-point c899e248 candidate matched the expected JIT output for
+the generic selector, nested static call, parameterized view and
+extension-backed view fixtures. Both missing-premise diagnostics remained
+correct. Read-only review confirmed recording verifies the exact selector
+on the instantiated receiver. A nominal provided-method result with a
+missing explicit type argument resolved from its expected result and ran
+on both candidates. The independent review's projected expected-result
+completion coverage concern remains open: the attempted Item#Mark[K]
+fixture was rejected in both candidates during generic body checking,
+before it could establish that the selector was published on that path.
