@@ -1,6 +1,6 @@
 ---
 id: com-f18l
-status: closed
+status: in_progress
 deps: []
 links: [com-j2i7]
 created: 2026-11-17T10:39:00Z
@@ -144,3 +144,17 @@ fixed point with unchanged inputs and a 7.500079-second median. A six-pair
 comparison on cceb9631 source gave medians 7.354675 seconds before and
 7.364672 seconds after, with identical LLVM in all trials. The phase-wide
 performance target remains with com-p5um.
+
+## Package Visibility Regression
+
+The ordinary suite on cceb9631 (20261117T113819-test-2fabfb) rejected
+compiler-importing fixtures before reaching the tested logic. In the exact
+test invocation context, projection_member_identity, record_layout_collection,
+and active_type_parameter_identity failed on spec/15 public API closure
+at ExprType.pw:326. selectedMethodSourceResult was declared in a public
+impl although its result record is private to Frontend.
+
+Its two callers are in parts of Frontend. The helper now uses a module-private
+impl while the U64-returning public entry remains public. All three fixture
+checks pass with the same fixed carrier against the repaired sources.
+The task stays open for the fixed candidate and group regression gate.

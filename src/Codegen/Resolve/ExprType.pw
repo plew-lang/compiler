@@ -322,7 +322,9 @@ pub impl Comp {
     inout fn selectedMethodResult(callee: U64, environment: InstanceEnvironment) -> Result[U64, CompileDiagnostic] {
         return <Result.Ok value=(try self.selectedMethodSourceResult(callee: callee, environment: environment)).term />
     }
+}
 
+impl Comp {
     inout fn selectedMethodSourceResult(callee: U64, environment: InstanceEnvironment) -> Result[SelectedMethodSourceResult, CompileDiagnostic] {
         if environment.receiverRef == 0U64 { return <Result.Ok value=<SelectedMethodSourceResult term=0U64 /> /> }
         val declaration = self.arena.functionAt(index: callee)
@@ -333,6 +335,9 @@ pub impl Comp {
         val term = try self.groundFinalMethodSignatureInEnvironment(f: declaration, environment: environment, signatureTerm: self.semanticCallableReturnTerm(function: declaration))
         return <Result.Ok value=<SelectedMethodSourceResult term=term /> />
     }
+}
+
+pub impl Comp {
 
     inout fn groundFinalMethodReturn(callee: U64, receiver: U64, args: ArgRange) -> Result[U64, CompileDiagnostic] {
         if receiver == 0U64 { return <Result.Ok value=0U64 /> }
