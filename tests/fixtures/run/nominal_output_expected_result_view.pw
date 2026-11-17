@@ -1,0 +1,25 @@
+use @Std/Io only { print }
+
+trait Mark[K] { fn number() -> I64 }
+struct Box[T] {}
+impl[T] Box[T] as Mark[T] {
+    fn number() -> I64 { return 42I64 }
+}
+
+trait Source {}
+pub impl Source {
+    fn select[K]() -> Box[K]#Mark[K] {
+        return <Box[K] />#Mark[K]
+    }
+
+    fn read() -> I64 {
+        val selected: Box[I64]#Mark[I64] = self.select()
+        return selected.number()
+    }
+}
+
+struct Provider {}
+pub impl Provider { factory }
+impl Provider as Source {}
+
+fn main() { print(<Provider />.read()) }

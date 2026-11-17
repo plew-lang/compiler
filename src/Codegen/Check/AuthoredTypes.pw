@@ -1026,6 +1026,7 @@ impl Comp {
                         val saved = try self.signatureOccurrenceView(proofs: proofs, occurrence: node.occurrence, selector: selectors[index], offset: occurrence.site)
                         val proofSubject = self.authoredTraitViewSubject(ref: receiver)
                         try self.readAuthoredOccurrenceProof(saved: saved, receiver: proofSubject, arguments: sourceViews[index].traitInstance.positionalArgs, environment: environment, offset: occurrence.site, normalizations: proofEquations, context: context)
+                        if original.assocNameId == 0U64 { outputSelector = <Optional.Some v=sourceViews[index] /> }
                     } else if selectors[index].surfaceId != 0U64 {
                         (try self.requireAuthoredExtensionView(id: node.occurrence, source: selectors[index], offset: occurrence.site))
                     }

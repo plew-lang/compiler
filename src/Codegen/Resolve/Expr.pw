@@ -1836,7 +1836,7 @@ pub impl Comp {
                 val selectedReceiver = self.selectedCallableReceiver(function: function, receiver: receiver, receiverTerm: receiverTerm, params: self.copyFuncBinds(binds: function.typeParams), typeArgs: completed)
                 val environment = try self.recordedDirectCallEnvironment(function: function, receiverTerm: selectedReceiver, typeArgs: completed, proof: proof)
                 val result = if provided {
-                    give try self.selectedMethodResult(callee: callee, environment: environment)
+                    give try self.completeProvidedResultSource(exprId: exprId, callee: callee, environment: environment)
                 } else {
                     give try self.groundTermForBody(ref: self.semanticCallableReturnTerm(function: function), environment: environment, selfRef: environment.receiverRef, itemRef: 0U64)
                 }
@@ -1877,11 +1877,7 @@ pub impl Comp {
                     StaticMemberResolution.Provided(proof: _, traitIdx: _, callee: val callee) => {
                         give if self.isAuthoredProvidedDeclaration(function: callee) {
                             val lexical = try self.withLexicalSelfBinding(f: function, environment: environment)
-                            val signature = try self.providedSourceSignature(function: callee, environment: lexical, read: <CallableSignatureRead.SourceResult />)
-                            if self.arena.typeViewSourceCount(ref: signature.resultType) != 0U64 {
-                                self.recordSelectedResultTraitSelector(exprId: exprId, occurrence: signature.resultOccurrence, term: signature.resultType, selector: signature.resultSelector)
-                            }
-                            give signature.resultType
+                            give try self.completeProvidedResultSource(exprId: exprId, callee: callee, environment: lexical)
                         } else {
                             give try self.groundTermForBody(ref: pattern, environment: environment, selfRef: receiverTerm, itemRef: 0U64)
                         }
@@ -1893,6 +1889,15 @@ pub impl Comp {
             }
             _ => { return <Result.Ok value=kind /> }
         }
+    }
+
+    inout fn completeProvidedResultSource(exprId: U64, callee: U64, environment: InstanceEnvironment) -> Result[U64, CompileDiagnostic] {
+        if environment.receiverRef == 0U64 { return <Result.Ok value=0U64 /> }
+        val signature = try self.providedSourceSignature(function: callee, environment: environment, read: <CallableSignatureRead.SourceResult />)
+        if self.arena.typeViewSourceCount(ref: signature.resultType) != 0U64 {
+            self.recordSelectedResultTraitSelector(exprId: exprId, occurrence: signature.resultOccurrence, term: signature.resultType, selector: signature.resultSelector)
+        }
+        return <Result.Ok value=signature.resultType />
     }
 
     inout fn providedExpectedResultPattern(callee: U64, receiver: U64, arguments: Array[U64], proof: StaticConformanceProof) -> Result[U64, CompileDiagnostic] {
@@ -3208,7 +3213,6 @@ impl Comp {
                 }
             }
         }
-        try self.recordCallTemplate(exprId: exprId, callee: callee, receiver: receiver, args: args, calleeTypeArgs: calleeTypeArgs, proof: selectedProof, receiverTypeTerm: receiverTypeTerm)
         if callee < self.arena.functionCount() && resultTerm != 0U64 {
             val viewed = self.arena.typeViewSourceCount(ref: resultTerm) != 0U64
             val composite = self.arena.typeTermAt(index: resultTerm).args.len != 0U64
@@ -3228,6 +3232,8 @@ impl Comp {
                 }
             }
         }
+        // Contextual completion may refine the initial result selector.
+        try self.recordCallTemplate(exprId: exprId, callee: callee, receiver: receiver, args: args, calleeTypeArgs: calleeTypeArgs, proof: selectedProof, receiverTypeTerm: receiverTypeTerm)
         return <Result.Ok value=() />
     }
 }

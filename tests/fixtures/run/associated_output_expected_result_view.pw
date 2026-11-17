@@ -1,0 +1,37 @@
+use @Std/Io only { print }
+
+trait Mark[K] { fn number() -> I64 }
+struct Value {}
+impl Value as Mark[Bool] { fn number() -> I64 { return 42I64 } }
+
+trait Source {
+    type Item: Mark[Bool]
+    fn value() -> Item
+}
+
+pub impl Source {
+    fn select[K]() -> Item#Mark[K] where Item: Mark[K] {
+        return self.value()#Mark[K]
+    }
+}
+
+struct Provider {}
+pub impl Provider { factory }
+impl Provider as Source {
+    type Item = Value
+    fn value() -> Value { return <Value /> }
+}
+
+// The equality grounds Item without inferring the receiver of a projection.
+// The expected result then supplies the selected method's own type argument.
+fn read[T](receiver: T) -> I64 where T: Source[Item=Value] {
+    val selected: Value#Mark[Bool] = receiver.select()
+    return selected.number()
+}
+
+fn main() {
+    val provider = <Provider />
+    print(read(receiver: provider))
+    val selected: Value#Mark[Bool] = provider.select()
+    print(selected.number())
+}

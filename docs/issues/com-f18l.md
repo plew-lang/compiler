@@ -99,3 +99,30 @@ on both candidates. The independent review's projected expected-result
 completion coverage concern remains open: the attempted Item#Mark[K]
 fixture was rejected in both candidates during generic body checking,
 before it could establish that the selector was published on that path.
+
+## Completed Result Selection
+
+An associated-type equality on a generic receiver grounds Item to Value
+before result matching. The expected Value#Mark[Bool] supplies the
+method binder without inverting an unresolved projection. The regression
+also exercises the same completion with a concrete receiver. Diagnostic
+runs on c899e248 reached both late-completion branches and found an exact
+selector in the signature; the Direct consumer dropped it. The same
+candidate reached static completion for an authored nominal Box[K]#Mark[K]
+result but returned no selector from its recipe.
+
+The retained recipe reader now emits an authored outer selector after
+reading its saved proof for nominal results too. Projection-receiver
+selectors stay separate from selectors on the projection result. Direct
+and static completion use the same reader and publisher. Direct recording
+places the initial origin before completion so earlier facts cannot
+overwrite the completed selector. No new conformance search is involved.
+The independent diff review confirmed exact receiver matching and that
+call recipe and authored extension origin routes are preserved.
+
+The two permanent fixtures cover the associated static and direct routes
+and the nominal static route. A diagnostic candidate printed their
+expected outputs, reached all three completions, and supplied their
+retained selectors. The existing nested, generic, and extension-backed
+JIT fixtures also passed. Formal verification of the new revision is
+pending.
