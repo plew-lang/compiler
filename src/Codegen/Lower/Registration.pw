@@ -383,7 +383,7 @@ pub impl Comp {
         val ta: TypeRef = self.arena.typeAt(index: a)
         val tb: TypeRef = self.arena.typeAt(index: b)
         if ta.assocNameId != 0U64 || tb.assocNameId != 0U64 {
-            if !self.arena.typeTermAt(index: a).patternProjectionHeadMatches(other: self.arena.typeTermAt(index: b)) { return false }
+            if !self.typeTermRefSameHead(a: a, b: b) { return false }
             val count = self.typeTermRefChildCount(ref: a)
             if count != self.typeTermRefChildCount(ref: b) { return false }
             mut val child = 0U64
@@ -537,9 +537,15 @@ pub impl Comp {
         val ta: TypeTerm = self.arena.typeTermAt(index: a)
         val tb: TypeTerm = self.arena.typeTermAt(index: b)
         if ta.assocNameId != 0U64 || tb.assocNameId != 0U64 {
-            if !ta.patternProjectionHeadMatches(other: tb) { return false }
-            val count = self.typeTermRefChildCount(ref: a)
-            if count != self.typeTermRefChildCount(ref: b) { return false }
+            if !ta.isProjection() || !tb.isProjection() || !ta.projectionHeadEquals(other: tb) { return false }
+            if ta.assocTraitArgs.len != tb.assocTraitArgs.len { return false }
+            mut val count = 1U64 + ta.assocTraitArgs.len
+            if !ignoreTopView {
+                if !self.arena.typeViewSourceHeadsEqual(a: a, b: b) { return false }
+                val viewArguments = self.arena.typeViewArgumentCount(ref: a)
+                if viewArguments != self.arena.typeViewArgumentCount(ref: b) { return false }
+                count += viewArguments
+            }
             mut val child = 0U64
             while child < count {
                 if self.typeTermRefIdentityChildLabel(ref: a, index: child) != self.typeTermRefIdentityChildLabel(ref: b, index: child) || !self.unifyPatterns(a: self.typeTermRefChildRef(ref: a, index: child), aSide: aSide, b: self.typeTermRefChildRef(ref: b, index: child), bSide: bSide, aParams: aParams, bParams: bParams, binds: inout binds, deferPatternProjections: deferPatternProjections) { return false }

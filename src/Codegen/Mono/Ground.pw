@@ -592,7 +592,7 @@ pub impl Comp {
     // replacement here prevents each substitution path from accidentally
     // treating a projection's flattened legacy head as the whole term.
     inout fn rebuildProjectionTerm(t: TypeRef, receiver: U64, traitArgs: Array[U64]) -> U64 {
-        if receiver >= self.arena.typeCount() { return 0U64 }
+        if t.assocNameId == 0U64 || receiver == 0U64 || receiver >= self.arena.typeCount() { return 0U64 }
         val base: TypeRef = self.arena.typeAt(index: receiver)
         return self.pushType(t: <TypeRef nameStart=base.nameStart nameLen=base.nameLen paramId=base.paramId args=base.args isRecord=base.isRecord recordFieldLabels=base.recordFieldLabels recordFieldTerms=base.recordFieldTerms viewExtId=t.viewExtId viewIds=t.viewIds viewSources=t.viewSources isAny=base.isAny argLabels=base.argLabels projectionReceiver=receiver assocTraitStart=t.assocTraitStart assocTraitLen=t.assocTraitLen assocTraitId=t.assocTraitId assocTraitArgs=traitArgs assocTraitArgLabels=t.assocTraitArgLabels assocNameStart=t.assocNameStart assocNameLen=t.assocNameLen assocNameId=t.assocNameId isSendable=base.isSendable isDiverging=base.isDiverging hasDecl=base.hasDecl declOffset=base.declOffset hasAssocTraitDecl=t.hasAssocTraitDecl assocTraitDeclOffset=t.assocTraitDeclOffset siteOffset=t.siteOffset />)
     }

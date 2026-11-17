@@ -26,6 +26,14 @@ projection identity ignores the receiver layout name
 1
 changing the output view changes projection identity
 1
+declaration equality compares output views
+1
+pattern matching compares output views
+1
+receiver dispatch can ignore the outer output view
+1
+invalid projection components do not publish a term
+1
 substitution record projection equal
 0
 the mapped terms retain their projection receiver

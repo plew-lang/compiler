@@ -1,7 +1,7 @@
 // Structural identity must distinguish members even when a projection is rebuilt with a record receiver.
 use /Frontend only { Comp, FrontendInput, analyzeFrontend }
 use /SourceAccess only { SourceAccess }
-use /Ir only { TypeRef, ResolvedViewSource, TraitInstanceKey }
+use /Ir only { TypeRef, ResolvedViewSource, TraitInstanceKey, PatternBindInput, UnifyBind }
 use @Std/Io only { print }
 fn main() {
     mut val compiler = <Comp />
@@ -65,6 +65,20 @@ fn main() {
     val viewedProjection = compiler.typeRefWithAddedViewSources(ref: rebuiltFirst, additions: [view])
     print("changing the output view changes projection identity")
     print(!compiler.typeRefEq(a: rebuiltFirst, b: viewedProjection))
+    print("declaration equality compares output views")
+    print(!compiler.typeRefsAlphaEq(a: rebuiltFirst, b: viewedProjection, aParams: [], bParams: []))
+    val noBinders = <PatternBindInput.Values values=[] />
+    mut val bindings: Array[UnifyBind] = []
+    print("pattern matching compares output views")
+    print(!compiler.unifyPatterns(a: rebuiltFirst, aSide: 0U64, b: viewedProjection, bSide: 1U64, aParams: noBinders, bParams: noBinders, binds: inout bindings))
+    print("receiver dispatch can ignore the outer output view")
+    print(compiler.unifyPatterns(a: rebuiltFirst, aSide: 0U64, b: viewedProjection, bSide: 1U64, aParams: noBinders, bParams: noBinders, binds: inout bindings, ignoreTopView: true))
+    val beforeInvalidRebuilds = compiler.arena.typeCount()
+    val missingReceiver = compiler.rebuildProjectionTerm(t: term, receiver: 0U64, traitArgs: [])
+    val missingMember = compiler.rebuildProjectionTerm(t: record, receiver: receiver, traitArgs: [])
+    val invalidReceiver = compiler.rebuildProjectionTerm(t: term, receiver: beforeInvalidRebuilds, traitArgs: [])
+    print("invalid projection components do not publish a term")
+    print(missingReceiver == 0U64 && missingMember == 0U64 && invalidReceiver == 0U64 && compiler.arena.typeCount() == beforeInvalidRebuilds)
     val binder = compiler.funcBindAt(binds: function.typeParams, index: 0U64)
     val mappedFirst = compiler.groundTermInEnvironment(ref: first, params: [binder], values: [receiver])
     val mappedSecond = compiler.groundTermInEnvironment(ref: second, params: [binder], values: [receiver])

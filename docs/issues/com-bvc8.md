@@ -159,3 +159,24 @@ equality and unification, possible owner overwrites during declaration sealing,
 unchecked receiver and member inputs in reconstruction, and remaining layout
 callers that branch on compatibility mirrors. Those paths still require audit,
 regression cases and a follow-up independent review.
+
+## Declaration Comparison and Constructor Inputs
+
+The native regression fails before repair when an extension view exists only
+on one projection output: both alpha equality and directional unification
+accept it. Alpha equality now uses the common head reader. Directional
+unification uses the same projection owner and member comparison and checks
+output selector heads and argument terms, except when its caller explicitly
+requests receiver dispatch without the outer view. The previous competing
+projection head matcher was removed.
+
+A second native RED shows rebuilding can publish rows for missing receivers
+or members. Rebuilding now rejects a missing or out-of-range receiver and
+a missing member before publication. Tests assert that invalid input cannot
+change the arena. Both native REDs pass with their respective changes, and
+the exact-pin carrier accepts the revised compiler source in check mode.
+
+The next boundary is declaration sealing: trace an owner selected by both
+lowering inputs through later declaration registration, including same-spelled
+foreign owners, before deciding whether the existing canonical stamp is
+sufficient. Recheck remaining ABI entry and construction payload reads.

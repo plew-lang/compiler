@@ -247,11 +247,6 @@ pub impl TypeTerm {
         return self.assocTraitId == other.assocTraitId
     }
 
-    // A pattern projection's receiver is a child, not its head. The legacy
-    // owner bridge here is not exact equality or source-proof admission.
-    fn patternProjectionHeadMatches(other: TypeTerm) -> Bool {
-        return self.assocNameId != 0U64 && self.assocNameId == other.assocNameId && self.assocTraitId == other.assocTraitId && (!(self.hasAssocTraitDecl && other.hasAssocTraitDecl) || self.assocTraitDeclOffset == other.assocTraitDeclOffset)
-    }
 }
 
 // These recursive read queries need only immutable structural pools. Keep
