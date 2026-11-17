@@ -1,0 +1,16 @@
+use @Std/Io only { print }
+trait Mark[K] { fn number() -> I64 }
+struct Value {}
+impl Value as Mark[Bool] { fn number() -> I64 { return 42I64 } }
+trait Source[K] { type Item: Mark[K] }
+pub impl[K] Source[K] {
+    fn forward(value: Item#Mark[K]) -> Item#Mark[K] { return value }
+    fn read(value: Item#Mark[K]) -> I64 { return self.forward(value: value).number() }
+}
+struct Provider {}
+pub impl Provider { factory }
+impl Provider as Source[Bool] { type Item = Value }
+fn main() {
+    val value = <Value />#Mark[Bool]
+    print(<Provider />.read(value: value))
+}

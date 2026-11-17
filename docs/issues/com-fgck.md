@@ -1,6 +1,6 @@
 ---
 id: com-fgck
-status: open
+status: in_progress
 deps: []
 links: []
 created: 2026-11-17T10:47:30Z
@@ -10,7 +10,7 @@ assignee: Koji Murata
 parent: com-bvc8
 tags: [frontend, generics, mid]
 ---
-# Publish the viewed provided call result for Mid instantiation
+# Publish provided body parameter types for Mid instantiation
 
 
 ## Reproduced failure and contract
@@ -39,3 +39,22 @@ unavailable map entry by re-resolving source syntax or using an unviewed term
 as semantic identity. Verify native and JIT 42, the unviewed control, and
 existing rejection of absent view evidence. Independently review this boundary
 separately from the source selector handoff in com-f18l.
+
+## Root Cause and Repair
+
+The diagnostic compiler printed the exact term requested by Mid. In body
+read, term 4235 was the prepared source-body parameter, a viewed
+Self.Item. The closed ABI parameter was term 5322. The selected inner call
+result already had a separate closed result. The prior signature publication
+mapped placement-declaration rows but omitted the prepared lexical parameter
+rows unless the receiver itself used the dependent nominal path.
+
+The same body finalization boundary now publishes the selected signature
+against its prepared source-body parameter slots for authored provided
+placements too. It checks the slot count before pairing. This uses the
+existing owner and closed type map; Mid's lookup and proof rules do not change.
+
+The new nested regression prints 42 in JIT and native execution. The
+bare nested control, five neighboring JIT controls and missing-premise
+diagnostic passed. The exact source with the final shape guard passes
+compiler check. Independent review and optimized verification are pending.
