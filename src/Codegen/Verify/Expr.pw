@@ -60,7 +60,7 @@ pub impl Comp {
     // A view changes method selection, never the ownership of its operand.
     inout fn verifyOwnershipSource(id: U64) -> Result[(), CompileDiagnostic] {
         if self.moveOperandIsAggregatePartial(id: id) {
-            return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: id), msg: "aggregate partial move is not part of v1; move the whole value, or use a replace/take-style API that leaves the aggregate valid (spec/11)") />
+            return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: id), msg: "aggregate partial move is not part of v1; move the whole value, or use a replace/take-style API that leaves the aggregate valid (spec/11)", failureDomain: <FailureDomain.Source />) />
         }
         match self.arena.exprs[id] {
             Expr.Cast(val operand, tyStart: _, tyLen: _, ty: _) => { return self.verifyOwnershipSource(id: operand) }
@@ -531,25 +531,21 @@ pub impl Comp {
                 // drop-elaboration dataflow lands.
                 if !(isBorrow) {
                     try self.verifyOwnershipSource(id: operand)
-                    if self.moveOperandIsAggregatePartial(id: operand) {
-                        return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: operand), msg: "aggregate partial move is not part of v1; move the whole value, or use a replace/take-style API that leaves the aggregate valid (spec/11)") />
-                    } else {
-                        match self.arena.exprs[operand] {
-                            Expr.Ident(val start, val len) => {
-                                if self.isSelfRef(start: start, len: len) {
-                                    return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: operand), msg: "moving `self` is not yet supported") />
-                                }
-                                if self.localIndexByName(start: start, len: len) < self.cur.branchBase {
-                                    // Conditional move is valid affine ownership.
-                                    // Record its required lowering capability so an
-                                    // incompletely migrated backend cannot silently
-                                    // select the path-insensitive AST emitter.
-                                    self.requireOwnershipCfgForCurrentFunction()
-                                }
+                    match self.arena.exprs[operand] {
+                        Expr.Ident(val start, val len) => {
+                            if self.isSelfRef(start: start, len: len) {
+                                return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: operand), msg: "moving `self` is not yet supported") />
                             }
-                            _ => {
-                                return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: operand), msg: "`move` is only supported from a whole local variable in v1") />
+                            if self.localIndexByName(start: start, len: len) < self.cur.branchBase {
+                                // Conditional move is valid affine ownership.
+                                // Record its required lowering capability so an
+                                // incompletely migrated backend cannot silently
+                                // select the path-insensitive AST emitter.
+                                self.requireOwnershipCfgForCurrentFunction()
                             }
+                        }
+                        _ => {
+                            return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: operand), msg: "`move` is only supported from a whole local variable in v1") />
                         }
                     }
                 }

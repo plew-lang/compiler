@@ -210,3 +210,23 @@ Keep this source producer/transport case within the existing domain-classificati
 work; do not weaken com-fsuq's consumer or tag unrelated failures Source. The
 location currently points to the requirement declaration, and lazy refusal adds
 ORC wrapper diagnostics; neither is certified fixed by this test addition.
+
+## Aggregate Partial-Move Producer
+
+An exact negative-worker replay of the prior normal suite's 743
+classification failures on c41653f1 returned 739 Unclassified, one
+Internal, one Limit, and two successful compilations. The accepted
+cross-module extension cases remain owned by met-bejv. Preserve the
+other dispositions separately; Unclassified is not a proof of an
+established source violation.
+
+Scope of this increment is spec/11's refusal of aggregate partial move.
+The shared ownership verifier establishes the violation for explicit
+moves and selected consuming method receivers. It now issues Source at
+that boundary. The explicit-move arm no longer repeats the same check
+after this verifier succeeds. No other refusal changes domain.
+Five existing fixtures and the new consuming_receiver_partial_move
+fixture changed from Unclassified to Source with identical diagnostics.
+Three positive controls preserved their outputs. Independent review
+confirmed both producer routes and the redundant reread removal.
+The full candidate gate and broader producer work remain open.

@@ -1,0 +1,8 @@
+unique struct File {}
+impl File { move fn close() {} }
+unique struct Holder { val file: File }
+
+fn main() {
+    val holder = <Holder file=<File /> />
+    holder.file.close()
+}
