@@ -3156,7 +3156,7 @@ impl Comp {
         return []
     }
 
-    inout fn recordSemanticExprCall(exprId: U64, callee: U64, receiver: CallTemplateReceiver, args: ArgRange, calleeTypeArgs: Array[U64], resultTerm: U64, proof: StaticConformanceProof = <StaticConformanceProof.Missing />, receiverTypeTerm: U64 = 0U64) -> Result[(), CompileDiagnostic] {
+    inout fn recordSemanticExprCall(exprId: U64, callee: U64, receiver: CallTemplateReceiver, args: ArgRange, calleeTypeArgs: Array[U64], resultTerm: U64, proof: StaticConformanceProof = <StaticConformanceProof.Missing />, receiverTypeTerm: U64 = 0U64, resultSelector: Optional[ResolvedViewSource] = <Optional.None />) -> Result[(), CompileDiagnostic] {
         val prior: SemanticExprType = self.constructionExpression(exprId: exprId)
         mut val contract = prior.invocation
         if callee < self.arena.functionCount() {
@@ -3214,7 +3214,11 @@ impl Comp {
                 }
                 self.recordAuthoredCompositeOrigin(exprId: exprId, term: resultTerm, occurrence: occurrence)
                 if viewed {
-                    self.recordAuthoredTraitSelector(exprId: exprId, occurrence: occurrence, term: resultTerm)
+                    if resultSelector.isSome() {
+                        self.recordExpressionTraitSelector(exprId: exprId, selection: self.matchRecordedTraitSelector(selected: resultSelector.unwrap(), receiver: resultTerm))
+                    } else {
+                        self.recordAuthoredTraitSelector(exprId: exprId, occurrence: occurrence, term: resultTerm)
+                    }
                     mut val proofs = self.resultSubstitutionExtensions(exprId: exprId, declaration: declaration, args: args, typeArguments: calleeTypeArgs, receiverTerm: receiverTypeTerm)
                     for proof in self.authoredResultExtensionSources(occurrence: occurrence) { proofs.append(proof) }
                     self.recordExpressionExtensionSources(exprId: exprId, proofs: proofs)

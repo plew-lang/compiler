@@ -1197,8 +1197,8 @@ pub impl Comp {
             }
         }
         val signatureEnvironment = <InstanceEnvironment params=finalEnvironment.params args=finalEnvironment.args receiverRef=finalEnvironment.receiverRef proof=proof />
-        val result = try self.selectedMethodResult(callee: callee, environment: signatureEnvironment)
-        try self.recordSemanticExprCall(exprId: exprId, callee: callee, receiver: finalReceiverSource, args: args, calleeTypeArgs: self.signatureTypeArguments(f: f, environment: finalEnvironment), resultTerm: result, proof: proof, receiverTypeTerm: receiverTerm)
+        val result = try self.selectedMethodSourceResult(callee: callee, environment: signatureEnvironment)
+        try self.recordSemanticExprCall(exprId: exprId, callee: callee, receiver: finalReceiverSource, args: args, calleeTypeArgs: self.signatureTypeArguments(f: f, environment: finalEnvironment), resultTerm: result.term, proof: proof, receiverTypeTerm: receiverTerm, resultSelector: result.selector)
         return <Result.Ok value=() />
     }
 

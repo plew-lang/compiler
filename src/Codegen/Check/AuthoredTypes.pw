@@ -46,7 +46,7 @@ pub impl Comp {
             Optional.None => { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "function has no registered authored signature", failureDomain: <FailureDomain.Internal />) /> },
         }
         val terms = try self.readAdmittedSignatureRoots(source: source, slots: [slot], environment: environment)
-        return <Result.Ok value=terms[0U64] />
+        return <Result.Ok value=terms.terms[0U64] />
     }
 }
 
@@ -836,7 +836,7 @@ impl Comp {
 
     // One read owns one declaration/environment validation and recipe memo.
     // Roots retain their distinct authored occurrences, even for equal terms.
-    inout fn readAdmittedSignatureRoots(source: AuthoredFunctionSignature, slots: Array[SourceSignatureSlot], environment: InstanceEnvironment, context: SignatureRecipeContext = <SignatureRecipeContext.Concrete />) -> Result[Array[U64], CompileDiagnostic] {
+    inout fn readAdmittedSignatureRoots(source: AuthoredFunctionSignature, slots: Array[SourceSignatureSlot], environment: InstanceEnvironment, context: SignatureRecipeContext = <SignatureRecipeContext.Concrete />) -> Result[AdmittedSignatureRoots, CompileDiagnostic] {
         try self.checkAuthoredSignatureAdmissionOutcome()
         val function = source.function
         val admitted = match self.authoredSignatureViews.get(key: function) {
@@ -858,6 +858,7 @@ impl Comp {
             for equation in read.normalizations { try self.appendRetainedProjectionEquation(step: equation, normalizations: inout receiverEquations) }
         }
         mut val terms: Array[U64] = []
+        mut val resultSelector: Optional[ResolvedViewSource] = <Optional.None />
         for slot in slots {
             val occurrenceIds = match slot {
                 SourceSignatureSlot.Parameter(index: val index) => {
@@ -871,9 +872,14 @@ impl Comp {
             if id != occurrenceIds.saved { return <Result.Err error=self.diagnosticAt(offset: self.arena.functionAt(index: function).defOffset, msg: "authored signature has a foreign slot occurrence", failureDomain: <FailureDomain.Internal />) /> }
             if id == 0U64 { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "signature slot has no authored annotation", failureDomain: <FailureDomain.Input />) /> }
             val occurrence = try self.signatureOccurrence(id: id)
-            terms.append((try self.readAuthoredTypeRecipe(proofs: admitted.proofs, recipe: occurrence.recipe, environment: environment, memo: inout memo, receiverEquations: receiverEquations, context: context)).term)
+            val read = try self.readAuthoredTypeRecipe(proofs: admitted.proofs, recipe: occurrence.recipe, environment: environment, memo: inout memo, receiverEquations: receiverEquations, context: context)
+            terms.append(read.term)
+            match slot {
+                SourceSignatureSlot.Result => { resultSelector = read.outputSelector }
+                _ => {}
+            }
         }
-        return <Result.Ok value=terms />
+        return <Result.Ok value=<AdmittedSignatureRoots terms=terms resultSelector=resultSelector /> />
     }
 
     // An abstract body uses only the equations admitted for its exact
@@ -994,6 +1000,7 @@ impl Comp {
         }
         mut val sourceViews = if original.assocNameId == 0U64 { give self.viewSourcesWithArguments(ref: node.term, arguments: viewArguments) } else { give reads[0U64].views }
         mut val term = rebuilt
+        mut val outputSelector: Optional[ResolvedViewSource] = <Optional.None />
         if original.assocNameId == 0U64 {
             match self.typeTermHeadReplacement(ref: node.term, params: environment.params, values: environment.args, selfRef: environment.receiverRef, itemRef: 0U64) {
                 Optional.Some(v: val replacement) => {
@@ -1096,14 +1103,15 @@ impl Comp {
                     if outputSelectors.count() != 0U64 {
                         val instantiated = self.arena.typeViewSources(ref: rebuilt)
                         for index in 0U64..<outputSelectors.count() {
-                            val outputSelector = outputSelectors[index]
-                            if outputSelector.traitInstance.owner != 0U64 {
-                                val outputProof = try self.signatureOccurrenceView(proofs: proofs, occurrence: node.occurrence, selector: outputSelector, offset: occurrence.site, projectionOutput: true)
+                            val writtenOutputSelector = outputSelectors[index]
+                            if writtenOutputSelector.traitInstance.owner != 0U64 {
+                                val outputProof = try self.signatureOccurrenceView(proofs: proofs, occurrence: node.occurrence, selector: writtenOutputSelector, offset: occurrence.site, projectionOutput: true)
                                 val viewedOutput = self.typeRefWithAddedViewSources(ref: term, additions: instantiated)
                                 val subject = self.authoredTraitViewSubject(ref: viewedOutput)
                                 try self.readAuthoredOccurrenceProof(saved: outputProof, receiver: subject, arguments: instantiated[index].traitInstance.positionalArgs, environment: environment, offset: occurrence.site, normalizations: proofEquations, context: context)
+                                outputSelector = <Optional.Some v=instantiated[index] />
                             } else {
-                                try self.requireAuthoredExtensionView(id: node.occurrence, source: outputSelector, offset: occurrence.site, projectionOutput: true)
+                                try self.requireAuthoredExtensionView(id: node.occurrence, source: writtenOutputSelector, offset: occurrence.site, projectionOutput: true)
                             }
                         }
                         term = self.typeRefWithAddedViewSources(ref: term, additions: instantiated)
@@ -1119,7 +1127,7 @@ impl Comp {
             SourceTypeRecipeOrigin.ProjectionReceiver | SourceTypeRecipeOrigin.LexicalParameter | SourceTypeRecipeOrigin.InheritedTraitArgument => {}
             SourceTypeRecipeOrigin.BoundSelection => { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "signature reader encountered an unadmitted bound recipe", failureDomain: <FailureDomain.Internal />) /> }
         }
-        val read = <AuthoredRecipeRead term=term views=sourceViews normalizations=normalizations />
+        val read = <AuthoredRecipeRead term=term views=sourceViews normalizations=normalizations outputSelector=outputSelector />
         memo[recipe] = read
         return <Result.Ok value=read />
     }

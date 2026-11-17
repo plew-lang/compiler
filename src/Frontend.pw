@@ -469,11 +469,24 @@ enum CallableSignatureRead {
     SourceResult
 }
 
+struct AdmittedSignatureRoots {
+    val terms: Array[U64]
+    val resultSelector: Optional[ResolvedViewSource] = <Optional.None />
+}
+impl AdmittedSignatureRoots { factory }
+
+struct SelectedMethodSourceResult {
+    val term: U64
+    val selector: Optional[ResolvedViewSource] = <Optional.None />
+}
+impl SelectedMethodSourceResult { factory }
+
 struct RetainedCallableTypes {
     val parameterTypes: Array[U64]
     val resultType: U64 = 0U64
     val bodyResultType: U64 = 0U64
     val resultOccurrence: U64 = 0U64
+    val resultSelector: Optional[ResolvedViewSource] = <Optional.None />
 }
 impl RetainedCallableTypes { factory }
 
@@ -558,6 +571,7 @@ struct AuthoredRecipeRead {
     // Folded selectors of this source constructor, before a caller replacement
     // can add its own views. Original selector identity stays in the recipe.
     val views: Array[ResolvedViewSource]
+    val outputSelector: Optional[ResolvedViewSource] = <Optional.None />
 }
 impl AuthoredRecipeRead { factory }
 

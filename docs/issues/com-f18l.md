@@ -1,6 +1,6 @@
 ---
 id: com-f18l
-status: open
+status: in_progress
 deps: []
 links: [com-j2i7]
 created: 2026-11-17T10:39:00Z
@@ -56,3 +56,20 @@ instances and a case whose result merely acquires a view from a caller,
 so that a same-head view cannot manufacture source evidence. Cover the
 literal-argument and no-premise controls, optimized verification and
 independent review. Preserve representation and unrelated candidate lookup.
+
+## Implemented Handoff
+
+The authored recipe reader returns the output selector only after replaying
+its retained proof. The retained callable result hands the selected
+instantiated selector to lexical call recording, which checks the exact view
+is present on the recorded result. No owner/arity recovery or new
+conformance lookup is used.
+
+The compiler source passes check. A separate diagnostic rebuild using the
+fixed-point carrier observed publication from the already-read output
+selector and consumption by candidate collection in the reduced repro.
+The two-instance native compiler input produced two publications and matched
+42/17 in JIT. A generic identity call returning its caller's Mark[Bool] view
+still prints 42, with no publication of an authored output selector.
+Instrumentation exists only in scratch. Independent review and optimized
+verification remain pending.

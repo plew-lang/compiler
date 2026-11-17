@@ -320,12 +320,18 @@ pub impl Comp {
     }
 
     inout fn selectedMethodResult(callee: U64, environment: InstanceEnvironment) -> Result[U64, CompileDiagnostic] {
-        if environment.receiverRef == 0U64 { return <Result.Ok value=0U64 /> }
+        return <Result.Ok value=(try self.selectedMethodSourceResult(callee: callee, environment: environment)).term />
+    }
+
+    inout fn selectedMethodSourceResult(callee: U64, environment: InstanceEnvironment) -> Result[SelectedMethodSourceResult, CompileDiagnostic] {
+        if environment.receiverRef == 0U64 { return <Result.Ok value=<SelectedMethodSourceResult term=0U64 /> /> }
         val declaration = self.arena.functionAt(index: callee)
         if declaration.isProvided && self.isAuthoredProvidedDeclaration(function: callee) {
-            return <Result.Ok value=(try self.providedSourceSignature(function: callee, environment: environment, read: <CallableSignatureRead.SourceResult />)).resultType />
+            val types = try self.providedSourceSignature(function: callee, environment: environment, read: <CallableSignatureRead.SourceResult />)
+            return <Result.Ok value=<SelectedMethodSourceResult term=types.resultType selector=types.resultSelector /> />
         }
-        return self.groundFinalMethodSignatureInEnvironment(f: declaration, environment: environment, signatureTerm: self.semanticCallableReturnTerm(function: declaration))
+        val term = try self.groundFinalMethodSignatureInEnvironment(f: declaration, environment: environment, signatureTerm: self.semanticCallableReturnTerm(function: declaration))
+        return <Result.Ok value=<SelectedMethodSourceResult term=term /> />
     }
 
     inout fn groundFinalMethodReturn(callee: U64, receiver: U64, args: ArgRange) -> Result[U64, CompileDiagnostic] {
