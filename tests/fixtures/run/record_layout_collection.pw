@@ -35,6 +35,10 @@ fn main() {
     val projection = compiler.rebuildProjectionTerm(source: <ProjectionRebuildSource assocTraitId=owner.nameId assocNameId=member.nameId />, receiver: record, traitArgs: [])
     if compiler.recordLayoutMatches(ref: projection, structIndex: layout) { panic "projection matched its receiver layout" }
     if compiler.recordStructIndex(ref: projection) < compiler.arena.structCount() { panic "projection acquired its receiver layout" }
+    val stringName = compiler.internBytes(s: "String")
+    val string = compiler.pushType(t: <TypeRef nameStart=stringName.nameStart nameLen=stringName.nameLen args=[] />)
+    val symbolic = compiler.rebuildProjectionTerm(source: <ProjectionRebuildSource assocTraitId=owner.nameId assocNameId=member.nameId />, receiver: string, traitArgs: [])
+    if !compiler.arcClassOfRef(ref: symbolic).isErr() { panic "projection acquired its receiver ownership class" }
     val count = compiler.arena.structCount()
     compiler.scanType(ref: record).unwrap()
     if compiler.arena.structCount() != count { panic "record layout not deduplicated" }

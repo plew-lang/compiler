@@ -23,6 +23,9 @@ pub impl Comp {
             return <Result.Ok value=<ArcClass.Scalar /> />
         }
         val t: TypeRef = self.arena.typeAt(index: ref)
+        if t.assocNameId != 0U64 {
+            return <Result.Err error=self.diagnosticAt(offset: t.siteOffset, msg: "internal error (compiler bug): ownership requires a resolved associated type") />
+        }
         if t.isRecord {
             val layout: U64 = self.recordStructIndex(ref: ref)
             if layout < self.arena.structCount() {

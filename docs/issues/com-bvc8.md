@@ -210,3 +210,18 @@ mirror on TypeRef. Its old contents cannot be passed as reconstruction input.
 
 The exact-pin carrier passed compiler check, checks of all eleven adjusted
 internal fixtures and native execution of projection_member_identity.
+
+## Ownership Materialization Guard
+
+The shared ARC classifier previously accepted an unresolved projection over
+String and returned its receiver's ARC class. The expanded record-layout
+fixture reproduces this as a native RED. The ARC boundary now requires a
+resolved associated output. Record layout search and matching consume the
+pooled semantic row directly, without fetching the legacy row as well.
+
+The expanded layout fixture passes natively. The existing materialized
+TypeAst controls execute successfully in legacy, foreign and malformed-input
+modes, and the extended same-spelled owner fixture passes JIT with a fresh
+diagnostic compiler. The materialized control verifies foreign owner
+selection itself; the same-spelled alias sealing regression uses the ordinary
+file path.

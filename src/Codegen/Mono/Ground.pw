@@ -835,15 +835,15 @@ pub impl Comp {
     // ambient parameters or recovering terms from a template StructDef.
     inout fn recordLayoutMatches(ref: U64, structIndex: U64) -> Bool {
         if ref >= self.arena.typeCount() || structIndex >= self.arena.structCount() { return false }
-        val term: TypeRef = self.arena.typeAt(index: ref)
+        val term = self.arena.typeTermAt(index: ref)
         val layout: StructDef = self.arena.structAt(index: structIndex)
-        if !self.arena.typeTermAt(index: ref).isStructuralRecord() || term.recordFieldLabels.count() != term.recordFieldTerms.count() { return false }
+        if !term.isStructuralRecord() || term.recordFieldLabels.len != term.recordFieldTerms.len { return false }
         if layout.nameLen == 0U64 || layout.isExtern || layout.typeParams.count() != 0U64 { return false }
-        if self.arena.bytes[layout.nameStart] != 40U8 || layout.fields.count() != term.recordFieldTerms.count() { return false }
+        if self.arena.bytes[layout.nameStart] != 40U8 || layout.fields.count() != term.recordFieldTerms.len { return false }
         mut val index: U64 = 0U64
         while index < layout.fields.count() {
             val field: FieldDef = layout.fields[index]
-            if field.nameId != term.recordFieldLabels[index] || !self.typeRefEq(a: field.ty, b: term.recordFieldTerms[index]) { return false }
+            if field.nameId != self.arena.typeRecordLabelAt(index: term.recordFieldLabels.start + index) || !self.typeRefEq(a: field.ty, b: self.arena.typeRecordFieldAt(index: term.recordFieldTerms.start + index)) { return false }
             index += 1U64
         }
         return true
@@ -851,8 +851,8 @@ pub impl Comp {
 
     inout fn recordStructIndex(ref: U64) -> U64 {
         if ref >= self.arena.typeCount() { return self.arena.structCount() }
-        val term: TypeRef = self.arena.typeAt(index: ref)
-        if !self.arena.typeTermAt(index: ref).isStructuralRecord() { return self.arena.structCount() }
+        val term = self.arena.typeTermAt(index: ref)
+        if !term.isStructuralRecord() { return self.arena.structCount() }
         val attached: U64 = self.structIndexByName(start: term.nameStart, len: term.nameLen)
         if self.recordLayoutMatches(ref: ref, structIndex: attached) { return attached }
         mut val index: U64 = 0U64
