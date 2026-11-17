@@ -1,7 +1,7 @@
 ---
 id: com-yeua
 status: in_progress
-deps: [met-c1pg]
+deps: [met-c1pg, com-to2g]
 links: []
 created: 2026-11-02T21:30:19Z
 type: task
@@ -263,3 +263,17 @@ lack a written construction site. The trial is not adopted. Retain the
 nominal owner's proof and the written construction's actual lexical origin
 before classifying this missing-access case. Keep the unproved cases out
 of the Source lane.
+
+## Resolved Identifier and Value-Place Producers
+
+Use the existing value-binding predicate across generic and ordinary source
+checks. Only resolved non-value classifications produce Source; an unfilled
+or unknown binding is a compiler failure. For overlapping inout arguments,
+attach Source to proved value-place conflicts only. The old shared-place
+syntax rule is not proof of an evaluated-cell conflict (com-to2g).
+
+The diagnostic rebuild makes 28 of 29 focused cases Source and keeps all
+29 stderr streams byte-identical. The remaining shared-cell negative
+(overlapping_inout_ref_self) stays Unclassified pending the stable-cell
+proof. Four accepted JIT controls pass. The initial all-place trial is
+superseded by the independently reviewed narrowed candidate.

@@ -427,13 +427,7 @@ pub impl Comp {
                 // so it is an undefined-identifier misuse (`val x = SomeType`).
                 if self.cur.checkFn < self.arena.functionCount() {
                     val bindCode: I64 = self.recordIdent(id: exprId, start: start, len: len, tpFn: self.cur.checkFn)
-                    if !(self.bindIsValue(code: bindCode)) {
-                        if bindCode == identFnCode() {
-                            return <Result.Err error=self.diagnosticAt(offset: start, msg: "a named function declaration cannot be used as a value; wrap it in an explicit closure (e.g. `fn(...) {{ return name(...) }}`) (spec/04)") />
-                        } else {
-                            return <Result.Err error=self.diagnosticAt(offset: start, msg: "undefined identifier: this name is not a local, parameter, or global in scope (a bare type name is valid only as an assoc-fn receiver like `Type.fn()`; a field of `self` needs `self.`) (spec/04)") />
-                        }
-                    }
+                    try self.checkIdentifierValueBinding(binding: bindCode, offset: start)
                 }
             }
             _ => {}

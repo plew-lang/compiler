@@ -38,7 +38,14 @@ pub impl Comp {
     // or subexpression is ever re-evaluated.
     inout fn checkInoutPair(a: U64, b: U64) -> Result[(), CompileDiagnostic] {
         if self.classifyInoutPair(a: a, b: b) == 1U64 {
-            return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: b), msg: "two `inout` positions in one call overlap: they reach into the same variable (or one contains the other) without diverging at distinct fields; overlapping `inout` is forbidden (spec/03)") />
+            // Shared-place syntax equality does not prove the two evaluated
+            // cells are the same; another argument can rebind the handle.
+            val domain = if self.placeHasDeref(id: a) {
+                give <FailureDomain.Unclassified />
+            } else {
+                give <FailureDomain.Source />
+            }
+            return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: b), msg: "two `inout` positions in one call overlap: they reach into the same variable (or one contains the other) without diverging at distinct fields; overlapping `inout` is forbidden (spec/03)", failureDomain: domain) />
         }
         return <Result.Ok value=() />
     }
