@@ -1,0 +1,10 @@
+trait Required {}
+trait Source[T] { type Item }
+struct Yes {}
+struct No {}
+impl Yes as Required {}
+struct Box[T] { val value: T }
+impl[T] Box[T] as Source[I64] { type Item = I64 }
+extension Selection { impl[T] Box[T] as Source[I64] where T: Required { type Item = Bool } }
+fn probe(value: Box[No]#Selection#Source[I64].Item) {}
+fn main() {}
