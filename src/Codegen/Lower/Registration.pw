@@ -1324,16 +1324,31 @@ pub impl Comp {
     }
 
     inout fn checkConformanceRegistration(cf: Conform) -> Result[(), CompileDiagnostic] {
+        return self.checkConformanceRegistrationForAdmission(cf: cf, origin: <FrontendDeclarationOrigin.Raw />)
+    }
+}
+
+impl Comp {
+    inout fn checkConformanceRegistrationForAdmission(cf: Conform, origin: FrontendDeclarationOrigin) -> Result[(), CompileDiagnostic] {
         for index in 0U64..<self.decls.conformCount() {
             val prior = self.decls.conformAt(index: index)
             if self.sameConformanceNamespace(left: prior, right: cf) && self.conformancePatternsMayOverlap(a: prior, b: cf, leftArguments: <PatternTypeInput.Conformance range=prior.traitArgs />, rightArguments: <PatternTypeInput.Conformance range=cf.traitArgs />, leftSubject: prior.subjectArgs, rightSubject: cf.subjectArgs) {
-                return <Result.Err error=self.overlappingConformanceDiagnostic(offset: cf.defOffset) />
+                return <Result.Err error=self.overlappingConformanceDiagnosticForAdmission(offset: cf.defOffset, origin: origin) />
             }
         }
         return <Result.Ok value=() />
     }
 
+}
+
+pub impl Comp {
     inout fn checkAdmittedConformanceOverlap(changedSubjects: Set[U64]) -> Result[(), CompileDiagnostic] {
+        return self.checkAdmittedConformanceOverlapForAdmission(changedSubjects: changedSubjects, origin: <FrontendDeclarationOrigin.Raw />)
+    }
+}
+
+impl Comp {
+    inout fn checkAdmittedConformanceOverlapForAdmission(changedSubjects: Set[U64], origin: FrontendDeclarationOrigin) -> Result[(), CompileDiagnostic] {
         if changedSubjects.count() == 0U64 && self.nominalConformanceReceiverScopes.count() == 0U64 && self.authoredConformanceTargets.count() == 0U64 && self.admittedConformanceSubjects.count() == 0U64 { return <Result.Ok value=() /> }
         for index in 0U64..<self.decls.conformCount() {
             if !changedSubjects.contains(index) && !self.nominalConformanceReceiverScopes.contains(key: index) && !self.authoredConformanceTargets.contains(key: index) && !self.admittedConformanceSubjects.contains(key: index) { continue }
@@ -1348,16 +1363,19 @@ pub impl Comp {
                 val dependentReceiver = (self.nominalConformanceReceiverScopes.contains(key: index) && self.arena.typeContainsAssociatedProjection(ref: declaration.subjectTy)) || (self.nominalConformanceReceiverScopes.contains(key: otherIndex) && self.arena.typeContainsAssociatedProjection(ref: other.subjectTy))
                 if dependentReceiver {
                     if try self.dependentConformanceSubjectsMayOverlap(left: declaration.subjectTy, right: other.subjectTy, arguments: arguments, comparison: comparison, offset: offset) {
-                        return <Result.Err error=self.overlappingConformanceDiagnostic(offset: offset) />
+                        return <Result.Err error=self.overlappingConformanceDiagnosticForAdmission(offset: offset, origin: origin) />
                     }
                 } else if self.conformancePatternsMayOverlap(a: declaration, b: other, leftArguments: arguments, rightArguments: comparison, leftSubject: self.conformanceDeclarationSubjectTerms(index: index, written: declaration.subjectArgs), rightSubject: self.conformanceDeclarationSubjectTerms(index: otherIndex, written: other.subjectArgs)) {
-                    return <Result.Err error=self.overlappingConformanceDiagnostic(offset: offset) />
+                    return <Result.Err error=self.overlappingConformanceDiagnosticForAdmission(offset: offset, origin: origin) />
                 }
             }
         }
         return <Result.Ok value=() />
     }
 
+}
+
+pub impl Comp {
     // An undecided projection gives no proof of disjointness. The
     // structural relation can still prove a mismatch in another position.
     inout fn dependentConformanceSubjectsMayOverlap(left: U64, right: U64, arguments: PatternTypeInput, comparison: PatternTypeInput, offset: U64) -> Result[Bool, CompileDiagnostic] {
@@ -1379,11 +1397,27 @@ pub impl Comp {
     }
 
     inout fn overlappingConformanceDiagnostic(offset: U64) -> CompileDiagnostic {
-        return self.diagnosticAt(offset: offset, msg: "duplicate or overlapping trait conformance in one declaration namespace (spec/08,09)")
+        return self.overlappingConformanceDiagnosticForAdmission(offset: offset, origin: <FrontendDeclarationOrigin.Raw />)
+    }
+}
+
+impl Comp {
+    inout fn overlappingConformanceDiagnosticForAdmission(offset: U64, origin: FrontendDeclarationOrigin) -> CompileDiagnostic {
+        val domain = match origin { FrontendDeclarationOrigin.SourceAdmission => <FailureDomain.Source />, FrontendDeclarationOrigin.Raw => <FailureDomain.Unclassified /> }
+        return self.diagnosticAt(offset: offset, msg: "duplicate or overlapping trait conformance in one declaration namespace (spec/08,09)", failureDomain: domain)
     }
 
+}
+
+pub impl Comp {
     inout fn registerDeclaredConformance(cf: Conform, bounds: Array[ConformBound]) -> Result[U64, CompileDiagnostic] {
-        try self.checkConformanceRegistration(cf: cf)
+        return self.registerDeclaredConformanceForAdmission(cf: cf, bounds: bounds, origin: <FrontendDeclarationOrigin.Raw />)
+    }
+}
+
+impl Comp {
+    inout fn registerDeclaredConformanceForAdmission(cf: Conform, bounds: Array[ConformBound], origin: FrontendDeclarationOrigin) -> Result[U64, CompileDiagnostic] {
+        try self.checkConformanceRegistrationForAdmission(cf: cf, origin: origin)
         val index = self.decls.conformCount()
         self.decls.registerConform(cf, sourceBounds: <Optional.Some v=bounds />)
         return <Result.Ok value=index />

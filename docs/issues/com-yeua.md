@@ -1141,3 +1141,44 @@ public/raw controls and a disjoint positive. Preserve structuralOverlap
 AnalysisLimit as Limit via its existing try, not as source overlap. No change
 to acceptance or new proof/scan is intended. This is a restart investigation
 record, not an approved implementation or completed test.
+
+### Overlap classification scenarios
+
+Isolated diagnostic tracing of the six current refusals identifies registration
+for extension_conformance_generic_overlap / extension_duplicate_conformance,
+and post-admission for conformance_dependent_receiver_overlap,
+conformance_receiver_projected_overlap, conformance_target_projection_overlap
+and impl_receiver_projection_overlap. All18 baseline check/AOT/ORC runs are
+Unclassified with complete terminal reports and the expected overlap reason.
+
+Forward existing origin through private Syntax top-item/published/impl and
+registration paths; all public entries and legacy lowering remain Raw. Apply
+origin only at the three overlap refusal returns, not normalization or Limit.
+Native scenarios: fresh owned2 versus caller-owned2 for direct/pub/extension,
+projected target and receiver; public registration and Syntax top/published/impl
+rechecks on actual IDs; legacy AST lowering on parsed source; explicit raw
+duplicate arena followed by public admitted checker; disjoint namespaces and
+distinct trait arguments remain valid. Producer trace is diagnostic evidence,
+not a semantic candidate. Normal source/native controls and independent review
+are required before recognizing this checkpoint.
+
+### Conformance overlap checkpoint
+
+Private origin now reaches both producers through Syntax lowering and nominal
+admission. Public APIs and legacy lowering retain Raw; no origin state, scan
+or query was added. Three overlap returns use the private diagnostic producer.
+The six fixtures keep exact stderr/status/channel in 18 check/AOT/ORC runs and
+become Source. Six existing disjoint/projected/extension/provided controls pass
+check and exact ORC output (12 runs). Native owned/raw, public registration,
+public Syntax/legacy lowering and post-admission raw injection controls print ok.
+
+New native setups were corrected before GREEN: public lowering is tested at
+its pre-admission phase, separately from owned canonical registration; manual
+Comp constructions reserve TypeRef sentinel before lowering. Setup failures
+were not counted as RED/GREEN; the original Source-domain RED assertion is
+unchanged. Independent review confirms matching stages, source identities and
+restoration contracts, with no remaining required finding. Structural overlap
+AnalysisLimit preservation is checked structurally, not an executed Limit claim.
+Full gates, com-yeua and phase3 remain open.
+
+[Evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-conformance-overlap-rejection.json).

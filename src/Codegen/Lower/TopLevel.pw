@@ -346,6 +346,12 @@ pub impl Comp {
     }
 
     inout fn lowerSyntaxPublishedItem(item: TopItemId) -> Result[(), CompileDiagnostic] {
+        return self.lowerSyntaxPublishedItemForAdmission(item: item, origin: <FrontendDeclarationOrigin.Raw />)
+    }
+}
+
+impl Comp {
+    inout fn lowerSyntaxPublishedItemForAdmission(item: TopItemId, origin: FrontendDeclarationOrigin) -> Result[(), CompileDiagnostic] {
         match syntaxTopItemKind(file: self.syntax, item: item) {
             SyntaxTopItemKind.Extension => {
                 val extension = syntaxExtension(file: self.syntax, id: <ExtensionId raw=syntaxTopItemPayload(file: self.syntax, item: item) />)
@@ -386,21 +392,30 @@ pub impl Comp {
                 try self.lowerSyntaxNewtype(id: <NewtypeId raw=syntaxTopItemPayload(file: self.syntax, item: item) />)
                 if self.arena.newtypeCount() > before { self.recordExportFrom(nameStart: self.arena.newtypeAt(index: before).nameStart, nameLen: self.arena.newtypeAt(index: before).nameLen, moduleOffset: self.arena.newtypeAt(index: before).defOffset) }
             }
-            _ => { try self.lowerSyntaxTopItem(item: item) }
+            _ => { try self.lowerSyntaxTopItemForAdmission(item: item, origin: origin) }
         }
         return <Result.Ok value=() />
     }
 
+}
+
+pub impl Comp {
     inout fn lowerSyntaxTopItem(item: TopItemId) -> Result[(), CompileDiagnostic] {
+        return self.lowerSyntaxTopItemForAdmission(item: item, origin: <FrontendDeclarationOrigin.Raw />)
+    }
+}
+
+impl Comp {
+    inout fn lowerSyntaxTopItemForAdmission(item: TopItemId, origin: FrontendDeclarationOrigin) -> Result[(), CompileDiagnostic] {
         self.cur.typeParams = []
         match syntaxTopItemKind(file: self.syntax, item: item) {
             SyntaxTopItemKind.Extension => {}
             SyntaxTopItemKind.Decl => { try self.lowerSyntaxDecl(d: syntaxDecl(file: self.syntax, id: <DeclId raw=syntaxTopItemPayload(file: self.syntax, item: item) />)) }
-            SyntaxTopItemKind.Impl => { try self.lowerSyntaxImpl(im: syntaxImpl(file: self.syntax, id: <ImplId raw=syntaxTopItemPayload(file: self.syntax, item: item) />)) }
+            SyntaxTopItemKind.Impl => { try self.lowerSyntaxImplForAdmission(im: syntaxImpl(file: self.syntax, id: <ImplId raw=syntaxTopItemPayload(file: self.syntax, item: item) />), origin: origin) }
             SyntaxTopItemKind.Trait => { try self.lowerSyntaxTrait(t: syntaxTrait(file: self.syntax, id: <TraitId raw=syntaxTopItemPayload(file: self.syntax, item: item) />)) }
             SyntaxTopItemKind.Extern => { try self.lowerSyntaxExtern(ext: syntaxExtern(file: self.syntax, id: <ExternId raw=syntaxTopItemPayload(file: self.syntax, item: item) />)) }
             SyntaxTopItemKind.Import => { self.lowerSyntaxImport(imp: syntaxImport(file: self.syntax, id: <ImportId raw=syntaxTopItemPayload(file: self.syntax, item: item) />)) }
-            SyntaxTopItemKind.Published => { try self.lowerSyntaxPublishedItem(item: <TopItemId raw=syntaxTopItemPayload(file: self.syntax, item: item) />) }
+            SyntaxTopItemKind.Published => { try self.lowerSyntaxPublishedItemForAdmission(item: <TopItemId raw=syntaxTopItemPayload(file: self.syntax, item: item) />, origin: origin) }
             SyntaxTopItemKind.Directive => { try self.lowerSyntaxDirective(dir: syntaxDirective(file: self.syntax, id: <DirectiveId raw=syntaxTopItemPayload(file: self.syntax, item: item) />)) }
             SyntaxTopItemKind.GlobalVal => { try self.lowerSyntaxGlobalVal(id: <StmtId raw=syntaxTopItemPayload(file: self.syntax, item: item) />) }
             SyntaxTopItemKind.NewType => { try self.lowerSyntaxNewtype(id: <NewtypeId raw=syntaxTopItemPayload(file: self.syntax, item: item) />) }
@@ -408,6 +423,9 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
+}
+
+pub impl Comp {
     inout fn finishNominalSourceScope(scope: U64, offset: U64, result: Result[(), CompileDiagnostic]) -> Result[(), CompileDiagnostic] {
         if !self.sourceTypeUses.finish(token: scope, succeeded: result.isOk()) {
             return <Result.Err error=self.diagnosticAt(offset: offset, msg: "invalid nominal source scope completion", failureDomain: <FailureDomain.Internal />) />

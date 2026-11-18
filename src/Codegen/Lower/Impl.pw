@@ -1221,6 +1221,12 @@ impl Comp {
 pub impl Comp {
 
     inout fn lowerSyntaxImpl(im: SyntaxImpl) -> Result[(), CompileDiagnostic] {
+        return self.lowerSyntaxImplForAdmission(im: im, origin: <FrontendDeclarationOrigin.Raw />)
+    }
+}
+
+impl Comp {
+    inout fn lowerSyntaxImplForAdmission(im: SyntaxImpl, origin: FrontendDeclarationOrigin) -> Result[(), CompileDiagnostic] {
         val savedBounds = self.activeProjectionBounds
         val savedParameters = self.cur.typeParams
         val savedReturn = self.cur.lowerRetTy
@@ -1229,7 +1235,7 @@ pub impl Comp {
         val savedReceiverRecipes = self.lowerMethodReceiverRecipes
         val scope = self.sourceTypeUses.begin(kind: <SourceTypeScopeKind.Implementation />, anchor: im.span.start)
         mut val stagedBounds: Array[FuncBound] = []
-        val result = self.lowerSyntaxImplInSourceScope(im: im, stagedBounds: inout stagedBounds)
+        val result = self.lowerSyntaxImplInSourceScope(im: im, stagedBounds: inout stagedBounds, origin: origin)
         self.activeProjectionBounds = savedBounds
         self.cur.typeParams = savedParameters
         self.cur.lowerRetTy = savedReturn
@@ -1246,7 +1252,7 @@ pub impl Comp {
 }
 
 impl Comp {
-    inout fn lowerSyntaxImplInSourceScope(im: SyntaxImpl, stagedBounds: inout Array[FuncBound]) -> Result[(), CompileDiagnostic] {
+    inout fn lowerSyntaxImplInSourceScope(im: SyntaxImpl, stagedBounds: inout Array[FuncBound], origin: FrontendDeclarationOrigin) -> Result[(), CompileDiagnostic] {
         mut val implSpans: Array[Span] = []
         mut val implFlags: Array[Bool] = []
         mut val i: U64 = 0U64
@@ -1354,7 +1360,7 @@ impl Comp {
         if normalizedImpl.extName.end > normalizedImpl.extName.start { extensionId = try self.extensionIdentityForImpl(name: normalizedImpl.extName, siteOffset: normalizedImpl.span.start) }
         val ownerKind = if normalizedImpl.isTraitImpl {
             val traitN: Bind = conformanceTrait
-            val index = try self.registerDeclaredConformance(cf: <Conform subjectTraitOwner=recvTraitOwner sourceModule=sourceModule typeStart=recvN.nameStart typeLen=recvN.nameLen typeId=intern(c: inout self, start: recvN.nameStart, len: recvN.nameLen) subjectTy=recvTy subjectArgs=self.pushConformTypes(types: subjectArgs) typeParams=self.pushConformBinds(binds: implParamBinds) typeArity=recvArity traitStart=traitN.nameStart traitLen=traitN.nameLen traitId=intern(c: inout self, start: traitN.nameStart, len: traitN.nameLen) traitArgs=self.pushConformTypes(types: conformanceTraitArgs) derived=false isPub=normalizedImpl.isPub witnessed=self.pushConformWitnesses(witnesses: witnessed) witnessFuncIds=self.pushConformFuncIds(ids: witnessFuncIds) extId=extensionId defOffset=normalizedImpl.span.start assocBindingIds=self.pushConformFuncIds(ids: assocBindingIds) />, bounds: (try self.collectPreparedBounds()))
+            val index = try self.registerDeclaredConformanceForAdmission(cf: <Conform subjectTraitOwner=recvTraitOwner sourceModule=sourceModule typeStart=recvN.nameStart typeLen=recvN.nameLen typeId=intern(c: inout self, start: recvN.nameStart, len: recvN.nameLen) subjectTy=recvTy subjectArgs=self.pushConformTypes(types: subjectArgs) typeParams=self.pushConformBinds(binds: implParamBinds) typeArity=recvArity traitStart=traitN.nameStart traitLen=traitN.nameLen traitId=intern(c: inout self, start: traitN.nameStart, len: traitN.nameLen) traitArgs=self.pushConformTypes(types: conformanceTraitArgs) derived=false isPub=normalizedImpl.isPub witnessed=self.pushConformWitnesses(witnesses: witnessed) witnessFuncIds=self.pushConformFuncIds(ids: witnessFuncIds) extId=extensionId defOffset=normalizedImpl.span.start assocBindingIds=self.pushConformFuncIds(ids: assocBindingIds) />, bounds: (try self.collectPreparedBounds()), origin: origin)
             give <SourceImplementationKind.Conformance index=index />
         } else { give <SourceImplementationKind.Inherent /> }
         val implementation = <SourceImplementationOwner kind=ownerKind receiver=recvTy receiverOccurrence=nominalReceiver.authoredUse receiverTrait=recvTraitOwner receiverArguments=subjectArgs receiverArgumentRecipes=self.lowerMethodReceiverRecipes targetArgumentOccurrences=targetArgumentOccurrences parameters=implParamBinds sourceModule=sourceModule extensionId=extensionId />

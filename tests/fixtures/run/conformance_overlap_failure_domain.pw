@@ -1,0 +1,122 @@
+use /Frontend only { Comp, FrontendInput, openFrontend, openFrontendForRequests, analyzeFrontendDeclarations, analyzeFrontendForRequests }
+use /SourceAccess only { SourceAccess }
+use /Diag only { CompileDiagnostic, FailureDomain }
+use @Plew/Syntax as Syntax
+use @Std/Io only { print }
+use @Std/Set only { Set }
+
+fn main() {
+    verifySource(text: "trait Mark {{}} struct Worker {{}} impl Worker as Mark {{}} impl Worker as Mark {{}} fn main() {{}}", late: false)
+    verifySource(text: "pub trait Mark {{}} pub struct Worker {{}} pub impl Worker as Mark {{}} pub impl Worker as Mark {{}} fn main() {{}}", late: false)
+    verifySource(text: "trait Mark {{}} struct Worker {{}} extension Extra {{ pub impl Worker as Mark {{}} pub impl Worker as Mark {{}} }} fn main() {{}}", late: false)
+    verifySource(text: "trait Source[Kind] {{ type Item }} struct Token {{}} struct Number {{}} impl Number as Source[Token] {{ type Item=Token }} trait Marker[Kind] {{}} struct Worker {{}} impl Worker as Marker[Token] {{}} impl Worker as Marker[Number#Source[Token].Item] {{}} fn main() {{}}", late: true)
+    verifySource(text: "trait Source {{ type Item }} struct Token {{}} struct Number {{}} impl Number as Source {{ type Item=Token }} struct Box[T] {{}} trait Answer {{}} impl Box[Number#Source.Item] as Answer {{}} impl Box[Token] as Answer {{}} fn main() {{}}", late: true)
+    verifyRaw()
+    verifyLegacyRaw()
+    verifySyntaxRaw()
+    for text in [
+        "trait Mark {{}} struct Worker {{}} extension First {{ impl Worker as Mark {{}} }} extension Second {{ impl Worker as Mark {{}} }} fn main() {{}}",
+        "trait Marker[T] {{}} struct Token {{}} struct Other {{}} struct Worker {{}} impl Worker as Marker[Token] {{}} impl Worker as Marker[Other] {{}} fn main() {{}}"
+    ] {
+        val healthy = checked(openFrontendForRequests(input: <FrontendInput.Text path="valid-overlap.pw" text=text />, sources: <SourceAccess stdRoot=[] />))
+        if healthy.decls.conformCount() != 2U64 { panic("disjoint conformance control missing") }
+    }
+    print("ok")
+}
+
+fn verifySource(text: String, late: Bool) {
+    val input = <FrontendInput.Text path="overlap.pw" text=text />
+    val sources = <SourceAccess stdRoot=[] />
+    requireFailure(result: openFrontend(input: input, sources: sources), source: true, context: "openFrontend")
+    requireFailure(result: openFrontendForRequests(input: input, sources: sources), source: true, context: "openFrontendForRequests")
+    mut val raw = <Comp />
+    requireFailure(result: analyzeFrontendForRequests(c: inout raw, input: input, sources: sources), source: false, context: "analyzeFrontendForRequests")
+    mut val declarations = <Comp />
+    requireFailure(result: analyzeFrontendDeclarations(c: inout declarations, input: input, sources: sources), source: false, context: "analyzeFrontendDeclarations")
+    if late {
+        mut val changed: Set[U64] = Set.new()
+        for index in 0U64..<raw.decls.conformCount() { changed.insert(index) }
+        requireFailure(result: raw.checkAdmittedConformanceOverlap(changedSubjects: changed), source: false, context: "raw.checkAdmittedConformanceOverlap")
+    }
+}
+
+fn verifyRaw() {
+    mut val compiler = checked(openFrontendForRequests(input: <FrontendInput.Text path="raw-overlap.pw" text="trait Mark {{}} struct Worker {{}} impl Worker as Mark {{}} fn main() {{}}" />, sources: <SourceAccess stdRoot=[] />))
+    if compiler.decls.conformCount() != 1U64 { panic("raw conformance control missing") }
+    val declaration = compiler.decls.conformAt(index: 0U64)
+    requireFailure(result: compiler.checkConformanceRegistration(cf: declaration), source: false, context: "compiler.checkConformanceRegistration")
+    requireFailure(result: compiler.registerDeclaredConformance(cf: declaration, bounds: []), source: false, context: "compiler.registerDeclaredConformance")
+    if compiler.decls.conformCount() != 1U64 { panic("failed duplicate registration changed declaration count") }
+    compiler.decls.registerConform(declaration)
+    mut val changed: Set[U64] = Set.new()
+    changed.insert(1U64)
+    requireFailure(result: compiler.checkAdmittedConformanceOverlap(changedSubjects: changed), source: false, context: "compiler.checkAdmittedConformanceOverlap")
+}
+
+fn verifySyntaxRaw() {
+    val source = "trait Mark {{}} struct Worker {{}} impl Worker as Mark {{}}"
+    mut val lexer = <Syntax.Lexer bytes=source.bytes() pos=0U64 toks=[] depth=0I64 />
+    Syntax.lex(lx: inout lexer)
+    mut val parser = <Syntax.P bytes=source.bytes() toks=lexer.toks pos=0U64 base=0U64 />
+    val file = Syntax.parseProgramSyntaxFile(p: inout parser)
+    mut val compiler = <Comp />
+    compiler.arena.reserveTypeSentinel()
+    compiler.appendSrc(from: source.bytes())
+    compiler.syntax = file
+    mut val traits: Array[Syntax.TraitId] = []
+    for index in 0U64..<3U64 { compiler.predeclareSyntaxTraitItem(item: Syntax.syntaxFileTopLevel(file: file, index: index), traits: inout traits) }
+    for trait in traits { val prepared = checked(compiler.prepareSyntaxTraitHeader(id: trait)) }
+    val traitItem = Syntax.syntaxFileTopLevel(file: file, index: 0U64)
+    val declaredTrait = checked(compiler.lowerSyntaxTrait(t: Syntax.syntaxTrait(file: file, id: <Syntax.TraitId raw=Syntax.syntaxTopItemPayload(file: file, item: traitItem) />)))
+    val structItem = Syntax.syntaxFileTopLevel(file: file, index: 1U64)
+    val declaredStruct = checked(compiler.lowerSyntaxStructDecl(d: Syntax.syntaxDecl(file: file, id: <Syntax.DeclId raw=Syntax.syntaxTopItemPayload(file: file, item: structItem) />)))
+    val item = Syntax.syntaxFileTopLevel(file: file, index: 2U64)
+    val implementation = Syntax.syntaxImpl(file: file, id: <Syntax.ImplId raw=Syntax.syntaxTopItemPayload(file: file, item: item) />)
+    val declaredImpl = checked(compiler.lowerSyntaxImpl(im: implementation))
+    requireFailure(result: compiler.lowerSyntaxTopItem(item: item), source: false, context: "compiler.lowerSyntaxTopItem")
+    requireFailure(result: compiler.lowerSyntaxPublishedItem(item: item), source: false, context: "compiler.lowerSyntaxPublishedItem")
+    requireFailure(result: compiler.lowerSyntaxImpl(im: implementation), source: false, context: "compiler.lowerSyntaxImpl")
+    if compiler.decls.conformCount() != 1U64 { panic("failed Syntax duplicate changed declaration count") }
+}
+
+fn verifyLegacyRaw() {
+    val source = "trait Mark {{}} struct Worker {{}} impl Worker as Mark {{}}"
+    mut val lexer = <Syntax.Lexer bytes=source.bytes() pos=0U64 toks=[] depth=0I64 />
+    Syntax.lex(lx: inout lexer)
+    mut val parser = <Syntax.P bytes=source.bytes() toks=lexer.toks pos=0U64 base=0U64 />
+    val items = Syntax.parseProgramAst(p: inout parser)
+    if items.count() != 3U64 { panic("legacy raw control missing") }
+    mut val compiler = <Comp />
+    compiler.arena.reserveTypeSentinel()
+    compiler.appendSrc(from: source.bytes())
+    for item in items { compiler.predeclareTraitItem(item: item) }
+    for item in items { val lowered = checked(compiler.lowerTopItem(item: item)) }
+    if compiler.decls.conformCount() != 1U64 { panic("legacy source conformance missing") }
+    requireFailure(result: compiler.lowerTopItem(item: items[2U64]), source: false, context: "compiler.lowerTopItem")
+    requireFailure(result: compiler.lowerPublishedItem(inner: items[2U64]), source: false, context: "compiler.lowerPublishedItem")
+    match items[2U64] {
+        Syntax.TopItemAst.Impl(im: val implementation) => { requireFailure(result: compiler.lowerImpl(im: implementation), source: false, context: "compiler.lowerImpl") }
+        _ => { panic("legacy impl control missing") }
+    }
+}
+
+fn requireFailure[T](result: Result[T, CompileDiagnostic], source: Bool, context: String) {
+    match result {
+        Result.Ok(value: _) => { panic("overlapping conformance accepted: " + context) }
+        Result.Err(error: val diagnostic) => {
+            if diagnostic.message != "duplicate or overlapping trait conformance in one declaration namespace (spec/08,09)" { panic(diagnostic.message) }
+            if source {
+                match diagnostic.failureDomain { FailureDomain.Source => {} _ => { panic("source overlap lost its origin") } }
+            } else {
+                match diagnostic.failureDomain { FailureDomain.Unclassified => {} _ => { panic("raw overlap became source") } }
+            }
+        }
+    }
+}
+
+fn checked[T](result~: Result[T, CompileDiagnostic]) -> T {
+    match result {
+        Result.Ok(value: val value) => { return value }
+        Result.Err(error: val diagnostic) => { panic(diagnostic.message) }
+    }
+}
