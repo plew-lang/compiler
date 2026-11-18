@@ -1,0 +1,101 @@
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests, spansEqual }
+use /SourceAccess only { SourceAccess }
+use /Ir only { Expr, Arg, CachedCallee, SyntheticCallSite }
+use /Diag only { FailureDomain }
+use @Std/Io only { print }
+
+fn main() {
+    mut val invalid = <Comp />
+    analyzeFrontendForRequests(c: inout invalid, input: <FrontendInput.Text path="free-call-source.pw" text="fn accept(value: I64) {{}} fn target() {{ accept(other: 1I64) }} fn main() {{}}" />, sources: <SourceAccess stdRoot=[] />).unwrap()
+    val queryName = invalid.internBytes(s: "target")
+    mut val rejected = invalid.arena.functionCount()
+    for i in 0U64..<invalid.arena.functionCount() {
+        val row = invalid.arena.functionAt(index: i)
+        if spansEqual(c: inout invalid, aStart: row.nameStart, aLen: row.nameLen, bStart: queryName.nameStart, bLen: queryName.nameLen) { rejected = i }
+    }
+    for iteration in 0U64..<2U64 {
+        match invalid.prepareLexicalBody(fnIdx: rejected) {
+            Result.Ok(value: _) => { panic "invalid call accepted" }
+            Result.Err(error: val diagnostic) => {
+                if diagnostic.message != "no matching function for this argument list" || !diagnostic.isSourceRejection() { panic "source failure lost its domain" }
+            }
+        }
+    }
+
+    invalid.cur.checkFn = rejected
+    val acceptName = invalid.internBytes(s: "accept")
+    mut val invalidCall = invalid.arena.exprs.count()
+    for index in 0U64..<invalid.arena.exprs.count() {
+        match invalid.arena.exprs[index] {
+            Expr.Call(nameStart: val start, nameLen: val length, args: _) => {
+                if spansEqual(c: inout invalid, aStart: start, aLen: length, bStart: acceptName.nameStart, bLen: acceptName.nameLen) { invalidCall = index }
+            }
+            _ => {}
+        }
+    }
+    match invalid.arena.exprs[invalidCall] {
+        Expr.Call(nameStart: val start, nameLen: val length, args: val arguments) => {
+            match invalid.freeCallSelectionFailureDomain(exprId: invalidCall, start: start, length: length, args: arguments) {
+                FailureDomain.Source => {}
+                _ => { panic "retained negative selection lost" }
+            }
+            mut val changedOwner = invalid
+            changedOwner.cur.checkFn = rejected + 1U64
+            expectRaw(domain: changedOwner.freeCallSelectionFailureDomain(exprId: invalidCall, start: start, length: length, args: arguments))
+            mut val changedArgument = invalid
+            val argument = changedArgument.argAt(args: arguments, index: 0U64)
+            changedArgument.arena.argPool[arguments.start] = <Arg expr=argument.expr isInout=!argument.isInout labelStart=argument.labelStart labelLen=argument.labelLen hasLabel=argument.hasLabel />
+            expectRaw(domain: changedArgument.freeCallSelectionFailureDomain(exprId: invalidCall, start: start, length: length, args: arguments))
+            mut val changedName = invalid
+            changedName.arena.exprs[invalidCall] = <Expr.Call nameStart=start nameLen=length + 1U64 args=arguments />
+            expectRaw(domain: changedName.freeCallSelectionFailureDomain(exprId: invalidCall, start: start, length: length, args: arguments))
+            mut val raw = invalid
+            val newCall = raw.pushExpr(e: <Expr.Call nameStart=start nameLen=length args=arguments />)
+            expectRaw(domain: raw.freeCallSelectionFailureDomain(exprId: newCall, start: start, length: length, args: arguments))
+            mut val generated = invalid
+            generated.recordSyntheticCallSite(site: <SyntheticCallSite exprId=invalidCall originSerial=generated.arena.exprOriginSerial[invalidCall] receiverTerm=0U64 />).unwrap()
+            expectRaw(domain: generated.freeCallSelectionFailureDomain(exprId: invalidCall, start: start, length: length, args: arguments))
+        }
+        _ => { panic "missing failed call" }
+    }
+
+    mut val c = <Comp />
+    analyzeFrontendForRequests(c: inout c, input: <FrontendInput.Text path="free-call-cache.pw" text="fn accept(value: I64) {{}} fn target() {{ accept(value: 1I64) }} fn main() {{}}" />, sources: <SourceAccess stdRoot=[] />).unwrap()
+    val query = c.internBytes(s: "target")
+    mut val target = c.arena.functionCount()
+    for index in 0U64..<c.arena.functionCount() {
+        val function = c.arena.functionAt(index: index)
+        if spansEqual(c: inout c, aStart: function.nameStart, aLen: function.nameLen, bStart: query.nameStart, bLen: query.nameLen) { target = index }
+    }
+    mut val healthy = c
+    healthy.prepareLexicalBody(fnIdx: target).unwrap()
+    val name = c.internBytes(s: "accept")
+    mut val changed = false
+    for index in 0U64..<c.arena.exprs.count() {
+        match c.arena.exprs[index] {
+            Expr.Call(nameStart: val start, nameLen: val length, args: _) => {
+                if spansEqual(c: inout c, aStart: start, aLen: length, bStart: name.nameStart, bLen: name.nameLen) {
+                    c.typeCache.callee[index] = <CachedCallee.NoStaticCallee />
+                    changed = true
+                }
+            }
+            _ => {}
+        }
+    }
+    if !changed { panic "missing authored call" }
+    match c.prepareLexicalBody(fnIdx: target) {
+        Result.Ok(value: _) => { panic "cache counterexample was accepted" }
+        Result.Err(error: val diagnostic) => {
+            if diagnostic.message != "no matching function for this argument list" { panic "wrong cache failure" }
+            match diagnostic.failureDomain {
+                FailureDomain.Unclassified => {}
+                _ => { panic "wrong domain" }
+            }
+        }
+    }
+    print("ok")
+}
+
+fn expectRaw(domain: FailureDomain) {
+    match domain { FailureDomain.Unclassified => {} _ => { panic "raw selection became source" } }
+}

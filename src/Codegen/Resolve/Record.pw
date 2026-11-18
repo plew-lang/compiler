@@ -2074,6 +2074,35 @@ pub impl Comp {
 
     // Call selection can finish early without bypassing the common expression
     // completion, value-use and type publication boundary in recordExpr.
+    fn isAuthoredFreeCall(exprId: U64, start: U64, length: U64, args: ArgRange) -> Bool {
+        if exprId >= self.arena.exprs.count() || self.syntheticCallSiteIndex(exprId: exprId) < self.decls.syntheticCallSites.count() { return false }
+        val written = match self.authoredFreeCallOrigins.get(key: exprId) {
+            Optional.Some(v: val call) => call,
+            Optional.None => { return false }
+        }
+        if written.start != start || written.length != length || written.arguments.start != args.start || written.arguments.len != args.len { return false }
+        return match self.arena.exprs[exprId] {
+            Expr.Call(nameStart: val currentStart, nameLen: val currentLength, args: val currentArgs) =>
+                currentStart == start && currentLength == length && currentArgs.start == args.start && currentArgs.len == args.len,
+            _ => false,
+        }
+    }
+
+    fn freeCallSelectionFailureDomain(exprId: U64, start: U64, length: U64, args: ArgRange) -> FailureDomain {
+        if !self.isAuthoredFreeCall(exprId: exprId, start: start, length: length, args: args) { return <FailureDomain.Unclassified /> }
+        val failed = match self.failedFreeCallSelections.get(key: exprId) {
+            Optional.Some(v: val failed) => failed,
+            Optional.None => { return <FailureDomain.Unclassified /> }
+        }
+        if failed.owner != self.cur.checkFn || failed.arguments.count() != args.len { return <FailureDomain.Unclassified /> }
+        for index in 0U64..<args.len {
+            val a = failed.arguments[index]
+            val b = self.argAt(args: args, index: index)
+            if a.expr != b.expr || a.isInout != b.isInout || a.hasLabel != b.hasLabel || a.labelStart != b.labelStart || a.labelLen != b.labelLen { return <FailureDomain.Unclassified /> }
+        }
+        return <FailureDomain.Source />
+    }
+
     inout fn recordFreeCallExpression(exprId: U64, callStart: U64, callLen: U64, args: ArgRange, chainHoleRef: U64) -> Result[(), CompileDiagnostic] {
         mut val i: U64 = 0
         while i < args.len {
@@ -2147,7 +2176,7 @@ pub impl Comp {
         } else {
             val selected = try self.recordDynamicLocalCall(exprId: exprId, nameStart: callStart, nameLen: callLen, args: args)
             if !selected {
-                return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "no matching function for this argument list") />
+                return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "no matching function for this argument list", failureDomain: self.freeCallSelectionFailureDomain(exprId: exprId, start: callStart, length: callLen, args: args)) />
             }
         }
         try self.recordArgumentAccessUses(parentExpr: exprId, callee: cfi, args: args)

@@ -185,6 +185,7 @@ pub impl Comp {
                 // ORIGINAL offset (name is at the call's span start) — feeds moduleOf.
                 val a = (try self.lowerArgs(args: args))
                 result = self.pushExpr(e: <Expr.Call nameStart=span.start nameLen=name.bytes().count() args=a />)
+                self.authoredFreeCallOrigins[result] = (start: span.start, length: name.bytes().count(), arguments: a)
             }
             ExprAst.Field(val base, val name, val nameSpan, val span) => {
                 // the field name's SOURCE span, not an interned copy: the bytes there ARE
@@ -460,6 +461,7 @@ pub impl Comp {
             SyntaxExprKind.Call => {
                 val args = (try self.lowerSyntaxArgs(expr: e))
                 result = self.pushExpr(e: <Expr.Call nameStart=e.name.start nameLen=e.name.end - e.name.start args=args />)
+                self.authoredFreeCallOrigins[result] = (start: e.name.start, length: e.name.end - e.name.start, arguments: args)
             }
             SyntaxExprKind.Field => {
                 result = self.pushExpr(e: <Expr.Field base=(try self.lowerSyntaxExpr(id: e.child0)) nameStart=e.name.start nameLen=e.name.end - e.name.start />)
