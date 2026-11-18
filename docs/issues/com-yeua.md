@@ -696,3 +696,20 @@ Unclassified. Its copied row uses fallback line 1, recorded separately from
 the authored exact-location replay. Independent source review found no
 scoped blocker; legacy value-AST lowering was inspected, not independently
 executed in this increment. Formal final gates remain pending.
+
+### Source-bound ambiguity checkpoint
+
+Nine baseline cases comprise four viewed-constraint queries, four general
+pattern queries and one instantiated proof query, as verified by isolated
+producer markers. Compiler 7d2e9878 preserves the ambiguous result at the
+saved call-constraint consumer and applies its existing source receipt.
+Found/Missing behavior and the single proof query remain unchanged.
+
+All 27 comparisons retain baseline text/status/channel. Four check/AOT
+and three reached ORC refusals now have Source. The publication-disabled
+carrier keeps all refusals Unclassified. Three valid proof-path controls
+pass check and exact ORC output. Independent review found no scoped blocker.
+Four general pattern consumers and one instantiation consumer remain
+required work. Formal final gates remain pending.
+
+[Replay and producer trace](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-bound-ambiguity-rejection.json).
