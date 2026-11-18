@@ -333,6 +333,11 @@ impl PatternInputFacts {
     fn normalizedRef(ref: U64) -> U64 { return self.normalizedTerms.getOr(key: ref, fallback: ref) }
 }
 
+enum TraitCycleViolation {
+    Growth(offset: U64)
+    ClosedPath(offset: U64)
+}
+
 struct CheckedTraitCycleGraph {
     val graph: TraitCycleGraph
     val facts: PatternInputFacts
@@ -2405,8 +2410,7 @@ fn loadFrontendDeclarations(c: inout Comp, input: FrontendInput, sources: Source
     // A trait-to-trait cycle is invalid as a declaration graph. Check it before
     // the concrete-conformance fixpoint, whose idempotent fact deduplication is
     // intentionally not a substitute for this diagnostic.
-    try c.checkTraitSubjectCycles(activeExtIds: [])
-    try c.checkTraitSubjectCycleBundles()
+    try c.checkSourceTraitSubjectCycles()
     c.newtypeAnnotationAdmissionOpen = true
     val nominalAdmission = admitFrontendNominalDependencies(c: inout c)
     c.newtypeAnnotationAdmissionOpen = false

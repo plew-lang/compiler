@@ -387,3 +387,22 @@ receiver applicability; retain the previously scoped structural graph contract.
 After these prerequisites, finish the raw category checks, Source cycle/growth
 producers and remaining scoped graph controls/review. New product repair
 assignment does not certify any implementation or close this issue.
+
+## Declaration Cycle and Growth Classification
+
+The graph check now returns a typed violation for a closed path or an SCC
+growth violation. It keeps malformed-input diagnostics from admission.
+The declaration-sequence consumer classifies violations from authored bare
+and bundle graphs as Source. The raw entry retains its previous domain for
+structural violations and does not translate input failures.
+
+On the diagnostic candidate, bare cycle, growth, extension self-loop, and
+mixed bare/extension cycles produce Source with their existing reason in
+check, AOT, and lazy (12 assertions). Native TraitCycleInputAdmission
+passes all six malformed cases as Input. Native TraitCycleFailureDomains
+passes its Source and acyclic controls. JIT shrinking and diamond goldens
+pass. The primitive arity and missing associated member authored controls
+also produce Source with the original expected wording. View application
+still needs classification at the established authored or signature
+boundary: the composed extension fixture retains Unclassified at this
+checkpoint. The repair and overall review remain open.

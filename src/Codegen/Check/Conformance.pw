@@ -493,11 +493,11 @@ impl Comp {
 
 }
 
-pub impl Comp {
+impl Comp {
     // `activeExtIds` is empty for the declaration-time bare graph.  A view
     // passes its complete extension-source set, making extensions edge-active
     // only when the programmer explicitly selected them.
-    inout fn checkTraitSubjectCycles(activeExtIds: Array[U64], offset: U64 = 0U64) -> Result[(), CompileDiagnostic] {
+    inout fn findTraitSubjectCycle(activeExtIds: Array[U64], offset: U64) -> Result[Optional[TraitCycleViolation], CompileDiagnostic] {
         val admitted = (try self.buildTraitCycleGraph(activeExtIds: activeExtIds))
         val graph = admitted.graph
         val facts = admitted.facts
@@ -512,7 +512,7 @@ pub impl Comp {
                 if !(self.traitCycleEdgeIsNonIncreasing(cf: edge, facts: facts)) {
                     mut val report: U64 = edge.defOffset
                     if offset != 0U64 { report = offset }
-                    return <Result.Err error=self.diagnosticAt(offset: report, msg: "trait-to-trait conformance edge grows within a cycle") />
+                    return <Result.Ok value=<Optional.Some v=<TraitCycleViolation.Growth offset=report /> /> />
                 }
             }
             val source: TraitCycleNode = <TraitCycleNode owner=edge.typeStart args=self.copyCheckedPatternTypes(types: edge.subjectArgs, facts: facts) scope=ci />
@@ -521,11 +521,31 @@ pub impl Comp {
             if self.traitCyclePathReaches(start: source, node: target, binds: binds, graph: graph, facts: facts) {
                 mut val report: U64 = edge.defOffset
                 if offset != 0U64 { report = offset }
-                return <Result.Err error=self.diagnosticAt(offset: report, msg: "trait-to-trait conformance cycle") />
+                return <Result.Ok value=<Optional.Some v=<TraitCycleViolation.ClosedPath offset=report /> /> />
             }
             edgeId += 1U64
         }
-        return <Result.Ok value=() />
+        return <Result.Ok value=<Optional.None /> />
+    }
+
+    inout fn requireTraitSubjectAcyclic(activeExtIds: Array[U64], offset: U64, domain: FailureDomain) -> Result[(), CompileDiagnostic] {
+        val violation = try self.findTraitSubjectCycle(activeExtIds: activeExtIds, offset: offset)
+        match violation {
+            Optional.Some(v: val cycle) => {
+                match cycle {
+                    TraitCycleViolation.Growth(offset: val position) => { return <Result.Err error=self.diagnosticAt(offset: position, msg: "trait-to-trait conformance edge grows within a cycle", failureDomain: domain) /> }
+                    TraitCycleViolation.ClosedPath(offset: val position) => { return <Result.Err error=self.diagnosticAt(offset: position, msg: "trait-to-trait conformance cycle", failureDomain: domain) /> }
+                }
+            }
+            Optional.None => { return <Result.Ok value=() /> }
+        }
+    }
+}
+
+pub impl Comp {
+    // The raw graph entry also accepts synthetic registration fixtures.
+    inout fn checkTraitSubjectCycles(activeExtIds: Array[U64], offset: U64 = 0U64) -> Result[(), CompileDiagnostic] {
+        return self.requireTraitSubjectAcyclic(activeExtIds: activeExtIds, offset: offset, domain: <FailureDomain.Unclassified />)
     }
 
     // A named extension is one module-crossing bundle.  Validate every
@@ -534,14 +554,15 @@ pub impl Comp {
     // declaration order.  `checkTraitSubjectCycles` already treats bare
     // edges as present for every source-set; supplying one bundle id gives
     // exactly `bare ∪ bundle`.
-    inout fn checkTraitSubjectCycleBundles() -> Result[(), CompileDiagnostic] {
+    inout fn checkSourceTraitSubjectCycles() -> Result[(), CompileDiagnostic] {
+        try self.requireTraitSubjectAcyclic(activeExtIds: [], offset: 0U64, domain: <FailureDomain.Source />)
         mut val seen: Set[U64] = Set.new()
         mut val ci: U64 = 0U64
         while ci < self.decls.conformCount() {
             val cf: Conform = self.decls.conformAt(index: ci)
             if cf.extId != 0U64 && !seen.contains(cf.extId) {
                 seen.insert(cf.extId)
-                try self.checkTraitSubjectCycles(activeExtIds: [cf.extId], offset: cf.defOffset)
+                try self.requireTraitSubjectAcyclic(activeExtIds: [cf.extId], offset: cf.defOffset, domain: <FailureDomain.Source />)
             }
             ci += 1U64
         }
