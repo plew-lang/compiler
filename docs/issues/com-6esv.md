@@ -1,7 +1,7 @@
 ---
 id: com-6esv
 status: open
-deps: [com-atac]
+deps: [com-atac, com-ceny]
 links: [com-3jtd]
 created: 2026-11-13T18:41:32Z
 type: bug

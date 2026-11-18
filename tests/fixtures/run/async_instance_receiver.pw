@@ -1,0 +1,20 @@
+use @Std/Async only { sleep }
+use @Std/Io only { print }
+
+struct Worker {
+    val label: String
+    val code: I64
+}
+
+impl Worker {
+    async fn perform(extra: I64) -> Promise[I64] {
+        await sleep(ms: 1)
+        print(self.label)
+        return self.code + extra
+    }
+}
+
+async fn main() {
+    val pending = <Worker label=("copied" + " receiver") code=40I64 />.perform(extra: 2I64)
+    print(await pending)
+}

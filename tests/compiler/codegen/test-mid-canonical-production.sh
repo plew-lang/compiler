@@ -324,13 +324,14 @@ done
 python3 - <<'PYASYNCDECL'
 from pathlib import Path
 source = Path('src/Backend/Llvm/Async.pw').read_text()
-declarations = source.split('inout fn declareAsyncFns(', 1)[1].split('inout fn asyncSlotOf(', 1)[0]
+declarations = source.split('inout fn declareAsyncFns(', 1)[1].split('inout fn asyncEntrySlot(', 1)[0]
 for forbidden in ['prepareMidAsyncFrame(', 'prepareAsyncMidCanonical(', 'prepareMidExecutable(']:
     assert forbidden not in declarations, 'async declaration demands an executable body'
 emission = source.split('inout fn genLlvmAsyncFunc(', 1)[1].split('inout fn emitAsyncFns(', 1)[0]
 assert emission.index('prepareMidAsyncFrame(') < emission.index('self.beginFnBody(')
 assert 'genLlvmMidAsyncResume(c: inout c, activationId: activationId)' in emission
-assert 'bodyId: self.asyncBodyIds[slot], entry: entry, resume: resumeFn' in emission
+assert 'val bodyId = self.asyncBodyIds[slot]' in emission
+assert 'bodyId: bodyId, entry: entry, resume: resumeFn' in emission
 PYASYNCDECL
 
 # An unused async declaration is not an executable root, just like an unused

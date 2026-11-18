@@ -1,0 +1,21 @@
+use @Std/Async only { sleep }
+use @Std/Io only { print }
+
+unique struct Worker {
+    val code: I64
+    deinit { print(99I64) }
+}
+
+impl Worker {
+    factory
+    async move fn perform() -> Promise[I64] {
+        await sleep(ms: 1)
+        return self.code
+    }
+}
+
+async fn main() {
+    val worker = <Worker code=42I64 />
+    val pending = (move worker).perform()
+    print(await pending)
+}

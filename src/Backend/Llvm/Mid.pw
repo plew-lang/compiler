@@ -989,7 +989,7 @@ pub impl LlvmCtx {
         match selected.target { CallTarget.Direct => {} _ => { return <Result.Ok value=<MidCallPreflight.Target /> /> } }
         if selected.callee >= c.arena.functionCount() { return <Result.Ok value=<MidCallPreflight.Callee /> /> }
         val callee: Func = c.arena.functionAt(index: selected.callee)
-        if callee.isAsync && (callee.hasRecv || callee.typeParams.count() != 0U64 || self.asyncEntrySlot(fi: selected.callee) >= self.asyncEntryIdx.count()) { return <Result.Ok value=<MidCallPreflight.Async /> /> }
+        if callee.isAsync && self.asyncEntrySlot(bodyId: selected.calleeBodyId) >= self.asyncEntryBodyIds.count() { return <Result.Ok value=<MidCallPreflight.Async /> /> }
         if callee.hasRecv {
             if !(try self.midCanonicalReceiverSupported(c: inout c, body: body, receiverId: term.callReceiver, passing: selected.receiverPassing)) {
                 if c.traceCodegen {
@@ -2082,7 +2082,7 @@ pub impl LlvmCtx {
         }
         mut val asyncAbiId = 0U64
         if callee.isAsync {
-            asyncAbiId = (try self.asyncNativeAbi(function: self.asyncEntryVal[self.asyncEntrySlot(fi: selected.callee)], bodyId: selected.calleeBodyId, resume: false))
+            asyncAbiId = (try self.asyncNativeAbi(function: self.asyncEntryVal[self.asyncEntrySlot(bodyId: selected.calleeBodyId)], bodyId: selected.calleeBodyId, resume: false))
             if !c.typeRefEq(a: self.valueAbis[asyncAbiId - 1U64].resultTerm, b: selected.resultTypeRef) { return <Result.Err error=valueAbiFailure(message: "async call lost its frozen Promise result") /> }
         }
         mut val privateAbiId = asyncAbiId
@@ -2143,7 +2143,7 @@ pub impl LlvmCtx {
         }
         mut val result: LLVMValueRef = LLVMConstInt(self.i64ty, 0U64, 0I32)
         if callee.isAsync {
-            val slot: U64 = self.asyncEntrySlot(fi: selected.callee)
+            val slot: U64 = self.asyncEntrySlot(bodyId: selected.calleeBodyId)
             result = (try self.callAsyncEntryValueFunction(function: self.asyncEntryVal[slot], bodyId: selected.calleeBodyId, arguments: typedValues))
         } else if callee.isExtern { result = LLVMBuildCall2(self.b, self.declTy[externalSlot], self.declFn[externalSlot], arrayCPtr(values), values.count(), anon()) }
         else if useMethod { result = (try self.callBodyValueFunction(function: self.genMethVal[methodSlot], bodyId: selected.calleeBodyId, inputs: (try self.bodyInputScope(bodyId: selected.calleeBodyId, signature: self.genMethTy[methodSlot])), arguments: typedValues)) }

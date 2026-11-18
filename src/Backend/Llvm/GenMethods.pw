@@ -93,7 +93,7 @@ pub impl LlvmCtx {
                 // The closed body graph already contains executable instances.
                 // Trait-origin declarations may have concrete environments,
                 // including when JIT requests a body without its caller.
-                if f.hasRecv && !f.isExtern {
+                if f.hasRecv && !f.isExtern && !f.isAsync {
                     if self.genMethSlotFor(bodyId: bodyId) == self.genMethBody.count() {
                         try self.declareOneGenMethod(c: inout c, bodyId: bodyId)
                     }

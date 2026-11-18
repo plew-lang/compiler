@@ -53,3 +53,30 @@ method and free async positive controls, receiver ownership preservation and
 independent review. Check admission, entry registration and the final consumer
 on the same candidate. Async syntax or scheduling policy changes are outside
 scope. This is a runtime control prerequisite of [com-6esv](com-6esv.md).
+
+## Receiver ABI Implementation Checkpoint
+
+The candidate routes ordinary async methods through the finalized-body
+entry table and uses a receiver lane before ordinary arguments. Copy-self
+from a temporary aggregate with a heap String survives suspension, and the
+moved unique receiver deinitializes once before the awaiting caller prints
+the result. The two cases and the existing via path failed on the old
+carrier with the recorded ABI diagnostic. The first prototype passed
+check, JIT and native AOT for those cases and four positive controls.
+The existing generic async feature limit is unchanged.
+
+Independent review verified those paths and found that a second iteration
+must check the supplied entry against the frozen receiver/ordinary modes
+before admitting its frame (including the forged Move case in
+ReadyAsyncPlanMain). The independent review also found that the successful
+via output concealed an extra activation. [com-ceny](com-ceny.md) owns
+that separate forwarding repair and blocks com-6esv. The existing unique
+copy-self source-admission gap is recorded in [com-tn1m](com-tn1m.md).
+
+The follow-up candidate checks receiver and ordinary lane type, role and
+passing against the frozen signature before publishing a Ready activation.
+The seven check/JIT/native controls passed again, as did the Ready and
+completed-async architecture checks. The two receiver lifetime fixtures
+are registered in the pre-optimization ASan ownership manifest. The
+first full suite (20261118T135447-test-411f83) stopped via its watchdog;
+a passing full suite, ASan and formal performance are still unverified.

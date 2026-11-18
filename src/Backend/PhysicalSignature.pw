@@ -380,8 +380,15 @@ pub impl LlvmSignatureScope {
                 }
                 LlvmValueConvention.GlobalInitializer => { return <Result.Err error=signatureFailure(message: "global initializer has native inputs") /> }
                 LlvmValueConvention.AsyncEntry => {
-                    if parameter.semanticType == 0U64 || (parameter.mode.key() != 1U64 && parameter.mode.key() != 3U64) || !parameter.role.same(role: <LlvmParameterRole.Ordinary index=ordinary />) { return <Result.Err error=signatureFailure(message: "async entry ordinary type/mode/index mismatch") /> }
-                    ordinary += 1U64
+                    if parameter.semanticType == 0U64 || (parameter.mode.key() != 1U64 && parameter.mode.key() != 3U64) { return <Result.Err error=signatureFailure(message: "async entry type/mode mismatch") /> }
+                    match parameter.role {
+                        LlvmParameterRole.Receiver => { if index != 0U64 { return <Result.Err error=signatureFailure(message: "async receiver must be first") /> } }
+                        LlvmParameterRole.Ordinary(index: val position) => {
+                            if position != ordinary { return <Result.Err error=signatureFailure(message: "async ordinary parameter index mismatch") /> }
+                            ordinary += 1U64
+                        }
+                        _ => { return <Result.Err error=signatureFailure(message: "invalid async entry parameter role") /> }
+                    }
                 }
                 LlvmValueConvention.AsyncResume => {
                     val owner = match parameter.role { LlvmParameterRole.Frame(bodyId: val bodyId) => { give bodyId } _ => { give 0U64 } }

@@ -574,17 +574,11 @@ struct LlvmCtx {
     pub mut val curFrameTy: LLVMTypeRef
     pub mut val curResumeFn: LLVMValueRef
     pub mut val curAsyncSwitch: LLVMValueRef
-    // per async fn (parallel, keyed by c.arena.funcs index): its frame struct type and
-    // resume fn value, so the entry/resume/await sites all agree on the layout.
-    pub mut val asyncFnIdx: Array[U64]
+    // Each finalized async body has its own resume function.
     pub mut val asyncBodyIds: Array[U64] = []
     pub mut val asyncResumeFn: Array[LLVMValueRef]
-    // the promise-returning ENTRY symbol of each non-main async fn (`async fn doubler`
-    // -> `pf<fi>`), its own small symbol table keyed by funcs index — kept SEPARATE from
-    // the `pf` fnIdx/fnVal/fnTy tables (which now hold only provided/lang-item method
-    // lazy declarations) so an async state-machine entry is no longer conflated with a
-    // method symbol. `main` keeps the C `i32 main()` shape and has no entry here.
-    pub mut val asyncEntryIdx: Array[U64]
+    // Promise-returning entry for each non-main async body.
+    pub mut val asyncEntryBodyIds: Array[U64]
     pub mut val asyncEntryVal: Array[LLVMValueRef]
     // loop break/continue target blocks (a stack — innermost loop on top), so a
     // `break` branches to the enclosing loop's end and `continue` to its
@@ -1120,7 +1114,7 @@ fn llvmContext(ctx: LLVMContextRef, m: LLVMModuleRef, builder: LLVMBuilderRef,
         curFrameBase=LLVMConstNull(ptrty) curFrameTy=i64ty
         curResumeFn=LLVMConstInt(LLVMInt32TypeInContext(ctx), 0U64, 0I32)
         curAsyncSwitch=LLVMConstInt(LLVMInt32TypeInContext(ctx), 0U64, 0I32)
-        asyncFnIdx=[] asyncResumeFn=[] asyncEntryIdx=[] asyncEntryVal=[] loopBreakBB=[] loopContBB=[] loopUnwindMark=[] loopDepth=0 />
+        asyncResumeFn=[] asyncEntryBodyIds=[] asyncEntryVal=[] loopBreakBB=[] loopContBB=[] loopUnwindMark=[] loopDepth=0 />
 
 }
 

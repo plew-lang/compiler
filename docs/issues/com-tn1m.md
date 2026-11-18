@@ -47,3 +47,16 @@ need their own verification, not blanket claims of missing all async support.
 [com-604k](com-604k.md), scope record [com-esri](com-esri.md): **Mixed: split current subset**.
 
 Current scalar async/activation/frame/loop lifetime is com-7u06. Composite/unique results and method/generic async remain unimplemented future work. Do not require or claim them when closing the child.
+
+## Unique copy-self rejection control
+
+A unique struct with an ordinary `async fn perform() -> Promise[I64]`
+and `await worker.perform()` passes `--check` on the compiler both before
+and after the first com-atac prototype. The prototype fails closed when
+building the async entry because it cannot copy a borrowed unique receiver.
+[Spec/07](../../../spec/spec/02-type-system/07-methods-impl.md) requires
+the source checker to reject non-consuming async methods on unique receivers.
+When auditing the source boundary, require declaration-time rejection even
+when no caller demands the body, and retain the passing `async move fn`
+control. An ordinary method on a copyable receiver is supported by the
+com-atac implementation.

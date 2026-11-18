@@ -13,7 +13,7 @@ pub impl LlvmCtx {
         val function = c.arena.functionAt(index: instance.fnIdx)
         val signature = c.arena.bodySignature(bodyId: bodyId)
         val noReceiver = match signature.receiverPassing { CallReceiverPassing.None => { give true } _ => { give false } }
-        if !noReceiver || !function.isAsync || function.hasRecv || function.typeParams.count() != 0U64 || !signature.ready || signature.receiverType != 0U64 || signature.parameterTypes.count() != signature.parameterPassings.count() { return <Result.Err error=valueAbiFailure(message: "async signature requires a completed supported free body") /> }
+        if !function.isAsync || !signature.ready || function.hasRecv == noReceiver || (signature.receiverType == 0U64) != noReceiver || signature.parameterTypes.count() != signature.parameterPassings.count() { return <Result.Err error=valueAbiFailure(message: "async signature requires a completed async body") /> }
         mut val parameters: Array[LlvmLogicalParameter] = []
         mut val result = self.voidty
         mut val resultTerm = 0U64
@@ -24,6 +24,18 @@ pub impl LlvmCtx {
             resultTerm = signature.resultType
             result = (try self.llvmTypeOfRef(c: inout c, ref: resultTerm))
             if plew_pointer_equal(result, self.ptrty) == 0I32 { return <Result.Err error=valueAbiFailure(message: "async Promise result representation mismatch") /> }
+            if !noReceiver {
+                val copyable = !c.arena.typeTermIsUnique(ref: signature.receiverType)
+                val mode = match signature.receiverPassing {
+                    CallReceiverPassing.Borrow => {
+                        if !copyable { return <Result.Err error=valueAbiFailure(message: "async entry cannot copy a borrowed unique receiver") /> }
+                        give <LlvmParameterMode.Borrow />
+                    }
+                    CallReceiverPassing.Move => { give <LlvmParameterMode.Move /> }
+                    _ => { return <Result.Err error=valueAbiFailure(message: "async entry requires a copied or moved receiver") /> }
+                }
+                parameters.append(<LlvmLogicalParameter type=(try self.llvmTypeOfRef(c: inout c, ref: signature.receiverType)) semanticType=signature.receiverType copyable=copyable role=<LlvmParameterRole.Receiver /> mode=mode />)
+            }
             mut val index = 0U64
             while index < signature.parameterTypes.count() {
                 val passing = signature.parameterPassings[index]

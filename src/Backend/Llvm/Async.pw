@@ -11,7 +11,7 @@
 pub impl LlvmCtx {
 
     // Declare each reachable async signature and resume symbol, and (for a
-    // non-main async fn) its entry symbol in the fnIdx table (signature: params ->
+    // non-main async fn) its entry symbol in the finalized body table (signature: params ->
     // PlewPromise*, so a call site `doubler(x: 21)` resolves to a promise-returning
     // call). `main` keeps the C `i32 main()` shape (handled at emit).
     inout fn declareAsyncFns(c: inout Comp) -> Result[(), CompileDiagnostic] {
@@ -31,17 +31,18 @@ pub impl LlvmCtx {
                 if c.arena.functionAt(index: fi).typeParams.count() > 0U64 {
                     return <Result.Err error=c.diagnosticAt(offset: c.arena.functionAt(index: fi).nameStart, msg: "LLVM backend: generic `async fn` is not yet supported") />
                 }
-                if c.arena.functionAt(index: fi).hasRecv {
-                    return <Result.Err error=c.diagnosticAt(offset: c.arena.functionAt(index: fi).nameStart, msg: "LLVM backend: `async fn` methods are not yet supported (only free `async fn`)") />
-                }
+                val hasReceiver = c.arena.functionAt(index: fi).hasRecv
                 // resume fn: void __af<fi>_resume(void*).
                 mut val rnm: Array[U8] = []
                 appendBytes(into: inout rnm, from: "__af".bytes())
                 appendU64Dec(into: inout rnm, n: fi)
+                if hasReceiver {
+                    appendBytes(into: inout rnm, from: "_method_".bytes())
+                    appendU64Dec(into: inout rnm, n: bodyId)
+                }
                 appendBytes(into: inout rnm, from: "_resume".bytes())
                 rnm.append(0)
                 val resumeFn: LLVMValueRef = (try self.declarePlannedBodyFunction(name: arrayCPtr(rnm), abiId: (try self.asyncBodyValueAbi(c: inout c, bodyId: bodyId, resume: true)), bodyId: bodyId))
-                self.asyncFnIdx.append(fi)
                 self.asyncBodyIds.append(bodyId)
                 self.asyncResumeFn.append(resumeFn)
                 // entry symbol (non-main): params -> ptr (Promise).
@@ -49,9 +50,13 @@ pub impl LlvmCtx {
                     mut val enm: Array[U8] = []
                     appendBytes(into: inout enm, from: "pf".bytes())
                     appendU64Dec(into: inout enm, n: fi)
+                    if hasReceiver {
+                        appendBytes(into: inout enm, from: "_method_".bytes())
+                        appendU64Dec(into: inout enm, n: bodyId)
+                    }
                     enm.append(0)
                     val entryFn: LLVMValueRef = (try self.declarePlannedBodyFunction(name: arrayCPtr(enm), abiId: (try self.asyncBodyValueAbi(c: inout c, bodyId: bodyId, resume: false)), bodyId: bodyId))
-                    self.asyncEntryIdx.append(fi)
+                    self.asyncEntryBodyIds.append(bodyId)
                     self.asyncEntryVal.append(entryFn)
                 }
             }
@@ -59,29 +64,13 @@ pub impl LlvmCtx {
         return <Result.Ok value=() />
     }
 
-    // The async-fn registry slot for `fi` (frame type / resume fn), or count if absent.
-    inout fn asyncSlotOf(fi: U64) -> U64 {
-        mut val i: U64 = 0
-        while i < self.asyncFnIdx.count() {
-            if self.asyncFnIdx[i] == fi {
-                return i
-            }
-            i += 1
+    inout fn asyncEntrySlot(bodyId: U64) -> U64 {
+        mut val index = 0U64
+        while index < self.asyncEntryBodyIds.count() {
+            if self.asyncEntryBodyIds[index] == bodyId { return index }
+            index += 1U64
         }
-        return self.asyncFnIdx.count()
-    }
-
-    // The async-entry-symbol slot for `fi` (its promise-returning entry fn), or
-    // asyncEntryIdx.count() if absent (`main` and non-async fns have none).
-    inout fn asyncEntrySlot(fi: U64) -> U64 {
-        mut val i: U64 = 0
-        while i < self.asyncEntryIdx.count() {
-            if self.asyncEntryIdx[i] == fi {
-                return i
-            }
-            i += 1
-        }
-        return self.asyncEntryIdx.count()
+        return self.asyncEntryBodyIds.count()
     }
 
     inout fn asyncFreeFrame(c: inout Comp, frame: LLVMValueRef) -> Result[(), CompileDiagnostic] {
@@ -125,24 +114,22 @@ pub impl LlvmCtx {
     }
 
     // Emit one async fn's entry + resume bodies.
-    inout fn genLlvmAsyncFunc(c: inout Comp, fi: U64) -> Result[(), CompileDiagnostic] {
-        val slot: U64 = self.asyncSlotOf(fi: fi)
-        if slot >= self.asyncFnIdx.count() {
-            return <Result.Ok value=() />
-        }
-        if !self.admitBody(bodyId: self.asyncBodyIds[slot]) { return <Result.Ok value=() /> }
+    inout fn genLlvmAsyncFunc(c: inout Comp, slot: U64) -> Result[(), CompileDiagnostic] {
+        val bodyId = self.asyncBodyIds[slot]
+        if !self.admitBody(bodyId: bodyId) { return <Result.Ok value=() /> }
+        val fi = c.arena.bodyInstanceAt(index: bodyId - 1U64).fnIdx
         val f: Func = c.arena.functionAt(index: fi)
         val resumeFn: LLVMValueRef = self.asyncResumeFn[slot]
         val isMain: Bool = c.nameIsMain(f: f)
         // ---- entry function ----
         mut val entryFn: LLVMValueRef = resumeFn
         if isMain {
-            entryFn = (try self.declareProgramValueFunction(c: inout c, bodyId: self.asyncBodyIds[slot], main: true))
+            entryFn = (try self.declareProgramValueFunction(c: inout c, bodyId: bodyId, main: true))
         } else {
-            entryFn = self.asyncEntryVal[self.asyncEntrySlot(fi: fi)]
+            entryFn = self.asyncEntryVal[self.asyncEntrySlot(bodyId: bodyId)]
         }
         val entry = if isMain { give <LlvmAsyncEntry.Main function=entryFn /> } else { give <LlvmAsyncEntry.Private function=entryFn abiId=self.valueAbiFunctions.getOr(key: LLVMIsAFunction(entryFn), fallback: 0U64) /> }
-        val activationId = (try self.prepareMidAsyncFrame(c: inout c, bodyId: self.asyncBodyIds[slot], entry: entry, resume: resumeFn))
+        val activationId = (try self.prepareMidAsyncFrame(c: inout c, bodyId: bodyId, entry: entry, resume: resumeFn))
         val activation = self.asyncActivations[activationId - 1U64]
         val planId = match activation.prepared { MidLlvmPrepared.Ready(canonical: _, localAdmission: val admission) => { give match admission { LlvmBodyLocalAdmission.Planned(planId: val saved) => { give saved } } } _ => { return <Result.Err error=valueAbiFailure(message: "async entry lacks Ready") /> } }
         try self.validateMidAsyncActivation(activationId: activationId, planId: planId)
@@ -171,7 +158,7 @@ pub impl LlvmCtx {
             val input = self.asyncActivationInputs[activation.inputStart + pi]
             val local = self.preparedLocals[self.bodyLocalPlans[planId - 1U64].localStart + input.local]
             val field = match local.storage { LlvmLocalStorage.FrameField(field: val saved) => { give saved } _ => { return <Result.Err error=valueAbiFailure(message: "async input lost frame field") /> } }
-            val value = self.valueInputValue(input: (try self.asyncValueParameter(function: entryFn, bodyId: self.asyncBodyIds[slot], resume: false, index: pi)))
+            val value = self.valueInputValue(input: (try self.asyncValueParameter(function: entryFn, bodyId: bodyId, resume: false, index: pi)))
             llvmStore(self.b, value, LLVMBuildStructGEP2(self.b, frameTy, frame, field, anon()))
             if input.acquireShare { try self.valueArc(c: inout c, v: value, typeRef: local.semanticType, retain: true) }
             pi += 1U64
@@ -202,8 +189,8 @@ pub impl LlvmCtx {
     // Only emission requests the activation layout; declarations need no body.
     inout fn emitAsyncFns(c: inout Comp) -> Result[(), CompileDiagnostic] {
         mut val slot = 0U64
-        while slot < self.asyncFnIdx.count() {
-            try self.genLlvmAsyncFunc(c: inout c, fi: self.asyncFnIdx[slot])
+        while slot < self.asyncBodyIds.count() {
+            try self.genLlvmAsyncFunc(c: inout c, slot: slot)
             slot += 1U64
         }
         return <Result.Ok value=() />

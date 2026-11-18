@@ -1,0 +1,18 @@
+use @Std/Io only { print }
+
+struct Worker { val code: I64 }
+
+trait Action { async fn go() -> Promise[I64] }
+
+impl Worker {
+    async fn perform() -> Promise[I64] { return self.code }
+}
+
+impl Worker as Action {
+    async fn go() -> Promise[I64] via perform
+}
+
+async fn main() {
+    val answer: I64 = await <Worker code=42I64 />.go()
+    print(answer)
+}
