@@ -825,3 +825,21 @@ Independent review's missing invalid-TypeRef control was added and executed;
 no further scoped findings remain. Broad/final gates and com-yeua remain open.
 
 [Evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-call-inference-rejection.json).
+
+### Post-inference finite rejection refresh
+
+Pinned b7d4c530 diagnostic carrier replays the 498 surviving previous
+non-Source flat rejection inputs with --check. Candidate and every input hash
+remain unchanged. Results: Source144, Unclassified350, Internal1, signal2,
+accepted1. No transport timeout/error. Previous Source672 inputs are not
+revalidated by this replay. The retired unique_shadow_cliff_use fixture was
+removed in 747602af and is explicitly excluded, not counted as a pass.
+
+Internal blanket_headless remains assigned to com-wka4. Both O0 signal cases
+are the already recorded resource cases; neither counts as Source. The accepted
+polymorphic_recursion check also succeeds with the prior 4fd1f1d0 candidate;
+both candidates' AOT retains its identical unsupported-polymorphic-recursion
+refusal. No new acceptance regression from the inference repair is established.
+This is a diagnostic refresh, not a full suite or task closure.
+
+[Current groups, input hashes and mode comparison](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-post-inference-classification-refresh.json).
