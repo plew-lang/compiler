@@ -1,0 +1,75 @@
+use /Frontend only { Comp, FrontendInput, openFrontend, openFrontendForRequests, analyzeFrontendDeclarations, analyzeFrontendForRequests, spansEqual }
+use /SourceAccess only { SourceAccess, SourceResource }
+use /Diag only { CompileDiagnostic, FailureDomain }
+use @Std/Io only { print }
+
+fn main() {
+    for text in [
+        "trait Act {{ inout fn act() }} struct X {{}} impl X as Act {{ fn act() {{}} }} fn main() {{}}",
+        "trait Act {{ fn act() }} struct X {{}} impl X as Act {{ inout fn act() {{}} }} fn main() {{}}",
+        "trait Act {{ assoc fn act() }} struct X {{}} impl X as Act {{ fn act() {{}} }} fn main() {{}}",
+        "trait Act {{ async fn act() }} struct X {{}} impl X as Act {{ fn act() {{}} }} fn main() {{}}"
+    ] { verifySource(text: text) }
+    mut val compiler = checked(openFrontendForRequests(
+        input: <FrontendInput.Text path="raw-calling-convention.pw" text="trait Act {{ fn act() }} struct Owner {{}} impl Owner as Act {{ fn act() {{}} }} struct Mutable {{}} impl Mutable {{ inout fn act() {{}} }} struct Associated {{}} impl Associated {{ assoc fn act() {{}} }} unique struct Moving {{}} impl Moving {{ move fn act() {{}} }} fn main() {{}}" />,
+        sources: <SourceAccess stdRoot=[] />))
+    if compiler.decls.conformCount() != 1U64 { panic("unexpected source conformance") }
+    val conformance = compiler.decls.conformAt(index: 0U64)
+    val traitIndex = compiler.resolveTraitDef(cf: conformance)
+    if conformance.witnessFuncIds.len != 1U64 { panic("unexpected witness range") }
+    val original = compiler.conformFuncIdAt(ids: conformance.witnessFuncIds, index: 0U64)
+    val method = compiler.internBytes(s: "act")
+    for receiver in ["Mutable", "Associated", "Moving"] {
+        val target = compiler.internBytes(s: receiver)
+        mut val wrong = compiler.arena.functionCount()
+        for index in 0U64..<compiler.arena.functionCount() {
+            val function = compiler.arena.functionAt(index: index)
+            if spansEqual(c: inout compiler, aStart: function.nameStart, aLen: function.nameLen, bStart: method.nameStart, bLen: method.nameLen) &&
+               spansEqual(c: inout compiler, aStart: function.recvStart, aLen: function.recvLen, bStart: target.nameStart, bLen: target.nameLen) { wrong = index }
+        }
+        if wrong == compiler.arena.functionCount() { panic("missing raw convention target") }
+        if compiler.conformFuncIdAt(ids: conformance.witnessFuncIds, index: 0U64) != original { panic("previous mutation was not restored") }
+        val selected = compiler.arena.functionAt(index: wrong)
+        if receiver == "Mutable" && !selected.selfInout { panic("missing inout receiver") }
+        if receiver == "Associated" && !selected.isAssoc { panic("missing associated entry") }
+        if receiver == "Moving" && !selected.selfMove { panic("missing consuming receiver") }
+        compiler.decls.conformFuncIdPool[conformance.witnessFuncIds.start] = wrong
+        requireFailure(result: compiler.checkConformanceMethodBounds(conformIndex: 0U64, traitIndex: traitIndex), source: false)
+        requireFailure(result: compiler.checkConformances(), source: false)
+        compiler.decls.conformFuncIdPool[conformance.witnessFuncIds.start] = original
+    }
+    print("ok")
+}
+
+fn verifySource(text: String) {
+    val path = "plew:std/CallingConventionProbe.pw"
+    val input = <FrontendInput.File path=path />
+    val sources = <SourceAccess stdRoot="std/".bytes() resources=[<SourceResource path=path.bytes() text=text />] />
+    requireFailure(result: openFrontend(input: input, sources: sources), source: true)
+    requireFailure(result: openFrontendForRequests(input: input, sources: sources), source: true)
+    mut val raw = <Comp />
+    requireFailure(result: analyzeFrontendForRequests(c: inout raw, input: input, sources: sources), source: false)
+    mut val declarations = <Comp />
+    requireFailure(result: analyzeFrontendDeclarations(c: inout declarations, input: input, sources: sources), source: false)
+}
+
+fn requireFailure[T](result: Result[T, CompileDiagnostic], source: Bool) {
+    match result {
+        Result.Ok(value: _) => { panic("calling convention mismatch accepted") }
+        Result.Err(error: val diagnostic) => {
+            if diagnostic.message != "implementation calling convention does not match the trait requirement" { panic(diagnostic.message) }
+            if source {
+                match diagnostic.failureDomain { FailureDomain.Source => {} _ => { panic("source convention mismatch lost its origin") } }
+            } else {
+                match diagnostic.failureDomain { FailureDomain.Unclassified => {} _ => { panic("raw convention mismatch became source") } }
+            }
+        }
+    }
+}
+
+fn checked[T](result~: Result[T, CompileDiagnostic]) -> T {
+    match result {
+        Result.Ok(value: val value) => { return value }
+        Result.Err(error: val diagnostic) => { panic(diagnostic.message) }
+    }
+}

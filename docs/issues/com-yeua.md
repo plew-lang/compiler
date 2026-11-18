@@ -1016,3 +1016,41 @@ readonly/inout in both directions, instance/associated, sync/async) to the
 existing sibling refusal. All four check processes currently return the exact
 calling-convention diagnostic with Unclassified; they are not repaired by this
 checkpoint. [Probe](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-calling-convention-investigation.json).
+
+### Calling-convention mismatch scenarios
+
+Only the confirmed isAssoc/selfInout/selfMove/isAsync mismatch branch receives
+existing private declaration origin. Preserve public Raw API signatures, prior
+read/query failures, other comparison branches and evidence publication.
+Four new flat fixtures pin receiver readonly/inout in both directions, instance
+versus associated, and sync versus async: all12 baseline process runs refuse
+with the same message but Unclassified. Native baseline reaches the exact
+source convention mismatch lost its origin assertion (exit134).
+
+Native controls use File resources with the actual std root for Promise and
+exercise each source through owned2/raw2. A separate healthy Text-owned state
+with one user conformance has Mutable/inout, Associated/assoc and unique
+Moving/move receiver entries. Each actual witness-link mutation is asserted and
+restored, and public checker both entries must keep the exact reason as
+Unclassified. No successful re-publication is requested. Preserve normal
+receiver/associated/async/default/via positives and previous result failures.
+
+### Calling-convention mismatch checkpoint
+
+Only the confirmed calling-convention predicate now selects Source/Unclassified
+from existing private declaration origin. Four flat fixtures retain exact
+baseline stderr/status/channel in check/AOT/ORC (12 executions), now Source.
+Normal async instance dispatch, via/associated forms, inout receiver default
+forwarding and generic default forwarding pass check and exact ORC output
+(eight executions). Native calling_convention_failure_domain prints ok.
+
+Its four File+std source cases each exercise owned2 Source/caller-owned2
+Unclassified. Separate healthy Text state has one user conformance; its real
+witness ID is changed to registered Mutable/inout, Associated/assoc and unique
+Moving/move receivers with asserted flags. Both public checkers keep the same
+calling-convention refusal as Unclassified; each mutation restores the original
+link. No successful re-publication is requested. Independent plan/source review
+has no remaining required finding. No new state, scan, lookup or snapshot.
+Formal final gates and com-yeua remain open.
+
+[Evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-calling-convention-rejection.json).

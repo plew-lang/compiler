@@ -1257,7 +1257,8 @@ impl Comp {
                         return <Result.Err error=self.diagnosticAt(offset: function.defOffset, msg: "a factory requirement must be implemented by the matching factory declaration", failureDomain: domain) />
                     }
                     if function.isAssoc != requirement.isAssoc || function.selfInout != requirement.selfInout || function.selfMove != requirement.selfMove || function.isAsync != requirement.isAsync {
-                        return <Result.Err error=self.diagnosticAt(offset: function.defOffset, msg: "implementation calling convention does not match the trait requirement") />
+                        val domain = match origin { FrontendDeclarationOrigin.SourceAdmission => <FailureDomain.Source />, FrontendDeclarationOrigin.Raw => <FailureDomain.Unclassified /> }
+                        return <Result.Err error=self.diagnosticAt(offset: function.defOffset, msg: "implementation calling convention does not match the trait requirement", failureDomain: domain) />
                     }
                     mut val parameterIndex = 0U64
                     while parameterIndex < requirement.params.count() {
