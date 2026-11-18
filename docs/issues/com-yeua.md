@@ -552,3 +552,13 @@ typed local-access error. Check both the raw verifier and cached-request
 boundary, including preservation of ordinary disjoint source calls.
 
 [Probe replay](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-call-access-rejection.json).
+
+A second prototype captured the finding while the builder still owned newly
+lowered operands. All 51 comparisons passed and the native cached-argument
+mutation returned Unclassified. The prototype remains exploratory. Review
+found a public write path for the receipt and repeated CFG/access scans of
+successful bodies. A numeric canonical body ID alone is also insufficient
+proof across sessions. Preserve the result through a sealed builder/request
+boundary with one ordinary declaration access evaluation; keep existing raw
+verifier input as a separate boundary to exercise. The exact authored and
+cache-mutation checks belong together in the declaration-demand fixture.
