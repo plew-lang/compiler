@@ -1,0 +1,3 @@
+use ./First only { value }
+
+fn main() {}

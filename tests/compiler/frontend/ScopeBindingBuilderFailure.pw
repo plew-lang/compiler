@@ -14,6 +14,21 @@ fn collision[T](result: Result[T, ScopeBindingFailure], first: U64, second: U64)
     return false
 }
 
+fn cycle[T](result: Result[T, ScopeBindingFailure]) -> Bool {
+    match result {
+        Result.Err(error: val failure) => {
+            match failure {
+                ScopeBindingFailure.ImportCycle(val offset, val modules) => {
+                    return offset == 33U64 && modules.count() == 3U64 && modules[0] == 1U64 && modules[1] == 2U64 && modules[2] == 1U64
+                }
+                _ => {}
+            }
+        }
+        _ => {}
+    }
+    return false
+}
+
 fn main() {
     mut val bindings = <ModuleScopeBindings />
     bindings.addDeclaration(moduleId: 0U64, nameId: 1U64, kind: <ScopeBindingKind.Type />, offset: 11U64, isPublic: false).unwrap()
@@ -39,5 +54,17 @@ fn main() {
         _ => { print("0") return }
     }
     if !((first == 23U64 && second == 24U64) || (first == 24U64 && second == 23U64)) || !collision(result: imported.finish(), first: first, second: second) || !collision(result: imported.addDeclaration(moduleId: 0U64, nameId: 5U64, kind: <ScopeBindingKind.Value />, offset: 25U64, isPublic: false), first: first, second: second) || !collision(result: imported.addImport(moduleId: 0U64, nameId: 6U64, targetModule: 3U64, targetNameId: 7U64, isNamespace: false, isPublic: false, offset: 26U64), first: first, second: second) { print("0") return }
+    mut val cyclic = <ModuleScopeBindings />
+    cyclic.addImport(moduleId: 0U64, nameId: 1U64, targetModule: 1U64, targetNameId: 1U64, isNamespace: true, isPublic: false, offset: 31U64).unwrap()
+    cyclic.addImport(moduleId: 1U64, nameId: 2U64, targetModule: 2U64, targetNameId: 2U64, isNamespace: true, isPublic: false, offset: 32U64).unwrap()
+    cyclic.addImport(moduleId: 2U64, nameId: 3U64, targetModule: 1U64, targetNameId: 1U64, isNamespace: true, isPublic: false, offset: 33U64).unwrap()
+    if !cycle(result: cyclic.finish()) || !cycle(result: cyclic.finish()) {
+        print("0")
+        return
+    }
+    if !cycle(result: cyclic.addDeclaration(moduleId: 0U64, nameId: 4U64, kind: <ScopeBindingKind.Value />, offset: 34U64, isPublic: false)) {
+        print("0")
+        return
+    }
     print("1")
 }

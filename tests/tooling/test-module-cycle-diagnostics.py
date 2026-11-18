@@ -13,6 +13,8 @@ def main():
     fixtures = Path(__file__).resolve().parents[1] / "fixtures"
     marker = "module use graph contains a cycle (spec/15): "
     cases = {
+        "importcycle": {"A.pw", "B.pw"},
+        "selective_reexport_cycle": {"First.pw", "Second.pw"},
         "namespace_import_cycle": {"First.pw", "Second.pw"},
         "namespace_reexport_cycle": {"First.pw", "Second.pw"},
         "namespace_self_import_cycle": {"Main.pw"},

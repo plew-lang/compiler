@@ -74,3 +74,13 @@ the entry prefix in the two-file cases is excluded. Three acyclic
 module controls pass. The private Source receipt is preserved on all
 nine corrected invocations. [Original fixed-point RED](../../../evidence/rejection-domains/diagnostic-domain-implementation/module-cycle-ring-red.json).
 Independent review and acceptance checks remain open.
+
+Independent implementation review confirmed that every edge in the old
+walk has a binding origin, and that gen and ORC reach the early admission
+boundary. The old edge table remains available for direct visibility.
+The expanded diagnostic test covers five cycle shapes in check, AOT and
+lazy, including named imports and reciprocal same-selector re-exports.
+It reports 15 failures on 241b58b6 and passes on the 593906c6 diagnostic
+candidate with all acyclic controls. The focused builder fixture confirms
+the closing offset and exact ring survive repeated finish and attempted
+registration after failure.
