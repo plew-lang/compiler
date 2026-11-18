@@ -64,6 +64,8 @@ tests/fixtures/run/optchain_projected_result.pw
 # Value blocks leaving before their result binding or interpolation write.
 tests/fixtures/run/standalone_block_return.pw
 tests/fixtures/run/standalone_block_discarded_result.pw
+tests/fixtures/run/unique_shadow_cliff_use.pw
+tests/fixtures/run/guard_unique_shadow_commit.pw
 tests/fixtures/run/block_interpolation_divergence.pw
 
 # Value-block local loop exits and interpolation options returning early.

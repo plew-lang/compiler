@@ -140,22 +140,57 @@ pub impl Comp {
         return index
     }
 
-    // Verify consumes the binding end admitted during lexical recording.
+    fn replacedUniqueTarget(prior: Local) -> U64 {
+        if !prior.isGlobal && prior.owned && self.arena.typeTermIsUnique(ref: prior.ty) { return prior.nameStart }
+        return 0U64
+    }
+
+    inout fn recordGuardBindingEnds(blockId: U64, introducedFrom: U64) {
+        if introducedFrom == self.cur.locals.count() || introducedFrom <= self.cur.bindingScopeStart { return }
+        match self.sourceRecordingOwner() {
+            Optional.Some(v: val owner) => {
+                mut val names: Set[U64] = Set.new()
+                for index in introducedFrom..<self.cur.locals.count() { names.insert(self.cur.locals[index].nameId) }
+                mut val ended: Array[U64] = []
+                mut val index = introducedFrom
+                // The latest old binding of each name is replaced, once. Ends
+                // sharing this commit are published in reverse declaration order.
+                while index > self.cur.bindingScopeStart {
+                    index -= 1U64
+                    val prior = self.cur.locals[index]
+                    if names.contains(prior.nameId) {
+                        names.remove(prior.nameId)
+                        val target = self.replacedUniqueTarget(prior: prior)
+                        if target != 0U64 { ended.append(target) }
+                    }
+                }
+                self.sourceFacts.activate(owner: owner)
+                if ended.count() != 0U64 { self.sourceFacts.activeBuilder.data.guardBindingEnds[blockId] = ended }
+                else { self.sourceFacts.activeBuilder.data.guardBindingEnds.remove(key: blockId) }
+            }
+            Optional.None => {}
+        }
+    }
+
+    // Verify consumes a binding end admitted during lexical recording.
+    inout fn markCommittedBindingEnd(target: U64) -> Result[(), CompileDiagnostic] {
+        mut val index = self.cur.locals.count()
+        while index > 0U64 {
+            index -= 1U64
+            if self.cur.locals[index].nameStart == target {
+                self.verifyMarkMoved(idx: index)
+                return <Result.Ok value=() />
+            }
+        }
+        return <Result.Err error=self.diagnosticAt(offset: target, msg: "committed binding end has no local owner", failureDomain: <FailureDomain.Internal />) />
+    }
+
     inout fn markReplacedUniqueMoved(stmtId: U64) -> Result[(), CompileDiagnostic] {
         match self.currentSourceOwner() {
             Optional.Some(v: val owner) => {
                 match self.sourceFacts.binding(owner: owner, stmtId: stmtId) {
                     Optional.Some(v: val binding) => {
-                        if binding.endedBinding == 0U64 { return <Result.Ok value=() /> }
-                        mut val index = self.cur.locals.count()
-                        while index > 0U64 {
-                            index -= 1U64
-                            if self.cur.locals[index].nameStart == binding.endedBinding {
-                                self.verifyMarkMoved(idx: index)
-                                return <Result.Ok value=() />
-                            }
-                        }
-                        return <Result.Err error=self.diagnosticAt(offset: binding.declarationTarget, msg: "committed binding end has no local owner", failureDomain: <FailureDomain.Internal />) />
+                        if binding.endedBinding != 0U64 { try self.markCommittedBindingEnd(target: binding.endedBinding) }
                     }
                     Optional.None => {}
                 }

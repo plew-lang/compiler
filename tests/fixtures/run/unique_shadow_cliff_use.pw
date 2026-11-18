@@ -11,4 +11,18 @@ fn main() {
         print(f.fd)
     }
     print(f.fd)
+    borrowedOwner()
+}
+
+fn showBorrowed(file: borrow File, other: I64) {
+    print(file.fd)
+    print(other)
+}
+
+fn borrowedOwner() {
+    val f = <File fd=3I64 />
+    showBorrowed(file: borrow f, other: {
+        val f = <File fd=4I64 />
+        give f.fd
+    })
 }

@@ -1,0 +1,52 @@
+use @Std/Io only { print }
+use @Std/Core only { MutableRef }
+
+unique struct Resource {
+    val id: I64
+    deinit { print(self.id + 100I64) }
+}
+impl Resource { factory }
+
+fn probe(useNew: Bool) {
+    val first = <Resource id=1I64 />
+    val second = <Resource id=2I64 />
+    val a: Optional[I64] = <Optional.Some v=3I64 />
+    val b: Optional[I64] = <Optional.Some v=4I64 />
+    guard Optional.Some(v: val first) = a && Optional.Some(v: val second) = b && useNew {
+        print(first.id)
+        print(second.id)
+        return
+    }
+    print(first)
+    print(second)
+}
+
+enum Input {
+    Present(number: I64, discarded: MutableRef[Resource], retained: MutableRef[Resource])
+    Missing
+}
+
+fn input() -> Input {
+    return <Input.Present
+        number=3I64
+        discarded=<MutableRef value=<Resource id=4I64 /> />
+        retained=<MutableRef value=<Resource id=5I64 /> />
+    />
+}
+
+fn temporary(useNew: Bool) {
+    val number = <Resource id=6I64 />
+    guard Input.Present(number: val number, discarded: _, retained: val retained) = input() && useNew {
+        print(number.id)
+        return
+    }
+    print(number)
+    print(retained->id)
+}
+
+fn main() {
+    probe(useNew: true)
+    probe(useNew: false)
+    temporary(useNew: true)
+    temporary(useNew: false)
+}

@@ -356,6 +356,18 @@ impl SourceFactDirectory {
         return <Optional.None />
     }
 
+    fn guardBindingEnds(owner: SemanticCompletionOwner, blockId: U64) -> Array[U64] {
+        if self.isActive(owner: owner) { return self.activeBuilder.data.guardBindingEnds.getOr(key: blockId, fallback: []) }
+        return match self.state(owner: owner) {
+            Optional.Some(v: val state) => match state {
+                SourceBodyState.Building => self.inactiveBuilder(owner: owner).data.guardBindingEnds.getOr(key: blockId, fallback: [])
+                SourceBodyState.Succeeded(reader: val reader) => self.readers[reader].guardBindingEnds(blockId: blockId)
+                _ => []
+            }
+            Optional.None => []
+        }
+    }
+
     fn binding(owner: SemanticCompletionOwner, stmtId: U64) -> Optional[SourceBindingFact] {
         if self.isActive(owner: owner) { return readSourceRow(rows: self.activeBuilder.data.bindings, keys: self.activeBuilder.data.bindingKeys, key: stmtId) }
         match self.state(owner: owner) {

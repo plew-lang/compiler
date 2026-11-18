@@ -162,7 +162,19 @@ pub impl Comp {
                 val mark = self.scopeMark()
                 val savedBB = self.cur.branchBase
                 try self.verifyConditionClauses(conditions: conditions)
+                val beforeGuardCommit = self.cur.verifyMovedIdx
+                if self.blockExitRequirements.contains(key: elseBlk) {
+                    match self.currentSourceOwner() {
+                        Optional.Some(v: val owner) => {
+                            for target in self.sourceFacts.guardBindingEnds(owner: owner, blockId: thenBlk) {
+                                try self.markCommittedBindingEnd(target: target)
+                            }
+                        }
+                        Optional.None => {}
+                    }
+                }
                 val thenMoves = try self.verifyOwnershipBranch(blockId: thenBlk)
+                self.cur.verifyMovedIdx = beforeGuardCommit
                 self.popLocals(mark: mark)
                 val elseMoves = try self.verifyOwnershipBranch(blockId: elseBlk)
                 self.verifyMergeMoved(first: thenMoves, second: elseMoves)

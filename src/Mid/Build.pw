@@ -3117,21 +3117,46 @@ fn buildMidPatternBindings(c: inout Comp, state: inout MidBuildState, semantic: 
     return <MidBuildError.None />
 }
 
-fn buildMidIrrefutablePattern(c: inout Comp, state: inout MidBuildState, semantic: SemanticMatch, continuation: MidPatternContinuation, scrutinee: MidPlace, hasScrutineeScope: Bool, scrutineeScope: U64, blockResult: MidBlockResult) -> MidBuildError {
-    if semantic.arms.count() == 0U64 || midPatternArmCount(continuation: continuation) == 0U64 { return <MidBuildError.UnsupportedMatch /> }
-    val bindingMark: U64 = state.bindings.count()
-    val armScope: U64 = midOpenScope(state: inout state)
-    val arm: SemanticMatchArm = semantic.arms[0U64]
-    val bindingResult = buildMidPatternBindings(c: inout c, state: inout state, semantic: semantic, arm: arm, scrutinee: scrutinee, traceId: 0U64)
+// Pattern bindings hold their own values after extraction. In a condition
+// the scrutinee evaluation ends here, while the bindings remain in scope for
+// the next clause and success body. Match arms retain their scrutinee.
+fn buildMidSelectedPattern(c: inout Comp, state: inout MidBuildState, semantic: SemanticMatch, arm: SemanticMatchArm, scrutinee: MidPlace, continuation: MidPatternContinuation, armIndex: U64, hasScrutineeScope: Bool, blockResult: MidBlockResult, traceId: U64) -> MidBuildError {
+    val parentScope = state.currentScope
+    val endBeforeContinuation = hasScrutineeScope && match continuation {
+        MidPatternContinuation.Condition(conditions: _, nextIndex: _, thenBlk: _, failureTarget: _, enclosingScope: _) => true
+        MidPatternContinuation.Arms(arms: _) => false
+    }
+    if endBeforeContinuation {
+        // Seal the evaluation range before allocating the independent bindings.
+        // The alternate edge uses the same already-sealed range.
+        if state.scopes[parentScope].localCount == 0U64 { midCloseScope(state: inout state, scope: parentScope) }
+        else { state.currentScope = state.scopes[parentScope].parent }
+    }
+    val bindingMark = state.bindings.count()
+    val armScope = midOpenScope(state: inout state)
+    val bindingResult = buildMidPatternBindings(c: inout c, state: inout state, semantic: semantic, arm: arm, scrutinee: scrutinee, traceId: traceId)
     match bindingResult { MidBuildError.None => {} _ => { return bindingResult } }
-    val result: MidBuildError = buildMidPatternContinuation(c: inout c, state: inout state, continuation: continuation, armIndex: 0U64, blockResult: blockResult)
+    if endBeforeContinuation { midEmitScopeExit(state: inout state, scope: parentScope) }
+    val result = buildMidPatternContinuation(c: inout c, state: inout state, continuation: continuation, armIndex: armIndex, blockResult: blockResult)
     if midCurrentBlockIsOpen(state: state) {
         midEmitScopeExit(state: inout state, scope: armScope)
-        if hasScrutineeScope { midEmitScopeExit(state: inout state, scope: scrutineeScope) }
+        if hasScrutineeScope && !endBeforeContinuation { midEmitScopeExit(state: inout state, scope: parentScope) }
     }
     midCloseScope(state: inout state, scope: armScope)
+    state.currentScope = parentScope
     state.bindings.truncate(count: bindingMark)
-    if hasScrutineeScope { midCloseScope(state: inout state, scope: scrutineeScope) }
+    return result
+}
+
+fn midClosePatternScrutinee(state: inout MidBuildState, scope: U64) {
+    if state.scopes[scope].localCount == 0U64 { midCloseScope(state: inout state, scope: scope) }
+    else { state.currentScope = state.scopes[scope].parent }
+}
+
+fn buildMidIrrefutablePattern(c: inout Comp, state: inout MidBuildState, semantic: SemanticMatch, continuation: MidPatternContinuation, scrutinee: MidPlace, hasScrutineeScope: Bool, scrutineeScope: U64, blockResult: MidBlockResult) -> MidBuildError {
+    if semantic.arms.count() == 0U64 || midPatternArmCount(continuation: continuation) == 0U64 { return <MidBuildError.UnsupportedMatch /> }
+    val result = buildMidSelectedPattern(c: inout c, state: inout state, semantic: semantic, arm: semantic.arms[0U64], scrutinee: scrutinee, continuation: continuation, armIndex: 0U64, hasScrutineeScope: hasScrutineeScope, blockResult: blockResult, traceId: 0U64)
+    if hasScrutineeScope { midClosePatternScrutinee(state: inout state, scope: scrutineeScope) }
     return result
 }
 
@@ -3205,25 +3230,17 @@ fn buildMidOrderedPatternMatch(c: inout Comp, state: inout MidBuildState, semant
             midSetTerminator(state: inout state, terminator: <MidTerminator.Goto target=selected />)
         }
         state.currentBlock = selected
-        val bindingMark = state.bindings.count()
-        val armScope = midOpenScope(state: inout state)
-        val bindingResult = buildMidPatternBindings(c: inout c, state: inout state, semantic: semantic, arm: arm, scrutinee: scrutinee, traceId: traceId)
-        match bindingResult { MidBuildError.None => {} _ => { return bindingResult } }
-        val bodyResult = buildMidPatternContinuation(c: inout c, state: inout state, continuation: continuation, armIndex: armIndex, blockResult: blockResult)
+        val bodyResult = buildMidSelectedPattern(c: inout c, state: inout state, semantic: semantic, arm: arm, scrutinee: scrutinee, continuation: continuation, armIndex: armIndex, hasScrutineeScope: hasScrutineeScope, blockResult: blockResult, traceId: traceId)
         match bodyResult { MidBuildError.None => {} _ => { return bodyResult } }
         if midCurrentBlockIsOpen(state: state) {
-            midEmitScopeExit(state: inout state, scope: armScope)
-            if hasScrutineeScope { midEmitScopeExit(state: inout state, scope: scrutineeScope) }
             midSetTerminator(state: inout state, terminator: <MidTerminator.Goto target=joinTarget />)
         }
-        midCloseScope(state: inout state, scope: armScope)
-        state.bindings.truncate(count: bindingMark)
         state.currentBlock = next
         if !refutable { midSetTerminator(state: inout state, terminator: <MidTerminator.Unreachable />) }
         armIndex += 1U64
     }
     if midCurrentBlockIsOpen(state: state) { midSetTerminator(state: inout state, terminator: <MidTerminator.Abort />) }
-    if hasScrutineeScope { midCloseScope(state: inout state, scope: scrutineeScope) }
+    if hasScrutineeScope { midClosePatternScrutinee(state: inout state, scope: scrutineeScope) }
     state.patternSubjects.truncate(count: subjectMark)
     state.currentBlock = joinTarget
     if !midBlockHasIncoming(state: state, target: joinTarget) { midSetTerminator(state: inout state, terminator: <MidTerminator.Unreachable />) }
@@ -3327,7 +3344,7 @@ fn buildMidPatternMatch(c: inout Comp, state: inout MidBuildState, matchSource: 
                 // Preserve scrutinee evaluation above, then terminate this path.
                 if c.arena.enumAt(index: enumIndex).variants.count() != 0U64 { return <MidBuildError.UnsupportedMatch /> }
                 midSetTerminator(state: inout state, terminator: <MidTerminator.Unreachable />)
-                if hasScrutineeScope { midCloseScope(state: inout state, scope: scrutineeScope) }
+                if hasScrutineeScope { midClosePatternScrutinee(state: inout state, scope: scrutineeScope) }
                 return <MidBuildError.None />
             }
             val tagTerm: U64 = midDiscriminantType(c: c)
@@ -3373,24 +3390,15 @@ fn buildMidPatternMatch(c: inout Comp, state: inout MidBuildState, matchSource: 
                     continue
                 }
                 state.currentBlock = armTargets[armIndex]
-                val bindingMark: U64 = state.bindings.count()
-                val armScope: U64 = midOpenScope(state: inout state)
-                val semanticArm: SemanticMatchArm = semantic.arms[armIndex]
-                val bindingResult = buildMidPatternBindings(c: inout c, state: inout state, semantic: semantic, arm: semanticArm, scrutinee: scrutinee.place, traceId: traceId)
-                match bindingResult { MidBuildError.None => {} _ => { return bindingResult } }
-                val armResult: MidBuildError = buildMidPatternContinuation(c: inout c, state: inout state, continuation: continuation, armIndex: armIndex, blockResult: blockResult)
+                val armResult = buildMidSelectedPattern(c: inout c, state: inout state, semantic: semantic, arm: semantic.arms[armIndex], scrutinee: scrutinee.place, continuation: continuation, armIndex: armIndex, hasScrutineeScope: hasScrutineeScope, blockResult: blockResult, traceId: traceId)
                 match armResult { MidBuildError.None => {} _ => { return armResult } }
-                if midTerminatorIsOpen(terminator: state.blocks[state.currentBlock].terminator) {
-                    midEmitScopeExit(state: inout state, scope: armScope)
-                    if hasScrutineeScope { midEmitScopeExit(state: inout state, scope: scrutineeScope) }
+                if midCurrentBlockIsOpen(state: state) {
                     midSetTerminator(state: inout state, terminator: <MidTerminator.Goto target=joinTarget />)
                     joinReachable = true
                 }
-                midCloseScope(state: inout state, scope: armScope)
-                state.bindings.truncate(count: bindingMark)
                 armIndex += 1U64
             }
-            if hasScrutineeScope { midCloseScope(state: inout state, scope: scrutineeScope) }
+            if hasScrutineeScope { midClosePatternScrutinee(state: inout state, scope: scrutineeScope) }
             state.currentBlock = joinTarget
             if !joinReachable {
                 // Every arm diverges (for example, each returns). This join is
@@ -3416,7 +3424,19 @@ fn buildMidMatchAdmitted(c: inout Comp, state: inout MidBuildState, stmtId: U64)
 }
 
 fn buildMidConditionClauses(c: inout Comp, state: inout MidBuildState, conditions: ConditionClauseRange, index: U64, thenBlk: U64, failureTarget: U64, enclosingScope: U64, blockResult: MidBlockResult) -> MidBuildError {
-    if index == conditions.len { return buildMidBlockInto(c: inout c, state: inout state, blockId: thenBlk, blockResult: blockResult) }
+    if index == conditions.len {
+        match state.sourceFacts {
+            Optional.Some(v: val facts) => {
+                for target in facts.guardBindingEnds(blockId: thenBlk) {
+                    val local = midLocalForBinding(state: state, declarationTarget: target)
+                    if !local.found { return <MidBuildError.InvalidStatement /> }
+                    midAppendStatement(state: inout state, statement: <MidStatement.EndBinding local=local.local />)
+                }
+            }
+            Optional.None => {}
+        }
+        return buildMidBlockInto(c: inout c, state: inout state, blockId: thenBlk, blockResult: blockResult)
+    }
     val clause = c.conditionClauseAt(conditions: conditions, index: index)
     if clause.isBinding {
         return buildMidPatternMatch(c: inout c, state: inout state, matchSource: <MatchSource.Condition clauseIndex=conditions.start + index />, scrut: clause.value, continuation: <MidPatternContinuation.Condition conditions=conditions nextIndex=index + 1U64 thenBlk=thenBlk failureTarget=failureTarget enclosingScope=enclosingScope />, blockResult: blockResult, traceId: clause.value)
