@@ -596,3 +596,18 @@ admission from raw rechecks, including the early callable-form path.
 Check native mutation plus normal diagnostic and valid conformance controls.
 
 [Replay and native counterexample](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-associated-bound-rejection.json).
+
+Compiler d1eb1dc9 constructs Comp inside new owned frontend entry points.
+Only that private path supplies SourceAdmission to the associated-bound
+query. Caller-owned analyzers and public rechecks use Raw. The mode also
+passes through early callable-form evidence and parent recursion. The old
+public callable evidence signature remains as a raw wrapper.
+
+Final candidate retains diagnostics/status/channel across all 30 original
+runs. Added defaulted and inherited-parent witness controls pass all four
+check/AOT/ORC/gen modes. Four positive fixtures pass check and exact ORC
+outputs. The native domain fixture verifies healthy List, changed sibling
+output, and prepopulated raw state; its native build precedes the final
+compatibility-wrapper restoration. Source entry structure passes its
+architecture check. Final independent re-review found no scoped blocker.
+Formal self-host and whole-suite gates remain pending.
