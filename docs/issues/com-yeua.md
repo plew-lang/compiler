@@ -969,3 +969,50 @@ Independent design/source review has no remaining required finding.
 Formal final gates and com-yeua remain open.
 
 [Evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-witness-contract-rejection.json).
+
+### Missing conformance witness scenarios
+
+The final !matched branch in method-bound admission is distinct from supertrait
+lookup Missing. Header/label/type comparisons exhaust the finite witness list;
+requireAdmittedRawRequirement/readRequirementParameter errors propagate via try.
+Direct structural equality and grounding/projection normalization have no
+numeric cutoff on this path. Projection cycles preserve symbolic terms.
+com-pq5j's capped supertrait member searches remain outside this change.
+
+Only the final no-witness diagnostic receives the existing private declaration
+origin. Preserve raw public entries and all previous query failures. Scenarios:
+five flat reject fixtures across check/AOT/ORC; empty and wrong-signature source
+through both owned/caller-owned entries; healthy owned conformance then actual
+witness link mutation to wrong selector or same selector/different nominal type
+through both public checkers; erased source signature map retains the reader's
+original non-Source diagnostic rather than becoming Missing. Positive complete
+overloads, default forwarding, via and Chain conformance remain required.
+Before implementation, all15 process refusals were Unclassified and native
+fixture failed specifically at source missing witness lost its origin.
+
+### Missing conformance witness origin checkpoint
+
+Only final !matched refusal now uses existing private owned declaration origin.
+Five fixtures retain exact stderr/status/channel in check/AOT/ORC (15 executions),
+now Source. Complete overloads, default forwarding, via forms and Chain
+conformance pass check and exact ORC output (eight executions). New native
+missing_witness_failure_domain prints ok: empty/wrong-nominal signature source
+owned-two-entry Source versus caller-owned-two-entry Unclassified; healthy
+owned conformance followed by actual witness link changes to a different
+selector or same selector/different nominal parameter type; public checker
+both entries preserve Missing as Unclassified. Erasing the public source-use
+map after restoring the original link preserves the reader's original
+selected requirement has no authored signature error as non-Source.
+
+Independent plan/source review confirmed that this direct matcher has no
+numeric cutoff and propagates read/recipe errors. The separate capped
+supertrait search issue com-pq5j is unchanged. No added scan/state/snapshot.
+Formal final gates and com-yeua remain open.
+
+[Evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-missing-witness-rejection.json).
+
+Next investigation pins four source calling-convention mismatches (receiver
+readonly/inout in both directions, instance/associated, sync/async) to the
+existing sibling refusal. All four check processes currently return the exact
+calling-convention diagnostic with Unclassified; they are not repaired by this
+checkpoint. [Probe](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-calling-convention-investigation.json).

@@ -1,0 +1,74 @@
+use /Frontend only { Comp, FrontendInput, openFrontend, openFrontendForRequests, analyzeFrontendDeclarations, analyzeFrontendForRequests, spansEqual }
+use /SourceAccess only { SourceAccess }
+use /SourceTypeUses only { SourceTypeUses }
+use /Diag only { CompileDiagnostic, FailureDomain }
+use @Std/Io only { print }
+
+fn main() {
+    verifySource(text: "trait Need {{ fn act() }} struct Owner {{}} impl Owner as Need {{}} fn main() {{}}")
+    verifySource(text: "struct First {{}} struct Second {{}} trait Need {{ fn act(value: First) }} struct Owner {{}} impl Owner as Need {{ fn act(value: Second) {{}} }} fn main() {{}}")
+    mut val compiler = checked(openFrontendForRequests(
+        input: <FrontendInput.Text path="raw-missing-witness.pw" text="struct First {{}} struct Second {{}} trait Need {{ fn act(value: First) }} struct Owner {{}} impl Owner as Need {{ fn act(value: First) {{}} }} struct Other {{}} impl Other {{ fn different(value: First) {{}} fn act(value: Second) {{}} }} fn main() {{}}" />,
+        sources: <SourceAccess stdRoot=[] />))
+    if compiler.decls.conformCount() != 1U64 { panic("unexpected source conformance") }
+    val conformance = compiler.decls.conformAt(index: 0U64)
+    val traitIndex = compiler.resolveTraitDef(cf: conformance)
+    if conformance.witnessFuncIds.len != 1U64 { panic("unexpected witness range") }
+    val original = compiler.conformFuncIdAt(ids: conformance.witnessFuncIds, index: 0U64)
+    val other = compiler.internBytes(s: "Other")
+    for method in ["different", "act"] {
+        val name = compiler.internBytes(s: method)
+        mut val wrong = compiler.arena.functionCount()
+        for index in 0U64..<compiler.arena.functionCount() {
+            val function = compiler.arena.functionAt(index: index)
+            if spansEqual(c: inout compiler, aStart: function.nameStart, aLen: function.nameLen, bStart: name.nameStart, bLen: name.nameLen) &&
+               spansEqual(c: inout compiler, aStart: function.recvStart, aLen: function.recvLen, bStart: other.nameStart, bLen: other.nameLen) { wrong = index }
+        }
+        if wrong == compiler.arena.functionCount() { panic("missing raw mutation target") }
+        compiler.decls.conformFuncIdPool[conformance.witnessFuncIds.start] = wrong
+        requireMissing(result: compiler.checkConformanceMethodBounds(conformIndex: 0U64, traitIndex: traitIndex), source: false)
+        requireMissing(result: compiler.checkConformances(), source: false)
+    }
+    // A signature-reader refusal must not collapse to the no-witness result.
+    compiler.decls.conformFuncIdPool[conformance.witnessFuncIds.start] = original
+    compiler.sourceTypeUses = <SourceTypeUses />
+    match compiler.checkConformanceMethodBounds(conformIndex: 0U64, traitIndex: traitIndex) {
+        Result.Ok(value: _) => { panic("missing source signature accepted") }
+        Result.Err(error: val diagnostic) => {
+            if diagnostic.message != "selected requirement has no authored signature" || diagnostic.isSourceRejection() { panic(diagnostic.message) }
+        }
+    }
+    print("ok")
+}
+
+fn verifySource(text: String) {
+    val input = <FrontendInput.Text path="missing-witness.pw" text=text />
+    val sources = <SourceAccess stdRoot=[] />
+    requireMissing(result: openFrontend(input: input, sources: sources), source: true)
+    requireMissing(result: openFrontendForRequests(input: input, sources: sources), source: true)
+    mut val raw = <Comp />
+    requireMissing(result: analyzeFrontendForRequests(c: inout raw, input: input, sources: sources), source: false)
+    mut val declarations = <Comp />
+    requireMissing(result: analyzeFrontendDeclarations(c: inout declarations, input: input, sources: sources), source: false)
+}
+
+fn requireMissing[T](result: Result[T, CompileDiagnostic], source: Bool) {
+    match result {
+        Result.Ok(value: _) => { panic("missing witness accepted") }
+        Result.Err(error: val diagnostic) => {
+            if diagnostic.message != "incomplete trait conformance: a requirement is not witnessed (define its body or bind it with `via`)" { panic(diagnostic.message) }
+            if source {
+                match diagnostic.failureDomain { FailureDomain.Source => {} _ => { panic("source missing witness lost its origin") } }
+            } else {
+                match diagnostic.failureDomain { FailureDomain.Unclassified => {} _ => { panic("raw missing witness became source") } }
+            }
+        }
+    }
+}
+
+fn checked[T](result~: Result[T, CompileDiagnostic]) -> T {
+    match result {
+        Result.Ok(value: val value) => { return value }
+        Result.Err(error: val diagnostic) => { panic(diagnostic.message) }
+    }
+}

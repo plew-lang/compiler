@@ -1323,7 +1323,8 @@ impl Comp {
                 witnessIndex += 1U64
             }
             if !matched {
-                return <Result.Err error=self.diagnosticAt(offset: conformance.typeStart, msg: "incomplete trait conformance: a requirement is not witnessed (define its body or bind it with `via`)") />
+                val domain = match origin { FrontendDeclarationOrigin.SourceAdmission => <FailureDomain.Source />, FrontendDeclarationOrigin.Raw => <FailureDomain.Unclassified /> }
+                return <Result.Err error=self.diagnosticAt(offset: conformance.typeStart, msg: "incomplete trait conformance: a requirement is not witnessed (define its body or bind it with `via`)", failureDomain: domain) />
             }
             requirementIndex += 1U64
         }
