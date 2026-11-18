@@ -1,6 +1,6 @@
 ---
 id: com-6esv
-status: open
+status: closed
 deps: [com-atac, com-ceny]
 links: [com-3jtd]
 created: 2026-11-13T18:41:32Z
@@ -93,8 +93,8 @@ outcomes, including the projected receiver regression's RED.
 The ordinary lexical body request now owns declaration-time via validation
 in check, AOT, lazy execution and generation. It checks the saved selected
 signature and the witness's admitted argument/result types and modes before
-publishing owner success. Lower retains both the exact call and the
-forwarded expression (the awaited value for async). The old raw signature
+publishing owner success. Lower retains the exact call. The first implementation separately retained
+the awaited result for async; com-ceny removed that intermediate await. The old raw signature
 precheck and candidate search were removed. Via source failures retain the
 exact authored occurrence; a generated adapter has no such entry.
 
@@ -108,3 +108,22 @@ delegation. [com-atac](com-atac.md) owns its entry ABI repair and blocks
 closure of this issue. Explicit trait-view result materialization is
 also reproduced on the baseline and tracked under [com-qb05](com-qb05.md).
 No full-suite or formal performance result is claimed.
+
+## Independent closure review
+
+Final execution candidate `47085e32` includes both [receiver
+entry](com-atac.md) and [single-activation forwarding](com-ceny.md).
+The projected receiver, Self result and trait-subject requirement fixtures
+passed native AOT, ORC and generation. Five malformed delegation fixtures
+rejected as Source in each of check, AOT, undemanded ORC and generation.
+Independent supplementary checks confirmed ordinary ambiguity and
+cross-module visibility diagnostics, argument/result identity even where
+an ordinary conversion exists, and correct diverging-target admission
+and rejection. The reviewed final consumer preserves the exact call row,
+default plan, instance evidence and witness proof from lexical selection.
+The old independent raw signature gate and candidate search are gone.
+
+This closes the supported method delegation contract. Explicit
+trait-view projection remains [com-qb05](com-qb05.md), and future
+copyability-split families remain [met-b2la](met-b2la.md). Phase-wide
+performance and full test gates remain separate.
