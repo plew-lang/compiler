@@ -49,6 +49,39 @@ pub impl Comp {
         if authored.count() != 0U64 { self.authoredExpressionTypeSlots[expression] = authored }
     }
 
+    // Only source expression lowering registers a block as a value producer
+    // for this particular expression. A raw node can still reuse either ID.
+    inout fn recordAuthoredValueBlockUses(exprId: U64) {
+        match self.arena.exprs[exprId] {
+            Expr.Block(body: val body, offset: _) => { self.authoredValueBlockOwners[body] = exprId }
+            Expr.IfExpr(cond: _, thenBlk: val thenBlk, elseBlk: val elseBlk) => {
+                self.authoredValueBlockOwners[thenBlk] = exprId
+                self.authoredValueBlockOwners[elseBlk] = exprId
+            }
+            Expr.IfChain(conditions: _, thenBlk: val thenBlk, elseBlk: val elseBlk) => {
+                self.authoredValueBlockOwners[thenBlk] = exprId
+                self.authoredValueBlockOwners[elseBlk] = exprId
+            }
+            Expr.MatchExpr(scrut: _, arms: val arms) => {
+                mut val index = 0U64
+                while index < arms.len {
+                    val arm = self.matchArmAt(arms: arms, index: index)
+                    self.authoredValueBlockOwners[arm.body] = exprId
+                    index += 1U64
+                }
+            }
+            _ => {}
+        }
+    }
+
+    inout fn lowerExpressionStatement(exprId: U64) -> U64 {
+        match self.arena.exprs[exprId] {
+            Expr.Block(body: val body, offset: _) => { self.authoredValueBlockOwners.remove(key: body) }
+            _ => {}
+        }
+        return self.pushStmt(s: <Stmt.ExprStmt expr=exprId />)
+    }
+
     inout fn lowerExpr(e: ExprAst) -> Result[U64, CompileDiagnostic] {
         val parent = self.loweringTypeUses
         self.loweringTypeUses = []
@@ -254,16 +287,19 @@ pub impl Comp {
             }
             ExprAst.MatchExpr(val scrut, val arms, span: _) => {
                 result = self.pushExpr(e: <Expr.MatchExpr scrut=(try self.lowerExpr(e: scrut)) arms=(try self.lowerMatchArms(arms: arms)) />)
+                self.recordAuthoredValueBlockUses(exprId: result)
             }
-            ExprAst.BlockExpr(val body, val span) => { result = self.pushExpr(e: <Expr.Block body=(try self.lowerBlock(b: body)) offset=span.start />) }
+            ExprAst.BlockExpr(val body, val span) => { result = self.pushExpr(e: <Expr.Block body=(try self.lowerBlock(b: body)) offset=span.start />) self.recordAuthoredValueBlockUses(exprId: result) }
             ExprAst.IfChain(val conditions, val thenBlk, val elseBlk, span: _) => {
                 result = self.pushExpr(e: <Expr.IfChain conditions=(try self.lowerConditionClauses(conditions: conditions)) thenBlk=(try self.lowerBlock(b: thenBlk)) elseBlk=(try self.lowerBlock(b: elseBlk)) />)
+                self.recordAuthoredValueBlockUses(exprId: result)
             }
             ExprAst.IfExpr(val cond, val thenBlk, val elseBlk, val span) => {
                 val cnd: U64 = (try self.lowerExpr(e: cond))
                 val tb: U64 = (try self.lowerBlock(b: thenBlk))
                 val eb: U64 = (try self.lowerBlock(b: elseBlk))
                 result = self.pushExpr(e: <Expr.IfExpr cond=cnd thenBlk=tb elseBlk=eb />)
+                self.recordAuthoredValueBlockUses(exprId: result)
             }
             ExprAst.OptChain(val base, val cont, val memberSpan, val span) => {
                 // the trailing chain `cont` is lowered with its ChainHole root intact; the
@@ -506,15 +542,18 @@ pub impl Comp {
                 val ty: PType = (try self.lowerSyntaxType(id: e.type0))
                 result = self.lowerCast(operand: (try self.lowerSyntaxExpr(id: e.child0)), target: ty)
             }
-            SyntaxExprKind.BlockExpr => { result = self.pushExpr(e: <Expr.Block body=(try self.lowerSyntaxBlock(id: e.block0)) offset=e.span.start />) }
+            SyntaxExprKind.BlockExpr => { result = self.pushExpr(e: <Expr.Block body=(try self.lowerSyntaxBlock(id: e.block0)) offset=e.span.start />) self.recordAuthoredValueBlockUses(exprId: result) }
             SyntaxExprKind.IfChain => {
                 result = self.pushExpr(e: <Expr.IfChain conditions=(try self.lowerSyntaxConditionClauses(conditions: e.conditions)) thenBlk=(try self.lowerSyntaxBlock(id: e.block0)) elseBlk=(try self.lowerSyntaxBlock(id: e.block1)) />)
+                self.recordAuthoredValueBlockUses(exprId: result)
             }
             SyntaxExprKind.IfExpr => {
                 result = self.pushExpr(e: <Expr.IfExpr cond=(try self.lowerSyntaxExpr(id: e.child0)) thenBlk=(try self.lowerSyntaxBlock(id: e.block0)) elseBlk=(try self.lowerSyntaxBlock(id: e.block1)) />)
+                self.recordAuthoredValueBlockUses(exprId: result)
             }
             SyntaxExprKind.MatchExpr => {
                 result = (try self.lowerSyntaxMatchExprInto(expr: e))
+                self.recordAuthoredValueBlockUses(exprId: result)
             }
             SyntaxExprKind.OptChain => {
                 result = self.pushExpr(e: <Expr.OptChain base=(try self.lowerSyntaxExpr(id: e.child0)) cont=(try self.lowerSyntaxExpr(id: e.child1)) />)

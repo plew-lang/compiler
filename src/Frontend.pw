@@ -687,6 +687,7 @@ pub struct Comp {
     mut val callTemplateLocations: Array[SourceCallLocation]
     mut val viaWitnesses: Array[ViaWitness] = []
     mut val viaCallByFunction: Dictionary[U64, U64] = [:]
+    mut val authoredValueBlockOwners: Dictionary[U64, U64] = [:]
     mut val authoredForIterators: Dictionary[U64, U64] = [:]
     // Nonfatal diagnostics remain owned by the compilation/session. Only the
     // driver decides how to display them; requesting a body emits no process IO.

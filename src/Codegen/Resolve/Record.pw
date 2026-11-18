@@ -1689,7 +1689,11 @@ pub impl Comp {
                     self.recordSemanticExprCompletion(exprId: exprId, completion: completion)
                     return <Result.Ok value=false />
                 }
-                return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "a normally completing value block requires `give` to yield its value (spec/11)") />
+                val domain = match self.authoredValueBlockOwners.get(key: blockId) {
+                    Optional.Some(v: val owner) => if owner == exprId { give <FailureDomain.Source /> } else { give <FailureDomain.Unclassified /> }
+                    Optional.None => <FailureDomain.Unclassified />
+                }
+                return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "a normally completing value block requires `give` to yield its value (spec/11)", failureDomain: domain) />
             }
             // recordBlockContents admitted this producer against its result
             // context. Preserve that destination for boxing/repacking joins;

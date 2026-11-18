@@ -417,7 +417,10 @@ pub impl Comp {
                 val statement = self.pushStmt(s: <Stmt.Let mutable=s.flag0 nameStart=s.name.start nameLen=s.name.end - s.name.start tyStart=tyStart tyLen=tyLen tyIsArray=tyIsArray ty=tyRef init=(try self.lowerSyntaxExpr(id: s.child0)) annotationOccurrence=annotation />)
                 return <Result.Ok value=statement />
             }
-            SyntaxStmtKind.ExprStmt => { return <Result.Ok value=self.pushStmt(s: <Stmt.ExprStmt expr=(try self.lowerSyntaxExpr(id: s.child0)) />) />}
+            SyntaxStmtKind.ExprStmt => {
+                val expr = try self.lowerSyntaxExpr(id: s.child0)
+                return <Result.Ok value=self.lowerExpressionStatement(exprId: expr) />
+            }
             SyntaxStmtKind.Return => {
                 mut val value: U64 = 0U64
                 if s.flag0 { value = (try self.lowerSyntaxExpr(id: s.child0)) }
@@ -541,7 +544,7 @@ pub impl Comp {
             }
             StmtAst.ExprStmt(val expr, val span) => {
                 val e: U64 = (try self.lowerExpr(e: expr))
-                result = self.pushStmt(s: <Stmt.ExprStmt expr=e />)
+                result = self.lowerExpressionStatement(exprId: e)
             }
             StmtAst.Return(val value, val hasValue, val span) => {
                 mut val v: U64 = 0

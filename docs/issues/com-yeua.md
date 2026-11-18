@@ -384,3 +384,21 @@ The subsequent specification decision is tracked by [com-j8k0](com-j8k0.md).
 [com-ew3i](com-ew3i.md) owns bare blocks and [com-x7ql](com-x7ql.md) owns
 nested unique shadowing and the combined success fixture. Both are
 prerequisites here; this fixture is not a missing-give control.
+
+### Missing-give producer checkpoint
+
+The migrated shadowing fixture now runs successfully under
+[com-x7ql](com-x7ql.md). The other ten original cases return the same
+diagnostic and normal failure status, now with Source: ten in check,
+ten in AOT, and four in demanded ORC. Six undemanded ORC inputs still
+succeed. An additional if-chain case changed from Unclassified to Source
+in check and demanded ORC. Three successful standalone and shadowing
+fixtures retain their ORC output.
+
+The two Lower paths record the exact block-to-value-expression relationship,
+excluding the directly discarded standalone block. Record decides the
+violation once and uses that receipt only to decide the failure domain. A
+native producer probe rejects raw block and expression substitutions with
+the same message and no Source, including when the exact authored
+standalone expression and block are reused in a raw value position.
+Independent re-review verified that distinction in both Lower paths.
