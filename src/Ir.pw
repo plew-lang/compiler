@@ -1653,11 +1653,11 @@ pub struct Conform {
     pub val witnessFuncIds: ConformFuncIdRange = <ConformFuncIdRange start=0U64 len=0U64 />
 }
 
-// A via witness owns an ordinary forwarding Func. Keep its declared target
-// for validation; lookup must retain the witness, never rename a call to it.
+// The authored delegation owns this forwarding call. Generated callable-form
+// adapters have no ViaWitness entry.
 pub struct ViaWitness {
     pub val functionIndex: U64
-    pub val targetNameId: U64
+    pub val callExpr: U64
 }
 
 // The semantic input of every trait query. `owner` is the resolved trait

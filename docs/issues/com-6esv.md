@@ -77,3 +77,13 @@ undemanded JIT. The same experiment incorrectly accepts receiver-mode and
 Unit-result mismatches, so lexical admission alone does not satisfy the
 delegation contract. Continue with selected-operation verification and
 authored provenance before replacing the precheck.
+
+## Forwarding Occurrence Handoff
+
+Both Lower inputs now retain the call expression returned when constructing
+the forwarding body, keyed by the declaration ID actually registered. The
+generated callable-form adapter takes only the body and does not publish an
+authored via witness. The temporary precheck reads the target from this
+stored expression. It remains the gate until selected-operation validation
+can replace it. The scoped check/JIT comparison preserves all 26 prior
+outcomes, including the projected receiver regression's RED.

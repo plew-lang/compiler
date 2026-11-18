@@ -1431,9 +1431,16 @@ pub impl Comp {
     inout fn checkViaTargets() -> Result[(), CompileDiagnostic] {
         for val binding in self.decls.viaWitnesses {
             val witness = self.arena.functionAt(index: binding.functionIndex)
+            if binding.callExpr >= self.arena.exprs.count() {
+                return <Result.Err error=self.diagnosticAt(offset: witness.defOffset, msg: "delegation lost its forwarding call", failureDomain: <FailureDomain.Internal />) />
+            }
+            val targetNameId = match self.arena.exprs[binding.callExpr] {
+                Expr.Method(recv: _, nameStart: val start, nameLen: val len, args: _) => intern(c: inout self, start: start, len: len)
+                _ => { return <Result.Err error=self.diagnosticAt(offset: witness.defOffset, msg: "delegation lost its forwarding call", failureDomain: <FailureDomain.Internal />) /> }
+            }
             mut val foundName = false
             mut val foundSignature = false
-            mut val index = self.decls.firstCallableNamed(nameId: binding.targetNameId)
+            mut val index = self.decls.firstCallableNamed(nameId: targetNameId)
             while index < self.decls.callableCount() {
                 val candidateIndex = self.decls.callableAt(index: index).funcIdx
                 val target = self.arena.functionAt(index: candidateIndex)
