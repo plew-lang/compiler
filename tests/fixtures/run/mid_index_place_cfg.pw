@@ -27,8 +27,9 @@ fn main() {
     match c.prepareLexicalBody(fnIdx: owner) { Result.Ok(value: _) => {} Result.Err(error: val diagnostic) => { panic(diagnostic.message) } }
     val facts = c.preparedFunctionSemanticFacts(fnIdx: owner).unwrap()
     mut val state = (prepareMidSourceState(c: inout c, sourceFunction: owner, facts: facts)).unwrap()
-    val items = addMidLocal(state: inout state, declarationTarget: itemsParameter.nameStart, typeTerm: arrayTerm, isUnique: false, isParameter: true, ownsAtEntry: true)
-    val index = addMidLocal(state: inout state, declarationTarget: indexParameter.nameStart, typeTerm: indexTerm, isUnique: false, isParameter: true, ownsAtEntry: true)
+    // Synchronous value parameters use the production non-owning entry convention.
+    val items = addMidLocal(state: inout state, declarationTarget: itemsParameter.nameStart, typeTerm: arrayTerm, isUnique: false, isParameter: true, ownsAtEntry: false)
+    val index = addMidLocal(state: inout state, declarationTarget: indexParameter.nameStart, typeTerm: indexTerm, isUnique: false, isParameter: true, ownsAtEntry: false)
     val result = buildMidLet(c: inout c, state: inout state, stmtId: bindingStatement)
 
     mut val correctPlace: Bool = false

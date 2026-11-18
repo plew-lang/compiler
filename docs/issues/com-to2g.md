@@ -128,3 +128,12 @@ are tracked separately in [com-uk1h](com-uk1h.md). Formal validation reached
 the third-generation fixed point, median 7.569017 s. The same-source
 alternating comparison measured 7.286 s before and 7.289 s after. The
 phase-wide performance threshold remains outstanding.
+
+## Standard Suite Fixture Control
+
+The current normal sweep exposed an unrelated mismatch in the manual Mid
+fixture's parameter setup. It gave an ordinary synchronous value parameter
+the owned-entry state reserved for async or move inputs. The repair makes
+the fixture use the production synchronous convention and keeps its exact
+index-local identity assertion and golden. The diagnostic compiler emits
+wrong-place for the old fixture and index-place after this correction.
