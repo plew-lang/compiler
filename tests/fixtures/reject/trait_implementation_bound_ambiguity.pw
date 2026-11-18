@@ -1,0 +1,1 @@
+trait Allowed {} trait A: Allowed {} trait B: Allowed {} trait Action { fn go[U](value: U) where U: A, U: B } struct Worker {} impl Worker as Action { fn go[U](value: U) where U: Allowed {} } fn main() {}

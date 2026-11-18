@@ -1,0 +1,77 @@
+use /Frontend only { Comp, FrontendInput, openFrontend, openFrontendForRequests, analyzeFrontendDeclarations, analyzeFrontendForRequests, spansEqual }
+use /SourceAccess only { SourceAccess }
+use /Ir only { ConformanceProofResult, ConformanceProofDemand }
+use /Diag only { CompileDiagnostic, FailureDomain }
+use @Std/Io only { print }
+
+fn main() {
+    val missing = "implementation requires a trait constraint not guaranteed by the requirement"
+    val ambiguous = "ambiguous conformance: multiple declaration paths satisfy the source bound"
+    verifySource(text: "trait Allowed {{}} trait Action {{ fn go[U](value: U) }} struct Worker {{}} impl Worker as Action {{ fn go[U](value: U) where U: Allowed {{}} }} fn main() {{}}", message: missing)
+    verifySource(text: "trait Allowed {{}} trait A: Allowed {{}} trait B: Allowed {{}} trait Action {{ fn go[U](value: U) where U: A, U: B }} struct Worker {{}} impl Worker as Action {{ fn go[U](value: U) where U: Allowed {{}} }} fn main() {{}}", message: ambiguous)
+    verifyRaw(text: "trait Allowed {{}} trait Action {{ fn go[U](value: U) }} struct Worker {{}} impl Worker as Action {{ fn go[U](value: U) {{}} }} struct Other {{}} impl Other {{ fn go[U](value: U) where U: Allowed {{}} }} fn main() {{}}", message: missing)
+    verifyRaw(text: "trait Allowed {{}} trait A: Allowed {{}} trait B: Allowed {{}} trait Action {{ fn go[U](value: U) where U: A, U: B }} struct Worker {{}} impl Worker as Action {{ fn go[U](value: U) where U: A, U: B {{}} }} struct Other {{}} impl Other {{ fn go[U](value: U) where U: Allowed {{}} }} fn main() {{}}", message: ambiguous)
+    for text in [
+        "trait Allowed {{}} trait Action {{ fn go[U](value: U) where U: Allowed }} struct Worker {{}} impl Worker as Action {{ fn go[U](value: U) where U: Allowed {{}} }} fn main() {{}}",
+        "trait Allowed {{}} trait Action {{ fn go[U](value: U) where U: Allowed }} struct Worker {{}} impl Worker as Action {{ fn go[U](value: U) {{}} }} fn main() {{}}",
+        "trait Allowed {{}} trait A: Allowed {{}} trait Action {{ fn go[U](value: U) where U: A }} struct Worker {{}} impl Worker as Action {{ fn go[U](value: U) where U: Allowed {{}} }} fn main() {{}}",
+        "trait Allowed {{}} trait A: Allowed {{}} trait B: Allowed {{}} trait Action {{ fn go[U](value: U) where U: A, U: B, U: Allowed }} struct Worker {{}} impl Worker as Action {{ fn go[U](value: U) where U: Allowed {{}} }} fn main() {{}}"
+    ] {
+        val healthy = checked(openFrontendForRequests(input: <FrontendInput.Text path="valid-implementation-bound.pw" text=text />, sources: <SourceAccess stdRoot=[] />))
+    }
+    print("ok")
+}
+
+fn verifySource(text: String, message: String) {
+    val input = <FrontendInput.Text path="implementation-bound.pw" text=text />
+    val sources = <SourceAccess stdRoot=[] />
+    requireFailure(result: openFrontend(input: input, sources: sources), message: message, source: true)
+    requireFailure(result: openFrontendForRequests(input: input, sources: sources), message: message, source: true)
+    mut val raw = <Comp />
+    requireFailure(result: analyzeFrontendForRequests(c: inout raw, input: input, sources: sources), message: message, source: false)
+    mut val declarations = <Comp />
+    requireFailure(result: analyzeFrontendDeclarations(c: inout declarations, input: input, sources: sources), message: message, source: false)
+}
+
+fn verifyRaw(text: String, message: String) {
+    mut val compiler = checked(openFrontendForRequests(input: <FrontendInput.Text path="raw-implementation-bound.pw" text=text />, sources: <SourceAccess stdRoot=[] />))
+    if compiler.decls.conformCount() != 1U64 { panic("unexpected source conformance") }
+    val conformance = compiler.decls.conformAt(index: 0U64)
+    val traitIndex = compiler.resolveTraitDef(cf: conformance)
+    if conformance.witnessFuncIds.len != 1U64 { panic("unexpected witness range") }
+    val method = compiler.internBytes(s: "go")
+    val receiver = compiler.internBytes(s: "Other")
+    mut val wrong = compiler.arena.functionCount()
+    for index in 0U64..<compiler.arena.functionCount() {
+        val function = compiler.arena.functionAt(index: index)
+        if spansEqual(c: inout compiler, aStart: function.nameStart, aLen: function.nameLen, bStart: method.nameStart, bLen: method.nameLen) &&
+           spansEqual(c: inout compiler, aStart: function.recvStart, aLen: function.recvLen, bStart: receiver.nameStart, bLen: receiver.nameLen) { wrong = index }
+    }
+    if wrong == compiler.arena.functionCount() { panic("missing raw constraint target") }
+    compiler.decls.conformFuncIdPool[conformance.witnessFuncIds.start] = wrong
+    requireFailure(result: compiler.checkConformanceMethodBounds(conformIndex: 0U64, traitIndex: traitIndex), message: message, source: false)
+    requireFailure(result: compiler.checkConformances(), message: message, source: false)
+    val allowed = compiler.decls.traitAt(index: compiler.decls.firstTraitNamed(nameId: compiler.internBytes(s: "Allowed").nameId))
+    requireFailure(result: compiler.requireConformanceProof(answer: <ConformanceProofResult.Ambiguous owner=allowed.nameStart demand=<ConformanceProofDemand.SourceAdmission /> selectedSource=false />), message: "ambiguous conformance: multiple declaration paths satisfy the source bound", source: false)
+}
+
+fn requireFailure[T](result: Result[T, CompileDiagnostic], message: String, source: Bool) {
+    match result {
+        Result.Ok(value: _) => { panic("invalid implementation bound accepted") }
+        Result.Err(error: val diagnostic) => {
+            if diagnostic.message != message { panic(diagnostic.message) }
+            if source {
+                match diagnostic.failureDomain { FailureDomain.Source => {} _ => { panic("source implementation bound lost its origin") } }
+            } else {
+                match diagnostic.failureDomain { FailureDomain.Unclassified => {} _ => { panic("raw implementation bound became source") } }
+            }
+        }
+    }
+}
+
+fn checked[T](result~: Result[T, CompileDiagnostic]) -> T {
+    match result {
+        Result.Ok(value: val value) => { return value }
+        Result.Err(error: val diagnostic) => { panic(diagnostic.message) }
+    }
+}

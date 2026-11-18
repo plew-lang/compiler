@@ -1054,3 +1054,36 @@ has no remaining required finding. No new state, scan, lookup or snapshot.
 Formal final gates and com-yeua remain open.
 
 [Evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-calling-convention-rejection.json).
+
+### Implementation-bound classification scenarios
+
+The first implementation-bound consumer owns refusal when an implementation
+requires a proof not guaranteed by its requirement. Cover successful query
+results Missing and semantic Ambiguous, preserving acceptance and exact reasons.
+Fresh owned Frontend entries classify Source; public caller-owned entries and
+public proof interpretation remain Unclassified, including SourceAdmission demand.
+Query Err/Limit must propagate before interpretation; no failure remapping.
+The second retained-evidence and publication failures remain unchanged.
+
+Two source fixtures exercise check/AOT/ORC. Native controls cover owned2/raw2,
+actual witness-link mutations, public Ambiguous interpretation, and equal, weaker,
+inherited and exact-direct-premise positives. Baseline six process outcomes are
+Unclassified; native exits134 at `source implementation bound lost its origin`.
+Query error preservation is a structural check, not an executed resource-limit
+claim; resource/re-entry work remains com-pq5j.
+
+### Implementation-bound checkpoint
+
+The first consumer now classifies Missing and semantic Ambiguous from a
+successful query using private declaration origin. Query Err/Limit returns
+before interpretation; public interpretation remains fixed Unclassified.
+No query, scan, retained state or evidence construction was added.
+Six check/AOT/ORC refusals retain exact stderr/status/channel and become Source.
+Native source/raw, witness mutation and positive controls print ok; three
+existing trait constraint fixtures pass check and exact ORC output (six runs).
+Frontend input boundary structural test passes. Independent static review found
+no required defect; unrelated indentation was reverted. Its public interpreter
+control uses fabricated data, separately from actual query ambiguity controls.
+No executed Limit control is claimed. Full gates and com-yeua remain open.
+
+[Evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-implementation-bound-rejection.json).

@@ -486,15 +486,24 @@ pub impl Comp {
     }
 
     inout fn requireConformanceProof(answer: ConformanceProofResult) -> Result[StaticConformanceProof, CompileDiagnostic] {
+        return self.requireConformanceProofInDomain(answer: answer, domain: <FailureDomain.Unclassified />)
+    }
+
+}
+
+impl Comp {
+    inout fn requireConformanceProofInDomain(answer: ConformanceProofResult, domain: FailureDomain) -> Result[StaticConformanceProof, CompileDiagnostic] {
         match answer {
             ConformanceProofResult.Found(proof: val proof) => { return <Result.Ok value=proof /> }
             ConformanceProofResult.Missing => { return <Result.Ok value=<StaticConformanceProof.Missing /> /> }
             ConformanceProofResult.Ambiguous(owner: val owner, demand: val demand, selectedSource: val selectedSource) => {
-                return <Result.Err error=self.conformanceAmbiguityDiagnostic(owner: owner, demand: demand, selectedSource: selectedSource) />
+                return <Result.Err error=self.conformanceAmbiguityDiagnostic(owner: owner, demand: demand, selectedSource: selectedSource, domain: domain) />
             }
         }
     }
+}
 
+pub impl Comp {
     fn conformanceAmbiguityDiagnostic(owner: U64, demand: ConformanceProofDemand, selectedSource: Bool, domain: FailureDomain = <FailureDomain.Unclassified />) -> CompileDiagnostic {
         if demand.isSourceAdmission() {
             if selectedSource { return self.diagnosticAt(offset: owner, msg: "ambiguous conformance: multiple declaration paths satisfy the selected source bound", failureDomain: domain) }

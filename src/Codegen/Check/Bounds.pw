@@ -1265,7 +1265,7 @@ impl Comp {
                         val actual = self.funcParamAt(params: function.params, index: parameterIndex)
                         val expected = self.funcParamAt(params: requirement.params, index: parameterIndex)
                         if actual.isInout != expected.isInout || actual.isMove != expected.isMove || actual.isBorrow != expected.isBorrow {
-                            val domain = match origin { FrontendDeclarationOrigin.SourceAdmission => <FailureDomain.Source />, FrontendDeclarationOrigin.Raw => <FailureDomain.Unclassified /> }
+                        val domain = match origin { FrontendDeclarationOrigin.SourceAdmission => <FailureDomain.Source />, FrontendDeclarationOrigin.Raw => <FailureDomain.Unclassified /> }
                             return <Result.Err error=self.diagnosticAt(offset: function.defOffset, msg: "implementation parameter ownership does not match the trait requirement", failureDomain: domain) />
                         }
                         parameterIndex += 1U64
@@ -1298,9 +1298,11 @@ impl Comp {
                             // public clauses; authored clause IDs stay intact.
                             val subject = self.traitBoundTypeTerm(ref: self.groundTermInEnvironment(ref: bound.paramTy, params: [], values: [], selfRef: traitBound.subject), bound: traitBound, traitIndex: traitIndex)
                             val constraint = self.traitConstraintInBound(constraint: self.groundTraitConstraintInEnvironment(constraint: bound.constraint, params: [], args: [], selfRef: traitBound.subject), bound: traitBound, traitIndex: traitIndex)
-                            val proof = try self.viewedTraitConstraintProof(demand: <ConformanceProofDemand.SourceAdmission />, ref: subject, constraint: constraint, assumptions: assumptions)
+                            val answer = try self.queryViewedTraitConstraint(demand: <ConformanceProofDemand.SourceAdmission />, ref: subject, constraint: constraint, assumptions: assumptions)
+                            val domain = match origin { FrontendDeclarationOrigin.SourceAdmission => <FailureDomain.Source />, FrontendDeclarationOrigin.Raw => <FailureDomain.Unclassified /> }
+                            val proof = try self.requireConformanceProofInDomain(answer: answer, domain: domain)
                             if self.proofIsMissing(proof: proof) {
-                                return <Result.Err error=self.diagnosticAt(offset: function.defOffset, msg: "implementation requires a trait constraint not guaranteed by the requirement") />
+                                return <Result.Err error=self.diagnosticAt(offset: function.defOffset, msg: "implementation requires a trait constraint not guaranteed by the requirement", failureDomain: domain) />
                             }
                             implementationIndices.append(boundIndex)
                             implementationProofs.append(self.freezeStaticConformanceProof(proof: proof))
