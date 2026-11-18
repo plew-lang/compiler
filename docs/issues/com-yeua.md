@@ -780,3 +780,18 @@ accepted only by its private delegate. Comp-importing native fixture compiles.
 Formal final gates and com-yeua overall remain open.
 
 [Evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-immutable-receiver-rejection.json).
+
+### Call-inference producer investigation
+
+Eight existing fixtures remain Unclassified across all 24 check/AOT/ORC
+executions, with exact baseline diagnostics/status/channel retained. A separate
+instrumented compiler pins all eight check refusals to
+checkRecordedCallLiteralArguments's Incomplete state, rather than the later
+checkCallTemplateTypeArguments consumer. selectedCallParameterState currently
+uses the same state for malformed saved ranges/arity and genuine unresolved
+inference slots. Source publication alone cannot classify both as Source.
+Next repair must preserve source-owned negative inference evidence, contextual
+completion, and a raw healthy-template-to-incomplete mutation contrast. No
+repair or completion is claimed by this investigation.
+
+[Evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-call-inference-investigation.json).
