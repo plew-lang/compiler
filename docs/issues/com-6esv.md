@@ -66,3 +66,14 @@ judging candidate applicability. A raw early Boolean cannot authorize a
 separate forwarding-body search. Preserve declaration-time invalidity even
 when JIT never demands the witness. The fixed-point reproduction is RED
 evidence, not an adoption decision or completion result.
+
+The regression fixture is
+[`trait_via_projected_receiver`](../../tests/fixtures/run/trait_via_projected_receiver.pw).
+With the fixed-point carrier it rejects before ordinary selection. The
+[isolated admission experiment](../../../evidence/rejection-domains/diagnostic-domain-implementation/via-applicability-red.json)
+shows that requesting the ordinary lexical body at declaration admission
+preserves rejection of a missing target and a stronger `where` even in
+undemanded JIT. The same experiment incorrectly accepts receiver-mode and
+Unit-result mismatches, so lexical admission alone does not satisfy the
+delegation contract. Continue with selected-operation verification and
+authored provenance before replacing the precheck.
