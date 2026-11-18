@@ -1,0 +1,89 @@
+// A source-shaped call key without an expression receipt has no Source authority.
+use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use ../../../src/SourceAccess only { SourceAccess }
+use ../../../src/Ir only { CallSiteKey, CallTemplate, CallTemplateKind, CallTemplateReceiver, CallTemplateArgument, CallArgumentSource, Stmt, Expr }
+use @Std/Io only { print }
+
+fn checkSyntheticMissingConstraint(includeExpression: Bool) {
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler,
+        input: <FrontendInput.Text text="trait Q {{}} fn free[T](value: T) where T: Q {{}} fn probe(value: I64) {{ val copied = value }}" path="synthetic-constraint.pw" />,
+        sources: <SourceAccess stdRoot=[] />).unwrap()
+    val owner = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "probe").nameId)
+    val callee = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "free").nameId)
+    val function = compiler.arena.functionAt(index: owner)
+    val parameter = compiler.funcParamAt(params: function.params, index: 0U64)
+    val arguments = compiler.publishCallTemplateArguments(args: [<CallTemplateArgument source=<CallArgumentSource.Term exprId=0U64 term=parameter.ty /> labelStart=parameter.nameStart labelLen=parameter.nameLen hasLabel=true isInout=false />])
+    val types = compiler.publishCallTemplateTypeArgs(args: [parameter.ty])
+    val index = compiler.callTemplateCount()
+    compiler.cur.checkFn = owner
+    val statement = compiler.blockStmtAt(blkId: function.body, index: 0U64)
+    val expression = match compiler.arena.stmts[statement] {
+        Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, init: val initial, annotationOccurrence: _) => initial
+        _ => { panic("synthetic call setup has no expression") }
+    }
+    val site = if includeExpression { give compiler.sourceCallSiteKey(fnIdx: owner, exprId: expression).unwrap() }
+        else { give <CallSiteKey ownerFnIdx=owner originKind=1U64 originStart=function.nameStart originEnd=function.nameStart + function.nameLen originSerial=900U64 /> }
+    val resultExpression = if includeExpression { give <Optional.Some v=expression /> } else { give <Optional.None /> }
+    if !compiler.appendCallTemplate(template: <CallTemplate siteKey=site kind=<CallTemplateKind.Direct callee=callee receiver=<CallTemplateReceiver.None /> args=arguments calleeTypeArgs=types proofId=0U64 /> />, resultExpression: resultExpression) {
+        panic("synthetic call setup failed")
+    }
+    match compiler.prepareCallTemplateConstraints(templateIndex: index) {
+        Result.Err(error: val diagnostic) => {
+            if diagnostic.message != "type argument does not conform to the trait required by `where`" || diagnostic.isSourceRejection() {
+                panic("synthetic missing proof was misclassified")
+            }
+        }
+        Result.Ok(value: _) => { panic("synthetic call without a proof was admitted") }
+    }
+}
+
+fn checkReplacedSourceCall(usePublicRecorder: Bool) {
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler,
+        input: <FrontendInput.Text text="trait Q {{}} fn bounded[T](value: T) where T: Q {{}} fn accepts[T](value: T) {{}} fn probe(value: I64) {{ accepts(value: value) }}" path="replaced-constraint.pw" />,
+        sources: <SourceAccess stdRoot=[] />).unwrap()
+    val owner = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "probe").nameId)
+    val callee = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "bounded").nameId)
+    val function = compiler.arena.functionAt(index: owner)
+    compiler.recordParametricFunction(fnIdx: owner, recordCallTemplates: true).unwrap()
+    val stmt = compiler.blockStmtAt(blkId: function.body, index: 0U64)
+    val expression = match compiler.arena.stmts[stmt] {
+        Stmt.ExprStmt(val expr) => expr
+        _ => { panic("replacement setup has no call") }
+    }
+    val site = compiler.templateCallSiteKey(fnIdx: owner, exprId: expression).unwrap()
+    val index = compiler.callTemplateIndex(siteKey: site)
+    val selected = compiler.callTemplateAt(index: index)
+    val replacement = match selected.kind {
+        CallTemplateKind.Direct(callee: _, val receiver, val args, val calleeTypeArgs, val proofId) =>
+            <CallTemplateKind.Direct callee=callee receiver=receiver args=args calleeTypeArgs=calleeTypeArgs proofId=proofId />
+        _ => { panic("replacement setup has no direct call") }
+    }
+    if usePublicRecorder {
+        val arguments = match compiler.arena.exprs[expression] {
+            Expr.Call(nameStart: _, nameLen: _, val args) => args
+            _ => { panic("recorder setup has no call arguments") }
+        }
+        val parameter = compiler.funcParamAt(params: function.params, index: 0U64)
+        compiler.recordCallTemplate(exprId: expression, callee: callee, receiver: <CallTemplateReceiver.None />, args: arguments, calleeTypeArgs: [parameter.ty]).unwrap()
+    } else if !compiler.replaceBuildingCallTemplate(index: index, template: <CallTemplate siteKey=site resultTypeRecipe=selected.resultTypeRecipe kind=replacement expectedResultTerm=selected.expectedResultTerm receiverTypeTerm=selected.receiverTypeTerm />) {
+        panic("replacement setup could not replace call")
+    }
+    match compiler.prepareCallTemplateConstraints(templateIndex: index) {
+        Result.Err(error: val diagnostic) => {
+            if diagnostic.message != "type argument does not conform to the trait required by `where`" || diagnostic.isSourceRejection() {
+                panic("raw replacement retained source authority")
+            }
+        }
+        Result.Ok(value: _) => { panic("replacement without a proof was admitted") }
+    }
+}
+
+fn main() {
+    checkSyntheticMissingConstraint(includeExpression: false)
+    checkSyntheticMissingConstraint(includeExpression: true)
+    checkReplacedSourceCall(usePublicRecorder: false)
+    checkReplacedSourceCall(usePublicRecorder: true)
+    print("synthetic constraint remains non-Source")
+}

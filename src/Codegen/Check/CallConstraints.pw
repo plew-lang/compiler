@@ -139,6 +139,15 @@ pub impl Comp {
     }
     // Construction API; successful source publication removes write authority.
     inout fn replaceBuildingCallTemplate(index: U64, template: CallTemplate) -> Bool {
+        if !self.replaceCallTemplateRow(index: index, template: template) { return false }
+        val location = self.callTemplateLocations[index]
+        self.callTemplateLocations.set(i: index, value: <SourceCallLocation owner=location.owner siteKey=location.siteKey localIndex=location.localIndex publishedFromSource=false />)
+        return true
+    }
+}
+
+impl Comp {
+    inout fn replaceCallTemplateRow(index: U64, template: CallTemplate) -> Bool {
         if index >= self.callTemplateLocations.count() { return false }
         val location = self.callTemplateLocations[index]
         if self.sourceOwnerConstructionClosed(owner: location.owner) || !location.siteKey.sameKey(other: template.siteKey) { return false }
@@ -151,7 +160,7 @@ pub impl Comp {
 
 impl Comp {
     inout fn replaceSourceCallTemplate(index: U64, template: CallTemplate) {
-        if !self.replaceBuildingCallTemplate(index: index, template: template) {
+        if !self.replaceCallTemplateRow(index: index, template: template) {
             panic("internal error: cannot replace a prepared source call template")
         }
     }
@@ -186,8 +195,21 @@ pub impl Comp {
 }
 
 impl Comp {
+    inout fn writeRecordedCallTemplate(index: U64, template: CallTemplate, authored: Bool) {
+        if authored { self.replaceSourceCallTemplate(index: index, template: template) }
+        else if !self.replaceBuildingCallTemplate(index: index, template: template) {
+            panic("internal error: cannot replace a prepared call template")
+        }
+    }
+
+    inout fn appendRecordedCallTemplate(template: CallTemplate, expression: U64, authored: Bool) {
+        if !self.appendCallTemplateRow(template: template, resultExpression: <Optional.Some v=expression />, publishedFromSource: authored) {
+            panic("internal error: cannot append to a completed call owner")
+        }
+    }
+
     inout fn appendSourceCallTemplate(template: CallTemplate, resultExpression: Optional[U64] = <Optional.None />) {
-        if !self.appendCallTemplate(template: template, resultExpression: resultExpression) {
+        if !self.appendCallTemplateRow(template: template, resultExpression: resultExpression, publishedFromSource: true) {
             panic("internal error: cannot append to a completed source call owner")
         }
     }

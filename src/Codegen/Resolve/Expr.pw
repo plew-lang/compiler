@@ -1031,6 +1031,12 @@ pub impl Comp {
     }
 
     inout fn appendCallTemplate(template: CallTemplate, resultExpression: Optional[U64] = <Optional.None />) -> Bool {
+        return self.appendCallTemplateRow(template: template, resultExpression: resultExpression, publishedFromSource: false)
+    }
+}
+
+impl Comp {
+    inout fn appendCallTemplateRow(template: CallTemplate, resultExpression: Optional[U64], publishedFromSource: Bool) -> Bool {
         val owner = match self.currentSourceOwner() {
             Optional.Some(v: val owner) => owner
             Optional.None => { return false }
@@ -1051,7 +1057,7 @@ pub impl Comp {
         val localIndex = self.sourceFacts.activeBuilder.data.operations.count()
         self.sourceFacts.activeBuilder.data.operations.append(<CallTemplate siteKey=template.siteKey resultTypeRecipe=resultRecipe kind=template.kind expectedResultTerm=template.expectedResultTerm receiverTypeTerm=template.receiverTypeTerm />)
         self.sourceFacts.activeBuilder.data.operationConstraints.append(<Optional.None />)
-        self.callTemplateLocations.append(<SourceCallLocation owner=owner siteKey=template.siteKey localIndex=localIndex />)
+        self.callTemplateLocations.append(<SourceCallLocation owner=owner siteKey=template.siteKey localIndex=localIndex publishedFromSource=publishedFromSource />)
         val capacity: U64 = self.callTemplateIndexSlots.count()
         mut val slot: U64 = sourceCallTemplateBucket(hash: template.siteKey.lookupHash(), capacity: capacity)
         while self.callTemplateIndexSlots[slot] != 0U64 {
@@ -1064,6 +1070,9 @@ pub impl Comp {
         return true
     }
 
+}
+
+pub impl Comp {
     // The no-function sentinel is a lookup namespace, not a global owner's
     // readiness token. Keep request membership at publication, not by AST scan.
     inout fn prepareGlobalCallTemplateConstraints(target: U64) -> Result[(), CompileDiagnostic] {
@@ -1171,6 +1180,12 @@ pub impl Comp {
     }
 
     inout fn recordCallTemplate(exprId: U64, callee: U64, receiver: CallTemplateReceiver, args: ArgRange, calleeTypeArgs: Array[U64], proof: StaticConformanceProof = <StaticConformanceProof.Missing />, receiverTypeTerm: U64 = 0U64) -> Result[(), CompileDiagnostic] {
+        return self.recordDirectCallTemplate(exprId: exprId, callee: callee, receiver: receiver, args: args, calleeTypeArgs: calleeTypeArgs, proof: proof, receiverTypeTerm: receiverTypeTerm, authored: false)
+    }
+}
+
+impl Comp {
+    inout fn recordDirectCallTemplate(exprId: U64, callee: U64, receiver: CallTemplateReceiver, args: ArgRange, calleeTypeArgs: Array[U64], proof: StaticConformanceProof, receiverTypeTerm: U64, authored: Bool) -> Result[(), CompileDiagnostic] {
         mut val receiverTerm = receiverTypeTerm
         if receiverTerm == 0U64 {
             match receiver { CallTemplateReceiver.Term(term: val term) | CallTemplateReceiver.Binding(term: val term, exprId: _) => { receiverTerm = term } _ => {} }
@@ -1184,16 +1199,19 @@ pub impl Comp {
             val prior: CallTemplate = self.callTemplateAt(index: index)
             val kind = (try self.completeCallTemplateResult(exprId: exprId, kind: <CallTemplateKind.Direct callee=callee receiver=receiver args=templateArgs calleeTypeArgs=templateTypeArgs proofId=proofId />, expectedTerm: prior.expectedResultTerm, receiverTerm: receiverTerm))
             receiverTerm = self.completeCallTemplateReceiver(kind: kind, receiverTerm: receiverTerm)
-            self.replaceSourceCallTemplate(index: index, template: <CallTemplate resultTypeRecipe=prior.resultTypeRecipe siteKey=siteKey kind=kind expectedResultTerm=prior.expectedResultTerm receiverTypeTerm=receiverTerm />)
+            self.writeRecordedCallTemplate(index: index, template: <CallTemplate resultTypeRecipe=prior.resultTypeRecipe siteKey=siteKey kind=kind expectedResultTerm=prior.expectedResultTerm receiverTypeTerm=receiverTerm />, authored: authored)
             self.recordGlobalCallTemplateOwner(templateIndex: index)
             return <Result.Ok value=() />
         }
         val kind = <CallTemplateKind.Direct callee=callee receiver=receiver args=templateArgs calleeTypeArgs=templateTypeArgs proofId=proofId />
         receiverTerm = self.completeCallTemplateReceiver(kind: kind, receiverTerm: receiverTerm)
-        self.appendSourceCallTemplate(template: <CallTemplate siteKey=siteKey kind=kind receiverTypeTerm=receiverTerm />, resultExpression: <Optional.Some v=exprId />)
+        self.appendRecordedCallTemplate(template: <CallTemplate siteKey=siteKey kind=kind receiverTypeTerm=receiverTerm />, expression: exprId, authored: authored)
         return <Result.Ok value=() />
     }
 
+}
+
+pub impl Comp {
     // A dynamic call is selected at Record too.  It carries the same receiver
     // and argument provenance as a direct call, while the target remains a
     // symbolic closure type or existential witness until a BodyInstance
@@ -1255,6 +1273,9 @@ pub impl Comp {
 
 
 
+}
+
+impl Comp {
     inout fn recordDynamicCallTemplate(exprId: U64, receiver: CallTemplateReceiver, args: ArgRange, target: DynamicCallTemplateTarget, receiverTerm: U64 = 0U64) -> Result[(), CompileDiagnostic] {
         mut val functionType: U64 = 0U64
         match target {
@@ -1428,6 +1449,9 @@ pub impl Comp {
     // assumptions are available. The error payload has a semantic type, not
     // a fabricated expression/local. Ordinary static-call obligations and
     // finalization consume this same template under each body environment.
+}
+
+pub impl Comp {
     inout fn recordTryExpression(exprId: U64, operand: U64) -> Result[(), CompileDiagnostic] {
         val returnTerm = try self.normalizedValueType(ref: self.declaredBodyReturnTerm(fnIdx: self.cur.checkFn))
         if self.resultEnumIndex(ref: returnTerm) >= self.arena.enumCount() {
@@ -1759,6 +1783,12 @@ pub impl Comp {
     }
 
     inout fn recordCallTemplateExpectedResult(exprId: U64, expectedTerm: U64) -> Result[(), CompileDiagnostic] {
+        return self.recordExpectedCallResult(exprId: exprId, expectedTerm: expectedTerm, authored: false)
+    }
+}
+
+impl Comp {
+    inout fn recordExpectedCallResult(exprId: U64, expectedTerm: U64, authored: Bool) -> Result[(), CompileDiagnostic] {
         // Atomic values cannot select a call. Their contextual typing belongs
         // to SemanticExprType; publishing a Pending call here invents a call
         // obligation for a literal or a local read. Compound and synthetic
@@ -1782,17 +1812,20 @@ pub impl Comp {
             val kind = if exprId >= self.arena.exprs.count() || self.sourceExprRequiresCallSelection(exprId: exprId) || self.syntheticCallSiteIndex(exprId: exprId) < self.decls.syntheticCallSites.count() {
                 give <CallTemplateKind.Pending />
             } else { give <CallTemplateKind.ExpectedValue /> }
-            self.appendSourceCallTemplate(template: <CallTemplate siteKey=siteKey kind=kind expectedResultTerm=expectedTerm />, resultExpression: <Optional.Some v=exprId />)
+            self.appendRecordedCallTemplate(template: <CallTemplate siteKey=siteKey kind=kind expectedResultTerm=expectedTerm />, expression: exprId, authored: authored)
             return <Result.Ok value=() />
         }
         val prior: CallTemplate = self.callTemplateAt(index: index)
         val kind = (try self.completeCallTemplateResult(exprId: exprId, kind: prior.kind, expectedTerm: expectedTerm, receiverTerm: prior.receiverTypeTerm))
         val receiverTerm = self.completeCallTemplateReceiver(kind: kind, receiverTerm: prior.receiverTypeTerm)
-        self.replaceSourceCallTemplate(index: index, template: <CallTemplate resultTypeRecipe=prior.resultTypeRecipe siteKey=prior.siteKey kind=kind expectedResultTerm=expectedTerm receiverTypeTerm=receiverTerm />)
+        self.writeRecordedCallTemplate(index: index, template: <CallTemplate resultTypeRecipe=prior.resultTypeRecipe siteKey=prior.siteKey kind=kind expectedResultTerm=expectedTerm receiverTypeTerm=receiverTerm />, authored: authored)
         self.recordGlobalCallTemplateOwner(templateIndex: index)
         return <Result.Ok value=() />
     }
 
+}
+
+pub impl Comp {
     // Expected results may fill only the selected declaration's unresolved
     // binders. A failed structural match never publishes a partial update.
     inout fn completeCallTypeArguments(function: Func, current: Array[U64], resultPattern: U64, expectedTerm: U64) -> Array[U64] {
@@ -2470,7 +2503,7 @@ pub impl Comp {
         if normalizedContext == 0U64 || normalizedContext >= self.arena.typeCount() { return <Result.Ok value=() /> }
         if self.expressionNeedsTypeContext(exprId: exprId) { try self.recordExpr(exprId: exprId, expectedTerm: normalizedContext) }
         val prior: SemanticExprType = self.constructionExpression(exprId: exprId)
-        try self.recordCallTemplateExpectedResult(exprId: exprId, expectedTerm: normalizedContext)
+        try self.recordExpectedCallResult(exprId: exprId, expectedTerm: normalizedContext, authored: true)
         // Array construction is a bidirectional value form: at its explicit
         // expected-result boundary the Array[E] term is the semantic result,
         // not merely a hint for an empty literal. Record also refreshes its
@@ -3234,7 +3267,7 @@ impl Comp {
             }
         }
         // Contextual completion may refine the initial result selector.
-        try self.recordCallTemplate(exprId: exprId, callee: callee, receiver: receiver, args: args, calleeTypeArgs: calleeTypeArgs, proof: selectedProof, receiverTypeTerm: receiverTypeTerm)
+        try self.recordDirectCallTemplate(exprId: exprId, callee: callee, receiver: receiver, args: args, calleeTypeArgs: calleeTypeArgs, proof: selectedProof, receiverTypeTerm: receiverTypeTerm, authored: true)
         return <Result.Ok value=() />
     }
 }

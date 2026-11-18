@@ -2874,6 +2874,7 @@ struct SourceCallLocation {
     val owner: SemanticCompletionOwner
     val siteKey: CallSiteKey
     val localIndex: U64
+    val publishedFromSource: Bool
 }
 impl SourceCallLocation { factory }
 

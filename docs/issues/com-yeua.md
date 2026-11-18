@@ -284,11 +284,22 @@ Both trait_subject_arity_confer and
 associated_condition_normalization_nested_missing were traced in check,
 AOT, and lazy to the missing proof in prepareCallTemplateConstraints.
 [Producer trace](../../../evidence/rejection-domains/diagnostic-domain-implementation/where-source-producer-trace.json).
-The proposed classification reads the already attached source expression
-recipe on the missing-proof branch. It requires a matching lexical
-operation, a valid subject and a registered trait owner. Unmatched or
-synthetic origins remain fail-closed. The internal raw control uses a
-source-shaped key but no matching expression receipt. It must retain
-the same reason and remain non-Source. Existing plan retention behavior
-and the operator/protocol refusal branches are unchanged. Execution of
-this candidate is pending the running formal measurement.
+The missing-proof branch consumes the retained recipe for a written
+source operation and requires a valid subject and registered trait owner.
+The private locator receipt originates in semantic Record, not in arbitrary
+raw template keys or result recipes. Raw append cannot issue it. Raw
+replacement or direct recording and expected-result template mutation
+revoke it; internal refinement cannot promote a raw row. The general
+semantic Record API still owns its expected-type analysis and is distinct
+from bare template storage mutation.
+
+The diagnostic candidate passes both real source error inputs in check,
+AOT, and lazy. The grouped 49-case check preserves exit 1 and the exact
+expected reason in all cases and produces Source in 47. The other two
+come from the separate iteration diagnostic owner. The native control
+covers raw append with and without a matching expression, raw replacement
+of an authored call, and the public direct recorder's substitution path.
+The latter three demonstrated incorrect Source in successive intermediate
+builds. All corrected cases retain the same reason and remain non-Source.
+A wider existing synthetic evidence fixture remains at its baseline
+failure; it has not been edited as part of this correction.

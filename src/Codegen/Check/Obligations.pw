@@ -1387,7 +1387,7 @@ pub impl Comp {
                     }
                     _ => {}
                 }
-                val domain = self.missingCallConstraintDomain(template: template, bound: bound)
+                val domain = self.missingCallConstraintDomain(template: template, bound: bound, authored: self.callTemplateLocations[templateIndex].publishedFromSource)
                 return <Result.Err error=self.diagnosticAt(offset: bound.offset, msg: "type argument does not conform to the trait required by `where`", failureDomain: domain) />
             }
             try self.checkDeclarationCallProof(proof: proof, scope: scope, offset: template.siteKey.originStart)
@@ -1408,10 +1408,10 @@ pub impl Comp {
 impl Comp {
     // Only a missing proof for a valid, authored call is a source refusal.
     // A synthetic operation or an unbound recipe still fails closed.
-    inout fn missingCallConstraintDomain(template: CallTemplate, bound: TraitBound) -> FailureDomain {
+    inout fn missingCallConstraintDomain(template: CallTemplate, bound: TraitBound, authored: Bool) -> FailureDomain {
         val site = template.siteKey
         val recipeId = template.resultTypeRecipe
-        if site.originKind != 1U64 || recipeId == 0U64 || recipeId > self.arena.semanticTypeRecipes.count() {
+        if !authored || site.originKind != 1U64 || site.originEnd <= site.originStart || recipeId == 0U64 || recipeId > self.arena.semanticTypeRecipes.count() {
             return <FailureDomain.Unclassified />
         }
         if bound.subject == 0U64 || bound.subject >= self.arena.typeCount() || self.decls.traitOwnerIndex(offset: bound.constraint.key.owner) >= self.decls.traitOwnerCount() {
