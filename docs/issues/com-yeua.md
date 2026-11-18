@@ -887,3 +887,47 @@ review and correction review found no remaining scoped issue. Formal final
 gates and com-yeua remain open.
 
 [Evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-trait-requirement-rejection.json).
+
+### Witness-result mismatch origin scenarios
+
+Classify only the actual callableResultTypesEqual false branch in
+checkConformanceMethodBounds: implementation and factory result mismatch.
+The owned source conformance sweep passes existing private declaration origin;
+public checker remains Raw, with unchanged signature. Preserve all signature
+read/parameter/constraint failures and other mismatch reasons unchanged. No
+origin on Comp, repeated proof lookup or parallel signature snapshot.
+
+Scenarios: nine existing ordinary/associated/provided/unit/fallible factory
+rejects across check/AOT/ORC; both owned and both caller-owned input analyzers;
+healthy owned Comp then a real witness-ID pool mutation to a different
+well-typed same-selector method with the wrong result, verified through both
+public method-bound and conformance checkers as Unclassified. Include normal
+provided/associated/via/factory/unit-equivalence positives. Baseline native
+setup succeeds and fails at "source witness result lost its origin" (exit134).
+
+### Witness result origin checkpoint
+
+The owned conformance sweep now passes its existing private declaration
+origin to method-bound admission. The public checkConformanceMethodBounds
+signature remains unchanged and delegates Raw. Only a confirmed false result
+comparison emits Source for implementation/factory return mismatch; signature
+reads, constraints and all other mismatches retain their original behavior.
+There is no new receipt table, repeat comparison, or authority stored on Comp.
+
+Nine existing rejection fixtures retain exact stderr/status/channel in
+check/AOT/ORC (27 executions), now Source. Provided/associated results, via Self
+results, fallible factories and implicit/explicit unit equivalence pass check
+and exact ORC output (eight executions). The new native fixture prints ok:
+owned two-entry Source failure versus caller-owned two-entry Unclassified,
+then a successful owned Comp whose actual witness link is replaced with the
+well-typed unrelated Other.make of a different result. Both public local and
+whole-conformance checkers preserve the same mismatch as Unclassified.
+
+The initial internal fixture wrongly asked a successful owned admission to
+publish its constraint evidence again. Removed that unsupported setup demand;
+owned constructor success remains the healthy control. The mutation refusal
+returns before publication and does not claim re-admission is supported.
+Independent source/correction review found no remaining scoped issue.
+Formal final gates and com-yeua remain open.
+
+[Evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-witness-return-rejection.json).

@@ -1221,6 +1221,12 @@ pub impl Comp {
     // require more from its callers. Publish the requirement's obligations on
     // the selected declaration so concrete calls use the normal bound checker.
     inout fn checkConformanceMethodBounds(conformIndex: U64, traitIndex: U64) -> Result[(), CompileDiagnostic] {
+        return self.checkConformanceMethodBoundsForAdmission(conformIndex: conformIndex, traitIndex: traitIndex, origin: <FrontendDeclarationOrigin.Raw />)
+    }
+}
+
+impl Comp {
+    inout fn checkConformanceMethodBoundsForAdmission(conformIndex: U64, traitIndex: U64, origin: FrontendDeclarationOrigin) -> Result[(), CompileDiagnostic] {
         val conformance = self.decls.conformAt(index: conformIndex)
         val trait = self.decls.traitAt(index: traitIndex)
         if trait.reqs.count() == 0U64 { return <Result.Ok value=() /> }
@@ -1264,8 +1270,9 @@ pub impl Comp {
                     val expectedResult = try self.readRequirementResult(interface: signature, environment: environment, memo: inout memo)
                     val actualResult = self.traitBoundTypeTerm(ref: self.groundTermInEnvironment(ref: self.semanticCallableReturnTerm(function: function), params: [], values: [], selfRef: traitBound.subject), bound: traitBound, traitIndex: traitIndex)
                     if !self.callableResultTypesEqual(a: expectedResult, b: actualResult) {
-                        if requirement.isFactory { return <Result.Err error=self.diagnosticAt(offset: function.defOffset, msg: "factory return type does not match the trait requirement") /> }
-                        return <Result.Err error=self.diagnosticAt(offset: function.defOffset, msg: "implementation return type does not match the trait requirement") />
+                        val domain = match origin { FrontendDeclarationOrigin.SourceAdmission => <FailureDomain.Source />, FrontendDeclarationOrigin.Raw => <FailureDomain.Unclassified /> }
+                        if requirement.isFactory { return <Result.Err error=self.diagnosticAt(offset: function.defOffset, msg: "factory return type does not match the trait requirement", failureDomain: domain) /> }
+                        return <Result.Err error=self.diagnosticAt(offset: function.defOffset, msg: "implementation return type does not match the trait requirement", failureDomain: domain) />
                     }
                     mut val requirementSources: Array[U64] = []
                     val clauses = try self.readRequirementBoundsInEnvironment(signature: signature, environment: environment, memo: inout memo)
@@ -1321,6 +1328,9 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
+}
+
+pub impl Comp {
     // Retain the declaration's chosen parent evidence, including its impl
     // assumptions. Instantiation follows this edge rather than searching anew.
     inout fn prepareConformanceSupertraits(conformIndex: U64, traitIndex: U64) -> Result[(), CompileDiagnostic] {
@@ -1412,7 +1422,7 @@ impl Comp {
             val conformance = self.decls.conformAt(index: index)
             if !conformance.derived {
                 val traitIndex = self.decls.traitIndexByOffset(offset: conformance.traitStart)
-                try self.checkConformanceMethodBounds(conformIndex: index, traitIndex: traitIndex)
+                try self.checkConformanceMethodBoundsForAdmission(conformIndex: index, traitIndex: traitIndex, origin: origin)
             }
         }
         return <Result.Ok value=() />
