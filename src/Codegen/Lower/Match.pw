@@ -129,11 +129,13 @@ pub impl Comp {
     // navigations are re-evaluable places (a local read, a GEP), so only Index keys need a
     // temp.
     inout fn lowerCompoundAssignInto(op: I64, target: ExprAst, value: ExprAst, stmts: inout Array[U64]) -> Result[(), CompileDiagnostic] {
+        val firstGenerated = stmts.count()
         val pid: U64 = (try self.rebuildPlaceTemping(e: target, stmts: inout stmts))
         val vid: U64 = (try self.lowerExpr(e: value))
         val read: U64 = (try self.loweredPlaceRead(id: pid))
         val binE: U64 = self.pushAuthoredBinaryExpression(op: compoundBinOp(op: op), lhs: read, rhs: vid)
         try self.lowerPlaceAssignInto(target: pid, value: binE, stmts: inout stmts)
+        self.retainAssignmentIndexWrites(statements: stmts, first: firstGenerated)
         return <Result.Ok value=() />
     }
 
@@ -217,9 +219,11 @@ pub impl Comp {
     }
 
     inout fn lowerPlainAssignInto(target: ExprAst, value: ExprAst, stmts: inout Array[U64]) -> Result[(), CompileDiagnostic] {
+        val firstGenerated = stmts.count()
         val pid: U64 = (try self.rebuildPlaceTemping(e: target, stmts: inout stmts))
         val vid: U64 = (try self.lowerExpr(e: value))
         try self.lowerPlaceAssignInto(target: pid, value: vid, stmts: inout stmts)
+        self.retainAssignmentIndexWrites(statements: stmts, first: firstGenerated)
         return <Result.Ok value=() />
     }
 
@@ -259,18 +263,22 @@ pub impl Comp {
     }
 
     inout fn lowerSyntaxPlainAssignInto(stmt: SyntaxStmt, stmts: inout Array[U64]) -> Result[(), CompileDiagnostic] {
+        val firstGenerated = stmts.count()
         val target: U64 = (try self.rebuildSyntaxPlaceTemping(id: stmt.child0, stmts: inout stmts))
         val value: U64 = (try self.lowerSyntaxExpr(id: stmt.child1))
         try self.lowerPlaceAssignInto(target: target, value: value, stmts: inout stmts)
+        self.retainAssignmentIndexWrites(statements: stmts, first: firstGenerated)
         return <Result.Ok value=() />
     }
 
     inout fn lowerSyntaxCompoundAssignInto(stmt: SyntaxStmt, stmts: inout Array[U64]) -> Result[(), CompileDiagnostic] {
+        val firstGenerated = stmts.count()
         val target: U64 = (try self.rebuildSyntaxPlaceTemping(id: stmt.child0, stmts: inout stmts))
         val value: U64 = (try self.lowerSyntaxExpr(id: stmt.child1))
         val read: U64 = (try self.loweredPlaceRead(id: target))
         val combined: U64 = self.pushAuthoredBinaryExpression(op: compoundBinOp(op: stmt.op), lhs: read, rhs: value)
         try self.lowerPlaceAssignInto(target: target, value: combined, stmts: inout stmts)
+        self.retainAssignmentIndexWrites(statements: stmts, first: firstGenerated)
         return <Result.Ok value=() />
     }
 
@@ -530,6 +538,7 @@ pub impl Comp {
                     match target {
                         ExprAst.Index(val base, val index, span: _) => {
                             result = (try self.lowerIndexSetAssign(recv: (try self.lowerExpr(e: base)), key: (try self.lowerExpr(e: index)), value: v))
+                            self.retainAssignmentIndexWrites(statements: [result], first: 0U64)
                         }
                         _ => {
                             val t: U64 = (try self.lowerExpr(e: target))
@@ -916,5 +925,33 @@ impl Comp {
             }
         }
         return result
+    }
+}
+
+// Source assignment entry points own these generated statements. The public
+// raw index-set builder and detached write facets cannot issue this receipt.
+impl Comp {
+    inout fn retainAssignmentIndexWrites(statements: Array[U64], first: U64) {
+        for position in first..<statements.count() {
+            match self.arena.stmts[statements[position]] {
+                Stmt.ExprStmt(expr: val expression) => {
+                    val index = self.syntheticCallSiteIndex(exprId: expression)
+                    if index >= self.decls.syntheticCallSites.count() { continue }
+                    val origin = self.decls.syntheticCallSites[index]
+                    match origin.kind {
+                        SyntheticCallKind.IndexWrite => {
+                            match self.arena.exprs[expression] {
+                                Expr.Method(recv: val receiver, nameStart: _, nameLen: _, args: val arguments) => {
+                                    self.authoredIndexWrites[expression] = (serial: origin.originSerial, receiver: receiver, arguments: arguments)
+                                }
+                                _ => {}
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                _ => {}
+            }
+        }
     }
 }

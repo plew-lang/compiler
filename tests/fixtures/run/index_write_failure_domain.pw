@@ -1,0 +1,61 @@
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests, spansEqual }
+use /SourceAccess only { SourceAccess, SourceResource }
+use /Ir only { Expr, Stmt }
+use /Diag only { FailureDomain }
+use @Std/Io only { print }
+
+fn main() {
+    mut val c = <Comp />
+    val path = "plew:std/IndexOrigin.pw"
+    val source = "fn target() {{ val xs: Array[I64] = [1I64] xs[0U64] = 2I64 }} fn main() {{}}"
+    analyzeFrontendForRequests(c: inout c,
+        input: <FrontendInput.File path=path />,
+        sources: <SourceAccess stdRoot="std/".bytes() resources=[<SourceResource path=path.bytes() text=source />] />).unwrap()
+    val name = c.internBytes(s: "target")
+    mut val target = c.arena.functionCount()
+    for i in 0U64..<c.arena.functionCount() {
+        val function = c.arena.functionAt(index: i)
+        if spansEqual(c: inout c, aStart: function.nameStart, aLen: function.nameLen, bStart: name.nameStart, bLen: name.nameLen) { target = i }
+    }
+    mut val authored = c
+    requireDomain(c: inout authored, function: target, source: true)
+    val block = c.arena.blocks[c.arena.functionAt(index: target).body]
+    mut val changed = false
+    for i in 0U64..<block.stmtLen {
+        val statement = block.stmtStart + i
+        match c.arena.stmts[statement] {
+            Stmt.ExprStmt(expr: val expression) => {
+                match c.arena.exprs[expression] {
+                    Expr.Method(recv: val receiver, nameStart: _, nameLen: _, args: val arguments) => {
+                        if arguments.len == 2U64 {
+                            val key = c.argAt(args: arguments, index: 0U64).expr
+                            val value = c.argAt(args: arguments, index: 1U64).expr
+                            val raw = c.lowerIndexSetAssign(recv: receiver, key: key, value: value).unwrap()
+                            c.arena.stmts[statement] = c.arena.stmts[raw]
+                            changed = true
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            _ => {}
+        }
+    }
+    if !changed { panic "missed original index write" }
+    requireDomain(c: inout c, function: target, source: false)
+    print("ok")
+}
+
+fn requireDomain(c: inout Comp, function: U64, source: Bool) {
+    match c.prepareLexicalBody(fnIdx: function) {
+        Result.Ok(value: _) => { panic "immutable index write accepted" }
+        Result.Err(error: val diagnostic) => {
+            if diagnostic.message != "cannot call an `inout fn` method on an immutable binding; declare it with `mut val`" { print(diagnostic.message) panic "wrong index refusal" }
+            if source {
+                match diagnostic.failureDomain { FailureDomain.Source => {} _ => { panic "source origin missing" } }
+            } else {
+                match diagnostic.failureDomain { FailureDomain.Unclassified => {} _ => { panic "raw index write became source" } }
+            }
+        }
+    }
+}

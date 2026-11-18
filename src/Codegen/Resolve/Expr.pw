@@ -187,7 +187,7 @@ pub impl Comp {
                 return <Result.Ok value=<StaticMemberResolution.Provided proof=proof traitIdx=traitIndex callee=selected /> />
             }
         }
-        return self.staticMemberResolution(fnIdx: self.cur.checkFn, receiverRef: receiverRef, nameStart: nameStart, nameLen: nameLen, args: args, requiredTraitOwner: requiredTraitOwner, methodOrigin: <MethodLookupOrigin expression=<Optional.Some v=exprId /> />)
+        return self.staticMemberResolutionWithOrigin(fnIdx: self.cur.checkFn, receiverRef: receiverRef, nameStart: nameStart, nameLen: nameLen, args: args, requiredTraitOwner: requiredTraitOwner, methodOrigin: <MethodLookupOrigin expression=<Optional.Some v=exprId /> />)
     }
 
     inout fn syntheticSelectedTypeArguments(exprId: U64, declaration: U64) -> Result[Array[U64], CompileDiagnostic] {

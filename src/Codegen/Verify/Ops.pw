@@ -604,7 +604,9 @@ impl Comp {
         if recipeId == 0U64 || recipeId > self.arena.semanticTypeRecipes.count() { return <FailureDomain.Unclassified /> }
         val recipe = self.arena.semanticTypeRecipes[recipeId - 1U64]
         val expression = recipe.sourceExpression.unwrapOr(fallback: self.arena.exprs.count())
-        if recipe.kind != 2U64 || !recipe.callSite.sameKey(other: template.siteKey) || !self.hasAuthoredMethodExpression(exprId: expression) { return <FailureDomain.Unclassified /> }
+        if recipe.kind != 2U64 || !recipe.callSite.sameKey(other: template.siteKey) { return <FailureDomain.Unclassified /> }
+        if self.isAuthoredIndexWriteReceiver(expression: expression, recv: recv, args: args) { return <FailureDomain.Source /> }
+        if !self.hasAuthoredMethodExpression(exprId: expression) { return <FailureDomain.Unclassified /> }
         match self.arena.exprs[expression] {
             Expr.Method(recv: val written, nameStart: _, nameLen: _, args: val arguments) |
             Expr.ExtMethod(recv: val written, source: _, nameStart: _, nameLen: _, args: val arguments) => {
@@ -613,5 +615,26 @@ impl Comp {
             _ => {}
         }
         return <FailureDomain.Unclassified />
+    }
+}
+
+impl Comp {
+    fn isAuthoredIndexWriteReceiver(expression: U64, recv: U64, args: ArgRange) -> Bool {
+        val saved = match self.authoredIndexWrites.get(key: expression) {
+            Optional.Some(v: val saved) => saved,
+            Optional.None => { return false }
+        }
+        if saved.receiver != recv || saved.arguments.start != args.start || saved.arguments.len != args.len { return false }
+        val index = self.syntheticCallSiteIndex(exprId: expression)
+        if index >= self.decls.syntheticCallSites.count() { return false }
+        val origin = self.decls.syntheticCallSites[index]
+        if origin.originSerial != saved.serial || origin.originSerial != self.arena.exprOriginSerial[expression] { return false }
+        match origin.kind { SyntheticCallKind.IndexWrite => {} _ => { return false } }
+        match self.arena.exprs[expression] {
+            Expr.Method(recv: val receiver, nameStart: _, nameLen: _, args: val arguments) => {
+                return receiver == recv && arguments.start == args.start && arguments.len == args.len
+            }
+            _ => { return false }
+        }
     }
 }

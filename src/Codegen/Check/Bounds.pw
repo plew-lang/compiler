@@ -463,7 +463,13 @@ pub impl Comp {
     // One source frontier for ordinary symbolic and associated receivers.
     // Discovery and applicability are tentative; only the exact selected
     // instance is admitted and published. No expected result ranks candidates.
-    inout fn staticMemberResolution(fnIdx: U64, receiverRef: U64, nameStart: U64, nameLen: U64, args: ArgRange, requiredTraitOwner: U64 = 0U64, methodOrigin: MethodLookupOrigin = <MethodLookupOrigin />) -> Result[StaticMemberResolution, CompileDiagnostic] {
+    inout fn staticMemberResolution(fnIdx: U64, receiverRef: U64, nameStart: U64, nameLen: U64, args: ArgRange, requiredTraitOwner: U64 = 0U64) -> Result[StaticMemberResolution, CompileDiagnostic] {
+        return self.staticMemberResolutionWithOrigin(fnIdx: fnIdx, receiverRef: receiverRef, nameStart: nameStart, nameLen: nameLen, args: args, requiredTraitOwner: requiredTraitOwner, methodOrigin: <MethodLookupOrigin />)
+    }
+}
+
+impl Comp {
+    inout fn staticMemberResolutionWithOrigin(fnIdx: U64, receiverRef: U64, nameStart: U64, nameLen: U64, args: ArgRange, requiredTraitOwner: U64, methodOrigin: MethodLookupOrigin) -> Result[StaticMemberResolution, CompileDiagnostic] {
         if receiverRef == 0U64 || receiverRef >= self.arena.typeCount() { return <Result.Ok value=<StaticMemberResolution.Missing /> /> }
         val memberId = intern(c: inout self, start: nameStart, len: nameLen)
         val assumptions = self.functionBoundAssumptions(fnIdx: fnIdx)
@@ -572,6 +578,9 @@ pub impl Comp {
         return self.admitStaticMemberInstanceWithOrigin(resolution: selected, receiverRef: receiverRef, assumptions: assumptions, domain: domain)
     }
 
+}
+
+pub impl Comp {
     inout fn admitStaticMemberInstance(resolution: StaticMemberResolution, receiverRef: U64, assumptions: Array[DeclarationBoundRef]) -> Result[StaticMemberResolution, CompileDiagnostic] {
         return self.admitStaticMemberInstanceWithOrigin(resolution: resolution, receiverRef: receiverRef, assumptions: assumptions, domain: <FailureDomain.Unclassified />)
     }
