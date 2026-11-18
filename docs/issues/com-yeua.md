@@ -1122,3 +1122,22 @@ Query Err/Limit preservation is structural, not an executed Limit claim.
 Full gates, com-yeua and phase3 remain open.
 
 [Evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-supertrait-rejection.json).
+
+### Next producer boundary: overlapping conformances
+
+Source inspection finds two producers of the same diagnostic, not one failure
+to wrap at the end: registration (Registration.pw checkConformanceRegistration,
+called by registerDeclaredConformance from legacy and Syntax impl lowering) and
+post-admission overlap (checkAdmittedConformanceOverlap, called by
+Frontend.admitFrontendNominalDependencies). The latter already has a private
+origin-aware caller; registration needs origin forwarded through the actual
+Syntax top-item/published-item/impl private path. Public raw lowering and
+registration APIs must remain Raw, including the legacy AST path. Do not infer
+source origin from public SourceTypeUses, selected IDs or the shared message.
+
+Before changing code, establish which producer the six remaining overlap
+fixtures reach; cover registration and normalized projected overlap separately,
+public/raw controls and a disjoint positive. Preserve structuralOverlap
+AnalysisLimit as Limit via its existing try, not as source overlap. No change
+to acceptance or new proof/scan is intended. This is a restart investigation
+record, not an approved implementation or completed test.
