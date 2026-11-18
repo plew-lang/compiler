@@ -304,6 +304,12 @@ pub impl Comp {
     }
 
     inout fn checkConstructVis(typeRef: U64, isEnum: Bool, fields: MakeFieldRange, offset: U64) -> Result[(), CompileDiagnostic] {
+        return self.checkConstructionVisibility(typeRef: typeRef, isEnum: isEnum, fields: fields, offset: offset, authoredExpr: <Optional.None />)
+    }
+}
+
+impl Comp {
+    inout fn checkConstructionVisibility(typeRef: U64, isEnum: Bool, fields: MakeFieldRange, offset: U64, authoredExpr: Optional[U64]) -> Result[(), CompileDiagnostic] {
         if isEnum { return <Result.Ok value=() /> }
         val sidx = self.structIndexForType(ref: typeRef)
         if sidx >= self.arena.structCount() { return <Result.Ok value=() /> }
@@ -319,17 +325,40 @@ pub impl Comp {
             while index < fields.len {
                 val field = self.makeFieldAt(fields: fields, index: index)
                 if field.requiresFactoryAccess() {
-                    return <Result.Err error=self.diagnosticAt(offset: field.offset, msg: "construction outside the defining module requires a public factory (`pub impl Type {{ factory }}`)") />
+                    return <Result.Err error=self.constructionVisibilityDiagnostic(typeRef: typeRef, declaration: sd.defOffset, useOffset: offset, diagnosticOffset: field.offset, authoredExpr: authoredExpr) />
                 }
                 index += 1U64
             }
             if fields.len == 0U64 {
-                return <Result.Err error=self.diagnosticAt(offset: offset, msg: "construction outside the defining module requires a public factory (`pub impl Type {{ factory }}`)") />
+                return <Result.Err error=self.constructionVisibilityDiagnostic(typeRef: typeRef, declaration: sd.defOffset, useOffset: offset, diagnosticOffset: offset, authoredExpr: authoredExpr) />
             }
         }
         return <Result.Ok value=() />
     }
 
+    // The written construction site and the nominal owner are both needed.
+    // The raw visibility API can report the same diagnostic without them.
+    inout fn constructionVisibilityDiagnostic(typeRef: U64, declaration: U64, useOffset: U64, diagnosticOffset: U64, authoredExpr: Optional[U64]) -> CompileDiagnostic {
+        mut val domain = <FailureDomain.Unclassified />
+        match authoredExpr {
+            Optional.Some(v: val exprId) => {
+                match self.authoredConstruction(exprId: exprId) {
+                    Optional.Some(v: val source) => {
+                        val nominal = self.arena.typeTermAt(index: typeRef)
+                        if nominal.hasDecl && nominal.declOffset == declaration && self.offsetIsLoaded(offset: declaration) && self.offsetIsLoaded(offset: source.offset) && self.offsetIsLoaded(offset: useOffset) && self.moduleOf(offset: source.offset) == self.moduleOf(offset: useOffset) {
+                            domain = <FailureDomain.Source />
+                        }
+                    }
+                    Optional.None => {}
+                }
+            }
+            Optional.None => {}
+        }
+        return self.diagnosticAt(offset: diagnosticOffset, msg: "construction outside the defining module requires a public factory (`pub impl Type {{ factory }}`)", failureDomain: domain)
+    }
+}
+
+pub impl Comp {
     inout fn structHasPubFactory(structIndex: U64) -> Bool {
         mut val i: U64 = 0
         while i < self.decls.pubFactoryTypes.count() {

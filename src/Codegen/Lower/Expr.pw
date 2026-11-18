@@ -272,6 +272,7 @@ pub impl Comp {
                 }
                 val fs: Array[MakeField] = (try self.lowerMakeFields(fields: fields))
                 result = self.pushExpr(e: <Expr.Make typeStart=tn.nameStart typeLen=tn.nameLen variantStart=vStart variantLen=vLen isEnum=constructionEnum ty=tyRef fields=self.pushMakeFields(fields: fs) />)
+                self.authoredConstructions[result] = <AuthoredConstruction offset=span.start expression=self.arena.exprs[result] />
                 if authored.count() != 0U64 { self.authoredExpressionTypeSlots[result] = authored }
                 if typeNameSpan.start == typeNameSpan.end && typeName.bytes().count() == 0U64 { self.pendingConstructionContexts.insert(result) }
             }
@@ -532,6 +533,7 @@ pub impl Comp {
                 val tyRef = try self.lowerConstructionType(nameStart: typeName.start, nameLen: typeName.end - typeName.start, args: typeArgs, siteOffset: e.name.start)
                 val fields: Array[MakeField] = (try self.lowerSyntaxMakeFields(expr: e))
                 result = self.pushExpr(e: <Expr.Make typeStart=typeName.start typeLen=typeName.end - typeName.start variantStart=variantName.start variantLen=variantName.end - variantName.start isEnum=constructionEnum ty=tyRef fields=self.pushMakeFields(fields: fields) />)
+                self.authoredConstructions[result] = <AuthoredConstruction offset=e.span.start expression=self.arena.exprs[result] />
                 if authored.count() != 0U64 { self.authoredExpressionTypeSlots[result] = authored }
                 if e.name.start == e.name.end { self.pendingConstructionContexts.insert(result) }
             }

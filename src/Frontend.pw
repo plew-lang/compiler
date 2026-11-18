@@ -670,6 +670,18 @@ struct AuthoredBinaryExpression {
 }
 impl AuthoredBinaryExpression { factory }
 
+struct AuthoredConstruction {
+    val offset: U64
+    val expression: Expr
+}
+impl AuthoredConstruction { factory }
+
+struct AuthoredNamedFactory {
+    val serial: U64
+    val arguments: Array[Arg]
+}
+impl AuthoredNamedFactory { factory }
+
 pub struct Comp {
     mut val checkingTraitOperandDependencies: Bool = false
     mut val traitDeclarationPremises: Dictionary[U64, TraitBound] = [:]
@@ -703,6 +715,8 @@ pub struct Comp {
     mut val viaCallByFunction: Dictionary[U64, U64] = [:]
     mut val authoredBinaryExpressions: Dictionary[U64, AuthoredBinaryExpression] = [:]
     mut val authoredMethodExpressions: Set[U64] = Set.new()
+    mut val authoredNamedFactoryOrigins: Dictionary[U64, AuthoredNamedFactory] = [:]
+    mut val authoredConstructions: Dictionary[U64, AuthoredConstruction] = [:]
     mut val authoredValueBlockOwners: Dictionary[U64, U64] = [:]
     mut val authoredForIterators: Dictionary[U64, U64] = [:]
     // Nonfatal diagnostics remain owned by the compilation/session. Only the

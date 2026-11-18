@@ -1094,6 +1094,38 @@ pub impl Comp {
         return self.diagnosticAt(offset: offset, msg: fallback, failureDomain: domain)
     }
 
+}
+
+impl Comp {
+    inout fn hasAuthoredNamedFactoryCall(exprId: U64, receiverTerm: U64, args: ArgRange) -> Bool {
+        if receiverTerm == 0U64 || receiverTerm >= self.arena.typeCount() { return false }
+        val index = self.syntheticCallSiteIndex(exprId: exprId)
+        if index >= self.decls.syntheticCallSites.count() { return false }
+        val site = self.decls.syntheticCallSites[index]
+        if !site.receiverIsType || site.receiverTerm == 0U64 || site.receiverTerm >= self.arena.typeCount() { return false }
+        match site.kind {
+            SyntheticCallKind.Factory => {}
+            _ => { return false }
+        }
+        val origin = match self.authoredNamedFactoryOrigins.get(key: exprId) {
+            Optional.Some(v: val origin) => origin,
+            Optional.None => { return false }
+        }
+        if site.originSerial != origin.serial || args.len != origin.arguments.count() || args.start > self.arena.argPool.count() || args.len > self.arena.argPool.count() - args.start { return false }
+        for i in 0U64..<args.len {
+            val arg = self.argAt(args: args, index: i)
+            val written = origin.arguments[i]
+            if arg.expr != written.expr || arg.isInout != written.isInout || arg.labelStart != written.labelStart || arg.labelLen != written.labelLen || arg.hasLabel != written.hasLabel { return false }
+        }
+        match self.authoredConstruction(exprId: exprId) {
+            Optional.Some(v: val source) => { if !self.offsetIsLoaded(offset: source.offset) { return false } }
+            Optional.None => { return false }
+        }
+        val selected = self.arena.typeTermAt(index: receiverTerm)
+        val written = self.arena.typeTermAt(index: site.receiverTerm)
+        return selected.hasDecl && written.hasDecl && selected.declOffset == written.declOffset && self.offsetIsLoaded(offset: written.declOffset)
+    }
+
     inout fn recordUnresolvedMethodTemplate(exprId: U64, receiver: CallTemplateReceiver, receiverExpr: U64, receiverTerm: U64, nameStart: U64, nameLen: U64, args: ArgRange, resolution: StaticMemberResolution) -> Result[(), CompileDiagnostic] {
         match resolution {
             StaticMemberResolution.Requirement(proof: _, traitIdx: val traitIdx, reqIdx: val reqIdx) => {
@@ -1125,7 +1157,7 @@ pub impl Comp {
                     if receiverTerm != 0U64 && receiverTerm < self.arena.typeCount() && self.isAuthoredViaCall(owner: self.cur.checkFn, expression: exprId) {
                         return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "no applicable `via` target for the declared requirement", failureDomain: <FailureDomain.Source />) />
                     }
-                    val domain = if receiverTerm != 0U64 && receiverTerm < self.arena.typeCount() && self.isAuthoredMethodLookup(exprId: exprId, nameStart: nameStart, nameLen: nameLen, args: args) {
+                    val domain = if receiverTerm != 0U64 && receiverTerm < self.arena.typeCount() && (self.isAuthoredMethodLookup(exprId: exprId, nameStart: nameStart, nameLen: nameLen, args: args) || self.hasAuthoredNamedFactoryCall(exprId: exprId, receiverTerm: receiverTerm, args: args)) {
                         give <FailureDomain.Source />
                     } else { give <FailureDomain.Unclassified /> }
                     return <Result.Err error=self.unavailableSourceMethod(receiverTerm: receiverTerm, offset: self.exprOffset(id: exprId), fallback: "no matching method for this argument list", domain: domain) />
@@ -1135,6 +1167,9 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
+}
+
+pub impl Comp {
     inout fn recordParametricMethodCall(exprId: U64, callee: U64, receiverSource: CallTemplateReceiver, receiverTerm: U64, args: ArgRange) -> Result[(), CompileDiagnostic] {
         if callee >= self.arena.functionCount() { return <Result.Ok value=() /> }
         val f: Func = self.arena.functionAt(index: callee)
@@ -2705,7 +2740,7 @@ pub impl Comp {
                     i += 1
                 }
                 if completedFields.count() != 0U64 {
-                    self.arena.exprs.set(i: exprId, value: <Expr.Make typeStart=typeStart typeLen=typeLen variantStart=variantStart variantLen=variantLen isEnum=isEnum ty=ty fields=self.pushMakeFields(fields: completedFields) />)
+                    self.replaceConstructionExpression(exprId: exprId, expression: <Expr.Make typeStart=typeStart typeLen=typeLen variantStart=variantStart variantLen=variantLen isEnum=isEnum ty=ty fields=self.pushMakeFields(fields: completedFields) />)
                 }
                 if origins.count() != 0U64 {
                     self.recordExpressionTypeOrigin(exprId: exprId, origin: <SourceExpressionTypeOrigin.Structural term=instance slots=origins />)

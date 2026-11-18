@@ -2,6 +2,56 @@
 // ordering and use-alias / factory-construction rewriting.
 
 
+impl Comp {
+    fn authoredConstruction(exprId: U64) -> Optional[AuthoredConstruction] {
+        if exprId >= self.arena.exprs.count() { return <Optional.None /> }
+        val receipt = self.authoredConstructions.get(key: exprId)
+        match receipt {
+            Optional.Some(v: val source) => {
+                val current = self.arena.exprs[exprId]
+                match source.expression {
+                    Expr.Make(val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, val ty, val fields) => {
+                        match current {
+                            Expr.Make(typeStart: val start, typeLen: val length, variantStart: val variant, variantLen: val variantLength, isEnum: val usesVariant, ty: val receiver, fields: val arguments) => {
+                                if typeStart == start && typeLen == length && variantStart == variant && variantLen == variantLength && isEnum == usesVariant && ty == receiver && fields.start == arguments.start && fields.len == arguments.len {
+                                    return receipt
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                    Expr.Method(val recv, val nameStart, val nameLen, val args) => {
+                        match current {
+                            Expr.Method(recv: val receiver, nameStart: val start, nameLen: val length, args: val arguments) => {
+                                if recv == receiver && nameStart == start && nameLen == length && args.start == arguments.start && args.len == arguments.len {
+                                    return receipt
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            Optional.None => {}
+        }
+        return <Optional.None />
+    }
+
+    // Context, defaults and named-factory lowering may revise a written
+    // construction. A raw replacement cannot transfer its source receipt.
+    inout fn replaceConstructionExpression(exprId: U64, expression: Expr) {
+        val origin = self.authoredConstruction(exprId: exprId)
+        self.arena.exprs.set(i: exprId, value: expression)
+        match origin {
+            Optional.Some(v: val receipt) => {
+                self.authoredConstructions[exprId] = <AuthoredConstruction offset=receipt.offset expression=expression />
+            }
+            Optional.None => { self.authoredConstructions.remove(key: exprId) }
+        }
+    }
+}
+
 pub impl Comp {
     inout fn normalizeMemberwiseDefaultsAt(exprId: U64) {
         match self.arena.exprs[exprId] {
@@ -27,7 +77,7 @@ pub impl Comp {
                         self.appendOmittedMakeDefaults(out: inout values, structIndex: self.arena.structIndexByOffset(offset: declaration.nameStart))
                     }
                     if values.count() != fields.len {
-                        self.arena.exprs.set(i: exprId, value: <Expr.Make typeStart=typeStart typeLen=typeLen variantStart=variantStart variantLen=variantLen isEnum=isEnum ty=ty fields=self.pushMakeFields(fields: values) />)
+                        self.replaceConstructionExpression(exprId: exprId, expression: <Expr.Make typeStart=typeStart typeLen=typeLen variantStart=variantStart variantLen=variantLen isEnum=isEnum ty=ty fields=self.pushMakeFields(fields: values) />)
                     }
                 }
             }
@@ -396,11 +446,14 @@ pub impl Comp {
                             args.append(<Arg expr=field.value isInout=false labelStart=field.nameStart labelLen=field.nameLen hasLabel=true />)
                             fi += 1
                         }
-                        self.arena.exprs[exprId] = <Expr.Method recv=recv nameStart=variantStart nameLen=variantLen args=self.pushArgs(args: args) />
+                        self.replaceConstructionExpression(exprId: exprId, expression: <Expr.Method recv=recv nameStart=variantStart nameLen=variantLen args=self.pushArgs(args: args) />)
                         val receiverTerm: U64 = try self.factoryConstructionReceiver(writtenTerm: ty, typeStart: typeStart, typeLen: typeLen, offset: self.exprOffset(id: exprId))
                         val originSerial: U64 = self.nextExprOriginSerial
                         self.nextExprOriginSerial += 1U64
                         try self.recordSyntheticCallSite(site: <SyntheticCallSite exprId=exprId kind=<SyntheticCallKind.Factory /> originSerial=originSerial receiverTerm=receiverTerm receiverIsType=true />)
+                        if self.authoredConstruction(exprId: exprId).isSome() {
+                            self.authoredNamedFactoryOrigins[exprId] = <AuthoredNamedFactory serial=originSerial arguments=args />
+                        }
                     }
                 }
             }
@@ -500,7 +553,7 @@ pub impl Comp {
         match self.arena.exprs[exprId] {
             Expr.Make(typeStart: _, typeLen: _, val variantStart, val variantLen, val isEnum, ty: _, val fields) => {
                 val type = self.arena.typeAt(index: context)
-                self.arena.exprs[exprId] = <Expr.Make typeStart=type.nameStart typeLen=type.nameLen variantStart=variantStart variantLen=variantLen isEnum=isEnum ty=context fields=fields />
+                self.replaceConstructionExpression(exprId: exprId, expression: <Expr.Make typeStart=type.nameStart typeLen=type.nameLen variantStart=variantStart variantLen=variantLen isEnum=isEnum ty=context fields=fields />)
                 self.pendingConstructionContexts.remove(exprId)
                 try self.rewriteNamedFactoryConstructionAt(exprId: exprId)
             }

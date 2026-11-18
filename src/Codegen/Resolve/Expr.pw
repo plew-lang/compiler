@@ -2799,7 +2799,7 @@ pub impl Comp {
                     if !(self.isGenericInst(ref: ty)) {
                         val inferred = try self.inferMakeInstance(typeStart: typeStart, typeLen: typeLen, typeRef: ty, isEnum: isEnum, variantStart: variantStart, variantLen: variantLen, fields: fields)
                         if inferred != 0U64 {
-                            self.arena.exprs.set(i: i, value: <Expr.Make typeStart=typeStart typeLen=typeLen variantStart=variantStart variantLen=variantLen isEnum=isEnum ty=inferred fields=fields />)
+                            self.replaceConstructionExpression(exprId: i, expression: <Expr.Make typeStart=typeStart typeLen=typeLen variantStart=variantStart variantLen=variantLen isEnum=isEnum ty=inferred fields=fields />)
                         }
                     }
                 }
