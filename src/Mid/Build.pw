@@ -10,6 +10,8 @@ use ../Frontend only { Comp, PreparedSemanticFacts }
 use ../Ir only { BodyOrigin, CallReceiverPassing, CallArgumentPassing, ForTypeRecipe, Bind, TypeRef, SemanticExprType, SemanticExpressionTypeState, InvocationCompletion, SemanticAggregateKind, SemanticAggregate, SemanticAggregateElement, SemanticClosureCaptureMode, SemanticClosure, MatchSource, SemanticMatchKind, SemanticMatch, SemanticMatchArm, SemanticMatchPayload, ConditionClauseRange, MatchArmRange, Expr, Stmt, Param, Func, AccessCandidate, CallSiteKey, CallTemplate, CallTemplateKind, StaticMemberResolution, CallTemplateReceiver, CallTemplateArgument, CallArgumentSource, identValueCode, identSelfTarget }
 use ../Diag only { eprintU64, CompileDiagnostic }
 use @Std/Io only { eprint }
+use ./DeclarationCallAccess only { DeclarationCallAccess, findDeclarationCallAccess, sameDeclarationCallAccessInputs }
+use ./Ir only { MidCanonicalArena }
 use ../Ops only { opAnd, opOr }
 use ./Ir only { MidStorageInitialization, MidTerminatingInitializer, midLocalIsOwnedTemporary, MidEnumDestination, MidRange, MidCanonicalBody, MidClosureBody, MidProjection, MidPlace, MidBorrowCapability, MidConstant, MidOperand, MidCallArgument, MidAggregateKind, MidAggregateElement, MidClosureCapture, MidRvalue, MidCallTarget, MidCallReceiver, MidStatement, MidTerminator, MidLocalDecl, MidValueHomeStability, MidScope, MidBlock, MidBody }
 
@@ -160,9 +162,18 @@ pub struct MidBodyBuild {
     // `body` remains only until the downstream passes are migrated one by one.
     pub val canonical: MidCanonicalBody = <MidCanonicalBody body=0U64 />
     pub val sourceAdmission: MidBodySource = <MidBodySource.Unknown />
+    val fresh: Bool
     pub val error: MidBuildError = <MidBuildError.None />
 }
-pub impl MidBodyBuild { factory }
+pub impl MidBodyBuild {
+    factory(body: MidBody, canonical: MidCanonicalBody = <MidCanonicalBody body=0U64 />,
+            sourceAdmission: MidBodySource = <MidBodySource.Unknown />, error: MidBuildError = <MidBuildError.None />) {
+        return <MidBodyBuild body=body canonical=canonical sourceAdmission=sourceAdmission error=error fresh=false />
+    }
+
+    fn isFresh() -> Bool { return self.fresh }
+}
+
 
 enum MidOperandBuild {
     Value(operand: MidOperand)
@@ -3785,7 +3796,7 @@ pub fn buildParametricMidBody(c: inout Comp, fnIdx: U64) -> MidBodyBuild {
         // before any downstream pass sees either representation.
         return <MidBodyBuild body=body canonical=canonical error=<MidBuildError.InvalidBlock /> />
     }
-    return <MidBodyBuild body=body canonical=canonical sourceAdmission=<MidBodySource.Authored facts=facts /> />
+    return <MidBodyBuild body=body canonical=canonical sourceAdmission=<MidBodySource.Authored facts=facts /> fresh=true />
 }
 
 // A closure body has the same parametric-to-grounded Mid path as a Func body,
@@ -3866,7 +3877,7 @@ fn buildParametricMidClosureBody(c: inout Comp, closure: SemanticClosure) -> Mid
     if !c.mid.isWellFormed(body: canonical) {
         return <MidBodyBuild body=body canonical=canonical error=<MidBuildError.InvalidBlock /> />
     }
-    return <MidBodyBuild body=body canonical=canonical sourceAdmission=<MidBodySource.Authored facts=facts /> />
+    return <MidBodyBuild body=body canonical=canonical sourceAdmission=<MidBodySource.Authored facts=facts /> fresh=true />
 }
 
 // The semantic closure index is frontend-owned.  This adjacent Mid registry
@@ -3882,6 +3893,9 @@ pub fn ensureParametricMidClosureBody(c: inout Comp, closure: SemanticClosure) -
     val prepared = match c.preparedSemanticClosureAt(index: index) {
         Result.Ok(value: val closure) => { give closure }
         Result.Err(error: val diagnostic) => { return <MidBodyBuild body=emptyMidBody(sourceFunction: closure.bodyKey) error=<MidBuildError.Frontend diagnostic=diagnostic /> /> }
+    }
+    if prepared.bodyKey != closure.bodyKey {
+        return <MidBodyBuild body=emptyMidBody(sourceFunction: closure.bodyKey) error=<MidBuildError.InvalidBlock /> />
     }
     return ensurePreparedParametricMidClosureBody(c: inout c, closure: prepared)
 }
@@ -3980,7 +3994,7 @@ pub fn buildParametricMidGlobalInit(c: inout Comp) -> MidBodyBuild {
     val body: MidBody = <MidBody sourceFunction=globalOwner locals=state.locals scopes=state.scopes blocks=state.blocks callArgumentProjections=state.callArgumentProjections entry=0U64 />
     val canonical: MidCanonicalBody = c.mid.store(body: body)
     if !c.mid.isWellFormed(body: canonical) { return <MidBodyBuild body=body canonical=canonical error=<MidBuildError.InvalidBlock /> /> }
-    return <MidBodyBuild body=body canonical=canonical sourceAdmission=<MidBodySource.GlobalComposite /> />
+    return <MidBodyBuild body=body canonical=canonical sourceAdmission=<MidBodySource.GlobalComposite /> fresh=true />
 }
 
 // A concrete adapter is built from frozen signatures, with no source AST walk.
@@ -4001,12 +4015,18 @@ fn midAdapterOperand(place: MidPlace, isMove: Bool, isInout: Bool) -> MidOperand
 // are frozen during that preparation; only immutable parametric snapshots
 // are shared. Grounded adapters and synthetic bodies remain instance-owned.
 pub struct MidFunctionTemplates {
+    mut val session: U64
     mut val bodies: Array[U64] = []
     mut val globalBody: U64 = 0U64
 }
 pub impl MidFunctionTemplates {
-    factory
+    factory() { return <MidFunctionTemplates session=0U64 /> }
+
+    fn usableInSession(session: U64) -> Bool { return self.session == 0U64 || self.session == session }
     inout fn globalInitializer(c: inout Comp) -> MidBodyBuild {
+        if !self.acceptSession(session: c.sourceFactSession()) {
+            return <MidBodyBuild body=emptyMidBody(sourceFunction: 18446744073709551615U64) error=<MidBuildError.InvalidBlock /> />
+        }
         if self.globalBody != 0U64 {
             return <MidBodyBuild body=emptyMidBody(sourceFunction: 18446744073709551615U64) canonical=<MidCanonicalBody body=self.globalBody /> sourceAdmission=<MidBodySource.GlobalComposite /> />
         }
@@ -4018,6 +4038,9 @@ pub impl MidFunctionTemplates {
         return built
     }
     inout fn body(c: inout Comp, function: U64) -> MidBodyBuild {
+        if !self.acceptSession(session: c.sourceFactSession()) {
+            return <MidBodyBuild body=emptyMidBody(sourceFunction: function) error=<MidBuildError.InvalidBlock /> />
+        }
         if function >= c.arena.functionCount() { return buildParametricMidBody(c: inout c, fnIdx: function) }
         if function < self.bodies.count() && self.bodies[function] != 0U64 {
             val facts = match c.preparedFunctionSemanticFacts(fnIdx: function) {
@@ -4034,6 +4057,13 @@ pub impl MidFunctionTemplates {
         while self.bodies.count() <= function { self.bodies.append(0U64) }
         self.bodies[function] = built.canonical.body
         return built
+    }
+}
+
+impl MidFunctionTemplates {
+    inout fn acceptSession(session: U64) -> Bool {
+        if self.session == 0U64 { self.session = session }
+        return self.session == session
     }
 }
 
@@ -4232,5 +4262,33 @@ fn midSourceSemanticType(c: inout Comp, facts: Optional[PreparedSemanticFacts], 
             return <Result.Ok value=<MidSourceExpressionType.CallResult recipe=head.resultTypeRecipe /> />
         }
         SemanticExpressionTypeState.Unrecorded => { return <Result.Err error=<MidBuildError.MissingSemanticType /> /> }
+    }
+}
+
+// Replay is cold and isolated from the mutable caller's canonical pools.
+// It consumes already admitted source facts and does not publish another body.
+pub fn replaySourceDeclarationCallAccess(c: Comp, sourceFunction: U64, closure: Optional[SemanticClosure], globalInitializer: Bool, terminator: U64) -> DeclarationCallAccess {
+    mut val source = c
+    source.mid = <MidCanonicalArena />
+    val built = if globalInitializer {
+        give buildParametricMidGlobalInit(c: inout source)
+    } else {
+        give match closure {
+            Optional.Some(v: val declaration) => ensureParametricMidClosureBody(c: inout source, closure: declaration),
+            Optional.None => buildParametricMidBody(c: inout source, fnIdx: sourceFunction),
+        }
+    }
+    match built.error {
+        MidBuildError.None => {
+            val access = findDeclarationCallAccess(c: inout source, canonical: built.canonical)
+            match access {
+                DeclarationCallAccess.Conflict(error: _, terminator: val written, site: _) => {
+                    if sameDeclarationCallAccessInputs(left: c.mid, leftId: terminator, right: source.mid, rightId: written) { return access }
+                }
+                _ => {}
+            }
+            return <DeclarationCallAccess.None />
+        }
+        _ => { return <DeclarationCallAccess.None /> }
     }
 }

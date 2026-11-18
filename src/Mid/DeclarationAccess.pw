@@ -2,14 +2,15 @@
 // program token: unresolved calls, conversions, and ownership dependencies
 // remain explicit obligations for instance analysis or dynamic enforcement.
 use ../Frontend only { Comp, tracePhase }
-use ../Diag only { CompileDiagnostic }
+use ../Diag only { CompileDiagnostic, FailureDomain }
 use ../Ir only { CallSiteKey, CallTemplateKind }
 use ./Build only { MidFunctionTemplates, MidBuildError, MidBodyBuild, ensureParametricMidClosureBody }
 use ./Ir only { MidTerminatorNode, MidCanonicalBody }
 use ./Prepare only { MidParametricBody }
 use ./OwnershipAnalysis only { MidOwnershipRequests }
 use ./GlobalAccessGraph only { GlobalAccessGraph }
-use ./Verify only { canonicalMidReachable, canonicalMidCallAccessError, MidVerifyError, MidVerification }
+use ./Verify only { canonicalMidReachable, MidVerifyError, MidVerification }
+use ./DeclarationCallAccess only { DeclarationCallAccess, findDeclarationCallAccess }
 
 pub enum DeclarationAccessNode {
     Function(function: U64)
@@ -29,7 +30,7 @@ pub enum DeclarationAccessObligation {
 pub enum DeclarationAccessError {
     Build(body: DeclarationAccessNode, error: MidBuildError)
     Ownership(body: DeclarationAccessNode, verification: MidVerification)
-    LocalAccess(body: DeclarationAccessNode, error: MidVerifyError)
+    LocalAccess(body: DeclarationAccessNode, error: MidVerifyError, domain: FailureDomain)
     CallSelection(body: DeclarationAccessNode, terminator: U64)
     Frontend(diagnostic: CompileDiagnostic)
 }
@@ -296,53 +297,14 @@ pub fn analyzeDeclarationGlobalAccessRoots(c: inout Comp, templates: inout MidFu
 
 // Local place conflicts do not require a mutable global or executable instance.
 // Function snapshots are shared with global analysis and executable preparation.
-fn declarationCallHasStorageArguments(c: Comp, term: MidTerminatorNode) -> Bool {
-    mut val index = 0U64
-    while index < term.args.len {
-        val argument = c.mid.operands[c.mid.callArguments[term.args.start + index] - 1U64]
-        if argument.tag == 2U64 || argument.tag == 4U64 || (argument.tag == 3U64 && argument.borrowsStorage) { return true }
-        index += 1U64
-    }
-    // No pair can conflict when every argument is an independent value.
-    // Unelaborated access markers remain subject to the later Access pass.
-    return false
-}
-
+// The raw-facing analysis never asserts source provenance.
 pub fn checkDeclarationBodyAccess(c: inout Comp, owner: DeclarationAccessNode, built: MidBodyBuild) -> Result[(), DeclarationAccessError] {
     match built.error { MidBuildError.None => {} _ => { return <Result.Err error=<DeclarationAccessError.Build body=owner error=built.error /> /> } }
-    val body = c.mid.bodies[built.canonical.body - 1U64]
-    val reachable = canonicalMidReachable(arena: c.mid, body: body)
-    mut val index = 0U64
-    while index < body.blocks.len {
-        if reachable[index] {
-            val block = c.mid.blocks[body.blocks.start + index]
-            val term = c.mid.terminators[block.terminator - 1U64]
-            if term.tag == 4U64 && declarationCallHasStorageArguments(c: c, term: term) {
-                val target = c.mid.callTargets[term.callTarget - 1U64]
-                mut val receiverTag = 0U64
-                if target.tag == 1U64 {
-                    val key = <CallSiteKey ownerFnIdx=target.ownerFnIdx originKind=target.originKind originStart=target.originStart originEnd=target.originEnd originSerial=target.originSerial slot=target.slot />
-                    val template = c.callTemplateIndex(siteKey: key)
-                    if template < c.callTemplateCount() {
-                        match c.callTemplateAt(index: template).kind {
-                            CallTemplateKind.Direct(callee: val callee, receiver: _, args: _, calleeTypeArgs: _, proofId: _) => {
-                                if callee >= c.arena.functionCount() { return <Result.Err error=<DeclarationAccessError.CallSelection body=owner terminator=block.terminator /> /> }
-                                val function = c.arena.functionAt(index: callee)
-                                if function.hasRecv {
-                                    receiverTag = if function.selfInout { give 4U64 } else if function.selfMove { give 2U64 } else { give 3U64 }
-                                }
-                            }
-                            _ => {}
-                        }
-                    }
-                }
-                val conflict = canonicalMidCallAccessError(arena: c.mid, term: term, receiverTag: receiverTag)
-                match conflict { MidVerifyError.None => {} _ => { return <Result.Err error=<DeclarationAccessError.LocalAccess body=owner error=conflict /> /> } }
-            }
-        }
-        index += 1U64
+    match findDeclarationCallAccess(c: inout c, canonical: built.canonical) {
+        DeclarationCallAccess.None => { return <Result.Ok value=() /> }
+        DeclarationCallAccess.InvalidSelection(terminator: val terminator) => { return <Result.Err error=<DeclarationAccessError.CallSelection body=owner terminator=terminator /> /> }
+        DeclarationCallAccess.Conflict(error: val error, terminator: _, site: _) => { return <Result.Err error=<DeclarationAccessError.LocalAccess body=owner error=error domain=<FailureDomain.Unclassified /> /> /> }
     }
-    return <Result.Ok value=() />
 }
 
 pub fn checkDeclarationLocalAccess(c: inout Comp, templates: inout MidFunctionTemplates, eager: Bool = false) -> Result[(), DeclarationAccessError] {

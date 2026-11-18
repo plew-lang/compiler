@@ -4,6 +4,39 @@
 // A completed owner therefore protects every row without reading/copying its
 // retained constraint evidence merely to decide whether writing is allowed.
 pub impl Comp {
+    inout fn isAuthoredAccessCall(site: CallSiteKey, sourceFunction: U64) -> Bool {
+        if site.originKind != 1U64 || site.originStart >= site.originEnd { return false }
+        val owner = match self.semanticBodyOwner(fnIdx: sourceFunction) {
+            Result.Ok(value: val owner) => owner,
+            Result.Err(error: _) => { return false }
+        }
+        if self.callTemplateOwner(fnIdx: owner) != site.ownerFnIdx { return false }
+        val index = self.callTemplateIndex(siteKey: site)
+        if index >= self.callTemplateLocations.count() { return false }
+        val location = self.callTemplateLocations[index]
+        if !location.publishedFromSource { return false }
+        val template = match self.sourceFacts.operation(owner: location.owner, index: location.localIndex) {
+            Optional.Some(v: val template) => template,
+            Optional.None => { return false }
+        }
+        val recipeId = template.resultTypeRecipe
+        if !template.siteKey.sameKey(other: site) || recipeId == 0U64 || recipeId > self.arena.semanticTypeRecipes.count() { return false }
+        val recipe = self.arena.semanticTypeRecipes[recipeId - 1U64]
+        val exprId = recipe.sourceExpression.unwrapOr(fallback: self.arena.exprs.count())
+        if recipe.kind != 2U64 || !recipe.callSite.sameKey(other: site) || exprId >= self.arena.exprs.count() { return false }
+        match self.arena.exprs[exprId] {
+            Expr.Method(recv: _, nameStart: _, nameLen: _, args: _) | Expr.ExtMethod(recv: _, source: _, nameStart: _, nameLen: _, args: _) => {
+                if !self.hasAuthoredMethodExpression(exprId: exprId) { return false }
+            }
+            Expr.Call(nameStart: _, nameLen: _, args: _) => {}
+            _ => { return false }
+        }
+        match self.templateCallSiteKey(fnIdx: sourceFunction, exprId: exprId, slot: site.slot) {
+            Result.Ok(value: val authored) => { return authored.sameKey(other: site) }
+            Result.Err(error: _) => { return false }
+        }
+    }
+
     fn selectedCallConstraintPlan(index: U64) -> Optional[SelectedCallConstraints] {
         match self.sourceOperationConstraints(index: index) {
             Optional.Some(v: val state) => {

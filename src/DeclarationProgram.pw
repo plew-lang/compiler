@@ -2,13 +2,14 @@
 // Remaining obligations are explicit; success is not a whole-target check token.
 use ./Frontend only { Comp, tracePhase }
 use ./Diag only { CompileDiagnostic, FailureDomain }
-use ./Mid/Build only { MidBuildError, MidBodyBuild, MidFunctionTemplates, ensureParametricMidClosureBody }
-use ./Mid/DeclarationAccess only { analyzeDeclarationGlobalAccessWithRequests, analyzeDeclarationGlobalAccessRoots, checkDeclarationBodyAccess, DeclarationAccessAnalysis, DeclarationAccessNode, DeclarationAccessError }
+use ./Mid/Build only { MidBuildError, MidBodyBuild, MidFunctionTemplates, ensureParametricMidClosureBody, replaySourceDeclarationCallAccess }
+use ./Mid/DeclarationAccess only { analyzeDeclarationGlobalAccessWithRequests, analyzeDeclarationGlobalAccessRoots, DeclarationAccessAnalysis, DeclarationAccessNode, DeclarationAccessError }
 use ./Mid/Verify only { MidVerifyError }
+use ./Mid/DeclarationCallAccess only { DeclarationCallAccess, findDeclarationCallAccess }
 use ./Mid/OwnershipAnalysis only { MidOwnershipRequests }
 use ./Mid/Prepare only { MidParametricBody }
 use ./Mid/Ir only { MidCanonicalBody }
-use ./Ir only { SemanticClosure }
+use ./Ir only { SemanticClosure, CallSiteKey }
 use ./Mid/Diagnostics only { reportMidBuildError }
 
 pub enum DeclarationProgramError {
@@ -24,13 +25,18 @@ pub struct CheckedDeclarationBody {
 
 // Requests are session scoped, like templates: keep them with the owning Comp.
 pub struct DeclarationBodyRequests {
+    mut val session: U64
     mut val ownership: MidOwnershipRequests = <MidOwnershipRequests />
     mut val results: Dictionary[U64, Result[CheckedDeclarationBody, DeclarationAccessError]] = [:]
 }
 pub impl DeclarationBodyRequests {
-    factory
+    factory() { return <DeclarationBodyRequests session=0U64 /> }
 
     inout fn function(c: inout Comp, templates: inout MidFunctionTemplates, function: U64) -> Result[CheckedDeclarationBody, DeclarationAccessError] {
+        val session = c.sourceFactSession()
+        if !templates.usableInSession(session: session) || !self.acceptSession(session: session) {
+            return <Result.Err error=<DeclarationAccessError.Build body=<DeclarationAccessNode.Function function=function /> error=<MidBuildError.InvalidBlock /> /> />
+        }
         match c.prepareLexicalBody(fnIdx: function) {
             Result.Ok(value: _) => {}
             Result.Err(error: val diagnostic) => { return <Result.Err error=<DeclarationAccessError.Frontend diagnostic=diagnostic /> /> }
@@ -40,11 +46,19 @@ pub impl DeclarationBodyRequests {
     }
 
     inout fn closure(c: inout Comp, closure: SemanticClosure) -> Result[CheckedDeclarationBody, DeclarationAccessError] {
+        val session = c.sourceFactSession()
+        if !self.acceptSession(session: session) {
+            return <Result.Err error=<DeclarationAccessError.Build body=<DeclarationAccessNode.Closure bodyKey=closure.bodyKey /> error=<MidBuildError.InvalidBlock /> /> />
+        }
         val built = ensureParametricMidClosureBody(c: inout c, closure: closure)
         return self.body(c: inout c, owner: <DeclarationAccessNode.Closure bodyKey=closure.bodyKey />, built: built)
     }
 
     inout fn globalInitializer(c: inout Comp, templates: inout MidFunctionTemplates) -> Result[CheckedDeclarationBody, DeclarationAccessError] {
+        val session = c.sourceFactSession()
+        if !templates.usableInSession(session: session) || !self.acceptSession(session: session) {
+            return <Result.Err error=<DeclarationAccessError.Build body=<DeclarationAccessNode.GlobalInitializer /> error=<MidBuildError.InvalidBlock /> /> />
+        }
         // A declaration request admits every source owner before Mid consumes
         // its immutable facts, just as an ordinary function request does.
         mut val index = 0U64
@@ -64,6 +78,11 @@ pub impl DeclarationBodyRequests {
     }
 }
 impl DeclarationBodyRequests {
+    inout fn acceptSession(session: U64) -> Bool {
+        if self.session == 0U64 { self.session = session }
+        return self.session == session
+    }
+
     inout fn body(c: inout Comp, owner: DeclarationAccessNode, built: MidBodyBuild) -> Result[CheckedDeclarationBody, DeclarationAccessError] {
         match built.error {
             MidBuildError.None => {}
@@ -101,9 +120,69 @@ impl DeclarationBodyRequests {
             }
             _ => {}
         }
-        if needsAccess { try checkDeclarationBodyAccess(c: inout c, owner: owner, built: built) }
+        if needsAccess { try checkRequestedDeclarationBodyAccess(c: inout c, owner: owner, built: built) }
         return <Result.Ok value=<CheckedDeclarationBody canonical=built.canonical /> />
     }
+}
+
+// The request calls this immediately on the result of its own builder
+// invocation. Raw callers use checkDeclarationBodyAccess instead.
+fn checkRequestedDeclarationBodyAccess(c: inout Comp, owner: DeclarationAccessNode, built: MidBodyBuild) -> Result[(), DeclarationAccessError] {
+    match findDeclarationCallAccess(c: inout c, canonical: built.canonical) {
+        DeclarationCallAccess.None => { return <Result.Ok value=() /> }
+        DeclarationCallAccess.InvalidSelection(terminator: val terminator) => { return <Result.Err error=<DeclarationAccessError.CallSelection body=owner terminator=terminator /> /> }
+        DeclarationCallAccess.Conflict(error: val error, terminator: val terminator, site: val site) => {
+            mut val domain = <FailureDomain.Unclassified />
+            match site {
+                Optional.Some(v: val written) => {
+                    if hasSourceDeclarationCallConflict(c: inout c, owner: owner, built: built, site: written, error: error, terminator: terminator) {
+                        domain = <FailureDomain.Source />
+                    }
+                }
+                Optional.None => {}
+            }
+            return <Result.Err error=<DeclarationAccessError.LocalAccess body=owner error=error domain=domain /> />
+        }
+    }
+}
+
+fn hasSourceDeclarationCallConflict(c: inout Comp, owner: DeclarationAccessNode, built: MidBodyBuild, site: CallSiteKey, error: MidVerifyError, terminator: U64) -> Bool {
+    val sourceFunction = c.mid.bodies[built.canonical.body - 1U64].sourceFunction
+    if !c.isAuthoredAccessCall(site: site, sourceFunction: sourceFunction) { return false }
+    if built.isFresh() { return true }
+    mut val closure: Optional[SemanticClosure] = <Optional.None />
+    mut val globalInitializer = false
+    match owner {
+        DeclarationAccessNode.Function(function: val function) => { if function != sourceFunction { return false } }
+        DeclarationAccessNode.Closure(bodyKey: val key) => {
+            if key != sourceFunction { return false }
+            mut val index = 0U64
+            while index < c.semanticClosureCount() {
+                val row = c.semanticClosureAt(index: index)
+                if row.bodyKey == key { closure = <Optional.Some v=row />
+                    break }
+                index += 1U64
+            }
+            match closure { Optional.None => { return false } _ => {} }
+        }
+        DeclarationAccessNode.GlobalInitializer => { globalInitializer = true }
+        DeclarationAccessNode.Destruction(typeTerm: _) => { return false }
+    }
+    match replaySourceDeclarationCallAccess(c: c, sourceFunction: sourceFunction, closure: closure, globalInitializer: globalInitializer, terminator: terminator) {
+        DeclarationCallAccess.Conflict(error: val original, terminator: _, site: val originalSite) => {
+            match originalSite {
+                Optional.Some(v: val written) => { if !written.sameKey(other: site) { return false } }
+                Optional.None => { return false }
+            }
+            match original {
+                MidVerifyError.ConflictingReceiverAccess => { match error { MidVerifyError.ConflictingReceiverAccess => { return true } _ => {} } }
+                MidVerifyError.ConflictingBorrowAccess => { match error { MidVerifyError.ConflictingBorrowAccess => { return true } _ => {} } }
+                _ => {}
+            }
+        }
+        _ => {}
+    }
+    return false
 }
 
 // Whole-target checking demands the same local requests as lazy admission,
@@ -241,11 +320,11 @@ pub fn declarationProgramDiagnostic(c: inout Comp, error: DeclarationProgramErro
                     }
                     return c.diagnosticAt(offset: declarationAccessOffset(c: inout c, owner: owner), msg: "internal error: declaration Mid construction failed")
                 }
-                DeclarationAccessError.LocalAccess(body: val owner, error: val error) => {
+                DeclarationAccessError.LocalAccess(body: val owner, error: val error, domain: val domain) => {
                     val offset = declarationAccessOffset(c: inout c, owner: owner)
                     match error {
-                        MidVerifyError.ConflictingBorrowAccess => { return c.diagnosticAt(offset: offset, msg: "borrow argument overlaps an inout or move access in the same call") }
-                        MidVerifyError.ConflictingReceiverAccess => { return c.diagnosticAt(offset: offset, msg: "read-only receiver overlaps an inout or move argument in the same call") }
+                        MidVerifyError.ConflictingBorrowAccess => { return c.diagnosticAt(offset: offset, msg: "borrow argument overlaps an inout or move access in the same call", failureDomain: domain) }
+                        MidVerifyError.ConflictingReceiverAccess => { return c.diagnosticAt(offset: offset, msg: "read-only receiver overlaps an inout or move argument in the same call", failureDomain: domain) }
                         _ => { return c.diagnosticAt(offset: offset, msg: "internal error: invalid declaration access result") }
                     }
                 }

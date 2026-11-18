@@ -12,7 +12,7 @@ fn classification(result: Result[(), DeclarationAccessError]) -> U64 {
         Result.Ok(value: _) => { return 0U64 }
         Result.Err(error: val error) => {
             match error {
-                DeclarationAccessError.LocalAccess(body: _, error: val conflict) => {
+                DeclarationAccessError.LocalAccess(body: _, error: val conflict, domain: _) => {
                     match conflict {
                         MidVerifyError.ConflictingBorrowAccess => { return 1U64 }
                         MidVerifyError.ConflictingReceiverAccess => { return 2U64 }

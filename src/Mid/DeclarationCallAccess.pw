@@ -1,0 +1,112 @@
+// Checks the already lowered call places under the selected receiver mode.
+// The finding carries identity but does not assert source provenance.
+use ../Frontend only { Comp }
+use ../Ir only { CallSiteKey, CallTemplateKind }
+use ./Ir only { MidTerminatorNode, MidCanonicalBody, MidCanonicalArena }
+use ./Verify only { canonicalMidReachable, canonicalMidCallAccessError, MidVerifyError }
+
+pub enum DeclarationCallAccess {
+    None
+    InvalidSelection(terminator: U64)
+    Conflict(error: MidVerifyError, terminator: U64, site: Optional[CallSiteKey])
+}
+
+fn declarationCallHasStorageArguments(c: Comp, term: MidTerminatorNode) -> Bool {
+    mut val index = 0U64
+    while index < term.args.len {
+        val argument = c.mid.operands[c.mid.callArguments[term.args.start + index] - 1U64]
+        if argument.tag == 2U64 || argument.tag == 4U64 || (argument.tag == 3U64 && argument.borrowsStorage) { return true }
+        index += 1U64
+    }
+    // No pair can conflict when every argument is an independent value.
+    // Unelaborated access markers remain subject to the later Access pass.
+    return false
+}
+
+pub fn findDeclarationCallAccess(c: inout Comp, canonical: MidCanonicalBody) -> DeclarationCallAccess {
+    val body = c.mid.bodies[canonical.body - 1U64]
+    val reachable = canonicalMidReachable(arena: c.mid, body: body)
+    mut val index = 0U64
+    while index < body.blocks.len {
+        if reachable[index] {
+            val block = c.mid.blocks[body.blocks.start + index]
+            val term = c.mid.terminators[block.terminator - 1U64]
+            if term.tag == 4U64 && declarationCallHasStorageArguments(c: c, term: term) {
+                val target = c.mid.callTargets[term.callTarget - 1U64]
+                mut val receiverTag = 0U64
+                val key = <CallSiteKey ownerFnIdx=target.ownerFnIdx originKind=target.originKind originStart=target.originStart originEnd=target.originEnd originSerial=target.originSerial slot=target.slot />
+                if target.tag == 1U64 {
+                    val template = c.callTemplateIndex(siteKey: key)
+                    if template < c.callTemplateCount() {
+                        match c.callTemplateAt(index: template).kind {
+                            CallTemplateKind.Direct(callee: val callee, receiver: _, args: _, calleeTypeArgs: _, proofId: _) => {
+                                if callee >= c.arena.functionCount() { return <DeclarationCallAccess.InvalidSelection terminator=block.terminator /> }
+                                val function = c.arena.functionAt(index: callee)
+                                if function.hasRecv {
+                                    receiverTag = if function.selfInout { give 4U64 } else if function.selfMove { give 2U64 } else { give 3U64 }
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+                val conflict = canonicalMidCallAccessError(arena: c.mid, term: term, receiverTag: receiverTag)
+                match conflict {
+                    MidVerifyError.None => {}
+                    _ => {
+                        val site = if target.tag == 1U64 { give <Optional.Some v=key /> } else { give <Optional.None /> }
+                        return <DeclarationCallAccess.Conflict error=conflict terminator=block.terminator site=site />
+                    }
+                }
+            }
+        }
+        index += 1U64
+    }
+    return <DeclarationCallAccess.None />
+}
+
+// Pool indexes are not semantic identities across independently built bodies.
+// The access check observes passing modes and the places those modes reserve.
+pub fn sameDeclarationCallAccessInputs(left: MidCanonicalArena, leftId: U64, right: MidCanonicalArena, rightId: U64) -> Bool {
+    val a = left.terminators[leftId - 1U64]
+    val b = right.terminators[rightId - 1U64]
+    if a.args.len != b.args.len || (a.callReceiver == 0U64) != (b.callReceiver == 0U64) { return false }
+    if a.callReceiver != 0U64 {
+        val ar = left.callReceivers[a.callReceiver - 1U64]
+        val br = right.callReceivers[b.callReceiver - 1U64]
+        if ar.tag != br.tag || !sameAccessOperand(left: left, a: ar.operand, right: right, b: br.operand) { return false }
+    }
+    mut val i = 0U64
+    while i < a.args.len {
+        if !sameAccessOperand(left: left, a: left.callArguments[a.args.start + i], right: right, b: right.callArguments[b.args.start + i]) { return false }
+        i += 1U64
+    }
+    return true
+}
+
+fn sameAccessOperand(left: MidCanonicalArena, a: U64, right: MidCanonicalArena, b: U64) -> Bool {
+    if a == 0U64 || b == 0U64 { return a == b }
+    val x = left.operands[a - 1U64]
+    val y = right.operands[b - 1U64]
+    if x.tag != y.tag || x.capability != y.capability || x.borrowsStorage != y.borrowsStorage { return false }
+    return sameAccessPlace(left: left, a: x.place, right: right, b: y.place) &&
+        sameAccessPlace(left: left, a: x.accessPlace, right: right, b: y.accessPlace) &&
+        sameAccessPlace(left: left, a: x.accessOwner, right: right, b: y.accessOwner)
+}
+
+fn sameAccessPlace(left: MidCanonicalArena, a: U64, right: MidCanonicalArena, b: U64) -> Bool {
+    if a == 0U64 || b == 0U64 { return a == b }
+    val x = left.places[a - 1U64]
+    val y = right.places[b - 1U64]
+    if x.rootTag != y.rootTag || x.local != y.local || x.globalTarget != y.globalTarget ||
+        x.globalMutable != y.globalMutable || x.projections.len != y.projections.len { return false }
+    mut val i = 0U64
+    while i < x.projections.len {
+        val xp = left.projections[x.projections.start + i]
+        val yp = right.projections[y.projections.start + i]
+        if xp.tag != yp.tag || xp.index != yp.index || xp.indexLocal != yp.indexLocal ||
+            xp.isBoxed != yp.isBoxed || xp.typeTerm != yp.typeTerm || xp.sourceTerm != yp.sourceTerm { return false }
+        i += 1U64
+    }
+    return true
+}
