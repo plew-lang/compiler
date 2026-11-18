@@ -1,6 +1,6 @@
 ---
 id: com-to2g
-status: in_progress
+status: closed
 deps: []
 links: [com-jbau]
 created: 2026-11-17T12:41:19Z
@@ -110,3 +110,21 @@ for handle fields and for the referent path. Missing slot evidence leaves
 the pair to the dynamic check. It does not compare spellings or re-run
 field lookup. The rebind rejection and both nested disjoint and mutable
 index controls retain their outcomes on the diagnostic candidate.
+
+## Closure
+
+Resolved at 241b58b6. Independent review of the implementation and scoped
+matrix found no blocker. The fixed candidate reports Source overlap in
+check, AOT, and lazy for repeated, grouped, same constant key, same array
+container, and receiver containment cases. Separate handle fields on the
+same binding and distinct constant keys work in native and lazy. Nested
+disjoint fields, mutable index evaluation, pinning, reference reads, and
+dynamic overlap panic controls preserve their expected results.
+[Executed matrix and probe sources](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-shared-inout-contract.json).
+
+Trait field via declarations can be accepted without their storage
+selection being implemented. Concrete view and bounded generic field access
+are tracked separately in [com-uk1h](com-uk1h.md). Formal validation reached
+the third-generation fixed point, median 7.569017 s. The same-source
+alternating comparison measured 7.286 s before and 7.289 s after. The
+phase-wide performance threshold remains outstanding.
