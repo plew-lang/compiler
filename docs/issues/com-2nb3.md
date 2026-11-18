@@ -1,6 +1,6 @@
 ---
 id: com-2nb3
-status: open
+status: closed
 deps: []
 links: []
 created: 2026-11-02T21:46:43Z
@@ -34,7 +34,7 @@ Static discoverable cyclic selector path can recurse before cycle diagnostic; no
 
 ## Completion and adoption
 
-Exact producer→retention→required consumer, meaningful defect-specific RED/positive/refusal/boundary/noninterference controls, original failure preserved, legitimate prefixes retained, applicable gates and independent review. This proposal is not implemented or verified. Do not infer authorization for an undecided syntax/panic/CLI policy from this assignment. Preserve original error and legitimate published prefixes; make no rollback/recovery promise beyond the actual API contract.
+Exact producer→retention→required consumer, meaningful defect-specific RED/positive/refusal/boundary/noninterference controls, original failure preserved, legitimate prefixes retained, applicable gates and independent review. Do not infer authorization for an undecided syntax/panic/CLI policy from this assignment. Preserve original error and legitimate published prefixes; make no rollback/recovery promise beyond the actual API contract.
 
 Required admission proposal: {"phase": "source-admission-before-G1-and-integration", "receivers": ["com-61jt", "com-604k"], "reason": "Actual source use DAG admission; new defect outside closed historical F2 controls. Direct source G1 prerequisite, not reopen com-d57o or expand JIT F3."}. Actual accepted edges are recorded in the audit adoption evidence after cycle review.
 
@@ -73,7 +73,6 @@ the reported sequence is one closed ring of exactly the expected modules;
 the entry prefix in the two-file cases is excluded. Three acyclic
 module controls pass. The private Source receipt is preserved on all
 nine corrected invocations. [Original fixed-point RED](../../../evidence/rejection-domains/diagnostic-domain-implementation/module-cycle-ring-red.json).
-Independent review and acceptance checks remain open.
 
 Independent implementation review confirmed that every edge in the old
 walk has a binding origin, and that gen and ORC reach the early admission
@@ -84,3 +83,12 @@ It reports 15 failures on 241b58b6 and passes on the 593906c6 diagnostic
 candidate with all acyclic controls. The focused builder fixture confirms
 the closing offset and exact ring survive repeated finish and attempted
 registration after failure.
+
+## Outcome
+
+Completed at c65002f2 after independent closure review. The exact builder
+payload passes its golden in JIT and native. Four existing acyclic JIT
+goldens cover namespaces, aliases and repeated reachability through two
+paths; a missing export still rejects with its own reason. The registered
+ring test and the focused producer test cover separate consumer and
+retention guarantees. Phase-wide validation remains with G2a/G2b.
