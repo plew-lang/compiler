@@ -683,3 +683,16 @@ comparisons pass, source-publication-disabled failures remain Unclassified,
 and three successful check/ORC controls pass. Independent review found no
 scoped blocker. Pending operator routes and formal final validation remain
 outstanding.
+
+Compiler 6c0de400 retains authored value-pattern row identity, value
+expression and original offset. Record can authenticate the generated Eq
+only against that retained row; raw arm copies have no authority.
+All 27 comparison replays preserve exact baseline stderr/status/channel,
+with nine Source refusals in check/AOT, six reached ORC refusals and three
+undemanded successes. Four positive value-pattern fixtures pass check and
+exact ORC output. An isolated carrier copies the same arms through raw
+pushMatchArms: three modes retain the refusal reason/status/channel as
+Unclassified. Its copied row uses fallback line 1, recorded separately from
+the authored exact-location replay. Independent source review found no
+scoped blocker; legacy value-AST lowering was inspected, not independently
+executed in this increment. Formal final gates remain pending.
