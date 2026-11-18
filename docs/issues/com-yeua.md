@@ -325,10 +325,45 @@ compatibility and existential type formation remain distinct from this
 classification. Ownership/API work remains with [com-03ra](com-03ra.md)
 and the unresolved formation question with [com-nsv6](com-nsv6.md).
 
-The five neighboring `via` rejects still retain three producer paths.
-The written missing-bound call is Source; the two signature mismatches and
-missing target come from declaration precheck; the stronger-target refusal
-comes from checking a synthesized forwarding call. Keep the latter two
-paths non-source until their actual authored declaration and selected
-applicability are connected under [com-6esv](com-6esv.md). No phase
-completion or full-suite result follows from these scoped controls.
+The neighboring delegation cases are now covered by [com-6esv](com-6esv.md).
+Its final candidate preserved 20 exact Source refusals across check, AOT,
+undemanded ORC and generation.
+
+## Rejection Classification Refresh
+
+The diagnostic build from implementation revision `47085e32`
+(SHA-256 `0b5f6ce279818350bc526ca5a19ccd7c0a395b07f47904914eb263c6765b855a`)
+replayed all 1,171 flat reject inputs through the private terminal channel:
+
+| Terminal outcome | Cases |
+|---|---:|
+| Source | 672 |
+| Unclassified | 496 |
+| Internal | 1 |
+| Signal with no terminal record | 2 |
+
+This is the flat rejection corpus on an unoptimized diagnostic carrier.
+The Internal result is the known `blanket_headless` case in
+[com-wka4](com-wka4.md). Both signal cases reproduce on the preceding
+unoptimized carrier: `nominal_newtype_projection_limit` and
+`overload_structural_analysis_limit`. The prior optimized fixed-point
+carrier reports a completed Limit and Unclassified respectively. Neither
+outcome on either carrier meets normal Source rejection.
+
+The three existing async borrowed/inout parameter fixtures supplied RED:
+the declaration checker rejected all three with their existing diagnostic,
+while the channel completed as Unclassified in check, AOT, undemanded ORC,
+and gen. The checker now looks up the written signature receipt for the
+exact rejected declaration on the failure path. Same 12 reasons and failure
+statuses, now Source. Five positive ORC controls passed (ordinary async,
+owned input, suspended delegated copy and move, and synchronous receiver).
+An isolated native Frontend probe copied the rejected function and its
+parameter data to a fresh declaration ID without an authored signature.
+The authored original returned Source and the raw duplicate did not, with
+the same diagnostic text. Other parameter-mode reasons are unchanged.
+
+The largest remaining report families start with bare method ambiguity (19),
+missing applicable method (13), arithmetic conformance (12), and normally
+completing value blocks missing `give` (11). These are clusters by printed
+reason for triage; the corresponding producer must establish the fact and
+source origin. This is neither a full suite nor completion of this issue.

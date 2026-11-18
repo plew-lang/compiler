@@ -481,14 +481,23 @@ pub impl Comp {
     // with by-value). `inout` is valid for both. Array params are containers
     // (copyable in v1) and not mode-checked here. `anchor` is the owning function's
     // declaration offset (Param.nameStart is interned = maps to no source file).
-    inout fn checkParamModes(params: FuncParamRange, anchor: U64, selfRef: U64, isAsync: Bool) -> Result[(), CompileDiagnostic] {
+    inout fn checkParamModes(functionIndex: U64) -> Result[(), CompileDiagnostic] {
+        val function = self.arena.functionAt(index: functionIndex)
+        val params = function.params
+        val anchor = self.fnAnchor(f: function)
+        val selfRef = self.parametricSelfRef(f: function)
         mut val i: U64 = 0
         while i < params.count() {
             val p: Param = self.funcParamAt(params: params, index: i)
             // Async entry owns values independently of the caller's synchronous
             // borrow scope. Explicit storage loans cannot escape into its frame.
-            if isAsync && (p.isBorrow || p.isInout) {
-                return <Result.Err error=self.diagnosticAt(offset: anchor, msg: "an async function cannot have borrow or inout parameters; pass an owned value instead") />
+            if function.isAsync && (p.isBorrow || p.isInout) {
+                val domain = if self.sourceTypeUses.signatureFor(function: functionIndex).isSome() {
+                    give <FailureDomain.Source />
+                } else {
+                    give <FailureDomain.Unclassified />
+                }
+                return <Result.Err error=self.diagnosticAt(offset: anchor, msg: "an async function cannot have borrow or inout parameters; pass an owned value instead", failureDomain: domain) />
             }
             if !(p.tyIsArray) {
                 // Ownership modes describe the lexical parameter type, not
@@ -587,8 +596,7 @@ pub impl Comp {
     inout fn checkAllParamModes() -> Result[(), CompileDiagnostic] {
         mut val i: U64 = 0
         while i < self.arena.functionCount() {
-            val function = self.arena.functionAt(index: i)
-            try self.checkParamModes(params: function.params, anchor: self.fnAnchor(f: function), selfRef: self.parametricSelfRef(f: function), isAsync: function.isAsync)
+            try self.checkParamModes(functionIndex: i)
             i += 1
         }
         return <Result.Ok value=() />
