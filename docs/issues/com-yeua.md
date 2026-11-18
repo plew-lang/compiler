@@ -269,8 +269,8 @@ of the Source lane.
 Use the existing value-binding predicate across generic and ordinary source
 checks. Only resolved non-value classifications produce Source; an unfilled
 or unknown binding is a compiler failure. For overlapping inout arguments,
-attach Source to proved value-place conflicts only. The old shared-place
-syntax rule is not proof of an evaluated-cell conflict (com-to2g).
+attach Source to proved value-place conflicts only. Shared-place classification follows the adopted same-reference-place rule
+once the producer matches that rule by resolved binding (com-to2g).
 
 The diagnostic rebuild makes 28 of 29 focused cases Source and keeps all
 29 stderr streams byte-identical. The remaining shared-cell negative

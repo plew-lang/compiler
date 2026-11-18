@@ -10,38 +10,55 @@ assignee: Koji Murata
 parent: met-si6j
 tags: [frontend, ownership, verification]
 ---
-# Require stable shared-cell identity for static inout rejection
+# Apply the same-reference-place rule to shared inout arguments
+
+## Contract
+
+[Spec/03](../../../spec/spec/01-basics/03-values.md#重なる-inout-は禁止排他) and
+[Ownership and Access](../design/ownership-and-access.md#places-and-exclusivity)
+are authoritative.
+
+Spec/03 rejects two inout positions (including an inout receiver) that
+use the same resolved binding and reference place and overlap after path
+normalization. Intervening argument effects are irrelevant to this source
+restriction. Preserve field disjointness, container granularity, and
+separate reference places within one binding. For potentially aliasing
+references outside the static restriction, use each evaluated, pinned cell
+once through Access and preserve the runtime check.
+
+## Fixed Candidate Observations
+
+On c41653f1 both check and lazy execution reject the three-argument
+current/rebind/current reproducer. This is the required result under the
+adopted rule. Binding the old and new cells to separate variables before
+the call yields the expected output, 1 and 2. The existing shared-disjoint
+fixture also passed in lazy mode. The earlier rejection evidence predates
+the decision and remains an observation of the same behavior.
+
+The same candidate rejected two disjoint nested fields under one shared
+struct field in both check and JIT, using its supported arrow spelling.
+The two paths split at the final fields; retaining only their first
+post-deref field loses that distinction.
+
+The current shared branch uses exprSyntaxEq, including identifier spelling,
+and emits Unclassified instead of Source. These facts cannot certify the
+new lexical rule. Use retained binding and place identities where checking
+source; keep dynamic evaluated identity separate.
+
+## Required Verification
+
+Assert the Source domain and reason for repeated inout access both with and
+without an intervening rebind. Cover equivalent place spellings and distinct
+lexical identities, inout receivers, containing paths, disjoint nested
+fields, and indexing before and after dereference. Cover distinct
+reference fields of one root, dynamic same/different cells, and unchanged disjoint and mixed cases.
+Verify the source-to-Access handoff in check, AOT and lazy modes, including
+lifetime and evaluation order. No new effect analysis, general alias
+inference, or test audit work from com-jbau is required.
 
 
-## Contract and Reproduction
-
-Spec/03 requires evaluation of each shared place once, with the selected
-cell held across argument evaluation and the call. Distinct evaluated cells
-are valid. Only an established static overlap may fail at compilation;
-otherwise Access compares the evaluated cells. Follow
-[Ownership and Access](../design/ownership-and-access.md).
-
-The c41653f1 fixed candidate rejects both check and JIT for a valid
-three-argument call: the first and last arguments are `inout current->value`
-and the middle argument replaces mutable global `current` with a new cell.
-The first selected cell remains pinned, the second refers to the replacement.
-The intended outputs are 1 and 2. Current Verify/Ops.classifyInoutPair
-claims static overlap from `exprSyntaxEq` on those shared places.
-A readable exact reproducer is saved with the execution evidence in meta.
-
-## Required Change and Verification
-
-Establish stable cell identity and overlapping projection from legitimate
-retained source facts before rejecting. Preserve static rejection for
-definite conflicts, the value-place rules, mixed/disjoint success, and
-runtime failure on actual unproven aliases before any conflicting effect.
-Make the producer and Access consumer agree on any uncertain case so the
-check reads already evaluated, pinned cells exactly once. Avoid a separate
-syntax-equality authority. Cover the mutable rebinding contrast, an immutable
-same-cell negative, truly dynamic same/different cells, shared container
-granularity and source-to-Access lifetime. Verify check, AOT and lazy modes,
-actual diagnostics or call effects, independent review and normal gates.
-
-This repair does not add general alias inference or change the test audit
-owned by com-jbau. com-yeua must not classify unproved shared conflicts as
-source errors while this repair is open.
+Independent contract review checked the accepted scope, the separation
+between reference-handle identity and referent container overlap, and
+preservation of read-borrow rules. Its nested-field example was reproduced
+on c41653f1 with the arrow spelling supported by that candidate. The
+contract review does not establish implementation conformance.
