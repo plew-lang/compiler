@@ -1,7 +1,7 @@
 ---
 id: com-yeua
 status: in_progress
-deps: [met-c1pg, com-to2g]
+deps: [met-c1pg, com-to2g, com-ew3i, com-x7ql]
 links: []
 created: 2026-11-02T21:30:19Z
 type: task
@@ -379,3 +379,8 @@ isolates the intended property: the final read is rejected at line 13 as
 use after move, and removing it makes the program pass `--check`. The
 fixture has no reason golden. Keep it out of the missing-`give` evidence
 until its test intent is restored. The fixture itself is unchanged.
+
+The subsequent specification decision is tracked by [com-j8k0](com-j8k0.md).
+[com-ew3i](com-ew3i.md) owns bare blocks and [com-x7ql](com-x7ql.md) owns
+nested unique shadowing and the combined success fixture. Both are
+prerequisites here; this fixture is not a missing-give control.
