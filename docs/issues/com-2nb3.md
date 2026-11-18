@@ -58,3 +58,19 @@ Keep one cycle authority and reconcile/remove the redundant late walk
 after proving it supplies no additional valid guarantees. Add a RED
 test for the ring itself before changing the producer. Cover ordinary,
 public re-export, self-loop and acyclic cases in the affected modes.
+
+## Executed Cycle Ring Repair
+
+The early binding DFS now retains the suffix of its active path and the
+closing node. The diagnostic adapter renders that sequence using source
+module paths. The old late DFS is removed. The removed import-edge walk
+used the same successful file import path that already records binding
+origins, including namespace imports with no selective names.
+
+The registered command-line diagnostic test fails all nine cycle checks
+on 241b58b6 and passes all nine on a diagnostic rebuild. It checks that
+the reported sequence is one closed ring of exactly the expected modules;
+the entry prefix in the two-file cases is excluded. Three acyclic
+module controls pass. The private Source receipt is preserved on all
+nine corrected invocations. [Original fixed-point RED](../../../evidence/rejection-domains/diagnostic-domain-implementation/module-cycle-ring-red.json).
+Independent review and acceptance checks remain open.

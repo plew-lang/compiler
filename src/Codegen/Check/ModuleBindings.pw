@@ -2,6 +2,17 @@
 // can choose a name's kind from its use. This adapter supplies syntax facts;
 // ModuleScopeBindings owns merge, identity deduplication and public forwarding.
 impl Comp {
+    fn importModulePath(module: U64) -> String {
+        mut val index = 0U64
+        while index < self.modules.sourceFileCount() {
+            if self.modules.sourceFileRange(index: index).moduleId == module {
+                return self.modules.sourceFilePath(index: index)
+            }
+            index += 1U64
+        }
+        return "<unknown module>"
+    }
+
     inout fn moduleBindingResult(result: Result[(), ScopeBindingFailure]) -> Result[(), CompileDiagnostic] {
         match result {
             Result.Ok(value: _) => { return <Result.Ok value=() /> }
@@ -13,7 +24,15 @@ impl Comp {
                         return <Result.Err error=<CompileDiagnostic severity=primary.severity failureDomain=primary.failureDomain location=primary.location message=primary.message notes=[<DiagnosticNote location=previous.location message=previous.message />] /> />
                     }
                     ScopeBindingFailure.MissingImport(val offset) => { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "imported name is not exported by the specified module (declare it `pub` in that module)", failureDomain: <FailureDomain.Source />) /> }
-                    ScopeBindingFailure.ImportCycle(val offset) => { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "module use graph contains a cycle (spec/15)", failureDomain: <FailureDomain.Source />) /> }
+                    ScopeBindingFailure.ImportCycle(val offset, val modules) => {
+                        mut val message = "module use graph contains a cycle (spec/15): " + self.importModulePath(module: modules[0])
+                        mut val index = 1U64
+                        while index < modules.count() {
+                            message = message + " -> " + self.importModulePath(module: modules[index])
+                            index += 1U64
+                        }
+                        return <Result.Err error=self.diagnosticAt(offset: offset, msg: message, failureDomain: <FailureDomain.Source />) />
+                    }
                     ScopeBindingFailure.Closed(val offset) => { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "module binding registration after admission", failureDomain: <FailureDomain.Internal />) /> }
                 }
             }

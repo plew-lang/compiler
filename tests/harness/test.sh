@@ -131,6 +131,12 @@ else
     fail=$((fail + 1)); failed="$failed check-command"
 fi
 
+if python3 -B ./tests/tooling/test-module-cycle-diagnostics.py --compiler "$PLEWC"; then
+    echo "PASS module-cycle-diagnostics"
+else
+    fail=$((fail + 1)); failed="$failed module-cycle-diagnostics"
+fi
+
 if python3 -B ./tests/tooling/test-match-diagnostics.py --compiler "$PLEWC"; then
     echo "PASS match-diagnostics"
 else

@@ -1893,7 +1893,6 @@ fn admitFrontendNominalDependencies(c: inout Comp) -> Result[(), CompileDiagnost
     // module also fails here — that module doesn't get loaded, so the name isn't
     // among the exported (loaded) declarations.
     try c.checkImports()
-    try c.detectImportCycles()
     if c.genMode {
         try c.checkUseVisibility()
         try c.checkTypeVisibility()

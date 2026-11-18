@@ -15,7 +15,7 @@ pub impl ScopeBindingKind as Eq {
 pub enum ScopeBindingFailure {
     Collision(firstOffset: U64, secondOffset: U64)
     MissingImport(offset: U64)
-    ImportCycle(offset: U64)
+    ImportCycle(offset: U64, modules: Array[U64])
     Closed(offset: U64)
 }
 pub struct ScopeBinding {
@@ -88,9 +88,10 @@ pub impl ModuleScopeBindings {
     inout fn finish() -> Result[AdmittedModuleScopeBindings, ScopeBindingFailure] {
         match self.failure { Optional.Some(v: val failure) => { return <Result.Err error=failure /> } _ => {} }
         if self.closed { return <Result.Ok value=<AdmittedModuleScopeBindings entries=self.entries nextNamed=self.nextNamed nameHeads=self.nameHeads extensionRows=self.extensionRows /> /> }
+        mut val activeModules: Array[U64] = []
         mut val index = 0U64
         while index < self.modules.count() {
-            match self.finishModule(moduleId: self.modules[index], offset: 0U64) {
+            match self.finishModule(moduleId: self.modules[index], offset: 0U64, activeModules: inout activeModules) {
                 Result.Err(error: val failure) => { self.failure = <Optional.Some v=failure /> return <Result.Err error=failure /> }
                 _ => {}
             }
@@ -196,15 +197,28 @@ impl ModuleScopeBindings {
         return <Result.Ok value=() />
     }
 
-    inout fn finishModule(moduleId: U64, offset: U64) -> Result[(), ScopeBindingFailure] {
+    inout fn finishModule(moduleId: U64, offset: U64, activeModules: inout Array[U64]) -> Result[(), ScopeBindingFailure] {
         val state = self.states.getOr(key: moduleId, fallback: 0U64)
         if state == 2U64 { return <Result.Ok value=() /> }
-        if state == 1U64 { return <Result.Err error=<ScopeBindingFailure.ImportCycle offset=offset /> /> }
+        if state == 1U64 {
+            // A gray module is on the active DFS path. Keep the closed ring
+            // only, with the first module repeated to show the back edge.
+            mut val cycle: Array[U64] = []
+            mut val index = 0U64
+            while activeModules[index] != moduleId { index += 1U64 }
+            while index < activeModules.count() {
+                cycle.append(activeModules[index])
+                index += 1U64
+            }
+            cycle.append(moduleId)
+            return <Result.Err error=<ScopeBindingFailure.ImportCycle offset=offset modules=cycle /> />
+        }
         self.states[moduleId] = 1U64
+        activeModules.append(moduleId)
         mut val importIndex = self.importHeads.getOr(key: moduleId, fallback: 0U64)
         while importIndex != 0U64 {
             val origin = self.imports[importIndex - 1U64]
-            try self.finishModule(moduleId: origin.targetModule, offset: origin.origin)
+            try self.finishModule(moduleId: origin.targetModule, offset: origin.origin, activeModules: inout activeModules)
             if origin.isNamespace {
                 // Namespace identity is its target module, independent of the
                 // local alias or which barrel made that namespace public.
@@ -227,6 +241,7 @@ impl ModuleScopeBindings {
             }
             importIndex = self.nextImport[importIndex - 1U64]
         }
+        activeModules.removeLast()
         self.states[moduleId] = 2U64
         return <Result.Ok value=() />
     }
