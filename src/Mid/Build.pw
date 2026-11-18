@@ -1940,12 +1940,9 @@ fn materializeMidReferencePlace(c: inout Comp, state: inout MidBuildState, base:
     return <MidOperandBuild.Value operand=<MidOperand.Copy place=<MidPlace local=local projections=projections typeTerm=typeTerm /> /> />
 }
 
-// A projection cannot contain an arbitrary operand: that would make Place and
-// Operand mutually recursive and let an effectful index be re-evaluated by a
-// later consumer. Materialize non-root operands into a fresh Mid local first.
-// A root Copy is already a one-time evaluated value and may be referenced
-// directly. This is the same stable-local discipline used by Rust MIR index
-// projections.
+// An index projection uses a body-local slot containing the evaluated key.
+// A stable local root already owns that value. Other operands need a snapshot
+// before the projection can outlive evaluation of the source expression.
 fn midIndexLocalForSourceExpr(c: inout Comp, state: inout MidBuildState, exprId: U64, typeTerm: U64) -> MidIndexLocalBuild {
     val built: MidOperandBuild = midValueOperandForSourceExpr(c: inout c, state: inout state, exprId: exprId, allowAccessMarker: false)
     val builtValue: MidOperand = match built {
@@ -1955,7 +1952,9 @@ fn midIndexLocalForSourceExpr(c: inout Comp, state: inout MidBuildState, exprId:
     }
     match builtValue {
         MidOperand.Copy(place: val place) => {
-            if place.projections.count() == 0U64 { return <MidIndexLocalBuild.Value local=place.local /> }
+            if place.rootTag == 1U64 && place.projections.count() == 0U64 && place.local < state.locals.count() {
+                if midLocalHasStableEvaluationValue(local: state.locals[place.local]) { return <MidIndexLocalBuild.Value local=place.local /> }
+            }
         }
         _ => {}
     }

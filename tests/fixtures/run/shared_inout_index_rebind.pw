@@ -1,0 +1,22 @@
+use @Std/Core only { MutableRef }
+use @Std/Io only { print }
+
+struct Counter { pub mut val count: I64 }
+mut val position = 0U64
+
+fn advance() -> I64 {
+    position = 1U64
+    return 0I64
+}
+
+fn update(first: inout I64, marker: I64, second: inout I64) {
+    first += 1I64
+    second += 2I64
+}
+
+fn main() {
+    val counters = [<MutableRef value=<Counter count=0I64 /> />, <MutableRef value=<Counter count=0I64 /> />]
+    update(first: inout counters[position]->count, marker: advance(), second: inout counters[position]->count)
+    print(counters[0U64]->count)
+    print(counters[1U64]->count)
+}

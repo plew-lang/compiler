@@ -84,3 +84,21 @@ boundary remains open. The reviewed checkpoint also still compares field
 spellings. Audit Record's saved projected fields and use their identity
 for equivalent view/via paths. Check transient field path costs before
 the performance gate. Do not close the task on the scoped controls.
+
+## Index Evaluation Handoff
+
+AOT tracing on the previously saved diagnostic build reported a Mid
+type mismatch on the block evaluating an Array reference element selected
+by a global key. A single global-index operand reproduces it too. Direct
+global reads and a local snapshot used as the key are successful controls.
+The shared index helper treated every projection-free Copy as a
+body-local slot, even for a global place whose local field is zero.
+
+The builder now reuses only a proven stable local root. Other keys use
+the existing materialization path, so the saved local names the evaluated
+integer. The rebind fixture passes check and prints 1 then 2 in JIT and
+native code. All eleven existing index-evaluation JIT outputs match.
+Independent review confirmed the fix covers physical indexing in
+ordinary value, place, and normalized-inout builders and preserves
+the distinct selected-Index call path. Field selection and formal
+performance verification remain open.
