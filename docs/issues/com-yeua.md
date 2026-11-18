@@ -543,7 +543,10 @@ inspection: cache a valid disjoint call via `MidFunctionTemplates.body`,
 replace its canonical argument to alias the read receiver, and request that
 body through a fresh `DeclarationBodyRequests`. A genuine symbolic key still
 exists, so key attribution alone cannot classify the mutated operands.
-Execute this contrast before implementing the repair. The repair must tie
+The native probe reproduced the counterexample: the first declaration
+request accepted the disjoint source; a fresh request on the changed cache
+returned typed ConflictingReceiverAccess with Source instead of Unclassified.
+The repair must tie
 the conflict to the operands emitted by the source builder and retain the
 typed local-access error. Check both the raw verifier and cached-request
 boundary, including preservation of ordinary disjoint source calls.
