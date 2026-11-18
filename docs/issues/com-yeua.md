@@ -306,3 +306,29 @@ The latter three demonstrated incorrect Source in successive intermediate
 builds. All corrected cases retain the same reason and remain non-Source.
 A wider existing synthetic evidence fixture remains at its baseline
 failure; it has not been edited as part of this correction.
+
+## Iteration Producer Boundary
+
+Compiler 76a15cb2 records the lowered source `for` and its iterator
+expression together. Record uses that origin when the checked operation
+has no applicable iteration protocol. A selected operation without result
+evidence and a raw duplicate statement keep their non-source domain.
+Compiler cbf8b74f applies the same boundary to the existential interface
+check before selecting the iterator. Closed-recipe rechecks have no source
+publication authority.
+
+[Executed controls and reviews](../../../evidence/rejection-domains/diagnostic-domain-implementation/iteration-source-refusal.json)
+cover the 22 known classification failures in these two iteration branches,
+the original rejection reasons, check/AOT/demanded JIT, undemanded JIT,
+positive iteration and an authored/raw native contrast. Cursor/Item
+compatibility and existential type formation remain distinct from this
+classification. Ownership/API work remains with [com-03ra](com-03ra.md)
+and the unresolved formation question with [com-nsv6](com-nsv6.md).
+
+The five neighboring `via` rejects still retain three producer paths.
+The written missing-bound call is Source; the two signature mismatches and
+missing target come from declaration precheck; the stronger-target refusal
+comes from checking a synthesized forwarding call. Keep the latter two
+paths non-source until their actual authored declaration and selected
+applicability are connected under [com-6esv](com-6esv.md). No phase
+completion or full-suite result follows from these scoped controls.
