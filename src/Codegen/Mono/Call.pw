@@ -4493,7 +4493,7 @@ pub impl Comp {
     // source-path uniqueness that an abstract subject could not establish.
     // An exact authored premise was admitted by its caller already. Derived
     // paths do not inherit that authority for a different target trait.
-    inout fn checkFirstConcreteSourcePath(bound: TraitBound, proof: StaticConformanceProof, receiverRef: U64, environment: InstanceEnvironment, selfRef: U64, itemRef: U64) -> Result[(), CompileDiagnostic] {
+    inout fn checkFirstConcreteSourcePath(bound: TraitBound, proof: StaticConformanceProof, receiverRef: U64, environment: InstanceEnvironment, selfRef: U64, itemRef: U64, callSite: Optional[CallSiteKey] = <Optional.None />) -> Result[(), CompileDiagnostic] {
         if self.arena.typeIsClosed(ref: bound.subject) { return <Result.Ok value=() /> }
         match proof {
             StaticConformanceProof.AssumedBound(source: val source) => {
@@ -4504,7 +4504,7 @@ pub impl Comp {
             }
             _ => {}
         }
-        match (try self.instantiateBoundProof(demand: <ConformanceProofDemand.SourceAdmission />, bound: bound, receiverRef: receiverRef, environment: environment, selfRef: selfRef, itemRef: itemRef)) {
+        match (try self.instantiateBoundProof(demand: <ConformanceProofDemand.SourceAdmission />, bound: bound, receiverRef: receiverRef, environment: environment, selfRef: selfRef, itemRef: itemRef, memberSite: callSite)) {
             StaticProofInstantiation.Ready(proof: _) => { return <Result.Ok value=() /> }
             _ => { return <Result.Err error=self.diagnosticAt(offset: bound.offset, msg: "where clause is not satisfied after caller substitution") /> }
         }
@@ -4546,7 +4546,7 @@ impl Comp {
                     val substituted = self.substituteRetainedBound(bound: source, environment: environment, selfRef: selfRef, itemRef: itemRef)
                     val grounded = try self.replayBoundNormalizations(bound: substituted, normalizations: normalizations)
                     val proof = self.thawStaticConformanceProof(id: plan.proofs[position])
-                    try self.checkFirstConcreteSourcePath(bound: source, proof: proof, receiverRef: grounded.subject, environment: environment, selfRef: selfRef, itemRef: itemRef)
+                    try self.checkFirstConcreteSourcePath(bound: source, proof: proof, receiverRef: grounded.subject, environment: environment, selfRef: selfRef, itemRef: itemRef, callSite: <Optional.Some v=template.siteKey />)
                     val state = try self.instantiateConstraintProof(proof: proof, receiverRef: grounded.subject, environment: environment, selfRef: selfRef, itemRef: itemRef, normalizations: normalizations)
                     match state {
                         StaticProofInstantiation.Ready(proof: val concrete) => {

@@ -668,7 +668,7 @@ impl Comp {
             val bound = try self.replayBoundNormalizations(bound: substituted, normalizations: normalizations)
             val proof = self.thawStaticConformanceProof(id: plan.proofs[position])
             if !self.typeTermContainsParameter(ref: bound.subject, parameter: self.interfaceScopeParameter(scope: scope)) {
-                try self.checkFirstConcreteSourcePath(bound: original, proof: proof, receiverRef: bound.subject, environment: environment, selfRef: selfRef, itemRef: itemRef)
+                try self.checkFirstConcreteSourcePath(bound: original, proof: proof, receiverRef: bound.subject, environment: environment, selfRef: selfRef, itemRef: itemRef, callSite: <Optional.Some v=template.siteKey />)
             }
             val replay = try self.replayConstraintProof(proof: proof, receiver: bound.subject, environment: environment, selfRef: selfRef, itemRef: itemRef, context: <Optional.Some v=context />, normalizations: normalizations)
             val instantiated = match replay {
