@@ -577,3 +577,22 @@ a same-kind conflict with different storage roots, wrong-session caches,
 and retry after rejecting a foreign template. Independent re-review found
 no further scoped blocker. Formal self-host and full-suite verification
 remain pending for this revision.
+
+### Associated declaration bounds checkpoint
+
+Baseline a01aa74e returns Unclassified for ten associated declaration bound
+refusals in each of check, AOT and ORC. The missing-proof branch in
+`checkAssociatedBounds` is the producer. An isolated prototype authenticated
+the selected binding and trait clause, matching all thirty baseline messages,
+exit statuses and channels while reporting Source.
+
+Independent review identified dependencies also present in the query: sibling
+associated outputs, target arguments, and local declaration assumptions. A
+native probe changed only the sibling `Item` binding used on the right of
+`Cursor[Item = Item]` and obtained Source from the direct recheck although
+the original List implementation was valid. This falsified the prototype.
+The next candidate must separate a private, fresh source-declaration
+admission from raw rechecks, including the early callable-form path.
+Check native mutation plus normal diagnostic and valid conformance controls.
+
+[Replay and native counterexample](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-associated-bound-rejection.json).
