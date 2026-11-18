@@ -291,7 +291,8 @@ pub impl Comp {
             if op == opRem() { return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: lhs), msg: "`%` (remainder) is integer-only; not defined for floats (spec/12)") /> }
         } else {
             if (try self.compareNeedsTrait(op: op, lhs: lhs, rhs: rhs)) {
-                return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: lhs), msg: "comparison needs an `Eq`/`Ord` witness — a struct/enum needs `impl T as Eq` (e.g. derive `@[Eq]`) for `==`/`!=` or `impl T as Ord` for `< <= > >=`; there is no built-in structural/tag comparison") />
+                val domain = self.binaryOperationFailureDomain(exprId: exprId, op: op, lhs: lhs, rhs: rhs, template: template)
+                return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: lhs), msg: "comparison needs an `Eq`/`Ord` witness — a struct/enum needs `impl T as Eq` (e.g. derive `@[Eq]`) for `==`/`!=` or `impl T as Ord` for `< <= > >=`; there is no built-in structural/tag comparison", failureDomain: domain) />
             }
             if (try self.binTraitNeedsTrait(op: op, lhs: lhs, rhs: rhs)) {
                 val domain = self.binaryOperationFailureDomain(exprId: exprId, op: op, lhs: lhs, rhs: rhs, template: template)

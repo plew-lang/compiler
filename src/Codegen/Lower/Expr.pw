@@ -3,7 +3,7 @@
 impl Comp {
     inout fn pushAuthoredBinaryExpression(op: I64, lhs: U64, rhs: U64) -> U64 {
         val exprId = self.pushExpr(e: <Expr.Binary op=op lhs=lhs rhs=rhs />)
-        if isBinTraitOp(op: op) {
+        if isBinTraitOp(op: op) || op == opEq() || op == opNe() || op == opLt() || op == opLe() || op == opGt() || op == opGe() {
             self.authoredBinaryExpressions[exprId] = <AuthoredBinaryExpression op=op lhs=lhs rhs=rhs />
         }
         return exprId
