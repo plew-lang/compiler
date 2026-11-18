@@ -1294,3 +1294,26 @@ processing a larger source. Examine hot Result return/try/Ok machine code first
 if the difference persists, then count getter/factory executions; do not distort
 the API or weaken source authority based on speculation. Fresh snapshot file
 sets, not delta copies, are required for this comparison.
+
+### Exact Report performance comparison
+
+Fresh Git-archive55b70b6e baseline, identical37fefb30 carrier and LLVM20
+pipeline, succeeds with complete input hashes unchanged. Five alternating pairs
+on the same current source give7.461869 versus7.664992 seconds; all10 emitted
+LLVM hashes and both generated runtimes agree. This isolates a roughly0.20-second
+compiler-runtime difference from processing a different source. It is diagnostic
+comparison evidence, not a completed formal self-host median.
+
+Independent optimized-IR and final-arm64 review finds some widened Result
+returns, but the large `check` IR expansion becomes fewer final instructions
+and zero stores. `buildMidCallEvaluation` grows in frame/code size. These static
+counts do not quantify dynamic causes; getter ARC is not established as the
+primary cause. The report abstraction and authority boundaries remain required.
+
+A fresh isolated diagnostic source changes only buildEnumFromValues initialization
+from full zero to explicit LLVM undef. This tests inactive-payload costs; it is
+not an adopted product change. Before adoption, audit tag/active-field initialization,
+all match/ownership/repack/ABI consumers and zero-sentinel/byte-observation
+dependencies; retain semantic controls, ownership sanitizer coverage and
+same-input measurement. No verifier or failure classification is weakened.
+[Exact evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-diagnostic-report-exact-performance.json).
