@@ -562,3 +562,18 @@ proof across sessions. Preserve the result through a sealed builder/request
 boundary with one ordinary declaration access evaluation; keep existing raw
 verifier input as a separate boundary to exercise. The exact authored and
 cache-mutation checks belong together in the declaration-demand fixture.
+
+Compiler 82fe7185 uses one local access scan for normal declaration
+requests. Its fresh path consumes its own builder result; the raw analysis
+keeps its own unclassified result. On a cache-hit conflict, the request
+replays the frozen source into an isolated arena and compares the receiver
+and argument modes and storage places as well as the call site and conflict.
+Both request and template caches check source session before reuse. Their
+zero-argument factories no longer expose private cache initialization.
+
+All 51 comparisons passed again. The native declaration-demand fixture
+covers fresh and warm source conflicts, disjoint-to-conflicting mutation,
+a same-kind conflict with different storage roots, wrong-session caches,
+and retry after rejecting a foreign template. Independent re-review found
+no further scoped blocker. Formal self-host and full-suite verification
+remain pending for this revision.
