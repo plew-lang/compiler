@@ -509,3 +509,23 @@ blocker for this slice. This does not extend to ambiguous Pending causes
 in other selection paths or to comparison, unary, and synthetic operators.
 
 [Producer replay](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-arithmetic-rejection.json).
+
+### Construction and named factory checkpoint
+
+Compiler f5fd1c7c retains the exact written construction and source location.
+Authorized contextual typing, default completion, and named rewriting refresh
+the receipt only when the incoming expression still matches. Default factory
+visibility requires the loaded lexical site and the selected nominal owner.
+Named factory failure also validates the retained rewrite serial and original
+argument payload. The public raw visibility path keeps its prior domain.
+Default-field ranges retain the arena's existing immutable-slice contract.
+
+Check and AOT each classify all 12 previously Unclassified fixtures as
+Source. ORC classifies 11 reached refusals and keeps the undemanded helper
+successful. All 36 runs retain identical stderr, status and terminal
+channel. Six positive construction controls pass check and ORC. Same-ID
+Make and Method replacement was checked in a native origin control, and a
+named argument-pool mutation kept the original refusal Unclassified.
+Independent re-review found no blocker within the supported boundary.
+
+[Replay and controls](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-factory-rejection.json).
