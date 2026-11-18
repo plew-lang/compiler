@@ -1256,3 +1256,41 @@ Full gates and performance remain open; previous mixed-scratch observations
 are not silently promoted to product revision certification.
 
 [Evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-diagnostic-report-values.json).
+
+### Report fixed point and performance follow-up
+
+Standard run20261118T224254-self-host-cdd742 uses verified development carrier
+37fefb30 and reaches generation2 equality of LLVM, runtime and successor bytes
+(e2360a6d). The input is unchanged. The run nevertheless fails after the third
+LLVM output is empty while the compiler exits0; com-x386 retains this existing
+output-status observation. Two successful times8.392522/8.330378 are not a
+formal median. An older seed carrier c367 first rejected a current type check,
+so its failed attempt supplies no timing.
+
+A no-storage alternating diagnostic on the same current source and explicit
+current std emits one LLVM hash in all6 outputs. Earlier37fefb30 compiler median
+is7.376004; newe2360a6d median7.602993. This proves a difference between those
+compilers, not sole attribution to Report (the older compiler predates other
+changes). Before adding ownership semantic refusal, build the immediately
+pre-Report55b70b6e complete-source optimized baseline and isolate the difference.
+The7-second goal remains unmet, not judged difficult/impossible.
+[Evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-diagnostic-report-self-host.json).
+
+### Performance source review and next comparison
+
+Independent performance review distinguishes facts from hypotheses. Plew's
+current enum layout adds a tag word even for one variant (GenericStruct.pw /
+Enums.pw); if Err dominates the payload, Result[T,CompileDiagnostic] also grows
+one word on success paths. Return ABI stays UnchangedValue. A nonconsuming
+Report payload bind produces EnumPayloadCopy and potential whole-report ARC,
+but its successful-compile execution frequency and optimized cost are unmeasured.
+Defaults already existed in the old struct, so their mere existence is not a
+new cost. No sole cause or optimization is adopted from these observations.
+
+The next comparison uses55b70b6e versus180d4c3f, complete fresh source trees,
+the same carrier/LLVM/pipeline and one fixed compile input. Record wall/user/sys,
+RSS, sizes and LLVM/runtime equality. Separate compiler-runtime difference from
+processing a larger source. Examine hot Result return/try/Ok machine code first
+if the difference persists, then count getter/factory executions; do not distort
+the API or weaken source authority based on speculation. Fresh snapshot file
+sets, not delta copies, are required for this comparison.

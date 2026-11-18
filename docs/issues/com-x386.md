@@ -62,3 +62,14 @@ a failed validation rather than being hidden by compiler exit0.
 **2026-11-15T15:42:11Z**
 
 Observed on 4e6b0256 in the optimized scratch self-compile A/B: under low available disk, both compilers exited 0 after backend:write:done but produced zero-byte stdout LLVM in all 18 trials. With additional free space, the exact same binaries and source emitted 78,200,624 bytes, matching the fixed-point LLVM hash on all rerun outputs. The benchmark now rejects empty output. This is an observed failure, without an errno trace from the compiler itself.
+
+### Additional formal-run observation
+
+Report source180d4c3f in standard self-host run20261118T224254-self-host-cdd742
+reaches a generation2 LLVM/runtime/binary fixed point. Generation2 and
+measurement2 emit identical LLVM, but measurement3 exits0 with a zero-byte
+compiler.ll. The script rejects the required artifact with exit65; available
+space after the failure is158MiB. No compiler errno trace is available, so this
+is the same observed low-space status-loss class, not a completed fix or an
+intentionally invalid source rejection. The run has no formal median.
+[Evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-diagnostic-report-self-host.json).
