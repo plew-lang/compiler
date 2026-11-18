@@ -673,3 +673,13 @@ bound obligations. These are still required work within this task.
 Formal self-host and whole-suite gates remain pending.
 
 [Replay and publication control](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-comparison-rejection.json).
+
+Compiler 47f4f342 also transports authored binary provenance when a selected
+operator's implementation bound has no proof. It reuses the original
+operator diagnostic and its location. Final comparison replay has eight
+Source failures in check/AOT and five reached ORC failures; generated
+match_value_pattern_type remains Unclassified. All 27 text/status/channel
+comparisons pass, source-publication-disabled failures remain Unclassified,
+and three successful check/ORC controls pass. Independent review found no
+scoped blocker. Pending operator routes and formal final validation remain
+outstanding.
