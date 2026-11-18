@@ -757,3 +757,26 @@ review found no scoped blocker. Generated index_immutable remains required
 work. Formal final gates are pending.
 
 [Replay and publication control](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-immutable-receiver-rejection.json).
+
+### Generated index-write origin checkpoint
+
+Compiler 4fd1f1d0 retains a private receipt only at five source assignment
+lowering entry points, then authenticates its synthetic serial, receiver and
+argument range against the published source call. Public raw index builders
+remain without source authority. All 24 immutable-receiver comparisons retain
+exact stderr/status/channel; check/AOT eight and reached ORC seven refusals
+are Source, with the same one undemanded ORC helper succeeding. Three mutable
+index fixtures pass check and exact ORC output (six executions).
+
+The new native index_write_failure_domain fixture prints ok: ordinary source
+refusal is Source while replacing the generated call using the public raw
+builder yields the identical refusal with Unclassified. Its File resource
+input loads ambient standard declarations and uses a U64 index. Earlier
+fixture setup failures are not counted as RED or product failures.
+Independent review found no scoped blocker, including the source/raw contrast.
+A public signature regression from the prior ambiguity increment is repaired:
+staticMemberResolution keeps its original public signature; source origin is
+accepted only by its private delegate. Comp-importing native fixture compiles.
+Formal final gates and com-yeua overall remain open.
+
+[Evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-immutable-receiver-rejection.json).
