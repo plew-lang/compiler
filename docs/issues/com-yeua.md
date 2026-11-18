@@ -295,8 +295,11 @@ from bare template storage mutation.
 
 The diagnostic candidate passes both real source error inputs in check,
 AOT, and lazy. The grouped 49-case check preserves exit 1 and the exact
-expected reason in all cases and produces Source in 47. The other two
-come from the separate iteration diagnostic owner. The native control
+expected reason in all cases and produces Source in 46. Two unclassified
+cases come from the separate iteration diagnostic owner. The third,
+trait_via_stronger_target, is a generated delegation call with no written
+call span. Preserve classification fail-closed there until the authored
+via declaration supplies the diagnostic provenance. The native control
 covers raw append with and without a matching expression, raw replacement
 of an authored call, and the public direct recorder's substitution path.
 The latter three demonstrated incorrect Source in successive intermediate
