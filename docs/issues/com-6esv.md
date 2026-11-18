@@ -50,3 +50,19 @@ generated callable forms, and trait-subject forwarding.
   a second raw signature decision or post-publication candidate search is gone,
   then obtain independent completion review and record the evidence.
 
+
+## Reproduction on the Iteration Fixed Point
+
+The [four-case comparison](../../../evidence/rejection-domains/diagnostic-domain-implementation/via-applicability-red.json)
+uses the generation-2 fixed point of compiler `76a15cb2`. The dependent
+receiver still fails only through `via` at the raw signature precheck.
+The equivalent explicit call and the ordinary and defaulted `via`
+controls pass check and return 42 in JIT.
+
+Use the declaration's real delegation occurrence and requirement signature
+as the input to shared applicability. Preserve the exact receiver and
+parameter modes, result and failure type, and async/diverge contract when
+judging candidate applicability. A raw early Boolean cannot authorize a
+separate forwarding-body search. Preserve declaration-time invalidity even
+when JIT never demands the witness. The fixed-point reproduction is RED
+evidence, not an adoption decision or completion result.
