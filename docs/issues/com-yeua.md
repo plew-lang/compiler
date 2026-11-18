@@ -713,3 +713,16 @@ Four general pattern consumers and one instantiation consumer remain
 required work. Formal final gates remain pending.
 
 [Replay and producer trace](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-bound-ambiguity-rejection.json).
+
+Compiler 5deeecc6 forwards the saved call site through first-concrete
+source-bound checking, including interface evidence replay. The existing
+ambiguity classifier authenticates the site; the raw helper's default
+remains unclassified. Five check/AOT and four reached ORC cases now return
+Source. All 27 comparisons and source-publication-disabled controls pass.
+Three source/interface positives pass check and exact ORC output, and
+independent source review found no scoped blocker.
+
+The internal fixture interface_boxing_conditions imports the compiler;
+its check hit a 30-second diagnostic O0 limit. It is not counted as
+validated here and still needs native/full validation. Four general
+pattern-query consumers and formal final gates remain outstanding.
