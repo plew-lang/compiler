@@ -24,7 +24,7 @@ fn main() {
     match analyzeFrontend(c: inout compiler, input: <FrontendInput.File path=argAt(1I64) />, sources: <SourceAccess stdRoot=argAt(2I64).bytes() />) {
         Result.Ok(value: _) => { if unavailable { panic("a missing interface promise authorized the member condition") } }
         Result.Err(error: val error) => {
-            if !unavailable || error.message != "type argument does not conform to the trait required by `where`" { panic(error.message) }
+            if !unavailable || error.message() != "type argument does not conform to the trait required by `where`" { panic(error.message()) }
         }
     }
     if unavailable || argAt(3I64) == "frontendOnly" { print("ok") return }
@@ -53,7 +53,7 @@ fn main() {
         val wrong = <DeclarationTypeScope origin=<DeclarationScopeOrigin.InterfaceContract /> owner=0U64 parameters=<FuncBindRange start=0U64 len=0U64 /> />
         match compiler.checkDeclarationCallProof(proof: proof, scope: wrong, offset: 0U64) {
             Result.Ok(value: _) => { panic("abstract retained output escaped its interface scope") }
-            Result.Err(error: val error) => { if error.message != "interface assumption belongs to another selected operation" { panic(error.message) } }
+            Result.Err(error: val error) => { if error.message() != "interface assumption belongs to another selected operation" { panic(error.message()) } }
         }
     } else if scenario == "missing" {
         mut val equations: Array[ProjectionNormalizationStep] = []
@@ -69,7 +69,7 @@ fn main() {
         val changed = <ProjectionNormalizationStep source=source proof=step.proof output=0U64 />
         match compiler.checkProjectionNormalizations(normalizations: [changed], offset: 0U64, assumptions: compiler.declarationScopeAssumptions(scope: scope).unwrap()) {
             Result.Ok(value: _) => { panic("an abstract output authorized a nonexistent associated member") }
-            Result.Err(error: val error) => { if error.message != "selected condition projection evidence has no declared associated type" { panic(error.message) } }
+            Result.Err(error: val error) => { if error.message() != "selected condition projection evidence has no declared associated type" { panic(error.message()) } }
         }
     }
     if compiler.activeAssumptionAdmission.count() != 0U64 { panic("interface scope rejection leaked the active prerequisite stack") }

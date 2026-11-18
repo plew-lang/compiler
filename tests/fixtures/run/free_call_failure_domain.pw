@@ -17,7 +17,7 @@ fn main() {
         match invalid.prepareLexicalBody(fnIdx: rejected) {
             Result.Ok(value: _) => { panic "invalid call accepted" }
             Result.Err(error: val diagnostic) => {
-                if diagnostic.message != "no matching function for this argument list" || !diagnostic.isSourceRejection() { panic "source failure lost its domain" }
+                if diagnostic.message() != "no matching function for this argument list" || !diagnostic.isSourceRejection() { panic "source failure lost its domain" }
             }
         }
     }
@@ -86,8 +86,8 @@ fn main() {
     match c.prepareLexicalBody(fnIdx: target) {
         Result.Ok(value: _) => { panic "cache counterexample was accepted" }
         Result.Err(error: val diagnostic) => {
-            if diagnostic.message != "no matching function for this argument list" { panic "wrong cache failure" }
-            match diagnostic.failureDomain {
+            if diagnostic.message() != "no matching function for this argument list" { panic "wrong cache failure" }
+            match diagnostic.failureDomain() {
                 FailureDomain.Unclassified => {}
                 _ => { panic "wrong domain" }
             }

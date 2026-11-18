@@ -18,16 +18,16 @@ fn main() {
     assert(deferred.isDeferred())
     assert(requests.count() == 0U64)
     match compiler.appendCallConstraintInstance(function: 0U64, arguments: [], receiver: 0U64, proof: <StaticConformanceProof.Missing />, depth: 0U64, requests: inout requests, heads: inout heads, relevant: relevant) {
-        Result.Err(error: val diagnostic) => { assert(diagnostic.message == "declaration obligation has incomplete type arguments") }
+        Result.Err(error: val diagnostic) => { assert(diagnostic.message() == "declaration obligation has incomplete type arguments") }
         Result.Ok(value: _) => { panic "missing arguments were treated as completed" }
     }
     match compiler.appendCallConstraintInstance(function: 0U64, arguments: [0U64], receiver: 0U64, proof: <StaticConformanceProof.Missing />, depth: 0U64, requests: inout requests, heads: inout heads, relevant: relevant) {
-        Result.Err(error: val diagnostic) => { assert(diagnostic.message == "declaration obligation has an unresolved type argument") }
+        Result.Err(error: val diagnostic) => { assert(diagnostic.message() == "declaration obligation has an unresolved type argument") }
         Result.Ok(value: _) => { panic "unknown type was treated as symbolic" }
     }
     // A symbolic prefix must not hide a missing later argument.
     match compiler.appendCallConstraintInstance(function: 2U64, arguments: [symbolic, 0U64], receiver: 0U64, proof: <StaticConformanceProof.Missing />, depth: 0U64, requests: inout requests, heads: inout heads, relevant: relevant) {
-        Result.Err(error: val diagnostic) => { assert(diagnostic.message == "declaration obligation has an unresolved type argument") }
+        Result.Err(error: val diagnostic) => { assert(diagnostic.message() == "declaration obligation has an unresolved type argument") }
         Result.Ok(value: _) => { panic "symbolic prefix hid a missing argument" }
     }
     val complete = compiler.appendCallConstraintInstance(function: 0U64, arguments: [concrete], receiver: 0U64, proof: <StaticConformanceProof.Missing />, depth: 0U64, requests: inout requests, heads: inout heads, relevant: relevant).unwrap()
@@ -48,13 +48,13 @@ fn main() {
     // A nested missing proof cannot be hidden by a successful outer repack.
     val conversion = <ValueConversionProof.ArrayRepack sourceRef=concrete targetRef=concrete element=<ValueConversionProof.Missing /> />
     match compiler.checkConversionObligations(conversion: conversion, environment: <InstanceEnvironment />, depth: 0U64, requests: inout requests, heads: inout heads, relevant: relevant) {
-        Result.Err(error: val diagnostic) => { assert(diagnostic.message == "source value does not satisfy the required conversion") }
+        Result.Err(error: val diagnostic) => { assert(diagnostic.message() == "source value does not satisfy the required conversion") }
         Result.Ok(value: _) => { panic "nested missing proof was treated as completed" }
     }
     // Even an abstract source requires recorded conformance evidence.
     val missingBox = <ValueConversionProof.ExistentialBox sourceRef=symbolic targetRef=concrete traitIdx=0U64 proof=<StaticConformanceProof.Missing /> />
     match compiler.checkConversionObligations(conversion: missingBox, environment: <InstanceEnvironment />, depth: 0U64, requests: inout requests, heads: inout heads, relevant: relevant) {
-        Result.Err(error: val diagnostic) => { assert(diagnostic.message == "declaration obligation has no conformance evidence") }
+        Result.Err(error: val diagnostic) => { assert(diagnostic.message() == "declaration obligation has no conformance evidence") }
         Result.Ok(value: _) => { panic "symbolic source hid missing conformance evidence" }
     }
     print("ok")

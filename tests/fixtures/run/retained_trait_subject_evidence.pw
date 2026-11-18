@@ -18,7 +18,7 @@ fn main() {
     val assumption = <StaticConformanceProof.AssumedBound source=<DeclarationBoundRef.TraitSubject index=terminal.conformIdx - 1U64 /> />
     val instantiated = match compiler.instantiateConstraintProof(proof: assumption, receiverRef: receiver, environment: environment, selfRef: receiver, itemRef: 0U64) {
         Result.Ok(value: val state) => { give state }
-        Result.Err(error: val diagnostic) => { panic(diagnostic.message) }
+        Result.Err(error: val diagnostic) => { panic(diagnostic.message()) }
     }
     match instantiated {
         StaticProofInstantiation.Ready(proof: val selected) => {

@@ -23,7 +23,7 @@ fn requireClosureOk[T](result: Result[T, CompileDiagnostic], stage: String, mode
             eprint(text: " stage=")
             eprint(text: stage)
             eprint(text: ": ")
-            eprint(text: error.message)
+            eprint(text: error.message())
             eprint(text: "\n")
             panic "private closure setup or valid-path API failed"
         }
@@ -32,7 +32,7 @@ fn requireClosureOk[T](result: Result[T, CompileDiagnostic], stage: String, mode
 fn requireClosureInternal[T](result: Result[T, CompileDiagnostic]) {
     match result {
         Result.Ok(value: _) => { panic "malformed closure local plan accepted" }
-        Result.Err(error: val error) => { match error.failureDomain { FailureDomain.Internal => {} _ => { panic "wrong closure local plan failure domain" } } }
+        Result.Err(error: val error) => { match error.failureDomain() { FailureDomain.Internal => {} _ => { panic "wrong closure local plan failure domain" } } }
     }
 }
 // Each rejection starts from an otherwise valid live LLVM entry. No malformed

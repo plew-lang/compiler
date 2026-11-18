@@ -30,8 +30,8 @@ fn main() {
         val type = <TypeAst name="S" args=[] span=site viewSources=views projectionTrait="P" projectionTraitArgs=[integer] projectionAssoc="Item" />
         match compiler.lowerType(t: type) {
             Result.Err(error: val diagnostic) => {
-                if scenario == "empty" && diagnostic.message == "invalid type source path input" {
-                    match diagnostic.failureDomain { FailureDomain.Input => { print("1") return } _ => {} }
+                if scenario == "empty" && diagnostic.message() == "invalid type source path input" {
+                    match diagnostic.failureDomain() { FailureDomain.Input => { print("1") return } _ => {} }
                 }
                 emitDiagnostic(diagnostic: diagnostic) print("0") return
             }

@@ -1185,7 +1185,7 @@ impl Comp {
         }
         match self.checkProjectionNormalizations(normalizations: equations, offset: offset, assumptions: [premise.source.unwrap()]) {
             Result.Ok(value: _) => {}
-            Result.Err(error: val diagnostic) => { return <Result.Err error=self.diagnosticAt(offset: offset, msg: diagnostic.message, failureDomain: <FailureDomain.Internal />) /> }
+            Result.Err(error: val diagnostic) => { return <Result.Err error=self.diagnosticAt(offset: offset, msg: diagnostic.message(), failureDomain: <FailureDomain.Internal />) /> }
         }
         return self.substituteSignatureEquations(equations: equations, environment: environment, offset: offset)
     }

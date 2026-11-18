@@ -24,8 +24,8 @@ fn checkFailure(known: Bool) {
     assert(compiler.decls.declarationConversions.count() == 1U64)
     match compiler.checkRecordedMemberObligations() {
         Result.Err(error: val diagnostic) => {
-            if known { assert(diagnostic.message == "source value does not satisfy the required conversion") }
-            else { assert(diagnostic.message == "source conversion requires a resolved value type") }
+            if known { assert(diagnostic.message() == "source value does not satisfy the required conversion") }
+            else { assert(diagnostic.message() == "source conversion requires a resolved value type") }
         }
         Result.Ok(value: _) => { panic "declaration accepted incomplete conversion evidence" }
     }
@@ -37,11 +37,11 @@ fn checkFailure(known: Bool) {
         val proof = compiler.freezeValueConversionProof(proof: conversion)
         compiler.decls.declarationConversions[0U64] = <DeclarationConversion site=site source=source target=target proof=proof />
         match compiler.checkRecordedMemberObligations() {
-            Result.Err(error: val diagnostic) => { assert(diagnostic.message == "declaration obligation has no conformance evidence") }
+            Result.Err(error: val diagnostic) => { assert(diagnostic.message() == "declaration obligation has no conformance evidence") }
             Result.Ok(value: _) => { panic "empty trait hid missing conformance evidence" }
         }
         match compiler.instantiateValueConversion(conversion: conversion, environment: <InstanceEnvironment />, selfRef: 0U64, itemRef: 0U64) {
-            Result.Err(error: val diagnostic) => { assert(diagnostic.message == "conversion has no concrete conformance evidence") }
+            Result.Err(error: val diagnostic) => { assert(diagnostic.message() == "conversion has no concrete conformance evidence") }
             Result.Ok(value: _) => { panic "executable conversion accepted missing evidence" }
         }
     }

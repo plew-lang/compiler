@@ -64,8 +64,8 @@ fn recordFailureDomain(domain: FailureDomain) {
 
 pub fn emitCompilerFailure(diagnostic: CompileDiagnostic) {
     emitDiagnostic(diagnostic: diagnostic)
-    val domain = match diagnostic.severity {
-        DiagnosticSeverity.Error => diagnostic.failureDomain
+    val domain = match diagnostic.severity() {
+        DiagnosticSeverity.Error => diagnostic.failureDomain()
         DiagnosticSeverity.Warning => <FailureDomain.Unclassified />
     }
     recordFailureDomain(domain: domain)

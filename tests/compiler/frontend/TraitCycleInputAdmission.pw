@@ -8,11 +8,11 @@ use @Std/Process only { argAt }
 fn requireInputFailure(compiler: inout Comp, message: String, activeExtIds: Array[U64] = []) {
     match compiler.checkTraitSubjectCycles(activeExtIds: activeExtIds) {
         Result.Err(error: val diagnostic) => {
-            if diagnostic.message != message {
+            if diagnostic.message() != message {
                 emitDiagnostic(diagnostic: diagnostic)
                 panic("invalid graph was not refused at input admission")
             }
-            match diagnostic.failureDomain {
+            match diagnostic.failureDomain() {
                 FailureDomain.Input => {}
                 _ => { panic("malformed graph did not retain Input failure domain") }
             }

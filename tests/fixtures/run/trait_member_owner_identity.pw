@@ -58,7 +58,7 @@ fn main() {
         val owner = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: name).nameId)
         match compiler.prepareLexicalBody(fnIdx: owner) {
             Result.Err(error: val error) => {
-                assert(error.message == "no matching method for this argument list: method not provided by the bounds of this type parameter (add a `where T: Trait` that declares it)")
+                assert(error.message() == "no matching method for this argument list: method not provided by the bounds of this type parameter (add a `where T: Trait` that declares it)")
                 if name == "secondHidden" { print(false) }
             }
             Result.Ok(value: _) => { panic("private provided member leaked") }

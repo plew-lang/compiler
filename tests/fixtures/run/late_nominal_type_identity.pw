@@ -8,7 +8,7 @@ use /Ir only { Bind, Stmt, Expr, InstanceEnvironment, TypeRef, ResolvedViewSourc
 fn requireSuccess(result: Result[(), CompileDiagnostic]) {
     match result {
         Result.Ok(value: _) => {}
-        Result.Err(error: val error) => { print(error.message) panic("unexpected declaration-client error") }
+        Result.Err(error: val error) => { print(error.message()) panic("unexpected declaration-client error") }
     }
 }
 

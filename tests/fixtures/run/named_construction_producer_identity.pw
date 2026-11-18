@@ -34,7 +34,7 @@ fn inspect(function: String, missing: Bool = false) {
     val prepared = compiler.prepareLexicalBody(fnIdx: owner)
     if missing {
         match prepared {
-            Result.Err(error: val error) => { assert(error.message == "internal error: named construction is missing its producer type term") }
+            Result.Err(error: val error) => { assert(error.message() == "internal error: named construction is missing its producer type term") }
             _ => { panic("missing producer term admitted") }
         }
     } else {

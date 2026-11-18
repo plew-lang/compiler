@@ -123,11 +123,11 @@ fn main() {
             if expected != "" { panic("invalid pattern input was admitted") }
         }
         Result.Err(error: val diagnostic) => {
-            if expected == "" || diagnostic.message != expected {
+            if expected == "" || diagnostic.message() != expected {
                 emitDiagnostic(diagnostic: diagnostic)
                 panic("wrong pattern input result")
             }
-            match diagnostic.failureDomain {
+            match diagnostic.failureDomain() {
                 FailureDomain.Input => {}
                 _ => { panic("pattern input did not retain Input domain") }
             }

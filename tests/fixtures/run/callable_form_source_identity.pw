@@ -15,7 +15,7 @@ fn replacement(site: SyntheticCallSite, declaration: U64, conformance: U64, argu
 fn require[T](result: Result[T, CompileDiagnostic], stage: String) -> T {
     match result {
         Result.Ok(value: val value) => { return value }
-        Result.Err(error: val error) => { print(stage) panic(error.message) }
+        Result.Err(error: val error) => { print(stage) panic(error.message()) }
     }
 }
 

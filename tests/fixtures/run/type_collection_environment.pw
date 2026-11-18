@@ -40,7 +40,7 @@ fn main() {
     match compiler.scanGenInstFields(instRef: rejected) {
         Result.Ok(value: _) => { panic "expected nested registration diagnostic" }
         Result.Err(error: val diagnostic) => {
-            if diagnostic.message != "type recursion limit reached while instantiating a generic type — a generic appears to recurse with an ever-deepening type argument (polymorphic recursion is not supported)" { panic "unexpected nested registration diagnostic" }
+            if diagnostic.message() != "type recursion limit reached while instantiating a generic type — a generic appears to recurse with an ever-deepening type argument (polymorphic recursion is not supported)" { panic "unexpected nested registration diagnostic" }
         }
     }
     if compiler.cur.typeParams.count() != declaration.typeParams.count() || compiler.cur.typeParams[0U64].paramId != declaration.typeParams[0U64].paramId { panic "diagnostic changed caller binders" }

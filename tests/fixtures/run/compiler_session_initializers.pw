@@ -6,7 +6,7 @@ use @Std/Io only { print }
 fn initializers() {
     val source = "mut val counter = 1I64 val ready = initialize() fn initialize() -> I64 {{ return counter }} fn main() {{ missing() }}"
     match CompilerSession.open(input: <FrontendInput.Text path="startup.pw" text=source />, sources: <SourceAccess />) {
-        CompilerSessionResult.Failure(diagnostic: val diagnostic) => { panic diagnostic.message }
+        CompilerSessionResult.Failure(diagnostic: val diagnostic) => { panic diagnostic.message() }
         CompilerSessionResult.Success(session: val opened) => {
             mut val session = move opened
             val prepared = session.prepareInitializers().unwrap().unwrap()
@@ -20,7 +20,7 @@ fn initializers() {
                 Result.Err(error: val diagnostic) => {
                     match session.prepareInitializers() {
                         Result.Ok(value: _) => { panic "startup resumed failed session" }
-                        Result.Err(error: val repeated) => { if repeated.message != diagnostic.message { panic "terminal error changed" } }
+                        Result.Err(error: val repeated) => { if repeated.message() != diagnostic.message() { panic "terminal error changed" } }
                     }
                 }
             }
@@ -30,7 +30,7 @@ fn initializers() {
 
 fn empty() {
     match CompilerSession.open(input: <FrontendInput.Text path="empty.pw" text="fn main() {{ missing() }}" />, sources: <SourceAccess />) {
-        CompilerSessionResult.Failure(diagnostic: val diagnostic) => { panic diagnostic.message }
+        CompilerSessionResult.Failure(diagnostic: val diagnostic) => { panic diagnostic.message() }
         CompilerSessionResult.Success(session: val opened) => {
             mut val session = move opened
             match session.prepareInitializers().unwrap() {

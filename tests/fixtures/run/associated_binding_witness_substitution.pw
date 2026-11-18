@@ -53,7 +53,7 @@ fn main() {
     for malformed in [extra, missing] {
         match compiler.associatedOutputInProof(proof: malformed, traitOwner: binding.traitOwner, assocId: binding.nameId) {
             Result.Err(error: val diagnostic) => {
-                match diagnostic.failureDomain {
+                match diagnostic.failureDomain() {
                     FailureDomain.Internal => {}
                     _ => { panic("malformed binder is not an internal evidence failure") }
                 }

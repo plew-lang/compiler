@@ -9,10 +9,10 @@ extern(c) {
     fn LLVMIsALoadInst(value~: LLVMValueRef) -> U64
 }
 fn glueOk[T](result: Result[T, CompileDiagnostic]) -> T {
-    match result { Result.Ok(value: val value) => { return value } Result.Err(error: val error) => { eprint(text: error.message) panic "valid glue protocol rejected" } }
+    match result { Result.Ok(value: val value) => { return value } Result.Err(error: val error) => { eprint(text: error.message()) panic "valid glue protocol rejected" } }
 }
 fn glueInternal[T](result: Result[T, CompileDiagnostic]) {
-    match result { Result.Ok(value: _) => { panic "malformed glue accepted" } Result.Err(error: val error) => { match error.failureDomain { FailureDomain.Internal => {} _ => { panic "wrong glue failure domain" } } } }
+    match result { Result.Ok(value: _) => { panic "malformed glue accepted" } Result.Err(error: val error) => { match error.failureDomain() { FailureDomain.Internal => {} _ => { panic "wrong glue failure domain" } } } }
 }
 fn main() {
     val context = LLVMContextCreate()

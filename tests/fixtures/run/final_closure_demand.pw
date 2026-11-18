@@ -34,7 +34,7 @@ fn main() {
     c.inCollection = false
     match c.requestFinalBody(bodyId: closure, requests: inout requests) {
         Result.Ok(value: _) => {}
-        Result.Err(error: val diagnostic) => { panic diagnostic.message }
+        Result.Err(error: val diagnostic) => { panic diagnostic.message() }
     }
     if c.cur.checkFn != 77U64 || c.cur.bodyId != 88U64 || c.inCollection { panic "closure request leaked context" }
     mut val calls = 0U64

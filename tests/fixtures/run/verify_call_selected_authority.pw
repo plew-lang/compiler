@@ -56,7 +56,7 @@ fn checkReceiver(source: String, message: String) {
     val owner = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "probe").nameId)
     match compiler.prepareLexicalBody(fnIdx: owner) {
         Result.Err(error: val diagnostic) => {
-            if diagnostic.message != message { panic(diagnostic.message) }
+            if diagnostic.message() != message { panic(diagnostic.message()) }
         }
         Result.Ok(value: _) => { panic("invalid selected receiver accepted") }
     }
@@ -65,7 +65,7 @@ fn checkReceiver(source: String, message: String) {
 fn checked(result~: Result[(), CompileDiagnostic]) {
     match result {
         Result.Ok(value: _) => {}
-        Result.Err(error: val diagnostic) => { panic(diagnostic.message) }
+        Result.Err(error: val diagnostic) => { panic(diagnostic.message()) }
     }
 }
 

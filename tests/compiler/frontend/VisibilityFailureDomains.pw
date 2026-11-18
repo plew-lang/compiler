@@ -8,7 +8,7 @@ fn requireVisibilityFailure(input: FrontendInput, message: String) {
     mut val compiler = <Comp />
     match analyzeFrontend(c: inout compiler, input: input, sources: <SourceAccess stdRoot="std/".bytes() />) {
         Result.Err(error: val diagnostic) => {
-            if diagnostic.message != message { emitDiagnostic(diagnostic: diagnostic) panic("wrong visibility refusal") }
+            if diagnostic.message() != message { emitDiagnostic(diagnostic: diagnostic) panic("wrong visibility refusal") }
             if !diagnostic.isSourceRejection() { panic("visibility refusal lost Source domain") }
         }
         Result.Ok(value: _) => { panic("private field access was accepted") }

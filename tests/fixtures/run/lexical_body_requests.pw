@@ -40,7 +40,7 @@ fn main() {
     if c.cur.checkFn != 70001U64 || c.cur.bodyFnIdx != 70002U64 || c.cur.bodyId != 70003U64 || !c.cur.recordCallTemplates { panic("failed request leaked its cursor") }
     val templates = c.callTemplateCount()
     match c.prepareLexicalBody(fnIdx: broken) {
-        Result.Err(error: val failure) => { if failure.message != diagnostic.message { panic("retry changed diagnostic") } }
+        Result.Err(error: val failure) => { if failure.message() != diagnostic.message() { panic("retry changed diagnostic") } }
         Result.Ok(value: _) => { panic("retry lost failure") }
     }
     if c.callTemplateCount() != templates { panic("retry repeated recording") }

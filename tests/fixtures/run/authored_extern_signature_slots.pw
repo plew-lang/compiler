@@ -56,8 +56,8 @@ fn checkUnprovenView(source: String) {
     match analyzeFrontendDeclarations(c: inout compiler, input: <FrontendInput.Text text=source path="unused-extern.pw" />, sources: <SourceAccess stdRoot=[] />) {
         Result.Ok(value: _) => { panic("unused extern with an unproven view passed declaration checking") }
         Result.Err(error: val diagnostic) => {
-            assert(diagnostic.message == "trait view requires a conformance for this receiver and exact trait instance (spec/09)")
-            match diagnostic.failureDomain {
+            assert(diagnostic.message() == "trait view requires a conformance for this receiver and exact trait instance (spec/09)")
+            match diagnostic.failureDomain() {
                 FailureDomain.Source => {}
                 _ => { panic("unproven extern view did not produce a source diagnostic") }
             }

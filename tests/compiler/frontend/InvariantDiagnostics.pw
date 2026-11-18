@@ -10,7 +10,7 @@ use @Std/Io only { print }
 fn expectDiagnostic[T](result: Result[T, CompileDiagnostic]) {
     match result {
         Result.Ok(value: _) => { panic("invalid semantic state was accepted") }
-        Result.Err(error: val diagnostic) => { print(diagnostic.message) }
+        Result.Err(error: val diagnostic) => { print(diagnostic.message()) }
     }
 }
 
@@ -29,7 +29,7 @@ fn duplicateOrigin() {
     c.recordSyntheticCallSite(site: site).unwrap()
     match c.recordSyntheticCallSite(site: site) {
         Result.Ok(value: _) => { panic("duplicate origin was accepted") }
-        Result.Err(error: val diagnostic) => { print(diagnostic.message) }
+        Result.Err(error: val diagnostic) => { print(diagnostic.message()) }
     }
 }
 
@@ -87,7 +87,7 @@ fn missingMidOwner() {
     c.arena.registerFunction(invalidOwnerFunction())
     val built = buildParametricMidBody(c: inout c, fnIdx: 0U64)
     match built.error {
-        MidBuildError.Frontend(diagnostic: val diagnostic) => { print(diagnostic.message) }
+        MidBuildError.Frontend(diagnostic: val diagnostic) => { print(diagnostic.message()) }
         _ => { panic("Mid did not return the frontend ownership diagnostic") }
     }
 }
@@ -107,7 +107,7 @@ fn missingAmbientDestruction() {
     mut val effects = <MidAmbientEffects bodyCount=0U64 />
     match effects.destruction(c: inout c, owner: 0U64, type: term) {
         Result.Ok(value: _) => { panic("missing destruction was accepted by ambient analysis") }
-        Result.Err(error: val diagnostic) => { print(diagnostic.message) }
+        Result.Err(error: val diagnostic) => { print(diagnostic.message()) }
     }
 }
 

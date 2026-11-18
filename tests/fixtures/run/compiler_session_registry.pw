@@ -7,7 +7,7 @@ use @Std/Io only { print }
 
 fn registered(source: String) -> U64 {
     match CompilerSession.open(input: <FrontendInput.Text path="registry.pw" text=source />, sources: <SourceAccess />) {
-        CompilerSessionResult.Failure(diagnostic: val diagnostic) => { panic diagnostic.message }
+        CompilerSessionResult.Failure(diagnostic: val diagnostic) => { panic diagnostic.message() }
         CompilerSessionResult.Success(session: val session) => {
             return registerCompilerSession(session: move session).unwrap()
         }
@@ -45,7 +45,7 @@ fn main() {
     }
     match held->prepareFunction(function: 0U64) {
         Result.Ok(value: _) => {}
-        Result.Err(error: val diagnostic) => { panic diagnostic.message }
+        Result.Err(error: val diagnostic) => { panic diagnostic.message() }
     }
     val other = findCompilerSession(registry: snapshot, sessionId: second).unwrap()
     match other->prepareFunction(function: 0U64) {

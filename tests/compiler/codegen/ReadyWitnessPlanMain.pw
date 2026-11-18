@@ -25,7 +25,7 @@ fn requireWitnessOk[T](result: Result[T, CompileDiagnostic], stage: String, mode
         Result.Err(error: val error) => {
             eprint(text: "witness-plan mode=") eprintU64(n: mode)
             eprint(text: " stage=") eprint(text: stage)
-            eprint(text: ": ") eprint(text: error.message) eprint(text: "\n")
+            eprint(text: ": ") eprint(text: error.message()) eprint(text: "\n")
             panic "private witness setup or valid-path API failed"
         }
     }
@@ -33,7 +33,7 @@ fn requireWitnessOk[T](result: Result[T, CompileDiagnostic], stage: String, mode
 fn requireWitnessInternal[T](result: Result[T, CompileDiagnostic], mode: U64) {
     match result {
         Result.Ok(value: _) => { eprintU64(n: mode) panic "malformed witness local plan accepted" }
-        Result.Err(error: val error) => { match error.failureDomain { FailureDomain.Internal => {} _ => { panic "wrong witness local plan failure domain" } } }
+        Result.Err(error: val error) => { match error.failureDomain() { FailureDomain.Internal => {} _ => { panic "wrong witness local plan failure domain" } } }
     }
 }
 fn witnessPlanControl(mode: U64) {

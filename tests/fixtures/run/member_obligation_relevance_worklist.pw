@@ -94,7 +94,7 @@ fn checkOperator() {
 }
 
 fn line(diagnostic: CompileDiagnostic) -> I64 {
-    match diagnostic.location {
+    match diagnostic.location() {
         DiagnosticLocation.Line(line: val line) => { return line }
         DiagnosticLocation.File(path: _, line: val line) => { return line }
         DiagnosticLocation.Unpositioned => { panic("missing diagnostic source line") }
@@ -136,7 +136,7 @@ fn checkErrorOrder(reverse: Bool) {
     val expected = compiler.diagnosticAt(offset: site.originStart, msg: message)
     match compiler.memberObligationRelevance() {
         Result.Err(error: val diagnostic) => {
-            if diagnostic.message != message || line(diagnostic: diagnostic) != line(diagnostic: expected) { panic("initial relevance diagnostic order changed") }
+            if diagnostic.message() != message || line(diagnostic: diagnostic) != line(diagnostic: expected) { panic("initial relevance diagnostic order changed") }
         }
         Result.Ok(value: _) => { panic("missing prepared constraints were silently skipped") }
     }

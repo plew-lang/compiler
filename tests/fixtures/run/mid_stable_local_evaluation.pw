@@ -42,12 +42,12 @@ fn check(name: String, snapshot: Bool) {
     mut val compiler = <Comp />
     match analyzeFrontendDeclarations(c: inout compiler, input: <FrontendInput.Text path="stable-local.pw" text="fn effect() -> I64 {{ return 0I64 }} fn text(input: String) -> String {{ return input }} struct Pair {{ val first: String val second: String }} fn sink(value: String, extra: I64) {{}} fn stable(input: String) {{ val first = input val local = first sink(value: local, extra: effect()) val values = <Pair first=local second=text(input: local) /> }} fn mutable(input: String) {{ val first = input mut val local = first sink(value: local, extra: effect()) val values = <Pair first=local second=text(input: local) /> }}" />, sources: <SourceAccess />) {
         Result.Ok(value: _) => {}
-        Result.Err(error: val diagnostic) => { print(diagnostic.message) panic("stable-local frontend setup failed") }
+        Result.Err(error: val diagnostic) => { print(diagnostic.message()) panic("stable-local frontend setup failed") }
     }
     val owner = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: name).nameId)
     match compiler.prepareLexicalBody(fnIdx: owner) {
         Result.Ok(value: _) => {}
-        Result.Err(error: val diagnostic) => { print(diagnostic.message) panic("stable-local body setup failed") }
+        Result.Err(error: val diagnostic) => { print(diagnostic.message()) panic("stable-local body setup failed") }
     }
     val facts = compiler.preparedFunctionSemanticFacts(fnIdx: owner).unwrap()
     mut val templates = <MidFunctionTemplates />

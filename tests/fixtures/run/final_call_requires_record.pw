@@ -8,7 +8,7 @@ fn rejected(compiler: inout Comp, expression: U64) {
     val template = compiler.callTemplateForCurrentBody(exprId: expression).unwrap()
     match compiler.resolveBodyCallee(exprId: expression, template: template) {
         Result.Err(error: val diagnostic) => {
-            if diagnostic.message != "internal error: written call CallTemplate was not recorded" { panic diagnostic.message }
+            if diagnostic.message() != "internal error: written call CallTemplate was not recorded" { panic diagnostic.message() }
         }
         Result.Ok(value: _) => { panic "final call reselected without a lexical record" }
     }
@@ -18,7 +18,7 @@ fn rejected(compiler: inout Comp, expression: U64) {
 fn rejectRecipe(compiler: inout Comp, recipe: U64, body: U64, message: String) {
     match compiler.groundSemanticTypeRecipeForBody(recipeId: recipe, bodyId: body, selfRef: 0U64, itemRef: 0U64, requireProducer: true) {
         Result.Err(error: val diagnostic) => {
-            if diagnostic.message != message { panic diagnostic.message }
+            if diagnostic.message() != message { panic diagnostic.message() }
         }
         Result.Ok(value: _) => { panic "invalid checked recipe produced a result" }
     }
@@ -27,7 +27,7 @@ fn rejectRecipe(compiler: inout Comp, recipe: U64, body: U64, message: String) {
 fn rejectDependency(compiler: inout Comp, expression: U64, site: CallSiteKey, message: String) {
     match compiler.prepareCheckedResultCall(expression: expression, site: site) {
         Result.Err(error: val diagnostic) => {
-            if diagnostic.message != message { panic diagnostic.message }
+            if diagnostic.message() != message { panic diagnostic.message() }
         }
         Result.Ok(value: _) => { panic "invalid checked dependency was accepted" }
     }

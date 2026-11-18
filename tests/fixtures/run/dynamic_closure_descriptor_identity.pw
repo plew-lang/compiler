@@ -46,7 +46,7 @@ fn main() {
     val source = "struct Left {{}} struct Right {{}} struct Handler[T] {{ val first: fn(value: T) -> T val second: fn(value: T) -> T }} fn field[T](handler: Handler[T], value: T) -> T {{ return handler.first(value: value) }} fn local[T](first: fn(value: T) -> T, second: fn(value: T) -> T, value: T) -> T {{ return first(value: value) }} fn main() {{ val left = fn(value: Left) -> Left {{ return value }} val right = fn(value: Right) -> Right {{ return value }} val a = field(handler: <Handler[Left] first=left second=left />, value: <Left />) val b = field(handler: <Handler[Right] first=right second=right />, value: <Right />) val c = local(first: left, second: left, value: <Left />) val d = local(first: right, second: right, value: <Right />) }}"
     match analyzeFrontend(c: inout compiler, input: <FrontendInput.Text path="dynamic-descriptors.pw" text=source />, sources: <SourceAccess />) {
         Result.Ok(value: _) => {}
-        Result.Err(error: val diagnostic) => { panic(diagnostic.message) }
+        Result.Err(error: val diagnostic) => { panic(diagnostic.message()) }
     }
     mut val rows: Array[CallResolution] = []
     mut val fields = 0U64

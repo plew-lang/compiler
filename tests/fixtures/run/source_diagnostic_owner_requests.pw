@@ -18,7 +18,7 @@ fn owner(compiler: inout Comp, name: String) -> U64 {
 fn expectFailure(result: Result[(), CompileDiagnostic]) {
     match result {
         Result.Err(error: val diagnostic) => {
-            if diagnostic.message != "unary `-` (Neg) is for signed integers / floats only (spec/12)" { panic(diagnostic.message) }
+            if diagnostic.message() != "unary `-` (Neg) is for signed integers / floats only (spec/12)" { panic(diagnostic.message()) }
         }
         Result.Ok(value: _) => { panic("diagnostic continuation published owner success") }
     }

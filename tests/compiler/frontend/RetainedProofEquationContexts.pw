@@ -47,7 +47,7 @@ fn main() {
         val environment = compiler.selectedConstraintEnvironment(witness: compiler.selectedConstraintWitness(proof: selected).unwrap(), proof: selected).unwrap()
         val replay = match compiler.instantiateConstraintProof(proof: abstract, receiverRef: item, environment: environment, selfRef: boxed, itemRef: 0U64) {
             Result.Ok(value: val replay) => replay,
-            Result.Err(error: val diagnostic) => { panic("associated replay: " + diagnostic.message) },
+            Result.Err(error: val diagnostic) => { panic("associated replay: " + diagnostic.message()) },
         }
         match replay {
             StaticProofInstantiation.Ready(proof: val actual) => { compiler.checkStaticProofEvidence(proof: actual, offset: 0U64).unwrap() }

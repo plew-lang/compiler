@@ -12,7 +12,7 @@ fn main() {
     val program = "trait Marker {{}}\npub impl Marker {{ fn markerAnswer() -> I64 {{ return 1I64 }} }}\ntrait Service: Marker {{ fn get() -> I64 where Self: Marker }}\npub impl Service {{ fn providedAnswer() -> I64 {{ return 42I64 }} }}\nstruct Wrapper[T] {{}}\nimpl[T] Wrapper[T] as Marker where T: Marker {{}}\ntrait Items {{ type Item: Marker fn get() -> I64 where Wrapper[Item]: Marker }}\nstruct Value {{}}\nimpl Value as Marker {{}}\nimpl Value as Service {{ fn get() -> I64 {{ return 42I64 }} }}\nstruct Collection {{}}\nimpl Collection as Items {{ type Item = Value fn get() -> I64 {{ return 1I64 }} }}\nfn read(value: any Service) -> I64 {{ val first = value.get() return value.get() }}\nfn item[T](value: any Items[Item = T]) -> I64 {{ return value.get() }}\ntrait Family {{ type Child: Marker }}\nstruct Parent {{}}\nimpl Parent as Family {{ type Child = Value }}\nstruct NestedWrapper[T] {{}}\nimpl[T] NestedWrapper[T] as Marker where T: Family, T#Family.Child: Marker {{}}\ntrait Trees {{ type Item: Family fn get() -> I64 where NestedWrapper[Item]: Marker }}\nstruct Tree {{}}\nimpl Tree as Trees {{ type Item = Parent fn get() -> I64 {{ return 3I64 }} }}\nfn tree[T](value: any Trees[Item=T]) -> I64 {{ return value.get() }}\nfn main() {{ val first = read(value: <Value />) val erased: any Items[Item = Value] = <Collection /> val second = item(value: erased) val trees: any Trees[Item=Parent] = <Tree /> val third = tree(value: trees) }}\n"
     match analyzeFrontend(c: inout compiler, input: <FrontendInput.Text text=program path="interface-final.pw" />, sources: <SourceAccess />) {
         Result.Ok(value: _) => {}
-        Result.Err(error: val error) => { emitDiagnostic(diagnostic: error) panic(error.message) }
+        Result.Err(error: val error) => { emitDiagnostic(diagnostic: error) panic(error.message()) }
     }
     mut val rows: Array[CallResolution] = []
     for index in 0U64..<compiler.arena.finalCalleeCount() {
@@ -70,10 +70,10 @@ fn main() {
                             match compiler.staticMemberCallResultType(resolution: resolution, receiverTerm: receiver, args: noArguments) {
                                 Result.Ok(value: _) => { panic "provided signature accepted universal interface evidence" }
                                 Result.Err(error: val diagnostic) => {
-                                    if diagnostic.message != "universal interface evidence cannot authorize a static callable" { panic(diagnostic.message) }
-                                    match diagnostic.failureDomain {
+                                    if diagnostic.message() != "universal interface evidence cannot authorize a static callable" { panic(diagnostic.message()) }
+                                    match diagnostic.failureDomain() {
                                         FailureDomain.Internal => {}
-                                        _ => { panic(diagnostic.message) }
+                                        _ => { panic(diagnostic.message()) }
                                     }
                                 }
                             }
@@ -108,12 +108,12 @@ fn main() {
                                 match compiler.instantiateConstraintProof(proof: proof, receiverRef: bound.subject, environment: <InstanceEnvironment />, selfRef: 0U64, itemRef: 0U64) {
                                     Result.Ok(value: _) => { panic "nested universal evidence escaped through the static adapter" }
                                     Result.Err(error: val diagnostic) => {
-                                        if diagnostic.message == "interface evidence requires a universal call scope" {
+                                        if diagnostic.message() == "interface evidence requires a universal call scope" {
                                             val resolution = <StaticMemberResolution.Provided proof=proof traitIdx=nestedTrait callee=nestedProvided />
                                             match compiler.staticMemberCallResultType(resolution: resolution, receiverTerm: bound.subject, args: noArguments) {
                                                 Result.Ok(value: _) => { panic "provided signature accepted nested universal interface evidence" }
                                                 Result.Err(error: val rejected) => {
-                                                    if rejected.message != "universal interface evidence cannot authorize a static callable" { panic(rejected.message) }
+                                                    if rejected.message() != "universal interface evidence cannot authorize a static callable" { panic(rejected.message()) }
                                                 }
                                             }
                                             nested = true
@@ -136,7 +136,7 @@ fn main() {
     // Exercise the actual Mid consumer in an independent execution session,
     // beyond validating the final descriptor's private capability in isolation.
     match CompilerSession.open(input: <FrontendInput.Text text=program path="interface-final-mid.pw" />, sources: <SourceAccess />) {
-        CompilerSessionResult.Failure(diagnostic: val diagnostic) => { emitDiagnostic(diagnostic: diagnostic) panic(diagnostic.message) }
+        CompilerSessionResult.Failure(diagnostic: val diagnostic) => { emitDiagnostic(diagnostic: diagnostic) panic(diagnostic.message()) }
         CompilerSessionResult.Success(session: val opened) => {
             mut val session = move opened
             session.prepareInitializers().unwrap()

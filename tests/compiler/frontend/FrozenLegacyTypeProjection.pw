@@ -50,7 +50,7 @@ fn main() {
     match compiler.lowerSyntaxType(id: id) {
         Result.Err(error: val diagnostic) => {
             val expected = if scenario == "named" { give "trait view source accepts positional type arguments only" } else if scenario == "extension" { give "associated-type projection source must name a trait" } else { give "a trait view requires all positional type arguments" }
-            if invalid && diagnostic.isSourceRejection() && diagnostic.message == expected { print("1") } else { emitDiagnostic(diagnostic: diagnostic) print("0") }
+            if invalid && diagnostic.isSourceRejection() && diagnostic.message() == expected { print("1") } else { emitDiagnostic(diagnostic: diagnostic) print("0") }
         }
         Result.Ok(value: val lowered) => {
             if invalid { print("0") return }

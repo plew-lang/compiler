@@ -14,8 +14,8 @@ fn main() {
     match analyzeFrontend(c: inout compiler, input: <FrontendInput.File path="tests/compiler/frontend/fixtures/ModuleBindings/" + scenario + ".pw" />, sources: <SourceAccess stdRoot="std/".bytes() />) {
         Result.Ok(value: _) => { print(if privateCall || collision { give "0" } else { give "1" }) }
         Result.Err(error: val diagnostic) => {
-            if collision && diagnostic.isSourceRejection() && diagnostic.message == expected && diagnostic.notes.count() == 1U64 && diagnostic.notes[0U64].message == "previous binding is here" { print("1") return }
-            if privateCall && diagnostic.isSourceRejection() && diagnostic.message == expected { print("1") return }
+            if collision && diagnostic.isSourceRejection() && diagnostic.message() == expected && diagnostic.notes().count() == 1U64 && diagnostic.notes()[0U64].message == "previous binding is here" { print("1") return }
+            if privateCall && diagnostic.isSourceRejection() && diagnostic.message() == expected { print("1") return }
             emitDiagnostic(diagnostic: diagnostic) print("0")
         }
     }

@@ -54,7 +54,7 @@ fn check(family: U64, mode: U64) {
     val message = if mode == 0U64 { give "" } else if mode == 1U64 { give "selected call has no retained constraint evidence" } else if mode == 2U64 || mode == 7U64 { give "selected call has incomplete constraint evidence" } else if mode == 6U64 { give "selected call constraint evidence has a different substitution" } else if mode == 8U64 { give "declaration assumption is not available in its lexical scope" } else { give "selected call constraint evidence does not satisfy its signature" }
     match result {
         Result.Ok(value: _) => { if message != "" { panic("accepted inconsistent constraint evidence") } }
-        Result.Err(error: val diagnostic) => { if diagnostic.message != message { panic(diagnostic.message) } }
+        Result.Err(error: val diagnostic) => { if diagnostic.message() != message { panic(diagnostic.message()) } }
     }
     if mode != 1U64 { compiler.checkRecordedCallTemplateBound(templateIndex: index).unwrap() }
 }

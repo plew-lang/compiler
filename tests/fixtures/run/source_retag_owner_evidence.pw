@@ -31,13 +31,13 @@ fn check(text: String, compatible: Bool, identity: Bool = false, mismatched: Boo
     match compiler.prepareLexicalBody(fnIdx: 0U64) {
         Result.Ok(value: _) => { if !compatible { panic("owner accepted invalid retag") } }
         Result.Err(error: val diagnostic) => {
-            if compatible || diagnostic.message != message { panic(diagnostic.message) }
+            if compatible || diagnostic.message() != message { panic(diagnostic.message()) }
         }
     }
     match compiler.checkRecordedMemberObligations() {
         Result.Ok(value: _) => { if !compatible { panic("whole target accepted invalid retag") } }
         Result.Err(error: val diagnostic) => {
-            if compatible || diagnostic.message != message { panic(diagnostic.message) }
+            if compatible || diagnostic.message() != message { panic(diagnostic.message()) }
         }
     }
 }

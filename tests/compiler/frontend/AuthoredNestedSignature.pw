@@ -44,7 +44,7 @@ fn main() {
     mut val compiler = <Comp />
     match analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text text=source path="NestedSignature.pw" />, sources: <SourceAccess stdRoot=[] />) {
         Result.Ok(value: _) => {}
-        Result.Err(error: val diagnostic) => { panic("signature setup: " + diagnostic.message) }
+        Result.Err(error: val diagnostic) => { panic("signature setup: " + diagnostic.message()) }
     }
     val owner = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "inspect").nameId)
     if scenario == "once" {
@@ -67,7 +67,7 @@ fn main() {
     }
     val environment = match compiler.environmentWithCallableConstraints(fnIdx: owner, environment: <InstanceEnvironment params=compiler.copyFuncBinds(binds: compiler.arena.functionAt(index: owner).typeParams) args=[receiver] />, evidence: <CallableConstraintEvidence.Declaration />) {
         Result.Ok(value: val environment) => environment,
-        Result.Err(error: val diagnostic) => { panic("signature environment: " + diagnostic.message) },
+        Result.Err(error: val diagnostic) => { panic("signature environment: " + diagnostic.message()) },
     }
     if scenario == "missingReceiverView" {
         val full = environment.constraints.unwrap()
@@ -81,7 +81,7 @@ fn main() {
     val slot = if scenario == "result" { give <SourceSignatureSlot.Result /> } else { give <SourceSignatureSlot.Parameter index=0U64 /> }
     val actual = match compiler.readAdmittedSignatureRoot(function: owner, slot: slot, environment: environment) {
         Result.Ok(value: val term) => term,
-        Result.Err(error: val diagnostic) => { panic("signature read: " + diagnostic.message) },
+        Result.Err(error: val diagnostic) => { panic("signature read: " + diagnostic.message()) },
     }
     if !compiler.typeRefEq(a: actual, b: expectedType) { panic("nested signature reader did not consume the retained associated output") }
     print("1")

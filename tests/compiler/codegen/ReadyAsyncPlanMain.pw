@@ -18,7 +18,7 @@ fn requireAsyncOk[T](result: Result[T, CompileDiagnostic], stage: String, mode: 
         Result.Err(error: val error) => {
             eprint(text: "async-plan mode=") eprintU64(n: mode)
             eprint(text: " stage=") eprint(text: stage)
-            eprint(text: ": ") eprint(text: error.message) eprint(text: "\n")
+            eprint(text: ": ") eprint(text: error.message()) eprint(text: "\n")
             panic "private async setup or valid-path API failed"
         }
     }
@@ -26,7 +26,7 @@ fn requireAsyncOk[T](result: Result[T, CompileDiagnostic], stage: String, mode: 
 fn requireAsyncInternal[T](result: Result[T, CompileDiagnostic], mode: U64) {
     match result {
         Result.Ok(value: _) => { eprintU64(n: mode) panic "malformed async activation accepted" }
-        Result.Err(error: val error) => { match error.failureDomain { FailureDomain.Internal => {} _ => { panic "wrong async activation failure domain" } } }
+        Result.Err(error: val error) => { match error.failureDomain() { FailureDomain.Internal => {} _ => { panic "wrong async activation failure domain" } } }
     }
 }
 fn asyncPlanControl(mode: U64) {

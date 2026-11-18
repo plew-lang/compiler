@@ -29,7 +29,7 @@ fn main() {
         assert(compiler.arena.typeCount() == count)
         val literal = compiler.pushExpr(e: <Expr.Str start=name.nameStart len=name.nameLen />)
         match compiler.recordExpr(exprId: literal) {
-            Result.Err(error: val error) => { assert(error.message == "string literal requires the ambient String declaration") }
+            Result.Err(error: val error) => { assert(error.message() == "string literal requires the ambient String declaration") }
             Result.Ok(value: _) => { panic("missing String admitted") }
         }
         val asynchronous = <Func nameStart=name.nameStart nameLen=name.nameLen hasRet=false retStart=0U64 retLen=0U64 retIsArray=false retTy=0U64 body=0U64 hasRecv=false recvStart=0U64 recvLen=0U64 selfInout=false selfMove=false isAssoc=false isAsync=true isExtern=false />

@@ -34,7 +34,7 @@ fn main() {
     }
     assert(facts.expression(exprId: saved.exprId).isSome())
     match compiler.recordParametricFunction(fnIdx: 0U64, recordCallTemplates: false) {
-        Result.Err(error: val diagnostic) => { assert(diagnostic.message == "internal error: completed source owner cannot record its body again") }
+        Result.Err(error: val diagnostic) => { assert(diagnostic.message() == "internal error: completed source owner cannot record its body again") }
         Result.Ok(value: _) => { panic("completed source owner reopened closure construction") }
     }
     // A navigation descriptor cannot replace the prepared meaning at the Mid boundary.

@@ -41,12 +41,12 @@ fn main() {
         Result.Err(error: val diagnostic) => {
             if compiler.decls.conformCount() != count { print("0") return }
             if wrongKind {
-                match diagnostic.failureDomain {
-                    FailureDomain.Input => { print(if diagnostic.message == "extension impl does not name an extension declaration" { give "1" } else { give "0" }) return }
+                match diagnostic.failureDomain() {
+                    FailureDomain.Input => { print(if diagnostic.message() == "extension impl does not name an extension declaration" { give "1" } else { give "0" }) return }
                     _ => {}
                 }
             }
-            if unknown && diagnostic.isSourceRejection() && diagnostic.message == "unknown view source (spec/09)" { print("1") return }
+            if unknown && diagnostic.isSourceRejection() && diagnostic.message() == "unknown view source (spec/09)" { print("1") return }
             emitDiagnostic(diagnostic: diagnostic)
             print("0")
             return

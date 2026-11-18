@@ -67,7 +67,7 @@ fn main() {
     mut val compiler = <Comp />
     match analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text text=source path="RetainedFreeSignatureConsumers.pw" />, sources: <SourceAccess stdRoot=[] />) {
         Result.Ok(value: _) => {}
-        Result.Err(error: val error) => { panic("signature setup: " + error.message) }
+        Result.Err(error: val error) => { panic("signature setup: " + error.message()) }
     }
     if scenario == "stableChildren" {
         val count = compiler.arena.typeCount()

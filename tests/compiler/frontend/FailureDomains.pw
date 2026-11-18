@@ -14,7 +14,7 @@ fn retained(diagnostic: CompileDiagnostic) -> Result[(), CompileDiagnostic] {
 fn main() {
     val unknown = <CompileDiagnostic location=<DiagnosticLocation.Unpositioned /> message="same message" />
     if unknown.isSourceRejection() { panic("unclassified failure was source rejection") }
-    match unknown.failureDomain {
+    match unknown.failureDomain() {
         FailureDomain.Unclassified => {}
         _ => { panic("the default domain was not unclassified") }
     }

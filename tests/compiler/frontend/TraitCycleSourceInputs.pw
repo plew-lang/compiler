@@ -22,7 +22,7 @@ fn main() {
     mut val compiler = <Comp />
     match analyzeFrontend(c: inout compiler, input: <FrontendInput.Text text=source path="InvalidGraphType.pw" />, sources: <SourceAccess />) {
         Result.Err(error: val diagnostic) => {
-            if !diagnostic.isSourceRejection() || diagnostic.message != expected {
+            if !diagnostic.isSourceRejection() || diagnostic.message() != expected {
                 emitDiagnostic(diagnostic: diagnostic)
                 panic("authored type did not retain Source failure")
             }

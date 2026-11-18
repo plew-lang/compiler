@@ -24,7 +24,7 @@ fn main() {
     val indexTerm = indexParameter.ty
     val integerTerm = c.arena.typeAt(index: arrayTerm).args[0U64]
     val bindingStatement = c.blockStmtAt(blkId: function.body, index: 0U64)
-    match c.prepareLexicalBody(fnIdx: owner) { Result.Ok(value: _) => {} Result.Err(error: val diagnostic) => { panic(diagnostic.message) } }
+    match c.prepareLexicalBody(fnIdx: owner) { Result.Ok(value: _) => {} Result.Err(error: val diagnostic) => { panic(diagnostic.message()) } }
     val facts = c.preparedFunctionSemanticFacts(fnIdx: owner).unwrap()
     mut val state = (prepareMidSourceState(c: inout c, sourceFunction: owner, facts: facts)).unwrap()
     // Synchronous value parameters use the production non-owning entry convention.

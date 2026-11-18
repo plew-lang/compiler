@@ -9,26 +9,26 @@ use @Std/Io only { write }
 fn main() {
     val source = "fn main() {{}} fn unused() {{ missing() }}"
     match CompilerSession.open(input: <FrontendInput.Text text=source path="request.pw" />, sources: <SourceAccess />) {
-        CompilerSessionResult.Failure(diagnostic: val diagnostic) => { panic diagnostic.message }
+        CompilerSessionResult.Failure(diagnostic: val diagnostic) => { panic diagnostic.message() }
         CompilerSessionResult.Success(session: val opened) => {
             mut val session = move opened
             match session.lowerDeclarations() {
                 LlvmLoweringResult.Success(module: val module) => {}
-                LlvmLoweringResult.Failure(diagnostic: val diagnostic) => { panic diagnostic.message }
+                LlvmLoweringResult.Failure(diagnostic: val diagnostic) => { panic diagnostic.message() }
             }
             val main = session.prepareFunction(function: 0U64).unwrap()
             match session.lowerBody(bodyId: main.bodyId) {
                 LlvmLoweringResult.Success(module: val module) => { write(s: module.text()) }
-                LlvmLoweringResult.Failure(diagnostic: val diagnostic) => { panic diagnostic.message }
+                LlvmLoweringResult.Failure(diagnostic: val diagnostic) => { panic diagnostic.message() }
             }
             val failure = match session.prepareFunction(function: 1U64) {
                 Result.Ok(value: _) => { panic "invalid function accepted" }
-                Result.Err(error: val diagnostic) => { give diagnostic.message }
+                Result.Err(error: val diagnostic) => { give diagnostic.message() }
             }
             match session.lowerBody(bodyId: main.bodyId) {
                 LlvmLoweringResult.Success(module: val module) => { panic "failed session generated another module" }
                 LlvmLoweringResult.Failure(diagnostic: val diagnostic) => {
-                    if diagnostic.message != failure { panic "terminal diagnostic changed" }
+                    if diagnostic.message() != failure { panic "terminal diagnostic changed" }
                 }
             }
         }

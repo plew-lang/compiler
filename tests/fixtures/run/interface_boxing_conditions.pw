@@ -9,7 +9,7 @@ fn main() {
     mut val compiler = <Comp />
     match analyzeFrontend(c: inout compiler, input: <FrontendInput.Text text=program path="boxing-conditions.pw" />, sources: <SourceAccess />) {
         Result.Ok(value: _) => {}
-        Result.Err(error: val error) => { emitDiagnostic(diagnostic: error) panic(error.message) }
+        Result.Err(error: val error) => { emitDiagnostic(diagnostic: error) panic(error.message()) }
     }
     val unavailable = compiler.internBytes(s: "Unavailable").nameId
     val nominalUnavailable = compiler.internBytes(s: "NominalUnavailable").nameId
@@ -85,7 +85,7 @@ fn main() {
     if inactive != 2U64 || active != 5U64 { panic("boxing condition controls did not cover each member") }
     val main = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "main").nameId)
     match CompilerSession.open(input: <FrontendInput.Text text=program path="boxing-conditions-mid.pw" />, sources: <SourceAccess />) {
-        CompilerSessionResult.Failure(diagnostic: val diagnostic) => { emitDiagnostic(diagnostic: diagnostic) panic(diagnostic.message) }
+        CompilerSessionResult.Failure(diagnostic: val diagnostic) => { emitDiagnostic(diagnostic: diagnostic) panic(diagnostic.message()) }
         CompilerSessionResult.Success(session: val opened) => {
             mut val session = move opened
             session.prepareFunction(function: main).unwrap()

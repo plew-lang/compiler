@@ -35,7 +35,7 @@ fn rejected(compiler: inout Comp, function: U64) -> CompileDiagnostic {
 fn failedFacts(compiler: inout Comp, function: U64, message: String) {
     match compiler.preparedFunctionSemanticFacts(fnIdx: function) {
         Result.Err(error: val diagnostic) => {
-            if diagnostic.message != message { panic("failed owner lost its original diagnostic") }
+            if diagnostic.message() != message { panic("failed owner lost its original diagnostic") }
         }
         Result.Ok(value: _) => { panic("failed owner published successful facts") }
     }
@@ -81,20 +81,20 @@ fn main() {
     // Analytical dead code still has an ordinary type contract. Failed
     // publication and retry preserve the type error, without another warning.
     val invalidDiagnostic = rejected(compiler: inout compiler, function: invalid)
-    match invalidDiagnostic.severity { DiagnosticSeverity.Error => {} _ => { panic("dead-code type mismatch was only a warning") } }
-    if invalidDiagnostic.message != "type mismatch: this value's type does not match the type required here (Plew has no implicit conversion — spec/12)" { panic(invalidDiagnostic.message) }
+    match invalidDiagnostic.severity() { DiagnosticSeverity.Error => {} _ => { panic("dead-code type mismatch was only a warning") } }
+    if invalidDiagnostic.message() != "type mismatch: this value's type does not match the type required here (Plew has no implicit conversion — spec/12)" { panic(invalidDiagnostic.message()) }
     oneWarning(compiler: inout compiler)
-    failedFacts(compiler: inout compiler, function: invalid, message: invalidDiagnostic.message)
-    if rejected(compiler: inout compiler, function: invalid).message != invalidDiagnostic.message { panic("failed retry changed the diagnostic") }
+    failedFacts(compiler: inout compiler, function: invalid, message: invalidDiagnostic.message())
+    if rejected(compiler: inout compiler, function: invalid).message != invalidDiagnostic.message() { panic("failed retry changed the diagnostic") }
     noDiagnostics(compiler: inout compiler)
 
     // A warning region does not relax the local source-transfer prohibition.
     // The return is warned; a successor after that return remains an error.
     val transferDiagnostic = rejected(compiler: inout compiler, function: transfer)
-    match transferDiagnostic.severity { DiagnosticSeverity.Error => {} _ => { panic("explicit-transfer successor was only warned") } }
-    if transferDiagnostic.message != "code after a source control transfer is not allowed (spec/11)" { panic(transferDiagnostic.message) }
+    match transferDiagnostic.severity() { DiagnosticSeverity.Error => {} _ => { panic("explicit-transfer successor was only warned") } }
+    if transferDiagnostic.message() != "code after a source control transfer is not allowed (spec/11)" { panic(transferDiagnostic.message()) }
     oneWarning(compiler: inout compiler)
-    failedFacts(compiler: inout compiler, function: transfer, message: transferDiagnostic.message)
+    failedFacts(compiler: inout compiler, function: transfer, message: transferDiagnostic.message())
     if compiler.preparedFunctionSemanticFacts(fnIdx: unused).isOk() { panic("later requests prepared the dormant warning body") }
     noDiagnostics(compiler: inout compiler)
     print("source-completion-diagnostics")

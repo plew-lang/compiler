@@ -12,19 +12,19 @@ fn main() {
         <SourceResource path="plew:std/Demand.pw".bytes() text=source />,
     ] />
     match CompilerSession.open(input: <FrontendInput.File path="plew:std/Demand.pw" />, sources: sources) {
-        CompilerSessionResult.Failure(diagnostic: val diagnostic) => { panic diagnostic.message }
+        CompilerSessionResult.Failure(diagnostic: val diagnostic) => { panic diagnostic.message() }
         CompilerSessionResult.Success(session: val opened) => {
             mut val session = move opened
             val root = match session.prepareFunction(function: 0U64) {
                 Result.Ok(value: val prepared) => prepared,
-                Result.Err(error: val diagnostic) => { panic diagnostic.message },
+                Result.Err(error: val diagnostic) => { panic diagnostic.message() },
             }
             val requested = session.registeredBodies()
             mut val reached = false
             for body in requested {
                 val prepared = match session.prepareBody(bodyId: body) {
                     Result.Ok(value: val value) => value,
-                    Result.Err(error: val diagnostic) => { panic diagnostic.message },
+                    Result.Err(error: val diagnostic) => { panic diagnostic.message() },
                 }
                 for declaration in prepared.declarations {
                     match declaration.root {

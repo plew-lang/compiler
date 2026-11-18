@@ -74,14 +74,14 @@ fn check(family: U64, invalid: Bool, cyclic: Bool = false) {
     // signature and operand validation is covered by their ordinary fixtures.
     match compiler.checkCallTemplateEvidence(template: template) {
         Result.Ok(value: _) => { if rejected { panic("call accepted missing condition evidence") } }
-        Result.Err(error: val diagnostic) => { if !rejected || diagnostic.message != message { panic(diagnostic.message) } }
+        Result.Err(error: val diagnostic) => { if !rejected || diagnostic.message() != message { panic(diagnostic.message()) } }
     }
     if family == 0U64 {
         val index = compiler.callTemplateCount()
         compiler.appendCallTemplate(template: template)
         match compiler.checkCallTemplateSelection(templateIndex: index) {
             Result.Ok(value: _) => { if rejected { panic("sealed call accepted missing condition evidence") } }
-            Result.Err(error: val diagnostic) => { if !rejected || diagnostic.message != message { panic(diagnostic.message) } }
+            Result.Err(error: val diagnostic) => { if !rejected || diagnostic.message() != message { panic(diagnostic.message()) } }
         }
     }
 }

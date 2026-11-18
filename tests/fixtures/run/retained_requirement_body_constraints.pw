@@ -7,7 +7,7 @@ fn check(source: String, publicCount: U64, missingProjectionEvidence: Bool = fal
     mut val compiler = <Comp />
     match analyzeFrontend(c: inout compiler, input: <FrontendInput.Text text=source path="requirement-constraints.pw" />, sources: <SourceAccess stdRoot=[] />) {
         Result.Ok(value: _) => {}
-        Result.Err(error: val diagnostic) => { panic(diagnostic.message) }
+        Result.Err(error: val diagnostic) => { panic(diagnostic.message()) }
     }
     val name = compiler.internBytes(s: "fetch").nameId
     mut val found = false
@@ -45,7 +45,7 @@ fn check(source: String, publicCount: U64, missingProjectionEvidence: Bool = fal
                     match compiler.instantiateRequirementCallConstraints(fnIdx: body.fnIdx, environment: body.environment, planIndex: planIndex, bounds: bounds, proofs: proofs) {
                         Result.Ok(value: _) => { panic "translated requirement accepted without its projection normalizations" }
                         Result.Err(error: val diagnostic) => {
-                            if diagnostic.message != "requirement evidence has a different public substitution" { panic(diagnostic.message) }
+                            if diagnostic.message() != "requirement evidence has a different public substitution" { panic(diagnostic.message()) }
                         }
                     }
                     return

@@ -69,18 +69,18 @@ fn main() {
         val start = offset(compiler, body)
         match parseItem(source: body, start: start, end: start + body.bytes().count()) {
             TopItemAst.Decl(d: val declaration) => {
-                match compiler.lowerFuncDecl(d: declaration) { Result.Ok(value: _) => {} Result.Err(error: val diagnostic) => { panic(diagnostic.message) } }
+                match compiler.lowerFuncDecl(d: declaration) { Result.Ok(value: _) => {} Result.Err(error: val diagnostic) => { panic(diagnostic.message()) } }
             }
             _ => { panic("value signature did not parse") }
         }
-        match compiler.admitAuthoredFunctionViews() { Result.Ok(value: _) => {} Result.Err(error: val diagnostic) => { panic(diagnostic.message) } }
+        match compiler.admitAuthoredFunctionViews() { Result.Ok(value: _) => {} Result.Err(error: val diagnostic) => { panic(diagnostic.message()) } }
     } else {
         match result {
             Result.Ok(value: _) => { if !valid { panic("unjustified authored signature was accepted") } }
             Result.Err(error: val diagnostic) => {
-                if valid { panic(diagnostic.message) }
-                match diagnostic.failureDomain { FailureDomain.Source => {} _ => { panic("missing premise did not return Source failure") } }
-                if !rangeEquals(bytes: diagnostic.message.bytes(), start: 0U64, len: "trait view requires a conformance".bytes().count(), kw: "trait view requires a conformance") { panic(diagnostic.message) }
+                if valid { panic(diagnostic.message()) }
+                match diagnostic.failureDomain() { FailureDomain.Source => {} _ => { panic("missing premise did not return Source failure") } }
+                if !rangeEquals(bytes: diagnostic.message().bytes(), start: 0U64, len: "trait view requires a conformance".bytes().count(), kw: "trait view requires a conformance") { panic(diagnostic.message()) }
                 val rejectedOwner = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "inspect").nameId)
                 if compiler.readAdmittedSignatureRoot(function: rejectedOwner, slot: <SourceSignatureSlot.Parameter index=0U64 />, environment: <InstanceEnvironment />).isOk() { panic("failed declaration published signature evidence") }
                 print("1")

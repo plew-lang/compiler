@@ -50,11 +50,11 @@ fn check(array: Bool, phantom: Bool, corruption: U64, message: String = "") {
     compiler.decls.declarationConversions[0U64] = <DeclarationConversion site=original.site source=source target=target proof=compiler.freezeValueConversionProof(proof: damaged) />
     match compiler.prepareLexicalBody(fnIdx: 0U64) {
         Result.Ok(value: _) => { assert(message == "") }
-        Result.Err(error: val diagnostic) => { assert(message != "" && diagnostic.message == message) }
+        Result.Err(error: val diagnostic) => { assert(message != "" && diagnostic.message() == message) }
     }
     match compiler.checkRecordedMemberObligations() {
         Result.Ok(value: _) => { assert(message == "") }
-        Result.Err(error: val diagnostic) => { assert(message != "" && diagnostic.message == message) }
+        Result.Err(error: val diagnostic) => { assert(message != "" && diagnostic.message() == message) }
     }
     if phantom {
         assert(compiler.arena.finalExistentials.count() == 0U64)

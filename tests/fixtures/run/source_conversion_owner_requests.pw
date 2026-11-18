@@ -18,7 +18,7 @@ fn owner(compiler: inout Comp, name: String) -> U64 {
 fn expectFailure(result: Result[(), CompileDiagnostic]) {
     match result {
         Result.Err(error: val diagnostic) => {
-            if diagnostic.message != "source value does not satisfy the required conversion" { panic(diagnostic.message) }
+            if diagnostic.message() != "source value does not satisfy the required conversion" { panic(diagnostic.message()) }
         }
         Result.Ok(value: _) => { panic("missing conversion evidence published owner success") }
     }

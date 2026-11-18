@@ -24,7 +24,7 @@ fn checkIteration(authored: Bool, existential: Bool) {
     compiler.cur.checkFn = functionId
     match compiler.recordStmt(stmtId: checked) {
         Result.Err(error: val diagnostic) => {
-            if diagnostic.message != "for-loop requires an Iterable or Iterator" { panic(diagnostic.message) }
+            if diagnostic.message() != "for-loop requires an Iterable or Iterator" { panic(diagnostic.message()) }
             if diagnostic.isSourceRejection() != authored { panic("iteration refusal has the wrong source provenance") }
         }
         Result.Ok(value: _) => { panic("invalid iteration was accepted") }

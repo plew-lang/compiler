@@ -34,7 +34,7 @@ fn main() {
         }
         Result.Err(error: val diagnostic) => {
             val expected = if scenario == "QualifiedPrivate" { give "name is not public in the specified namespace" } else { give "imported name is not exported by the specified module (declare it `pub` in that module)" }
-            if rejected && diagnostic.isSourceRejection() && diagnostic.message == expected { print("1") }
+            if rejected && diagnostic.isSourceRejection() && diagnostic.message() == expected { print("1") }
             else { emitDiagnostic(diagnostic: diagnostic) print("0") }
         }
     }

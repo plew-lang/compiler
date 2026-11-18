@@ -104,11 +104,11 @@ fn requireFailure[T](result: Result[T, CompileDiagnostic], source: Bool, context
     match result {
         Result.Ok(value: _) => { panic("overlapping conformance accepted: " + context) }
         Result.Err(error: val diagnostic) => {
-            if diagnostic.message != "duplicate or overlapping trait conformance in one declaration namespace (spec/08,09)" { panic(diagnostic.message) }
+            if diagnostic.message() != "duplicate or overlapping trait conformance in one declaration namespace (spec/08,09)" { panic(diagnostic.message()) }
             if source {
-                match diagnostic.failureDomain { FailureDomain.Source => {} _ => { panic("source overlap lost its origin") } }
+                match diagnostic.failureDomain() { FailureDomain.Source => {} _ => { panic("source overlap lost its origin") } }
             } else {
-                match diagnostic.failureDomain { FailureDomain.Unclassified => {} _ => { panic("raw overlap became source") } }
+                match diagnostic.failureDomain() { FailureDomain.Unclassified => {} _ => { panic("raw overlap became source") } }
             }
         }
     }
@@ -117,6 +117,6 @@ fn requireFailure[T](result: Result[T, CompileDiagnostic], source: Bool, context
 fn checked[T](result~: Result[T, CompileDiagnostic]) -> T {
     match result {
         Result.Ok(value: val value) => { return value }
-        Result.Err(error: val diagnostic) => { panic(diagnostic.message) }
+        Result.Err(error: val diagnostic) => { panic(diagnostic.message()) }
     }
 }

@@ -45,14 +45,14 @@ fn check(family: U64, mode: U64, provided: Bool = false) {
     val message = if provided && (family == 0U64 || family == 2U64 || family == 3U64) && (mode == 2U64 || mode == 4U64) { give "internal error: static call has no selected declaration and proof" } else if mode == 2U64 || mode == 4U64 { give "selected call evidence does not match its declaration trait" } else { give "selected call evidence does not match its receiver type" }
     match compiler.checkCallTemplateEvidence(template: template) {
         Result.Ok(value: _) => { if mode != 0U64 { panic("call accepted a foreign evidence boundary") } }
-        Result.Err(error: val diagnostic) => { if mode == 0U64 || diagnostic.message != message { panic(diagnostic.message) } }
+        Result.Err(error: val diagnostic) => { if mode == 0U64 || diagnostic.message() != message { panic(diagnostic.message()) } }
     }
     if family == 0U64 {
         val index = compiler.callTemplateCount()
         compiler.appendCallTemplate(template: template)
         match compiler.checkCallTemplateSelection(templateIndex: index) {
             Result.Ok(value: _) => { if mode != 0U64 { panic("sealed call accepted a foreign evidence boundary") } }
-            Result.Err(error: val diagnostic) => { if mode == 0U64 || diagnostic.message != message { panic(diagnostic.message) } }
+            Result.Err(error: val diagnostic) => { if mode == 0U64 || diagnostic.message() != message { panic(diagnostic.message()) } }
         }
     }
 }

@@ -10,7 +10,7 @@ use @Std/Io only { print }
 fn checked[T](result~: Result[T, CompileDiagnostic]) -> T {
     match result {
         Result.Ok(value: val value) => { return value }
-        Result.Err(error: val error) => { panic(error.message) }
+        Result.Err(error: val error) => { panic(error.message()) }
     }
 }
 

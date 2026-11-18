@@ -14,8 +14,7 @@ fn main() {
         _ => <FailureDomain.Source />
     }
     val severity = if mode == "warning" { give <DiagnosticSeverity.Warning /> } else { give <DiagnosticSeverity.Error /> }
-    val diagnostic = <CompileDiagnostic failureDomain=domain severity=severity
-        location=<DiagnosticLocation.Unpositioned /> message="same message" />
+    val diagnostic = <CompileDiagnostic severity=severity failureDomain=domain location=<DiagnosticLocation.Unpositioned /> message="same message" />
     if mode == "render" { emitDiagnostic(diagnostic: diagnostic) } else { emitCompilerFailure(diagnostic: diagnostic) }
     if mode == "twice" { emitCompilerFailure(diagnostic: diagnostic) }
     if mode == "source-panic" { panic("controlled after diagnostic") }

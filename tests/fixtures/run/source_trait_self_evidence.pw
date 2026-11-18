@@ -17,12 +17,12 @@ fn main() {
     val planningProof = <StaticConformanceProof.TraitSelf traitIdx=traitIndex receiverRef=synthetic traitArgs=[] />
     match compiler.checkStaticProofEvidence(proof: planningProof, offset: 0U64) {
         Result.Ok(value: _) => {}
-        Result.Err(error: val diagnostic) => { panic(diagnostic.message) }
+        Result.Err(error: val diagnostic) => { panic(diagnostic.message()) }
     }
     val forged = <StaticConformanceProof.TraitSelf traitIdx=traitIndex receiverRef=receiver traitArgs=[] />
     match compiler.checkDeclarationCallProof(proof: forged, scope: compiler.declarationTypeScope(owner: functionIndex).unwrap(), offset: 0U64) {
         Result.Ok(value: _) => { panic("unjustified generic trait Self accepted") }
-        Result.Err(error: val diagnostic) => { assert(diagnostic.message == "selected trait Self evidence does not match its interface Self") }
+        Result.Err(error: val diagnostic) => { assert(diagnostic.message() == "selected trait Self evidence does not match its interface Self") }
     }
     val wrongInterface = compiler.recordAnyTraitIndex(anyRef: compiler.funcParamAt(params: function.params, index: 1U64).ty)
     val wrongSelf = compiler.existentialSelfTerm(traitIndex: wrongInterface).unwrap()
@@ -32,7 +32,7 @@ fn main() {
     ] {
         match compiler.checkStaticProofEvidence(proof: proof, offset: 0U64) {
             Result.Ok(value: _) => { panic("malformed interface Self accepted") }
-            Result.Err(error: val diagnostic) => { assert(diagnostic.message == "selected trait Self evidence does not match its interface Self") }
+            Result.Err(error: val diagnostic) => { assert(diagnostic.message() == "selected trait Self evidence does not match its interface Self") }
         }
     }
     print("trait-self-evidence")

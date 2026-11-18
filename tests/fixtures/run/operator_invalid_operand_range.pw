@@ -31,7 +31,7 @@ fn check(start: U64, length: U64) {
     val recorded = compiler.callTemplateForCurrentBody(exprId: expression).unwrap()
     match compiler.recordBodyOperatorCallee(exprId: expression, template: recorded) {
         Result.Err(error: val diagnostic) => {
-            if diagnostic.message != "internal error: selected operator has an invalid operand range" { panic(diagnostic.message) }
+            if diagnostic.message() != "internal error: selected operator has an invalid operand range" { panic(diagnostic.message()) }
         }
         Result.Ok(value: _) => { panic("invalid operator range silently accepted") }
     }

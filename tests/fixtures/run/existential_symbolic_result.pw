@@ -131,7 +131,7 @@ fn checkProvidedSignature() {
     val source = "trait Provider {{ type Item }} pub impl Provider {{ fn supply(value: Item) -> Item {{ return value }} fn marker() -> Bool {{ return true }} }} fn probe[T](receiver: T) where T: Provider[Item=Bool] {{}}"
     match analyzeFrontendDeclarations(c: inout compiler, input: <FrontendInput.Text text=source path="provided-reader.pw" />, sources: <SourceAccess stdRoot=[] />) {
         Result.Ok(value: _) => {}
-        Result.Err(error: val diagnostic) => { panic(diagnostic.message) }
+        Result.Err(error: val diagnostic) => { panic(diagnostic.message()) }
     }
     val bound = compiler.decls.funcBounds.at(index: 0U64)
     val receiver = bound.paramTy
@@ -141,7 +141,7 @@ fn checkProvidedSignature() {
     val args = compiler.pushArgs(args: [])
     val result = match compiler.staticMemberCallResultType(resolution: resolution, receiverTerm: receiver, args: args) {
         Result.Ok(value: val term) => term,
-        Result.Err(error: val diagnostic) => { panic(diagnostic.message) }
+        Result.Err(error: val diagnostic) => { panic(diagnostic.message()) }
     }
     assert(compiler.typeRefEq(a: result, b: bound.constraint.assocPredicates[0U64].value))
     val marker = compiler.internBytes(s: "marker")
@@ -156,7 +156,7 @@ fn checkProvidedSignature() {
     }
     match compiler.staticMemberCallResultType(resolution: resolution, receiverTerm: receiver, args: args) {
         Result.Err(error: val diagnostic) => {
-            match diagnostic.failureDomain {
+            match diagnostic.failureDomain() {
                 FailureDomain.Internal => {}
                 _ => { panic "missing provided signature was not an internal error" }
             }
@@ -228,7 +228,7 @@ fn main() {
         c.decls.traitReqPool[requirements.start + 2U64] = c.traitReqAt(reqs: requirements, index: 1U64)
         match c.checkExistentialRequirementCall(target: receiver, traitIndex: traitIndex, requirement: 2U64, offset: hidden.nameStart) {
             Result.Err(error: val diagnostic) => {
-                assert(diagnostic.message == "this member is not callable through `any P`: `Self` appears in a non-receiver input — two `any P` values need not share a concrete type (spec/08)")
+                assert(diagnostic.message() == "this member is not callable through `any P`: `Self` appears in a non-receiver input — two `any P` values need not share a concrete type (spec/08)")
             }
             Result.Ok(value: _) => { panic "raw trait row made the hidden Self input dispatchable" }
         }
@@ -256,8 +256,8 @@ fn main() {
     }
     match c.existentialRequirementSignature(target: receiver, traitIndex: traitIndex, slot: 0U64) {
         Result.Err(error: val diagnostic) => {
-            assert(diagnostic.message == "selected requirement has no authored signature")
-            match diagnostic.failureDomain {
+            assert(diagnostic.message() == "selected requirement has no authored signature")
+            match diagnostic.failureDomain() {
                 FailureDomain.Internal => {}
                 _ => { panic "missing source requirement was not an internal error" }
             }

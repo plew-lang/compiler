@@ -51,11 +51,11 @@ fn check(text: String, compatible: Bool, targetIndex: Bool = false, proofSubject
     compiler.decls.declarationConversions[0U64] = <DeclarationConversion site=original.site source=source target=no proof=proof />
     match compiler.prepareLexicalBody(fnIdx: 0U64) {
         Result.Ok(value: _) => { if !compatible { panic("owner accepted invalid box evidence") } }
-        Result.Err(error: val diagnostic) => { if compatible || diagnostic.message != message { panic(diagnostic.message) } }
+        Result.Err(error: val diagnostic) => { if compatible || diagnostic.message() != message { panic(diagnostic.message()) } }
     }
     match compiler.checkRecordedMemberObligations() {
         Result.Ok(value: _) => { if !compatible { panic("whole target accepted invalid box evidence") } }
-        Result.Err(error: val diagnostic) => { if compatible || diagnostic.message != message { panic(diagnostic.message) } }
+        Result.Err(error: val diagnostic) => { if compatible || diagnostic.message() != message { panic(diagnostic.message()) } }
     }
 }
 // A closed parent must not hide a condition whose positional argument is still symbolic.

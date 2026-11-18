@@ -32,7 +32,7 @@ fn main() {
     match compiler.completeStaticBodyCallee(exprId: 0U64, callee: callee, recvRef: 0U64, calleeArgs: [], resultRef: result, calleeBodyId: body) {
         Result.Ok(value: _) => { panic "unprepared signature supplied a final call" }
         Result.Err(error: val diagnostic) => {
-            if diagnostic.message != "internal error: final call requires a prepared callable signature" { panic "wrong signature diagnostic" }
+            if diagnostic.message() != "internal error: final call requires a prepared callable signature" { panic "wrong signature diagnostic" }
         }
     }
     compiler.prepareFinalCallableSignature(bodyId: body).unwrap()

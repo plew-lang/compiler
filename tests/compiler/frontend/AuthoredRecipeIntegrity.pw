@@ -75,8 +75,8 @@ fn main() {
     match compiler.admitAuthoredFunctionViews() {
         Result.Ok(value: _) => { if !valid { panic("malformed source recipe was admitted") } }
         Result.Err(error: val diagnostic) => {
-            if valid { panic(diagnostic.message) }
-            match diagnostic.failureDomain { FailureDomain.Internal => {} _ => { panic("malformed recipe failed in another domain") } }
+            if valid { panic(diagnostic.message()) }
+            match diagnostic.failureDomain() { FailureDomain.Internal => {} _ => { panic("malformed recipe failed in another domain") } }
             val expected: String = if scenario == "shape" { give "authored type recipe does not cover canonical children" }
               else if scenario == "term" { give "authored type recipe child differs from canonical term" }
               else if scenario == "label" { give "authored type recipe child has a foreign label" }
@@ -85,7 +85,7 @@ fn main() {
               else if scenario == "representationSource" { give "result representation must retain an authored source" }
               else if scenario == "derived" || scenario == "receiver" || scenario == "representationPosition" || scenario == "memoPosition" || scenario == "nestedReceiver" { give "authored type recipe has an invalid derived edge" }
               else { give "authored type recipe has an invalid result representation" }
-            if diagnostic.message != expected { panic(diagnostic.message) }
+            if diagnostic.message() != expected { panic(diagnostic.message()) }
         }
     }
     print("1")

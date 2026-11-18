@@ -67,11 +67,11 @@ fn check(kind: U64, message: String = "") {
     }
     match compiler.prepareLexicalBody(fnIdx: owner) {
         Result.Ok(value: _) => { if message != "" { panic("owner accepted invalid derived assumption") } }
-        Result.Err(error: val diagnostic) => { if diagnostic.message != message { panic(diagnostic.message) } }
+        Result.Err(error: val diagnostic) => { if diagnostic.message() != message { panic(diagnostic.message()) } }
     }
     match compiler.checkRecordedMemberObligations() {
         Result.Ok(value: _) => { if message != "" { panic("whole target accepted invalid derived assumption") } }
-        Result.Err(error: val diagnostic) => { if diagnostic.message != message { panic(diagnostic.message) } }
+        Result.Err(error: val diagnostic) => { if diagnostic.message() != message { panic(diagnostic.message()) } }
     }
 }
 fn main() {

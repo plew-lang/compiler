@@ -38,14 +38,14 @@ fn main() {
                 Result.Err(error: val diagnostic) => {
                     if valid { emitDiagnostic(diagnostic: diagnostic) print("0") return }
                     val expected = if scenario == "astUnknown" { give "unknown trait in impl conformance" } else { give "an impl conformance requires all positional trait type arguments" }
-                    if diagnostic.isSourceRejection() && diagnostic.message == expected { print("1") } else { emitDiagnostic(diagnostic: diagnostic) print("0") }
+                    if diagnostic.isSourceRejection() && diagnostic.message() == expected { print("1") } else { emitDiagnostic(diagnostic: diagnostic) print("0") }
                 }
             }
         }
         Result.Err(error: val diagnostic) => {
             if valid { emitDiagnostic(diagnostic: diagnostic) print("0") return }
             val expected = if scenario == "unknown" || scenario == "hidden" { give "unknown trait in impl conformance" } else { give "an impl conformance requires all positional trait type arguments" }
-            if diagnostic.isSourceRejection() && diagnostic.message == expected { print("1") } else { emitDiagnostic(diagnostic: diagnostic) print("0") }
+            if diagnostic.isSourceRejection() && diagnostic.message() == expected { print("1") } else { emitDiagnostic(diagnostic: diagnostic) print("0") }
         }
     }
 }

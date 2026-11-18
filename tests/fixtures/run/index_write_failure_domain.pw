@@ -50,11 +50,11 @@ fn requireDomain(c: inout Comp, function: U64, source: Bool) {
     match c.prepareLexicalBody(fnIdx: function) {
         Result.Ok(value: _) => { panic "immutable index write accepted" }
         Result.Err(error: val diagnostic) => {
-            if diagnostic.message != "cannot call an `inout fn` method on an immutable binding; declare it with `mut val`" { print(diagnostic.message) panic "wrong index refusal" }
+            if diagnostic.message() != "cannot call an `inout fn` method on an immutable binding; declare it with `mut val`" { print(diagnostic.message()) panic "wrong index refusal" }
             if source {
-                match diagnostic.failureDomain { FailureDomain.Source => {} _ => { panic "source origin missing" } }
+                match diagnostic.failureDomain() { FailureDomain.Source => {} _ => { panic "source origin missing" } }
             } else {
-                match diagnostic.failureDomain { FailureDomain.Unclassified => {} _ => { panic "raw index write became source" } }
+                match diagnostic.failureDomain() { FailureDomain.Unclassified => {} _ => { panic "raw index write became source" } }
             }
         }
     }

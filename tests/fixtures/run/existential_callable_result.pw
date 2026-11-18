@@ -32,7 +32,7 @@ fn main() {
             val wrongSignature = <ExistentialRequirementSignature receiverPassing=<CallReceiverPassing.None /> parameterTypes=plan.signature.parameterTypes argumentPassings=plan.signature.argumentPassings resultType=plan.signature.resultType />
             val wrongPlan = <ExistentialWitnessPlan signature=wrongSignature sourceResultType=plan.sourceResultType resultConversion=plan.resultConversion />
             match compiler.checkExistentialWitnessSignature(plan: wrongPlan, implementation: implementation, evidence: evidence) {
-                Result.Err(error: val diagnostic) => { assert(diagnostic.message == "existential witness signature does not match its selected requirement") }
+                Result.Err(error: val diagnostic) => { assert(diagnostic.message() == "existential witness signature does not match its selected requirement") }
                 Result.Ok(value: _) => { panic "accepted mismatched witness receiver ownership" }
             }
             assert(compiler.monoWork.bodyCount() == 0U64)

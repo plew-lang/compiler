@@ -43,7 +43,7 @@ fn checkProjectedEdges(scenario: String) {
             if shouldClose { panic("identical projection instances failed to close the cycle") }
         }
         Result.Err(error: val diagnostic) => {
-            if !shouldClose || diagnostic.message != "trait-to-trait conformance cycle" {
+            if !shouldClose || diagnostic.message() != "trait-to-trait conformance cycle" {
                 emitDiagnostic(diagnostic: diagnostic)
                 panic("wrong projection instance cycle result")
             }
@@ -194,7 +194,7 @@ fn main() {
         }
         Result.Err(error: val diagnostic) => {
             val expected = if scenario == "viewOwnerForeign" { give "invalid pattern type input: multiple trait view selectors" } else { give "trait-to-trait conformance cycle" }
-            if distinct || diagnostic.message != expected {
+            if distinct || diagnostic.message() != expected {
                 emitDiagnostic(diagnostic: diagnostic)
                 panic("wrong canonical identity result")
             }

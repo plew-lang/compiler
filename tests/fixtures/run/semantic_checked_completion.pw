@@ -88,11 +88,11 @@ fn main() {
         Result.Ok(value: _) => { panic "invalid owner was prepared" }
     }
     match failed.prepareLexicalBody(fnIdx: failedOwner) {
-        Result.Err(error: val diagnostic) => { if diagnostic.message != failure.message { panic "completed request was overwritten" } }
+        Result.Err(error: val diagnostic) => { if diagnostic.message() != failure.message() { panic "completed request was overwritten" } }
         Result.Ok(value: _) => { panic "retry replaced failed owner readiness" }
     }
     match failed.checkedSemanticStmtCompletion(stmtId: failedStatement) {
-        Result.Err(error: val diagnostic) => { if diagnostic.message != failure.message { panic "statement reader lost owner diagnostic" } }
+        Result.Err(error: val diagnostic) => { if diagnostic.message() != failure.message() { panic "statement reader lost owner diagnostic" } }
         Result.Ok(value: _) => { panic "failed owner supplied statement flow" }
     }
     mut val globals = <Comp />

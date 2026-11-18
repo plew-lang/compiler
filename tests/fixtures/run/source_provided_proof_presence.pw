@@ -37,13 +37,13 @@ fn main() {
             val message = if family == 0U64 { give "selected provided call has no conformance evidence" } else { give "internal error: static call has no selected declaration and proof" }
             match compiler.checkCallTemplateEvidence(template: template) {
                 Result.Ok(value: _) => { if missing { panic("provided call accepted without proof") } }
-                Result.Err(error: val diagnostic) => { if !missing || diagnostic.message != message { panic(diagnostic.message) } }
+                Result.Err(error: val diagnostic) => { if !missing || diagnostic.message() != message { panic(diagnostic.message()) } }
             }
             val index = compiler.callTemplateCount()
             if !compiler.appendCallTemplate(template: template) { panic("construction sample was refused") }
             match compiler.checkCallTemplateSelection(templateIndex: index) {
                 Result.Ok(value: _) => { if missing { panic("sealed provided call accepted without proof") } }
-                Result.Err(error: val diagnostic) => { if !missing || diagnostic.message != message { panic(diagnostic.message) } }
+                Result.Err(error: val diagnostic) => { if !missing || diagnostic.message() != message { panic(diagnostic.message()) } }
             }
             iteration += 1U64
         }

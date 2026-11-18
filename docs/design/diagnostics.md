@@ -47,6 +47,25 @@ Returned results, request caches and stage conversions preserve that field along
 with the original diagnostic. An internal-domain returned failure does not by
 itself establish the admitted-state precondition for panic.
 
+`CompileDiagnostic` is a closed structured diagnostic value. A rendered report
+retains severity, domain, owned location, message and notes together. A dedicated
+semantic-refusal variant may retain a checking result whose classification
+depends on ownership of the input. Its raw interpretation is Unclassified;
+message, location and severity are derived from that variant, not maintained as
+a second editable report. Ordinary reports retain their original domain.
+
+An owned request consumer may create a Source report from such a dedicated
+semantic result only when it performed the request on its own unexposed compiler
+state. It must not accept an external failure for promotion, infer a class from
+text, or promote arbitrary reports. Raw APIs retain the structured refusal
+without granting source authority. Request caches and intervening stages keep
+the variant intact, including failed re-requests; rendering is a projection and
+must not flatten the canonical failure into a replacement report. This separates
+semantic checking from authorized diagnostic interpretation without a global
+source flag or a second ownership analysis. The diagnostic leaf stores only
+owned presentation data and session-local scalar identities, not a dependency
+on frontend arenas or mutable cursors.
+
 `CompileDiagnostic.isSourceRejection()` requires both error severity and the
 explicit source domain. It is a value-level query, not proof of a failed process
 or an intended rejection reason. Rendering remains nonterminal and independent

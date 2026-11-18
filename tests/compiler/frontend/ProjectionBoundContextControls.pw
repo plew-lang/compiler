@@ -48,14 +48,14 @@ fn exerciseRequirementWhere(valueAdapter: Bool) {
     }
     match rejected {
         Result.Err(error: val diagnostic) => {
-            match diagnostic.failureDomain { FailureDomain.Source => {} _ => { panic(diagnostic.message) } }
-            match diagnostic.location {
+            match diagnostic.failureDomain() { FailureDomain.Source => {} _ => { panic(diagnostic.message()) } }
+            match diagnostic.location() {
                 DiagnosticLocation.File(path: val file, line: val line) => {
                     if file != path || line != 3I64 { panic("requirement where rejection lost its source location") }
                 }
                 _ => { panic("requirement where rejection has no source location") }
             }
-            if diagnostic.message != "unknown trait in where clause" { panic(diagnostic.message) }
+            if diagnostic.message() != "unknown trait in where clause" { panic(diagnostic.message()) }
         }
         Result.Ok(value: _) => { panic("an unresolved requirement bound entered source admission") }
     }
@@ -116,8 +116,8 @@ fn exerciseRequirementSignatureValue() {
     mut val compiler = valueRequirementCompiler(requirement: invalid)
     match compiler.admitAuthoredFunctionViews() {
         Result.Err(error: val diagnostic) => {
-            match diagnostic.failureDomain { FailureDomain.Source => {} _ => { panic(diagnostic.message) } }
-            if diagnostic.message != "trait view requires a conformance for this receiver and exact trait instance (spec/09)" { panic(diagnostic.message) }
+            match diagnostic.failureDomain() { FailureDomain.Source => {} _ => { panic(diagnostic.message()) } }
+            if diagnostic.message() != "trait view requires a conformance for this receiver and exact trait instance (spec/09)" { panic(diagnostic.message()) }
         }
         Result.Ok(value: _) => { panic("the value adapter admitted a foreign trait instance") }
     }
@@ -139,14 +139,14 @@ fn exerciseWhereAdmission(valueAdapter: Bool) {
     }
     match rejected {
         Result.Err(error: val diagnostic) => {
-            match diagnostic.failureDomain { FailureDomain.Source => {} _ => { panic(diagnostic.message) } }
-            match diagnostic.location {
+            match diagnostic.failureDomain() { FailureDomain.Source => {} _ => { panic(diagnostic.message()) } }
+            match diagnostic.location() {
                 DiagnosticLocation.File(path: val file, line: val line) => {
                     if file != path || line != 3I64 { panic("where rejection lost its source location") }
                 }
                 _ => { panic("where rejection has no source location") }
             }
-            if diagnostic.message != "unknown trait in where clause" { panic(diagnostic.message) }
+            if diagnostic.message() != "unknown trait in where clause" { panic(diagnostic.message()) }
         }
         Result.Ok(value: _) => { panic("an unresolved trait entered source admission") }
     }
@@ -222,15 +222,15 @@ fn main() {
     }
     match compiler.lowerFuncDecl(d: declaration(compiler, bad)) {
         Result.Err(error: val diagnostic) => {
-            match diagnostic.failureDomain { FailureDomain.Limit => {} _ => { panic("recursive bound did not report typed Limit") } }
+            match diagnostic.failureDomain() { FailureDomain.Limit => {} _ => { panic("recursive bound did not report typed Limit") } }
         }
         Result.Ok(value: _) => { panic("recursive bound preparation was accepted") }
     }
     if compiler.lowerProjectionDepth != 0U64 || compiler.sourceTypeUses.currentScope() != 0U64 || compiler.cur.typeParams.count() != 0U64 { panic("failed bound preparation leaked lexical state") }
     match compiler.lowerFuncDecl(d: declaration(compiler, empty)) {
         Result.Err(error: val diagnostic) => {
-            match diagnostic.failureDomain { FailureDomain.Source => {} _ => { panic("empty bound frame failed in another domain") } }
-            if !rangeEquals(bytes: diagnostic.message.bytes(), start: 0U64, len: "associated-type short projection has no unique trait source".bytes().count(), kw: "associated-type short projection has no unique trait source") { panic(diagnostic.message) }
+            match diagnostic.failureDomain() { FailureDomain.Source => {} _ => { panic("empty bound frame failed in another domain") } }
+            if !rangeEquals(bytes: diagnostic.message().bytes(), start: 0U64, len: "associated-type short projection has no unique trait source".bytes().count(), kw: "associated-type short projection has no unique trait source") { panic(diagnostic.message()) }
         }
         Result.Ok(value: _) => { panic("empty bound frame borrowed a stale outer premise") }
     }

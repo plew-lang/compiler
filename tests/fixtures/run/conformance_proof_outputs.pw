@@ -57,7 +57,7 @@ fn main() {
     match analyzeFrontend(c: inout rejected, input: <FrontendInput.Text text=invalid path="opaque-call.pw" />, sources: <SourceAccess />) {
         Result.Ok(value: _) => { panic("ordinary call guessed outputs for an opaque premise") }
         Result.Err(error: val error) => {
-            if error.message != "type argument does not conform to the trait required by `where`" { panic(error.message) }
+            if error.message() != "type argument does not conform to the trait required by `where`" { panic(error.message()) }
         }
     }
     print("proof-outputs")

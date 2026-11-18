@@ -10,7 +10,7 @@ fn main() {
     val path = "plew:std/ConversionScope.pw"
     match analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.File path=path />, sources: <SourceAccess stdRoot="std/".bytes() resources=[<SourceResource path=path.bytes() text=source />] />) {
         Result.Ok(value: _) => {}
-        Result.Err(error: val diagnostic) => { panic(diagnostic.message) }
+        Result.Err(error: val diagnostic) => { panic(diagnostic.message()) }
     }
     val first = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "sourceConversionOwner").nameId)
     val second = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "foreignConversionOwner").nameId)

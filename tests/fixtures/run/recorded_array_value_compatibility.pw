@@ -24,7 +24,7 @@ fn main() {
     if compiler.expressionSourceType(exprId: expression).unwrap() == 0U64 { panic "grounding lost array term" }
     match compiler.tcCheckValue(expectedRef: actual, valueExpr: expression, pos: "array-probe") {
         Result.Ok(value: _) => {}
-        Result.Err(val error) => { print(error.message) panic "value check rejected matching recorded array" }
+        Result.Err(val error) => { print(error.message()) panic "value check rejected matching recorded array" }
     }
     if compiler.tcCheckValue(expectedRef: expected, valueExpr: expression, pos: "array-probe").isOk() { panic "value check ignored recorded array type" }
     if compiler.checkGenericTypeMatch(expectedRef: actual, valueExpr: expression).isErr() { panic "generic check rejected matching recorded array" }

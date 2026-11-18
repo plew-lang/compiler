@@ -31,11 +31,11 @@ fn requireFailure[T](result: Result[T, CompileDiagnostic], source: Bool) {
     match result {
         Result.Ok(value: _) => { panic("duplicate requirements accepted") }
         Result.Err(error: val diagnostic) => {
-            if diagnostic.message != "duplicate trait requirement: a common callable form has no provably distinct argument type (spec/07,08)" { panic(diagnostic.message) }
+            if diagnostic.message() != "duplicate trait requirement: a common callable form has no provably distinct argument type (spec/07,08)" { panic(diagnostic.message()) }
             if source {
-                match diagnostic.failureDomain { FailureDomain.Source => {} _ => { panic("source duplicate lost its origin") } }
+                match diagnostic.failureDomain() { FailureDomain.Source => {} _ => { panic("source duplicate lost its origin") } }
             } else {
-                match diagnostic.failureDomain { FailureDomain.Unclassified => {} _ => { panic("raw duplicate became source") } }
+                match diagnostic.failureDomain() { FailureDomain.Unclassified => {} _ => { panic("raw duplicate became source") } }
             }
         }
     }

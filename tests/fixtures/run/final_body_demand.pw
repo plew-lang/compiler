@@ -39,8 +39,8 @@ fn main() {
         match c.requestFinalBody(bodyId: callee, requests: inout requests) {
             Result.Ok(value: _) => { panic "invalid callee was accepted" }
             Result.Err(error: val diagnostic) => {
-                if attempt == 0U64 { message = diagnostic.message }
-                else if diagnostic.message != message { panic "diagnostic changed" }
+                if attempt == 0U64 { message = diagnostic.message() }
+                else if diagnostic.message() != message { panic "diagnostic changed" }
             }
         }
         if c.cur.checkFn != 77U64 || c.cur.bodyId != 88U64 || c.inCollection || c.arena.finalCalleeCount() != calls { panic "failed request leaked state" }
@@ -48,7 +48,7 @@ fn main() {
     }
     match c.requestFinalBody(bodyId: root, requests: inout requests) {
         Result.Ok(value: _) => { panic "failed session resumed successful preparation" }
-        Result.Err(error: val diagnostic) => { if diagnostic.message != message { panic "terminal diagnostic changed" } }
+        Result.Err(error: val diagnostic) => { if diagnostic.message() != message { panic "terminal diagnostic changed" } }
     }
     print("ok")
 }

@@ -14,7 +14,7 @@ fn main() {
     ] />
     match analyzeFrontend(c: inout compiler, input: <FrontendInput.File path="plew:std/Probe.pw" />, sources: sources) {
         Result.Ok(value: _) => {}
-        Result.Err(error: val error) => { panic(error.message) }
+        Result.Err(error: val error) => { panic(error.message()) }
     }
     val add = compiler.internBytes(s: "add").nameId
     val next = compiler.internBytes(s: "next").nameId

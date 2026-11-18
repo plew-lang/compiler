@@ -27,12 +27,12 @@ fn main() {
     if argAt(2I64) == "declarations" {
         match lowerCallableDeclarationsLlvm(c: inout compiler) {
             LlvmLoweringResult.Success(module: val module) => { module.writeText(c: inout compiler) }
-            LlvmLoweringResult.Failure(diagnostic: val diagnostic) => { panic diagnostic.message }
+            LlvmLoweringResult.Failure(diagnostic: val diagnostic) => { panic diagnostic.message() }
         }
     } else if argAt(2I64) == "storage" {
         match lowerGlobalStorageLlvm(c: inout compiler) {
             LlvmLoweringResult.Success(module: val module) => { module.writeText(c: inout compiler) }
-            LlvmLoweringResult.Failure(diagnostic: val diagnostic) => { panic diagnostic.message }
+            LlvmLoweringResult.Failure(diagnostic: val diagnostic) => { panic diagnostic.message() }
         }
     } else {
         mut val emission = <LlvmBodyEmission.Whole />
@@ -43,7 +43,7 @@ fn main() {
         }
         match lowerPreparedLlvm(c: inout compiler, prepared: prepared, globalStorage: <LlvmGlobalStorage.Reference />, emission: emission) {
             LlvmLoweringResult.Success(module: val module) => { module.writeText(c: inout compiler) }
-            LlvmLoweringResult.Failure(diagnostic: val diagnostic) => { panic diagnostic.message }
+            LlvmLoweringResult.Failure(diagnostic: val diagnostic) => { panic diagnostic.message() }
         }
     }
 }

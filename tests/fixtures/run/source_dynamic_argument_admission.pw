@@ -13,7 +13,7 @@ fn function(compiler: inout Comp, name: String) -> U64 {
 
 fn failure(result: Result[(), CompileDiagnostic], message: String) {
     match result {
-        Result.Err(error: val diagnostic) => { assert(diagnostic.message == message) }
+        Result.Err(error: val diagnostic) => { assert(diagnostic.message() == message) }
         Result.Ok(value: _) => { panic("invalid dynamic argument published owner success") }
     }
 }

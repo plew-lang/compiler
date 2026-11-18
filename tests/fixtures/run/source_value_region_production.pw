@@ -31,12 +31,12 @@ fn main() {
     if !compiler.typeRefEq(a: result.resultTerm, b: reader.expression(exprId: expression).unwrap().term) { panic("expression changed its region result") }
     val missing = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "missing").nameId)
     val failure = match compiler.prepareLexicalBody(fnIdx: missing) {
-        Result.Err(error: val diagnostic) => diagnostic.message
+        Result.Err(error: val diagnostic) => diagnostic.message()
         Result.Ok(value: _) => { panic("expectation supplied a missing value") }
     }
     if compiler.preparedFunctionSemanticFacts(fnIdx: missing).isOk() { panic("missing producer published an owner") }
     match compiler.prepareLexicalBody(fnIdx: missing) {
-        Result.Err(error: val diagnostic) => { if diagnostic.message != failure { panic("failed result changed") } }
+        Result.Err(error: val diagnostic) => { if diagnostic.message() != failure { panic("failed result changed") } }
         Result.Ok(value: _) => { panic("retry supplied a missing value") }
     }
     if reader.valueBlock(blockId: block).unwrap().resultTerm != result.resultTerm { panic("failed owner changed another result") }

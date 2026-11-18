@@ -12,7 +12,7 @@ fn main() {
         mut val c = <Comp />
         match analyzeFrontendDeclarations(c: inout c, input: <FrontendInput.Text text=source path="call.pw" />, sources: <SourceAccess stdRoot=[] />) {
             Result.Ok(value: _) => { assert(false) }
-            Result.Err(error: val diagnostic) => { assert(diagnostic.message == "no matching function for this argument list") }
+            Result.Err(error: val diagnostic) => { assert(diagnostic.message() == "no matching function for this argument list") }
         }
         assert(c.monoWork.bodyCount() == 0U64)
         assert(c.arena.finalDestructions.count() == 0U64)

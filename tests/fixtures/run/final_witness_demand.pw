@@ -13,7 +13,7 @@ fn main() {
     val root = c.enqueueFinalBody(fnIdx: 0U64, args: [], recvInstRef: 0U64).unwrap()
     match c.requestFinalBody(bodyId: root, requests: inout requests) {
         Result.Ok(value: _) => {}
-        Result.Err(error: val diagnostic) => { panic diagnostic.message }
+        Result.Err(error: val diagnostic) => { panic diagnostic.message() }
     }
     if c.arena.finalExistentials.count() != 1U64 { panic "missing witness resolution" }
     val member = c.arena.finalExistentials[0U64].members[0U64]

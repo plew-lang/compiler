@@ -11,7 +11,7 @@ fn main() {
     match analyzeFrontend(c: inout compiler, input: <FrontendInput.File path="tests/compiler/frontend/fixtures/ModuleBindings/" + scenario + ".pw" />, sources: <SourceAccess stdRoot="std/".bytes() />) {
         Result.Ok(value: _) => { print(if valid { give "1" } else { give "0" }) }
         Result.Err(error: val diagnostic) => {
-            if !valid && diagnostic.isSourceRejection() && diagnostic.message == "duplicate module binding name (spec/15): only valid free-function overloads may share a name" { print("1") }
+            if !valid && diagnostic.isSourceRejection() && diagnostic.message() == "duplicate module binding name (spec/15): only valid free-function overloads may share a name" { print("1") }
             else { emitDiagnostic(diagnostic: diagnostic) print("0") }
         }
     }

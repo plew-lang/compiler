@@ -19,7 +19,7 @@ fn accepts(scenario: String, expectedError: String = "") -> Bool {
             return true
         }
         Result.Err(error: val diagnostic) => {
-            if expectedError != "" && diagnostic.message == expectedError { return true }
+            if expectedError != "" && diagnostic.message() == expectedError { return true }
             emitDiagnostic(diagnostic: diagnostic)
             return false
         }

@@ -67,7 +67,7 @@ fn verifyStorageDiagnosticOrder() {
     c.cur.checkedLocalStorage = <Optional.Some v=[first: firstRequest, later: laterRequest] />
     match c.scanBlockInsts(blkId: block) {
         Result.Err(error: val diagnostic) => {
-            if diagnostic.message != "final local has a foreign Mid binding occurrence" { panic(diagnostic.message) }
+            if diagnostic.message() != "final local has a foreign Mid binding occurrence" { panic(diagnostic.message()) }
         }
         Result.Ok(value: _) => { panic("invalid initializations were accepted") }
     }
@@ -80,7 +80,7 @@ fn verifyStorageDiagnosticOrder() {
     c.cur.checkedLocalStorage = <Optional.Some v=[first: foreign, later: laterRequest] />
     match c.scanBlockInsts(blkId: block) {
         Result.Err(error: val diagnostic) => {
-            if diagnostic.message != "checked local has a foreign initializer occurrence" { panic(diagnostic.message) }
+            if diagnostic.message() != "checked local has a foreign initializer occurrence" { panic(diagnostic.message()) }
         }
         Result.Ok(value: _) => { panic("foreign initializer was accepted") }
     }
@@ -92,13 +92,13 @@ fn verifyStorageDiagnosticOrder() {
     val captureResult = c.finalClosureCaptureType(capture: capture, enclosingBodyId: c.cur.bodyId)
     match argumentResult {
         Result.Err(error: val diagnostic) => {
-            if diagnostic.message != "local argument has no checked storage request" { panic(diagnostic.message) }
+            if diagnostic.message() != "local argument has no checked storage request" { panic(diagnostic.message()) }
         }
         Result.Ok(value: _) => { panic("local argument recovered a missing checked request") }
     }
     match captureResult {
         Result.Err(error: val diagnostic) => {
-            if diagnostic.message != "closure capture has no checked storage request" { panic(diagnostic.message) }
+            if diagnostic.message() != "closure capture has no checked storage request" { panic(diagnostic.message()) }
         }
         Result.Ok(value: _) => { panic("closure capture recovered a missing checked request") }
     }
@@ -152,7 +152,7 @@ fn verifyTerminatingInitializerDependency() {
     c.cur.checkedLocalStorage = <Optional.Some v=[:] />
     match c.scanBlockInsts(blkId: block) {
         Result.Err(error: val diagnostic) => {
-            if diagnostic.message != "local initializer has no checked Mid dependency" { panic(diagnostic.message) }
+            if diagnostic.message() != "local initializer has no checked Mid dependency" { panic(diagnostic.message()) }
         }
         Result.Ok(value: _) => { panic("missing terminating dependency was accepted") }
     }

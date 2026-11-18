@@ -15,9 +15,9 @@ fn main() {
     match analyzeFrontendForRequests(c: inout compiler, input: (if scenario == "qualified" { give <FrontendInput.File path="tests/compiler/frontend/fixtures/ImplTraitInstances/QualifiedShorthandInstance.pw" /> } else { give <FrontendInput.Text text=text path="ShortProjectionInstances.pw" /> }), sources: <SourceAccess stdRoot="std/".bytes() />) {
         Result.Err(error: val diagnostic) => {
             if scenario == "recursive" {
-                match diagnostic.failureDomain { FailureDomain.Limit => { print(diagnostic.message == "associated-type short projection analysis limit exceeded") } _ => { print("0") } }
-            } else if scenario == "differentInstances" { print(diagnostic.isSourceRejection() && diagnostic.message == "associated-type short projection is ambiguous — write the canonical `T#Trait.Item` form (spec/08)") }
-            else if scenario == "noBound" || scenario == "open" { print(diagnostic.isSourceRejection() && diagnostic.message == "associated-type short projection has no unique trait source — write `T#Trait.Item` or add an appropriate `where T: Trait` bound (spec/08)") }
+                match diagnostic.failureDomain() { FailureDomain.Limit => { print(diagnostic.message() == "associated-type short projection analysis limit exceeded") } _ => { print("0") } }
+            } else if scenario == "differentInstances" { print(diagnostic.isSourceRejection() && diagnostic.message() == "associated-type short projection is ambiguous — write the canonical `T#Trait.Item` form (spec/08)") }
+            else if scenario == "noBound" || scenario == "open" { print(diagnostic.isSourceRejection() && diagnostic.message() == "associated-type short projection has no unique trait source — write `T#Trait.Item` or add an appropriate `where T: Trait` bound (spec/08)") }
             else { emitDiagnostic(diagnostic: diagnostic) print("0") }
             return
         }

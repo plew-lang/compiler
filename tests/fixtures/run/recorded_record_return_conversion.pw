@@ -38,7 +38,7 @@ fn main() {
     compiler.cur.bodyFnIdx = 0U64
     compiler.cur.bodyId = body
     match compiler.finalizeCurrentBodyReturn(exprId: aggregate.exprId) {
-        Result.Err(error: val diagnostic) => { assert(diagnostic.message == "source conversion evidence disagrees with the instantiated value type") }
+        Result.Err(error: val diagnostic) => { assert(diagnostic.message() == "source conversion evidence disagrees with the instantiated value type") }
         Result.Ok(value: _) => { panic "record return reselected its field conversion" }
     }
     print("ok")

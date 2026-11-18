@@ -30,7 +30,7 @@ fn checkRecipe(compiler: inout Comp, occurrence: U64) {
 fn main() {
     mut val compiler = <Comp />
     match analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text path="UnitRecipe.pw" text="fn omitted(action: fn()) {{}} fn main() {{}}" />, sources: <SourceAccess stdRoot=[] />) {
-        Result.Err(error: val diagnostic) => { panic(diagnostic.message) }
+        Result.Err(error: val diagnostic) => { panic(diagnostic.message()) }
         Result.Ok(value: _) => {}
     }
     val function = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "omitted").nameId)

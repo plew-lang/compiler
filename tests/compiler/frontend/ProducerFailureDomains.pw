@@ -33,7 +33,7 @@ fn sourceFailure() -> CompileDiagnostic {
     while index < 2U64 {
         match compiler.prepareLexicalBody(fnIdx: target) {
             Result.Err(error: val cached) => {
-                if !cached.isSourceRejection() || cached.message != diagnostic.message { panic("repeat lost cached failure") }
+                if !cached.isSourceRejection() || cached.message() != diagnostic.message() { panic("repeat lost cached failure") }
             }
             Result.Ok(value: _) => { panic("draining presentation recovered failed source owner") }
         }
@@ -116,7 +116,7 @@ fn main() {
         input: <FrontendInput.File path="/nonexistent/plew-failure-domain-input.pw" />,
         sources: <SourceAccess />) {
         Result.Err(error: val diagnostic) => {
-            match diagnostic.failureDomain {
+            match diagnostic.failureDomain() {
                 FailureDomain.Input => {}
                 _ => { panic("missing input lost input domain") }
             }

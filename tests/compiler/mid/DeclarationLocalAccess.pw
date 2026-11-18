@@ -19,7 +19,7 @@ fn classification(result: Result[(), DeclarationAccessError]) -> U64 {
                         _ => { return 3U64 }
                     }
                 }
-                DeclarationAccessError.Frontend(diagnostic: val diagnostic) => { print(diagnostic.message) return 3U64 }
+                DeclarationAccessError.Frontend(diagnostic: val diagnostic) => { print(diagnostic.message()) return 3U64 }
                 _ => { return 3U64 }
             }
         }

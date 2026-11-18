@@ -19,7 +19,7 @@ fn checkBoundary(source: String, expected: String) {
     match finalizeFrontendExecutables(c: inout compiler) {
         Result.Ok(value: _) => { panic "concrete implementation limit was not diagnosed" }
         Result.Err(error: val diagnostic) => {
-            if diagnostic.message != expected { panic diagnostic.message }
+            if diagnostic.message() != expected { panic diagnostic.message() }
         }
     }
 }

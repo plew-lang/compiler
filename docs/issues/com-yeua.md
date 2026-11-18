@@ -1194,3 +1194,65 @@ Trace the owning verification entry and its moved-state production before
 choosing a private origin/capability boundary. Preserve checked dead-code and
 branch-merge behavior; do not alter ownership acceptance merely to classify
 failures. No ownership classification implementation is claimed here.
+
+### Ownership refusal transport plan
+
+The 8 current use-after-move fixtures produce 23 Unclassified refusals and one
+unused ORC success across24 baseline executions. A private lexical preparation
+helper is not source authority: public raw prepareLexicalBody reaches it.
+The existing CompilerSession does own private Comp, but forwarding a detached
+public token into Frontend would permit owner/input substitution.
+
+Use a closed structured CompileDiagnostic sum: ordinary rendered Report versus
+a dedicated semantic refusal. No parallel message/cause authorities. The owning
+request consumer generates Source from its own typed result; raw APIs merely
+render the semantic refusal Unclassified. Keep its canonical cache variant, not
+a flattened Raw Report. No diagnostic-text classification or global source flag.
+Independent source investigation and plan review supports this arrangement;
+reorganizing CompilerSession/Backend modules is unnecessary.
+
+First isolate a behavior-preserving Report/accessor migration. Existing
+DiagnosticValues, FailureDomains and DiagnosticNotes are GREEN baselines. Preserve
+all constructor labels/defaults, severity/domain/location/message/notes and
+terminal failure transport. Internal test field reads migrate to accessors, not
+new expectations. Then add the ownership semantic variant and owned consumer
+projection with Source/Raw, corrupt cursor, cache re-request, generic, lazy,
+branch/dead-code and positive controls. Both stages require independent review.
+
+### Diagnostic scratch input integrity correction
+
+During the Report migration, self-compilation rejected an unchanged constructor.
+The cause was the diagnostic build's delta-only copy: abandoned prototype
+changes survived in SourceTypeAdmissions.pw (extra required member) and Mid/Ir.pw
+(old sourceCallConflicts API), because these product files had reverted to the
+comparison revision and were no longer copied. The rejection also reproduced
+without the Report sum; it was not evidence against the new representation.
+
+Replace that scratch copy with a complete source sync and per-file hash equality
+assertion before compiling. Prior observations remain recorded but candidates
+from this scratch after the prototype edits are not certified exact product
+revisions. Revalidate affected native/control scopes on the complete product
+source and reconcile the final full gates before task completion. Formal
+self-host records used distinct frozen worktrees and are outside this scratch
+correction. The Report migration remains WIP until fresh complete-input gates.
+
+### Structured Report migration checkpoint
+
+The Report/accessor migration builds from complete product src (every source
+file hash matches), with std contents also matched. Existing DiagnosticValues,
+FailureDomains and DiagnosticNotes retain exact status/stdout/stderr. The real
+private terminal producer passes25 controls. DiagnosticNotes passes LLVM22
+ASan/LSan with explicitly instrumented IR. A temporary runner executes the
+latest implementation-bound, supertrait and overlap native fixtures against
+this complete source and prints three ok lines; only their entry names change
+for import. These three boundary scopes are freshly revalidated.
+
+Independent source review confirms all client changes are five-accessor syntax
+substitutions except four constructor order adjustments; unchanged expectations,
+constructor defaults, Note fields and leaf DAG. No substitutions occurred inside
+string literals. Source authority/ownership acceptance is unchanged in this
+first step. Dedicated ownership variant and owned interpretation remain next.
+Full gates and performance remain open; previous mixed-scratch observations
+are not silently promoted to product revision certification.
+
+[Evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-diagnostic-report-values.json).

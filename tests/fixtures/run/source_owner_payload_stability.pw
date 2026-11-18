@@ -57,15 +57,15 @@ fn main() {
         Result.Ok(value: _) => { panic("completed owner gained a new expression") }
     }
     val failure = match compiler.prepareLexicalBody(fnIdx: broken) {
-        Result.Err(error: val diagnostic) => diagnostic.message
+        Result.Err(error: val diagnostic) => diagnostic.message()
         Result.Ok(value: _) => { panic("unresolved owner succeeded") }
     }
     match compiler.prepareLexicalBody(fnIdx: broken) {
-        Result.Err(error: val diagnostic) => { if diagnostic.message != failure { panic("failed request changed") } }
+        Result.Err(error: val diagnostic) => { if diagnostic.message() != failure { panic("failed request changed") } }
         Result.Ok(value: _) => { panic("retry blessed failed owner") }
     }
     match compiler.preparedFunctionSemanticFacts(fnIdx: broken) {
-        Result.Err(error: val diagnostic) => { if diagnostic.message != failure { panic("failed owner changed diagnostic") } }
+        Result.Err(error: val diagnostic) => { if diagnostic.message() != failure { panic("failed owner changed diagnostic") } }
         Result.Ok(value: _) => { panic("failed owner published a payload") }
     }
     compiler.cur.checkFn = broken

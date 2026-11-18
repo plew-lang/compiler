@@ -31,9 +31,9 @@ fn check(scenario: U64) {
     match compiler.admitAuthoredFunctionViews() {
         Result.Ok(value: _) => { if scenario != 0U64 { panic("invalid representation mapping admitted") } }
         Result.Err(error: val diagnostic) => {
-            if scenario == 0U64 { panic(diagnostic.message) }
-            match diagnostic.failureDomain { FailureDomain.Internal => {} _ => { panic("invalid mapping lost internal failure domain") } }
-            if diagnostic.message != "authored type recipe has an invalid result representation" { panic(diagnostic.message) }
+            if scenario == 0U64 { panic(diagnostic.message()) }
+            match diagnostic.failureDomain() { FailureDomain.Internal => {} _ => { panic("invalid mapping lost internal failure domain") } }
+            if diagnostic.message() != "authored type recipe has an invalid result representation" { panic(diagnostic.message()) }
         }
     }
 }

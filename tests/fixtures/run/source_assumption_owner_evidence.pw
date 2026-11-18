@@ -22,11 +22,11 @@ fn check(foreign: Bool) {
     if foreign { compiler.decls.funcBounds.set(index: 0U64, value: <FuncBound fnIdx=other paramStart=bound.paramStart paramLen=bound.paramLen paramTy=bound.paramTy paramNameId=bound.paramNameId constraint=bound.constraint />) }
     match compiler.prepareLexicalBody(fnIdx: owner) {
         Result.Ok(value: _) => { if foreign { panic("owner accepted foreign assumption") } }
-        Result.Err(error: val diagnostic) => { if !foreign || diagnostic.message != "declaration assumption is not available in its lexical scope" { panic(diagnostic.message) } }
+        Result.Err(error: val diagnostic) => { if !foreign || diagnostic.message() != "declaration assumption is not available in its lexical scope" { panic(diagnostic.message()) } }
     }
     match compiler.checkRecordedMemberObligations() {
         Result.Ok(value: _) => { if foreign { panic("whole target accepted foreign assumption") } }
-        Result.Err(error: val diagnostic) => { if !foreign || diagnostic.message != "declaration assumption is not available in its lexical scope" { panic(diagnostic.message) } }
+        Result.Err(error: val diagnostic) => { if !foreign || diagnostic.message() != "declaration assumption is not available in its lexical scope" { panic(diagnostic.message()) } }
     }
 }
 
@@ -42,7 +42,7 @@ fn checkCycle() {
     while attempt < 2U64 {
         match compiler.checkDeclarationAssumptionScope(source: source, scope: scope, offset: 0U64) {
             Result.Ok(value: _) => { panic("accepted cyclic assumption prerequisite") }
-            Result.Err(error: val diagnostic) => { if diagnostic.message != "declaration assumption prerequisite is cyclic" { panic(diagnostic.message) } }
+            Result.Err(error: val diagnostic) => { if diagnostic.message() != "declaration assumption prerequisite is cyclic" { panic(diagnostic.message()) } }
         }
         if compiler.activeAssumptionAdmission.count() != 0U64 { panic("assumption admission leaked active state") }
         attempt += 1U64

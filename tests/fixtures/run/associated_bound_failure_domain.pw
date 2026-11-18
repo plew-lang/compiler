@@ -19,7 +19,7 @@ fn main() {
     match openFrontendForRequests(input: <FrontendInput.Text path="associated-environment.pw" text=source />, sources: <SourceAccess stdRoot=[] />) {
         Result.Ok(value: _) => { panic "expected declaration admission to reject First" }
         Result.Err(error: val diagnostic) => {
-            if diagnostic.message != "associated type does not satisfy its declared trait constraint" || !diagnostic.isSourceRejection() {
+            if diagnostic.message() != "associated type does not satisfy its declared trait constraint" || !diagnostic.isSourceRejection() {
                 panic "expected authored conformance failure"
             }
         }
@@ -27,7 +27,7 @@ fn main() {
     match analyzeFrontendForRequests(c: inout c, input: <FrontendInput.Text path="associated-environment.pw" text=source />, sources: <SourceAccess stdRoot=[] />) {
         Result.Ok(value: _) => { panic "expected declaration admission to reject First" }
         Result.Err(error: val diagnostic) => {
-            if diagnostic.message != "associated type does not satisfy its declared trait constraint" || diagnostic.isSourceRejection() {
+            if diagnostic.message() != "associated type does not satisfy its declared trait constraint" || diagnostic.isSourceRejection() {
                 panic "expected raw conformance failure"
             }
         }
@@ -46,8 +46,8 @@ fn main() {
     match c.checkAssociatedBounds(conformIndex: listIndex, conformance: list, traitIndex: traitIndex, assumptions: c.conformanceDeclarationAssumptions(conformIndex: listIndex)) {
         Result.Ok(value: _) => { panic "mutated sibling was accepted" }
         Result.Err(error: val diagnostic) => {
-            if diagnostic.message != "associated type does not satisfy its declared trait constraint" { panic "wrong mutation failure" }
-            match diagnostic.failureDomain {
+            if diagnostic.message() != "associated type does not satisfy its declared trait constraint" { panic "wrong mutation failure" }
+            match diagnostic.failureDomain() {
                 FailureDomain.Unclassified => {}
                 _ => { panic "unexpected mutation domain" }
             }
@@ -58,8 +58,8 @@ fn main() {
     match analyzeFrontendForRequests(c: inout seeded, input: <FrontendInput.Text path="seeded-associated-environment.pw" text=source />, sources: <SourceAccess stdRoot=[] />) {
         Result.Ok(value: _) => { panic "seeded failure was accepted" }
         Result.Err(error: val diagnostic) => {
-            if diagnostic.message != "associated type does not satisfy its declared trait constraint" { panic "wrong seeded failure" }
-            match diagnostic.failureDomain {
+            if diagnostic.message() != "associated type does not satisfy its declared trait constraint" { panic "wrong seeded failure" }
+            match diagnostic.failureDomain() {
                 FailureDomain.Unclassified => {}
                 _ => { panic "seeded state received source attribution" }
             }

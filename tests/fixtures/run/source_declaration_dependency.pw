@@ -19,20 +19,20 @@ fn main() {
     mut val ready = compiler
     val expected = "internal error: source publication requires completed type declaration resolution"
     match compiler.prepareLexicalBody(fnIdx: 0U64) {
-        Result.Err(error: val diagnostic) => { if diagnostic.message != expected { panic(diagnostic.message) } }
+        Result.Err(error: val diagnostic) => { if diagnostic.message() != expected { panic(diagnostic.message()) } }
         Result.Ok(value: _) => { panic("source success ignored declaration dependency") }
     }
     if compiler.preparedFunctionSemanticFacts(fnIdx: 0U64).isOk() { panic("failed dependency published source facts") }
     if !compiler.arena.finishTypeDeclarationResolution(resolutions: []) { panic("declaration phase did not complete") }
     // Completing a dependency later cannot overwrite this request's failure.
     match compiler.prepareLexicalBody(fnIdx: 0U64) {
-        Result.Err(error: val diagnostic) => { if diagnostic.message != expected { panic("source failure changed") } }
+        Result.Err(error: val diagnostic) => { if diagnostic.message() != expected { panic("source failure changed") } }
         Result.Ok(value: _) => { panic("failed owner reopened") }
     }
     if !ready.arena.finishTypeDeclarationResolution(resolutions: []) { panic("independent declaration phase failed") }
     match ready.prepareLexicalBody(fnIdx: 0U64) {
         Result.Ok(value: _) => {}
-        Result.Err(error: val diagnostic) => { panic(diagnostic.message) }
+        Result.Err(error: val diagnostic) => { panic(diagnostic.message()) }
     }
     if !ready.preparedFunctionSemanticFacts(fnIdx: 0U64).unwrap().functionSignature().isSome() { panic("successful owner has no signature") }
     print("source-declaration-dependency")

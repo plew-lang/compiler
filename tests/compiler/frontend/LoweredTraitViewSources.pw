@@ -39,7 +39,7 @@ fn main() {
     mut val compiler = <Comp />
     match analyzeFrontend(c: inout compiler, input: (if file { give <FrontendInput.File path="tests/compiler/frontend/fixtures/ImplTraitInstances/" + path + ".pw" /> } else { give <FrontendInput.Text text=text path="LoweredViews.pw" /> }), sources: <SourceAccess stdRoot="std/".bytes() />) {
         Result.Err(error: val diagnostic) => {
-            if invalid && diagnostic.isSourceRejection() && diagnostic.message == expectedDiagnostic { print("1") } else { emitDiagnostic(diagnostic: diagnostic) print("0") }
+            if invalid && diagnostic.isSourceRejection() && diagnostic.message() == expectedDiagnostic { print("1") } else { emitDiagnostic(diagnostic: diagnostic) print("0") }
             return
         }
         Result.Ok(value: _) => {}
@@ -61,7 +61,7 @@ fn main() {
             val legacyType = <TypeAst name="S" nameSpan=type.nameSpan args=[] span=type.span viewNames=(if scenario == "legacyViews" { give ["P"] } else { give [] }) viewNameSpans=[selected.nameSpan] extView=(if scenario == "legacyExt" { give "P" } else { give "" }) extViewSpan=selected.nameSpan />
             match compiler.lowerType(t: legacyType) {
                 Result.Ok(value: _) => { print("0") }
-                Result.Err(error: val diagnostic) => { print(diagnostic.isSourceRejection() && diagnostic.message == "a trait view requires all positional type arguments") }
+                Result.Err(error: val diagnostic) => { print(diagnostic.isSourceRejection() && diagnostic.message() == "a trait view requires all positional type arguments") }
             }
             return
         }

@@ -50,7 +50,7 @@ fn main() {
     assertCursor(compiler: inout compiler)
     if compiler.globalInitializerPrepared(target: broken.nameStart) { panic("failure published readiness") }
     match compiler.prepareGlobalInitializer(target: broken.nameStart) {
-        Result.Err(error: val failure) => { if failure.message != diagnostic.message { panic("retry changed diagnostic") } }
+        Result.Err(error: val failure) => { if failure.message() != diagnostic.message() { panic("retry changed diagnostic") } }
         Result.Ok(value: _) => { panic("retry accepted invalid initializer") }
     }
     assertCursor(compiler: inout compiler)
@@ -59,7 +59,7 @@ fn main() {
     }
     if compiler.globalInitializerPreparationCount() != 1U64 { panic("failed request was not cached once") }
     match compiler.semanticCompletionOwnerPrepared(owner: <SemanticCompletionOwner.Global target=broken.nameStart />) {
-        Result.Err(error: val failure) => { if failure.message != diagnostic.message { panic("final reader lost failed owner diagnostic") } }
+        Result.Err(error: val failure) => { if failure.message() != diagnostic.message() { panic("final reader lost failed owner diagnostic") } }
         Result.Ok(value: _) => { panic("failed owner became an ordinary readiness result") }
     }
     val saved = compiler.cur

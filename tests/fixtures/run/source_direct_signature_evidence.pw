@@ -20,7 +20,7 @@ fn check(name: String, label: String, labelled: Bool, inoutArgument: Bool, messa
     compiler.appendCallTemplate(template: <CallTemplate siteKey=<CallSiteKey ownerFnIdx=owner originKind=2U64 originSerial=900U64 /> kind=<CallTemplateKind.Direct callee=callee receiver=<CallTemplateReceiver.None /> args=args calleeTypeArgs=types proofId=0U64 /> />)
     match compiler.checkRecordedCallTemplateBound(templateIndex: index) {
         Result.Ok(value: _) => { if message != "" { panic("accepted inconsistent signature") } }
-        Result.Err(error: val diagnostic) => { if diagnostic.message != message { panic(diagnostic.message) } }
+        Result.Err(error: val diagnostic) => { if diagnostic.message() != message { panic(diagnostic.message()) } }
     }
 }
 fn main() {

@@ -17,7 +17,7 @@ fn owner(c: inout Comp, name: String) -> U64 {
 fn require[T](result: Result[T, CompileDiagnostic], stage: String) -> T {
     match result {
         Result.Ok(value: val value) => { return value }
-        Result.Err(error: val diagnostic) => { print(stage) panic(diagnostic.message) }
+        Result.Err(error: val diagnostic) => { print(stage) panic(diagnostic.message()) }
     }
 }
 
@@ -76,8 +76,8 @@ fn main() {
         match c.publishFinalCallables(state: inout publication) {
             Result.Ok(value: _) => { panic "invalid destructor published" }
             Result.Err(error: val diagnostic) => {
-                if repeat == 0U64 { message = diagnostic.message }
-                else if diagnostic.message != message { panic "publication diagnostic changed" }
+                if repeat == 0U64 { message = diagnostic.message() }
+                else if diagnostic.message() != message { panic "publication diagnostic changed" }
             }
         }
         if c.arena.semanticAccesses.count() != accesses * 2U64 { panic "failed publication duplicated rows" }

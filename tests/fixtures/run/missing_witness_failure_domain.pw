@@ -35,7 +35,7 @@ fn main() {
     match compiler.checkConformanceMethodBounds(conformIndex: 0U64, traitIndex: traitIndex) {
         Result.Ok(value: _) => { panic("missing source signature accepted") }
         Result.Err(error: val diagnostic) => {
-            if diagnostic.message != "selected requirement has no authored signature" || diagnostic.isSourceRejection() { panic(diagnostic.message) }
+            if diagnostic.message() != "selected requirement has no authored signature" || diagnostic.isSourceRejection() { panic(diagnostic.message()) }
         }
     }
     print("ok")
@@ -56,11 +56,11 @@ fn requireMissing[T](result: Result[T, CompileDiagnostic], source: Bool) {
     match result {
         Result.Ok(value: _) => { panic("missing witness accepted") }
         Result.Err(error: val diagnostic) => {
-            if diagnostic.message != "incomplete trait conformance: a requirement is not witnessed (define its body or bind it with `via`)" { panic(diagnostic.message) }
+            if diagnostic.message() != "incomplete trait conformance: a requirement is not witnessed (define its body or bind it with `via`)" { panic(diagnostic.message()) }
             if source {
-                match diagnostic.failureDomain { FailureDomain.Source => {} _ => { panic("source missing witness lost its origin") } }
+                match diagnostic.failureDomain() { FailureDomain.Source => {} _ => { panic("source missing witness lost its origin") } }
             } else {
-                match diagnostic.failureDomain { FailureDomain.Unclassified => {} _ => { panic("raw missing witness became source") } }
+                match diagnostic.failureDomain() { FailureDomain.Unclassified => {} _ => { panic("raw missing witness became source") } }
             }
         }
     }
@@ -69,6 +69,6 @@ fn requireMissing[T](result: Result[T, CompileDiagnostic], source: Bool) {
 fn checked[T](result~: Result[T, CompileDiagnostic]) -> T {
     match result {
         Result.Ok(value: val value) => { return value }
-        Result.Err(error: val diagnostic) => { panic(diagnostic.message) }
+        Result.Err(error: val diagnostic) => { panic(diagnostic.message()) }
     }
 }

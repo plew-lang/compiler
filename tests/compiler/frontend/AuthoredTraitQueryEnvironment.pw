@@ -18,7 +18,7 @@ fn main() {
         val source = "trait Has {{ type Item }} struct Leaf {{}} impl Leaf as Has {{ type Item=I64 }} val boxed: any Has[Item=I64] = <Leaf /> fn main() {{}}"
         match analyzeFrontend(c: inout global, input: <FrontendInput.Text text=source path="QueryGlobalBoundary.pw" />, sources: <SourceAccess stdRoot=[] />) {
             Result.Ok(value: _) => {}
-            Result.Err(error: val diagnostic) => { panic(diagnostic.message) }
+            Result.Err(error: val diagnostic) => { panic(diagnostic.message()) }
         }
         print("1")
         return
@@ -33,7 +33,7 @@ fn main() {
         mut val boundary = <Comp />
         match analyzeFrontend(c: inout boundary, input: <FrontendInput.Text text=declarations+body path="QueryBoundary.pw" />, sources: <SourceAccess stdRoot=[] />) {
             Result.Ok(value: _) => {}
-            Result.Err(error: val diagnostic) => { panic(diagnostic.message) }
+            Result.Err(error: val diagnostic) => { panic(diagnostic.message()) }
         }
         print("1")
         return

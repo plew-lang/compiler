@@ -39,7 +39,7 @@ fn main() {
             match compiler.prepareLexicalBody(fnIdx: broken) {
                 Result.Ok(value: _) => { panic "failed request became successful" }
                 Result.Err(error: val repeated) => {
-                    if repeated.message != diagnostic.message { panic "request changed its diagnostic" }
+                    if repeated.message() != diagnostic.message() { panic "request changed its diagnostic" }
                 }
             }
         }

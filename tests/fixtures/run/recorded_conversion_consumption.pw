@@ -30,18 +30,18 @@ fn main() {
     // Both concrete types conform. Re-solving would incorrectly accept this
     // corrupted source boundary, which must instead report the disagreement.
     match compiler.finalValueConversion(sourceRef: other, targetRef: target, exprId: expression) {
-        Result.Err(error: val diagnostic) => { assert(diagnostic.message == "source conversion evidence disagrees with the instantiated value type") }
+        Result.Err(error: val diagnostic) => { assert(diagnostic.message() == "source conversion evidence disagrees with the instantiated value type") }
         Result.Ok(value: _) => { panic "reselected instead of consuming evidence" }
     }
     // Equal final types cannot erase the recorded source boundary either.
     match compiler.finalValueConversion(sourceRef: target, targetRef: target, exprId: expression) {
-        Result.Err(error: val diagnostic) => { assert(diagnostic.message == "source conversion evidence disagrees with the instantiated value type") }
+        Result.Err(error: val diagnostic) => { assert(diagnostic.message() == "source conversion evidence disagrees with the instantiated value type") }
         Result.Ok(value: _) => { panic "identity bypassed recorded conversion evidence" }
     }
     // First also conforms to Q, but this source boundary selected P. A
     // changed target must not silently request a different conformance.
     match compiler.finalValueConversion(sourceRef: value, targetRef: otherTarget, exprId: expression) {
-        Result.Err(error: val diagnostic) => { assert(diagnostic.message == "source value conversion lacks recorded evidence") }
+        Result.Err(error: val diagnostic) => { assert(diagnostic.message() == "source value conversion lacks recorded evidence") }
         Result.Ok(value: _) => { panic "reselected a conversion to an unrecorded target" }
     }
     print("ok")

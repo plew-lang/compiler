@@ -74,7 +74,7 @@ fn exerciseValueRecovery() {
     analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text text=source path="ImplBoundRecovery.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
     match compiler.lowerImpl(im: parseImplementation(compiler, bad)) {
         Result.Err(error: val diagnostic) => {
-            match diagnostic.failureDomain { FailureDomain.Limit => {} _ => { panic(diagnostic.message) } }
+            match diagnostic.failureDomain() { FailureDomain.Limit => {} _ => { panic(diagnostic.message()) } }
         }
         Result.Ok(value: _) => { panic("recursive impl bound was accepted") }
     }
@@ -83,7 +83,7 @@ fn exerciseValueRecovery() {
     }
     match compiler.lowerImpl(im: parseImplementation(compiler, missing)) {
         Result.Err(error: val diagnostic) => {
-            match diagnostic.failureDomain { FailureDomain.Source => {} _ => { panic(diagnostic.message) } }
+            match diagnostic.failureDomain() { FailureDomain.Source => {} _ => { panic(diagnostic.message()) } }
         }
         Result.Ok(value: _) => { panic("an unrelated impl borrowed the previous impl's clauses") }
     }
@@ -96,7 +96,7 @@ fn exerciseValueRecovery() {
     val initialFunctionBounds = compiler.decls.funcBounds.count()
     match compiler.lowerImpl(im: parseImplementation(compiler, partial)) {
         Result.Err(error: val diagnostic) => {
-            match diagnostic.failureDomain { FailureDomain.Source => {} _ => { panic(diagnostic.message) } }
+            match diagnostic.failureDomain() { FailureDomain.Source => {} _ => { panic(diagnostic.message()) } }
         }
         Result.Ok(value: _) => { panic("the partial implementation unexpectedly succeeded") }
     }
@@ -113,7 +113,7 @@ fn exerciseValueRecovery() {
     val originalBounds = compiler.decls.conformBoundPool.count()
     match compiler.lowerImpl(im: parseImplementation(compiler, duplicate)) {
         Result.Err(error: val diagnostic) => {
-            if diagnostic.message != "duplicate or overlapping trait conformance in one declaration namespace (spec/08,09)" { panic(diagnostic.message) }
+            if diagnostic.message() != "duplicate or overlapping trait conformance in one declaration namespace (spec/08,09)" { panic(diagnostic.message()) }
         }
         Result.Ok(value: _) => { panic("a duplicate conformance unexpectedly succeeded") }
     }
@@ -135,7 +135,7 @@ fn exerciseFailedMethodReceiver() {
     val rejected = compiler.arena.functionCount()
     match compiler.lowerImpl(im: parseImplementation(compiler, partial)) {
         Result.Err(error: val diagnostic) => {
-            match diagnostic.failureDomain { FailureDomain.Source => {} _ => { panic(diagnostic.message) } }
+            match diagnostic.failureDomain() { FailureDomain.Source => {} _ => { panic(diagnostic.message()) } }
         }
         Result.Ok(value: _) => { panic("the partial implementation unexpectedly succeeded") }
     }
@@ -149,7 +149,7 @@ fn exerciseFailedMethodReceiver() {
     val collision = compiler.arena.functionCount()
     match compiler.lowerImpl(im: parseImplementation(compiler, good)) {
         Result.Err(error: val diagnostic) => {
-            if diagnostic.message != "duplicate or overlapping callable form in one declaration namespace: no provably distinct argument type (spec/04,07,09)" { panic(diagnostic.message) }
+            if diagnostic.message() != "duplicate or overlapping callable form in one declaration namespace: no provably distinct argument type (spec/04,07,09)" { panic(diagnostic.message()) }
         }
         Result.Ok(value: _) => { panic("a colliding method unexpectedly registered") }
     }
@@ -175,8 +175,8 @@ fn exerciseValueSignatureAdmission() {
     compiler.lowerImpl(im: parseImplementation(compiler, rejected)).unwrap()
     match compiler.admitAuthoredFunctionViews() {
         Result.Err(error: val diagnostic) => {
-            if diagnostic.message != "trait view requires a conformance for this receiver and exact trait instance (spec/09)" { panic(diagnostic.message) }
-            match diagnostic.failureDomain { FailureDomain.Source => {} _ => { panic("wrong-instance signature did not retain its source failure domain") } }
+            if diagnostic.message() != "trait view requires a conformance for this receiver and exact trait instance (spec/09)" { panic(diagnostic.message()) }
+            match diagnostic.failureDomain() { FailureDomain.Source => {} _ => { panic("wrong-instance signature did not retain its source failure domain") } }
         }
         Result.Ok(value: _) => { panic("the value adapter admitted a different trait instance") }
     }

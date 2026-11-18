@@ -12,7 +12,7 @@ fn main() {
     mut val compiler = <Comp />
     match analyzeFrontend(c: inout compiler, input: (if scenario == "namespaceArguments" { give <FrontendInput.File path="tests/compiler/frontend/fixtures/ImplTraitInstances/QualifiedTypePrefixArguments.pw" /> } else { give <FrontendInput.Text text=text path="TypePathEdges.pw" /> }), sources: <SourceAccess stdRoot="std/".bytes() />) {
         Result.Err(error: val diagnostic) => {
-            if !valid && diagnostic.isSourceRejection() && diagnostic.message == expected { print("1") return }
+            if !valid && diagnostic.isSourceRejection() && diagnostic.message() == expected { print("1") return }
             emitDiagnostic(diagnostic: diagnostic) print("0") return
         }
         Result.Ok(value: _) => { if !valid { print("0") return } }

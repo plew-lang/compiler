@@ -17,7 +17,7 @@ fn functionOwner(compiler: inout Comp, name: String) -> U64 {
 fn expectTypeFailure(result: Result[(), CompileDiagnostic]) {
     match result {
         Result.Err(error: val diagnostic) => {
-            if diagnostic.message != "cannot infer this expression's type; add a type annotation or provide an expected type" { panic("wrong diagnostic") }
+            if diagnostic.message() != "cannot infer this expression's type; add a type annotation or provide an expected type" { panic("wrong diagnostic") }
         }
         Result.Ok(value: _) => { panic("unresolved owner succeeded") }
     }

@@ -8,7 +8,7 @@ fn requireCycleFailure(path: String, message: String) {
     match analyzeFrontend(c: inout compiler, input: <FrontendInput.File path=path />,
         sources: <SourceAccess stdRoot="std/".bytes() />) {
         Result.Err(error: val diagnostic) => {
-            if diagnostic.message != message { emitDiagnostic(diagnostic: diagnostic) panic("wrong cycle refusal") }
+            if diagnostic.message() != message { emitDiagnostic(diagnostic: diagnostic) panic("wrong cycle refusal") }
             if !diagnostic.isSourceRejection() { panic("trait cycle refusal lost Source domain") }
         }
         Result.Ok(value: _) => { panic("trait cycle was accepted") }

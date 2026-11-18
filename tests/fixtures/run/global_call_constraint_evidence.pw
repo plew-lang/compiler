@@ -19,7 +19,7 @@ fn main() {
     match compiler.prepareGlobalInitializer(target: broken) {
         Result.Ok(value: _) => { panic("global with an unsatisfied source constraint was prepared") }
         Result.Err(error: val diagnostic) => {
-            if diagnostic.message != "type argument does not conform to the trait required by `where`" { panic(diagnostic.message) }
+            if diagnostic.message() != "type argument does not conform to the trait required by `where`" { panic(diagnostic.message()) }
         }
     }
     if compiler.globalInitializerPrepared(target: broken) { panic("failed request published readiness") }

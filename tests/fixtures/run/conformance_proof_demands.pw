@@ -34,7 +34,7 @@ fn main() {
     match analyzeFrontend(c: inout rejected, input: <FrontendInput.Text text="// Admission needs one conformance path even when no trait member is used.\ntrait C {{}}\ntrait D {{}}\ntrait B {{}}\ntrait A {{}}\nstruct S {{}}\nimpl S as C {{}}\nimpl S as D {{}}\nimpl C as B {{}}\nimpl D as B {{}}\nimpl B as A {{}}\nfn accept[T](value: T) where T: A {{}}\nfn main() {{ accept(value: <S />) }}\n" path="ambiguous-bound.pw" />, sources: <SourceAccess />) {
         Result.Ok(value: _) => { panic("source admission retained a presence-only proof") }
         Result.Err(error: val error) => {
-            if error.message != "ambiguous conformance: multiple declaration paths satisfy the source bound" { panic(error.message) }
+            if error.message() != "ambiguous conformance: multiple declaration paths satisfy the source bound" { panic(error.message()) }
         }
     }
     mut val accepted = <Comp />

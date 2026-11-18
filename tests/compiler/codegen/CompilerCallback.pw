@@ -14,7 +14,7 @@ extern(c) {
 }
 fn main() {
     match CompilerSession.open(input: <FrontendInput.File path=argAt(2I64) />, sources: <SourceAccess stdRoot=argAt(1I64).bytes() />) {
-        CompilerSessionResult.Failure(diagnostic: val diagnostic) => { panic diagnostic.message }
+        CompilerSessionResult.Failure(diagnostic: val diagnostic) => { panic diagnostic.message() }
         CompilerSessionResult.Success(session: val opened) => {
             val sessionId = registerCompilerSession(session: move opened).unwrap()
             val shared = findCompilerSession(registry: compilerSessionSnapshot(), sessionId: sessionId).unwrap()
@@ -24,7 +24,7 @@ fn main() {
                     mut val jit = move created
                     shared->configureLlvmTarget(target: jit.targetDescription().unwrap()).unwrap()
                     match shared->lowerDeclarations() {
-                        LlvmLoweringResult.Failure(diagnostic: val diagnostic) => { panic diagnostic.message }
+                        LlvmLoweringResult.Failure(diagnostic: val diagnostic) => { panic diagnostic.message() }
                         LlvmLoweringResult.Success(module: val module) => {
                             assert(jit.registerDeclarations(module: move module, sessionId: sessionId) == 0I32)
                         }

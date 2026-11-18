@@ -57,7 +57,7 @@ fn main() {
                 }
                 MidBuildError.Frontend(diagnostic: val diagnostic) => { failed += 1U64
                     print(index)
-                    print(diagnostic.message) }
+                    print(diagnostic.message()) }
                 MidBuildError.StringLiteral(offset: val offset, message: val message) => { failed += 1U64
                     print(offset)
                     print(message) }

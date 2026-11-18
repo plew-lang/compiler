@@ -13,7 +13,7 @@ fn main() {
     if scenario == "invalidGenericViewRef" {
         match compiler.checkGenericTypeViewCycles(ref: 999999U64, offset: 0U64) {
             Result.Err(error: val diagnostic) => {
-                match diagnostic.failureDomain {
+                match diagnostic.failureDomain() {
                     FailureDomain.Input => { print(1I64) }
                     _ => { print(0I64) }
                 }
@@ -171,6 +171,6 @@ fn main() {
     }
     match compiler.checkGenericTypeViewCycles(ref: viewed, offset: 0U64) {
         Result.Ok(value: _) => { print(scenario == "genericCycleControl" || scenario == "traitSourceActivation") }
-        Result.Err(error: val diagnostic) => { print(scenario == "genericCycleViewArgument" && diagnostic.message == "trait-to-trait conformance cycle" && !diagnostic.isSourceRejection()) }
+        Result.Err(error: val diagnostic) => { print(scenario == "genericCycleViewArgument" && diagnostic.message() == "trait-to-trait conformance cycle" && !diagnostic.isSourceRejection()) }
     }
 }

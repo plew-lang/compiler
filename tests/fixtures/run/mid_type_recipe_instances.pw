@@ -42,7 +42,7 @@ fn main() {
     // A duplicate statement-owned call has no source expression to inspect.
     // Reject it through its retained site without dereferencing exprId zero.
     match compiler.appendFinalCallee(exprId: 0U64, callee: noCallee, siteIsStmt: true, slot: 2U64, recvTypeRef: secondType, resultTypeRef: secondOptional, generatedSite: site) {
-        Result.Err(error: val error) => { if error.message != "final call occurrence is already published" { panic(error.message) } }
+        Result.Err(error: val error) => { if error.message() != "final call occurrence is already published" { panic(error.message()) } }
         Result.Ok(value: _) => { panic "duplicate call occurrence accepted" }
     }
     // Navigation is deliberately unrelated to the stored semantic call site.

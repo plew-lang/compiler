@@ -55,11 +55,11 @@ fn check(mode: U64, text: String = "trait P[V] {{}} trait Q {{}} trait R[V] {{}}
     compiler.decls.declarationConversions[0U64] = <DeclarationConversion site=original.site source=actual target=target proof=proof />
     match compiler.prepareLexicalBody(fnIdx: 0U64) {
         Result.Ok(value: _) => { if mode != 0U64 { panic("owner accepted invalid path evidence") } }
-        Result.Err(error: val diagnostic) => { if mode == 0U64 || diagnostic.message != (if mode == 3U64 { give "selected conformance path has an invalid terminal" } else { give "selected conformance path does not match its predecessor" }) { panic(diagnostic.message) } }
+        Result.Err(error: val diagnostic) => { if mode == 0U64 || diagnostic.message() != (if mode == 3U64 { give "selected conformance path has an invalid terminal" } else { give "selected conformance path does not match its predecessor" }) { panic(diagnostic.message()) } }
     }
     match compiler.checkRecordedMemberObligations() {
         Result.Ok(value: _) => { if mode != 0U64 { panic("whole target accepted invalid path evidence") } }
-        Result.Err(error: val diagnostic) => { if mode == 0U64 || diagnostic.message != (if mode == 3U64 { give "selected conformance path has an invalid terminal" } else { give "selected conformance path does not match its predecessor" }) { panic(diagnostic.message) } }
+        Result.Err(error: val diagnostic) => { if mode == 0U64 || diagnostic.message() != (if mode == 3U64 { give "selected conformance path has an invalid terminal" } else { give "selected conformance path does not match its predecessor" }) { panic(diagnostic.message()) } }
     }
 }
 fn main() {

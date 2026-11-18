@@ -34,8 +34,8 @@ fn retained(compiler: inout Comp, traitName: String, argumentName: String, arity
 }
 
 fn rejectedAt(diagnostic: CompileDiagnostic, message: String, line: I64) -> Bool {
-    if !diagnostic.isSourceRejection() || diagnostic.message != message { return false }
-    match diagnostic.location {
+    if !diagnostic.isSourceRejection() || diagnostic.message() != message { return false }
+    match diagnostic.location() {
         DiagnosticLocation.File(path: val path, line: val actual) => { return path == "ValueViewConsumers.pw" && actual == line }
         DiagnosticLocation.Line(line: val actual) => { return actual == line }
         _ => { return false }

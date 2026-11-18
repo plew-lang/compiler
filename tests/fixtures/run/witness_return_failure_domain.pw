@@ -40,11 +40,11 @@ fn requireFailure[T](result: Result[T, CompileDiagnostic], source: Bool) {
     match result {
         Result.Ok(value: _) => { panic("wrong witness return accepted") }
         Result.Err(error: val diagnostic) => {
-            if diagnostic.message != "implementation return type does not match the trait requirement" { panic(diagnostic.message) }
+            if diagnostic.message() != "implementation return type does not match the trait requirement" { panic(diagnostic.message()) }
             if source {
-                match diagnostic.failureDomain { FailureDomain.Source => {} _ => { panic("source witness result lost its origin") } }
+                match diagnostic.failureDomain() { FailureDomain.Source => {} _ => { panic("source witness result lost its origin") } }
             } else {
-                match diagnostic.failureDomain { FailureDomain.Unclassified => {} _ => { panic("raw witness result became source") } }
+                match diagnostic.failureDomain() { FailureDomain.Unclassified => {} _ => { panic("raw witness result became source") } }
             }
         }
     }
@@ -53,6 +53,6 @@ fn requireFailure[T](result: Result[T, CompileDiagnostic], source: Bool) {
 fn checked[T](result~: Result[T, CompileDiagnostic]) -> T {
     match result {
         Result.Ok(value: val value) => { return value }
-        Result.Err(error: val diagnostic) => { panic(diagnostic.message) }
+        Result.Err(error: val diagnostic) => { panic(diagnostic.message()) }
     }
 }

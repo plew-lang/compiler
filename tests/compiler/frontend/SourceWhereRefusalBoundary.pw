@@ -30,7 +30,7 @@ fn checkSyntheticMissingConstraint(includeExpression: Bool) {
     }
     match compiler.prepareCallTemplateConstraints(templateIndex: index) {
         Result.Err(error: val diagnostic) => {
-            if diagnostic.message != "type argument does not conform to the trait required by `where`" || diagnostic.isSourceRejection() {
+            if diagnostic.message() != "type argument does not conform to the trait required by `where`" || diagnostic.isSourceRejection() {
                 panic("synthetic missing proof was misclassified")
             }
         }
@@ -72,7 +72,7 @@ fn checkReplacedSourceCall(usePublicRecorder: Bool) {
     }
     match compiler.prepareCallTemplateConstraints(templateIndex: index) {
         Result.Err(error: val diagnostic) => {
-            if diagnostic.message != "type argument does not conform to the trait required by `where`" || diagnostic.isSourceRejection() {
+            if diagnostic.message() != "type argument does not conform to the trait required by `where`" || diagnostic.isSourceRejection() {
                 panic("raw replacement retained source authority")
             }
         }

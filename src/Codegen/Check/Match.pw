@@ -41,7 +41,7 @@ pub impl Comp {
         self.reportedUnreachableArms.insert(arm.offset)
         val message = if arm.orGroup == 0U64 { give "unreachable match arm: earlier patterns already cover it (spec/11)" } else { give "unreachable match alternative: earlier patterns already cover it (spec/11)" }
         val location = self.diagnosticAt(offset: arm.offset, msg: message)
-        self.pendingDiagnostics.append(<CompileDiagnostic severity=<DiagnosticSeverity.Warning /> location=location.location message=location.message />)
+        self.pendingDiagnostics.append(<CompileDiagnostic severity=<DiagnosticSeverity.Warning /> location=location.location() message=location.message() />)
     }
 
     // Coverage is structural: arbitrary Eq calls (including repeated reads of

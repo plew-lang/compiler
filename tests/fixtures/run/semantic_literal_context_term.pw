@@ -13,12 +13,12 @@ fn main() {
     val integerName = compiler.internBytes(s: "I64")
     val integer = compiler.pushType(t: <TypeRef nameStart=integerName.nameStart nameLen=integerName.nameLen nameId=integerName.nameId args=[] />)
     val literal = compiler.pushExpr(e: <Expr.Int value=1U64 offset=0U64 isBool=false tyStart=0U64 tyLen=0U64 isNeg=false />)
-    match compiler.recordExpr(exprId: literal) { Result.Ok(value: _) => {} Result.Err(error: val diagnostic) => { panic(diagnostic.message) } }
+    match compiler.recordExpr(exprId: literal) { Result.Ok(value: _) => {} Result.Err(error: val diagnostic) => { panic(diagnostic.message()) } }
     match compiler.sourceSemanticExprTypeAt(index: literal).typeState {
         SemanticExpressionTypeState.Pending => {}
         _ => { panic "untyped literal is not pending" }
     }
-    match compiler.recordExpr(exprId: literal, expectedTerm: integer) { Result.Ok(value: _) => {} Result.Err(error: val diagnostic) => { panic(diagnostic.message) } }
+    match compiler.recordExpr(exprId: literal, expectedTerm: integer) { Result.Ok(value: _) => {} Result.Err(error: val diagnostic) => { panic(diagnostic.message()) } }
     val recorded = compiler.semanticExprTerm(exprId: literal)
     if recorded == 0U64 { panic "context producer did not publish a term" }
     match compiler.sourceSemanticExprTypeAt(index: literal).typeState {
@@ -28,12 +28,12 @@ fn main() {
     val typeCount = compiler.arena.typeCount()
     if compiler.semanticExprTerm(exprId: literal) != recorded { panic "reader changed the term" }
     if compiler.semanticExprTerm(exprId: literal) != recorded || compiler.arena.typeCount() != typeCount { panic "reader materialized a type" }
-    match compiler.recordExpr(exprId: literal) { Result.Ok(value: _) => {} Result.Err(error: val diagnostic) => { panic(diagnostic.message) } }
+    match compiler.recordExpr(exprId: literal) { Result.Ok(value: _) => {} Result.Err(error: val diagnostic) => { panic(diagnostic.message()) } }
     if compiler.semanticExprTerm(exprId: literal) != recorded { panic "context-free recording erased the checked context" }
     val unsignedName = compiler.internBytes(s: "U8")
     val unsigned = compiler.pushType(t: <TypeRef nameStart=unsignedName.nameStart nameLen=unsignedName.nameLen nameId=unsignedName.nameId args=[] />)
     val explicit = compiler.pushExpr(e: <Expr.Int value=1U64 offset=0U64 isBool=false tyStart=unsignedName.nameStart tyLen=unsignedName.nameLen isNeg=false />)
-    match compiler.recordExpr(exprId: explicit, expectedTerm: integer) { Result.Ok(value: _) => {} Result.Err(error: val diagnostic) => { panic(diagnostic.message) } }
+    match compiler.recordExpr(exprId: explicit, expectedTerm: integer) { Result.Ok(value: _) => {} Result.Err(error: val diagnostic) => { panic(diagnostic.message()) } }
     if !compiler.typeRefEq(a: compiler.semanticExprTerm(exprId: explicit), b: unsigned) { panic "expected context overwrote an explicit type" }
     if compiler.tcCheckValue(expectedRef: integer, valueExpr: explicit, pos: "literal-context").isOk() { panic "incompatible explicit type matched numeric context" }
     val elements = compiler.pushExprs(exprs: [])
@@ -45,7 +45,7 @@ fn main() {
         SemanticExpressionTypeState.Pending => {}
         _ => { panic "numeric context resolved an untyped array" }
     }
-    match compiler.recordParametricFunction(fnIdx: owner, recordCallTemplates: false) { Result.Ok(value: _) => {} Result.Err(error: val diagnostic) => { panic(diagnostic.message) } }
+    match compiler.recordParametricFunction(fnIdx: owner, recordCallTemplates: false) { Result.Ok(value: _) => {} Result.Err(error: val diagnostic) => { panic(diagnostic.message()) } }
     compiler.cur.checkFn = owner
     val unitName = compiler.internBytes(s: "unit")
     val stopName = compiler.internBytes(s: "stop")
@@ -64,7 +64,7 @@ fn main() {
     }
     if unit >= compiler.arena.exprs.count() || stopped >= compiler.arena.exprs.count() { panic "missing callable context probes" }
     val unitTerm = compiler.semanticExprTerm(exprId: unit)
-    match compiler.recordExpr(exprId: unit, expectedTerm: integer) { Result.Ok(value: _) => {} Result.Err(error: val diagnostic) => { panic(diagnostic.message) } }
+    match compiler.recordExpr(exprId: unit, expectedTerm: integer) { Result.Ok(value: _) => {} Result.Err(error: val diagnostic) => { panic(diagnostic.message()) } }
     if !compiler.recordedExpressionHasUnitResult(exprId: unit) { panic "numeric context erased Unit state" }
     if !compiler.typeRefEq(a: compiler.semanticExprTerm(exprId: unit), b: unitTerm) { panic "numeric context changed Unit type" }
     if compiler.recordExpr(exprId: stopped, expectedTerm: integer).isOk() { panic "diverging expression was accepted as a numeric value" }

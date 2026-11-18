@@ -12,7 +12,7 @@ fn main() {
         mut val c = <Comp />
         match analyzeFrontendDeclarations(c: inout c, input: <FrontendInput.Text text=source path="projection.pw" />, sources: <SourceAccess stdRoot=[] />) {
             Result.Ok(value: _) => { assert(false) }
-            Result.Err(error: val diagnostic) => { assert(diagnostic.message == "associated-type projection names an associated type that is not bound by the selected conformance (spec/08)") }
+            Result.Err(error: val diagnostic) => { assert(diagnostic.message() == "associated-type projection names an associated type that is not bound by the selected conformance (spec/08)") }
         }
         assert(c.monoWork.bodyCount() == 0U64)
     }

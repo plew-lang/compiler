@@ -58,7 +58,7 @@ fn main() {
 fn requireSuccess(result: Result[(), CompileDiagnostic], context: String) {
     match result {
         Result.Ok(value: _) => {}
-        Result.Err(error: val error) => { print(context) print(error.message) panic("chain source preparation failed") }
+        Result.Err(error: val error) => { print(context) print(error.message()) panic("chain source preparation failed") }
     }
 }
 

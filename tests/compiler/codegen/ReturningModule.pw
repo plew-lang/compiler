@@ -13,7 +13,7 @@ fn lowerInput(path: String, shouldFail: Bool) {
     match analyzeFrontend(c: inout compiler,
         input: <FrontendInput.File path=path />, sources: <SourceAccess stdRoot=argAt(3I64).bytes() />) {
         Result.Ok(value: _) => {}
-        Result.Err(error: val diagnostic) => { panic(diagnostic.message) }
+        Result.Err(error: val diagnostic) => { panic(diagnostic.message()) }
     }
     match lowerLlvm(c: inout compiler) {
         LlvmLoweringResult.Success(module: val module) => {
@@ -21,8 +21,8 @@ fn lowerInput(path: String, shouldFail: Bool) {
             print("module returned")
         }
         LlvmLoweringResult.Failure(diagnostic: val diagnostic) => {
-            if !shouldFail { panic(diagnostic.message) }
-            print(diagnostic.message)
+            if !shouldFail { panic(diagnostic.message()) }
+            print(diagnostic.message())
         }
     }
 }
@@ -33,7 +33,7 @@ fn lowerMissingEntry() {
         sources: <SourceAccess />).unwrap()
     match lowerLlvm(c: inout compiler) {
         LlvmLoweringResult.Success(module: val module) => { panic("module without main was accepted") }
-        LlvmLoweringResult.Failure(diagnostic: val diagnostic) => { print(diagnostic.message) }
+        LlvmLoweringResult.Failure(diagnostic: val diagnostic) => { print(diagnostic.message()) }
     }
 }
 fn lowerInvalidContract() {
@@ -47,7 +47,7 @@ fn lowerInvalidContract() {
     compiler.arena.finalDestructions.append(<FinalDestruction typeRef=0U64 />)
     match lowerPreparedLlvm(c: inout compiler, prepared: prepared) {
         LlvmLoweringResult.Success(module: val module) => { panic("unfinished contract was accepted") }
-        LlvmLoweringResult.Failure(diagnostic: val diagnostic) => { print(diagnostic.message) }
+        LlvmLoweringResult.Failure(diagnostic: val diagnostic) => { print(diagnostic.message()) }
     }
 }
 fn main() {

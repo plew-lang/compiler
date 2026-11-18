@@ -25,7 +25,7 @@ fn check(name: String, localRoot: Bool, snapshot: Bool, receiver: Bool = false) 
     mut val compiler = <Comp />
     match analyzeFrontendDeclarations(c: inout compiler, input: <FrontendInput.Text path="stable-fields.pw" text="struct Inner {{ pub mut val value: I64 }} struct Outer {{ pub mut val inner: Inner }} struct Pair {{ val first: I64 val second: I64 }} fn effect() -> I64 {{ return 0I64 }} fn sink(value: I64, extra: I64) {{}} fn fromLocal(input: Outer) {{ val local = input sink(value: local.inner.value, extra: effect()) val pair = <Pair first=local.inner.value second=effect() /> }} fn fromMutable(input: Outer) {{ mut val local = input sink(value: local.inner.value, extra: effect()) val pair = <Pair first=local.inner.value second=effect() /> }} fn fromInput(input: Outer) {{ sink(value: input.inner.value, extra: effect()) val pair = <Pair first=input.inner.value second=effect() /> }} fn fromInout(input: inout Outer) {{ sink(value: input.inner.value, extra: effect()) val pair = <Pair first=input.inner.value second=effect() /> }} impl Outer {{ fn fromSelf() {{ sink(value: self.inner.value, extra: effect()) val pair = <Pair first=self.inner.value second=effect() /> }} }}" />, sources: <SourceAccess />) {
         Result.Ok(value: _) => {}
-        Result.Err(error: val diagnostic) => { print(diagnostic.message) panic("field source setup failed") }
+        Result.Err(error: val diagnostic) => { print(diagnostic.message()) panic("field source setup failed") }
     }
     val owner = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: name).nameId)
     compiler.prepareLexicalBody(fnIdx: owner).unwrap()

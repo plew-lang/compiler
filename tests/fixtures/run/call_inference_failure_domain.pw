@@ -63,10 +63,10 @@ fn main() {
 }
 
 fn requireFailure(diagnostic: CompileDiagnostic, source: Bool) {
-    if diagnostic.message != "cannot infer all type arguments for this call" { panic(diagnostic.message) }
+    if diagnostic.message() != "cannot infer all type arguments for this call" { panic(diagnostic.message()) }
     if source {
-        match diagnostic.failureDomain { FailureDomain.Source => {} _ => { panic("source inference lost its origin") } }
+        match diagnostic.failureDomain() { FailureDomain.Source => {} _ => { panic("source inference lost its origin") } }
     } else {
-        match diagnostic.failureDomain { FailureDomain.Unclassified => {} _ => { panic("raw template failure became source") } }
+        match diagnostic.failureDomain() { FailureDomain.Unclassified => {} _ => { panic("raw template failure became source") } }
     }
 }

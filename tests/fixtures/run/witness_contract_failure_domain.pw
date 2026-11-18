@@ -47,11 +47,11 @@ fn requireFailure[T](result: Result[T, CompileDiagnostic], message: String, sour
     match result {
         Result.Ok(value: _) => { panic("wrong witness contract accepted") }
         Result.Err(error: val diagnostic) => {
-            if diagnostic.message != message { panic(diagnostic.message) }
+            if diagnostic.message() != message { panic(diagnostic.message()) }
             if source {
-                match diagnostic.failureDomain { FailureDomain.Source => {} _ => { panic("source witness contract lost its origin") } }
+                match diagnostic.failureDomain() { FailureDomain.Source => {} _ => { panic("source witness contract lost its origin") } }
             } else {
-                match diagnostic.failureDomain { FailureDomain.Unclassified => {} _ => { panic("raw witness contract became source") } }
+                match diagnostic.failureDomain() { FailureDomain.Unclassified => {} _ => { panic("raw witness contract became source") } }
             }
         }
     }
@@ -60,6 +60,6 @@ fn requireFailure[T](result: Result[T, CompileDiagnostic], message: String, sour
 fn checked[T](result~: Result[T, CompileDiagnostic]) -> T {
     match result {
         Result.Ok(value: val value) => { return value }
-        Result.Err(error: val diagnostic) => { panic(diagnostic.message) }
+        Result.Err(error: val diagnostic) => { panic(diagnostic.message()) }
     }
 }

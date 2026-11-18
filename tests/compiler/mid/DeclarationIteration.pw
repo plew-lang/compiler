@@ -10,6 +10,6 @@ fn main() {
     assert(compiler.arena.finalDestructions.count() == 0U64)
     match result {
         Result.Ok(value: _) => { print("ok") }
-        Result.Err(error: val diagnostic) => { print(diagnostic.message) }
+        Result.Err(error: val diagnostic) => { print(diagnostic.message()) }
     }
 }

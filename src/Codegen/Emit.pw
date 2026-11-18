@@ -198,11 +198,11 @@ pub impl Comp {
                     if self.arena.bytes[cursor] == 10U8 { line += 1 }
                     cursor += 1U64
                 }
-                return <CompileDiagnostic location=<DiagnosticLocation.File path=self.modules.sourceFilePath(index: index) line=line /> message=msg failureDomain=failureDomain />
+                return <CompileDiagnostic failureDomain=failureDomain location=<DiagnosticLocation.File path=self.modules.sourceFilePath(index: index) line=line /> message=msg />
             }
             Optional.None => {}
         }
-        return <CompileDiagnostic location=<DiagnosticLocation.Line line=self.lineOf(offset: offset) /> message=msg failureDomain=failureDomain />
+        return <CompileDiagnostic failureDomain=failureDomain location=<DiagnosticLocation.Line line=self.lineOf(offset: offset) /> message=msg />
     }
 
     // Diagnostic anchor for a function declaration: defOffset is the declaration's

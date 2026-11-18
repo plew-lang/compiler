@@ -122,7 +122,7 @@ fn main() {
                     _ => { panic("valid associated row did not replay") }
                 }
             }
-            Result.Err(error: val diagnostic) => { panic("associated reader: " + diagnostic.message) }
+            Result.Err(error: val diagnostic) => { panic("associated reader: " + diagnostic.message()) }
         }
     }
     if compiler.activeConditionReplay.count() != 0U64 || compiler.activeConditionAdmission.count() != 0U64 || compiler.activeAssumptionAdmission.count() != 0U64 { panic("associated reader leaked active state") }

@@ -18,7 +18,7 @@ fn main() {
     for assumption in [symbolic, receiverAssumption] {
         val instantiated = match compiler.instantiateConstraintProof(proof: assumption, receiverRef: receiver, environment: environment, selfRef: receiver, itemRef: 0U64) {
             Result.Ok(value: val state) => { give state }
-            Result.Err(error: val diagnostic) => { panic(diagnostic.message) }
+            Result.Err(error: val diagnostic) => { panic(diagnostic.message()) }
         }
         match instantiated {
             StaticProofInstantiation.Ready(proof: val actual) => { if !compiler.sameStaticConformanceProof(a: actual, b: selected) { panic("trait Self evidence was reselected") } }

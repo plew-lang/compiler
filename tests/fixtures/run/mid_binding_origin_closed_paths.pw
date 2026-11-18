@@ -9,8 +9,8 @@ use /Mid/Program only { MidExecutableRequests }
 fn main() {
     mut val compiler = <Comp />
     match analyzeFrontendDeclarations(c: inout compiler, input: <FrontendInput.Text path="closed-origins.pw"
-        text="val first: I64 = {{ val initial = 1I64 while true {{}} give initial }} val later: I64 = {{ val skipped = 2I64 give skipped }} fn main() {{ val abandoned = {{ while true {{}} give 1I64 }} val unreachable = 2I64 }}" />, sources: <SourceAccess />) { Result.Ok(value: _) => {} Result.Err(error: val diagnostic) => { print(diagnostic.message) panic("closed-path declaration setup failed") } }
-    match finalizeFrontendExecutables(c: inout compiler) { Result.Ok(value: _) => {} Result.Err(error: val diagnostic) => { print(diagnostic.message) panic("closed-path finalization failed") } }
+        text="val first: I64 = {{ val initial = 1I64 while true {{}} give initial }} val later: I64 = {{ val skipped = 2I64 give skipped }} fn main() {{ val abandoned = {{ while true {{}} give 1I64 }} val unreachable = 2I64 }}" />, sources: <SourceAccess />) { Result.Ok(value: _) => {} Result.Err(error: val diagnostic) => { print(diagnostic.message()) panic("closed-path declaration setup failed") } }
+    match finalizeFrontendExecutables(c: inout compiler) { Result.Ok(value: _) => {} Result.Err(error: val diagnostic) => { print(diagnostic.message()) panic("closed-path finalization failed") } }
     val instance = compiler.monoWork.bodyAt(index: 0U64)
     mut val templates = <MidFunctionTemplates />
     mut val requests = <MidExecutableRequests />

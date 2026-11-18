@@ -13,7 +13,7 @@ fn checkSource(path: String, asan: Bool) {
         sources: <SourceAccess />, options: <FrontendOptions asan=asan />)
     match analysis {
         Result.Ok(value: _) => {}
-        Result.Err(error: val diagnostic) => { panic(diagnostic.message) }
+        Result.Err(error: val diagnostic) => { panic(diagnostic.message()) }
     }
     match PreparedProgram.prepare(c: inout compiler) {
         Result.Ok(value: _) => {}
@@ -29,7 +29,7 @@ fn main() {
         input: <FrontendInput.File path="/nonexistent/plew-input-test.pw" />,
         sources: <SourceAccess />) {
         Result.Ok(value: _) => { panic("missing input was accepted") }
-        Result.Err(error: val diagnostic) => { print(diagnostic.message) }
+        Result.Err(error: val diagnostic) => { print(diagnostic.message()) }
     }
     checkSource(path: "First.pw", asan: false)
     checkSource(path: "Second.pw", asan: true)

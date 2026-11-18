@@ -39,7 +39,7 @@ fn control(mode~: U64) {
             if mode != 0U64 { panic("associated output accepted a corrupt projection equation") }
             if !compiler.typeRefEq(a: value, b: expected) { panic("selected witness changed its associated output") }
         }
-        Result.Err(error: val diagnostic) => { if mode == 0U64 { panic(diagnostic.message) } }
+        Result.Err(error: val diagnostic) => { if mode == 0U64 { panic(diagnostic.message()) } }
     }
     if !compiler.typeRefEq(a: compiler.associatedOutputInProof(proof: originalProof, traitOwner: traitOwner, assocId: member).unwrap(), b: expected) { panic("original associated output did not recover") }
     val validation = compiler.checkWitnessConditionEvidence(witness: changedWitness, offset: 0U64)

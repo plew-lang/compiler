@@ -38,7 +38,7 @@ fn main() {
             match compiler.checkDeclarationCallProof(proof: proof, scope: scope, offset: 0U64) {
                 Result.Ok(value: _) => { panic("retained projection context hid a foreign owner") }
                 Result.Err(error: val error) => {
-                    if error.message != "declaration obligation refers to a type parameter outside its lexical scope" { panic(error.message) }
+                    if error.message() != "declaration obligation refers to a type parameter outside its lexical scope" { panic(error.message()) }
                 }
             }
             if compiler.activeAssumptionAdmission.count() != 0U64 { panic("foreign scope rejection leaked its active assumption stack") }

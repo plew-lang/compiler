@@ -7,7 +7,7 @@ extern(c) { fn LLVMGetAllocatedType(value~: LLVMValueRef) -> LLVMTypeRef }
 fn requireInternal[T](result: Result[T, CompileDiagnostic]) {
     match result {
         Result.Ok(value: _) => { panic "malformed private local admission accepted" }
-        Result.Err(error: val error) => { match error.failureDomain { FailureDomain.Internal => {} _ => { panic "wrong private local admission failure domain" } } }
+        Result.Err(error: val error) => { match error.failureDomain() { FailureDomain.Internal => {} _ => { panic "wrong private local admission failure domain" } } }
     }
 }
 fn main() {
