@@ -412,3 +412,15 @@ candidate failures and three gated-source failures in findMethod, plus
 Establish the origin of each actual request before classification.
 
 [Producer replay](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-bare-ambiguity-producers.json).
+
+The three-mode replay locates the proof failures more precisely. In check
+and AOT, all 14 come from the Requirement branch of
+checkStaticMemberObligation. In ORC, nine come from the Requirement branch
+of selectStaticMethodTemplateCall and five complete without requesting the
+failing body or operation. Both failing paths ask instantiateBoundProof to
+resolve a concrete member-dispatch witness from a recorded requirement.
+This is distinct from first-concrete SourceAdmission checks for where
+clauses. Both preparation paths must carry the same authenticated source
+operation to diagnosis. Unauthenticated raw requests and unrelated proof
+failures remain separate controls. The five direct lookup cases take an
+instance route (four) or the associated route (one) in all three modes.
