@@ -1,0 +1,65 @@
+use /Frontend only { Comp, FrontendInput, openFrontend, openFrontendForRequests, analyzeFrontendDeclarations, analyzeFrontendForRequests }
+use /SourceAccess only { SourceAccess }
+use /Diag only { CompileDiagnostic, FailureDomain }
+use @Std/Io only { print }
+
+fn main() {
+    val missing = "supertrait not satisfied: this type must also conform to the trait's supertrait"
+    verifySource(text: "trait Parent {{}} trait Child: Parent {{}} struct Worker {{}} impl Worker as Child {{}} fn main() {{}}", message: missing)
+    verifySource(text: "trait Parent {{}} trait Child: Parent {{ fn go() }} struct Worker {{}} impl Worker as Child {{ fn go(value: () = ()) {{}} }} fn main() {{}}", message: missing)
+    verifySource(text: "trait Parent {{}} trait A: Parent {{}} trait B: Parent {{}} trait Child: Parent {{}} struct Box[T] {{}} impl[T] Box[T] as Child where Box[T]: A, Box[T]: B {{}} fn main() {{}}", message: "ambiguous conformance: multiple declaration paths satisfy the source bound")
+    mut val compiler = checked(openFrontendForRequests(input: <FrontendInput.Text path="valid-supertrait.pw" text="trait Parent {{}} trait Child: Parent {{}} struct Worker {{}} impl Worker as Parent {{}} impl Worker as Child {{}} fn main() {{}}" />, sources: <SourceAccess stdRoot=[] />))
+    if compiler.decls.conformCount() != 2U64 { panic("unexpected supertrait controls") }
+    mut val nonempty = 0U64
+    for index in 0U64..<compiler.decls.conformCount() {
+        val traitIndex = compiler.resolveTraitDef(cf: compiler.decls.conformAt(index: index))
+        val evidence = checked(compiler.prepareConformanceSupertraits(conformIndex: index, traitIndex: traitIndex))
+        if !compiler.arena.hasConformanceSupertraits(conformance: index) { panic("healthy parent evidence missing") }
+        val trait = compiler.decls.traitAt(index: traitIndex)
+        for clause in 0U64..<trait.supertraits.count() {
+            val evidence = compiler.arena.conformanceSupertraitEvidence(conformance: index, clause: clause)
+            if evidence.isNone() { panic("nonempty parent proof missing") }
+            if !compiler.arena.hasStaticConformanceProof(id: evidence.unwrap().proof) { panic("parent proof identity missing") }
+            nonempty += 1U64
+        }
+    }
+    if nonempty != 1U64 { panic("nonempty parent control not exercised") }
+    print("ok")
+}
+
+fn verifySource(text: String, message: String) {
+    val input = <FrontendInput.Text path="supertrait-bound.pw" text=text />
+    val sources = <SourceAccess stdRoot=[] />
+    requireFailure(result: openFrontend(input: input, sources: sources), message: message, source: true)
+    requireFailure(result: openFrontendForRequests(input: input, sources: sources), message: message, source: true)
+    mut val raw = <Comp />
+    requireFailure(result: analyzeFrontendForRequests(c: inout raw, input: input, sources: sources), message: message, source: false)
+    mut val declarations = <Comp />
+    requireFailure(result: analyzeFrontendDeclarations(c: inout declarations, input: input, sources: sources), message: message, source: false)
+    if raw.decls.conformCount() != 1U64 { panic("unexpected raw parent declaration") }
+    if raw.arena.hasConformanceSupertraits(conformance: 0U64) { panic("failed parent proof was published") }
+    val traitIndex = raw.resolveTraitDef(cf: raw.decls.conformAt(index: 0U64))
+    requireFailure(result: raw.prepareConformanceSupertraits(conformIndex: 0U64, traitIndex: traitIndex), message: message, source: false)
+    requireFailure(result: raw.checkConformances(), message: message, source: false)
+}
+
+fn requireFailure[T](result: Result[T, CompileDiagnostic], message: String, source: Bool) {
+    match result {
+        Result.Ok(value: _) => { panic("invalid supertrait bound accepted") }
+        Result.Err(error: val diagnostic) => {
+            if diagnostic.message != message { panic(diagnostic.message) }
+            if source {
+                match diagnostic.failureDomain { FailureDomain.Source => {} _ => { panic("source supertrait bound lost its origin") } }
+            } else {
+                match diagnostic.failureDomain { FailureDomain.Unclassified => {} _ => { panic("raw supertrait bound became source") } }
+            }
+        }
+    }
+}
+
+fn checked[T](result~: Result[T, CompileDiagnostic]) -> T {
+    match result {
+        Result.Ok(value: val value) => { return value }
+        Result.Err(error: val diagnostic) => { panic(diagnostic.message) }
+    }
+}

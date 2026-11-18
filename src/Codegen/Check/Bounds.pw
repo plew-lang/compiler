@@ -1340,6 +1340,12 @@ pub impl Comp {
     // Retain the declaration's chosen parent evidence, including its impl
     // assumptions. Instantiation follows this edge rather than searching anew.
     inout fn prepareConformanceSupertraits(conformIndex: U64, traitIndex: U64) -> Result[(), CompileDiagnostic] {
+        return self.prepareConformanceSupertraitsForAdmission(conformIndex: conformIndex, traitIndex: traitIndex, origin: <FrontendDeclarationOrigin.Raw />)
+    }
+}
+
+impl Comp {
+    inout fn prepareConformanceSupertraitsForAdmission(conformIndex: U64, traitIndex: U64, origin: FrontendDeclarationOrigin) -> Result[(), CompileDiagnostic] {
         if self.arena.hasConformanceSupertraits(conformance: conformIndex) { return <Result.Ok value=() /> }
         val conformance = self.decls.conformAt(index: conformIndex)
         val traitDef = self.decls.traitAt(index: traitIndex)
@@ -1359,8 +1365,10 @@ pub impl Comp {
             mut val normalizations: Array[ProjectionNormalizationStep] = []
             try self.recordBoundInputProjectionEquations(bound: original, assumptions: assumptions, normalizations: inout normalizations, demand: demand)
             val expected = try self.replayBoundNormalizations(bound: original, normalizations: normalizations)
-            val proof = try self.viewedTraitConstraintProof(demand: demand, ref: expected.subject, constraint: expected.constraint, assumptions: assumptions)
-            if self.proofIsMissing(proof: proof) { return <Result.Err error=self.diagnosticAt(offset: conformance.typeStart, msg: "supertrait not satisfied: this type must also conform to the trait's supertrait") /> }
+            val answer = try self.queryViewedTraitConstraint(demand: demand, ref: expected.subject, constraint: expected.constraint, assumptions: assumptions)
+            val domain = match origin { FrontendDeclarationOrigin.SourceAdmission => <FailureDomain.Source />, FrontendDeclarationOrigin.Raw => <FailureDomain.Unclassified /> }
+            val proof = try self.requireConformanceProofInDomain(answer: answer, domain: domain)
+            if self.proofIsMissing(proof: proof) { return <Result.Err error=self.diagnosticAt(offset: conformance.typeStart, msg: "supertrait not satisfied: this type must also conform to the trait's supertrait", failureDomain: domain) /> }
             try self.recordBoundPredicateEquations(bound: original, proof: proof, assumptions: assumptions, normalizations: inout normalizations)
             try self.checkProjectionNormalizations(normalizations: normalizations, offset: original.offset, assumptions: assumptions)
             try self.checkRetainedWitnessClause(expected: expected, proof: proof, normalizations: normalizations, offset: original.offset, assumptions: assumptions)
@@ -1371,6 +1379,9 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
+}
+
+pub impl Comp {
     inout fn readConformanceSupertraitEvidence(conformance: U64, step: SupertraitRef) -> Result[ConformanceSupertraitEvidence, CompileDiagnostic] {
         if conformance >= self.decls.conformCount() || step.traitIndex >= self.decls.traitCount() { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "supertrait edge has an invalid declaration", failureDomain: <FailureDomain.Internal />) /> }
         val owner = self.decls.conformAt(index: conformance)
@@ -1412,7 +1423,7 @@ impl Comp {
             val conformance = self.decls.conformAt(index: index)
             val traitIndex = self.decls.traitIndexByOffset(offset: conformance.traitStart)
             if traitIndex < self.decls.traitCount() {
-                try self.prepareConformanceSupertraits(conformIndex: index, traitIndex: traitIndex)
+                try self.prepareConformanceSupertraitsForAdmission(conformIndex: index, traitIndex: traitIndex, origin: origin)
             } else if !conformance.derived {
                 return <Result.Err error=self.diagnosticAt(offset: conformance.traitStart, msg: "conformance to an unknown trait (is it declared / imported?)") />
             }
@@ -1439,7 +1450,7 @@ impl Comp {
     // along the selected path before callable-form signature comparison.
     inout fn prepareCallableFormEvidenceForAdmission(conformanceIndex: U64, traitIndex: U64, prepared: inout Dictionary[U64, Bool], origin: FrontendDeclarationOrigin) -> Result[(), CompileDiagnostic] {
         if prepared.get(key: conformanceIndex).isSome() { return <Result.Ok value=() /> }
-        try self.prepareConformanceSupertraits(conformIndex: conformanceIndex, traitIndex: traitIndex)
+        try self.prepareConformanceSupertraitsForAdmission(conformIndex: conformanceIndex, traitIndex: traitIndex, origin: origin)
         prepared[conformanceIndex] = true
         val trait = self.decls.traitAt(index: traitIndex)
         for clause in 0U64..<trait.supertraits.count() {

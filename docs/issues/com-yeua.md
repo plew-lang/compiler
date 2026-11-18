@@ -1087,3 +1087,38 @@ control uses fabricated data, separately from actual query ambiguity controls.
 No executed Limit control is claimed. Full gates and com-yeua remain open.
 
 [Evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-implementation-bound-rejection.json).
+
+### Direct supertrait proof classification scenarios
+
+Only successful direct supertrait query outcomes Missing/semantic Ambiguous
+are classified by existing private declaration origin. Keep the public
+prepareConformanceSupertraits entry Raw; both existing private admission callers
+forward origin. Preserve normalization, retained-evidence and publication failures
+and query Err/Limit. No new state, query, scan or proof selection.
+
+Nine source fixtures (eight existing Missing, one new Ambiguous) refuse with
+Unclassified in all27 baseline check/AOT/ORC runs. Native scenarios cover owned2,
+caller-owned2 and public prepare/full-check after unsuccessful raw admission,
+including a provided callable form; healthy parent/child control retains and
+reuses nonempty supertrait evidence. Existing projected/generic/callable-form
+positives remain controls. Independent plan review found no required violation.
+
+### Direct supertrait proof checkpoint
+
+Existing public prepare remains Raw; two private admission callers pass the
+existing origin to the direct query consumer. Missing and semantic Ambiguous
+classify Source for fresh owned admission only. Nine source fixtures retain
+exact stderr/status/channel in check/AOT/ORC (27 runs), now Source. Five existing
+projected/generic/provided/default/via controls pass check and exact ORC output
+(10 runs). Native source/raw/public recheck and saved-parent controls print ok.
+
+Independent review required nonempty parent evidence checks; each clause now
+requires a stored row and valid proof ID, with exactly one nonempty clause in
+the control. Failed raw admission must publish none. A never-passed extra
+control's trait-body syntax was corrected to valid default-argument callable
+form syntax; that setup failure is not GREEN. Independent re-review confirms
+this reaches callable-form parent preparation and has no remaining finding.
+Query Err/Limit preservation is structural, not an executed Limit claim.
+Full gates, com-yeua and phase3 remain open.
+
+[Evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-supertrait-rejection.json).

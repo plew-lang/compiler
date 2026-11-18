@@ -1,0 +1,7 @@
+trait Parent {}
+trait A: Parent {}
+trait B: Parent {}
+trait Child: Parent {}
+struct Box[T] {}
+impl[T] Box[T] as Child where Box[T]: A, Box[T]: B {}
+fn main() {}
