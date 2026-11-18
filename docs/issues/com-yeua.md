@@ -402,3 +402,13 @@ native producer probe rejects raw block and expression substitutions with
 the same message and no Source, including when the exact authored
 standalone expression and block are reused in a raw value position.
 Independent re-review verified that distinction in both Lower paths.
+
+### Bare ambiguity producer survey
+
+The 19 baseline check inputs all return Unclassified. A diagnostic-only
+replay separates the same printed message into two matching-provided
+candidate failures and three gated-source failures in findMethod, plus
+14 conformance proof admission failures in requireConformanceProof.
+Establish the origin of each actual request before classification.
+
+[Producer replay](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-bare-ambiguity-producers.json).
