@@ -1,6 +1,6 @@
 ---
 id: com-9hde
-status: in_progress
+status: closed
 deps: [com-zdod, com-scq5, com-2nb3]
 links: [com-amjl]
 created: 2026-11-06T23:54:58Z
@@ -759,3 +759,25 @@ Independent migration review identified the missing cycle module sequence
 required by spec/15. The updated cycle fixtures assert the common refusal
 reason only. The full diagnostic and its stronger test are required
 under [com-2nb3](com-2nb3.md#retain-the-cycle-for-the-diagnostic).
+
+## Outcome
+
+Completed at a79a9369 with Syntax 0.1.11-dev.32, exact lock
+e8aee7cbad65684d94e41e48a6e009a17456f145. Independent scoped audit
+reconciled R1–R5, the published selector, and prior direct/materialized/
+frozen evidence and found no implementation blocker. The fresh diagnostic
+binary was rebuilt from the same source tree as the frozen a79a9369
+checkout with that pin. In the frozen checkout, these five native goldens
+passed: ValueViewApplicationConsumers, QualifiedValueViewApplications,
+QualifiedTypeViewConsumers, FrozenLegacyTypeProjection, and
+ModuleBindingPublicationControls. TraitViewSelectors, TraitViewMalformed,
+and QualifiedTypeSources passed using the exact Syntax tag checkout.
+Four migrated JIT goldens, the function-lowering native golden, and
+eight migrated rejection inputs in check/AOT/lazy passed. The cycle
+diagnostic prerequisite com-2nb3 is closed.
+
+Unchanged ownership: com-amjl for associated-type shorthand admission,
+com-4k31 for final exact-instance dispatch, and com-yeua for the missing
+where rejection domain. The phase still requires frozen self-host and
+full-suite gates. Earlier unresolved pin and consumer-coverage entries
+describe historical checkpoints.
