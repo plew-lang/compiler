@@ -742,3 +742,18 @@ for exactly those four. Three successful member-selection controls pass
 check and exact ORC output. Independent source review found no scoped
 blocker. Normal selected-member origin checks are bounded but performance
 has not been measured; formal final validation remains pending.
+
+### Immutable receiver checkpoint
+
+Compiler 435be989 threads the saved method operation index to a private
+receiver checker. Immutable refusal authenticates source publication,
+recipe/site/expression, original Method/ExtMethod receiver and argument
+range. The public raw receiver checker keeps its signature and no origin.
+All 24 baseline text/status/channel comparisons pass. Seven check/AOT and
+six reached ORC refusals are Source, one lazy helper remains successful.
+Source-publication-disabled refusals remain Unclassified. Three mutable
+receiver fixtures pass check and exact ORC output; independent source
+review found no scoped blocker. Generated index_immutable remains required
+work. Formal final gates are pending.
+
+[Replay and publication control](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-immutable-receiver-rejection.json).
