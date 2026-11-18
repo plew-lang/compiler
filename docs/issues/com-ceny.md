@@ -41,3 +41,23 @@ actual delegation path, then prove one target activation in AOT and
 ORC plus behavior controls for immediate and suspended completion.
 Exercise copied self and moved unique ownership, retain the authored
 forwarding control, and obtain independent review.
+
+## Structural RED and implementation boundary
+
+Run `PLEWC=/absolute/candidate python3 -B tests/compiler/codegen/test-async-forwarding-activation.py`.
+The candidate for `9c0e4cf8` emits three frame allocation calls for the
+standalone fixture. The expected two belong to async main and the selected
+target. The same test counts Promise creation separately. This is a
+pre-optimization check, independent of LLVM inlining.
+
+Lower's `lowerViaBody` is shared by explicit delegation and generated
+callable-form witnesses. The execution distinction must follow the generated
+body through lexical and concrete owners, separately from the callable's
+public async signature. The forwarding body evaluates its existing selected
+call and required defaults synchronously, and returns the target's Promise
+directly. Copyable receiver and ordinary inputs keep the caller's guarantee
+until the delegated entry acquires them. Move inputs are forwarded once.
+Mid ownership and access checking remain responsible for the forwarding body,
+including any synchronous effects in defaults. The LLVM body route must read
+the same execution classification as Mid. It must not infer forwarding from
+an await/call sequence in an authored async body.
