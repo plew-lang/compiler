@@ -490,13 +490,17 @@ pub impl Comp {
             ConformanceProofResult.Found(proof: val proof) => { return <Result.Ok value=proof /> }
             ConformanceProofResult.Missing => { return <Result.Ok value=<StaticConformanceProof.Missing /> /> }
             ConformanceProofResult.Ambiguous(owner: val owner, demand: val demand, selectedSource: val selectedSource) => {
-                if demand.isSourceAdmission() {
-                    if selectedSource { return <Result.Err error=self.diagnosticAt(offset: owner, msg: "ambiguous conformance: multiple declaration paths satisfy the selected source bound") /> }
-                    return <Result.Err error=self.diagnosticAt(offset: owner, msg: "ambiguous conformance: multiple declaration paths satisfy the source bound") />
-                }
-                return <Result.Err error=self.diagnosticAt(offset: owner, msg: "ambiguous bare call: two conformed traits provide this method; select the source with `a#P.method()`") />
+                return <Result.Err error=self.conformanceAmbiguityDiagnostic(owner: owner, demand: demand, selectedSource: selectedSource) />
             }
         }
+    }
+
+    fn conformanceAmbiguityDiagnostic(owner: U64, demand: ConformanceProofDemand, selectedSource: Bool, domain: FailureDomain = <FailureDomain.Unclassified />) -> CompileDiagnostic {
+        if demand.isSourceAdmission() {
+            if selectedSource { return self.diagnosticAt(offset: owner, msg: "ambiguous conformance: multiple declaration paths satisfy the selected source bound", failureDomain: domain) }
+            return self.diagnosticAt(offset: owner, msg: "ambiguous conformance: multiple declaration paths satisfy the source bound", failureDomain: domain)
+        }
+        return self.diagnosticAt(offset: owner, msg: "ambiguous bare call: two conformed traits provide this method; select the source with `a#P.method()`", failureDomain: domain)
     }
 
     inout fn queryTraitPatternProof(demand: ConformanceProofDemand, baseRef: U64, traitId: U64, traitOwner: U64, traitArgs: PatternTypeInput, patternParams: PatternBindInput, traitArgsOpen: Bool = false, assocNames: Array[U64] = [], assocValues: Array[U64] = [], assumptions: Array[DeclarationBoundRef] = [], sourceOwners: Array[U64] = [], selectedProjection: Optional[StaticConformanceProof] = <Optional.None />, normalizations: Array[ProjectionNormalizationStep] = []) -> Result[ConformanceProofResult, CompileDiagnostic] {

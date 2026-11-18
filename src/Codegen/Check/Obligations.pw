@@ -682,7 +682,7 @@ pub impl Comp {
         mut val evidence = <StaticConformanceProof.Missing />
         match resolution {
             StaticMemberResolution.Requirement(proof: val proof, traitIdx: val owner, reqIdx: val requirement) => {
-                val instantiation = try self.instantiateStaticMemberProof(proof: proof, receiverRef: receiver, environment: environment, selfRef: environment.receiverRef, itemRef: 0U64)
+                val instantiation = try self.instantiateStaticMemberProof(proof: proof, receiverRef: receiver, environment: environment, selfRef: environment.receiverRef, itemRef: 0U64, memberSite: <Optional.Some v=template.siteKey />)
                 match instantiation {
                     StaticProofInstantiation.Missing => { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "declaration obligation has no concrete conformance evidence") /> }
                     StaticProofInstantiation.Deferred => { return <Result.Ok value=<DeclarationObligationState.Deferred /> /> }
@@ -1387,7 +1387,7 @@ pub impl Comp {
                     }
                     _ => {}
                 }
-                val domain = self.missingCallConstraintDomain(template: template, bound: bound, authored: self.callTemplateLocations[templateIndex].publishedFromSource)
+                val domain = self.retainedCallProofFailureDomain(template: template, bound: bound, authored: self.callTemplateLocations[templateIndex].publishedFromSource)
                 return <Result.Err error=self.diagnosticAt(offset: bound.offset, msg: "type argument does not conform to the trait required by `where`", failureDomain: domain) />
             }
             try self.checkDeclarationCallProof(proof: proof, scope: scope, offset: template.siteKey.originStart)
@@ -1406,9 +1406,9 @@ pub impl Comp {
 }
 
 impl Comp {
-    // Only a missing proof for a valid, authored call is a source refusal.
+    // A proof failure for a valid authored call can reject the source.
     // A synthetic operation or an unbound recipe still fails closed.
-    inout fn missingCallConstraintDomain(template: CallTemplate, bound: TraitBound, authored: Bool) -> FailureDomain {
+    inout fn retainedCallProofFailureDomain(template: CallTemplate, bound: TraitBound, authored: Bool) -> FailureDomain {
         val site = template.siteKey
         val recipeId = template.resultTypeRecipe
         if !authored || recipeId == 0U64 || recipeId > self.arena.semanticTypeRecipes.count() {

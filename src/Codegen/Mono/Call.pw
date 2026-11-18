@@ -178,7 +178,7 @@ pub impl Comp {
                     ProtocolSelection.Identity => { target = <CallTarget.NoCallable />
                         result = receiverRef }
                     ProtocolSelection.Static(resolution: val resolution) => {
-                        val selected = try self.selectStaticMethodTemplateCall(exprId: stmtId, methodArguments: [], receiver: <CallTemplateReceiver.Term term=receiverRef />, arguments: [], resolution: resolution, resultTerm: resultTerm, expectedResultTerm: template.expectedResultTerm, slot: slot)
+                        val selected = try self.selectStaticMethodTemplateCall(exprId: stmtId, methodArguments: [], receiver: <CallTemplateReceiver.Term term=receiverRef />, arguments: [], resolution: resolution, resultTerm: resultTerm, expectedResultTerm: template.expectedResultTerm, slot: slot, memberSite: <Optional.Some v=template.siteKey />)
                         result = selected.resultRef
                         callee = selected.callee
                         proof = selected.proof
@@ -669,8 +669,8 @@ pub impl Comp {
 
     // Executable consumers require an actual closed proof. Declaration callers
     // retain Deferred obligations and revisit them with their source environment.
-    inout fn concreteStaticMemberProof(proof: StaticConformanceProof, receiverRef: U64, environment: InstanceEnvironment, selfRef: U64, itemRef: U64) -> Result[StaticConformanceProof, CompileDiagnostic] {
-        val instantiation = try self.instantiateStaticMemberProof(proof: proof, receiverRef: receiverRef, environment: environment, selfRef: selfRef, itemRef: itemRef)
+    inout fn concreteStaticMemberProof(proof: StaticConformanceProof, receiverRef: U64, environment: InstanceEnvironment, selfRef: U64, itemRef: U64, memberSite: Optional[CallSiteKey] = <Optional.None />) -> Result[StaticConformanceProof, CompileDiagnostic] {
+        val instantiation = try self.instantiateStaticMemberProof(proof: proof, receiverRef: receiverRef, environment: environment, selfRef: selfRef, itemRef: itemRef, memberSite: memberSite)
         match instantiation {
             StaticProofInstantiation.Missing => { return <Result.Ok value=<StaticConformanceProof.Missing /> /> }
             StaticProofInstantiation.Ready(proof: val concrete) => { return <Result.Ok value=concrete /> }
@@ -678,7 +678,7 @@ pub impl Comp {
         }
     }
 
-    inout fn instantiateBoundProof(demand: ConformanceProofDemand, bound: TraitBound, receiverRef: U64, environment: InstanceEnvironment, selfRef: U64, itemRef: U64) -> Result[StaticProofInstantiation, CompileDiagnostic] {
+    inout fn instantiateBoundProof(demand: ConformanceProofDemand, bound: TraitBound, receiverRef: U64, environment: InstanceEnvironment, selfRef: U64, itemRef: U64, memberSite: Optional[CallSiteKey] = <Optional.None />) -> Result[StaticProofInstantiation, CompileDiagnostic] {
         if bound.subject == 0U64 || bound.constraint.key.owner == 0U64 { return <Result.Ok value=<StaticProofInstantiation.Missing /> /> }
         val traitIndex = self.decls.traitIndexByOffset(offset: bound.constraint.key.owner)
         if traitIndex >= self.decls.traitCount() { return <Result.Ok value=<StaticProofInstantiation.Missing /> /> }
@@ -701,9 +701,38 @@ pub impl Comp {
         for val source in self.arena.typeViewSources(ref: receiverRef) {
             if source.traitInstance.owner != 0U64 { sourceOwners.append(source.traitInstance.owner) }
         }
-        val proof = try self.traitPatternProof(demand: demand, baseRef: receiverRef, traitId: traitDef.nameId, traitOwner: traitDef.nameStart, traitArgs: <PatternTypeInput.Values values=arguments />, patternParams: <PatternBindInput.Values values=[] />, assocNames: associatedNames, assocValues: associatedValues, sourceOwners: sourceOwners)
+        val answer = try self.queryTraitPatternProof(demand: demand, baseRef: receiverRef, traitId: traitDef.nameId, traitOwner: traitDef.nameStart, traitArgs: <PatternTypeInput.Values values=arguments />, patternParams: <PatternBindInput.Values values=[] />, assocNames: associatedNames, assocValues: associatedValues, sourceOwners: sourceOwners)
+        val proof = match answer {
+            ConformanceProofResult.Found(proof: val proof) => proof,
+            ConformanceProofResult.Missing => { return <Result.Ok value=<StaticProofInstantiation.Missing /> /> }
+            ConformanceProofResult.Ambiguous(owner: val owner, demand: val ambiguityDemand, selectedSource: val selectedSource) => {
+                val domain = match memberSite {
+                    Optional.Some(v: val site) => self.memberDispatchAmbiguityDomain(site: site, bound: bound),
+                    Optional.None => <FailureDomain.Unclassified />,
+                }
+                return <Result.Err error=self.conformanceAmbiguityDiagnostic(owner: owner, demand: ambiguityDemand, selectedSource: selectedSource, domain: domain) />
+            }
+        }
         if self.proofIsMissing(proof: proof) { return <Result.Ok value=<StaticProofInstantiation.Missing /> /> }
         return <Result.Ok value=<StaticProofInstantiation.Ready proof=proof /> />
+    }
+
+    // Member-dispatch ambiguity can reject a retained source operation.
+    // The proof query's demand alone grants no source authority.
+    inout fn memberDispatchAmbiguityDomain(site: CallSiteKey, bound: TraitBound) -> FailureDomain {
+        val index = self.callTemplateIndex(siteKey: site)
+        if index >= self.callTemplateLocations.count() { return <FailureDomain.Unclassified /> }
+        val location = self.callTemplateLocations[index]
+        if !location.publishedFromSource { return <FailureDomain.Unclassified /> }
+        match self.sourceFacts.operation(owner: location.owner, index: location.localIndex) {
+            Optional.Some(v: val template) => {
+                if template.siteKey.sameKey(other: site) {
+                    return self.retainedCallProofFailureDomain(template: template, bound: bound, authored: true)
+                }
+            }
+            Optional.None => {}
+        }
+        return <FailureDomain.Unclassified />
     }
 
     inout fn groundSelectedTraitPath(rootState: StaticProofInstantiation, edges: Array[WitnessMatch], receiverRef: U64, environment: InstanceEnvironment, selfRef: U64, itemRef: U64, normalizations: Array[ProjectionNormalizationStep] = []) -> Result[StaticProofInstantiation, CompileDiagnostic] {
@@ -732,7 +761,7 @@ pub impl Comp {
         return <Result.Ok value=<StaticProofInstantiation.Ready proof=<StaticConformanceProof.TraitPath edges=grounded terminalConformIdx=grounded[grounded.count() - 1U64].conformIdx /> /> />
     }
 
-    inout fn instantiateStaticMemberProof(proof: StaticConformanceProof, receiverRef: U64, environment: InstanceEnvironment, selfRef: U64, itemRef: U64, normalizations: Array[ProjectionNormalizationStep] = []) -> Result[StaticProofInstantiation, CompileDiagnostic] {
+    inout fn instantiateStaticMemberProof(proof: StaticConformanceProof, receiverRef: U64, environment: InstanceEnvironment, selfRef: U64, itemRef: U64, normalizations: Array[ProjectionNormalizationStep] = [], memberSite: Optional[CallSiteKey] = <Optional.None />) -> Result[StaticProofInstantiation, CompileDiagnostic] {
         if receiverRef == 0U64 || !self.arena.typeIsClosed(ref: receiverRef) { return <Result.Ok value=<StaticProofInstantiation.Deferred /> /> }
         match proof {
             StaticConformanceProof.ConcreteWitness(witness: val witness) => {
@@ -758,19 +787,19 @@ pub impl Comp {
                 return <Result.Ok value=<StaticProofInstantiation.Ready proof=<StaticConformanceProof.TraitPath edges=grounded terminalConformIdx=terminal /> /> />
             }
             StaticConformanceProof.AssumedTraitPath(source: val source, steps: val steps, edges: val edges) => {
-                val rootState = try self.instantiateBoundProof(demand: <ConformanceProofDemand.MemberDispatch />, bound: self.assumedSupertraitBound(source: source, steps: steps), receiverRef: receiverRef, environment: environment, selfRef: selfRef, itemRef: itemRef)
+                val rootState = try self.instantiateBoundProof(demand: <ConformanceProofDemand.MemberDispatch />, bound: self.assumedSupertraitBound(source: source, steps: steps), receiverRef: receiverRef, environment: environment, selfRef: selfRef, itemRef: itemRef, memberSite: memberSite)
                 return self.groundSelectedTraitPath(rootState: rootState, edges: edges, receiverRef: receiverRef, environment: environment, selfRef: selfRef, itemRef: itemRef, normalizations: normalizations)
             }
             StaticConformanceProof.Missing => { return <Result.Ok value=<StaticProofInstantiation.Missing /> /> }
             StaticConformanceProof.AssumedBound(source: val source) => {
                 if !self.declarationBoundIsValid(source: source) { return <Result.Ok value=<StaticProofInstantiation.Missing /> /> }
-                return self.instantiateBoundProof(demand: <ConformanceProofDemand.MemberDispatch />, bound: self.declarationBound(source: source), receiverRef: receiverRef, environment: environment, selfRef: selfRef, itemRef: itemRef)
+                return self.instantiateBoundProof(demand: <ConformanceProofDemand.MemberDispatch />, bound: self.declarationBound(source: source), receiverRef: receiverRef, environment: environment, selfRef: selfRef, itemRef: itemRef, memberSite: memberSite)
             }
             StaticConformanceProof.AssumedSupertraitPath(source: val source, steps: val steps) => {
-                return self.instantiateBoundProof(demand: <ConformanceProofDemand.MemberDispatch />, bound: self.assumedSupertraitBound(source: source, steps: steps), receiverRef: receiverRef, environment: environment, selfRef: selfRef, itemRef: itemRef)
+                return self.instantiateBoundProof(demand: <ConformanceProofDemand.MemberDispatch />, bound: self.assumedSupertraitBound(source: source, steps: steps), receiverRef: receiverRef, environment: environment, selfRef: selfRef, itemRef: itemRef, memberSite: memberSite)
             }
             StaticConformanceProof.TraitSelf(traitIdx: val owner, receiverRef: _, traitArgs: _) => {
-                return self.instantiateBoundProof(demand: <ConformanceProofDemand.MemberDispatch />, bound: (try self.staticProofBound(proof: proof, traitIdx: owner)), receiverRef: receiverRef, environment: environment, selfRef: selfRef, itemRef: itemRef)
+                return self.instantiateBoundProof(demand: <ConformanceProofDemand.MemberDispatch />, bound: (try self.staticProofBound(proof: proof, traitIdx: owner)), receiverRef: receiverRef, environment: environment, selfRef: selfRef, itemRef: itemRef, memberSite: memberSite)
             }
         }
     }
@@ -1384,7 +1413,7 @@ pub impl Comp {
             val template = try self.callTemplateForCurrentBody(exprId: exprId, slot: 1U64)
             val selection = match template.kind {
                 CallTemplateKind.StaticMethod(val receiver, args: val arguments, val resolution, val methodTypeArgs, val resultTerm) => {
-                    give try self.selectStaticMethodTemplateCall(exprId: exprId, methodArguments: self.callTemplateTypeArgs(range: methodTypeArgs), receiver: receiver, arguments: self.callTemplateArguments(range: arguments), resolution: resolution, resultTerm: resultTerm, expectedResultTerm: template.expectedResultTerm, slot: 1U64)
+                    give try self.selectStaticMethodTemplateCall(exprId: exprId, methodArguments: self.callTemplateTypeArgs(range: methodTypeArgs), receiver: receiver, arguments: self.callTemplateArguments(range: arguments), resolution: resolution, resultTerm: resultTerm, expectedResultTerm: template.expectedResultTerm, slot: 1U64, memberSite: <Optional.Some v=template.siteKey />)
                 }
                 _ => { return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: error conversion has no recorded call template") /> }
             }
@@ -1617,7 +1646,7 @@ pub impl Comp {
                 return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: operator selection was not completed before materialization") />
             }
             OperatorSelection.Static(resolution: val selectedResolution) => {
-                val selected = try self.selectStaticMethodTemplateCall(exprId: exprId, methodArguments: [], receiver: <CallTemplateReceiver.Term term=selectedReceiverRef />, arguments: argumentSources, resolution: selectedResolution, resultTerm: resultTerm, expectedResultTerm: template.expectedResultTerm)
+                val selected = try self.selectStaticMethodTemplateCall(exprId: exprId, methodArguments: [], receiver: <CallTemplateReceiver.Term term=selectedReceiverRef />, arguments: argumentSources, resolution: selectedResolution, resultTerm: resultTerm, expectedResultTerm: template.expectedResultTerm, memberSite: <Optional.Some v=template.siteKey />)
                 callee = selected.callee
                 selectedProof = selected.proof
                 typeArguments = selected.calleeTypeArgs
@@ -4069,7 +4098,7 @@ pub impl Comp {
         return <Result.Ok value=selected />
     }
 
-    inout fn selectStaticMethodTemplateCall(exprId: U64, methodArguments: Array[U64], receiver: CallTemplateReceiver, arguments: Array[CallTemplateArgument], resolution: StaticMemberResolution, resultTerm: U64, expectedResultTerm: U64, slot: U64 = 0U64) -> Result[CallSiteSelection, CompileDiagnostic] {
+    inout fn selectStaticMethodTemplateCall(exprId: U64, methodArguments: Array[U64], receiver: CallTemplateReceiver, arguments: Array[CallTemplateArgument], resolution: StaticMemberResolution, resultTerm: U64, expectedResultTerm: U64, slot: U64 = 0U64, memberSite: Optional[CallSiteKey] = <Optional.None />) -> Result[CallSiteSelection, CompileDiagnostic] {
         val noCallee: U64 = self.arena.functionCount()
         val receiverRef: U64 = (try self.groundCallTemplateReceiver(receiver: receiver))
         val args: ArgRange = self.templateArgumentRangeFromValues(arguments: arguments)
@@ -4087,7 +4116,7 @@ pub impl Comp {
                 // Preserve the requirement selected in the declaration. A
                 // grounded proof chooses its witness before surface lookup can
                 // re-rank overloads using partially inferred argument types.
-                mut val concreteProof = (try self.concreteStaticMemberProof(proof: proof, receiverRef: receiverRef, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef))
+                mut val concreteProof = (try self.concreteStaticMemberProof(proof: proof, receiverRef: receiverRef, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, memberSite: memberSite))
                 mut val callee: U64 = (try self.proofConcreteWitness(proof: concreteProof, receiverRef: receiverRef, traitIdx: traitIdx, reqIdx: reqIdx))
                 if callee >= self.arena.functionCount() {
                     match proof {
@@ -4626,7 +4655,7 @@ pub impl Comp {
                 return <Result.Ok value=selection.callee />
             }
             CallTemplateKind.StaticMethod(receiver: val receiver, args: val arguments, resolution: val resolution, methodTypeArgs: val methodTypeArgs, resultTerm: val resultTerm) => {
-                val selection: CallSiteSelection = (try self.selectStaticMethodTemplateCall(exprId: exprId, methodArguments: self.callTemplateTypeArgs(range: methodTypeArgs), receiver: receiver, arguments: self.callTemplateArguments(range: arguments), resolution: resolution, resultTerm: resultTerm, expectedResultTerm: template.expectedResultTerm))
+                val selection: CallSiteSelection = (try self.selectStaticMethodTemplateCall(exprId: exprId, methodArguments: self.callTemplateTypeArgs(range: methodTypeArgs), receiver: receiver, arguments: self.callTemplateArguments(range: arguments), resolution: resolution, resultTerm: resultTerm, expectedResultTerm: template.expectedResultTerm, memberSite: <Optional.Some v=template.siteKey />))
                 try self.recordSelectedBodyCallee(selection: selection)
                 try self.enqueueSelectedCallee(selection: selection, template: template)
                 return <Result.Ok value=selection.callee />

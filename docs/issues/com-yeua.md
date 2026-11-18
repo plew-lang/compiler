@@ -424,3 +424,20 @@ clauses. Both preparation paths must carry the same authenticated source
 operation to diagnosis. Unauthenticated raw requests and unrelated proof
 failures remain separate controls. The five direct lookup cases take an
 instance route (four) or the associated route (one) in all three modes.
+
+### Concrete requirement ambiguity classification checkpoint
+
+The declaration and ORC requirement paths pass the retained operation key to
+concrete witness preparation. Only an Ambiguous proof-query result reads
+that origin. The selected operation must match its published source identity
+and satisfy the existing call-proof provenance check. The shared diagnostic
+preserves its wording, anchor, status and channel. Raw proof queries retain
+their default domain.
+
+Matched check and AOT each classify 14 Source, and ORC classifies the nine
+demanded failures while retaining five successful undemanded inputs.
+The separate lookup failures remain Unclassified. Suppressing publication
+of source provenance in an isolated build retains the same rejection and
+Unclassified for four representative inputs in check, AOT and ORC.
+Independent review covered the proof result, provenance and both consumers.
+The subsequent diagnostic factoring was independently re-reviewed.
