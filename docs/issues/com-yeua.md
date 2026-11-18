@@ -1317,3 +1317,17 @@ all match/ownership/repack/ABI consumers and zero-sentinel/byte-observation
 dependencies; retain semantic controls, ownership sanitizer coverage and
 same-input measurement. No verifier or failure classification is weakened.
 [Exact evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-diagnostic-report-exact-performance.json).
+
+The isolated inactive-padding diagnostic reached a second optimized compiler
+(5770fa52), so its own code reflects the proposed lowering. Alternating5-pair
+comparison gives7.711814(product) versus7.640997(diagnostic), roughly0.9%.
+Eight existing native enum/Result/try controls and two explicit LLVM22
+ASan/LSan controls pass exact expected output. The LLVM output hashes differ
+as expected from zero versus undef padding; this is not fixed-point evidence.
+The product source remains unchanged and the optimization is not adopted.
+Independent consumer review found typed variant-selected ARC/match/repack,
+but full active-field count/types/order must be established or enforced before
+adoption, including malformed raw Mid controls. The small improvement alone
+does not recover the7-second goal. Remaining repeated-work costs still require
+measurement; recovery is not judged difficult. Exact record above includes
+both generations, the setup-recording error and all control results.
