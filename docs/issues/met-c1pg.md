@@ -1,6 +1,6 @@
 ---
 id: met-c1pg
-status: in_progress
+status: closed
 deps: [com-x95z, com-9hde]
 links: [com-xh2h, com-amjl, com-bvc8, com-zdod, com-4k31]
 created: 2026-11-06T07:58:54Z
@@ -426,4 +426,18 @@ extension case passed native. On the candidate after the provenance
 change, all six source shapes in check, AOT, and lazy produce Source
 with the original cycle/growth reason (18 invocations). The final focused
 review found no remaining defect in these source/raw boundaries. Native
-re-execution of the latest generic-view and source controls is pending.
+re-execution of the latest generic-view and source controls passed.
+
+## Outcome
+
+Completed at c58f12ac after independent acceptance. Native
+TraitCycleInputAdmission (7), TraitCycleSourceInputs (3),
+TraitCyclePatternInputs (27), TraitCycleCanonicalIdentity (19),
+TraitCycleFailureDomains, and four SemanticTraitViewConsumers controls
+passed on the diagnostic candidate. The Source rejection matrix passes
+all 18 check, AOT, and lazy assertions. Earlier evidence retains the
+exact graph/canonical-owner and distinct-path contrasts; no SCC or
+structural equality algorithm changed in this final classification
+increment. The source/body failure transport and final suite gates
+remain with com-yeua and the parent.
+[Final results](../../../evidence/rejection-domains/diagnostic-domain-implementation/trait-cycle-scc-domain-red.json).
