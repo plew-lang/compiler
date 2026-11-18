@@ -1182,3 +1182,15 @@ AnalysisLimit preservation is checked structurally, not an executed Limit claim.
 Full gates, com-yeua and phase3 remain open.
 
 [Evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-conformance-overlap-rejection.json).
+
+### Next ownership producer inspection
+
+The eight finite use-after-move refusals share Verify/Expr.pw's Ident branch:
+recordIdentBinding establishes the local and verifyIsMoved reads mutable
+cur.verifyMovedIdx before constructing an Unclassified diagnostic. A source
+expression marker alone is insufficient authority for this state-dependent
+refusal: public raw verifier callers can supply or alter ownership state.
+Trace the owning verification entry and its moved-state production before
+choosing a private origin/capability boundary. Preserve checked dead-code and
+branch-merge behavior; do not alter ownership acceptance merely to classify
+failures. No ownership classification implementation is claimed here.
