@@ -655,3 +655,21 @@ Closure shadowing and a generic default witness pass check and exact ORC.
 Independent final re-review found no remaining scoped blocker under the
 immutable declaration/AST payload contract. Formal self-host and broad
 suite validation remain pending.
+
+### Comparison checkpoint
+
+Compiler 7f1647a8 registers the six authored comparison operators in the
+existing binary-origin producer and uses the arithmetic attribution check
+at the definite compareNeedsTrait refusal. All 27 baseline comparisons
+preserve text/status/channel. Seven check/AOT refusals and four reached
+ORC refusals are Source; three ORC cases remain undemanded successes.
+The isolated carrier with source operation publication disabled keeps
+all refusals Unclassified. Three positive fixtures pass check and exact
+ORC output. Independent source review found no blocker for this branch.
+
+Two original cases remain Unclassified: match_value_pattern_type uses
+a generated comparison and nested_array_noeq fails at selected operator
+bound obligations. These are still required work within this task.
+Formal self-host and whole-suite gates remain pending.
+
+[Replay and publication control](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-comparison-rejection.json).
