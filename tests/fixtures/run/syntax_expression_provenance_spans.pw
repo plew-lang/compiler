@@ -12,11 +12,16 @@ fn main() {
     }
     val extensionCall = parseExprFrom(source: "value#Ext.method()", start: 0U64)
     match extensionCall {
-        ExprAst.ExtMethod(recv: _, src: _, val srcSpan, name: _, val nameSpan, args: _, span: _) => {
-            print(srcSpan.start)
-            print(srcSpan.end)
-            print(nameSpan.start)
-            print(nameSpan.end)
+        ExprAst.Method(recv: val receiver, name: _, val nameSpan, args: _, span: _) => {
+            match receiver {
+                ExprAst.SourceSelection(recv: _, path: _, application: _, strip: _, val sourceSpan, span: _) => {
+                    print(sourceSpan.start)
+                    print(sourceSpan.end)
+                    print(nameSpan.start)
+                    print(nameSpan.end)
+                }
+                _ => {}
+            }
         }
         _ => {}
     }

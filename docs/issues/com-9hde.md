@@ -726,3 +726,15 @@ fresh controls, independent review and updated final gates are required before
 accepting this increment; prior6.738295 measurement precedes this repair.
 
 [Saved frozen legacy evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/qualified-type-path-repair.json) records executed RED and seven native successes, independently replayed and source-reviewed without a required finding. Standard build20261107T201530-build-4672e6 passes with unchanged inputs; fresh candidate preserves36 native successes plus the existing com-amjl shorthand RED1, and CLI check/run14. Updated formal performance/fixed point, exact Syntax uptake, full suites and task closure remain unproven.
+
+## Direct Syntax and Declaration Fixture Migration
+
+On fixed compiler 241b58b6, the old span fixture printed only the free-call
+coordinates, and the old root fixture observed 4 roots but read the
+Extension payload as an Impl. The migrated fixtures preserve the original
+coordinates and impl-member checks, assert the independent Extension root,
+and read the published and import roots at their actual positions. Both
+goldens pass in JIT and native execution. The function fixture now uses
+the frontend request admission path so Lower receives admitted module
+bindings; its four original counts pass unchanged in native execution.
+No product code or public API changed in this increment.
