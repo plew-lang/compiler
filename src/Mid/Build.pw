@@ -1628,6 +1628,9 @@ fn midValueRegionOperand(c: inout Comp, state: inout MidBuildState, expression: 
     val destination = <MidPlace local=local typeTerm=term typeRecipe=recipe />
     val result = <MidBlockResult.Value destination=destination />
     val error = match region {
+        SourceValueRegion.DiscardedBlock(body: val body, yieldsValue: val yields) => if yields {
+            give buildMidBlockInto(c: inout c, state: inout state, blockId: body, blockResult: result)
+        } else { give <MidBuildError.MissingSemanticType /> }
         SourceValueRegion.Block(body: val body, sequence: val sequence) => buildMidBlockInto(c: inout c, state: inout state, blockId: body, blockResult: result, expressionSequence: sequence)
         SourceValueRegion.If(condition: val condition, thenBlock: val thenBlock, elseBlock: val elseBlock) => buildMidIfCfg(c: inout c, state: inout state, cond: c.callArgumentExprId(source: condition), thenBlk: thenBlock, elseBlk: elseBlock, hasElse: true, blockResult: result)
         SourceValueRegion.IfChain(conditions: val conditions, thenBlock: val thenBlock, elseBlock: val elseBlock) => buildMidConditionChain(c: inout c, state: inout state, conditions: conditions, thenBlk: thenBlock, elseBlk: elseBlock, blockResult: result)
@@ -2913,11 +2916,26 @@ fn buildMidBlockInto(c: inout Comp, state: inout MidBuildState, blockId: U64, bl
                 // result.  In particular `try f()` must retain its Err edge
                 // and discard only the normal Ok value; special-casing calls
                 // here used to make that source form lose its CFG meaning.
-                val discarded: MidOperandBuild = midValueOperandForSourceExpr(c: inout c, state: inout state, exprId: expr, allowAccessMarker: false)
-                match discarded {
-                    MidOperandBuild.Value(operand: _) => {}
-                    MidOperandBuild.NoContinuation => {}
-                    MidOperandBuild.Error(error: val error) => { result = error }
+                val statementBlock: Optional[U64] = if expr < c.arena.exprs.count() {
+                    give match c.arena.exprs[expr] {
+                        Expr.Block(body: val body, offset: _) => match midValueRegionForExpr(state: state, expression: expr, fallback: <SourceValueRegion.Block body=body sequence=false />) {
+                            SourceValueRegion.DiscardedBlock(body: val admitted, yieldsValue: val yields) => if yields { give <Optional.None /> } else { give <Optional.Some v=admitted /> }
+                            _ => <Optional.None />
+                        }
+                        _ => <Optional.None />
+                    }
+                } else { give <Optional.None /> }
+                match statementBlock {
+                    Optional.Some(v: val block) => {
+                        result = buildMidBlockInto(c: inout c, state: inout state, blockId: block, blockResult: <MidBlockResult.Forbidden />)
+                    }
+                    Optional.None => {
+                        match midValueOperandForSourceExpr(c: inout c, state: inout state, exprId: expr, allowAccessMarker: false) {
+                            MidOperandBuild.Value(operand: _) => {}
+                            MidOperandBuild.NoContinuation => {}
+                            MidOperandBuild.Error(error: val error) => { result = error }
+                        }
+                    }
                 }
                 if !expressionSequence { midFinishEvaluationScope(state: inout state, scope: evaluation) }
             }

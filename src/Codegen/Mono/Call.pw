@@ -6734,7 +6734,8 @@ pub impl Comp {
                 try self.scanBlockInsts(blkId: body)
             }
             Expr.Block(val body, offset: _) => {
-                try self.scanBlockInsts(blkId: body)
+                val region = try self.finalizationValueRegion(expression: exprId, fallback: <SourceValueRegion.Block body=body sequence=false />)
+                return self.prepareCheckedValueRegion(expression: exprId, region: region)
             }
             Expr.IfChain(val conditions, val thenBlk, val elseBlk) => { try self.scanConditionChain(conditions: conditions, thenBlk: thenBlk, elseBlk: elseBlk) }
             Expr.IfExpr(val cond, val thenBlk, val elseBlk) => {
@@ -7070,7 +7071,7 @@ pub impl Comp {
 
     inout fn prepareCheckedValueRegion(expression: U64, region: SourceValueRegion) -> Result[(), CompileDiagnostic] {
         match region {
-            SourceValueRegion.Block(body: val body, sequence: _) => { return self.scanBlockInsts(blkId: body) }
+            SourceValueRegion.Block(body: val body, sequence: _) | SourceValueRegion.DiscardedBlock(body: val body, yieldsValue: _) => { return self.scanBlockInsts(blkId: body) }
             SourceValueRegion.If(condition: val condition, thenBlock: val thenBlock, elseBlock: val elseBlock) => {
                 if try self.prepareValueContinuation(source: condition) {
                     try self.scanBlockInsts(blkId: thenBlock)

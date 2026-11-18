@@ -1,0 +1,41 @@
+use @Std/Io only { print }
+
+unique struct Resource {
+    val code: I64
+    deinit { print(self.code) }
+}
+impl Resource { factory }
+
+fn early() -> I64 {
+    {
+        val item = <Resource code=30I64 />
+        print(item.code + 1I64)
+        return 32I64
+    }
+}
+
+fn main() {
+    1U32
+    {
+        val item = <Resource code=10I64 />
+        print(item.code + 1I64)
+        { give 99I64 }
+        print(12I64)
+    }
+    {
+        val item = <Resource code=20I64 />
+        print(item.code + 1I64)
+        give 22I64
+    }
+    print(early())
+    mut val rounds = 0I64
+    while rounds < 3I64 {
+        rounds += 1I64
+        {
+            val item = <Resource code=rounds />
+            if item.code == 1I64 { continue }
+            break
+        }
+    }
+    print(40I64)
+}

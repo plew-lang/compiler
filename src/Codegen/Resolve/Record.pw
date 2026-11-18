@@ -1671,11 +1671,12 @@ pub impl Comp {
 
     // Check and publish a block result while its local and pattern bindings
     // are still in scope. All value-control forms share this boundary.
-    inout fn recordValueBlock(exprId: U64, blockId: U64, expectedTerm: U64) -> Result[(), CompileDiagnostic] {
+    inout fn recordValueBlock(exprId: U64, blockId: U64, expectedTerm: U64, discarded: Bool = false) -> Result[Bool, CompileDiagnostic] {
         val mark = self.scopeMark()
         mut val context = expectedTerm
         if context == 0U64 { context = self.semanticExprTerm(exprId: exprId) }
-        val completion = try self.recordBlockContents(blkId: blockId, resultContext: <BlockResultContext.Value expectedTerm=context />)
+        val resultContext = if discarded { give <BlockResultContext.Discarded /> } else { give <BlockResultContext.Value expectedTerm=context /> }
+        val completion = try self.recordBlockContents(blkId: blockId, resultContext: resultContext)
         mut val resultTerm = 0U64
         if completion.source.normal() {
             // Analytical noncontinuation does not supply a source value. Only
@@ -1683,6 +1684,11 @@ pub impl Comp {
             // the surrounding expectation remains context for that producer.
             val value = self.blockGiveExpr(blkId: blockId)
             if value >= self.arena.exprs.count() {
+                if discarded {
+                    self.popLocals(mark: mark)
+                    self.recordSemanticExprCompletion(exprId: exprId, completion: completion)
+                    return <Result.Ok value=false />
+                }
                 return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "a normally completing value block requires `give` to yield its value (spec/11)") />
             }
             // recordBlockContents admitted this producer against its result
@@ -1711,9 +1717,14 @@ pub impl Comp {
                 }
             }
         }
+        if discarded && !completion.source.normal() {
+            self.popLocals(mark: mark)
+            self.recordSemanticExprCompletion(exprId: exprId, completion: completion)
+            return <Result.Ok value=false />
+        }
         try self.storeBuildingValueBlock(blockId: blockId, expression: exprId, completion: completion, resultTerm: resultTerm)
         self.popLocals(mark: mark)
-        return <Result.Ok value=() />
+        return <Result.Ok value=true />
     }
 
     // `readExpr` is a synthetic Index.index call made by Lower.  The candidate
@@ -2093,7 +2104,7 @@ pub impl Comp {
     // unique enclosing chain stage. The payload is a structural child input,
     // not Cursor state: ordinary expressions use 0, and every continuation
     // descendant receives the same explicit parametric term.
-    inout fn recordExpr(exprId: U64, chainHoleRef: U64 = 0U64, expectedTerm: U64 = 0U64, deferContext: Bool = false, needsValue: Bool = true, purpose: ExpressionRecordPurpose = <ExpressionRecordPurpose.Execution />, admittedContext: Bool = false, composedView: Bool = false) -> Result[(), CompileDiagnostic] {
+    inout fn recordExpr(exprId: U64, chainHoleRef: U64 = 0U64, expectedTerm: U64 = 0U64, deferContext: Bool = false, needsValue: Bool = true, purpose: ExpressionRecordPurpose = <ExpressionRecordPurpose.Execution />, admittedContext: Bool = false, composedView: Bool = false, standaloneBlock: Bool = false) -> Result[(), CompileDiagnostic] {
         if self.semanticExprConstructionClosed(exprId: exprId) {
             return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: completed source owner cannot record an expression") />
         }
@@ -2804,8 +2815,12 @@ pub impl Comp {
                 if self.cur.recordCallTemplates { self.storeBuildingValueRegion(exprId: exprId, region: <SourceValueRegion.Block body=body sequence=true />) }
             }
             Expr.Block(val body, offset: _) => {
-                try self.recordValueBlock(exprId: exprId, blockId: body, expectedTerm: normalizedContext)
-                if self.cur.recordCallTemplates { self.storeBuildingValueRegion(exprId: exprId, region: <SourceValueRegion.Block body=body sequence=false />) }
+                val yieldsValue = try self.recordValueBlock(exprId: exprId, blockId: body, expectedTerm: normalizedContext, discarded: standaloneBlock)
+                if self.cur.recordCallTemplates {
+                    val region = if standaloneBlock { give <SourceValueRegion.DiscardedBlock body=body yieldsValue=yieldsValue /> } else { give <SourceValueRegion.Block body=body sequence=false /> }
+                    self.storeBuildingValueRegion(exprId: exprId, region: region)
+                }
+                if !yieldsValue { return <Result.Ok value=() /> }
             }
             Expr.IfChain(val conditions, val thenBlk, val elseBlk) => {
                 val mark = self.scopeMark()
@@ -3169,7 +3184,7 @@ pub impl Comp {
                 val expected: U64 = self.parametricExprTerm(exprId: target)
                 try self.recordExpr(exprId: value, expectedTerm: expected)
             }
-            Stmt.ExprStmt(val expr) => { try self.recordExpr(exprId: expr, needsValue: false) }
+            Stmt.ExprStmt(val expr) => { try self.recordExpr(exprId: expr, needsValue: false, standaloneBlock: true) }
             Stmt.Return(val value, val hasValue, offset: _) => {
                 if hasValue {
                     val expected: U64 = self.semanticBodyReturnContext(fnIdx: self.cur.checkFn)
@@ -3281,7 +3296,7 @@ pub impl Comp {
     }
 
     inout fn recordBlockContents(blkId: U64, resultContext: BlockResultContext) -> Result[SourceCompletion, CompileDiagnostic] {
-        val permitsGive = match resultContext { BlockResultContext.Value(expectedTerm: _) => true _ => false }
+        val permitsGive = match resultContext { BlockResultContext.Value(expectedTerm: _) | BlockResultContext.Discarded => true _ => false }
         val checkpoint = self.enterSourceControlRegion(region: <SourceControlRegion.Block blockId=blkId permitsGive=permitsGive />)
         val recorded = self.recordBlockContentsInRegion(blkId: blkId, resultContext: resultContext)
         self.restoreSourceControlRegion(checkpoint: checkpoint)
@@ -3293,6 +3308,7 @@ pub impl Comp {
         mut val permitsGive = false
         match resultContext {
             BlockResultContext.Statement => {}
+            BlockResultContext.Discarded => { permitsGive = true }
             BlockResultContext.Value(expectedTerm: val expected) => {
                 expectedTerm = expected
                 permitsGive = true

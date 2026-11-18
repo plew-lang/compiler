@@ -1,6 +1,6 @@
 ---
 id: com-x7ql
-status: open
+status: in_progress
 deps: [com-j8k0, com-ew3i]
 links: []
 created: 2026-11-18T15:24:06Z

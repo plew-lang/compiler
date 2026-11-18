@@ -87,5 +87,6 @@ pub fn completionLoop(body: SourceCompletion, maySkip: Bool) -> SourceCompletion
 // Give leaves the current block; block completion consumes that local edge.
 pub enum BlockResultContext {
     Statement
+    Discarded
     Value(expectedTerm: U64)
 }

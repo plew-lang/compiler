@@ -1215,6 +1215,7 @@ pub enum Stmt {
 
 // Checked evaluation edges for a value-producing block or conditional.
 pub enum SourceValueRegion {
+    DiscardedBlock(body: U64, yieldsValue: Bool)
     Block(body: U64, sequence: Bool)
     If(condition: CallArgumentSource, thenBlock: U64, elseBlock: U64)
     IfChain(conditions: ConditionClauseRange, thenBlock: U64, elseBlock: U64)
