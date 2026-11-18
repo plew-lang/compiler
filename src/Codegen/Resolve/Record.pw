@@ -2064,7 +2064,7 @@ pub impl Comp {
         if index == args.len { return <Result.Ok value=() /> }
         val selected = match (try self.recordedCallParameterState(exprId: exprId)) {
             SourceCallParameterState.Selected(function: val function, signature: val signature) => { give (function: function, signature: signature) }
-            SourceCallParameterState.Incomplete | SourceCallParameterState.Unselected | SourceCallParameterState.NotApplicable => { return <Result.Ok value=() /> }
+            SourceCallParameterState.Incomplete(source: _) | SourceCallParameterState.Unselected | SourceCallParameterState.NotApplicable => { return <Result.Ok value=() /> }
         }
         if !self.paramsLabelsOk(params: selected.function.params, args: args) { return <Result.Ok value=() /> }
         while index < args.len {

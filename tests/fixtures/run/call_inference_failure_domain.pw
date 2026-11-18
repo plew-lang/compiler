@@ -1,0 +1,72 @@
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use /SourceAccess only { SourceAccess }
+use /Ir only { Expr, CallTemplate, CallTemplateKind, CallTemplateTypeArgumentRange }
+use /Diag only { CompileDiagnostic, FailureDomain }
+use @Std/Io only { print }
+
+fn main() {
+    mut val invalid = <Comp />
+    analyzeFrontendForRequests(c: inout invalid,
+        input: <FrontendInput.Text path="inference-source.pw" text="fn empty[T]() -> T {{ panic(\"unused\") }} fn target() {{ val value = empty() }}" />,
+        sources: <SourceAccess stdRoot=[] />).unwrap()
+    val target = invalid.arena.firstFunctionNamed(nameId: invalid.internBytes(s: "target").nameId)
+    for iteration in 0U64..<2U64 {
+        match invalid.prepareLexicalBody(fnIdx: target) {
+            Result.Ok(value: _) => { panic("unresolved source call accepted") }
+            Result.Err(error: val diagnostic) => { requireFailure(diagnostic: diagnostic, source: true) }
+        }
+    }
+
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler,
+        input: <FrontendInput.Text path="inference-raw.pw" text="struct Item {{}} fn identity[T](value: T) -> T {{ return value }} fn probe() {{ val item = identity(value: <Item />) }}" />,
+        sources: <SourceAccess stdRoot=[] />).unwrap()
+    val owner = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "probe").nameId)
+    mut val healthy = compiler
+    healthy.prepareLexicalBody(fnIdx: owner).unwrap()
+    compiler.recordParametricFunction(fnIdx: owner, recordCallTemplates: true).unwrap()
+    compiler.cur.checkFn = owner
+    compiler.cur.recordCallTemplates = false
+    mut val found = false
+    for expression in 0U64..<compiler.arena.exprs.count() {
+        match compiler.arena.exprs[expression] {
+            Expr.Call(nameStart: _, nameLen: _, args: val arguments) => {
+                val site = compiler.templateCallSiteKey(fnIdx: owner, exprId: expression).unwrap()
+                val index = compiler.callTemplateIndex(siteKey: site)
+                if index < compiler.callTemplateCount() {
+                    val original = compiler.callTemplateAt(index: index)
+                    match original.kind {
+                        CallTemplateKind.Direct(callee: val callee, receiver: val receiver, args: val savedArguments, calleeTypeArgs: _, proofId: val proof) => {
+                            for shape in 0U64..<4U64 {
+                                val types = if shape == 0U64 { give compiler.publishCallTemplateTypeArgs(args: [0U64]) }
+                                    else if shape == 1U64 { give compiler.publishCallTemplateTypeArgs(args: []) }
+                                    else if shape == 2U64 { give <CallTemplateTypeArgumentRange start=1000000U64 len=1U64 /> }
+                                    else { give compiler.publishCallTemplateTypeArgs(args: [compiler.arena.typeCount() + 1U64]) }
+                                val kind = <CallTemplateKind.Direct callee=callee receiver=receiver args=savedArguments calleeTypeArgs=types proofId=proof />
+                                if !compiler.replaceBuildingCallTemplate(index: index, template: <CallTemplate siteKey=site kind=kind resultTypeRecipe=original.resultTypeRecipe expectedResultTerm=original.expectedResultTerm receiverTypeTerm=original.receiverTypeTerm />) { panic("raw writer lost its open owner") }
+                                match compiler.checkRecordedCallLiteralArguments(exprId: expression, args: arguments) {
+                                    Result.Ok(value: _) => { panic("raw incomplete call accepted") }
+                                    Result.Err(error: val diagnostic) => { requireFailure(diagnostic: diagnostic, source: false) }
+                                }
+                            }
+                            found = true
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    if !found { panic("missing selected source call") }
+    print("ok")
+}
+
+fn requireFailure(diagnostic: CompileDiagnostic, source: Bool) {
+    if diagnostic.message != "cannot infer all type arguments for this call" { panic(diagnostic.message) }
+    if source {
+        match diagnostic.failureDomain { FailureDomain.Source => {} _ => { panic("source inference lost its origin") } }
+    } else {
+        match diagnostic.failureDomain { FailureDomain.Unclassified => {} _ => { panic("raw template failure became source") } }
+    }
+}

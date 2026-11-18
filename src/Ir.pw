@@ -2148,7 +2148,7 @@ pub enum SourceCallSignature {
 pub enum SourceCallParameterState {
     Unselected
     NotApplicable
-    Incomplete
+    Incomplete(source: Bool)
     Selected(function: Func, signature: SourceCallSignature)
 }
 

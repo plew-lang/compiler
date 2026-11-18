@@ -34,27 +34,34 @@ pub impl Comp {
         val index = self.callTemplateIndex(siteKey: site)
         if index >= self.callTemplateLocations.count() { return <Result.Ok value=<SourceCallParameterState.Unselected /> /> }
         val template = self.callTemplateAt(index: index)
-        return self.selectedCallParameterState(template: template, exprId: exprId)
+        return self.selectedCallParameterStateWithOrigin(template: template, exprId: exprId, origin: <Optional.Some v=index />)
     }
 
     inout fn selectedCallParameterState(template: CallTemplate, exprId: U64) -> Result[SourceCallParameterState, CompileDiagnostic] {
+        return self.selectedCallParameterStateWithOrigin(template: template, exprId: exprId, origin: <Optional.None />)
+    }
+}
+
+impl Comp {
+    inout fn selectedCallParameterStateWithOrigin(template: CallTemplate, exprId: U64, origin: Optional[U64]) -> Result[SourceCallParameterState, CompileDiagnostic] {
         val site = template.siteKey
         match template.kind {
             CallTemplateKind.Direct(callee: val callee, receiver: _, args: _, calleeTypeArgs: val typeArgs, proofId: val proofId) => {
                 if callee >= self.arena.functionCount() { return <Result.Err error=self.diagnosticAt(offset: site.originStart, msg: "internal error: selected call has no declaration") /> }
                 val function = self.arena.functionAt(index: callee)
-                val arguments = self.callTemplateTypeArgs(range: typeArgs)
-                if typeArgs.len != arguments.count() || arguments.count() != function.typeParams.count() || (arguments.count() != 0U64 && !self.fnArgsAllResolved(args: arguments)) {
-                    return <Result.Ok value=<SourceCallParameterState.Incomplete /> />
+                match self.incompleteCallParameterState(range: typeArgs, parameterCount: function.typeParams.count(), exprId: exprId, origin: origin) {
+                    Optional.Some(v: val incomplete) => { return <Result.Ok value=incomplete /> }
+                    Optional.None => {}
                 }
+                val arguments = self.callTemplateTypeArgs(range: typeArgs)
                 val environment = try self.recordedDirectCallEnvironmentForExpression(exprId: exprId, callee: callee, function: function, receiverTerm: template.receiverTypeTerm, typeArgs: arguments, proof: self.thawStaticConformanceProof(id: proofId))
                 return <Result.Ok value=<SourceCallParameterState.Selected function=function signature=(try self.selectedDirectParameterSignature(callee: callee, environment: environment)) /> />
             }
             CallTemplateKind.StaticMethod(receiver: _, args: _, resolution: val resolution, methodTypeArgs: val typeArgs, resultTerm: _) => {
                 val function = try self.selectedStaticCallDeclaration(resolution: resolution, offset: site.originStart)
-                val arguments = self.callTemplateTypeArgs(range: typeArgs)
-                if typeArgs.len != arguments.count() || arguments.count() != function.typeParams.count() || (arguments.count() != 0U64 && !self.fnArgsAllResolved(args: arguments)) {
-                    return <Result.Ok value=<SourceCallParameterState.Incomplete /> />
+                match self.incompleteCallParameterState(range: typeArgs, parameterCount: function.typeParams.count(), exprId: exprId, origin: origin) {
+                    Optional.Some(v: val incomplete) => { return <Result.Ok value=incomplete /> }
+                    Optional.None => {}
                 }
                 return <Result.Ok value=<SourceCallParameterState.Selected function=function signature=(try self.selectedStaticCallSignature(template: template, function: function, typeArgs: typeArgs, resolution: resolution)) /> />
             }
@@ -71,6 +78,35 @@ pub impl Comp {
         }
     }
 
+    // None means complete. A malformed saved substitution and a legitimate
+    // unresolved source slot have the same refusal text but different origin.
+    // Scan the retained pool once; complete calls need no provenance query.
+    fn incompleteCallParameterState(range: CallTemplateTypeArgumentRange, parameterCount: U64, exprId: U64, origin: Optional[U64]) -> Optional[SourceCallParameterState] {
+        if range.len != parameterCount || range.start > self.callTemplateTypeArgumentPool.count() || range.len > self.callTemplateTypeArgumentPool.count() - range.start {
+            return <Optional.Some v=<SourceCallParameterState.Incomplete source=false /> />
+        }
+        mut val unresolved = false
+        for index in 0U64..<range.len {
+            val term = self.callTemplateTypeArgumentPool[range.start + index]
+            if term == 0U64 { unresolved = true }
+            else if term >= self.arena.typeCount() { return <Optional.Some v=<SourceCallParameterState.Incomplete source=false /> /> }
+        }
+        if !unresolved { return <Optional.None /> }
+        return <Optional.Some v=<SourceCallParameterState.Incomplete source=self.callParameterFailureIsSource(exprId: exprId, origin: origin) /> />
+    }
+
+    fn callParameterFailureIsSource(exprId: U64, origin: Optional[U64]) -> Bool {
+        val index = match origin { Optional.Some(v: val index) => index, Optional.None => { return false } }
+        if index >= self.callTemplateLocations.count() || !self.callTemplateLocations[index].publishedFromSource { return false }
+        val template = self.callTemplateAt(index: index)
+        if template.resultTypeRecipe == 0U64 || template.resultTypeRecipe > self.arena.semanticTypeRecipes.count() { return false }
+        val recipe = self.arena.semanticTypeRecipes[template.resultTypeRecipe - 1U64]
+        if recipe.kind != 2U64 || !recipe.callSite.sameKey(other: template.siteKey) { return false }
+        return recipe.sourceExpression.unwrapOr(fallback: self.arena.exprs.count()) == exprId
+    }
+}
+
+pub impl Comp {
     // Erasure changes dispatch, not the source parameter contract. Interpret
     // the retained requirement and interface proof through the same signature
     // projection used by Record contexts, argument checking and source closure.
@@ -90,7 +126,10 @@ pub impl Comp {
     inout fn checkRecordedCallLiteralArguments(exprId: U64, args: ArgRange) -> Result[Bool, CompileDiagnostic] {
         val selected = match (try self.recordedCallParameterState(exprId: exprId)) {
             SourceCallParameterState.Selected(function: val function, signature: val signature) => { give (function: function, signature: signature) }
-            SourceCallParameterState.Incomplete => { return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "cannot infer all type arguments for this call") /> }
+            SourceCallParameterState.Incomplete(source: val source) => {
+                val domain = if source { give <FailureDomain.Source /> } else { give <FailureDomain.Unclassified /> }
+                return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "cannot infer all type arguments for this call", failureDomain: domain) />
+            }
             SourceCallParameterState.Unselected | SourceCallParameterState.NotApplicable => { return <Result.Ok value=false /> }
         }
         if !self.paramsLabelsOk(params: selected.function.params, args: args) {
