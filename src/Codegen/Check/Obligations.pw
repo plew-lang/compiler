@@ -1373,7 +1373,15 @@ pub impl Comp {
                     continue
                 }
             }
-            val proof = try self.viewedTraitConstraintProof(demand: <ConformanceProofDemand.SourceAdmission />, ref: bound.subject, constraint: bound.constraint, assumptions: assumptions)
+            val answer = try self.queryViewedTraitConstraint(demand: <ConformanceProofDemand.SourceAdmission />, ref: bound.subject, constraint: bound.constraint, assumptions: assumptions)
+            val proof = match answer {
+                ConformanceProofResult.Found(proof: val selected) => selected,
+                ConformanceProofResult.Missing => <StaticConformanceProof.Missing />,
+                ConformanceProofResult.Ambiguous(owner: val owner, demand: val demand, selectedSource: val selectedSource) => {
+                    val domain = self.retainedCallProofFailureDomain(template: template, bound: bound, authored: self.callTemplateLocations[templateIndex].publishedFromSource)
+                    return <Result.Err error=self.conformanceAmbiguityDiagnostic(owner: owner, demand: demand, selectedSource: selectedSource, domain: domain) />
+                }
+            }
             if self.proofIsMissing(proof: proof) {
                 // An operator's impl bounds justify that source operation.
                 // Report a missing witness at its retained site, not at a
