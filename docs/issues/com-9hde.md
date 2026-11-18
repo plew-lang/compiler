@@ -1,7 +1,7 @@
 ---
 id: com-9hde
 status: in_progress
-deps: [com-zdod, com-scq5]
+deps: [com-zdod, com-scq5, com-2nb3]
 links: [com-amjl]
 created: 2026-11-06T23:54:58Z
 type: bug
@@ -754,3 +754,8 @@ names so it again reaches the original missing where proof in all three
 modes. Its receipt on this candidate is Unclassified despite the intended
 source diagnostic. This is part of the existing where-refusal producer work
 in [com-yeua](com-yeua.md#nested-conditional-wrapper-source-refusal-control).
+
+Independent migration review identified the missing cycle module sequence
+required by spec/15. The updated cycle fixtures assert the common refusal
+reason only. The full diagnostic and its stronger test are required
+under [com-2nb3](com-2nb3.md#retain-the-cycle-for-the-diagnostic).

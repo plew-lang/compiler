@@ -37,3 +37,24 @@ Static discoverable cyclic selector path can recurse before cycle diagnostic; no
 Exact producer→retention→required consumer, meaningful defect-specific RED/positive/refusal/boundary/noninterference controls, original failure preserved, legitimate prefixes retained, applicable gates and independent review. This proposal is not implemented or verified. Do not infer authorization for an undecided syntax/panic/CLI policy from this assignment. Preserve original error and legitimate published prefixes; make no rollback/recovery promise beyond the actual API contract.
 
 Required admission proposal: {"phase": "source-admission-before-G1-and-integration", "receivers": ["com-61jt", "com-604k"], "reason": "Actual source use DAG admission; new defect outside closed historical F2 controls. Direct source G1 prerequisite, not reopen com-d57o or expand JIT F3."}. Actual accepted edges are recorded in the audit adoption evidence after cycle review.
+
+## Retain the Cycle for the Diagnostic
+
+Independent review of com-9hde fixture migration exposed a current
+spec/15 violation on 241b58b6. All of namespace_import_cycle,
+namespace_reexport_cycle, and namespace_self_import_cycle exit 1 and
+show "module use graph contains a cycle (spec/15)" without identifying
+the modules in the ring. The first two source rings are First → Second
+→ First. The last is Main → Main. Main is only an entry prefix in the
+first two. The issue is observable in check, AOT, and lazy.
+
+ModuleScopeBindings.finishModule detects the back edge before surface
+recursion, but ScopeBindingFailure.ImportCycle retains only the use
+offset. Frontend's later Visibility.detectImportCycles implementation
+has path reconstruction. Restore the full structured ring at the early
+producer and render it once using canonical module identities, excluding
+noncycle prefixes and preserving the primary location and Source domain.
+Keep one cycle authority and reconcile/remove the redundant late walk
+after proving it supplies no additional valid guarantees. Add a RED
+test for the ring itself before changing the producer. Cover ordinary,
+public re-export, self-loop and acyclic cases in the affected modes.
