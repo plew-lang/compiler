@@ -367,3 +367,15 @@ missing applicable method (13), arithmetic conformance (12), and normally
 completing value blocks missing `give` (11). These are clusters by printed
 reason for triage; the corresponding producer must establish the fact and
 source origin. This is neither a full suite nor completion of this issue.
+
+### Existing fixture stops at the wrong rejection
+
+`unique_shadow_cliff_use.pw` was introduced by `62e495f3` to check that an
+outer unique owner does not revive after an inner declaration shadows it.
+The diagnostic and the optimized fixed-point candidates both reject line
+9 for a normally completing value block without `give`, even after the
+final read is removed. Replacing the bare block with `if true { ... }`
+isolates the intended property: the final read is rejected at line 13 as
+use after move, and removing it makes the program pass `--check`. The
+fixture has no reason golden. Keep it out of the missing-`give` evidence
+until its test intent is restored. The fixture itself is unchanged.
