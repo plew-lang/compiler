@@ -1,6 +1,6 @@
 ---
 id: com-x7ql
-status: in_progress
+status: closed
 deps: [com-j8k0, com-ew3i]
 links: []
 created: 2026-11-18T15:24:06Z
@@ -57,3 +57,21 @@ Remaining RED: for an outer unique `f`, a successful
 old owner. Finish binding-end publication and consumption at guard
 pattern acquisition, including its ownership/borrow and failure controls.
 The task stays open for that and independent closure verification.
+
+## Closure evidence
+
+Compiler `60beea23` records committed guard replacements by source binding
+identity. Verify updates ownership only along the successful continuation,
+and Mid ends the same owners after the condition's temporaries are released.
+The selected-pattern lowering seals the condition evaluation range before
+creating independent payload bindings. Match arms keep their existing lifetime.
+
+The guard fixture failed against the standalone-block candidate and passes
+check, ORC, native and LLVM 22 ASan/LSan with exact destruction order. It
+covers reverse old-owner order, short-circuit failure retaining old owners,
+and discarded and retained reference payloads. Both ordinary shadowing
+fixtures pass the same modes. An actual nested move still refuses a subsequent
+read in check, ORC and AOT. The nested shadow fixture preserves a pending
+borrow across temporary hiding; its existing RHS-move control still passes.
+Independent re-review confirmed the former counterexample, initial mismatch,
+late failure, and if/while condition cleanup with no remaining blocker.
