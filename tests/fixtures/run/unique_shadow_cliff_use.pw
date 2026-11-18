@@ -1,0 +1,14 @@
+use @Std/Io only { print }
+unique struct File {
+    val fd: I64
+    deinit { print(self.fd + 100I64) }
+}
+impl File { factory }
+fn main() {
+    val f = <File fd=1I64 />
+    {
+        val f = <File fd=2I64 />
+        print(f.fd)
+    }
+    print(f.fd)
+}

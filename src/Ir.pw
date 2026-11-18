@@ -4248,6 +4248,7 @@ pub struct Cursor {
     // with the rest of the context; it is not an independent success flag.
     pub mut val sourceFactReader: Optional[U64] = <Optional.None />
     pub mut val locals: Array[Local] = []
+    pub mut val bindingScopeStart: U64 = 0U64
     pub mut val tmp: U64 = 0
     pub mut val loopMark: U64 = 0
     pub mut val isMain: Bool = false

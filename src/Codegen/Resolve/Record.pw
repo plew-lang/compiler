@@ -3157,7 +3157,7 @@ pub impl Comp {
                 try self.recordExpr(exprId: init, expectedTerm: expected, admittedContext: annotation.isSome())
                 mut val endedBinding: U64 = 0U64
                 val previous = self.localIndexByName(start: nameStart, len: nameLen)
-                if previous < self.cur.locals.count() {
+                if previous >= self.cur.bindingScopeStart && previous < self.cur.locals.count() {
                     val prior = self.cur.locals[previous]
                     if prior.owned && self.arena.typeTermIsUnique(ref: prior.ty) {
                         endedBinding = prior.nameStart
@@ -3194,13 +3194,13 @@ pub impl Comp {
             Stmt.IfChain(val conditions, val thenBlk, val elseBlk) => {
                 val mark = self.scopeMark()
                 try self.recordConditionClauses(conditions: conditions)
-                try self.recordBlock(blkId: thenBlk)
+                try self.recordBlock(blkId: thenBlk, continuesBindingScope: self.blockExitRequirements.contains(key: elseBlk))
                 self.popLocals(mark: mark)
                 try self.recordBlock(blkId: elseBlk)
             }
             Stmt.If(val cond, val thenBlk, val elseBlk, val hasElse) => {
                 try self.recordExpr(exprId: cond)
-                try self.recordBlock(blkId: thenBlk)
+                try self.recordBlock(blkId: thenBlk, continuesBindingScope: hasElse && self.blockExitRequirements.contains(key: elseBlk))
                 if hasElse {
                     try self.recordBlock(blkId: elseBlk)
                 }
@@ -3288,18 +3288,21 @@ pub impl Comp {
         return <Result.Ok value=completion />
     }
 
-    inout fn recordBlock(blkId: U64) -> Result[(), CompileDiagnostic] {
+    inout fn recordBlock(blkId: U64, continuesBindingScope: Bool = false) -> Result[(), CompileDiagnostic] {
         val mark = self.scopeMark()
-        try self.recordBlockContents(blkId: blkId, resultContext: <BlockResultContext.Statement />)
+        try self.recordBlockContents(blkId: blkId, resultContext: <BlockResultContext.Statement />, continuesBindingScope: continuesBindingScope)
         self.popLocals(mark: mark)
         return <Result.Ok value=() />
     }
 
-    inout fn recordBlockContents(blkId: U64, resultContext: BlockResultContext) -> Result[SourceCompletion, CompileDiagnostic] {
+    inout fn recordBlockContents(blkId: U64, resultContext: BlockResultContext, continuesBindingScope: Bool = false) -> Result[SourceCompletion, CompileDiagnostic] {
+        val savedScope = self.cur.bindingScopeStart
+        if !continuesBindingScope { self.cur.bindingScopeStart = self.cur.locals.count() }
         val permitsGive = match resultContext { BlockResultContext.Value(expectedTerm: _) | BlockResultContext.Discarded => true _ => false }
         val checkpoint = self.enterSourceControlRegion(region: <SourceControlRegion.Block blockId=blkId permitsGive=permitsGive />)
         val recorded = self.recordBlockContentsInRegion(blkId: blkId, resultContext: resultContext)
         self.restoreSourceControlRegion(checkpoint: checkpoint)
+        self.cur.bindingScopeStart = savedScope
         return recorded
     }
 

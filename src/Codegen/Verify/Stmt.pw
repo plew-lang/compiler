@@ -110,7 +110,7 @@ pub impl Comp {
                         _ => {}
                     }
                 }
-                self.markShadowedUniqueMoved(nameStart: nameStart, nameLen: nameLen)
+                try self.markReplacedUniqueMoved(stmtId: stmtId)
                 self.addLocal(nameStart: nameStart, nameLen: nameLen, tyStart: le.start, tyLen: le.len, isArray: le.arr, ty: le.ty, isInout: false, isMut: mutable, owned: true)
             }
             Stmt.Assign(val target, val value) => {
