@@ -611,3 +611,21 @@ output, and prepopulated raw state; its native build precedes the final
 compatibility-wrapper restoration. Source entry structure passes its
 architecture check. Final independent re-review found no scoped blocker.
 Formal self-host and whole-suite gates remain pending.
+
+### Free call applicability checkpoint
+
+Baseline c64b0c94 reproduces ten unclassified free-call refusals in check
+and AOT, and three reached ORC refusals. Seven ORC helpers remain
+undemanded and successful. An isolated authored Call/Arg receipt prototype
+preserved stderr/status/channel in thirty runs and classified the reached
+refusals as Source.
+
+The prototype was not adopted. Independent source review identified a
+single-field counterexample to execute next: a valid authored free call
+can receive CachedCallee.NoStaticCallee through public typeCache. The
+resolver then skips selection, and the unchanged written-call receipt
+misclassifies its failure as Source. Attribution must include the
+selection-failure producer. The prototype also added an owned argument
+array per authored free call; its performance cost has not been measured.
+
+[Replay and remaining control](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-free-call-rejection.json).
