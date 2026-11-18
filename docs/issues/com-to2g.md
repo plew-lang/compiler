@@ -1,6 +1,6 @@
 ---
 id: com-to2g
-status: open
+status: in_progress
 deps: []
 links: [com-jbau]
 created: 2026-11-17T12:41:19Z
@@ -62,3 +62,25 @@ between reference-handle identity and referent container overlap, and
 preservation of read-borrow rules. Its nested-field example was reproduced
 on c41653f1 with the arrow spelling supported by that candidate. The
 contract review does not establish implementation conformance.
+
+## Source Classifier Increment
+
+The lexical classifier now separates the reference expression from its
+post-deref field path. It reads recorded identifier targets and compares
+the whole field prefix up to its container boundary. The adopted rebind
+negative is Source in check and lazy on a diagnostic rebuild. The nested
+disjoint test and the explicit distinct bindings print 1 and 2 in lazy
+and native execution. The prior direct static negative passes its reason
+and domain check in check, AOT, and lazy. Existing disjoint, indexed
+referent and read receiver JIT controls pass. Native distinct-alias
+overlap/container panics and pinning also retain their outcomes.
+
+Handle selection with an unknown key remains dynamic. Equal typed
+constant Array keys have a static proof; different constant keys execute
+successfully. An interposed mutation of a global index was rejected as
+overlap by c41653f1. The new lexical checker accepts it, but lazy
+execution now exposes a Mid preparation failure, so the source-to-use
+boundary remains open. The reviewed checkpoint also still compares field
+spellings. Audit Record's saved projected fields and use their identity
+for equivalent view/via paths. Check transient field path costs before
+the performance gate. Do not close the task on the scoped controls.

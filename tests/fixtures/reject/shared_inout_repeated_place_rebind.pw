@@ -1,0 +1,22 @@
+use @Std/Core only { MutableRef }
+use @Std/Io only { print }
+unique struct Cell { pub mut val value: I64 }
+pub impl Cell { factory }
+mut val current = <MutableRef value=<Cell value=0I64 /> />
+
+fn rebind() -> I64 {
+    current = <MutableRef value=<Cell value=0I64 /> />
+    return 0I64
+}
+
+fn update(first: inout I64, marker: I64, second: inout I64) {
+    first += 1I64
+    second += 2I64
+}
+
+fn main() {
+    val before = current
+    update(first: inout current->value, marker: rebind(), second: inout current->value)
+    print(before->value)
+    print(current->value)
+}

@@ -1,0 +1,18 @@
+use @Std/Core only { MutableRef }
+use @Std/Io only { print }
+struct Pair { pub mut val first: I64
+              pub mut val second: I64 }
+unique struct Cell { pub mut val pair: Pair }
+pub impl Cell { factory }
+
+fn update(first: inout I64, second: inout I64) {
+    first += 1I64
+    second += 2I64
+}
+
+fn main() {
+    val cell = <MutableRef value=<Cell pair=<Pair first=0I64 second=0I64 /> /> />
+    update(first: inout cell->pair.first, second: inout cell->pair.second)
+    print(cell->pair.first)
+    print(cell->pair.second)
+}

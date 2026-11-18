@@ -38,20 +38,13 @@ pub impl Comp {
     // or subexpression is ever re-evaluated.
     inout fn checkInoutPair(a: U64, b: U64) -> Result[(), CompileDiagnostic] {
         if self.classifyInoutPair(a: a, b: b) == 1U64 {
-            // Shared-place syntax equality does not prove the two evaluated
-            // cells are the same; another argument can rebind the handle.
-            val domain = if self.placeHasDeref(id: a) {
-                give <FailureDomain.Unclassified />
-            } else {
-                give <FailureDomain.Source />
-            }
-            return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: b), msg: "two `inout` positions in one call overlap: they reach into the same variable (or one contains the other) without diverging at distinct fields; overlapping `inout` is forbidden (spec/03)", failureDomain: domain) />
+            return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: b), msg: "two `inout` positions in one call overlap: they reach into the same variable (or one contains the other) without diverging at distinct fields; overlapping `inout` is forbidden (spec/03)", failureDomain: <FailureDomain.Source />) />
         }
         return <Result.Ok value=() />
     }
 
     // Classify one pair of `inout` places (spec/03, Swift-equivalent granularity):
-    // 1 = certain overlap (compile error), 2 = a same-cell question only answerable at
+    // 1 = static source restriction (compile error), 2 = a same-cell question answerable at
     // runtime (the backend compares the cells just before the call), 0 = provably
     // distinct (no check). Two worlds: a deref-free place lives in value-semantics
     // storage, so it can only overlap a place rooted in the SAME variable — decided
@@ -59,8 +52,8 @@ pub impl Comp {
     // overlap regardless of the index values; only divergence at distinct field names
     // proves disjointness). A deref-crossing place lives in a heap cell, so it can
     // only overlap another deref-crossing place: distinct pointee fields are disjoint
-    // whatever the cells; the same field (or containment) reduces to cell identity —
-    // certain when the places share one syntactic variable path, runtime otherwise.
+    // whatever the cells. Overlapping fields or containment through the same
+    // reference place violate the source restriction; other pairs use cell identity.
     // MIXED worlds never overlap (variable storage vs heap cell): `f(r: inout r1,
     // x: inout r1->n)` is legal — the backend's cell pin keeps the lent pointee alive
     // across a rebind of the variable.
@@ -87,36 +80,7 @@ pub impl Comp {
             }
             return 1
         }
-        // shared world: truncate each place to its outermost cell projection — the
-        // first Field above the topmost deref (container granularity: everything below
-        // an element access collapses onto its container field), or the whole pointee
-        // when the place IS the deref.
-        val pa: U64 = self.placePostDerefDepth(id: a)
-        val pb: U64 = self.placePostDerefDepth(id: b)
-        mut val ta: U64 = a
-        mut val tb: U64 = b
-        if pa > 1U64 {
-            ta = self.placeAncestor(id: a, up: pa - 1U64)
-        }
-        if pb > 1U64 {
-            tb = self.placeAncestor(id: b, up: pb - 1U64)
-        }
-        // whole pointee vs a pointee projection: containment — compare at the cell.
-        if pa == 0U64 && pb != 0U64 {
-            tb = self.placeAncestor(id: tb, up: 1U64)
-        }
-        if pb == 0U64 && pa != 0U64 {
-            ta = self.placeAncestor(id: ta, up: 1U64)
-        }
-        if pa != 0U64 && pb != 0U64 {
-            if self.derefProjNamesDiffer(a: ta, b: tb) {
-                return 0
-            }
-        }
-        if self.exprSyntaxEq(a: ta, b: tb) {
-            return 1
-        }
-        return 2
+        return self.classifySharedInoutPair(a: a, b: b)
     }
 
     // Every traversal reads Lower-published storage provenance. A synthetic
@@ -258,77 +222,6 @@ pub impl Comp {
                 }
             }
             _ => { return 2 }
-        }
-    }
-
-    // Levels of a place path ABOVE its topmost deref: 0 = the place IS the pointee
-    // (`Deref`, a pointee-method receiver), 1 = a direct cell projection (`r->f`),
-    // 2+ = deeper (`r->xs[i]`, `r->a.b`). Only meaningful when placeHasDeref holds.
-    inout fn placePostDerefDepth(id: U64) -> U64 {
-        match self.arena.exprs[self.materializablePlace(id: id)] {
-            Expr.Field(val base, nameStart: _, nameLen: _) => { return self.placePostDerefDepth(id: base) + 1U64 }
-            Expr.Index(val base, index: _) => { return self.placePostDerefDepth(id: base) + 1U64 }
-            // Arrow = Field∘Deref: the field is ONE level above its own deref, which is
-            // the topmost deref of the whole path (anything deeper sits inside `base`).
-            Expr.Arrow(base: _, nameStart: _, nameLen: _) => { return 1 }
-            _ => { return 0 }
-        }
-    }
-
-    // Two direct cell projections: do they name provably DIFFERENT pointee fields?
-    // Distinct fields are disjoint regardless of cell identity (fields of one cell are
-    // disjoint; fields of two cells even more so). Non-Arrow shapes: unknown (false).
-    inout fn derefProjNamesDiffer(a: U64, b: U64) -> Bool {
-        match self.arena.exprs[self.materializablePlace(id: a)] {
-            Expr.Arrow(base: _, nameStart: val n1s, nameLen: val n1l) => {
-                match self.arena.exprs[self.materializablePlace(id: b)] {
-                    Expr.Arrow(base: _, nameStart: val n2s, nameLen: val n2l) => { return !(spansEqual(c: inout self, aStart: n1s, aLen: n1l, bStart: n2s, bLen: n2l)) }
-                    _ => { return false }
-                }
-            }
-            _ => { return false }
-        }
-    }
-
-    inout fn exprSyntaxEq(a: U64, b: U64) -> Bool {
-        match self.arena.exprs[self.materializablePlace(id: a)] {
-            Expr.Ident(start: val s1, len: val l1) => {
-                match self.arena.exprs[self.materializablePlace(id: b)] {
-                    Expr.Ident(start: val s2, len: val l2) => { return spansEqual(c: inout self, aStart: s1, aLen: l1, bStart: s2, bLen: l2) }
-                    _ => { return false }
-                }
-            }
-            Expr.Int(value: val v1, offset: _, isBool: _, tyStart: _, tyLen: _, isNeg: val neg1) => {
-                match self.arena.exprs[self.materializablePlace(id: b)] {
-                    Expr.Int(value: val v2, offset: _, isBool: _, tyStart: _, tyLen: _, isNeg: val neg2) => { return v1 == v2 && neg1 == neg2 }
-                    _ => { return false }
-                }
-            }
-            Expr.Field(base: val base1, nameStart: val n1s, nameLen: val n1l) => {
-                match self.arena.exprs[self.materializablePlace(id: b)] {
-                    Expr.Field(base: val base2, nameStart: val n2s, nameLen: val n2l) => { return spansEqual(c: inout self, aStart: n1s, aLen: n1l, bStart: n2s, bLen: n2l) && self.exprSyntaxEq(a: base1, b: base2) }
-                    _ => { return false }
-                }
-            }
-            Expr.Arrow(base: val base1, nameStart: val n1s, nameLen: val n1l) => {
-                match self.arena.exprs[self.materializablePlace(id: b)] {
-                    Expr.Arrow(base: val base2, nameStart: val n2s, nameLen: val n2l) => { return spansEqual(c: inout self, aStart: n1s, aLen: n1l, bStart: n2s, bLen: n2l) && self.exprSyntaxEq(a: base1, b: base2) }
-                    _ => { return false }
-                }
-            }
-            Expr.Index(base: val base1, index: val idx1) => {
-                match self.arena.exprs[self.materializablePlace(id: b)] {
-                    Expr.Index(base: val base2, index: val idx2) => { return self.exprSyntaxEq(a: base1, b: base2) && self.exprSyntaxEq(a: idx1, b: idx2) }
-                    _ => { return false }
-                }
-            }
-            Expr.Deref(base: val base1) => {
-                match self.arena.exprs[self.materializablePlace(id: b)] {
-                    Expr.Deref(base: val base2) => { return self.exprSyntaxEq(a: base1, b: base2) }
-                    _ => { return false }
-                }
-            }
-            _ => { return false }
         }
     }
 
@@ -575,4 +468,107 @@ pub impl Comp {
         }
         return <Result.Ok value=() />
     }
+}
+
+impl Comp {
+    inout fn sharedInoutPlace(expression: U64) -> Optional[SharedInoutPlace] {
+        mut val current = expression
+        mut val fields: Array[SharedInoutField] = []
+        while current < self.arena.exprs.count() {
+            current = self.materializablePlace(id: current)
+            match self.arena.exprs[current] {
+                Expr.Field(val base, val nameStart, val nameLen) => {
+                    fields.append(<SharedInoutField nameStart=nameStart nameLen=nameLen />)
+                    current = base
+                }
+                Expr.Index(val base, index: _) => {
+                    // Subfields of an indexed element reserve the container.
+                    fields = []
+                    current = base
+                }
+                Expr.Arrow(val base, val nameStart, val nameLen) => {
+                    fields.append(<SharedInoutField nameStart=nameStart nameLen=nameLen />)
+                    return <Optional.Some v=<SharedInoutPlace reference=base fields=fields /> />
+                }
+                Expr.Deref(val base) => { return <Optional.Some v=<SharedInoutPlace reference=base fields=fields /> /> }
+                _ => { return <Optional.None /> }
+            }
+        }
+        return <Optional.None />
+    }
+
+    inout fn classifySharedInoutPair(a: U64, b: U64) -> U64 {
+        val first = self.sharedInoutPlace(expression: a)
+        val second = self.sharedInoutPlace(expression: b)
+        if first.isNone() || second.isNone() { return 2U64 }
+        val left = first.unwrap()
+        val right = second.unwrap()
+        mut val offset = 0U64
+        while offset < left.fields.count() && offset < right.fields.count() {
+            val leftField = left.fields[left.fields.count() - offset - 1U64]
+            val rightField = right.fields[right.fields.count() - offset - 1U64]
+            if !spansEqual(c: inout self, aStart: leftField.nameStart, aLen: leftField.nameLen, bStart: rightField.nameStart, bLen: rightField.nameLen) { return 0U64 }
+            offset += 1U64
+        }
+        if self.sameInoutReferencePlace(a: left.reference, b: right.reference) { return 1U64 }
+        return 2U64
+    }
+
+    inout fn sameLiteralInoutIndex(a: U64, b: U64) -> Bool {
+        match self.arena.exprs[a] {
+            Expr.Int(value: val value, offset: _, isBool: val flag, tyStart: _, tyLen: _, isNeg: val negative) => {
+                match self.arena.exprs[b] {
+                    Expr.Int(value: val other, offset: _, isBool: val otherFlag, tyStart: _, tyLen: _, isNeg: val otherNegative) => {
+                        val term = self.semanticExprTerm(exprId: a)
+                        return !flag && !otherFlag && value == other && negative == otherNegative && term != 0U64 && term == self.semanticExprTerm(exprId: b)
+                    }
+                    _ => { return false }
+                }
+            }
+            _ => { return false }
+        }
+    }
+
+    inout fn sameInoutReferencePlace(a: U64, b: U64) -> Bool {
+        match self.arena.exprs[self.materializablePlace(id: a)] {
+            Expr.Ident(start: _, len: _) => {
+                val lhs = self.materializablePlace(id: a)
+                val rhs = self.materializablePlace(id: b)
+                if lhs >= self.typeCache.identTarget.count() || rhs >= self.typeCache.identTarget.count() { return false }
+                if self.typeCache.identBind[lhs] != identValueCode() || self.typeCache.identBind[rhs] != identValueCode() { return false }
+                val owner = self.typeCache.identTarget[lhs]
+                return owner != identNoTarget() && owner == self.typeCache.identTarget[rhs]
+            }
+            Expr.Field(base: val base1, nameStart: val n1s, nameLen: val n1l) => {
+                match self.arena.exprs[self.materializablePlace(id: b)] {
+                    Expr.Field(base: val base2, nameStart: val n2s, nameLen: val n2l) => { return spansEqual(c: inout self, aStart: n1s, aLen: n1l, bStart: n2s, bLen: n2l) && self.sameInoutReferencePlace(a: base1, b: base2) }
+                    _ => { return false }
+                }
+            }
+            Expr.Arrow(base: val base1, nameStart: val n1s, nameLen: val n1l) => {
+                match self.arena.exprs[self.materializablePlace(id: b)] {
+                    Expr.Arrow(base: val base2, nameStart: val n2s, nameLen: val n2l) => { return spansEqual(c: inout self, aStart: n1s, aLen: n1l, bStart: n2s, bLen: n2l) && self.sameInoutReferencePlace(a: base1, b: base2) }
+                    _ => { return false }
+                }
+            }
+            Expr.Index(base: val base1, index: val idx1) => {
+                match self.arena.exprs[self.materializablePlace(id: b)] {
+                    Expr.Index(base: val base2, index: val idx2) => {
+                        if !self.sameLiteralInoutIndex(a: idx1, b: idx2) { return false }
+                        if !self.isLangArrayType(ref: self.semanticExprTerm(exprId: base1)) { return false }
+                        return self.sameInoutReferencePlace(a: base1, b: base2)
+                    }
+                    _ => { return false }
+                }
+            }
+            Expr.Deref(base: val base1) => {
+                match self.arena.exprs[self.materializablePlace(id: b)] {
+                    Expr.Deref(base: val base2) => { return self.sameInoutReferencePlace(a: base1, b: base2) }
+                    _ => { return false }
+                }
+            }
+            _ => { return false }
+        }
+    }
+
 }
