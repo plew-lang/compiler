@@ -1,11 +1,11 @@
 pub trait Sub {}
-pub trait Sub[Rhs] {}
+pub trait GenericSub[Rhs] {}
 pub trait Marker {}
 
 struct S {}
 pub impl S { factory }
 
-pub impl S as Sub[I64] {}
+pub impl S as GenericSub[I64] {}
 pub impl Sub as Marker {}
 
 fn needMarker[T](value: T) where T: Marker {}

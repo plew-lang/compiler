@@ -12,7 +12,7 @@ pub impl Parser as Convert[String] {
 }
 
 fn keep[T](value: T) -> I64 where T: Convert[String] {
-    return value#Convert.source()
+    return value#Convert[String].source()
 }
 
 fn main() {

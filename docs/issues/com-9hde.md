@@ -738,3 +738,19 @@ goldens pass in JIT and native execution. The function fixture now uses
 the frontend request admission path so Lower receives admitted module
 bindings; its four original counts pass unchanged in native execution.
 No product code or public API changed in this increment.
+
+## Binding and Complete View Fixture Migration
+
+The generic backend success now exercises a distinct extension and trait
+on two instances of Box. The re-export fixture supplies the complete
+Convert[String] view and still calls the re-exported owner. Both fixtures
+pass their JIT and native goldens on 241b58b6. The former same-name
+trait/extension positive now asserts the adopted Source collision rule.
+
+Duplicate type, missing trait arguments, non-conforming view, and three
+module-cycle fixtures preserve exit 1 and the owning diagnostic in check,
+AOT, and lazy. The abstract trait-subject fixture uses separate declaration
+names so it again reaches the original missing where proof in all three
+modes. Its receipt on this candidate is Unclassified despite the intended
+source diagnostic. This is part of the existing where-refusal producer work
+in [com-yeua](com-yeua.md#nested-conditional-wrapper-source-refusal-control).

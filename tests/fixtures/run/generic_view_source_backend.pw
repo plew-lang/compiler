@@ -7,11 +7,13 @@ struct Box[T] { pub val value: T }
 pub impl[T] Box[T] { factory }
 pub impl Box[String] as Extra {}
 
-extension Extra {
+extension Numbers {
     pub impl Box[I64] { fn extensionMethod() -> I64 { return self.value } }
 }
 
 fn main() {
     val box: Box[I64] = <Box value=7I64 />
-    print(box#Extra.extensionMethod())
+    print(box#Numbers.extensionMethod())
+    val text: Box[String] = <Box value="ok" />
+    print(text#Extra.traitMethod())
 }

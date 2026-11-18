@@ -1,3 +1,4 @@
+// A trait and an extension cannot publish the same module binding.
 use @Std/Io only { print }
 
 trait Extra {}
