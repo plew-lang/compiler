@@ -637,3 +637,21 @@ the receipt prototype to return the original refusal as Source. The next
 repair must retain the actual negative selection producer, and distinguish
 freshly established absence from a cache assertion. The source text and
 native stdout are preserved in the linked evidence.
+
+Compiler abb4d895 issues a negative-selection receipt only after the resolver
+actually queries visible free functions and finds none. Failed consumers
+check the authored Call shape, original argument range, source owner and
+retained argument fields. A raw NoStaticCallee assertion cannot issue it.
+Successful calls retain only a scalar origin; argument copies are limited
+to actual missing selections.
+
+All thirty original comparisons preserve stderr/status/channel; check/AOT
+each report ten Source failures, ORC reports three and retains seven lazy
+successes. Native entry controls pass for repeated authored refusal and the
+healthy-call cache mutation. Five additional native controls exercise the
+classifier directly for altered owner/Arg/parent, raw copy and synthetic
+registration. They are helper-boundary tests, not full entry replays.
+Closure shadowing and a generic default witness pass check and exact ORC.
+Independent final re-review found no remaining scoped blocker under the
+immutable declaration/AST payload contract. Formal self-host and broad
+suite validation remain pending.
