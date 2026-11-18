@@ -529,3 +529,23 @@ named argument-pool mutation kept the original refusal Unclassified.
 Independent re-review found no blocker within the supported boundary.
 
 [Replay and controls](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-factory-rejection.json).
+
+### Declaration call-access checkpoint
+
+Against 34b75f5a the 11 receiver overlaps went through declaration access
+in check/AOT and all six reached ORC cases. Five ORC cases were undemanded.
+An isolated declaration-only prototype also made the six borrow overlaps
+Source in check/AOT and the three reached ORC cases. Across the 51 runs,
+stderr, exit status and terminal channel were identical to baseline.
+
+The prototype was not adopted. Independent review found a falsifier by
+inspection: cache a valid disjoint call via `MidFunctionTemplates.body`,
+replace its canonical argument to alias the read receiver, and request that
+body through a fresh `DeclarationBodyRequests`. A genuine symbolic key still
+exists, so key attribution alone cannot classify the mutated operands.
+Execute this contrast before implementing the repair. The repair must tie
+the conflict to the operands emitted by the source builder and retain the
+typed local-access error. Check both the raw verifier and cached-request
+boundary, including preservation of ordinary disjoint source calls.
+
+[Probe replay](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-call-access-rejection.json).
