@@ -1,6 +1,6 @@
 // A whole-target static-check result owns the exact compiler snapshot it proves.
 // No public factory or mutable arena accessor can attach it to another input.
-use ./Frontend only { Comp, FrontendInput, FrontendOptions, analyzeFrontendForRequests, completeFrontendDeclarations, traceFinalCallableStart, traceFinalCallableFinish, FinalBodyRequests, FinalDependencies, FinalizationPublication }
+use ./Frontend only { Comp, FrontendInput, FrontendOptions, openFrontendForRequests, completeFrontendDeclarations, traceFinalCallableStart, traceFinalCallableFinish, FinalBodyRequests, FinalDependencies, FinalizationPublication }
 use ./Ir only { StaticConformanceProof, BodyOrigin, InstanceEnvironment, CallSiteKey, CheckedLocalStorageRequest, SourceBindingOrigin }
 use ./Backend only { LlvmLoweringResult, LlvmTargetDescription, lowerRequestedLlvm, lowerGlobalStorageLlvm, lowerCallableDeclarationsLlvm }
 use ./SourceAccess only { SourceAccess }
@@ -103,9 +103,8 @@ pub impl CompilerSession {
 
     assoc fn open(input: FrontendInput, sources: SourceAccess,
                   options: FrontendOptions = <FrontendOptions />) -> CompilerSessionResult {
-        mut val compiler = <Comp />
-        match analyzeFrontendForRequests(c: inout compiler, input: input, sources: sources, options: options) {
-            Result.Ok(value: _) => {}
+        val compiler = match openFrontendForRequests(input: input, sources: sources, options: options) {
+            Result.Ok(value: val compiler) => compiler,
             Result.Err(error: val diagnostic) => { return <CompilerSessionResult.Failure diagnostic=diagnostic /> }
         }
         return <CompilerSessionResult.Success session=<CompilerSession compiler=compiler /> />

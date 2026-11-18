@@ -1,0 +1,69 @@
+use /Diag only { FailureDomain }
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests, openFrontendForRequests, spansEqual }
+use /Ir only { AssocBinding }
+use /SourceAccess only { SourceAccess }
+use @Std/Io only { print }
+
+fn conformance(c: inout Comp, name: String) -> U64 {
+    val query = c.internBytes(s: name)
+    for i in 0U64..<c.decls.conformCount() {
+        val row = c.decls.conformAt(index: i)
+        if spansEqual(c: inout c, aStart: row.typeStart, aLen: row.typeLen, bStart: query.nameStart, bLen: query.nameLen) { return i }
+    }
+    panic "missing conformance"
+}
+
+fn main() {
+    mut val c = <Comp />
+    val source = "trait Cursor {{ type Item }} trait Collection {{ type Item type Iter: Cursor[Item = Item] }} struct Iter {{}} impl Iter as Cursor {{ type Item = I64 }} struct First {{}} impl First as Collection {{ type Item = String type Iter = Iter }} struct List {{}} impl List as Collection {{ type Item = I64 type Iter = Iter }} fn main() {{}}"
+    match openFrontendForRequests(input: <FrontendInput.Text path="associated-environment.pw" text=source />, sources: <SourceAccess stdRoot=[] />) {
+        Result.Ok(value: _) => { panic "expected declaration admission to reject First" }
+        Result.Err(error: val diagnostic) => {
+            if diagnostic.message != "associated type does not satisfy its declared trait constraint" || !diagnostic.isSourceRejection() {
+                panic "expected authored conformance failure"
+            }
+        }
+    }
+    match analyzeFrontendForRequests(c: inout c, input: <FrontendInput.Text path="associated-environment.pw" text=source />, sources: <SourceAccess stdRoot=[] />) {
+        Result.Ok(value: _) => { panic "expected declaration admission to reject First" }
+        Result.Err(error: val diagnostic) => {
+            if diagnostic.message != "associated type does not satisfy its declared trait constraint" || diagnostic.isSourceRejection() {
+                panic "expected raw conformance failure"
+            }
+        }
+    }
+    val first = c.decls.conformAt(index: conformance(c: inout c, name: "First"))
+    val listIndex = conformance(c: inout c, name: "List")
+    val list = c.decls.conformAt(index: listIndex)
+    val traitIndex = c.resolveTraitDef(cf: list)
+    mut val healthy = c
+    healthy.checkAssociatedBounds(conformIndex: listIndex, conformance: list, traitIndex: traitIndex, assumptions: healthy.conformanceDeclarationAssumptions(conformIndex: listIndex)).unwrap()
+    val foreign = c.decls.assocBindings[c.conformFuncIdAt(ids: first.assocBindingIds, index: 0U64)]
+    val index = c.conformFuncIdAt(ids: list.assocBindingIds, index: 0U64)
+    val item = c.decls.assocBindings[index]
+    if item.nameId != foreign.nameId || c.typeRefEq(a: item.ty, b: foreign.ty) { panic "wrong sibling pair" }
+    c.decls.assocBindings[index] = <AssocBinding recvStart=item.recvStart recvLen=item.recvLen recvId=item.recvId nameStart=item.nameStart nameLen=item.nameLen nameId=item.nameId traitId=item.traitId traitOwner=item.traitOwner implOffset=item.implOffset subjectTy=item.subjectTy subjectArgs=item.subjectArgs typeParams=item.typeParams traitArgs=item.traitArgs tyStart=item.tyStart tyLen=item.tyLen tyIsArray=item.tyIsArray ty=foreign.ty authoredTypeSite=item.authoredTypeSite authoredTypeUse=item.authoredTypeUse />
+    match c.checkAssociatedBounds(conformIndex: listIndex, conformance: list, traitIndex: traitIndex, assumptions: c.conformanceDeclarationAssumptions(conformIndex: listIndex)) {
+        Result.Ok(value: _) => { panic "mutated sibling was accepted" }
+        Result.Err(error: val diagnostic) => {
+            if diagnostic.message != "associated type does not satisfy its declared trait constraint" { panic "wrong mutation failure" }
+            match diagnostic.failureDomain {
+                FailureDomain.Unclassified => {}
+                _ => { panic "unexpected mutation domain" }
+            }
+        }
+    }
+    mut val seeded = <Comp />
+    seeded.decls.conformTypePool.append(0U64)
+    match analyzeFrontendForRequests(c: inout seeded, input: <FrontendInput.Text path="seeded-associated-environment.pw" text=source />, sources: <SourceAccess stdRoot=[] />) {
+        Result.Ok(value: _) => { panic "seeded failure was accepted" }
+        Result.Err(error: val diagnostic) => {
+            if diagnostic.message != "associated type does not satisfy its declared trait constraint" { panic "wrong seeded failure" }
+            match diagnostic.failureDomain {
+                FailureDomain.Unclassified => {}
+                _ => { panic "seeded state received source attribution" }
+            }
+        }
+    }
+    print("ok")
+}

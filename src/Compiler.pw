@@ -1,7 +1,7 @@
 use ./CompilerFailureOutput only { emitCompilerFailure }
 // Low-level compiler driver shared by the development and distributed entries.
 use @Std/Process only { argCount, argAt, exit }
-use ./Frontend only { Comp, FrontendInput, FrontendOptions, analyzeFrontend }
+use ./Frontend only { Comp, FrontendInput, FrontendOptions, openFrontend }
 use ./FrontendDriver only { frontendRequest, configuredSourceAccess }
 use ./CompilerExecution only { executeProgram }
 use ./CheckedProgram only { CheckedProgram, ProgramCheckResult, prepareCheckedProgram, ExecutableCompilationResult }
@@ -84,9 +84,8 @@ fn compileSource(sources: SourceAccess, firstArgument: I64, emitText: Bool = fal
     val request = frontendRequest(sources: sources, firstArgument: firstArgument)
     // Generation checks a synthesized harness, not the user's whole target.
     if request.options.genMode {
-        mut val compiler = <Comp />
-        match analyzeFrontend(c: inout compiler, input: request.input, sources: request.sources, options: request.options) {
-            Result.Ok(value: _) => {}
+        mut val compiler = match openFrontend(input: request.input, sources: request.sources, options: request.options) {
+            Result.Ok(value: val compiler) => compiler,
             Result.Err(error: val diagnostic) => { return <CompilationResult.Failure diagnostic=diagnostic /> }
         }
         val target = match LlvmTargetDescription.native(cpu: cpu) {

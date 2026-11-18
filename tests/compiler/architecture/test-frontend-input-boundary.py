@@ -24,17 +24,20 @@ checked = (root / 'src/CheckedProgram.pw').read_text()
 checking = checked.split('assoc fn check(', 1)[1].split('pub fn prepareCheckedProgram(', 1)[0]
 assert checking.index('CompilerSession.open(') < checking.index('checkCompilerSession(session: move session)')
 opening = checked.split('assoc fn open(', 1)[1].split('inout fn prepareFunction(', 1)[0]
-assert opening.index('analyzeFrontendForRequests(') < opening.index('<CompilerSessionResult.Success')
+assert opening.index('openFrontendForRequests(') < opening.index('<CompilerSessionResult.Success')
 completion = checked.split('pub fn checkCompilerSession(', 1)[1].split('// Static success', 1)[0]
 assert completion.index('completeFrontendDeclarations(') < completion.index('prepareDeclarationProgramWithRequests(') < completion.index('<ProgramCheckResult.Success')
 assert 'session=move state' in completion
-assert 'analyzeFrontendForRequests(' not in completion  # complete the same snapshot
+assert 'openFrontendForRequests(' not in completion  # complete the same snapshot
 session = checked.split('pub unique struct CompilerSession {', 1)[1].split('}', 1)[0]
 assert 'pub val ' not in session and 'pub mut val ' not in session
 assert 'mut val session: CompilerSession' in checked
 checking = opening + checking + completion
 for forbidden in ('finalizeFrontendExecutables(', 'LLVMContextCreate(', 'lowerRequestedLlvm(', 'lowerGlobalStorageLlvm(', 'argCount(', 'readStdin(', 'exit(', 'emitDiagnostic(', 'emitCompilerFailure('):
     assert forbidden not in checking, f'whole-target check crosses its boundary: {forbidden}'
+source_open = frontend.split('pub fn openFrontendForRequests(', 1)[1].split('fn analyzeFrontendRequestsWithOrigin(', 1)[0]
+assert 'c: inout Comp' not in source_open and 'mut val c = <Comp />' in source_open
+assert 'origin: <AssociatedBoundCheckOrigin.SourceAdmission />' in source_open
 # Sessions now also own explicit backend requests. Static check/open must not
 # execute them; importing their result types is not code generation.
 assert 'use ./Backend' not in frontend

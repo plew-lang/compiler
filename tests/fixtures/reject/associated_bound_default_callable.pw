@@ -1,0 +1,11 @@
+trait Mark {}
+trait Source {
+    type Item: Mark
+    fn get() -> I64
+}
+struct Box {}
+impl Box as Source {
+    type Item = I64
+    fn get(count: I64 = 1I64) -> I64 { return count }
+}
+fn main() {}

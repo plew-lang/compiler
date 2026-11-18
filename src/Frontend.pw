@@ -1894,7 +1894,13 @@ pub fn analyzeFrontend(c: inout Comp, input: FrontendInput, sources: SourceAcces
 
 // The admission window covers roots which may require a newtype before
 // declaration identity resolution, as well as the final nominal sweep.
-fn admitFrontendNominalDependencies(c: inout Comp) -> Result[(), CompileDiagnostic] {
+// Only the loader can supply the source domain to declaration checks.
+enum AssociatedBoundCheckOrigin {
+    Raw
+    SourceAdmission
+}
+
+fn admitFrontendNominalDependencies(c: inout Comp, origin: AssociatedBoundCheckOrigin) -> Result[(), CompileDiagnostic] {
     c.indexConformanceArgumentScopes()
     try c.admitConformanceSubjects()
     try c.admitAssociatedBindingRecipes()
@@ -1908,7 +1914,7 @@ fn admitFrontendNominalDependencies(c: inout Comp) -> Result[(), CompileDiagnost
     // conforming concrete type (before provided methods, so A's own provided
     // methods also reach the newly-conforming types). The headless form
     // `impl[T] T as A where T: B` is rejected separately (Verify.checkBlanketHeadless).
-    try c.prepareConformanceCallableForms()
+    try c.prepareConformanceCallableFormsForAdmission(origin: origin)
     try c.instantiateTraitSubjectConforms()
     // trait provided methods (spec/08): copy each `impl Trait { }` provided
     // method onto every conforming type, so they ride normal method resolution.
@@ -1921,7 +1927,7 @@ fn admitFrontendNominalDependencies(c: inout Comp) -> Result[(), CompileDiagnost
     // mode. Generation requests macro dependencies, not application bodies.
     // trait conformance is explicit and complete (spec/08): every requirement of
     // each `impl Type as Trait` must be witnessed (a body method or a `via` alias).
-    try c.checkConformances()
+    try c.checkConformancesForAdmission(origin: origin)
     // Existential formation (spec/08) requires a known trait and complete
     // type-argument/associated-type bindings; operations are checked at use.
     if c.genMode { try c.checkAnyFormation() }
@@ -1946,7 +1952,7 @@ fn admitFrontendNominalDependencies(c: inout Comp) -> Result[(), CompileDiagnost
 // Produces declaration-time types, bindings and call templates, without
 // closing the executable BodyInstance/destruction worklist.
 fn loadFrontendDeclarations(c: inout Comp, input: FrontendInput, sources: SourceAccess,
-                         options: FrontendOptions = <FrontendOptions />) -> Result[(), CompileDiagnostic] {
+                            options: FrontendOptions, origin: AssociatedBoundCheckOrigin) -> Result[(), CompileDiagnostic] {
     val genMode = options.genMode
     val tcLog = options.tcLog
     val asan = options.asan
@@ -2446,7 +2452,7 @@ fn loadFrontendDeclarations(c: inout Comp, input: FrontendInput, sources: Source
     // intentionally not a substitute for this diagnostic.
     try c.checkSourceTraitSubjectCycles()
     c.newtypeAnnotationAdmissionOpen = true
-    val nominalAdmission = admitFrontendNominalDependencies(c: inout c)
+    val nominalAdmission = admitFrontendNominalDependencies(c: inout c, origin: origin)
     c.newtypeAnnotationAdmissionOpen = false
     try nominalAdmission
     // assoc-val reads (spec/05): rewrite `Type.NAME` (a Field on a type that owns an
@@ -2507,11 +2513,26 @@ fn loadFrontendDeclarations(c: inout Comp, input: FrontendInput, sources: Source
 // its independent harness preparation. Neither entry discovers executable code.
 pub fn analyzeFrontendDeclarations(c: inout Comp, input: FrontendInput, sources: SourceAccess,
                                   options: FrontendOptions = <FrontendOptions />) -> Result[(), CompileDiagnostic] {
+    return analyzeFrontendDeclarationsWithOrigin(c: inout c, input: input, sources: sources, options: options, origin: <AssociatedBoundCheckOrigin.Raw />)
+}
+
+// The complete source constructor starts with a compiler state that the
+// caller cannot prepopulate, and transfers it only after admission.
+pub fn openFrontend(input: FrontendInput, sources: SourceAccess,
+                    options: FrontendOptions = <FrontendOptions />) -> Result[Comp, CompileDiagnostic] {
+    mut val c = <Comp />
+    try analyzeFrontendDeclarationsWithOrigin(c: inout c, input: input, sources: sources, options: options, origin: <AssociatedBoundCheckOrigin.SourceAdmission />)
+    try finalizeFrontendExecutables(c: inout c)
+    return <Result.Ok value=c />
+}
+
+fn analyzeFrontendDeclarationsWithOrigin(c: inout Comp, input: FrontendInput, sources: SourceAccess,
+                                         options: FrontendOptions, origin: AssociatedBoundCheckOrigin) -> Result[(), CompileDiagnostic] {
     if !options.genMode {
-        try analyzeFrontendForRequests(c: inout c, input: input, sources: sources, options: options)
+        try analyzeFrontendRequestsWithOrigin(c: inout c, input: input, sources: sources, options: options, origin: origin)
         return completeFrontendDeclarations(c: inout c)
     }
-    try loadFrontendDeclarations(c: inout c, input: input, sources: sources, options: options)
+    try loadFrontendDeclarations(c: inout c, input: input, sources: sources, options: options, origin: origin)
     // Generic bodies are checked abstractly below. Concrete `where` bounds are
     // checked only when finalization enqueues their grounded BodyInstance; that
     // is the one semantic edge Mono and LLVM will actually consume.
@@ -2592,10 +2613,22 @@ pub fn analyzeFrontendDeclarations(c: inout Comp, input: FrontendInput, sources:
 // This is request admission, not whole-target static-check success.
 pub fn analyzeFrontendForRequests(c: inout Comp, input: FrontendInput, sources: SourceAccess,
                                  options: FrontendOptions = <FrontendOptions />) -> Result[(), CompileDiagnostic] {
+    return analyzeFrontendRequestsWithOrigin(c: inout c, input: input, sources: sources, options: options, origin: <AssociatedBoundCheckOrigin.Raw />)
+}
+
+pub fn openFrontendForRequests(input: FrontendInput, sources: SourceAccess,
+                               options: FrontendOptions = <FrontendOptions />) -> Result[Comp, CompileDiagnostic] {
+    mut val c = <Comp />
+    try analyzeFrontendRequestsWithOrigin(c: inout c, input: input, sources: sources, options: options, origin: <AssociatedBoundCheckOrigin.SourceAdmission />)
+    return <Result.Ok value=c />
+}
+
+fn analyzeFrontendRequestsWithOrigin(c: inout Comp, input: FrontendInput, sources: SourceAccess,
+                                     options: FrontendOptions, origin: AssociatedBoundCheckOrigin) -> Result[(), CompileDiagnostic] {
     if options.genMode {
         return <Result.Err error=c.diagnosticAt(offset: 0U64, msg: "source body requests cannot use generator mode") />
     }
-    try loadFrontendDeclarations(c: inout c, input: input, sources: sources, options: options)
+    try loadFrontendDeclarations(c: inout c, input: input, sources: sources, options: options, origin: origin)
     try c.admitGlobalAnnotations()
     c.semanticRecordingStarted = true
     c.buildExprTyTable()

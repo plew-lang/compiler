@@ -1,0 +1,9 @@
+trait Mark {}
+trait Parent { type Item: Mark }
+trait Source: Parent { fn get() -> I64 }
+struct Box {}
+impl Box as Parent { type Item = I64 }
+impl Box as Source {
+    fn get(count: I64 = 1I64) -> I64 { return count }
+}
+fn main() {}
