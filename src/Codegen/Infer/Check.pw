@@ -253,14 +253,29 @@ pub impl Comp {
         return <Result.Err error=self.diagnosticAt(offset: template.siteKey.originStart, msg: "internal error: selected operator has no parameter") />
     }
 
-    inout fn unresolvedSourceOperatorDiagnostic(op: I64, offset: U64) -> CompileDiagnostic {
+    inout fn selectedOperatorFailureDomain(template: CallTemplate, op: I64) -> FailureDomain {
+        val recipeId = template.resultTypeRecipe
+        if recipeId == 0U64 || recipeId > self.arena.semanticTypeRecipes.count() { return <FailureDomain.Unclassified /> }
+        val recipe = self.arena.semanticTypeRecipes[recipeId - 1U64]
+        val expression = recipe.sourceExpression.unwrapOr(fallback: self.arena.exprs.count())
+        if expression >= self.arena.exprs.count() { return <FailureDomain.Unclassified /> }
+        match self.arena.exprs[expression] {
+            Expr.Binary(op: val written, lhs: val lhs, rhs: val rhs) => {
+                if written != op { return <FailureDomain.Unclassified /> }
+                return self.binaryOperationFailureDomain(exprId: expression, op: op, lhs: lhs, rhs: rhs, template: template)
+            }
+            _ => { return <FailureDomain.Unclassified /> }
+        }
+    }
+
+    inout fn unresolvedSourceOperatorDiagnostic(op: I64, offset: U64, domain: FailureDomain = <FailureDomain.Unclassified />) -> CompileDiagnostic {
         if op == opEq() || op == opNe() || op == opLt() || op == opLe() || op == opGt() || op == opGe() {
-            return self.diagnosticAt(offset: offset, msg: "comparison needs an `Eq`/`Ord` witness — a struct/enum needs `impl T as Eq` (e.g. derive `@[Eq]`) for `==`/`!=` or `impl T as Ord` for `< <= > >=`; there is no built-in structural/tag comparison")
+            return self.diagnosticAt(offset: offset, msg: "comparison needs an `Eq`/`Ord` witness — a struct/enum needs `impl T as Eq` (e.g. derive `@[Eq]`) for `==`/`!=` or `impl T as Ord` for `< <= > >=`; there is no built-in structural/tag comparison", failureDomain: domain)
         }
         if isBinTraitOp(op: op) {
-            return self.diagnosticAt(offset: offset, msg: "arithmetic operator needs Add/Sub/Mul/Div/Rem; not implemented for this type")
+            return self.diagnosticAt(offset: offset, msg: "arithmetic operator needs Add/Sub/Mul/Div/Rem; not implemented for this type", failureDomain: domain)
         }
-        return self.diagnosticAt(offset: offset, msg: "cannot resolve this operator from the available context")
+        return self.diagnosticAt(offset: offset, msg: "cannot resolve this operator from the available context", failureDomain: domain)
     }
 
     inout fn tcCheckBinop(exprId: U64, op: I64, lhs: U64, rhs: U64) -> Result[(), CompileDiagnostic] {

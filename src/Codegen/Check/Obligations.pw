@@ -1380,7 +1380,8 @@ pub impl Comp {
                 // library declaration the author did not call explicitly.
                 match template.kind {
                     CallTemplateKind.Operator(op: val op, operands: _, resolution: _, resultTerm: _) => {
-                        return <Result.Err error=self.unresolvedSourceOperatorDiagnostic(op: op, offset: template.siteKey.originStart) />
+                        val domain = self.selectedOperatorFailureDomain(template: template, op: op)
+                        return <Result.Err error=self.unresolvedSourceOperatorDiagnostic(op: op, offset: template.siteKey.originStart, domain: domain) />
                     }
                     CallTemplateKind.Protocol(receiver: _, selection: _, resultTerm: _) => {
                         return <Result.Err error=self.diagnosticAt(offset: template.siteKey.originStart, msg: "for-loop requires an Iterable or Iterator") />
