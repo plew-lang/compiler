@@ -629,3 +629,11 @@ selection-failure producer. The prototype also added an owned argument
 array per authored free call; its performance cost has not been measured.
 
 [Replay and remaining control](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-free-call-rejection.json).
+
+The single-field counterexample is now executed natively. A healthy copy of
+the same admitted source accepts `accept(value: 1I64)`. Changing only that
+call's `typeCache.callee` to NoStaticCallee before body preparation causes
+the receipt prototype to return the original refusal as Source. The next
+repair must retain the actual negative selection producer, and distinguish
+freshly established absence from a cache assertion. The source text and
+native stdout are preserved in the linked evidence.
