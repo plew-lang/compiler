@@ -1550,6 +1550,14 @@ pub impl Comp {
                 if arm.testExpr == 0U64 {
                     val subject = self.pushExpr(e: <Expr.MatchSubject scrut=scrut />)
                     arm.testExpr = self.pushExpr(e: <Expr.Binary op=opEq() lhs=subject rhs=arm.valueExpr />)
+                    match self.authoredValuePatterns.get(key: arms.start + index) {
+                        Optional.Some(v: val written) => {
+                            if written.value == arm.valueExpr && written.offset == arm.offset {
+                                self.authoredBinaryExpressions[arm.testExpr] = <AuthoredBinaryExpression op=opEq() lhs=subject rhs=arm.valueExpr />
+                            }
+                        }
+                        Optional.None => {}
+                    }
                     self.arena.matchArmPool.set(i: arms.start + index, value: arm)
                 }
                 try self.recordExpr(exprId: arm.testExpr)

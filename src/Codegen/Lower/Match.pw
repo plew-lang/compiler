@@ -58,7 +58,7 @@ pub impl Comp {
             out.append(<MatchArm offset=arm.pattern.span.start captureStart=pi.captureStart captureLen=pi.captureLen captureMutable=pi.captureMutable orGroup=arm.orGroup isValuePattern=pi.isValuePattern valueExpr=pi.valueExpr isWildcard=pi.isWildcard enumStart=pi.enumStart enumLen=pi.enumLen variantStart=pi.variantStart variantLen=pi.variantLen binds=pi.binds body=body isStruct=pi.isStruct />)
             i += 1
         }
-        return <Result.Ok value=self.pushMatchArms(arms: out) />
+        return <Result.Ok value=self.pushAuthoredMatchArms(arms: out) />
     }
 
     inout fn lowerSyntaxPatternInfo(pattern: SyntaxPattern) -> Result[PatInfo, CompileDiagnostic] {
@@ -108,7 +108,7 @@ pub impl Comp {
             out.append(<MatchArm offset=pattern.span.start orGroup=arm.orGroup captureMutable=pattern.captureMutable captureStart=pattern.captureName.start captureLen=pattern.captureName.end - pattern.captureName.start isValuePattern=info.isValuePattern valueExpr=info.valueExpr isWildcard=info.isWildcard enumStart=info.enumStart enumLen=info.enumLen variantStart=info.variantStart variantLen=info.variantLen binds=info.binds body=(try self.lowerSyntaxBlock(id: arm.body)) isStruct=info.isStruct />)
             i += 1U64
         }
-        return <Result.Ok value=self.pushMatchArms(arms: out) />
+        return <Result.Ok value=self.pushAuthoredMatchArms(arms: out) />
     }
 
     inout fn lowerSyntaxMatchStmtInto(stmt: SyntaxStmt, stmts: inout Array[U64]) -> Result[(), CompileDiagnostic] {
@@ -904,3 +904,17 @@ pub impl Comp {
 // visibility-gated), so re-interning is sound here. (A *function* declaration name
 // does feed moduleOf; that path keeps the original offset — handled when free
 // functions move to this lowering.)
+
+// Pattern rows remain immutable apart from their generated comparison slot.
+impl Comp {
+    inout fn pushAuthoredMatchArms(arms: Array[MatchArm]) -> MatchArmRange {
+        val result = self.pushMatchArms(arms: arms)
+        for index in 0U64..<result.len {
+            val arm = self.matchArmAt(arms: result, index: index)
+            if arm.isValuePattern {
+                self.authoredValuePatterns[result.start + index] = (value: arm.valueExpr, offset: arm.offset)
+            }
+        }
+        return result
+    }
+}
