@@ -442,6 +442,32 @@ pub impl Comp {
     // the source call-site, not that interned helper span, so callers can pass
     // the real AST offset explicitly.
     inout fn findMethod(recvStart: U64, recvLen: U64, nameStart: U64, nameLen: U64, args: ArgRange, recvRef: U64 = 0U64, useOffset: U64 = 0U64, associated: Bool = false, typeMatchOnly: Bool = false) -> Result[U64, CompileDiagnostic] {
+        return self.findMethodWithOrigin(recvStart: recvStart, recvLen: recvLen, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: recvRef, useOffset: useOffset, associated: associated, typeMatchOnly: typeMatchOnly)
+    }
+}
+
+impl Comp {
+    fn isAuthoredMethodLookup(exprId: U64, nameStart: U64, nameLen: U64, args: ArgRange) -> Bool {
+        if !self.authoredMethodExpressions.contains(exprId) || exprId >= self.arena.exprs.count() || self.syntheticCallSiteIndex(exprId: exprId) < self.decls.syntheticCallSites.count() {
+            return false
+        }
+        return match self.arena.exprs[exprId] {
+            Expr.Method(recv: _, nameStart: val start, nameLen: val length, args: val written) |
+            Expr.ExtMethod(recv: _, source: _, nameStart: val start, nameLen: val length, args: val written) =>
+                start == nameStart && length == nameLen && written.start == args.start && written.len == args.len
+            _ => false
+        }
+    }
+
+    fn bareMethodAmbiguityDiagnostic(nameStart: U64, nameLen: U64, args: ArgRange, methodOrigin: MethodLookupOrigin) -> CompileDiagnostic {
+        val domain = match methodOrigin.expression {
+            Optional.Some(v: val exprId) => if self.isAuthoredMethodLookup(exprId: exprId, nameStart: nameStart, nameLen: nameLen, args: args) { give <FailureDomain.Source /> } else { give <FailureDomain.Unclassified /> }
+            Optional.None => <FailureDomain.Unclassified />
+        }
+        return self.conformanceAmbiguityDiagnostic(owner: nameStart, demand: <ConformanceProofDemand.MemberDispatch />, selectedSource: false, domain: domain)
+    }
+
+    inout fn findMethodWithOrigin(recvStart: U64, recvLen: U64, nameStart: U64, nameLen: U64, args: ArgRange, recvRef: U64 = 0U64, useOffset: U64 = 0U64, associated: Bool = false, typeMatchOnly: Bool = false, methodOrigin: MethodLookupOrigin = <MethodLookupOrigin />) -> Result[U64, CompileDiagnostic] {
         mut val firstLabel: U64 = self.arena.functionCount()
         mut val typeMatch: U64 = self.arena.functionCount()
         mut val typeMatch2: U64 = self.arena.functionCount()
@@ -527,7 +553,7 @@ pub impl Comp {
                 if typeMatchEntry < self.decls.callableCount() && typeMatch2Entry < self.decls.callableCount() {
                     if self.decls.callableAt(index: typeMatchEntry).sourceKind == 2U64 && self.decls.callableAt(index: typeMatch2Entry).sourceKind == 2U64 {
                         if !(self.sameCallableSemanticOrigin(a: self.decls.callableAt(index: typeMatchEntry), b: self.decls.callableAt(index: typeMatch2Entry))) {
-                            return <Result.Err error=self.diagnosticAt(offset: nameStart, msg: "ambiguous bare call: two conformed traits provide this method; select the source with `a#P.method()`") />
+                            return <Result.Err error=self.bareMethodAmbiguityDiagnostic(nameStart: nameStart, nameLen: nameLen, args: args, methodOrigin: methodOrigin) />
                         }
                     }
                 }
@@ -551,10 +577,13 @@ pub impl Comp {
             if !seen { gatedSources.append(source) }
         }
         if gatedSources.count() > 1U64 {
-            return <Result.Err error=self.diagnosticAt(offset: nameStart, msg: "ambiguous bare call: two conformed traits provide this method; select the source with `a#P.method()`") />
+            return <Result.Err error=self.bareMethodAmbiguityDiagnostic(nameStart: nameStart, nameLen: nameLen, args: args, methodOrigin: methodOrigin) />
         }
         return <Result.Ok value=self.arena.functionCount() />
     }
+}
+
+pub impl Comp {
 
     // Resolve a written `#Name` to one semantic source key before method
     // lookup. The spelling is only an input to this conversion: candidates
@@ -744,6 +773,12 @@ impl Comp {
     // view-source normalization belong to the frontend resolver; Mono supplies
     // only the concrete receiver term it obtained from its environment.
     inout fn resolveMethodForResolvedReceiver(recv: U64, surfaceRef: U64, sourceId: U64, sourceOwner: U64, nameStart: U64, nameLen: U64, args: ArgRange, useOffset: U64, readReceiverSyntax: Bool = true, requiredTraitOwner: U64 = 0U64, extensionProofs: Array[SourceExtensionViewProof] = [], admittedTrait: Optional[ResolvedViewSource] = <Optional.None />) -> Result[U64, CompileDiagnostic] {
+        return self.resolveMethodForResolvedReceiverWithOrigin(recv: recv, surfaceRef: surfaceRef, sourceId: sourceId, sourceOwner: sourceOwner, nameStart: nameStart, nameLen: nameLen, args: args, useOffset: useOffset, readReceiverSyntax: readReceiverSyntax, requiredTraitOwner: requiredTraitOwner, extensionProofs: extensionProofs, admittedTrait: admittedTrait)
+    }
+}
+
+impl Comp {
+    inout fn resolveMethodForResolvedReceiverWithOrigin(recv: U64, surfaceRef: U64, sourceId: U64, sourceOwner: U64, nameStart: U64, nameLen: U64, args: ArgRange, useOffset: U64, readReceiverSyntax: Bool = true, requiredTraitOwner: U64 = 0U64, extensionProofs: Array[SourceExtensionViewProof] = [], admittedTrait: Optional[ResolvedViewSource] = <Optional.None />, methodOrigin: MethodLookupOrigin = <MethodLookupOrigin />) -> Result[U64, CompileDiagnostic] {
         if surfaceRef == 0U64 || surfaceRef >= self.arena.typeCount() {
             return <Result.Ok value=self.arena.functionCount() />
         }
@@ -764,10 +799,13 @@ impl Comp {
             callee = (try self.findMethodInViewSet(recvStart: rt.nameStart, recvLen: rt.nameLen, sources: sources, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: resolvedRef, requiredTraitOwner: requiredTraitOwner))
         }
         if callee >= self.arena.functionCount() && requiredTraitOwner == 0U64 {
-            callee = (try self.findMethod(recvStart: rt.nameStart, recvLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: resolvedRef, useOffset: useOffset))
+            callee = (try self.findMethodWithOrigin(recvStart: rt.nameStart, recvLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: resolvedRef, useOffset: useOffset, methodOrigin: methodOrigin))
         }
         return <Result.Ok value=callee />
     }
+}
+
+pub impl Comp {
 
 }
 
@@ -931,6 +969,12 @@ pub impl Comp {
     // traits narrow those candidates, then the bare surface is the fallback.
     // Type recovery, verifier, and backend consume this exact final Func.
     inout fn resolveExtMethodFinal(recv: U64, source: ResolvedViewSource, nameStart: U64, nameLen: U64, args: ArgRange) -> Result[U64, CompileDiagnostic] {
+        return self.resolveExtMethodFinalWithOrigin(recv: recv, source: source, nameStart: nameStart, nameLen: nameLen, args: args)
+    }
+}
+
+impl Comp {
+    inout fn resolveExtMethodFinalWithOrigin(recv: U64, source: ResolvedViewSource, nameStart: U64, nameLen: U64, args: ArgRange, methodOrigin: MethodLookupOrigin = <MethodLookupOrigin />) -> Result[U64, CompileDiagnostic] {
         // `Type#Source.member()` is the associated counterpart of a value
         // view.  It has no value TypeInfo, so select its source from the type
         // qualifier before entering the ordinary receiver path.
@@ -940,7 +984,7 @@ pub impl Comp {
             val sources: Array[CallableSourceHead] = (try self.collectViewSources(recv: recv, recvStart: assoc.nameStart, recvLen: assoc.nameLen, recvRef: recvRef, finalSourceId: source.surfaceId, finalSourceOwner: source.traitInstance.owner))
             val selected: U64 = (try self.findAssocInViewSet(recvStart: assoc.nameStart, recvLen: assoc.nameLen, sources: sources, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: recvRef))
             if selected < self.arena.functionCount() { return <Result.Ok value=selected />}
-            return <Result.Ok value=(try self.findAssoc(recvStart: assoc.nameStart, recvLen: assoc.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)) />
+            return <Result.Ok value=(try self.findAssocWithOrigin(recvStart: assoc.nameStart, recvLen: assoc.nameLen, nameStart: nameStart, nameLen: nameLen, args: args, methodOrigin: methodOrigin)) />
         }
         val rt: TypeInfo = (try self.typeOf(id: recv))
         if !(rt.kind == 2 || (rt.kind == 0 && rt.nameLen > 0U64)) {
@@ -949,22 +993,40 @@ pub impl Comp {
         val sources: Array[CallableSourceHead] = (try self.collectViewSources(recv: recv, recvStart: rt.nameStart, recvLen: rt.nameLen, recvRef: rt.ref, finalSourceId: source.surfaceId, finalSourceOwner: source.traitInstance.owner))
         mut val mfi: U64 = (try self.findMethodInViewSet(recvStart: rt.nameStart, recvLen: rt.nameLen, sources: sources, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: rt.ref))
         if mfi >= self.arena.functionCount() {
-            mfi = (try self.findMethod(recvStart: rt.nameStart, recvLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: rt.ref))
+            mfi = (try self.findMethodWithOrigin(recvStart: rt.nameStart, recvLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: rt.ref, methodOrigin: methodOrigin))
         }
         return <Result.Ok value=mfi />
     }
+}
+
+pub impl Comp {
 
     // Ordinary syntax still carries a view when its receiver was declared as
     // `T#Source`. Resolve that static source before the additive bare surface;
     // this is the same final-callable contract as explicit `value#Source.m()`.
     inout fn resolveMethodFinal(recv: U64, nameStart: U64, nameLen: U64, args: ArgRange) -> Result[U64, CompileDiagnostic] {
-        return <Result.Ok value=(try self.resolveMethodFinalForType(recv: recv, receiverType: (try self.typeOf(id: recv)), nameStart: nameStart, nameLen: nameLen, args: args)) />
+        return self.resolveMethodFinalWithOrigin(recv: recv, nameStart: nameStart, nameLen: nameLen, args: args)
     }
+}
+
+impl Comp {
+    inout fn resolveMethodFinalWithOrigin(recv: U64, nameStart: U64, nameLen: U64, args: ArgRange, methodOrigin: MethodLookupOrigin = <MethodLookupOrigin />) -> Result[U64, CompileDiagnostic] {
+        return <Result.Ok value=(try self.resolveMethodFinalForTypeWithOrigin(recv: recv, receiverType: (try self.typeOf(id: recv)), nameStart: nameStart, nameLen: nameLen, args: args, methodOrigin: methodOrigin)) />
+    }
+}
+
+pub impl Comp {
 
     // Selection over an already-resolved semantic receiver. A ChainHole
     // continuation owns that receiver term structurally, so re-deriving it
     // from the context-free ExprId query would discard the payload binding.
     inout fn resolveMethodFinalForType(recv: U64, receiverType: TypeInfo, nameStart: U64, nameLen: U64, args: ArgRange, requiredTraitOwner: U64 = 0U64) -> Result[U64, CompileDiagnostic] {
+        return self.resolveMethodFinalForTypeWithOrigin(recv: recv, receiverType: receiverType, nameStart: nameStart, nameLen: nameLen, args: args, requiredTraitOwner: requiredTraitOwner)
+    }
+}
+
+impl Comp {
+    inout fn resolveMethodFinalForTypeWithOrigin(recv: U64, receiverType: TypeInfo, nameStart: U64, nameLen: U64, args: ArgRange, requiredTraitOwner: U64 = 0U64, methodOrigin: MethodLookupOrigin = <MethodLookupOrigin />) -> Result[U64, CompileDiagnostic] {
         val rt: TypeInfo = receiverType
         if !(rt.kind == 2 || rt.kind == 3 || (rt.kind == 0 && rt.nameLen > 0U64)) {
             return <Result.Ok value=self.arena.functionCount() />
@@ -1014,10 +1076,13 @@ pub impl Comp {
             mfi = (try self.findMethodInViewSet(recvStart: recvStart, recvLen: recvLen, sources: sources, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: rt.ref, requiredTraitOwner: requiredTraitOwner))
         }
         if mfi >= self.arena.functionCount() && requiredTraitOwner == 0U64 {
-            mfi = (try self.findMethod(recvStart: recvStart, recvLen: recvLen, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: rt.ref))
+            mfi = (try self.findMethodWithOrigin(recvStart: recvStart, recvLen: recvLen, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: rt.ref, methodOrigin: methodOrigin))
         }
         return <Result.Ok value=mfi />
     }
+}
+
+pub impl Comp {
 
     inout fn extMethodNameExists(recvStart: U64, recvLen: U64, nameStart: U64, nameLen: U64) -> Bool {
         val qNameId: U64 = intern(c: inout self, start: nameStart, len: nameLen)
@@ -1140,6 +1205,12 @@ pub impl Comp {
     }
 
     inout fn findAssoc(recvStart: U64, recvLen: U64, nameStart: U64, nameLen: U64, args: ArgRange, recvRef: U64 = 0U64) -> Result[U64, CompileDiagnostic] {
+        return self.findAssocWithOrigin(recvStart: recvStart, recvLen: recvLen, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: recvRef)
+    }
+}
+
+impl Comp {
+    inout fn findAssocWithOrigin(recvStart: U64, recvLen: U64, nameStart: U64, nameLen: U64, args: ArgRange, recvRef: U64 = 0U64, methodOrigin: MethodLookupOrigin = <MethodLookupOrigin />) -> Result[U64, CompileDiagnostic] {
         mut val firstLabel: U64 = self.arena.functionCount()
         mut val typeMatch: U64 = self.arena.functionCount()
         mut val typeMatch2: U64 = self.arena.functionCount()
@@ -1192,10 +1263,13 @@ pub impl Comp {
         // A concrete trait-subject witness carries a trait source even on
         // the bare surface. Keep inherent/namespace calls above, then use
         // the shared provided-call contract instead of dropping that source.
-        val provided = try self.findMethod(recvStart: rnu.nameStart, recvLen: rnu.nameLen, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: recvRef, associated: true, typeMatchOnly: true)
+        val provided = try self.findMethodWithOrigin(recvStart: rnu.nameStart, recvLen: rnu.nameLen, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: recvRef, associated: true, typeMatchOnly: true, methodOrigin: methodOrigin)
         if provided < self.arena.functionCount() { return <Result.Ok value=provided /> }
         return <Result.Ok value=firstLabel />
     }
+}
+
+pub impl Comp {
 
     inout fn isTypeName(start: U64, len: U64) -> Bool {
         val declaration = self.typeDeclIdentityAt(useMod: self.moduleOf(offset: start), start: start, len: len)

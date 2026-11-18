@@ -988,7 +988,7 @@ pub impl Comp {
                 // `Type.name(args)` assoc-fn call: return type from the assoc fn.
                 val arn: Bind = self.assocRecvName(recv: recv)
                 if arn.nameLen != 0 {
-                    val afi: U64 = (try self.findAssoc(recvStart: arn.nameStart, recvLen: arn.nameLen, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: (try self.methodReceiverTerm(exprId: recv))))
+                    val afi: U64 = (try self.findAssocWithOrigin(recvStart: arn.nameStart, recvLen: arn.nameLen, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: (try self.methodReceiverTerm(exprId: recv)), methodOrigin: <MethodLookupOrigin expression=<Optional.Some v=id /> />))
                     if afi == self.arena.functionCount() {
                         return <Result.Ok value=scalarInfo() />
                     }
@@ -1071,7 +1071,7 @@ pub impl Comp {
                     // term only for this missing-descriptor case; ordinary
                     // source expressions keep their already-selected cache.
                     if mi == self.arena.functionCount() && chainHoleRef != 0U64 {
-                        mi = (try self.resolveMethodFinalForType(recv: recv, receiverType: rt, nameStart: nameStart, nameLen: nameLen, args: args))
+                        mi = (try self.resolveMethodFinalForTypeWithOrigin(recv: recv, receiverType: rt, nameStart: nameStart, nameLen: nameLen, args: args, methodOrigin: <MethodLookupOrigin expression=<Optional.Some v=id /> />))
                     }
                     if mi == self.arena.functionCount() {
                         // not a method — but it may be a closure-typed FIELD called

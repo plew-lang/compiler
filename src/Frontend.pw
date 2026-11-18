@@ -656,6 +656,13 @@ struct TraitBoundShape {
     val supertraits: TraitConstraintRange
 }
 
+// Only expression-checking callers in the frontend module may attach this
+// origin to a ranked lookup. The empty value carries no source authority.
+struct MethodLookupOrigin {
+    val expression: Optional[U64] = <Optional.None />
+}
+impl MethodLookupOrigin { factory }
+
 pub struct Comp {
     mut val checkingTraitOperandDependencies: Bool = false
     mut val traitDeclarationPremises: Dictionary[U64, TraitBound] = [:]
@@ -687,6 +694,7 @@ pub struct Comp {
     mut val callTemplateLocations: Array[SourceCallLocation]
     mut val viaWitnesses: Array[ViaWitness] = []
     mut val viaCallByFunction: Dictionary[U64, U64] = [:]
+    mut val authoredMethodExpressions: Set[U64] = Set.new()
     mut val authoredValueBlockOwners: Dictionary[U64, U64] = [:]
     mut val authoredForIterators: Dictionary[U64, U64] = [:]
     // Nonfatal diagnostics remain owned by the compilation/session. Only the

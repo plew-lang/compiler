@@ -441,3 +441,25 @@ of source provenance in an isolated build retains the same rejection and
 Unclassified for four representative inputs in check, AOT and ORC.
 Independent review covered the proof result, provenance and both consumers.
 The subsequent diagnostic factoring was independently re-reviewed.
+
+### Ranked method ambiguity classification checkpoint
+
+Both Lower paths record the authored method expression identity. Internal
+expression-checking paths retain that identity into ranked lookup. The
+public raw lookup signatures still supply no source origin. The producer
+checks the exact selector and argument range, and generated rewrites cannot
+gain authority from a span inherited from the original expression.
+
+The 19-case replay agrees on terminal status, channel and first diagnostic
+line. Check and AOT each classify all 19 as Source. ORC classifies 14
+demanded failures and preserves five successful undemanded runs. Three
+normal source programs pass check and match their ORC goldens. A native
+producer probe distinguishes the valid authored lookup from an unregistered
+raw expression with a span, different arguments and a registered synthetic
+call. Independent re-review confirmed the raw API boundary and fallback
+propagation.
+
+The next baseline cluster with the same printed missing-method reason
+contains 13 check rejections. Some are compiler-internal fixtures, so use
+their intended assertions and the actual rejection path before deciding
+whether a source diagnostic applies.

@@ -188,6 +188,7 @@ pub impl Comp {
                 val recvId = (try self.lowerExpr(e: recv))
                 val loweredArgs = (try self.lowerArgs(args: args))
                 result = self.pushExpr(e: <Expr.Method recv=recvId nameStart=nameSpan.start nameLen=name.bytes().count() args=loweredArgs />)
+                self.authoredMethodExpressions.insert(result)
             }
             ExprAst.ArrowMethod(val recv, val name, val nameSpan, val args, val span) => {
                 // `recv->name(args)`: a pointee method call. Lower the receiver, wrap it in a
@@ -197,12 +198,14 @@ pub impl Comp {
                 val d: U64 = self.pushExpr(e: <Expr.Deref base=r />)
                 val a = (try self.lowerArgs(args: args))
                 result = self.pushExpr(e: <Expr.Method recv=d nameStart=nameSpan.start nameLen=name.bytes().count() args=a />)
+                self.authoredMethodExpressions.insert(result)
             }
             ExprAst.ExtMethod(val recv, val src, val srcSpan, val name, nameSpan: _, val args, val span) => {
                 val r: U64 = (try self.lowerExpr(e: recv))
                 val a = (try self.lowerArgs(args: args))
                 val nm: Bind = self.internBytes(s: name)
                 result = self.pushExpr(e: <Expr.ExtMethod recv=r source=(try self.lowerViewSourceSpan(siteOffset: span.start, start: srcSpan.start, len: srcSpan.end - srcSpan.start)) nameStart=nm.nameStart nameLen=nm.nameLen args=a />)
+                self.authoredMethodExpressions.insert(result)
             }
             ExprAst.SourceSelection(val recv, val path, val application, val strip, sourceSpan: _, span: _) => { result = try self.lowerValueSourceSelection(recv: recv, path: path, application: application, strip: strip) }
             ExprAst.ExtView(val recv, val src, val srcSpan, val strip, val span) => {
@@ -454,17 +457,20 @@ pub impl Comp {
                 val recv = (try self.lowerSyntaxExpr(id: e.child0))
                 val args = (try self.lowerSyntaxArgs(expr: e))
                 result = self.pushExpr(e: <Expr.Method recv=recv nameStart=e.name.start nameLen=e.name.end - e.name.start args=args />)
+                self.authoredMethodExpressions.insert(result)
             }
             SyntaxExprKind.ArrowMethod => {
                 val recv: U64 = (try self.lowerSyntaxExpr(id: e.child0))
                 val deref: U64 = self.pushExpr(e: <Expr.Deref base=recv />)
                 val args = (try self.lowerSyntaxArgs(expr: e))
                 result = self.pushExpr(e: <Expr.Method recv=deref nameStart=e.name.start nameLen=e.name.end - e.name.start args=args />)
+                self.authoredMethodExpressions.insert(result)
             }
             SyntaxExprKind.ExtMethod => {
                 val recv: U64 = (try self.lowerSyntaxExpr(id: e.child0))
                 val args = (try self.lowerSyntaxArgs(expr: e))
                 result = self.pushExpr(e: <Expr.ExtMethod recv=recv source=(try self.lowerViewSourceSpan(siteOffset: e.span.start, start: e.text.start, len: e.text.end - e.text.start)) nameStart=e.name.start nameLen=e.name.end - e.name.start args=args />)
+                self.authoredMethodExpressions.insert(result)
             }
             SyntaxExprKind.Arrow => {
                 result = self.pushExpr(e: <Expr.Arrow base=(try self.lowerSyntaxExpr(id: e.child0)) nameStart=e.name.start nameLen=e.name.end - e.name.start />)

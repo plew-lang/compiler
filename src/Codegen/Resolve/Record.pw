@@ -2354,12 +2354,12 @@ pub impl Comp {
                 // selected cache entry.
                 // Only unresolved receivers need the parametric Record query.
                 mut val methodCallee = if admittedFactoryReceiver != 0U64 {
-                    give try self.resolveWrittenMethod(exprId: exprId, recv: recv, nameStart: nameStart, nameLen: nameLen, args: args, admittedReceiver: admittedFactoryReceiver)
+                    give try self.resolveWrittenMethodWithOrigin(exprId: exprId, recv: recv, nameStart: nameStart, nameLen: nameLen, args: args, admittedReceiver: admittedFactoryReceiver, methodOrigin: <MethodLookupOrigin expression=<Optional.Some v=exprId /> />)
                 } else if extensionProofs.count() != 0U64 || admittedTrait.isSome() {
-                    give try self.resolveMethodForResolvedReceiver(recv: recv, surfaceRef: receiverTerm, sourceId: 0U64, sourceOwner: 0U64, nameStart: nameStart, nameLen: nameLen, args: args, useOffset: self.exprOffset(id: exprId), requiredTraitOwner: requiredTraitOwner, extensionProofs: extensionProofs, admittedTrait: admittedTrait)
+                    give try self.resolveMethodForResolvedReceiverWithOrigin(recv: recv, surfaceRef: receiverTerm, sourceId: 0U64, sourceOwner: 0U64, nameStart: nameStart, nameLen: nameLen, args: args, useOffset: self.exprOffset(id: exprId), requiredTraitOwner: requiredTraitOwner, extensionProofs: extensionProofs, admittedTrait: admittedTrait, methodOrigin: <MethodLookupOrigin expression=<Optional.Some v=exprId /> />)
                 } else { give try self.resolvedCallee(id: exprId) }
                 if extensionProofs.count() == 0U64 && admittedTrait.isNone() && requiredTraitOwner != 0U64 && methodCallee >= self.arena.functionCount() {
-                    methodCallee = (try self.resolveMethodFinalForType(recv: recv, receiverType: self.typeInfoOfRef(ref: receiverTerm), nameStart: nameStart, nameLen: nameLen, args: args, requiredTraitOwner: requiredTraitOwner))
+                    methodCallee = (try self.resolveMethodFinalForTypeWithOrigin(recv: recv, receiverType: self.typeInfoOfRef(ref: receiverTerm), nameStart: nameStart, nameLen: nameLen, args: args, requiredTraitOwner: requiredTraitOwner, methodOrigin: <MethodLookupOrigin expression=<Optional.Some v=exprId /> />))
                 } else if extensionProofs.count() == 0U64 && admittedTrait.isNone() && requiredTraitOwner == 0U64 {
                     // A factory is lowered to Expr.Method but its receiver is a
                     // type spelling, not a value receiver.  Select its associated
@@ -2368,7 +2368,7 @@ pub impl Comp {
                     if methodCallee >= self.arena.functionCount() {
                         val assocRecv: Bind = self.assocRecvName(recv: recv)
                         if assocRecv.nameLen != 0U64 {
-                            methodCallee = (try self.findAssoc(recvStart: assocRecv.nameStart, recvLen: assocRecv.nameLen, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: receiverTerm))
+                            methodCallee = (try self.findAssocWithOrigin(recvStart: assocRecv.nameStart, recvLen: assocRecv.nameLen, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: receiverTerm, methodOrigin: <MethodLookupOrigin expression=<Optional.Some v=exprId /> />))
                         }
                     }
                     // Some valid inherited surfaces (notably a newtype's
@@ -2377,7 +2377,7 @@ pub impl Comp {
                     // the already-recorded receiver, rather than leaving Mono to
                     // reopen this method Expr during finalization.
                     if methodCallee >= self.arena.functionCount() && receiverTerm != 0U64 {
-                        methodCallee = (try self.resolveMethodForResolvedReceiver(recv: recv, surfaceRef: receiverTerm, sourceId: 0U64, sourceOwner: 0U64, nameStart: nameStart, nameLen: nameLen, args: args, useOffset: self.exprOffset(id: exprId)))
+                        methodCallee = (try self.resolveMethodForResolvedReceiverWithOrigin(recv: recv, surfaceRef: receiverTerm, sourceId: 0U64, sourceOwner: 0U64, nameStart: nameStart, nameLen: nameLen, args: args, useOffset: self.exprOffset(id: exprId), methodOrigin: <MethodLookupOrigin expression=<Optional.Some v=exprId /> />))
                     }
                     // A parametric field receiver (`self.items: Array[T]`) has a
                     // complete TypeTerm but can still require the ordinary
@@ -2386,7 +2386,7 @@ pub impl Comp {
                     // Record owns the lexical `self.items` scope and publishes the
                     // resulting template once; Mono only grounds it later.
                     if methodCallee >= self.arena.functionCount() {
-                        methodCallee = (try self.resolveMethodFinal(recv: recv, nameStart: nameStart, nameLen: nameLen, args: args))
+                        methodCallee = (try self.resolveMethodFinalWithOrigin(recv: recv, nameStart: nameStart, nameLen: nameLen, args: args, methodOrigin: <MethodLookupOrigin expression=<Optional.Some v=exprId /> />))
                     }
                     // Newtype member inheritance selects the underlying surface
                     // while preserving the authored newtype as the value term.
@@ -2398,7 +2398,7 @@ pub impl Comp {
                         val underlying: U64 = try self.checkedNominalUnderlying(ref: receiverTerm)
                         if underlying != 0U64 && underlying < self.arena.typeCount() {
                             val under: TypeRef = self.arena.typeAt(index: underlying)
-                            methodCallee = (try self.findMethod(recvStart: under.nameStart, recvLen: under.nameLen, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: underlying, useOffset: self.exprOffset(id: exprId)))
+                            methodCallee = (try self.findMethodWithOrigin(recvStart: under.nameStart, recvLen: under.nameLen, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: underlying, useOffset: self.exprOffset(id: exprId), methodOrigin: <MethodLookupOrigin expression=<Optional.Some v=exprId /> />))
                         }
                     }
                     // A lexical bound selects a requirement/provided member, even
@@ -2499,10 +2499,10 @@ pub impl Comp {
                 // leaves some extension-path selections unfilled because the
                 // final concrete receiver is not known during the early pass.
                 if methodCallee >= self.arena.functionCount() {
-                    methodCallee = (try self.resolveMethodForResolvedReceiver(recv: recv, surfaceRef: receiverTerm, sourceId: source.surfaceId, sourceOwner: source.traitInstance.owner, nameStart: nameStart, nameLen: nameLen, args: args, useOffset: self.exprOffset(id: exprId), extensionProofs: extensionProofs, admittedTrait: admittedTrait))
+                    methodCallee = (try self.resolveMethodForResolvedReceiverWithOrigin(recv: recv, surfaceRef: receiverTerm, sourceId: source.surfaceId, sourceOwner: source.traitInstance.owner, nameStart: nameStart, nameLen: nameLen, args: args, useOffset: self.exprOffset(id: exprId), extensionProofs: extensionProofs, admittedTrait: admittedTrait, methodOrigin: <MethodLookupOrigin expression=<Optional.Some v=exprId /> />))
                 }
                 if methodCallee >= self.arena.functionCount() && source.surfaceId != 0U64 && extensionProofs.count() == 0U64 && admittedTrait.isNone() {
-                        methodCallee = (try self.resolveExtMethodFinal(recv: recv, source: source, nameStart: nameStart, nameLen: nameLen, args: args))
+                        methodCallee = (try self.resolveExtMethodFinalWithOrigin(recv: recv, source: source, nameStart: nameStart, nameLen: nameLen, args: args, methodOrigin: <MethodLookupOrigin expression=<Optional.Some v=exprId /> />))
                 }
                 try self.recordSelectedMethodArguments(callee: methodCallee, receiverTerm: receiverTerm, args: args, chainHoleRef: chainHoleRef, useOffset: self.exprOffset(id: exprId))
                 try self.recordParametricMethodCall(exprId: exprId, callee: methodCallee, receiverSource: receiverSource, receiverTerm: receiverTerm, args: args)
