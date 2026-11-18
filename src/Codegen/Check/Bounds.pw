@@ -463,7 +463,7 @@ pub impl Comp {
     // One source frontier for ordinary symbolic and associated receivers.
     // Discovery and applicability are tentative; only the exact selected
     // instance is admitted and published. No expected result ranks candidates.
-    inout fn staticMemberResolution(fnIdx: U64, receiverRef: U64, nameStart: U64, nameLen: U64, args: ArgRange, requiredTraitOwner: U64 = 0U64) -> Result[StaticMemberResolution, CompileDiagnostic] {
+    inout fn staticMemberResolution(fnIdx: U64, receiverRef: U64, nameStart: U64, nameLen: U64, args: ArgRange, requiredTraitOwner: U64 = 0U64, methodOrigin: MethodLookupOrigin = <MethodLookupOrigin />) -> Result[StaticMemberResolution, CompileDiagnostic] {
         if receiverRef == 0U64 || receiverRef >= self.arena.typeCount() { return <Result.Ok value=<StaticMemberResolution.Missing /> /> }
         val memberId = intern(c: inout self, start: nameStart, len: nameLen)
         val assumptions = self.functionBoundAssumptions(fnIdx: fnIdx)
@@ -565,10 +565,20 @@ pub impl Comp {
             if mismatch { return <Result.Err error=self.diagnosticAt(offset: nameStart, msg: "type mismatch: no trait member matches these arguments") /> }
             return <Result.Ok value=<StaticMemberResolution.Missing /> />
         }
-        return self.admitStaticMemberInstance(resolution: selected, receiverRef: receiverRef, assumptions: assumptions)
+        val domain = match methodOrigin.expression {
+            Optional.Some(v: val expression) => if self.isAuthoredMethodLookup(exprId: expression, nameStart: nameStart, nameLen: nameLen, args: args) { give <FailureDomain.Source /> } else { give <FailureDomain.Unclassified /> },
+            Optional.None => <FailureDomain.Unclassified />,
+        }
+        return self.admitStaticMemberInstanceWithOrigin(resolution: selected, receiverRef: receiverRef, assumptions: assumptions, domain: domain)
     }
 
     inout fn admitStaticMemberInstance(resolution: StaticMemberResolution, receiverRef: U64, assumptions: Array[DeclarationBoundRef]) -> Result[StaticMemberResolution, CompileDiagnostic] {
+        return self.admitStaticMemberInstanceWithOrigin(resolution: resolution, receiverRef: receiverRef, assumptions: assumptions, domain: <FailureDomain.Unclassified />)
+    }
+}
+
+impl Comp {
+    inout fn admitStaticMemberInstanceWithOrigin(resolution: StaticMemberResolution, receiverRef: U64, assumptions: Array[DeclarationBoundRef], domain: FailureDomain) -> Result[StaticMemberResolution, CompileDiagnostic] {
         val traitIndex = match resolution {
             StaticMemberResolution.Requirement(proof: _, traitIdx: val owner, reqIdx: _) => owner,
             StaticMemberResolution.Provided(proof: _, traitIdx: val owner, callee: _) => owner,
@@ -581,7 +591,14 @@ pub impl Comp {
         }
         val bound = try self.staticProofBound(proof: original, traitIdx: traitIndex)
         val declaration = self.decls.traitAt(index: traitIndex)
-        val proof = try self.traitPatternProof(demand: <ConformanceProofDemand.SourceAdmission />, baseRef: receiverRef, traitId: declaration.nameId, traitOwner: declaration.nameStart, traitArgs: <PatternTypeInput.Values values=bound.constraint.key.positionalArgs />, patternParams: <PatternBindInput.Values values=[] />, assumptions: assumptions)
+        val answer = try self.queryTraitPatternProof(demand: <ConformanceProofDemand.SourceAdmission />, baseRef: receiverRef, traitId: declaration.nameId, traitOwner: declaration.nameStart, traitArgs: <PatternTypeInput.Values values=bound.constraint.key.positionalArgs />, patternParams: <PatternBindInput.Values values=[] />, assumptions: assumptions)
+        val proof = match answer {
+            ConformanceProofResult.Found(proof: val selected) => selected,
+            ConformanceProofResult.Missing => <StaticConformanceProof.Missing />,
+            ConformanceProofResult.Ambiguous(owner: val owner, demand: val demand, selectedSource: val selectedSource) => {
+                return <Result.Err error=self.conformanceAmbiguityDiagnostic(owner: owner, demand: demand, selectedSource: selectedSource, domain: domain) />
+            }
+        }
         if self.proofIsMissing(proof: proof) { return <Result.Ok value=<StaticMemberResolution.Missing /> /> }
         match resolution {
             StaticMemberResolution.Requirement(proof: _, traitIdx: val owner, reqIdx: val requirement) => { return <Result.Ok value=<StaticMemberResolution.Requirement proof=proof traitIdx=owner reqIdx=requirement /> /> }
@@ -596,6 +613,10 @@ pub impl Comp {
     // transient AST payload while answering a pure type query.  Its arity is
     // part of the operator grammar, so this is the same proof-backed selection
     // with the only applicable call shape stated explicitly.
+}
+
+pub impl Comp {
+
     inout fn staticOperatorResolution(fnIdx: U64, receiverRef: U64, traitName: String, memberName: String, arity: U64, traitArity: U64 = 0U64) -> Result[StaticMemberResolution, CompileDiagnostic] {
         val targetOwner: U64 = self.coreTraitOwner(name: traitName, arity: traitArity)
         if targetOwner == 0U64 { return <Result.Ok value=<StaticMemberResolution.Missing /> />}
