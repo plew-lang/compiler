@@ -102,3 +102,11 @@ Independent review confirmed the fix covers physical indexing in
 ordinary value, place, and normalized-inout builders and preserves
 the distinct selected-Index call path. Field selection and formal
 performance verification remain open.
+
+## Saved Field Selection
+
+The Source overlap classifier uses the same selected field slots as Mid
+for handle fields and for the referent path. Missing slot evidence leaves
+the pair to the dynamic check. It does not compare spellings or re-run
+field lookup. The rebind rejection and both nested disjoint and mutable
+index controls retain their outcomes on the diagnostic candidate.

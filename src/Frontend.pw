@@ -475,14 +475,9 @@ struct AdmittedSignatureRoots {
 }
 impl AdmittedSignatureRoots { factory }
 
-struct SharedInoutField {
-    val nameStart: U64
-    val nameLen: U64
-}
-
 struct SharedInoutPlace {
     val reference: U64
-    val fields: Array[SharedInoutField]
+    val fields: Array[U64]
 }
 
 struct SelectedMethodSourceResult {

@@ -473,12 +473,12 @@ pub impl Comp {
 impl Comp {
     inout fn sharedInoutPlace(expression: U64) -> Optional[SharedInoutPlace] {
         mut val current = expression
-        mut val fields: Array[SharedInoutField] = []
+        mut val fields: Array[U64] = []
         while current < self.arena.exprs.count() {
             current = self.materializablePlace(id: current)
             match self.arena.exprs[current] {
-                Expr.Field(val base, val nameStart, val nameLen) => {
-                    fields.append(<SharedInoutField nameStart=nameStart nameLen=nameLen />)
+                Expr.Field(val base, nameStart: _, nameLen: _) => {
+                    fields.append(current)
                     current = base
                 }
                 Expr.Index(val base, index: _) => {
@@ -486,8 +486,8 @@ impl Comp {
                     fields = []
                     current = base
                 }
-                Expr.Arrow(val base, val nameStart, val nameLen) => {
-                    fields.append(<SharedInoutField nameStart=nameStart nameLen=nameLen />)
+                Expr.Arrow(val base, nameStart: _, nameLen: _) => {
+                    fields.append(current)
                     return <Optional.Some v=<SharedInoutPlace reference=base fields=fields /> />
                 }
                 Expr.Deref(val base) => { return <Optional.Some v=<SharedInoutPlace reference=base fields=fields /> /> }
@@ -505,9 +505,10 @@ impl Comp {
         val right = second.unwrap()
         mut val offset = 0U64
         while offset < left.fields.count() && offset < right.fields.count() {
-            val leftField = left.fields[left.fields.count() - offset - 1U64]
-            val rightField = right.fields[right.fields.count() - offset - 1U64]
-            if !spansEqual(c: inout self, aStart: leftField.nameStart, aLen: leftField.nameLen, bStart: rightField.nameStart, bLen: rightField.nameLen) { return 0U64 }
+            val leftField = self.constructionExpression(exprId: left.fields[left.fields.count() - offset - 1U64])
+            val rightField = self.constructionExpression(exprId: right.fields[right.fields.count() - offset - 1U64])
+            if !leftField.hasFieldProjection || !rightField.hasFieldProjection { return 2U64 }
+            if leftField.fieldProjectionIndex != rightField.fieldProjectionIndex { return 0U64 }
             offset += 1U64
         }
         if self.sameInoutReferencePlace(a: left.reference, b: right.reference) { return 1U64 }
@@ -530,29 +531,37 @@ impl Comp {
     }
 
     inout fn sameInoutReferencePlace(a: U64, b: U64) -> Bool {
-        match self.arena.exprs[self.materializablePlace(id: a)] {
+        val lhs = self.materializablePlace(id: a)
+        val rhs = self.materializablePlace(id: b)
+        match self.arena.exprs[lhs] {
             Expr.Ident(start: _, len: _) => {
-                val lhs = self.materializablePlace(id: a)
-                val rhs = self.materializablePlace(id: b)
                 if lhs >= self.typeCache.identTarget.count() || rhs >= self.typeCache.identTarget.count() { return false }
                 if self.typeCache.identBind[lhs] != identValueCode() || self.typeCache.identBind[rhs] != identValueCode() { return false }
                 val owner = self.typeCache.identTarget[lhs]
                 return owner != identNoTarget() && owner == self.typeCache.identTarget[rhs]
             }
-            Expr.Field(base: val base1, nameStart: val n1s, nameLen: val n1l) => {
-                match self.arena.exprs[self.materializablePlace(id: b)] {
-                    Expr.Field(base: val base2, nameStart: val n2s, nameLen: val n2l) => { return spansEqual(c: inout self, aStart: n1s, aLen: n1l, bStart: n2s, bLen: n2l) && self.sameInoutReferencePlace(a: base1, b: base2) }
+            Expr.Field(base: val base1, nameStart: _, nameLen: _) => {
+                match self.arena.exprs[rhs] {
+                    Expr.Field(base: val base2, nameStart: _, nameLen: _) => {
+                        val leftField = self.constructionExpression(exprId: lhs)
+                        val rightField = self.constructionExpression(exprId: rhs)
+                        return leftField.hasFieldProjection && rightField.hasFieldProjection && leftField.fieldProjectionIndex == rightField.fieldProjectionIndex && self.sameInoutReferencePlace(a: base1, b: base2)
+                    }
                     _ => { return false }
                 }
             }
-            Expr.Arrow(base: val base1, nameStart: val n1s, nameLen: val n1l) => {
-                match self.arena.exprs[self.materializablePlace(id: b)] {
-                    Expr.Arrow(base: val base2, nameStart: val n2s, nameLen: val n2l) => { return spansEqual(c: inout self, aStart: n1s, aLen: n1l, bStart: n2s, bLen: n2l) && self.sameInoutReferencePlace(a: base1, b: base2) }
+            Expr.Arrow(base: val base1, nameStart: _, nameLen: _) => {
+                match self.arena.exprs[rhs] {
+                    Expr.Arrow(base: val base2, nameStart: _, nameLen: _) => {
+                        val leftField = self.constructionExpression(exprId: lhs)
+                        val rightField = self.constructionExpression(exprId: rhs)
+                        return leftField.hasFieldProjection && rightField.hasFieldProjection && leftField.fieldProjectionIndex == rightField.fieldProjectionIndex && self.sameInoutReferencePlace(a: base1, b: base2)
+                    }
                     _ => { return false }
                 }
             }
             Expr.Index(base: val base1, index: val idx1) => {
-                match self.arena.exprs[self.materializablePlace(id: b)] {
+                match self.arena.exprs[rhs] {
                     Expr.Index(base: val base2, index: val idx2) => {
                         if !self.sameLiteralInoutIndex(a: idx1, b: idx2) { return false }
                         if !self.isLangArrayType(ref: self.semanticExprTerm(exprId: base1)) { return false }
@@ -562,7 +571,7 @@ impl Comp {
                 }
             }
             Expr.Deref(base: val base1) => {
-                match self.arena.exprs[self.materializablePlace(id: b)] {
+                match self.arena.exprs[rhs] {
                     Expr.Deref(base: val base2) => { return self.sameInoutReferencePlace(a: base1, b: base2) }
                     _ => { return false }
                 }
