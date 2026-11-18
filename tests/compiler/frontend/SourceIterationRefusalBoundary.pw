@@ -2,12 +2,17 @@ use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontendForRequests
 use ../../../src/SourceAccess only { SourceAccess, SourceResource }
 use @Std/Io only { print }
 
-fn checkIteration(authored: Bool) {
+fn checkIteration(authored: Bool, existential: Bool) {
+    val program = if existential {
+        give "trait Other {{}} fn values() -> any Other {{}} fn probe() {{ for val item in values() {{}} }}"
+    } else {
+        give "fn probe() {{ for val item in 1I64 {{}} }}"
+    }
     mut val compiler = <Comp />
     val sources = <SourceAccess stdRoot="plew:std/".bytes() resources=[
         <SourceResource path="plew:std/Lang.pw".bytes() text="pub use ./Core only {{ I64 }} pub enum Optional[T] {{ Some(v: T) None }}" />,
         <SourceResource path="plew:std/Core.pw".bytes() text="pub extern(plewIntrinsic) {{ struct I64 }} pub trait Iterator {{ type Item inout fn next() -> Optional[Item] }} pub trait Iterable {{ type Item type Iter: Iterator[Item=Item] fn iterator() -> Iter }}" />,
-        <SourceResource path="plew:std/IterationRefusalProbe.pw".bytes() text="fn probe() {{ for val item in 1I64 {{}} }}" />,
+        <SourceResource path="plew:std/IterationRefusalProbe.pw".bytes() text=program />,
     ] />
     analyzeFrontendForRequests(c: inout compiler,
         input: <FrontendInput.File path="plew:std/IterationRefusalProbe.pw" />, sources: sources).unwrap()
@@ -27,7 +32,9 @@ fn checkIteration(authored: Bool) {
 }
 
 fn main() {
-    checkIteration(authored: true)
-    checkIteration(authored: false)
+    for existential in [false, true] {
+        checkIteration(authored: true, existential: existential)
+        checkIteration(authored: false, existential: existential)
+    }
     print("ok")
 }

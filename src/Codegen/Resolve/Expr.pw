@@ -1503,13 +1503,16 @@ pub impl Comp {
         return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: Core From has no conversion requirement") />
     }
 
-    inout fn recordProtocolCallTemplate(stmtId: U64, slot: U64, receiver: CallTemplateReceiver, receiverTerm: U64, useOffset: U64) -> Result[U64, CompileDiagnostic] {
+}
+
+impl Comp {
+    inout fn recordProtocolCallTemplate(stmtId: U64, iter: U64, slot: U64, receiver: CallTemplateReceiver, receiverTerm: U64, useOffset: U64) -> Result[U64, CompileDiagnostic] {
         val name = self.internBytes(s: if slot == 1U64 { give "iterator" } else { give "next" })
         val arguments = self.pushArgs(args: [])
         val owner = self.coreTraitOwner(name: if slot == 1U64 { give "Iterable" } else { give "Iterator" })
         if owner == 0U64 { return <Result.Err error=self.diagnosticAt(offset: useOffset, msg: "for-loop requires an Iterable or Iterator") /> }
         if slot == 1U64 && receiverTerm != 0U64 && receiverTerm < self.arena.typeCount() && self.arena.typeTermAt(index: receiverTerm).isAny {
-            try self.checkExistentialIterationReceiver(receiver: receiverTerm, fnIdx: self.cur.checkFn, offset: useOffset)
+            try self.checkExistentialIterationReceiver(receiver: receiverTerm, fnIdx: self.cur.checkFn, offset: useOffset, authored: self.hasAuthoredIterationSubject(stmtId: stmtId, iter: iter))
         }
         mut val selection = <ProtocolSelection.Pending />
         mut val resultTerm = 0U64
@@ -1590,6 +1593,9 @@ pub impl Comp {
         return <Result.Ok value=resultTerm />
     }
 
+}
+
+pub impl Comp {
     inout fn callArgumentSource(exprId: U64) -> Result[CallArgumentSource, CompileDiagnostic] {
         match self.arena.exprs[exprId] {
             Expr.Ident(start: val start, len: val len) => {

@@ -3,6 +3,13 @@
 // facts under a BodyInstance; they do not repeat lexical type inference.
 
 impl Comp {
+    fn hasAuthoredIterationSubject(stmtId: U64, iter: U64) -> Bool {
+        return match self.authoredForIterators.get(key: stmtId) {
+            Optional.Some(v: val authoredIter) => authoredIter == iter
+            Optional.None => false
+        }
+    }
+
     // Error reporting only: selection has already failed for both protocols.
     // Retain a closed conditional-conformance cause instead of disguising it
     // as a type with no protocol at all. This never admits a candidate and is
@@ -12,13 +19,8 @@ impl Comp {
         val iterator = self.coreTraitOwner(name: "Iterator")
         val offset = self.exprOffset(id: iter)
         mut val domain: FailureDomain = <FailureDomain.Unclassified />
-        if iterable != 0U64 && iterator != 0U64 && iterTerm != 0U64 && iterTerm < self.arena.typeCount() && iteratorResult != 0U64 && iteratorResult < self.arena.typeCount() {
-            match self.authoredForIterators.get(key: stmtId) {
-                Optional.Some(v: val authoredIter) => {
-                    if authoredIter == iter { domain = <FailureDomain.Source /> }
-                }
-                Optional.None => {}
-            }
+        if iterable != 0U64 && iterator != 0U64 && iterTerm != 0U64 && iterTerm < self.arena.typeCount() && iteratorResult != 0U64 && iteratorResult < self.arena.typeCount() && self.hasAuthoredIterationSubject(stmtId: stmtId, iter: iter) {
+            domain = <FailureDomain.Source />
         }
         val assumptions = self.functionBoundAssumptions(fnIdx: self.cur.checkFn)
         for receiver in [iterTerm, iteratorResult] {
@@ -3210,8 +3212,8 @@ pub impl Comp {
                 try self.recordExpr(exprId: iter, expectedTerm: iteratorContext)
                 val iterTerm = self.parametricExprTerm(exprId: iter)
                 val iteratorReceiver = try self.protocolReceiverTemplateForExpr(exprId: iter)
-                val iteratorResult = try self.recordProtocolCallTemplate(stmtId: stmtId, slot: 1U64, receiver: iteratorReceiver, receiverTerm: iterTerm, useOffset: self.exprOffset(id: iter))
-                val nextResult = try self.recordProtocolCallTemplate(stmtId: stmtId, slot: 2U64, receiver: <CallTemplateReceiver.PriorProtocolResult slot=1U64 />, receiverTerm: iteratorResult, useOffset: self.exprOffset(id: iter))
+                val iteratorResult = try self.recordProtocolCallTemplate(stmtId: stmtId, iter: iter, slot: 1U64, receiver: iteratorReceiver, receiverTerm: iterTerm, useOffset: self.exprOffset(id: iter))
+                val nextResult = try self.recordProtocolCallTemplate(stmtId: stmtId, iter: iter, slot: 2U64, receiver: <CallTemplateReceiver.PriorProtocolResult slot=1U64 />, receiverTerm: iteratorResult, useOffset: self.exprOffset(id: iter))
                 val optional = self.internBytes(s: "Optional")
                 val carrier = self.typeDeclIdentityFromSurface(surfaceMod: self.modules.langModule, start: optional.nameStart, len: optional.nameLen)
                 if nextResult == 0U64 {

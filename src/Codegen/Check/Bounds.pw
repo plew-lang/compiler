@@ -226,12 +226,24 @@ pub impl Comp {
         return self.existentialIterationItemInBound(bound: <TraitBound subject=receiver constraint=self.existentialTraitConstraint(ref: receiver) offset=self.arena.typeAt(index: receiver).siteOffset />)
     }
 
+}
+
+impl Comp {
     // A for-loop contains a second operation on the result of iterator().
     // The erased receiver's interface does not become an extra static bound
     // on that result type. Check next() under the enclosing lexical facts.
-    inout fn checkExistentialIterationReceiver(receiver: U64, fnIdx: U64, offset: U64) -> Result[(), CompileDiagnostic] {
+    inout fn checkExistentialIterationReceiver(receiver: U64, fnIdx: U64, offset: U64, authored: Bool = false) -> Result[(), CompileDiagnostic] {
         val item = self.existentialIterationItemTerm(receiver: receiver)
-        if item == 0U64 { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "for-loop requires an Iterable or Iterator") /> }
+        if item == 0U64 {
+            mut val domain: FailureDomain = <FailureDomain.Unclassified />
+            if authored {
+                val type = self.arena.typeAt(index: receiver)
+                if type.hasDecl && self.decls.traitIndexByOffset(offset: type.declOffset) < self.decls.traitCount() && self.coreTraitOwner(name: "Iterator") != 0U64 {
+                    domain = <FailureDomain.Source />
+                }
+            }
+            return <Result.Err error=self.diagnosticAt(offset: offset, msg: "for-loop requires an Iterable or Iterator", failureDomain: domain) />
+        }
         val name = self.internBytes(s: "iterator")
         val slot = try self.recordAnyRequirementSlot(anyRef: receiver, nameStart: name.nameStart, nameLen: name.nameLen, args: self.pushArgs(args: []))
         if slot == 0U64 { return <Result.Ok value=() /> }
@@ -251,6 +263,9 @@ pub impl Comp {
         if !valid { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "for-loop iterator result must satisfy Iterator with the declared Item type") /> }
         return <Result.Ok value=() />
     }
+}
+
+pub impl Comp {
 
     // Ground every term owned by a constraint through one explicit instance
     // map.  This is the sole substitution boundary for a bound's trait key
