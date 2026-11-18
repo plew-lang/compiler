@@ -181,7 +181,7 @@ a source ID still evaluate independently. Synthetic interpolation Expr.Sequence
 uses a result home without creating a new source complete-expression/lexical
 scope; expressionSequence/completeEvaluation boundary information prevents its
 steps from prematurely dropping retained receiver/Options/builder values. A real
-Expr.Block keeps normal lexical and complete-expression cleanup and give exits.
+Blocks retain lexical and complete-expression cleanup and explicit give exits. Consume the checked result use: fall-through of a standalone block needs no result, and a discarded give result is cleaned up after block-local cleanup at the enclosing expression statement boundary.
 Try failure cleans unfinished generated builders under those same rules.
 
 Final calls retain receiver None/Borrow/Inout/Move and argument Borrow/Inout/Move.

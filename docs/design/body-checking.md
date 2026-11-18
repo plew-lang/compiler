@@ -56,7 +56,7 @@ makes creation visible instead of inferring a conversion from convenience.
 
 ## 4. Blocks, Branches, Patterns, and Completion
 
-A shared value-region operation checks a sequence under an optional result expectation and explicit exit targets. A single block uses it directly; each block-bodied `if` branch and `match` arm uses it with the corresponding region. A bare match arm is an expression-result adapter into the same branch aggregation. Match adds scrutinee/pattern checking, binding construction, arm order, and coverage; it does not own another value-block type checker.
+A shared block operation checks a sequence with explicit exit targets and a result use separate from the optional expected type. A required result can have an inferred type. A standalone block can fall through without a result or give a result that the statement discards. A single block uses it directly; each block-bodied `if` branch and `match` arm uses it with the corresponding region. A bare match arm is an expression-result adapter into the same branch aggregation. Match adds scrutinee/pattern checking, binding construction, arm order, and coverage; it does not own another value-block type checker.
 
 `give` evaluates a value, transfers that result out of its target block, and ends that path. `return` checks against the enclosing function's result contract and exits that function. `break` and `continue` retain their loop target; a value-bearing break checks the value-loop result contract. Mid owns cleanup realization, but the source checker must retain enough target and value information to request it correctly.
 

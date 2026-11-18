@@ -96,7 +96,7 @@ remains [com-tn1m](../issues/com-tn1m.md).
 
 ## Lifetime Boundaries and Drop Elaboration
 
-Source-defined obligation-ending edges—including lexical exits, explicit binding ends, and conditional-move accessibility cliffs—are the cleanup authority. An owned unique binding shadowed by a new declaration ends at the frontend-selected shadowing commit, after RHS evaluation and its temporary cleanup. A shadowed copyable binding retains its ordinary scope lifetime. Mid consumes binding IDs rather than re-resolving names to reconstruct this distinction.
+Source-defined obligation-ending edges—including lexical exits, explicit binding ends, and conditional-move accessibility cliffs—are the cleanup authority. A same-scope replacement ends an old unique binding at the frontend-selected commit, after RHS evaluation and its temporary cleanup. An enclosing binding hidden by a nested declaration and a replaced copyable binding retain their ordinary scope lifetime. Mid consumes binding IDs rather than re-resolving names to reconstruct this distinction.
 
 EndBinding(local) is an independent binding-end operation, not a fabricated
 ScopeExit. Frontend binding-end identity selects the target after initializer

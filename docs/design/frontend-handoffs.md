@@ -321,7 +321,7 @@ protocol; the old claim that ranges remain a separate protocol is superseded.
 A value-region checker serves standalone blocks, if branches, and block-bodied
 match arms; bare arms adapt their result into the same aggregation. Source
 completion and analytical reachability follow [Explicit Divergence](decisions/divergence.md).
-Saved flow includes explicit give/return/loop destinations and remains immutable
+Retain whether a block result is required or discarded at its source occurrence. A standalone block can complete with no result or give a result to discard. A required result needs a directly owned give on normal paths. Preserve the block scope and each transfer destination through lowering. Saved flow includes explicit give/return/loop destinations and remains immutable
 under the successful owner. A scope's result joins only paths reaching it;
 loop/give consumers handle their own exits, and closures have independent flow.
 Evaluation-only aggregate lowering keeps child evaluation order without inventing

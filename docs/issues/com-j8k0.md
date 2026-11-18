@@ -1,6 +1,6 @@
 ---
 id: com-j8k0
-status: open
+status: closed
 deps: []
 links: []
 created: 2026-11-18T15:24:06Z
@@ -39,3 +39,14 @@ Check that examples and cleanup/borrow terminology agree across the affected
 documents. Record the independent review before closure. This task delivers
 the source and compiler contracts; implementation belongs to
 [com-ew3i](com-ew3i.md) and [com-x7ql](com-x7ql.md).
+
+## Independent closure review
+
+Spec revision `c895765` and the corresponding compiler design update
+synchronize block result use, destination-specific transfers, binding
+scope and destruction. The independent reviewer identified unconditional
+fall-through wording, stale function/give wording, conflation of expected
+type and result use, missing pattern-scope detail, and an ambiguous numeric
+example. Follow-up review confirmed each correction and the new anchor.
+This closes the documentation contract; the implementation and runtime
+controls belong to com-ew3i and com-x7ql.
