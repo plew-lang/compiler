@@ -1543,9 +1543,14 @@ pub impl Comp {
                         }
                     }
                 }
-                if resultTerm == 0U64 && slot == 1U64 {
-                    selection = <ProtocolSelection.Identity />
-                    resultTerm = receiverTerm
+                if slot == 1U64 {
+                    match selection {
+                        ProtocolSelection.Pending => {
+                            selection = <ProtocolSelection.Identity />
+                            resultTerm = receiverTerm
+                        }
+                        _ => {}
+                    }
                 }
             }
         }
@@ -1557,6 +1562,14 @@ pub impl Comp {
             eprint(text: " result=")
             self.traceMonoTypeHead(ref: resultTerm)
             eprint(text: "\n")
+        }
+        // A selected operation with a missing result is a different failure
+        // from a checked receiver for which no operation is applicable.
+        if resultTerm == 0U64 {
+            match selection {
+                ProtocolSelection.Pending => {}
+                _ => { return <Result.Err error=self.diagnosticAt(offset: useOffset, msg: "for-loop requires an Iterable or Iterator") /> }
+            }
         }
         if !self.cur.recordCallTemplates { return <Result.Ok value=resultTerm /> }
         val key = try self.templateProtocolSiteKey(fnIdx: self.cur.checkFn, stmtId: stmtId, slot: slot)

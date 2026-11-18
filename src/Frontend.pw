@@ -685,6 +685,7 @@ pub struct Comp {
     mut val callTemplateViewPool: Array[ResolvedViewSource] = []
     mut val callTemplateIndexSlots: Array[U64] = []
     mut val callTemplateLocations: Array[SourceCallLocation]
+    mut val authoredForIterators: Dictionary[U64, U64] = [:]
     // Nonfatal diagnostics remain owned by the compilation/session. Only the
     // driver decides how to display them; requesting a body emits no process IO.
     pub mut val pendingDiagnostics: Array[CompileDiagnostic] = []

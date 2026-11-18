@@ -573,7 +573,7 @@ pub impl Comp {
                     val loopBody: U64 = (try self.lowerBlock(b: body))
                     mut val pattern: Bind = <Bind nameStart=0U64 nameLen=0U64 fieldStart=0U64 fieldLen=0U64 />
                     if patType != "__rec__" { pattern = self.internBytes(s: patType) }
-                    return <Result.Ok value=self.lowerForDestructure(iter: source, body: loopBody, typeStart: pattern.nameStart, typeLen: pattern.nameLen, binds: self.destructureSiteBinds(binds: binds), offset: span.start) />
+                    return <Result.Ok value=self.lowerForDestructure(iter: source, body: loopBody, typeStart: pattern.nameStart, typeLen: pattern.nameLen, binds: self.destructureSiteBinds(binds: binds), span: span) />
                 }
                 mut val vStart: U64 = 0
                 mut val vLen: U64 = 0
@@ -599,7 +599,7 @@ pub impl Comp {
                     lo = try self.lowerRangeConstruction(low: lo, high: hi, inclusive: inclusive, span: <Span start=exprAstSpan(e: iter).start end=exprAstSpan(e: rangeHi).end />)
                 }
                 val bd: U64 = (try self.lowerBlock(b: body))
-                result = (try self.lowerForBinding(nameStart: vStart, nameLen: vLen, typeStart: vtStart, typeLen: vtLen, typeRef: elementRef, occurrence: authoredUse, iter: lo, body: bd))
+                result = (try self.lowerForBinding(nameStart: vStart, nameLen: vLen, typeStart: vtStart, typeLen: vtLen, typeRef: elementRef, occurrence: authoredUse, iter: lo, body: bd, span: span))
             }
             StmtAst.Match(val scrut, val arms, val span) => {
                 val sc: U64 = (try self.lowerExpr(e: scrut))
@@ -742,10 +742,23 @@ pub impl Comp {
     // Both syntax carriers erase record/struct loop patterns at the same
     // boundary. The element owns its value for one iteration; ordinary field
     // lets acquire their own copies and ordinary scope exits release them.
-    inout fn lowerForDestructure(iter: U64, body: U64, typeStart: U64, typeLen: U64, binds: BindRange, offset: U64) -> U64 {
+}
+
+impl Comp {
+    inout fn pushAuthoredFor(iter: U64, span: Span, statement: Stmt) -> U64 {
+        val statementId = self.pushStmt(s: statement)
+        val iteratorStart = self.arena.exprSpanStart[iter]
+        val iteratorEnd = self.arena.exprSpanEnd[iter]
+        if span.start <= iteratorStart && iteratorEnd > iteratorStart && iteratorEnd <= span.end {
+            self.authoredForIterators[statementId] = iter
+        }
+        return statementId
+    }
+
+    inout fn lowerForDestructure(iter: U64, body: U64, typeStart: U64, typeLen: U64, binds: BindRange, span: Span) -> U64 {
         self.cur.lowerTmpSeq += 1U64
         val element: Bind = self.internTmpName(prefix: "__fe", n: self.cur.lowerTmpSeq)
-        self.decls.destructureSites.append(<DestructureSite initId=iter offset=offset isElem=true typeStart=typeStart typeLen=typeLen binds=binds />)
+        self.decls.destructureSites.append(<DestructureSite initId=iter offset=span.start isElem=true typeStart=typeStart typeLen=typeLen binds=binds />)
         mut val statements: Array[U64] = []
         mut val index: U64 = 0U64
         while index < binds.len {
@@ -769,12 +782,12 @@ pub impl Comp {
             Optional.Some(v: val uses) => { self.blockTypeUses[expanded] = uses }
             Optional.None => {}
         }
-        return self.pushStmt(s: <Stmt.For varStart=element.nameStart varLen=element.nameLen varTyStart=0U64 varTyLen=0U64 varTy=0U64 iter=iter body=expanded isStruct=false patStart=0U64 patLen=0U64 binds=<BindRange start=0U64 len=0U64 /> />)
+        return self.pushAuthoredFor(iter: iter, span: span, statement: <Stmt.For varStart=element.nameStart varLen=element.nameLen varTyStart=0U64 varTyLen=0U64 varTy=0U64 iter=iter body=expanded isStruct=false patStart=0U64 patLen=0U64 binds=<BindRange start=0U64 len=0U64 /> />)
     }
 
     // A typed loop binding is an ordinary typed declaration initialized from
     // the iterator's Item. Reuse its checking, conversion and ownership path.
-    inout fn lowerForBinding(nameStart: U64, nameLen: U64, typeStart: U64, typeLen: U64, typeRef: U64, occurrence: U64, iter: U64, body: U64) -> Result[U64, CompileDiagnostic] {
+    inout fn lowerForBinding(nameStart: U64, nameLen: U64, typeStart: U64, typeLen: U64, typeRef: U64, occurrence: U64, iter: U64, body: U64, span: Span) -> Result[U64, CompileDiagnostic] {
         mut val element = <Bind nameStart=nameStart nameLen=nameLen fieldStart=0U64 fieldLen=0U64 />
         mut val expanded = body
         if typeRef != 0U64 {
@@ -796,7 +809,7 @@ pub impl Comp {
                 Optional.None => {}
             }
         }
-        return <Result.Ok value=self.pushStmt(s: <Stmt.For varStart=element.nameStart varLen=element.nameLen varTyStart=typeStart varTyLen=typeLen varTy=typeRef iter=iter body=expanded isStruct=false patStart=0U64 patLen=0U64 binds=<BindRange start=0U64 len=0U64 /> />) />
+        return <Result.Ok value=self.pushAuthoredFor(iter: iter, span: span, statement: <Stmt.For varStart=element.nameStart varLen=element.nameLen varTyStart=typeStart varTyLen=typeLen varTy=typeRef iter=iter body=expanded isStruct=false patStart=0U64 patLen=0U64 binds=<BindRange start=0U64 len=0U64 /> />) />
     }
 
     inout fn lowerSyntaxFor(stmt: SyntaxStmt) -> Result[U64, CompileDiagnostic] {
@@ -809,7 +822,7 @@ pub impl Comp {
                 typeStart = stmt.typeName.start
                 typeLen = stmt.typeName.end - stmt.typeName.start
             }
-            return <Result.Ok value=self.lowerForDestructure(iter: source, body: body, typeStart: typeStart, typeLen: typeLen, binds: self.syntaxDestructureSiteBinds(stmt: stmt), offset: stmt.span.start) />
+            return <Result.Ok value=self.lowerForDestructure(iter: source, body: body, typeStart: typeStart, typeLen: typeLen, binds: self.syntaxDestructureSiteBinds(stmt: stmt), span: stmt.span) />
         }
         mut val varTyStart: U64 = 0U64
         mut val varTyLen: U64 = 0U64
@@ -828,9 +841,12 @@ pub impl Comp {
             val rangeSpan: Span = <Span start=syntaxExpr(file: self.syntax, id: stmt.child0).span.start end=syntaxExpr(file: self.syntax, id: stmt.child1).span.end />
             iter = try self.lowerRangeConstruction(low: iter, high: rangeHi, inclusive: stmt.flag2, span: rangeSpan)
         }
-        return self.lowerForBinding(nameStart: stmt.name.start, nameLen: stmt.name.end - stmt.name.start, typeStart: varTyStart, typeLen: varTyLen, typeRef: elementRef, occurrence: authoredUse, iter: iter, body: (try self.lowerSyntaxBlock(id: stmt.block0)))
+        return self.lowerForBinding(nameStart: stmt.name.start, nameLen: stmt.name.end - stmt.name.start, typeStart: varTyStart, typeLen: varTyLen, typeRef: elementRef, occurrence: authoredUse, iter: iter, body: (try self.lowerSyntaxBlock(id: stmt.block0)), span: stmt.span)
     }
 
+}
+
+pub impl Comp {
     inout fn lowerBlock(b: BlockAst) -> Result[U64, CompileDiagnostic] {
         val parent = self.loweringTypeUses
         self.loweringTypeUses = []

@@ -1,0 +1,33 @@
+use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use ../../../src/SourceAccess only { SourceAccess, SourceResource }
+use @Std/Io only { print }
+
+fn checkIteration(authored: Bool) {
+    mut val compiler = <Comp />
+    val sources = <SourceAccess stdRoot="plew:std/".bytes() resources=[
+        <SourceResource path="plew:std/Lang.pw".bytes() text="pub use ./Core only {{ I64 }} pub enum Optional[T] {{ Some(v: T) None }}" />,
+        <SourceResource path="plew:std/Core.pw".bytes() text="pub extern(plewIntrinsic) {{ struct I64 }} pub trait Iterator {{ type Item inout fn next() -> Optional[Item] }} pub trait Iterable {{ type Item type Iter: Iterator[Item=Item] fn iterator() -> Iter }}" />,
+        <SourceResource path="plew:std/IterationRefusalProbe.pw".bytes() text="fn probe() {{ for val item in 1I64 {{}} }}" />,
+    ] />
+    analyzeFrontendForRequests(c: inout compiler,
+        input: <FrontendInput.File path="plew:std/IterationRefusalProbe.pw" />, sources: sources).unwrap()
+    val functionId = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "probe").nameId)
+    val function = compiler.arena.functionAt(index: functionId)
+    val statement = compiler.blockStmtAt(blkId: function.body, index: 0U64)
+    val checked = if authored { give statement }
+        else { give compiler.pushStmt(s: compiler.arena.stmts[statement]) }
+    compiler.cur.checkFn = functionId
+    match compiler.recordStmt(stmtId: checked) {
+        Result.Err(error: val diagnostic) => {
+            if diagnostic.message != "for-loop requires an Iterable or Iterator" { panic(diagnostic.message) }
+            if diagnostic.isSourceRejection() != authored { panic("iteration refusal has the wrong source provenance") }
+        }
+        Result.Ok(value: _) => { panic("invalid iteration was accepted") }
+    }
+}
+
+fn main() {
+    checkIteration(authored: true)
+    checkIteration(authored: false)
+    print("ok")
+}
