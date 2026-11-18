@@ -726,3 +726,19 @@ The internal fixture interface_boxing_conditions imports the compiler;
 its check hit a 30-second diagnostic O0 limit. It is not counted as
 validated here and still needs native/full validation. Four general
 pattern-query consumers and formal final gates remain outstanding.
+
+Compiler 3c6c13b1 closes the four general-query consumers. Additional
+isolated instrumentation showed all four originate at selected static
+member admission, including the fixtures whose names mention boxing.
+The written member wrapper passes the original lookup origin. Admission
+authenticates Method/ExtMethod selector and argument range through the
+existing source marker; the public raw helper preserves its old signature
+and default Unclassified behavior. The proof query is still performed once.
+
+All 27 replays preserve exact baseline text/status/channel, now with nine
+check/AOT Source refusals, four reached ORC refusals, and five undemanded
+successes. An isolated omission of lookup origin restores Unclassified
+for exactly those four. Three successful member-selection controls pass
+check and exact ORC output. Independent source review found no scoped
+blocker. Normal selected-member origin checks are bounded but performance
+has not been measured; formal final validation remains pending.
