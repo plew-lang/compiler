@@ -1,5 +1,5 @@
-use /Frontend only { Comp }
-fn main() {
-    mut val compiler = <Comp />
-    compiler.admitSelectedCallConstraints(templateIndex: 0U64).unwrap()
+use /Frontend only { CallTemplate, Comp }
+fn attempt(compiler: inout Comp, template: CallTemplate) {
+    compiler.admitSelectedCallConstraints(templateIndex: 0U64, template: template).unwrap()
 }
+fn main() {}

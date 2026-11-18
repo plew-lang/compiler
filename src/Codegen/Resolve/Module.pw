@@ -447,10 +447,12 @@ pub impl Comp {
 }
 
 impl Comp {
+    fn hasAuthoredMethodExpression(exprId: U64) -> Bool {
+        return exprId < self.arena.exprs.count() && self.authoredMethodExpressions.contains(exprId) && self.syntheticCallSiteIndex(exprId: exprId) >= self.decls.syntheticCallSites.count()
+    }
+
     fn isAuthoredMethodLookup(exprId: U64, nameStart: U64, nameLen: U64, args: ArgRange) -> Bool {
-        if !self.authoredMethodExpressions.contains(exprId) || exprId >= self.arena.exprs.count() || self.syntheticCallSiteIndex(exprId: exprId) < self.decls.syntheticCallSites.count() {
-            return false
-        }
+        if !self.hasAuthoredMethodExpression(exprId: exprId) { return false }
         return match self.arena.exprs[exprId] {
             Expr.Method(recv: _, nameStart: val start, nameLen: val length, args: val written) |
             Expr.ExtMethod(recv: _, source: _, nameStart: val start, nameLen: val length, args: val written) =>

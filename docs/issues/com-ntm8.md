@@ -319,3 +319,10 @@ Row5: Exactly the immutable original row findings/qualifiers and receiving task 
 Required producer close/use dependency: com-7u8z. Exact phantomdep intended-reason assertion consumes the canonical fixture schema ruling. This is a close/use prerequisite for that subset; other ntm8 controls can proceed without waiting.
 
 Preserve the original finite contract and meaningful controls; intake does not choose unresolved source semantics, implement new APIs, certify product GREEN or close a mixed future/optional parent. Required repair/investigation must finish before its affected admission; classification closure cannot bypass it.
+
+The publication-visibility fixture now uses a typed AdmittedCallConstraints
+parameter to isolate the publication API. The separate admission fixture
+supplies its currently required CallTemplate. Both retain their original
+diagnostic goldens, and a visibility-only mutation proved each becomes
+accepted when its own API is public. See the
+[missing-method replay](com-yeua.md#missing-method-and-member-visibility-checkpoint).

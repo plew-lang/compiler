@@ -1069,20 +1069,29 @@ pub impl Comp {
     inout fn checkSourceMethodVisibility(exprId: U64, receiverTerm: U64, function: Func) -> Result[(), CompileDiagnostic] {
         if function.isPub { return <Result.Ok value=() /> }
         if !self.methodIsVisibleInModule(mf: function, useModule: (try self.sourceBodyModule())) {
-            return <Result.Err error=self.unavailableSourceMethod(receiverTerm: receiverTerm, offset: self.exprOffset(id: exprId), fallback: "method is private (callable only in its defining module; put it in a `pub impl`)") />
+            val domain = self.sourceMethodVisibilityDomain(exprId: exprId, receiverTerm: receiverTerm)
+            return <Result.Err error=self.unavailableSourceMethod(receiverTerm: receiverTerm, offset: self.exprOffset(id: exprId), fallback: "method is private (callable only in its defining module; put it in a `pub impl`)", domain: domain) />
         }
         return <Result.Ok value=() />
     }
 
-    inout fn unavailableSourceMethod(receiverTerm: U64, offset: U64, fallback: String) -> CompileDiagnostic {
+    fn sourceMethodVisibilityDomain(exprId: U64, receiverTerm: U64) -> FailureDomain {
+        // Associated and opaque selected methods may have no receiver term.
+        if (receiverTerm == 0U64 || receiverTerm < self.arena.typeCount()) && self.hasAuthoredMethodExpression(exprId: exprId) {
+            return <FailureDomain.Source />
+        }
+        return <FailureDomain.Unclassified />
+    }
+
+    inout fn unavailableSourceMethod(receiverTerm: U64, offset: U64, fallback: String, domain: FailureDomain) -> CompileDiagnostic {
         val type = self.typeInfoOfRef(ref: receiverTerm)
         if self.cur.checkFn < self.arena.functionCount() && self.isTypeParamOf(fnIdx: self.cur.checkFn, start: type.nameStart, len: type.nameLen) {
-            return self.diagnosticAt(offset: offset, msg: "no matching method for this argument list: method not provided by the bounds of this type parameter (add a `where T: Trait` that declares it)")
+            return self.diagnosticAt(offset: offset, msg: "no matching method for this argument list: method not provided by the bounds of this type parameter (add a `where T: Trait` that declares it)", failureDomain: domain)
         }
         if self.isSelfTypeInProvided(start: type.nameStart, len: type.nameLen) {
-            return self.diagnosticAt(offset: offset, msg: "no matching method for this argument list: method not provided by this trait: a provided method's `self` (Self) can only use the trait's requirements / provided methods / supertrait members (spec/08)")
+            return self.diagnosticAt(offset: offset, msg: "no matching method for this argument list: method not provided by this trait: a provided method's `self` (Self) can only use the trait's requirements / provided methods / supertrait members (spec/08)", failureDomain: domain)
         }
-        return self.diagnosticAt(offset: offset, msg: fallback)
+        return self.diagnosticAt(offset: offset, msg: fallback, failureDomain: domain)
     }
 
     inout fn recordUnresolvedMethodTemplate(exprId: U64, receiver: CallTemplateReceiver, receiverExpr: U64, receiverTerm: U64, nameStart: U64, nameLen: U64, args: ArgRange, resolution: StaticMemberResolution) -> Result[(), CompileDiagnostic] {
@@ -1116,7 +1125,10 @@ pub impl Comp {
                     if receiverTerm != 0U64 && receiverTerm < self.arena.typeCount() && self.isAuthoredViaCall(owner: self.cur.checkFn, expression: exprId) {
                         return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "no applicable `via` target for the declared requirement", failureDomain: <FailureDomain.Source />) />
                     }
-                    return <Result.Err error=self.unavailableSourceMethod(receiverTerm: receiverTerm, offset: self.exprOffset(id: exprId), fallback: "no matching method for this argument list") />
+                    val domain = if receiverTerm != 0U64 && receiverTerm < self.arena.typeCount() && self.isAuthoredMethodLookup(exprId: exprId, nameStart: nameStart, nameLen: nameLen, args: args) {
+                        give <FailureDomain.Source />
+                    } else { give <FailureDomain.Unclassified /> }
+                    return <Result.Err error=self.unavailableSourceMethod(receiverTerm: receiverTerm, offset: self.exprOffset(id: exprId), fallback: "no matching method for this argument list", domain: domain) />
                 }
             }
         }
@@ -1953,10 +1965,13 @@ pub impl Comp {
     }
 
     // All statically selected method surfaces use the same argument context.
-    inout fn recordSelectedMethodArguments(callee: U64, receiverTerm: U64, args: ArgRange, chainHoleRef: U64, useOffset: U64) -> Result[(), CompileDiagnostic] {
+    inout fn recordSelectedMethodArguments(callee: U64, receiverTerm: U64, args: ArgRange, chainHoleRef: U64, exprId: U64) -> Result[(), CompileDiagnostic] {
         if callee < self.arena.functionCount() {
             val selectedMethod: Func = self.arena.functionAt(index: callee)
-            try self.checkMethodVis(ownerStart: selectedMethod.recvStart, ownerLen: selectedMethod.recvLen, mf: selectedMethod, offset: useOffset)
+            val useOffset = self.exprOffset(id: exprId)
+            if !self.methodIsVisible(mf: selectedMethod, offset: useOffset) {
+                return <Result.Err error=self.methodPrivateDiagnostic(offset: useOffset, domain: self.sourceMethodVisibilityDomain(exprId: exprId, receiverTerm: receiverTerm)) />
+            }
             if args.len == 0U64 { return <Result.Ok value=() /> }
             val signature = if selectedMethod.isProvided && self.isAuthoredProvidedDeclaration(function: callee) {
                 val environment = try self.finalMethodEnvironment(f: selectedMethod, receiverRef: receiverTerm, args: args)
@@ -2413,7 +2428,7 @@ pub impl Comp {
                     StaticMemberResolution.Provided(proof: _, traitIdx: _, callee: _) => { methodCallee = self.arena.functionCount() }
                     _ => {}
                 }
-                try self.recordSelectedMethodArguments(callee: methodCallee, receiverTerm: receiverTerm, args: args, chainHoleRef: chainHoleRef, useOffset: self.exprOffset(id: exprId))
+                try self.recordSelectedMethodArguments(callee: methodCallee, receiverTerm: receiverTerm, args: args, chainHoleRef: chainHoleRef, exprId: exprId)
                 try self.recordParametricMethodCall(exprId: exprId, callee: methodCallee, receiverSource: (try self.writtenCallReceiverTemplate(exprId: exprId, receiverExpr: recv)), receiverTerm: receiverTerm, args: args)
                 if methodCallee >= self.arena.functionCount() {
                     try self.recordUnresolvedMethodTemplate(exprId: exprId, receiver: (try self.writtenCallReceiverTemplate(exprId: exprId, receiverExpr: recv)), receiverExpr: recv, receiverTerm: receiverTerm, nameStart: nameStart, nameLen: nameLen, args: args, resolution: boundMember)
@@ -2504,7 +2519,7 @@ pub impl Comp {
                 if methodCallee >= self.arena.functionCount() && source.surfaceId != 0U64 && extensionProofs.count() == 0U64 && admittedTrait.isNone() {
                         methodCallee = (try self.resolveExtMethodFinalWithOrigin(recv: recv, source: source, nameStart: nameStart, nameLen: nameLen, args: args, methodOrigin: <MethodLookupOrigin expression=<Optional.Some v=exprId /> />))
                 }
-                try self.recordSelectedMethodArguments(callee: methodCallee, receiverTerm: receiverTerm, args: args, chainHoleRef: chainHoleRef, useOffset: self.exprOffset(id: exprId))
+                try self.recordSelectedMethodArguments(callee: methodCallee, receiverTerm: receiverTerm, args: args, chainHoleRef: chainHoleRef, exprId: exprId)
                 try self.recordParametricMethodCall(exprId: exprId, callee: methodCallee, receiverSource: receiverSource, receiverTerm: receiverTerm, args: args)
                 if self.traceCodegen {
                     eprint(text: "[trace-codegen] viewed-call expr=")

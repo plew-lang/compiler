@@ -463,3 +463,26 @@ The next baseline cluster with the same printed missing-method reason
 contains 13 check rejections. Some are compiler-internal fixtures, so use
 their intended assertions and the actual rejection path before deciding
 whether a source diagnostic applies.
+
+### Missing-method and member visibility checkpoint
+
+The Record rejection paths classify an authored missing-method call only
+with the recorded method identity, exact selector and arguments, a valid
+receiver term, and no synthetic call-site marker. A selected private
+method instead uses the failed visibility check and the authored call.
+The raw visibility helper retains its previous diagnostic and domain.
+
+For the 13-input replay, check and AOT each produce 12 Source failures,
+while ORC produces nine demanded Source failures and three successful
+undemanded runs. The synthetic factory shape in
+mid_source_state_unchecked_factory remains Unclassified in all three
+modes. Classify it with authored factory construction, preserving the
+separate Lower origin for rewritten expressions.
+
+The two compiler-internal selected-call privacy fixtures now use typed
+inputs and test one private API each. Their existing goldens pass in check
+and AOT. In each isolated mutation, exposing only the targeted API made
+its fixture pass. Three successful source controls passed check and ORC,
+and the change passed independent re-review.
+
+[Producer replay](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-missing-method-producers.json).

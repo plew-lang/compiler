@@ -294,9 +294,13 @@ pub impl Comp {
 
     inout fn checkMethodVis(ownerStart: U64, ownerLen: U64, mf: Func, offset: U64) -> Result[(), CompileDiagnostic] {
         if !self.methodIsVisible(mf: mf, offset: offset) {
-            return <Result.Err error=self.diagnosticAt(offset: offset, msg: "method is private (callable only in its defining module; put it in a `pub impl`)") />
+            return <Result.Err error=self.methodPrivateDiagnostic(offset: offset, domain: <FailureDomain.Unclassified />) />
         }
         return <Result.Ok value=() />
+    }
+
+    fn methodPrivateDiagnostic(offset: U64, domain: FailureDomain) -> CompileDiagnostic {
+        return self.diagnosticAt(offset: offset, msg: "method is private (callable only in its defining module; put it in a `pub impl`)", failureDomain: domain)
     }
 
     inout fn checkConstructVis(typeRef: U64, isEnum: Bool, fields: MakeFieldRange, offset: U64) -> Result[(), CompileDiagnostic] {
