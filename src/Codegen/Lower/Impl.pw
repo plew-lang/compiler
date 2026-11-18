@@ -662,12 +662,12 @@ pub impl Comp {
     }
 
     inout fn prepareConformanceCallableForms() -> Result[(), CompileDiagnostic] {
-        return self.prepareConformanceCallableFormsForAdmission(origin: <AssociatedBoundCheckOrigin.Raw />)
+        return self.prepareConformanceCallableFormsForAdmission(origin: <FrontendDeclarationOrigin.Raw />)
     }
 }
 
 impl Comp {
-    inout fn prepareConformanceCallableFormsForAdmission(origin: AssociatedBoundCheckOrigin) -> Result[(), CompileDiagnostic] {
+    inout fn prepareConformanceCallableFormsForAdmission(origin: FrontendDeclarationOrigin) -> Result[(), CompileDiagnostic] {
         mut val preparedParents: Dictionary[U64, Bool] = [:]
         mut val conformanceIndex = 0U64
         while conformanceIndex < self.decls.conformCount() {

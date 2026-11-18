@@ -37,7 +37,7 @@ for forbidden in ('finalizeFrontendExecutables(', 'LLVMContextCreate(', 'lowerRe
     assert forbidden not in checking, f'whole-target check crosses its boundary: {forbidden}'
 source_open = frontend.split('pub fn openFrontendForRequests(', 1)[1].split('fn analyzeFrontendRequestsWithOrigin(', 1)[0]
 assert 'c: inout Comp' not in source_open and 'mut val c = <Comp />' in source_open
-assert 'origin: <AssociatedBoundCheckOrigin.SourceAdmission />' in source_open
+assert 'origin: <FrontendDeclarationOrigin.SourceAdmission />' in source_open
 # Sessions now also own explicit backend requests. Static check/open must not
 # execute them; importing their result types is not code generation.
 assert 'use ./Backend' not in frontend

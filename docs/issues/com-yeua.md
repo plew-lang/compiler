@@ -843,3 +843,47 @@ refusal. No new acceptance regression from the inference repair is established.
 This is a diagnostic refresh, not a full suite or task closure.
 
 [Current groups, input hashes and mode comparison](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-post-inference-classification-refresh.json).
+
+### Duplicate requirement origin scenarios
+
+Reuse the private fresh-owned frontend admission boundary used for associated
+bounds, generalized as FrontendDeclarationOrigin. Preserve all public raw
+checker/analyzer signatures and Raw delegation. Add Source only directly after
+callableDeclarationConflict returns true; propagate its failure unchanged.
+Do not retain the origin on Comp or reconstruct trust from public mutable
+sourceTypeUses / traitReqPool, and do not add requirement snapshots.
+
+Scenarios: six existing duplicate-requirement fixtures in check/AOT/ORC, with
+exact baseline diagnostic/status/channel; source failures through both owned
+frontend constructors; same input through both caller-owned analyzers remains
+Unclassified; healthy owned Comp succeeds, public requirement mutation makes
+a duplicate and raw checker/admission retains Unclassified, and a fresh caller-owned analysis with a preseeded orphan requirement retains Unclassified. Keep
+distinct requirement positives and existing associated-bound source/raw native
+controls. The native RED on the prior b7d4c530 carrier is exactly
+"source duplicate lost its origin" (exit134); setup succeeds.
+
+### Duplicate requirement source origin checkpoint
+
+Private FrontendDeclarationOrigin generalizes the existing fresh-owned
+associated-bound boundary. Both owned constructors create Comp internally;
+loadFrontendDeclarations passes authority only to private declaration admission
+and duplicate-requirement checking. Public analyzers and both public checkers
+retain their signatures and Raw delegation. Source is emitted only when the
+shared callable conflict query returns true, without changing propagated errors
+or retaining authority on Comp. No extra signature sweep or receipt table.
+
+Six existing duplicate fixtures retain exact diagnostic/status/channel in
+check/AOT/ORC (18 executions), now Source. Three distinct requirement/structural
+overload positives pass check and exact ORC output (six executions). Native
+trait_requirement_failure_domain prints ok: owned entry failures, both raw
+analyzers, healthy owned state then public requirement mutation, public duplicate
+and admission rechecks remain distinct. The separate fresh preseeded orphan
+control tests raw entry authority, not the semantic validity of that orphan.
+An initial never-successful fixture incorrectly reinitialized an already
+initialized Comp; that invalid test setup was removed, not counted as a product
+failure or an accepted API requirement. Associated_bound_failure_domain also
+prints ok after the private enum rename. Architecture guard passes. Independent
+review and correction review found no remaining scoped issue. Formal final
+gates and com-yeua remain open.
+
+[Evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-trait-requirement-rejection.json).

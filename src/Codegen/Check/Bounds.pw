@@ -1155,12 +1155,12 @@ pub impl Comp {
     }
 
     inout fn checkAssociatedBounds(conformIndex: U64, conformance: Conform, traitIndex: U64, assumptions: Array[DeclarationBoundRef]) -> Result[(), CompileDiagnostic] {
-        return self.checkAssociatedBoundsForAdmission(conformIndex: conformIndex, conformance: conformance, traitIndex: traitIndex, assumptions: assumptions, origin: <AssociatedBoundCheckOrigin.Raw />)
+        return self.checkAssociatedBoundsForAdmission(conformIndex: conformIndex, conformance: conformance, traitIndex: traitIndex, assumptions: assumptions, origin: <FrontendDeclarationOrigin.Raw />)
     }
 }
 
 impl Comp {
-    inout fn checkAssociatedBoundsForAdmission(conformIndex: U64, conformance: Conform, traitIndex: U64, assumptions: Array[DeclarationBoundRef], origin: AssociatedBoundCheckOrigin) -> Result[(), CompileDiagnostic] {
+    inout fn checkAssociatedBoundsForAdmission(conformIndex: U64, conformance: Conform, traitIndex: U64, assumptions: Array[DeclarationBoundRef], origin: FrontendDeclarationOrigin) -> Result[(), CompileDiagnostic] {
         if self.arena.hasConformanceAssociatedEvidence(conformance: conformIndex) { return <Result.Ok value=() /> }
         val declaration = self.decls.traitAt(index: traitIndex)
         mut val evidence: Array[ConformanceAssociatedEvidence] = []
@@ -1176,8 +1176,8 @@ impl Comp {
             val proof = try self.viewedTraitConstraintProof(demand: demand, ref: expected.subject, constraint: expected.constraint, assumptions: assumptions)
             if self.proofIsMissing(proof: proof) {
                 val domain = match origin {
-                    AssociatedBoundCheckOrigin.SourceAdmission => <FailureDomain.Source />,
-                    AssociatedBoundCheckOrigin.Raw => <FailureDomain.Unclassified />,
+                    FrontendDeclarationOrigin.SourceAdmission => <FailureDomain.Source />,
+                    FrontendDeclarationOrigin.Raw => <FailureDomain.Unclassified />,
                 }
                 return <Result.Err error=self.diagnosticAt(offset: original.offset, msg: "associated type does not satisfy its declared trait constraint", failureDomain: domain) />
             }
@@ -1380,16 +1380,16 @@ pub impl Comp {
     }
 
     inout fn prepareCallableFormEvidence(conformanceIndex: U64, traitIndex: U64, prepared: inout Dictionary[U64, Bool]) -> Result[(), CompileDiagnostic] {
-        return self.prepareCallableFormEvidenceForAdmission(conformanceIndex: conformanceIndex, traitIndex: traitIndex, prepared: inout prepared, origin: <AssociatedBoundCheckOrigin.Raw />)
+        return self.prepareCallableFormEvidenceForAdmission(conformanceIndex: conformanceIndex, traitIndex: traitIndex, prepared: inout prepared, origin: <FrontendDeclarationOrigin.Raw />)
     }
 
     inout fn checkConformances() -> Result[(), CompileDiagnostic] {
-        return self.checkConformancesForAdmission(origin: <AssociatedBoundCheckOrigin.Raw />)
+        return self.checkConformancesForAdmission(origin: <FrontendDeclarationOrigin.Raw />)
     }
 }
 
 impl Comp {
-    inout fn checkConformancesForAdmission(origin: AssociatedBoundCheckOrigin) -> Result[(), CompileDiagnostic] {
+    inout fn checkConformancesForAdmission(origin: FrontendDeclarationOrigin) -> Result[(), CompileDiagnostic] {
         // Parent proofs are declaration-owned prerequisites of method
         // signatures. Complete their publication before comparing any method.
         for index in 0U64..<self.decls.conformCount() {
@@ -1421,7 +1421,7 @@ impl Comp {
     // Callable forms are synthesized before trait-subject conferral and the
     // general conformance check. Publish both kinds of declaration evidence
     // along the selected path before callable-form signature comparison.
-    inout fn prepareCallableFormEvidenceForAdmission(conformanceIndex: U64, traitIndex: U64, prepared: inout Dictionary[U64, Bool], origin: AssociatedBoundCheckOrigin) -> Result[(), CompileDiagnostic] {
+    inout fn prepareCallableFormEvidenceForAdmission(conformanceIndex: U64, traitIndex: U64, prepared: inout Dictionary[U64, Bool], origin: FrontendDeclarationOrigin) -> Result[(), CompileDiagnostic] {
         if prepared.get(key: conformanceIndex).isSome() { return <Result.Ok value=() /> }
         try self.prepareConformanceSupertraits(conformIndex: conformanceIndex, traitIndex: traitIndex)
         prepared[conformanceIndex] = true
@@ -2075,7 +2075,7 @@ impl Comp {
         return <InstanceEnvironment params=bindings args=values receiverRef=base.receiverRef />
     }
 
-    inout fn conformanceCallableFormParametersMatch(conformanceIndex: U64, traitIndex: U64, slot: U64, witness: Func, parameters: FuncParamRange, preparedParents: inout Dictionary[U64, Bool], origin: AssociatedBoundCheckOrigin) -> Result[Bool, CompileDiagnostic] {
+    inout fn conformanceCallableFormParametersMatch(conformanceIndex: U64, traitIndex: U64, slot: U64, witness: Func, parameters: FuncParamRange, preparedParents: inout Dictionary[U64, Bool], origin: FrontendDeclarationOrigin) -> Result[Bool, CompileDiagnostic] {
         val conformance = self.decls.conformAt(index: conformanceIndex)
         val requirement = self.traitReqAt(reqs: self.decls.traitAt(index: traitIndex).reqs, index: slot)
         if parameters.count() != requirement.params.count() || witness.typeParams.count() != conformance.typeParams.count() + requirement.typeParams.count() { return <Result.Ok value=false /> }

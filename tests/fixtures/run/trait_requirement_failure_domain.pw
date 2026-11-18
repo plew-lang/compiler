@@ -1,0 +1,42 @@
+use /Frontend only { Comp, FrontendInput, openFrontend, openFrontendForRequests, analyzeFrontendDeclarations, analyzeFrontendForRequests }
+use /SourceAccess only { SourceAccess }
+use /Diag only { CompileDiagnostic, FailureDomain }
+use @Std/Io only { print }
+
+fn main() {
+    val input = <FrontendInput.Text path="duplicate-requirement.pw" text="trait Duplicate {{ fn same() fn same() }} fn main() {{}}" />
+    val sources = <SourceAccess stdRoot=[] />
+    requireFailure(result: openFrontend(input: input, sources: sources), source: true)
+    requireFailure(result: openFrontendForRequests(input: input, sources: sources), source: true)
+    mut val raw = <Comp />
+    requireFailure(result: analyzeFrontendForRequests(c: inout raw, input: input, sources: sources), source: false)
+
+    mut val rawDeclarations = <Comp />
+    requireFailure(result: analyzeFrontendDeclarations(c: inout rawDeclarations, input: input, sources: sources), source: false)
+    mut val compiler = openFrontendForRequests(
+        input: <FrontendInput.Text path="raw-requirement.pw" text="trait Original {{ fn first() fn second() }} fn main() {{}}" />,
+        sources: sources).unwrap()
+    compiler.checkDuplicateTraitReqs().unwrap()
+    val original = compiler.decls.traitAt(index: compiler.decls.firstTraitNamed(nameId: compiler.internBytes(s: "Original").nameId))
+    compiler.decls.traitReqPool[original.reqs.start + 1U64] = compiler.traitReqAt(reqs: original.reqs, index: 0U64)
+    requireFailure(result: compiler.checkDuplicateTraitReqs(), source: false)
+    requireFailure(result: compiler.checkCallableDeclarationAdmission(), source: false)
+    mut val seeded = <Comp />
+    seeded.decls.traitReqPool.append(compiler.traitReqAt(reqs: original.reqs, index: 0U64))
+    requireFailure(result: analyzeFrontendForRequests(c: inout seeded, input: input, sources: sources), source: false)
+    print("ok")
+}
+
+fn requireFailure[T](result: Result[T, CompileDiagnostic], source: Bool) {
+    match result {
+        Result.Ok(value: _) => { panic("duplicate requirements accepted") }
+        Result.Err(error: val diagnostic) => {
+            if diagnostic.message != "duplicate trait requirement: a common callable form has no provably distinct argument type (spec/07,08)" { panic(diagnostic.message) }
+            if source {
+                match diagnostic.failureDomain { FailureDomain.Source => {} _ => { panic("source duplicate lost its origin") } }
+            } else {
+                match diagnostic.failureDomain { FailureDomain.Unclassified => {} _ => { panic("raw duplicate became source") } }
+            }
+        }
+    }
+}

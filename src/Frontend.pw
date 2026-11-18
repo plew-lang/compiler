@@ -1898,13 +1898,14 @@ pub fn analyzeFrontend(c: inout Comp, input: FrontendInput, sources: SourceAcces
 
 // The admission window covers roots which may require a newtype before
 // declaration identity resolution, as well as the final nominal sweep.
-// Only the loader can supply the source domain to declaration checks.
-enum AssociatedBoundCheckOrigin {
+// Only a fresh owned frontend can supply source authority to declaration
+// checks. Caller-owned analyses and public rechecks retain Raw authority.
+enum FrontendDeclarationOrigin {
     Raw
     SourceAdmission
 }
 
-fn admitFrontendNominalDependencies(c: inout Comp, origin: AssociatedBoundCheckOrigin) -> Result[(), CompileDiagnostic] {
+fn admitFrontendNominalDependencies(c: inout Comp, origin: FrontendDeclarationOrigin) -> Result[(), CompileDiagnostic] {
     c.indexConformanceArgumentScopes()
     try c.admitConformanceSubjects()
     try c.admitAssociatedBindingRecipes()
@@ -1956,7 +1957,7 @@ fn admitFrontendNominalDependencies(c: inout Comp, origin: AssociatedBoundCheckO
 // Produces declaration-time types, bindings and call templates, without
 // closing the executable BodyInstance/destruction worklist.
 fn loadFrontendDeclarations(c: inout Comp, input: FrontendInput, sources: SourceAccess,
-                            options: FrontendOptions, origin: AssociatedBoundCheckOrigin) -> Result[(), CompileDiagnostic] {
+                            options: FrontendOptions, origin: FrontendDeclarationOrigin) -> Result[(), CompileDiagnostic] {
     val genMode = options.genMode
     val tcLog = options.tcLog
     val asan = options.asan
@@ -2474,7 +2475,7 @@ fn loadFrontendDeclarations(c: inout Comp, input: FrontendInput, sources: Source
     c.sourceExpressionLimit = c.arena.exprs.count()
     // Registration reserves identities. Admit all overload groups under the
     // shared rule only after nominal identities are authoritative.
-    try c.checkCallableDeclarationAdmission()
+    try c.admitCallableDeclarations(origin: origin)
     // recursive value types (spec/03): mark fields that close a containment cycle
     // onto their owner; codegen stores them behind a heap pointer so the C type is
     // finite (hidden indirection; value semantics kept by deref-read/repoint-write).
@@ -2517,7 +2518,7 @@ fn loadFrontendDeclarations(c: inout Comp, input: FrontendInput, sources: Source
 // its independent harness preparation. Neither entry discovers executable code.
 pub fn analyzeFrontendDeclarations(c: inout Comp, input: FrontendInput, sources: SourceAccess,
                                   options: FrontendOptions = <FrontendOptions />) -> Result[(), CompileDiagnostic] {
-    return analyzeFrontendDeclarationsWithOrigin(c: inout c, input: input, sources: sources, options: options, origin: <AssociatedBoundCheckOrigin.Raw />)
+    return analyzeFrontendDeclarationsWithOrigin(c: inout c, input: input, sources: sources, options: options, origin: <FrontendDeclarationOrigin.Raw />)
 }
 
 // The complete source constructor starts with a compiler state that the
@@ -2525,13 +2526,13 @@ pub fn analyzeFrontendDeclarations(c: inout Comp, input: FrontendInput, sources:
 pub fn openFrontend(input: FrontendInput, sources: SourceAccess,
                     options: FrontendOptions = <FrontendOptions />) -> Result[Comp, CompileDiagnostic] {
     mut val c = <Comp />
-    try analyzeFrontendDeclarationsWithOrigin(c: inout c, input: input, sources: sources, options: options, origin: <AssociatedBoundCheckOrigin.SourceAdmission />)
+    try analyzeFrontendDeclarationsWithOrigin(c: inout c, input: input, sources: sources, options: options, origin: <FrontendDeclarationOrigin.SourceAdmission />)
     try finalizeFrontendExecutables(c: inout c)
     return <Result.Ok value=c />
 }
 
 fn analyzeFrontendDeclarationsWithOrigin(c: inout Comp, input: FrontendInput, sources: SourceAccess,
-                                         options: FrontendOptions, origin: AssociatedBoundCheckOrigin) -> Result[(), CompileDiagnostic] {
+                                         options: FrontendOptions, origin: FrontendDeclarationOrigin) -> Result[(), CompileDiagnostic] {
     if !options.genMode {
         try analyzeFrontendRequestsWithOrigin(c: inout c, input: input, sources: sources, options: options, origin: origin)
         return completeFrontendDeclarations(c: inout c)
@@ -2617,18 +2618,18 @@ fn analyzeFrontendDeclarationsWithOrigin(c: inout Comp, input: FrontendInput, so
 // This is request admission, not whole-target static-check success.
 pub fn analyzeFrontendForRequests(c: inout Comp, input: FrontendInput, sources: SourceAccess,
                                  options: FrontendOptions = <FrontendOptions />) -> Result[(), CompileDiagnostic] {
-    return analyzeFrontendRequestsWithOrigin(c: inout c, input: input, sources: sources, options: options, origin: <AssociatedBoundCheckOrigin.Raw />)
+    return analyzeFrontendRequestsWithOrigin(c: inout c, input: input, sources: sources, options: options, origin: <FrontendDeclarationOrigin.Raw />)
 }
 
 pub fn openFrontendForRequests(input: FrontendInput, sources: SourceAccess,
                                options: FrontendOptions = <FrontendOptions />) -> Result[Comp, CompileDiagnostic] {
     mut val c = <Comp />
-    try analyzeFrontendRequestsWithOrigin(c: inout c, input: input, sources: sources, options: options, origin: <AssociatedBoundCheckOrigin.SourceAdmission />)
+    try analyzeFrontendRequestsWithOrigin(c: inout c, input: input, sources: sources, options: options, origin: <FrontendDeclarationOrigin.SourceAdmission />)
     return <Result.Ok value=c />
 }
 
 fn analyzeFrontendRequestsWithOrigin(c: inout Comp, input: FrontendInput, sources: SourceAccess,
-                                     options: FrontendOptions, origin: AssociatedBoundCheckOrigin) -> Result[(), CompileDiagnostic] {
+                                     options: FrontendOptions, origin: FrontendDeclarationOrigin) -> Result[(), CompileDiagnostic] {
     if options.genMode {
         return <Result.Err error=c.diagnosticAt(offset: 0U64, msg: "source body requests cannot use generator mode") />
     }

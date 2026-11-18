@@ -1202,6 +1202,12 @@ pub impl Comp {
     }
 
     inout fn checkCallableDeclarationAdmission() -> Result[(), CompileDiagnostic] {
+        return self.admitCallableDeclarations(origin: <FrontendDeclarationOrigin.Raw />)
+    }
+}
+
+impl Comp {
+    inout fn admitCallableDeclarations(origin: FrontendDeclarationOrigin) -> Result[(), CompileDiagnostic] {
         mut val index = 0U64
         while index < self.decls.callableCount() {
             val candidate = self.decls.callableAt(index: index)
@@ -1212,11 +1218,14 @@ pub impl Comp {
             try self.checkProvidedExtensionSurfaceCollision(f: function)
             index += 1U64
         }
-        try self.checkDuplicateTraitReqs()
+        try self.checkDuplicateTraitReqsForAdmission(origin: origin)
         try self.checkMemberwiseFactoryCollisions()
         return <Result.Ok value=() />
     }
 
+}
+
+pub impl Comp {
     inout fn callableIsBare(c: Callable) -> Bool {
         return c.sourceKind == 0U64
     }

@@ -33,6 +33,12 @@ pub impl Comp {
     }
 
     inout fn checkDuplicateTraitReqs() -> Result[(), CompileDiagnostic] {
+        return self.checkDuplicateTraitReqsForAdmission(origin: <FrontendDeclarationOrigin.Raw />)
+    }
+}
+
+impl Comp {
+    inout fn checkDuplicateTraitReqsForAdmission(origin: FrontendDeclarationOrigin) -> Result[(), CompileDiagnostic] {
         mut val ti: U64 = 0
         while ti < self.decls.traitCount() {
             val reqs: Array[Func] = self.copyTraitReqs(reqs: self.decls.traitAt(index: ti).reqs)
@@ -44,7 +50,8 @@ pub impl Comp {
                         // A requirement group uses the complete declaration
                         // rule, not a separate duplicate-only approximation.
                         if try self.callableDeclarationConflict(a: reqs[a], b: reqs[b]) {
-                            return <Result.Err error=self.diagnosticAt(offset: reqs[b].nameStart, msg: "duplicate trait requirement: a common callable form has no provably distinct argument type (spec/07,08)") />
+                            val domain = match origin { FrontendDeclarationOrigin.SourceAdmission => <FailureDomain.Source />, FrontendDeclarationOrigin.Raw => <FailureDomain.Unclassified /> }
+                            return <Result.Err error=self.diagnosticAt(offset: reqs[b].nameStart, msg: "duplicate trait requirement: a common callable form has no provably distinct argument type (spec/07,08)", failureDomain: domain) />
                         }
                     }
                     b += 1U64
@@ -56,6 +63,9 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
+}
+
+pub impl Comp {
     inout fn methodWitnessesAConformance(recvStart: U64, recvLen: U64, mStart: U64, mLen: U64) -> Bool {
         val qRecv: U64 = intern(c: inout self, start: recvStart, len: recvLen)
         val qM: U64 = intern(c: inout self, start: mStart, len: mLen)
