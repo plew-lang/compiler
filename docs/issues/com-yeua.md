@@ -795,3 +795,33 @@ completion, and a raw healthy-template-to-incomplete mutation contrast. No
 repair or completion is claimed by this investigation.
 
 [Evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-call-inference-investigation.json).
+
+Call-inference repair scenarios: preserve the eight CLI refusals and positive
+contextual inference; report authored incomplete source as Source through
+repeated body requests; preserve the same error as Unclassified after public
+raw replacement of a healthy open source template with unresolved slots,
+wrong arity, or invalid pool range. Reuse the private source publication and
+recipe identity rather than storing another copy of selection/inference data.
+Before implementation, the new native fixture aborts specifically at
+"source inference lost its origin" with the fixed 4fd1f1d0 candidate;
+preparation and native build both succeed. Product and raw controls are pending.
+
+### Incomplete call inference origin checkpoint
+
+Compiler b7d4c530 transports the source origin on the transient Incomplete
+parameter state. Only the recorded reader can pass a private saved operation
+index. An unresolved zero slot requires a valid saved substitution and exact
+source publication/recipe/site/expression identity. Malformed arity/range or
+nonzero invalid type references remain Unclassified; public raw query and
+raw template replacement cannot grant Source. Complete substitutions avoid
+provenance checks; the pool is scanned once and no parallel fact store is added.
+
+All eight fixtures pass exact baseline stderr/status/channel comparison in
+check/AOT/ORC (24 executions), now Source. Normal generic array inference,
+associated result context and provided default forwarding pass check and exact
+ORC output (six executions). New native fixture prints ok: cached source
+refusal, healthy body, and raw zero/arity/range/invalid-TypeRef contrasts.
+Independent review's missing invalid-TypeRef control was added and executed;
+no further scoped findings remain. Broad/final gates and com-yeua remain open.
+
+[Evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-call-inference-rejection.json).
