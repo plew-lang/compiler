@@ -318,7 +318,7 @@ pub impl Comp {
                 }
                 val function = self.arena.functionAt(index: callee)
                 try self.checkSourceMethodVisibility(exprId: exprId, receiverTerm: template.receiverTypeTerm, function: function)
-                try self.verifySelectedMethodReceiver(recv: recv, function: function, args: args)
+                try self.verifySelectedMethodReceiverWithOrigin(recv: recv, function: function, args: args, origin: <Optional.Some v=index />)
                 val environment = try self.recordedDirectCallEnvironment(function: function, receiverTerm: template.receiverTypeTerm, typeArgs: self.callTemplateTypeArgs(range: typeArgs), proof: self.thawStaticConformanceProof(id: proofId))
                 try self.checkSelectedMethodArguments(exprId: exprId, function: function, environment: environment, args: args)
                 self.recordResolvedMethodCallee(id: exprId, callee: callee)
@@ -331,7 +331,7 @@ pub impl Comp {
                     }
                     _ => {}
                 }
-                try self.verifySelectedMethodReceiver(recv: recv, function: function, args: args)
+                try self.verifySelectedMethodReceiverWithOrigin(recv: recv, function: function, args: args, origin: <Optional.Some v=index />)
                 // Argument types/bounds use the retained trait substitution in
                 // source-call closure, including selected provided declarations.
             }
@@ -341,7 +341,7 @@ pub impl Comp {
                         if traitIndex >= self.decls.traitCount() || slot == 0U64 || slot > self.decls.traitAt(index: traitIndex).reqs.count() {
                             return <Result.Err error=self.diagnosticAt(offset: offset, msg: "internal error: selected dynamic method has no requirement") />
                         }
-                        try self.verifySelectedMethodReceiver(recv: recv, function: self.traitReqAt(reqs: self.decls.traitAt(index: traitIndex).reqs, index: slot - 1U64), args: args)
+                        try self.verifySelectedMethodReceiverWithOrigin(recv: recv, function: self.traitReqAt(reqs: self.decls.traitAt(index: traitIndex).reqs, index: slot - 1U64), args: args, origin: <Optional.Some v=index />)
                     }
                     DynamicCallTemplateTarget.ClosureField(fieldIndex: _, fnTypeTerm: _) => {}
                     _ => { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "internal error: recorded method has a non-method dynamic target") /> }
@@ -353,6 +353,12 @@ pub impl Comp {
     }
 
     inout fn verifySelectedMethodReceiver(recv: U64, function: Func, args: ArgRange) -> Result[(), CompileDiagnostic] {
+        return self.verifySelectedMethodReceiverWithOrigin(recv: recv, function: function, args: args, origin: <Optional.None />)
+    }
+}
+
+impl Comp {
+    inout fn verifySelectedMethodReceiverWithOrigin(recv: U64, function: Func, args: ArgRange, origin: Optional[U64]) -> Result[(), CompileDiagnostic] {
         if function.selfMove {
             try self.verifyOwnershipSource(id: recv)
         }
@@ -368,7 +374,8 @@ pub impl Comp {
                 return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: recv), msg: "cannot call an `inout fn` method on a temporary value; the receiver must be a place (a variable or field) declared `mut val` (spec/03)") />
             }
             if !((try self.placeIsMutable(id: receiverPlace))) {
-                return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: recv), msg: "cannot call an `inout fn` method on an immutable binding; declare it with `mut val`") />
+                val domain = self.immutableReceiverFailureDomain(recv: recv, args: args, origin: origin)
+                return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: recv), msg: "cannot call an `inout fn` method on an immutable binding; declare it with `mut val`", failureDomain: domain) />
             }
             // overlapping `inout` (spec/03): an `inout fn` self IS an inout
             // position, so it pairs with every `inout` argument — statically-
@@ -386,6 +393,9 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
+}
+
+pub impl Comp {
     inout fn exprIsFloat(id: U64) -> Result[Bool, CompileDiagnostic] {
         match self.arena.exprs[id] {
             Expr.Float(start: _, len: _, tyStart: _, tyLen: _) => { return <Result.Ok value=true />}
@@ -580,4 +590,28 @@ impl Comp {
         }
     }
 
+}
+
+impl Comp {
+    fn immutableReceiverFailureDomain(recv: U64, args: ArgRange, origin: Optional[U64]) -> FailureDomain {
+        val index = match origin {
+            Optional.Some(v: val index) => index,
+            Optional.None => { return <FailureDomain.Unclassified /> }
+        }
+        if index >= self.callTemplateLocations.count() || !self.callTemplateLocations[index].publishedFromSource { return <FailureDomain.Unclassified /> }
+        val template = self.callTemplateAt(index: index)
+        val recipeId = template.resultTypeRecipe
+        if recipeId == 0U64 || recipeId > self.arena.semanticTypeRecipes.count() { return <FailureDomain.Unclassified /> }
+        val recipe = self.arena.semanticTypeRecipes[recipeId - 1U64]
+        val expression = recipe.sourceExpression.unwrapOr(fallback: self.arena.exprs.count())
+        if recipe.kind != 2U64 || !recipe.callSite.sameKey(other: template.siteKey) || !self.hasAuthoredMethodExpression(exprId: expression) { return <FailureDomain.Unclassified /> }
+        match self.arena.exprs[expression] {
+            Expr.Method(recv: val written, nameStart: _, nameLen: _, args: val arguments) |
+            Expr.ExtMethod(recv: val written, source: _, nameStart: _, nameLen: _, args: val arguments) => {
+                if written == recv && arguments.start == args.start && arguments.len == args.len { return <FailureDomain.Source /> }
+            }
+            _ => {}
+        }
+        return <FailureDomain.Unclassified />
+    }
 }
