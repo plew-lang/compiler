@@ -663,6 +663,13 @@ struct MethodLookupOrigin {
 }
 impl MethodLookupOrigin { factory }
 
+struct AuthoredBinaryExpression {
+    val op: I64
+    val lhs: U64
+    val rhs: U64
+}
+impl AuthoredBinaryExpression { factory }
+
 pub struct Comp {
     mut val checkingTraitOperandDependencies: Bool = false
     mut val traitDeclarationPremises: Dictionary[U64, TraitBound] = [:]
@@ -694,6 +701,7 @@ pub struct Comp {
     mut val callTemplateLocations: Array[SourceCallLocation]
     mut val viaWitnesses: Array[ViaWitness] = []
     mut val viaCallByFunction: Dictionary[U64, U64] = [:]
+    mut val authoredBinaryExpressions: Dictionary[U64, AuthoredBinaryExpression] = [:]
     mut val authoredMethodExpressions: Set[U64] = Set.new()
     mut val authoredValueBlockOwners: Dictionary[U64, U64] = [:]
     mut val authoredForIterators: Dictionary[U64, U64] = [:]

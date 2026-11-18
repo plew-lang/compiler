@@ -132,7 +132,7 @@ pub impl Comp {
         val pid: U64 = (try self.rebuildPlaceTemping(e: target, stmts: inout stmts))
         val vid: U64 = (try self.lowerExpr(e: value))
         val read: U64 = (try self.loweredPlaceRead(id: pid))
-        val binE: U64 = self.pushExpr(e: <Expr.Binary op=compoundBinOp(op: op) lhs=read rhs=vid />)
+        val binE: U64 = self.pushAuthoredBinaryExpression(op: compoundBinOp(op: op), lhs: read, rhs: vid)
         try self.lowerPlaceAssignInto(target: pid, value: binE, stmts: inout stmts)
         return <Result.Ok value=() />
     }
@@ -269,7 +269,7 @@ pub impl Comp {
         val target: U64 = (try self.rebuildSyntaxPlaceTemping(id: stmt.child0, stmts: inout stmts))
         val value: U64 = (try self.lowerSyntaxExpr(id: stmt.child1))
         val read: U64 = (try self.loweredPlaceRead(id: target))
-        val combined: U64 = self.pushExpr(e: <Expr.Binary op=compoundBinOp(op: stmt.op) lhs=read rhs=value />)
+        val combined: U64 = self.pushAuthoredBinaryExpression(op: compoundBinOp(op: stmt.op), lhs: read, rhs: value)
         try self.lowerPlaceAssignInto(target: target, value: combined, stmts: inout stmts)
         return <Result.Ok value=() />
     }
@@ -538,7 +538,7 @@ pub impl Comp {
                     }
                 } else {
                     val t: U64 = (try self.lowerExpr(e: target))
-                    val binE: U64 = self.pushExpr(e: <Expr.Binary op=compoundBinOp(op: op) lhs=t rhs=(try self.lowerExpr(e: value)) />)
+                    val binE: U64 = self.pushAuthoredBinaryExpression(op: compoundBinOp(op: op), lhs: t, rhs: (try self.lowerExpr(e: value)))
                     result = self.pushStmt(s: <Stmt.Assign target=t value=binE />)
                 }
             }

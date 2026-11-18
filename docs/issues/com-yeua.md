@@ -486,3 +486,26 @@ its fixture pass. Three successful source controls passed check and ORC,
 and the change passed independent re-review.
 
 [Producer replay](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-missing-method-producers.json).
+
+### Binary arithmetic witness rejection checkpoint
+
+A diagnostic-only probe places all 12 check/AOT and nine demanded ORC
+failures in the existing arithmetic-legality rejection. Lower now retains
+the exact arithmetic operation and operand IDs for written infix and
+compound assignments. The checker requires that receipt, the published
+operator template and its exact result recipe, and available receiver and
+right operand terms before attaching Source. The operator template writer
+is module-private, and raw template replacement revokes source publication.
+The failure path does not repeat witness lookup.
+
+The final candidate matches the baseline stderr, exit and terminal channel
+across all 36 executions. Check/AOT each report 12 Source, and demanded
+ORC reports nine Source. Three undemanded ORC inputs still succeed. An
+isolated build with source-operation publication suppressed produces eight
+same-diagnostic Unclassified failures and one unchanged lazy success
+across three controls. Five successful operator and compound-assignment
+controls pass check and ORC. Independent re-review found no remaining
+blocker for this slice. This does not extend to ambiguous Pending causes
+in other selection paths or to comparison, unary, and synthetic operators.
+
+[Producer replay](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-arithmetic-rejection.json).

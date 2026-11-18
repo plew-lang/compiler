@@ -1,6 +1,32 @@
 // Part of type inference/checking (root: _.pw): checking expressions, operators,
 // assignments, indices, and make-fields against an expected type.
 
+impl Comp {
+    inout fn binaryOperationFailureDomain(exprId: U64, op: I64, lhs: U64, rhs: U64, template: CallTemplate) -> FailureDomain {
+        match self.authoredBinaryExpressions.get(key: exprId) {
+            Optional.Some(v: val origin) => {
+                if origin.op != op || origin.lhs != lhs || origin.rhs != rhs { return <FailureDomain.Unclassified /> }
+            }
+            Optional.None => { return <FailureDomain.Unclassified /> }
+        }
+        if template.receiverTypeTerm == 0U64 || template.receiverTypeTerm >= self.arena.typeCount() {
+            return <FailureDomain.Unclassified />
+        }
+        val rhsTerm = self.semanticExprTerm(exprId: rhs)
+        if rhsTerm == 0U64 || rhsTerm >= self.arena.typeCount() { return <FailureDomain.Unclassified /> }
+        val index = self.callTemplateIndex(siteKey: template.siteKey)
+        val recipeId = template.resultTypeRecipe
+        if index >= self.callTemplateLocations.count() || !self.callTemplateLocations[index].publishedFromSource || recipeId == 0U64 || recipeId > self.arena.semanticTypeRecipes.count() {
+            return <FailureDomain.Unclassified />
+        }
+        val recipe = self.arena.semanticTypeRecipes[recipeId - 1U64]
+        if recipe.kind == 2U64 && recipe.callSite.sameKey(other: template.siteKey) && recipe.sourceExpression.unwrapOr(fallback: self.arena.exprs.count()) == exprId {
+            return <FailureDomain.Source />
+        }
+        return <FailureDomain.Unclassified />
+    }
+}
+
 pub impl Comp {
     // Logging may continue within one owner, but must retain the semantic
     // failure independently of conversions (invalid unary operators need none).
@@ -268,7 +294,8 @@ pub impl Comp {
                 return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: lhs), msg: "comparison needs an `Eq`/`Ord` witness — a struct/enum needs `impl T as Eq` (e.g. derive `@[Eq]`) for `==`/`!=` or `impl T as Ord` for `< <= > >=`; there is no built-in structural/tag comparison") />
             }
             if (try self.binTraitNeedsTrait(op: op, lhs: lhs, rhs: rhs)) {
-                return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: lhs), msg: "arithmetic operator needs Add/Sub/Mul/Div/Rem; not implemented for this type") />
+                val domain = self.binaryOperationFailureDomain(exprId: exprId, op: op, lhs: lhs, rhs: rhs, template: template)
+                return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: lhs), msg: "arithmetic operator needs Add/Sub/Mul/Div/Rem; not implemented for this type", failureDomain: domain) />
             }
         }
         match template.kind {

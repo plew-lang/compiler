@@ -1,5 +1,15 @@
 // Structural expression lowering. Expected types are supplied by Record.
 
+impl Comp {
+    inout fn pushAuthoredBinaryExpression(op: I64, lhs: U64, rhs: U64) -> U64 {
+        val exprId = self.pushExpr(e: <Expr.Binary op=op lhs=lhs rhs=rhs />)
+        if isBinTraitOp(op: op) {
+            self.authoredBinaryExpressions[exprId] = <AuthoredBinaryExpression op=op lhs=lhs rhs=rhs />
+        }
+        return exprId
+    }
+}
+
 pub impl Comp {
     // Value-position subscript syntax is an Index requirement call.  The
     // generated node has no source spelling of its own, so give it an explicit
@@ -169,7 +179,7 @@ pub impl Comp {
             ExprAst.Binary(val op, val lhs, val rhs, val span) => {
                 val l: U64 = (try self.lowerExpr(e: lhs))
                 val r: U64 = (try self.lowerExpr(e: rhs))
-                result = self.pushExpr(e: <Expr.Binary op=op lhs=l rhs=r />)
+                result = self.pushAuthoredBinaryExpression(op: op, lhs: l, rhs: r)
             }
             ExprAst.Call(val name, nameSpan: _, val args, val span) => {
                 // ORIGINAL offset (name is at the call's span start) — feeds moduleOf.
@@ -444,7 +454,7 @@ pub impl Comp {
             SyntaxExprKind.Binary => {
                 val lhs: U64 = (try self.lowerSyntaxExpr(id: e.child0))
                 val rhs: U64 = (try self.lowerSyntaxExpr(id: e.child1))
-                result = self.pushExpr(e: <Expr.Binary op=e.op lhs=lhs rhs=rhs />)
+                result = self.pushAuthoredBinaryExpression(op: e.op, lhs: lhs, rhs: rhs)
             }
             SyntaxExprKind.Call => {
                 val args = (try self.lowerSyntaxArgs(expr: e))

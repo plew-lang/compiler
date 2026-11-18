@@ -1712,6 +1712,9 @@ pub impl Comp {
         return <Result.Ok value=<OperatorSelection.Pending /> />
     }
 
+}
+
+impl Comp {
     inout fn recordOperatorTemplate(exprId: U64, op: I64, operandExprs: Array[U64], isUnary: Bool) -> Result[(), CompileDiagnostic] {
         if !isUnary && (op == opAnd() || op == opOr()) { return <Result.Ok value=() /> }
         // A typed integer sibling fixes an otherwise untyped numeric receiver
@@ -1796,6 +1799,9 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
+}
+
+pub impl Comp {
     // Source forms that own a call selection. Implicit calls are published
     // under their own synthetic sites; a surrounding value only owns context.
     fn sourceExprRequiresCallSelection(exprId: U64) -> Bool {
