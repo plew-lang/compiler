@@ -23,8 +23,10 @@ pub impl LlvmCtx {
             val instance = c.arena.bodyInstanceAt(index: bodyId - 1U64)
             val fi = instance.fnIdx
             if fi >= c.arena.functionCount() { continue }
-            if isAsyncFn(c: inout c, fi: fi) {
+            val function = c.arena.functionAt(index: fi)
+            if function.isAsync {
                 val signature = c.arena.bodySignature(bodyId: bodyId)
+                if signature.forwardsAsyncPromise { continue }
                 if !signature.ready || signature.parameterTypes.count() != signature.parameterPassings.count() {
                     return <Result.Err error=c.diagnosticAt(offset: c.arena.functionAt(index: fi).nameStart, msg: "async entry requires a finalized parameter contract") />
                 }

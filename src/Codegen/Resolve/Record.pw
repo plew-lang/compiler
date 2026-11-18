@@ -3408,7 +3408,7 @@ pub impl Comp {
                 pi += 1
             }
             if recordCallTemplates {
-                try self.recordSourceBodySignature(fnIdx: fnIdx, signature: <SourceBodySignature hasReceiver=f.hasRecv receiverTerm=self.cur.selfRef selfInout=f.selfInout selfMove=f.selfMove isAsync=f.isAsync hasReturnValue=f.hasRet resultTerm=self.semanticBodyReturnContext(fnIdx: fnIdx) block=f.body parameters=parameters />)
+                try self.recordSourceBodySignature(fnIdx: fnIdx, signature: <SourceBodySignature hasReceiver=f.hasRecv receiverTerm=self.cur.selfRef selfInout=f.selfInout selfMove=f.selfMove isAsync=self.arena.requiresAsyncActivation(function: f) hasReturnValue=f.hasRet || self.arena.forwardsAsyncPromise(function: f) resultTerm=self.semanticBodyReturnContext(fnIdx: fnIdx) block=f.body parameters=parameters />)
             }
             try self.recordBlock(blkId: f.body)
             try self.checkDefaultGenerator(fnIdx: fnIdx)

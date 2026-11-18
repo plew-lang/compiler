@@ -433,7 +433,7 @@ impl Comp {
             result = self.semanticCallableReturnTerm(function: declaration)
         }
         mut val bodyResult = result
-        if declaration.isAsync {
+        if self.arena.requiresAsyncActivation(function: declaration) {
             bodyResult = 0U64
             if declaration.hasRet {
                 bodyResult = result
@@ -4786,7 +4786,7 @@ pub impl Comp {
                     try self.scanType(ref: signature.resultType)
                 }
                 if f.isAsync { self.recordBodyTypeTermResult(bodyId: bodyId, source: self.declaredBodyReturnTerm(fnIdx: instance.fnIdx), result: signature.bodyResultType) }
-                self.arena.setBodySignature(bodyId: bodyId, parameters: signature.parameterTypes, passings: signature.parameterPassings, result: signature.resultType, receiverType: signature.receiverType, receiverPassing: signature.receiverPassing, bodyResult: signature.bodyResultType)
+                self.arena.setBodySignature(bodyId: bodyId, parameters: signature.parameterTypes, passings: signature.parameterPassings, result: signature.resultType, receiverType: signature.receiverType, receiverPassing: signature.receiverPassing, bodyResult: signature.bodyResultType, forwardsAsyncPromise: self.arena.forwardsAsyncPromise(function: f))
                 return <Result.Ok value=() />
             }
             Optional.None => {}
@@ -4810,7 +4810,7 @@ pub impl Comp {
             try self.scanType(ref: signatureResult)
         }
         val bodyResult = if f.isAsync { give (try self.groundAndRecordBodyType(ref: self.declaredBodyReturnTerm(fnIdx: instance.fnIdx), environment: instance.environment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: bodyId)) } else { give signatureResult }
-        self.arena.setBodySignature(bodyId: bodyId, parameters: signatureParameters, passings: self.selectedArgumentPassings(callee: instance.fnIdx), result: signatureResult, receiverType: if f.hasRecv { give instance.environment.receiverRef } else { give 0U64 }, receiverPassing: self.selectedReceiverPassing(callee: instance.fnIdx), bodyResult: bodyResult)
+        self.arena.setBodySignature(bodyId: bodyId, parameters: signatureParameters, passings: self.selectedArgumentPassings(callee: instance.fnIdx), result: signatureResult, receiverType: if f.hasRecv { give instance.environment.receiverRef } else { give 0U64 }, receiverPassing: self.selectedReceiverPassing(callee: instance.fnIdx), bodyResult: bodyResult, forwardsAsyncPromise: self.arena.forwardsAsyncPromise(function: f))
         return <Result.Ok value=() />
     }
 

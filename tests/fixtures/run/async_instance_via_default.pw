@@ -1,0 +1,29 @@
+use @Std/Async only { sleep }
+use @Std/Io only { print }
+
+struct Worker { val label: String }
+
+trait Action { async fn go() -> Promise[I64] }
+
+fn getCode() -> I64 {
+    print("default")
+    return 42I64
+}
+
+impl Worker {
+    async fn perform(code: I64 = getCode()) -> Promise[I64] {
+        await sleep(ms: 1)
+        print(self.label)
+        return code
+    }
+}
+
+impl Worker as Action {
+    async fn go() -> Promise[I64] via perform
+}
+
+async fn main() {
+    val pending = <Worker label=("copied" + " receiver") />.go()
+    print("caller")
+    print(await pending)
+}

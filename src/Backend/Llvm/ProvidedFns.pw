@@ -18,7 +18,7 @@ pub impl LlvmCtx {
                     // Receiver methods have their own ABI table. Async entry/resume and main
                     // likewise have dedicated emitters. Everything else is one ordinary
                     // free-function body, generic or not, keyed by this body id.
-                    if !(f.hasRecv) && !(f.isExtern) && !(f.isAsync) && !(c.nameIsMain(f: f)) {
+                    if !(f.hasRecv) && !(f.isExtern) && (!f.isAsync || c.arena.bodySignature(bodyId: bodyId).forwardsAsyncPromise) && !(c.nameIsMain(f: f)) {
                         if genFnSlotForBody(bodyId: bodyId, st: inout self) == self.genFnK.count() {
                     if c.traceCodegen {
                         eprint(text: "[trace-codegen] frozen free body declare id=")

@@ -24,7 +24,8 @@ pub impl Comp {
     inout fn verifyFunc(f: Func, abstract: Bool = false) -> Result[(), CompileDiagnostic] {
         try self.checkFunctionReturns(f: f)
         val declarationReceiver = self.parametricSelfRef(f: f)
-        if f.hasRet {
+        val forwardsPromise = self.arena.forwardsAsyncPromise(function: f)
+        if f.hasRet || forwardsPromise {
             self.cur.retVoid = false
             mut val rStart: U64 = f.retStart
             mut val rLen: U64 = f.retLen
@@ -36,7 +37,16 @@ pub impl Comp {
             // even for `-> Promise[I64]`; the implicit `-> I64` form is already the inner
             // type). Unwrap an explicitly-written Promise[T] to T so the return check uses
             // T. (tcCheckValue handles a literal/array return against the inner ref.)
-            if f.isAsync {
+            if forwardsPromise {
+                rTy = self.semanticBodyReturnContext(fnIdx: self.cur.checkFn)
+                if rTy == 0U64 || rTy >= self.arena.typeCount() {
+                    return <Result.Err error=self.diagnosticAt(offset: self.fnAnchor(f: f), msg: "async forwarding requires a resolved Promise result") />
+                }
+                val result = self.arena.typeTermAt(index: rTy)
+                rStart = result.nameStart
+                rLen = result.nameLen
+                rArr = false
+            } else if f.isAsync {
                 if rangeEquals(bytes: self.arena.bytes, start: rStart, len: rLen, kw: "Promise") {
                     if rTy != 0U64 {
                         if rTy < self.arena.typeCount() {

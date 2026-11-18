@@ -103,7 +103,7 @@ impl Comp {
             position += 1U64
         }
         val expected = witnessSignature.resultTerm
-        val actual = self.sourceFacts.expressionHead(owner: sourceOwner, exprId: delegation.resultExpr).term
+        val actual = self.sourceFacts.expressionHead(owner: sourceOwner, exprId: expression).term
         if !witness.isDiverging && !self.typeRefEq(a: expected, b: actual) && !(self.callableResultIsUnit(ref: expected) && self.callableResultIsUnit(ref: actual)) {
             return <Result.Err error=self.viaSignatureMismatch(offset: witness.defOffset) />
         }

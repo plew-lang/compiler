@@ -168,7 +168,10 @@ pub impl LlvmCtx {
         if body.fnIdx >= c.arena.functionCount() { return <Result.Err error=valueAbiFailure(message: "normal convention has an invalid function") /> }
         val declaration = c.arena.functionAt(index: body.fnIdx)
         val signature = c.arena.bodySignature(bodyId: bodyId)
-        if !signature.ready || signature.closureSignatureId != 0U64 || signature.parameterTypes.count() != signature.parameterPassings.count() || declaration.isAsync || declaration.isExtern || c.nameIsMain(f: declaration) || declaration.hasRecv != (signature.receiverType != 0U64) { return <Result.Err error=valueAbiFailure(message: "normal body signature is incomplete or belongs to another entry convention") /> }
+        if !signature.ready || signature.closureSignatureId != 0U64 || signature.parameterTypes.count() != signature.parameterPassings.count() || signature.requiresAsyncActivation(isAsync: declaration.isAsync) || declaration.isExtern || c.nameIsMain(f: declaration) || declaration.hasRecv != (signature.receiverType != 0U64) { return <Result.Err error=valueAbiFailure(message: "normal body signature is incomplete or belongs to another entry convention") /> }
+        if signature.forwardsAsyncPromise && (!declaration.isAsync || signature.resultType == 0U64 || !c.typeRefEq(a: signature.resultType, b: signature.bodyResultType)) {
+            return <Result.Err error=valueAbiFailure(message: "async forwarding body must deliver its public Promise directly") />
+        }
         mut val parameters: Array[LlvmLogicalParameter] = []
         if signature.receiverType != 0U64 {
             val mode = match signature.receiverPassing {

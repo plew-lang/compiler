@@ -25,8 +25,8 @@ pub impl LlvmCtx {
         if body.bodyInstance == 0U64 || body.bodyInstance > c.arena.bodyInstanceCount() || body.sourceFunction >= c.arena.functionCount() { return <Result.Err error=valueAbiFailure(message: "async body owner is invalid") /> }
         val instance = c.arena.bodyInstanceAt(index: body.bodyInstance - 1U64)
         val function = c.arena.functionAt(index: body.sourceFunction)
-        if instance.fnIdx != body.sourceFunction || !function.isAsync { return <Result.Err error=valueAbiFailure(message: "async activation requires an async body") /> }
         val signature = c.arena.bodySignature(bodyId: body.bodyInstance)
+        if instance.fnIdx != body.sourceFunction || !signature.requiresAsyncActivation(isAsync: function.isAsync) { return <Result.Err error=valueAbiFailure(message: "async activation requires an async body") /> }
         val noReceiver = match signature.receiverPassing { CallReceiverPassing.None => { give true } _ => { give false } }
         if !signature.ready || function.hasRecv == noReceiver || (signature.receiverType == 0U64) != noReceiver || signature.parameterTypes.count() != signature.parameterPassings.count() { return <Result.Err error=valueAbiFailure(message: "async activation signature is incomplete") /> }
         val receiverCount = if noReceiver { give 0U64 } else { give 1U64 }

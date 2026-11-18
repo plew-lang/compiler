@@ -1,0 +1,13 @@
+use @Std/Io only { print }
+
+trait Action { async fn go() -> Promise[I64] }
+struct Worker {}
+impl Worker as Action {
+    async fn go(code: I64 = 42I64) -> Promise[I64] { return code }
+}
+fn invoke[T](value: T) -> Promise[I64] where T: Action {
+    return value.go()
+}
+async fn main() {
+    print(await invoke(value: <Worker />))
+}

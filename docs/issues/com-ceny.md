@@ -1,6 +1,6 @@
 ---
 id: com-ceny
-status: in_progress
+status: closed
 deps: [com-atac]
 links: []
 created: 2026-11-18T13:58:58Z
@@ -61,3 +61,31 @@ Mid ownership and access checking remain responsible for the forwarding body,
 including any synchronous effects in defaults. The LLVM body route must read
 the same execution classification as Mid. It must not infer forwarding from
 an await/call sequence in an authored async body.
+
+## Implementation and independent review
+
+Lower marks the generated body and returns the selected call expression
+itself. Source and Mid use synchronous ownership for the adapter. Mono
+freezes the forwarding kind and the body result in the completed signature.
+Both AOT and ORC use that signature to route the body through ordinary
+ABI emission, which verifies the return against the public Promise term.
+The actual target still uses the async entry descriptor. The authored
+delegation check uses the same selected call expression.
+
+RED at `9c0e4cf8`: three frame and Promise allocations where two were
+expected. On the final candidate, five mechanical cases (ordinary via,
+suspended with a default, moved receiver, generated callable form and
+implicit Unit) emitted two allocations for each routine in AOT. A
+diagnostic-only snapshot printed emitted ORC body-module IR immediately
+before publication and confirmed the same counts. The authored
+await-forwarding control kept three allocations in both paths. All six
+ORC outputs matched exactly. Thirteen check/native controls and both
+async structural checks passed. The suspended copy/default and unique
+move fixtures passed focused LLVM 22 ASan/LSan, with exact stdout.
+
+Independent review inspected the selected call and direct Promise return,
+the acquisition and drop sites, lexical and final effect edges, and the
+frozen signature's publication and consumers. A supplemental ORC probe
+matched baseline and candidate evaluation order for explicit arguments,
+two defaults and a moved unique ordinary argument, with one deinit after
+suspension. Full-suite and phase-level performance gates remain separate.

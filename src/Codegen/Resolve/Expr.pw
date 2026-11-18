@@ -3295,6 +3295,7 @@ impl Comp {
     inout fn declaredBodyReturnTerm(fnIdx: U64) -> U64 {
         if fnIdx < self.arena.functionCount() {
             val function: Func = self.arena.functionAt(index: fnIdx)
+            if self.arena.forwardsAsyncPromise(function: function) { return self.semanticCallableReturnTerm(function: function) }
             if !function.hasRet { return 0U64 }
             if function.isAsync && function.retTy != 0U64 && function.retTy < self.arena.typeCount() {
                 val result: TypeRef = self.arena.typeAt(index: function.retTy)

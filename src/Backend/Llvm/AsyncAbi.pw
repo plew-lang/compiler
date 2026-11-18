@@ -13,7 +13,7 @@ pub impl LlvmCtx {
         val function = c.arena.functionAt(index: instance.fnIdx)
         val signature = c.arena.bodySignature(bodyId: bodyId)
         val noReceiver = match signature.receiverPassing { CallReceiverPassing.None => { give true } _ => { give false } }
-        if !function.isAsync || !signature.ready || function.hasRecv == noReceiver || (signature.receiverType == 0U64) != noReceiver || signature.parameterTypes.count() != signature.parameterPassings.count() { return <Result.Err error=valueAbiFailure(message: "async signature requires a completed async body") /> }
+        if !signature.requiresAsyncActivation(isAsync: function.isAsync) || !signature.ready || function.hasRecv == noReceiver || (signature.receiverType == 0U64) != noReceiver || signature.parameterTypes.count() != signature.parameterPassings.count() { return <Result.Err error=valueAbiFailure(message: "async signature requires a completed async body") /> }
         mut val parameters: Array[LlvmLogicalParameter] = []
         mut val result = self.voidty
         mut val resultTerm = 0U64

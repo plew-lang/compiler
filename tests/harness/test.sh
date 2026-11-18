@@ -316,6 +316,13 @@ else
     fail=$((fail + 1)); failed="$failed ready-async-plan-private"
 fi
 
+
+if PLEWC="$PLEWC" python3 -B ./tests/compiler/codegen/test-async-forwarding-activation.py; then
+    pass=$((pass + 1))
+else
+    fail=$((fail + 1)); failed="$failed async-forwarding-activation"
+fi
+
 if LLVM_CONFIG="$LC" python3 -B ./tests/compiler/codegen/test-source-entry-abi.py; then
     pass=$((pass + 1))
 else

@@ -130,7 +130,7 @@ pub fn analyzeMidGlobalAccess(c: inout Comp) -> Result[MidGlobalAccessAnalysis, 
                             // Foreign boundaries are accepted, never labelled
                             // pure. This graph has no edge to their absent body.
                             if selected.calleeBodyId != 0U64 && selected.calleeBodyId < bodyMap.count() {
-                                if !c.arena.functionAt(index: selected.callee).isAsync {
+                                if !c.arena.functionAt(index: selected.callee).isAsync || c.arena.bodySignature(bodyId: selected.calleeBodyId).forwardsAsyncPromise {
                                     if bodyMap[selected.calleeBodyId] == 0U64 {
                                         bodyMap[selected.calleeBodyId] = graph.node() + 1U64
                                         missingBodies.append(selected.calleeBodyId)

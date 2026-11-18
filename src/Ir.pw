@@ -1234,6 +1234,8 @@ pub impl SourceStatementRange { factory }
 // though arena children never have an independent lifetime.
 pub struct Block {
     pub val implicitResult: Bool = false
+    // Generated forwarding executes synchronously and returns the target Promise.
+    pub val forwardsAsyncPromise: Bool = false
     pub val stmtStart: U64
     pub val stmtLen: U64
 }
@@ -1658,7 +1660,6 @@ pub struct Conform {
 pub struct ViaWitness {
     pub val functionIndex: U64
     pub val callExpr: U64
-    pub val resultExpr: U64
 }
 
 // The semantic input of every trait query. `owner` is the resolved trait
@@ -2782,6 +2783,7 @@ pub impl ClosureSignature { factory }
 
 pub struct BodySignature {
     pub val ready: Bool = false
+    pub val forwardsAsyncPromise: Bool = false
     pub val receiverType: U64 = 0U64
     pub val receiverPassing: CallReceiverPassing = <CallReceiverPassing.None />
     pub val parameterTypes: Array[U64] = []
@@ -2791,7 +2793,10 @@ pub struct BodySignature {
     pub val bodyResultType: U64 = 0U64
     pub val closureSignatureId: U64 = 0U64
 }
-pub impl BodySignature { factory }
+pub impl BodySignature {
+    factory
+    fn requiresAsyncActivation(isAsync: Bool) -> Bool { return isAsync && !self.forwardsAsyncPromise }
+}
 
 // Frontend-published concrete results for a body-owned recipe or type term.
 // Scalar rows keep reading a fact independent of recipe/AST ownership.

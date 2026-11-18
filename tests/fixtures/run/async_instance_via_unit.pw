@@ -1,0 +1,8 @@
+use @Std/Io only { print }
+trait Action { async fn go() }
+struct Worker {}
+impl Worker { async fn perform() { print(42I64) } }
+impl Worker as Action { async fn go() via perform }
+async fn main() {
+    await <Worker />.go()
+}

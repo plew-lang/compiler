@@ -1,6 +1,14 @@
 // Body IDs and candidate links are one-based; zero is always a miss.
 // The registry owns navigation, while Comp owns semantic environment equality.
 pub impl Arena {
+    fn forwardsAsyncPromise(function: Func) -> Bool {
+        return function.isAsync && function.body != 0U64 && function.body < self.blocks.count() && self.blocks[function.body].forwardsAsyncPromise
+    }
+
+    fn requiresAsyncActivation(function: Func) -> Bool {
+        return function.isAsync && !self.forwardsAsyncPromise(function: function)
+    }
+
     fn bodyInstanceCount() -> U64 { return self.bodyInstances.count() }
     fn bodyInstanceAt(index: U64) -> BodyInstance { return self.bodyInstances[index] }
     fn bodyAdapterTarget(bodyId: U64) -> U64 { return self.bodyInstances[bodyId - 1U64].adapterTargetBodyId }
@@ -42,9 +50,9 @@ pub impl Arena {
         return self.bodySignatures[bodyId - 1U64]
     }
 
-    inout fn setBodySignature(bodyId: U64, parameters: Array[U64], passings: Array[CallArgumentPassing], result: U64, receiverType: U64 = 0U64, receiverPassing: CallReceiverPassing = <CallReceiverPassing.None />, bodyResult: U64 = 18446744073709551615U64) {
+    inout fn setBodySignature(bodyId: U64, parameters: Array[U64], passings: Array[CallArgumentPassing], result: U64, receiverType: U64 = 0U64, receiverPassing: CallReceiverPassing = <CallReceiverPassing.None />, bodyResult: U64 = 18446744073709551615U64, forwardsAsyncPromise: Bool = false) {
         if !self.bodySignatures[bodyId - 1U64].ready { self.readyBodySignatures.append(bodyId) }
-        self.bodySignatures[bodyId - 1U64] = <BodySignature ready=true receiverType=receiverType receiverPassing=receiverPassing parameterTypes=parameters parameterPassings=passings resultType=result bodyResultType=if bodyResult == 18446744073709551615U64 { give result } else { give bodyResult } />
+        self.bodySignatures[bodyId - 1U64] = <BodySignature ready=true forwardsAsyncPromise=forwardsAsyncPromise receiverType=receiverType receiverPassing=receiverPassing parameterTypes=parameters parameterPassings=passings resultType=result bodyResultType=if bodyResult == 18446744073709551615U64 { give result } else { give bodyResult } />
     }
 
     fn closureSignature(bodyId: U64) -> ClosureSignature {

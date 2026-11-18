@@ -262,7 +262,7 @@ pub fn canonicalMidBodyParameterTypesMatch(c: inout Comp, body: MidBodyNode) -> 
     if signature.closureSignatureId != 0U64 || instance.fnIdx == 18446744073709551615U64 { return true }
     if instance.fnIdx >= c.arena.functionCount() { return false }
     val declaration = c.arena.functionAt(index: instance.fnIdx)
-    if declaration.isAsync { return true }
+    if signature.requiresAsyncActivation(isAsync: declaration.isAsync) { return true }
     if declaration.isExtern || declaration.hasRecv != (signature.receiverType != 0U64) || signature.parameterTypes.count() != signature.parameterPassings.count() { return false }
     if signature.receiverType == 0U64 { match signature.receiverPassing { CallReceiverPassing.None => {} _ => { return false } } }
     val receiverCount = if signature.receiverType == 0U64 { give 0U64 } else { give 1U64 }

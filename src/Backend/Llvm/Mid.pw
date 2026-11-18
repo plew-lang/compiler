@@ -989,7 +989,7 @@ pub impl LlvmCtx {
         match selected.target { CallTarget.Direct => {} _ => { return <Result.Ok value=<MidCallPreflight.Target /> /> } }
         if selected.callee >= c.arena.functionCount() { return <Result.Ok value=<MidCallPreflight.Callee /> /> }
         val callee: Func = c.arena.functionAt(index: selected.callee)
-        if callee.isAsync && self.asyncEntrySlot(bodyId: selected.calleeBodyId) >= self.asyncEntryBodyIds.count() { return <Result.Ok value=<MidCallPreflight.Async /> /> }
+        if callee.isAsync && !c.arena.bodySignature(bodyId: selected.calleeBodyId).forwardsAsyncPromise && self.asyncEntrySlot(bodyId: selected.calleeBodyId) >= self.asyncEntryBodyIds.count() { return <Result.Ok value=<MidCallPreflight.Async /> /> }
         if callee.hasRecv {
             if !(try self.midCanonicalReceiverSupported(c: inout c, body: body, receiverId: term.callReceiver, passing: selected.receiverPassing)) {
                 if c.traceCodegen {
@@ -2067,10 +2067,11 @@ pub impl LlvmCtx {
         val callee: Func = c.arena.functionAt(index: selected.callee)
         mut val externalSlot: U64 = self.declId.count()
         if callee.isExtern { externalSlot = (try self.declareResolvedCFunction(c: inout c, selected: selected)) }
+        val asyncActivation = callee.isAsync && !c.arena.bodySignature(bodyId: selected.calleeBodyId).forwardsAsyncPromise
         mut val methodSlot: U64 = self.genMethBody.count()
         mut val freeSlot: U64 = self.genFnK.count()
         mut val useMethod: Bool = false
-        if !callee.isExtern && !callee.isAsync {
+        if !callee.isExtern && !asyncActivation {
             if callee.hasRecv {
                 methodSlot = (try self.ensureFinalGenMethodBody(c: inout c, bodyId: selected.calleeBodyId))
                 if methodSlot >= self.genMethBody.count() { return <Result.Ok value=false /> }
@@ -2081,12 +2082,12 @@ pub impl LlvmCtx {
             }
         }
         mut val asyncAbiId = 0U64
-        if callee.isAsync {
+        if asyncActivation {
             asyncAbiId = (try self.asyncNativeAbi(function: self.asyncEntryVal[self.asyncEntrySlot(bodyId: selected.calleeBodyId)], bodyId: selected.calleeBodyId, resume: false))
             if !c.typeRefEq(a: self.valueAbis[asyncAbiId - 1U64].resultTerm, b: selected.resultTypeRef) { return <Result.Err error=valueAbiFailure(message: "async call lost its frozen Promise result") /> }
         }
         mut val privateAbiId = asyncAbiId
-        if !callee.isExtern && !callee.isAsync {
+        if !callee.isExtern && !asyncActivation {
             val function = if useMethod { give self.genMethVal[methodSlot] } else { give self.genFnVal[freeSlot] }
             privateAbiId = self.valueAbiFunctions.getOr(key: LLVMIsAFunction(function), fallback: 0U64)
         }
@@ -2142,7 +2143,7 @@ pub impl LlvmCtx {
             argumentI += 1U64
         }
         mut val result: LLVMValueRef = LLVMConstInt(self.i64ty, 0U64, 0I32)
-        if callee.isAsync {
+        if asyncActivation {
             val slot: U64 = self.asyncEntrySlot(bodyId: selected.calleeBodyId)
             result = (try self.callAsyncEntryValueFunction(function: self.asyncEntryVal[slot], bodyId: selected.calleeBodyId, arguments: typedValues))
         } else if callee.isExtern { result = LLVMBuildCall2(self.b, self.declTy[externalSlot], self.declFn[externalSlot], arrayCPtr(values), values.count(), anon()) }
