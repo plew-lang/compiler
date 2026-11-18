@@ -58,7 +58,35 @@ fn check(family: U64, mode: U64) {
     }
     if mode != 1U64 { compiler.checkRecordedCallTemplateBound(templateIndex: index).unwrap() }
 }
+fn checkSyntheticMissingConstraint() {
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler,
+        input: <FrontendInput.Text text="trait Q {{}} fn free[T](value: T) where T: Q {{}} fn probe(value: I64) {{}}" path="synthetic-constraint.pw" />,
+        sources: <SourceAccess stdRoot=[] />).unwrap()
+    val owner = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "probe").nameId)
+    val callee = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "free").nameId)
+    val function = compiler.arena.functionAt(index: owner)
+    val parameter = compiler.funcParamAt(params: function.params, index: 0U64)
+    val arguments = compiler.publishCallTemplateArguments(args: [<CallTemplateArgument source=<CallArgumentSource.Term exprId=0U64 term=parameter.ty /> labelStart=parameter.nameStart labelLen=parameter.nameLen hasLabel=true isInout=false />])
+    val types = compiler.publishCallTemplateTypeArgs(args: [parameter.ty])
+    val index = compiler.callTemplateCount()
+    compiler.cur.checkFn = owner
+    val site = <CallSiteKey ownerFnIdx=owner originKind=1U64 originStart=function.nameStart originEnd=function.nameStart + function.nameLen originSerial=900U64 />
+    if !compiler.appendCallTemplate(template: <CallTemplate siteKey=site kind=<CallTemplateKind.Direct callee=callee receiver=<CallTemplateReceiver.None /> args=arguments calleeTypeArgs=types proofId=0U64 /> />) {
+        panic("synthetic call setup failed")
+    }
+    match compiler.prepareCallTemplateConstraints(templateIndex: index) {
+        Result.Err(error: val diagnostic) => {
+            if diagnostic.message != "type argument does not conform to the trait required by `where`" || diagnostic.isSourceRejection() {
+                panic("synthetic missing proof was misclassified")
+            }
+        }
+        Result.Ok(value: _) => { panic("synthetic call without a proof was admitted") }
+    }
+}
+
 fn main() {
+    checkSyntheticMissingConstraint()
     mut val family = 0U64
     while family < 3U64 {
         mut val mode = 0U64

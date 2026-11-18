@@ -277,3 +277,18 @@ The diagnostic rebuild makes 28 of 29 focused cases Source and keeps all
 (overlapping_inout_ref_self) stays Unclassified pending the stable-cell
 proof. Four accepted JIT controls pass. The initial all-place trial is
 superseded by the independently reviewed narrowed candidate.
+
+## Selected Where Refusal Classification
+
+Both trait_subject_arity_confer and
+associated_condition_normalization_nested_missing were traced in check,
+AOT, and lazy to the missing proof in prepareCallTemplateConstraints.
+[Producer trace](../../../evidence/rejection-domains/diagnostic-domain-implementation/where-source-producer-trace.json).
+The proposed classification reads the already attached source expression
+recipe on the missing-proof branch. It requires a matching lexical
+operation, a valid subject and a registered trait owner. Unmatched or
+synthetic origins remain fail-closed. The internal raw control uses a
+source-shaped key but no matching expression receipt. It must retain
+the same reason and remain non-Source. Existing plan retention behavior
+and the operator/protocol refusal branches are unchanged. Execution of
+this candidate is pending the running formal measurement.

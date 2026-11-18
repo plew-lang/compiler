@@ -1387,7 +1387,8 @@ pub impl Comp {
                     }
                     _ => {}
                 }
-                return <Result.Err error=self.diagnosticAt(offset: bound.offset, msg: "type argument does not conform to the trait required by `where`") />
+                val domain = self.missingCallConstraintDomain(template: template, bound: bound)
+                return <Result.Err error=self.diagnosticAt(offset: bound.offset, msg: "type argument does not conform to the trait required by `where`", failureDomain: domain) />
             }
             try self.checkDeclarationCallProof(proof: proof, scope: scope, offset: template.siteKey.originStart)
             for step in (try self.recordSelectedBoundNormalizations(bound: bound, proof: proof, assumptions: assumptions)) {
@@ -1402,6 +1403,31 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
+}
+
+impl Comp {
+    // Only a missing proof for a valid, authored call is a source refusal.
+    // A synthetic operation or an unbound recipe still fails closed.
+    inout fn missingCallConstraintDomain(template: CallTemplate, bound: TraitBound) -> FailureDomain {
+        val site = template.siteKey
+        val recipeId = template.resultTypeRecipe
+        if site.originKind != 1U64 || recipeId == 0U64 || recipeId > self.arena.semanticTypeRecipes.count() {
+            return <FailureDomain.Unclassified />
+        }
+        if bound.subject == 0U64 || bound.subject >= self.arena.typeCount() || self.decls.traitOwnerIndex(offset: bound.constraint.key.owner) >= self.decls.traitOwnerCount() {
+            return <FailureDomain.Unclassified />
+        }
+        val recipe = self.arena.semanticTypeRecipes[recipeId - 1U64]
+        val expression = recipe.sourceExpression.unwrapOr(fallback: self.arena.exprs.count())
+        if recipe.kind != 2U64 || !recipe.callSite.sameKey(other: site) || expression >= self.arena.exprs.count() {
+            return <FailureDomain.Unclassified />
+        }
+        match self.sourceCallSiteKey(fnIdx: site.ownerFnIdx, exprId: expression, slot: site.slot) {
+            Result.Ok(value: val authored) => { if authored.sameKey(other: site) { return <FailureDomain.Source /> } }
+            Result.Err(error: _) => {}
+        }
+        return <FailureDomain.Unclassified />
+    }
 }
 
 pub impl Comp {
