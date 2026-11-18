@@ -931,3 +931,41 @@ Independent source/correction review found no remaining scoped issue.
 Formal final gates and com-yeua remain open.
 
 [Evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-witness-return-rejection.json).
+
+### Witness factory-kind and parameter-ownership scenarios
+
+Use existing private declaration origin only on confirmed factory-kind
+(isFactory / isAnonymousFactory) and argument ownership (inout/move/borrow)
+mismatches. Keep calling convention, result, Missing, read/constraint and
+publication errors unchanged. No added state, lookup, comparison or loop.
+
+Two existing fixtures cover factory-as-associated-method and default-argument
+ownership mismatch in check/AOT/ORC. New native source/raw tests cover each
+reason through both owned constructors and both caller-owned analyzers. Healthy
+owned state is mutated via the real witness-ID link to a well-typed same-selector
+function of wrong kind/mode; both public checkers must preserve the exact reason
+as Unclassified. Preserve ordinary default forwarding, factories and inout
+witness positives; no successful re-publication of completed evidence required.
+Native baseline setup succeeds and fails specifically at
+"source witness contract lost its origin" (exit134).
+
+### Witness factory-kind and parameter-ownership checkpoint
+
+Only the two confirmed mismatch branches select Source/Unclassified from the
+existing private declaration origin. Calling convention, result mismatch,
+Missing, all fallible reads/queries and publication behavior are unchanged.
+The comparison order and public checker signatures are unchanged; no new
+state, scan, lookup or declaration copy.
+
+Two existing fixtures retain exact stderr/status/channel in check/AOT/ORC
+(six executions), now Source. Default forwarding, fallible factories, generic
+inout witnesses and via forms pass check and exact ORC output (eight executions).
+New witness_contract_failure_domain native fixture prints ok. Each reason has
+owned-two-entry Source and caller-owned-two-entry Unclassified controls, then
+healthy owned admission plus a real witness-ID link mutation to Other.value
+(non-factory) or Other.act (inout argument). Both public checkers preserve the
+exact mismatch as Unclassified. No successful re-publication is requested.
+Independent design/source review has no remaining required finding.
+Formal final gates and com-yeua remain open.
+
+[Evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-witness-contract-rejection.json).

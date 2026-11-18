@@ -1,0 +1,65 @@
+use /Frontend only { Comp, FrontendInput, openFrontend, openFrontendForRequests, analyzeFrontendDeclarations, analyzeFrontendForRequests, spansEqual }
+use /SourceAccess only { SourceAccess }
+use /Diag only { CompileDiagnostic, FailureDomain }
+use @Std/Io only { print }
+
+fn main() {
+    val factoryError = "a factory requirement must be implemented by the matching factory declaration"
+    val ownershipError = "implementation parameter ownership does not match the trait requirement"
+    verifySource(text: "trait Build {{ factory(value: I64) }} struct X {{ val raw: I64 }} impl X as Build {{ assoc fn value(value: I64) -> X {{ return <X raw=value /> }} }} fn main() {{}}", message: factoryError)
+    verifySource(text: "trait A {{ fn act(value: I64) }} struct X {{}} impl X as A {{ fn act(value: inout I64, count: I64 = 5I64) {{ value += count }} }} fn main() {{}}", message: ownershipError)
+    verifyRaw(text: "trait Build {{ factory(value: I64) }} struct X {{ val raw: I64 }} impl X as Build {{ factory(value: I64) {{ return <X raw=value /> }} }} struct Other {{}} impl Other {{ assoc fn value(value: I64) -> X {{ return <X raw=value /> }} }} fn main() {{}}", method: "value", message: factoryError)
+    verifyRaw(text: "struct Item {{}} trait Action {{ fn act(value: Item) }} struct Owner {{}} impl Owner as Action {{ fn act(value: Item) {{}} }} struct Other {{}} impl Other {{ fn act(value: inout Item) {{}} }} fn main() {{}}", method: "act", message: ownershipError)
+    print("ok")
+}
+
+fn verifySource(text: String, message: String) {
+    val input = <FrontendInput.Text path="witness-contract.pw" text=text />
+    val sources = <SourceAccess stdRoot=[] />
+    requireFailure(result: openFrontend(input: input, sources: sources), message: message, source: true)
+    requireFailure(result: openFrontendForRequests(input: input, sources: sources), message: message, source: true)
+    mut val raw = <Comp />
+    requireFailure(result: analyzeFrontendForRequests(c: inout raw, input: input, sources: sources), message: message, source: false)
+    mut val declarations = <Comp />
+    requireFailure(result: analyzeFrontendDeclarations(c: inout declarations, input: input, sources: sources), message: message, source: false)
+}
+
+fn verifyRaw(text: String, method: String, message: String) {
+    mut val compiler = checked(openFrontendForRequests(input: <FrontendInput.Text path="raw-witness-contract.pw" text=text />, sources: <SourceAccess stdRoot=[] />))
+    if compiler.decls.conformCount() != 1U64 { panic("unexpected conformance") }
+    val conformance = compiler.decls.conformAt(index: 0U64)
+    val traitIndex = compiler.resolveTraitDef(cf: conformance)
+    val other = compiler.internBytes(s: "Other")
+    val name = compiler.internBytes(s: method)
+    mut val wrong = compiler.arena.functionCount()
+    for index in 0U64..<compiler.arena.functionCount() {
+        val function = compiler.arena.functionAt(index: index)
+        if spansEqual(c: inout compiler, aStart: function.nameStart, aLen: function.nameLen, bStart: name.nameStart, bLen: name.nameLen) &&
+           spansEqual(c: inout compiler, aStart: function.recvStart, aLen: function.recvLen, bStart: other.nameStart, bLen: other.nameLen) { wrong = index }
+    }
+    if wrong == compiler.arena.functionCount() || conformance.witnessFuncIds.len != 1U64 { panic("missing witness mutation target") }
+    compiler.decls.conformFuncIdPool[conformance.witnessFuncIds.start] = wrong
+    requireFailure(result: compiler.checkConformanceMethodBounds(conformIndex: 0U64, traitIndex: traitIndex), message: message, source: false)
+    requireFailure(result: compiler.checkConformances(), message: message, source: false)
+}
+
+fn requireFailure[T](result: Result[T, CompileDiagnostic], message: String, source: Bool) {
+    match result {
+        Result.Ok(value: _) => { panic("wrong witness contract accepted") }
+        Result.Err(error: val diagnostic) => {
+            if diagnostic.message != message { panic(diagnostic.message) }
+            if source {
+                match diagnostic.failureDomain { FailureDomain.Source => {} _ => { panic("source witness contract lost its origin") } }
+            } else {
+                match diagnostic.failureDomain { FailureDomain.Unclassified => {} _ => { panic("raw witness contract became source") } }
+            }
+        }
+    }
+}
+
+fn checked[T](result~: Result[T, CompileDiagnostic]) -> T {
+    match result {
+        Result.Ok(value: val value) => { return value }
+        Result.Err(error: val diagnostic) => { panic(diagnostic.message) }
+    }
+}

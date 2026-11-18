@@ -1253,7 +1253,8 @@ impl Comp {
                     }
                     matched = true
                     if function.isFactory != requirement.isFactory || function.isAnonymousFactory != requirement.isAnonymousFactory {
-                        return <Result.Err error=self.diagnosticAt(offset: function.defOffset, msg: "a factory requirement must be implemented by the matching factory declaration") />
+                        val domain = match origin { FrontendDeclarationOrigin.SourceAdmission => <FailureDomain.Source />, FrontendDeclarationOrigin.Raw => <FailureDomain.Unclassified /> }
+                        return <Result.Err error=self.diagnosticAt(offset: function.defOffset, msg: "a factory requirement must be implemented by the matching factory declaration", failureDomain: domain) />
                     }
                     if function.isAssoc != requirement.isAssoc || function.selfInout != requirement.selfInout || function.selfMove != requirement.selfMove || function.isAsync != requirement.isAsync {
                         return <Result.Err error=self.diagnosticAt(offset: function.defOffset, msg: "implementation calling convention does not match the trait requirement") />
@@ -1263,7 +1264,8 @@ impl Comp {
                         val actual = self.funcParamAt(params: function.params, index: parameterIndex)
                         val expected = self.funcParamAt(params: requirement.params, index: parameterIndex)
                         if actual.isInout != expected.isInout || actual.isMove != expected.isMove || actual.isBorrow != expected.isBorrow {
-                            return <Result.Err error=self.diagnosticAt(offset: function.defOffset, msg: "implementation parameter ownership does not match the trait requirement") />
+                            val domain = match origin { FrontendDeclarationOrigin.SourceAdmission => <FailureDomain.Source />, FrontendDeclarationOrigin.Raw => <FailureDomain.Unclassified /> }
+                            return <Result.Err error=self.diagnosticAt(offset: function.defOffset, msg: "implementation parameter ownership does not match the trait requirement", failureDomain: domain) />
                         }
                         parameterIndex += 1U64
                     }
