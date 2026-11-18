@@ -129,9 +129,12 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
+}
+
+impl Comp {
     inout fn checkAuthoredTypeView(receiver: U64, offset: U64, lexical: Optional[SemanticCompletionOwner], admittedRecipe: Bool, occurrence: U64) -> Result[(), CompileDiagnostic] {
         val sources = self.arena.typeViewSources(ref: receiver)
-        try self.checkTraitSubjectViewCycles(sources: sources, offset: offset)
+        try self.checkAuthoredTraitViewCycles(sources: sources, offset: offset)
         mut val selectedCount = 0U64
         for source in sources {
             if source.surfaceId != 0U64 {
@@ -157,6 +160,9 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
+}
+
+pub impl Comp {
     inout fn lexicalViewAssumptions(owner: SemanticCompletionOwner) -> Result[Array[DeclarationBoundRef], CompileDiagnostic] {
         match owner {
             SemanticCompletionOwner.Function(index: val function) => {

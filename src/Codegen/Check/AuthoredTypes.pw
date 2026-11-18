@@ -2736,7 +2736,7 @@ impl Comp {
     // A trait selector can disambiguate the premise for an extension, and
     // an already applicable extension can establish the selector's trait.
     inout fn admitTypeExtensionSources(subject: U64, sources: Array[ResolvedViewSource], assumptions: Array[DeclarationBoundRef], normalizations: Array[ProjectionNormalizationStep], selectedProjection: Optional[StaticConformanceProof], offset: U64, projectionOutput: Bool = false) -> Result[Array[SourceExtensionViewProof], CompileDiagnostic] {
-        try self.checkTraitSubjectViewCycles(sources: sources, offset: offset)
+        try self.checkAuthoredTraitViewCycles(sources: sources, offset: offset)
         mut val pending: Array[ResolvedViewSource] = []
         mut val traitSelector: Optional[ResolvedViewSource] = <Optional.None />
         for source in sources {

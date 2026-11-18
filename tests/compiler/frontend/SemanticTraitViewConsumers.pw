@@ -2,6 +2,7 @@
 // argument recovery and recursive view-cycle entries, not a copied matcher.
 use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontend }
 use ../../../src/SourceAccess only { SourceAccess }
+use ../../../src/Diag only { FailureDomain }
 use ../../../src/Ir only { TypeRef, ResolvedViewSource, TraitInstanceKey, Expr, Param, MakeFieldRange, InstanceEnvironment, Conform }
 use @Std/Io only { print }
 use @Std/Process only { argAt }
@@ -9,6 +10,18 @@ use @Std/Process only { argAt }
 fn main() {
     val scenario = argAt(1I64)
     mut val compiler = <Comp />
+    if scenario == "invalidGenericViewRef" {
+        match compiler.checkGenericTypeViewCycles(ref: 999999U64, offset: 0U64) {
+            Result.Err(error: val diagnostic) => {
+                match diagnostic.failureDomain {
+                    FailureDomain.Input => { print(1I64) }
+                    _ => { print(0I64) }
+                }
+            }
+            Result.Ok(value: _) => { print(0I64) }
+        }
+        return
+    }
     analyzeFrontend(c: inout compiler, input: <FrontendInput.Text text="trait A[K] {{}} trait B[K] {{}} trait P[K] {{ type Item }} struct S {{}} impl S as P[I64] {{ type Item=I64 }} impl S as P[Bool] {{ type Item=Bool }} extension E {{ impl A[I64] as B[I64] {{}} }} extension F {{ impl B[I64] as A[I64] {{}} }} trait Zero {{}} trait OtherZero {{}} fn identity[T](value: T) -> T {{ return value }} fn main() {{}}" path="ViewConsumers.pw" />, sources: <SourceAccess />).unwrap()
     val integerName = compiler.internBytes(s: "I64")
     val integer = compiler.pushType(t: <TypeRef nameStart=integerName.nameStart nameLen=integerName.nameLen args=[] />)
@@ -158,6 +171,6 @@ fn main() {
     }
     match compiler.checkGenericTypeViewCycles(ref: viewed, offset: 0U64) {
         Result.Ok(value: _) => { print(scenario == "genericCycleControl" || scenario == "traitSourceActivation") }
-        Result.Err(error: val diagnostic) => { print(scenario == "genericCycleViewArgument" && diagnostic.message == "trait-to-trait conformance cycle") }
+        Result.Err(error: val diagnostic) => { print(scenario == "genericCycleViewArgument" && diagnostic.message == "trait-to-trait conformance cycle" && !diagnostic.isSourceRejection()) }
     }
 }

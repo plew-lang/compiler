@@ -5,8 +5,8 @@ use ../../../src/Diag only { FailureDomain, emitDiagnostic }
 use @Std/Io only { print }
 use @Std/Process only { argAt }
 
-fn requireInputFailure(compiler: inout Comp, message: String) {
-    match compiler.checkTraitSubjectCycles(activeExtIds: []) {
+fn requireInputFailure(compiler: inout Comp, message: String, activeExtIds: Array[U64] = []) {
+    match compiler.checkTraitSubjectCycles(activeExtIds: activeExtIds) {
         Result.Err(error: val diagnostic) => {
             if diagnostic.message != message {
                 emitDiagnostic(diagnostic: diagnostic)
@@ -25,7 +25,9 @@ fn requireInputFailure(compiler: inout Comp, message: String) {
 fn main() {
     val scenario = argAt(1I64)
     mut val compiler = <Comp />
-    if scenario == "missingOwner" {
+    if scenario == "unknownActiveExtension" {
+        requireInputFailure(compiler: inout compiler, message: "unknown extension identity in source set", activeExtIds: [999999U64])
+    } else if scenario == "missingOwner" {
         compiler.decls.registerConform(<Conform sourceModule=0U64 typeStart=0U64 typeLen=0U64 typeId=0U64 subjectTraitOwner=1U64 traitStart=0U64 traitLen=0U64 derived=false />)
         requireInputFailure(compiler: inout compiler, message: "invalid trait-cycle input: missing or inconsistent trait owner")
     } else if scenario == "foreignOwner" || scenario == "invalidRange" || scenario == "traitArity" {

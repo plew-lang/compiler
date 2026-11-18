@@ -191,20 +191,32 @@ pub impl Comp {
     // complete type tree here: a view source-set nested in Array[T#E#F], a
     // tuple, or a function type is no less structural than a top-level view.
     inout fn checkGenericTypeViewCycles(ref: U64, offset: U64) -> Result[(), CompileDiagnostic] {
-        if ref == 0U64 || ref >= self.arena.typeCount() { return <Result.Ok value=() /> }
+        return self.requireGenericTypeViewAcyclic(ref: ref, offset: offset, domain: <FailureDomain.Unclassified />)
+    }
+}
+
+impl Comp {
+    inout fn requireGenericTypeViewAcyclic(ref: U64, offset: U64, domain: FailureDomain) -> Result[(), CompileDiagnostic] {
+        if ref == 0U64 { return <Result.Ok value=() /> }
+        if ref >= self.arena.typeCount() {
+            return <Result.Err error=self.diagnosticAt(offset: offset, msg: "invalid type reference in trait view cycle check", failureDomain: <FailureDomain.Input />) />
+        }
         // Projection mirrors do not own a second view set. Their receiver is
         // a child in the same traversal as selector arguments and record fields.
         if self.arena.typeTermAt(index: ref).assocNameId == 0U64 {
-            try self.checkTraitSubjectViewCycles(sources: self.arena.typeViewSources(ref: ref), offset: offset)
+            try self.requireTraitSubjectViewAcyclic(sources: self.arena.typeViewSources(ref: ref), offset: offset, domain: domain)
         }
         mut val index = 0U64
         while index < self.typeTermRefChildCount(ref: ref) {
-            try self.checkGenericTypeViewCycles(ref: self.typeTermRefChildRef(ref: ref, index: index), offset: offset)
+            try self.requireGenericTypeViewAcyclic(ref: self.typeTermRefChildRef(ref: ref, index: index), offset: offset, domain: domain)
             index += 1U64
         }
         return <Result.Ok value=() />
     }
 
+}
+
+pub impl Comp {
     // Walk a method/assoc receiver in a generic body. A bare type / primitive / type-
     // parameter name here is a valid assoc-fn qualifier (`T.make()`, `Buffer.new()`),
     // not a value read — so it needs no value check (the parent Method arm bound-checks a
@@ -812,13 +824,17 @@ pub impl Comp {
             // their TypeRefs carry siteOffset=0 (the general verifier uses
             // that sentinel to skip concrete receiver checks).  Validate
             // their structural cycle rule here, once per declaration.
+            // A synthetic function row has no Lower-published signature.
+            val viewDomain = if self.sourceTypeUses.signatureFor(function: fnIdx).isSome() {
+                give <FailureDomain.Source />
+            } else { give <FailureDomain.Unclassified /> }
             mut val pi: U64 = 0U64
             while pi < f.params.count() {
                 val param: Param = self.funcParamAt(params: f.params, index: pi)
-                try self.checkGenericTypeViewCycles(ref: param.ty, offset: param.tyStart)
+                try self.requireGenericTypeViewAcyclic(ref: param.ty, offset: param.tyStart, domain: viewDomain)
                 pi += 1U64
             }
-            try self.checkGenericTypeViewCycles(ref: f.retTy, offset: f.retStart)
+            try self.requireGenericTypeViewAcyclic(ref: f.retTy, offset: f.retStart, domain: viewDomain)
             val noArgs: Array[U64] = []
             self.cur.locals = []
             self.cur.hasRecv = f.hasRecv

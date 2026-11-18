@@ -406,3 +406,24 @@ also produce Source with the original expected wording. View application
 still needs classification at the established authored or signature
 boundary: the composed extension fixture retains Unclassified at this
 checkpoint. The repair and overall review remain open.
+
+## Authored Views and Raw Cycle Requests
+
+Value views, authored type recipes, and generic signatures now reuse the
+typed violation. The adapters that issue Source for declarations or
+authored views are module-private. The generic function check uses
+Lower's signature receipt for the exact function. Inserting a synthetic
+function row does not create this receipt. The direct synthetic view path
+retains its structural refusal domain.
+
+Independent review exposed two raw admission holes. An unknown active
+extension ID succeeded on an empty graph and a nonzero out-of-range
+generic type reference was treated as absent. Both have executed native
+REDs. The active extension uses the admitted extension table and the
+type boundary now rejects out-of-range nonzero refs as Input, preserving
+zero as absence. The seven raw graph assertions including the new
+extension case passed native. On the candidate after the provenance
+change, all six source shapes in check, AOT, and lazy produce Source
+with the original cycle/growth reason (18 invocations). The final focused
+review found no remaining defect in these source/raw boundaries. Native
+re-execution of the latest generic-view and source controls is pending.

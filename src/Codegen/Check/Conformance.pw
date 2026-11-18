@@ -545,9 +545,16 @@ impl Comp {
 pub impl Comp {
     // The raw graph entry also accepts synthetic registration fixtures.
     inout fn checkTraitSubjectCycles(activeExtIds: Array[U64], offset: U64 = 0U64) -> Result[(), CompileDiagnostic] {
+        for identity in activeExtIds {
+            if !self.knownExtensionSource(identity: identity) {
+                return <Result.Err error=self.diagnosticAt(offset: offset, msg: "unknown extension identity in source set", failureDomain: <FailureDomain.Input />) />
+            }
+        }
         return self.requireTraitSubjectAcyclic(activeExtIds: activeExtIds, offset: offset, domain: <FailureDomain.Unclassified />)
     }
+}
 
+impl Comp {
     // A named extension is one module-crossing bundle.  Validate every
     // bundle only after registration has collected all of its declaration
     // parts and every bare edge, so the outcome cannot depend on load or
@@ -573,7 +580,11 @@ pub impl Comp {
     // source-set, extension names select their registered bundles regardless
     // of whether a particular receiver can use every member.  Applicability is
     // checked separately by the view validator.
-    inout fn checkTraitSubjectViewCycles(sources: Array[ResolvedViewSource], offset: U64) -> Result[(), CompileDiagnostic] {
+    inout fn checkAuthoredTraitViewCycles(sources: Array[ResolvedViewSource], offset: U64) -> Result[(), CompileDiagnostic] {
+        return self.requireTraitSubjectViewAcyclic(sources: sources, offset: offset, domain: <FailureDomain.Source />)
+    }
+
+    inout fn requireTraitSubjectViewAcyclic(sources: Array[ResolvedViewSource], offset: U64, domain: FailureDomain) -> Result[(), CompileDiagnostic] {
         mut val extIds: Array[U64] = []
         mut val i: U64 = 0U64
         while i < sources.count() {
@@ -589,10 +600,12 @@ pub impl Comp {
             }
             i += 1U64
         }
-        try self.checkTraitSubjectCycles(activeExtIds: extIds, offset: offset)
-        return <Result.Ok value=() />
+        return self.requireTraitSubjectAcyclic(activeExtIds: extIds, offset: offset, domain: domain)
     }
 
+}
+
+pub impl Comp {
     inout fn isMacrointerfaceCompatConform(cf: Conform) -> Bool {
         // Compatibility shim until spec/16's `macro Foo as Derive` surface is lowered
         // to a dedicated macro-provider IR. The current M1 dogfood represents built-in
