@@ -81,7 +81,10 @@ pub impl LlvmCtx {
                     if !lane.role.same(role: <LlvmParameterRole.Ordinary index=ordinary />) || lane.semanticType != signature.parameterTypes[ordinary] || lane.mode.key() != passing.key() { return <Result.Err error=valueAbiFailure(message: "async entry ordinary parameter contract mismatch") /> }
                 }
                 if !declaration.ownsAtEntry || declaration.isBorrowed || declaration.isInout || declaration.isCaptureCell || !c.typeRefEq(a: declaration.typeTerm, b: lane.semanticType) || plew_pointer_equal(lane.type, type) == 0I32 { return <Result.Err error=valueAbiFailure(message: "async parameter ownership/type mismatch") /> }
-                if lane.mode.key() == 1U64 && declaration.isUnique { return <Result.Err error=valueAbiFailure(message: "async activation cannot copy borrowed unique input") /> }
+                if lane.mode.key() == 1U64 {
+                    val destruction = (try c.checkedFinalDestruction(typeRef: declaration.typeTerm))
+                    if declaration.isUnique || (destruction != 0U64 && c.arena.finalDestructions[destruction - 1U64].isUnique) { return <Result.Err error=valueAbiFailure(message: "async activation cannot copy borrowed unique input") /> }
+                }
                 semanticType = lane.semanticType
                 mode = lane.mode
             }

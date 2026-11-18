@@ -1,5 +1,6 @@
 // Appended to an exact Backend.pw snapshot. This exercises the private physical
 // boundary; source acquisition/await/cleanup execute in existing async fixtures.
+use ./Ir only { FinalDestruction }
 use ./Frontend only { analyzeFrontendDeclarations, FrontendInput }
 use ./SourceAccess only { SourceAccess }
 extern(c) {
@@ -119,6 +120,12 @@ fn asyncPlanControl(mode: U64) {
     }
     val resumeFunction = requireAsyncOk(result: backend.declarePlannedBodyFunction(name: resumeName.ptr, abiId: resumeAbi, bodyId: resumeOwner), stage: "declare resume", mode: mode)
     val resume = if mode == 17U64 { give LLVMAddFunction(otherModule, resumeName.ptr, resumeSignature) } else { give resumeFunction }
+    if mode == 34U64 {
+        // Simulate a malformed local claiming copyability despite the completed
+        // ownership classification. Keep the physical representation unchanged.
+        val contract = requireAsyncOk(result: compiler.checkedFinalDestruction(typeRef: integer), stage: "frozen parameter classification", mode: mode)
+        compiler.arena.finalDestructions[contract - 1U64] = <FinalDestruction representation=contract typeRef=integer isUnique=true ready=true />
+    }
     val admissionResult = backend.admitMidAsyncActivation(c: inout compiler, canonical: if mode == 3U64 { give <MidCanonicalBody body=0U64 /> } else { give canonical }, entry: entry, resume: resume)
     if (mode >= 3U64 && mode <= 20U64) || mode == 28U64 || mode >= 29U64 {
         requireAsyncInternal(result: admissionResult, mode: mode)
@@ -225,6 +232,6 @@ fn main() {
     while mode <= 18U64 { asyncPlanControl(mode: mode) mode += 1U64 }
     asyncPlanControl(mode: 20U64)
     mode = 21U64
-    while mode <= 33U64 { asyncPlanControl(mode: mode) mode += 1U64 }
+    while mode <= 34U64 { asyncPlanControl(mode: mode) mode += 1U64 }
     write(s: "ok\n")
 }

@@ -1,6 +1,6 @@
 ---
 id: com-atac
-status: open
+status: closed
 deps: []
 links: []
 created: 2026-11-18T13:46:02Z
@@ -80,3 +80,24 @@ completed-async architecture checks. The two receiver lifetime fixtures
 are registered in the pre-optimization ASan ownership manifest. The
 first full suite (20261118T135447-test-411f83) stopped via its watchdog;
 a passing full suite, ASan and formal performance are still unverified.
+
+## Independent closure review
+
+The review of `9c0e4cf8` reproduced the expected AOT/JIT golden outputs and
+identified one remaining verifier regression. Async Ready admission trusted
+the Mid local's uniqueness bit on a Borrow lane. The new private mode 34
+keeps a Borrow descriptor and a local marked copyable while setting the
+frozen destruction contract to unique. The native fixture failed at mode 34
+with `malformed async activation accepted`, then passed all modes after
+restoring the frozen ownership classification check. The follow-up reviewer
+replayed the native harness and both architecture checks against the corrected
+source, and confirmed the common check covers ordinary and receiver Borrow.
+
+The corrected carrier passed all seven original positive fixtures in check,
+JIT and native AOT. The copied and moved receiver binaries also passed
+focused LLVM 22 pre-optimization IR instrumentation and ASan/LSan runtime
+checks with exact output. This closes receiver entry routing and acquisition.
+The mechanical forwarding activation count remains [com-ceny](com-ceny.md).
+The generic async limit and the source-side unique copy-self diagnostic
+remain [com-tn1m](com-tn1m.md). The full suite, full sanitizer gate and
+formal self-host performance remain required at the phase boundary.

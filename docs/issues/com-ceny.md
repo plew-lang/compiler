@@ -1,6 +1,6 @@
 ---
 id: com-ceny
-status: open
+status: in_progress
 deps: [com-atac]
 links: []
 created: 2026-11-18T13:58:58Z
