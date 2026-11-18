@@ -1411,7 +1411,7 @@ impl Comp {
     inout fn missingCallConstraintDomain(template: CallTemplate, bound: TraitBound, authored: Bool) -> FailureDomain {
         val site = template.siteKey
         val recipeId = template.resultTypeRecipe
-        if !authored || site.originKind != 1U64 || site.originEnd <= site.originStart || recipeId == 0U64 || recipeId > self.arena.semanticTypeRecipes.count() {
+        if !authored || recipeId == 0U64 || recipeId > self.arena.semanticTypeRecipes.count() {
             return <FailureDomain.Unclassified />
         }
         if bound.subject == 0U64 || bound.subject >= self.arena.typeCount() || self.decls.traitOwnerIndex(offset: bound.constraint.key.owner) >= self.decls.traitOwnerCount() {
@@ -1422,6 +1422,15 @@ impl Comp {
         if recipe.kind != 2U64 || !recipe.callSite.sameKey(other: site) || expression >= self.arena.exprs.count() {
             return <FailureDomain.Unclassified />
         }
+        // A forwarding call is synthetic, but its authored declaration
+        // imposes the bound. Authenticate the exact call retained by Lower.
+        if self.isAuthoredViaCall(owner: site.ownerFnIdx, expression: expression) {
+            match self.templateCallSiteKey(fnIdx: site.ownerFnIdx, exprId: expression, slot: site.slot) {
+                Result.Ok(value: val known) => { if known.sameKey(other: site) { return <FailureDomain.Source /> } }
+                Result.Err(error: _) => {}
+            }
+        }
+        if site.originKind != 1U64 || site.originEnd <= site.originStart { return <FailureDomain.Unclassified /> }
         match self.sourceCallSiteKey(fnIdx: site.ownerFnIdx, exprId: expression, slot: site.slot) {
             Result.Ok(value: val authored) => { if authored.sameKey(other: site) { return <FailureDomain.Source /> } }
             Result.Err(error: _) => {}

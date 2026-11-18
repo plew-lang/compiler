@@ -1113,6 +1113,9 @@ pub impl Comp {
                     if receiverTerm != 0U64 && receiverTerm < self.arena.typeCount() && self.arena.typeTermAt(index: receiverTerm).isAny {
                         return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "method is not part of the existential trait interface") />
                     }
+                    if receiverTerm != 0U64 && receiverTerm < self.arena.typeCount() && self.isAuthoredViaCall(owner: self.cur.checkFn, expression: exprId) {
+                        return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "no applicable `via` target for the declared requirement", failureDomain: <FailureDomain.Source />) />
+                    }
                     return <Result.Err error=self.unavailableSourceMethod(receiverTerm: receiverTerm, offset: self.exprOffset(id: exprId), fallback: "no matching method for this argument list") />
                 }
             }

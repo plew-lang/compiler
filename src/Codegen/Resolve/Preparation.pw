@@ -20,12 +20,93 @@ impl Comp {
         }
         try self.completeSourceConversions(owner: <SemanticCompletionOwner.Function index=owner />)
         val admitted = try self.admitRecordedBodyCallConstraints(owner: owner)
+        if self.viaWitnesses.count() != 0U64 {
+            match self.viaCallByFunction.get(key: owner) {
+                Optional.Some(v: val index) => { try self.verifySelectedDelegation(delegation: self.viaWitnesses[index]) }
+                Optional.None => {}
+            }
+        }
         try self.checkSourceConversionEvidence(owner: <SemanticCompletionOwner.Function index=owner />)
         try self.checkSourceDiagnosticFailures(owner: <SemanticCompletionOwner.Function index=owner />)
         try self.checkSourceTypingObligations(owner: <SemanticCompletionOwner.Function index=owner />)
         try self.checkNestedSourceFacts(owner: <SemanticCompletionOwner.Function index=owner />)
         self.finalizeLexicalCallStorage(owner: owner)
         for token in admitted { self.publishPreparedCallConstraints(admitted: token) }
+        return <Result.Ok value=() />
+    }
+
+    // Delegation is part of the declaration contract, even if the witness
+    // is never reached by lazy execution. This is the ordinary body request,
+    // so subsequent source and concrete consumers reuse its selected call.
+    inout fn prepareViaDelegations() -> Result[(), CompileDiagnostic] {
+        for delegation in self.viaWitnesses {
+            try self.prepareLexicalBody(fnIdx: delegation.functionIndex)
+        }
+        return <Result.Ok value=() />
+    }
+
+    fn isAuthoredViaCall(owner: U64, expression: U64) -> Bool {
+        match self.viaCallByFunction.get(key: owner) {
+            Optional.Some(v: val index) => {
+                val delegation = self.viaWitnesses[index]
+                return delegation.functionIndex == owner && delegation.callExpr == expression
+            }
+            Optional.None => { return false }
+        }
+    }
+
+    fn viaSignatureMismatch(offset: U64) -> CompileDiagnostic {
+        return self.diagnosticAt(offset: offset, msg: "`via` target signature does not match the declared requirement", failureDomain: <FailureDomain.Source />)
+    }
+
+    inout fn verifySelectedDelegation(delegation: ViaWitness) -> Result[(), CompileDiagnostic] {
+        val owner = delegation.functionIndex
+        val expression = delegation.callExpr
+        val witness = self.arena.functionAt(index: owner)
+        val sourceOwner = <SemanticCompletionOwner.Function index=owner />
+        val template = try self.callTemplateForSourceBody(fnIdx: owner, exprId: expression)
+        val selected = match (try self.selectedCallParameterState(template: template, exprId: expression)) {
+            SourceCallParameterState.Selected(function: val function, signature: val signature) => (function: function, signature: signature)
+            SourceCallParameterState.NotApplicable => { return <Result.Err error=self.viaSignatureMismatch(offset: witness.defOffset) /> }
+            _ => { return <Result.Err error=self.diagnosticAt(offset: witness.defOffset, msg: "delegation has no selected signature", failureDomain: <FailureDomain.Internal />) /> }
+        }
+        val target = selected.function
+        // Requirement rows describe a slot and do not carry the concrete
+        // Func's hasRecv bit. The selected operation supplies that distinction.
+        val hasReceiver = match template.kind {
+            CallTemplateKind.StaticMethod(receiver: _, args: _, resolution: val resolution, methodTypeArgs: _, resultTerm: _) => match resolution {
+                StaticMemberResolution.Requirement(proof: _, traitIdx: _, reqIdx: _) => !target.isAssoc && !target.isFactory,
+                _ => target.hasRecv,
+            }
+            CallTemplateKind.Dynamic(receiver: _, args: _, target: _) => !target.isAssoc && !target.isFactory,
+            _ => target.hasRecv,
+        }
+        if witness.hasRecv != hasReceiver || witness.isAssoc != target.isAssoc || witness.isFactory != target.isFactory || witness.selfInout != target.selfInout || witness.selfMove != target.selfMove || witness.isAsync != target.isAsync || witness.isDiverging != target.isDiverging {
+            return <Result.Err error=self.viaSignatureMismatch(offset: witness.defOffset) />
+        }
+        self.sourceFacts.activate(owner: sourceOwner)
+        val witnessSignature = match self.sourceFacts.activeBuilder.data.signature {
+            Optional.Some(v: val signature) => signature
+            Optional.None => { return <Result.Err error=self.diagnosticAt(offset: witness.defOffset, msg: "delegation has no source signature", failureDomain: <FailureDomain.Internal />) /> }
+        }
+        val form = <CallableArgumentInput.Parameters range=witness.params />
+        mut val position = 0U64
+        for index in 0U64..<witnessSignature.parameters.count() {
+            position = self.callableNextParameter(params: target.params, input: form, index: index, start: position)
+            if position >= target.params.count() { return <Result.Err error=self.viaSignatureMismatch(offset: witness.defOffset) /> }
+            val actual = self.funcParamAt(params: target.params, index: position)
+            val expected = witnessSignature.parameters[index]
+            val actualType = try self.sourceCallArgumentType(parameter: actual, position: position, signature: selected.signature)
+            if expected.isInout != actual.isInout || expected.isMove != actual.isMove || expected.isBorrow != actual.isBorrow || !self.typeRefEq(a: expected.typeTerm, b: actualType) {
+                return <Result.Err error=self.viaSignatureMismatch(offset: witness.defOffset) />
+            }
+            position += 1U64
+        }
+        val expected = witnessSignature.resultTerm
+        val actual = self.sourceFacts.expressionHead(owner: sourceOwner, exprId: delegation.resultExpr).term
+        if !witness.isDiverging && !self.typeRefEq(a: expected, b: actual) && !(self.callableResultIsUnit(ref: expected) && self.callableResultIsUnit(ref: actual)) {
+            return <Result.Err error=self.viaSignatureMismatch(offset: witness.defOffset) />
+        }
         return <Result.Ok value=() />
     }
 

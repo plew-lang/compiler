@@ -1,0 +1,4 @@
+struct Worker { val perform: fn() -> I64 }
+trait Action { fn go() -> I64 }
+impl Worker as Action { fn go() -> I64 via perform }
+fn main() {}

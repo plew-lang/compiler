@@ -1,0 +1,9 @@
+use @Std/Io only { print }
+trait Clone { fn clone() -> Self }
+struct Worker { val n: I64 }
+impl Worker { fn makeCopy() -> Self { return self } }
+impl Worker as Clone { fn clone() -> Self via makeCopy }
+fn main() {
+    val worker = <Worker n=42I64 />
+    print(worker.clone().n)
+}

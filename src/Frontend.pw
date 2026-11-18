@@ -685,6 +685,8 @@ pub struct Comp {
     mut val callTemplateViewPool: Array[ResolvedViewSource] = []
     mut val callTemplateIndexSlots: Array[U64] = []
     mut val callTemplateLocations: Array[SourceCallLocation]
+    mut val viaWitnesses: Array[ViaWitness] = []
+    mut val viaCallByFunction: Dictionary[U64, U64] = [:]
     mut val authoredForIterators: Dictionary[U64, U64] = [:]
     // Nonfatal diagnostics remain owned by the compilation/session. Only the
     // driver decides how to display them; requesting a body emits no process IO.
@@ -2516,6 +2518,7 @@ pub fn analyzeFrontendDeclarations(c: inout Comp, input: FrontendInput, sources:
     tracePhase(c: inout c, label: "default-generators:start")
     try c.prepareDefaultArgumentGenerators()
     c.prepareFieldDefaultGenerators()
+    try c.prepareViaDelegations()
     // Default expressions use the same lexical semantic request in generation
     // and ordinary compilation. They cannot be type-checked before Record
     // supplies their generator's return context.
@@ -2572,6 +2575,7 @@ pub fn analyzeFrontendForRequests(c: inout Comp, input: FrontendInput, sources: 
     // Whole-program closure remains false: unrequested closures and bodies
     // must not inherit the initializers' readiness.
     try c.prepareDiscriminantType()
+    try c.prepareViaDelegations()
     return <Result.Ok value=() />
 }
 

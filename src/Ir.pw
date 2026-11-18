@@ -1658,6 +1658,7 @@ pub struct Conform {
 pub struct ViaWitness {
     pub val functionIndex: U64
     pub val callExpr: U64
+    pub val resultExpr: U64
 }
 
 // The semantic input of every trait query. `owner` is the resolved trait
@@ -3859,8 +3860,7 @@ pub struct DestructureSite {
 pub impl DestructureSite { factory }
 
 // Declaration / conformance / name side-tables built during loading & analysis.
-// `traits`/`conforms`/`viaWitnesses` drive trait conformance (spec/08): trait
-// decls, recorded conformances, and `via` requirement→witness redirects.
+// `traits`/`conforms` drive trait conformance (spec/08).
 // `derives`: `@[...]` derive requests on type decls. `funcBounds`: `where T:
 // Trait` bounds keyed by function index. `deinits`: declared destructor function indices, whose receiver
 // type carries the resolved nominal identity. `assocBindings`: `type Item = Concrete` lines from
@@ -3904,7 +3904,6 @@ pub struct Decls {
     pub mut val conformBindPool: Array[Bind] = []
     pub mut val conformWitnessPool: Array[Func] = []
     pub mut val conformFuncIdPool: Array[U64] = []
-    pub mut val viaWitnesses: Array[ViaWitness] = []
     pub mut val derives: Array[DeriveReq] = []
     pub mut val funcBounds: FunctionBoundArena = <FunctionBoundArena.empty />
     // Func rows are copied throughout selection and emission. Keep every

@@ -34,6 +34,11 @@ pub impl Comp {
         val index = self.callTemplateIndex(siteKey: site)
         if index >= self.callTemplateLocations.count() { return <Result.Ok value=<SourceCallParameterState.Unselected /> /> }
         val template = self.callTemplateAt(index: index)
+        return self.selectedCallParameterState(template: template, exprId: exprId)
+    }
+
+    inout fn selectedCallParameterState(template: CallTemplate, exprId: U64) -> Result[SourceCallParameterState, CompileDiagnostic] {
+        val site = template.siteKey
         match template.kind {
             CallTemplateKind.Direct(callee: val callee, receiver: _, args: _, calleeTypeArgs: val typeArgs, proofId: val proofId) => {
                 if callee >= self.arena.functionCount() { return <Result.Err error=self.diagnosticAt(offset: site.originStart, msg: "internal error: selected call has no declaration") /> }

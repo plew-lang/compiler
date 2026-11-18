@@ -1,7 +1,7 @@
 ---
 id: com-6esv
 status: open
-deps: []
+deps: [com-atac]
 links: [com-3jtd]
 created: 2026-11-13T18:41:32Z
 type: bug
@@ -87,3 +87,24 @@ authored via witness. The temporary precheck reads the target from this
 stored expression. It remains the gate until selected-operation validation
 can replace it. The scoped check/JIT comparison preserves all 26 prior
 outcomes, including the projected receiver regression's RED.
+
+## Selected Admission Implementation
+
+The ordinary lexical body request now owns declaration-time via validation
+in check, AOT, lazy execution and generation. It checks the saved selected
+signature and the witness's admitted argument/result types and modes before
+publishing owner success. Lower retains both the exact call and the
+forwarded expression (the awaited value for async). The old raw signature
+precheck and candidate search were removed. Via source failures retain the
+exact authored occurrence; a generated adapter has no such entry.
+
+Comparison reached 48/48 selected check/JIT/AOT controls, five rejection
+inputs carrying Source in all four modes, and three new positive native
+goldens plus their gen admission. Independent review exposed lexical Self,
+receiver-shaped trait requirements and async result handling; the new
+controls cover those boundaries. The demanded async instance method still
+fails on the pinned baseline even as an ordinary call, independently of
+delegation. [com-atac](com-atac.md) owns its entry ABI repair and blocks
+closure of this issue. Explicit trait-view result materialization is
+also reproduced on the baseline and tracked under [com-qb05](com-qb05.md).
+No full-suite or formal performance result is claimed.

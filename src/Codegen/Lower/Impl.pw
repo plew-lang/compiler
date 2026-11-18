@@ -533,10 +533,20 @@ pub impl Comp {
         return <Result.Ok value=bounds />
     }
 
+}
+
+impl Comp {
+    inout fn publishViaWitness(function: U64, call: U64, result: U64) {
+        self.viaCallByFunction[function] = self.viaWitnesses.count()
+        self.viaWitnesses.append(<ViaWitness functionIndex=function callExpr=call resultExpr=result />)
+    }
+}
+
+pub impl Comp {
     // A via declaration owns its requirement contract. Its synthesized body
     // forwards through an ordinary call, so argument passing, constraints and
     // ownership use the same semantic pipeline as an authored implementation.
-    inout fn lowerViaBody(params: Array[Param], receiver: Bind, receiverType: U64, target: Bind, isAssoc: Bool, isAsync: Bool, hasRet: Bool, resultType: U64, isFactory: Bool, offset: U64, selectedDeclaration: Optional[U64] = <Optional.None />, selectedConformance: U64 = 0U64, selectedTypeArgs: Array[U64] = []) -> Result[(body: U64, call: U64), CompileDiagnostic] {
+    inout fn lowerViaBody(params: Array[Param], receiver: Bind, receiverType: U64, target: Bind, isAssoc: Bool, isAsync: Bool, hasRet: Bool, resultType: U64, isFactory: Bool, offset: U64, selectedDeclaration: Optional[U64] = <Optional.None />, selectedConformance: U64 = 0U64, selectedTypeArgs: Array[U64] = []) -> Result[(body: U64, call: U64, result: U64), CompileDiagnostic] {
         mut val arguments: Array[Arg] = []
         for val parameter in params {
             mut val value = self.pushExpr(e: <Expr.Ident start=parameter.nameStart len=parameter.nameLen />)
@@ -567,14 +577,14 @@ pub impl Comp {
             val effect = self.pushStmt(s: <Stmt.ExprStmt expr=result />)
             val unit = self.pushExpr(e: <Expr.Make typeStart=0U64 typeLen=0U64 variantStart=0U64 variantLen=0U64 isEnum=false ty=resultType fields=self.pushMakeFields(fields: []) />)
             val finish = self.pushStmt(s: <Stmt.Return value=unit hasValue=true offset=offset />)
-            return <Result.Ok value=(body: self.pushBlock(stmts: [effect, finish]), call: call) />
+            return <Result.Ok value=(body: self.pushBlock(stmts: [effect, finish]), call: call, result: result) />
         }
         val statement = if hasRet {
             give self.pushStmt(s: <Stmt.Return value=result hasValue=true offset=offset />)
         } else {
             give self.pushStmt(s: <Stmt.ExprStmt expr=result />)
         }
-        return <Result.Ok value=(body: self.pushBlock(stmts: [statement]), call: call) />
+        return <Result.Ok value=(body: self.pushBlock(stmts: [statement]), call: call, result: result) />
     }
 
     // Project one callable form using exactly the ordinary argument traversal.
@@ -827,10 +837,10 @@ impl Comp {
             self.cur.lowerRetTy = self.groundTermInEnvironment(ref: retRef, params: [], values: [], selfRef: recvTy)
         }
         try self.setAuthoredTypeUseRole(role: <SourceTypeUseRole.Body />, site: m.name.start)
-        mut val forwardingCall: Optional[U64] = <Optional.None />
+        mut val forwardingCall: Optional[(call: U64, result: U64)] = <Optional.None />
         val body: U64 = if m.isVia {
             val forwarding = try self.lowerViaBody(params: params, receiver: recvN, receiverType: recvTy, target: <Bind nameStart=m.viaName.start nameLen=m.viaName.end - m.viaName.start fieldStart=m.viaName.start fieldLen=m.viaName.end - m.viaName.start />, isAssoc: isAssoc, isAsync: m.isAsync, hasRet: effHasRet, resultType: retRef, isFactory: m.isFactory, offset: m.name.start)
-            forwardingCall = <Optional.Some v=forwarding.call />
+            forwardingCall = <Optional.Some v=(call: forwarding.call, result: forwarding.result) />
             give forwarding.body
         } else {
             give  (try self.lowerSyntaxBlock(id: m.body))
@@ -857,7 +867,9 @@ impl Comp {
         val fnIdx: U64 = (try self.registerAuthoredCallable(f: <Func nameStart=nameN.nameStart nameLen=nameN.nameLen nameId=intern(c: inout self, start: nameN.nameStart, len: nameN.nameLen) recvId=intern(c: inout self, start: recvN.nameStart, len: recvN.nameLen) recvTy=self.receiverSubjectTerm(receiver: recvTy, traitOwner: recvTraitOwner) recvTraitArgs=self.pushFuncTypes(types: recvTraitArgs) typeParams=self.pushFuncBinds(binds: typeParams) params=self.pushFuncParams(params: params) hasRet=effHasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=body hasRecv=hasRecv recvStart=recvN.nameStart recvLen=recvN.nameLen selfInout=m.selfInout selfMove=m.selfMove isAssoc=isAssoc isFactory=m.isFactory isAnonymousFactory=m.isAnonymousFactory isAsync=m.isAsync isDiverging=m.isDiverging isExtern=false isPub=im.isPub extId=extId provTraitArity=recvTraitArgs.count() provTraitOwner=recvTraitOwner originTraitId=originTraitId originTraitOwner=originTraitOwner originTraitArity=originTraitArity sourceWitnessFuncId=prospectiveFnIdx + 1U64 defOffset=m.name.start />, result: retUse, factoryError: factoryError, registerSurface: registerSurface))
         if im.isTraitImpl {
             match forwardingCall {
-                Optional.Some(v: val expression) => { self.decls.viaWitnesses.append(<ViaWitness functionIndex=fnIdx callExpr=expression />) }
+                Optional.Some(v: val forwarding) => {
+                    self.publishViaWitness(function: fnIdx, call: forwarding.call, result: forwarding.result)
+                }
                 Optional.None => {}
             }
         }
@@ -989,10 +1001,10 @@ impl Comp {
             self.cur.lowerRetTy = self.groundTermInEnvironment(ref: retRef, params: [], values: [], selfRef: recvTy)
         }
         try self.setAuthoredTypeUseRole(role: <SourceTypeUseRole.Body />, site: m.nameSpan.start)
-        mut val forwardingCall: Optional[U64] = <Optional.None />
+        mut val forwardingCall: Optional[(call: U64, result: U64)] = <Optional.None />
         val body: U64 = if m.isVia {
             val forwarding = try self.lowerViaBody(params: params, receiver: recvN, receiverType: recvTy, target: self.internBytes(s: m.viaName), isAssoc: isAssoc, isAsync: m.isAsync, hasRet: effHasRet, resultType: retRef, isFactory: m.isFactory, offset: m.nameSpan.start)
-            forwardingCall = <Optional.Some v=forwarding.call />
+            forwardingCall = <Optional.Some v=(call: forwarding.call, result: forwarding.result) />
             give forwarding.body
         } else {
             give (try self.lowerBlock(b: m.body))
@@ -1023,7 +1035,9 @@ impl Comp {
         val fnIdx: U64 = (try self.registerAuthoredCallable(f: <Func nameStart=nameN.nameStart nameLen=nameN.nameLen nameId=intern(c: inout self, start: nameN.nameStart, len: nameN.nameLen) recvId=intern(c: inout self, start: recvN.nameStart, len: recvN.nameLen) recvTy=self.receiverSubjectTerm(receiver: recvTy, traitOwner: recvTraitOwner) recvTraitArgs=self.pushFuncTypes(types: recvTraitArgs) typeParams=self.pushFuncBinds(binds: typeParams) params=self.pushFuncParams(params: params) hasRet=effHasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=body hasRecv=hasRecv recvStart=recvN.nameStart recvLen=recvN.nameLen selfInout=m.selfInout selfMove=m.selfMove isAssoc=isAssoc isFactory=m.isFactory isAnonymousFactory=m.isAnonymousFactory isAsync=m.isAsync isDiverging=m.isDiverging isExtern=false isPub=im.isPub extId=extId provTraitArity=recvTraitArgs.count() provTraitOwner=recvTraitOwner originTraitId=originTraitId originTraitOwner=originTraitOwner originTraitArity=originTraitArity sourceWitnessFuncId=prospectiveFnIdx + 1U64 defOffset=m.nameSpan.start />, result: retUse, factoryError: factoryError, registerSurface: registerSurface))
         if im.isTraitImpl {
             match forwardingCall {
-                Optional.Some(v: val expression) => { self.decls.viaWitnesses.append(<ViaWitness functionIndex=fnIdx callExpr=expression />) }
+                Optional.Some(v: val forwarding) => {
+                    self.publishViaWitness(function: fnIdx, call: forwarding.call, result: forwarding.result)
+                }
                 Optional.None => {}
             }
         }

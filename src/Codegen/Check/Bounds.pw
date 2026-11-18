@@ -1362,7 +1362,6 @@ pub impl Comp {
                 try self.checkConformanceMethodBounds(conformIndex: index, traitIndex: traitIndex)
             }
         }
-        try self.checkViaTargets()
         return <Result.Ok value=() />
     }
 
@@ -1391,73 +1390,6 @@ pub impl Comp {
         }
         val conformance = self.decls.conformAt(index: conformanceIndex)
         return self.checkAssociatedBounds(conformIndex: conformanceIndex, conformance: conformance, traitIndex: traitIndex, assumptions: self.conformanceDeclarationAssumptions(conformIndex: conformanceIndex))
-    }
-
-    // Via uses the ordinary callable form, including omitted defaults, while
-    // preserving the requirement's result and ownership contract.
-    // Match the implementation directionally: requirement
-    // binders remain rigid while the target's binders acquire one substitution.
-    inout fn viaSignatureMatches(witness: Func, target: Func) -> Bool {
-        if witness.hasRecv != target.hasRecv || witness.isAssoc != target.isAssoc || witness.selfInout != target.selfInout || witness.selfMove != target.selfMove || witness.isAsync != target.isAsync || witness.isDiverging != target.isDiverging {
-            return false
-        }
-        val input = <CallableArgumentInput.Parameters range=witness.params />
-        if !self.callableInputLabelsOk(params: target.params, input: input) { return false }
-        mut val bindings: Array[UnifyBind] = []
-        val targetParameters = <PatternBindInput.Function range=target.typeParams />
-        val rigidParameters = <PatternBindInput.Values values=[] />
-        if target.recvTy != 0U64 || witness.recvTy != 0U64 {
-            if !self.unifyPatterns(a: target.recvTy, aSide: 0U64, b: witness.recvTy, bSide: 1U64, aParams: targetParameters, bParams: rigidParameters, binds: inout bindings) { return false }
-        }
-        mut val index = 0U64
-        mut val targetIndex = 0U64
-        while index < witness.params.count() {
-            val expected = self.funcParamAt(params: witness.params, index: index)
-            targetIndex = self.callableNextParameter(params: target.params, input: input, index: index, start: targetIndex)
-            val actual = self.funcParamAt(params: target.params, index: targetIndex)
-            targetIndex += 1U64
-            if expected.noLabel != actual.noLabel || (!expected.noLabel && expected.nameId != actual.nameId) || expected.isInout != actual.isInout || expected.isMove != actual.isMove || expected.isBorrow != actual.isBorrow { return false }
-            val expectedType = self.groundTermInEnvironment(ref: expected.ty, params: [], values: [], selfRef: witness.recvTy)
-            val actualType = self.groundTermInEnvironment(ref: actual.ty, params: [], values: [], selfRef: witness.recvTy)
-            if !self.unifyPatterns(a: actualType, aSide: 0U64, b: expectedType, bSide: 1U64, aParams: targetParameters, bParams: rigidParameters, binds: inout bindings) { return false }
-            index += 1U64
-        }
-        val expectedResult = self.groundTermInEnvironment(ref: self.semanticCallableReturnTerm(function: witness), params: [], values: [], selfRef: witness.recvTy)
-        val actualResult = self.groundTermInEnvironment(ref: self.semanticCallableReturnTerm(function: target), params: [], values: [], selfRef: witness.recvTy)
-        if !(self.callableResultIsUnit(ref: expectedResult) && self.callableResultIsUnit(ref: actualResult)) && !self.unifyPatterns(a: actualResult, aSide: 0U64, b: expectedResult, bSide: 1U64, aParams: targetParameters, bParams: rigidParameters, binds: inout bindings) { return false }
-        return true
-    }
-
-    inout fn checkViaTargets() -> Result[(), CompileDiagnostic] {
-        for val binding in self.decls.viaWitnesses {
-            val witness = self.arena.functionAt(index: binding.functionIndex)
-            if binding.callExpr >= self.arena.exprs.count() {
-                return <Result.Err error=self.diagnosticAt(offset: witness.defOffset, msg: "delegation lost its forwarding call", failureDomain: <FailureDomain.Internal />) />
-            }
-            val targetNameId = match self.arena.exprs[binding.callExpr] {
-                Expr.Method(recv: _, nameStart: val start, nameLen: val len, args: _) => intern(c: inout self, start: start, len: len)
-                _ => { return <Result.Err error=self.diagnosticAt(offset: witness.defOffset, msg: "delegation lost its forwarding call", failureDomain: <FailureDomain.Internal />) /> }
-            }
-            mut val foundName = false
-            mut val foundSignature = false
-            mut val index = self.decls.firstCallableNamed(nameId: targetNameId)
-            while index < self.decls.callableCount() {
-                val candidateIndex = self.decls.callableAt(index: index).funcIdx
-                val target = self.arena.functionAt(index: candidateIndex)
-                if candidateIndex != binding.functionIndex && target.recvId == witness.recvId && (target.extId == 0U64 || target.extId == witness.extId) && self.methodIsVisible(mf: target, offset: witness.defOffset) {
-                    foundName = true
-                    if self.viaSignatureMatches(witness: witness, target: target) { foundSignature = true }
-                }
-                index = self.decls.nextCallableNamed(index: index)
-            }
-            if !foundName {
-                return <Result.Err error=self.diagnosticAt(offset: witness.defOffset, msg: "`via` target is not a member of this type") />
-            }
-            if !foundSignature {
-                return <Result.Err error=self.diagnosticAt(offset: witness.defOffset, msg: "`via` target signature does not match the declared requirement") />
-            }
-        }
-        return <Result.Ok value=() />
     }
 
     inout fn typeConformsTo(typeStart: U64, typeLen: U64, traitStart: U64, traitLen: U64) -> Bool {

@@ -157,3 +157,14 @@ The injected Missing proof was rejected with “selected conformance evidence
 does not satisfy its declaration conditions”. The fixture expected the
 later signature mismatch diagnostic. Check the intended diagnostic boundary
 and re-run all families before using this fixture as a closure control.
+
+### Trait View With a Self Result
+
+Using the `76a15cb2` fixed-point carrier, the file
+[`trait_via_self_result.pw`](../../tests/fixtures/run/trait_via_self_result.pw)
+runs with 42 via its bare selector. Changing only `worker.clone()` to
+`worker#Clone.clone()` fails in final call result projection with
+`final call result projection does not match its carrier or source result`.
+The failure also occurs if the witness is written
+`fn clone() -> Self { return self.makeCopy() }`. Keep the explicit-view
+and bare cases distinct when reconciling the selected result projection.

@@ -1,0 +1,12 @@
+use @Std/Io only { print }
+trait Only { fn o() -> I64 }
+trait Derived { fn d() -> I64 }
+struct W { val w: I64 }
+pub impl W as Only { fn o() -> I64 { return self.w } }
+pub impl Only as Derived { fn d() -> I64 via o }
+fn useDerived[X](x: X) -> I64 where X: Derived { return x.d() }
+fn main() {
+    val w = <W w=42I64 />
+    print(w.d())
+    print(useDerived(x: w))
+}
