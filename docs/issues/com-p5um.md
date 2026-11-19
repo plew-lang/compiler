@@ -1,7 +1,7 @@
 ---
 id: com-p5um
 status: open
-deps: [com-61jt, com-auvx, com-jy25, com-nqiq, com-1a6q, com-jgy9, com-kphi, com-8lj3, met-6vbn]
+deps: [com-61jt, com-auvx, com-jy25, com-nqiq, com-1a6q, com-jgy9, com-kphi, com-8lj3, met-6vbn, met-kuej]
 links: []
 created: 2026-10-23T10:41:59Z
 type: task
@@ -102,4 +102,4 @@ No permanent product pipeline, source semantics, ABI, runtime duplication or car
 
 Integration review recommends three finite units: (1) shared compiler-link profile with actual toolchain/export recording; (2) summary-bearing native ThinLTO object producer under an explicit internal request, preserving ordinary machine output; (3) ADD→USE transition and both-path final validation, depending on1+2. Text and native stages must agree, the common runtime remains single, and a native machine object must never be relabelled as LTO-capable. Bare bitcode is not sufficient ThinLTO proof.
 
-These units are planned, not existing tk dependencies or implemented product changes. The active goal explicitly stops for required task changes; task creation/dependency changes await that decision. Performance recovery is promising, not judged difficult.
+User approved execution. Units are met-8ibr (shared link), met-jv7m (native artifact), and met-kuej (integration, depending on both). This gate depends on met-kuej; no formal gate ownership is duplicated. Implementation and formal recovery are not yet certified.
