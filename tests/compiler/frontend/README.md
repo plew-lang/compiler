@@ -37,6 +37,11 @@ facets exercise structural queries, not executable source admission. Require
 exit0, empty runtime stderr and exact `TypeGroundHead.out` with the same manual
 procedure. This is a manual implementation test outside the normal fixture suite.
 
+`OwnershipFailureDomains.pw` checks raw semantic ownership refusal/cache retention,
+foreign-session/unknown-owner/out-of-range provenance, owned lazy repeated
+requests and whole/eager checks. Require its exact `.out`, exit0 and empty
+runtime stderr. It does not authorize raw mutable verifier state as source.
+
 ## Manual execution procedure
 
 Run from the compiler repository root with the selected carrier. Keep all

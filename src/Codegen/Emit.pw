@@ -190,6 +190,10 @@ pub impl Comp {
     }
 
     fn diagnosticAt(offset: U64, msg: String, failureDomain: FailureDomain) -> CompileDiagnostic {
+        return <CompileDiagnostic failureDomain=failureDomain location=self.diagnosticLocationAt(offset: offset) message=msg />
+    }
+
+    fn diagnosticLocationAt(offset: U64) -> DiagnosticLocation {
         match self.modules.sourceFileContaining(offset: offset) {
             Optional.Some(v: val index) => {
                 mut val line: I64 = 1
@@ -198,11 +202,11 @@ pub impl Comp {
                     if self.arena.bytes[cursor] == 10U8 { line += 1 }
                     cursor += 1U64
                 }
-                return <CompileDiagnostic failureDomain=failureDomain location=<DiagnosticLocation.File path=self.modules.sourceFilePath(index: index) line=line /> message=msg />
+                return <DiagnosticLocation.File path=self.modules.sourceFilePath(index: index) line=line />
             }
             Optional.None => {}
         }
-        return <CompileDiagnostic failureDomain=failureDomain location=<DiagnosticLocation.Line line=self.lineOf(offset: offset) /> message=msg />
+        return <DiagnosticLocation.Line line=self.lineOf(offset: offset) />
     }
 
     // Diagnostic anchor for a function declaration: defOffset is the declaration's

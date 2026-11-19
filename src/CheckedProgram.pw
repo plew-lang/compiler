@@ -75,6 +75,31 @@ pub unique enum CompilerSessionResult {
 }
 
 pub impl CompilerSession {
+
+    inout fn prepareFunction(function: U64, arguments: Array[U64] = [], receiver: U64 = 0U64, proof: StaticConformanceProof = <StaticConformanceProof.Missing />) -> Result[BodyDescriptors, CompileDiagnostic] {
+        val result = self.prepareFunctionRaw(function: function, arguments: arguments, receiver: receiver, proof: proof)
+        return self.ownedResult(result: result)
+    }
+    inout fn prepareBody(bodyId: U64) -> Result[BodyDescriptors, CompileDiagnostic] {
+        val result = self.prepareBodyRaw(bodyId: bodyId)
+        return self.ownedResult(result: result)
+    }
+    inout fn prepareMidBody(bodyId: U64) -> Result[MidBodyPreparation, CompileDiagnostic] {
+        val result = self.prepareMidBodyRaw(bodyId: bodyId)
+        return self.ownedResult(result: result)
+    }
+    inout fn prepareInitializers() -> Result[Optional[MidAccessPreparation], CompileDiagnostic] {
+        val result = self.prepareInitializersRaw()
+        return self.ownedResult(result: result)
+    }
+    inout fn prepareBodyAccess(bodyId: U64) -> Result[MidAccessPreparation, CompileDiagnostic] {
+        val result = self.prepareBodyAccessRaw(bodyId: bodyId)
+        return self.ownedResult(result: result)
+    }
+    inout fn request(root: DeclarationAccessNode) -> Result[DeclarationAccessAnalysis, CompileDiagnostic] {
+        val result = self.requestRaw(root: root)
+        return self.ownedResult(result: result)
+    }
     inout fn takeDiagnostics() -> Array[CompileDiagnostic] { return self.compiler.takeDiagnostics() }
 
     // The execution host installs its actual JIT description before publication.
@@ -111,7 +136,114 @@ pub impl CompilerSession {
     }
 
     // Only this session can combine source checking with its concrete arena.
-    inout fn prepareFunction(function: U64, arguments: Array[U64] = [], receiver: U64 = 0U64, proof: StaticConformanceProof = <StaticConformanceProof.Missing />) -> Result[BodyDescriptors, CompileDiagnostic] {
+
+
+    // Registration is a signature/identity snapshot, not an execution grant.
+    // IDs are meaningful only in this session. Global startup is separate from
+    // this callable worklist and is checked by every preparation request.
+    fn registeredBodies() -> Array[U64] { return self.compiler.monoWork.bodies() }
+
+
+
+
+
+    // Startup is an explicit root, independent of requesting main's body.
+    // None means there are no global initializers to execute.
+
+
+
+
+    // Publish entry signatures without requesting main or exposed source bodies.
+    // Global initializers are mandatory startup roots, with their own preparation.
+    inout fn lowerDeclarations() -> LlvmLoweringResult {
+        match self.registerProgramRoots() {
+            Result.Ok(value: _) => {}
+            Result.Err(error: val diagnostic) => {
+                self.executionFailure = <Optional.Some v=diagnostic />
+                return <LlvmLoweringResult.Failure diagnostic=self.ownedFailure(diagnostic: diagnostic) />
+            }
+        }
+        val target = match self.targetForLowering() {
+            Result.Ok(value: val target) => { give target }
+            Result.Err(error: val diagnostic) => { return <LlvmLoweringResult.Failure diagnostic=self.ownedFailure(diagnostic: diagnostic) /> }
+        }
+        match lowerCallableDeclarationsLlvm(c: inout self.compiler, target: <Optional.Some v=target />) {
+            LlvmLoweringResult.Success(module: val module) => { return <LlvmLoweringResult.Success module=move module /> }
+            LlvmLoweringResult.Failure(diagnostic: val diagnostic) => {
+                self.executionFailure = <Optional.Some v=diagnostic />
+                return <LlvmLoweringResult.Failure diagnostic=self.ownedFailure(diagnostic: diagnostic) />
+            }
+        }
+    }
+
+    // Compile from this session's checked request and matching snapshot. No
+    // mutable compiler or whole-target check token escapes to the execution host.
+    inout fn lowerBody(bodyId: U64) -> LlvmLoweringResult {
+        val prepared = match self.prepareBodyAccessRaw(bodyId: bodyId) {
+            Result.Ok(value: val prepared) => { give prepared }
+            Result.Err(error: val diagnostic) => { return <LlvmLoweringResult.Failure diagnostic=self.ownedFailure(diagnostic: diagnostic) /> }
+        }
+        val target = match self.targetForLowering() {
+            Result.Ok(value: val target) => { give target }
+            Result.Err(error: val diagnostic) => { return <LlvmLoweringResult.Failure diagnostic=self.ownedFailure(diagnostic: diagnostic) /> }
+        }
+        match lowerRequestedLlvm(c: inout self.compiler, program: prepared.program, ambient: prepared.ambient, bodyId: bodyId, target: <Optional.Some v=target />) {
+            LlvmLoweringResult.Success(module: val module) => { return <LlvmLoweringResult.Success module=move module /> }
+            LlvmLoweringResult.Failure(diagnostic: val diagnostic) => {
+                self.executionFailure = <Optional.Some v=diagnostic />
+                return <LlvmLoweringResult.Failure diagnostic=self.ownedFailure(diagnostic: diagnostic) />
+            }
+        }
+    }
+
+    // Storage publication is separate from executing its initializer. The host
+    // must install this unique definition module before calling any app entry.
+    inout fn lowerGlobalStorage() -> LlvmLoweringResult {
+        match self.prepareInitializersRaw() {
+            Result.Ok(value: _) => {}
+            Result.Err(error: val diagnostic) => { return <LlvmLoweringResult.Failure diagnostic=self.ownedFailure(diagnostic: diagnostic) /> }
+        }
+        val target = match self.targetForLowering() {
+            Result.Ok(value: val target) => { give target }
+            Result.Err(error: val diagnostic) => { return <LlvmLoweringResult.Failure diagnostic=self.ownedFailure(diagnostic: diagnostic) /> }
+        }
+        match lowerGlobalStorageLlvm(c: inout self.compiler, target: <Optional.Some v=target />) {
+            LlvmLoweringResult.Success(module: val module) => { return <LlvmLoweringResult.Success module=move module /> }
+            LlvmLoweringResult.Failure(diagnostic: val diagnostic) => {
+                self.executionFailure = <Optional.Some v=diagnostic />
+                return <LlvmLoweringResult.Failure diagnostic=self.ownedFailure(diagnostic: diagnostic) />
+            }
+        }
+    }
+
+    // Declaration IDs are local to this admitted input. The returned analysis
+    // is observational: obligations remain, and it cannot authorize execution.
+
+}
+
+impl CompilerSession {
+    // Rendering is a projection of a result produced by this unexposed Comp.
+    // Neither this helper nor a raw cache accepts a caller-supplied failure.
+    fn ownedFailure(diagnostic: CompileDiagnostic) -> CompileDiagnostic {
+        match diagnostic {
+            CompileDiagnostic.UseAfterMove(refusal: val refusal) => {
+                if self.compiler.sourceExpressionHasOwner(session: refusal.session(), expression: refusal.expression(), owner: refusal.owner()) {
+                    return <CompileDiagnostic failureDomain=<FailureDomain.Source /> location=refusal.location() message=diagnostic.message() />
+                }
+            }
+            CompileDiagnostic.Report(report: _) => {}
+        }
+        return diagnostic
+    }
+
+    fn ownedResult[T](result: Result[T, CompileDiagnostic]) -> Result[T, CompileDiagnostic] {
+        return match result {
+            Result.Ok(value: _) => result
+            Result.Err(error: val diagnostic) => <Result.Err error=self.ownedFailure(diagnostic: diagnostic) />
+        }
+    }
+
+    inout fn prepareFunctionRaw(function: U64, arguments: Array[U64], receiver: U64, proof: StaticConformanceProof) -> Result[BodyDescriptors, CompileDiagnostic] {
         match self.executionFailure {
             Optional.Some(v: val diagnostic) => { return <Result.Err error=diagnostic /> }
             Optional.None => {}
@@ -124,12 +256,7 @@ pub impl CompilerSession {
         return result
     }
 
-    // Registration is a signature/identity snapshot, not an execution grant.
-    // IDs are meaningful only in this session. Global startup is separate from
-    // this callable worklist and is checked by every preparation request.
-    fn registeredBodies() -> Array[U64] { return self.compiler.monoWork.bodies() }
-
-    inout fn prepareBody(bodyId: U64) -> Result[BodyDescriptors, CompileDiagnostic] {
+    inout fn prepareBodyRaw(bodyId: U64) -> Result[BodyDescriptors, CompileDiagnostic] {
         match self.executionFailure {
             Optional.Some(v: val diagnostic) => { return <Result.Err error=diagnostic /> }
             Optional.None => {}
@@ -142,8 +269,8 @@ pub impl CompilerSession {
         return result
     }
 
-    inout fn prepareMidBody(bodyId: U64) -> Result[MidBodyPreparation, CompileDiagnostic] {
-        val descriptors = (try self.prepareBody(bodyId: bodyId))
+    inout fn prepareMidBodyRaw(bodyId: U64) -> Result[MidBodyPreparation, CompileDiagnostic] {
+        val descriptors = (try self.prepareBodyRaw(bodyId: bodyId))
         match self.midRequests.request(c: inout self.compiler, templates: inout self.templates, bodyId: bodyId) {
             Result.Ok(value: val executable) => {
                 return <Result.Ok value=<MidBodyPreparation descriptors=descriptors executable=executable /> />
@@ -156,9 +283,7 @@ pub impl CompilerSession {
         }
     }
 
-    // Startup is an explicit root, independent of requesting main's body.
-    // None means there are no global initializers to execute.
-    inout fn prepareInitializers() -> Result[Optional[MidAccessPreparation], CompileDiagnostic] {
+    inout fn prepareInitializersRaw() -> Result[Optional[MidAccessPreparation], CompileDiagnostic] {
         match self.executionFailure {
             Optional.Some(v: val diagnostic) => { return <Result.Err error=diagnostic /> }
             Optional.None => {}
@@ -171,7 +296,7 @@ pub impl CompilerSession {
         return result
     }
 
-    inout fn prepareBodyAccess(bodyId: U64) -> Result[MidAccessPreparation, CompileDiagnostic] {
+    inout fn prepareBodyAccessRaw(bodyId: U64) -> Result[MidAccessPreparation, CompileDiagnostic] {
         val result = self.prepareBodyAccessInSession(bodyId: bodyId)
         match result {
             Result.Ok(value: _) => {}
@@ -180,72 +305,7 @@ pub impl CompilerSession {
         return result
     }
 
-    // Publish entry signatures without requesting main or exposed source bodies.
-    // Global initializers are mandatory startup roots, with their own preparation.
-    inout fn lowerDeclarations() -> LlvmLoweringResult {
-        match self.registerProgramRoots() {
-            Result.Ok(value: _) => {}
-            Result.Err(error: val diagnostic) => {
-                self.executionFailure = <Optional.Some v=diagnostic />
-                return <LlvmLoweringResult.Failure diagnostic=diagnostic />
-            }
-        }
-        val target = match self.targetForLowering() {
-            Result.Ok(value: val target) => { give target }
-            Result.Err(error: val diagnostic) => { return <LlvmLoweringResult.Failure diagnostic=diagnostic /> }
-        }
-        match lowerCallableDeclarationsLlvm(c: inout self.compiler, target: <Optional.Some v=target />) {
-            LlvmLoweringResult.Success(module: val module) => { return <LlvmLoweringResult.Success module=move module /> }
-            LlvmLoweringResult.Failure(diagnostic: val diagnostic) => {
-                self.executionFailure = <Optional.Some v=diagnostic />
-                return <LlvmLoweringResult.Failure diagnostic=diagnostic />
-            }
-        }
-    }
-
-    // Compile from this session's checked request and matching snapshot. No
-    // mutable compiler or whole-target check token escapes to the execution host.
-    inout fn lowerBody(bodyId: U64) -> LlvmLoweringResult {
-        val prepared = match self.prepareBodyAccess(bodyId: bodyId) {
-            Result.Ok(value: val prepared) => { give prepared }
-            Result.Err(error: val diagnostic) => { return <LlvmLoweringResult.Failure diagnostic=diagnostic /> }
-        }
-        val target = match self.targetForLowering() {
-            Result.Ok(value: val target) => { give target }
-            Result.Err(error: val diagnostic) => { return <LlvmLoweringResult.Failure diagnostic=diagnostic /> }
-        }
-        match lowerRequestedLlvm(c: inout self.compiler, program: prepared.program, ambient: prepared.ambient, bodyId: bodyId, target: <Optional.Some v=target />) {
-            LlvmLoweringResult.Success(module: val module) => { return <LlvmLoweringResult.Success module=move module /> }
-            LlvmLoweringResult.Failure(diagnostic: val diagnostic) => {
-                self.executionFailure = <Optional.Some v=diagnostic />
-                return <LlvmLoweringResult.Failure diagnostic=diagnostic />
-            }
-        }
-    }
-
-    // Storage publication is separate from executing its initializer. The host
-    // must install this unique definition module before calling any app entry.
-    inout fn lowerGlobalStorage() -> LlvmLoweringResult {
-        match self.prepareInitializers() {
-            Result.Ok(value: _) => {}
-            Result.Err(error: val diagnostic) => { return <LlvmLoweringResult.Failure diagnostic=diagnostic /> }
-        }
-        val target = match self.targetForLowering() {
-            Result.Ok(value: val target) => { give target }
-            Result.Err(error: val diagnostic) => { return <LlvmLoweringResult.Failure diagnostic=diagnostic /> }
-        }
-        match lowerGlobalStorageLlvm(c: inout self.compiler, target: <Optional.Some v=target />) {
-            LlvmLoweringResult.Success(module: val module) => { return <LlvmLoweringResult.Success module=move module /> }
-            LlvmLoweringResult.Failure(diagnostic: val diagnostic) => {
-                self.executionFailure = <Optional.Some v=diagnostic />
-                return <LlvmLoweringResult.Failure diagnostic=diagnostic />
-            }
-        }
-    }
-
-    // Declaration IDs are local to this admitted input. The returned analysis
-    // is observational: obligations remain, and it cannot authorize execution.
-    inout fn request(root: DeclarationAccessNode) -> Result[DeclarationAccessAnalysis, CompileDiagnostic] {
+    inout fn requestRaw(root: DeclarationAccessNode) -> Result[DeclarationAccessAnalysis, CompileDiagnostic] {
         val cached = match root {
             DeclarationAccessNode.Function(function: val function) => { give self.functionResults.get(key: function) }
             DeclarationAccessNode.Closure(bodyKey: val key) => { give self.closureResults.get(key: key) }
@@ -268,11 +328,9 @@ pub impl CompilerSession {
         }
         return result
     }
-}
 
-impl CompilerSession {
     inout fn registerProgramRoots() -> Result[(), CompileDiagnostic] {
-        (try self.prepareInitializers())
+        (try self.prepareInitializersRaw())
         mut val foundMain = false
         mut val index = 0U64
         while index < self.compiler.arena.functionCount() {
@@ -302,20 +360,20 @@ impl CompilerSession {
     }
 
     inout fn prepareInitializersInSession() -> Result[Optional[MidAccessPreparation], CompileDiagnostic] {
-        (try self.request(root: <DeclarationAccessNode.GlobalInitializer />))
+        (try self.requestRaw(root: <DeclarationAccessNode.GlobalInitializer />))
         try self.startFinalization()
         try self.compiler.prepareFinalInitializers(state: inout self.finalDependencies)
         if self.compiler.arena.globals.count() == 0U64 { return <Result.Ok value=<Optional.None /> /> }
         val bodyId = self.compiler.findBodyInstance(fnIdx: 18446744073709551615U64, environment: <InstanceEnvironment />)
-        val prepared = (try self.prepareBodyAccess(bodyId: bodyId))
+        val prepared = (try self.prepareBodyAccessRaw(bodyId: bodyId))
         return <Result.Ok value=<Optional.Some v=prepared /> />
     }
 
     inout fn prepareFunctionInSession(function: U64, arguments: Array[U64], receiver: U64, proof: StaticConformanceProof) -> Result[BodyDescriptors, CompileDiagnostic] {
         // Globals are mandatory startup roots. Keep their analysis in the
         // session cache even though this result describes one function.
-        (try self.request(root: <DeclarationAccessNode.GlobalInitializer />))
-        (try self.request(root: <DeclarationAccessNode.Function function=function />))
+        (try self.requestRaw(root: <DeclarationAccessNode.GlobalInitializer />))
+        (try self.requestRaw(root: <DeclarationAccessNode.Function function=function />))
         try self.startFinalization()
         try self.compiler.prepareFinalInitializers(state: inout self.finalDependencies)
         val bodyId = (try self.compiler.enqueueFinalBody(fnIdx: function, args: arguments, recvInstRef: receiver, selectedProof: proof))
@@ -441,7 +499,7 @@ impl CompilerSession {
         val roots = self.declarationRootsForBody(bodyId: bodyId)
         mut val declarations: Array[BodyDeclarationAnalysis] = []
         for root in roots {
-            declarations.append(<BodyDeclarationAnalysis root=root analysis=(try self.request(root: root)) />)
+            declarations.append(<BodyDeclarationAnalysis root=root analysis=(try self.requestRaw(root: root)) />)
         }
         val instance = self.compiler.arena.bodyInstanceAt(index: bodyId - 1U64)
         if instance.fnIdx != 18446744073709551615U64 {
@@ -455,7 +513,7 @@ impl CompilerSession {
     }
 
     inout fn prepareBodyAccessInSession(bodyId: U64) -> Result[MidAccessPreparation, CompileDiagnostic] {
-        val body = (try self.prepareMidBody(bodyId: bodyId))
+        val body = (try self.prepareMidBodyRaw(bodyId: bodyId))
         mut val closed = false
         while !closed {
             val analysis = (try analyzeMidGlobalAccess(c: inout self.compiler))
@@ -466,7 +524,7 @@ impl CompilerSession {
                 return <Result.Err error=programPreparationDiagnostic(c: inout self.compiler, error: <ProgramPreparationError.GlobalAccess offset=offset />) />
             }
             closed = analysis.requiredBodies.count() == 0U64
-            for dependency in analysis.requiredBodies { (try self.prepareMidBody(bodyId: dependency)) }
+            for dependency in analysis.requiredBodies { (try self.prepareMidBodyRaw(bodyId: dependency)) }
         }
         val snapshot = match self.midRequests.snapshot() {
             Result.Ok(value: val snapshot) => { give snapshot }
@@ -549,17 +607,18 @@ pub impl CheckedProgram {
 pub fn checkCompilerSession(session: move CompilerSession) -> ProgramCheckResult {
     mut val state = move session
     match state.executionFailure {
-        Optional.Some(v: val diagnostic) => { return <ProgramCheckResult.Failure diagnostic=diagnostic /> }
+        Optional.Some(v: val diagnostic) => { return <ProgramCheckResult.Failure diagnostic=state.ownedFailure(diagnostic: diagnostic) /> }
         Optional.None => {}
     }
     match completeFrontendDeclarations(c: inout state.compiler) {
         Result.Ok(value: _) => {}
-        Result.Err(error: val diagnostic) => { return <ProgramCheckResult.Failure diagnostic=diagnostic /> }
+        Result.Err(error: val diagnostic) => { return <ProgramCheckResult.Failure diagnostic=state.ownedFailure(diagnostic: diagnostic) /> }
     }
     val analysis = match prepareDeclarationProgramWithRequests(c: inout state.compiler, templates: inout state.templates, requests: inout state.requests) {
         Result.Ok(value: val analysis) => { give analysis }
         Result.Err(error: val error) => {
-            return <ProgramCheckResult.Failure diagnostic=declarationProgramDiagnostic(c: inout state.compiler, error: error) />
+            val diagnostic = declarationProgramDiagnostic(c: inout state.compiler, error: error)
+            return <ProgramCheckResult.Failure diagnostic=state.ownedFailure(diagnostic: diagnostic) />
         }
     }
     return <ProgramCheckResult.Success program=<CheckedProgram session=move state declarationAccess=analysis /> />
@@ -571,17 +630,18 @@ pub fn prepareCheckedProgram(checked: move CheckedProgram) -> ExecutableCompilat
     mut val program = move checked
     match program.session.startFinalization() {
         Result.Ok(value: _) => {}
-        Result.Err(error: val diagnostic) => { return <ExecutableCompilationResult.Failure diagnostic=diagnostic /> }
+        Result.Err(error: val diagnostic) => { return <ExecutableCompilationResult.Failure diagnostic=program.session.ownedFailure(diagnostic: diagnostic) /> }
     }
     match program.session.completeExecutableDependencies() {
         Result.Ok(value: _) => {}
-        Result.Err(error: val diagnostic) => { return <ExecutableCompilationResult.Failure diagnostic=diagnostic /> }
+        Result.Err(error: val diagnostic) => { return <ExecutableCompilationResult.Failure diagnostic=program.session.ownedFailure(diagnostic: diagnostic) /> }
     }
     val prepared = match PreparedProgram.prepareWithRequests(c: inout program.session.compiler,
         templates: inout program.session.templates, declarationAccess: program.declarationAccess, requests: inout program.session.midRequests) {
         Result.Ok(value: val prepared) => { give prepared }
         Result.Err(error: val error) => {
-            return <ExecutableCompilationResult.Failure diagnostic=programPreparationDiagnostic(c: inout program.session.compiler, error: error) />
+            val diagnostic = programPreparationDiagnostic(c: inout program.session.compiler, error: error)
+            return <ExecutableCompilationResult.Failure diagnostic=program.session.ownedFailure(diagnostic: diagnostic) />
         }
     }
     return <ExecutableCompilationResult.Success compilation=<ExecutableCompilation compiler=program.session.compiler prepared=prepared /> />

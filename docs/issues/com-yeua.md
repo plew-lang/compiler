@@ -1480,3 +1480,32 @@ measured LLVM/runtime hashes agree. Times7.698432/7.067001/7.069988seconds, medi
 not judged difficult to recover. This validates the combined diagnostic storage
 and declaration head-reader fixed point, not full functional gates or closure.
 [Formal evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-compact-diagnostic-formal-self-host.json).
+
+
+### Semantic use-after-move transport increment
+
+The verifier now returns a compact dedicated cause with session, authored owner,
+resolved declaration binding, expression and owned location. Raw caches retain
+this variant. Internal session dependencies use private raw cores; public exits
+interpret only their own result after session/expression/owner comparison.
+General reports are unchanged. Fresh eager/request constructors also interpret
+failures before their Comp escapes. No moved-state analysis is repeated.
+
+The baseline eight inputs plus reached/unused generic controls have30old/new
+comparisons:28Unclassified refusals becomeSource with identical primary errors,
+status and auxiliary ORC messages; two unused lazy cases remain successes.
+This first CLI candidate predates the eager-open review correction. The current
+source manual native test passes forged cursor, real different owner, foreign
+session, invalid expression, raw cache/drain, owned retry, whole and eager cases.
+New semantic lifetime and existing report lifetime controls pass native and
+proper LLVM22ASan/LSan, including actual Plew body memory checks.
+
+Independent review found and then verified the eager-open correction; no remaining
+source must-fix. Final candidate reconciliation, generated layout/performance
+and full gates are still pending. This task is not complete.
+[Evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-ownership-semantic-refusal.json).
+
+The initial semantic candidate regresses the identical-source official-inner
+comparison7.189309→7.319353seconds (all10LLVM equal). Investigate aggregate
+Result/diagnostic representation and ARC dispatch before final adoption. Do not
+weaken source authority or mislabel this as within the7-second objective.

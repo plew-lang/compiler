@@ -908,6 +908,23 @@ impl Comp {
 
 pub impl Comp {
     fn sourceFactSession() -> U64 { return self.sourceFacts.session }
+
+    // Observation only: matching scalar provenance does not turn a raw Comp
+    // into an owned source request. The owning session interprets its result.
+    fn sourceExpressionHasOwner(session: U64, expression: U64, owner: DiagnosticOwner) -> Bool {
+        if session != self.sourceFacts.session || expression == 0U64 || expression >= self.arena.exprs.count() { return false }
+        val recorded = match self.sourceFacts.expressionOwners.get(key: expression) {
+            Optional.Some(v: val recorded) => recorded
+            Optional.None => { return false }
+        }
+        match owner {
+            DiagnosticOwner.Function(index: val index) => { return semanticCompletionOwnersEqual(recorded: recorded, prepared: <SemanticCompletionOwner.Function index=index />) }
+            DiagnosticOwner.Global(target: val target) => { return semanticCompletionOwnersEqual(recorded: recorded, prepared: <SemanticCompletionOwner.Global target=target />) }
+            DiagnosticOwner.Closure(expression: val expression) => { return semanticCompletionOwnersEqual(recorded: recorded, prepared: <SemanticCompletionOwner.Closure expression=expression />) }
+            DiagnosticOwner.Unknown => { return false }
+        }
+    }
+
     // Global lowering can stop before later initializers. Project only already
     // published owners; this query neither prepares nor evaluates a source body.
     fn publishedGlobalBindingStorageOrigins() -> Result[SourceBindingStorageIndex, CompileDiagnostic] {

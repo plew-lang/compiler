@@ -66,7 +66,7 @@ use ./Path only { resolveImport, extractSpan, dirPrefixLen, findSrcRoot, findPkg
 use ./Manifest only { Dep, loadManifestDeps, resolveDepImport, resolveGitDepImport, loadLock, isExternalDepImport }
 use ./Lock only { Lock }
 use ./Cache only { cacheRoot }
-use ./Diag only { compileErrorAt, compileErrorAtFile, CompileDiagnostic, DiagnosticNote, DiagnosticLocation, DiagnosticSeverity, FailureDomain, emitDiagnostic, eprintInt, digitByte, digitStrU }
+use ./Diag only { compileErrorAt, compileErrorAtFile, CompileDiagnostic, UseAfterMoveRefusal, DiagnosticOwner, DiagnosticNote, DiagnosticLocation, DiagnosticSeverity, FailureDomain, emitDiagnostic, eprintInt, digitByte, digitStrU }
 use ./Ops only { opEq, opNe, opLt, opLe, opGt, opGe, opAdd, opSub, opMul, opDiv, opRem, opAnd, opOr, opNot, opBitAnd, opBitOr, opBitXor, opShl, opShr, opBitNot, opAssign, compoundBinOp, isBinTraitOp, binTraitName, binTraitMethodName, unaryMethodName }
 
 // Only an entirely unsuffixed numeric expression accepts a sibling's
@@ -2521,13 +2521,33 @@ pub fn analyzeFrontendDeclarations(c: inout Comp, input: FrontendInput, sources:
     return analyzeFrontendDeclarationsWithOrigin(c: inout c, input: input, sources: sources, options: options, origin: <FrontendDeclarationOrigin.Raw />)
 }
 
+// Called only while a fresh source constructor still owns its unexposed
+// Comp. Caller-owned analysis never gains authority from this interpretation.
+fn ownedFrontendFailure(c: Comp, diagnostic: CompileDiagnostic) -> CompileDiagnostic {
+    match diagnostic {
+        CompileDiagnostic.UseAfterMove(refusal: val refusal) => {
+            if c.sourceExpressionHasOwner(session: refusal.session(), expression: refusal.expression(), owner: refusal.owner()) {
+                return <CompileDiagnostic failureDomain=<FailureDomain.Source /> location=refusal.location() message=diagnostic.message() />
+            }
+        }
+        CompileDiagnostic.Report(report: _) => {}
+    }
+    return diagnostic
+}
+
 // The complete source constructor starts with a compiler state that the
 // caller cannot prepopulate, and transfers it only after admission.
 pub fn openFrontend(input: FrontendInput, sources: SourceAccess,
                     options: FrontendOptions = <FrontendOptions />) -> Result[Comp, CompileDiagnostic] {
     mut val c = <Comp />
-    try analyzeFrontendDeclarationsWithOrigin(c: inout c, input: input, sources: sources, options: options, origin: <FrontendDeclarationOrigin.SourceAdmission />)
-    try finalizeFrontendExecutables(c: inout c)
+    match analyzeFrontendDeclarationsWithOrigin(c: inout c, input: input, sources: sources, options: options, origin: <FrontendDeclarationOrigin.SourceAdmission />) {
+        Result.Ok(value: _) => {}
+        Result.Err(error: val diagnostic) => { return <Result.Err error=ownedFrontendFailure(c: c, diagnostic: diagnostic) /> }
+    }
+    match finalizeFrontendExecutables(c: inout c) {
+        Result.Ok(value: _) => {}
+        Result.Err(error: val diagnostic) => { return <Result.Err error=ownedFrontendFailure(c: c, diagnostic: diagnostic) /> }
+    }
     return <Result.Ok value=c />
 }
 
@@ -2624,7 +2644,10 @@ pub fn analyzeFrontendForRequests(c: inout Comp, input: FrontendInput, sources: 
 pub fn openFrontendForRequests(input: FrontendInput, sources: SourceAccess,
                                options: FrontendOptions = <FrontendOptions />) -> Result[Comp, CompileDiagnostic] {
     mut val c = <Comp />
-    try analyzeFrontendRequestsWithOrigin(c: inout c, input: input, sources: sources, options: options, origin: <FrontendDeclarationOrigin.SourceAdmission />)
+    match analyzeFrontendRequestsWithOrigin(c: inout c, input: input, sources: sources, options: options, origin: <FrontendDeclarationOrigin.SourceAdmission />) {
+        Result.Ok(value: _) => {}
+        Result.Err(error: val diagnostic) => { return <Result.Err error=ownedFrontendFailure(c: c, diagnostic: diagnostic) /> }
+    }
     return <Result.Ok value=c />
 }
 

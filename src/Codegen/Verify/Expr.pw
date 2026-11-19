@@ -519,7 +519,15 @@ pub impl Comp {
                         Optional.None => self.localIndexByName(start: start, len: len)
                     }
                     if self.verifyIsMoved(idx: index) {
-                        return <Result.Err error=self.diagnosticAt(offset: start, msg: "use of a value after it was moved (`move` transfers ownership away — the variable is dead; bind a fresh value to use it again) (spec/03)") />
+                        val owner: DiagnosticOwner = match self.currentSourceOwner() {
+                            Optional.Some(v: val owner) => match owner {
+                                SemanticCompletionOwner.Function(index: val index) => <DiagnosticOwner.Function index=index />
+                                SemanticCompletionOwner.Global(target: val target) => <DiagnosticOwner.Global target=target />
+                                SemanticCompletionOwner.Closure(expression: val expression) => <DiagnosticOwner.Closure expression=expression />
+                            }
+                            Optional.None => <DiagnosticOwner.Unknown />
+                        }
+                        return <Result.Err error=<CompileDiagnostic.UseAfterMove refusal=<UseAfterMoveRefusal session=self.sourceFactSession() owner=owner binding=binding.target expression=id location=self.diagnosticLocationAt(offset: start) /> /> />
                     }
                 }
             }

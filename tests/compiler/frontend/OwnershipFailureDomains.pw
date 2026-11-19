@@ -1,0 +1,130 @@
+// Raw verifier state has no source authority; owned requests interpret their
+// own semantic refusal without replacing the failure retained by the owner.
+use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontendForRequests, openFrontend }
+use ../../../src/CheckedProgram only { CompilerSession, CompilerSessionResult, ProgramCheckResult, checkCompilerSession }
+use ../../../src/Backend only { LlvmLoweringResult }
+use ../../../src/SourceAccess only { SourceAccess }
+use ../../../src/Ir only { Expr }
+use ../../../src/Diag only { CompileDiagnostic, FailureDomain, DiagnosticOwner }
+use @Std/Io only { print }
+use @Plew/Syntax only { rangeEquals }
+
+fn input() -> FrontendInput {
+    return <FrontendInput.Text path="Ownership.pw" text="unique struct File {{ val fd: I64 }}\nimpl File {{ factory }}\nfn other() {{}}\nfn main() {{\n val file = <File fd=1I64 />\n val moved = move file\n val number = file.fd\n}}" />
+}
+
+fn rawFailure(compiler: inout Comp, function: U64) -> CompileDiagnostic {
+    return match compiler.prepareLexicalBody(fnIdx: function) {
+        Result.Err(error: val diagnostic) => diagnostic
+        Result.Ok(value: _) => { panic("moved value was accepted") }
+    }
+}
+
+fn requireRaw(diagnostic: CompileDiagnostic, compiler: Comp) {
+    if diagnostic.isSourceRejection() { panic("raw ownership state acquired source authority") }
+    match diagnostic.failureDomain() {
+        FailureDomain.Unclassified => {}
+        _ => { panic("raw ownership refusal changed domain") }
+    }
+    match diagnostic {
+        CompileDiagnostic.UseAfterMove(refusal: val refusal) => {
+            if refusal.session() != compiler.sourceFactSession() { panic("semantic refusal lost session") }
+            if !rangeEquals(bytes: compiler.arena.bytes, start: refusal.binding(), len: 4U64, kw: "file") { panic("semantic refusal lost declaration binding") }
+            mut val other = compiler.arena.functionCount()
+            for index in 0U64..<compiler.arena.functionCount() {
+                val function = compiler.arena.functionAt(index: index)
+                if rangeEquals(bytes: compiler.arena.bytes, start: function.nameStart, len: function.nameLen, kw: "other") { other = index }
+            }
+            if other >= compiler.arena.functionCount() { panic("missing other owner") }
+            if compiler.sourceExpressionHasOwner(session: refusal.session(), expression: refusal.expression(), owner: <DiagnosticOwner.Function index=other />) { panic("different declared owner matched") }
+            if !compiler.sourceExpressionHasOwner(session: refusal.session(), expression: refusal.expression(), owner: refusal.owner()) { panic("semantic refusal lost expression owner") }
+            if compiler.sourceExpressionHasOwner(session: refusal.session() + 1U64, expression: refusal.expression(), owner: refusal.owner()) { panic("foreign session matched") }
+            if compiler.sourceExpressionHasOwner(session: refusal.session(), expression: refusal.expression(), owner: <DiagnosticOwner.Unknown />) { panic("unknown owner matched") }
+            if compiler.sourceExpressionHasOwner(session: refusal.session(), expression: 18446744073709551615U64, owner: refusal.owner()) { panic("out of range expression matched") }
+        }
+        _ => { panic("raw cache flattened semantic refusal") }
+    }
+}
+
+fn session() -> CompilerSession {
+    match CompilerSession.open(input: input(), sources: <SourceAccess />) {
+        CompilerSessionResult.Success(session: val session) => { return move session }
+        CompilerSessionResult.Failure(diagnostic: val diagnostic) => { panic(diagnostic.message()) }
+    }
+}
+
+fn forgedMoveState() {
+    mut val raw = <Comp />
+    raw.arena.reserveTypeSentinel()
+    val name = raw.internTmpName(prefix: "forged", n: 1U64)
+    raw.addLocal(nameStart: name.nameStart, nameLen: name.nameLen, tyStart: 0U64, tyLen: 0U64, isArray: false, ty: 0U64, isInout: false, isMut: false, owned: false)
+    raw.pushExpr(e: <Expr.Ident start=name.nameStart len=name.nameLen />)
+    val expression = raw.pushExpr(e: <Expr.Ident start=name.nameStart len=name.nameLen />)
+    raw.cur.verifyMovedIdx = [0U64]
+    match raw.verifyExpr(id: expression) {
+        Result.Ok(value: _) => { panic("forged moved state did not reach refusal") }
+        Result.Err(error: val diagnostic) => {
+            if diagnostic.isSourceRejection() { panic("forged cursor acquired source authority") }
+            match diagnostic {
+                CompileDiagnostic.UseAfterMove(refusal: val refusal) => {
+                    if raw.sourceExpressionHasOwner(session: refusal.session(), expression: refusal.expression(), owner: refusal.owner()) { panic("raw expression acquired authored provenance") }
+                }
+                _ => { panic("forged state reached an unrelated refusal") }
+            }
+        }
+    }
+    print("forged cursor remains raw")
+}
+
+
+fn main() {
+    forgedMoveState()
+    mut val raw = <Comp />
+    match analyzeFrontendForRequests(c: inout raw, input: input(), sources: <SourceAccess />) {
+        Result.Ok(value: _) => {}
+        Result.Err(error: val diagnostic) => { panic(diagnostic.message()) }
+    }
+    val name = raw.internBytes(s: "main")
+    val function = raw.arena.firstFunctionNamed(nameId: name.nameId)
+    val first = rawFailure(compiler: inout raw, function: function)
+    requireRaw(diagnostic: first, compiler: raw)
+    raw.pendingDiagnostics.append(first)
+    if raw.takeDiagnostics().count() != 1U64 { panic("drain lost presentation") }
+    val repeated = rawFailure(compiler: inout raw, function: function)
+    requireRaw(diagnostic: repeated, compiler: raw)
+    if first.message() != repeated.message() { panic("cache changed cause") }
+    print("raw semantic cache retained")
+
+    mut val owned = session()
+    match owned.lowerDeclarations() {
+        LlvmLoweringResult.Success(module: _) => {}
+        LlvmLoweringResult.Failure(diagnostic: val diagnostic) => { panic(diagnostic.message()) }
+    }
+    val bodies = owned.registeredBodies()
+    if bodies.count() == 0U64 { panic("missing main body") }
+    for body in bodies {
+        match owned.prepareBodyAccess(bodyId: body) {
+            Result.Ok(value: _) => { panic("owned moved value was accepted") }
+            Result.Err(error: val diagnostic) => { if !diagnostic.isSourceRejection() { panic("owned request lost source refusal") } }
+        }
+        match owned.prepareBodyAccess(bodyId: body) {
+            Result.Ok(value: _) => { panic("repeat recovered failure") }
+            Result.Err(error: val diagnostic) => { if !diagnostic.isSourceRejection() { panic("repeat lost source refusal") } }
+        }
+    }
+    match checkCompilerSession(session: move owned) {
+        ProgramCheckResult.Success(program: _) => { panic("failed session became checked") }
+        ProgramCheckResult.Failure(diagnostic: val diagnostic) => { if !diagnostic.isSourceRejection() { panic("check lost retained source refusal") } }
+    }
+    print("owned request failure retained")
+    match checkCompilerSession(session: session()) {
+        ProgramCheckResult.Success(program: _) => { panic("whole check accepted moved value") }
+        ProgramCheckResult.Failure(diagnostic: val diagnostic) => { if !diagnostic.isSourceRejection() { panic("whole check lost source refusal") } }
+    }
+    print("whole source check classified")
+    match openFrontend(input: input(), sources: <SourceAccess />) {
+        Result.Ok(value: _) => { panic("fresh eager frontend accepted moved value") }
+        Result.Err(error: val diagnostic) => { if !diagnostic.isSourceRejection() { panic("fresh eager frontend lost source refusal") } }
+    }
+    print("fresh eager source classified")
+}
