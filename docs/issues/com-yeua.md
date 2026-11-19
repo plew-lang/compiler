@@ -1546,3 +1546,13 @@ Fixed-candidate RED, full native GREEN and neutral review pass. The strengthened
 divergence case rejects at body checking before the delegation comparison; no
 claim is made that it isolates that private branch.
 [Evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-completion-identity-fixture.json).
+
+## Public surface classification checkpoint
+
+The private surface core retains Exposure separately from existing inference
+diagnostics. Only fresh admission interprets Exposure as Source; public raw
+rechecks remain Unclassified. [Finite evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-public-surface-refusal.json)
+records 42 RED/GREEN CLI pairs, ten positive checks, native authority/retry
+controls, and four reached inference-fault controls preserving Internal/location/notes.
+Independent source/evidence review found no must-fix. This does not close this
+ticket, the full normal suite, or the 7-second performance gate.

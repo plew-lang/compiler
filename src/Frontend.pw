@@ -1900,6 +1900,13 @@ pub fn analyzeFrontend(c: inout Comp, input: FrontendInput, sources: SourceAcces
 // declaration identity resolution, as well as the final nominal sweep.
 // Only a fresh owned frontend can supply source authority to declaration
 // checks. Caller-owned analyses and public rechecks retain Raw authority.
+// The closure checker owns this semantic finding. Existing inference failures
+// are a separate alternative and cannot be reclassified by an admission.
+enum PublicSurfaceFailure {
+    Exposure(offset: U64)
+    Diagnostic(diagnostic: CompileDiagnostic)
+}
+
 enum FrontendDeclarationOrigin {
     Raw
     SourceAdmission
@@ -2486,7 +2493,7 @@ fn loadFrontendDeclarations(c: inout Comp, input: FrontendInput, sources: Source
     try c.checkMoveFnReceivers()
     try c.checkAllParamModes()
     try c.checkDeinitOnlyOnUnique()
-    try c.checkPublicApiClosure()
+    try c.checkPublicApiClosureForAdmission(origin: origin)
     tracePhase(c: inout c, label: "declaration-checks:done")
     // gen mode (spec/16): replace the program with the synthesized derive-runner
     // harness `main`. Added after the user-code checks (so its synthetic call to

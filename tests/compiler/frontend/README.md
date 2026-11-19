@@ -481,3 +481,9 @@ Generic equations retain the impl's original ParamId. Closed clauses avoid
 unrelated equations; the compatibility proof API and empty/absent publication
 remain distinct. This representation increment preserves SourceAdmission inputs
 and does not certify migration of the associated consumer to saved-only replay.
+
+`PublicSurfaceFailureDomains.pw` is a manual native diagnostic. It checks raw
+analysis and repeated public rechecks stay Unclassified, fresh lazy/eager
+admission classifies its own hidden-surface exposure as Source, and a public
+type succeeds. Exit0 must match `.out` with empty stderr. This is not full-suite
+coverage or authority to reclassify inference failures.

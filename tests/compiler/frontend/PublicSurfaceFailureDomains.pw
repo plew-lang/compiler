@@ -1,0 +1,52 @@
+// Public surface exposure is interpreted by the same fresh admission which
+// owns its declaration graph. Raw rechecks cannot grant source authority.
+use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontendForRequests, openFrontend, openFrontendForRequests }
+use ../../../src/SourceAccess only { SourceAccess }
+use ../../../src/Diag only { CompileDiagnostic, FailureDomain, DiagnosticLocation }
+use @Std/Io only { print }
+
+fn input(publicType: Bool = false) -> FrontendInput {
+    val prefix = if publicType { give "pub " } else { give "" }
+    return <FrontendInput.Text path="Surface.pw" text=prefix + "struct Hidden {{}}\npub fn visible(thing: Hidden) {{}}\nfn main() {{}}" />
+}
+fn check(diagnostic: CompileDiagnostic, source: Bool) {
+    if diagnostic.isSourceRejection() != source { panic("public surface authority changed") }
+    match diagnostic.failureDomain() {
+        FailureDomain.Source => { if !source { panic("raw surface gained source domain") } }
+        FailureDomain.Unclassified => { if source { panic("fresh surface lost source domain") } }
+        _ => { panic("surface refusal changed domain") }
+    }
+    if diagnostic.message() != "public API signature mentions a package-local name that is not reachable from the package root public surface — export or re-export it from src/_.pw (spec/15 public API closure)" { panic(diagnostic.message()) }
+    match diagnostic.location() {
+        DiagnosticLocation.File(path: val path, line: val line) => { if path != "Surface.pw" || line != 2I64 { panic("surface location changed") } }
+        _ => { panic("surface lost owned location") }
+    }
+}
+fn main() {
+    mut val raw = <Comp />
+    match analyzeFrontendForRequests(c: inout raw, input: input(), sources: <SourceAccess stdRoot=[] />) {
+        Result.Err(error: val diagnostic) => { check(diagnostic: diagnostic, source: false) }
+        Result.Ok(value: _) => { panic("raw hidden surface accepted") }
+    }
+    for index in 0U64..<2U64 {
+        match raw.checkPublicApiClosure() {
+            Result.Err(error: val diagnostic) => { check(diagnostic: diagnostic, source: false) }
+            Result.Ok(value: _) => { panic("raw retry recovered hidden surface") }
+        }
+    }
+    print("raw surface remains unclassified")
+    match openFrontendForRequests(input: input(), sources: <SourceAccess stdRoot=[] />) {
+        Result.Err(error: val diagnostic) => { check(diagnostic: diagnostic, source: true) }
+        Result.Ok(value: _) => { panic("fresh hidden surface accepted") }
+    }
+    match openFrontend(input: input(), sources: <SourceAccess stdRoot=[] />) {
+        Result.Err(error: val diagnostic) => { check(diagnostic: diagnostic, source: true) }
+        Result.Ok(value: _) => { panic("eager hidden surface accepted") }
+    }
+    print("fresh surface classified")
+    match openFrontendForRequests(input: input(publicType: true), sources: <SourceAccess stdRoot=[] />) {
+        Result.Ok(value: _) => {}
+        Result.Err(error: val diagnostic) => { panic(diagnostic.message()) }
+    }
+    print("public surface accepted")
+}
