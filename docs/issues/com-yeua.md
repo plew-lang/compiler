@@ -1460,3 +1460,13 @@ The semantic ownership refusal remains next. Preserve compact transport when
 adding its canonical owned context; do not reintroduce a large inline alternative
 or a duplicate mutable Report merely to carry Source classification. This is a
 representation constraint on the already-planned variant, not new task scope.
+
+Sanitizer evidence correction: the first hand-run sanitizer controls omitted
+compiler --asan and only checked generic __asan_ presence; those labels were
+withdrawn (native results remain valid). Re-generated with --asan, then LLVM22
+ASan and sanitizer link/LSan. Four storage controls each contain286actual memory
+check calls (267/268inside plew.body.*); the registered two contain271(253inside
+plew.body.*). All six sanitizer executions pass. Current evidence records flags,
+call counts and the invalidated attempt. Independent review of actual raw and
+instrumented LLVM confirms genuine function-body instrumentation, not merely
+global/module registration. Full compiler/corpus ASan remains unclaimed.
