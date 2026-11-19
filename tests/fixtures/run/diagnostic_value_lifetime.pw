@@ -1,0 +1,85 @@
+// Diagnostic values preserve lifetime, classification and value semantics through copies.
+use /Diag only { CompileDiagnostic, DiagnosticNote, DiagnosticLocation, DiagnosticSeverity, FailureDomain }
+use @Std/Io only { print }
+
+trait Presentation { fn source() -> Bool }
+struct Presented { val diagnostic: CompileDiagnostic }
+impl Presented { factory }
+impl Presented as Presentation {
+    fn source() -> Bool { return self.diagnostic.isSourceRejection() }
+}
+
+fn domainNumber(domain: FailureDomain) -> U64 {
+    return match domain {
+        FailureDomain.Unclassified => 0U64
+        FailureDomain.Source => 1U64
+        FailureDomain.Input => 2U64
+        FailureDomain.Tool => 3U64
+        FailureDomain.Limit => 4U64
+        FailureDomain.Internal => 5U64
+    }
+}
+
+fn owned(text: String) -> String { return text + "!" }
+
+fn diagnostic(domain: FailureDomain) -> CompileDiagnostic {
+    return <CompileDiagnostic failureDomain=domain location=<DiagnosticLocation.File path=owned(text: "escaped.pw") line=7I64 /> message=owned(text: "retained") notes=[<DiagnosticNote location=<DiagnosticLocation.Line line=3I64 /> message=owned(text: "context") />] />
+}
+
+fn copied() -> CompileDiagnostic {
+    val original = diagnostic(domain: <FailureDomain.Source />)
+    val copies = [original, original]
+    return copies[1U64]
+}
+
+fn escapedMessage() -> String {
+    val temporary = diagnostic(domain: <FailureDomain.Input />)
+    return temporary.message()
+}
+
+fn escapedNotes() -> Array[DiagnosticNote] {
+    val temporary = diagnostic(domain: <FailureDomain.Tool />)
+    return temporary.notes()
+}
+
+fn escapedLocation() -> DiagnosticLocation {
+    val temporary = diagnostic(domain: <FailureDomain.Limit />)
+    return temporary.location()
+}
+
+fn main() {
+    val domains = [<FailureDomain.Unclassified />, <FailureDomain.Source />, <FailureDomain.Input />, <FailureDomain.Tool />, <FailureDomain.Limit />, <FailureDomain.Internal />]
+    for index in 0U64..<domains.count() {
+        val value = diagnostic(domain: domains[index])
+        if domainNumber(domain: value.failureDomain()) != index { panic("domain changed") }
+        if value.isSourceRejection() != (index == 1U64) { panic("source authority changed") }
+        match value.severity() { DiagnosticSeverity.Error => {} _ => { panic("severity changed") } }
+    }
+    val saved = copied()
+    mut val failures: Dictionary[U64, Result[(), CompileDiagnostic]] = [:]
+    failures[1U64] = <Result.Err error=saved />
+    val retained = failures.get(key: 1U64).unwrap()
+    failures = [:]
+    match retained {
+        Result.Err(error: val failure) => {
+            if !failure.isSourceRejection() || failure.message() != "retained!" || failure.notes()[0U64].message != "context!" { panic("cached failure changed") }
+        }
+        Result.Ok(value: _) => { panic("cached failure became success") }
+    }
+    val portable: any sendable Presentation = <Presented diagnostic=saved />
+    if !portable.source() { panic("diagnostic sendability changed") }
+    if saved.message() != "retained!" || escapedMessage() != "retained!" { panic("message outlived owner incorrectly") }
+    val notes = escapedNotes()
+    if notes.count() != 1U64 || notes[0U64].message != "context!" { panic("notes outlived owner incorrectly") }
+    match escapedLocation() {
+        DiagnosticLocation.File(path: val path, line: val line) => { if path != "escaped.pw!" || line != 7I64 { panic("location changed") } }
+        _ => { panic("location variant changed") }
+    }
+    mut val changed = saved.notes()
+    changed[0U64] = <DiagnosticNote location=<DiagnosticLocation.Unpositioned /> message="changed" />
+    changed.append(<DiagnosticNote location=<DiagnosticLocation.Unpositioned /> message="extra" />)
+    if saved.notes().count() != 1U64 || saved.notes()[0U64].message != "context!" { panic("notes lost value semantics") }
+    val warning = <CompileDiagnostic severity=<DiagnosticSeverity.Warning /> failureDomain=<FailureDomain.Source /> location=<DiagnosticLocation.Unpositioned /> message="warning" />
+    if warning.isSourceRejection() { panic("warning became source failure") }
+    print("ok")
+}

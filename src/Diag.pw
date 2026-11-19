@@ -77,14 +77,25 @@ pub impl DiagnosticNote { factory }
 
 // A report is immutable presentation data. The enclosing sum is the sole
 // authority; accessors never maintain another copy of these fields.
-pub struct DiagnosticReport {
+struct DiagnosticReportData {
     val severity: DiagnosticSeverity
     val failureDomain: FailureDomain
     val location: DiagnosticLocation
     val message: String
     val notes: Array[DiagnosticNote]
 }
-impl DiagnosticReport { factory }
+impl DiagnosticReportData { factory }
+
+// Private fixed-cardinality value storage. Copies retain value semantics;
+// no reference identity or additional public capability is exposed.
+pub struct DiagnosticReport {
+    val storage: Array[DiagnosticReportData]
+}
+impl DiagnosticReport {
+    factory(severity: DiagnosticSeverity, failureDomain: FailureDomain, location: DiagnosticLocation, message: String, notes: Array[DiagnosticNote]) {
+        return <DiagnosticReport storage=[<DiagnosticReportData severity=severity failureDomain=failureDomain location=location message=message notes=notes />] />
+    }
+}
 
 pub enum CompileDiagnostic {
     Report(report: DiagnosticReport)
@@ -96,23 +107,23 @@ pub impl CompileDiagnostic {
     }
 
     fn severity() -> DiagnosticSeverity {
-        return match self { CompileDiagnostic.Report(report: val report) => report.severity }
+        return match self { CompileDiagnostic.Report(report: val report) => report.storage[0U64].severity }
     }
 
     fn failureDomain() -> FailureDomain {
-        return match self { CompileDiagnostic.Report(report: val report) => report.failureDomain }
+        return match self { CompileDiagnostic.Report(report: val report) => report.storage[0U64].failureDomain }
     }
 
     fn location() -> DiagnosticLocation {
-        return match self { CompileDiagnostic.Report(report: val report) => report.location }
+        return match self { CompileDiagnostic.Report(report: val report) => report.storage[0U64].location }
     }
 
     fn message() -> String {
-        return match self { CompileDiagnostic.Report(report: val report) => report.message }
+        return match self { CompileDiagnostic.Report(report: val report) => report.storage[0U64].message }
     }
 
     fn notes() -> Array[DiagnosticNote] {
-        return match self { CompileDiagnostic.Report(report: val report) => report.notes }
+        return match self { CompileDiagnostic.Report(report: val report) => report.storage[0U64].notes }
     }
 
     fn isSourceRejection() -> Bool {

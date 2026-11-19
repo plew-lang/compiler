@@ -54,6 +54,18 @@ depends on ownership of the input. Its raw interpretation is Unclassified;
 message, location and severity are derived from that variant, not maintained as
 a second editable report. Ordinary reports retain their original domain.
 
+Presentation storage remains private and value-semantic. A report's immutable
+fields have one authority; copying a diagnostic or returning its String/notes
+must preserve their independent lifetimes and the contents' sendability. A
+returned notes array may be modified without changing the original report.
+Storage must not expose reference identity, weak-reference capabilities or
+mutable access. Private fixed-cardinality value storage keeps the inline
+failure alternative small in success-dominant Result transport, at the cost
+of allocation when a report is created. Its factory alone establishes the
+storage invariant; consumers cannot construct an empty or malformed report.
+This representation choice neither grants source authority nor changes the
+classification or presentation of a retained failure.
+
 An owned request consumer may create a Source report from such a dedicated
 semantic result only when it performed the request on its own unexposed compiler
 state. It must not accept an external failure for promotion, infer a class from

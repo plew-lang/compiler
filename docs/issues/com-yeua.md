@@ -1423,3 +1423,40 @@ LLVM in4compiles; unchanged baseline native golden successes are explicitly
 reused, not relabeled new execution. Independent review has no required concern
 and accepts the structural cleanup. [Evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-declaration-access-head-reader.json).
 Formal fixed point,7seconds and task/phase-three closure remain unachieved.
+
+### Compact immutable diagnostic presentation storage
+
+The Report case retains its public DiagnosticReport payload type. That type
+privately owns one immutable report in Array value storage; its factory alone
+establishes cardinality. Accessors derive the same severity/domain/location/
+message/notes. No public Ref, weak identity, nonsendable field, source authority
+or parallel presentation/cause store is introduced. The existing private
+presentation contract is explicit in diagnostics.md.
+
+The exact archived prototype has matched5-pair medians7.552111/6.975506seconds
+on identical fc67841d source, all10LLVM equal. This is diagnostic timing, not an
+official fixed point or7-second completion. Creation adds one allocation per
+report to reduce the success-dominant Result inline failure width.
+
+Validation includes8before/after-library x old/new-compiler native andLLVM22
+ASan/LSan controls; heap-backed message/location/notes escape the report, copied
+reports survive owner destruction, Result dictionary removal preserves failure,
+notes retain CoW, and any-sendable erasure remains available. Constant-only
+String escape tests were strengthened before acceptance. The registered normal
+fixture diagnostic_value_lifetime has4native/ASan runs with exact stdout/empty
+stderr and equal old/new LLVM. Three unchanged diagnostic rendering goldens and
+the actual ProducerFailureDomains native source-cache retry/drain/raw-domain
+probe pass. External weak/storage access is rejected in8contrasts.48ownership
+CLI outcomes and8domain/input cases preserve primary diagnostics, status and
+channel. Both compilers retain7auxiliary ORC missing-module/context errors; this
+is not a repair or certification of that existing terminal-refusal path.
+
+Independent adoption review found no required issue. The independently adopted
+declaration head reader is not in this prototype binary; the combined frozen
+source requires formal/affected final gates. Main, seed and adopted carrier are
+unchanged. [Evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-diagnostic-value-storage.json).
+
+The semantic ownership refusal remains next. Preserve compact transport when
+adding its canonical owned context; do not reintroduce a large inline alternative
+or a duplicate mutable Report merely to carry Source classification. This is a
+representation constraint on the already-planned variant, not new task scope.
