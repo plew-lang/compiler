@@ -17,7 +17,7 @@ does not imply that the others passed.
 | `fixtures/genast/` | Input AST generation expectations | gen profile, `compiler/codegen/test-gen-input-ast.sh` |
 | `compiler/architecture/` | Implementation responsibility and structural invariants | explicit checks in normal harness |
 | `compiler/codegen/` | Generated LLVM, ABI, Mid emission and trace assertions | explicit checks in normal/gen harnesses; exception below |
-| `compiler/frontend/` | Focused tests importing the compiler implementation | manual diagnostics; see its README |
+| `compiler/frontend/` | Compiler API and focused frontend capability tests | manual diagnostics and explicit normal/ASan profiles; see its README |
 | `tooling/` | Runner, watchdog, build/measurement and sanitizer orchestration correctness | normal harness and focused Python/shell checks |
 | `sanitizer/` | Sanitizer detection control and raw ownership supplement | ASan E |
 | `harness/` | Normal, generation, dependency and ASan suite orchestration | four standard entries plus the internal A/B stage |

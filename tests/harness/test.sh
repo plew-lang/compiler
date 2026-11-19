@@ -479,6 +479,18 @@ else
     fail=$((fail + 1)); failed="$failed bounds-lowering"
 fi
 
+if python3 -B ./tests/tooling/test-capture-limit-registration.py; then
+    :
+else
+    fail=$((fail + 1)); failed="$failed capture-limit-registration"
+fi
+
+if python3 -B ./tests/compiler/frontend/test-closure-capture-limits.py; then
+    :
+else
+    fail=$((fail + 1)); failed="$failed closure-capture-limits"
+fi
+
 if python3 ./tests/compiler/codegen/test-expose.py; then
     :
 else

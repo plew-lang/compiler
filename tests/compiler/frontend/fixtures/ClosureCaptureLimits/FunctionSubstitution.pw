@@ -1,0 +1,7 @@
+fn make[T](value: T) -> fn() -> T {
+    return fn() -> T { return value }
+}
+fn main() {
+    val value: fn() -> I64 = fn() -> I64 { return 1I64 }
+    val callback = make(value: value)
+}

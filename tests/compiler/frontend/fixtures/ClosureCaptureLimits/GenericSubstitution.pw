@@ -1,0 +1,9 @@
+struct Box[T] { pub val value: T }
+pub impl[T] Box[T] { factory }
+fn make[T](value: T) -> fn() -> T {
+    return fn() -> T { return value }
+}
+fn main() {
+    val value: Box[I64] = <Box[I64] value=1I64 />
+    val callback = make(value: value)
+}

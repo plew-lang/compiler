@@ -495,3 +495,11 @@ retries, whole check and eager admission. Require exit0, exact `.out` and empty
 stderr. It does not classify construction or record-pattern failures. Registered
 `diagnostic_missing_field_lifetime` covers owned cause/location lifetime;
 `field_unit_payload` preserves successful generic and record Unit-field reads.
+
+`test-closure-capture-limits.py` is registered in normal and ASan B. Its
+`fixtures/ClosureCaptureLimits/` inputs assert current implementation limits,
+not forbidden source types. Four former reject fixtures remain covered, with
+precise Limit/status/reason checks, deferred substitution cases and unrequested
+lazy successes. The profile never widens the Source-only reject lane. Unique
+capture source restrictions stay in `tests/fixtures/reject/`; future shape
+support belongs to com-b1ro.

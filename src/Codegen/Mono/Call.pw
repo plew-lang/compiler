@@ -5648,33 +5648,10 @@ pub impl Comp {
     }
 
     inout fn captureSupported(lo: Local) -> Bool {
-        if lo.isArray {
-            return true
+        return match self.captureTypeSupport(typeStart: lo.tyStart, typeLen: lo.tyLen, isArray: lo.isArray, typeRef: lo.ty) {
+            CaptureTypeSupport.Supported => true
+            _ => false
         }
-        if self.isPrimType(start: lo.tyStart, len: lo.tyLen) {
-            return true
-        }
-        if rangeEquals(bytes: self.arena.bytes, start: lo.tyStart, len: lo.tyLen, kw: "String") {
-            return true
-        }
-        if self.isStrongRefInst(ref: lo.ty) || self.isWeakRefLikeInst(ref: lo.ty) {
-            return true
-        }
-        val si: U64 = self.structIndexForType(ref: lo.ty)
-        if si < self.arena.structCount() {
-            if self.arena.structAt(index: si).isUnique {
-                return false
-            }
-            if self.arena.structAt(index: si).typeParams.count() > 0 {
-                return false
-            }
-            return true
-        }
-        val enumIndex = self.enumIndexForType(ref: lo.ty)
-        if enumIndex < self.arena.enumCount() {
-            return !self.arena.enumAt(index: enumIndex).isUnique
-        }
-        return false
     }
 
     // Capture mode follows lexical mutability; representation restrictions are
@@ -5689,8 +5666,15 @@ pub impl Comp {
         // Environment slots and shared cells use the same finalized value layout
         // and destruction path. Mutability selects storage sharing, not a second
         // list of supported value representations.
-        if !self.captureSupported(lo: lo) {
-            return <Result.Err error=self.diagnosticAt(offset: lo.nameStart, msg: "closure capture does not support unique, generic struct, or function-typed values") />
+        match self.captureTypeSupport(typeStart: lo.tyStart, typeLen: lo.tyLen, isArray: lo.isArray, typeRef: lo.ty) {
+            CaptureTypeSupport.Supported => {}
+            CaptureTypeSupport.GenericStruct => {
+                return <Result.Err error=self.diagnosticAt(offset: lo.nameStart, msg: "closure capture of generic struct values is not implemented", failureDomain: <FailureDomain.Limit />) />
+            }
+            CaptureTypeSupport.FunctionValue => {
+                return <Result.Err error=self.diagnosticAt(offset: lo.nameStart, msg: "closure capture of function-typed values is not implemented", failureDomain: <FailureDomain.Limit />) />
+            }
+            _ => { return <Result.Err error=self.diagnosticAt(offset: lo.nameStart, msg: "closure capture does not support unique, generic struct, or function-typed values") /> }
         }
         return <Result.Ok value=lo.isMut />
     }
@@ -5706,6 +5690,29 @@ pub impl Comp {
 }
 
 impl Comp {
+    // Preserve the legacy support order. This query takes only type shape,
+    // not binding ownership or mutability, and performs each nominal lookup once.
+    inout fn captureTypeSupport(typeStart: U64, typeLen: U64, isArray: Bool, typeRef: U64) -> CaptureTypeSupport {
+        if isArray { return <CaptureTypeSupport.Supported /> }
+        if self.isPrimType(start: typeStart, len: typeLen) { return <CaptureTypeSupport.Supported /> }
+        if rangeEquals(bytes: self.arena.bytes, start: typeStart, len: typeLen, kw: "String") { return <CaptureTypeSupport.Supported /> }
+        if self.isStrongRefInst(ref: typeRef) || self.isWeakRefLikeInst(ref: typeRef) { return <CaptureTypeSupport.Supported /> }
+        val structureIndex = self.structIndexForType(ref: typeRef)
+        if structureIndex < self.arena.structCount() {
+            val structure = self.arena.structAt(index: structureIndex)
+            if structure.isUnique { return <CaptureTypeSupport.Unique /> }
+            if structure.typeParams.count() > 0U64 { return <CaptureTypeSupport.GenericStruct /> }
+            return <CaptureTypeSupport.Supported />
+        }
+        val enumerationIndex = self.enumIndexForType(ref: typeRef)
+        if enumerationIndex < self.arena.enumCount() {
+            if self.arena.enumAt(index: enumerationIndex).isUnique { return <CaptureTypeSupport.Unique /> }
+            return <CaptureTypeSupport.Supported />
+        }
+        if self.isFnType(ref: typeRef) { return <CaptureTypeSupport.FunctionValue /> }
+        return <CaptureTypeSupport.Unknown />
+    }
+
     inout fn rebuildSemanticClosureIndex(capacity: U64) {
         self.semanticClosureIndexSlots = []
         mut val zeroI: U64 = 0U64

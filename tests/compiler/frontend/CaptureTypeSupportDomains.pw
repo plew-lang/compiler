@@ -1,0 +1,78 @@
+// Representation queries do not create authored capture authority.
+use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use ../../../src/SourceAccess only { SourceAccess }
+use ../../../src/Ir only { Local }
+use ../../../src/Diag only { FailureDomain }
+use @Plew/Syntax only { rangeEquals }
+use @Std/Io only { print }
+
+// expected: 0 preserves storage mode, 1 is a precise Limit, 2 is raw Unclassified.
+fn verify(compiler: inout Comp, type: U64, mutable: Bool, array: Bool, supported: Bool, expected: U64) {
+    val info = compiler.typeInfoOfRef(ref: type)
+    val local = <Local nameStart=0U64 nameLen=0U64 tyStart=info.nameStart tyLen=info.nameLen isArray=array ty=type isInout=false isMut=mutable owned=false moved=false cnum=0U64 />
+    if compiler.captureSupported(lo: local) != supported { panic("Bool support projection changed") }
+    for repeat in 0U64..<2U64 {
+        match compiler.checkedCaptureCell(lo: local) {
+            Result.Ok(value: val cell) => { if expected != 0U64 || cell != mutable { panic("capture storage mode changed") } }
+            Result.Err(error: val diagnostic) => {
+                if diagnostic.isSourceRejection() { panic("raw representation query acquired source authority") }
+                match diagnostic.failureDomain() {
+                    FailureDomain.Limit => { if expected != 1U64 { panic("unique/unknown incorrectly classified Limit") } }
+                    FailureDomain.Unclassified => { if expected != 2U64 { panic("known limit lost domain") } }
+                    _ => { panic("unexpected representation domain") }
+                }
+                compiler.pendingDiagnostics.append(diagnostic)
+                val drained = compiler.takeDiagnostics()
+                if drained.count() != 1U64 || drained[0U64].message() != diagnostic.message() || drained[0U64].isSourceRejection() { panic("drain changed raw failure") }
+                match drained[0U64].failureDomain() {
+                    FailureDomain.Limit => { if expected != 1U64 { panic("drain changed unique/unknown domain") } }
+                    FailureDomain.Unclassified => { if expected != 2U64 { panic("drain lost implementation limit") } }
+                    _ => { panic("drain substituted another domain") }
+                }
+            }
+        }
+    }
+}
+fn main() {
+    mut val compiler = <Comp />
+    val input = <FrontendInput.Text path="Shapes.pw" text="use @Std/Core only {{ Ref, MutableRef, WeakRef }}\nstruct Ordinary {{ val number: I64 }}\nstruct Box[T] {{ val value: T }}\nunique struct Ticket[T] {{ val value: T }}\nenum Choice {{ One }}\nunique enum Token {{ One }}\nfn shapes(plain: Ordinary, generic: Box[I64], ticket: borrow Ticket[I64], token: borrow Token, closure: fn() -> I64, array: Array[I64], text: String, reference: Ref[I64], weak: WeakRef[I64], mutable: MutableRef[I64], choice: Choice) {{}}\nfn symbolic[T](value: T) {{}}\nfn main() {{}}" />
+    match analyzeFrontendForRequests(c: inout compiler, input: input, sources: <SourceAccess />) { Result.Ok(value: _) => {} Result.Err(error: val diagnostic) => { panic(diagnostic.message()) } }
+    for name in ["shapes", "symbolic"] {
+        val binding = compiler.internBytes(s: name)
+        val function = compiler.arena.firstFunctionNamed(nameId: binding.nameId)
+        match compiler.prepareLexicalBody(fnIdx: function) { Result.Ok(value: _) => {} Result.Err(error: val diagnostic) => { panic(diagnostic.message()) } }
+    }
+    mut val seen = 0U64
+    mut val symbolic = false
+    for index in 1U64..<compiler.arena.typeCount() {
+        val type = compiler.arena.typeAt(index: index)
+        if type.paramId != 0U64 && type.args.count() == 0U64 {
+            verify(compiler: inout compiler, type: index, mutable: false, array: false, supported: false, expected: 0U64)
+            verify(compiler: inout compiler, type: index, mutable: true, array: false, supported: false, expected: 0U64)
+            symbolic = true
+            continue
+        }
+        mut val expected = 18446744073709551615U64
+        mut val array = false
+        mut val bit = 0U64
+        if rangeEquals(bytes: compiler.arena.bytes, start: type.nameStart, len: type.nameLen, kw: "Box") && type.args.count() == 1U64 { expected = 1U64 bit = 1U64 }
+        if rangeEquals(bytes: compiler.arena.bytes, start: type.nameStart, len: type.nameLen, kw: "fn") { expected = 1U64 bit = 2U64 }
+        if rangeEquals(bytes: compiler.arena.bytes, start: type.nameStart, len: type.nameLen, kw: "Ticket") && type.args.count() == 1U64 { expected = 2U64 bit = 4U64 }
+        if rangeEquals(bytes: compiler.arena.bytes, start: type.nameStart, len: type.nameLen, kw: "Token") { expected = 2U64 bit = 8U64 }
+        val names = ["I64", "String", "Ordinary", "Choice", "Ref", "WeakRef", "MutableRef"]
+        for nameIndex in 0U64..<names.count() {
+            if rangeEquals(bytes: compiler.arena.bytes, start: type.nameStart, len: type.nameLen, kw: names[nameIndex]) { expected = 0U64 bit = 1U64 << (4U64 + nameIndex) }
+        }
+        if rangeEquals(bytes: compiler.arena.bytes, start: type.nameStart, len: type.nameLen, kw: "Array") && type.args.count() == 1U64 { expected = 0U64 array = true bit = 2048U64 }
+        if expected == 18446744073709551615U64 { continue }
+        verify(compiler: inout compiler, type: index, mutable: false, array: array, supported: expected == 0U64, expected: expected)
+        verify(compiler: inout compiler, type: index, mutable: true, array: array, supported: expected == 0U64, expected: expected)
+        seen = seen | bit
+    }
+    if seen != 4095U64 || !symbolic { panic("support matrix did not reach declared shapes") }
+    // Unknown raw metadata remains unclassified; it is not a function-shaped limit.
+    val unknown = <Local nameStart=0U64 nameLen=0U64 tyStart=0U64 tyLen=0U64 isArray=false ty=0U64 isInout=false isMut=false owned=false moved=false cnum=0U64 />
+    if compiler.captureSupported(lo: unknown) { panic("unknown type became supported") }
+    match compiler.checkedCaptureCell(lo: unknown) { Result.Err(error: val diagnostic) => { match diagnostic.failureDomain() { FailureDomain.Unclassified => {} _ => { panic("unknown type acquired a domain") } } } Result.Ok(value: _) => { panic("unknown type admitted") } }
+    print("capture support matrix retained")
+}

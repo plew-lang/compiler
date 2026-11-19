@@ -220,3 +220,15 @@ The [exact scoped outcome](../../../evidence/existing-feature-conformance/audit-
 Row22: Exactly the immutable original row findings/qualifiers and receiving task current-feature subset; retain all originals and per-finding corrections. Generic impl/factory fixture binders require explicit declaration identity and current construction/source ownership reconciliation. Preserve old input intent; do not infer a missing binder rule from the compiler accepting it. Required admission: met-ia09, met-acfl.
 
 Preserve the original finite contract and meaningful controls; intake does not choose unresolved source semantics, implement new APIs, certify product GREEN or close a mixed future/optional parent. Required repair/investigation must finish before its affected admission; classification closure cannot bypass it.
+
+## Capture-limit fixture maintenance
+
+The capture-only roots formerly named reject/closure_capture_generic_inst and
+reject/unused_closure_capture_generic_inst now live at
+compiler/frontend/fixtures/ClosureCaptureLimits/{GenericStruct,UnusedGenericStruct}.pw
+with explicit `pub impl[T] Box[T] { factory }`. The previous carrier still reaches
+the original capture refusal. This removes incidental dependence on bare-owner
+publication from those two implementation-limit controls; it does not decide
+the bare-owner shorthand. Other named bare-publication roots retain their ruling
+requirement and coverage. com-yeua owns precise Limit transport; com-b1ro owns
+future capture representation support.

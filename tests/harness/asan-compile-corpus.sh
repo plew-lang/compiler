@@ -60,4 +60,13 @@ else
     fail=1
 fi
 
+# Implementation restrictions are not source rejections. Keep these controls
+# under the ASan compiler, outside the Source-only fixture corpus above.
+if PLEWC=./plewc_asan python3 -B ./tests/compiler/frontend/test-closure-capture-limits.py --out "$TMP/capture-limits" --progress; then
+    :
+else
+    echo "FAIL closure-capture-limits"
+    fail=1
+fi
+
 exit "$fail"

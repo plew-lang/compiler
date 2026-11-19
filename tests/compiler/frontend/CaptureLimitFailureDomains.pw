@@ -1,0 +1,49 @@
+use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontendForRequests, openFrontend }
+use ../../../src/CheckedProgram only { CompilerSession, CompilerSessionResult, ProgramCheckResult, checkCompilerSession }
+use ../../../src/Backend only { LlvmLoweringResult }
+use ../../../src/SourceAccess only { SourceAccess }
+use ../../../src/Diag only { CompileDiagnostic, FailureDomain }
+use @Std/Io only { print }
+fn requireLimit(diagnostic: CompileDiagnostic, message: String) {
+    match diagnostic.failureDomain() { FailureDomain.Limit => {} _ => { panic("limit domain was lost") } }
+    if diagnostic.isSourceRejection() || diagnostic.message() != message { panic("limit was reinterpreted") }
+}
+fn session(input: FrontendInput) -> CompilerSession {
+    match CompilerSession.open(input: input, sources: <SourceAccess />) { CompilerSessionResult.Success(session: val session) => { return move session } CompilerSessionResult.Failure(diagnostic: val diagnostic) => { panic(diagnostic.message()) } }
+}
+fn run(input: FrontendInput, message: String) {
+    mut val raw = <Comp />
+    match analyzeFrontendForRequests(c: inout raw, input: input, sources: <SourceAccess />) { Result.Ok(value: _) => {} Result.Err(error: val diagnostic) => { panic(diagnostic.message()) } }
+    val name = raw.internBytes(s: "main")
+    val function = raw.arena.firstFunctionNamed(nameId: name.nameId)
+    for count in 0U64..<2U64 {
+        match raw.prepareLexicalBody(fnIdx: function) {
+            Result.Err(error: val diagnostic) => {
+                requireLimit(diagnostic: diagnostic, message: message)
+                raw.pendingDiagnostics.append(diagnostic)
+            }
+            Result.Ok(value: _) => { panic("unsupported capture became ready") }
+        }
+        val drained = raw.takeDiagnostics()
+        if drained.count() != 1U64 { panic("drain changed failure count") }
+        requireLimit(diagnostic: drained[0U64], message: message)
+    }
+    mut val owned = session(input: input)
+    match owned.lowerDeclarations() { LlvmLoweringResult.Success(module: _) => {} LlvmLoweringResult.Failure(diagnostic: val diagnostic) => { panic(diagnostic.message()) } }
+    mut val failed = false
+    for body in owned.registeredBodies() {
+        match owned.prepareBodyAccess(bodyId: body) {
+            Result.Err(error: val diagnostic) => { requireLimit(diagnostic: diagnostic, message: message) failed = true }
+            Result.Ok(value: _) => {}
+        }
+    }
+    if !failed { panic("owned unsupported capture admitted") }
+    match checkCompilerSession(session: move owned) { ProgramCheckResult.Failure(diagnostic: val diagnostic) => { requireLimit(diagnostic: diagnostic, message: message) } ProgramCheckResult.Success(program: _) => { panic("failed session became checked") } }
+    match checkCompilerSession(session: session(input: input)) { ProgramCheckResult.Failure(diagnostic: val diagnostic) => { requireLimit(diagnostic: diagnostic, message: message) } ProgramCheckResult.Success(program: _) => { panic("whole check accepted unsupported capture") } }
+    match openFrontend(input: input, sources: <SourceAccess />) { Result.Err(error: val diagnostic) => { requireLimit(diagnostic: diagnostic, message: message) } Result.Ok(value: _) => { panic("eager source accepted unsupported capture") } }
+    print("capture limit origin retained")
+}
+fn main() {
+    run(input: <FrontendInput.File path="tests/compiler/frontend/fixtures/ClosureCaptureLimits/GenericStruct.pw" />, message: "closure capture of generic struct values is not implemented")
+    run(input: <FrontendInput.File path="tests/compiler/frontend/fixtures/ClosureCaptureLimits/FunctionValue.pw" />, message: "closure capture of function-typed values is not implemented")
+}
