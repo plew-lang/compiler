@@ -1331,3 +1331,19 @@ adoption, including malformed raw Mid controls. The small improvement alone
 does not recover the7-second goal. Remaining repeated-work costs still require
 measurement; recovery is not judged difficult. Exact record above includes
 both generations, the setup-recording error and all control results.
+
+### Performance diagnostic disposition and next bounded probe
+
+The inactive-padding experiment is not adopted. Its raw-Mid safety inquiry
+confirmed the independently reviewed enum construction gap com-d607, assigned
+to phase-four Mid/LLVM admission without adding a phase-three prerequisite.
+Reordered elements are a valid field-index mapping control, not an error. This
+small optional optimization does not justify expanding this diagnostic task.
+
+Existing phase traces record7183 lexical function verification events with7183
+distinct function indices. Whole-function duplicate verification is not established.
+The next finite performance probe changes only resolveTy's unused owning
+TypeRef copy to the existing immutable pooled type head and args.len. Keep
+semantic/environment/alias behavior, exact same-source LLVM, successful native
+controls and actual timing separate; no product change is adopted from the
+profile alone. Canonical pooled readers already exist in Ir/Types.pw.
