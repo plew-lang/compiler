@@ -9,6 +9,7 @@ import shutil
 import statistics
 import subprocess
 import sys
+import tempfile
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "support"))
 import llvm_link
@@ -20,6 +21,29 @@ def digest(path):
 
 def fields(path):
     return dict(line.split('=', 1) for line in path.read_text().splitlines() if '=' in line)
+
+
+
+def link_tool_identities(tools):
+    return {name: {key: record[key] for key in ('path', 'sha256')}
+            for name, record in tools.items()
+            if name in ('clang', 'optimizer', 'linker', 'lto_library')}
+
+
+def check_link_tools(expected, actual):
+    if link_tool_identities(actual) != expected:
+        raise ValueError('compiler link toolchain changed during measurement')
+
+
+def initial_link_tools(config, clang):
+    # Inspect the actual driver without running a compiler or relying on seed files.
+    with tempfile.TemporaryDirectory(prefix='plew-link-tools-') as temporary:
+        root = Path(temporary)
+        source, runtime = root / 'input.ll', root / 'runtime.c'
+        source.write_text('define i32 @main() { ret i32 0 }\n')
+        runtime.write_text('/* tool selection only */\n')
+        command = llvm_link.link_command(clang, source, runtime, root / 'program', compiler_thinlto=True)
+        return llvm_link.compiler_link_provenance(config, command)
 
 
 def main():
@@ -45,10 +69,14 @@ def main():
         prefix = Path(config).parent.parent / 'lib'
         libdir = str(prefix) if (prefix / 'libLLVM.dylib').exists() else subprocess.check_output([config, '--libdir'], text=True).strip()
     opt = llvm_link.optimizer(config)
+    link_tools = initial_link_tools(config, clang)
+    expected_link_tools = link_tool_identities(link_tools)
+    bindir = Path(subprocess.check_output([config, '--bindir'], text=True).strip())
     output.mkdir(parents=True, exist_ok=False)
     state = dict(schema='self-host-measure-v2', status='running', carrier=str(carrier),
                  carrier_sha256=digest(carrier), source=str(source), runs=runs, clang_environment=clang_settings,
-                 link_command=[clang, '-Xclang', '-fdebug-pass-manager', '-mllvm', '-debug-pass=Executions', '-w', '-O2', '<optimized-llvm>', '<runtime>', '-L' + libdir, '-lLLVM', '<native-backend.o>', '-lc++' if sys.platform == 'darwin' else '-lstdc++', '-o', '<compiler>'],
+                 compiler_link_profile='thinlto', frozen_link_tools=expected_link_tools,
+                 link_command=llvm_link.link_command(clang, '<optimized-llvm>', '<runtime>', '<compiler>', ['-L' + libdir, '-lLLVM', '<native-backend.o>', '-lc++' if sys.platform == 'darwin' else '-lstdc++'], compiler_thinlto=True),
                  llvm_config=config, llvm_version=subprocess.check_output([config, '--version'], text=True).strip(),
                  clang_version=subprocess.check_output([clang, '--version'], text=True).strip(),
                  optimization_command=llvm_link.optimization_command(config, '<llvm>', '<optimized-llvm>'),
@@ -75,7 +103,9 @@ def main():
             paths.update(p for p in root.rglob('*') if p.suffix == '.pw' or p.name in ('Plew.toml', 'Plew.lock'))
         paths.update(Path(p) for p in ('Plew.toml', 'Plew.lock'))
         paths.add(llvm_link.PIPELINE_HEADER)
-        paths.update(Path('native').glob('llvm_backend.*'))
+        paths.update(p for p in Path('native').glob('*') if p.suffix in ('.cpp', '.h'))
+        paths.update(Path(record['path']) for record in expected_link_tools.values())
+        paths.update((bindir / 'clang++', bindir / 'llvm-ar', Path('scripts/support/watch-command.py')))
         paths.update((carrier, Path(config), Path(clang), Path(opt)))
         paths.update(Path(p) for p in ('scripts/support/clang_environment.py', 'scripts/support/llvm_link.py', 'scripts/support/trace-command.py', 'scripts/diagnostics/measure-self-host.py', 'scripts/diagnostics/measure-self-host.sh', 'scripts/diagnostics/measure-self-compile.sh', 'measure-self-compile.py'))
         paths.update(Path(libdir).glob('libLLVM*.dylib'))
@@ -116,9 +146,11 @@ def main():
             # progress and bound inactivity, rather than killing a progressing
             # optimized link after an arbitrary total wall time.
             llvm_link.link(config, directory / 'link', directory / 'compiler.ll',
-                           directory / 'runtime.c', successor, ['-L' + libdir, '-lLLVM'], clang, with_backend=True)
+                           directory / 'runtime.c', successor, ['-L' + libdir, '-lLLVM'], clang, with_backend=True, compiler_thinlto=True)
             check_inputs()
             (successor.parent / 'std').symlink_to(Path('std').absolute(), target_is_directory=True)
+            row['link_toolchain'] = json.loads((directory / 'link.toolchain.json').read_text())
+            check_link_tools(expected_link_tools, row['link_toolchain'])
             row['successor'] = str(successor)
             row['successor_sha256'] = digest(successor)
         return row

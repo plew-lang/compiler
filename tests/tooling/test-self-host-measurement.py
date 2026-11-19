@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Exercise real LLVM links, generation transitions and failure publication."""
 import json
+import importlib.util
+import copy
 import os
 from pathlib import Path
 import shutil
@@ -13,6 +15,23 @@ sys.path.insert(0, str(ROOT / "scripts/support"))
 import clang_environment
 import llvm_link
 clang_environment.apply()
+spec = importlib.util.spec_from_file_location('self_host_measurement', ROOT / 'scripts/diagnostics/measure-self-host.py')
+measurement = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(measurement)
+# Each actual tool identity is binding, not merely provenance to display.
+for changed in ('clang', 'optimizer', 'linker', 'lto_library'):
+    baseline = {name: {'path': '/' + name, 'sha256': 'original'}
+                for name in ('clang', 'optimizer', 'linker', 'lto_library')}
+    actual = copy.deepcopy(baseline)
+    actual[changed]['sha256'] = 'changed'
+    try:
+        measurement.check_link_tools(baseline, actual)
+    except ValueError as error:
+        assert 'toolchain changed' in str(error)
+    else:
+        raise AssertionError('changed actual tool accepted: ' + changed)
+measurement.check_link_tools(baseline, baseline)
+
 CONFIG = os.environ.get('LLVM_CONFIG', '/opt/homebrew/opt/llvm/bin/llvm-config')
 CLANG = str(Path(subprocess.check_output([CONFIG, '--bindir'], text=True).strip()) / 'clang')
 
@@ -59,6 +78,14 @@ int main(int argc, char **argv) {
                 assert state['current_artifact'] == 'generation-1', state
                 assert state['error'] == f'empty self-host artifact: generation-1/{empty_artifact}', state
         else:
+            assert state.get('compiler_link_profile') == 'thinlto', state
+            assert '-flto=thin' in state['link_command'], state
+            frozen = json.loads((output / 'inputs.json').read_text())
+            required = ['native/compiler_callbacks.cpp', 'native/compiler_execution.cpp', 'native/llvm_backend.h', 'scripts/support/watch-command.py']
+            assert all(str((ROOT / name).absolute()) in frozen for name in required), frozen
+            assert all(record['path'] in frozen for record in state['frozen_link_tools'].values()), state
+            for tool in ('clang++', 'llvm-ar'):
+                assert str(Path(CLANG).parent / tool) in frozen, tool
             assert state['fixed_point_generation'] == generation, state
             assert len(state['measurements']) == 3, state
             assert len({r['compiler_sha256'] for r in state['measurements']}) == 1, state
@@ -75,6 +102,9 @@ int main(int argc, char **argv) {
                 if 'successor' in row:
                     link_log = output / row['artifact'] / 'link.log'
                     assert link_log.is_file() and 'Running pass:' in link_log.read_text(), link_log
+                    tools = json.loads(link_log.with_name('link.toolchain.json').read_text())
+                    assert tools['input_kind'] == 'llvm' and '-flto=thin' in tools['command'], tools
+                    assert row['link_toolchain'] == tools, row
                     opt_log = link_log.with_name('link.opt.log')
                     assert opt_log.is_file() and 'Running pass:' in opt_log.read_text(), opt_log
                     assert link_log.with_name('link.optimized.ll').is_file()

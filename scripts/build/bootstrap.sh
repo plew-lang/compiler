@@ -68,8 +68,8 @@ link() {
     output=$4
     shift 4
     backend=""
-    if [ "$1" = "--compiler-backend" ]; then backend=--compiler-backend; shift; fi
-    python3 ./scripts/support/llvm_link.py ${backend:+"$backend"} --config "$LC" --log-prefix "$TRACE_DIR/$stage" --llvm "$llvm" --runtime "$runtime" --output "$output" -- "$@"
+    if [ "$1" = "--compiler-backend" ]; then backend="--compiler-backend --compiler-thinlto"; shift; fi
+    python3 ./scripts/support/llvm_link.py $backend --config "$LC" --log-prefix "$TRACE_DIR/$stage" --llvm "$llvm" --runtime "$runtime" --output "$output" -- "$@"
 }
 
 [ -f "$SEED_LL" ] || { echo "missing $SEED_LL — cannot bootstrap" >&2; exit 1; }
