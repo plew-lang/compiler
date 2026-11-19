@@ -24,7 +24,8 @@ pub fn runCompiler(sources: SourceAccess = <SourceAccess />, firstArgument: I64 
             runCheck(sources: sources, firstArgument: firstArgument + 1I64)
             return
         }
-        if argAt(firstArgument) == "--emit-object" {
+        if argAt(firstArgument) == "--emit-object" || argAt(firstArgument) == "--emit-thinlto-object" {
+            val thinLto = argAt(firstArgument) == "--emit-thinlto-object"
             if argCount() <= firstArgument + 2I64 { exit(code: 1I64) }
             mut val sourceArgument = firstArgument + 2I64
             mut val cpu = nativeCpu()
@@ -34,7 +35,7 @@ pub fn runCompiler(sources: SourceAccess = <SourceAccess />, firstArgument: I64 
                 sourceArgument += 2I64
             }
             val status = compileObject(sources: sources, firstArgument: sourceArgument,
-                output: argAt(firstArgument + 1I64), cpu: cpu)
+                output: argAt(firstArgument + 1I64), cpu: cpu, thinLto: thinLto)
             if status != 0I32 { exit(code: 1I64) }
             return
         }
@@ -129,12 +130,13 @@ fn finishCompilation(c: inout Comp, lowered: move LlvmLoweringResult, emitText: 
 
 // Object mode keeps lowering and native optimization in one process. A failed
 // native output returns normally so the owned LLVM context is still reclaimed.
-pub fn compileObject(sources: SourceAccess, firstArgument: I64, output: String, cpu: String) -> I32 {
+pub fn compileObject(sources: SourceAccess, firstArgument: I64, output: String, cpu: String, thinLto: Bool = false) -> I32 {
     match compileSource(sources: sources, firstArgument: firstArgument, cpu: cpu) {
         CompilationResult.Success(compilation: val value) => {
             mut val compilation = move value
             val trace = compilation.trace
             plew_llvm_initialize_worker(if trace { give 1I32 } else { give 0I32 })
+            if thinLto { return compilation.module.writeThinLtoObject(output: output, cpu: cpu, trace: trace) }
             return compilation.module.writeObject(output: output, cpu: cpu, trace: trace)
         }
         CompilationResult.Failure(diagnostic: val diagnostic) => {

@@ -117,6 +117,13 @@ or arbitrary long single-pass responsiveness. The distribution checker asserts
 the same bounded native progress contract; external LLVM-tool traces remain
 separate.
 
+`tooling/test-thinlto-object.py` is a scoped native-producer probe. It checks
+real summaries, Thin/machine link execution, error publication and borrowed-module
+lifetime on the selected LLVM. `--sanitize-worker` instruments the producer and
+lifetime harness with ASan/LSan. `--compiler PATH` additionally compares both
+private CLI modes using real Plew code and the shared runtime C. This probe is
+separate from application sanitizer output and does not promote a compiler.
+
 ## Shared inputs and companions
 
 Keep one input and all its companions together. A run fixture requires `.out`;

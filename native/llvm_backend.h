@@ -20,6 +20,12 @@ void plew_llvm_initialize_worker(int trace);
 int plew_llvm_emit_object(LLVMModuleRef module, const char *output,
                           const char *cpu, int trace);
 
+// Borrow the same owned module and emit summary-bearing ThinLTO bitcode.
+// Ordinary machine output is unchanged. Sanitizer output uses the ordinary
+// path; this internal compiler artifact rejects it before publication.
+int plew_llvm_emit_thinlto_object(LLVMModuleRef module, const char *output,
+                                  const char *cpu, int trace);
+
 // Immutable target descriptions for representation planning. Returned strings
 // are owned LLVM messages (LLVMDisposeMessage); empty means failure. Native
 // layout uses exactly the object backend's CPU/features/target-machine policy.

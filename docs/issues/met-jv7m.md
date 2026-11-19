@@ -1,6 +1,6 @@
 ---
 id: met-jv7m
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-11-19T15:28:59Z
@@ -27,3 +27,11 @@ No new backend/runtime, application source semantics, lifetime feature, distribu
 
 ## Basis
 [Reviewed isolated comparison and three-unit plan](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-runtime-thinlto-investigation.json). User approved creation and execution of these three units. Task decomposition reviewed by abi_optimization_plan_review; plan does not certify implementation.
+
+## Completion evidence
+Explicit native writer and private CLI added; production callers remain unchanged.
+RED: old worker rejects --thinlto, old compiler lacks --emit-thinlto-object.
+GREEN: LLVM20/22 real summaries, Thin/machine executable controls, target/layout/IR/sanitizer/output-error controls, same borrowed Module live across success/failure. LLVM22 producer and lifetime harness ran ASan/LSan with detect_leaks=1. Fresh isolated standard build 20261119T161917-build-4e6a52 passed with unchanged inputs; actual Plew print42 and shared runtime C linked/executed identically in both modes with explicit apple-m1.
+[Recorded hashes and results](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-thinlto-native-producer.json).
+Independent reviewer thinlto_producer_review derived controls, inspected source and LLVM20/22 artifacts, added independent machine execution, and finally confirmed snapshot equality and fresh CLI evidence. No unresolved must-fix. The initial machine/runtime evidence gaps were filled by persistent tests.
+Probe is documented as scoped, not an automatically enumerated fixture. Caller transition belongs to met-kuej; no full suite, formal timing or carrier promotion claimed.

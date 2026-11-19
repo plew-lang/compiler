@@ -109,6 +109,15 @@ toolchain is a failure rather than an implicit alternate pipeline. Required
 verification, input lifetimes, sanitizer placement and failure propagation remain
 independent of LTO.
 
+The private compiler worker selects `--emit-thinlto-object` explicitly;
+`--emit-object` continues to emit machine code. Thin output runs the shared IR
+preparation followed by the selected LLVM ThinLTO pre-link pipeline and summary
+writer, without first applying the ordinary object O2 pipeline. The emitter
+borrows the owned module and restores temporary target spelling before returning.
+On Darwin, bitcode uses LLVM's platform-version spelling for the same native
+deployment floor as machine output. Sanitizer-bearing Thin artifacts are rejected;
+the ordinary sanitizer object path remains available.
+
 This is a development-toolchain optimization, not a new backend or a second
 runtime. It does not add end-user LLVM dependencies to the
 [distribution contract](driver-and-execution.md#distribution-boundary). Raw LLVM

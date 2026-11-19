@@ -6,14 +6,19 @@
 #include <cstring>
 
 int main(int argc, char **argv) {
-  if (argc < 3 || argc > 5) {
-    std::fprintf(stderr, "usage: llvm-object input.ll output.o [cpu] [--trace]\n");
+  if (argc < 3 || argc > 6) {
+    std::fprintf(stderr, "usage: llvm-object input.ll output.o [cpu] [--trace] [--thinlto]\n");
     return 1;
   }
-  bool trace = argc == 5 && std::strcmp(argv[4], "--trace") == 0;
-  if (argc == 5 && !trace) {
-    std::fprintf(stderr, "plew: unknown option: %s\n", argv[4]);
-    return 1;
+  bool trace = false;
+  bool thinlto = false;
+  for (int index = 4; index < argc; ++index) {
+    if (std::strcmp(argv[index], "--trace") == 0 && !trace) trace = true;
+    else if (std::strcmp(argv[index], "--thinlto") == 0 && !thinlto) thinlto = true;
+    else {
+      std::fprintf(stderr, "plew: unknown or repeated option: %s\n", argv[index]);
+      return 1;
+    }
   }
   plew_llvm_initialize_worker(trace);
   LLVMContextRef context = LLVMContextCreate();
@@ -29,8 +34,9 @@ int main(int argc, char **argv) {
     std::fprintf(stderr, "plew: %s\n", error);
     LLVMDisposeMessage(error);
   } else {
-    result = plew_llvm_emit_object(module, argv[2], argc >= 4 ? argv[3] : "",
-                                  trace);
+    result = thinlto
+        ? plew_llvm_emit_thinlto_object(module, argv[2], argc >= 4 ? argv[3] : "", trace)
+        : plew_llvm_emit_object(module, argv[2], argc >= 4 ? argv[3] : "", trace);
     LLVMDisposeModule(module);
   }
   LLVMContextDispose(context);

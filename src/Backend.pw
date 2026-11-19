@@ -618,6 +618,7 @@ extern(c) {
     fn LLVMDisposeModule(module~: LLVMModuleRef)
     fn LLVMContextDispose(context~: LLVMContextRef)
     fn plew_llvm_emit_object(module~: LLVMModuleRef, output~: CPtr[U8], cpu~: CPtr[U8], trace~: I32) -> I32
+    fn plew_llvm_emit_thinlto_object(module~: LLVMModuleRef, output~: CPtr[U8], cpu~: CPtr[U8], trace~: I32) -> I32
     fn plew_llvm_native_data_layout(cpu~: CPtr[U8]) -> CPtr[U8]
     fn plew_llvm_empty_name() -> CPtr[U8]
     fn plew_llvm_jit_create() -> PlewLlvmJitRef
@@ -1029,9 +1030,23 @@ pub impl LlvmModule {
     }
 
     inout fn writeObject(output: String, cpu: String, trace: Bool) -> I32 {
+        return self.writeObjectArtifact(output: output, cpu: cpu, trace: trace, thinLto: false)
+    }
+    inout fn writeThinLtoObject(output: String, cpu: String, trace: Bool) -> I32 {
+        return self.writeObjectArtifact(output: output, cpu: cpu, trace: trace, thinLto: true)
+    }
+}
+
+impl LlvmModule {
+    inout fn writeObjectArtifact(output: String, cpu: String, trace: Bool, thinLto: Bool) -> I32 {
         val outputPath = cString(output)
         val targetCpu = cString(cpu)
-        val status = plew_llvm_emit_object(self.module, outputPath, targetCpu, if trace { give 1I32 } else { give 0I32 })
+        val tracing = if trace { give 1I32 } else { give 0I32 }
+        val status = if thinLto {
+            give plew_llvm_emit_thinlto_object(self.module, outputPath, targetCpu, tracing)
+        } else {
+            give plew_llvm_emit_object(self.module, outputPath, targetCpu, tracing)
+        }
         cFree(targetCpu)
         cFree(outputPath)
         return status

@@ -2,9 +2,12 @@
 #include "llvm_pipeline.h"
 #include "llvm_progress.h"
 #include <llvm/Passes/PassBuilder.h>
+#include <llvm/Transforms/IPO/ThinLTOBitcodeWriter.h>
 #include <llvm/Target/TargetMachine.h>
 #include <llvm/Passes/StandardInstrumentations.h>
 #include <llvm/ADT/SmallString.h>
+#include <llvm/ADT/ScopeExit.h>
+#include <llvm/TargetParser/Triple.h>
 #include <mutex>
 
 #include <llvm-c/Analysis.h>
@@ -156,7 +159,8 @@ bool verboseLlvmTrace(int trace) {
 
 bool optimize(LLVMModuleRef module, LLVMTargetMachineRef machine,
               const char *pipeline, const char *stage,
-              plew::native::LlvmProgress &progress, bool verbose) {
+              plew::native::LlvmProgress &progress, bool verbose,
+              llvm::raw_ostream *thinOutput = nullptr) {
   // Match LLVMRunPasses' default setup, adding observation callbacks only. The
   // C API does not expose these callbacks; do not maintain a second pipeline.
   // See llvm/lib/Passes/PassBuilderBindings.cpp (LLVM20/22).
@@ -191,6 +195,8 @@ bool optimize(LLVMModuleRef module, LLVMTargetMachineRef machine,
                  llvm::toString(std::move(error)).c_str());
     return false;
   }
+  if (thinOutput)
+    passes.addPass(llvm::ThinLTOBitcodeWriterPass(*thinOutput, nullptr));
   passes.run(*llvm::unwrap(module), modules);
   progress.finish();
   return true;
@@ -948,8 +954,10 @@ extern "C" void plew_llvm_initialize_worker(int trace) {
   }
 }
 
-extern "C" int plew_llvm_emit_object(LLVMModuleRef module, const char *output,
-                                     const char *cpu, int trace) {
+enum class NativeObjectFormat { Machine, ThinLTO };
+
+static int emitArtifact(LLVMModuleRef module, const char *output,
+                        const char *cpu, int trace, NativeObjectFormat format) {
   Message triple(LLVMGetDefaultTargetTriple());
   const char *moduleTriple = LLVMGetTarget(module);
   if (moduleTriple[0] && std::strcmp(moduleTriple, triple.get()) != 0) {
@@ -983,30 +991,79 @@ extern "C" int plew_llvm_emit_object(LLVMModuleRef module, const char *output,
   }
   plew::native::LlvmProgress progress(trace != 0);
   bool verbose = verboseLlvmTrace(trace);
-  // Preserve shared preprocessing, the second O2 pipeline and sanitizer order.
-  if (!optimize(module, machine.get(), PLEW_LLVM_PIPELINE, "ir-shared", progress, verbose) ||
-      !optimize(module, machine.get(), "default<O2>", "ir-o2", progress, verbose) ||
-      (sanitize && !optimize(module, machine.get(), "asan", "asan", progress, verbose)) ||
-      !verify(module))
+  if (format == NativeObjectFormat::ThinLTO && sanitize) {
+    std::fprintf(stderr, "plew: ThinLTO compiler objects do not support sanitizer output; use the ordinary object path\n");
+    return 1;
+  }
+  if (!optimize(module, machine.get(), PLEW_LLVM_PIPELINE, "ir-shared", progress, verbose))
     return 1;
 
   LLVMMemoryBufferRef buffer = nullptr;
-  char *error = nullptr;
-  if (emitObjectBuffer(machine.get(), module, progress, &error, &buffer)) {
-    Message message(error);
-    std::fprintf(stderr, "plew: LLVM object generation failed: %s\n", error);
+  auto object = std::unique_ptr<LLVMOpaqueMemoryBuffer,
+                               decltype(&LLVMDisposeMemoryBuffer)>(nullptr, LLVMDisposeMemoryBuffer);
+  llvm::SmallString<0> thinBytes;
+  const char *data = nullptr;
+  size_t size = 0;
+  if (format == NativeObjectFormat::ThinLTO) {
+    auto &ir = *llvm::unwrap(module);
+    auto *target = reinterpret_cast<llvm::TargetMachine *>(machine.get());
+    const auto selectedCpu = target->getTargetCPU().empty() ? "generic" : target->getTargetCPU().str();
+    for (auto &function : ir) {
+      if (function.isDeclaration()) continue;
+      if (!function.hasFnAttribute("target-cpu"))
+        function.addFnAttr("target-cpu", selectedCpu);
+      if (!function.hasFnAttribute("target-features"))
+        function.addFnAttr("target-features", target->getTargetFeatureString());
+    }
+    if (!ir.getModuleFlag("EnableSplitLTOUnit"))
+      ir.addModuleFlag(llvm::Module::Error, "EnableSplitLTOUnit", 0U);
+    // Mach-O LTO requires a platform triple rather than a Darwin kernel
+    // spelling. Keep the same LLVM-derived deployment floor as native objects;
+    // this is not a new SDK or deployment-target selection policy.
+    const std::string originalTriple = LLVMGetTarget(module);
+    auto restoreTriple = llvm::make_scope_exit([&] { LLVMSetTarget(module, originalTriple.c_str()); });
+    llvm::Triple serializedTriple(originalTriple);
+    if (serializedTriple.getOS() == llvm::Triple::Darwin) {
+      llvm::VersionTuple version;
+      if (!serializedTriple.getMacOSXVersion(version)) {
+        std::fprintf(stderr, "plew: cannot represent native Darwin target for ThinLTO\n");
+        return 1;
+      }
+      serializedTriple.setOSName("macosx" + version.getAsString());
+      LLVMSetTarget(module, serializedTriple.str().c_str());
+    }
+    llvm::raw_svector_ostream stream(thinBytes);
+    if (!optimize(module, machine.get(), "thinlto-pre-link<O2>", "thinlto-prelink", progress, verbose, &stream) ||
+        !verify(module))
+      return 1;
+    data = thinBytes.data();
+    size = thinBytes.size();
+  } else {
+    // Preserve the ordinary object pipeline and sanitizer ordering exactly.
+    if (!optimize(module, machine.get(), "default<O2>", "ir-o2", progress, verbose) ||
+        (sanitize && !optimize(module, machine.get(), "asan", "asan", progress, verbose)) ||
+        !verify(module))
+      return 1;
+    char *error = nullptr;
+    if (emitObjectBuffer(machine.get(), module, progress, &error, &buffer)) {
+      Message message(error);
+      std::fprintf(stderr, "plew: LLVM object generation failed: %s\n", error);
+      return 1;
+    }
+    object.reset(buffer);
+    data = LLVMGetBufferStart(buffer);
+    size = LLVMGetBufferSize(buffer);
+  }
+  if (size == 0) {
+    std::fprintf(stderr, "plew: LLVM produced an empty object\n");
     return 1;
   }
-  auto object = std::unique_ptr<LLVMOpaqueMemoryBuffer,
-                               decltype(&LLVMDisposeMemoryBuffer)>(
-      buffer, LLVMDisposeMemoryBuffer);
   FILE *file = std::fopen(output, "wb");
   if (!file) {
     std::perror(output);
     return 1;
   }
-  size_t size = LLVMGetBufferSize(buffer);
-  bool complete = std::fwrite(LLVMGetBufferStart(buffer), 1, size, file) == size;
+  bool complete = std::fwrite(data, 1, size, file) == size;
   if (std::fclose(file) != 0)
     complete = false;
   if (!complete) {
@@ -1015,4 +1072,14 @@ extern "C" int plew_llvm_emit_object(LLVMModuleRef module, const char *output,
     return 1;
   }
   return 0;
+}
+
+extern "C" int plew_llvm_emit_object(LLVMModuleRef module, const char *output,
+                                     const char *cpu, int trace) {
+  return emitArtifact(module, output, cpu, trace, NativeObjectFormat::Machine);
+}
+
+extern "C" int plew_llvm_emit_thinlto_object(LLVMModuleRef module, const char *output,
+                                             const char *cpu, int trace) {
+  return emitArtifact(module, output, cpu, trace, NativeObjectFormat::ThinLTO);
 }
