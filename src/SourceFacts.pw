@@ -1103,3 +1103,44 @@ pub impl Comp {
         return true
     }
 }
+
+pub impl Comp {
+    // Observes retained negative selection, never fabricates a successful call fact.
+    fn sourceStaticMemberAmbiguityHasOwner(refusal: StaticMemberAmbiguityRefusal) -> Bool {
+        if refusal.session() != self.sourceFactSession() || refusal.expression() >= self.arena.exprs.count() { return false }
+        val proof = match self.failedStaticMemberAmbiguities.get(key: refusal.expression()) {
+            Optional.Some(v: val proof) => proof
+            Optional.None => { return false }
+        }
+        val ownerMatches = match refusal.owner() {
+            DiagnosticOwner.Function(index: val index) => semanticCompletionOwnersEqual(recorded: proof.owner, prepared: <SemanticCompletionOwner.Function index=index />)
+            DiagnosticOwner.Global(target: val target) => semanticCompletionOwnersEqual(recorded: proof.owner, prepared: <SemanticCompletionOwner.Global target=target />)
+            DiagnosticOwner.Closure(expression: val expression) => semanticCompletionOwnersEqual(recorded: proof.owner, prepared: <SemanticCompletionOwner.Closure expression=expression />)
+            DiagnosticOwner.Unknown => false
+        }
+        if proof.receiverRef != refusal.receiverRef() || !ownerMatches || proof.nameStart != refusal.nameStart() || proof.nameLen != refusal.nameLen() { return false }
+        val args = match self.arena.exprs[refusal.expression()] {
+            Expr.Method(recv: val receiver, nameStart: val start, nameLen: val length, args: val args) => {
+                if receiver != proof.receiver || proof.source.isSome() || start != refusal.nameStart() || length != refusal.nameLen() { return false }
+                give args
+            }
+            Expr.ExtMethod(recv: val receiver, source: val source, nameStart: val start, nameLen: val length, args: val args) => {
+                if receiver != proof.receiver || start != refusal.nameStart() || length != refusal.nameLen() { return false }
+                val saved = match proof.source { Optional.Some(v: val saved) => saved Optional.None => { return false } }
+                if source.writtenStart != saved.writtenStart || source.writtenLen != saved.writtenLen || source.surfaceId != saved.surfaceId || source.traitInstance.owner != saved.traitInstance.owner || source.traitInstance.positionalArgs.count() != saved.traitInstance.positionalArgs.count() { return false }
+                for index in 0U64..<source.traitInstance.positionalArgs.count() { if source.traitInstance.positionalArgs[index] != saved.traitInstance.positionalArgs[index] { return false } }
+                give args
+            }
+            _ => { return false }
+        }
+        if args.start != refusal.argumentsStart() || args.len != refusal.argumentsCount() || proof.arguments.count() != args.len { return false }
+        if args.start > self.arena.argPool.count() || args.len > self.arena.argPool.count() - args.start { return false }
+        if !self.isAuthoredMethodLookup(exprId: refusal.expression(), nameStart: refusal.nameStart(), nameLen: refusal.nameLen(), args: args) { return false }
+        for index in 0U64..<args.len {
+            val a = proof.arguments[index]
+            val b = self.argAt(args: args, index: index)
+            if a.expr != b.expr || a.isInout != b.isInout || a.hasLabel != b.hasLabel || a.labelStart != b.labelStart || a.labelLen != b.labelLen { return false }
+        }
+        return true
+    }
+}

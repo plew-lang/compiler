@@ -1,0 +1,8 @@
+trait Convert[Input] { fn convert(count: Input) -> I64 }
+struct Item {}
+impl Item as Convert[I32] { fn convert(count: I32) -> I64 { return 1I64 } }
+impl Item as Convert[I64] { fn convert(count: I64) -> I64 { return count } }
+fn probe[T](value: T) -> I64 where T: Convert[I32], T: Convert[I64] {
+    return value.convert(count: 1)
+}
+fn main() { val number = probe(value: <Item />) }

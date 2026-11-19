@@ -469,6 +469,41 @@ pub impl Comp {
 }
 
 impl Comp {
+
+    inout fn staticMemberAmbiguityDiagnostic(receiverRef: U64, nameStart: U64, nameLen: U64, args: ArgRange, methodOrigin: MethodLookupOrigin) -> CompileDiagnostic {
+        val expression = match methodOrigin.expression {
+            Optional.Some(v: val expression) => expression
+            Optional.None => { return self.diagnosticAt(offset: nameStart, msg: "ambiguous call: multiple trait member instances match the arguments") }
+        }
+        val current = self.currentSourceOwner()
+        val owner: DiagnosticOwner = match current {
+            Optional.Some(v: val owner) => match owner {
+                SemanticCompletionOwner.Function(index: val index) => <DiagnosticOwner.Function index=index />
+                SemanticCompletionOwner.Global(target: val target) => <DiagnosticOwner.Global target=target />
+                SemanticCompletionOwner.Closure(expression: val expression) => <DiagnosticOwner.Closure expression=expression />
+            }
+            Optional.None => <DiagnosticOwner.Unknown />
+        }
+        if self.isAuthoredMethodLookup(exprId: expression, nameStart: nameStart, nameLen: nameLen, args: args) {
+            match current {
+                Optional.Some(v: val owner) => {
+                    if self.sourceFacts.isActive(owner: owner) {
+                        val operation = match self.arena.exprs[expression] {
+                            Expr.Method(recv: val receiver, nameStart: _, nameLen: _, args: _) => (receiver: receiver, source: <Optional[ResolvedViewSource].None />)
+                            Expr.ExtMethod(recv: val receiver, source: val source, nameStart: _, nameLen: _, args: _) => (receiver: receiver, source: <Optional.Some v=source />)
+                            _ => { return self.diagnosticAt(offset: nameStart, msg: "ambiguous call: multiple trait member instances match the arguments") }
+                        }
+                        mut val written: Array[Arg] = []
+                        for index in 0U64..<args.len { written.append(self.argAt(args: args, index: index)) }
+                        self.failedStaticMemberAmbiguities[expression] = (owner: owner, receiverRef: receiverRef, receiver: operation.receiver, source: operation.source, nameStart: nameStart, nameLen: nameLen, arguments: written)
+                    }
+                }
+                Optional.None => {}
+            }
+        }
+        return <CompileDiagnostic.staticMemberAmbiguity refusal=<StaticMemberAmbiguityRefusal session=self.sourceFactSession() owner=owner receiverRef=receiverRef expression=expression nameStart=nameStart nameLen=nameLen argumentsStart=args.start argumentsCount=args.len location=self.diagnosticLocationAt(offset: nameStart) /> />
+    }
+
     inout fn staticMemberResolutionWithOrigin(fnIdx: U64, receiverRef: U64, nameStart: U64, nameLen: U64, args: ArgRange, requiredTraitOwner: U64, methodOrigin: MethodLookupOrigin) -> Result[StaticMemberResolution, CompileDiagnostic] {
         if receiverRef == 0U64 || receiverRef >= self.arena.typeCount() { return <Result.Ok value=<StaticMemberResolution.Missing /> /> }
         val memberId = intern(c: inout self, start: nameStart, len: nameLen)
@@ -559,7 +594,7 @@ impl Comp {
                 Result.Err(error: val diagnostic) => { failure = <Optional.Some v=diagnostic /> give 0U64 },
             }
             if rank == 2U64 {
-                if found { return <Result.Err error=self.diagnosticAt(offset: nameStart, msg: "ambiguous call: multiple trait member instances match the arguments") /> }
+                if found { return <Result.Err error=self.staticMemberAmbiguityDiagnostic(receiverRef: receiverRef, nameStart: nameStart, nameLen: nameLen, args: args, methodOrigin: methodOrigin) /> }
                 selected = candidate
                 found = true
             } else if rank == 1U64 {
