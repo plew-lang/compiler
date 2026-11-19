@@ -1027,3 +1027,23 @@ impl SourceFactDirectory {
         return <Optional.None />
     }
 }
+
+pub impl Comp {
+    // Observation only. A failed field access has no successful parent fact;
+    // its recorded receiver and exact operation identify the constructing owner.
+    fn sourceMissingFieldHasOwner(refusal: MissingFieldRefusal) -> Bool {
+        if !self.sourceExpressionHasOwner(session: refusal.session(), expression: refusal.receiver(), owner: refusal.owner()) { return false }
+        if refusal.expression() >= self.arena.exprs.count() { return false }
+        match self.arena.exprs[refusal.expression()] {
+            Expr.Field(val base, val nameStart, val nameLen) => {
+                match refusal.kind() { MissingFieldKind.RefPointee => { return false } _ => {} }
+                return base == refusal.receiver() && nameStart == refusal.nameStart() && nameLen == refusal.nameLen()
+            }
+            Expr.Arrow(val base, val nameStart, val nameLen) => {
+                match refusal.kind() { MissingFieldKind.RefPointee => {} _ => { return false } }
+                return base == refusal.receiver() && nameStart == refusal.nameStart() && nameLen == refusal.nameLen()
+            }
+            _ => { return false }
+        }
+    }
+}

@@ -1,0 +1,10 @@
+use @Std/Io only { print }
+struct Holder[T] { val value: T }
+impl[T] Holder[T] { factory }
+fn main() {
+    val holder = <Holder[()] value=() />
+    val value: () = holder.value
+    val record = (value: ())
+    val other: () = record.value
+    print("unit fields exist")
+}

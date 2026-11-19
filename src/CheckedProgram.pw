@@ -233,6 +233,14 @@ impl CompilerSession {
             }
             Optional.None => {}
         }
+        match diagnostic.missingField() {
+            Optional.Some(v: val refusal) => {
+                if self.compiler.sourceMissingFieldHasOwner(refusal: refusal) {
+                    return <CompileDiagnostic failureDomain=<FailureDomain.Source /> location=refusal.location() message=diagnostic.message() />
+                }
+            }
+            Optional.None => {}
+        }
         return diagnostic
     }
 

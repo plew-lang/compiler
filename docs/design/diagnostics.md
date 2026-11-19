@@ -85,7 +85,11 @@ must not flatten the canonical failure into a replacement report. This separates
 semantic checking from authorized diagnostic interpretation without a global
 source flag or a second ownership analysis. The diagnostic leaf stores only
 owned presentation data and session-local scalar identities, not a dependency
-on frontend arenas or mutable cursors.
+on frontend arenas or mutable cursors. A refusal before successful expression
+publication may identify its recorded receiver/input and exact authored operation.
+Classification must not fabricate a successful parent fact or treat the absence
+of a saved selection as proof that a member does not exist; the structural
+checking owner establishes that finding.
 
 `CompileDiagnostic.isSourceRejection()` requires both error severity and the
 explicit source domain. It is a value-level query, not proof of a failed process

@@ -487,3 +487,11 @@ analysis and repeated public rechecks stay Unclassified, fresh lazy/eager
 admission classifies its own hidden-surface exposure as Source, and a public
 type succeeds. Exit0 must match `.out` with empty stderr. This is not full-suite
 coverage or authority to reclassify inference failures.
+
+`MissingFieldFailureDomains.pw` is a manual native diagnostic. It checks raw
+semantic cause/cache/retry/drain retention, receiver-owner and exact-operation
+matching, foreign/unknown owners and forged operation rejection, owned lazy
+retries, whole check and eager admission. Require exit0, exact `.out` and empty
+stderr. It does not classify construction or record-pattern failures. Registered
+`diagnostic_missing_field_lifetime` covers owned cause/location lifetime;
+`field_unit_payload` preserves successful generic and record Unit-field reads.

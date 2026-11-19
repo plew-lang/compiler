@@ -226,21 +226,7 @@ pub impl Comp {
     }
 
     inout fn verifySelectedFieldExists(exprId: U64, receiverTerm: U64, nameStart: U64, nameLen: U64, message: String) -> Result[(), CompileDiagnostic] {
-        if exprId < self.arena.exprs.count() && self.constructionExpression(exprId: exprId).hasFieldProjection { return <Result.Ok value=() /> }
-        val storage = self.fieldStorageTypeRef(receiverRef: self.lexicalLayoutReceiver(receiverTerm: receiverTerm))
-        if storage == 0U64 { return <Result.Ok value=() /> }
-        val storageType = self.arena.typeAt(index: storage)
-        mut val fieldCount: U64 = 0U64
-        if storageType.isRecord {
-            fieldCount = storageType.recordFieldLabels.count()
-        } else {
-            val structIndex = self.structIndexForType(ref: storage)
-            if structIndex >= self.arena.structCount() { return <Result.Ok value=() /> }
-            fieldCount = self.arena.structAt(index: structIndex).fields.count()
-        }
-        // Missing recording is not evidence of an absent field (for example,
-        // a Unit field has no nonzero result term). Check the declaration.
-        if self.fieldIndexOfReceiver(receiverRef: storage, fieldStart: nameStart, fieldLen: nameLen) >= fieldCount {
+        if self.selectedFieldIsMissing(exprId: exprId, receiverTerm: receiverTerm, nameStart: nameStart, nameLen: nameLen) {
             return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: message) />
         }
         return <Result.Ok value=() />
@@ -288,11 +274,11 @@ pub impl Comp {
                     return <Result.Err error=self.diagnosticAt(offset: nameStart, msg: "a method cannot be used as a value; call it, or wrap it in a closure (e.g. `fn() {{ obj.method() }}`)") />
                 }
             }
-            try self.verifySelectedFieldExists(exprId: exprId, receiverTerm: self.parametricExprTerm(exprId: base), nameStart: nameStart, nameLen: nameLen, message: "no such field on this value's type")
+            try self.verifySourceFieldExists(exprId: exprId, receiver: base, receiverTerm: self.parametricExprTerm(exprId: base), nameStart: nameStart, nameLen: nameLen, kind: <MissingFieldKind.Value />)
             try self.checkFieldReadVis(ownerRef: self.typedIrRefOfInfo(ti: bt), fieldStart: nameStart, fieldLen: nameLen, offset: nameStart)
         } else {
             if bt.kind == 3 {
-                try self.verifySelectedFieldExists(exprId: exprId, receiverTerm: self.parametricExprTerm(exprId: base), nameStart: nameStart, nameLen: nameLen, message: "no such field on this value's type")
+                try self.verifySourceFieldExists(exprId: exprId, receiver: base, receiverTerm: self.parametricExprTerm(exprId: base), nameStart: nameStart, nameLen: nameLen, kind: <MissingFieldKind.Value />)
                 try self.checkFieldReadVis(ownerRef: self.typedIrRefOfInfo(ti: bt), fieldStart: nameStart, fieldLen: nameLen, offset: nameStart)
             }
         }
@@ -636,5 +622,42 @@ impl Comp {
             }
             _ => { return false }
         }
+    }
+}
+
+impl Comp {
+    inout fn selectedFieldIsMissing(exprId: U64, receiverTerm: U64, nameStart: U64, nameLen: U64) -> Bool {
+        if exprId < self.arena.exprs.count() && self.constructionExpression(exprId: exprId).hasFieldProjection { return false }
+        val storage = self.fieldStorageTypeRef(receiverRef: self.lexicalLayoutReceiver(receiverTerm: receiverTerm))
+        if storage == 0U64 { return false }
+        val storageType = self.arena.typeAt(index: storage)
+        mut val fieldCount: U64 = 0U64
+        if storageType.isRecord {
+            fieldCount = storageType.recordFieldLabels.count()
+        } else {
+            val structIndex = self.structIndexForType(ref: storage)
+            if structIndex >= self.arena.structCount() { return false }
+            fieldCount = self.arena.structAt(index: structIndex).fields.count()
+        }
+        // Missing recording is not evidence of an absent field (for example,
+        // a Unit field has no nonzero result term). Check the declaration.
+        if self.fieldIndexOfReceiver(receiverRef: storage, fieldStart: nameStart, fieldLen: nameLen) >= fieldCount {
+            return true
+        }
+        return false
+    }
+
+    inout fn verifySourceFieldExists(exprId: U64, receiver: U64, receiverTerm: U64, nameStart: U64, nameLen: U64, kind: MissingFieldKind) -> Result[(), CompileDiagnostic] {
+        if !self.selectedFieldIsMissing(exprId: exprId, receiverTerm: receiverTerm, nameStart: nameStart, nameLen: nameLen) { return <Result.Ok value=() /> }
+        val owner: DiagnosticOwner = match self.currentSourceOwner() {
+            Optional.Some(v: val owner) => match owner {
+                SemanticCompletionOwner.Function(index: val index) => <DiagnosticOwner.Function index=index />
+                SemanticCompletionOwner.Global(target: val target) => <DiagnosticOwner.Global target=target />
+                SemanticCompletionOwner.Closure(expression: val expression) => <DiagnosticOwner.Closure expression=expression />
+            }
+            Optional.None => <DiagnosticOwner.Unknown />
+        }
+        val refusal = <MissingFieldRefusal session=self.sourceFactSession() owner=owner expression=exprId receiver=receiver nameStart=nameStart nameLen=nameLen kind=kind location=self.diagnosticLocationAt(offset: self.exprOffset(id: exprId)) />
+        return <Result.Err error=<CompileDiagnostic.missingField refusal=refusal /> />
     }
 }

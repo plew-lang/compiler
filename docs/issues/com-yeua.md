@@ -1556,3 +1556,17 @@ records 42 RED/GREEN CLI pairs, ten positive checks, native authority/retry
 controls, and four reached inference-fault controls preserving Internal/location/notes.
 Independent source/evidence review found no must-fix. This does not close this
 ticket, the full normal suite, or the 7-second performance gate.
+
+## Missing field classification checkpoint
+
+The structural absence check runs once, keeping its existing shortcuts/order.
+The public arbitrary-message wrapper remains an Unclassified report. Private
+source callers retain a typed MissingField cause, and private owned consumers
+check the recorded receiver owner plus exact Field/Arrow operation before Source
+interpretation; failed parent expressions need no fabricated successful fact.
+[Finite evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-missing-field-refusal.json)
+records 20 unchanged CLI refusals now Source, one unused ORC success preserved,
+30 before/after positive mode controls including Unit fields, raw-cache/owner
+native assertions, and cause lifetime native/LLVM22 ASan/LSan. Fresh candidate
+LLVM/runtime identity makes execution reuse explicit. Independent source/evidence review found no must-fix and permits finite adoption.
+Whole-task gates remain required; construction/pattern failures are separate.
