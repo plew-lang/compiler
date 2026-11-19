@@ -236,7 +236,15 @@ pub impl Comp {
             val ti: TypeInfo = (try self.typeOf(id: exprId))
             if ti.kind == 2 {
                 if self.arena.typeTermIsUnique(ref: self.typedIrRefOfInfo(ti: ti)) {
-                    return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "a unique value cannot be copied; use `move`, `borrow`, or `inout`") />
+                    val owner: DiagnosticOwner = match self.currentSourceOwner() {
+                        Optional.Some(v: val owner) => match owner {
+                            SemanticCompletionOwner.Function(index: val index) => <DiagnosticOwner.Function index=index />
+                            SemanticCompletionOwner.Global(target: val target) => <DiagnosticOwner.Global target=target />
+                            SemanticCompletionOwner.Closure(expression: val expression) => <DiagnosticOwner.Closure expression=expression />
+                        }
+                        Optional.None => <DiagnosticOwner.Unknown />
+                    }
+                    return <Result.Err error=<CompileDiagnostic.uniqueCopy refusal=<UniqueCopyRefusal session=self.sourceFactSession() owner=owner expression=exprId location=self.diagnosticLocationAt(offset: self.exprOffset(id: exprId)) /> /> />
                 }
             }
         }

@@ -131,6 +131,20 @@ pub impl MissingFieldRefusal {
     fn location() -> DiagnosticLocation { return self.location }
 }
 
+pub struct UniqueCopyRefusal {
+    val session: U64
+    val owner: DiagnosticOwner
+    val expression: U64
+    val location: DiagnosticLocation
+}
+pub impl UniqueCopyRefusal {
+    factory
+    fn session() -> U64 { return self.session }
+    fn owner() -> DiagnosticOwner { return self.owner }
+    fn expression() -> U64 { return self.expression }
+    fn location() -> DiagnosticLocation { return self.location }
+}
+
 pub enum AssignmentRefusalKind { Element Field Binding Ref PointeeField }
 pub impl AssignmentRefusalKind {
     fn message() -> String {
@@ -168,6 +182,7 @@ enum DiagnosticData {
     UseAfterMove(refusal: UseAfterMoveRefusal)
     MissingField(refusal: MissingFieldRefusal)
     Assignment(refusal: AssignmentRefusal)
+    UniqueCopy(refusal: UniqueCopyRefusal)
 }
 pub struct CompileDiagnostic {
     val storage: Array[DiagnosticData]
@@ -185,6 +200,15 @@ pub impl CompileDiagnostic {
     }
     factory assignment(refusal: AssignmentRefusal) {
         return <CompileDiagnostic storage=[<DiagnosticData.Assignment refusal=refusal />] />
+    }
+    factory uniqueCopy(refusal: UniqueCopyRefusal) {
+        return <CompileDiagnostic storage=[<DiagnosticData.UniqueCopy refusal=refusal />] />
+    }
+    fn uniqueCopy() -> Optional[UniqueCopyRefusal] {
+        return match self.storage[0U64] {
+            DiagnosticData.UniqueCopy(refusal: val refusal) => <Optional.Some v=refusal />
+            _ => <Optional.None />
+        }
     }
     fn assignment() -> Optional[AssignmentRefusal] {
         return match self.storage[0U64] {
@@ -210,6 +234,7 @@ pub impl CompileDiagnostic {
             DiagnosticData.UseAfterMove(refusal: _) => <DiagnosticSeverity.Error />
             DiagnosticData.MissingField(refusal: _) => <DiagnosticSeverity.Error />
             DiagnosticData.Assignment(refusal: _) => <DiagnosticSeverity.Error />
+            DiagnosticData.UniqueCopy(refusal: _) => <DiagnosticSeverity.Error />
         }
     }
     fn failureDomain() -> FailureDomain {
@@ -218,6 +243,7 @@ pub impl CompileDiagnostic {
             DiagnosticData.UseAfterMove(refusal: _) => <FailureDomain.Unclassified />
             DiagnosticData.MissingField(refusal: _) => <FailureDomain.Unclassified />
             DiagnosticData.Assignment(refusal: _) => <FailureDomain.Unclassified />
+            DiagnosticData.UniqueCopy(refusal: _) => <FailureDomain.Unclassified />
         }
     }
     fn location() -> DiagnosticLocation {
@@ -226,6 +252,7 @@ pub impl CompileDiagnostic {
             DiagnosticData.UseAfterMove(refusal: val refusal) => refusal.location()
             DiagnosticData.MissingField(refusal: val refusal) => refusal.location()
             DiagnosticData.Assignment(refusal: val refusal) => refusal.location()
+            DiagnosticData.UniqueCopy(refusal: val refusal) => refusal.location()
         }
     }
     fn message() -> String {
@@ -233,6 +260,7 @@ pub impl CompileDiagnostic {
             DiagnosticData.Report(severity: _, failureDomain: _, location: _, message: val message, notes: _) => message
             DiagnosticData.MissingField(refusal: val refusal) => refusal.kind().message()
             DiagnosticData.Assignment(refusal: val refusal) => refusal.kind().message()
+            DiagnosticData.UniqueCopy(refusal: _) => "a unique value cannot be copied; use `move`, `borrow`, or `inout`"
             DiagnosticData.UseAfterMove(refusal: _) => "use of a value after it was moved (`move` transfers ownership away — the variable is dead; bind a fresh value to use it again) (spec/03)"
         }
     }
@@ -242,6 +270,7 @@ pub impl CompileDiagnostic {
             DiagnosticData.UseAfterMove(refusal: _) => []
             DiagnosticData.MissingField(refusal: _) => []
             DiagnosticData.Assignment(refusal: _) => []
+            DiagnosticData.UniqueCopy(refusal: _) => []
         }
     }
     fn isSourceRejection() -> Bool {

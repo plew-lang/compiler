@@ -249,6 +249,14 @@ impl CompilerSession {
             }
             Optional.None => {}
         }
+        match diagnostic.uniqueCopy() {
+            Optional.Some(v: val refusal) => {
+                if self.compiler.sourceExpressionHasOwner(session: refusal.session(), expression: refusal.expression(), owner: refusal.owner()) {
+                    return <CompileDiagnostic failureDomain=<FailureDomain.Source /> location=refusal.location() message=diagnostic.message() />
+                }
+            }
+            Optional.None => {}
+        }
         return diagnostic
     }
 
