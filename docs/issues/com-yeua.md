@@ -1537,3 +1537,12 @@ semantic and ordinary report lifetime pass. Fresh candidate emits byte-equal
 LLVM/runtime for those executed lifetime controls; execution reuse is explicit.
 Independent source/design reviews have no must-fix. Formal/full gates remain.
 [Evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-diagnostic-cause-value-handle.json).
+
+The remaining new function_completion_type_identity refusal called the removed
+viaSignatureMatches helper. All original type/grounding/overload assertions stay;
+the final detached comparisons now exercise four actual selected delegation
+programs, with exact distinct refusal reasons and both positive contracts.
+Fixed-candidate RED, full native GREEN and neutral review pass. The strengthened
+divergence case rejects at body checking before the delegation comparison; no
+claim is made that it isolates that private branch.
+[Evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-completion-identity-fixture.json).

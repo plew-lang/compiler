@@ -1,6 +1,7 @@
 // Semantic contract test. Source diverge syntax is covered separately.
 // A function value remains a value regardless of its call contract.
-use /Frontend only { Comp }
+use /Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use /SourceAccess only { SourceAccess }
 use /Ir only { TypeRef, Func, Bind, InstanceEnvironment, PatternBindInput, UnifyBind }
 use @Std/Core only { assert }
 use @Std/Io only { print }
@@ -12,6 +13,21 @@ fn signature(compiler: inout Comp, result: U64, argument: U64, diverging: Bool, 
 fn declaration(diverging: Bool) -> Func {
     return <Func nameStart=0U64 nameLen=0U64 hasRet=false retStart=0U64 retLen=0U64 retIsArray=false retTy=0U64 body=0U64 hasRecv=false recvStart=0U64 recvLen=0U64 selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false isDiverging=diverging />
 }
+// Compare completion through the selected delegation, not a detached Func pair.
+fn delegationCompletion(witness: Bool, target: Bool, expected: Bool) {
+    val requirement = if witness { give "diverge fn act()" } else { give "fn act()" }
+    val implementation = if target { give "diverge fn perform() {{ while true {{}} }}" } else { give "fn perform() {{}}" }
+    val text = "struct Worker {{}}\ntrait Action {{ " + requirement + " }}\nimpl Worker {{ " + implementation + " }}\nimpl Worker as Action {{ " + requirement + " via perform }}\nfn main() {{}}"
+    mut val compiler = <Comp />
+    match analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text path="via-completion.pw" text=text />, sources: <SourceAccess stdRoot=[] />) {
+        Result.Ok(value: _) => { if !expected { panic("via accepted mismatching completion") } }
+        Result.Err(error: val diagnostic) => {
+            val reason = if witness { give "a diverging function cannot reach the end of its body (spec/04)" } else { give "`via` target signature does not match the declared requirement" }
+            if expected || diagnostic.message() != reason { panic(diagnostic.message()) }
+        }
+    }
+}
+
 fn main() {
     mut val compiler = <Comp />
     compiler.arena.reserveTypeSentinel()
@@ -61,8 +77,9 @@ fn main() {
     val normalDeclaration = declaration(diverging: false)
     val stoppingDeclaration = declaration(diverging: true)
     assert(compiler.callableDeclarationConflict(a: normalDeclaration, b: stoppingDeclaration).unwrap(), message: "completion is not an overload selector")
-    assert(!compiler.viaSignatureMatches(witness: normalDeclaration, target: stoppingDeclaration), message: "via retains completion")
-    assert(!compiler.viaSignatureMatches(witness: stoppingDeclaration, target: normalDeclaration), message: "via cannot infer completion")
-    assert(compiler.viaSignatureMatches(witness: stoppingDeclaration, target: stoppingDeclaration), message: "same via contract")
+    delegationCompletion(witness: false, target: true, expected: false)
+    delegationCompletion(witness: true, target: false, expected: false)
+    delegationCompletion(witness: true, target: true, expected: true)
+    delegationCompletion(witness: false, target: false, expected: true)
     print("ok")
 }
