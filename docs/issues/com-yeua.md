@@ -1393,3 +1393,15 @@ Independent neutral review found no must-fix; source/evidence review only, not a
 independent execution. Untraced watchdog interruption and an unsupported CLI
 flag ordering are not GREEN. AOT and full normal remain uncertified. Other new
 signatures and the semantic ownership variant remain open.
+
+The two new structural gate failures were stale probes for the former raw access
+helper and pre-forwarding method condition. They now require the source-owning
+helper after ownership and before publication, its common access analysis and
+source provenance interpretation, and the selected synchronous/async-forwarding
+method admission. Both scripts pass, including existing provided-method ORC
+output. Four isolated mutations remove required ownership/access/provenance or
+async admission checks and are rejected. The ownership mutation removes a call;
+order is separately checked by source-position assertions. Independent review
+has no must-fix. [Evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-structural-test-reconciliation.json).
+No product repair, full-suite pass or phase-three closure follows from these
+internal compatibility corrections.

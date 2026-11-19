@@ -183,7 +183,14 @@ assert analysis.index('prepareDeclarationProgram(') < analysis.index('MidExecuta
 assert 'prepareDeclarationProgram(c: inout c, templates: inout templates)' in analysis
 declarations = Path('src/DeclarationProgram.pw').read_text()
 local = declarations.split('inout fn checkBody(', 1)[1].split('// Whole-target checking', 1)[0]
-assert local.index('self.ownership.request(') < local.index('checkDeclarationBodyAccess(') < local.index('<CheckedDeclarationBody ')
+assert local.index('self.ownership.request(') < local.index('checkRequestedDeclarationBodyAccess(') < local.index('<CheckedDeclarationBody ')
+assert 'if needsAccess { try checkRequestedDeclarationBodyAccess(c: inout c, owner: owner, built: built) }' in local
+# The source-owning request now interprets its own builder result. It must
+# still use the common access analysis; the raw public API grants no Source.
+requested = declarations.split('fn checkRequestedDeclarationBodyAccess(', 1)[1].split('\n}\n', 1)[0]
+assert 'findDeclarationCallAccess(c: inout c, canonical: built.canonical)' in requested
+assert 'hasSourceDeclarationCallConflict(c: inout c, owner: owner, built: built,' in requested
+assert 'return <Result.Err error=<DeclarationAccessError.LocalAccess body=owner error=error domain=domain /> />' in requested
 whole = declarations.split('pub fn prepareDeclarationProgram(', 1)[1]
 assert whole.index('checkDeclarationBodies(') < whole.index('analyzeDeclarationGlobalAccessWithRequests(')
 assert 'analyzeDeclarationGlobalAccessWithRequests(c: inout c, templates: inout templates, requests: inout requests.ownership)' in whole

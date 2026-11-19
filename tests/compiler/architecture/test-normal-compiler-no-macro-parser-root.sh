@@ -65,7 +65,7 @@ fi
 # Concrete provided methods use the same finalized body identity, including
 # proof provenance. Excluding them here leaves a JIT-requested body undeclared
 # unless its caller happened to register it first.
-if ! rg -Fq 'if f.hasRecv && !f.isExtern {' "$methods"; then
+if ! rg -Fq 'if f.hasRecv && !f.isExtern && (!f.isAsync || c.arena.bodySignature(bodyId: bodyId).forwardsAsyncPromise) {' "$methods"; then
     echo "method declaration does not include every reachable concrete method" >&2
     exit 1
 fi
