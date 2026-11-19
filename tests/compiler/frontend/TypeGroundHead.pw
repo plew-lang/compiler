@@ -1,0 +1,73 @@
+// Direct implementation controls; structural closedness is not source admission.
+use @Std/Core only { assert }
+use @Std/Io only { print }
+use /Frontend only { Comp }
+use /Ir only { TypeRef, ResolvedTypeDeclaration, ResolvedViewSource, TraitInstanceKey }
+
+// Keep both adapters' semantic child sequence aligned. This is not type
+// admission; the canonical query must preserve the existing child identities.
+fn checkChildren(compiler: inout Comp, ref: U64) {
+    val oldRow = compiler.arena.typeAt(index: ref)
+    val count = compiler.typeTermChildCount(t: oldRow)
+    assert(count == compiler.typeTermRefChildCount(ref: ref))
+    mut val index = 0U64
+    while index < count {
+        val oldChild = compiler.typeTermChildRef(t: oldRow, index: index)
+        assert(oldChild == compiler.typeTermRefChildRef(ref: ref, index: index))
+        index += 1U64
+    }
+}
+fn main() {
+    mut val compiler: Comp = <Comp />
+    compiler.arena.reserveTypeSentinel()
+    val integerName = compiler.internBytes(s: "I64")
+    val integer = compiler.simpleTypeRef(nameStart: integerName.nameStart, nameLen: integerName.nameLen)
+    val name = compiler.internBytes(s: "GroundHead")
+    val parameter = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] paramId=11U64 />)
+    assert(!compiler.tyRefIsGround(ref: parameter).unwrap())
+    assert(compiler.tyRefIsGround(ref: integer).unwrap())
+    val existential = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] isAny=true />)
+    assert(compiler.tyRefIsGround(ref: existential).unwrap())
+    val selfName = compiler.internBytes(s: "Self")
+    val selfType = compiler.simpleTypeRef(nameStart: selfName.nameStart, nameLen: selfName.nameLen)
+    assert(!compiler.tyRefIsGround(ref: selfType).unwrap())
+    val itemName = compiler.internBytes(s: "Item")
+    val item = compiler.simpleTypeRef(nameStart: itemName.nameStart, nameLen: itemName.nameLen)
+    assert(compiler.tyRefIsGround(ref: item).unwrap())
+    val closed = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[integer] />)
+    val open = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[parameter] />)
+    assert(compiler.tyRefIsGround(ref: closed).unwrap())
+    assert(!compiler.tyRefIsGround(ref: open).unwrap())
+    val record = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] isRecord=true recordFieldLabels=[1U64, 2U64] recordFieldTerms=[integer, parameter] />)
+    assert(!compiler.tyRefIsGround(ref: record).unwrap())
+    val viewedClosed = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] viewSources=[<ResolvedViewSource surfaceId=9U64 traitInstance=<TraitInstanceKey owner=97U64 positionalArgs=[integer] /> />] />)
+    val viewedOpen = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] viewSources=[<ResolvedViewSource surfaceId=9U64 traitInstance=<TraitInstanceKey owner=97U64 positionalArgs=[parameter] /> />] />)
+    assert(compiler.tyRefIsGround(ref: viewedClosed).unwrap())
+    assert(!compiler.tyRefIsGround(ref: viewedOpen).unwrap())
+    // The publication API seals one complete ordered batch. Nominal evidence
+    // delegates to structural closedness, including positional view children.
+    assert(compiler.arena.finishTypeDeclarationResolution(resolutions: [<ResolvedTypeDeclaration index=closed hasDecl=true declOffset=41U64 hasAssocTraitDecl=false assocTraitDeclOffset=0U64 />, <ResolvedTypeDeclaration index=open hasDecl=true declOffset=41U64 hasAssocTraitDecl=false assocTraitDeclOffset=0U64 />, <ResolvedTypeDeclaration index=viewedClosed hasDecl=true declOffset=43U64 hasAssocTraitDecl=false assocTraitDeclOffset=0U64 />, <ResolvedTypeDeclaration index=viewedOpen hasDecl=true declOffset=43U64 hasAssocTraitDecl=false assocTraitDeclOffset=0U64 />]))
+    assert(compiler.tyRefIsGround(ref: closed).unwrap())
+    assert(!compiler.tyRefIsGround(ref: open).unwrap())
+    assert(compiler.tyRefIsGround(ref: viewedClosed).unwrap())
+    assert(!compiler.tyRefIsGround(ref: viewedOpen).unwrap())
+    val associatedChild = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] assocTraitArgs=[parameter] />)
+    assert(!compiler.tyRefIsGround(ref: associatedChild).unwrap())
+    val projection = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] projectionReceiver=parameter assocNameId=7U64 />)
+    assert(!compiler.tyRefIsGround(ref: projection).unwrap())
+    val invalidProjection = compiler.pushType(t: <TypeRef nameStart=integerName.nameStart nameLen=integerName.nameLen args=[] projectionReceiver=integer assocNameId=7U64 />)
+    match compiler.tyRefIsGround(ref: invalidProjection) {
+        Result.Err(error: val error) => { assert(error.message() == "associated-type short projection was not resolved from a unique `where` source — write `T#Trait.Item` (spec/08)") }
+        Result.Ok(value: _) => { assert(false) }
+    }
+    // Keep the existing raw-facing sentinel/range behavior, without claiming
+    // these values are successfully admitted source types.
+    assert(compiler.tyRefIsGround(ref: 0U64).unwrap())
+    assert(compiler.tyRefIsGround(ref: compiler.arena.typeCount() + 1U64).unwrap())
+    mut val index = 0U64
+    while index < compiler.arena.typeCount() {
+        checkChildren(compiler: inout compiler, ref: index)
+        index += 1U64
+    }
+    print("ok")
+}

@@ -1,0 +1,27 @@
+// Numeric candidate context and already-typed arguments share the same rank
+// contract; receiver substitution must keep eager and lazy overloads distinct.
+use @Std/Io only { print }
+fn number(value: I64) -> String { return "integer" }
+fn number(value: Bool) -> String { return "bool" }
+fn fraction(value: F64) -> String { return "float" }
+fn fraction(value: String) -> String { return "string" }
+fn main() {
+    print(number(value: 1))
+    print(number(value: -2))
+    print(number(value: 1 + 2))
+    print(number(value: 3I64))
+    print(number(value: true))
+    val bound: I64 = 9I64
+    print(number(value: bound))
+    print(fraction(value: 1.25))
+    print(fraction(value: -1.25))
+    print(fraction(value: 1.0 + 2.0))
+    print(fraction(value: "text"))
+    val empty: Optional[I64] = <Optional.None />
+    val some: Optional[I64] = <Optional.Some v=9I64 />
+    print(empty.unwrapOr(fallback: 5))
+    print(empty.unwrapOr(fallback: fn() { return 6I64 }))
+    print(some.unwrapOr(fallback: fn() { return 7I64 }))
+    val callback: fn() -> I64 = fn() { return 8I64 }
+    print(empty.unwrapOr(fallback: callback))
+}

@@ -1354,7 +1354,21 @@ and retained-view-base assertions pass. Independent adoption review finds no
 must-fix. Manual TypeHeadResolution documents the direct regression controls.
 [Reader evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-pooled-type-head-reader.json).
 
-The7-second objective remains unmet, not judged difficult. Next examine only
-tyRefIsGround's early head-only returns before acquiring child arrays; preserve
-all contextual/projection/recursive behavior and measure before adopting another
-change. Ownership semantic refusal and the rest of this task remain unfinished.
+The adjacent finite reader cleanup also consumes existing canonical head/child
+readers in tyRefIsGround, acquires immutable childCount once, and obtains only
+nameStart/nameLen inside callableParameterTypeMatchRank's numeric branch.
+Complete semantic children, projection failures and rank decisions are unchanged.
+Fourteen scoped controls plus actual registered-path native checks pass, and
+all10 LLVM outputs on the final source agree with each other and the initial
+prototype output. Independent review approves structural adoption. Latest medians
+are7.540963 ->7.548907 seconds: no wall-time improvement is demonstrated.
+The static TypeRef retain/drop calls disappear from both queried functions,
+but this is not dynamic performance or final gate evidence.
+[Reader cleanup evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-pooled-grounding-ranking-readers.json).
+
+The7-second objective remains unmet, not judged difficult. Stop speculative
+leaf-reader edits as a performance strategy: next isolate remaining aggregate
+getter result-copy costs with a minimal program and actual optimized IR before
+choosing a broader change. Do not assume the existing argument-forwarding
+optimization covers returned temporary projection. Ownership semantic refusal
+and this task's final producer-to-consumer/gate work remain unfinished.

@@ -274,8 +274,8 @@ pub impl Comp {
             if self.expressionNeedsTypeContext(exprId: expression) {
                 if !(try self.contextualArgumentMatchesType(exprId: expression, expected: expected)) { return <Result.Ok value=1U64 /> }
             } else {
-                val term = self.arena.typeAt(index: expected)
                 if self.semanticExprTerm(exprId: expression) == 0U64 && contextualNumericExpression(self.arena.exprs, exprId: expression) {
+                    val term = self.arena.typeTermAt(index: expected)
                     if self.isFloatType(start: term.nameStart, len: term.nameLen) || ((try self.argIsUntypedIntLit(argExpr: expression)) && self.isIntType(start: term.nameStart, len: term.nameLen)) { index += 1U64 continue }
                 }
                 val actual = try self.inferenceArgumentType(exprId: expression)

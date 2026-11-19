@@ -1381,7 +1381,7 @@ pub impl Comp {
         if ref >= self.arena.typeCount() {
             return <Result.Ok value=true />
         }
-        val t: TypeRef = self.arena.typeAt(index: ref)
+        val t = self.arena.typeTermAt(index: ref)
         if t.paramId != 0U64 { return <Result.Ok value=false />}
         // Registered nominal identity and its canonical children are complete
         // authority. Global parameter-name membership only serves the remaining
@@ -1408,9 +1408,10 @@ pub impl Comp {
         if t.paramId == 0U64 && rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Self") {
             return <Result.Ok value=false />
         }
+        val childCount = self.typeTermRefChildCount(ref: ref)
         mut val i: U64 = 0
-        while i < self.typeTermChildCount(t: t) {
-            if !((try self.tyRefIsGround(ref: self.typeTermChildRef(t: t, index: i)))) {
+        while i < childCount {
+            if !((try self.tyRefIsGround(ref: self.typeTermRefChildRef(ref: ref, index: i)))) {
                 return <Result.Ok value=false />
             }
             i += 1

@@ -30,6 +30,13 @@ Use the manual procedure below: require exit0, empty runtime stderr and exact
 `TypeHeadResolution.out`. It does not establish source-wide conformance or
 replace the ordinary generic/associated-type language controls.
 
+`TypeGroundHead.pw` directly checks `Comp.tyRefIsGround` head-only returns,
+nominal canonical closedness and recursive ordinary/record/associated/view
+children, plus deferred and failed projections. Its synthetic declaration
+facets exercise structural queries, not executable source admission. Require
+exit0, empty runtime stderr and exact `TypeGroundHead.out` with the same manual
+procedure. This is a manual implementation test outside the normal fixture suite.
+
 ## Manual execution procedure
 
 Run from the compiler repository root with the selected carrier. Keep all
