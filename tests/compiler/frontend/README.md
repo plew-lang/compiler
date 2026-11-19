@@ -498,11 +498,11 @@ stderr. It does not classify construction or record-pattern failures. Registered
 
 `test-closure-capture-limits.py` is registered in normal and ASan B. Its
 `fixtures/ClosureCaptureLimits/` inputs assert current implementation limits,
-not forbidden source types. Four former reject fixtures remain covered, with
+not forbidden source shapes. Six former reject fixtures remain covered, with
 precise Limit/status/reason checks, deferred substitution cases and unrequested
 lazy successes. The profile never widens the Source-only reject lane. Unique
 capture source restrictions stay in `tests/fixtures/reject/`; future shape
-support belongs to com-b1ro.
+support, including nested closures, belongs to com-b1ro.
 
 `UniqueCaptureFailureDomains.pw` checks unique-capture refusal provenance through
 raw repeated requests/drain and owned lazy/whole/eager requests. It covers
@@ -510,3 +510,8 @@ struct/enum/generic, mutable bindings and borrowed parameters, retaining unused
 lazy success. Foreign sessions, failure indices, closure expressions and binding
 targets cannot reuse a retained failure; equal-text Internal reports remain
 Internal. Run with the manual compile/link procedure and require its exact `.out`.
+
+`NestedClosureLimitDomains.pw` checks the recorded nested-closure capability
+failure through raw retry/drain and owning lazy/whole/eager requests. It also
+reaches the direct executable-scan fallback and requires Limit there. The unused
+lazy body stays unrequested. Require exit0, exact `.out` and empty stderr.

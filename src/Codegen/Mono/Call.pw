@@ -6647,7 +6647,7 @@ pub impl Comp {
             Expr.Ident(start: _, len: _) => { try self.scanBindingInsts(exprId: exprId) }
             Expr.Closure(val params, val hasRet, val retStart, val retLen, val retIsArray, val retTy, val body, isDiverging: _) => {
                 if self.cur.inClosure {
-                    return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "v1 rejects nested closure literals; use a named helper or a single closure boundary") />
+                    return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "v1 rejects nested closure literals; use a named helper or a single closure boundary", failureDomain: <FailureDomain.Limit />) />
                 }
                 // Captures and the ABI come from the checked lexical record.
                 // Creating a closure does not request its executable body.

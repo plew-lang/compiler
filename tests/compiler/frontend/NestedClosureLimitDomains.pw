@@ -1,0 +1,69 @@
+use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontendForRequests, openFrontend }
+use ../../../src/CheckedProgram only { CompilerSession, CompilerSessionResult, ProgramCheckResult, checkCompilerSession }
+use ../../../src/Backend only { LlvmLoweringResult }
+use ../../../src/SourceAccess only { SourceAccess }
+use ../../../src/Diag only { CompileDiagnostic, FailureDomain }
+use ../../../src/Ir only { Expr }
+use @Std/Io only { print }
+fn requireLimit(diagnostic: CompileDiagnostic, message: String) {
+    match diagnostic.failureDomain() { FailureDomain.Limit => {} _ => { panic("limit domain was lost") } }
+    if diagnostic.isSourceRejection() || diagnostic.message() != message { panic("limit was reinterpreted") }
+}
+fn session(input: FrontendInput) -> CompilerSession {
+    match CompilerSession.open(input: input, sources: <SourceAccess />) { CompilerSessionResult.Success(session: val session) => { return move session } CompilerSessionResult.Failure(diagnostic: val diagnostic) => { panic(diagnostic.message()) } }
+}
+fn run(input: FrontendInput, message: String, functionName: String = "main", lazyRequested: Bool = true) {
+    mut val raw = <Comp />
+    match analyzeFrontendForRequests(c: inout raw, input: input, sources: <SourceAccess />) { Result.Ok(value: _) => {} Result.Err(error: val diagnostic) => { panic(diagnostic.message()) } }
+    val name = raw.internBytes(s: functionName)
+    val function = raw.arena.firstFunctionNamed(nameId: name.nameId)
+    for count in 0U64..<2U64 {
+        match raw.prepareLexicalBody(fnIdx: function) {
+            Result.Err(error: val diagnostic) => {
+                requireLimit(diagnostic: diagnostic, message: message)
+                raw.pendingDiagnostics.append(diagnostic)
+            }
+            Result.Ok(value: _) => { panic("unsupported capture became ready") }
+        }
+        val drained = raw.takeDiagnostics()
+        if drained.count() != 1U64 { panic("drain changed failure count") }
+        requireLimit(diagnostic: drained[0U64], message: message)
+    }
+    mut val scanned = false
+    for index in 0U64..<raw.arena.exprs.count() {
+        match raw.arena.exprs[index] {
+            Expr.Closure(params: _, hasRet: _, retStart: _, retLen: _, retIsArray: _, retTy: _, body: _, isDiverging: _) => {
+                raw.cur.inClosure = true
+                match raw.scanExprInsts(exprId: index) { Result.Err(error: val diagnostic) => { requireLimit(diagnostic: diagnostic, message: message) } Result.Ok(value: _) => { panic("scan fallback accepted nesting") } }
+                scanned = true
+                break
+            }
+            _ => {}
+        }
+    }
+    if !scanned { panic("nested fixture has no closure expression") }
+    mut val owned = session(input: input)
+    match owned.lowerDeclarations() { LlvmLoweringResult.Success(module: _) => {} LlvmLoweringResult.Failure(diagnostic: val diagnostic) => { panic(diagnostic.message()) } }
+    mut val failed = false
+    mut val bodyIndex = 0U64
+    while true {
+        val bodies = owned.registeredBodies()
+        if bodyIndex >= bodies.count() { break }
+        val body = bodies[bodyIndex]
+        bodyIndex += 1U64
+        match owned.prepareBodyAccess(bodyId: body) {
+            Result.Err(error: val diagnostic) => { requireLimit(diagnostic: diagnostic, message: message) failed = true }
+            Result.Ok(value: _) => {}
+        }
+    }
+    if failed != lazyRequested { panic("nested request coverage changed") }
+    match checkCompilerSession(session: move owned) { ProgramCheckResult.Failure(diagnostic: val diagnostic) => { requireLimit(diagnostic: diagnostic, message: message) } ProgramCheckResult.Success(program: _) => { panic("failed session became checked") } }
+    match checkCompilerSession(session: session(input: input)) { ProgramCheckResult.Failure(diagnostic: val diagnostic) => { requireLimit(diagnostic: diagnostic, message: message) } ProgramCheckResult.Success(program: _) => { panic("whole check accepted unsupported capture") } }
+    match openFrontend(input: input, sources: <SourceAccess />) { Result.Err(error: val diagnostic) => { requireLimit(diagnostic: diagnostic, message: message) } Result.Ok(value: _) => { panic("eager source accepted unsupported capture") } }
+    print("nested closure limit retained")
+}
+fn main() {
+    val message = "v1 rejects nested closure literals; use a named helper or a single closure boundary"
+    run(input: <FrontendInput.File path="tests/compiler/frontend/fixtures/ClosureCaptureLimits/Nested.pw" />, message: message)
+    run(input: <FrontendInput.File path="tests/compiler/frontend/fixtures/ClosureCaptureLimits/UnusedNested.pw" />, message: message, functionName: "auditUnused", lazyRequested: false)
+}

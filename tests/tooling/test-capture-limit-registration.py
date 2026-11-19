@@ -17,12 +17,15 @@ import os,sys
 from pathlib import Path
 name=Path(sys.argv[-1]).stem
 mode='check' if '--check' in sys.argv else ('orc' if '--run' in sys.argv else 'aot')
-limits={'GenericStruct','FunctionValue','UnusedGenericStruct','UnusedFunctionValue','GenericSubstitution','FunctionSubstitution'}
+limits={'GenericStruct','FunctionValue','UnusedGenericStruct','UnusedFunctionValue','GenericSubstitution','FunctionSubstitution','Nested','UnusedNested'}
 if name in limits:
     if (name.startswith('Unused') and mode=='orc') or (name.endswith('Substitution') and mode=='check'):
         sys.exit(0)
-    kind='generic struct' if 'Generic' in name else 'function-typed'
-    message='closure capture of '+kind+' values is not implemented'
+    if 'Nested' in name:
+        message='v1 rejects nested closure literals; use a named helper or a single closure boundary'
+    else:
+        kind='generic struct' if 'Generic' in name else 'function-typed'
+        message='closure capture of '+kind+' values is not implemented'
     domain=os.environ.get('CAPTURE_TEST_DOMAIN','limit')
     if os.environ.get('CAPTURE_TEST_SANITIZER'):
         message+='\nERROR: AddressSanitizer: controlled failure'
@@ -58,8 +61,8 @@ for label,domain,sanitizer,expected in [('limit','limit',False,0),('source','sou
         assert result.returncode==expected,(label,result.stdout,result.stderr)
         assert b'clean (3 files)' in result.stdout,(label,result.stdout)
         receipt=json.loads((logs/'capture-limits/result.json').read_text())
-        assert receipt['compiler']==str(compiler.resolve()) and len(receipt['cases'])==18
-        assert len(receipt['errors'])==(0 if expected==0 else 14),(label,receipt['errors'])
+        assert receipt['compiler']==str(compiler.resolve()) and len(receipt['cases'])==24
+        assert len(receipt['errors'])==(0 if expected==0 else 19),(label,receipt['errors'])
         if expected==0:
             assert b'PASS closure-capture-limits' in result.stdout
         else:

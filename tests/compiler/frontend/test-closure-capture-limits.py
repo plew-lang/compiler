@@ -15,9 +15,11 @@ sys.path.insert(0, str(ROOT / 'scripts/support'))
 from compiler_failure_result import CompilerResult, run_compiler
 
 CASES = ('GenericStruct', 'FunctionValue', 'UnusedGenericStruct',
-         'UnusedFunctionValue', 'GenericSubstitution', 'FunctionSubstitution')
+         'UnusedFunctionValue', 'GenericSubstitution', 'FunctionSubstitution',
+         'Nested', 'UnusedNested')
 SUCCESS = {('UnusedGenericStruct', 'orc'), ('UnusedFunctionValue', 'orc'),
-           ('GenericSubstitution', 'check'), ('FunctionSubstitution', 'check')}
+           ('GenericSubstitution', 'check'), ('FunctionSubstitution', 'check'),
+           ('UnusedNested', 'orc')}
 MARKERS = (b'ERROR: AddressSanitizer', b'ERROR: LeakSanitizer',
            b'AddressSanitizer:DEADLYSIGNAL', b'watch-command:', b'trace-command: no progress')
 
@@ -101,7 +103,10 @@ def main():
         for error in errors:
             print(error, file=sys.stderr)
         return 1
-    print('PASS closure-capture-limits: 18 modes, 14 precise Limit refusals and 4 deferred/unrequested successes')
+    print('PASS closure-capture-limits: ' + str(len(rows)) + ' modes, ' +
+          str(sum(row['expectation'] == 'limit' for row in rows)) +
+          ' precise Limit refusals and ' + str(sum(row['expectation'] == 'success' for row in rows)) +
+          ' deferred/unrequested successes')
     return 0
 
 if __name__ == '__main__':
