@@ -35,6 +35,13 @@ that contract through the production callers and controlled subprocess faults,
 including parallel budgets, progress and cancellation. Compiler semantics and
 the separately owned gen/ASan classifications retain their own tests.
 
+`tooling/test-compiler-link-profile.py` is registered through the self-host tooling
+gate. It checks explicit ThinLTO input kinds, selected-tool provenance, native
+object noninterference and real text/LTO-object links with one runtime C. Ordinary
+object files and bare bitcode cannot stand in for summary-bearing ThinLTO input.
+Its small cross-TU control checks actual optimization and preserved exports; it
+does not certify the compiler's fixed point or performance.
+
 `compiler/codegen/test-buffer-capacity.py` is registered in the normal harness.
 It checks the actual emitted runtime at O0/O2 with bounded allocation-failure
 injection, overflow/header/zero-size limits and unchanged backing on failure,

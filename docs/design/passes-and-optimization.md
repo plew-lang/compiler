@@ -91,6 +91,31 @@ Candidate extraction is not the proof: required whole-body use, escape and CFG c
 
 Rust's [SsaLocals](https://github.com/rust-lang/rust/blob/main/compiler/rustc_mir_transform/src/ssa.rs) and [CopyProp](https://github.com/rust-lang/rust/blob/main/compiler/rustc_mir_transform/src/copy_prop.rs) illustrate analyses layered over non-SSA MIR. Swift's [CopyPropagation](https://github.com/swiftlang/swift/blob/main/lib/SILOptimizer/Transforms/CopyPropagation.cpp) operates under ownership and lifetime constraints. These are references for proof structure; Rust Copy is not Plew's ARC/CoW copy, and retain/release count equality alone is insufficient.
 
+## Compiler Link Optimization
+
+Compiler development and bootstrap use one explicit link profile owned by the
+shared link driver. A ThinLTO profile processes the Plew module and the same
+runtime C implementation together, preserving required runtime/callback exports.
+It accepts raw LLVM or a summary-bearing ThinLTO object; an already emitted
+machine object cannot supply equivalent program optimization. Ordinary native
+object output retains its independent contract.
+
+The native producer and text preparation must agree on target, DataLayout, CPU
+and pre-link stages. ThinLTO summaries are produced by the matching LLVM writer,
+not inferred from a file extension or bare bitcode. The link driver validates the
+artifact kind, uses the selected LLVM clang and LTO implementation, and records
+the actual optimizer, linker, library, flags and SDK environment. A conflicting
+toolchain is a failure rather than an implicit alternate pipeline. Required
+verification, input lifetimes, sanitizer placement and failure propagation remain
+independent of LTO.
+
+This is a development-toolchain optimization, not a new backend or a second
+runtime. It does not add end-user LLVM dependencies to the
+[distribution contract](driver-and-execution.md#distribution-boundary). Raw LLVM
+and runtime fixed-point comparisons precede link optimization; a link-profile
+change requires a new frozen candidate and formal measurement, not reuse of a
+prior binary's performance result.
+
 ## Verification and Diagnostics
 
 Structural validation guards intermediate boundaries appropriate to their stage. Executable verification always runs before LLVM lowering; optimization settings do not suppress it. Additional debug checking can inspect every intermediate snapshot but does not create a weaker release-mode validity rule.

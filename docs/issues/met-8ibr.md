@@ -1,6 +1,6 @@
 ---
 id: met-8ibr
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-11-19T15:28:59Z
@@ -27,3 +27,9 @@ No runtime fork, static LLVM rebuilding, new backend, public plew CLI feature, o
 
 ## Basis
 [Reviewed isolated comparison and three-unit plan](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-runtime-thinlto-investigation.json). User approved creation and execution of these three units. Task decomposition reviewed by abi_optimization_plan_review; plan does not certify implementation.
+
+## Outcome: resolved
+
+[Retained evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-thinlto-link-profile.json) records RED/GREEN and latest19 profile tests, three real cross-TU links, export/optimization checks and fixed-input tooling shell exit0. After that shell, only the ThinLTO validator and its test changed; profile-OFF legacy controls are explicitly reused while latest profile tests reran. The entire final source is not claimed to have rerun the shell.
+
+Review found libraries could override the profile; strict library arguments and actual cc1 mode checks now reject it before preparation. Additional real counterexamples cover stale metadata and bare-bitcode filename/header spoofing; stdin analysis plus exact block recognition fixes the latter. Independent final review found no must-fix and accepted finite completion. Production callers remain unchanged; met-jv7m/met-kuej and formal performance are not certified.
