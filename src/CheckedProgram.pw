@@ -264,9 +264,9 @@ impl CompilerSession {
             }
             Optional.None => {}
         }
-    match diagnostic.staticMemberAmbiguity() {
+    match diagnostic.memberCallAmbiguity() {
             Optional.Some(v: val refusal) => {
-                if self.compiler.sourceStaticMemberAmbiguityHasOwner(refusal: refusal) {
+                if self.compiler.sourceMemberCallAmbiguityHasOwner(refusal: refusal) {
                     return <CompileDiagnostic failureDomain=<FailureDomain.Source /> location=refusal.location() message=diagnostic.message() />
                 }
             }

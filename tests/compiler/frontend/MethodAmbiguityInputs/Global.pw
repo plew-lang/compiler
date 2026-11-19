@@ -1,0 +1,12 @@
+trait Numbers {
+    fn pick(value: I8) -> I64
+    fn pick(value: I64) -> I64
+}
+struct Worker {}
+impl Worker as Numbers {
+    fn pick(value: I8) -> I64 { return 8I64 }
+    fn pick(value: I64) -> I64 { return 64I64 }
+}
+val value: any Numbers = <Worker />
+val chosen: I64 = value.pick(value: 4)
+fn main() {}

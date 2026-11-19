@@ -838,7 +838,7 @@ impl Comp {
         if !self.appendRequiredTraitSource(sources: inout sources, owner: requiredTraitOwner) { return <Result.Ok value=self.arena.functionCount() /> }
         mut val callee: U64 = self.arena.functionCount()
         if sources.count() > 0U64 {
-            callee = (try self.findMethodInViewSet(recvStart: rt.nameStart, recvLen: rt.nameLen, sources: sources, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: resolvedRef, requiredTraitOwner: requiredTraitOwner))
+            callee = (try self.findCallableInViewSetWithOrigin(recvStart: rt.nameStart, recvLen: rt.nameLen, sources: sources, nameStart: nameStart, nameLen: nameLen, args: args, associated: false, recvRef: resolvedRef, requiredTraitOwner: requiredTraitOwner, methodOrigin: methodOrigin))
         }
         if callee >= self.arena.functionCount() && requiredTraitOwner == 0U64 {
             callee = (try self.findMethodWithOrigin(recvStart: rt.nameStart, recvLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: resolvedRef, useOffset: useOffset, methodOrigin: methodOrigin))
@@ -916,6 +916,11 @@ pub impl Comp {
     // set, provenance narrowing, overload ranking, and ambiguity rule are
     // identical.
     inout fn findCallableInViewSet(recvStart: U64, recvLen: U64, sources: Array[CallableSourceHead], nameStart: U64, nameLen: U64, args: ArgRange, associated: Bool, recvRef: U64 = 0U64, requiredTraitOwner: U64 = 0U64) -> Result[U64, CompileDiagnostic] {
+        return self.findCallableInViewSetWithOrigin(recvStart: recvStart, recvLen: recvLen, sources: sources, nameStart: nameStart, nameLen: nameLen, args: args, associated: associated, recvRef: recvRef, requiredTraitOwner: requiredTraitOwner, methodOrigin: <MethodLookupOrigin />)
+    }
+}
+impl Comp {
+    inout fn findCallableInViewSetWithOrigin(recvStart: U64, recvLen: U64, sources: Array[CallableSourceHead], nameStart: U64, nameLen: U64, args: ArgRange, associated: Bool, recvRef: U64 = 0U64, requiredTraitOwner: U64 = 0U64, methodOrigin: MethodLookupOrigin) -> Result[U64, CompileDiagnostic] {
         val qNameId: U64 = intern(c: inout self, start: nameStart, len: nameLen)
         val qRecvId: U64 = intern(c: inout self, start: recvStart, len: recvLen)
         val useMod: U64 = self.moduleOf(offset: nameStart)
@@ -980,7 +985,7 @@ pub impl Comp {
                 if typeMatch2 != self.arena.functionCount() {
                     if typeMatchEntry < self.decls.callableCount() && typeMatch2Entry < self.decls.callableCount() {
                         if !(self.sameCallableSemanticOrigin(a: self.decls.callableAt(index: typeMatchEntry), b: self.decls.callableAt(index: typeMatch2Entry))) {
-                            return <Result.Err error=self.diagnosticAt(offset: nameStart, msg: "ambiguous source-qualified call: active views provide multiple matching methods") />
+                            return <Result.Err error=self.memberCallAmbiguityDiagnostic(kind: <MemberCallAmbiguityKind.ActiveViews />, receiverRef: recvRef, nameStart: nameStart, nameLen: nameLen, args: args, methodOrigin: methodOrigin) />
                         }
                         // A direct conformance and a single trait-to-trait
                         // propagation can materialize the same selected source
@@ -998,6 +1003,8 @@ pub impl Comp {
         return <Result.Ok value=self.arena.functionCount() />
     }
 
+}
+pub impl Comp {
     inout fn findMethodInViewSet(recvStart: U64, recvLen: U64, sources: Array[CallableSourceHead], nameStart: U64, nameLen: U64, args: ArgRange, recvRef: U64 = 0U64, requiredTraitOwner: U64 = 0U64) -> Result[U64, CompileDiagnostic] {
         return <Result.Ok value=(try self.findCallableInViewSet(recvStart: recvStart, recvLen: recvLen, sources: sources, nameStart: nameStart, nameLen: nameLen, args: args, associated: false, recvRef: recvRef, requiredTraitOwner: requiredTraitOwner)) />
     }
@@ -1024,7 +1031,7 @@ impl Comp {
         if assoc.nameLen != 0U64 {
             val recvRef: U64 = self.simpleTypeRef(nameStart: assoc.nameStart, nameLen: assoc.nameLen)
             val sources: Array[CallableSourceHead] = (try self.collectViewSources(recv: recv, recvStart: assoc.nameStart, recvLen: assoc.nameLen, recvRef: recvRef, finalSourceId: source.surfaceId, finalSourceOwner: source.traitInstance.owner))
-            val selected: U64 = (try self.findAssocInViewSet(recvStart: assoc.nameStart, recvLen: assoc.nameLen, sources: sources, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: recvRef))
+            val selected: U64 = (try self.findCallableInViewSetWithOrigin(recvStart: assoc.nameStart, recvLen: assoc.nameLen, sources: sources, nameStart: nameStart, nameLen: nameLen, args: args, associated: true, recvRef: recvRef, methodOrigin: methodOrigin))
             if selected < self.arena.functionCount() { return <Result.Ok value=selected />}
             return <Result.Ok value=(try self.findAssocWithOrigin(recvStart: assoc.nameStart, recvLen: assoc.nameLen, nameStart: nameStart, nameLen: nameLen, args: args, methodOrigin: methodOrigin)) />
         }
@@ -1033,7 +1040,7 @@ impl Comp {
             return <Result.Ok value=self.arena.functionCount() />
         }
         val sources: Array[CallableSourceHead] = (try self.collectViewSources(recv: recv, recvStart: rt.nameStart, recvLen: rt.nameLen, recvRef: rt.ref, finalSourceId: source.surfaceId, finalSourceOwner: source.traitInstance.owner))
-        mut val mfi: U64 = (try self.findMethodInViewSet(recvStart: rt.nameStart, recvLen: rt.nameLen, sources: sources, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: rt.ref))
+        mut val mfi: U64 = (try self.findCallableInViewSetWithOrigin(recvStart: rt.nameStart, recvLen: rt.nameLen, sources: sources, nameStart: nameStart, nameLen: nameLen, args: args, associated: false, recvRef: rt.ref, methodOrigin: methodOrigin))
         if mfi >= self.arena.functionCount() {
             mfi = (try self.findMethodWithOrigin(recvStart: rt.nameStart, recvLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: rt.ref, methodOrigin: methodOrigin))
         }
@@ -1115,7 +1122,7 @@ impl Comp {
         }
         if !self.appendRequiredTraitSource(sources: inout sources, owner: requiredTraitOwner) { return <Result.Ok value=self.arena.functionCount() /> }
         if sources.count() > 0U64 {
-            mfi = (try self.findMethodInViewSet(recvStart: recvStart, recvLen: recvLen, sources: sources, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: rt.ref, requiredTraitOwner: requiredTraitOwner))
+            mfi = (try self.findCallableInViewSetWithOrigin(recvStart: recvStart, recvLen: recvLen, sources: sources, nameStart: nameStart, nameLen: nameLen, args: args, associated: false, recvRef: rt.ref, requiredTraitOwner: requiredTraitOwner, methodOrigin: methodOrigin))
         }
         if mfi >= self.arena.functionCount() && requiredTraitOwner == 0U64 {
             mfi = (try self.findMethodWithOrigin(recvStart: recvStart, recvLen: recvLen, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: rt.ref, methodOrigin: methodOrigin))

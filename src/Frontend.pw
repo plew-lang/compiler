@@ -66,7 +66,7 @@ use ./Path only { resolveImport, extractSpan, dirPrefixLen, findSrcRoot, findPkg
 use ./Manifest only { Dep, loadManifestDeps, resolveDepImport, resolveGitDepImport, loadLock, isExternalDepImport }
 use ./Lock only { Lock }
 use ./Cache only { cacheRoot }
-use ./Diag only { compileErrorAt, compileErrorAtFile, CompileDiagnostic, UseAfterMoveRefusal, MissingFieldRefusal, MissingFieldKind, AssignmentRefusal, AssignmentRefusalKind, UniqueCopyRefusal, FreeCallAmbiguityRefusal, StaticMemberAmbiguityRefusal, DiagnosticOwner, DiagnosticNote, DiagnosticLocation, DiagnosticSeverity, FailureDomain, emitDiagnostic, eprintInt, digitByte, digitStrU }
+use ./Diag only { compileErrorAt, compileErrorAtFile, CompileDiagnostic, UseAfterMoveRefusal, MissingFieldRefusal, MissingFieldKind, AssignmentRefusal, AssignmentRefusalKind, UniqueCopyRefusal, FreeCallAmbiguityRefusal, MemberCallAmbiguityRefusal, MemberCallAmbiguityKind, DiagnosticOwner, DiagnosticNote, DiagnosticLocation, DiagnosticSeverity, FailureDomain, emitDiagnostic, eprintInt, digitByte, digitStrU }
 use ./Ops only { opEq, opNe, opLt, opLe, opGt, opGe, opAdd, opSub, opMul, opDiv, opRem, opAnd, opOr, opNot, opBitAnd, opBitOr, opBitXor, opShl, opShr, opBitNot, opAssign, compoundBinOp, isBinTraitOp, binTraitName, binTraitMethodName, unaryMethodName }
 
 // Only an entirely unsuffixed numeric expression accepts a sibling's
@@ -726,7 +726,7 @@ pub struct Comp {
     mut val authoredFreeCallOrigins: Dictionary[U64, (start: U64, length: U64, arguments: ArgRange)] = [:]
     mut val failedFreeCallSelections: Dictionary[U64, (owner: U64, arguments: Array[Arg])] = [:]
     mut val failedFreeCallAmbiguities: Dictionary[U64, (owner: SemanticCompletionOwner, nameStart: U64, nameLen: U64, arguments: Array[Arg])] = [:]
-    mut val failedStaticMemberAmbiguities: Dictionary[U64, (owner: SemanticCompletionOwner, receiverRef: U64, receiver: U64, source: Optional[ResolvedViewSource], nameStart: U64, nameLen: U64, arguments: Array[Arg])] = [:]
+    mut val failedMemberCallAmbiguities: Dictionary[U64, (kind: MemberCallAmbiguityKind, owner: SemanticCompletionOwner, receiverRef: U64, receiver: U64, source: Optional[ResolvedViewSource], nameStart: U64, nameLen: U64, arguments: Array[Arg])] = [:]
     mut val authoredNamedFactoryOrigins: Dictionary[U64, AuthoredNamedFactory] = [:]
     mut val authoredConstructions: Dictionary[U64, AuthoredConstruction] = [:]
     mut val authoredValueBlockOwners: Dictionary[U64, U64] = [:]
@@ -2578,9 +2578,9 @@ fn ownedFrontendFailure(c: Comp, diagnostic: CompileDiagnostic) -> CompileDiagno
         }
         Optional.None => {}
     }
-    match diagnostic.staticMemberAmbiguity() {
+    match diagnostic.memberCallAmbiguity() {
         Optional.Some(v: val refusal) => {
-            if c.sourceStaticMemberAmbiguityHasOwner(refusal: refusal) {
+            if c.sourceMemberCallAmbiguityHasOwner(refusal: refusal) {
                 return <CompileDiagnostic failureDomain=<FailureDomain.Source /> location=refusal.location() message=diagnostic.message() />
             }
         }

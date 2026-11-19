@@ -96,6 +96,17 @@ core; a public direct assignment check cannot claim an authored operation. Owned
 interpretation checks the saved owner and operation shape without repeating the
 mutability decision or retaining unrelated RHS state.
 
+Member-call ambiguity findings share one authored-operation ownership boundary.
+Their finite cause kind identifies the selection result (static trait instances,
+existential requirements or active view sources), rather than a message to
+reclassify. The retained negative query includes that kind and the exact receiver,
+selector and arguments; interpretation neither repeats selection nor constructs
+a successful call fact. Public raw selectors carry no authored origin. An
+implicit protocol query is not an authored method call merely because it selects
+a similarly named requirement. A fallback caused by missing candidate bookkeeping
+is not evidence of source ambiguity and must not acquire the source domain from
+a nearby authored expression.
+
 `CompileDiagnostic.isSourceRejection()` requires both error severity and the
 explicit source domain. It is a value-level query, not proof of a failed process
 or an intended rejection reason. Rendering remains nonterminal and independent

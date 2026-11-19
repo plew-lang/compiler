@@ -1056,7 +1056,7 @@ pub impl Comp {
                         if rt.ref < self.arena.typeCount() {
                             if self.arena.typeTermAt(index: rt.ref).isAny {
                                 val traitIndex = self.recordAnyTraitIndex(anyRef: rt.ref)
-                                val slot = try self.recordAnyRequirementSlot(anyRef: rt.ref, nameStart: nameStart, nameLen: nameLen, args: args)
+                                val slot = try self.recordAnyRequirementSlotWithOrigin(anyRef: rt.ref, nameStart: nameStart, nameLen: nameLen, args: args, methodOrigin: <MethodLookupOrigin expression=<Optional.Some v=id /> />)
                                 if traitIndex < self.decls.traitCount() && slot != 0U64 {
                                     return <Result.Ok value=(try self.anyMemberRetInfo(anyRef: rt.ref, traitIndex: traitIndex, slot: slot - 1U64)) />
                                 }

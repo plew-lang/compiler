@@ -167,7 +167,26 @@ pub impl FreeCallAmbiguityRefusal {
     fn location() -> DiagnosticLocation { return self.location }
 }
 
-pub struct StaticMemberAmbiguityRefusal {
+pub enum MemberCallAmbiguityKind { StaticInstances ExistentialRequirements ActiveViews }
+pub impl MemberCallAmbiguityKind {
+    fn message() -> String {
+        return match self {
+            MemberCallAmbiguityKind.StaticInstances => "ambiguous call: multiple trait member instances match the arguments"
+            MemberCallAmbiguityKind.ExistentialRequirements => "ambiguous call: multiple trait requirements match the arguments"
+            MemberCallAmbiguityKind.ActiveViews => "ambiguous source-qualified call: active views provide multiple matching methods"
+        }
+    }
+    fn same(other: MemberCallAmbiguityKind) -> Bool {
+        return match self {
+            MemberCallAmbiguityKind.StaticInstances => match other { MemberCallAmbiguityKind.StaticInstances => true _ => false }
+            MemberCallAmbiguityKind.ExistentialRequirements => match other { MemberCallAmbiguityKind.ExistentialRequirements => true _ => false }
+            MemberCallAmbiguityKind.ActiveViews => match other { MemberCallAmbiguityKind.ActiveViews => true _ => false }
+        }
+    }
+}
+
+pub struct MemberCallAmbiguityRefusal {
+    val kind: MemberCallAmbiguityKind
     val session: U64
     val owner: DiagnosticOwner
     val receiverRef: U64
@@ -178,8 +197,9 @@ pub struct StaticMemberAmbiguityRefusal {
     val argumentsCount: U64
     val location: DiagnosticLocation
 }
-pub impl StaticMemberAmbiguityRefusal {
+pub impl MemberCallAmbiguityRefusal {
     factory
+    fn kind() -> MemberCallAmbiguityKind { return self.kind }
     fn session() -> U64 { return self.session }
     fn owner() -> DiagnosticOwner { return self.owner }
     fn receiverRef() -> U64 { return self.receiverRef }
@@ -230,7 +250,7 @@ enum DiagnosticData {
     Assignment(refusal: AssignmentRefusal)
     UniqueCopy(refusal: UniqueCopyRefusal)
     FreeCallAmbiguity(refusal: FreeCallAmbiguityRefusal)
-    StaticMemberAmbiguity(refusal: StaticMemberAmbiguityRefusal)
+    MemberCallAmbiguity(refusal: MemberCallAmbiguityRefusal)
 }
 pub struct CompileDiagnostic {
     val storage: Array[DiagnosticData]
@@ -267,12 +287,12 @@ pub impl CompileDiagnostic {
             _ => <Optional.None />
         }
     }
-    factory staticMemberAmbiguity(refusal: StaticMemberAmbiguityRefusal) {
-        return <CompileDiagnostic storage=[<DiagnosticData.StaticMemberAmbiguity refusal=refusal />] />
+    factory memberCallAmbiguity(refusal: MemberCallAmbiguityRefusal) {
+        return <CompileDiagnostic storage=[<DiagnosticData.MemberCallAmbiguity refusal=refusal />] />
     }
-    fn staticMemberAmbiguity() -> Optional[StaticMemberAmbiguityRefusal] {
+    fn memberCallAmbiguity() -> Optional[MemberCallAmbiguityRefusal] {
         return match self.storage[0U64] {
-            DiagnosticData.StaticMemberAmbiguity(refusal: val refusal) => <Optional.Some v=refusal />
+            DiagnosticData.MemberCallAmbiguity(refusal: val refusal) => <Optional.Some v=refusal />
             _ => <Optional.None />
         }
     }
@@ -302,7 +322,7 @@ pub impl CompileDiagnostic {
             DiagnosticData.Assignment(refusal: _) => <DiagnosticSeverity.Error />
             DiagnosticData.UniqueCopy(refusal: _) => <DiagnosticSeverity.Error />
             DiagnosticData.FreeCallAmbiguity(refusal: _) => <DiagnosticSeverity.Error />
-            DiagnosticData.StaticMemberAmbiguity(refusal: _) => <DiagnosticSeverity.Error />
+            DiagnosticData.MemberCallAmbiguity(refusal: _) => <DiagnosticSeverity.Error />
         }
     }
     fn failureDomain() -> FailureDomain {
@@ -313,7 +333,7 @@ pub impl CompileDiagnostic {
             DiagnosticData.Assignment(refusal: _) => <FailureDomain.Unclassified />
             DiagnosticData.UniqueCopy(refusal: _) => <FailureDomain.Unclassified />
             DiagnosticData.FreeCallAmbiguity(refusal: _) => <FailureDomain.Unclassified />
-            DiagnosticData.StaticMemberAmbiguity(refusal: _) => <FailureDomain.Unclassified />
+            DiagnosticData.MemberCallAmbiguity(refusal: _) => <FailureDomain.Unclassified />
         }
     }
     fn location() -> DiagnosticLocation {
@@ -324,7 +344,7 @@ pub impl CompileDiagnostic {
             DiagnosticData.Assignment(refusal: val refusal) => refusal.location()
             DiagnosticData.UniqueCopy(refusal: val refusal) => refusal.location()
             DiagnosticData.FreeCallAmbiguity(refusal: val refusal) => refusal.location()
-            DiagnosticData.StaticMemberAmbiguity(refusal: val refusal) => refusal.location()
+            DiagnosticData.MemberCallAmbiguity(refusal: val refusal) => refusal.location()
         }
     }
     fn message() -> String {
@@ -334,7 +354,7 @@ pub impl CompileDiagnostic {
             DiagnosticData.Assignment(refusal: val refusal) => refusal.kind().message()
             DiagnosticData.UniqueCopy(refusal: _) => "a unique value cannot be copied; use `move`, `borrow`, or `inout`"
             DiagnosticData.FreeCallAmbiguity(refusal: _) => "ambiguous call: multiple visible function declarations match the argument labels and types"
-            DiagnosticData.StaticMemberAmbiguity(refusal: _) => "ambiguous call: multiple trait member instances match the arguments"
+            DiagnosticData.MemberCallAmbiguity(refusal: val refusal) => refusal.kind().message()
             DiagnosticData.UseAfterMove(refusal: _) => "use of a value after it was moved (`move` transfers ownership away — the variable is dead; bind a fresh value to use it again) (spec/03)"
         }
     }
@@ -346,7 +366,7 @@ pub impl CompileDiagnostic {
             DiagnosticData.Assignment(refusal: _) => []
             DiagnosticData.UniqueCopy(refusal: _) => []
             DiagnosticData.FreeCallAmbiguity(refusal: _) => []
-            DiagnosticData.StaticMemberAmbiguity(refusal: _) => []
+            DiagnosticData.MemberCallAmbiguity(refusal: _) => []
         }
     }
     fn isSourceRejection() -> Bool {

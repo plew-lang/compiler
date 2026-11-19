@@ -1,9 +1,9 @@
 // A static-member ambiguity cause is an owned value, not a reference into a compiler.
-use /Diag only { CompileDiagnostic, StaticMemberAmbiguityRefusal, DiagnosticOwner, DiagnosticLocation, FailureDomain }
+use /Diag only { CompileDiagnostic, MemberCallAmbiguityRefusal, MemberCallAmbiguityKind, DiagnosticOwner, DiagnosticLocation, FailureDomain }
 use @Std/Io only { print }
 fn diagnostic() -> CompileDiagnostic {
     val path = "field" + ".pw"
-    return <CompileDiagnostic.staticMemberAmbiguity refusal=<StaticMemberAmbiguityRefusal session=7U64 owner=<DiagnosticOwner.Function index=3U64 /> receiverRef=23U64 expression=11U64 nameStart=13U64 nameLen=4U64 argumentsStart=17U64 argumentsCount=2U64 location=<DiagnosticLocation.File path=path line=19I64 /> /> />
+    return <CompileDiagnostic.memberCallAmbiguity refusal=<MemberCallAmbiguityRefusal kind=<MemberCallAmbiguityKind.StaticInstances /> session=7U64 owner=<DiagnosticOwner.Function index=3U64 /> receiverRef=23U64 expression=11U64 nameStart=13U64 nameLen=4U64 argumentsStart=17U64 argumentsCount=2U64 location=<DiagnosticLocation.File path=path line=19I64 /> /> />
 }
 fn location() -> DiagnosticLocation { return diagnostic().location() }
 fn main() {
@@ -16,7 +16,7 @@ fn main() {
         Result.Err(error: val failure) => {
             if failure.isSourceRejection() || failure.notes().count() != 0U64 || failure.useAfterMove().isSome() { panic("field cause confused with another diagnostic") }
             match failure.failureDomain() { FailureDomain.Unclassified => {} _ => { panic("raw cause changed domain") } }
-            val cause = failure.staticMemberAmbiguity().unwrap()
+            val cause = failure.memberCallAmbiguity().unwrap()
             if cause.session() != 7U64 || cause.expression() != 11U64 || cause.receiverRef() != 23U64 { panic("cause context changed") }
             if cause.nameStart() != 13U64 || cause.nameLen() != 4U64 || cause.argumentsStart() != 17U64 || cause.argumentsCount() != 2U64 { panic("selection snapshot changed") }
             if failure.uniqueCopy().isSome() { panic("different cause matched") }

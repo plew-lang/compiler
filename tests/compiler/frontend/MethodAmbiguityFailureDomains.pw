@@ -1,0 +1,141 @@
+// Different selection producers share one retained authored-method boundary.
+use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontendForRequests, openFrontend }
+use ../../../src/CheckedProgram only { CompilerSession, CompilerSessionResult, ProgramCheckResult, checkCompilerSession }
+use ../../../src/Backend only { LlvmLoweringResult }
+use ../../../src/SourceAccess only { SourceAccess }
+use ../../../src/Ir only { Expr }
+use ../../../src/Diag only { CompileDiagnostic, DiagnosticOwner, FailureDomain, MemberCallAmbiguityKind, MemberCallAmbiguityRefusal }
+use @Std/Io only { print }
+use @Plew/Syntax only { rangeEquals }
+
+fn requireRaw(diagnostic: CompileDiagnostic, compiler: Comp, kind: MemberCallAmbiguityKind) {
+    if diagnostic.isSourceRejection() { panic("raw query acquired source authority") }
+    match diagnostic.failureDomain() { FailureDomain.Unclassified => {} _ => { panic("raw cause changed domain") } }
+    val cause = diagnostic.memberCallAmbiguity().unwrap()
+    if !cause.kind().same(other: kind) || !compiler.sourceMemberCallAmbiguityHasOwner(refusal: cause) { panic("negative query lost producer/owner") }
+    val changed = <MemberCallAmbiguityRefusal kind=<MemberCallAmbiguityKind.StaticInstances /> session=cause.session() owner=cause.owner() receiverRef=cause.receiverRef() expression=cause.expression() nameStart=cause.nameStart() nameLen=cause.nameLen() argumentsStart=cause.argumentsStart() argumentsCount=cause.argumentsCount() location=cause.location() />
+    if compiler.sourceMemberCallAmbiguityHasOwner(refusal: changed) { panic("another producer kind matched a retained query") }
+    mut val raw = compiler
+    if kind.same(other: <MemberCallAmbiguityKind.ExistentialRequirements />) {
+        match raw.arena.exprs[cause.expression()] {
+            Expr.Method(recv: _, nameStart: val start, nameLen: val length, args: val args) => {
+                match raw.recordAnyRequirementSlot(anyRef: cause.receiverRef(), nameStart: start, nameLen: length, args: args) {
+                    Result.Ok(value: _) => { panic("raw existential adapter accepted ambiguity") }
+                    Result.Err(error: val diagnostic) => {
+                        if diagnostic.isSourceRejection() || diagnostic.memberCallAmbiguity().isSome() || diagnostic.message() != kind.message() { panic("empty origin changed raw adapter") }
+                        match diagnostic.failureDomain() { FailureDomain.Unclassified => {} _ => { panic("raw adapter changed domain") } }
+                    }
+                }
+            }
+            _ => { panic("existential fixture lost its method operation") }
+        }
+    }
+    // A view can be carried by the receiver of an ordinary Method too. Its
+    // raw view adapter is replayed with exact admitted inputs in a snapshot.
+    if !raw.sourceMemberCallAmbiguityHasOwner(refusal: cause) { panic("raw adapter replaced retained proof") }
+}
+
+fn session(input: FrontendInput) -> CompilerSession {
+    match CompilerSession.open(input: input, sources: <SourceAccess />) {
+        CompilerSessionResult.Success(session: val session) => { return move session }
+        CompilerSessionResult.Failure(diagnostic: val diagnostic) => { panic(diagnostic.message()) }
+    }
+}
+fn requireOwned(diagnostic: CompileDiagnostic, kind: MemberCallAmbiguityKind) {
+    if !diagnostic.isSourceRejection() || diagnostic.message() != kind.message() { panic("owned request lost semantic source refusal") }
+}
+fn run(input: FrontendInput, kind: MemberCallAmbiguityKind) {
+    mut val raw = <Comp />
+    match analyzeFrontendForRequests(c: inout raw, input: input, sources: <SourceAccess />) {
+        Result.Ok(value: _) => {}
+        Result.Err(error: val diagnostic) => { panic(diagnostic.message()) }
+    }
+    val name = raw.internBytes(s: "main")
+    val function = raw.arena.firstFunctionNamed(nameId: name.nameId)
+    for count in 0U64..<2U64 {
+        match raw.prepareLexicalBody(fnIdx: function) {
+            Result.Ok(value: _) => { panic("raw request accepted ambiguous method") }
+            Result.Err(error: val diagnostic) => {
+                requireRaw(diagnostic: diagnostic, compiler: raw, kind: kind)
+                raw.pendingDiagnostics.append(diagnostic)
+            }
+        }
+        if raw.takeDiagnostics().count() != 1U64 { panic("drain changed retained ambiguity") }
+    }
+    mut val owned = session(input: input)
+    match owned.lowerDeclarations() {
+        LlvmLoweringResult.Success(module: _) => {}
+        LlvmLoweringResult.Failure(diagnostic: val diagnostic) => { panic(diagnostic.message()) }
+    }
+    val bodies = owned.registeredBodies()
+    if bodies.count() == 0U64 { panic("missing main request") }
+    mut val refused = false
+    for body in bodies {
+        match owned.prepareBodyAccess(bodyId: body) {
+            Result.Ok(value: _) => {}
+            Result.Err(error: val diagnostic) => {
+                requireOwned(diagnostic: diagnostic, kind: kind)
+                refused = true
+            }
+        }
+    }
+    if !refused { panic("lazy owned request did not reject") }
+    match checkCompilerSession(session: move owned) {
+        ProgramCheckResult.Success(program: _) => { panic("failed session became checked") }
+        ProgramCheckResult.Failure(diagnostic: val diagnostic) => { requireOwned(diagnostic: diagnostic, kind: kind) }
+    }
+    match checkCompilerSession(session: session(input: input)) {
+        ProgramCheckResult.Success(program: _) => { panic("whole check accepted ambiguity") }
+        ProgramCheckResult.Failure(diagnostic: val diagnostic) => { requireOwned(diagnostic: diagnostic, kind: kind) }
+    }
+    match openFrontend(input: input, sources: <SourceAccess />) {
+        Result.Ok(value: _) => { panic("eager frontend accepted ambiguity") }
+        Result.Err(error: val diagnostic) => { requireOwned(diagnostic: diagnostic, kind: kind) }
+    }
+    print("owned ambiguity retained")
+}
+fn additionalOwners() {
+    for kind in 0U64..<2U64 {
+        val input = <FrontendInput.File path=if kind == 0U64 { give "tests/compiler/frontend/MethodAmbiguityInputs/Global.pw" } else { give "tests/compiler/frontend/MethodAmbiguityInputs/Closure.pw" } />
+        mut val raw = <Comp />
+        val diagnostic = match analyzeFrontendForRequests(c: inout raw, input: input, sources: <SourceAccess />) {
+            Result.Err(error: val diagnostic) => diagnostic
+            Result.Ok(value: _) => {
+                give if kind == 0U64 {
+                    mut val target = 18446744073709551615U64
+                    for global in raw.arena.globals { if rangeEquals(bytes: raw.arena.bytes, start: global.nameStart, len: global.nameLen, kw: "chosen") { target = global.nameStart } }
+                    give match raw.prepareGlobalInitializer(target: target) { Result.Err(error: val diagnostic) => diagnostic Result.Ok(value: _) => { panic("global ambiguity accepted") } }
+                } else {
+                    val name = raw.internBytes(s: "main")
+                    val function = raw.arena.firstFunctionNamed(nameId: name.nameId)
+                    give match raw.prepareLexicalBody(fnIdx: function) { Result.Err(error: val diagnostic) => diagnostic Result.Ok(value: _) => { panic("closure ambiguity accepted") } }
+                }
+            }
+        }
+        val cause = diagnostic.memberCallAmbiguity().unwrap()
+        match cause.owner() {
+            DiagnosticOwner.Global(target: val target) => {
+                if kind != 0U64 { panic("wrong global owner") }
+                mut val found = false
+                for global in raw.arena.globals { if global.nameStart == target && rangeEquals(bytes: raw.arena.bytes, start: global.nameStart, len: global.nameLen, kw: "chosen") { found = true } }
+                if !found { panic("negative query belongs to another global") }
+            }
+            DiagnosticOwner.Closure(expression: val expression) => {
+                if kind != 1U64 || expression >= raw.arena.exprs.count() { panic("wrong closure owner") }
+                match raw.arena.exprs[expression] {
+                    Expr.Closure(params: _, hasRet: _, retStart: _, retLen: _, retIsArray: _, retTy: _, body: _, isDiverging: _) => {}
+                    _ => { panic("negative owner is not a closure expression") }
+                }
+            }
+            _ => { panic("missing canonical additional source owner") }
+        }
+        requireRaw(diagnostic: diagnostic, compiler: raw, kind: <MemberCallAmbiguityKind.ExistentialRequirements />)
+        match openFrontend(input: input, sources: <SourceAccess />) { Result.Err(error: val diagnostic) => { requireOwned(diagnostic: diagnostic, kind: <MemberCallAmbiguityKind.ExistentialRequirements />) } Result.Ok(value: _) => { panic("eager owner accepted ambiguity") } }
+        print("additional source owner retained")
+    }
+}
+fn main() {
+    additionalOwners()
+    run(input: <FrontendInput.File path="tests/fixtures/reject/existential_overload_literal_ambiguous.pw" />, kind: <MemberCallAmbiguityKind.ExistentialRequirements />)
+    run(input: <FrontendInput.File path="tests/fixtures/reject/extension_trait_provenance_ambiguous.pw" />, kind: <MemberCallAmbiguityKind.ActiveViews />)
+}

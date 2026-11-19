@@ -4,7 +4,7 @@ use ../../../src/CheckedProgram only { CompilerSession, CompilerSessionResult, P
 use ../../../src/Backend only { LlvmLoweringResult }
 use ../../../src/Ir only { Expr, Arg, ResolvedViewSource, TraitInstanceKey }
 use ../../../src/SourceAccess only { SourceAccess }
-use ../../../src/Diag only { CompileDiagnostic, FailureDomain, DiagnosticOwner, StaticMemberAmbiguityRefusal }
+use ../../../src/Diag only { CompileDiagnostic, FailureDomain, DiagnosticOwner, MemberCallAmbiguityRefusal, MemberCallAmbiguityKind }
 use @Std/Io only { print }
 use @Plew/Syntax only { rangeEquals }
 
@@ -23,15 +23,17 @@ fn rawFailure(compiler: inout Comp, function: U64) -> CompileDiagnostic {
 fn requireRaw(diagnostic: CompileDiagnostic, compiler: Comp) {
     if diagnostic.isSourceRejection() { panic("raw ambiguity acquired source authority") }
     match diagnostic.failureDomain() { FailureDomain.Unclassified => {} _ => { panic("raw domain changed") } }
-    val refusal = match diagnostic.staticMemberAmbiguity() {
+    val refusal = match diagnostic.memberCallAmbiguity() {
         Optional.Some(v: val refusal) => refusal
         Optional.None => { panic("semantic ambiguity was flattened") }
     }
-    if !compiler.sourceStaticMemberAmbiguityHasOwner(refusal: refusal) { panic("negative query lost ownership") }
-    val wrongSession = <StaticMemberAmbiguityRefusal session=refusal.session()+1U64 owner=refusal.owner() receiverRef=refusal.receiverRef() expression=refusal.expression() nameStart=refusal.nameStart() nameLen=refusal.nameLen() argumentsStart=refusal.argumentsStart() argumentsCount=refusal.argumentsCount() location=refusal.location() />
-    if compiler.sourceStaticMemberAmbiguityHasOwner(refusal: wrongSession) { panic("foreign session matched") }
-    val wrongType = <StaticMemberAmbiguityRefusal session=refusal.session() owner=refusal.owner() receiverRef=0U64 expression=refusal.expression() nameStart=refusal.nameStart() nameLen=refusal.nameLen() argumentsStart=refusal.argumentsStart() argumentsCount=refusal.argumentsCount() location=refusal.location() />
-    if compiler.sourceStaticMemberAmbiguityHasOwner(refusal: wrongType) { panic("different receiver type matched") }
+    if !compiler.sourceMemberCallAmbiguityHasOwner(refusal: refusal) { panic("negative query lost ownership") }
+    val wrongSession = <MemberCallAmbiguityRefusal kind=<MemberCallAmbiguityKind.StaticInstances /> session=refusal.session()+1U64 owner=refusal.owner() receiverRef=refusal.receiverRef() expression=refusal.expression() nameStart=refusal.nameStart() nameLen=refusal.nameLen() argumentsStart=refusal.argumentsStart() argumentsCount=refusal.argumentsCount() location=refusal.location() />
+    if compiler.sourceMemberCallAmbiguityHasOwner(refusal: wrongSession) { panic("foreign session matched") }
+    val wrongType = <MemberCallAmbiguityRefusal kind=<MemberCallAmbiguityKind.StaticInstances /> session=refusal.session() owner=refusal.owner() receiverRef=0U64 expression=refusal.expression() nameStart=refusal.nameStart() nameLen=refusal.nameLen() argumentsStart=refusal.argumentsStart() argumentsCount=refusal.argumentsCount() location=refusal.location() />
+    if compiler.sourceMemberCallAmbiguityHasOwner(refusal: wrongType) { panic("different receiver type matched") }
+    val wrongKind = <MemberCallAmbiguityRefusal kind=<MemberCallAmbiguityKind.ExistentialRequirements /> session=refusal.session() owner=refusal.owner() receiverRef=refusal.receiverRef() expression=refusal.expression() nameStart=refusal.nameStart() nameLen=refusal.nameLen() argumentsStart=refusal.argumentsStart() argumentsCount=refusal.argumentsCount() location=refusal.location() />
+    if compiler.sourceMemberCallAmbiguityHasOwner(refusal: wrongKind) { panic("another producer kind matched static selection") }
     val cause = refusal
     mut val direct = compiler
     val args = match direct.arena.exprs[cause.expression()] {
@@ -43,21 +45,21 @@ fn requireRaw(diagnostic: CompileDiagnostic, compiler: Comp) {
     match direct.staticMemberResolution(fnIdx: function, receiverRef: cause.receiverRef(), nameStart: cause.nameStart(), nameLen: cause.nameLen(), args: args) {
         Result.Ok(value: _) => { panic("raw selector accepted ambiguity") }
         Result.Err(error: val raw) => {
-            if raw.isSourceRejection() || raw.staticMemberAmbiguity().isSome() || raw.message() != diagnostic.message() { panic("empty origin changed raw selector") }
+            if raw.isSourceRejection() || raw.memberCallAmbiguity().isSome() || raw.message() != diagnostic.message() { panic("empty origin changed raw selector") }
         }
     }
-    if !direct.sourceStaticMemberAmbiguityHasOwner(refusal: cause) { panic("raw empty origin replaced prior proof") }
+    if !direct.sourceMemberCallAmbiguityHasOwner(refusal: cause) { panic("raw empty origin replaced prior proof") }
     mut val other = direct.arena.functionCount()
     for index in 0U64..<direct.arena.functionCount() {
         val function = direct.arena.functionAt(index: index)
         if rangeEquals(bytes: direct.arena.bytes, start: function.nameStart, len: function.nameLen, kw: "other") { other = index }
     }
     for owner in [<DiagnosticOwner.Unknown />, <DiagnosticOwner.Function index=other />, <DiagnosticOwner.Global target=0U64 />, <DiagnosticOwner.Closure expression=0U64 />] {
-        val forged = <StaticMemberAmbiguityRefusal session=cause.session() receiverRef=cause.receiverRef() owner=owner expression=cause.expression() nameStart=cause.nameStart() nameLen=cause.nameLen() argumentsStart=cause.argumentsStart() argumentsCount=cause.argumentsCount() location=cause.location() />
-        if direct.sourceStaticMemberAmbiguityHasOwner(refusal: forged) { panic("foreign owner matched selection") }
+        val forged = <MemberCallAmbiguityRefusal kind=<MemberCallAmbiguityKind.StaticInstances /> session=cause.session() receiverRef=cause.receiverRef() owner=owner expression=cause.expression() nameStart=cause.nameStart() nameLen=cause.nameLen() argumentsStart=cause.argumentsStart() argumentsCount=cause.argumentsCount() location=cause.location() />
+        if direct.sourceMemberCallAmbiguityHasOwner(refusal: forged) { panic("foreign owner matched selection") }
     }
-    val foreign = <StaticMemberAmbiguityRefusal session=cause.session() + 1U64 receiverRef=cause.receiverRef() owner=cause.owner() expression=cause.expression() nameStart=cause.nameStart() nameLen=cause.nameLen() argumentsStart=cause.argumentsStart() argumentsCount=cause.argumentsCount() location=cause.location() />
-    if direct.sourceStaticMemberAmbiguityHasOwner(refusal: foreign) { panic("foreign session matched") }
+    val foreign = <MemberCallAmbiguityRefusal kind=<MemberCallAmbiguityKind.StaticInstances /> session=cause.session() + 1U64 receiverRef=cause.receiverRef() owner=cause.owner() expression=cause.expression() nameStart=cause.nameStart() nameLen=cause.nameLen() argumentsStart=cause.argumentsStart() argumentsCount=cause.argumentsCount() location=cause.location() />
+    if direct.sourceMemberCallAmbiguityHasOwner(refusal: foreign) { panic("foreign session matched") }
     for kind in 0U64..<7U64 {
         val expression = if kind == 0U64 { give 18446744073709551615U64 } else { give cause.expression() }
         val start = cause.nameStart() + if kind == 1U64 { give 1U64 } else { give 0U64 }
@@ -72,8 +74,8 @@ fn requireRaw(diagnostic: CompileDiagnostic, compiler: Comp) {
             val argument = changed.argAt(args: args, index: 0U64)
             changed.arena.argPool[args.start] = <Arg expr=argument.expr + 1U64 isInout=argument.isInout labelStart=argument.labelStart labelLen=argument.labelLen hasLabel=argument.hasLabel />
         }
-        val invalid = <StaticMemberAmbiguityRefusal session=cause.session() receiverRef=cause.receiverRef() owner=cause.owner() expression=expression nameStart=start nameLen=length argumentsStart=argumentsStart argumentsCount=argumentsCount location=cause.location() />
-        if (kind != 6U64 || args.len != 0U64) && changed.sourceStaticMemberAmbiguityHasOwner(refusal: invalid) { panic("modified operation matched selection") }
+        val invalid = <MemberCallAmbiguityRefusal kind=<MemberCallAmbiguityKind.StaticInstances /> session=cause.session() receiverRef=cause.receiverRef() owner=cause.owner() expression=expression nameStart=start nameLen=length argumentsStart=argumentsStart argumentsCount=argumentsCount location=cause.location() />
+        if (kind != 6U64 || args.len != 0U64) && changed.sourceMemberCallAmbiguityHasOwner(refusal: invalid) { panic("modified operation matched selection") }
     }
     for kind in 0U64..<8U64 {
         mut val changed = compiler
@@ -95,19 +97,19 @@ fn requireRaw(diagnostic: CompileDiagnostic, compiler: Comp) {
             }
             _ => { panic("fixture lost method") }
         }
-        if changed.sourceStaticMemberAmbiguityHasOwner(refusal: cause) { panic("modified receiver or view matched negative query") }
+        if changed.sourceMemberCallAmbiguityHasOwner(refusal: cause) { panic("modified receiver or view matched negative query") }
     }
     for kind in 0U64..<5U64 {
         mut val changed = compiler
         val original = changed.argAt(args: args, index: 0U64)
         changed.arena.argPool[args.start] = <Arg expr=original.expr + if kind == 0U64 { give 1U64 } else { give 0U64 } isInout=if kind == 1U64 { give !original.isInout } else { give original.isInout } hasLabel=if kind == 2U64 { give !original.hasLabel } else { give original.hasLabel } labelStart=original.labelStart + if kind == 3U64 { give 1U64 } else { give 0U64 } labelLen=original.labelLen + if kind == 4U64 { give 1U64 } else { give 0U64 } />
-        if changed.sourceStaticMemberAmbiguityHasOwner(refusal: cause) { panic("modified argument matched negative query") }
+        if changed.sourceMemberCallAmbiguityHasOwner(refusal: cause) { panic("modified argument matched negative query") }
     }
     mut val duplicate = compiler
     val freshExpression = duplicate.arena.exprs.count()
     duplicate.arena.exprs.append(duplicate.arena.exprs[cause.expression()])
-    val unowned = <StaticMemberAmbiguityRefusal session=cause.session() receiverRef=cause.receiverRef() owner=cause.owner() expression=freshExpression nameStart=cause.nameStart() nameLen=cause.nameLen() argumentsStart=cause.argumentsStart() argumentsCount=cause.argumentsCount() location=cause.location() />
-    if duplicate.sourceStaticMemberAmbiguityHasOwner(refusal: unowned) { panic("same spelling forged a retained query") }
+    val unowned = <MemberCallAmbiguityRefusal kind=<MemberCallAmbiguityKind.StaticInstances /> session=cause.session() receiverRef=cause.receiverRef() owner=cause.owner() expression=freshExpression nameStart=cause.nameStart() nameLen=cause.nameLen() argumentsStart=cause.argumentsStart() argumentsCount=cause.argumentsCount() location=cause.location() />
+    if duplicate.sourceMemberCallAmbiguityHasOwner(refusal: unowned) { panic("same spelling forged a retained query") }
 
 }
 

@@ -972,6 +972,11 @@ pub impl Comp {
     }
 
     inout fn recordAnyRequirementSlot(anyRef: U64, nameStart: U64, nameLen: U64, args: ArgRange) -> Result[U64, CompileDiagnostic] {
+        return self.recordAnyRequirementSlotWithOrigin(anyRef: anyRef, nameStart: nameStart, nameLen: nameLen, args: args, methodOrigin: <MethodLookupOrigin />)
+    }
+}
+impl Comp {
+    inout fn recordAnyRequirementSlotWithOrigin(anyRef: U64, nameStart: U64, nameLen: U64, args: ArgRange, methodOrigin: MethodLookupOrigin) -> Result[U64, CompileDiagnostic] {
         val traitIndex = self.recordAnyTraitIndex(anyRef: anyRef)
         if traitIndex >= self.decls.traitCount() { return <Result.Ok value=0U64 /> }
         val nameId = intern(c: inout self, start: nameStart, len: nameLen)
@@ -990,7 +995,7 @@ pub impl Comp {
                 while values.count() < callable.typeParams.count() { values.append(0U64) }
                 val rank = try self.callableParameterTypeMatchRank(function: callable, args: args, signatures: signatures, receiver: bound.subject, initialValues: values)
                 if rank == 2U64 && bestRank == 2U64 {
-                    return <Result.Err error=self.diagnosticAt(offset: nameStart, msg: "ambiguous call: multiple trait requirements match the arguments") />
+                    return <Result.Err error=self.memberCallAmbiguityDiagnostic(kind: <MemberCallAmbiguityKind.ExistentialRequirements />, receiverRef: anyRef, nameStart: nameStart, nameLen: nameLen, args: args, methodOrigin: methodOrigin) />
                 }
                 if rank > bestRank { selected = index + 1U64 bestRank = rank }
             }
@@ -999,6 +1004,8 @@ pub impl Comp {
         return <Result.Ok value=selected />
     }
 
+}
+pub impl Comp {
     // A method expression whose receiver is a function-valued field or an
     // existential has no static Func callee.  Record its selected target while
     // the parametric receiver and source selector are both available; the
@@ -1027,7 +1034,7 @@ pub impl Comp {
         val recvTy: TypeRef = self.arena.typeAt(index: receiverTerm)
         if recvTy.isAny {
             val traitIndex: U64 = self.recordAnyTraitIndex(anyRef: receiverTerm)
-            val slot: U64 = try self.recordAnyRequirementSlot(anyRef: receiverTerm, nameStart: nameStart, nameLen: nameLen, args: args)
+            val slot: U64 = try self.recordAnyRequirementSlotWithOrigin(anyRef: receiverTerm, nameStart: nameStart, nameLen: nameLen, args: args, methodOrigin: <MethodLookupOrigin expression=<Optional.Some v=exprId /> />)
             if traitIndex < self.decls.traitCount() && slot != 0U64 {
                 try self.checkExistentialRequirementCall(target: receiverTerm, traitIndex: traitIndex, requirement: slot - 1U64, offset: self.exprOffset(id: exprId))
                 try self.recordDynamicCallTemplate(exprId: exprId, receiver: receiver, args: args, target: <DynamicCallTemplateTarget.ExistentialRequirement traitIdx=traitIndex slot=slot interfaceRoot=0U64 />, receiverTerm: receiverTerm)
