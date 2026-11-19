@@ -1405,3 +1405,21 @@ order is separately checked by source-position assertions. Independent review
 has no must-fix. [Evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-structural-test-reconciliation.json).
 No product repair, full-suite pass or phase-three closure follows from these
 internal compatibility corrections.
+
+### Declaration access scalar consumer
+
+CPU sampling of c6f5542b mapped callTemplateAt to current body identity. The
+declaration request only needs mayHaveStorageArguments, already exposed by
+the same owner-aware operation head reader. checkBody now consumes that
+scalar projection; owner/session/site checks, conservative defaults, required
+ownership and conditional access verification remain unchanged. No new store,
+authority or compiler-specific ARC exception.
+
+An exact archived prototype built with carrier37/common LLVM20 pipeline. The
+same-source alternating5pairs have medians7.646253/7.621242seconds and all10LLVM
+identical; one8.176s after sample is retained. Treat25ms as a small observation,
+not certified recovery. Existing head/storage-publication controls emit equal
+LLVM in4compiles; unchanged baseline native golden successes are explicitly
+reused, not relabeled new execution. Independent review has no required concern
+and accepts the structural cleanup. [Evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-declaration-access-head-reader.json).
+Formal fixed point,7seconds and task/phase-three closure remain unachieved.
