@@ -1,0 +1,2 @@
+use ./Hidden as Library
+fn main() {}

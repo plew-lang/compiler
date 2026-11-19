@@ -36,6 +36,26 @@ fn requireRaw(diagnostic: CompileDiagnostic, compiler: Comp) {
             if raw.isSourceRejection() || raw.freeCallAmbiguity().isSome() || raw.message() != diagnostic.message() { panic("raw selector adapter changed") }
         }
     }
+    val absent = direct.internBytes(s: "unavailableFreeFunctionName")
+    match direct.findFunc(nameStart: absent.nameStart, nameLen: absent.nameLen, args: args) {
+        Result.Ok(value: val function) => { if function != direct.arena.functionCount() { panic("missing function lost sentinel") } }
+        Result.Err(error: val diagnostic) => { panic(diagnostic.message()) }
+    }
+    if args.len != 0U64 {
+        val label = direct.argAt(args: args, index: 0U64)
+        val value = direct.pushExpr(e: <Expr.Int value=1U64 offset=0U64 isBool=true tyStart=0U64 tyLen=0U64 isNeg=false />)
+        val wrong = direct.pushArgs(args: [<Arg expr=value isInout=false labelStart=label.labelStart labelLen=label.labelLen hasLabel=label.hasLabel />])
+        val name = direct.internBytes(s: "consume")
+        val first = direct.arena.firstFunctionNamed(nameId: name.nameId)
+        match direct.callableArgMatchRank(f: direct.arena.functionAt(index: first), args: wrong) {
+            Result.Ok(value: val rank) => { if rank != 1U64 { panic("labels-only control missed fallback") } }
+            Result.Err(error: val diagnostic) => { panic(diagnostic.message()) }
+        }
+        match direct.findFunc(nameStart: cause.nameStart(), nameLen: cause.nameLen(), args: wrong) {
+            Result.Ok(value: val function) => { if function != first { panic("first label fallback changed") } }
+            Result.Err(error: val diagnostic) => { panic(diagnostic.message()) }
+        }
+    }
     mut val other = direct.arena.functionCount()
     for index in 0U64..<direct.arena.functionCount() {
         val function = direct.arena.functionAt(index: index)
@@ -139,6 +159,7 @@ fn main() {
     }
     print("fresh eager source classified")
     requireAdditionalOwners()
+    requireGenFallback()
 }
 
 
@@ -157,7 +178,6 @@ fn ownerInput(kind: U64) -> FrontendInput {
 
 fn requireAdditionalOwners() {
     for kind in 0U64..<3U64 {
-        print(kind)
         val source = ownerInput(kind: kind)
         mut val raw = <Comp />
         val diagnostic = match analyzeFrontendForRequests(c: inout raw, input: source, sources: <SourceAccess />) {
@@ -181,6 +201,7 @@ fn requireAdditionalOwners() {
         }
         if diagnostic.freeCallAmbiguity().isNone() { panic(diagnostic.message()) }
         val cause = diagnostic.freeCallAmbiguity().unwrap()
+        if kind == 0U64 && cause.expression() != 0U64 { panic("zero-argument control no longer exercises Expr0") }
         match cause.owner() {
             DiagnosticOwner.Function(index: _) => { if kind != 0U64 { panic("wrong function source owner") } }
             DiagnosticOwner.Closure(expression: _) => { if kind != 1U64 { panic("wrong closure source owner") } }
@@ -194,4 +215,25 @@ fn requireAdditionalOwners() {
         }
     }
     print("zero-argument closure global owners retained")
+}
+
+
+fn requireGenFallback() {
+    mut val raw = <Comp />
+    match analyzeFrontendForRequests(c: inout raw, input: <FrontendInput.File path="tests/compiler/frontend/FreeCallAmbiguityInputs/Namespace.pw" />, sources: <SourceAccess />) {
+        Result.Ok(value: _) => {}
+        Result.Err(error: val diagnostic) => { panic(diagnostic.message()) }
+    }
+    val name = raw.internBytes(s: "hidden")
+    val args = raw.pushArgs(args: [])
+    match raw.findFunc(nameStart: name.nameStart, nameLen: name.nameLen, args: args) {
+        Result.Ok(value: val function) => { if function != raw.arena.functionCount() { panic("normal mode leaked namespace members") } }
+        Result.Err(error: val diagnostic) => { panic(diagnostic.message()) }
+    }
+    raw.genMode = true
+    match raw.findFunc(nameStart: name.nameStart, nameLen: name.nameLen, args: args) {
+        Result.Ok(value: val function) => { if function != raw.arena.firstFunctionNamed(nameId: name.nameId) { panic("gen fallback changed selection") } }
+        Result.Err(error: val diagnostic) => { panic(diagnostic.message()) }
+    }
+    print("gen-only fallback retained")
 }
