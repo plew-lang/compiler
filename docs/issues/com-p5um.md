@@ -12,6 +12,12 @@ tags: [frontend, verification]
 ---
 # Verify the frozen candidate fixed point and formal self compilation time
 
+## Latest diagnostic fixed-point measurement
+
+[Source56985a02 formal record](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-assignment-formal-self-host.json): standard run20261119T094138-self-host-59a400, carrier37fefb30, unchanged inputs and exit0. Generation2LLVM/runtime/successor binary match; all three measurements use1963e4c5. Times7.620871/7.132441/7.186216 give median **7.186216 seconds**, above the absolute seven-second limit. Neutral review verified197 src/std files against56985a02 and the recorded hashes/attribution. This is a diagnostic WIP measurement, not frozen-G1 final gate completion or functional green. Main/seed/adopted carrier remain unchanged; recovery has not been judged difficult.
+
+The nominal-layout index trial is rejected for no demonstrated whole-time benefit. A natural sealed SourceBodyData head-reader trial instead creates a1200-byte snapshot at the caller; it is not adopted. An extra verified argpromotion/SROA diagnostic still leaves that snapshot. [Caller investigation](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-source-head-projection-investigation.json). Conservative snapshots for reference roots remain within the current ABI contract; extending forwarding requires its own safety proof, not disabling access or ownership checks.
+
 ## Current Candidate Refresh
 
 Reopened for the source repair e73a8476 in [com-ugee](com-ugee.md). The prior
