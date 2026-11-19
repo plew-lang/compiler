@@ -1470,3 +1470,13 @@ plew.body.*). All six sanitizer executions pass. Current evidence records flags,
 call counts and the invalidated attempt. Independent review of actual raw and
 instrumented LLVM confirms genuine function-body instrumentation, not merely
 global/module registration. Full compiler/corpus ASan remains unclaimed.
+
+### Combined formal self-host checkpoint
+
+Standard self-host20261119T035845-self-host-8760ac on95bf9d60 passes with
+unchanged inputs. Generation2LLVM/runtime and successor binary match; all three
+measured LLVM/runtime hashes agree. Times7.698432/7.067001/7.069988seconds, median
+7.069988. The first slow sample is retained. The7-second goal remains unmet,
+not judged difficult to recover. This validates the combined diagnostic storage
+and declaration head-reader fixed point, not full functional gates or closure.
+[Formal evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-compact-diagnostic-formal-self-host.json).
