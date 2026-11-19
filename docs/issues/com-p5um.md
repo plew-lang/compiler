@@ -89,3 +89,17 @@ The [exact scoped outcome](../../../evidence/existing-feature-conformance/audit-
 Row97: Direct standalone claim needs external complete fixed-input proof. Preserve measured candidate/fixed point/<7s/refresh; old3c532ce1 not current gate, no new anonymous checker repair. Existing open G2a is actual G2b prerequisite after G1. Standalone collector is bounded; standard validate includes locked closure/native/support/carrierStd/run_gate before+after, so B133 assigns no new standard-gate defect. Required admission: com-9l3b.
 
 Preserve the original finite contract and meaningful controls; intake does not choose unresolved source semantics, implement new APIs, certify product GREEN or close a mixed future/optional parent. Required repair/investigation must finish before its affected admission; classification closure cannot bypass it.
+
+## Dynamic LLVM / Plew-runtime ThinLTO diagnostic
+
+[Six-second CPU window](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-wide-cpu-investigation.json) shows distributed ARC/Array preparation and verification costs, without proving a new unnecessary source pass. Review permits a separate isolated link trial: retain the exact formal56985a02 optimized LLVM/runtime/native backend archive and dynamic libLLVM, add clang20 `-flto=thin`, and record the selected LLVM20LTO implementation and hashes. Compare identical source with all old/new outputs and samples retained. This targets Plew/runtime optimization, unlike the older static-LLVM-library ThinLTO distribution trial.
+
+No permanent product pipeline, source semantics, ABI, runtime duplication or carrier/seed/main change is authorized by the diagnostic result alone. A benefit may include global codegen/layout effects, not only cross-TU inlining. Direct-native-object development integration would require its own compatibility assessment after evidence.
+
+### Diagnostic outcome and reviewed integration units
+
+[Retained link comparison](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-runtime-thinlto-investigation.json) shows all5 alternating pairs improve: medians7.027126→6.704112 seconds, all10LLVM outputs equal formal2eabe0dc. The measured symbol-preserving candidate9b148ff0 retains138/138 runtime exports and24CLI controls. Earlier debug-option and symbol-internalization attempts are separate; they are not the measured success. Performance review found no must-fix. This is not a formal7-second gate or whole-program semantic certificate.
+
+Integration review recommends three finite units: (1) shared compiler-link profile with actual toolchain/export recording; (2) summary-bearing native ThinLTO object producer under an explicit internal request, preserving ordinary machine output; (3) ADD→USE transition and both-path final validation, depending on1+2. Text and native stages must agree, the common runtime remains single, and a native machine object must never be relabelled as LTO-capable. Bare bitcode is not sufficient ThinLTO proof.
+
+These units are planned, not existing tk dependencies or implemented product changes. The active goal explicitly stops for required task changes; task creation/dependency changes await that decision. Performance recovery is promising, not judged difficult.

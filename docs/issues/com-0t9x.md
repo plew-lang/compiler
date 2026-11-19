@@ -48,3 +48,9 @@ Optional components stay optional and must not become mandatory merely because t
 [Scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-mid-and-lowering.json) retains all main/mixed roles and normative grounds. Mid-only predicates, canonical CFG/signature/operand readers, frame liveness and trace/error adaptation consume frozen inputs and caller-owned derived plans. These are existing Mid preparation and diagnostic authority contracts, not source reinference or a new semantic grounder.
 
 Original audit-time independence does not waive this implementation admission. Preserve the original finite guarantee, actual callers/delegates, controls and excluded optional/new-feature scopes. Assignment is not product repair/GREEN.
+
+## Measured writable-path adapter cost
+
+[Formal56985a02 CPU/IR follow-up](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-wide-cpu-investigation.json) identifies two canonicalMidWritablePhysicalPath calls in verifyCanonicalMidBodyStage. Despite a readonly byref callee, the caller snapshots all135 top-level Comp fields. Samples at gf8288+19640/+34152/+37944/+39472 lie in the transfer sequences, not a proven redundant verifier check. The helper reads Mid locals/projections plus the type query isMutableRefInst. Retain its complete writable-path check; do not replace it with a broad acceptance or mutate the API solely to force a borrowed receiver.
+
+This is new cost evidence for an already listed API, not a new phase-three correctness dependency. Ordinary by-value/free-argument forwarding has different proof requirements from source receiver borrowing. Narrow this helper only according to its Mid/type responsibilities, or repair generic transfer under an independently proven contract. Exact sample-time share remains unestablished.
