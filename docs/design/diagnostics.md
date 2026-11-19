@@ -54,6 +54,15 @@ depends on ownership of the input. Its raw interpretation is Unclassified;
 message, location and severity are derived from that variant, not maintained as
 a second editable report. Ordinary reports retain their original domain.
 
+The diagnostic is an opaque value handle to private fixed-cardinality storage
+of that closed cause sum. Public factories construct valid reports or dedicated
+semantic causes; typed accessors observe a cause without granting classification
+authority. A nonmatching semantic accessor means an ordinary report, not missing
+or corrupt cause storage. The handle does not duplicate a presentation report
+alongside a semantic cause, nor allocate another array when observing context.
+Keeping the discriminant inside the owned storage makes transport independent
+of the number and physical payload sizes of diagnostic alternatives.
+
 Presentation storage remains private and value-semantic. A report's immutable
 fields have one authority; copying a diagnostic or returning its String/notes
 must preserve their independent lifetimes and the contents' sendability. A

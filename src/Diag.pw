@@ -75,103 +75,83 @@ pub struct DiagnosticNote {
 }
 pub impl DiagnosticNote { factory }
 
-// A report is immutable presentation data. The enclosing sum is the sole
-// authority; accessors never maintain another copy of these fields.
-struct DiagnosticReportData {
-    val severity: DiagnosticSeverity
-    val failureDomain: FailureDomain
-    val location: DiagnosticLocation
-    val message: String
-    val notes: Array[DiagnosticNote]
-}
-impl DiagnosticReportData { factory }
-
-// Private fixed-cardinality value storage. Copies retain value semantics;
-// no reference identity or additional public capability is exposed.
-pub struct DiagnosticReport {
-    val storage: Array[DiagnosticReportData]
-}
-impl DiagnosticReport {
-    factory(severity: DiagnosticSeverity, failureDomain: FailureDomain, location: DiagnosticLocation, message: String, notes: Array[DiagnosticNote]) {
-        return <DiagnosticReport storage=[<DiagnosticReportData severity=severity failureDomain=failureDomain location=location message=message notes=notes />] />
-    }
-}
-
-// Scalar identities explain the failed checking operation; they are not a
-// source-admission capability. Raw callers may construct these values.
+// Scalar checking identities are context, not a source-admission capability.
 pub enum DiagnosticOwner {
     Unknown
     Function(index: U64)
     Global(target: U64)
     Closure(expression: U64)
 }
-struct UseAfterMoveData {
+
+pub struct UseAfterMoveRefusal {
     val session: U64
     val owner: DiagnosticOwner
     val binding: U64
     val expression: U64
     val location: DiagnosticLocation
 }
-impl UseAfterMoveData { factory }
-pub struct UseAfterMoveRefusal {
-    val storage: Array[UseAfterMoveData]
-}
 pub impl UseAfterMoveRefusal {
-    factory(session: U64, owner: DiagnosticOwner, binding: U64, expression: U64, location: DiagnosticLocation) {
-        return <UseAfterMoveRefusal storage=[<UseAfterMoveData session=session owner=owner binding=binding expression=expression location=location />] />
-    }
-    fn session() -> U64 { return self.storage[0U64].session }
-    fn owner() -> DiagnosticOwner { return self.storage[0U64].owner }
-    fn binding() -> U64 { return self.storage[0U64].binding }
-    fn expression() -> U64 { return self.storage[0U64].expression }
-    fn location() -> DiagnosticLocation { return self.storage[0U64].location }
+    factory
+    fn session() -> U64 { return self.session }
+    fn owner() -> DiagnosticOwner { return self.owner }
+    fn binding() -> U64 { return self.binding }
+    fn expression() -> U64 { return self.expression }
+    fn location() -> DiagnosticLocation { return self.location }
 }
 
-pub enum CompileDiagnostic {
-    Report(report: DiagnosticReport)
+// One closed cause in opaque value storage. The transport handle has no
+// variant-dependent ARC; classification and rendering inspect its cause.
+enum DiagnosticData {
+    Report(severity: DiagnosticSeverity, failureDomain: FailureDomain, location: DiagnosticLocation, message: String, notes: Array[DiagnosticNote])
     UseAfterMove(refusal: UseAfterMoveRefusal)
+}
+pub struct CompileDiagnostic {
+    val storage: Array[DiagnosticData]
 }
 
 pub impl CompileDiagnostic {
     factory(severity: DiagnosticSeverity = <DiagnosticSeverity.Error />, failureDomain: FailureDomain = <FailureDomain.Unclassified />, location: DiagnosticLocation, message: String, notes: Array[DiagnosticNote] = []) {
-        return <CompileDiagnostic.Report report=<DiagnosticReport severity=severity failureDomain=failureDomain location=location message=message notes=notes /> />
+        return <CompileDiagnostic storage=[<DiagnosticData.Report severity=severity failureDomain=failureDomain location=location message=message notes=notes />] />
     }
-
+    factory useAfterMove(refusal: UseAfterMoveRefusal) {
+        return <CompileDiagnostic storage=[<DiagnosticData.UseAfterMove refusal=refusal />] />
+    }
+    fn useAfterMove() -> Optional[UseAfterMoveRefusal] {
+        return match self.storage[0U64] {
+            DiagnosticData.UseAfterMove(refusal: val refusal) => <Optional.Some v=refusal />
+            DiagnosticData.Report(severity: _, failureDomain: _, location: _, message: _, notes: _) => <Optional.None />
+        }
+    }
     fn severity() -> DiagnosticSeverity {
-        return match self {
-            CompileDiagnostic.Report(report: val report) => report.storage[0U64].severity
-            CompileDiagnostic.UseAfterMove(refusal: val refusal) => <DiagnosticSeverity.Error />
+        return match self.storage[0U64] {
+            DiagnosticData.Report(severity: val severity, failureDomain: _, location: _, message: _, notes: _) => severity
+            DiagnosticData.UseAfterMove(refusal: _) => <DiagnosticSeverity.Error />
         }
     }
-
     fn failureDomain() -> FailureDomain {
-        return match self {
-            CompileDiagnostic.Report(report: val report) => report.storage[0U64].failureDomain
-            CompileDiagnostic.UseAfterMove(refusal: val refusal) => <FailureDomain.Unclassified />
+        return match self.storage[0U64] {
+            DiagnosticData.Report(severity: _, failureDomain: val domain, location: _, message: _, notes: _) => domain
+            DiagnosticData.UseAfterMove(refusal: _) => <FailureDomain.Unclassified />
         }
     }
-
     fn location() -> DiagnosticLocation {
-        return match self {
-            CompileDiagnostic.Report(report: val report) => report.storage[0U64].location
-            CompileDiagnostic.UseAfterMove(refusal: val refusal) => refusal.location()
+        return match self.storage[0U64] {
+            DiagnosticData.Report(severity: _, failureDomain: _, location: val location, message: _, notes: _) => location
+            DiagnosticData.UseAfterMove(refusal: val refusal) => refusal.location()
         }
     }
-
     fn message() -> String {
-        return match self {
-            CompileDiagnostic.Report(report: val report) => report.storage[0U64].message
-            CompileDiagnostic.UseAfterMove(refusal: val refusal) => "use of a value after it was moved (`move` transfers ownership away — the variable is dead; bind a fresh value to use it again) (spec/03)"
+        return match self.storage[0U64] {
+            DiagnosticData.Report(severity: _, failureDomain: _, location: _, message: val message, notes: _) => message
+            DiagnosticData.UseAfterMove(refusal: _) => "use of a value after it was moved (`move` transfers ownership away — the variable is dead; bind a fresh value to use it again) (spec/03)"
         }
     }
-
     fn notes() -> Array[DiagnosticNote] {
-        return match self {
-            CompileDiagnostic.Report(report: val report) => report.storage[0U64].notes
-            CompileDiagnostic.UseAfterMove(refusal: val refusal) => []
+        return match self.storage[0U64] {
+            DiagnosticData.Report(severity: _, failureDomain: _, location: _, message: _, notes: val notes) => notes
+            DiagnosticData.UseAfterMove(refusal: _) => []
         }
     }
-
     fn isSourceRejection() -> Bool {
         match self.severity() {
             DiagnosticSeverity.Warning => { return false }

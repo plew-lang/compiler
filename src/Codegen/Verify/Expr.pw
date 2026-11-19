@@ -527,7 +527,7 @@ pub impl Comp {
                             }
                             Optional.None => <DiagnosticOwner.Unknown />
                         }
-                        return <Result.Err error=<CompileDiagnostic.UseAfterMove refusal=<UseAfterMoveRefusal session=self.sourceFactSession() owner=owner binding=binding.target expression=id location=self.diagnosticLocationAt(offset: start) /> /> />
+                        return <Result.Err error=<CompileDiagnostic.useAfterMove refusal=<UseAfterMoveRefusal session=self.sourceFactSession() owner=owner binding=binding.target expression=id location=self.diagnosticLocationAt(offset: start) /> /> />
                     }
                 }
             }

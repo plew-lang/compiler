@@ -4,7 +4,7 @@ use @Std/Io only { print }
 
 fn failure() -> CompileDiagnostic {
     val path = "owned" + ".pw"
-    return <CompileDiagnostic.UseAfterMove refusal=<UseAfterMoveRefusal session=7U64 owner=<DiagnosticOwner.Closure expression=11U64 /> binding=13U64 expression=17U64 location=<DiagnosticLocation.File path=path line=19I64 /> /> />
+    return <CompileDiagnostic.useAfterMove refusal=<UseAfterMoveRefusal session=7U64 owner=<DiagnosticOwner.Closure expression=11U64 /> binding=13U64 expression=17U64 location=<DiagnosticLocation.File path=path line=19I64 /> /> />
 }
 
 fn location() -> DiagnosticLocation { return failure().location() }
@@ -20,8 +20,8 @@ fn main() {
             if diagnostic.isSourceRejection() || diagnostic.notes().count() != 0U64 { panic("raw cause gained source authority or notes") }
             match diagnostic.failureDomain() { FailureDomain.Unclassified => {} _ => { panic("raw cause lost domain") } }
             match diagnostic.severity() { DiagnosticSeverity.Error => {} _ => { panic("raw cause lost severity") } }
-            match diagnostic {
-                CompileDiagnostic.UseAfterMove(refusal: val refusal) => {
+            match diagnostic.useAfterMove() {
+                Optional.Some(v: val refusal) => {
                     if refusal.session() != 7U64 || refusal.binding() != 13U64 || refusal.expression() != 17U64 { panic("cached scalar context changed") }
                     match refusal.owner() { DiagnosticOwner.Closure(expression: val expression) => { if expression != 11U64 { panic("owner changed") } } _ => { panic("owner variant changed") } }
                 }

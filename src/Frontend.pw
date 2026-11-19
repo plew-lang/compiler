@@ -2524,13 +2524,13 @@ pub fn analyzeFrontendDeclarations(c: inout Comp, input: FrontendInput, sources:
 // Called only while a fresh source constructor still owns its unexposed
 // Comp. Caller-owned analysis never gains authority from this interpretation.
 fn ownedFrontendFailure(c: Comp, diagnostic: CompileDiagnostic) -> CompileDiagnostic {
-    match diagnostic {
-        CompileDiagnostic.UseAfterMove(refusal: val refusal) => {
+    match diagnostic.useAfterMove() {
+        Optional.Some(v: val refusal) => {
             if c.sourceExpressionHasOwner(session: refusal.session(), expression: refusal.expression(), owner: refusal.owner()) {
                 return <CompileDiagnostic failureDomain=<FailureDomain.Source /> location=refusal.location() message=diagnostic.message() />
             }
         }
-        CompileDiagnostic.Report(report: _) => {}
+        Optional.None => {}
     }
     return diagnostic
 }

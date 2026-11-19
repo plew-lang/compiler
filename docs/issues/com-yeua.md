@@ -1517,3 +1517,23 @@ valid minimal navigation consumes prepared metadata and the canonical body's
 sourceFunction equals saved.bodyKey. Native RED/GREEN, original golden and
 independent contract review are retained. No product admission rule was weakened.
 [Evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-closure-navigation-fixture.json).
+
+### Opaque cause transport
+
+CompileDiagnostic now owns private fixed-cardinality Array storage of one
+closed DiagnosticData sum. Ordinary factory labels/defaults are unchanged;
+branch-internal enum observations migrate to the dedicated named factory and
+typed optional accessor. The sole cause remains canonical in caches; private
+source-owned interpretation is unchanged. Context observation allocates no
+extra Array and introduces no reference identity.
+
+Latest72c7f39b baseline/prototype same-source5pairs give7.275936/7.239295seconds,
+all10LLVM equal. Representative raw Result[U64, CompileDiagnostic] shrinks24to16
+bytes. Treat36ms as a small observation, not demonstrated7-second recovery or
+proof that ARC alone caused the prior regression.28Source refusals/two unused
+lazy successes and auxiliary ORC messages are identical in60CLI controls.
+Manual owner/cache native,6privacy refusals, and native/LLVM22ASan/LSan for
+semantic and ordinary report lifetime pass. Fresh candidate emits byte-equal
+LLVM/runtime for those executed lifetime controls; execution reuse is explicit.
+Independent source/design reviews have no must-fix. Formal/full gates remain.
+[Evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-diagnostic-cause-value-handle.json).

@@ -26,8 +26,8 @@ fn requireRaw(diagnostic: CompileDiagnostic, compiler: Comp) {
         FailureDomain.Unclassified => {}
         _ => { panic("raw ownership refusal changed domain") }
     }
-    match diagnostic {
-        CompileDiagnostic.UseAfterMove(refusal: val refusal) => {
+    match diagnostic.useAfterMove() {
+        Optional.Some(v: val refusal) => {
             if refusal.session() != compiler.sourceFactSession() { panic("semantic refusal lost session") }
             if !rangeEquals(bytes: compiler.arena.bytes, start: refusal.binding(), len: 4U64, kw: "file") { panic("semantic refusal lost declaration binding") }
             mut val other = compiler.arena.functionCount()
@@ -65,8 +65,8 @@ fn forgedMoveState() {
         Result.Ok(value: _) => { panic("forged moved state did not reach refusal") }
         Result.Err(error: val diagnostic) => {
             if diagnostic.isSourceRejection() { panic("forged cursor acquired source authority") }
-            match diagnostic {
-                CompileDiagnostic.UseAfterMove(refusal: val refusal) => {
+            match diagnostic.useAfterMove() {
+                Optional.Some(v: val refusal) => {
                     if raw.sourceExpressionHasOwner(session: refusal.session(), expression: refusal.expression(), owner: refusal.owner()) { panic("raw expression acquired authored provenance") }
                 }
                 _ => { panic("forged state reached an unrelated refusal") }

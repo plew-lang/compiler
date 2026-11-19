@@ -225,13 +225,13 @@ impl CompilerSession {
     // Rendering is a projection of a result produced by this unexposed Comp.
     // Neither this helper nor a raw cache accepts a caller-supplied failure.
     fn ownedFailure(diagnostic: CompileDiagnostic) -> CompileDiagnostic {
-        match diagnostic {
-            CompileDiagnostic.UseAfterMove(refusal: val refusal) => {
+        match diagnostic.useAfterMove() {
+            Optional.Some(v: val refusal) => {
                 if self.compiler.sourceExpressionHasOwner(session: refusal.session(), expression: refusal.expression(), owner: refusal.owner()) {
                     return <CompileDiagnostic failureDomain=<FailureDomain.Source /> location=refusal.location() message=diagnostic.message() />
                 }
             }
-            CompileDiagnostic.Report(report: _) => {}
+            Optional.None => {}
         }
         return diagnostic
     }
