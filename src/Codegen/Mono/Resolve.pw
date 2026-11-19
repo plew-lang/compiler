@@ -1260,7 +1260,7 @@ pub impl Comp {
         if tyRef >= self.arena.typeCount() {
             return <Result.Ok value=tyRef />
         }
-        val t: TypeRef = self.arena.typeAt(index: tyRef)
+        val t = self.arena.typeTermAt(index: tyRef)
         if t.assocNameId != 0U64 {
             return <Result.Ok value=(try self.resolveAssocProjection(tyRef: tyRef)) />
         }
@@ -1327,7 +1327,7 @@ pub impl Comp {
         if receiverPatternArg != 0U64 && receiverPatternArg != tyRef {
             return <Result.Ok value=(try self.resolveTy(tyRef: receiverPatternArg)) />
         }
-        if t.args.count() == 0U64 {
+        if t.args.len == 0U64 {
             // `Self`/`Item` as types (provided methods on a trait): resolve to the
             // receiver type and its associated `Item` binding (set per method).
             if self.cur.selfRef != 0U64 {

@@ -1,0 +1,58 @@
+// Manual implementation control: pooled type-head reads preserve lexical
+// substitution, legacy spelling, existential heads, views and contextual Self/Item.
+use @Std/Core only { assert }
+use @Std/Io only { print }
+use /Frontend only { Comp }
+use /Ir only { TypeRef, Bind }
+
+fn main() {
+    mut val compiler: Comp = <Comp />
+    compiler.arena.reserveTypeSentinel()
+    val integerName = compiler.internBytes(s: "I64")
+    val integer = compiler.simpleTypeRef(nameStart: integerName.nameStart, nameLen: integerName.nameLen)
+    val boolName = compiler.internBytes(s: "Bool")
+    val boolean = compiler.simpleTypeRef(nameStart: boolName.nameStart, nameLen: boolName.nameLen)
+    val name = compiler.internBytes(s: "T")
+    compiler.cur.typeParams = [<Bind nameStart=name.nameStart nameLen=name.nameLen nameId=name.nameId paramId=11U64 fieldStart=0U64 fieldLen=0U64 />, <Bind nameStart=name.nameStart nameLen=name.nameLen nameId=name.nameId paramId=22U64 fieldStart=0U64 fieldLen=0U64 />]
+    compiler.cur.typeArgs = [integer, boolean]
+    val bare = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] />)
+    val first = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] paramId=11U64 />)
+    val second = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] paramId=22U64 />)
+    val foreign = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] paramId=33U64 />)
+    assert(compiler.resolveTy(tyRef: bare).unwrap() == boolean)
+    assert(compiler.resolveTy(tyRef: first).unwrap() == integer)
+    assert(compiler.resolveTy(tyRef: second).unwrap() == boolean)
+    assert(compiler.resolveTy(tyRef: foreign).unwrap() == foreign)
+    val existential = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] isAny=true />)
+    assert(compiler.resolveTy(tyRef: existential).unwrap() == existential)
+    val applied = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[integer] />)
+    assert(compiler.resolveTy(tyRef: applied).unwrap() == applied)
+    compiler.cur.typeArgs = [second, boolean]
+    assert(compiler.resolveTy(tyRef: first).unwrap() == boolean)
+    compiler.cur.typeArgs = [integer, boolean]
+    val viewed = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] paramId=11U64 viewExtId=7U64 />)
+    val resolvedView = compiler.resolveTy(tyRef: viewed).unwrap()
+    val sources = compiler.arena.typeViewSources(ref: resolvedView)
+    assert(sources.count() == 1U64 && sources[0U64].surfaceId == 7U64)
+    val unviewed = compiler.typeRefWithoutOuterViews(ref: resolvedView)
+    assert(compiler.typeRefEq(a: unviewed, b: integer))
+    val selfName = compiler.internBytes(s: "Self")
+    val selfType = compiler.simpleTypeRef(nameStart: selfName.nameStart, nameLen: selfName.nameLen)
+    val itemName = compiler.internBytes(s: "Item")
+    val itemType = compiler.simpleTypeRef(nameStart: itemName.nameStart, nameLen: itemName.nameLen)
+    compiler.cur.selfRef = integer
+    compiler.cur.itemRef = boolean
+    assert(compiler.resolveTy(tyRef: selfType).unwrap() == integer)
+    assert(compiler.resolveTy(tyRef: itemType).unwrap() == boolean)
+    val invalid = compiler.arena.typeCount() + 1U64
+    assert(compiler.resolveTy(tyRef: invalid).unwrap() == invalid)
+    assert(compiler.resolveTy(tyRef: 0U64).unwrap() == 0U64)
+    val legacyName = compiler.internBytes(s: "LegacyHead")
+    val legacy = compiler.arena.registerType(t: <TypeRef nameStart=legacyName.nameStart nameLen=legacyName.nameLen args=[] />, nameCount: 0U64)
+    assert(compiler.arena.typeAt(index: legacy).nameId == 0U64)
+    assert(compiler.arena.typeTermAt(index: legacy).nameId == 0U64)
+    compiler.cur.typeParams = [<Bind nameStart=legacyName.nameStart nameLen=legacyName.nameLen nameId=0U64 paramId=0U64 fieldStart=0U64 fieldLen=0U64 />]
+    compiler.cur.typeArgs = [integer]
+    assert(compiler.resolveTy(tyRef: legacy).unwrap() == integer)
+    print("ok")
+}

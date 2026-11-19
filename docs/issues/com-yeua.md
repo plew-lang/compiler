@@ -1342,8 +1342,19 @@ small optional optimization does not justify expanding this diagnostic task.
 
 Existing phase traces record7183 lexical function verification events with7183
 distinct function indices. Whole-function duplicate verification is not established.
-The next finite performance probe changes only resolveTy's unused owning
-TypeRef copy to the existing immutable pooled type head and args.len. Keep
-semantic/environment/alias behavior, exact same-source LLVM, successful native
-controls and actual timing separate; no product change is adopted from the
-profile alone. Canonical pooled readers already exist in Ir/Types.pw.
+The finite resolveTy performance increment is adopted: use the existing pooled
+immutable head instead of acquiring owning TypeRef child arrays, retaining the
+same semantic decisions. Latest-source alternating5-pair medians are7.654653
+versus7.582012 seconds; all10 LLVM outputs equal each other and the prototype's
+initial self-compile output. This is not a formal standard-run median or
+successor-binary fixed-point claim. Source/std files exactly match the validated
+cd16d25a candidate. Direct native before/after, existing native receiver/generic/
+projection controls, two rejection inputs in check/AOT/ORC, legacy zero-nameId
+and retained-view-base assertions pass. Independent adoption review finds no
+must-fix. Manual TypeHeadResolution documents the direct regression controls.
+[Reader evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-pooled-type-head-reader.json).
+
+The7-second objective remains unmet, not judged difficult. Next examine only
+tyRefIsGround's early head-only returns before acquiring child arrays; preserve
+all contextual/projection/recursive behavior and measure before adopting another
+change. Ownership semantic refusal and the rest of this task remain unfinished.

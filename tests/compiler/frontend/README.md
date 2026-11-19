@@ -23,6 +23,13 @@ its execution must exit 0, report the diagnostic in the companion `.err`, and
 print the `.out` marker after receiving the failure.
 This is a compiler diagnostic test, not a panic (SIGABRT) test.
 
+`TypeHeadResolution.pw` directly checks `Comp.resolveTy` with lexical ParamIds,
+shadowing, recursive substitutions, existential/applied heads, retained views,
+contextual Self/Item, legacy zero-nameId input and out-of-range identities.
+Use the manual procedure below: require exit0, empty runtime stderr and exact
+`TypeHeadResolution.out`. It does not establish source-wide conformance or
+replace the ordinary generic/associated-type language controls.
+
 ## Manual execution procedure
 
 Run from the compiler repository root with the selected carrier. Keep all
