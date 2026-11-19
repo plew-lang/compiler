@@ -2137,3 +2137,26 @@ fixtures still reject at the implementation with the exact-instance
 diagnostic in all three modes. Next, admit provided impl receiver arguments
 even when there are no methods, then recheck the remaining compatibility
 sweep.
+
+### Parameterized trait sibling-associated operand
+
+The existing positive `tests/fixtures/run/associated_type_constraints.pw`
+rejects on candidate b9fe38ed (source 3c03a209) at `type Iter: Cursor[Item = Item]`
+with Internal `authored type recipe has an invalid derived edge`. The normal run
+lane already rejected it on the older pooled-reader candidate; it is not a new
+MissingField classification regression. The fixture remains a valid spec08
+associated equality: both Iter.Cursor.Item and Container[String].Item are I64;
+Good:Marker, Text:Convert[String] and Box:Convert[Box] satisfy the other clauses.
+Do not replace its bare Item with an explicit projection as a workaround.
+
+Read-only neutral review (`storage_completion_audit`) identifies the existing
+trait operand provenance scope above as the owner. Lower/TypeRecipes.pw's
+`lexicalAssociatedRecipeChildren` currently creates BoundSelection for every
+receiver argument, while `checkAuthoredTypeRecipe` correctly rejects such an
+unretained source edge. Attribution of this particular runtime refusal to that
+node is source inference, not an instrumented node capture. Confirm the exact
+node, original trait scope and ParamId before repair; retain its real recipe in
+both header lowerers through concrete conformance consumption. Do not broaden
+the validator to accept arbitrary BoundSelection. Preserve the existing positive
+and add needed generic/sibling/noninterference controls under this finite scope.
+[Current reproduction](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-current-run-refusals.json).

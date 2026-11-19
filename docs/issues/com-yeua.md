@@ -1570,3 +1570,21 @@ records 20 unchanged CLI refusals now Source, one unused ORC success preserved,
 native assertions, and cause lifetime native/LLVM22 ASan/LSan. Fresh candidate
 LLVM/runtime identity makes execution reuse explicit. Independent source/evidence review found no must-fix and permits finite adoption.
 Whole-task gates remain required; construction/pattern failures are separate.
+
+## Frozen normal suite reconciliation
+
+The full standard test `20261119T074607-test-0a8555` (source3c03a209,
+candidate b9fe38ed) ended1 with unchanged inputs, skip0 and366failures versus
+399 on the previous pooled-reader run. Case events remove29classification
+failures and three internal-run failures; both old raw structural failures
+are gone. One new raw structural failure is frontend-input-boundary's
+order-dependent text slice. [Full evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-missing-field-normal-suite.json).
+
+The internal boundary gate was repaired to extract balanced declarations instead
+of using the next method as a delimiter. It retains the forbidden static
+operations, current private Raw preparation before LLVM and owned public
+interpretation, and checks raw/owned public wrappers. Current source passes;
+seven boundary counterfactuals fail and two scope/brace noninterference controls
+pass. Neutral review finds no weakened guarantee. [Test evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-frontend-boundary-test.json).
+This does not rewrite the frozen failed run or close the339remaining
+classification cases,25run failures or one diagnostic mismatch.
