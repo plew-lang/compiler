@@ -18,11 +18,11 @@ fn noDiagnostics(compiler: inout Comp) {
 fn oneWarning(compiler: inout Comp) {
     val diagnostics = compiler.takeDiagnostics()
     if diagnostics.count() != 1U64 { panic("source request did not retain exactly one loop warning") }
-    match diagnostics[0U64].severity {
+    match diagnostics[0U64].severity() {
         DiagnosticSeverity.Warning => {}
         _ => { panic("analytical noncontinuation became an error") }
     }
-    if diagnostics[0U64].message != "unreachable code: preceding control flow cannot continue here (spec/11)" { panic(diagnostics[0U64].message) }
+    if diagnostics[0U64].message() != "unreachable code: preceding control flow cannot continue here (spec/11)" { panic(diagnostics[0U64].message()) }
 }
 
 fn rejected(compiler: inout Comp, function: U64) -> CompileDiagnostic {
@@ -85,7 +85,7 @@ fn main() {
     if invalidDiagnostic.message() != "type mismatch: this value's type does not match the type required here (Plew has no implicit conversion — spec/12)" { panic(invalidDiagnostic.message()) }
     oneWarning(compiler: inout compiler)
     failedFacts(compiler: inout compiler, function: invalid, message: invalidDiagnostic.message())
-    if rejected(compiler: inout compiler, function: invalid).message != invalidDiagnostic.message() { panic("failed retry changed the diagnostic") }
+    if rejected(compiler: inout compiler, function: invalid).message() != invalidDiagnostic.message() { panic("failed retry changed the diagnostic") }
     noDiagnostics(compiler: inout compiler)
 
     // A warning region does not relax the local source-transfer prohibition.

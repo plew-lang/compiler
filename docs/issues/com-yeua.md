@@ -1372,3 +1372,24 @@ getter result-copy costs with a minimal program and actual optimized IR before
 choosing a broader change. Do not assume the existing argument-forwarding
 optimization covers returned temporary projection. Ownership semantic refusal
 and this task's final producer-to-consumer/gate work remain unfinished.
+
+### Normal-suite reconciliation after pooled readers
+
+Candidate c6f5542b (product5ff6defd) completed the standard normal suite
+20261119T014141-test-d92083 with unchanged inputs and exit1. The harness has399
+failures:368classification,16internal run refusals,12internal run aborts,
+2structural gates and1diagnostic mismatch. Supervisor397failure events are
+a different count. The finite list and comparison limitations are retained in
+[normal evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-pooled-readers-normal-suite.json).
+Do not infer producer causes from consumer classification labels or attribute
+different-source signature changes to the pooled reader edits.
+
+The newly observed source_completion_diagnostics refusal was a missed internal
+Report accessor migration. Four reads now use the existing severity/message
+accessors; assertions and golden output are unchanged. Fixed-candidate original
+check refusal and repaired actual ORC exit0/exact output are retained in
+[accessor evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-completion-diagnostic-accessors.json).
+Independent neutral review found no must-fix; source/evidence review only, not an
+independent execution. Untraced watchdog interruption and an unsupported CLI
+flag ordering are not GREEN. AOT and full normal remain uncertified. Other new
+signatures and the semantic ownership variant remain open.
