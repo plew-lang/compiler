@@ -37,14 +37,22 @@ fn main() {
         Result.Err(error: val diagnostic) => { assert(diagnostic.message() == "internal error: completed source owner cannot record its body again") }
         Result.Ok(value: _) => { panic("completed source owner reopened closure construction") }
     }
-    // A navigation descriptor cannot replace the prepared meaning at the Mid boundary.
-    val requested = <SemanticClosure ownerFnIdx=saved.ownerFnIdx exprId=saved.exprId bodyKey=999999U64 />
+    // A navigation descriptor cannot select a different body's prepared meaning.
+    val foreign = <SemanticClosure ownerFnIdx=saved.ownerFnIdx exprId=saved.exprId bodyKey=999999U64 />
+    val rejected = ensureParametricMidClosureBody(c: inout compiler, closure: foreign)
+    match rejected.error {
+        MidBuildError.InvalidBlock => {}
+        _ => { panic("Mid accepted mismatching closure body identity") }
+    }
+    // Non-identity descriptor fields still come from the prepared source value.
+    val requested = <SemanticClosure ownerFnIdx=saved.ownerFnIdx exprId=saved.exprId bodyKey=saved.bodyKey />
     val built = ensureParametricMidClosureBody(c: inout compiler, closure: requested)
     match built.error {
         MidBuildError.None => {}
         _ => { panic("Mid did not consume the canonical prepared closure") }
     }
     assert(built.canonical.body != 0U64)
+    assert(compiler.mid.bodies[built.canonical.body - 1U64].sourceFunction == saved.bodyKey)
     val retained = compiler.preparedSemanticClosureAt(index: 0U64).unwrap()
     assert(retained.functionTypeTerm == saved.functionTypeTerm)
     assert(retained.captures.count() == saved.captures.count())

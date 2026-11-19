@@ -1509,3 +1509,11 @@ The initial semantic candidate regresses the identical-source official-inner
 comparison7.189309→7.319353seconds (all10LLVM equal). Investigate aggregate
 Result/diagnostic representation and ARC dispatch before final adoption. Do not
 weaken source authority or mislabel this as within the7-second objective.
+
+The internal source_closure_publication abort was a stale raw-navigation
+expectation: saved owner/expression plus foreign bodyKey was expected to succeed.
+The fixture now checks InvalidBlock for that inconsistent identity, then checks
+valid minimal navigation consumes prepared metadata and the canonical body's
+sourceFunction equals saved.bodyKey. Native RED/GREEN, original golden and
+independent contract review are retained. No product admission rule was weakened.
+[Evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-closure-navigation-fixture.json).
