@@ -5657,6 +5657,11 @@ pub impl Comp {
     // Capture mode follows lexical mutability; representation restrictions are
     // checked as soon as the type shape is known and again after substitution.
     inout fn checkedCaptureCell(lo: Local) -> Result[Bool, CompileDiagnostic] {
+        return self.checkedCaptureCellWithOrigin(lo: lo, origin: <CaptureCheckOrigin.Raw />)
+    }
+}
+impl Comp {
+    inout fn checkedCaptureCellWithOrigin(lo: Local, origin: CaptureCheckOrigin) -> Result[Bool, CompileDiagnostic] {
         if lo.ty != 0U64 && lo.ty < self.arena.typeCount() {
             val type = self.arena.typeAt(index: lo.ty)
             if type.assocNameId != 0U64 || (type.paramId != 0U64 && type.args.count() == 0U64) {
@@ -5668,6 +5673,19 @@ pub impl Comp {
         // list of supported value representations.
         match self.captureTypeSupport(typeStart: lo.tyStart, typeLen: lo.tyLen, isArray: lo.isArray, typeRef: lo.ty) {
             CaptureTypeSupport.Supported => {}
+            CaptureTypeSupport.Unique => {
+                val index = match origin {
+                    CaptureCheckOrigin.Raw => { return <Result.Err error=self.diagnosticAt(offset: lo.nameStart, msg: "closure capture does not support unique, generic struct, or function-typed values") /> }
+                    CaptureCheckOrigin.Declaration(index: val index) | CaptureCheckOrigin.Instance(index: val index, captureIndex: _, closureBody: _, sourceType: _, finalType: _) => index
+                }
+                if index >= self.semanticClosures.count() || index >= self.semanticClosureOwners.count() {
+                    return <Result.Err error=self.diagnosticAt(offset: lo.nameStart, msg: "internal error: capture failure has no closure owner", failureDomain: <FailureDomain.Internal />) />
+                }
+                val closure = self.semanticClosures[index]
+                val failureIndex = self.failedUniqueCaptures.count()
+                self.failedUniqueCaptures.append(<FailedUniqueCapture origin=origin closure=closure.exprId owner=self.semanticClosureOwners[index] bindingTarget=lo.nameStart bindingStatement=lo.bindingStatement />)
+                return <Result.Err error=<CompileDiagnostic.uniqueCapture refusal=<UniqueCaptureRefusal session=self.sourceFactSession() failureIndex=failureIndex expression=closure.exprId bindingTarget=lo.nameStart location=self.diagnosticAt(offset: lo.nameStart, msg: "").location() /> /> />
+            }
             CaptureTypeSupport.GenericStruct => {
                 return <Result.Err error=self.diagnosticAt(offset: lo.nameStart, msg: "closure capture of generic struct values is not implemented", failureDomain: <FailureDomain.Limit />) />
             }
@@ -5679,6 +5697,9 @@ pub impl Comp {
         return <Result.Ok value=lo.isMut />
     }
 
+}
+
+pub impl Comp {
     // Declaration recording owns capture identities and modes. Executable
     // preparation only substitutes their TypeTerms into the closure ABI.
     fn semanticClosureHash(ownerFnIdx: U64, exprId: U64) -> U64 {
@@ -5843,7 +5864,7 @@ impl Comp {
             if captures[i].bindingTarget == local.nameStart { return <Result.Ok value=() /> }
             i += 1U64
         }
-        val boxed = try self.checkedCaptureCell(lo: local)
+        val boxed = try self.checkedCaptureCellWithOrigin(lo: local, origin: <CaptureCheckOrigin.Declaration index=index />)
         val mode = if boxed { give <SemanticClosureCaptureMode.CellBorrow /> } else { give <SemanticClosureCaptureMode.ValueCopy /> }
         captures.append(<SemanticClosureCapture bindingStatement=local.bindingStatement bindingTarget=local.nameStart nameLen=local.nameLen typeTerm=local.ty mode=mode />)
         self.sourceFacts.activate(owner: self.semanticClosureOwners[index])
@@ -6043,8 +6064,8 @@ pub impl Comp {
             self.recordBodyTypeTermResult(bodyId: closureBodyId, source: capture.typeTerm, result: type)
             val info = self.typeInfoOfRef(ref: type)
             val mutable = match capture.mode { SemanticClosureCaptureMode.CellBorrow => { give true } _ => { give false } }
-            val local = <Local nameStart=capture.bindingTarget nameLen=0U64 tyStart=info.nameStart tyLen=info.nameLen isArray=info.kind == 3 ty=type isInout=false isMut=mutable owned=false moved=false cnum=0U64 />
-            val boxed = try self.checkedCaptureCell(lo: local)
+            val local = <Local bindingStatement=capture.bindingStatement nameStart=capture.bindingTarget nameLen=0U64 tyStart=info.nameStart tyLen=info.nameLen isArray=info.kind == 3 ty=type isInout=false isMut=mutable owned=false moved=false cnum=0U64 />
+            val boxed = try self.checkedCaptureCellWithOrigin(lo: local, origin: <CaptureCheckOrigin.Instance index=index captureIndex=captureI closureBody=closureBodyId sourceType=capture.typeTerm finalType=type />)
             captures.append(<SemanticClosureCapture bindingStatement=capture.bindingStatement bindingTarget=capture.bindingTarget nameLen=capture.nameLen typeTerm=type mode=capture.mode />)
             captureI += 1U64
         }

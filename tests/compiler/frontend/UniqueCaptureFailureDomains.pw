@@ -1,0 +1,88 @@
+use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontendForRequests, openFrontend }
+use ../../../src/CheckedProgram only { CompilerSession, CompilerSessionResult, ProgramCheckResult, checkCompilerSession }
+use ../../../src/Backend only { LlvmLoweringResult }
+use ../../../src/SourceAccess only { SourceAccess }
+use ../../../src/Diag only { CompileDiagnostic, FailureDomain, UniqueCaptureRefusal }
+use @Std/Io only { print }
+fn requireUnclassified(diagnostic: CompileDiagnostic, message: String) {
+    match diagnostic.failureDomain() { FailureDomain.Unclassified => {} _ => { panic("raw refusal domain was lost") } }
+    if diagnostic.isSourceRejection() || diagnostic.message() != message { panic("raw refusal was reinterpreted") }
+}
+fn requireSource(diagnostic: CompileDiagnostic, message: String) {
+    if !diagnostic.isSourceRejection() || diagnostic.message() != message { panic("unique capture source origin was lost") }
+}
+fn session(input: FrontendInput) -> CompilerSession {
+    match CompilerSession.open(input: input, sources: <SourceAccess />) { CompilerSessionResult.Success(session: val session) => { return move session } CompilerSessionResult.Failure(diagnostic: val diagnostic) => { panic(diagnostic.message()) } }
+}
+fn run(input: FrontendInput, message: String, functionName: String = "main", lazyRequested: Bool = true) {
+    mut val raw = <Comp />
+    match analyzeFrontendForRequests(c: inout raw, input: input, sources: <SourceAccess />) { Result.Ok(value: _) => {} Result.Err(error: val diagnostic) => { panic(diagnostic.message()) } }
+    val name = raw.internBytes(s: functionName)
+    val function = raw.arena.firstFunctionNamed(nameId: name.nameId)
+    for count in 0U64..<2U64 {
+        match raw.prepareLexicalBody(fnIdx: function) {
+            Result.Err(error: val diagnostic) => {
+                requireUnclassified(diagnostic: diagnostic, message: message)
+                val refusal = diagnostic.uniqueCapture().unwrap()
+                if !raw.sourceUniqueCaptureHasOwner(refusal: refusal) { panic("retained capture failure lost provenance") }
+                if raw.sourceUniqueCaptureHasOwner(refusal: <UniqueCaptureRefusal session=refusal.session() + 1U64 failureIndex=refusal.failureIndex() expression=refusal.expression() bindingTarget=refusal.bindingTarget() location=refusal.location() />) { panic("foreign session accepted") }
+                if raw.sourceUniqueCaptureHasOwner(refusal: <UniqueCaptureRefusal session=refusal.session() failureIndex=refusal.failureIndex() + 1U64 expression=refusal.expression() bindingTarget=refusal.bindingTarget() location=refusal.location() />) { panic("unknown failure accepted") }
+                if raw.sourceUniqueCaptureHasOwner(refusal: <UniqueCaptureRefusal session=refusal.session() failureIndex=refusal.failureIndex() expression=raw.arena.exprs.count() bindingTarget=refusal.bindingTarget() location=refusal.location() />) { panic("foreign closure accepted") }
+                if raw.sourceUniqueCaptureHasOwner(refusal: <UniqueCaptureRefusal session=refusal.session() failureIndex=refusal.failureIndex() expression=refusal.expression() bindingTarget=refusal.bindingTarget() + 1U64 location=refusal.location() />) { panic("foreign binding accepted") }
+                val internal = <CompileDiagnostic failureDomain=<FailureDomain.Internal /> location=refusal.location() message=message />
+                if internal.uniqueCapture().isSome() || internal.isSourceRejection() { panic("equal text gained source authority") }
+                raw.pendingDiagnostics.append(diagnostic)
+            }
+            Result.Ok(value: _) => { panic("unsupported capture became ready") }
+        }
+        val drained = raw.takeDiagnostics()
+        if drained.count() != 1U64 { panic("drain changed failure count") }
+        requireUnclassified(diagnostic: drained[0U64], message: message)
+    }
+    mut val owned = session(input: input)
+    match owned.lowerDeclarations() { LlvmLoweringResult.Success(module: _) => {} LlvmLoweringResult.Failure(diagnostic: val diagnostic) => { panic(diagnostic.message()) } }
+    mut val failed = false
+    mut val bodyIndex = 0U64
+    while true {
+        val bodies = owned.registeredBodies()
+        if bodyIndex >= bodies.count() { break }
+        val body = bodies[bodyIndex]
+        bodyIndex += 1U64
+        match owned.prepareBodyAccess(bodyId: body) {
+            Result.Err(error: val diagnostic) => { requireSource(diagnostic: diagnostic, message: message) failed = true }
+            Result.Ok(value: _) => {}
+        }
+    }
+    if failed != lazyRequested { panic("owned capture request coverage changed") }
+    match checkCompilerSession(session: move owned) { ProgramCheckResult.Failure(diagnostic: val diagnostic) => { requireSource(diagnostic: diagnostic, message: message) } ProgramCheckResult.Success(program: _) => { panic("failed session became checked") } }
+    match checkCompilerSession(session: session(input: input)) { ProgramCheckResult.Failure(diagnostic: val diagnostic) => { requireSource(diagnostic: diagnostic, message: message) } ProgramCheckResult.Success(program: _) => { panic("whole check accepted unsupported capture") } }
+    match openFrontend(input: input, sources: <SourceAccess />) { Result.Err(error: val diagnostic) => { requireSource(diagnostic: diagnostic, message: message) } Result.Ok(value: _) => { panic("eager source accepted unsupported capture") } }
+    print("unique capture origin retained")
+}
+fn independentFailures() {
+    mut val raw = <Comp />
+    val input = <FrontendInput.File path="tests/compiler/frontend/fixtures/UniqueCaptureBoundaries/MultipleBindings.pw" />
+    match analyzeFrontendForRequests(c: inout raw, input: input, sources: <SourceAccess />) { Result.Ok(value: _) => {} Result.Err(error: val diagnostic) => { panic(diagnostic.message()) } }
+    mut val causes: Array[UniqueCaptureRefusal] = []
+    for name in ["first", "second"] {
+        val symbol = raw.internBytes(s: name)
+        val function = raw.arena.firstFunctionNamed(nameId: symbol.nameId)
+        match raw.prepareLexicalBody(fnIdx: function) { Result.Err(error: val diagnostic) => { causes.append(diagnostic.uniqueCapture().unwrap()) } Result.Ok(value: _) => { panic("independent capture accepted") } }
+    }
+    val first = causes[0U64]
+    val second = causes[1U64]
+    if first.failureIndex() == second.failureIndex() || !raw.sourceUniqueCaptureHasOwner(refusal: first) || !raw.sourceUniqueCaptureHasOwner(refusal: second) { panic("independent failures replaced each other") }
+    if raw.sourceUniqueCaptureHasOwner(refusal: <UniqueCaptureRefusal session=first.session() failureIndex=second.failureIndex() expression=first.expression() bindingTarget=first.bindingTarget() location=first.location() />) { panic("another valid failure index accepted") }
+    if raw.sourceUniqueCaptureHasOwner(refusal: <UniqueCaptureRefusal session=first.session() failureIndex=first.failureIndex() expression=second.expression() bindingTarget=second.bindingTarget() location=first.location() />) { panic("same-named binding reused foreign proof") }
+    print("independent capture failures retained")
+}
+fn main() {
+    val message = "closure capture does not support unique, generic struct, or function-typed values"
+    run(input: <FrontendInput.File path="tests/fixtures/reject/closure_capture_unique.pw" />, message: message)
+    run(input: <FrontendInput.File path="tests/fixtures/reject/closure_capture_unique_enum.pw" />, message: message)
+    run(input: <FrontendInput.File path="tests/fixtures/reject/unused_closure_capture_unique.pw" />, message: message, functionName: "auditUnused", lazyRequested: false)
+    run(input: <FrontendInput.File path="tests/fixtures/reject/closure_capture_unique_parameter.pw" />, message: message, functionName: "capture")
+    run(input: <FrontendInput.File path="tests/fixtures/reject/closure_capture_unique_mut.pw" />, message: message)
+    run(input: <FrontendInput.File path="tests/fixtures/reject/closure_capture_unique_generic.pw" />, message: message)
+    independentFailures()
+}

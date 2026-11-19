@@ -1144,3 +1144,46 @@ pub impl Comp {
         return true
     }
 }
+
+
+pub impl Comp {
+    // Retained failed selections are observed without redoing type checking or
+    // manufacturing a successful source-expression/capture fact.
+    fn sourceUniqueCaptureHasOwner(refusal: UniqueCaptureRefusal) -> Bool {
+        if refusal.session() != self.sourceFactSession() || refusal.failureIndex() >= self.failedUniqueCaptures.count() { return false }
+        val proof = self.failedUniqueCaptures[refusal.failureIndex()]
+        if proof.closure != refusal.expression() || proof.bindingTarget != refusal.bindingTarget() || proof.closure >= self.arena.exprs.count() { return false }
+        match self.arena.exprs[proof.closure] { Expr.Closure(params: _, hasRet: _, retStart: _, retLen: _, retIsArray: _, retTy: _, body: _, isDiverging: _) => {} _ => { return false } }
+        val index = match proof.origin {
+            CaptureCheckOrigin.Raw => { return false }
+            CaptureCheckOrigin.Declaration(index: val index) => index
+            CaptureCheckOrigin.Instance(index: val index, captureIndex: _, closureBody: _, sourceType: _, finalType: _) => index
+        }
+        if index >= self.semanticClosures.count() || index >= self.semanticClosureOwners.count() { return false }
+        val declaration = self.semanticClosures[index]
+        if declaration.exprId != proof.closure || !semanticCompletionOwnersEqual(recorded: proof.owner, prepared: self.semanticClosureOwners[index]) { return false }
+        match proof.origin {
+            CaptureCheckOrigin.Instance(index: _, captureIndex: val captureIndex, closureBody: val closureBody, sourceType: val sourceType, finalType: val finalType) => {
+                if closureBody == 0U64 || closureBody > self.arena.bodyInstanceCount() { return false }
+                if self.arena.bodyInstanceAt(index: closureBody - 1U64).fnIdx != declaration.bodyKey { return false }
+                val reader = match self.sourceFacts.state(owner: proof.owner) {
+                    Optional.Some(v: val state) => match state { SourceBodyState.Succeeded(reader: val reader) => reader _ => { return false } }
+                    Optional.None => { return false }
+                }
+                val facts = self.sourceFacts.readers[reader]
+                val closure = match readSourceRow(rows: facts.payload->closurePlans, keys: facts.payload->closureKeys, key: proof.closure) {
+                    Optional.Some(v: val closure) => closure
+                    Optional.None => { return false }
+                }
+                if captureIndex >= closure.captures.count() { return false }
+                val capture = closure.captures[captureIndex]
+                if capture.bindingTarget != proof.bindingTarget || capture.bindingStatement != proof.bindingStatement || capture.typeTerm != sourceType { return false }
+                val substitution = self.arena.bodyTypeTermResult(bodyId: closureBody, typeTerm: sourceType)
+                if substitution.bodyId != closureBody || substitution.resultType != finalType { return false }
+
+            }
+            _ => {}
+        }
+        return true
+    }
+}

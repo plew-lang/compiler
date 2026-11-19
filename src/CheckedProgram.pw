@@ -264,6 +264,14 @@ impl CompilerSession {
             }
             Optional.None => {}
         }
+        match diagnostic.uniqueCapture() {
+            Optional.Some(v: val refusal) => {
+                if self.compiler.sourceUniqueCaptureHasOwner(refusal: refusal) {
+                    return <CompileDiagnostic failureDomain=<FailureDomain.Source /> location=refusal.location() message=diagnostic.message() />
+                }
+            }
+            Optional.None => {}
+        }
     match diagnostic.memberCallAmbiguity() {
             Optional.Some(v: val refusal) => {
                 if self.compiler.sourceMemberCallAmbiguityHasOwner(refusal: refusal) {

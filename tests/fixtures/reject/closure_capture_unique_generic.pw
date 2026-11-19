@@ -1,0 +1,8 @@
+use @Std/Io only { print }
+unique struct Ticket[T] { pub val value: T }
+pub impl[T] Ticket[T] { factory }
+fn main() {
+    val ticket: Ticket[I64] = <Ticket[I64] value=1I64 />
+    val f: fn() -> I64 = fn() -> I64 { return ticket.value }
+    print(f())
+}

@@ -1,0 +1,11 @@
+unique struct Handle { pub val value: I64 }
+pub impl Handle { factory }
+fn first() {
+    val handle: Handle = <Handle value=1I64 />
+    val function: fn() -> I64 = fn() -> I64 { return handle.value }
+}
+fn second() {
+    val handle: Handle = <Handle value=2I64 />
+    val function: fn() -> I64 = fn() -> I64 { return handle.value }
+}
+fn main() {}

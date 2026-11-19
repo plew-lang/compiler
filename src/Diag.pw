@@ -145,6 +145,22 @@ pub impl UniqueCopyRefusal {
     fn location() -> DiagnosticLocation { return self.location }
 }
 
+pub struct UniqueCaptureRefusal {
+    val session: U64
+    val failureIndex: U64
+    val expression: U64
+    val bindingTarget: U64
+    val location: DiagnosticLocation
+}
+pub impl UniqueCaptureRefusal {
+    factory
+    fn session() -> U64 { return self.session }
+    fn failureIndex() -> U64 { return self.failureIndex }
+    fn expression() -> U64 { return self.expression }
+    fn bindingTarget() -> U64 { return self.bindingTarget }
+    fn location() -> DiagnosticLocation { return self.location }
+}
+
 pub struct FreeCallAmbiguityRefusal {
     val session: U64
     val owner: DiagnosticOwner
@@ -249,6 +265,7 @@ enum DiagnosticData {
     MissingField(refusal: MissingFieldRefusal)
     Assignment(refusal: AssignmentRefusal)
     UniqueCopy(refusal: UniqueCopyRefusal)
+    UniqueCapture(refusal: UniqueCaptureRefusal)
     FreeCallAmbiguity(refusal: FreeCallAmbiguityRefusal)
     MemberCallAmbiguity(refusal: MemberCallAmbiguityRefusal)
 }
@@ -275,6 +292,15 @@ pub impl CompileDiagnostic {
     fn uniqueCopy() -> Optional[UniqueCopyRefusal] {
         return match self.storage[0U64] {
             DiagnosticData.UniqueCopy(refusal: val refusal) => <Optional.Some v=refusal />
+            _ => <Optional.None />
+        }
+    }
+    factory uniqueCapture(refusal: UniqueCaptureRefusal) {
+        return <CompileDiagnostic storage=[<DiagnosticData.UniqueCapture refusal=refusal />] />
+    }
+    fn uniqueCapture() -> Optional[UniqueCaptureRefusal] {
+        return match self.storage[0U64] {
+            DiagnosticData.UniqueCapture(refusal: val refusal) => <Optional.Some v=refusal />
             _ => <Optional.None />
         }
     }
@@ -321,6 +347,7 @@ pub impl CompileDiagnostic {
             DiagnosticData.MissingField(refusal: _) => <DiagnosticSeverity.Error />
             DiagnosticData.Assignment(refusal: _) => <DiagnosticSeverity.Error />
             DiagnosticData.UniqueCopy(refusal: _) => <DiagnosticSeverity.Error />
+            DiagnosticData.UniqueCapture(refusal: _) => <DiagnosticSeverity.Error />
             DiagnosticData.FreeCallAmbiguity(refusal: _) => <DiagnosticSeverity.Error />
             DiagnosticData.MemberCallAmbiguity(refusal: _) => <DiagnosticSeverity.Error />
         }
@@ -332,6 +359,7 @@ pub impl CompileDiagnostic {
             DiagnosticData.MissingField(refusal: _) => <FailureDomain.Unclassified />
             DiagnosticData.Assignment(refusal: _) => <FailureDomain.Unclassified />
             DiagnosticData.UniqueCopy(refusal: _) => <FailureDomain.Unclassified />
+            DiagnosticData.UniqueCapture(refusal: _) => <FailureDomain.Unclassified />
             DiagnosticData.FreeCallAmbiguity(refusal: _) => <FailureDomain.Unclassified />
             DiagnosticData.MemberCallAmbiguity(refusal: _) => <FailureDomain.Unclassified />
         }
@@ -343,6 +371,7 @@ pub impl CompileDiagnostic {
             DiagnosticData.MissingField(refusal: val refusal) => refusal.location()
             DiagnosticData.Assignment(refusal: val refusal) => refusal.location()
             DiagnosticData.UniqueCopy(refusal: val refusal) => refusal.location()
+            DiagnosticData.UniqueCapture(refusal: val refusal) => refusal.location()
             DiagnosticData.FreeCallAmbiguity(refusal: val refusal) => refusal.location()
             DiagnosticData.MemberCallAmbiguity(refusal: val refusal) => refusal.location()
         }
@@ -353,6 +382,7 @@ pub impl CompileDiagnostic {
             DiagnosticData.MissingField(refusal: val refusal) => refusal.kind().message()
             DiagnosticData.Assignment(refusal: val refusal) => refusal.kind().message()
             DiagnosticData.UniqueCopy(refusal: _) => "a unique value cannot be copied; use `move`, `borrow`, or `inout`"
+            DiagnosticData.UniqueCapture(refusal: _) => "closure capture does not support unique, generic struct, or function-typed values"
             DiagnosticData.FreeCallAmbiguity(refusal: _) => "ambiguous call: multiple visible function declarations match the argument labels and types"
             DiagnosticData.MemberCallAmbiguity(refusal: val refusal) => refusal.kind().message()
             DiagnosticData.UseAfterMove(refusal: _) => "use of a value after it was moved (`move` transfers ownership away — the variable is dead; bind a fresh value to use it again) (spec/03)"
@@ -365,6 +395,7 @@ pub impl CompileDiagnostic {
             DiagnosticData.MissingField(refusal: _) => []
             DiagnosticData.Assignment(refusal: _) => []
             DiagnosticData.UniqueCopy(refusal: _) => []
+            DiagnosticData.UniqueCapture(refusal: _) => []
             DiagnosticData.FreeCallAmbiguity(refusal: _) => []
             DiagnosticData.MemberCallAmbiguity(refusal: _) => []
         }

@@ -503,3 +503,10 @@ precise Limit/status/reason checks, deferred substitution cases and unrequested
 lazy successes. The profile never widens the Source-only reject lane. Unique
 capture source restrictions stay in `tests/fixtures/reject/`; future shape
 support belongs to com-b1ro.
+
+`UniqueCaptureFailureDomains.pw` checks unique-capture refusal provenance through
+raw repeated requests/drain and owned lazy/whole/eager requests. It covers
+struct/enum/generic, mutable bindings and borrowed parameters, retaining unused
+lazy success. Foreign sessions, failure indices, closure expressions and binding
+targets cannot reuse a retained failure; equal-text Internal reports remain
+Internal. Run with the manual compile/link procedure and require its exact `.out`.

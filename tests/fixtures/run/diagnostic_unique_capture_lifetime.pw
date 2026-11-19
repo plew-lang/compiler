@@ -1,0 +1,29 @@
+// A unique-capture cause is an owned value, not a reference into a compiler.
+use /Diag only { CompileDiagnostic, UniqueCaptureRefusal, DiagnosticLocation, FailureDomain }
+use @Std/Io only { print }
+fn diagnostic() -> CompileDiagnostic {
+    val path = "field" + ".pw"
+    return <CompileDiagnostic.uniqueCapture refusal=<UniqueCaptureRefusal session=7U64 failureIndex=3U64 bindingTarget=5U64 expression=11U64 location=<DiagnosticLocation.File path=path line=19I64 /> /> />
+}
+fn location() -> DiagnosticLocation { return diagnostic().location() }
+fn main() {
+    mut val cache: Dictionary[U64, Result[(), CompileDiagnostic]] = [:]
+    cache[0U64] = <Result.Err error=diagnostic() />
+    val retained = cache[0U64]
+    cache = [:]
+    match retained {
+        Result.Ok(value: _) => { panic("semantic failure became success") }
+        Result.Err(error: val failure) => {
+            if failure.isSourceRejection() || failure.notes().count() != 0U64 || failure.useAfterMove().isSome() { panic("field cause confused with another diagnostic") }
+            match failure.failureDomain() { FailureDomain.Unclassified => {} _ => { panic("raw cause changed domain") } }
+            val cause = failure.uniqueCapture().unwrap()
+            if cause.session() != 7U64 || cause.expression() != 11U64 || cause.failureIndex() != 3U64 || cause.bindingTarget() != 5U64 { panic("cause context changed") }
+            if failure.message() != "closure capture does not support unique, generic struct, or function-typed values" { panic("derived message changed") }
+        }
+    }
+    match location() {
+        DiagnosticLocation.File(path: val path, line: val line) => { if path != "field.pw" || line != 19I64 { panic("location died with its cause") } }
+        _ => { panic("location changed") }
+    }
+    print("ok")
+}

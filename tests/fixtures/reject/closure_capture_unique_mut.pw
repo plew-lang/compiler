@@ -1,0 +1,8 @@
+use @Std/Io only { print }
+unique struct Handle { pub val id: I64 }
+pub impl Handle { factory }
+fn main() {
+    mut val handle: Handle = <Handle id=1I64 />
+    val f: fn() -> I64 = fn() -> I64 { return handle.id }
+    print(f())
+}
