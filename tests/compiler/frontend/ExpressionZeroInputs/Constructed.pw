@@ -1,0 +1,2 @@
+struct Item {}
+fn main() { val value = (<Item />).missing }

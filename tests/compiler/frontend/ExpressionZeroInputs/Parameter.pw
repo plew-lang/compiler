@@ -1,0 +1,3 @@
+struct Item {}
+fn inspect(item: Item) { val value = item.missing }
+fn main() { inspect(item: <Item />) }

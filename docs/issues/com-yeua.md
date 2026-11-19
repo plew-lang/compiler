@@ -1646,3 +1646,16 @@ Additional controls: static trait ambiguity21 old/new comparisons preserve class
 Matching-source alternating5-pair observation: old6.777299s / new6.748447s median; all10LLVM equal, all new samples below7. Operational formal-text versus native development ThinLTO carriers are compared, so this is neither a frontend-only isolated attribution nor a new formal G2a. Independent review free_function_ambiguity_origin_review finds no source must-fix; final test inputs and receipts are fixed separately.
 
 This adopts one producer only. com-yeua, normal-suite refresh and phase3 remain open; latest whole normal suite349fail is not rewritten into a passing result. Next characterize existing general Expr0 owner observation, then the separate static trait ambiguity producer. Main/seed/adopted carrier remain unchanged.
+
+## General expression-owner zero boundary scenarios
+
+Characterize the existing sourceExpressionHasOwner zero filter using missing-field on an empty constructed receiver and on a parameter receiver. Both have a valid first AST expression; TypeRef0 sentinel rules do not determine Expr index validity. Before production edits, preserve six check/AOT/ORC statuses/domains/messages and verify the actual MissingFieldRefusal receiver and retained owner.
+
+Endpoint: owner observation accepts any in-range expression with a retained matching source owner, including0; it still rejects unknown/unrecorded input, foreign session/owner and out-of-range identities. Do not create facts or broaden raw Source interpretation. Re-run relevant existing missing-field/assignment/unique-copy/ownership probes and private owned controls, plus native/sanitizer lifetime if payload/lifetime changes. No language acceptance, cause payload, ARC policy or parent-fact fabrication is authorized. Independent review before finite adoption.
+## General expression-owner zero boundary outcome
+
+The native RED confirms a real MissingFieldRefusal receiver0, then fails owner/operation observation. Six CLI mode controls reproduce Unclassified; removing only the invalid zero exclusion makes all six Source with byte-identical stdout/stderr and exit1. The common observer still requires session, arena range and recorded canonical owner, and does not create facts or grant raw Source authority.
+
+Standard isolated build 20261119T194348-build-28aac5 exits0 with immutable inputs unchanged. Fresh native ExpressionZero/MissingField/Assignment/UniqueCopy/Ownership probes all pass their exact goldens with empty stderr. New direct controls reject empty arena0, admitted-but-unrecorded0 and failed-parent provenance, alongside wrong/unknown owner, foreign session, range and forged-operation controls. Independent expression_zero_owner_review accepts this finite increment with no must-fix. Payload, lifetime, ARC and code generation are unchanged; existing sanitizer evidence is retained. No new formal performance result is claimed.
+
+Evidence: meta evidence/rejection-domains/diagnostic-domain-implementation/phase3-expression-zero-owner.json. com-yeua remains open; next separate producer is static trait ambiguity. All execution handles collected. Main, seed and adopted carrier remain unchanged.

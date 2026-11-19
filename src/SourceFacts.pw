@@ -912,7 +912,9 @@ pub impl Comp {
     // Observation only: matching scalar provenance does not turn a raw Comp
     // into an owned source request. The owning session interprets its result.
     fn sourceExpressionHasOwner(session: U64, expression: U64, owner: DiagnosticOwner) -> Bool {
-        if session != self.sourceFacts.session || expression == 0U64 || expression >= self.arena.exprs.count() { return false }
+        // Expression IDs are zero-based; retained ownership, not nonzero-ness,
+        // establishes provenance. Type IDs use a different sentinel contract.
+        if session != self.sourceFacts.session || expression >= self.arena.exprs.count() { return false }
         val recorded = match self.sourceFacts.expressionOwners.get(key: expression) {
             Optional.Some(v: val recorded) => recorded
             Optional.None => { return false }
