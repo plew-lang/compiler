@@ -1,0 +1,4 @@
+use ./ZeroA only { choose }
+use ./ZeroB only { choose }
+fn other() {}
+fn main() { choose() }

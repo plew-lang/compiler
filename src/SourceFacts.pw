@@ -1066,3 +1066,38 @@ pub impl Comp {
         }
     }
 }
+
+
+pub impl Comp {
+    // Observes retained negative selection, never fabricates a successful call fact.
+    fn sourceFreeCallAmbiguityHasOwner(refusal: FreeCallAmbiguityRefusal) -> Bool {
+        if refusal.session() != self.sourceFactSession() || refusal.expression() >= self.arena.exprs.count() { return false }
+        val proof = match self.failedFreeCallAmbiguities.get(key: refusal.expression()) {
+            Optional.Some(v: val proof) => proof
+            Optional.None => { return false }
+        }
+        val ownerMatches = match refusal.owner() {
+            DiagnosticOwner.Function(index: val index) => semanticCompletionOwnersEqual(recorded: proof.owner, prepared: <SemanticCompletionOwner.Function index=index />)
+            DiagnosticOwner.Global(target: val target) => semanticCompletionOwnersEqual(recorded: proof.owner, prepared: <SemanticCompletionOwner.Global target=target />)
+            DiagnosticOwner.Closure(expression: val expression) => semanticCompletionOwnersEqual(recorded: proof.owner, prepared: <SemanticCompletionOwner.Closure expression=expression />)
+            DiagnosticOwner.Unknown => false
+        }
+        if !ownerMatches || proof.nameStart != refusal.nameStart() || proof.nameLen != refusal.nameLen() { return false }
+        val args = match self.arena.exprs[refusal.expression()] {
+            Expr.Call(nameStart: val start, nameLen: val length, args: val args) => {
+                if start != refusal.nameStart() || length != refusal.nameLen() { return false }
+                give args
+            }
+            _ => { return false }
+        }
+        if args.start != refusal.argumentsStart() || args.len != refusal.argumentsCount() || proof.arguments.count() != args.len { return false }
+        if args.start > self.arena.argPool.count() || args.len > self.arena.argPool.count() - args.start { return false }
+        if !self.isAuthoredFreeCall(exprId: refusal.expression(), start: refusal.nameStart(), length: refusal.nameLen(), args: args) { return false }
+        for index in 0U64..<args.len {
+            val a = proof.arguments[index]
+            val b = self.argAt(args: args, index: index)
+            if a.expr != b.expr || a.isInout != b.isInout || a.hasLabel != b.hasLabel || a.labelStart != b.labelStart || a.labelLen != b.labelLen { return false }
+        }
+        return true
+    }
+}

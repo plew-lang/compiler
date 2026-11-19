@@ -1,0 +1,31 @@
+// A free-call ambiguity cause is an owned value, not a reference into a compiler.
+use /Diag only { CompileDiagnostic, FreeCallAmbiguityRefusal, DiagnosticOwner, DiagnosticLocation, FailureDomain }
+use @Std/Io only { print }
+fn diagnostic() -> CompileDiagnostic {
+    val path = "field" + ".pw"
+    return <CompileDiagnostic.freeCallAmbiguity refusal=<FreeCallAmbiguityRefusal session=7U64 owner=<DiagnosticOwner.Function index=3U64 /> expression=11U64 nameStart=13U64 nameLen=4U64 argumentsStart=17U64 argumentsCount=2U64 location=<DiagnosticLocation.File path=path line=19I64 /> /> />
+}
+fn location() -> DiagnosticLocation { return diagnostic().location() }
+fn main() {
+    mut val cache: Dictionary[U64, Result[(), CompileDiagnostic]] = [:]
+    cache[0U64] = <Result.Err error=diagnostic() />
+    val retained = cache[0U64]
+    cache = [:]
+    match retained {
+        Result.Ok(value: _) => { panic("semantic failure became success") }
+        Result.Err(error: val failure) => {
+            if failure.isSourceRejection() || failure.notes().count() != 0U64 || failure.useAfterMove().isSome() { panic("field cause confused with another diagnostic") }
+            match failure.failureDomain() { FailureDomain.Unclassified => {} _ => { panic("raw cause changed domain") } }
+            val cause = failure.freeCallAmbiguity().unwrap()
+            if cause.session() != 7U64 || cause.expression() != 11U64 { panic("cause context changed") }
+            if cause.nameStart() != 13U64 || cause.nameLen() != 4U64 || cause.argumentsStart() != 17U64 || cause.argumentsCount() != 2U64 { panic("selection snapshot changed") }
+            if failure.uniqueCopy().isSome() { panic("different cause matched") }
+            if failure.message() != "ambiguous call: multiple visible function declarations match the argument labels and types" { panic("derived message changed") }
+        }
+    }
+    match location() {
+        DiagnosticLocation.File(path: val path, line: val line) => { if path != "field.pw" || line != 19I64 { panic("location died with its cause") } }
+        _ => { panic("location changed") }
+    }
+    print("ok")
+}

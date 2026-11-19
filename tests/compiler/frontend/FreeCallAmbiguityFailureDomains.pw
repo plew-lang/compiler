@@ -1,0 +1,197 @@
+// Retain the single free-call ambiguity finding without repeating ownership analysis.
+// Public raw causes do not confer private owned-source authority.
+use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontendForRequests, openFrontend }
+use ../../../src/CheckedProgram only { CompilerSession, CompilerSessionResult, ProgramCheckResult, checkCompilerSession }
+use ../../../src/Backend only { LlvmLoweringResult }
+use ../../../src/Ir only { Expr, Arg }
+use ../../../src/SourceAccess only { SourceAccess }
+use ../../../src/Diag only { CompileDiagnostic, FailureDomain, DiagnosticOwner, FreeCallAmbiguityRefusal }
+use @Std/Io only { print }
+use @Plew/Syntax only { rangeEquals }
+
+fn input() -> FrontendInput {
+    return <FrontendInput.Text path="FreeCallAmbiguity.pw" text="struct First {{ val value: I64 }}\nstruct Second {{ val value: I64 }}\nfn consume(value: First) {{}}\nfn consume(value: Second) {{}}\nfn other() {{}}\nfn main() {{ consume(value: <value=1I64 />) }}" />
+}
+
+fn rawFailure(compiler: inout Comp, function: U64) -> CompileDiagnostic {
+    return match compiler.prepareLexicalBody(fnIdx: function) {
+        Result.Err(error: val diagnostic) => diagnostic
+        Result.Ok(value: _) => { panic("ambiguous free call was accepted") }
+    }
+}
+
+fn requireRaw(diagnostic: CompileDiagnostic, compiler: Comp) {
+    if diagnostic.isSourceRejection() { panic("raw selection gained source authority") }
+    match diagnostic.failureDomain() { FailureDomain.Unclassified => {} _ => { panic("raw domain changed") } }
+    val cause = diagnostic.freeCallAmbiguity().unwrap()
+    if !compiler.sourceFreeCallAmbiguityHasOwner(refusal: cause) { panic("negative selection lost its owner/input") }
+    mut val direct = compiler
+    val args = match direct.arena.exprs[cause.expression()] {
+        Expr.Call(nameStart: _, nameLen: _, args: val args) => args
+        _ => { panic("failure did not retain a call") }
+    }
+    match direct.findFunc(nameStart: cause.nameStart(), nameLen: cause.nameLen(), args: args) {
+        Result.Ok(value: _) => { panic("raw selector accepted ambiguity") }
+        Result.Err(error: val raw) => {
+            if raw.isSourceRejection() || raw.freeCallAmbiguity().isSome() || raw.message() != diagnostic.message() { panic("raw selector adapter changed") }
+        }
+    }
+    mut val other = direct.arena.functionCount()
+    for index in 0U64..<direct.arena.functionCount() {
+        val function = direct.arena.functionAt(index: index)
+        if rangeEquals(bytes: direct.arena.bytes, start: function.nameStart, len: function.nameLen, kw: "other") { other = index }
+    }
+    for owner in [<DiagnosticOwner.Unknown />, <DiagnosticOwner.Function index=other />, <DiagnosticOwner.Global target=0U64 />, <DiagnosticOwner.Closure expression=0U64 />] {
+        val forged = <FreeCallAmbiguityRefusal session=cause.session() owner=owner expression=cause.expression() nameStart=cause.nameStart() nameLen=cause.nameLen() argumentsStart=cause.argumentsStart() argumentsCount=cause.argumentsCount() location=cause.location() />
+        if direct.sourceFreeCallAmbiguityHasOwner(refusal: forged) { panic("foreign owner matched selection") }
+    }
+    val foreign = <FreeCallAmbiguityRefusal session=cause.session() + 1U64 owner=cause.owner() expression=cause.expression() nameStart=cause.nameStart() nameLen=cause.nameLen() argumentsStart=cause.argumentsStart() argumentsCount=cause.argumentsCount() location=cause.location() />
+    if direct.sourceFreeCallAmbiguityHasOwner(refusal: foreign) { panic("foreign session matched") }
+    for kind in 0U64..<7U64 {
+        val expression = if kind == 0U64 { give 18446744073709551615U64 } else { give cause.expression() }
+        val start = cause.nameStart() + if kind == 1U64 { give 1U64 } else { give 0U64 }
+        val length = cause.nameLen() + if kind == 2U64 { give 1U64 } else { give 0U64 }
+        val argumentsStart = cause.argumentsStart() + if kind == 3U64 { give 1U64 } else { give 0U64 }
+        val argumentsCount = cause.argumentsCount() + if kind == 4U64 { give 1U64 } else { give 0U64 }
+        mut val changed = compiler
+        if kind == 5U64 {
+            changed.arena.exprs[cause.expression()] = <Expr.Method recv=0U64 nameStart=cause.nameStart() nameLen=cause.nameLen() args=args />
+        }
+        if kind == 6U64 && args.len != 0U64 {
+            val argument = changed.argAt(args: args, index: 0U64)
+            changed.arena.argPool[args.start] = <Arg expr=argument.expr + 1U64 isInout=argument.isInout labelStart=argument.labelStart labelLen=argument.labelLen hasLabel=argument.hasLabel />
+        }
+        val invalid = <FreeCallAmbiguityRefusal session=cause.session() owner=cause.owner() expression=expression nameStart=start nameLen=length argumentsStart=argumentsStart argumentsCount=argumentsCount location=cause.location() />
+        if (kind != 6U64 || args.len != 0U64) && changed.sourceFreeCallAmbiguityHasOwner(refusal: invalid) { panic("modified operation matched selection") }
+    }
+    mut val duplicate = compiler
+    val freshExpression = duplicate.arena.exprs.count()
+    duplicate.arena.exprs.append(duplicate.arena.exprs[cause.expression()])
+    val unowned = <FreeCallAmbiguityRefusal session=cause.session() owner=cause.owner() expression=freshExpression nameStart=cause.nameStart() nameLen=cause.nameLen() argumentsStart=cause.argumentsStart() argumentsCount=cause.argumentsCount() location=cause.location() />
+    if duplicate.sourceFreeCallAmbiguityHasOwner(refusal: unowned) { panic("same spelling forged a retained query") }
+    // Public cursor mutation must not overwrite private negative-selection ownership.
+    direct.cur.checkFn = other
+    match direct.resolvedCallee(id: cause.expression()) {
+        Result.Ok(value: _) => { panic("foreign raw selection accepted ambiguity") }
+        Result.Err(error: val changed) => {
+            if changed.isSourceRejection() { panic("raw cursor gained source authority") }
+            if direct.sourceFreeCallAmbiguityHasOwner(refusal: changed.freeCallAmbiguity().unwrap()) { panic("raw cursor rewrote the admitted source owner") }
+        }
+    }
+    if !direct.sourceFreeCallAmbiguityHasOwner(refusal: cause) { panic("foreign cursor destroyed retained proof") }
+}
+
+fn session() -> CompilerSession {
+    match CompilerSession.open(input: input(), sources: <SourceAccess />) {
+        CompilerSessionResult.Success(session: val session) => { return move session }
+        CompilerSessionResult.Failure(diagnostic: val diagnostic) => { panic(diagnostic.message()) }
+    }
+}
+
+
+fn main() {
+    mut val raw = <Comp />
+    match analyzeFrontendForRequests(c: inout raw, input: input(), sources: <SourceAccess />) {
+        Result.Ok(value: _) => {}
+        Result.Err(error: val diagnostic) => { panic(diagnostic.message()) }
+    }
+    val name = raw.internBytes(s: "main")
+    val function = raw.arena.firstFunctionNamed(nameId: name.nameId)
+    val first = rawFailure(compiler: inout raw, function: function)
+    requireRaw(diagnostic: first, compiler: raw)
+    raw.pendingDiagnostics.append(first)
+    if raw.takeDiagnostics().count() != 1U64 { panic("drain lost presentation") }
+    val repeated = rawFailure(compiler: inout raw, function: function)
+    requireRaw(diagnostic: repeated, compiler: raw)
+    if first.message() != repeated.message() { panic("cache changed cause") }
+    print("raw semantic cache retained")
+
+    mut val owned = session()
+    match owned.lowerDeclarations() {
+        LlvmLoweringResult.Success(module: _) => {}
+        LlvmLoweringResult.Failure(diagnostic: val diagnostic) => { panic(diagnostic.message()) }
+    }
+    val bodies = owned.registeredBodies()
+    if bodies.count() == 0U64 { panic("missing main body") }
+    for body in bodies {
+        match owned.prepareBodyAccess(bodyId: body) {
+            Result.Ok(value: _) => { panic("owned ambiguous free call was accepted") }
+            Result.Err(error: val diagnostic) => { if !diagnostic.isSourceRejection() { panic("owned request lost source refusal") } }
+        }
+        match owned.prepareBodyAccess(bodyId: body) {
+            Result.Ok(value: _) => { panic("repeat recovered failure") }
+            Result.Err(error: val diagnostic) => { if !diagnostic.isSourceRejection() { panic("repeat lost source refusal") } }
+        }
+    }
+    match checkCompilerSession(session: move owned) {
+        ProgramCheckResult.Success(program: _) => { panic("failed session became checked") }
+        ProgramCheckResult.Failure(diagnostic: val diagnostic) => { if !diagnostic.isSourceRejection() { panic("check lost retained source refusal") } }
+    }
+    print("owned request failure retained")
+    match checkCompilerSession(session: session()) {
+        ProgramCheckResult.Success(program: _) => { panic("whole check accepted ambiguous free call") }
+        ProgramCheckResult.Failure(diagnostic: val diagnostic) => { if !diagnostic.isSourceRejection() { panic("whole check lost source refusal") } }
+    }
+    print("whole source check classified")
+    match openFrontend(input: input(), sources: <SourceAccess />) {
+        Result.Ok(value: _) => { panic("fresh eager frontend accepted ambiguous free call") }
+        Result.Err(error: val diagnostic) => { if !diagnostic.isSourceRejection() { panic("fresh eager frontend lost source refusal") } }
+    }
+    print("fresh eager source classified")
+    requireAdditionalOwners()
+}
+
+
+fn ownerInput(kind: U64) -> FrontendInput {
+    if kind == 0U64 {
+        return <FrontendInput.File path="tests/compiler/frontend/FreeCallAmbiguityInputs/Zero.pw" />
+    }
+    val prefix = "struct First {{ val value: I64 }}\nstruct Second {{ val value: I64 }}\nfn consume(value: First) {{}}\nfn consume(value: Second) {{}}\nfn other() {{}}\n"
+    val body = if kind == 1U64 {
+        give "fn main() {{ val closure = fn() {{ consume(value: <value=1I64 />) }} closure() }}"
+    } else {
+        give "val result = consume(value: <value=1I64 />)\nfn main() {{}}"
+    }
+    return <FrontendInput.Text path="Owner.pw" text=prefix + body />
+}
+
+fn requireAdditionalOwners() {
+    for kind in 0U64..<3U64 {
+        print(kind)
+        val source = ownerInput(kind: kind)
+        mut val raw = <Comp />
+        val diagnostic = match analyzeFrontendForRequests(c: inout raw, input: source, sources: <SourceAccess />) {
+            Result.Err(error: val diagnostic) => diagnostic
+            Result.Ok(value: _) => {
+                give if kind == 2U64 {
+                    mut val target = 18446744073709551615U64
+                    for global in raw.arena.globals {
+                        if rangeEquals(bytes: raw.arena.bytes, start: global.nameStart, len: global.nameLen, kw: "result") { target = global.nameStart }
+                    }
+                    give match raw.prepareGlobalInitializer(target: target) {
+                        Result.Err(error: val diagnostic) => diagnostic
+                        Result.Ok(value: _) => { panic("global ambiguity accepted") }
+                    }
+                } else {
+                    val name = raw.internBytes(s: "main")
+                    val function = raw.arena.firstFunctionNamed(nameId: name.nameId)
+                    give rawFailure(compiler: inout raw, function: function)
+                }
+            }
+        }
+        if diagnostic.freeCallAmbiguity().isNone() { panic(diagnostic.message()) }
+        val cause = diagnostic.freeCallAmbiguity().unwrap()
+        match cause.owner() {
+            DiagnosticOwner.Function(index: _) => { if kind != 0U64 { panic("wrong function source owner") } }
+            DiagnosticOwner.Closure(expression: _) => { if kind != 1U64 { panic("wrong closure source owner") } }
+            DiagnosticOwner.Global(target: _) => { if kind != 2U64 { panic("wrong global source owner") } }
+            DiagnosticOwner.Unknown => { panic("canonical source owner missing") }
+        }
+        requireRaw(diagnostic: diagnostic, compiler: raw)
+        match openFrontend(input: source, sources: <SourceAccess />) {
+            Result.Ok(value: _) => { panic("eager owner accepted ambiguity") }
+            Result.Err(error: val diagnostic) => { if !diagnostic.isSourceRejection() { panic("eager owner lost source ambiguity") } }
+        }
+    }
+    print("zero-argument closure global owners retained")
+}
