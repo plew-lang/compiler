@@ -1,6 +1,6 @@
 ---
 id: met-6vbn
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-11-19T07:59:51Z
@@ -97,3 +97,9 @@ no arrays and must continue only in their originating MonoWork. Native controls
 cover unsealed hints, bad batch order/generation, recovery and declaration0.
 The public MonoWork factory preserves its existing ten labels/defaults while
 keeping the required private index out of its construction signature.
+
+## Outcome: investigated, prototype rejected
+
+[Retained evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-layout-candidate-investigation.json) records all ten same-source samples and identical LLVM outputs. Whole medians were 7.114961 → 7.156474 seconds; no useful whole-time improvement was demonstrated, so neither isolated prototype is adopted. All 12,952 queries used the index, preparation occurred once, and 859,122 root candidates were visited. These counts prove application, not runtime benefit; recursive equality counts use a different scope. Local collect-generic shortening does not override whole-time evidence.
+
+Independent reviewer diagnostic_report_performance_review found no must-fix in this finite rejection conclusion. The optimized caller avoids the first prototype’s whole-Arena transport, but compared caller functions have different roles and their size is not a benchmark. Product remains unchanged. This closes the bounded investigation, not the parent seven-second gate; no claim that recovery is difficult or all indexing designs are ineffective.
