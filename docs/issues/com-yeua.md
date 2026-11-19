@@ -1588,3 +1588,15 @@ seven boundary counterfactuals fail and two scope/brace noninterference controls
 pass. Neutral review finds no weakened guarantee. [Test evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-frontend-boundary-test.json).
 This does not rewrite the frozen failed run or close the339remaining
 classification cases,25run failures or one diagnostic mismatch.
+
+## Assignment write-capability increment
+
+Cover the five existing verifyAssign mutability refusals (element, field place, binding, read-only Ref, immutable pointee field). Exclude undeclared names, weak dereference, visibility, literal/type and inout errors. Existing nine fixtures reproduce 27 fixed-candidate Unclassified refusals across check/AOT/ORC; preserve exact message/location/status and change only owned classification.
+
+A typed cause retains session, recorded target owner, assignment statement and target, kind and owned location. Statement dispatch supplies the authored operation; public direct verifyAssign keeps ordinary raw-report behavior. Existing mutability decisions run once. Raw request cache/retry/drain retains the cause; only private owned consumers interpret matching retained target and assignment operation. No repeated mutability resolution, fabricated facts or catch-all Source promotion. Cover foreign/unknown/out-of-range/wrong operation, raw cache/retry/drain, own lazy/whole/eager consumers, ordinary Internal noninterference and positive writes. Independent review and fresh candidate validation are required before adoption.
+
+### Assignment finite checkpoint
+
+[Evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-assignment-refusal.json): four kinds (binding, field place, Ref write, pointee field) cover27 before/after refusals across9 inputs and3 modes; only domain changes to Source. Five positive inputs × old/new ×3 modes preserve30 successful executions and ORC goldens. Fresh candidate6bba1c3e from standard build20261119T092911-build-cfffed has unchanged inputs/exit0. Raw retries/drain, direct public raw call, wrong kind/nonassignment/range/owner, private helpers and owned lazy/whole/eager controls pass. Same-text injected Internal retains location/notes in owned paths. Cause lifetime native and LLVM22ASan/LSan pass with212 actual body memory checks.
+
+Review found two helpers incorrectly public; both are now private with external rejection controls. Independent re-review permits this finite adoption. **Element remains unproved for owned Source:** existing index_immutable source is rejected earlier by its inout requirement, unchanged in all3 old/new modes. The Element condition is retained and connected to the typed cause but is not credited as an executed owned path. This checkpoint does not close the five-kind increment, this ticket, full suite or performance gate.

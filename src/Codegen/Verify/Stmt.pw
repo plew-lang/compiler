@@ -114,7 +114,7 @@ pub impl Comp {
                 self.addLocal(nameStart: nameStart, nameLen: nameLen, tyStart: le.start, tyLen: le.len, isArray: le.arr, ty: le.ty, isInout: false, isMut: mutable, owned: true)
             }
             Stmt.Assign(val target, val value) => {
-                try self.verifyAssign(target: target, value: value)
+                try self.verifyAssignOperation(target: target, value: value, assignment: <Optional.Some v=stmtId />)
             }
             Stmt.ExprStmt(val expr) => {
                 try self.checkLitCtx(id: expr, eKind: 0, eBits: 0, eSgn: false)
@@ -297,10 +297,33 @@ pub impl Comp {
     }
 
     inout fn verifyAssign(target: U64, value: U64) -> Result[(), CompileDiagnostic] {
+        return self.verifyAssignOperation(target: target, value: value, assignment: <Optional.None />)
+    }
+
+}
+
+impl Comp {
+    fn assignmentDiagnostic(assignment: Optional[U64], target: U64, kind: AssignmentRefusalKind, offset: U64) -> CompileDiagnostic {
+        val statement = match assignment {
+            Optional.Some(v: val statement) => statement
+            Optional.None => { return self.diagnosticAt(offset: offset, msg: kind.message()) }
+        }
+        val owner: DiagnosticOwner = match self.currentSourceOwner() {
+            Optional.Some(v: val owner) => match owner {
+                SemanticCompletionOwner.Function(index: val index) => <DiagnosticOwner.Function index=index />
+                SemanticCompletionOwner.Global(target: val global) => <DiagnosticOwner.Global target=global />
+                SemanticCompletionOwner.Closure(expression: val expression) => <DiagnosticOwner.Closure expression=expression />
+            }
+            Optional.None => <DiagnosticOwner.Unknown />
+        }
+        return <CompileDiagnostic.assignment refusal=<AssignmentRefusal session=self.sourceFactSession() owner=owner statement=statement target=target kind=kind location=self.diagnosticLocationAt(offset: offset) /> />
+    }
+
+    inout fn verifyAssignOperation(target: U64, value: U64, assignment: Optional[U64]) -> Result[(), CompileDiagnostic] {
         match self.arena.exprs[target] {
             Expr.Index(val base, val index) => {
                 if !((try self.placeIsMutable(id: base))) {
-                    return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: base), msg: "cannot assign to an element of an immutable binding; declare it with `mut val`") />
+                    return <Result.Err error=self.assignmentDiagnostic(assignment: assignment, target: target, kind: <AssignmentRefusalKind.Element />, offset: self.exprOffset(id: base)) />
                 }
                 try self.verifyExpr(id: base)
                 try self.verifyExpr(id: index)
@@ -309,7 +332,7 @@ pub impl Comp {
             Expr.Field(base: val fbase, val nameStart, val nameLen) => {
                 // the whole place must be mutable (binding + field both `mut val`).
                 if !((try self.placeIsMutable(id: target))) {
-                    return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: target), msg: "cannot assign to an immutable place; the binding and field must be declared `mut val`") />
+                    return <Result.Err error=self.assignmentDiagnostic(assignment: assignment, target: target, kind: <AssignmentRefusalKind.Field />, offset: self.exprOffset(id: target)) />
                 }
                 // field-write visibility on the base's owner type.
                 val bt: TypeInfo = (try self.typeOf(id: fbase))
@@ -339,7 +362,7 @@ pub impl Comp {
                     // assign (`(x, val y) = r`) idents an INTERNED name — its source
                     // position lives in exprSpanStart (same for hand-written idents,
                     // where exprOffset falls back to the token start).
-                    return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: target), msg: "cannot assign to an immutable binding; declare it with `mut val`") />
+                    return <Result.Err error=self.assignmentDiagnostic(assignment: assignment, target: target, kind: <AssignmentRefusalKind.Binding />, offset: self.exprOffset(id: target)) />
                 }
             }
             Expr.Arrow(val base, val nameStart, val nameLen) => {
@@ -350,12 +373,12 @@ pub impl Comp {
                 if self.isWeakRefLikeInst(ref: abt.ref) {
                     return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: base), msg: "a weak reference cannot be dereferenced with `->` (its referent may be gone); call `upgrade()` to get an `Optional` strong reference, then `->` the unwrapped value (spec/03)") />
                 } else if self.isRefInst(ref: abt.ref) {
-                    return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: base), msg: "cannot assign through `Ref[T]`; use `MutableRef[T]` for shared mutation or call a mutable handle before narrowing with `asRef()` (spec/03)") />
+                    return <Result.Err error=self.assignmentDiagnostic(assignment: assignment, target: target, kind: <AssignmentRefusalKind.Ref />, offset: self.exprOffset(id: base)) />
                 } else if self.isMutableRefInst(ref: abt.ref) {
                     // the pointee FIELD must be `mut val` — the MutableRef exception waives only the
                     // binding's mutability, not the field's (spec/03 `val` immutability).
                     if !((try self.placeIsMutable(id: target))) {
-                        return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: target), msg: "cannot assign to an immutable pointee field; declare the field `mut val` (a `MutableRef` shares mutation through a `val` handle but does not make a `val` field writable — spec/03)") />
+                        return <Result.Err error=self.assignmentDiagnostic(assignment: assignment, target: target, kind: <AssignmentRefusalKind.PointeeField />, offset: self.exprOffset(id: target)) />
                     }
                     val inst: TypeRef = self.arena.typeAt(index: abt.ref)
                     val pt: TypeInfo = self.typeInfoOfRef(ref: inst.args[0])

@@ -89,7 +89,12 @@ on frontend arenas or mutable cursors. A refusal before successful expression
 publication may identify its recorded receiver/input and exact authored operation.
 Classification must not fabricate a successful parent fact or treat the absence
 of a saved selection as proof that a member does not exist; the structural
-checking owner establishes that finding.
+checking owner establishes that finding. Assignment-capability refusals retain the
+authored assignment and its recorded target, not an arbitrary expression with a
+matching name. The statement checker supplies that origin to a private checking
+core; a public direct assignment check cannot claim an authored operation. Owned
+interpretation checks the saved owner and operation shape without repeating the
+mutability decision or retaining unrelated RHS state.
 
 `CompileDiagnostic.isSourceRejection()` requires both error severity and the
 explicit source domain. It is a value-level query, not proof of a failed process

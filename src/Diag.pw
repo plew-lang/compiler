@@ -131,12 +131,43 @@ pub impl MissingFieldRefusal {
     fn location() -> DiagnosticLocation { return self.location }
 }
 
+pub enum AssignmentRefusalKind { Element Field Binding Ref PointeeField }
+pub impl AssignmentRefusalKind {
+    fn message() -> String {
+        return match self {
+            AssignmentRefusalKind.Element => "cannot assign to an element of an immutable binding; declare it with `mut val`"
+            AssignmentRefusalKind.Field => "cannot assign to an immutable place; the binding and field must be declared `mut val`"
+            AssignmentRefusalKind.Binding => "cannot assign to an immutable binding; declare it with `mut val`"
+            AssignmentRefusalKind.Ref => "cannot assign through `Ref[T]`; use `MutableRef[T]` for shared mutation or call a mutable handle before narrowing with `asRef()` (spec/03)"
+            AssignmentRefusalKind.PointeeField => "cannot assign to an immutable pointee field; declare the field `mut val` (a `MutableRef` shares mutation through a `val` handle but does not make a `val` field writable — spec/03)"
+        }
+    }
+}
+pub struct AssignmentRefusal {
+    val session: U64
+    val owner: DiagnosticOwner
+    val statement: U64
+    val target: U64
+    val kind: AssignmentRefusalKind
+    val location: DiagnosticLocation
+}
+pub impl AssignmentRefusal {
+    factory
+    fn session() -> U64 { return self.session }
+    fn owner() -> DiagnosticOwner { return self.owner }
+    fn statement() -> U64 { return self.statement }
+    fn target() -> U64 { return self.target }
+    fn kind() -> AssignmentRefusalKind { return self.kind }
+    fn location() -> DiagnosticLocation { return self.location }
+}
+
 // One closed cause in opaque value storage. The transport handle has no
 // variant-dependent ARC; classification and rendering inspect its cause.
 enum DiagnosticData {
     Report(severity: DiagnosticSeverity, failureDomain: FailureDomain, location: DiagnosticLocation, message: String, notes: Array[DiagnosticNote])
     UseAfterMove(refusal: UseAfterMoveRefusal)
     MissingField(refusal: MissingFieldRefusal)
+    Assignment(refusal: AssignmentRefusal)
 }
 pub struct CompileDiagnostic {
     val storage: Array[DiagnosticData]
@@ -151,6 +182,15 @@ pub impl CompileDiagnostic {
     }
     factory missingField(refusal: MissingFieldRefusal) {
         return <CompileDiagnostic storage=[<DiagnosticData.MissingField refusal=refusal />] />
+    }
+    factory assignment(refusal: AssignmentRefusal) {
+        return <CompileDiagnostic storage=[<DiagnosticData.Assignment refusal=refusal />] />
+    }
+    fn assignment() -> Optional[AssignmentRefusal] {
+        return match self.storage[0U64] {
+            DiagnosticData.Assignment(refusal: val refusal) => <Optional.Some v=refusal />
+            _ => <Optional.None />
+        }
     }
     fn missingField() -> Optional[MissingFieldRefusal] {
         return match self.storage[0U64] {
@@ -169,6 +209,7 @@ pub impl CompileDiagnostic {
             DiagnosticData.Report(severity: val severity, failureDomain: _, location: _, message: _, notes: _) => severity
             DiagnosticData.UseAfterMove(refusal: _) => <DiagnosticSeverity.Error />
             DiagnosticData.MissingField(refusal: _) => <DiagnosticSeverity.Error />
+            DiagnosticData.Assignment(refusal: _) => <DiagnosticSeverity.Error />
         }
     }
     fn failureDomain() -> FailureDomain {
@@ -176,6 +217,7 @@ pub impl CompileDiagnostic {
             DiagnosticData.Report(severity: _, failureDomain: val domain, location: _, message: _, notes: _) => domain
             DiagnosticData.UseAfterMove(refusal: _) => <FailureDomain.Unclassified />
             DiagnosticData.MissingField(refusal: _) => <FailureDomain.Unclassified />
+            DiagnosticData.Assignment(refusal: _) => <FailureDomain.Unclassified />
         }
     }
     fn location() -> DiagnosticLocation {
@@ -183,12 +225,14 @@ pub impl CompileDiagnostic {
             DiagnosticData.Report(severity: _, failureDomain: _, location: val location, message: _, notes: _) => location
             DiagnosticData.UseAfterMove(refusal: val refusal) => refusal.location()
             DiagnosticData.MissingField(refusal: val refusal) => refusal.location()
+            DiagnosticData.Assignment(refusal: val refusal) => refusal.location()
         }
     }
     fn message() -> String {
         return match self.storage[0U64] {
             DiagnosticData.Report(severity: _, failureDomain: _, location: _, message: val message, notes: _) => message
             DiagnosticData.MissingField(refusal: val refusal) => refusal.kind().message()
+            DiagnosticData.Assignment(refusal: val refusal) => refusal.kind().message()
             DiagnosticData.UseAfterMove(refusal: _) => "use of a value after it was moved (`move` transfers ownership away — the variable is dead; bind a fresh value to use it again) (spec/03)"
         }
     }
@@ -197,6 +241,7 @@ pub impl CompileDiagnostic {
             DiagnosticData.Report(severity: _, failureDomain: _, location: _, message: _, notes: val notes) => notes
             DiagnosticData.UseAfterMove(refusal: _) => []
             DiagnosticData.MissingField(refusal: _) => []
+            DiagnosticData.Assignment(refusal: _) => []
         }
     }
     fn isSourceRejection() -> Bool {

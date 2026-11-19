@@ -1047,3 +1047,22 @@ pub impl Comp {
         }
     }
 }
+
+
+pub impl Comp {
+    fn sourceAssignmentHasOwner(refusal: AssignmentRefusal) -> Bool {
+        if !self.sourceExpressionHasOwner(session: refusal.session(), expression: refusal.target(), owner: refusal.owner()) { return false }
+        if refusal.statement() >= self.arena.stmts.count() { return false }
+        match self.arena.stmts[refusal.statement()] {
+            Stmt.Assign(val target, value: _) => { if target != refusal.target() { return false } }
+            _ => { return false }
+        }
+        return match self.arena.exprs[refusal.target()] {
+            Expr.Index(base: _, index: _) => match refusal.kind() { AssignmentRefusalKind.Element => true _ => false }
+            Expr.Field(base: _, nameStart: _, nameLen: _) => match refusal.kind() { AssignmentRefusalKind.Field => true _ => false }
+            Expr.Ident(start: _, len: _) => match refusal.kind() { AssignmentRefusalKind.Binding => true _ => false }
+            Expr.Arrow(base: _, nameStart: _, nameLen: _) => match refusal.kind() { AssignmentRefusalKind.Ref => true AssignmentRefusalKind.PointeeField => true _ => false }
+            _ => false
+        }
+    }
+}

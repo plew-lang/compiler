@@ -1,0 +1,133 @@
+// Assignment capability is checked once. Retain its authored statement and
+// recorded target through raw cache/retry and private owned interpretation.
+use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontendForRequests, openFrontend }
+use ../../../src/CheckedProgram only { CompilerSession, CompilerSessionResult, ProgramCheckResult, checkCompilerSession }
+use ../../../src/Backend only { LlvmLoweringResult }
+use ../../../src/SourceAccess only { SourceAccess }
+use ../../../src/Diag only { CompileDiagnostic, FailureDomain, DiagnosticOwner, AssignmentRefusal, AssignmentRefusalKind }
+use ../../../src/Ir only { Stmt }
+use @Std/Io only { print }
+use @Plew/Syntax only { rangeEquals }
+
+fn input() -> FrontendInput {
+    return <FrontendInput.Text path="Assignment.pw" text="val number = 1I64\nfn other() {{}}\nfn main() {{\n number = 2I64\n}}" />
+}
+
+fn rawFailure(compiler: inout Comp, function: U64) -> CompileDiagnostic {
+    return match compiler.prepareLexicalBody(fnIdx: function) {
+        Result.Err(error: val diagnostic) => diagnostic
+        Result.Ok(value: _) => { panic("immutable assignment was accepted") }
+    }
+}
+
+fn requireRaw(diagnostic: CompileDiagnostic, compiler: Comp) {
+    if diagnostic.isSourceRejection() { panic("raw assignment state acquired source authority") }
+    match diagnostic.failureDomain() {
+        FailureDomain.Unclassified => {}
+        _ => { panic("raw assignment refusal changed domain") }
+    }
+    match diagnostic.assignment() {
+        Optional.Some(v: val refusal) => {
+            if !compiler.sourceAssignmentHasOwner(refusal: refusal) { panic("assignment refusal lost owner/operation") }
+            val forged = <AssignmentRefusal session=refusal.session() owner=refusal.owner() statement=18446744073709551615U64 target=refusal.target() kind=refusal.kind() location=refusal.location() />
+            if compiler.sourceAssignmentHasOwner(refusal: forged) { panic("target-only provenance accepted as an assignment") }
+            if <CompileDiagnostic.assignment refusal=forged />.isSourceRejection() { panic("forged cause acquired source authority") }
+            val wrongKind = <AssignmentRefusal session=refusal.session() owner=refusal.owner() statement=refusal.statement() target=refusal.target() kind=<AssignmentRefusalKind.Field /> location=refusal.location() />
+            if compiler.sourceAssignmentHasOwner(refusal: wrongKind) { panic("binding accepted as field operation") }
+            mut val nonAssignment = 0U64
+            for index in 0U64..<compiler.arena.stmts.count() {
+                match compiler.arena.stmts[index] {
+                    Stmt.Assign(target: _, value: _) => {}
+                    _ => { nonAssignment = index }
+                }
+            }
+            val wrongOperation = <AssignmentRefusal session=refusal.session() owner=refusal.owner() statement=nonAssignment target=refusal.target() kind=refusal.kind() location=refusal.location() />
+            if compiler.sourceAssignmentHasOwner(refusal: wrongOperation) { panic("declaration accepted as assignment") }
+            mut val direct = compiler
+            val value = match compiler.arena.stmts[refusal.statement()] {
+                Stmt.Assign(target: _, val value) => value
+                _ => { panic("missing assignment") }
+            }
+            match direct.verifyAssign(target: refusal.target(), value: value) {
+                Result.Ok(value: _) => { panic("direct assignment accepted") }
+                Result.Err(error: val raw) => {
+                    if raw.message() != diagnostic.message() { panic("direct call reached another refusal") }
+                    match raw.assignment() { Optional.None => {} _ => { panic("direct caller selected authored cause") } }
+                    match raw.failureDomain() { FailureDomain.Unclassified => {} _ => { panic("direct call acquired source authority") } }
+                }
+            }
+            if refusal.session() != compiler.sourceFactSession() { panic("semantic refusal lost session") }
+            mut val other = compiler.arena.functionCount()
+            for index in 0U64..<compiler.arena.functionCount() {
+                val function = compiler.arena.functionAt(index: index)
+                if rangeEquals(bytes: compiler.arena.bytes, start: function.nameStart, len: function.nameLen, kw: "other") { other = index }
+            }
+            if other >= compiler.arena.functionCount() { panic("missing other owner") }
+            if compiler.sourceExpressionHasOwner(session: refusal.session(), expression: refusal.target(), owner: <DiagnosticOwner.Function index=other />) { panic("different declared owner matched") }
+            if !compiler.sourceExpressionHasOwner(session: refusal.session(), expression: refusal.target(), owner: refusal.owner()) { panic("semantic refusal lost expression owner") }
+            if compiler.sourceExpressionHasOwner(session: refusal.session() + 1U64, expression: refusal.target(), owner: refusal.owner()) { panic("foreign session matched") }
+            if compiler.sourceExpressionHasOwner(session: refusal.session(), expression: refusal.target(), owner: <DiagnosticOwner.Unknown />) { panic("unknown owner matched") }
+            if compiler.sourceExpressionHasOwner(session: refusal.session(), expression: 18446744073709551615U64, owner: refusal.owner()) { panic("out of range expression matched") }
+        }
+        _ => { panic("raw cache flattened semantic refusal") }
+    }
+}
+
+fn session() -> CompilerSession {
+    match CompilerSession.open(input: input(), sources: <SourceAccess />) {
+        CompilerSessionResult.Success(session: val session) => { return move session }
+        CompilerSessionResult.Failure(diagnostic: val diagnostic) => { panic(diagnostic.message()) }
+    }
+}
+
+
+fn main() {
+    mut val raw = <Comp />
+    match analyzeFrontendForRequests(c: inout raw, input: input(), sources: <SourceAccess />) {
+        Result.Ok(value: _) => {}
+        Result.Err(error: val diagnostic) => { panic(diagnostic.message()) }
+    }
+    val name = raw.internBytes(s: "main")
+    val function = raw.arena.firstFunctionNamed(nameId: name.nameId)
+    val first = rawFailure(compiler: inout raw, function: function)
+    requireRaw(diagnostic: first, compiler: raw)
+    raw.pendingDiagnostics.append(first)
+    if raw.takeDiagnostics().count() != 1U64 { panic("drain lost presentation") }
+    val repeated = rawFailure(compiler: inout raw, function: function)
+    requireRaw(diagnostic: repeated, compiler: raw)
+    if first.message() != repeated.message() { panic("cache changed cause") }
+    print("raw semantic cache retained")
+
+    mut val owned = session()
+    match owned.lowerDeclarations() {
+        LlvmLoweringResult.Success(module: _) => {}
+        LlvmLoweringResult.Failure(diagnostic: val diagnostic) => { panic(diagnostic.message()) }
+    }
+    val bodies = owned.registeredBodies()
+    if bodies.count() == 0U64 { panic("missing main body") }
+    for body in bodies {
+        match owned.prepareBodyAccess(bodyId: body) {
+            Result.Ok(value: _) => { panic("owned immutable assignment was accepted") }
+            Result.Err(error: val diagnostic) => { if !diagnostic.isSourceRejection() { panic("owned request lost source refusal") } }
+        }
+        match owned.prepareBodyAccess(bodyId: body) {
+            Result.Ok(value: _) => { panic("repeat recovered failure") }
+            Result.Err(error: val diagnostic) => { if !diagnostic.isSourceRejection() { panic("repeat lost source refusal") } }
+        }
+    }
+    match checkCompilerSession(session: move owned) {
+        ProgramCheckResult.Success(program: _) => { panic("failed session became checked") }
+        ProgramCheckResult.Failure(diagnostic: val diagnostic) => { if !diagnostic.isSourceRejection() { panic("check lost retained source refusal") } }
+    }
+    print("owned request failure retained")
+    match checkCompilerSession(session: session()) {
+        ProgramCheckResult.Success(program: _) => { panic("whole check accepted immutable assignment") }
+        ProgramCheckResult.Failure(diagnostic: val diagnostic) => { if !diagnostic.isSourceRejection() { panic("whole check lost source refusal") } }
+    }
+    print("whole source check classified")
+    match openFrontend(input: input(), sources: <SourceAccess />) {
+        Result.Ok(value: _) => { panic("fresh eager frontend accepted immutable assignment") }
+        Result.Err(error: val diagnostic) => { if !diagnostic.isSourceRejection() { panic("fresh eager frontend lost source refusal") } }
+    }
+    print("fresh eager source classified")
+}
