@@ -377,7 +377,7 @@ pub impl Comp {
     inout fn argIsUntypedIntLit(argExpr: U64) -> Result[Bool, CompileDiagnostic] {
         val ti: TypeInfo = (try self.argResolvedTypeInfo(argExpr: argExpr))
         if ti.kind == 0 {
-            return <Result.Ok value=ti.nameLen == 0 />
+            return <Result.Ok value=ti.nameLen == 0 && contextualNumericExpression(self.arena.exprs, exprId: argExpr, floatingLiterals: false) />
         }
         return <Result.Ok value=false />
     }

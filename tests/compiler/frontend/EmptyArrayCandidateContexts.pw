@@ -10,6 +10,7 @@ fn probeCandidate(compiler: inout Comp, index: U64, nameId: U64) -> Optional[U64
             val candidates = compiler.visibleFreeFunctions(nameStart: start, nameLen: length)
             if candidates.count() != 2U64 { panic("lost visible overload frontier") }
             val operand = compiler.argAt(args: arguments, index: 0U64).expr
+            if compiler.argIsUntypedIntLit(argExpr: operand).unwrap() { panic("unresolved array was mistaken for an integer literal") }
             if compiler.semanticExprTerm(exprId: operand) != 0U64 { panic("operand already typed before candidate probe") }
             for repeat in 0U64..<2U64 {
                 if compiler.callableArgMatchRank(f: compiler.arena.functionAt(index: candidates[0U64]), args: arguments).unwrap() != 1U64 { panic("scalar candidate accepted an array context") }
