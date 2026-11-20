@@ -1,0 +1,11 @@
+trait Choice {}
+pub impl Choice {
+    fn choose(value: Array[I64]) -> I64 { return 1I64 }
+    fn choose(value: Array[Bool]) -> I64 { return 2I64 }
+}
+struct Selector {}
+impl Selector as Choice {}
+fn main() {
+    val selector = <Selector />
+    selector.choose(value: [])
+}

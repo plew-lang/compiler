@@ -1,0 +1,9 @@
+struct Selector {}
+impl Selector {
+    fn choose(value: Array[I64]) {}
+    fn choose(value: Array[String]) {}
+}
+fn main() {
+    val selector = <Selector />
+    selector.choose(value: [])
+}

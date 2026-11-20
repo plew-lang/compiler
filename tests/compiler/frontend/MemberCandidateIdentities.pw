@@ -1,0 +1,149 @@
+use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontendForRequests, intern, openFrontend }
+use ../../../src/SourceAccess only { SourceAccess }
+use ../../../src/Ir only { Func, Expr, ArgRange, CallableSourceHead }
+use ../../../src/CheckedProgram only { CompilerSession, CompilerSessionResult, ProgramCheckResult, checkCompilerSession }
+use ../../../src/Backend only { LlvmLoweringResult }
+use ../../../src/Diag only { CompileDiagnostic, MemberCallAmbiguityRefusal, MemberCallAmbiguityKind }
+use @Std/Io only { print }
+
+fn alias(compiler: inout Comp, prototype: U64, name: String, originConform: U64 = 0U64) -> U64 {
+    val original = compiler.arena.functionAt(index: prototype)
+    val spelling = compiler.internBytes(s: name)
+    val index = compiler.arena.functionCount()
+    compiler.arena.registerFunction(<Func nameStart=spelling.nameStart nameLen=spelling.nameLen nameId=spelling.nameId
+        lexicalOwnerFnId=original.lexicalOwnerFnId recvId=original.recvId recvTy=original.recvTy recvPatternParams=original.recvPatternParams
+        recvTraitArgs=original.recvTraitArgs typeParams=original.typeParams params=original.params hasRet=original.hasRet
+        retStart=original.retStart retLen=original.retLen retIsArray=original.retIsArray retTy=original.retTy body=original.body
+        hasRecv=original.hasRecv recvStart=original.recvStart recvLen=original.recvLen selfInout=original.selfInout selfMove=original.selfMove
+        isAssoc=original.isAssoc isAsync=original.isAsync isExtern=original.isExtern isPub=original.isPub isProvided=original.isProvided sourceWitnessFuncId=original.sourceWitnessFuncId
+        srcTraitId=original.srcTraitId srcTraitOwner=original.srcTraitOwner originTraitId=original.originTraitId
+        originTraitOwner=original.originTraitOwner originTraitArity=original.originTraitArity
+        originConformIdx=if originConform == 0U64 { give original.originConformIdx } else { give originConform }
+        sourceConformIdx=original.sourceConformIdx sourceRootConformIdx=original.sourceRootConformIdx
+        providedOwnerMod=original.providedOwnerMod provTraitArity=original.provTraitArity provTraitOwner=original.provTraitOwner
+        viewOnly=original.viewOnly extId=original.extId defOffset=original.defOffset />)
+    compiler.registerCallable(funcIdx: index).unwrap()
+    return index
+}
+
+fn query(compiler: inout Comp, prototype: U64, name: String, arguments: ArgRange, ambiguous: Bool) {
+    val receiver = compiler.arena.functionAt(index: prototype)
+    val spelling = compiler.internBytes(s: name)
+    val source = <CallableSourceHead kind=2U64 id=receiver.srcTraitId owner=receiver.srcTraitOwner arity=receiver.provTraitArity />
+    for mode in 0U64..<3U64 {
+        val selected = if mode == 0U64 {
+            give compiler.findMethod(recvStart: receiver.recvStart, recvLen: receiver.recvLen, nameStart: spelling.nameStart, nameLen: spelling.nameLen, args: arguments, recvRef: receiver.recvTy)
+        } else if mode == 1U64 {
+            give compiler.findCallableInViewSet(recvStart: receiver.recvStart, recvLen: receiver.recvLen, sources: [source], nameStart: spelling.nameStart, nameLen: spelling.nameLen, args: arguments, associated: false, recvRef: receiver.recvTy)
+        } else {
+            give compiler.findExtMethodBySource(recvStart: receiver.recvStart, recvLen: receiver.recvLen, source: source, nameStart: spelling.nameStart, nameLen: spelling.nameLen, args: arguments, recvRef: receiver.recvTy)
+        }
+        match selected {
+            Result.Ok(value: val function) => {
+                if function >= compiler.arena.functionCount() { panic("raw alias setup did not produce an applicable candidate") }
+                if ambiguous { panic("distinct member candidate was lost") }
+                val chosen = compiler.arena.functionAt(index: function)
+                if chosen.sourceWitnessFuncId != receiver.sourceWitnessFuncId { panic("duplicate lookup changed original declaration") }
+            }
+            Result.Err(error: val diagnostic) => {
+                if !ambiguous { panic(diagnostic.message()) }
+                if diagnostic.isSourceRejection() || compiler.sourceFailureHasOwner(diagnostic: diagnostic) { panic("raw alias acquired source authority") }
+                val message = diagnostic.message()
+                if message != "ambiguous call: multiple method declarations match the argument labels and types" && message != "ambiguous call: multiple trait member instances match the arguments" && message != "ambiguous source-qualified call: this declaration source provides more than one matching method" { panic(message) }
+            }
+        }
+    }
+}
+
+fn run(path: String, instances: Bool) {
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.File path=path />, sources: <SourceAccess stdRoot="std/".bytes() />).unwrap()
+    val name = compiler.internBytes(s: "choose")
+    mut val prototypes: Array[U64] = []
+    for index in 0U64..<compiler.arena.functionCount() {
+        val function = compiler.arena.functionAt(index: index)
+        if function.nameId == name.nameId && function.isProvided { prototypes.append(index) }
+    }
+    if prototypes.count() != 2U64 { panic("two real provided instances/declarations were not loaded") }
+    val first = compiler.arena.functionAt(index: prototypes[0U64])
+    val second = compiler.arena.functionAt(index: prototypes[1U64])
+    if (first.sourceWitnessFuncId == second.sourceWitnessFuncId) != instances { panic("original declaration control changed") }
+    val firstProof = compiler.providedBodyProof(f: first, receiverRef: first.recvTy).unwrap()
+    val secondProof = compiler.providedBodyProof(f: second, receiverRef: second.recvTy).unwrap()
+    if compiler.proofIsMissing(proof: firstProof) || compiler.proofIsMissing(proof: secondProof) { panic("real provided proof missing") }
+    if instances && compiler.sameMemberProofEndpoint(selected: firstProof, candidate: secondProof, traitOwner: first.originTraitOwner) { panic("different source instances were collapsed") }
+    mut val arguments: ArgRange = <ArgRange start=0U64 len=0U64 />
+    for index in 0U64..<compiler.arena.exprs.count() {
+        match compiler.arena.exprs[index] {
+            Expr.Method(recv: _, nameStart: val start, nameLen: val length, args: val args) => {
+                if intern(c: inout compiler, start: start, len: length) == name.nameId { arguments = args }
+            }
+            _ => {}
+        }
+    }
+    if arguments.len != 1U64 { panic("written empty-array operand was not found") }
+    alias(compiler: inout compiler, prototype: prototypes[0U64], name: "candidateAlias")
+    alias(compiler: inout compiler, prototype: prototypes[0U64], name: "candidateAlias")
+    query(compiler: inout compiler, prototype: prototypes[0U64], name: "candidateAlias", arguments: arguments, ambiguous: false)
+    alias(compiler: inout compiler, prototype: prototypes[1U64], name: "candidateAlias")
+    query(compiler: inout compiler, prototype: prototypes[0U64], name: "candidateAlias", arguments: arguments, ambiguous: true)
+}
+
+fn session(path: String) -> CompilerSession {
+    match CompilerSession.open(input: <FrontendInput.File path=path />, sources: <SourceAccess stdRoot="std/".bytes() />) {
+        CompilerSessionResult.Success(session: val result) => { return move result }
+        CompilerSessionResult.Failure(diagnostic: val diagnostic) => { panic(diagnostic.message()) }
+    }
+}
+
+fn requireSource(diagnostic: CompileDiagnostic, kind: MemberCallAmbiguityKind) {
+    if !diagnostic.isSourceRejection() || diagnostic.message() != kind.message() { panic(diagnostic.message()) }
+}
+
+fn sourceFailure(path: String, instances: Bool) {
+    val kind = if instances { give <MemberCallAmbiguityKind.StaticInstances /> } else { give <MemberCallAmbiguityKind.MethodOverloads /> }
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.File path=path />, sources: <SourceAccess stdRoot="std/".bytes() />).unwrap()
+    val mainName = compiler.internBytes(s: "main")
+    val owner = compiler.arena.firstFunctionNamed(nameId: mainName.nameId)
+    for repeat in 0U64..<2U64 {
+        match compiler.prepareLexicalBody(fnIdx: owner) {
+            Result.Ok(value: _) => { panic("ambiguous method became a checked source body") }
+            Result.Err(error: val diagnostic) => {
+                if diagnostic.isSourceRejection() || diagnostic.message() != kind.message() || !compiler.sourceFailureHasOwner(diagnostic: diagnostic) { panic(diagnostic.message()) }
+                val refusal = diagnostic.memberCallAmbiguity().unwrap()
+                if !refusal.kind().same(other: kind) { panic("method ambiguity lost its semantic kind") }
+                val otherKind = if instances { give <MemberCallAmbiguityKind.MethodOverloads /> } else { give <MemberCallAmbiguityKind.StaticInstances /> }
+                if compiler.sourceMemberCallAmbiguityHasOwner(refusal: <MemberCallAmbiguityRefusal kind=otherKind session=refusal.session() owner=refusal.owner() receiverRef=refusal.receiverRef() expression=refusal.expression() nameStart=refusal.nameStart() nameLen=refusal.nameLen() argumentsStart=refusal.argumentsStart() argumentsCount=refusal.argumentsCount() location=refusal.location() />) { panic("forged method ambiguity kind was accepted") }
+                compiler.takeDiagnostics()
+            }
+        }
+    }
+    mut val owned = session(path: path)
+    match owned.lowerDeclarations() {
+        LlvmLoweringResult.Success(module: _) => {}
+        LlvmLoweringResult.Failure(diagnostic: val diagnostic) => { panic(diagnostic.message()) }
+    }
+    val bodies = owned.registeredBodies()
+    if bodies.count() == 0U64 { panic("missing main body") }
+    for body in bodies {
+        for repeat in 0U64..<2U64 {
+            match owned.prepareBodyAccess(bodyId: body) {
+                Result.Ok(value: _) => { panic("owned ambiguous method became executable") }
+                Result.Err(error: val diagnostic) => { requireSource(diagnostic: diagnostic, kind: kind) }
+            }
+        }
+    }
+    match checkCompilerSession(session: move owned) { ProgramCheckResult.Failure(diagnostic: val diagnostic) => { requireSource(diagnostic: diagnostic, kind: kind) } ProgramCheckResult.Success(program: _) => { panic("failed method session became checked") } }
+    match checkCompilerSession(session: session(path: path)) { ProgramCheckResult.Failure(diagnostic: val diagnostic) => { requireSource(diagnostic: diagnostic, kind: kind) } ProgramCheckResult.Success(program: _) => { panic("whole check accepted ambiguous method") } }
+    match openFrontend(input: <FrontendInput.File path=path />, sources: <SourceAccess stdRoot="std/".bytes() />) { Result.Err(error: val diagnostic) => { requireSource(diagnostic: diagnostic, kind: kind) } Result.Ok(value: _) => { panic("eager check accepted ambiguous method") } }
+}
+
+fn main() {
+    run(path: "tests/fixtures/reject/empty_array_provided_overload_ambiguous.pw", instances: false)
+    run(path: "tests/fixtures/reject/empty_array_same_declaration_instances_ambiguous.pw", instances: true)
+    sourceFailure(path: "tests/fixtures/reject/empty_array_method_overload_ambiguous.pw", instances: false)
+    sourceFailure(path: "tests/fixtures/reject/empty_array_provided_overload_ambiguous.pw", instances: false)
+    sourceFailure(path: "tests/fixtures/reject/empty_array_same_declaration_instances_ambiguous.pw", instances: true)
+    print("member declaration and source instance identities remain distinct")
+}

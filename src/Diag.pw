@@ -242,13 +242,14 @@ pub impl FreeCallAmbiguityRefusal {
     fn location() -> DiagnosticLocation { return self.location }
 }
 
-pub enum MemberCallAmbiguityKind { StaticInstances ExistentialRequirements ActiveViews }
+pub enum MemberCallAmbiguityKind { StaticInstances ExistentialRequirements ActiveViews MethodOverloads }
 pub impl MemberCallAmbiguityKind {
     fn message() -> String {
         return match self {
             MemberCallAmbiguityKind.StaticInstances => "ambiguous call: multiple trait member instances match the arguments"
             MemberCallAmbiguityKind.ExistentialRequirements => "ambiguous call: multiple trait requirements match the arguments"
             MemberCallAmbiguityKind.ActiveViews => "ambiguous source-qualified call: active views provide multiple matching methods"
+            MemberCallAmbiguityKind.MethodOverloads => "ambiguous call: multiple method declarations match the argument labels and types"
         }
     }
     fn same(other: MemberCallAmbiguityKind) -> Bool {
@@ -256,6 +257,7 @@ pub impl MemberCallAmbiguityKind {
             MemberCallAmbiguityKind.StaticInstances => match other { MemberCallAmbiguityKind.StaticInstances => true _ => false }
             MemberCallAmbiguityKind.ExistentialRequirements => match other { MemberCallAmbiguityKind.ExistentialRequirements => true _ => false }
             MemberCallAmbiguityKind.ActiveViews => match other { MemberCallAmbiguityKind.ActiveViews => true _ => false }
+            MemberCallAmbiguityKind.MethodOverloads => match other { MemberCallAmbiguityKind.MethodOverloads => true _ => false }
         }
     }
 }

@@ -1250,15 +1250,6 @@ pub impl Comp {
         return c.traitId != 0U64 && source.kind == 2U64 && self.sameCallableSourceHead(a: self.callableTraitKey(c: c), b: source)
     }
 
-    // Candidate de-duplication is stricter than source selection.  `#E` names
-    // one extension bundle, but E may intentionally expose distinct A- and
-    // B-provided members that only `#E#A` / `#E#B` can distinguish.  They are
-    // two candidates under E, not duplicate witnesses.  Only copies of the
-    // same source *and* trait provenance denote one semantic callable.
-    inout fn sameCallableSemanticOrigin(a: Callable, b: Callable) -> Bool {
-        return self.sameCallableSourceHead(a: self.callableSourceKey(c: a), b: self.callableSourceKey(c: b)) && self.sameCallableSourceHead(a: self.callableTraitKey(c: a), b: self.callableTraitKey(c: b))
-    }
-
     // Match a call receiver against the declaration's complete receiver pattern.
     // A generic impl such as Box[T] is a pattern, whereas Box[I64] is exact.
     // A trait-receiver *provided copy* is different: it may be declared on B

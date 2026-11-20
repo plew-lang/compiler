@@ -24,6 +24,16 @@ impl Selector {
     fn chooseReverse(value: I64) -> I64 { return 0I64 }
 }
 
+trait Choice {}
+pub impl Choice {
+    fn chooseForward(value: I64) -> I64 { return 0I64 }
+    fn chooseForward(value: Array[I64]) -> I64 { return 95I64 }
+    fn chooseReverse(value: Array[I64]) -> I64 { return 96I64 }
+    fn chooseReverse(value: I64) -> I64 { return 0I64 }
+}
+struct ProvidedSelector {}
+impl ProvidedSelector as Choice {}
+
 fn main() {
     print(chooseForward(value: []))
     print(chooseReverse(value: []))
@@ -41,4 +51,9 @@ fn main() {
     print(selector.chooseReverse(value: []))
     print(selector.chooseForward(value: { give [] }))
     print(selector.chooseReverse(value: { give [] }))
+    val provided = <ProvidedSelector />
+    print(provided.chooseForward(value: []))
+    print(provided.chooseReverse(value: []))
+    print(provided.chooseForward(value: { give [] }))
+    print(provided.chooseReverse(value: { give [] }))
 }

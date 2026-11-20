@@ -31,6 +31,11 @@ Plew resolves from earlier information and available expectations. Later stateme
 
 Use two conceptual operations: construct/check an unresolved expression under an allowed expectation, and require compatibility of a determined value with a destination. They share structural relations but have different write permissions. A later compatibility check reads the committed source term and produces evidence or an error; it cannot retype a numeric literal, reopen overload selection, or reinterpret a binding from current spelling.
 
+Applying the completion context of a just-recorded expression does not start
+construction of that same expression again. An unresolved contextual literal
+must either acquire its permitted type or return its failure; retaining a need
+for context cannot create an unbounded construction/refinement backedge.
+
 For example, `val x = { give 1I64 }` commits `x` as `I64`. A later use requiring `U8` cannot reinterpret the literal or use that destination to infer the earlier binding; it must apply the ordinary compatibility rule and reject an unsupported conversion.
 
 For arrays, pass an available array element expectation to elements, construct the array term, then check the entire array at the destination. A non-array expectation cannot become the array's type. Empty arrays still need a determinable element type and full compatibility. For records, labels distribute child expectations; checking children does not establish whole-record compatibility or an implicit nominal conversion. Named construction preserves nominal identity and all type arguments, including arguments not mentioned by any field.

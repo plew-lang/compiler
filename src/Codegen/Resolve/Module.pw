@@ -556,7 +556,7 @@ impl Comp {
                                 if cand.sourceKind == 0U64 {
                                     if inherentMatch == self.arena.functionCount() {
                                         inherentMatch = cand.funcIdx
-                                    } else if inherentMatch2 == self.arena.functionCount() {
+                                    } else if inherentMatch2 == self.arena.functionCount() && cand.funcIdx != inherentMatch {
                                         inherentMatch2 = cand.funcIdx
                                     }
                                 }
@@ -564,7 +564,7 @@ impl Comp {
                                     typeMatch = cand.funcIdx
                                     typeMatchEntry = i
                                 } else {
-                                    if typeMatch2 == self.arena.functionCount() {
+                                    if typeMatch2 == self.arena.functionCount() && !(try self.sameCallableMemberInstance(a: self.decls.callableAt(index: typeMatchEntry), b: cand, receiverRef: recvRef)) {
                                         typeMatch2 = cand.funcIdx
                                         typeMatch2Entry = i
                                     }
@@ -583,20 +583,24 @@ impl Comp {
         // can select it; only bare lookup gives the inherent surface priority.
         if inherentMatch != self.arena.functionCount() {
             try self.checkOverloadAmbiguity(a: inherentMatch, b: inherentMatch2, args: args)
+            if inherentMatch2 != self.arena.functionCount() {
+                return <Result.Err error=self.memberCallAmbiguityDiagnostic(kind: <MemberCallAmbiguityKind.MethodOverloads />, receiverRef: recvRef, nameStart: nameStart, nameLen: nameLen, args: args, methodOrigin: methodOrigin) />
+            }
             return <Result.Ok value=inherentMatch />
         }
         if typeMatch != self.arena.functionCount() {
-            // two provided-method copies from DIFFERENT source traits matching the same
-            // bare selector: the bare call is ambiguous (spec/08) — select the source
-            // with `a#P.foo()`. (Only this case errors here; ordinary arg-type overloads
-            // are disambiguated by the args, and identical-trait copies are the same
-            // method.)
+            // Collection retained distinct declaration/instance identities.
+            // Preserve the existing cross-trait diagnostic; collisions within
+            // one source report the actual overload or instance ambiguity.
             if typeMatch2 != self.arena.functionCount() {
                 if typeMatchEntry < self.decls.callableCount() && typeMatch2Entry < self.decls.callableCount() {
                     if self.decls.callableAt(index: typeMatchEntry).sourceKind == 2U64 && self.decls.callableAt(index: typeMatch2Entry).sourceKind == 2U64 {
-                        if !(self.sameCallableSemanticOrigin(a: self.decls.callableAt(index: typeMatchEntry), b: self.decls.callableAt(index: typeMatch2Entry))) {
-                            return <Result.Err error=self.bareMethodAmbiguityDiagnostic(nameStart: nameStart, nameLen: nameLen, args: args, methodOrigin: methodOrigin) />
+                        val first = self.decls.callableAt(index: typeMatchEntry)
+                        val second = self.decls.callableAt(index: typeMatch2Entry)
+                        if self.sameCallableSourceOrigins(a: first, b: second) {
+                            return <Result.Err error=self.memberCallAmbiguityDiagnostic(kind: self.memberCandidateAmbiguityKind(a: first, b: second), receiverRef: recvRef, nameStart: nameStart, nameLen: nameLen, args: args, methodOrigin: methodOrigin) />
                         }
+                        return <Result.Err error=self.bareMethodAmbiguityDiagnostic(nameStart: nameStart, nameLen: nameLen, args: args, methodOrigin: methodOrigin) />
                     }
                 }
             }
@@ -970,7 +974,7 @@ impl Comp {
                                 if typeMatch == self.arena.functionCount() {
                                     typeMatch = cand.funcIdx
                                     typeMatchEntry = i
-                                } else if typeMatch2 == self.arena.functionCount() {
+                                } else if typeMatch2 == self.arena.functionCount() && !(try self.sameCallableMemberInstance(a: self.decls.callableAt(index: typeMatchEntry), b: cand, receiverRef: recvRef)) {
                                     typeMatch2 = cand.funcIdx
                                     typeMatch2Entry = i
                                 }
@@ -984,14 +988,7 @@ impl Comp {
                 try self.checkOverloadAmbiguity(a: typeMatch, b: typeMatch2, args: args)
                 if typeMatch2 != self.arena.functionCount() {
                     if typeMatchEntry < self.decls.callableCount() && typeMatch2Entry < self.decls.callableCount() {
-                        if !(self.sameCallableSemanticOrigin(a: self.decls.callableAt(index: typeMatchEntry), b: self.decls.callableAt(index: typeMatch2Entry))) {
-                            return <Result.Err error=self.memberCallAmbiguityDiagnostic(kind: <MemberCallAmbiguityKind.ActiveViews />, receiverRef: recvRef, nameStart: nameStart, nameLen: nameLen, args: args, methodOrigin: methodOrigin) />
-                        }
-                        // A direct conformance and a single trait-to-trait
-                        // propagation can materialize the same selected source
-                        // twice. It is one semantic callable surface, not an
-                        // ambiguity the caller can observe.
-                        return <Result.Ok value=typeMatch />
+                        return <Result.Err error=self.memberCallAmbiguityDiagnostic(kind: self.memberCandidateAmbiguityKind(a: self.decls.callableAt(index: typeMatchEntry), b: self.decls.callableAt(index: typeMatch2Entry)), receiverRef: recvRef, nameStart: nameStart, nameLen: nameLen, args: args, methodOrigin: methodOrigin) />
                     }
                     return <Result.Err error=self.diagnosticAt(offset: nameStart, msg: "ambiguous source-qualified call: this source provides more than one matching method") />
                 }
@@ -1203,7 +1200,7 @@ pub impl Comp {
                                         if typeMatch == self.arena.functionCount() {
                                             typeMatch = cand.funcIdx
                                             typeMatchEntry = i
-                                        } else if typeMatch2 == self.arena.functionCount() {
+                                        } else if typeMatch2 == self.arena.functionCount() && !(try self.sameCallableMemberInstance(a: self.decls.callableAt(index: typeMatchEntry), b: cand, receiverRef: recvRef)) {
                                             typeMatch2 = cand.funcIdx
                                             typeMatch2Entry = i
                                         }
@@ -1219,7 +1216,7 @@ pub impl Comp {
             try self.checkOverloadAmbiguity(a: typeMatch, b: typeMatch2, args: args)
             if typeMatch2 != self.arena.functionCount() {
                 if typeMatchEntry < self.decls.callableCount() && typeMatch2Entry < self.decls.callableCount() {
-                    if !(self.sameCallableSemanticOrigin(a: self.decls.callableAt(index: typeMatchEntry), b: self.decls.callableAt(index: typeMatch2Entry))) {
+                    if !(self.sameCallableSourceOrigins(a: self.decls.callableAt(index: typeMatchEntry), b: self.decls.callableAt(index: typeMatch2Entry))) {
                         return <Result.Err error=self.diagnosticAt(offset: nameStart, msg: "ambiguous source-qualified call: this `#` name resolves to multiple declaration sources") />
                     }
                 }
@@ -1458,5 +1455,34 @@ pub impl Comp {
             i += 1
         }
         return <Result.Ok value=() />
+    }
+}
+
+impl Comp {
+    inout fn sameCallableSourceOrigins(a: Callable, b: Callable) -> Bool {
+        return self.sameCallableSourceHead(a: self.callableSourceKey(c: a), b: self.callableSourceKey(c: b)) && self.sameCallableSourceHead(a: self.callableTraitKey(c: a), b: self.callableTraitKey(c: b))
+    }
+
+    // A source bundle can contain different declarations and trait instances.
+    // Copies coincide only at the same original declaration and receiver proof.
+    inout fn sameCallableMemberInstance(a: Callable, b: Callable, receiverRef: U64) -> Result[Bool, CompileDiagnostic] {
+        if a.funcIdx >= self.arena.functionCount() || b.funcIdx >= self.arena.functionCount() || !self.sameCallableSourceOrigins(a: a, b: b) { return <Result.Ok value=false /> }
+        if a.funcIdx == b.funcIdx { return <Result.Ok value=true /> }
+        val left = self.arena.functionAt(index: a.funcIdx)
+        val right = self.arena.functionAt(index: b.funcIdx)
+        if left.sourceWitnessFuncId == 0U64 || left.sourceWitnessFuncId > self.arena.functionCount() || left.sourceWitnessFuncId != right.sourceWitnessFuncId || !left.isProvided || !right.isProvided { return <Result.Ok value=false /> }
+        if left.originTraitOwner == 0U64 || left.originTraitOwner != right.originTraitOwner || self.decls.traitIndexByOffset(offset: left.originTraitOwner) >= self.decls.traitCount() { return <Result.Ok value=false /> }
+        val first = try self.providedBodyProof(f: left, receiverRef: receiverRef)
+        val second = try self.providedBodyProof(f: right, receiverRef: receiverRef)
+        if self.proofIsMissing(proof: first) || self.proofIsMissing(proof: second) { return <Result.Ok value=false /> }
+        return <Result.Ok value=self.sameMemberProofEndpoint(selected: first, candidate: second, traitOwner: left.originTraitOwner) />
+    }
+
+    inout fn memberCandidateAmbiguityKind(a: Callable, b: Callable) -> MemberCallAmbiguityKind {
+        if !self.sameCallableSourceOrigins(a: a, b: b) { return <MemberCallAmbiguityKind.ActiveViews /> }
+        val left = self.arena.functionAt(index: a.funcIdx)
+        val right = self.arena.functionAt(index: b.funcIdx)
+        if left.sourceWitnessFuncId != 0U64 && left.sourceWitnessFuncId == right.sourceWitnessFuncId { return <MemberCallAmbiguityKind.StaticInstances /> }
+        return <MemberCallAmbiguityKind.MethodOverloads />
     }
 }

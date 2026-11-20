@@ -132,6 +132,16 @@ default forms. A copied trait check or an assertion comparing two independent
 acceptance decisions is not the completed architecture. The implementation gap
 is tracked by [met-g53w](../issues/met-g53w.md).
 
+Candidate identity includes the original callable declaration and its applied
+source/receiver instance. Equal source or trait heads do not make different
+overload declarations or different proof instances one callable. Reuse canonical
+witness identities and member-proof endpoint equality; a shared lexical body is
+not a substitute. Collapse actual duplicate paths while collecting candidates,
+before retaining a bounded pair of distinct matches. Two copies followed by a
+different candidate must still expose the ambiguity. Apply inherent preference
+to its eligible family without making registration order resolve remaining
+multiple matches.
+
 Name indices accelerate candidate discovery. They must remain consistent with their owning declaration store through its registration API. A global spelling-presence query does not prove lexical binding, visibility, arity, conformance, or unique applicability. An index's iteration order is not a semantic priority.
 
 ### Index and Query Cost Boundaries
