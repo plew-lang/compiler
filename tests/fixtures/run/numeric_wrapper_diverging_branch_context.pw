@@ -1,0 +1,10 @@
+use @Std/Io only { print }
+fn choose(value: Bool) -> I64 { return 1I64 }
+fn choose(value: I64) -> I64 { return 64I64 }
+fn run(flag: Bool) -> I64 {
+    return choose(value: if flag { give 5 } else { return 0I64 })
+}
+fn main() {
+    print(run(flag: true))
+    print(run(flag: false))
+}

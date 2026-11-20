@@ -1,0 +1,39 @@
+use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontendForRequests, intern }
+use ../../../src/SourceAccess only { SourceAccess }
+use ../../../src/Ir only { Expr, CachedCallee }
+use @Std/Io only { print }
+fn main() {
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.File path="tests/fixtures/reject/diagnostic_candidate_argument_type_mismatch.pw" />, sources: <SourceAccess stdRoot="std/".bytes() />).unwrap()
+    val name = compiler.internBytes(s: "accept")
+    mut val call = compiler.arena.exprs.count()
+    for index in 0U64..<compiler.arena.exprs.count() {
+        match compiler.arena.exprs[index] {
+            Expr.Call(nameStart: val start, nameLen: val length, args: val arguments) => {
+                if intern(c: inout compiler, start: start, len: length) == name.nameId {
+                    call = index
+                    val candidates = compiler.visibleFreeFunctions(nameStart: start, nameLen: length)
+                    if candidates.count() != 1U64 { panic("missing diagnostic-only frontier") }
+                    if compiler.callableArgMatchRank(f: compiler.arena.functionAt(index: candidates[0U64]), args: arguments).unwrap() != 1U64 { panic("test did not reach a selector-only candidate") }
+                }
+            }
+            _ => {}
+        }
+    }
+    if call == compiler.arena.exprs.count() { panic("missing authored diagnostic call") }
+    val mainName = compiler.internBytes(s: "main")
+    val owner = compiler.arena.firstFunctionNamed(nameId: mainName.nameId)
+    for repeat in 0U64..<2U64 {
+        match compiler.prepareLexicalBody(fnIdx: owner) {
+            Result.Ok(value: _) => { panic("mismatched call was accepted") }
+            Result.Err(error: val error) => {
+                if error.message() != "type mismatch: this value's type does not match the type required here (Plew has no implicit conversion — spec/12)" { panic(error.message()) }
+            }
+        }
+        match compiler.typeCache.callee[call] {
+            CachedCallee.Uncomputed => {}
+            _ => { panic("diagnostic-only candidate published selected callee authority") }
+        }
+    }
+    print("diagnostic-only candidate does not publish a selected callable")
+}
