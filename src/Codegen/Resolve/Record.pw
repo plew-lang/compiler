@@ -2589,22 +2589,22 @@ pub impl Comp {
                 // The construction query preserves the synthetic requirement on its
                 // selected cache entry.
                 // Only unresolved receivers need the parametric Record query.
-                mut val methodCallee = if admittedFactoryReceiver != 0U64 {
+                mut val methodSelection = if admittedFactoryReceiver != 0U64 {
                     give try self.resolveWrittenMethodWithOrigin(exprId: exprId, recv: recv, nameStart: nameStart, nameLen: nameLen, args: args, admittedReceiver: admittedFactoryReceiver, methodOrigin: <MethodLookupOrigin expression=<Optional.Some v=exprId /> />)
                 } else if extensionProofs.count() != 0U64 || admittedTrait.isSome() {
                     give try self.resolveMethodForResolvedReceiverWithOrigin(recv: recv, surfaceRef: receiverTerm, sourceId: 0U64, sourceOwner: 0U64, nameStart: nameStart, nameLen: nameLen, args: args, useOffset: self.exprOffset(id: exprId), requiredTraitOwner: requiredTraitOwner, extensionProofs: extensionProofs, admittedTrait: admittedTrait, methodOrigin: <MethodLookupOrigin expression=<Optional.Some v=exprId /> />)
-                } else { give try self.resolvedCallee(id: exprId) }
-                if extensionProofs.count() == 0U64 && admittedTrait.isNone() && requiredTraitOwner != 0U64 && methodCallee >= self.arena.functionCount() {
-                    methodCallee = (try self.resolveMethodFinalForTypeWithOrigin(recv: recv, receiverType: self.typeInfoOfRef(ref: receiverTerm), nameStart: nameStart, nameLen: nameLen, args: args, requiredTraitOwner: requiredTraitOwner, methodOrigin: <MethodLookupOrigin expression=<Optional.Some v=exprId /> />))
+                } else { give try self.resolvedMemberCall(id: exprId) }
+                if extensionProofs.count() == 0U64 && admittedTrait.isNone() && requiredTraitOwner != 0U64 && self.memberLookupIsMissing(selection: methodSelection) {
+                    methodSelection = (try self.resolveMethodFinalForTypeWithOrigin(recv: recv, receiverType: self.typeInfoOfRef(ref: receiverTerm), nameStart: nameStart, nameLen: nameLen, args: args, requiredTraitOwner: requiredTraitOwner, methodOrigin: <MethodLookupOrigin expression=<Optional.Some v=exprId /> />))
                 } else if extensionProofs.count() == 0U64 && admittedTrait.isNone() && requiredTraitOwner == 0U64 {
                     // A factory is lowered to Expr.Method but its receiver is a
                     // type spelling, not a value receiver.  Select its associated
                     // callable here while Record still owns that lexical/type-name
                     // source; Mono must only ground the resulting Direct template.
-                    if methodCallee >= self.arena.functionCount() {
+                    if self.memberLookupIsMissing(selection: methodSelection) {
                         val assocRecv: Bind = self.assocRecvName(recv: recv)
                         if assocRecv.nameLen != 0U64 {
-                            methodCallee = (try self.findAssocWithOrigin(recvStart: assocRecv.nameStart, recvLen: assocRecv.nameLen, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: receiverTerm, methodOrigin: <MethodLookupOrigin expression=<Optional.Some v=exprId /> />))
+                            methodSelection = (try self.findAssocWithOrigin(recvStart: assocRecv.nameStart, recvLen: assocRecv.nameLen, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: receiverTerm, methodOrigin: <MethodLookupOrigin expression=<Optional.Some v=exprId /> />))
                         }
                     }
                     // Some valid inherited surfaces (notably a newtype's
@@ -2612,8 +2612,8 @@ pub impl Comp {
                     // still owns the one frontend selection: resolve it now from
                     // the already-recorded receiver, rather than leaving Mono to
                     // reopen this method Expr during finalization.
-                    if methodCallee >= self.arena.functionCount() && receiverTerm != 0U64 {
-                        methodCallee = (try self.resolveMethodForResolvedReceiverWithOrigin(recv: recv, surfaceRef: receiverTerm, sourceId: 0U64, sourceOwner: 0U64, nameStart: nameStart, nameLen: nameLen, args: args, useOffset: self.exprOffset(id: exprId), methodOrigin: <MethodLookupOrigin expression=<Optional.Some v=exprId /> />))
+                    if self.memberLookupIsMissing(selection: methodSelection) && receiverTerm != 0U64 {
+                        methodSelection = (try self.resolveMethodForResolvedReceiverWithOrigin(recv: recv, surfaceRef: receiverTerm, sourceId: 0U64, sourceOwner: 0U64, nameStart: nameStart, nameLen: nameLen, args: args, useOffset: self.exprOffset(id: exprId), methodOrigin: <MethodLookupOrigin expression=<Optional.Some v=exprId /> />))
                     }
                     // A parametric field receiver (`self.items: Array[T]`) has a
                     // complete TypeTerm but can still require the ordinary
@@ -2621,20 +2621,20 @@ pub impl Comp {
                     // surface. This is still declaration-time source selection:
                     // Record owns the lexical `self.items` scope and publishes the
                     // resulting template once; Mono only grounds it later.
-                    if methodCallee >= self.arena.functionCount() {
-                        methodCallee = (try self.resolveMethodFinalWithOrigin(recv: recv, nameStart: nameStart, nameLen: nameLen, args: args, methodOrigin: <MethodLookupOrigin expression=<Optional.Some v=exprId /> />))
+                    if self.memberLookupIsMissing(selection: methodSelection) {
+                        methodSelection = (try self.resolveMethodFinalWithOrigin(recv: recv, nameStart: nameStart, nameLen: nameLen, args: args, methodOrigin: <MethodLookupOrigin expression=<Optional.Some v=exprId /> />))
                     }
                     // Newtype member inheritance selects the underlying surface
                     // while preserving the authored newtype as the value term.
                     // The finalizer already normalizes that receiver for the
                     // selected declaration; Record must make the same frontend
                     // selection so it can publish a Direct template first.
-                    if methodCallee >= self.arena.functionCount() && receiverTerm != 0U64 && receiverTerm < self.arena.typeCount() {
+                    if self.memberLookupIsMissing(selection: methodSelection) && receiverTerm != 0U64 && receiverTerm < self.arena.typeCount() {
                         val receiver: TypeRef = self.arena.typeAt(index: receiverTerm)
                         val underlying: U64 = try self.checkedNominalUnderlying(ref: receiverTerm)
                         if underlying != 0U64 && underlying < self.arena.typeCount() {
                             val under: TypeRef = self.arena.typeAt(index: underlying)
-                            methodCallee = (try self.findMethodWithOrigin(recvStart: under.nameStart, recvLen: under.nameLen, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: underlying, useOffset: self.exprOffset(id: exprId), methodOrigin: <MethodLookupOrigin expression=<Optional.Some v=exprId /> />))
+                            methodSelection = (try self.findMethodWithOrigin(recvStart: under.nameStart, recvLen: under.nameLen, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: underlying, useOffset: self.exprOffset(id: exprId), methodOrigin: <MethodLookupOrigin expression=<Optional.Some v=exprId /> />))
                         }
                     }
                     // A lexical bound selects a requirement/provided member, even
@@ -2645,13 +2645,14 @@ pub impl Comp {
                 }
                 val boundMember: StaticMemberResolution = (try self.writtenStaticMemberResolution(exprId: exprId, receiverRef: receiverTerm, nameStart: nameStart, nameLen: nameLen, args: args, requiredTraitOwner: self.syntheticRequiredTraitOwner(exprId: exprId)))
                 match boundMember {
-                    StaticMemberResolution.Requirement(proof: _, traitIdx: _, reqIdx: _) => { methodCallee = self.arena.functionCount() }
-                    StaticMemberResolution.Provided(proof: _, traitIdx: _, callee: _) => { methodCallee = self.arena.functionCount() }
+                    StaticMemberResolution.Requirement(proof: _, traitIdx: _, reqIdx: _) => { methodSelection = <MemberCallLookup.NoCandidate /> }
+                    StaticMemberResolution.Provided(proof: _, traitIdx: _, callee: _) => { methodSelection = <MemberCallLookup.NoCandidate /> }
                     _ => {}
                 }
-                try self.recordSelectedMethodArguments(callee: methodCallee, receiverTerm: receiverTerm, args: args, chainHoleRef: chainHoleRef, exprId: exprId)
+                try self.recordMemberLookupArguments(selection: methodSelection, receiverTerm: receiverTerm, args: args, chainHoleRef: chainHoleRef, exprId: exprId)
+                val methodCallee = self.selectedMemberFunction(selection: methodSelection)
                 try self.recordParametricMethodCall(exprId: exprId, callee: methodCallee, receiverSource: (try self.writtenCallReceiverTemplate(exprId: exprId, receiverExpr: recv)), receiverTerm: receiverTerm, args: args)
-                if methodCallee >= self.arena.functionCount() {
+                if self.memberLookupIsMissing(selection: methodSelection) {
                     try self.recordUnresolvedMethodTemplate(exprId: exprId, receiver: (try self.writtenCallReceiverTemplate(exprId: exprId, receiverExpr: recv)), receiverExpr: recv, receiverTerm: receiverTerm, nameStart: nameStart, nameLen: nameLen, args: args, resolution: boundMember)
                 }
                 // The standard array Index witness returns the element type.
@@ -2728,19 +2729,20 @@ pub impl Comp {
                 val receiverSource: CallTemplateReceiver = (try self.viewedReceiverTemplateForExpr(exprId: recv, viewedTerm: receiverTerm))
                 mut val extensionProofs = self.recordedExtensionSources(exprId: recv)
                 if extension.isSome() { extensionProofs.append(extension.unwrap()) }
-                mut val methodCallee: U64 = if admittedTrait.isSome() || extensionProofs.count() != 0U64 { give self.arena.functionCount() } else { give try self.resolvedCallee(id: exprId) }
+                mut val methodSelection: MemberCallLookup = if admittedTrait.isSome() || extensionProofs.count() != 0U64 { give <MemberCallLookup.NoCandidate /> } else { give try self.resolvedMemberCall(id: exprId) }
                 // `#` fixes a trait/view source at the syntax site.  Its
                 // selected member must be recorded while that source is still
                 // present in Record; the ordinary TypeCache intentionally
                 // leaves some extension-path selections unfilled because the
                 // final concrete receiver is not known during the early pass.
-                if methodCallee >= self.arena.functionCount() {
-                    methodCallee = (try self.resolveMethodForResolvedReceiverWithOrigin(recv: recv, surfaceRef: receiverTerm, sourceId: source.surfaceId, sourceOwner: source.traitInstance.owner, nameStart: nameStart, nameLen: nameLen, args: args, useOffset: self.exprOffset(id: exprId), extensionProofs: extensionProofs, admittedTrait: admittedTrait, methodOrigin: <MethodLookupOrigin expression=<Optional.Some v=exprId /> />))
+                if self.memberLookupIsMissing(selection: methodSelection) {
+                    methodSelection = (try self.resolveMethodForResolvedReceiverWithOrigin(recv: recv, surfaceRef: receiverTerm, sourceId: source.surfaceId, sourceOwner: source.traitInstance.owner, nameStart: nameStart, nameLen: nameLen, args: args, useOffset: self.exprOffset(id: exprId), extensionProofs: extensionProofs, admittedTrait: admittedTrait, methodOrigin: <MethodLookupOrigin expression=<Optional.Some v=exprId /> />))
                 }
-                if methodCallee >= self.arena.functionCount() && source.surfaceId != 0U64 && extensionProofs.count() == 0U64 && admittedTrait.isNone() {
-                        methodCallee = (try self.resolveExtMethodFinalWithOrigin(recv: recv, source: source, nameStart: nameStart, nameLen: nameLen, args: args, methodOrigin: <MethodLookupOrigin expression=<Optional.Some v=exprId /> />))
+                if self.memberLookupIsMissing(selection: methodSelection) && source.surfaceId != 0U64 && extensionProofs.count() == 0U64 && admittedTrait.isNone() {
+                        methodSelection = (try self.resolveExtMethodFinalWithOrigin(recv: recv, source: source, nameStart: nameStart, nameLen: nameLen, args: args, methodOrigin: <MethodLookupOrigin expression=<Optional.Some v=exprId /> />))
                 }
-                try self.recordSelectedMethodArguments(callee: methodCallee, receiverTerm: receiverTerm, args: args, chainHoleRef: chainHoleRef, exprId: exprId)
+                try self.recordMemberLookupArguments(selection: methodSelection, receiverTerm: receiverTerm, args: args, chainHoleRef: chainHoleRef, exprId: exprId)
+                val methodCallee = self.selectedMemberFunction(selection: methodSelection)
                 try self.recordParametricMethodCall(exprId: exprId, callee: methodCallee, receiverSource: receiverSource, receiverTerm: receiverTerm, args: args)
                 if self.traceCodegen {
                     eprint(text: "[trace-codegen] viewed-call expr=")
@@ -2753,7 +2755,7 @@ pub impl Comp {
                     self.traceMonoTypeHead(ref: self.parametricExprTerm(exprId: exprId))
                     eprint(text: "\n")
                 }
-                if methodCallee >= self.arena.functionCount() {
+                if self.memberLookupIsMissing(selection: methodSelection) {
                     val resolution = try self.writtenStaticMemberResolution(exprId: exprId, receiverRef: receiverTerm, nameStart: nameStart, nameLen: nameLen, args: args, requiredTraitOwner: self.syntheticRequiredTraitOwner(exprId: exprId))
                     try self.recordUnresolvedMethodTemplate(exprId: exprId, receiver: receiverSource, receiverExpr: recv, receiverTerm: receiverTerm, nameStart: nameStart, nameLen: nameLen, args: args, resolution: resolution)
                 }
@@ -3808,5 +3810,23 @@ pub impl Comp {
         }
         val name = self.kwSpan(kw: "fn", kwLen: 2U64)
         return <Result.Ok value=self.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=types argLabels=labels isDiverging=isDiverging />) />
+    }
+}
+
+impl Comp {
+    inout fn recordMemberLookupArguments(selection: MemberCallLookup, receiverTerm: U64, args: ArgRange, chainHoleRef: U64, exprId: U64) -> Result[(), CompileDiagnostic] {
+        match selection {
+            MemberCallLookup.Selected(function: val function) => {
+                try self.recordSelectedMethodArguments(callee: function, receiverTerm: receiverTerm, args: args, chainHoleRef: chainHoleRef, exprId: exprId)
+            }
+            MemberCallLookup.DiagnosticCandidate(function: val function) => {
+                // This path may refine operands for a detailed error, but it
+                // must not publish a successful parent template or result.
+                try self.recordSelectedMethodArguments(callee: function, receiverTerm: receiverTerm, args: args, chainHoleRef: chainHoleRef, exprId: exprId)
+                return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "no matching method for this argument list") />
+            }
+            MemberCallLookup.NoCandidate => {}
+        }
+        return <Result.Ok value=() />
     }
 }

@@ -722,7 +722,7 @@ pub impl Comp {
                         if br != 0U64 {
                             val brt = self.arena.typeTermAt(index: br)
                             val powN: Bind = self.kwSpan(kw: "pow", kwLen: 3U64)
-                            fi = (try self.findAssoc(recvStart: brt.nameStart, recvLen: brt.nameLen, nameStart: powN.nameStart, nameLen: powN.nameLen, args: args))
+                            fi = self.selectedMemberFunction(selection: (try self.findAssocWithOrigin(recvStart: brt.nameStart, recvLen: brt.nameLen, nameStart: powN.nameStart, nameLen: powN.nameLen, args: args)))
                         }
                     }
                 }
@@ -987,7 +987,7 @@ pub impl Comp {
                 // `Type.name(args)` assoc-fn call: return type from the assoc fn.
                 val arn: Bind = self.assocRecvName(recv: recv)
                 if arn.nameLen != 0 {
-                    val afi: U64 = (try self.findAssocWithOrigin(recvStart: arn.nameStart, recvLen: arn.nameLen, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: (try self.methodReceiverTerm(exprId: recv)), methodOrigin: <MethodLookupOrigin expression=<Optional.Some v=id /> />))
+                    val afi: U64 = self.selectedMemberFunction(selection: (try self.findAssocWithOrigin(recvStart: arn.nameStart, recvLen: arn.nameLen, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: (try self.methodReceiverTerm(exprId: recv)), methodOrigin: <MethodLookupOrigin expression=<Optional.Some v=id /> />)))
                     if afi == self.arena.functionCount() {
                         return <Result.Ok value=scalarInfo() />
                     }
@@ -1070,7 +1070,7 @@ pub impl Comp {
                     // term only for this missing-descriptor case; ordinary
                     // source expressions keep their already-selected cache.
                     if mi == self.arena.functionCount() && chainHoleRef != 0U64 {
-                        mi = (try self.resolveMethodFinalForTypeWithOrigin(recv: recv, receiverType: rt, nameStart: nameStart, nameLen: nameLen, args: args, methodOrigin: <MethodLookupOrigin expression=<Optional.Some v=id /> />))
+                        mi = self.selectedMemberFunction(selection: (try self.resolveMethodFinalForTypeWithOrigin(recv: recv, receiverType: rt, nameStart: nameStart, nameLen: nameLen, args: args, methodOrigin: <MethodLookupOrigin expression=<Optional.Some v=id /> />)))
                     }
                     if mi == self.arena.functionCount() {
                         // not a method — but it may be a closure-typed FIELD called
@@ -1153,7 +1153,7 @@ pub impl Comp {
                     // typed-IR slot was unusable, so a discarded or un-annotated result
                     // was never classified for release (its deinit silently skipped).
                     val arrName: Bind = self.kwSpan(kw: "Array", kwLen: 5)
-                    val mi: U64 = (try self.findMethod(recvStart: arrName.nameStart, recvLen: arrName.nameLen, nameStart: nameStart, nameLen: nameLen, args: args))
+                    val mi: U64 = self.selectedMemberFunction(selection: (try self.findMethodWithOrigin(recvStart: arrName.nameStart, recvLen: arrName.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)))
                     if mi == self.arena.functionCount() {
                         return <Result.Ok value=scalarInfo() />
                     }

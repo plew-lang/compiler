@@ -1,0 +1,36 @@
+// Diagnostic context is never a final callable, including before body preparation.
+use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontendForRequests, intern }
+use ../../../src/SourceAccess only { SourceAccess }
+use ../../../src/Ir only { Expr, CachedCallee }
+use @Std/Io only { print }
+
+fn checkCall(text: String, member: String) {
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text path="Member.pw" text=text />, sources: <SourceAccess stdRoot="std/".bytes() />).unwrap()
+    val name = compiler.internBytes(s: member)
+    mut val seen = false
+    for index in 0U64..<compiler.arena.exprs.count() {
+        val matches = match compiler.arena.exprs[index] {
+            Expr.Method(recv: _, nameStart: val start, nameLen: val length, args: _) |
+            Expr.ExtMethod(recv: _, source: _, nameStart: val start, nameLen: val length, args: _) => intern(c: inout compiler, start: start, len: length) == name.nameId,
+            _ => false,
+        }
+        if !matches { continue }
+        seen = true
+        for repeat in 0U64..<2U64 {
+            if compiler.resolvedCallee(id: index).unwrap() < compiler.arena.functionCount() { panic("diagnostic member became a final callable") }
+            match compiler.typeCache.callee[index] {
+                CachedCallee.Uncomputed => {}
+                _ => { panic("diagnostic member published a completed callee cache") }
+            }
+        }
+    }
+    if !seen { panic("missing diagnostic member expression") }
+}
+
+fn main() {
+    checkCall(text: "struct Marker {{}}\nimpl Marker {{ fn accept(value: I64) -> Bool {{ return true }} }}\nfn main() {{ <Marker />.accept(value: false) }}", member: "accept")
+    checkCall(text: "struct Marker {{}}\nimpl Marker {{ assoc fn accept(value: I64) -> Bool {{ return true }} }}\nfn main() {{ Marker.accept(value: false) }}", member: "accept")
+    checkCall(text: "struct Marker {{}}\nextension Extra {{ impl Marker {{ fn accept(value: I64) -> Bool {{ return true }} }} }}\nfn main() {{ <Marker />#Extra.accept(value: false) }}", member: "accept")
+    print("diagnostic members do not publish final callable authority")
+}

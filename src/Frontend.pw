@@ -704,6 +704,13 @@ enum FreeCallLookup {
     CachedNonStatic
 }
 
+// Candidate context is not authority to publish a concrete member call.
+enum MemberCallLookup {
+    Selected(function: U64)
+    DiagnosticCandidate(function: U64)
+    NoCandidate
+}
+
 enum FreeCallVisibilityOrigin { Raw AuthoredFreeCall }
 
 enum FailedFreeCallSelection {

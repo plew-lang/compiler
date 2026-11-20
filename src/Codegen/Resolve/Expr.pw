@@ -208,16 +208,16 @@ pub impl Comp {
     }
 
     inout fn resolveWrittenMethod(exprId: U64, recv: U64, nameStart: U64, nameLen: U64, args: ArgRange, admittedReceiver: U64 = 0U64) -> Result[U64, CompileDiagnostic] {
-        return self.resolveWrittenMethodWithOrigin(exprId: exprId, recv: recv, nameStart: nameStart, nameLen: nameLen, args: args, admittedReceiver: admittedReceiver)
+        return <Result.Ok value=self.selectedMemberFunction(selection: (try self.resolveWrittenMethodWithOrigin(exprId: exprId, recv: recv, nameStart: nameStart, nameLen: nameLen, args: args, admittedReceiver: admittedReceiver))) />
     }
 }
 
 impl Comp {
-    inout fn resolveWrittenMethodWithOrigin(exprId: U64, recv: U64, nameStart: U64, nameLen: U64, args: ArgRange, admittedReceiver: U64 = 0U64, methodOrigin: MethodLookupOrigin = <MethodLookupOrigin />) -> Result[U64, CompileDiagnostic] {
+    inout fn resolveWrittenMethodWithOrigin(exprId: U64, recv: U64, nameStart: U64, nameLen: U64, args: ArgRange, admittedReceiver: U64 = 0U64, methodOrigin: MethodLookupOrigin = <MethodLookupOrigin />) -> Result[MemberCallLookup, CompileDiagnostic] {
         val synthetic = self.syntheticCallSiteIndex(exprId: exprId)
         if synthetic < self.decls.syntheticCallSites.count() {
             match self.decls.syntheticCallSites[synthetic].selectedDeclaration {
-                Optional.Some(v: val declaration) => { return <Result.Ok value=declaration /> }
+                Optional.Some(v: val declaration) => { return <Result.Ok value=<MemberCallLookup.Selected function=declaration /> /> }
                 Optional.None => {}
             }
         }
@@ -227,7 +227,7 @@ impl Comp {
         }
         val requiredTraitOwner = self.syntheticRequiredTraitOwner(exprId: exprId)
         val method = try self.resolveMethodFinalForTypeWithOrigin(recv: recv, receiverType: (try self.typeOf(id: recv)), nameStart: nameStart, nameLen: nameLen, args: args, requiredTraitOwner: requiredTraitOwner, methodOrigin: methodOrigin)
-        if method < self.arena.functionCount() || requiredTraitOwner != 0U64 { return <Result.Ok value=method /> }
+        if !self.memberLookupIsMissing(selection: method) || requiredTraitOwner != 0U64 { return <Result.Ok value=method /> }
         // Type-qualified associated calls share this source-selection entry
         // with value methods. Consumers must not repeat a bare-name lookup.
         val qualifier = self.assocRecvName(recv: recv)
@@ -257,41 +257,7 @@ pub impl Comp {
             }
             _ => {}
         }
-        if id < self.typeCache.callee.count() {
-            match self.typeCache.callee[id] {
-                CachedCallee.Selected(val callee) => { return <Result.Ok value=callee /> }
-                CachedCallee.NoStaticCallee => { return <Result.Ok value=self.arena.functionCount() /> }
-                CachedCallee.Uncomputed => {}
-            }
-        }
-        mut val r: U64 = self.arena.functionCount()
-        match self.arena.exprs[id] {
-            Expr.Method(val recv, val nameStart, val nameLen, val args) => {
-                // A generic body has an abstract requirement surface here. Its
-                // concrete witness is intentionally selected by Mono under the
-                // instantiated receiver, not cached from whatever conformers
-                // happen to be loaded while lowering the template.
-                mut val abstractBound: Bool = false
-                match self.arena.exprs[recv] {
-                    Expr.Ident(start: val rs, len: val rl) => {
-                        val li: U64 = self.localIndexByName(start: rs, len: rl)
-                        if li < self.cur.locals.count() {
-                            val lo: Local = self.cur.locals[li]
-                            abstractBound = self.isTypeParamOf(fnIdx: self.cur.checkFn, start: lo.tyStart, len: lo.tyLen)
-                        }
-                    }
-                    _ => {}
-                }
-                if !abstractBound {
-                    r = (try self.resolveWrittenMethodWithOrigin(exprId: id, recv: recv, nameStart: nameStart, nameLen: nameLen, args: args, methodOrigin: <MethodLookupOrigin expression=<Optional.Some v=id /> />))
-                }
-            }
-            Expr.ExtMethod(val recv, val source, val nameStart, val nameLen, val args) => {
-                r = (try self.resolveExtMethodFinalWithOrigin(recv: recv, source: source, nameStart: nameStart, nameLen: nameLen, args: args, methodOrigin: <MethodLookupOrigin expression=<Optional.Some v=id /> />))
-            }
-            _ => {}
-        }
-        return <Result.Ok value=r />
+        return <Result.Ok value=self.selectedMemberFunction(selection: (try self.resolvedMemberCall(id: id))) />
     }
 
 }
@@ -3398,4 +3364,44 @@ impl Comp {
         return 0U64
     }
 
+}
+
+impl Comp {
+    inout fn resolvedMemberCall(id: U64) -> Result[MemberCallLookup, CompileDiagnostic] {
+        if id < self.typeCache.callee.count() {
+            match self.typeCache.callee[id] {
+                CachedCallee.Selected(val callee) => { return <Result.Ok value=<MemberCallLookup.Selected function=callee /> /> }
+                CachedCallee.NoStaticCallee => { return <Result.Ok value=<MemberCallLookup.NoCandidate /> /> }
+                CachedCallee.Uncomputed => {}
+            }
+        }
+        mut val r: MemberCallLookup = <MemberCallLookup.NoCandidate />
+        match self.arena.exprs[id] {
+            Expr.Method(val recv, val nameStart, val nameLen, val args) => {
+                // A generic body has an abstract requirement surface here. Its
+                // concrete witness is intentionally selected by Mono under the
+                // instantiated receiver, not cached from whatever conformers
+                // happen to be loaded while lowering the template.
+                mut val abstractBound: Bool = false
+                match self.arena.exprs[recv] {
+                    Expr.Ident(start: val rs, len: val rl) => {
+                        val li: U64 = self.localIndexByName(start: rs, len: rl)
+                        if li < self.cur.locals.count() {
+                            val lo: Local = self.cur.locals[li]
+                            abstractBound = self.isTypeParamOf(fnIdx: self.cur.checkFn, start: lo.tyStart, len: lo.tyLen)
+                        }
+                    }
+                    _ => {}
+                }
+                if !abstractBound {
+                    r = (try self.resolveWrittenMethodWithOrigin(exprId: id, recv: recv, nameStart: nameStart, nameLen: nameLen, args: args, methodOrigin: <MethodLookupOrigin expression=<Optional.Some v=id /> />))
+                }
+            }
+            Expr.ExtMethod(val recv, val source, val nameStart, val nameLen, val args) => {
+                r = (try self.resolveExtMethodFinalWithOrigin(recv: recv, source: source, nameStart: nameStart, nameLen: nameLen, args: args, methodOrigin: <MethodLookupOrigin expression=<Optional.Some v=id /> />))
+            }
+            _ => {}
+        }
+        return <Result.Ok value=r />
+    }
 }
