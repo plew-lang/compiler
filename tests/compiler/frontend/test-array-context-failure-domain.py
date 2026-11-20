@@ -12,6 +12,10 @@ from compiler_failure_result import run_compiler
 
 MESSAGE = b"cannot infer an empty array's element type from a non-array context (spec/02)"
 REJECT = {
+    'explicit-closure-return': 'fn main() { val closure = fn() -> I64 { { return [] } } }',
+    'contextual-closure-return': 'fn main() { val closure: fn() -> I64 = fn() { { return [] } } }',
+    'failed-call-closure-return': 'fn accept(callback: fn() -> I64, other: I64) {}\nfn main() { accept(callback: fn() { { return [] } }, other: false) }',
+    'nested-element': 'fn main() { val values: Array[I64] = [[]] }',
     'custom-index': 'use @Std/Core only { Index }\nstruct Grid {}\nimpl Grid as Index[I64] { type Output = I64 fn index(key: I64) -> I64 { return 0I64 } }\nfn main() { val grid = <Grid /> val value = grid[[]] }',
     'named-factory': 'struct Number { val value: I64 }\nimpl Number { factory named(value: I64) { return <Number value=value /> } }\nfn main() { val value = <Number.named value=[] /> }',
     'annotation': 'fn main() { val value: I64 = [] }',

@@ -3,7 +3,7 @@ use ../../../src/CheckedProgram only { CompilerSession, CompilerSessionResult, P
 use ../../../src/Backend only { LlvmLoweringResult }
 use ../../../src/SourceAccess only { SourceAccess, SourceResource }
 use ../../../src/Diag only { CompileDiagnostic, FailureDomain, ArrayContextRefusal, DiagnosticOwner, DiagnosticLocation }
-use ../../../src/Ir only { Expr, Arg }
+use ../../../src/Ir only { Expr, Arg, SyntheticCallKind }
 use @Std/Io only { print }
 
 fn input() -> FrontendInput {
@@ -103,6 +103,52 @@ fn failedCall(text: String) {
     }
     if !seen { panic("missing failed-query operand control") }
 }
+fn syntheticCall(text: String) {
+    mut val raw = <Comp />
+    match analyzeFrontendForRequests(c: inout raw, input: <FrontendInput.File path="plew:std/ArrayContextProbe.pw" />, sources: <SourceAccess stdRoot="std/".bytes() resources=[<SourceResource path="plew:std/ArrayContextProbe.pw".bytes() text=text />] />) {
+        Result.Ok(value: _) => {}
+        Result.Err(error: val diagnostic) => { panic("synthetic setup: " + diagnostic.message()) }
+    }
+    val function = raw.arena.firstFunctionNamed(nameId: raw.internBytes(s: "main").nameId)
+    val diagnostic = failure(compiler: inout raw, function: function)
+    requireRaw(diagnostic: diagnostic)
+    val refusal = diagnostic.arrayContext().unwrap()
+    if refusal.frontier() == 18446744073709551615U64 || !raw.sourceArrayContextHasOwner(refusal: refusal) { panic("synthetic call lost actual failed frontier") }
+    mut val seen = false
+    for expression in 0U64..<raw.arena.exprs.count() {
+        match raw.arena.exprs[expression] {
+            Expr.Method(recv: val receiver, nameStart: val start, nameLen: val length, args: val arguments) => {
+                if arguments.len == 0U64 || raw.argAt(args: arguments, index: 0U64).expr != refusal.expression() { continue }
+                // Detached IndexSet writeback is not the failed read operation.
+                mut val queried = false
+                for site in raw.decls.syntheticCallSites {
+                    if site.exprId == expression {
+                        queried = match site.kind { SyntheticCallKind.IndexRead | SyntheticCallKind.Factory => true _ => false }
+                    }
+                }
+                if !queried { continue }
+                seen = true
+                for mutation in 0U64..<3U64 {
+                    mut val changed = raw
+                    val argument = raw.argAt(args: arguments, index: 0U64)
+                    if mutation == 0U64 {
+                        mut val copied: Array[Arg] = []
+                        for slot in 0U64..<arguments.len { copied.append(raw.argAt(args: arguments, index: slot)) }
+                        val replacement = changed.pushArgs(args: copied)
+                        changed.arena.exprs.set(i: expression, value: <Expr.Method recv=receiver nameStart=start nameLen=length args=replacement />)
+                    } else if mutation == 1U64 {
+                        changed.arena.argPool.set(i: arguments.start, value: <Arg expr=argument.expr isInout=argument.isInout labelStart=argument.labelStart labelLen=argument.labelLen hasLabel=!argument.hasLabel />)
+                    } else {
+                        changed.arena.exprs.set(i: expression, value: <Expr.Method recv=expression nameStart=start nameLen=length args=arguments />)
+                    }
+                    if changed.sourceArrayContextHasOwner(refusal: refusal) { panic(if mutation == 0U64 { give "synthetic range mutation retained evidence" } else if mutation == 1U64 { give "synthetic label mutation retained evidence" } else { give "synthetic receiver mutation retained evidence" }) }
+                }
+            }
+            _ => {}
+        }
+    }
+    if !seen { panic("missing synthetic call mutation control") }
+}
 fn main() {
     mut val raw = <Comp />
     analyzeFrontendForRequests(c: inout raw, input: input(), sources: <SourceAccess />).unwrap()
@@ -117,6 +163,15 @@ fn main() {
     requireRaw(diagnostic: direct)
     if raw.sourceFailureHasOwner(diagnostic: direct) { panic("Raw body minted array evidence") }
     val cause = direct.arrayContext().unwrap()
+    // Unknown and malformed context IDs keep the low-level no-op contract.
+    // They cannot manufacture a new expected-type obligation or event.
+    for context in [0U64, raw.arena.typeCount(), 18446744073709551615U64] {
+        match raw.recordArrayLitCtx(exprId: cause.expression(), ctxRef: context) {
+            Result.Ok(value: _) => {}
+            Result.Err(error: _) => { panic("unknown array context changed Raw behavior") }
+        }
+        if raw.semanticExprTerm(exprId: cause.expression()) != 0U64 { panic("unknown context committed an array type") }
+    }
     match raw.recordArrayLitCtx(exprId: cause.expression(), ctxRef: cause.effectiveTerm()) {
         Result.Err(error: val diagnostic) => { requireRaw(diagnostic: diagnostic) if raw.sourceFailureHasOwner(diagnostic: diagnostic) { panic("active-owner direct array API minted evidence") } }
         Result.Ok(value: _) => { panic("direct array context stopped rejecting") }
@@ -142,6 +197,9 @@ fn main() {
     failedCall(text: "struct Marker {{}}\nimpl Marker {{ assoc fn accept(value: I64, other: I64) {{}} }}\nfn main() {{ Marker.accept(value: [], other: false) }}")
     failedCall(text: "struct Marker {{}}\nextension Extra {{ impl Marker {{ fn accept(value: I64, other: I64) {{}} }} }}\nfn main() {{ <Marker />#Extra.accept(value: [], other: false) }}")
     print("failed query evidence precedes operand rejection")
+    syntheticCall(text: "use @Std/Core only {{ Index }}\nstruct Grid {{}}\nimpl Grid as Index[I64] {{ type Output = I64 fn index(key: I64) -> I64 {{ return 0I64 }} }}\nfn main() {{ val grid = <Grid /> val value = grid[[]] }}")
+    syntheticCall(text: "struct Number {{ val value: I64 }}\nimpl Number {{ factory named(value: I64, other: I64) {{ return <Number value=value /> }} }}\nfn main() {{ val value = <Number.named value=[] other=false /> }}")
+    print("synthetic index and factory mutations rejected")
     mut val owned = session()
     match owned.lowerDeclarations() { LlvmLoweringResult.Success(module: _) => {} LlvmLoweringResult.Failure(diagnostic: val diagnostic) => { panic(diagnostic.message()) } }
     val bodies = owned.registeredBodies()

@@ -571,3 +571,11 @@ refusals, with three valid Array context controls. It uses generated inputs in t
 explicit output directory and fails on off-target diagnostics as well as wrong
 domains. This is a focused manual diagnostic, not registered in the normal suite;
 it does not replace native Raw/event-mutation/cache/lifetime boundary controls.
+
+`ArrayContextFailureDomains.pw` checks the low-level Unclassified/owned Source
+boundary, active-owner Raw recursion, retained request/cache/retry/drain, cause
+mutations/foreign sessions/plain reports, real diagnostic-only free/member/
+associated/extension frontiers, and exact Index/Factory operand provenance.
+Index read mutations are distinct from detached IndexSet writeback. Require
+exit0, exact `.out`, and empty runtime stderr; apply ASan/LSan to this native
+internal fixture for failure-event lifetime checks.
