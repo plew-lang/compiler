@@ -1,7 +1,7 @@
 ---
 id: com-8uik
 status: open
-deps: [com-b0e6, com-5n0l]
+deps: [com-b0e6, com-5n0l, com-u22d]
 links: []
 created: 2026-11-20T05:06:49Z
 type: task
@@ -28,3 +28,5 @@ TDD:5existing source fixtures×check/AOT/ORC plus annotation/selectedparameter/r
 com-kuls already owns the Dictionary construction test's factory-visibility intent and Buffer-vs-Array detection weakness. Its source remains invalid, so keep it as an observed current rejection only; do not certify its intended privacy gate from the empty-array error. Use a stable custom field-context control. com-kuls remains required at met-ucze and is neither replaced nor bypassed here.
 
 Meta `evidence/rejection-domains/diagnostic-domain-implementation/phase3-array-context-refusal-plan.json` retains15mode RED, a provisional syntax inventory (19expected-result calls,49recordExpr calls plus block/statement/root bridges) and the independent plan caution. Counts/regex inventory do not establish a complete role map or closure. Include closure body recursion as well as return/default/block/selected-call contexts.
+
+com-u22d is a real prerequisite: distinguish applicable selected signatures from diagnostic firstLabel fallback through lookup/cache/Record before issuing expected-context admission. A single invalid candidate context is not Source authority. Preserve fallback diagnostics and useful source failure through their owning failed-frontier contract; do not fabricate an applicable parent call. recordMissing in the newer private expected-result core only separates construction from refinement and is not an origin/admission permission.
