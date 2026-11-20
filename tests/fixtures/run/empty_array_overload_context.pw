@@ -8,6 +8,14 @@ fn chooseReverse(value: I64) -> I64 { return 0I64 }
 fn chooseFunction(value: fn() -> I64) -> I64 { return 0I64 }
 fn chooseFunction(value: Array[I64]) -> I64 { return 55I64 }
 
+trait Marker {}
+fn chooseRecord(value: (count: I64)) -> I64 { return 0I64 }
+fn chooseRecord(value: Array[I64]) -> I64 { return 66I64 }
+fn chooseAny(value: any Marker) -> I64 { return 0I64 }
+fn chooseAny(value: Array[I64]) -> I64 { return 77I64 }
+fn chooseNested(value: Array[I64]) -> I64 { return 0I64 }
+fn chooseNested(value: Array[Array[I64]]) -> I64 { return 88I64 }
+
 struct Selector {}
 impl Selector {
     fn chooseForward(value: I64) -> I64 { return 0I64 }
@@ -22,6 +30,12 @@ fn main() {
     print(chooseForward(value: { give [] }))
     print(chooseReverse(value: { give [] }))
     print(chooseFunction(value: []))
+    print(chooseRecord(value: []))
+    print(chooseAny(value: []))
+    print(chooseNested(value: [[]]))
+    print(chooseForward(value: if true { give [] } else { give [] }))
+    print(chooseForward(value: match 1I64 { 0I64 => { give [] }, _ => { give [] } }))
+    print(chooseForward(value: if true { give [] } else { return }))
     val selector = <Selector />
     print(selector.chooseForward(value: []))
     print(selector.chooseReverse(value: []))

@@ -556,3 +556,5 @@ Internal. Run with the manual compile/link procedure and require its exact `.out
 failure through raw retry/drain and owning lazy/whole/eager requests. It also
 reaches the direct executable-scan fallback and requires Limit there. The unused
 lazy body stays unrequested. Require exit0, exact `.out` and empty stderr.
+
+`EmptyArrayCandidateContexts.pw` reads a real File with Std, repeats scalar/Array candidate comparisons for direct, block and branching operands, requires no expression-type or callee-cache publication, then checks the committed source call identities. Require exact `.out`, exit0 and empty runtime stderr. The ordinary `empty_array_overload_context` fixture separately checks AOT/JIT execution.

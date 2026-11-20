@@ -2053,7 +2053,7 @@ pub impl Comp {
                 }
             }
             Expr.Array(val elems) => {
-                if elems.len == 0U64 { return true }
+                if elems.len == 0U64 { return self.semanticExprTerm(exprId: exprId) == 0U64 }
                 mut val index = 0U64
                 while index < elems.len {
                     if self.expressionNeedsTypeContext(exprId: self.exprAt(exprs: elems, index: index), allowPartialFunction: allowPartialFunction) { return true }
@@ -3207,7 +3207,7 @@ pub impl Comp {
             }
         }
         if normalizedContext != 0U64 {
-            try self.recordSemanticExprExpectedResult(exprId: exprId, expectedTerm: requestedContext)
+            try self.recordSemanticExprExpectedResultCore(exprId: exprId, expectedTerm: requestedContext, recordMissing: false)
         }
         match self.arena.exprs[exprId] {
             Expr.Call(nameStart: _, nameLen: _, args: val arguments) | Expr.Method(recv: _, nameStart: _, nameLen: _, args: val arguments) | Expr.ExtMethod(recv: _, source: _, nameStart: _, nameLen: _, args: val arguments) => {

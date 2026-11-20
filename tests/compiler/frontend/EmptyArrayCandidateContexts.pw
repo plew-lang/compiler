@@ -1,0 +1,75 @@
+use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontendForRequests, intern }
+use ../../../src/SourceAccess only { SourceAccess }
+use ../../../src/Ir only { Expr, CachedCallee, CallTemplateKind }
+use @Std/Io only { print }
+
+fn probeCandidate(compiler: inout Comp, index: U64, nameId: U64) -> Optional[U64] {
+    match compiler.arena.exprs[index] {
+        Expr.Call(nameStart: val start, nameLen: val length, args: val arguments) => {
+            if intern(c: inout compiler, start: start, len: length) != nameId { return <Optional.None /> }
+            val candidates = compiler.visibleFreeFunctions(nameStart: start, nameLen: length)
+            if candidates.count() != 2U64 { panic("lost visible overload frontier") }
+            val operand = compiler.argAt(args: arguments, index: 0U64).expr
+            if compiler.semanticExprTerm(exprId: operand) != 0U64 { panic("operand already typed before candidate probe") }
+            for repeat in 0U64..<2U64 {
+                if compiler.callableArgMatchRank(f: compiler.arena.functionAt(index: candidates[0U64]), args: arguments).unwrap() != 1U64 { panic("scalar candidate accepted an array context") }
+                if compiler.callableArgMatchRank(f: compiler.arena.functionAt(index: candidates[1U64]), args: arguments).unwrap() != 2U64 { panic("array candidate lost its shape") }
+            }
+            if compiler.semanticExprTerm(exprId: operand) != 0U64 { panic("candidate probe published operand type") }
+            match compiler.typeCache.callee[index] {
+                CachedCallee.Uncomputed => {}
+                _ => { panic("candidate probe committed a callee") }
+            }
+            return <Optional.Some v=candidates[1U64] />
+        }
+        _ => {}
+    }
+    return <Optional.None />
+}
+
+fn checkRefusal() {
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.File path="tests/fixtures/reject/type_context_array_as_I64_empty.pw" />, sources: <SourceAccess stdRoot="std/".bytes() />).unwrap()
+    val name = compiler.internBytes(s: "main")
+    val owner = compiler.arena.firstFunctionNamed(nameId: name.nameId)
+    for repeat in 0U64..<2U64 {
+        match compiler.prepareLexicalBody(fnIdx: owner) {
+            Result.Ok(value: _) => { panic("non-array context was accepted") }
+            Result.Err(error: val diagnostic) => {
+                if diagnostic.message() != "cannot infer an empty array's element type from a non-array context (spec/02)" { panic(diagnostic.message()) }
+            }
+        }
+    }
+}
+
+fn main() {
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.File path="tests/fixtures/run/empty_array_overload_context.pw" />, sources: <SourceAccess stdRoot="std/".bytes() />).unwrap()
+    val name = compiler.internBytes(s: "chooseForward")
+    mut val expressions: Array[U64] = []
+    mut val selected: U64 = compiler.arena.functionCount()
+    for index in 0U64..<compiler.arena.exprs.count() {
+        match probeCandidate(compiler: inout compiler, index: index, nameId: name.nameId) {
+            Optional.Some(v: val candidate) => {
+                expressions.append(index)
+                selected = candidate
+            }
+            Optional.None => {}
+        }
+    }
+    if expressions.count() != 5U64 { panic("direct, wrapped and branching call controls were not exercised") }
+    val mainName = compiler.internBytes(s: "main")
+    val owner = compiler.arena.firstFunctionNamed(nameId: mainName.nameId)
+    compiler.prepareLexicalBody(fnIdx: owner).unwrap()
+    for expression in expressions {
+        val template = compiler.callTemplateForSourceBody(fnIdx: owner, exprId: expression).unwrap()
+        match template.kind {
+            CallTemplateKind.Direct(val callee, receiver: _, args: _, calleeTypeArgs: _, proofId: _) => {
+                if callee != selected { panic("committed call differs from the unique applicable candidate") }
+            }
+            _ => { panic("free call lost its direct selected identity") }
+        }
+    }
+    checkRefusal()
+    print("candidate array context remains private until selection")
+}

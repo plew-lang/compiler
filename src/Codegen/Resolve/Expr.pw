@@ -2559,11 +2559,18 @@ pub impl Comp {
     // The resulting type comes from that substitution into the declaration;
     // expected terms never replace the expression's independent meaning.
     inout fn recordSemanticExprExpectedResult(exprId: U64, expectedTerm: U64) -> Result[(), CompileDiagnostic] {
+        return self.recordSemanticExprExpectedResultCore(exprId: exprId, expectedTerm: expectedTerm, recordMissing: true)
+    }
+}
+
+// A just-recorded value needs context application, not another construction.
+impl Comp {
+    inout fn recordSemanticExprExpectedResultCore(exprId: U64, expectedTerm: U64, recordMissing: Bool) -> Result[(), CompileDiagnostic] {
         // Normalize at the context boundary before inspecting expression shape.
         val requestedContext = try self.normalizedSourceTypeContext(expectedTerm: expectedTerm)
         val normalizedContext = try self.effectiveSourceTypeContext(exprId: exprId, requested: requestedContext)
         if normalizedContext == 0U64 || normalizedContext >= self.arena.typeCount() { return <Result.Ok value=() /> }
-        if self.expressionNeedsTypeContext(exprId: exprId) { try self.recordExpr(exprId: exprId, expectedTerm: normalizedContext) }
+        if recordMissing && self.expressionNeedsTypeContext(exprId: exprId) { try self.recordExpr(exprId: exprId, expectedTerm: normalizedContext) }
         val prior: SemanticExprType = self.constructionExpression(exprId: exprId)
         try self.recordExpectedCallResult(exprId: exprId, expectedTerm: normalizedContext, authored: true)
         // Array construction is a bidirectional value form: at its explicit
@@ -2697,6 +2704,9 @@ pub impl Comp {
         self.commitSourceTypeContext(exprId: exprId)
         return <Result.Ok value=() />
     }
+}
+
+pub impl Comp {
 
     // The caller already acquired the exact source template. Ground its saved
     // context without navigating to the same owner/site a second time.
