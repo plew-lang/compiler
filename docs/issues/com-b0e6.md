@@ -41,4 +41,11 @@ The real selection roles require retaining applicable versus diagnostic-fallback
 
 ## Applicability role-map boundary
 
-The role map must reference [met-bu94](met-bu94.md) for common prepared arguments/free selection and [met-qo60](met-qo60.md) for method/associated selection roles. The latter and parent com-u22d remain unfinished. A finite child acceptance is not Source expected-context admission; retain Raw/committed origin checks and com-8uik's existing parent prerequisite.
+The role map must reference [met-bu94](met-bu94.md) for common prepared arguments/free selection and [met-qo60](met-qo60.md) for method/associated selection roles. Both children and parent com-u22d are now closed on final source ba891bdf. A finite child acceptance is not Source expected-context admission; retain Raw/committed origin checks and com-8uik's existing parent prerequisite.
+
+
+## Rebased origin investigation
+
+After prerequisite closure, the current structural inventory is35nodes/147edges on ba891bdf, not the old32/140 baseline: recordSelectedMethodArguments is now recordMethodArgumentContexts; the expected-result phase core and private free/member operand-context bridges are explicit. There remain25public entries, including the unchanged Raw legacy batch root, hence24public Raw adapters; private transit count must use the current graph. This is a candidate graph/source review, not plan completion.
+
+Current precise questions: Selected and DiagnosticCandidate enter the same operand-context helper, so complete bindings alone cannot admit a diagnostic expectation. Check tentative outer result completion through selected nested child signatures; preserve Raw through every recursive edge and genuinely independent root requests. If a diagnostic-only expectation yields the array failure, use only actual owned failed-selection evidence if the contract permits it; never label the first candidate a successful selected parameter. Reconfirm field origin before declaring the invalid private-field oracle a legitimate selected-field context. These are required resolutions of this existing task, not product repair or new language semantics. Canonical current_graph_delta retains current inventory and questions; the old graph is explicitly baseline-only.
