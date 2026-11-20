@@ -1,6 +1,6 @@
 ---
 id: com-u22d
-status: in_progress
+status: closed
 deps: [met-bu94, met-qo60]
 links: []
 created: 2026-11-20T06:58:04Z
@@ -84,3 +84,12 @@ The finite repair requires a retained parent term before treating field informat
 ## Bounded child work
 
 Independent neutral planning review accepts a two-child partition without narrowing this parent. [met-bu94](met-bu94.md) owns common applicability/prepared values and the free role increment through final gates; [met-qo60](met-qo60.md) owns the remaining method/associated collectors, composed resolvers, caches and publication. The second depends on the first; this parent depends on both and remains in_progress. Existing com-8uik dependence on this parent is unchanged. These are the original required repairs, not optional follow-ups or justification to close the parent.
+
+
+## Closure — provisional argument context and callable authority
+
+Resolved on final source ba891bdf with met-bu94 and met-qo60 closed. Independent parent review derives the required numeric/context/role/cache/publication/priority/Raw/rigid/normal scenarios from this contract and finds no missing finite parent obligation or confirmed product must-fix. A's prepared argument/free selection boundary and B's member/associated boundary share applicability without promoting diagnostic candidates. The exact fixedpoint carrier's target gates and generator gates cover the final combined source. Source admission of expected-type failures remains com-b0e6/com-8uik, not a new grant inferred from an active cursor.
+
+Formal run20261120T153146-self-host-32b720: generation3 fixedpoint, generation2/3 LLVM/runtime/successor equality, five samples median6.999988seconds (<7, no margin claim). Same-source alternating5pairs: oldA7.085223/newC6.950058, all reference LLVM hashes match. Canonical A/B evidence remains meta phase3-provisional-call-context.json and phase3-member-call-roles.json under evidence/rejection-domains/diagnostic-domain-implementation/.
+
+Limits: the whole normal suite was not rerun for this combined candidate, so current-corpus noninterference beyond executed targets is unconfirmed. Last whole324 failures remains historical, not a successful current corpus. Per工程3 progress policy, each finite task closes by applicable target validation, while final fixed-candidate whole gates remain G2a/G2b and com-yeua / 工程3 owners. This is neither their closure nor main/seed/bin promotion. Next is com-b0e6's complete expected-context role plan, then com-8uik's implementation under it.
