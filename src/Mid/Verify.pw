@@ -822,6 +822,10 @@ fn verifyCanonicalMidBindingOrigins(c: inout Comp, body: MidBodyNode) -> MidVeri
         val local = c.mid.locals[body.locals.start + index]
         val origin = local.sourceBinding
         val stability = local.homeStability.key()
+        match local.evaluationGlobalOrigin {
+            Optional.Some(v: val target) => { if stability != 2U64 || c.globalIndexForDeclarationTarget(target: target) >= c.arena.globals.count() { return <MidVerification error=<MidVerifyError.InvalidBindingOrigin /> local=index /> } }
+            Optional.None => {}
+        }
         if stability != 0U64 {
             if local.isUnique || local.isParameter || local.isBorrowed || local.isInout || local.isCaptureCell || local.ownsAtEntry || local.isDropFlag || local.isReturnPlace { return <MidVerification error=<MidVerifyError.InvalidBindingOrigin /> local=index /> }
             if stability == 1U64 && origin.isUnproved() { return <MidVerification error=<MidVerifyError.InvalidBindingOrigin /> local=index /> }
@@ -870,6 +874,7 @@ fn verifyCanonicalMidBodyStage(c: inout Comp, canonical: MidCanonicalBody, stage
     val reachable = analysis.reachable
 
     mut val hasAccessScopes = false
+    mut val snapshotInitializations: Dictionary[U64, Bool] = [:]
     mut val blockI: U64 = 0U64
     while blockI < body.blocks.len {
         if !reachable[blockI] {
@@ -899,6 +904,13 @@ fn verifyCanonicalMidBodyStage(c: inout Comp, canonical: MidCanonicalBody, stage
                 match result.error { MidVerifyError.None => {} _ => { return result } }
             }
             if statement.tag == 1U64 {
+                if statement.destination != 0U64 && statement.destination <= c.mid.places.count() {
+                    val destination = c.mid.places[statement.destination - 1U64]
+                    if destination.rootTag == 1U64 && destination.local < body.locals.len && c.mid.locals[body.locals.start + destination.local].evaluationGlobalOrigin.isSome() {
+                        if snapshotInitializations.getOr(key: destination.local, fallback: false) { return <MidVerification error=<MidVerifyError.InvalidBindingOrigin /> block=blockI local=destination.local /> }
+                        snapshotInitializations[destination.local] = true
+                    }
+                }
                 val result: MidVerification = canonicalMidVerifyConsumeRvalue(c: inout c, body: body, states: inout states, rvalueId: statement.value, block: blockI, isGrounded: body.bodyInstance != 0U64, stage: stage)
                 match result.error { MidVerifyError.None => {} _ => { return result } }
                 if statement.destination != 0U64 && statement.destination <= c.mid.places.count() {

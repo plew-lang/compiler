@@ -1,0 +1,36 @@
+use ../../../src/CheckedProgram only { CompilerSession, CompilerSessionResult }
+use ../../../src/Frontend only { FrontendInput }
+use ../../../src/SourceAccess only { SourceAccess }
+use @Std/Io only { print }
+
+fn rejected(source: String, cycle: Bool) {
+    match CompilerSession.open(input: <FrontendInput.Text path="global-order.pw" text=source />, sources: <SourceAccess />) {
+        CompilerSessionResult.Success(session: val opened) => {
+            mut val session = move opened
+            checkFailure(session: inout session, cycle: cycle)
+        }
+        CompilerSessionResult.Failure(diagnostic: val diagnostic) => { panic(diagnostic.message()) }
+    }
+}
+
+fn checkFailure(session: inout CompilerSession, cycle: Bool) {
+    mut val message = ""
+    for attempt in 0U64..<2U64 {
+        match session.prepareInitializers() {
+            Result.Ok(value: _) => { panic("failed source owners published an initializer plan") }
+            Result.Err(error: val diagnostic) => {
+                val cyclic = diagnostic.message() == "module-level variables form an initialization cycle (a global's initializer depends on itself transitively — spec/15)"
+                if cyclic != cycle { panic(diagnostic.message()) }
+                if attempt == 0U64 { message = diagnostic.message() }
+                else if message != diagnostic.message() { panic("initializer failure changed on repeated request") }
+            }
+        }
+    }
+}
+
+fn main() {
+    rejected(source: "val callback: fn() -> I64 = captured(value: callback()) fn captured(value: I64) -> fn() -> I64 {{ return fn() -> I64 {{ return value }} }} fn main() {{}}", cycle: true)
+    rejected(source: "val callback: fn(value: I64) -> I64 = captured(value: answer) val answer: I64 = callback(value: 0I64) fn captured(value: I64) -> fn(value: I64) -> I64 {{ return fn(value: I64) -> I64 {{ return value }} }} fn main() {{}}", cycle: true)
+    rejected(source: "val broken: I64 = true fn main() {{}}", cycle: false)
+    print("global callable dependency failures retained")
+}

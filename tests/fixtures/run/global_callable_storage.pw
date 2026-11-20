@@ -1,0 +1,9 @@
+use @Std/Io only { print }
+val callback: fn() -> I64 = fn() -> I64 { return 42I64 }
+val warm = callback()
+fn main() {
+    print(warm)
+    print(callback())
+    val callback = fn() -> I64 { return 7I64 }
+    print(callback())
+}

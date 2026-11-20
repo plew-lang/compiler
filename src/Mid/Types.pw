@@ -4,7 +4,7 @@
 use @Std/Io only { eprint }
 use ../Diag only { eprintU64 }
 use ../Frontend only { Comp }
-use ../Ir only { InstanceEnvironment, CallReceiverPassing, CallArgumentPassing }
+use ../Ir only { InstanceEnvironment, CallReceiverPassing, CallArgumentPassing, CallTarget }
 use @Plew/Syntax only { rangeEquals }
 use ./Ir only { MidCanonicalArena, MidBodyNode, MidPlaceNode, MidRvalueNode, MidStatementNode, MidTerminatorNode }
 
@@ -126,6 +126,10 @@ fn midOperandTypesAreValid(c: inout Comp, body: MidBodyNode, operandId: U64) -> 
         if !midPlaceTypeIsValid(c: inout c, body: body, placeId: operand.placeAt(index: index)) { return false }
         index += 1U64
     }
+    if operand.tag == 3U64 && operand.capability == 2U64 && operand.place != 0U64 {
+        val place = c.mid.places[operand.place - 1U64]
+        if place.rootTag == 1U64 && place.local < body.locals.len && c.mid.locals[body.locals.start + place.local].evaluationGlobalOrigin.isSome() { return false }
+    }
     if operand.place == 0U64 && operand.typeTerm != 0U64 {
         if operand.typeTerm >= c.arena.typeCount() { return false }
         val type = c.arena.typeTermAt(index: operand.typeTerm)
@@ -187,7 +191,21 @@ fn midRvalueTypesMatch(c: inout Comp, body: MidBodyNode, value: MidRvalueNode, d
 pub fn canonicalMidStatementTypesMatch(c: inout Comp, body: MidBodyNode, statement: MidStatementNode) -> Bool {
     mut val index = 0U64
     while index < statement.destinationCount() {
-        if !midPlaceTypeIsValid(c: inout c, body: body, placeId: c.mid.statementDestinationAt(statement: statement, index: index)) { return false }
+        val destinationId = c.mid.statementDestinationAt(statement: statement, index: index)
+        if !midPlaceTypeIsValid(c: inout c, body: body, placeId: destinationId) { return false }
+        val destination = c.mid.places[destinationId - 1U64]
+        if destination.rootTag == 1U64 && destination.local < body.locals.len {
+            val origin = c.mid.locals[body.locals.start + destination.local].evaluationGlobalOrigin
+            if origin.isSome() && statement.tag != 3U64 && statement.tag != 4U64 {
+                if statement.tag != 1U64 || destination.projections.len != 0U64 || statement.value == 0U64 || statement.value > c.mid.rvalues.count() { return false }
+                val value = c.mid.rvalues[statement.value - 1U64]
+                if value.tag != 1U64 || value.operand == 0U64 || value.operand > c.mid.operands.count() { return false }
+                val operand = c.mid.operands[value.operand - 1U64]
+                if operand.tag != 1U64 || operand.place == 0U64 || operand.place > c.mid.places.count() { return false }
+                val source = c.mid.places[operand.place - 1U64]
+                if source.rootTag != 2U64 || source.projections.len != 0U64 || source.globalTarget != origin.unwrap() { return false }
+            }
+        }
         index += 1U64
     }
     if statement.source != 0U64 && !midPlaceTypeIsValid(c: inout c, body: body, placeId: statement.source) { return false }
@@ -202,6 +220,19 @@ pub fn canonicalMidStatementTypesMatch(c: inout Comp, body: MidBodyNode, stateme
     return true
 }
 
+pub fn canonicalMidGlobalSnapshotReceiverMatches(arena: MidCanonicalArena, body: MidBodyNode, receiverId: U64, declarationTarget: U64) -> Bool {
+    if receiverId == 0U64 || receiverId > arena.callReceivers.count() { return false }
+    val receiver = arena.callReceivers[receiverId - 1U64]
+    if receiver.tag != 2U64 || receiver.operand == 0U64 || receiver.operand > arena.operands.count() { return false }
+    val operand = arena.operands[receiver.operand - 1U64]
+    if operand.tag != 3U64 || operand.capability != 1U64 || operand.place == 0U64 || operand.place > arena.places.count() { return false }
+    val place = arena.places[operand.place - 1U64]
+    if place.rootTag != 1U64 || place.projections.len != 0U64 || place.local >= body.locals.len { return false }
+    val local = arena.locals[body.locals.start + place.local]
+    val matchingOrigin = match local.evaluationGlobalOrigin { Optional.Some(v: val target) => target == declarationTarget Optional.None => false }
+    return matchingOrigin && local.homeStability.key() == 2U64 && !local.isUnique && !local.isParameter && !local.isBorrowed && !local.isInout && !local.isCaptureCell && !local.ownsAtEntry && !local.isReturnPlace && !local.isDropFlag
+}
+
 pub fn canonicalMidTerminatorTypesMatch(c: inout Comp, body: MidBodyNode, term: MidTerminatorNode) -> Bool {
     if term.destination != 0U64 && !midPlaceTypeIsValid(c: inout c, body: body, placeId: term.destination) { return false }
     mut val index = 0U64
@@ -214,6 +245,12 @@ pub fn canonicalMidTerminatorTypesMatch(c: inout Comp, body: MidBodyNode, term: 
         val target = c.mid.callTargets[term.callTarget - 1U64]
         if target.tag != 2U64 || target.resolution >= c.arena.finalCalleeCount() { return false }
         val call = c.arena.finalCalleeAt(index: target.resolution)
+        match call.target {
+            CallTarget.ClosureGlobal(declarationTarget: val declaration, fnTypeRef: _) => {
+                if !canonicalMidGlobalSnapshotReceiverMatches(arena: c.mid, body: body, receiverId: term.callReceiver, declarationTarget: declaration) { return false }
+            }
+            _ => {}
+        }
         if term.args.len != call.parameterTypeRefs.len || call.parameterTypeRefs.start > c.arena.finalCalleeParameterCount() || call.parameterTypeRefs.len > c.arena.finalCalleeParameterCount() - call.parameterTypeRefs.start { return false }
         index = 0U64
         while index < term.args.len {

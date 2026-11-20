@@ -1,0 +1,7 @@
+use ./Lib only { callback as imported }
+use @Std/Io only { print }
+val warm = imported()
+fn main() {
+    print(warm)
+    print(imported())
+}

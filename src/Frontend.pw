@@ -921,6 +921,7 @@ pub struct Comp {
     // The hash selects a bucket; consumers compare the complete parent key.
     mut val accessUses: Dictionary[U64, Array[AccessUse]] = [:]
     pub mut val resolvingGlobalTypes: Array[U64] = []
+    mut val globalValueDependencyOrderPrepared: Bool = false
     // ASan mode (`plewc --asan <file>`): the backend tags the module with the host target
     // triple and marks every DEFINED function `sanitize_address`, so a downstream
     // `opt -passes=asan` actually instruments loads/stores (a bare `.ll` has no
@@ -2775,11 +2776,7 @@ fn analyzeFrontendRequestsWithOrigin(c: inout Comp, input: FrontendInput, source
 pub fn completeFrontendDeclarations(c: inout Comp) -> Result[(), CompileDiagnostic] {
     // Whole-target static Mid construction consumes initializers as well as
     // functions. Global Record/admission alone is not a successful owner request.
-    mut val global = 0U64
-    while global < c.arena.globals.count() {
-        try c.prepareGlobalInitializer(target: c.arena.globals[global].nameStart)
-        global += 1U64
-    }
+    try c.prepareGlobalInitializers()
     val limit = c.arena.functionCount()
     mut val index = 0U64
     while index < limit {

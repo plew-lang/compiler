@@ -1,0 +1,1 @@
+pub val callback: fn() -> I64 = fn() -> I64 { return 42I64 }

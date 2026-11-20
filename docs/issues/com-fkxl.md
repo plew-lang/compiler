@@ -44,3 +44,5 @@ in JIT on both `f14e6539` and `39d67842`. The later initializer writes
 42 and is a prerequisite under the startup contract. Use the
 [block and call probes](../../../evidence/rejection-domains/diagnostic-domain-implementation/global-annotation-ownership/README.md)
 as ordering regressions for the selected-effect dependency graph.
+
+The finite com-za4f receiver repair adds direct callable-value storage-read edges from successful per-global CallTemplates. It does not close this task's transitive callee/default/drop/block-effect graph. `collectGlobalDeps` still explicitly skips block-bearing forms; use saved semantic/effect summaries here rather than broadening that AST guess or reselecting a named operation such as pow by spelling.

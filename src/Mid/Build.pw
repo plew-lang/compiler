@@ -1,6 +1,7 @@
 use ../Ir only { SourceBindingOrigin, SourceStatementRange, SourceValueRegion, RecordedStorageValueType }
 use ../SourceCompletion only { CompletionTransfer }
 use ../Ir only { SourceExitTarget, SourceTransferFact }
+use ../Ir only { DynamicCallTemplateTarget }
 use ../Diag only { CompileDiagnostic }
 // Mid builder state. Source bindings are mapped once to Mid local identities;
 // later passes consume the frontend resolver's declaration identity rather than
@@ -405,9 +406,9 @@ pub fn addMidLocal(state: inout MidBuildState, declarationTarget: U64, typeTerm:
 // Temporaries normally hold copyable evaluation results. A temporary that is
 // the owner of a unique aggregate must retain that fact too: it can only leave
 // the evaluation as Move, and drop elaboration must account for the transfer.
-fn addMidTemporary(state: inout MidBuildState, typeTerm: U64, isUnique: Bool = false, typeRecipe: U64 = 0U64, preparedExpr: U64 = 0U64) -> U64 {
+fn addMidTemporary(state: inout MidBuildState, typeTerm: U64, isUnique: Bool = false, typeRecipe: U64 = 0U64, preparedExpr: U64 = 0U64, evaluationGlobalOrigin: Optional[U64] = <Optional.None />) -> U64 {
     val local: U64 = state.locals.count()
-    state.locals.append(<MidLocalDecl typeTerm=typeTerm typeRecipe=typeRecipe sourceScope=state.currentScope isUnique=isUnique isParameter=false ownsAtEntry=false isDropFlag=false isReturnPlace=false sourceNameStart=0U64 preparedExpr=preparedExpr homeStability=if isUnique { give <MidValueHomeStability.Unproved /> } else { give <MidValueHomeStability.EvaluationTemporary /> } />)
+    state.locals.append(<MidLocalDecl typeTerm=typeTerm typeRecipe=typeRecipe sourceScope=state.currentScope isUnique=isUnique isParameter=false ownsAtEntry=false isDropFlag=false isReturnPlace=false sourceNameStart=0U64 preparedExpr=preparedExpr evaluationGlobalOrigin=evaluationGlobalOrigin homeStability=if isUnique { give <MidValueHomeStability.Unproved /> } else { give <MidValueHomeStability.EvaluationTemporary /> } />)
     return local
 }
 
@@ -2033,7 +2034,10 @@ fn midEvaluationValueProjectionsAreStable(projections: Array[MidProjection]) -> 
 // A value operand must denote the value at this evaluation point, not a
 // source place that a later sibling expression may change. Anonymous whole
 // temporaries already own a completed evaluation; borrows retain their place.
-fn midEvaluatedValue(c: inout Comp, state: inout MidBuildState, operand: MidOperand) -> MidOperand {
+// A selected global callee additionally needs its evaluation-source identity
+// at the final call. Ordinary snapshots keep their existing capabilities;
+// they do not acquire this immutable callee-home provenance contract.
+fn midEvaluatedValue(c: inout Comp, state: inout MidBuildState, operand: MidOperand, preserveGlobalOrigin: Bool = false) -> MidOperand {
     val source: MidPlace = match operand {
         MidOperand.Copy(place: val place) => {
             if midTermIsUnique(c: inout c, term: place.typeTerm) { return operand }
@@ -2057,7 +2061,8 @@ fn midEvaluatedValue(c: inout Comp, state: inout MidBuildState, operand: MidOper
         }
     }
     val ownsUnique = midTermIsUnique(c: inout c, term: source.typeTerm)
-    val local = addMidTemporary(state: inout state, typeTerm: source.typeTerm, isUnique: ownsUnique, typeRecipe: source.typeRecipe)
+    val globalOrigin = if preserveGlobalOrigin && source.rootTag == 2U64 && source.projections.count() == 0U64 && !ownsUnique { give <Optional.Some v=source.globalTarget /> } else { give <Optional.None /> }
+    val local = addMidTemporary(state: inout state, typeTerm: source.typeTerm, isUnique: ownsUnique, typeRecipe: source.typeRecipe, evaluationGlobalOrigin: globalOrigin)
     val destination = <MidPlace local=local typeTerm=source.typeTerm typeRecipe=source.typeRecipe />
     midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=destination value=<MidRvalue.Use operand=operand /> />)
     match operand {
@@ -2288,6 +2293,24 @@ fn midCallReceiver(c: inout Comp, state: inout MidBuildState, exprId: U64, templ
 }
 
 fn midSourceCallReceiver(c: inout Comp, state: inout MidBuildState, exprId: U64, template: CallTemplate) -> MidReceiverBuild {
+    // A global callable is a value evaluated before its arguments. Keep an
+    // owned snapshot in the normal call-evaluation scope, so replacement of
+    // the global cannot destroy the environment of the active invocation.
+    match template.kind {
+        CallTemplateKind.Dynamic(receiver: _, args: _, target: val target) => {
+            match target {
+                DynamicCallTemplateTarget.ClosureGlobal(declarationTarget: val declaration, fnTypeTerm: val term) => {
+                    val global = c.globalIndexForDeclarationTarget(target: declaration)
+                    if global >= c.arena.globals.count() || term == 0U64 { return <MidReceiverBuild.Error error=<MidBuildError.UnsupportedCallTemplate /> /> }
+                    val place = <MidPlace rootTag=2U64 local=0U64 globalTarget=declaration globalMutable=c.arena.globals[global].mutable typeTerm=term />
+                    val snapshot = midEvaluatedValue(c: inout c, state: inout state, operand: <MidOperand.Copy place=place />, preserveGlobalOrigin: true)
+                    return <MidReceiverBuild.Value receiver=<MidCallReceiver.Value operand=snapshot /> />
+                }
+                _ => {}
+            }
+        }
+        _ => {}
+    }
     val callee: U64 = midDirectCallee(functionCount: c.arena.functionCount(), template: template)
     val templateReceiver: CallTemplateReceiver = midTemplateReceiver(template: template)
     // Direct calls already name their declaration in the parametric template,

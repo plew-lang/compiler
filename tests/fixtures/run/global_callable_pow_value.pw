@@ -1,0 +1,4 @@
+use @Std/Io only { print }
+val answer: I64 = pow(value: 4I64)
+val pow: fn(value: I64) -> I64 = fn(value: I64) -> I64 { return value }
+fn main() { print(answer) }

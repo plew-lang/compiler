@@ -52,6 +52,14 @@ Nested expressions are lowered into ordered operations and temporaries. Source b
 
 An earlier child value must survive the effects of later children. When later evaluation can change the observed storage, construction captures the earlier Copy/Move value in an owned temporary at its evaluation point; it must not leave a recipe that reads the original place after those effects. Already materialized values can be reused under their lifetime contract. Borrow/inout operands remain capabilities rather than being silently converted into snapshots. Eliding a temporary requires proof that the later evaluation cannot change the value; unknown effects are not that proof. Aggregate children follow source evaluation order independently of their destination field indices.
 
+A callable value selected from global storage is an evaluated input, too. Keep
+its declaration identity through an owned callee snapshot created before the
+arguments, and keep the snapshot alive through the invocation using ordinary
+evaluation-scope ownership. Canonical validation relates the actual snapshot
+source and receiver to that selected declaration; an equal function type alone
+does not establish identity. LLVM consumes the retained operand rather than
+reloading global storage or inventing an otherwise invisible retain/release.
+
 For a whole copyable authored immutable local, the builder can keep the original
 value home instead of creating another evaluation owner. It consumes the accepted
 binding row through its retained origin, including owner and type identity; an

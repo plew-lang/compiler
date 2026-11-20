@@ -151,6 +151,8 @@ fn returnTransferOperand(arena: MidCanonicalArena, body: MidBodyNode, block: Mid
     val source = arena.places[operand.place - 1U64]
     if source.rootTag != 1U64 || source.projections.len != 0U64 || source.local >= body.locals.len || source.local == destination.local { return 0U64 }
     val local = arena.locals[body.locals.start + source.local]
+    // Keep the verified source identity attached to this evaluation home.
+    if local.evaluationGlobalOrigin.isSome() { return 0U64 }
     if local.sourceNameStart != 0U64 || local.isParameter || local.isBorrowed || local.isInout || local.isCaptureCell || local.ownsAtEntry || local.isReturnPlace || local.isDropFlag { return 0U64 }
     if definitions[source.local] != 1U64 || uses[source.local] != 1U64 { return 0U64 }
     // No subsequent computation may overwrite the result or loop back to the
@@ -190,6 +192,8 @@ fn scopeTransferOperand(arena: MidCanonicalArena, costs: MidCopyCosts, body: Mid
     if source.typeTerm != destination.typeTerm || source.local == destination.local { return 0U64 }
     if !costs.mayRelease(typeTerm: source.typeTerm) { return 0U64 }
     val local = arena.locals[body.locals.start + source.local]
+    // Keep the verified source identity attached to this evaluation home.
+    if local.evaluationGlobalOrigin.isSome() { return 0U64 }
     if local.sourceNameStart != 0U64 || local.isUnique || local.isParameter || local.isBorrowed || local.isInout || local.isCaptureCell || local.ownsAtEntry || local.isReturnPlace || local.isDropFlag { return 0U64 }
     val target = arena.locals[body.locals.start + destination.local]
     if target.isParameter || target.isBorrowed || target.isInout || target.isCaptureCell || target.isDropFlag { return 0U64 }

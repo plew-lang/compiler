@@ -2356,6 +2356,7 @@ pub enum CallTarget {
     RuntimeIntrinsic(intrinsic: RuntimeIntrinsic)
     NoCallable
     ExistentialRequirement(traitIdx: U64, slot: U64)
+    ClosureGlobal(declarationTarget: U64, fnTypeRef: U64)
     ClosureLocal(bindingDeclStart: U64, fnTypeRef: U64)
     ClosureField(fieldIndex: U64, fnTypeRef: U64)
 }

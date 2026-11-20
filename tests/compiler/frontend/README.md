@@ -54,6 +54,17 @@ callee identity in source templates, together with original pending type-cycle
 and implementation-limit failures. It does not claim global callable execution;
 that final consumer is tracked by `com-za4f`.
 
+`GlobalCallableSnapshotOrigin.pw` checks the canonical callee snapshot's actual
+global source and receiver identity, including same-type swaps, a forged origin,
+overwrite and inout mutations, with a valid read control. Compile/link and
+compare its `.out` using the manual procedure below.
+
+`GlobalCallableDependencyOrder.pw` checks single-global and two-global callable
+storage-read cycles, source-owner failure and repeated failure without publishing
+an initializer plan. It does not certify transitive callee effects or the general
+startup dependency graph (`com-fkxl`). Require exact `.out`, exit 0 and empty
+runtime stderr.
+
 Run `python3 -B tests/compiler/frontend/test-lexical-call-access.py --compiler
 /absolute/path/to/plewc --out tmp/lexical-access` on one line to check argument
 access recording for a function-value call. The driver creates isolated source

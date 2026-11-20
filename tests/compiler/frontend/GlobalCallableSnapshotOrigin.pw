@@ -1,0 +1,112 @@
+use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontend }
+use ../../../src/SourceAccess only { SourceAccess }
+use ../../../src/Ir only { CallTarget }
+use ../../../src/Mid/Build only { MidFunctionTemplates, MidBuildError }
+use ../../../src/Mid only { instantiateCanonicalMidBody, MidInstantiateError }
+use ../../../src/Mid/Ir only { MidPlaceNode, MidCallReceiverNode, MidLocalDecl, MidStatementNode, MidOperandNode, MidRvalueNode, MidBodyNode, MidRange }
+use ../../../src/Mid/Types only { canonicalMidStatementTypesMatch, canonicalMidTerminatorTypesMatch }
+use @Std/Io only { print }
+
+fn main() {
+    mut val compiler = <Comp />
+    val source = "val first: fn() -> I64 = fn() -> I64 {{ return 1I64 }} val second: fn() -> I64 = fn() -> I64 {{ return 2I64 }} fn main() {{ val value = first() val other = second() }}"
+    analyzeFrontend(c: inout compiler, input: <FrontendInput.Text path="snapshot-origin.pw" text=source />, sources: <SourceAccess />).unwrap()
+    mut val checked = false
+    for index in 0U64..<compiler.arena.finalCalleeCount() {
+        val row = compiler.arena.finalCalleeAt(index: index)
+        match row.target {
+            CallTarget.ClosureGlobal(declarationTarget: val declaration, fnTypeRef: _) => {
+                val function = compiler.arena.bodyInstanceAt(index: row.bodyId - 1U64).fnIdx
+                mut val templates = <MidFunctionTemplates />
+                val sourceBody = templates.body(c: inout compiler, function: function)
+                match sourceBody.error { MidBuildError.None => {} _ => { panic("global source Mid failed") } }
+                val instantiated = instantiateCanonicalMidBody(c: inout compiler, body: sourceBody.canonical, bodyId: row.bodyId)
+                match instantiated.error { MidInstantiateError.None => {} _ => { panic("global Mid instantiation failed") } }
+                val body = compiler.mid.bodies[instantiated.body.body - 1U64]
+                mut val receiverChecked = false
+                for blockIndex in 0U64..<body.blocks.len {
+                    val block = compiler.mid.blocks[body.blocks.start + blockIndex]
+                    val term = compiler.mid.terminators[block.terminator - 1U64]
+                    if term.tag == 4U64 && term.callTarget != 0U64 {
+                        val call = compiler.mid.callTargets[term.callTarget - 1U64]
+                        val selected = compiler.arena.finalCalleeAt(index: call.resolution)
+                        match selected.target {
+                            CallTarget.ClosureGlobal(declarationTarget: val actual, fnTypeRef: _) => {
+                                if actual == declaration {
+                                    if !canonicalMidTerminatorTypesMatch(c: inout compiler, body: body, term: term) { panic("valid global receiver rejected") }
+                                    for otherBlockIndex in 0U64..<body.blocks.len {
+                                        val otherBlock = compiler.mid.blocks[body.blocks.start + otherBlockIndex]
+                                        val otherTerm = compiler.mid.terminators[otherBlock.terminator - 1U64]
+                                        if otherTerm.tag == 4U64 && otherTerm.callTarget != 0U64 {
+                                            val otherCall = compiler.mid.callTargets[otherTerm.callTarget - 1U64]
+                                            match compiler.arena.finalCalleeAt(index: otherCall.resolution).target {
+                                                CallTarget.ClosureGlobal(declarationTarget: val otherTarget, fnTypeRef: _) => {
+                                                    if otherTarget != actual {
+                                                        mut val changed = compiler
+                                                        val otherReceiver = compiler.mid.callReceivers[otherTerm.callReceiver - 1U64]
+                                                        changed.mid.callReceivers[term.callReceiver - 1U64] = <MidCallReceiverNode tag=otherReceiver.tag operand=otherReceiver.operand />
+                                                        if canonicalMidTerminatorTypesMatch(c: inout changed, body: body, term: term) { panic("foreign global snapshot receiver accepted") }
+                                                        receiverChecked = true
+                                                    }
+                                                }
+                                                _ => {}
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                    for statementIndex in 0U64..<block.statements.len {
+                        val statement = compiler.mid.statements[block.statements.start + statementIndex]
+                        if statement.tag == 1U64 && statement.value != 0U64 {
+                            val value = compiler.mid.rvalues[statement.value - 1U64]
+                            if value.tag == 1U64 && value.operand != 0U64 {
+                                val operand = compiler.mid.operands[value.operand - 1U64]
+                                if operand.place != 0U64 {
+                                    val place = compiler.mid.places[operand.place - 1U64]
+                                    if place.rootTag == 2U64 && place.globalTarget == declaration {
+                                        if !canonicalMidStatementTypesMatch(c: inout compiler, body: body, statement: statement) { panic("valid global snapshot rejected") }
+                                        if canonicalMidStatementTypesMatch(c: inout compiler, body: body, statement: <MidStatementNode tag=9U64 destination=statement.destination value=statement.value />) { panic("global snapshot overwrite accepted") }
+                                        mut val changed = compiler
+                                        mut val other = declaration
+                                        for global in compiler.arena.globals { if global.nameStart != declaration { other = global.nameStart } }
+                                        if other == declaration { panic("missing same-type foreign global") }
+                                        changed.mid.places[operand.place - 1U64] = <MidPlaceNode rootTag=place.rootTag local=place.local globalTarget=other globalMutable=place.globalMutable projections=place.projections typeTerm=place.typeTerm typeRecipe=place.typeRecipe />
+                                        if canonicalMidStatementTypesMatch(c: inout changed, body: body, statement: statement) { panic("foreign global snapshot source accepted") }
+                                        mut val changedOrigin = compiler
+                                        val destination = compiler.mid.places[statement.destination - 1U64]
+                                        val localIndex = body.locals.start + destination.local
+                                        val local = compiler.mid.locals[localIndex]
+                                        changedOrigin.mid.locals[localIndex] = <MidLocalDecl typeTerm=local.typeTerm typeRecipe=local.typeRecipe sourceScope=local.sourceScope isUnique=local.isUnique isParameter=local.isParameter isBorrowed=local.isBorrowed isInout=local.isInout isCaptureCell=local.isCaptureCell ownsAtEntry=local.ownsAtEntry isDropFlag=local.isDropFlag isReturnPlace=local.isReturnPlace preparedExpr=local.preparedExpr sourceNameStart=local.sourceNameStart sourceBinding=local.sourceBinding homeStability=local.homeStability evaluationGlobalOrigin=<Optional.Some v=other /> />
+                                        if canonicalMidStatementTypesMatch(c: inout changedOrigin, body: body, statement: statement) { panic("forged global snapshot origin accepted") }
+                                        mut val changedInout = compiler
+                                        val localsStart = changedInout.mid.locals.count()
+                                        for localOffset in 0U64..<body.locals.len { changedInout.mid.locals.append(compiler.mid.locals[body.locals.start + localOffset]) }
+                                        changedInout.mid.locals.append(<MidLocalDecl typeTerm=local.typeTerm sourceScope=local.sourceScope isUnique=false isParameter=false />)
+                                        val typeBody = <MidBodyNode bodyInstance=body.bodyInstance sourceFunction=body.sourceFunction locals=<MidRange start=localsStart len=body.locals.len + 1U64 /> scopes=body.scopes blocks=body.blocks entry=body.entry />
+                                        changedInout.mid.places.append(<MidPlaceNode local=body.locals.len typeTerm=local.typeTerm />)
+                                        val output = changedInout.mid.places.count()
+                                        changedInout.mid.operands.append(<MidOperandNode tag=3U64 place=statement.destination capability=1U64 />)
+                                        val input = changedInout.mid.operands.count()
+                                        changedInout.mid.rvalues.append(<MidRvalueNode tag=1U64 operand=input />)
+                                        val read = <MidStatementNode tag=1U64 destination=output value=changedInout.mid.rvalues.count() />
+                                        if !canonicalMidStatementTypesMatch(c: inout changedInout, body: typeBody, statement: read) { panic("snapshot read control rejected") }
+                                        changedInout.mid.operands[input - 1U64] = <MidOperandNode tag=3U64 place=statement.destination capability=2U64 />
+                                        if canonicalMidStatementTypesMatch(c: inout changedInout, body: typeBody, statement: read) { panic("mutable access to global snapshot accepted") }
+                                        checked = true
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                if !receiverChecked { panic("same-type foreign receiver was not inspected") }
+            }
+            _ => {}
+        }
+    }
+    if !checked { panic("global snapshot assignment was not inspected") }
+    print("global snapshot origin retained")
+}

@@ -1,0 +1,8 @@
+use @Std/Core only { Pow }
+use @Std/Io only { print }
+val pow: I64 = answer
+val answer: I64 = pow(base: 2I64, exp: 3U64)
+fn main() {
+    print(pow)
+    print(answer)
+}

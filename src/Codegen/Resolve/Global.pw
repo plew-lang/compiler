@@ -252,6 +252,20 @@ pub impl Comp {
         return result
     }
 
+    inout fn prepareGlobalInitializers() -> Result[(), CompileDiagnostic] {
+        if self.globalValueDependencyOrderPrepared { return <Result.Ok value=() /> }
+        mut val index = 0U64
+        while index < self.arena.globals.count() {
+            try self.prepareGlobalInitializer(target: self.arena.globals[index].nameStart)
+            index += 1U64
+        }
+        // Only successful source owners contribute selected callable reads.
+        // No executable initializer plan exists until this order is admitted.
+        try self.orderGlobalsByDependency()
+        self.globalValueDependencyOrderPrepared = true
+        return <Result.Ok value=() />
+    }
+
     inout fn retainSelectedGlobals() {
         mut val selected: Array[Global] = []
         mut val index: U64 = 0U64
@@ -376,6 +390,24 @@ pub impl Comp {
         state[i] = 1U64
         mut val d: Array[U64] = []
         self.collectGlobalDeps(id: self.globalInitExpr(g: self.arena.globals[i]), into: inout d)
+        val owner = self.arena.globals[i].nameStart
+        if self.globalInitializerPrepared(target: owner) {
+            for index in self.globalCallTemplates(target: owner) {
+                match self.callTemplateAt(index: index).kind {
+                    CallTemplateKind.Dynamic(receiver: _, args: _, target: val target) => {
+                        match target {
+                            DynamicCallTemplateTarget.ClosureGlobal(declarationTarget: val declaration, fnTypeTerm: _) => {
+                                val dependency = self.globalIndexForDeclarationTarget(target: declaration)
+                                if dependency >= self.arena.globals.count() { return <Result.Err error=self.diagnosticAt(offset: owner, msg: "internal error: selected global callable has no declaration") /> }
+                                if !u64ArrayHas(a: d, v: dependency) { d.append(dependency) }
+                            }
+                            _ => {}
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
         mut val k: U64 = 0
         while k < d.count() {
             try self.globalDfs(i: d[k], state: inout state, order: inout order)
@@ -388,7 +420,7 @@ pub impl Comp {
 
     inout fn orderGlobalsByDependency() -> Result[(), CompileDiagnostic] {
         val n: U64 = self.arena.globals.count()
-        if n <= 1U64 {
+        if n == 0U64 {
             return <Result.Ok value=() />
         }
         mut val state: Array[U64] = []

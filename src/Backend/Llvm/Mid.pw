@@ -1694,6 +1694,15 @@ pub impl LlvmCtx {
         if c.checkFinalClosureCallEvidence(resolution: selected).isErr() { return <Result.Ok value=<MidCallPreflight.Resolution /> /> }
         mut val functionType: U64 = 0U64
         match selected.target {
+            CallTarget.ClosureGlobal(declarationTarget: val declaration, fnTypeRef: val ref) => {
+                functionType = ref
+                val global = c.globalIndexForDeclarationTarget(target: declaration)
+                if global >= c.arena.globals.count() || !c.typeRefEq(a: selected.recvTypeRef, b: ref) { return <Result.Ok value=<MidCallPreflight.Receiver /> /> }
+                if !canonicalMidGlobalSnapshotReceiverMatches(arena: c.mid, body: body, receiverId: term.callReceiver, declarationTarget: declaration) { return <Result.Ok value=<MidCallPreflight.Receiver /> /> }
+                if !(try self.midCanonicalReceiverSupported(c: inout c, body: body, receiverId: term.callReceiver, passing: <CallReceiverPassing.Borrow />)) { return <Result.Ok value=<MidCallPreflight.Receiver /> /> }
+                val receiver = c.mid.callReceivers[term.callReceiver - 1U64]
+                if !c.typeRefEq(a: self.midCanonicalOperandTypeTerm(c: c, body: body, operandId: receiver.operand), b: ref) { return <Result.Ok value=<MidCallPreflight.Receiver /> /> }
+            }
             CallTarget.ClosureLocal(bindingDeclStart: val binding, fnTypeRef: val ref) => {
                 functionType = ref
                 val local: U64 = self.midCanonicalBindingLocal(c: c, body: body, binding: binding)
@@ -1734,6 +1743,11 @@ pub impl LlvmCtx {
         mut val functionType: U64 = 0U64
         mut val closure: LLVMValueRef = LLVMConstNull(self.ptrty)
         match selected.target {
+            CallTarget.ClosureGlobal(declarationTarget: val declaration, fnTypeRef: val ref) => {
+                functionType = ref
+                val receiver = c.mid.callReceivers[term.callReceiver - 1U64]
+                closure = try self.midCanonicalEmitOperand(c: inout c, body: body, operandId: receiver.operand)
+            }
             CallTarget.ClosureLocal(bindingDeclStart: val binding, fnTypeRef: val ref) => {
                 functionType = ref
                 val local: U64 = self.midCanonicalBindingLocal(c: c, body: body, binding: binding)

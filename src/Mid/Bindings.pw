@@ -77,11 +77,11 @@ pub impl MidRetainedSourceBindings {
         while index < source.locals.len {
             val before = arena.locals[source.locals.start + index]
             val after = arena.locals[output.locals.start + index]
-            if before.sourceNameStart != after.sourceNameStart || !before.sourceBinding.matches(origin: after.sourceBinding) { return <MidVerification error=<MidVerifyError.InvalidBindingOrigin /> local=index /> }
+            if before.sourceNameStart != after.sourceNameStart || !before.sourceBinding.matches(origin: after.sourceBinding) || before.evaluationGlobalOrigin.isSome() != after.evaluationGlobalOrigin.isSome() || (before.evaluationGlobalOrigin.isSome() && before.evaluationGlobalOrigin.unwrap() != after.evaluationGlobalOrigin.unwrap()) { return <MidVerification error=<MidVerifyError.InvalidBindingOrigin /> local=index /> }
             index += 1U64
         }
         while index < output.locals.len {
-            if !arena.locals[output.locals.start + index].sourceBinding.isUnproved() { return <MidVerification error=<MidVerifyError.InvalidBindingOrigin /> local=index /> }
+            if (!arena.locals[output.locals.start + index].sourceBinding.isUnproved() || arena.locals[output.locals.start + index].evaluationGlobalOrigin.isSome()) { return <MidVerification error=<MidVerifyError.InvalidBindingOrigin /> local=index /> }
             index += 1U64
         }
         return <MidVerification />

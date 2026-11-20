@@ -1,4 +1,5 @@
 use ./Mid only { planCanonicalMidAsyncFrame }
+use ./Mid/Types only { canonicalMidGlobalSnapshotReceiverMatches }
 use ./Ir only { ConversionProofNode, FrozenEnumPayloadConversion }
 use @Std/Core only { bitCastU64 }
 use ./Diag only { eprintU64 }

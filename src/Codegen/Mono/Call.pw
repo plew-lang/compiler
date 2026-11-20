@@ -1845,6 +1845,11 @@ pub impl Comp {
         mut val dynamic: Bool = false
         mut val interfaceEvidence = 0U64
         match selection.target {
+            CallTarget.ClosureGlobal(declarationTarget: _, fnTypeRef: val ref) => {
+                functionType = ref
+                receiverPassing = <CallReceiverPassing.Borrow />
+                dynamic = true
+            }
             CallTarget.ClosureLocal(bindingDeclStart: _, fnTypeRef: val ref) => {
                 functionType = ref
                 dynamic = true
@@ -2009,6 +2014,9 @@ pub impl Comp {
             CallTarget.NoCallable => { match b { CallTarget.NoCallable => { return true } _ => {} } }
             CallTarget.ExistentialRequirement(val traitIdx, slot: val targetSlot) => {
                 match b { CallTarget.ExistentialRequirement(traitIdx: val otherTrait, slot: val otherSlot) => { return traitIdx == otherTrait && targetSlot == otherSlot } _ => {} }
+            }
+            CallTarget.ClosureGlobal(declarationTarget: val declaration, fnTypeRef: val fnRef) => {
+                match b { CallTarget.ClosureGlobal(declarationTarget: val other, fnTypeRef: val otherRef) => { return declaration == other && fnRef == otherRef } _ => {} }
             }
             CallTarget.ClosureLocal(val bindingDeclStart, fnTypeRef: val fnRef) => {
                 match b { CallTarget.ClosureLocal(bindingDeclStart: val otherBinding, fnTypeRef: val otherRef) => { return bindingDeclStart == otherBinding && fnRef == otherRef } _ => {} }
@@ -3718,6 +3726,11 @@ pub impl Comp {
                     if part == 1U64 { return <Result.Ok value=traitIdx />}
                     if part == 2U64 { return <Result.Ok value=targetSlot />}
                 }
+                CallTarget.ClosureGlobal(declarationTarget: val declaration, fnTypeRef: val fnTypeRef) => {
+                    if part == 0U64 { return <Result.Ok value=5U64 /> }
+                    if part == 2U64 { return <Result.Ok value=declaration /> }
+                    if part == 3U64 { return <Result.Ok value=fnTypeRef /> }
+                }
                 CallTarget.ClosureLocal(bindingDeclStart: _, val fnTypeRef) => {
                     if part == 0U64 { return <Result.Ok value=2U64 />}
                     if part == 3U64 { return <Result.Ok value=fnTypeRef />}
@@ -3810,8 +3823,15 @@ pub impl Comp {
         val args: ArgRange = self.templateArgumentRangeFromValues(arguments: arguments)
         val noCallee: U64 = self.arena.functionCount()
         match target {
-            DynamicCallTemplateTarget.ClosureGlobal(declarationTarget: _, fnTypeTerm: _) => {
-                return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "global callable receiver has no prepared storage access", failureDomain: <FailureDomain.Internal />) />
+            DynamicCallTemplateTarget.ClosureGlobal(declarationTarget: val declaration, fnTypeTerm: val fnTypeTerm) => {
+                val fnTypeRef = try self.groundAndRecordBodyType(ref: fnTypeTerm, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.cur.bodyId)
+                if self.globalIndexForDeclarationTarget(target: declaration) >= self.arena.globals.count() || fnTypeRef == 0U64 || !self.isFnType(ref: fnTypeRef) {
+                    return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: dynamic global template has invalid storage or function type") />
+                }
+                val signature = self.arena.typeAt(index: fnTypeRef)
+                mut val resultRef = 0U64
+                if signature.args.count() > 0U64 && !signature.isDiverging { resultRef = self.semanticSourceResultTerm(ref: signature.args[0U64]) }
+                return <Result.Ok value=<CallSiteSelection exprId=exprId callee=noCallee receiverRef=fnTypeRef args=args argumentSources=arguments resultHintRef=expected resultRef=resultRef target=<CallTarget.ClosureGlobal declarationTarget=declaration fnTypeRef=fnTypeRef /> /> />
             }
             DynamicCallTemplateTarget.ClosureLocal(bindingDeclStart: val bindingDeclStart, fnTypeTerm: val fnTypeTerm) => {
                 val fnTypeRef: U64 = (try self.groundAndRecordBodyType(ref: fnTypeTerm, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.cur.bodyId))
@@ -5446,6 +5466,7 @@ pub impl Comp {
     }
 
     inout fn prepareFinalInitializersInContext() -> Result[(), CompileDiagnostic] {
+        if !self.genMode { try self.prepareGlobalInitializers() }
         val noParams: Array[Bind] = []
         val noArgs: Array[U64] = []
         // Global initializers are an anonymous body instance.  They can reach
@@ -5975,7 +5996,7 @@ pub impl Comp {
     // different target would have exactly the same function ABI.
     inout fn checkFinalClosureCallEvidence(resolution: CallResolution) -> Result[(), CompileDiagnostic] {
         match resolution.target {
-            CallTarget.ClosureLocal(bindingDeclStart: _, fnTypeRef: _) | CallTarget.ClosureField(fieldIndex: _, fnTypeRef: _) => {}
+            CallTarget.ClosureGlobal(declarationTarget: _, fnTypeRef: _) | CallTarget.ClosureLocal(bindingDeclStart: _, fnTypeRef: _) | CallTarget.ClosureField(fieldIndex: _, fnTypeRef: _) => {}
             _ => { return <Result.Ok value=() /> }
         }
         val index = self.callTemplateIndex(siteKey: resolution.siteKey)
@@ -5992,7 +6013,12 @@ pub impl Comp {
         match template.kind {
             CallTemplateKind.Dynamic(receiver: _, args: _, target: val target) => {
                 match target {
-                    DynamicCallTemplateTarget.ClosureGlobal(declarationTarget: _, fnTypeTerm: _) => { matched = false }
+                    DynamicCallTemplateTarget.ClosureGlobal(declarationTarget: val declaration, fnTypeTerm: val term) => {
+                        match resolution.target {
+                            CallTarget.ClosureGlobal(declarationTarget: val actual, fnTypeRef: val ref) => { matched = declaration == actual && self.globalIndexForDeclarationTarget(target: actual) < self.arena.globals.count() && self.publishedBodyTypeMatches(bodyId: resolution.bodyId, source: term, concrete: ref) }
+                            _ => {}
+                        }
+                    }
                     DynamicCallTemplateTarget.ClosureLocal(bindingDeclStart: val binding, fnTypeTerm: val term) => {
                         match resolution.target {
                             CallTarget.ClosureLocal(bindingDeclStart: val actual, fnTypeRef: val ref) => { matched = binding == actual && self.publishedBodyTypeMatches(bodyId: resolution.bodyId, source: term, concrete: ref) }

@@ -1,7 +1,7 @@
 ---
 id: com-r88j
 status: in_progress
-deps: []
+deps: [com-za4f]
 links: []
 created: 2026-11-02T21:46:43Z
 type: bug
@@ -55,3 +55,7 @@ Current fixed-candidate RED: new lexical_call_value_shadow rejects in check/AOT/
 Product changes and finite evidence are retained in meta `evidence/rejection-domains/diagnostic-domain-implementation/phase3-lexical-call-binding.json`. Fresh build 20261119T233117-build-79f17e and standard gen 20261119T235538-gen-7c1f78 exit 0. Source-native probes cover failure ownership, pending original failures, inferred/annotated/imported-alias global target, and private argument-access recording with an intentionally omitted-recording detector. Native and ORC language controls exercise actual local receivers, default/provided callers and temporal scope boundaries. Genuine free visibility/selector/ambiguity refusals remain unchanged in 36 old/new mode controls. Same-source alternating five-pair medians are 6.727844/6.720914 seconds, all ten LLVM outputs equal; this is diagnostic, not a new formal fixed point.
 
 Interim independent source review found no remaining confirmed must-fix after restoring argument access recording and using typed value completion in ExprType. Final independent acceptance and normal whole-suite comparison remain required. This checkpoint does not close this task, com-yeua or phase 3. Global final receiver support, full function-value argument admission and gen authority remain with the excluded owners above.
+
+## Whole-suite interruption and adoption corrections
+
+Normal run 20261120T001448-test-7ffc79 was aborted by ENOSPC and has no whole-suite conclusion. Exact worker inspection found no survivors. Independent native reruns and old frozen-source controls distinguish two existing capture-boundary test failures from two new regressions: raw NoStatic cache must not mint NoMatch/Source evidence; global-initializer callback preparation must retain its previously working prefix. Keep the existing free_call_failure_domain expectation. A raw error from the free-only helper now blocks forged cache authority (fresh verification pending). com-za4f is a required predecessor for final global storage consumption; it consumes eab68d76 source publication, not this task's closure. Independent review accepted this dependency and responsibility split. No finite task closure before both corrections and full-suite comparison.

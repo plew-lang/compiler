@@ -770,6 +770,9 @@ pub struct MidLocalDecl {
     // Synthetic, parameter and borrowed roots retain an unproved origin.
     pub val sourceBinding: SourceBindingOrigin = <SourceBindingOrigin />
     pub val homeStability: MidValueHomeStability = <MidValueHomeStability.Unproved />
+    // Whole-global value copied into an owned evaluation home. Assign/type
+    // verification checks the actual source; this scalar is not proof alone.
+    pub val evaluationGlobalOrigin: Optional[U64] = <Optional.None />
 }
 pub impl MidLocalDecl { factory }
 

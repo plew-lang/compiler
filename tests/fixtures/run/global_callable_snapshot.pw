@@ -1,0 +1,20 @@
+use @Std/Io only { print }
+mut val callback: fn(input: I64) -> I64 = fn(input: I64) -> I64 { return input }
+fn replacement() -> I64 {
+    callback = fn(input: I64) -> I64 { return 99I64 + input }
+    return 0I64
+}
+fn captured(value: I64) -> fn(input: I64) -> I64 {
+    return fn(input: I64) -> I64 {
+        replacement()
+        return value + input
+    }
+}
+fn main() {
+    callback = captured(value: 42I64)
+    print(callback(input: replacement()))
+    print(callback(input: 0I64))
+    callback = captured(value: 7I64)
+    print(callback(input: 0I64))
+    print(callback(input: 0I64))
+}

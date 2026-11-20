@@ -61,13 +61,9 @@ pub impl DeclarationBodyRequests {
         }
         // A declaration request admits every source owner before Mid consumes
         // its immutable facts, just as an ordinary function request does.
-        mut val index = 0U64
-        while index < c.arena.globals.count() {
-            match c.prepareGlobalInitializer(target: c.arena.globals[index].nameStart) {
-                Result.Ok(value: _) => {}
-                Result.Err(error: val diagnostic) => { return <Result.Err error=<DeclarationAccessError.Frontend diagnostic=diagnostic /> /> }
-            }
-            index += 1U64
+        match c.prepareGlobalInitializers() {
+            Result.Ok(value: _) => {}
+            Result.Err(error: val diagnostic) => { return <Result.Err error=<DeclarationAccessError.Frontend diagnostic=diagnostic /> /> }
         }
         match c.checkGenericUniqueArgs() {
             Result.Ok(value: _) => {}
