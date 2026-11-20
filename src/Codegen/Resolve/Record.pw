@@ -2053,6 +2053,7 @@ pub impl Comp {
                 }
             }
             Expr.Array(val elems) => {
+                if elems.len == 0U64 { return true }
                 mut val index = 0U64
                 while index < elems.len {
                     if self.expressionNeedsTypeContext(exprId: self.exprAt(exprs: elems, index: index), allowPartialFunction: allowPartialFunction) { return true }

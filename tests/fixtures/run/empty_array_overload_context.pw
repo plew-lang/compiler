@@ -1,0 +1,30 @@
+use @Std/Io only { print }
+
+fn chooseForward(value: I64) -> I64 { return 0I64 }
+fn chooseForward(value: Array[I64]) -> I64 { return 11I64 }
+fn chooseReverse(value: Array[I64]) -> I64 { return 22I64 }
+fn chooseReverse(value: I64) -> I64 { return 0I64 }
+
+fn chooseFunction(value: fn() -> I64) -> I64 { return 0I64 }
+fn chooseFunction(value: Array[I64]) -> I64 { return 55I64 }
+
+struct Selector {}
+impl Selector {
+    fn chooseForward(value: I64) -> I64 { return 0I64 }
+    fn chooseForward(value: Array[I64]) -> I64 { return 33I64 }
+    fn chooseReverse(value: Array[I64]) -> I64 { return 44I64 }
+    fn chooseReverse(value: I64) -> I64 { return 0I64 }
+}
+
+fn main() {
+    print(chooseForward(value: []))
+    print(chooseReverse(value: []))
+    print(chooseForward(value: { give [] }))
+    print(chooseReverse(value: { give [] }))
+    print(chooseFunction(value: []))
+    val selector = <Selector />
+    print(selector.chooseForward(value: []))
+    print(selector.chooseReverse(value: []))
+    print(selector.chooseForward(value: { give [] }))
+    print(selector.chooseReverse(value: { give [] }))
+}

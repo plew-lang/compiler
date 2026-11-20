@@ -176,7 +176,9 @@ pub impl Comp {
     // components before its body is checked. Use this partial structural
     // evidence during selection without publishing an incomplete signature.
     inout fn contextualArgumentMatchesType(exprId: U64, expected: U64) -> Result[Bool, CompileDiagnostic] {
-        if self.expressionNeedsTypeContext(exprId: exprId, allowPartialFunction: true) { return <Result.Ok value=true /> }
+        if self.expressionNeedsTypeContext(exprId: exprId, allowPartialFunction: true) {
+            return <Result.Ok value=self.contextualArrayArgumentMatchesType(exprId: exprId, expected: expected) />
+        }
         val info = try self.exprType(id: exprId)
         if !self.isFnType(ref: info.ref) { return <Result.Ok value=true /> }
         if !self.isFnType(ref: expected) { return <Result.Ok value=!(try self.tyRefIsGround(ref: expected)) /> }
@@ -562,5 +564,41 @@ pub impl Comp {
             return <TypeInfo kind=0 nameStart=rs nameLen=rl ref=0 />
         }
         return <TypeInfo kind=2 nameStart=rs nameLen=rl ref=0 />
+    }
+}
+
+// Candidate applicability may read the shape of an unresolved array without
+// recording it under a candidate's expectation. A fixed caller binder remains
+// possible; a known non-Array constructor cannot provide an array context.
+impl Comp {
+    inout fn contextualArrayArgumentMatchesType(exprId: U64, expected: U64) -> Bool {
+        if exprId >= self.arena.exprs.count() || expected == 0U64 || expected >= self.arena.typeCount() { return true }
+        match self.arena.exprs[exprId] {
+            Expr.Array(val elems) => {
+                val context = self.arena.typeTermAt(index: expected)
+                if context.paramId != 0U64 || context.assocNameId != 0U64 { return true }
+                if context.isRecord || context.isAny || self.isFnType(ref: expected) { return false }
+                if !context.hasDecl || self.langArrayDeclOffset == 0U64 { return true }
+                if context.declOffset != self.langArrayDeclOffset { return false }
+                if context.args.len != 1U64 { return true }
+                val element = self.arena.typeArgumentAt(index: context.args.start)
+                for index in 0U64..<elems.len {
+                    if !self.contextualArrayArgumentMatchesType(exprId: self.exprAt(exprs: elems, index: index), expected: element) { return false }
+                }
+            }
+            Expr.Block(val body, offset: _) | Expr.Sequence(val body) => {
+                return self.contextualArrayArgumentMatchesType(exprId: self.blockGiveExpr(blkId: body), expected: expected)
+            }
+            Expr.IfChain(conditions: _, val thenBlk, val elseBlk) | Expr.IfExpr(cond: _, val thenBlk, val elseBlk) => {
+                return self.contextualArrayArgumentMatchesType(exprId: self.blockGiveExpr(blkId: thenBlk), expected: expected) && self.contextualArrayArgumentMatchesType(exprId: self.blockGiveExpr(blkId: elseBlk), expected: expected)
+            }
+            Expr.MatchExpr(scrut: _, val arms) => {
+                for index in 0U64..<arms.len {
+                    if !self.contextualArrayArgumentMatchesType(exprId: self.blockGiveExpr(blkId: self.matchArmAt(arms: arms, index: index).body), expected: expected) { return false }
+                }
+            }
+            _ => {}
+        }
+        return true
     }
 }

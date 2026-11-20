@@ -1,6 +1,6 @@
 ---
 id: com-5n0l
-status: open
+status: in_progress
 deps: []
 links: []
 created: 2026-11-20T06:16:22Z
@@ -22,3 +22,9 @@ This exact empty/context-demand selection defect differs from com-zy6r (already 
 
 RED before repair: both declaration orders and direct/block-yield empty array arguments; ground scalar versus Array and two genuinely viable Array contexts; exact saved selection and source publication checks. Confirm expected outcomes from spec, not the old first-order failure. Cover shared free/method paths that use the same defective producer and generic forwarding/closure/non-array rejection noninterference. GREEN must reach actual check/AOT/ORC and retained selected-call/final execution, preserve raw API behavior, and receive independent source/test review. Document exact root and removed competing authority. Parent phase3/whole gate remains open.
 
+
+## RED and actual first authority
+
+Fixed33d1011d rejects the new ordinary run fixture at its first scalar-first empty-array call. It incorrectly accepts both direct and block-wrapped two-Array ambiguity fixtures. Exact results: meta tmp/phase3-array-context-refusal/overload-red.json (classification audit evidence links the source controls). A native raw-API probe finds two visible candidates, both rank1 and an Uncomputed callee cache before preparation: no candidate-state mutation was established. Empty Expr.Array returns false from expressionNeedsTypeContext; both candidate comparisons fail and selectFreeFunction uses its firstLabel diagnostic fallback.
+
+WIP uses the shared context-demand rule for empty arrays plus one private syntax/canonical-Array-identity shape filter in common contextualArgumentMatchesType. Blocks/if/match forward the same possible-shape constraint; numeric/function behavior, rigid/unknown contexts and actual selected-parameter checking remain distinct. It does not check or publish a candidate value type. Fresh CLI/final-consumer checks and independent review are pending; no repair completion claim.

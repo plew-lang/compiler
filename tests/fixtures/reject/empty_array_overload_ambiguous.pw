@@ -1,0 +1,3 @@
+fn choose(value: Array[I64]) {}
+fn choose(value: Array[String]) {}
+fn main() { choose(value: []) }
