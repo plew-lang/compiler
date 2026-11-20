@@ -3,7 +3,7 @@ use ../../../src/CheckedProgram only { CompilerSession, CompilerSessionResult, P
 use ../../../src/Backend only { LlvmLoweringResult }
 use ../../../src/SourceAccess only { SourceAccess, SourceResource }
 use ../../../src/Diag only { CompileDiagnostic, FailureDomain, ArrayContextRefusal, DiagnosticOwner, DiagnosticLocation }
-use ../../../src/Ir only { Expr, Arg, SyntheticCallKind }
+use ../../../src/Ir only { Expr, Arg, SyntheticCallKind, Stmt, TypeRef }
 use @Std/Io only { print }
 
 fn input() -> FrontendInput {
@@ -149,6 +149,61 @@ fn syntheticCall(text: String) {
     }
     if !seen { panic("missing synthetic call mutation control") }
 }
+fn rawDetour(text: String, name: String = "main") {
+    mut val raw = <Comp />
+    match analyzeFrontendForRequests(c: inout raw, input: <FrontendInput.File path="plew:std/ArrayContextProbe.pw" />, sources: <SourceAccess stdRoot="std/".bytes() resources=[<SourceResource path="plew:std/ArrayContextProbe.pw".bytes() text=text />] />) {
+        Result.Ok(value: _) => {}
+        Result.Err(error: val diagnostic) => { panic("Raw detour setup: " + diagnostic.message()) }
+    }
+    val function = raw.arena.firstFunctionNamed(nameId: raw.internBytes(s: name).nameId)
+    val diagnostic = match raw.recordParametricFunction(fnIdx: function, recordCallTemplates: true) {
+        Result.Err(error: val diagnostic) => diagnostic
+        Result.Ok(value: _) => { panic("Raw detour accepted invalid array") }
+    }
+    requireRaw(diagnostic: diagnostic)
+    if raw.sourceFailureHasOwner(diagnostic: diagnostic) { panic("Raw detour minted private evidence") }
+    val refusal = diagnostic.arrayContext().unwrap()
+    val valid = raw.sourceArrayTypeRef(elemRef: refusal.effectiveTerm(), offset: raw.exprOffset(id: refusal.expression())).unwrap()
+    val head = raw.arena.typeAt(index: valid)
+    for arity in [0U64, 2U64] {
+        mut val arguments: Array[U64] = []
+        for slot in 0U64..<arity { arguments.append(refusal.effectiveTerm()) }
+        val malformed = raw.pushType(t: <TypeRef nameStart=head.nameStart nameLen=head.nameLen hasDecl=head.hasDecl declOffset=head.declOffset args=arguments />)
+        match raw.recordArrayLitCtx(exprId: refusal.expression(), ctxRef: malformed) {
+            Result.Err(error: val diagnostic) => { requireRaw(diagnostic: diagnostic) if raw.sourceFailureHasOwner(diagnostic: diagnostic) { panic("malformed Array acquired private evidence") } }
+            Result.Ok(value: _) => { panic("malformed Array changed Raw refusal") }
+        }
+    }
+    val unfilled = raw.pushType(t: <TypeRef nameStart=head.nameStart nameLen=head.nameLen hasDecl=head.hasDecl declOffset=head.declOffset args=[0U64] />)
+    match raw.recordArrayLitCtx(exprId: refusal.expression(), ctxRef: unfilled) {
+        Result.Err(error: val diagnostic) => {
+            match diagnostic.failureDomain() { FailureDomain.Unclassified => {} _ => { panic("unfilled Array context changed Raw domain") } }
+            if raw.sourceFailureHasOwner(diagnostic: diagnostic) { panic("unfilled Array context acquired private evidence") }
+        }
+        Result.Ok(value: _) => { panic("unfilled Array context changed Raw refusal") }
+    }
+}
+fn unwrittenArray() {
+    mut val raw = <Comp />
+    analyzeFrontendForRequests(c: inout raw, input: input(), sources: <SourceAccess />).unwrap()
+    val function = raw.arena.firstFunctionNamed(nameId: raw.internBytes(s: "main").nameId)
+    val statement = raw.blockStmtAt(blkId: raw.arena.functionAt(index: function).body, index: 0U64)
+    val synthetic = match raw.arena.stmts[statement] {
+        Stmt.Let(mutable: val mutable, nameStart: val start, nameLen: val length, tyStart: val typeStart, tyLen: val typeLength, tyIsArray: val isArray, ty: val type, init: val init, annotationOccurrence: val annotation) => {
+            val copy = raw.pushExpr(e: raw.arena.exprs[init])
+            raw.ensureExprTySlot(exprId: copy)
+            // Even an exact borrowed source span cannot create authored origin.
+            raw.arena.exprSpanStart.set(i: copy, value: raw.arena.exprSpanStart[init])
+            raw.arena.exprSpanEnd.set(i: copy, value: raw.arena.exprSpanEnd[init])
+            raw.arena.stmts.set(i: statement, value: <Stmt.Let mutable=mutable nameStart=start nameLen=length tyStart=typeStart tyLen=typeLength tyIsArray=isArray ty=type init=copy annotationOccurrence=annotation />)
+            give copy
+        }
+        _ => { panic("missing synthetic array statement control") }
+    }
+    val diagnostic = failure(compiler: inout raw, function: function)
+    requireRaw(diagnostic: diagnostic)
+    if diagnostic.arrayContext().unwrap().expression() != synthetic || raw.sourceFailureHasOwner(diagnostic: diagnostic) { panic("unwritten array acquired authored evidence") }
+}
 fn main() {
     mut val raw = <Comp />
     analyzeFrontendForRequests(c: inout raw, input: input(), sources: <SourceAccess />).unwrap()
@@ -163,7 +218,7 @@ fn main() {
     requireRaw(diagnostic: direct)
     if raw.sourceFailureHasOwner(diagnostic: direct) { panic("Raw body minted array evidence") }
     val cause = direct.arrayContext().unwrap()
-    // Unknown and malformed context IDs keep the low-level no-op contract.
+    // Unknown and out-of-range context IDs keep the low-level no-op contract.
     // They cannot manufacture a new expected-type obligation or event.
     for context in [0U64, raw.arena.typeCount(), 18446744073709551615U64] {
         match raw.recordArrayLitCtx(exprId: cause.expression(), ctxRef: context) {
@@ -180,6 +235,13 @@ fn main() {
         Result.Err(error: val diagnostic) => { requireRaw(diagnostic: diagnostic) if raw.sourceFailureHasOwner(diagnostic: diagnostic) { panic("Raw recursive expected-result minted evidence") } }
         Result.Ok(value: _) => { panic("direct expected-result stopped rejecting") }
     }
+    rawDetour(text: "fn main() {{ val value: I64 = {{ give {{ give [] }} }} }}")
+    rawDetour(text: "struct Shelf[T] {{ val value: T }} fn main() {{ val shelf = <Shelf[I64] value=[] /> }}")
+    rawDetour(text: "struct Shelf[T] {{ val value: T }} fn main() {{ val shelf: Shelf[I64] = <Shelf value=[] /> }}")
+    rawDetour(text: "fn main() {{ val closure: fn() -> I64 = fn() {{ return [] }} }}")
+    rawDetour(text: "fn main() {{ val values: Array[I64] = [[]] }}")
+    rawDetour(text: "fn probe[T]() {{ val value: T = [] }} fn main() {{}}", name: "probe")
+    unwrittenArray()
     print("raw recursive context stayed unclassified")
     val first = failure(compiler: inout raw, function: function)
     requireRaw(diagnostic: first)
