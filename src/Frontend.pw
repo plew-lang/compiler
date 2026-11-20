@@ -122,6 +122,13 @@ pub struct FinalizationPublication {
 }
 pub impl FinalizationPublication { factory }
 
+// Checking-operation provenance, not permission to classify a failure as Source.
+// Source interpretation additionally requires the owning unexposed-input adapter.
+enum SourceRecordOrigin {
+    Raw
+    CheckingRequest(session: U64, root: SemanticCompletionOwner)
+}
+
 enum FreeFunctionSelection {
     Selected(function: U64)
     DiagnosticCandidate(function: U64)

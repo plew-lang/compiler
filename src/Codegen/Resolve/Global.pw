@@ -685,12 +685,25 @@ pub impl Comp {
     // An exact newtype retag takes precedence over From. Both operand
     // evidence and the cast target are available in Record's lexical scope.
     inout fn prepareCastFactory(exprId: U64, operand: U64, target: U64, typeStart: U64, typeLen: U64, chainHoleRef: U64) -> Result[Bool, CompileDiagnostic] {
+        return self.prepareCastFactoryWithOrigin(exprId: exprId, operand: operand, target: target, typeStart: typeStart, typeLen: typeLen, chainHoleRef: chainHoleRef, origin: <SourceRecordOrigin.Raw />)
+    }
+
+    // Run under Record's lexical scope. The selected declaration is carried
+    // by the synthetic call, so later passes never redo factory selection.
+    inout fn prepareFactoryConstruction(exprId: U64, chainHoleRef: U64, admittedReceiver: U64) -> Result[(), CompileDiagnostic] {
+        return self.prepareFactoryConstructionWithOrigin(exprId: exprId, chainHoleRef: chainHoleRef, admittedReceiver: admittedReceiver, origin: <SourceRecordOrigin.Raw />)
+    }
+}
+
+// Internal recursion retains request provenance; public adapters above enter Raw.
+impl Comp {
+    inout fn prepareCastFactoryWithOrigin(exprId: U64, operand: U64, target: U64, typeStart: U64, typeLen: U64, chainHoleRef: U64, origin: SourceRecordOrigin) -> Result[Bool, CompileDiagnostic] {
         val fromName = self.kwSpan(kw: "from", kwLen: 4U64)
         if !(try self.typeHasAssocFn(typeStart: typeStart, typeLen: typeLen, nameStart: fromName.nameStart, nameLen: fromName.nameLen)) {
             return <Result.Ok value=false />
         }
         val context = try self.castLiteralContextTerm(operand: operand, targetTerm: target)
-        try self.recordExpr(exprId: operand, chainHoleRef: chainHoleRef, expectedTerm: context, deferContext: true)
+        try self.recordExprWithOrigin(exprId: operand, chainHoleRef: chainHoleRef, expectedTerm: context, deferContext: true, origin: origin)
         if try self.isExactNewtypeRetag(source: self.parametricExprTerm(exprId: operand), target: target) {
             return <Result.Ok value=true />
         }
@@ -705,9 +718,7 @@ pub impl Comp {
         return <Result.Ok value=true />
     }
 
-    // Run under Record's lexical scope. The selected declaration is carried
-    // by the synthetic call, so later passes never redo factory selection.
-    inout fn prepareFactoryConstruction(exprId: U64, chainHoleRef: U64, admittedReceiver: U64) -> Result[(), CompileDiagnostic] {
+    inout fn prepareFactoryConstructionWithOrigin(exprId: U64, chainHoleRef: U64, admittedReceiver: U64, origin: SourceRecordOrigin) -> Result[(), CompileDiagnostic] {
         val useOffset = self.exprOffset(id: exprId)
         match self.arena.exprs[exprId] {
             Expr.Make(val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, val ty, val fields) => {
@@ -729,7 +740,7 @@ pub impl Comp {
                 mut val index = 0U64
                 while index < fields.len {
                     val field = self.makeFieldAt(fields: fields, index: index)
-                    try self.recordExpr(exprId: field.value, chainHoleRef: chainHoleRef, deferContext: true)
+                    try self.recordExprWithOrigin(exprId: field.value, chainHoleRef: chainHoleRef, deferContext: true, origin: origin)
                     arguments.append(<Arg expr=field.value isInout=false labelStart=field.nameStart labelLen=field.nameLen hasLabel=true />)
                     index += 1U64
                 }

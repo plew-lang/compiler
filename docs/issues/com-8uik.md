@@ -1,6 +1,6 @@
 ---
 id: com-8uik
-status: open
+status: in_progress
 deps: [com-b0e6, com-5n0l, com-u22d]
 links: []
 created: 2026-11-20T05:06:49Z
@@ -30,3 +30,13 @@ com-kuls already owns the Dictionary construction test's factory-visibility inte
 Meta `evidence/rejection-domains/diagnostic-domain-implementation/phase3-array-context-refusal-plan.json` retains15mode RED, a provisional syntax inventory (19expected-result calls,49recordExpr calls plus block/statement/root bridges) and the independent plan caution. Counts/regex inventory do not establish a complete role map or closure. Include closure body recursion as well as return/default/block/selected-call contexts.
 
 com-u22d is a real prerequisite: distinguish applicable selected signatures from diagnostic firstLabel fallback through lookup/cache/Record before issuing expected-context admission. A single invalid candidate context is not Source authority. Preserve fallback diagnostics and useful source failure through their owning failed-frontier contract; do not fabricate an applicable parent call. recordMissing in the newer private expected-result core only separates construction from refinement and is not an origin/admission permission.
+
+## Accepted plan and RED
+
+com-b0e6 is independently accepted and closed. Follow the canonical meta array-context plan current_role_ledger/private_api_plan: actual checking-request evidence is distinct from Source interpretation permission; real diagnostic failed-frontier evidence may explain an operand refusal without inventing a selected parent. Keep diagnostic scope through zero-context descendants. Generic field substitution from explicit written args/rigid caller information is independent; outer-completed substitutions inherit that family. No new permit or all-context database.
+
+New focused test tests/compiler/frontend/test-array-context-failure-domain.py executes27 controls on exact fixedpoint C:8 rejection shapes×check/AOT/ORC all reach the target empty-array refusal but fail Source-domain assertions;3 valid Array contexts pass; off-target0. This is actual RED, not a setup failure. Native Raw/event-mutation/cache/lifetime controls and the full accepted scenario list remain mandatory before closure.
+
+## Scoped-core increment (WIP)
+
+The24 public recording helper APIs now delegate with Raw provenance to private scoped cores. Eight existing private transits forward provenance; the two canonical roots establish actual checking-request evidence. All145 internal edges forward explicitly; the two legacy batch edges stay Raw. No Source classification is added by this increment. A fixed source snapshot passes exact-C whole compiler --check; domain tests remain RED until context-family and retained-refusal implementation. No rebuilt candidate or performance claim yet.

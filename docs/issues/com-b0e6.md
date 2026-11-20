@@ -1,6 +1,6 @@
 ---
 id: com-b0e6
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-11-20T05:06:49Z
@@ -64,3 +64,9 @@ Remaining closure work: rebase all35nodes/147edges to committed-contract/real-fa
 All35nodes/147edges have current-source roles and exact-line checks, plus the two external legacy batch callers and two request-wrapper root bridges. Independent source review corrected five issuer/API details: Range element annotation precedes protocol lookup; Float sibling and structural U64 index issue independent narrow contracts; the two construction-field visits distinguish fixed declaration slots from outer-derived substitutions; the method core retains Selected versus genuine failed-frontier detail.
 
 The canonical meta plan's private_api_plan identifies24 Raw public adapters, eight private transits, two actual request roots, separate scope/context arguments, pre-Err negative evidence capture, both ArrayLit lowering sites, failure-only event storage, shared read-only interpretation, and finite test families. Source hashes and exact edge text are retained. Final independent acceptance is pending; this investigation neither repairs product behavior nor claims GREEN.
+
+The final field condition distinguishes independent substitution (written nominal arguments, rigid caller binders or independently checked fields) from substitution first completed by outer expected context; binder dependence alone is not the boundary. Unresolved declaration binders issue no contract. Fixedpoint C executes the finite five-case probe: explicit I64, rigid T and outer-completed I64 reach the exact Unclassified array refusal; explicit/outer Array[I64] controls succeed. Source and results are retained in the canonical plan. No product GREEN is claimed.
+
+## Outcome
+
+Investigated: final independent review accepts the35/147 map, explicit external/root bridges and minimal API/test plan after the five field controls; no essential unresolved point remains. com-8uik owns implementation and target gates. This closes planning only, not product repair/GREEN or phase3. Canonical meta plan records the review and exact-C probes.

@@ -564,3 +564,10 @@ lazy body stays unrequested. Require exit0, exact `.out` and empty stderr.
 `NumericCandidateContexts.pw` compares real File/Std integer-wrapper candidates without publishing operand types or a callee, then checks repeated ambiguity refusals and typed/local/mixed-branch context preservation. Its run fixture separately verifies evaluation order and final execution. Require exit0, exact `.out` and empty stderr.
 
 `ProvisionalCallAuthority.pw` requires a real selector-only mismatch to preserve its diagnostic while leaving no selected-callee cache, including failed retries. Successful numeric, Array and typed-closure generic calls separately retain Selected entries. Compile/link manually and require the exact `.out`, exit0 and empty stderr.
+
+`test-array-context-failure-domain.py --carrier PATH --output DIR --modes check aot orc`
+checks producer-owned failure-channel classification for real empty-array/non-array
+refusals, with three valid Array context controls. It uses generated inputs in the
+explicit output directory and fails on off-target diagnostics as well as wrong
+domains. This is a focused manual diagnostic, not registered in the normal suite;
+it does not replace native Raw/event-mutation/cache/lifetime boundary controls.
