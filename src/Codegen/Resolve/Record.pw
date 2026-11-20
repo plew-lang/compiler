@@ -2212,7 +2212,14 @@ pub impl Comp {
             Optional.Some(v: val binding) => { return self.recordBoundValueCall(exprId: exprId, binding: binding, args: args) }
             Optional.None => {}
         }
-        cfi = (try self.resolvedFreeFunctionCall(id: exprId, nameStart: callStart, nameLen: callLen, args: args))
+        cfi = match (try self.resolvedFreeFunctionCall(id: exprId, nameStart: callStart, nameLen: callLen, args: args)) {
+            FreeCallLookup.Selected(function: val function) => function
+            FreeCallLookup.NoCandidate => self.arena.functionCount()
+            // A cached nonstatic answer is valid for observation, but is not
+            // evidence that this request searched the free frontier. Do not
+            // emit a Source refusal or run visibility hints from this state.
+            FreeCallLookup.CachedNonStatic => { return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "no matching function for this argument list") /> }
+        }
         if cfi < self.arena.functionCount() {
             val cf: Func = self.arena.functionAt(index: cfi)
             val ps: Array[Param] = self.copyFuncParams(params: cf.params)

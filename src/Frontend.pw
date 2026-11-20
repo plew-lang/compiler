@@ -687,6 +687,12 @@ struct LexicalValueBinding {
 }
 impl LexicalValueBinding { factory }
 
+enum FreeCallLookup {
+    Selected(function: U64)
+    NoCandidate
+    CachedNonStatic
+}
+
 enum FailedFreeCallSelection {
     NoMatch(owner: SemanticCompletionOwner, arguments: Array[Arg])
     NonCallableBinding(owner: SemanticCompletionOwner, bindingTarget: U64, typeTerm: U64, arguments: Array[Arg])

@@ -250,7 +250,10 @@ pub impl Comp {
                 // A value binding remains authoritative even while its type is
                 // pending or noncallable; a stale static cache cannot override it.
                 if self.lexicalValueBinding(start: start, len: len).isSome() { return <Result.Ok value=self.arena.functionCount() /> }
-                return self.resolvedFreeFunctionCall(id: id, nameStart: start, nameLen: len, args: args)
+                match (try self.resolvedFreeFunctionCall(id: id, nameStart: start, nameLen: len, args: args)) {
+                    FreeCallLookup.Selected(function: val function) => { return <Result.Ok value=function /> }
+                    FreeCallLookup.NoCandidate | FreeCallLookup.CachedNonStatic => { return <Result.Ok value=self.arena.functionCount() /> }
+                }
             }
             _ => {}
         }
@@ -294,25 +297,33 @@ pub impl Comp {
 }
 
 impl Comp {
-    inout fn resolvedFreeFunctionCall(id: U64, nameStart: U64, nameLen: U64, args: ArgRange) -> Result[U64, CompileDiagnostic] {
+    inout fn resolvedFreeFunctionCall(id: U64, nameStart: U64, nameLen: U64, args: ArgRange) -> Result[FreeCallLookup, CompileDiagnostic] {
         if id < self.typeCache.callee.count() {
             match self.typeCache.callee[id] {
-                CachedCallee.Selected(val callee) => { return <Result.Ok value=callee /> }
+                CachedCallee.Selected(val callee) => {
+                    if callee >= self.arena.functionCount() { return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: id), msg: "cached free function selection is out of range") /> }
+                    return <Result.Ok value=<FreeCallLookup.Selected function=callee /> />
+                }
                 // This free-only entry follows the absence of a value binding.
                 // A dynamic cache row is not an exhausted free frontier and
                 // must not mint an authored NoMatch refusal in Record.
-                CachedCallee.NoStaticCallee => { return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: id), msg: "no matching function for this argument list") /> }
+                CachedCallee.NoStaticCallee => { return <Result.Ok value=<FreeCallLookup.CachedNonStatic /> /> }
                 CachedCallee.Uncomputed => {}
             }
         }
         val selected = match (try self.selectFreeFunction(nameStart: nameStart, nameLen: nameLen, args: args)) {
-            FreeFunctionSelection.Selected(function: val function) => function
-            FreeFunctionSelection.NoCandidate => self.arena.functionCount()
+            FreeFunctionSelection.Selected(function: val function) => <FreeCallLookup.Selected function=function />
+            FreeFunctionSelection.NoCandidate => <FreeCallLookup.NoCandidate />
             FreeFunctionSelection.AmbiguousVisibleDeclarations => { return <Result.Err error=self.freeCallAmbiguityDiagnostic(expression: id, nameStart: nameStart, nameLen: nameLen, args: args) /> }
         }
         // An incomplete probe is not a completed negative selection. Source
         // request failures retain their own outcome after recording instead.
-        if selected < self.arena.functionCount() && id < self.typeCache.callee.count() { self.typeCache.callee.set(i: id, value: <CachedCallee.Selected callee=selected />) }
+        match selected {
+            FreeCallLookup.Selected(function: val function) => {
+                if id < self.typeCache.callee.count() { self.typeCache.callee.set(i: id, value: <CachedCallee.Selected callee=function />) }
+            }
+            _ => {}
+        }
         return <Result.Ok value=selected />
     }
 

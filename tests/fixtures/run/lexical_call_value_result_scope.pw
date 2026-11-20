@@ -1,0 +1,13 @@
+use @Std/Io only { print }
+fn main() {
+    val text = {
+        val callback = fn() -> String { return "scope" }
+        give callback()
+    }
+    print(text + "!")
+    val truth = if true {
+        val callback = fn() -> Bool { return true }
+        give callback()
+    } else { give false }
+    if truth { print("true") }
+}

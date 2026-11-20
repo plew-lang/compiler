@@ -65,6 +65,12 @@ an initializer plan. It does not certify transitive callee effects or the genera
 startup dependency graph (`com-fkxl`). Require exact `.out`, exit 0 and empty
 runtime stderr.
 
+`FreeCallCacheOutcomes.pw` checks that a nonstatic marker and an out-of-range
+selected cache row cannot publish a source refusal. The existing ordinary
+`callee_cache_declaration_growth` fixture separately preserves the observational
+no-static answer across declaration growth. Require this manual fixture's exact
+`.out`, exit 0 and empty runtime stderr.
+
 Run `python3 -B tests/compiler/frontend/test-lexical-call-access.py --compiler
 /absolute/path/to/plewc --out tmp/lexical-access` on one line to check argument
 access recording for a function-value call. The driver creates isolated source

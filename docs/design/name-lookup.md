@@ -162,6 +162,14 @@ Each lookup is interpreted under explicit source context: module and file, lexic
 | Member | Receiver/qualification-scoped member candidates or abstract requirements | Concrete member existence versus capability available under generic bounds |
 | Diagnostic-only name search | Inaccessible or otherwise excluded suggestions | Explanation of failure versus permission to call |
 
+A cached answer that no static callee exists can describe a successful value
+call. It is an observation, not evidence that visible free candidates were
+searched and rejected. Keep these outcomes distinct through the query boundary:
+readers may consume the nonstatic answer, while source-refusal publication
+requires the actual failed search and its source owner. Invalid cached indices
+are malformed implementation input, not source rejection. Table growth must not
+reinterpret a nonstatic answer as a declaration identity.
+
 Shadowing creates a new lexical binding rather than changing the old binding's type or mutability. Its uses, captures, and cleanup remain associated with the correct identity. Pattern and condition bindings have their language-defined scope; entering a closure creates a separate body/control boundary while capture analysis records the enclosing binding identities it uses. Scope traversal must not be independently reconstructed by LLVM from source names.
 
 The initializer of a shadowing declaration is checked in the old binding environment. Only after its evaluation and temporary cleanup does the new binding become available. This commit boundary must be retained for ownership analysis: replacement in the same lexical scope can end unique ownership. Hiding an enclosing binding leaves its lifetime unchanged. Lookup retains the new and old binding identities and their lexical scopes; ownership analysis determines the corresponding cleanup edges.

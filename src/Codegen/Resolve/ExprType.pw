@@ -737,7 +737,10 @@ pub impl Comp {
                         }
                         Optional.None => {}
                     }
-                    fi = (try self.resolvedFreeFunctionCall(id: id, nameStart: nameStart, nameLen: nameLen, args: args))
+                    fi = match (try self.resolvedFreeFunctionCall(id: id, nameStart: nameStart, nameLen: nameLen, args: args)) {
+                        FreeCallLookup.Selected(function: val function) => function
+                        FreeCallLookup.NoCandidate | FreeCallLookup.CachedNonStatic => self.arena.functionCount()
+                    }
                 }
                 if fi < self.arena.functionCount() {
                     val f: Func = self.arena.functionAt(index: fi)

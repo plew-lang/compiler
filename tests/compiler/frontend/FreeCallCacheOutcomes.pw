@@ -1,0 +1,31 @@
+use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use ../../../src/SourceAccess only { SourceAccess }
+use ../../../src/Ir only { Expr, CachedCallee }
+use ../../../src/Diag only { FailureDomain }
+use @Std/Io only { print }
+
+fn poisoned(selected: Bool) {
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text path="cache.pw" text="fn accept(value: I64) {{}} fn target() {{ accept(value: 1I64) }} fn main() {{}}" />, sources: <SourceAccess stdRoot=[] />).unwrap()
+    val name = compiler.internBytes(s: "target")
+    val target = compiler.arena.firstFunctionNamed(nameId: name.nameId)
+    for index in 0U64..<compiler.arena.exprs.count() {
+        match compiler.arena.exprs[index] {
+            Expr.Call(nameStart: _, nameLen: _, args: _) => {
+                compiler.typeCache.callee[index] = if selected { give <CachedCallee.Selected callee=compiler.arena.functionCount() + 1U64 /> } else { give <CachedCallee.NoStaticCallee /> }
+            }
+            _ => {}
+        }
+    }
+    match compiler.prepareLexicalBody(fnIdx: target) {
+        Result.Ok(value: _) => { panic("poisoned cache published a source call") }
+        Result.Err(error: val diagnostic) => {
+            match diagnostic.failureDomain() { FailureDomain.Unclassified => {} _ => { panic("bad cache minted a Source refusal") } }
+        }
+    }
+}
+fn main() {
+    poisoned(selected: false)
+    poisoned(selected: true)
+    print("cached outcomes are not source selection failures")
+}
