@@ -867,8 +867,10 @@ pub impl Comp {
             val supplied = self.argIndexForParam(params: f.params, args: args, paramIdx: index)
             if supplied < args.len {
                 val expression = self.argAt(args: args, index: supplied).expr
-                val argument = self.parametricCallArgumentTerm(exprId: expression)
-                out = try self.extendCallTypeArguments(pattern: parameter.ty, argument: argument, params: f.typeParams, values: out, offset: self.exprOffset(id: expression))
+                if !(try self.argumentRequiresResultContext(exprId: expression)) {
+                    val argument = self.parametricCallArgumentTerm(exprId: expression)
+                    out = try self.extendCallTypeArguments(pattern: parameter.ty, argument: argument, params: f.typeParams, values: out, offset: self.exprOffset(id: expression))
+                }
             }
             index += 1U64
         }
@@ -2116,7 +2118,7 @@ pub impl Comp {
         mut val index = 0U64
         while index < args.len {
             val argument = self.argAt(args: args, index: index).expr
-            if self.semanticExprTerm(exprId: argument) == 0U64 { break }
+            if (try self.argumentRequiresResultContext(exprId: argument)) { break }
             index += 1U64
         }
         if index == args.len { return <Result.Ok value=() /> }
@@ -2127,11 +2129,11 @@ pub impl Comp {
         if !self.paramsLabelsOk(params: selected.function.params, args: args) { return <Result.Ok value=() /> }
         while index < args.len {
             val argument = self.argAt(args: args, index: index).expr
-            if self.semanticExprTerm(exprId: argument) == 0U64 {
+            if (try self.argumentRequiresResultContext(exprId: argument)) {
                 val position = self.paramIndexForArg(params: selected.function.params, args: args, argIdx: index)
                 val parameter = self.funcParamAt(params: selected.function.params, index: position)
                 val expected = try self.sourceCallArgumentType(parameter: parameter, position: position, signature: selected.signature)
-                if expected != 0U64 { try self.recordExpr(exprId: argument, chainHoleRef: chainHoleRef, expectedTerm: expected) }
+                if expected != 0U64 { try self.recordSemanticExprExpectedResult(exprId: argument, expectedTerm: expected) }
             }
             index += 1U64
         }

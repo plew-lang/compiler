@@ -1,0 +1,23 @@
+use @Std/Io only { print }
+struct Box[T] { val value: T }
+fn accept(value: Optional[I64]) -> I64 {
+    return match value { Optional.Some(val v) => v, Optional.None => 0I64 }
+}
+fn boxed(value: Box[I64]) -> I64 { return value.value }
+fn make[T]() -> Optional[T] { return <Optional.None /> }
+fn pair[T](value: Optional[T], witness: T) -> I64 { return 10I64 }
+fn reversed[T](witness: T, value: Optional[T]) -> I64 { return 11I64 }
+struct Marker {}
+extension Extra { impl Marker { fn make[T]() -> Optional[T] { return <Optional.None /> } } }
+fn main() {
+    print(accept(value: <Optional.None />))
+    print(accept(value: <Optional.Some v=5 />))
+    print(boxed(value: <Box value=6 />))
+    print(accept(value: { val local = 7I64 give <Optional.Some v=local /> }))
+    print(accept(value: if true { give <Optional.None /> } else { give <Optional.Some v=8 /> }))
+    print(accept(value: make()))
+    print(pair(value: make(), witness: 1I64))
+    print(reversed(witness: 1I64, value: make()))
+    val marker = <Marker />
+    print(accept(value: marker#Extra.make()))
+}

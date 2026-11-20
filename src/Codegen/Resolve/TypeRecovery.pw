@@ -265,50 +265,25 @@ pub impl Comp {
     // keeps method inference transactional and checks the complete parameter.
     inout fn callableParameterTypeMatchRank(function: Func, args: ArgRange, signatures: Array[U64], receiver: U64, initialValues: Array[U64]) -> Result[U64, CompileDiagnostic] {
         mut val values = initialValues
-        mut val numericContexts: Array[(signature: U64, integer: Bool)] = []
-        mut val index = 0U64
-        while index < args.len {
+        mut val deferred: Array[(expression: U64, signature: U64)] = []
+        for index in 0U64..<args.len {
             val parameter = self.paramIndexForArg(params: function.params, args: args, argIdx: index)
             if parameter >= signatures.count() { return <Result.Ok value=1U64 /> }
             val signature = signatures[parameter]
-            mut val expected = try self.groundKnownCallTypeArguments(ref: signature, params: function.typeParams, values: values, receiver: receiver)
-            if expected >= self.arena.typeCount() { return <Result.Ok value=1U64 /> }
             val expression = self.argAt(args: args, index: index).expr
-            if self.expressionNeedsTypeContext(exprId: expression) {
-                if !(try self.contextualArgumentMatchesType(exprId: expression, expected: expected)) { return <Result.Ok value=1U64 /> }
-            } else {
-                if self.contextualNumericArgument(exprId: expression) {
-                    val term = self.arena.typeTermAt(index: expected)
-                    if self.isFloatType(start: term.nameStart, len: term.nameLen) { index += 1U64 continue }
-                    val integer = try self.argIsUntypedIntLit(argExpr: expression)
-                    if integer && self.isIntType(start: term.nameStart, len: term.nameLen) { index += 1U64 continue }
-                    if function.typeParams.count() != 0U64 {
-                        // A literal supplies no independent substitution. Let
-                        // already-typed arguments complete this candidate map,
-                        // then validate the deferred expectation without typing
-                        // the literal under a guessed candidate environment.
-                        numericContexts.append((signature: signature, integer: integer))
-                        index += 1U64
-                        continue
-                    }
-                }
-                val actual = try self.inferenceArgumentType(exprId: expression)
-                mut val candidate = values
-                match self.matchCallTypeArguments(pattern: signature, argument: actual, params: function.typeParams, values: inout candidate) {
-                    TypeArgumentMatch.Matched | TypeArgumentMatch.Deferred => { values = candidate }
-                    TypeArgumentMatch.Mismatch => {}
-                    TypeArgumentMatch.Conflict => { return <Result.Ok value=1U64 /> }
-                }
-                expected = try self.groundKnownCallTypeArguments(ref: signature, params: function.typeParams, values: values, receiver: receiver)
-                if !(try self.typesCompatible(expected: expected, inferred: actual)) { return <Result.Ok value=1U64 /> }
+            match (try self.matchPreparedCallArgument(expression: expression, signature: signature, parameters: function.typeParams, receiver: receiver, values: inout values)) {
+                TypeArgumentMatch.Matched => {}
+                TypeArgumentMatch.Deferred => { deferred.append((expression: expression, signature: signature)) }
+                TypeArgumentMatch.Mismatch | TypeArgumentMatch.Conflict => { return <Result.Ok value=1U64 /> }
             }
-            index += 1U64
         }
-        for context in numericContexts {
-            val expected = try self.groundKnownCallTypeArguments(ref: context.signature, params: function.typeParams, values: values, receiver: receiver)
-            if expected == 0U64 || expected >= self.arena.typeCount() { return <Result.Ok value=1U64 /> }
-            val term = self.arena.typeTermAt(index: expected)
-            if !self.isFloatType(start: term.nameStart, len: term.nameLen) && !(context.integer && self.isIntType(start: term.nameStart, len: term.nameLen)) && !self.numericContextHasInferenceHole(expected: expected, parameters: function.typeParams, values: values) { return <Result.Ok value=1U64 /> }
+        // Only context-dependent operands are revisited. Independently typed
+        // operands have already contributed their one candidate-local map.
+        for context in deferred {
+            match (try self.matchPreparedCallArgument(expression: context.expression, signature: context.signature, parameters: function.typeParams, receiver: receiver, values: inout values)) {
+                TypeArgumentMatch.Mismatch | TypeArgumentMatch.Conflict => { return <Result.Ok value=1U64 /> }
+                _ => {}
+            }
         }
         return <Result.Ok value=2U64 />
     }
@@ -672,5 +647,175 @@ impl Comp {
             _ => {}
         }
         return true
+    }
+}
+
+// Prepared operands expose only their unfinished value recipe to candidate
+// matching. This is separate from the entry policy that defers recording an
+// expression: independently prepared fields and closed block locals stay put.
+impl Comp {
+    inout fn callArgumentHasInferenceHole(expected: U64, parameters: FuncBindRange, values: Array[U64]) -> Bool {
+        for index in 0U64..<parameters.count() {
+            if values[index] == 0U64 && self.typeTermContainsParameter(ref: expected, parameter: self.funcBindAt(binds: parameters, index: index).paramId) { return true }
+        }
+        return false
+    }
+
+    inout fn partialConstructionArgument(exprId: U64) -> Bool {
+        if exprId >= self.arena.exprs.count() { return false }
+        match self.arena.exprs[exprId] {
+            Expr.Make(typeStart: _, typeLen: _, variantStart: _, variantLen: _, isEnum: val isEnum, ty: _, fields: _) => {
+                val term = self.semanticExprTerm(exprId: exprId)
+                if term == 0U64 || term >= self.arena.typeCount() || self.arena.typeTermAt(index: term).args.len != 0U64 { return false }
+                if isEnum {
+                    val owner = self.enumIndexForType(ref: term)
+                    return owner < self.arena.enumCount() && self.arena.enumAt(index: owner).typeParams.count() != 0U64
+                }
+                val owner = self.structIndexForType(ref: term)
+                return owner < self.arena.structCount() && self.arena.structAt(index: owner).typeParams.count() != 0U64
+            }
+            _ => { return false }
+        }
+    }
+
+    inout fn incompleteArgumentCall(exprId: U64) -> Result[Optional[CallTemplate], CompileDiagnostic] {
+        match self.arena.exprs[exprId] {
+            Expr.Call(nameStart: _, nameLen: _, args: _) | Expr.Method(recv: _, nameStart: _, nameLen: _, args: _) | Expr.ExtMethod(recv: _, source: _, nameStart: _, nameLen: _, args: _) => {}
+            _ => { return <Result.Ok value=<Optional.None /> /> }
+        }
+        // A closed declaration result has no binder that a result context
+        // could complete, even if an unrelated callee slot is unresolved.
+        val term = self.semanticExprTerm(exprId: exprId)
+        if term != 0U64 && term < self.arena.typeCount() && self.arena.typeIsClosed(ref: term) { return <Result.Ok value=<Optional.None /> /> }
+        val site = try self.templateCallSiteKey(fnIdx: self.cur.checkFn, exprId: exprId)
+        val index = self.callTemplateIndex(siteKey: site)
+        if index >= self.callTemplateLocations.count() { return <Result.Ok value=<Optional.None /> /> }
+        val template = self.callTemplateAt(index: index)
+        val state = try self.selectedCallParameterStateWithOrigin(template: template, exprId: exprId, origin: <Optional.Some v=index />)
+        match state {
+            SourceCallParameterState.Incomplete(source: _) => {
+                match template.kind {
+                    CallTemplateKind.Direct(callee: _, receiver: _, args: _, calleeTypeArgs: _, proofId: _) | CallTemplateKind.StaticMethod(receiver: _, args: _, resolution: _, methodTypeArgs: _, resultTerm: _) => { return <Result.Ok value=<Optional.Some v=template /> /> }
+                    _ => {}
+                }
+            }
+            _ => {}
+        }
+        return <Result.Ok value=<Optional.None /> />
+    }
+
+    inout fn argumentRequiresResultContext(exprId: U64) -> Result[Bool, CompileDiagnostic] {
+        if exprId >= self.arena.exprs.count() { return <Result.Ok value=false /> }
+        if self.semanticExprTerm(exprId: exprId) == 0U64 || self.partialConstructionArgument(exprId: exprId) { return <Result.Ok value=true /> }
+        if (try self.incompleteArgumentCall(exprId: exprId)).isSome() { return <Result.Ok value=true /> }
+        match self.arena.exprs[exprId] {
+            Expr.Block(val body, offset: _) | Expr.Sequence(val body) => { return self.argumentBlockRequiresResultContext(blockId: body) }
+            Expr.IfChain(conditions: _, val thenBlk, val elseBlk) | Expr.IfExpr(cond: _, val thenBlk, val elseBlk) => {
+                return <Result.Ok value=(try self.argumentBlockRequiresResultContext(blockId: thenBlk)) || (try self.argumentBlockRequiresResultContext(blockId: elseBlk)) />
+            }
+            Expr.MatchExpr(scrut: _, val arms) => {
+                for index in 0U64..<arms.len {
+                    if (try self.argumentBlockRequiresResultContext(blockId: self.matchArmAt(arms: arms, index: index).body)) { return <Result.Ok value=true /> }
+                }
+            }
+            _ => {}
+        }
+        return <Result.Ok value=false />
+    }
+
+    inout fn argumentBlockRequiresResultContext(blockId: U64) -> Result[Bool, CompileDiagnostic] {
+        match self.constructionValueBlock(blockId: blockId) {
+            SemanticValueBlockTyping.Checked(completion: val completion, resultTerm: _) => {
+                if !completion.source.normal() { return <Result.Ok value=false /> }
+            }
+            _ => { return <Result.Ok value=false /> }
+        }
+        return self.argumentRequiresResultContext(exprId: self.blockGiveExpr(blkId: blockId))
+    }
+
+    inout fn matchPreparedArgumentBlock(blockId: U64, signature: U64, parameters: FuncBindRange, receiver: U64, values: inout Array[U64]) -> Result[TypeArgumentMatch, CompileDiagnostic] {
+        match self.constructionValueBlock(blockId: blockId) {
+            SemanticValueBlockTyping.Checked(completion: val completion, resultTerm: _) => {
+                if !completion.source.normal() { return <Result.Ok value=<TypeArgumentMatch.Matched /> /> }
+            }
+            _ => {}
+        }
+        return self.matchPreparedCallArgument(expression: self.blockGiveExpr(blkId: blockId), signature: signature, parameters: parameters, receiver: receiver, values: inout values)
+    }
+
+    inout fn matchPreparedCallArgument(expression: U64, signature: U64, parameters: FuncBindRange, receiver: U64, values: inout Array[U64]) -> Result[TypeArgumentMatch, CompileDiagnostic] {
+        mut val expected = try self.groundKnownCallTypeArguments(ref: signature, params: parameters, values: values, receiver: receiver)
+        if expected == 0U64 || expected >= self.arena.typeCount() { return <Result.Ok value=<TypeArgumentMatch.Mismatch /> /> }
+        if self.expressionNeedsTypeContext(exprId: expression) {
+            return <Result.Ok value=if (try self.contextualArgumentMatchesType(exprId: expression, expected: expected)) { give <TypeArgumentMatch.Deferred /> } else { give <TypeArgumentMatch.Mismatch /> } />
+        }
+        if self.contextualNumericArgument(exprId: expression) {
+            val term = self.arena.typeTermAt(index: expected)
+            if self.isFloatType(start: term.nameStart, len: term.nameLen) || ((try self.argIsUntypedIntLit(argExpr: expression)) && self.isIntType(start: term.nameStart, len: term.nameLen)) { return <Result.Ok value=<TypeArgumentMatch.Matched /> /> }
+            if self.numericContextHasInferenceHole(expected: expected, parameters: parameters, values: values) { return <Result.Ok value=<TypeArgumentMatch.Deferred /> /> }
+            return <Result.Ok value=<TypeArgumentMatch.Mismatch /> />
+        }
+        if (try self.argumentRequiresResultContext(exprId: expression)) {
+            match self.arena.exprs[expression] {
+                Expr.Block(val body, offset: _) | Expr.Sequence(val body) => { return self.matchPreparedArgumentBlock(blockId: body, signature: signature, parameters: parameters, receiver: receiver, values: inout values) }
+                Expr.IfChain(conditions: _, val thenBlk, val elseBlk) | Expr.IfExpr(cond: _, val thenBlk, val elseBlk) => {
+                    val first = try self.matchPreparedArgumentBlock(blockId: thenBlk, signature: signature, parameters: parameters, receiver: receiver, values: inout values)
+                    match first { TypeArgumentMatch.Mismatch | TypeArgumentMatch.Conflict => { return <Result.Ok value=first /> } _ => {} }
+                    val second = try self.matchPreparedArgumentBlock(blockId: elseBlk, signature: signature, parameters: parameters, receiver: receiver, values: inout values)
+                    match second { TypeArgumentMatch.Mismatch | TypeArgumentMatch.Conflict => { return <Result.Ok value=second /> } _ => {} }
+                    return <Result.Ok value=if (match first { TypeArgumentMatch.Deferred => true _ => false }) || (match second { TypeArgumentMatch.Deferred => true _ => false }) { give <TypeArgumentMatch.Deferred /> } else { give <TypeArgumentMatch.Matched /> } />
+                }
+                Expr.MatchExpr(scrut: _, val arms) => {
+                    mut val pending = false
+                    for index in 0U64..<arms.len {
+                        val matched = try self.matchPreparedArgumentBlock(blockId: self.matchArmAt(arms: arms, index: index).body, signature: signature, parameters: parameters, receiver: receiver, values: inout values)
+                        match matched {
+                            TypeArgumentMatch.Mismatch | TypeArgumentMatch.Conflict => { return <Result.Ok value=matched /> }
+                            TypeArgumentMatch.Deferred => { pending = true }
+                            _ => {}
+                        }
+                    }
+                    return <Result.Ok value=if pending { give <TypeArgumentMatch.Deferred /> } else { give <TypeArgumentMatch.Matched /> } />
+                }
+                Expr.Make(typeStart: _, typeLen: _, variantStart: val variantStart, variantLen: val variantLen, isEnum: val isEnum, ty: _, fields: val fields) => {
+                    if self.partialConstructionArgument(exprId: expression) {
+                        if self.numericContextHasInferenceHole(expected: expected, parameters: parameters, values: values) { return <Result.Ok value=<TypeArgumentMatch.Deferred /> /> }
+                        if !(try self.makeAcceptsExpectedTerm(exprId: expression, writtenTerm: self.semanticExprTerm(exprId: expression), isEnum: isEnum, fields: fields, expectedTerm: expected)) { return <Result.Ok value=<TypeArgumentMatch.Mismatch /> /> }
+                        mut val pending = false
+                        for index in 0U64..<fields.len {
+                            val field = self.makeFieldAt(fields: fields, index: index)
+                            val term = if isEnum { give (try self.genericEnumFieldType(instRef: expected, variantStart: variantStart, variantLen: variantLen, fieldStart: field.nameStart, fieldLen: field.nameLen)).term } else { give try self.fieldTypeRefOfReceiver(receiverRef: expected, fieldStart: field.nameStart, fieldLen: field.nameLen) }
+                            if term == 0U64 { return <Result.Ok value=<TypeArgumentMatch.Mismatch /> /> }
+                            val matched = try self.matchPreparedCallArgument(expression: field.value, signature: term, parameters: parameters, receiver: receiver, values: inout values)
+                            match matched { TypeArgumentMatch.Mismatch | TypeArgumentMatch.Conflict => { return <Result.Ok value=matched /> } _ => {} }
+                            pending = pending || (match matched { TypeArgumentMatch.Deferred => true _ => false })
+                        }
+                        return <Result.Ok value=if pending { give <TypeArgumentMatch.Deferred /> } else { give <TypeArgumentMatch.Matched /> } />
+                    }
+                }
+                _ => {}
+            }
+            match (try self.incompleteArgumentCall(exprId: expression)) {
+                Optional.Some(v: val template) => {
+                    match (try self.prepareCallTemplateResult(kind: template.kind, expectedTerm: expected, receiverTerm: template.receiverTypeTerm, offset: self.exprOffset(id: expression))) {
+                        Optional.Some(v: val completion) => {
+                            if !(try self.typesCompatible(expected: expected, inferred: completion.result.resultType)) { return <Result.Ok value=<TypeArgumentMatch.Mismatch /> /> }
+                            return <Result.Ok value=if self.callArgumentHasInferenceHole(expected: expected, parameters: parameters, values: values) { give <TypeArgumentMatch.Deferred /> } else { give <TypeArgumentMatch.Matched /> } />
+                        }
+                        Optional.None => { return <Result.Ok value=if self.callArgumentHasInferenceHole(expected: expected, parameters: parameters, values: values) { give <TypeArgumentMatch.Deferred /> } else { give <TypeArgumentMatch.Mismatch /> } /> }
+                    }
+                }
+                Optional.None => {}
+            }
+        }
+        val actual = try self.inferenceArgumentType(exprId: expression)
+        mut val candidate = values
+        match self.matchCallTypeArguments(pattern: signature, argument: actual, params: parameters, values: inout candidate) {
+            TypeArgumentMatch.Matched | TypeArgumentMatch.Deferred => { values = candidate }
+            TypeArgumentMatch.Mismatch => {}
+            TypeArgumentMatch.Conflict => { return <Result.Ok value=<TypeArgumentMatch.Conflict /> /> }
+        }
+        expected = try self.groundKnownCallTypeArguments(ref: signature, params: parameters, values: values, receiver: receiver)
+        return <Result.Ok value=if (try self.typesCompatible(expected: expected, inferred: actual)) { give <TypeArgumentMatch.Matched /> } else { give <TypeArgumentMatch.Mismatch /> } />
     }
 }

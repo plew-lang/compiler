@@ -1,1 +1,1 @@
-cannot infer all type arguments for this call
+type mismatch: this value's type does not match the type required here

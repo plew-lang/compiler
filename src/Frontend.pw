@@ -507,6 +507,15 @@ struct RetainedCallableTypes {
 }
 impl RetainedCallableTypes { factory }
 
+// A local result-completion proposal. Preparing it does not publish a call,
+// expression type, argument pool entry or view selector.
+struct ContextualCallResult {
+    val publishResultSelector: Bool = false
+    val arguments: Array[U64]
+    val result: RetainedCallableTypes
+}
+impl ContextualCallResult { factory }
+
 struct InherentReceiverMatch {
     val receiver: U64
     val assumptions: Array[DeclarationBoundRef]

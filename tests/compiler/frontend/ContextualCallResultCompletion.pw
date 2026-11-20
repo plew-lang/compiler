@@ -1,0 +1,41 @@
+use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontendForRequests, intern }
+use ../../../src/SourceAccess only { SourceAccess }
+use ../../../src/Ir only { Expr, CallTemplateKind, CallTemplateReceiver, CallTemplateArgumentRange, CallTemplateTypeArgumentRange }
+use @Std/Io only { print }
+
+fn main() {
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.File path="tests/fixtures/run/partial_call_argument_context.pw" />, sources: <SourceAccess stdRoot="std/".bytes() />).unwrap()
+    val name = compiler.internBytes(s: "make")
+    val callee = compiler.arena.firstFunctionNamed(nameId: name.nameId)
+    val accept = compiler.internBytes(s: "accept")
+    val function = compiler.arena.functionAt(index: compiler.arena.firstFunctionNamed(nameId: accept.nameId))
+    val expected = compiler.funcParamAt(params: function.params, index: 0U64).ty
+    mut val expression = compiler.arena.exprs.count()
+    for index in 0U64..<compiler.arena.exprs.count() {
+        match compiler.arena.exprs[index] {
+            Expr.Call(nameStart: val start, nameLen: val length, args: _) => {
+                if intern(c: inout compiler, start: start, len: length) == name.nameId { expression = index }
+            }
+            _ => {}
+        }
+    }
+    if expression == compiler.arena.exprs.count() { panic("missing nested result source") }
+    val invalid = compiler.publishCallTemplateTypeArgs(args: [compiler.arena.typeCount() + 1U64])
+    val oversized = compiler.publishCallTemplateTypeArgs(args: [0U64, 0U64])
+    val beyond = <CallTemplateTypeArgumentRange start=compiler.publishCallTemplateTypeArgs(args: []).start + 1U64 len=1U64 />
+    for range in [<CallTemplateTypeArgumentRange start=0U64 len=0U64 />, invalid, oversized, beyond] {
+        val before = compiler.semanticExprTerm(exprId: expression)
+        val poolSize = compiler.publishCallTemplateTypeArgs(args: []).start
+        val kind = <CallTemplateKind.Direct callee=callee receiver=<CallTemplateReceiver.None /> args=<CallTemplateArgumentRange start=0U64 len=0U64 /> calleeTypeArgs=range proofId=0U64 />
+        val after = compiler.completeCallTemplateResult(exprId: expression, kind: kind, expectedTerm: expected).unwrap()
+        match after {
+            CallTemplateKind.Direct(callee: val target, receiver: _, args: _, calleeTypeArgs: val retained, proofId: _) => {
+                if target != callee || retained.start != range.start || retained.len != range.len { panic("malformed substitution was repaired from expectation") }
+            }
+            _ => { panic("malformed substitution changed selected operation") }
+        }
+        if compiler.semanticExprTerm(exprId: expression) != before || compiler.publishCallTemplateTypeArgs(args: []).start != poolSize { panic("malformed substitution published completion") }
+    }
+    print("malformed call result substitutions are not context-completed")
+}
