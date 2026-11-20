@@ -30,3 +30,9 @@ Every relevant actual caller/recursive edge is assigned justified Raw/committing
 com-kuls already owns the Dictionary construction test's factory-visibility intent and Buffer-vs-Array detection weakness. Its source remains invalid, so keep it as an observed current rejection only; do not certify its intended privacy gate from the empty-array error. Use a stable custom field-context control. com-kuls remains required at met-ucze and is neither replaced nor bypassed here.
 
 Meta `evidence/rejection-domains/diagnostic-domain-implementation/phase3-array-context-refusal-plan.json` retains15mode RED, a provisional syntax inventory (19expected-result calls,49recordExpr calls plus block/statement/root bridges) and the independent plan caution. Counts/regex inventory do not establish a complete role map or closure. Include closure body recursion as well as return/default/block/selected-call contexts.
+
+## Current role map and discovered control
+
+The meta array-context plan now retains32source-reviewed node roles/140recursive edges, all19expected-result and49recordExpr call sites, and actual generic/default/field/closure/block controls. Closure/legacy/default bridges remain explicit. Fixed33d1011d accepts associated Output=Array and result-context inference, while rigid caller T/projection rejects through the original array refusal. The private plan separates request recording permission from expectation admission; existing admittedContext only concerns normalization and is not diagnostic authority. Independent closure is pending.
+
+A required overload contrast exposed declaration-order-dependent acceptance, owned by com-5n0l and required before com-8uik. The failing order is not a valid negative source oracle. Exact cause and relevant admission-path correction remain under independent investigation; do not close this audit until the authority implication is resolved.

@@ -1,7 +1,7 @@
 ---
 id: com-8uik
 status: open
-deps: [com-b0e6]
+deps: [com-b0e6, com-5n0l]
 links: []
 created: 2026-11-20T05:06:49Z
 type: task
