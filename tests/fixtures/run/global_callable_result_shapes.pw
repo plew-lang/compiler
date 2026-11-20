@@ -1,0 +1,8 @@
+use @Std/Io only { print }
+val announce: fn() -> () = fn() -> () { print("unit") }
+val echo: fn(value: String) -> String = fn(value: String) -> String { return value }
+fn main() {
+    announce()
+    val text = "hello" + " world"
+    print(echo(value: text))
+}
