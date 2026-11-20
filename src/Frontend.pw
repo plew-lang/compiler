@@ -1971,26 +1971,27 @@ fn idInSet(set: Array[U64], id: U64) -> Bool {
 // they are not source-level diagnostics and do not affect generated LLVM.
 pub fn tracePhase(c: inout Comp, label: String) {
     if c.tracePhases {
-        eprint(text: "[trace-phase] ")
-        eprint(text: label)
-        eprint(text: "\n")
+        eprint(text: "[trace-phase] " + label + "\n")
     }
 }
 
-fn traceU64(n: U64) {
+// Keep each progress event in one stderr write. Decimal formatting has no I/O;
+// a partial prefix or individual digit is not a progress event for the monitor.
+fn traceDecimal(n: U64) -> String {
     if n >= 10U64 {
-        traceU64(n: n / 10U64)
+        return traceDecimal(n: n / 10U64) + digitStrU(d: n % 10U64)
     }
-    eprint(text: digitStrU(d: n % 10U64))
+    return digitStrU(d: n)
+}
+
+// Other diagnostic paths share decimal output without phase-event framing.
+fn traceU64(n: U64) {
+    eprint(text: traceDecimal(n: n))
 }
 
 pub fn tracePhaseCount(c: inout Comp, label: String, count: U64) {
     if c.tracePhases {
-        eprint(text: "[trace-phase] ")
-        eprint(text: label)
-        eprint(text: "=")
-        traceU64(n: count)
-        eprint(text: "\n")
+        eprint(text: "[trace-phase] " + label + "=" + traceDecimal(n: count) + "\n")
     }
 }
 
@@ -2011,13 +2012,7 @@ pub fn tracePhaseProgress(c: inout Comp, label: String, count: U64, stride: U64)
 // never participates in source semantics or generated LLVM.
 fn traceLowerTopItem(c: inout Comp, index: U64, span: Span) {
     if c.tracePhases && index % 64U64 == 0U64 {
-        eprint(text: "[trace-phase] lower:top-item index=")
-        traceU64(n: index)
-        eprint(text: " span=")
-        traceU64(n: span.start)
-        eprint(text: "..")
-        traceU64(n: span.end)
-        eprint(text: "\n")
+        eprint(text: "[trace-phase] lower:top-item index=" + traceDecimal(n: index) + " span=" + traceDecimal(n: span.start) + ".." + traceDecimal(n: span.end) + "\n")
     }
 }
 

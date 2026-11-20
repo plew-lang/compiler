@@ -1,0 +1,19 @@
+use ../../../src/Frontend only { Comp, tracePhase, tracePhaseCount, tracePhaseProgress }
+
+fn main() {
+    mut val compiler = <Comp />
+    tracePhase(c: inout compiler, label: "disabled")
+    tracePhaseCount(c: inout compiler, label: "disabled", count: 18446744073709551615U64)
+    tracePhaseProgress(c: inout compiler, label: "disabled", count: 0U64, stride: 16U64)
+    compiler.tracePhases = true
+    tracePhase(c: inout compiler, label: "")
+    tracePhase(c: inout compiler, label: "phase:start")
+    tracePhaseCount(c: inout compiler, label: "zero", count: 0U64)
+    tracePhaseCount(c: inout compiler, label: "digits", count: 1234567890U64)
+    tracePhaseCount(c: inout compiler, label: "max", count: 18446744073709551615U64)
+    tracePhaseProgress(c: inout compiler, label: "stride", count: 15U64, stride: 16U64)
+    tracePhaseProgress(c: inout compiler, label: "stride", count: 16U64, stride: 16U64)
+    tracePhaseProgress(c: inout compiler, label: "stride", count: 0U64, stride: 16U64)
+    compiler.tracePhases = false
+    tracePhase(c: inout compiler, label: "disabled-again")
+}

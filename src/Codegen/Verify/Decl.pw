@@ -33,9 +33,7 @@ pub impl Comp {
         mut val gvi: U64 = 0
         while includeBodies && !self.genMode && gvi < self.arena.globals.count() {
             if self.tracePhases {
-                eprint(text: "[trace-phase] verify:global index=")
-                traceU64(n: gvi)
-                eprint(text: "\n")
+                eprint(text: "[trace-phase] verify:global index=" + traceDecimal(n: gvi) + "\n")
             }
             self.cur.checkFn = 18446744073709551615U64
             self.cur.globalInitializerTarget = <Optional.Some v=self.arena.globals[gvi].nameStart />
@@ -94,11 +92,7 @@ pub impl Comp {
                 // pass-through. (The retired C emitter used to be the only check here.)
                 self.cur.checkFn = fnIdx
                 if self.tracePhases {
-                    eprint(text: "[trace-phase] verify:function index=")
-                    traceU64(n: fnIdx)
-                    eprint(text: " offset=")
-                    traceU64(n: f.defOffset)
-                    eprint(text: "\n")
+                    eprint(text: "[trace-phase] verify:function index=" + traceDecimal(n: fnIdx) + " offset=" + traceDecimal(n: f.defOffset) + "\n")
                 }
                 try self.verifyFunc(f: f)
             }

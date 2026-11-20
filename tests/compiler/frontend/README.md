@@ -579,3 +579,9 @@ associated/extension frontiers, and exact Index/Factory operand provenance.
 Index read mutations are distinct from detached IndexSet writeback. Require
 exit0, exact `.out`, and empty runtime stderr; apply ASan/LSan to this native
 internal fixture for failure-event lifetime checks.
+
+`PhaseTrace.pw` preserves the phase-monitor protocol: trace disabled/enabled,
+empty labels, zero/multi-digit/U64-max counters and stride hit/miss. Compile
+against the implementation under test, link normally, and compare both `.out`
+and `.err` byte-for-byte. Whole-source traced/plain LLVM and phase-event
+comparisons additionally cover the private lowering/verification progress paths.
