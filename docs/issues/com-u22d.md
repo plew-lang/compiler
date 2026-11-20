@@ -24,3 +24,7 @@ Investigate the actual numeric-wrapper demand and selection path, then implement
 
 TDD direct/block/if/match integer forms and both declaration orders, unique versus genuinely ambiguous destinations, typed widths/Bool/function/Array noninterference, single-target contextual literal success, unknown/incomplete environments, Raw/cache/retry/provisional-versus-selected invariants and final actual call execution. Preserve source effect order and one-time evaluation. No diagnostic fallback can pass final call publication as applicable. Retain useful owned source failure without text classification, fake successful parent facts or replayed resolution. Cover all actual consumers, remove superseded competing authority, applicable gates and independent review. Investigation must establish a finite role/API plan before repair; not an open-ended numeric inference redesign.
 
+
+## Reversed-order execution RED
+
+Fixed b6461fdd fresh carrier confirms both declaration orders: direct choose(5) rejects, while block-give and if-give wrappers are accepted and execute32 or64 according to the first declaration. Check/ORC twelve-mode evidence: meta tmp/phase3-provisional-call-context/numeric-controls.json. This proves actual chosen execution, not merely acceptance. The context-demand query currently does not cover numeric wrappers, while selectFreeFunction returns firstLabel as Selected and lookupFreeCall caches that as CachedCallee.Selected. Investigate the shared producer and all final readers before changing it; planning review in progress.
