@@ -1,6 +1,7 @@
 use /CheckedProgram only { CheckedProgram, ProgramCheckResult, ExecutableCompilationResult, prepareCheckedProgram }
 use /Frontend only { FrontendInput, FrontendOptions }
 use /SourceAccess only { SourceAccess }
+use /Diag only { FailureDomain }
 use @Std/Io only { print }
 
 fn checked(source: String) -> ProgramCheckResult {
@@ -36,7 +37,9 @@ fn main() {
             match prepareCheckedProgram(checked: move program) {
                 ExecutableCompilationResult.Success(compilation: val compilation) => { panic "concrete limit accepted" }
                 ExecutableCompilationResult.Failure(diagnostic: val diagnostic) => {
-                    if diagnostic.message() != "closure capture does not support unique, generic struct, or function-typed values" { panic diagnostic.message() }
+                    if diagnostic.message() != "closure capture of generic struct values is not implemented" { panic diagnostic.message() }
+                    match diagnostic.failureDomain() { FailureDomain.Limit => {} _ => { panic "concrete capture refusal lost Limit domain" } }
+                    if diagnostic.isSourceRejection() { panic "concrete capture limit became a language rejection" }
                 }
             }
         }

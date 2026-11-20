@@ -1,6 +1,6 @@
 ---
 id: com-za4f
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-11-02T21:46:44Z
@@ -33,7 +33,7 @@ Existing global fn passes check but native/JIT fails; no repaired output claim.
 
 ## Completion and adoption
 
-Exact producer→retention→required consumer, meaningful defect-specific RED/positive/refusal/boundary/noninterference controls, original failure preserved, legitimate prefixes retained, applicable gates and independent review. This proposal is not implemented or verified. Do not infer authorization for an undecided syntax/panic/CLI policy from this assignment. Preserve original error and legitimate published prefixes; make no rollback/recovery promise beyond the actual API contract.
+Exact producer→retention→required consumer, meaningful defect-specific RED/positive/refusal/boundary/noninterference controls, original failure preserved, legitimate prefixes retained, applicable gates and independent review. Do not infer authorization for an undecided syntax/panic/CLI policy from this assignment. Preserve original error and legitimate published prefixes; make no rollback/recovery promise beyond the actual API contract.
 
 Required admission proposal: {"phase": "3-source", "receivers": ["met-ucze", "met-acfl", "com-61jt"], "reason": "Required existing source meaning/publication/final consumer closure; install at named area and G1, not merely assignment epic."}. Actual accepted edges are recorded in the audit adoption evidence after cycle review.
 
@@ -45,14 +45,14 @@ TDD: `tests/fixtures/run/global_callable_storage.pw` checks global-initializer c
 
 Completion requires actual native/ORC receiver execution, retained-owner negative probes, original initializer prefix and applicable gates plus independent review. Source preparation alone does not close this task.
 
-## Canonical snapshot implementation checkpoint
+## Canonical snapshot contract and verification
 
-The global source target now stays distinct in CallTarget, with a function-typed Borrow receiver. Mid construction copies the whole selected global into the normal owned evaluation temporary before arguments; call-scope cleanup owns its release. LLVM consumes that canonical receiver operand, never synthesizes a hidden global read/retain. `evaluationGlobalOrigin: Optional[U64]` preserves the source declaration (target 0 is valid); Assign, receiver and mutation checks verify the actual origin, instantiation/pass boundaries preserve it, and the two copy-transfer rewrites keep these homes intact.
+Accepted product revision: **2172ca70**. Global source targets remain distinct in CallTarget. Mid copies the selected whole global into an ordinary owned evaluation temporary before arguments; call-scope cleanup owns its release. LLVM consumes the canonical receiver, with no hidden global load/retain. Optional declaration origin preserves target0 and is checked against the actual Assign source, receiver, type and capabilities. Existing copy-transfer optimizations preserve these evaluation homes.
 
-New manual `GlobalCallableSnapshotOrigin` demonstrated native RED for same-type global Assign-source replacement; current source-native GREEN additionally rejects a same-type receiver swap. `GlobalCallableDependencyOrder` verifies genuine callable-value cycle rejection and failed-owner retry without publishing an initializer plan. Native temporary probes are in meta scratch `tmp/phase3-free-function-ambiguity/`. These are finite assertions, not full adoption.
+Global preparation adds only selected Dynamic.ClosureGlobal value dependencies from saved per-owner CallTemplates, through the common preparation/order entry. Name-based dependency recovery was rejected by a real named-pow false-cycle control. Single/multiple-global cycle and failed-owner retry controls pass. General block/callee-effect startup summaries remain com-fkxl.
 
-Alias startup smoke exposed a missing callable-value dependency. A name-based draft also caused a genuine pow false-cycle RED, so it is not the final implementation. The common `prepareGlobalInitializers` now prepares all source owners before adding only saved Dynamic.ClosureGlobal edges through the existing per-owner CallTemplate index, then admits order before any initializer Mid publication. The registration-time preliminary sort is retained; the three ordinary consumers use the shared completed preparation, with repeated requests cached only after success. Late ordering keeps declaration-target keyed source/type/request state; LLVM global row lookup is deferred until after the order is fixed. General block/callee-effect startup summary closure remains com-fkxl.
+Evidence: meta `evidence/rejection-domains/diagnostic-domain-implementation/phase3-global-callable-snapshot.json` and `phase3-call-cache-outcomes.json`. Defect-specific RED precedes the implementation. Fresh global storage, pre-argument/callee replacement snapshot, imported alias, named pow, callable pow, Unit/String result cases pass in18modes/6native. LLVM22 ASan/LSan4 controls pass; standard gen and72old/new positive modes/12LLVM pairs pass. Final candidate build `20261120T030816-build-2d8c9f` passes, including exact native global-origin/order/existing initializer-prefix controls. Same-type source/receiver swaps, forged origin, Overwrite and inout are rejected; matching Read remains accepted.
 
-Latest source check exits 0. Fixed snapshot build 20261120T013634-build-79ca57 is running, candidate location `tmp/phase3-global-call-storage/adoption-build/bin/plewc`; it is not yet an adopted carrier. Required next checks include fresh native/ORC global and alias outputs, named pow/non-named callable pow, existing initializer source-owner prefix and free-call cache fault, origin/mutation fault extensions, LLVM22 lifetime checking, same-source performance, full normal suite and independent acceptance.
+Final whole normal run `20261120T032029-test-6ec017` completes with immutable inputs, skip0 and no worker failure:329→324fail, no additions/changed reasons. This is finite nonregression, not all-green. Alternating same-source5pairs medians6.864809→6.873567s, all10LLVM equal; no formal fixed-point update. Independent no-history reviewer `lexical_call_binding_plan_review` accepted this finite guarantee after final whole-delta review, with no remaining must-fix. Cache observation regressions were corrected in com-r88j, and existing initializer-prefix behavior is retained.
 
-The single-global self-call cycle also has native RED/GREEN: the former n<=1 ordering shortcut published a plan, and n==0 now leaves one-global inputs in DFS. Provenance tracking is requested only for global callee evaluation homes; ordinary snapshots keep their existing capabilities. Expanded native origin controls reject same-type receiver/source swaps, origin-only forgery, Overwrite and inout, while accepting the matching Read. The preceding cf0831 candidate passed five global/alias/pow fixtures in 15 modes and five native executions, but predates the last two corrections and is not final evidence. The unchanged free_call_failure_domain internal control now passes native with the corrected raw-cache handling.
+Parent com-yeua/phase3 and excluded com-fkxl/com-l4x2/com-3mh9 remain open; no new capture support, language rule, main integration or carrier promotion is claimed.
