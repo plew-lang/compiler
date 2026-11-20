@@ -728,7 +728,16 @@ pub impl Comp {
                 }
                 // resolve the right overload (by labels + arg types) for its return.
                 if fi >= self.arena.functionCount() {
-                    fi = (try self.resolvedCallee(id: id))
+                    match self.lexicalValueBinding(start: nameStart, len: nameLen) {
+                        Optional.Some(v: val binding) => {
+                            val functionType = try self.selectedValueFunctionType(exprId: id, binding: binding, args: args)
+                            val signature = self.arena.typeTermAt(index: functionType)
+                            if signature.args.len == 0U64 { return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: id), msg: "selected function value has no result signature", failureDomain: <FailureDomain.Internal />) /> }
+                            return <Result.Ok value=self.typeInfoOfRef(ref: self.arena.typeArgumentAt(index: signature.args.start)) />
+                        }
+                        Optional.None => {}
+                    }
+                    fi = (try self.resolvedFreeFunctionCall(id: id, nameStart: nameStart, nameLen: nameLen, args: args))
                 }
                 if fi < self.arena.functionCount() {
                     val f: Func = self.arena.functionAt(index: fi)
@@ -792,20 +801,6 @@ pub impl Comp {
                         return <Result.Ok value=(try self.declaredRetInfo(f: f)) />
                     }
                     return <Result.Ok value=scalarInfo() />
-                }
-                // a call to a fn-typed local (a closure value): its result type is the
-                // function type's return (args[0] of the `fn` TypeRef). Without this a
-                // generic call like `print(closure(x))` can't recover the arg type and
-                // misses its instantiation (and `val r = closure(x)` mis-infers r).
-                val lvi: U64 = self.localIndexByName(start: nameStart, len: nameLen)
-                if lvi < self.cur.locals.count() {
-                    val lty: U64 = self.cur.locals[lvi].ty
-                    if self.isFnType(ref: lty) {
-                        val ftr = self.arena.typeTermAt(index: lty)
-                        if ftr.args.len > 0 {
-                            return <Result.Ok value=self.typeInfoOfRef(ref: self.arena.typeArgumentAt(index: ftr.args.start + 0)) />
-                        }
-                    }
                 }
                 return <Result.Ok value=scalarInfo() />
             }

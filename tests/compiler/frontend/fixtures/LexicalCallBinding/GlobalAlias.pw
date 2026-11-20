@@ -1,0 +1,2 @@
+use ./GlobalLibrary only { action as imported }
+fn main() { val result: I64 = imported() }

@@ -1,0 +1,3 @@
+val action: I64 = 0I64
+val result: I64 = action()
+fn main() {}

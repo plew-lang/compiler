@@ -1,0 +1,106 @@
+use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontendForRequests, openFrontend }
+use ../../../src/CheckedProgram only { CompilerSession, CompilerSessionResult, ProgramCheckResult, checkCompilerSession }
+use ../../../src/Backend only { LlvmLoweringResult }
+use ../../../src/SourceAccess only { SourceAccess }
+use ../../../src/Diag only { CompileDiagnostic, FailureDomain, NonCallableBindingRefusal, DiagnosticOwner }
+use ../../../src/Ir only { Arg }
+use @Std/Io only { print }
+fn requireUnclassified(diagnostic: CompileDiagnostic, message: String) {
+    match diagnostic.failureDomain() { FailureDomain.Unclassified => {} _ => { panic("raw refusal domain was lost") } }
+    if diagnostic.isSourceRejection() || diagnostic.message() != message { panic("raw refusal was reinterpreted") }
+}
+fn requireSource(diagnostic: CompileDiagnostic, message: String) {
+    if !diagnostic.isSourceRejection() || diagnostic.message() != message { panic("noncallable binding source origin was lost") }
+}
+fn session(input: FrontendInput) -> CompilerSession {
+    match CompilerSession.open(input: input, sources: <SourceAccess />) { CompilerSessionResult.Success(session: val session) => { return move session } CompilerSessionResult.Failure(diagnostic: val diagnostic) => { panic(diagnostic.message()) } }
+}
+fn run(input: FrontendInput, message: String, functionName: String = "main", lazyRequested: Bool = true) {
+    mut val raw = <Comp />
+    match analyzeFrontendForRequests(c: inout raw, input: input, sources: <SourceAccess />) { Result.Ok(value: _) => {} Result.Err(error: val diagnostic) => { panic(diagnostic.message()) } }
+    val name = raw.internBytes(s: functionName)
+    val function = raw.arena.firstFunctionNamed(nameId: name.nameId)
+    for count in 0U64..<2U64 {
+        match raw.prepareLexicalBody(fnIdx: function) {
+            Result.Err(error: val diagnostic) => {
+                requireUnclassified(diagnostic: diagnostic, message: message)
+                val refusal = diagnostic.nonCallableBinding().unwrap()
+                if !raw.sourceNonCallableBindingHasOwner(refusal: refusal) { panic("retained binding failure lost provenance") }
+                if raw.sourceNonCallableBindingHasOwner(refusal: <NonCallableBindingRefusal session=refusal.session() + 1U64 owner=refusal.owner() typeTerm=refusal.typeTerm() argumentsStart=refusal.argumentsStart() argumentsCount=refusal.argumentsCount() expression=refusal.expression() bindingTarget=refusal.bindingTarget() location=refusal.location() />) { panic("foreign session accepted") }
+                if raw.sourceNonCallableBindingHasOwner(refusal: <NonCallableBindingRefusal session=refusal.session() owner=refusal.owner() typeTerm=refusal.typeTerm() argumentsStart=refusal.argumentsStart() argumentsCount=refusal.argumentsCount() expression=raw.arena.exprs.count() bindingTarget=refusal.bindingTarget() location=refusal.location() />) { panic("foreign expression accepted") }
+                if raw.sourceNonCallableBindingHasOwner(refusal: <NonCallableBindingRefusal session=refusal.session() owner=refusal.owner() typeTerm=refusal.typeTerm() argumentsStart=refusal.argumentsStart() argumentsCount=refusal.argumentsCount() expression=refusal.expression() bindingTarget=refusal.bindingTarget() + 1U64 location=refusal.location() />) { panic("foreign binding accepted") }
+                if raw.sourceNonCallableBindingHasOwner(refusal: <NonCallableBindingRefusal session=refusal.session() owner=<DiagnosticOwner.Unknown /> expression=refusal.expression() bindingTarget=refusal.bindingTarget() typeTerm=refusal.typeTerm() argumentsStart=refusal.argumentsStart() argumentsCount=refusal.argumentsCount() location=refusal.location() />) { panic("unknown owner accepted") }
+                if raw.sourceNonCallableBindingHasOwner(refusal: <NonCallableBindingRefusal session=refusal.session() owner=refusal.owner() expression=refusal.expression() bindingTarget=refusal.bindingTarget() typeTerm=refusal.typeTerm() + 1U64 argumentsStart=refusal.argumentsStart() argumentsCount=refusal.argumentsCount() location=refusal.location() />) { panic("foreign type accepted") }
+                if raw.sourceNonCallableBindingHasOwner(refusal: <NonCallableBindingRefusal session=refusal.session() owner=refusal.owner() expression=refusal.expression() bindingTarget=refusal.bindingTarget() typeTerm=refusal.typeTerm() argumentsStart=refusal.argumentsStart() + 1U64 argumentsCount=refusal.argumentsCount() location=refusal.location() />) { panic("foreign arguments accepted") }
+                if raw.sourceNonCallableBindingHasOwner(refusal: <NonCallableBindingRefusal session=refusal.session() owner=refusal.owner() expression=refusal.expression() bindingTarget=refusal.bindingTarget() typeTerm=refusal.typeTerm() argumentsStart=refusal.argumentsStart() argumentsCount=refusal.argumentsCount() + 1U64 location=refusal.location() />) { panic("foreign argument count accepted") }
+                if refusal.argumentsCount() != 0U64 {
+                    val original = raw.arena.argPool[refusal.argumentsStart()]
+                    mut val changed = raw
+                    changed.arena.argPool.set(i: refusal.argumentsStart(), value: <Arg expr=original.expr isInout=!original.isInout hasLabel=original.hasLabel labelStart=original.labelStart labelLen=original.labelLen />)
+                    if changed.sourceNonCallableBindingHasOwner(refusal: refusal) { panic("modified argument reused a failed selection") }
+                }
+                val internal = <CompileDiagnostic failureDomain=<FailureDomain.Internal /> location=refusal.location() message=message />
+                if internal.nonCallableBinding().isSome() || internal.isSourceRejection() { panic("equal text gained source authority") }
+                raw.pendingDiagnostics.append(diagnostic)
+            }
+            Result.Ok(value: _) => { panic("noncallable binding became ready") }
+        }
+        val drained = raw.takeDiagnostics()
+        if drained.count() != 1U64 { panic("drain changed failure count") }
+        requireUnclassified(diagnostic: drained[0U64], message: message)
+    }
+    mut val owned = session(input: input)
+    match owned.lowerDeclarations() { LlvmLoweringResult.Success(module: _) => {} LlvmLoweringResult.Failure(diagnostic: val diagnostic) => { panic(diagnostic.message()) } }
+    mut val failed = false
+    mut val bodyIndex = 0U64
+    while true {
+        val bodies = owned.registeredBodies()
+        if bodyIndex >= bodies.count() { break }
+        val body = bodies[bodyIndex]
+        bodyIndex += 1U64
+        match owned.prepareBodyAccess(bodyId: body) {
+            Result.Err(error: val diagnostic) => { requireSource(diagnostic: diagnostic, message: message) failed = true }
+            Result.Ok(value: _) => {}
+        }
+    }
+    if failed != lazyRequested { panic("owned capture request coverage changed") }
+    match checkCompilerSession(session: move owned) { ProgramCheckResult.Failure(diagnostic: val diagnostic) => { requireSource(diagnostic: diagnostic, message: message) } ProgramCheckResult.Success(program: _) => { panic("failed session became checked") } }
+    match checkCompilerSession(session: session(input: input)) { ProgramCheckResult.Failure(diagnostic: val diagnostic) => { requireSource(diagnostic: diagnostic, message: message) } ProgramCheckResult.Success(program: _) => { panic("whole check accepted noncallable binding") } }
+    match openFrontend(input: input, sources: <SourceAccess />) { Result.Err(error: val diagnostic) => { requireSource(diagnostic: diagnostic, message: message) } Result.Ok(value: _) => { panic("eager source accepted noncallable binding") } }
+    print("noncallable binding origin retained")
+}
+fn globalFailure() {
+    val input = <FrontendInput.File path="tests/fixtures/reject/lexical_call_noncallable_global.pw" />
+    val message = "the selected value binding is not callable"
+    mut val raw = <Comp />
+    match analyzeFrontendForRequests(c: inout raw, input: input, sources: <SourceAccess />) { Result.Ok(value: _) => {} Result.Err(error: val diagnostic) => { panic(diagnostic.message()) } }
+    if raw.arena.globals.count() != 2U64 { panic("global failure fixture changed") }
+    val target = raw.arena.globals[1U64].nameStart
+    for attempt in 0U64..<2U64 {
+        match raw.prepareGlobalInitializer(target: target) {
+            Result.Ok(value: _) => { panic("noncallable global initializer accepted") }
+            Result.Err(error: val diagnostic) => {
+                requireUnclassified(diagnostic: diagnostic, message: message)
+                val cause = diagnostic.nonCallableBinding().unwrap()
+                if !raw.sourceNonCallableBindingHasOwner(refusal: cause) { panic("global binding cause lost provenance") }
+                match cause.owner() { DiagnosticOwner.Global(target: val owner) => { if owner != target { panic("global binding cause chose another initializer") } } _ => { panic("global binding cause lost owner kind") } }
+            }
+        }
+    }
+    match CompilerSession.open(input: input, sources: <SourceAccess />) {
+        CompilerSessionResult.Failure(diagnostic: val diagnostic) => { requireSource(diagnostic: diagnostic, message: message) }
+        CompilerSessionResult.Success(session: val opened) => {
+            mut val owned = move opened
+            match owned.lowerDeclarations() { LlvmLoweringResult.Failure(diagnostic: val diagnostic) => { requireSource(diagnostic: diagnostic, message: message) } LlvmLoweringResult.Success(module: _) => { panic("owned global failure was not requested") } }
+        }
+    }
+    match openFrontend(input: input, sources: <SourceAccess />) { Result.Err(error: val diagnostic) => { requireSource(diagnostic: diagnostic, message: message) } Result.Ok(value: _) => { panic("eager noncallable global accepted") } }
+    print("global noncallable binding origin retained")
+}
+fn main() {
+    val message = "the selected value binding is not callable"
+    run(input: <FrontendInput.File path="tests/fixtures/reject/lexical_call_noncallable_parameter.pw" />, message: message, functionName: "consume")
+    run(input: <FrontendInput.File path="tests/fixtures/reject/lexical_call_noncallable_shadow.pw" />, message: message)
+    run(input: <FrontendInput.File path="tests/fixtures/reject/lexical_call_noncallable_closure.pw" />, message: message)
+    globalFailure()
+}

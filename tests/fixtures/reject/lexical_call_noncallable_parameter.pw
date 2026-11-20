@@ -1,0 +1,5 @@
+fn pick(value: I64) -> I64 { return 11I64 }
+fn consume(pick: I64) -> I64 {
+    return pick(value: 42I64)
+}
+fn main() { val result = consume(pick: 0I64) }

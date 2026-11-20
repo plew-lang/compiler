@@ -44,6 +44,23 @@ runtime stderr. It does not authorize raw mutable verifier state as source.
 
 ## Manual execution procedure
 
+`NonCallableBindingFailureDomains.pw` checks the actual selected-value refusal,
+raw/cache/drain retention, owning lazy/whole/eager interpretation, and rejection
+of foreign or mismatched owner, target, type and argument provenance. Require its
+exact `.out`, exit 0 and empty runtime stderr using the procedure below.
+
+`LexicalCallBindingFacts.pw` checks inferred, annotated and imported-alias global
+callee identity in source templates, together with original pending type-cycle
+and implementation-limit failures. It does not claim global callable execution;
+that final consumer is tracked by `com-za4f`.
+
+Run `python3 -B tests/compiler/frontend/test-lexical-call-access.py --compiler
+/absolute/path/to/plewc --out tmp/lexical-access` on one line to check argument
+access recording for a function-value call. The driver creates isolated source
+copies with a private observation shim and requires its deliberately omitted
+recording control to fail. It exports no product test API and does not establish
+complete function-value argument admission (`com-l4x2`).
+
 Run from the compiler repository root with the selected carrier. Keep all
 outputs in a new directory under `tmp/`; these fixtures are not automatically
 registered in the normal suite.

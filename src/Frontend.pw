@@ -66,7 +66,7 @@ use ./Path only { resolveImport, extractSpan, dirPrefixLen, findSrcRoot, findPkg
 use ./Manifest only { Dep, loadManifestDeps, resolveDepImport, resolveGitDepImport, loadLock, isExternalDepImport }
 use ./Lock only { Lock }
 use ./Cache only { cacheRoot }
-use ./Diag only { compileErrorAt, compileErrorAtFile, CompileDiagnostic, UseAfterMoveRefusal, MissingFieldRefusal, MissingFieldKind, AssignmentRefusal, AssignmentRefusalKind, UniqueCopyRefusal, UniqueCaptureRefusal, FreeCallAmbiguityRefusal, MemberCallAmbiguityRefusal, MemberCallAmbiguityKind, DiagnosticOwner, DiagnosticNote, DiagnosticLocation, DiagnosticSeverity, FailureDomain, emitDiagnostic, eprintInt, digitByte, digitStrU }
+use ./Diag only { compileErrorAt, compileErrorAtFile, CompileDiagnostic, UseAfterMoveRefusal, MissingFieldRefusal, MissingFieldKind, AssignmentRefusal, AssignmentRefusalKind, UniqueCopyRefusal, UniqueCaptureRefusal, NonCallableBindingRefusal, FreeCallAmbiguityRefusal, MemberCallAmbiguityRefusal, MemberCallAmbiguityKind, DiagnosticOwner, DiagnosticNote, DiagnosticLocation, DiagnosticSeverity, FailureDomain, emitDiagnostic, eprintInt, digitByte, digitStrU }
 use ./Ops only { opEq, opNe, opLt, opLe, opGt, opGe, opAdd, opSub, opMul, opDiv, opRem, opAnd, opOr, opNot, opBitAnd, opBitOr, opBitXor, opShl, opShr, opBitNot, opAssign, compoundBinOp, isBinTraitOp, binTraitName, binTraitMethodName, unaryMethodName }
 
 // Only an entirely unsuffixed numeric expression accepts a sibling's
@@ -680,6 +680,19 @@ struct FailedUniqueCapture {
 impl FailedUniqueCapture { factory }
 enum CaptureTypeSupport { Supported Unique GenericStruct FunctionValue Unknown }
 
+struct LexicalValueBinding {
+    val localIndex: U64
+    val declarationTarget: U64
+    val isGlobal: Bool
+}
+impl LexicalValueBinding { factory }
+
+enum FailedFreeCallSelection {
+    NoMatch(owner: SemanticCompletionOwner, arguments: Array[Arg])
+    NonCallableBinding(owner: SemanticCompletionOwner, bindingTarget: U64, typeTerm: U64, arguments: Array[Arg])
+}
+
+
 // Only expression-checking callers in the frontend module may attach this
 // origin to a ranked lookup. The empty value carries no source authority.
 struct MethodLookupOrigin {
@@ -742,7 +755,7 @@ pub struct Comp {
     mut val authoredMethodExpressions: Set[U64] = Set.new()
     mut val authoredIndexWrites: Dictionary[U64, (serial: U64, receiver: U64, arguments: ArgRange)] = [:]
     mut val authoredFreeCallOrigins: Dictionary[U64, (start: U64, length: U64, arguments: ArgRange)] = [:]
-    mut val failedFreeCallSelections: Dictionary[U64, (owner: U64, arguments: Array[Arg])] = [:]
+    mut val failedFreeCallSelections: Dictionary[U64, FailedFreeCallSelection] = [:]
     mut val failedFreeCallAmbiguities: Dictionary[U64, (owner: SemanticCompletionOwner, nameStart: U64, nameLen: U64, arguments: Array[Arg])] = [:]
     mut val failedUniqueCaptures: Array[FailedUniqueCapture] = []
     mut val failedMemberCallAmbiguities: Dictionary[U64, (kind: MemberCallAmbiguityKind, owner: SemanticCompletionOwner, receiverRef: U64, receiver: U64, source: Optional[ResolvedViewSource], nameStart: U64, nameLen: U64, arguments: Array[Arg])] = [:]
@@ -2594,6 +2607,12 @@ fn ownedFrontendFailure(c: Comp, diagnostic: CompileDiagnostic) -> CompileDiagno
             if c.sourceFreeCallAmbiguityHasOwner(refusal: refusal) {
                 return <CompileDiagnostic failureDomain=<FailureDomain.Source /> location=refusal.location() message=diagnostic.message() />
             }
+        }
+        Optional.None => {}
+    }
+    match diagnostic.nonCallableBinding() {
+        Optional.Some(v: val refusal) => {
+            if c.sourceNonCallableBindingHasOwner(refusal: refusal) { return <CompileDiagnostic failureDomain=<FailureDomain.Source /> location=refusal.location() message=diagnostic.message() /> }
         }
         Optional.None => {}
     }

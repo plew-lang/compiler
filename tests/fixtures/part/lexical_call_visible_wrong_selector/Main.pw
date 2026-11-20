@@ -1,0 +1,8 @@
+use @Std/Io only { print }
+use ./Lib only { handler }
+fn run(handler: fn(value: I64) -> I64) -> I64 {
+    return handler(value: 41I64)
+}
+fn main() {
+    print(run(handler: fn(value: I64) -> I64 { return value + 1I64 }))
+}

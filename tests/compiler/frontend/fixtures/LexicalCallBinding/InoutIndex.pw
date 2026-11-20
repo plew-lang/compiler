@@ -1,0 +1,15 @@
+trait Index[Key] { type Output fn index(key: Key) -> Output }
+trait IndexSet[Key] { type Value inout fn indexSet(key: Key, value~: Value) }
+struct Shelf { mut val item: I64 }
+impl Shelf as Index[U64] {
+    type Output = I64
+    fn index(key: U64) -> I64 { return self.item }
+}
+impl Shelf as IndexSet[U64] {
+    type Value = I64
+    inout fn indexSet(key: U64, value~: I64) { self.item = value }
+}
+fn apply(action: fn(value: inout I64), shelf: inout Shelf) {
+    action(value: inout shelf[0U64])
+}
+fn main() {}

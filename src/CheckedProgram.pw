@@ -264,6 +264,12 @@ impl CompilerSession {
             }
             Optional.None => {}
         }
+        match diagnostic.nonCallableBinding() {
+            Optional.Some(v: val refusal) => {
+                if self.compiler.sourceNonCallableBindingHasOwner(refusal: refusal) { return <CompileDiagnostic failureDomain=<FailureDomain.Source /> location=refusal.location() message=diagnostic.message() /> }
+            }
+            Optional.None => {}
+        }
         match diagnostic.uniqueCapture() {
             Optional.Some(v: val refusal) => {
                 if self.compiler.sourceUniqueCaptureHasOwner(refusal: refusal) {

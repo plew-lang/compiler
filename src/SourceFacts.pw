@@ -1187,3 +1187,42 @@ pub impl Comp {
         return true
     }
 }
+
+
+pub impl Comp {
+    // Observe the exact failed binding selection, not today's locals or a hint.
+    fn sourceNonCallableBindingHasOwner(refusal: NonCallableBindingRefusal) -> Bool {
+        if refusal.session() != self.sourceFactSession() || refusal.expression() >= self.arena.exprs.count() || refusal.typeTerm() == 0U64 || refusal.typeTerm() >= self.arena.typeCount() { return false }
+        val proof = match self.failedFreeCallSelections.get(key: refusal.expression()) {
+            Optional.Some(v: val failed) => match failed {
+                FailedFreeCallSelection.NonCallableBinding(owner: val owner, bindingTarget: val bindingTarget, typeTerm: val typeTerm, arguments: val arguments) => (owner: owner, bindingTarget: bindingTarget, typeTerm: typeTerm, arguments: arguments)
+                _ => { return false }
+            }
+            Optional.None => { return false }
+        }
+        val ownerMatches = match refusal.owner() {
+            DiagnosticOwner.Function(index: val index) => semanticCompletionOwnersEqual(recorded: proof.owner, prepared: <SemanticCompletionOwner.Function index=index />)
+            DiagnosticOwner.Global(target: val target) => semanticCompletionOwnersEqual(recorded: proof.owner, prepared: <SemanticCompletionOwner.Global target=target />)
+            DiagnosticOwner.Closure(expression: val expression) => semanticCompletionOwnersEqual(recorded: proof.owner, prepared: <SemanticCompletionOwner.Closure expression=expression />)
+            DiagnosticOwner.Unknown => false
+        }
+        if !ownerMatches || proof.bindingTarget != refusal.bindingTarget() || proof.typeTerm != refusal.typeTerm() { return false }
+        val term = self.arena.typeTermAt(index: proof.typeTerm)
+        if rangeEquals(bytes: self.arena.bytes, start: term.nameStart, len: term.nameLen, kw: "fn") { return false }
+        val args = match self.arena.exprs[refusal.expression()] {
+            Expr.Call(nameStart: val start, nameLen: val len, args: val args) => {
+                if !self.isAuthoredFreeCall(exprId: refusal.expression(), start: start, length: len, args: args) { return false }
+                give args
+            }
+            _ => { return false }
+        }
+        if args.start != refusal.argumentsStart() || args.len != refusal.argumentsCount() || proof.arguments.count() != args.len { return false }
+        if args.start > self.arena.argPool.count() || args.len > self.arena.argPool.count() - args.start { return false }
+        for index in 0U64..<args.len {
+            val a = proof.arguments[index]
+            val b = self.argAt(args: args, index: index)
+            if a.expr != b.expr || a.isInout != b.isInout || a.hasLabel != b.hasLabel || a.labelStart != b.labelStart || a.labelLen != b.labelLen { return false }
+        }
+        return true
+    }
+}

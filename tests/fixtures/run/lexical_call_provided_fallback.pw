@@ -1,0 +1,6 @@
+use @Std/Io only { print }
+fn fallback(value: I64) -> I64 { return value }
+fn main() {
+    val value: Optional[I64] = <.None />
+    print(value.unwrapOr(fallback: fn() -> I64 { return 42I64 }))
+}

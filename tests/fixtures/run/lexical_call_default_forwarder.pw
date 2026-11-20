@@ -1,0 +1,9 @@
+use @Std/Io only { print }
+fn add(add: I64, extra: I64 = 2I64) -> I64 { return add + extra }
+fn run(run: fn() -> I64, extra: I64 = 1I64) -> I64 { return run() + extra }
+fn main() {
+    print(add(add: 40I64))
+    print(add(add: 40I64, extra: 3I64))
+    print(run(run: fn() -> I64 { return 41I64 }))
+    print(run(run: fn() -> I64 { return 41I64 }, extra: 2I64))
+}

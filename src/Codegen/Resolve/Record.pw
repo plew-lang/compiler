@@ -927,14 +927,60 @@ pub impl Comp {
     // Resolve the lexical closure target while Record owns the source scope.
     // `bindingDeclStart` is the lowered declaration identity, so the final
     // descriptor cannot accidentally select a same-spelled shadow later.
-    inout fn recordDynamicLocalCall(exprId: U64, nameStart: U64, nameLen: U64, args: ArgRange) -> Result[Bool, CompileDiagnostic] {
-        val localIndex: U64 = self.localIndexByName(start: nameStart, len: nameLen)
-        if localIndex >= self.cur.locals.count() { return <Result.Ok value=false /> }
-        try self.recordDeclarationCapture(localIndex: localIndex)
-        val local: Local = (try self.typedLocal(index: localIndex))
+}
+
+impl Comp {
+    inout fn nonCallableBindingDiagnostic(expression: U64, bindingTarget: U64, typeTerm: U64, args: ArgRange) -> CompileDiagnostic {
+        val current = self.currentSourceOwner()
+        val owner = match current {
+            Optional.Some(v: val owner) => match owner {
+                SemanticCompletionOwner.Function(index: val index) => <DiagnosticOwner.Function index=index />
+                SemanticCompletionOwner.Global(target: val target) => <DiagnosticOwner.Global target=target />
+                SemanticCompletionOwner.Closure(expression: val expression) => <DiagnosticOwner.Closure expression=expression />
+            }
+            Optional.None => <DiagnosticOwner.Unknown />
+        }
+        match self.arena.exprs[expression] {
+            Expr.Call(nameStart: val start, nameLen: val len, args: val writtenArgs) => {
+                if writtenArgs.start == args.start && writtenArgs.len == args.len && self.isAuthoredFreeCall(exprId: expression, start: start, length: len, args: args) {
+                    match current {
+                        Optional.Some(v: val owner) => {
+                            if self.sourceFacts.isActive(owner: owner) {
+                                mut val written: Array[Arg] = []
+                                for index in 0U64..<args.len { written.append(self.argAt(args: args, index: index)) }
+                                self.failedFreeCallSelections[expression] = <FailedFreeCallSelection.NonCallableBinding owner=owner bindingTarget=bindingTarget typeTerm=typeTerm arguments=written />
+                            }
+                        }
+                        Optional.None => {}
+                    }
+                }
+            }
+            _ => {}
+        }
+        return <CompileDiagnostic.nonCallableBinding refusal=<NonCallableBindingRefusal session=self.sourceFactSession() owner=owner expression=expression bindingTarget=bindingTarget typeTerm=typeTerm argumentsStart=args.start argumentsCount=args.len location=self.diagnosticLocationAt(offset: self.exprOffset(id: expression)) /> />
+    }
+    inout fn selectedValueFunctionType(exprId: U64, binding: LexicalValueBinding, args: ArgRange) -> Result[U64, CompileDiagnostic] {
+        if binding.localIndex >= self.cur.locals.count() || self.cur.locals[binding.localIndex].nameStart != binding.declarationTarget || self.cur.locals[binding.localIndex].isGlobal != binding.isGlobal {
+            return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "selected call binding is no longer in its lexical scope", failureDomain: <FailureDomain.Internal />) />
+        }
+        val local = try self.typedLocal(index: binding.localIndex)
         val functionType = try self.normalizedValueType(ref: local.ty)
-        if !self.isFnType(ref: functionType) { return <Result.Ok value=false /> }
-        try self.recordDynamicCallTemplate(exprId: exprId, receiver: <CallTemplateReceiver.None />, args: args, target: <DynamicCallTemplateTarget.ClosureLocal bindingDeclStart=local.nameStart fnTypeTerm=functionType />)
+        if functionType == 0U64 || functionType >= self.arena.typeCount() {
+            return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "selected call binding has no completed type", failureDomain: <FailureDomain.Internal />) />
+        }
+        if !self.isFnType(ref: functionType) { return <Result.Err error=self.nonCallableBindingDiagnostic(expression: exprId, bindingTarget: binding.declarationTarget, typeTerm: functionType, args: args) /> }
+        return <Result.Ok value=functionType />
+    }
+
+    inout fn recordBoundValueCall(exprId: U64, binding: LexicalValueBinding, args: ArgRange) -> Result[(), CompileDiagnostic] {
+        val functionType = try self.selectedValueFunctionType(exprId: exprId, binding: binding, args: args)
+        val local = self.cur.locals[binding.localIndex]
+        try self.recordDeclarationCapture(localIndex: binding.localIndex)
+        val target = if binding.isGlobal {
+            give <DynamicCallTemplateTarget.ClosureGlobal declarationTarget=binding.declarationTarget fnTypeTerm=functionType />
+        } else { give <DynamicCallTemplateTarget.ClosureLocal bindingDeclStart=binding.declarationTarget fnTypeTerm=functionType /> }
+        try self.recordDynamicCallTemplate(exprId: exprId, receiver: <CallTemplateReceiver.None />, args: args, target: target)
+        if exprId < self.typeCache.callee.count() { self.typeCache.callee.set(i: exprId, value: <CachedCallee.NoStaticCallee />) }
         val result = self.semanticExprTerm(exprId: exprId)
         if self.bodyTypeNeedsViewAdmission(ref: result) {
             mut val origin: Optional[SourceExpressionTypeOrigin] = <Optional.None />
@@ -948,9 +994,13 @@ pub impl Comp {
                 self.recordTypeChildEvidence(exprId: exprId, origin: origin.unwrap(), parentTerm: functionType, slot: 0U64, term: result)
             }
         }
-        return <Result.Ok value=true />
+        try self.recordArgumentAccessUses(parentExpr: exprId, callee: self.arena.functionCount(), args: args)
+        return <Result.Ok value=() />
     }
 
+}
+
+pub impl Comp {
     // An `any` type has an already-resolved declaration identity in TypeRef.
     // Prefer that owner over a spelling scan so a use/re-export cannot
     // redirect an existential slot after the source resolver selected it.
@@ -2106,10 +2156,14 @@ pub impl Comp {
     fn freeCallSelectionFailureDomain(exprId: U64, start: U64, length: U64, args: ArgRange) -> FailureDomain {
         if !self.isAuthoredFreeCall(exprId: exprId, start: start, length: length, args: args) { return <FailureDomain.Unclassified /> }
         val failed = match self.failedFreeCallSelections.get(key: exprId) {
-            Optional.Some(v: val failed) => failed,
+            Optional.Some(v: val failed) => match failed {
+                FailedFreeCallSelection.NoMatch(owner: val owner, arguments: val arguments) => (owner: owner, arguments: arguments)
+                _ => { return <FailureDomain.Unclassified /> }
+            }
             Optional.None => { return <FailureDomain.Unclassified /> }
         }
-        if failed.owner != self.cur.checkFn || failed.arguments.count() != args.len { return <FailureDomain.Unclassified /> }
+        val owner = match self.currentSourceOwner() { Optional.Some(v: val owner) => owner Optional.None => { return <FailureDomain.Unclassified /> } }
+        if !semanticCompletionOwnersEqual(recorded: failed.owner, prepared: owner) || failed.arguments.count() != args.len { return <FailureDomain.Unclassified /> }
         for index in 0U64..<args.len {
             val a = failed.arguments[index]
             val b = self.argAt(args: args, index: index)
@@ -2154,7 +2208,11 @@ pub impl Comp {
                 }
             }
         }
-        cfi = (try self.resolvedCallee(id: exprId))
+        match self.lexicalValueBinding(start: callStart, len: callLen) {
+            Optional.Some(v: val binding) => { return self.recordBoundValueCall(exprId: exprId, binding: binding, args: args) }
+            Optional.None => {}
+        }
+        cfi = (try self.resolvedFreeFunctionCall(id: exprId, nameStart: callStart, nameLen: callLen, args: args))
         if cfi < self.arena.functionCount() {
             val cf: Func = self.arena.functionAt(index: cfi)
             val ps: Array[Param] = self.copyFuncParams(params: cf.params)
@@ -2189,10 +2247,22 @@ pub impl Comp {
             // in SemanticAggregate).
             try self.recordParametricFreeCall(exprId: exprId, callee: cfi, args: args)
         } else {
-            val selected = try self.recordDynamicLocalCall(exprId: exprId, nameStart: callStart, nameLen: callLen, args: args)
-            if !selected {
-                return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "no matching function for this argument list", failureDomain: self.freeCallSelectionFailureDomain(exprId: exprId, start: callStart, length: callLen, args: args)) />
+            // Only an exhausted free-function frontier reaches this diagnostic
+            // lookup. It cannot reject a selected value or select another callee.
+            if !self.genMode && exprId < self.sourceExpressionLimit { try self.checkExpressionVisibility(exprId: exprId) }
+            if self.isAuthoredFreeCall(exprId: exprId, start: callStart, length: callLen, args: args) {
+                match self.currentSourceOwner() {
+                    Optional.Some(v: val owner) => {
+                        if self.sourceFacts.isActive(owner: owner) {
+                            mut val written: Array[Arg] = []
+                            for index in 0U64..<args.len { written.append(self.argAt(args: args, index: index)) }
+                            self.failedFreeCallSelections[exprId] = <FailedFreeCallSelection.NoMatch owner=owner arguments=written />
+                        }
+                    }
+                    Optional.None => {}
+                }
             }
+            return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "no matching function for this argument list", failureDomain: self.freeCallSelectionFailureDomain(exprId: exprId, start: callStart, length: callLen, args: args)) />
         }
         try self.recordArgumentAccessUses(parentExpr: exprId, callee: cfi, args: args)
         return <Result.Ok value=() />
@@ -2251,7 +2321,6 @@ pub impl Comp {
             val context = (try self.requireConstructionContext(ctxRef: normalizedContext, offset: self.exprOffset(id: exprId)))
             try self.resolveConstructionContext(exprId: exprId, context: context)
         }
-        if !self.genMode && exprId < self.sourceExpressionLimit { try self.checkExpressionVisibility(exprId: exprId) }
         mut val authored: Optional[Array[U64]] = <Optional.None />
         match self.arena.exprs[exprId] {
             Expr.ExtView(recv: _, source: val selector, strip: val strip) => {

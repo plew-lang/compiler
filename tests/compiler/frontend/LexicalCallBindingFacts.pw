@@ -1,0 +1,78 @@
+use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use ../../../src/SourceAccess only { SourceAccess }
+use ../../../src/Ir only { CallTemplateKind, DynamicCallTemplateTarget, Expr, CachedCallee }
+use ../../../src/Diag only { FailureDomain }
+use @Std/Io only { print }
+fn globalTarget(path: String) {
+    mut val compiler = <Comp />
+    match analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.File path=path />, sources: <SourceAccess />) { Result.Ok(value: _) => {} Result.Err(error: val diagnostic) => { panic(diagnostic.message()) } }
+    val name = compiler.internBytes(s: "main")
+    val function = compiler.arena.firstFunctionNamed(nameId: name.nameId)
+    match compiler.prepareLexicalBody(fnIdx: function) { Result.Ok(value: _) => {} Result.Err(error: val diagnostic) => { panic(diagnostic.message()) } }
+    if compiler.arena.globals.count() != 1U64 { panic("global fixture changed") }
+    val declaration = compiler.arena.globals[0U64].nameStart
+    mut val checked = false
+    for index in 0U64..<compiler.callTemplateCount() {
+        match compiler.callTemplateAt(index: index).kind {
+            CallTemplateKind.Dynamic(receiver: _, args: _, target: val target) => {
+                match target {
+                    DynamicCallTemplateTarget.ClosureGlobal(declarationTarget: val target, fnTypeTerm: val type) => {
+                        if target != declaration || type == 0U64 || !compiler.isFnType(ref: type) { panic("global target identity/type lost") }
+                        checked = true
+                    }
+                    DynamicCallTemplateTarget.ClosureLocal(bindingDeclStart: _, fnTypeTerm: _) => { panic("global callable became a local") }
+                    _ => {}
+                }
+            }
+            _ => {}
+        }
+    }
+    if !checked { panic("global callable was not recorded") }
+    print("global callable identity retained")
+}
+fn pendingFailure() {
+    mut val compiler = <Comp />
+    match analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.File path="tests/compiler/frontend/fixtures/LexicalCallBinding/PendingCycle.pw" />, sources: <SourceAccess />) { Result.Ok(value: _) => {} Result.Err(error: val diagnostic) => { panic(diagnostic.message()) } }
+    val name = compiler.internBytes(s: "main")
+    val function = compiler.arena.firstFunctionNamed(nameId: name.nameId)
+    for attempt in 0U64..<2U64 {
+        match compiler.prepareLexicalBody(fnIdx: function) {
+            Result.Ok(value: _) => { panic("pending type cycle became a callable") }
+            Result.Err(error: val diagnostic) => {
+                if diagnostic.message() != "cyclic global type inference" || diagnostic.nonCallableBinding().isSome() { panic("pending type failure was replaced") }
+            }
+        }
+    }
+    for index in 0U64..<compiler.arena.exprs.count() {
+        match compiler.arena.exprs[index] {
+            Expr.Call(nameStart: _, nameLen: _, args: _) => {
+                match compiler.typeCache.callee[index] { CachedCallee.Uncomputed => {} _ => { panic("pending type failure became a cached callee") } }
+            }
+            _ => {}
+        }
+    }
+    print("pending call type failure retained")
+}
+fn pendingLimit() {
+    mut val compiler = <Comp />
+    match analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.File path="tests/compiler/frontend/fixtures/LexicalCallBinding/PendingLimit.pw" />, sources: <SourceAccess />) { Result.Ok(value: _) => {} Result.Err(error: val diagnostic) => { panic(diagnostic.message()) } }
+    val name = compiler.internBytes(s: "main")
+    val function = compiler.arena.firstFunctionNamed(nameId: name.nameId)
+    for attempt in 0U64..<2U64 {
+        match compiler.prepareLexicalBody(fnIdx: function) {
+            Result.Ok(value: _) => { panic("pending implementation limit became a callable") }
+            Result.Err(error: val diagnostic) => {
+                match diagnostic.failureDomain() { FailureDomain.Limit => {} _ => { panic("pending implementation limit was reclassified") } }
+                if diagnostic.message() != "closure capture of generic struct values is not implemented" || diagnostic.nonCallableBinding().isSome() { panic("pending implementation limit was replaced") }
+            }
+        }
+    }
+    print("pending call implementation limit retained")
+}
+fn main() {
+    globalTarget(path: "tests/compiler/frontend/fixtures/LexicalCallBinding/GlobalInferred.pw")
+    globalTarget(path: "tests/compiler/frontend/fixtures/LexicalCallBinding/GlobalAnnotated.pw")
+    globalTarget(path: "tests/compiler/frontend/fixtures/LexicalCallBinding/GlobalAlias.pw")
+    pendingFailure()
+    pendingLimit()
+}

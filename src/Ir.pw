@@ -3778,6 +3778,7 @@ pub impl CallTemplateViewRange { factory }
 // Keep the symbolic template distinct from CallTarget: its function TypeTerm is
 // still parametric here and becomes the ground CallTarget only per BodyInstance.
 pub enum DynamicCallTemplateTarget {
+    ClosureGlobal(declarationTarget: U64, fnTypeTerm: U64)
     ClosureLocal(bindingDeclStart: U64, fnTypeTerm: U64)
     ClosureField(fieldIndex: U64, fnTypeTerm: U64)
     ExistentialRequirement(traitIdx: U64, slot: U64, interfaceRoot: U64)

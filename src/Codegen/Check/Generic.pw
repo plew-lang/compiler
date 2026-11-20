@@ -106,9 +106,9 @@ pub impl Comp {
         if self.isSelfRef(start: start, len: len) {
             return <IdentBinding code=identValueCode() target=identSelfTarget() />
         }
-        val li: U64 = self.localIndexByName(start: start, len: len)
-        if li < self.cur.locals.count() {
-            return <IdentBinding code=identValueCode() target=self.cur.locals[li].nameStart localIndex=<Optional.Some v=li /> />
+        match self.lexicalValueBinding(start: start, len: len) {
+            Optional.Some(v: val binding) => { return <IdentBinding code=identValueCode() target=binding.declarationTarget localIndex=<Optional.Some v=binding.localIndex /> /> }
+            Optional.None => {}
         }
         val fi: U64 = self.firstVisibleFuncByName(useMod: self.moduleOf(offset: start), nameStart: start, nameLen: len)
         if fi < self.arena.functionCount() {

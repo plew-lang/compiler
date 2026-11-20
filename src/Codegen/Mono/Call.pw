@@ -3810,6 +3810,9 @@ pub impl Comp {
         val args: ArgRange = self.templateArgumentRangeFromValues(arguments: arguments)
         val noCallee: U64 = self.arena.functionCount()
         match target {
+            DynamicCallTemplateTarget.ClosureGlobal(declarationTarget: _, fnTypeTerm: _) => {
+                return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "global callable receiver has no prepared storage access", failureDomain: <FailureDomain.Internal />) />
+            }
             DynamicCallTemplateTarget.ClosureLocal(bindingDeclStart: val bindingDeclStart, fnTypeTerm: val fnTypeTerm) => {
                 val fnTypeRef: U64 = (try self.groundAndRecordBodyType(ref: fnTypeTerm, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: self.cur.bodyId))
                 if fnTypeRef == 0U64 || !(self.isFnType(ref: fnTypeRef)) {
@@ -5989,6 +5992,7 @@ pub impl Comp {
         match template.kind {
             CallTemplateKind.Dynamic(receiver: _, args: _, target: val target) => {
                 match target {
+                    DynamicCallTemplateTarget.ClosureGlobal(declarationTarget: _, fnTypeTerm: _) => { matched = false }
                     DynamicCallTemplateTarget.ClosureLocal(bindingDeclStart: val binding, fnTypeTerm: val term) => {
                         match resolution.target {
                             CallTarget.ClosureLocal(bindingDeclStart: val actual, fnTypeRef: val ref) => { matched = binding == actual && self.publishedBodyTypeMatches(bodyId: resolution.bodyId, source: term, concrete: ref) }

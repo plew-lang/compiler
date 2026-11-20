@@ -1,0 +1,8 @@
+fn pick(value: I64) -> I64 { return 11I64 }
+fn main() {
+    val action: fn() -> I64 = fn() -> I64 {
+        val pick: I64 = 0I64
+        return pick(value: 42I64)
+    }
+    val result = action()
+}

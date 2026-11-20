@@ -1,0 +1,2 @@
+pub fn handler(other: Bool) -> I64 { return 11I64 }
+fn handler(value: I64) -> I64 { return 12I64 }

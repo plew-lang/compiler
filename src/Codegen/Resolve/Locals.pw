@@ -140,6 +140,20 @@ pub impl Comp {
         return index
     }
 
+}
+
+impl Comp {
+    // Scope chooses a value declaration before any type or callability query.
+    // This is shared by ordinary identifier lookup and source call heads.
+    inout fn lexicalValueBinding(start: U64, len: U64) -> Optional[LexicalValueBinding] {
+        val index = self.localIndexByName(start: start, len: len)
+        if index >= self.cur.locals.count() { return <Optional.None /> }
+        val local = self.cur.locals[index]
+        return <Optional.Some v=<LexicalValueBinding localIndex=index declarationTarget=local.nameStart isGlobal=local.isGlobal /> />
+    }
+}
+
+pub impl Comp {
     fn replacedUniqueTarget(prior: Local) -> U64 {
         if !prior.isGlobal && prior.owned && self.arena.typeTermIsUnique(ref: prior.ty) { return prior.nameStart }
         return 0U64
