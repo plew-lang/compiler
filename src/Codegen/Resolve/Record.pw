@@ -3986,12 +3986,8 @@ impl Comp {
                 if source.typeFromContext { return <SourceConstructionContext.Outer /> }
                 if self.sourceTypeHasCompleteArguments(ref: construction) { return <SourceConstructionContext.Producer /> }
             }
-            Optional.None => {
-                // A stale source receipt cannot become a fresh typed producer.
-                if self.authoredConstructions.contains(key: exprId) { return <SourceConstructionContext.Reused /> }
-                // Unregistered generated types may be derived from outer context.
-                // Fresh storage and a ground type do not prove producer origin.
-            }
+            // Missing and mismatched receipts both lack producer evidence.
+            Optional.None => {}
         }
         return <SourceConstructionContext.Reused />
     }

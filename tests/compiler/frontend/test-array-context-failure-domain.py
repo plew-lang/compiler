@@ -12,6 +12,7 @@ from compiler_failure_result import run_compiler
 
 MESSAGE = b"cannot infer an empty array's element type from a non-array context (spec/02)"
 REJECT = {
+    'record-field': 'fn main() { val record: (value: I64) = (value: []) }',
     'default-expanded-field': 'struct InvalidDefaultSlot { val value: I64 = [] }\nfn main() { val value = <InvalidDefaultSlot /> }',
     'explicit-closure-return': 'fn main() { val closure = fn() -> I64 { { return [] } } }',
     'contextual-closure-return': 'fn main() { val closure: fn() -> I64 = fn() { { return [] } } }',
@@ -29,6 +30,8 @@ REJECT = {
     'outer-field': 'struct Shelf[T] { val value: T }\nfn main() { val shelf: Shelf[I64] = <Shelf value=[] /> }',
 }
 ACCEPT = {
+    'inferred-record': 'fn main() { val record = (value: 1I64) }',
+    'contextual-record': 'fn main() { val record: (value: I64) = (value: 1I64) }',
     'zero-field': 'struct EmptySlot {}\nfn main() { val value = <EmptySlot /> }',
     'empty-record': 'fn main() { val value: () = () }',
     'generic-zero-explicit': 'struct EmptySlot[T] {}\nfn main() { val value = <EmptySlot[I64] /> }',

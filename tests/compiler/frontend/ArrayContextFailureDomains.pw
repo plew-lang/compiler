@@ -208,6 +208,25 @@ fn unwrittenArray(writtenNonempty: Bool = false) {
     requireRaw(diagnostic: diagnostic)
     if diagnostic.arrayContext().unwrap().expression() != synthetic || raw.sourceFailureHasOwner(diagnostic: diagnostic) { panic("unwritten array acquired authored evidence") }
 }
+fn staleConstruction() {
+    val text = "struct Shelf[T] {{ val value: T }} fn main() {{ val shelf = <Shelf[I64] value=[] /> }}"
+    mut val raw = <Comp />
+    analyzeFrontendForRequests(c: inout raw, input: <FrontendInput.File path="plew:std/ArrayContextProbe.pw" />, sources: <SourceAccess stdRoot="std/".bytes() resources=[<SourceResource path="plew:std/ArrayContextProbe.pw".bytes() text=text />] />).unwrap()
+    val function = raw.arena.firstFunctionNamed(nameId: raw.internBytes(s: "main").nameId)
+    val statement = raw.blockStmtAt(blkId: raw.arena.functionAt(index: function).body, index: 0U64)
+    val expression = match raw.arena.stmts[statement] { Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, init: val init, annotationOccurrence: _) => init _ => { panic("missing stale construction control") } }
+    match raw.arena.exprs[expression] {
+        Expr.Make(typeStart: val start, typeLen: val length, variantStart: val variant, variantLen: val variantLength, isEnum: val isEnum, ty: val type, fields: val fields) => {
+            // With no variant label, this offset is semantically inactive but
+            // no longer matches the immutable authored construction receipt.
+            raw.arena.exprs.set(i: expression, value: <Expr.Make typeStart=start typeLen=length variantStart=variant + 1U64 variantLen=variantLength isEnum=isEnum ty=type fields=fields />)
+        }
+        _ => { panic("missing stale Make control") }
+    }
+    val diagnostic = failure(compiler: inout raw, function: function)
+    requireRaw(diagnostic: diagnostic)
+    if raw.sourceFailureHasOwner(diagnostic: diagnostic) { panic("stale construction acquired producer authority") }
+}
 fn main() {
     mut val raw = <Comp />
     analyzeFrontendForRequests(c: inout raw, input: input(), sources: <SourceAccess />).unwrap()
@@ -245,6 +264,8 @@ fn main() {
     rawDetour(text: "fn main() {{ val closure: fn() -> I64 = fn() {{ return [] }} }}")
     rawDetour(text: "fn main() {{ val values: Array[I64] = [[]] }}")
     rawDetour(text: "fn probe[T]() {{ val value: T = [] }} fn main() {{}}", name: "probe")
+    staleConstruction()
+    rawDetour(text: "fn main() {{ val record: (value: I64) = (value: []) }}")
     unwrittenArray()
     unwrittenArray(writtenNonempty: true)
     print("raw recursive context stayed unclassified")
