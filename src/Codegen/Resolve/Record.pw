@@ -2076,8 +2076,9 @@ pub impl Comp {
         return false
     }
 
-    // All statically selected method surfaces use the same argument context.
-    inout fn recordSelectedMethodArguments(callee: U64, receiverTerm: U64, args: ArgRange, chainHoleRef: U64, exprId: U64) -> Result[(), CompileDiagnostic] {
+    // Selected and diagnostic method surfaces share operand context checks.
+    // This helper never publishes parent-call authority; its caller owns the role.
+    inout fn recordMethodArgumentContexts(callee: U64, receiverTerm: U64, args: ArgRange, chainHoleRef: U64, exprId: U64) -> Result[(), CompileDiagnostic] {
         if callee < self.arena.functionCount() {
             val selectedMethod: Func = self.arena.functionAt(index: callee)
             val useOffset = self.exprOffset(id: exprId)
@@ -3824,7 +3825,7 @@ impl Comp {
     inout fn recordMemberLookupArguments(selection: MemberCallLookup, receiverTerm: U64, args: ArgRange, chainHoleRef: U64, exprId: U64) -> Result[(), CompileDiagnostic] {
         match selection {
             MemberCallLookup.Selected(function: val function) => {
-                try self.recordSelectedMethodArguments(callee: function, receiverTerm: receiverTerm, args: args, chainHoleRef: chainHoleRef, exprId: exprId)
+                try self.recordMethodArgumentContexts(callee: function, receiverTerm: receiverTerm, args: args, chainHoleRef: chainHoleRef, exprId: exprId)
             }
             MemberCallLookup.DiagnosticCandidate(function: val function) => {
                 // This path may refine operands for a detailed error, but it
@@ -3834,7 +3835,7 @@ impl Comp {
                     val parameter = self.paramIndexForArg(params: declaration.params, args: args, argIdx: index)
                     if parameter < declaration.params.count() { try self.checkArgInoutMode(p: self.funcParamAt(params: declaration.params, index: parameter), arg: self.argAt(args: args, index: index)) }
                 }
-                try self.recordSelectedMethodArguments(callee: function, receiverTerm: receiverTerm, args: args, chainHoleRef: chainHoleRef, exprId: exprId)
+                try self.recordMethodArgumentContexts(callee: function, receiverTerm: receiverTerm, args: args, chainHoleRef: chainHoleRef, exprId: exprId)
                 return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "no matching method for this argument list") />
             }
             MemberCallLookup.NoCandidate | MemberCallLookup.CachedNonStatic => {}

@@ -1,0 +1,33 @@
+// A fixed selected parameter supplies context before nested-call validation.
+use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use ../../../src/SourceAccess only { SourceAccess }
+use ../../../src/Ir only { CallTemplateKind }
+use @Std/Io only { print }
+fn checkFile(path: String) {
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.File path=path />, sources: <SourceAccess stdRoot="std/".bytes() />).unwrap()
+    val name = compiler.internBytes(s: "main")
+    val owner = compiler.arena.firstFunctionNamed(nameId: name.nameId)
+    compiler.prepareLexicalBody(fnIdx: owner).unwrap()
+    mut val checked = 0U64
+    for index in 0U64..<compiler.callTemplateLocations.count() {
+        val template = compiler.callTemplateAt(index: index)
+        if template.siteKey.ownerFnIdx != owner { continue }
+        match template.kind {
+            CallTemplateKind.Direct(callee: val callee, receiver: _, args: _, calleeTypeArgs: val arguments, proofId: _) => {
+                if callee >= compiler.arena.functionCount() { panic("prepared member lost its declaration") }
+                val function = compiler.arena.functionAt(index: callee)
+                compiler.checkCallTemplateTypeArguments(arguments: arguments, parameterCount: function.typeParams.count(), offset: function.defOffset).unwrap()
+                checked += 1U64
+            }
+            _ => {}
+        }
+    }
+    if checked == 0U64 { panic("member fixture did not publish any selected operation") }
+}
+fn main() {
+    checkFile(path: "tests/fixtures/run/generic_method_result_argument_context.pw")
+    checkFile(path: "tests/fixtures/run/generic_associated_result_argument_context.pw")
+    checkFile(path: "tests/fixtures/run/method_if_construction_argument_context.pw")
+    print("member parameters complete prepared arguments before validation")
+}

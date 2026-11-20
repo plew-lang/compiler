@@ -4,15 +4,30 @@ use ../../../src/SourceAccess only { SourceAccess }
 use ../../../src/Ir only { Expr, CachedCallee }
 use ../../../src/Diag only { FailureDomain }
 use @Std/Io only { print }
-fn checkCache(selected: Bool) {
+fn checkCache(selected: Bool, kind: U64) {
     mut val compiler = <Comp />
-    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text path="Cache.pw" text="struct Marker {{}}\nimpl Marker {{ fn accept(value: I64) {{}} }}\nfn main() {{ <Marker />.accept(value: 1I64) }}" />, sources: <SourceAccess stdRoot="std/".bytes() />).unwrap()
+    val text = if kind == 0U64 {
+        give "struct Marker {{}}\nimpl Marker {{ fn accept(value: I64) -> Bool {{ return true }} }}\nfn main() {{ <Marker />.accept(value: 1I64) }}"
+    } else if kind == 1U64 {
+        give "struct Marker {{}}\nimpl Marker {{ assoc fn accept(value: I64) -> Bool {{ return true }} }}\nfn main() {{ Marker.accept(value: 1I64) }}"
+    } else {
+        give "struct Marker {{}}\nextension Extra {{ impl Marker {{ fn accept(value: I64) -> Bool {{ return true }} }} }}\nfn main() {{ <Marker />#Extra.accept(value: 1I64) }}"
+    }
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text path="Cache.pw" text=text />, sources: <SourceAccess stdRoot="std/".bytes() />).unwrap()
     val name = compiler.internBytes(s: "main")
     val owner = compiler.arena.firstFunctionNamed(nameId: name.nameId)
     for index in 0U64..<compiler.arena.exprs.count() {
         match compiler.arena.exprs[index] {
-            Expr.Method(recv: _, nameStart: _, nameLen: _, args: _) => {
+            Expr.Method(recv: _, nameStart: _, nameLen: _, args: _) |
+            Expr.ExtMethod(recv: _, source: _, nameStart: _, nameLen: _, args: _) => {
                 compiler.typeCache.callee[index] = if selected { give <CachedCallee.Selected callee=compiler.arena.functionCount() + 1U64 /> } else { give <CachedCallee.NoStaticCallee /> }
+                match compiler.typeOf(id: index) {
+                    Result.Ok(value: val result) => {
+                        if selected { panic("out-of-range method cache produced a value") }
+                        if result.ref != 0U64 || result.nameLen != 0U64 { panic("observation cache produced a method result") }
+                    }
+                    Result.Err(error: _) => { if !selected { panic("nonstatic observation failed during type recovery") } }
+                }
             }
             _ => {}
         }
@@ -26,8 +41,33 @@ fn checkCache(selected: Bool) {
         }
     }
 }
+fn checkChainCache() {
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text path="Chain.pw" text="struct Marker {{}}\nimpl Marker {{ fn accept(value: I64) -> Bool {{ return true }} }}\nfn main() {{ val marker = <Optional.Some v=<Marker /> /> marker?.accept(value: 1I64) }}" />, sources: <SourceAccess stdRoot="std/".bytes() />).unwrap()
+    val name = compiler.internBytes(s: "accept")
+    val method = compiler.arena.firstFunctionNamed(nameId: name.nameId)
+    val receiver = compiler.arena.functionAt(index: method).recvTy
+    if receiver == 0U64 { panic("chain fixture has no receiver") }
+    mut val seen = false
+    for index in 0U64..<compiler.arena.exprs.count() {
+        match compiler.arena.exprs[index] {
+            Expr.Method(recv: val base, nameStart: _, nameLen: _, args: _) => {
+                match compiler.arena.exprs[base] { Expr.ChainHole => {} _ => { continue } }
+                seen = true
+                compiler.typeCache.callee[index] = <CachedCallee.NoStaticCallee />
+                val result = compiler.exprTypeWithChainHole(id: index, chainHoleRef: receiver).unwrap()
+                if result.ref != 0U64 || result.nameLen != 0U64 { panic("chain continuation reopened an observation cache") }
+            }
+            _ => {}
+        }
+    }
+    if !seen { panic("missing chain continuation") }
+}
 fn main() {
-    checkCache(selected: false)
-    checkCache(selected: true)
+    checkChainCache()
+    for kind in 0U64..<3U64 {
+        checkCache(selected: false, kind: kind)
+        checkCache(selected: true, kind: kind)
+    }
     print("member observation caches do not confer source selection authority")
 }
