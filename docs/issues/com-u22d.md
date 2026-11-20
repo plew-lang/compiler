@@ -1,7 +1,7 @@
 ---
 id: com-u22d
 status: in_progress
-deps: []
+deps: [met-bu94, met-qo60]
 links: []
 created: 2026-11-20T06:58:04Z
 type: bug
@@ -80,3 +80,7 @@ Nested construction requires preserving incomplete children under a nonempty par
 Freshc68 passes new51mode, numeric75mode, Array/closure54old-new controls (7exact LLVM,2verified internal-name-only), representative96old-new controls, Float16modes and the first6internal natives. NumericCandidateContexts then fails only its final generic Pair[I32,I64] raw candidate assertion. Diagnostic native identifies arguments0T@48 and1I32 as successful, with argument2Pair[T@48,I64] losing rank2. The observer treated absent, not-yet-prepared field facts as unfinished child recipes and supplied parent term0 to construction matching. This is a product regression, not an erroneous existing test.
 
 The finite repair requires a retained parent term before treating field information as a prepared contextual construction. It does not reject the raw argument; fully written raw arguments continue through ordinary structural matching. Existing numeric assertions are unchanged. Instrumented source-native now passes all four ambiguity frontiers and the typed normal fixture; guard preparation and final fresh verification remain pending. The previous c68 fresh gates are not attributed to this additional guard.
+
+## Bounded child work
+
+Independent neutral planning review accepts a two-child partition without narrowing this parent. [met-bu94](met-bu94.md) owns common applicability/prepared values and the free role increment through final gates; [met-qo60](met-qo60.md) owns the remaining method/associated collectors, composed resolvers, caches and publication. The second depends on the first; this parent depends on both and remains in_progress. Existing com-8uik dependence on this parent is unchanged. These are the original required repairs, not optional follow-ups or justification to close the parent.

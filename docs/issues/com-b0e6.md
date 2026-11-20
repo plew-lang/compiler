@@ -38,3 +38,7 @@ The meta array-context plan now retains32source-reviewed node roles/140recursive
 A required overload contrast exposed declaration-order-dependent acceptance, owned by com-5n0l and required before com-8uik. The failing order is not a valid negative source oracle. Exact cause and relevant admission-path correction remain under independent investigation; do not close this audit until the authority implication is resolved.
 
 The real selection roles require retaining applicable versus diagnostic-fallback outcomes; Selected-looking firstLabel is not completed applicability. The independently identified contract now has mandatory repair owner com-u22d, required by com-8uik and met-ucze. Numeric wrapper acceptance differences were additionally reproduced on fixed33d1011d; this audit must incorporate the precise provisional/selected API plan, not certify arbitrary first-candidate context. com-5n0l remains the finite empty-array shape repair, not that general selection repair. The current phase-aware expected-result core adds one private graph node (33nodes/141edges); Raw origin must remain independent from recordMissing.
+
+## Applicability role-map boundary
+
+The role map must reference [met-bu94](met-bu94.md) for common prepared arguments/free selection and [met-qo60](met-qo60.md) for method/associated selection roles. The latter and parent com-u22d remain unfinished. A finite child acceptance is not Source expected-context admission; retain Raw/committed origin checks and com-8uik's existing parent prerequisite.
