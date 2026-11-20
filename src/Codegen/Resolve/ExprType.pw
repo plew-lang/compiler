@@ -1377,8 +1377,13 @@ impl Comp {
         if self.proofIsMissing(proof: proof) && f.isProvided { proof = try self.providedBodyProof(f: f, receiverRef: semanticReceiver, assumptions: self.functionBoundAssumptions(fnIdx: self.cur.checkFn)) }
         // A provided copy placed through a trait-subject edge is justified
         // by its conformance path, not nominal equality with that trait.
-        if f.recvTy != 0U64 && receiverMatch.conformIdx == 0U64 && self.proofIsMissing(proof: proof) { return <Result.Ok value=<InstanceEnvironment /> />}
         mut val fullArgs: Array[U64] = (try self.receiverCallableArguments(f: f, receiverRef: semanticReceiver, receiverMatch: receiverMatch))
+        if f.recvTy != 0U64 && receiverMatch.conformIdx == 0U64 && self.proofIsMissing(proof: proof) {
+            match (try self.traitNamespaceCallableArguments(f: f, receiver: semanticReceiver, values: fullArgs)) {
+                Optional.Some(v: val arguments) => { fullArgs = arguments }
+                Optional.None => { return <Result.Ok value=<InstanceEnvironment /> /> }
+            }
+        }
         val traitReceiver = if f.isProvided && f.recvTraitArgs.count() != 0U64 {
             val declaration = try self.lexicalFunction(f: f)
             give declaration.provTraitOwner != 0U64 && declaration.originTraitOwner == 0U64
@@ -1421,5 +1426,28 @@ impl Comp {
             }
         }
         return <Result.Ok value=<InstanceEnvironment params=parameters args=values receiverRef=partial.receiverRef proof=partial.proof constraints=partial.constraints /> />
+    }
+}
+
+// A trait namespace is justified by its declaration identity, not by a
+// conformance of the trait to itself. Reuse the final consumer's owner check.
+impl Comp {
+    inout fn traitNamespaceCallableArguments(f: Func, receiver: U64, values: Array[U64]) -> Result[Optional[Array[U64]], CompileDiagnostic] {
+        val declaration = try self.lexicalFunction(f: f)
+        if declaration.hasRecv || !declaration.isAssoc || declaration.provTraitOwner == 0U64 { return <Result.Ok value=<Optional.None /> /> }
+        val termRef = self.typeRefWithoutOuterViews(ref: receiver)
+        if termRef == 0U64 || termRef >= self.arena.typeCount() { return <Result.Ok value=<Optional.None /> /> }
+        val term = self.arena.typeTermAt(index: termRef)
+        if term.isRecord || term.isAny || term.assocNameId != 0U64 { return <Result.Ok value=<Optional.None /> /> }
+        mut val arguments = values
+        if term.paramId == 0U64 {
+            if !term.hasDecl || term.declOffset != declaration.provTraitOwner || term.args.len != declaration.recvTraitArgs.count() { return <Result.Ok value=<Optional.None /> /> }
+            for index in 0U64..<term.args.len {
+                if !self.matchCallResultArguments(pattern: self.funcTypeAt(types: declaration.recvTraitArgs, index: index), expected: self.arena.typeArgumentAt(index: term.args.start + index), params: f.typeParams, values: inout arguments) { return <Result.Ok value=<Optional.None /> /> }
+            }
+        }
+        val environment = <InstanceEnvironment params=self.copyFuncBinds(binds: f.typeParams) args=arguments receiverRef=receiver />
+        if !self.traitNamespaceReceiverMatches(function: declaration, environment: environment) { return <Result.Ok value=<Optional.None /> /> }
+        return <Result.Ok value=<Optional.Some v=arguments /> />
     }
 }

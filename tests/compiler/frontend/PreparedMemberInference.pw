@@ -1,5 +1,5 @@
 // Prepared nested results cannot bind their foreign slots into a member's map.
-use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use ../../../src/Frontend only { Comp, FrontendInput, FrontendOptions, analyzeFrontend, analyzeFrontendForRequests }
 use ../../../src/SourceAccess only { SourceAccess }
 use ../../../src/Ir only { CallTemplateKind }
 use ../../../src/Diag only { emitDiagnostic }
@@ -33,7 +33,16 @@ fn checkFile(path: String, functionName: String, concrete: Bool) {
     }
     if checked == 0U64 { panic("missing prepared member calls") }
 }
+fn checkGeneration() {
+    mut val compiler = <Comp />
+    match analyzeFrontend(c: inout compiler, input: <FrontendInput.File path="tests/fixtures/gen/deriveeqstruct/App.pw" />, sources: <SourceAccess stdRoot="std/".bytes() />, options: <FrontendOptions genMode=true />) {
+        Result.Ok(value: _) => {}
+        Result.Err(error: val error) => { emitDiagnostic(diagnostic: error) panic(error.message()) }
+    }
+}
 fn main() {
+    checkGeneration()
+    checkFile(path: "tests/fixtures/run/member_trait_namespace_context.pw", functionName: "main", concrete: true)
     checkFile(path: "tests/fixtures/run/associated_output_generic_view.pw", functionName: "main", concrete: true)
     checkFile(path: "tests/fixtures/run/member_associated_candidate_conflict.pw", functionName: "main", concrete: true)
     checkFile(path: "tests/fixtures/run/member_nested_constructor_context.pw", functionName: "main", concrete: true)

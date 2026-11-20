@@ -1,0 +1,4 @@
+use @Std/Io only { print }
+trait Names {}
+pub impl Names { assoc fn number() -> I64 { return 42I64 } }
+fn main() { print(Names.number()) }
