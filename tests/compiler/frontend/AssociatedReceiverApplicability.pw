@@ -1,0 +1,42 @@
+// Associated Self parameters use the same receiver-grounded applicability as methods.
+use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontendForRequests, intern }
+use ../../../src/SourceAccess only { SourceAccess }
+use ../../../src/Ir only { Expr }
+use @Std/Io only { print }
+fn main() {
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.File path="tests/fixtures/run/pow.pw" />, sources: <SourceAccess stdRoot="std/".bytes() />).unwrap()
+    val mainName = compiler.internBytes(s: "main")
+    val owner = compiler.arena.firstFunctionNamed(nameId: mainName.nameId)
+    val module = compiler.moduleOf(offset: compiler.arena.functionAt(index: owner).defOffset)
+    val name = compiler.internBytes(s: "pow")
+    mut val checked = 0U64
+    for index in 0U64..<compiler.arena.exprs.count() {
+        match compiler.arena.exprs[index] {
+            Expr.Call(nameStart: val start, nameLen: val length, args: val arguments) => {
+                if compiler.moduleOf(offset: start) != module || intern(c: inout compiler, start: start, len: length) != name.nameId { continue }
+                val first = compiler.argAt(args: arguments, index: 0U64).expr
+                // A Raw query cannot recover a local's declaration scope.
+                match compiler.arena.exprs[first] { Expr.Int(value: _, offset: _, isBool: _, tyStart: _, tyLen: _, isNeg: _) => {} _ => { continue } }
+                val receiver = compiler.inferenceArgumentType(exprId: first).unwrap()
+                if receiver == 0U64 { panic("typed literal lost its receiver") }
+                val info = compiler.typeInfoOfRef(ref: receiver)
+                val observed = compiler.findAssoc(recvStart: info.nameStart, recvLen: info.nameLen, nameStart: start, nameLen: length, args: arguments, recvRef: receiver).unwrap()
+                if observed >= compiler.arena.functionCount() { panic("missing associated diagnostic observation") }
+                val function = compiler.arena.functionAt(index: observed)
+                if compiler.groundedMethodArgMatchRank(f: function, args: arguments, recvRef: receiver).unwrap() != 2U64 { panic("fixture does not have full receiver-grounded applicability") }
+                val selected = compiler.resolveAssocForResolvedReceiver(surfaceRef: receiver, sourceId: 0U64, sourceOwner: 0U64, nameStart: start, nameLen: length, args: arguments, useOffset: start).unwrap()
+                if selected != observed { panic("associated selection lost receiver-grounded applicability") }
+                checked += 1U64
+            }
+            _ => {}
+        }
+    }
+    if checked == 0U64 { panic("missing typed associated operands") }
+    mut val globals = <Comp />
+    match analyzeFrontendForRequests(c: inout globals, input: <FrontendInput.File path="tests/fixtures/run/global_callable_named_pow.pw" />, sources: <SourceAccess stdRoot="std/".bytes() />) {
+        Result.Ok(value: _) => {}
+        Result.Err(error: val error) => { panic(error.message()) }
+    }
+    print("associated applicability retains receiver-grounded Self")
+}

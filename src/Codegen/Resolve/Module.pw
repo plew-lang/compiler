@@ -1211,7 +1211,7 @@ impl Comp {
             if f.isAssoc && self.callableIsBare(c: cand) {
                 if f.nameId == qNameId {
                     if f.recvId == qRecvId && self.receiverDeclarationMatches(f: f, receiverRef: recvRef) && self.receiverDeclarationHasOwner(f: f, declaration: receiverDeclaration) {
-                        val matchRank: U64 = (try self.callableArgMatchRank(f: f, args: args))
+                        val matchRank: U64 = (try self.groundedMethodArgMatchRank(f: f, args: args, recvRef: recvRef))
                         if matchRank != 0U64 {
                             if firstLabel == self.arena.functionCount() {
                                 firstLabel = cand.funcIdx
