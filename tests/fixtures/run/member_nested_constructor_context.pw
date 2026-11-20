@@ -1,0 +1,17 @@
+use @Std/Io only { print }
+struct Pair[A, B] { val first: A val second: B }
+impl[A, B] Pair[A, B] { assoc fn accept(value: Self, sample: B) -> I64 { return 3I64 } }
+struct Marker {}
+impl Marker {
+    fn produce[T]() -> Optional[T] { return <Optional.None /> }
+    fn accept[A, B](value: Pair[A, B], sample: B) -> I64 { return 1I64 }
+    fn reverse[A, B](sample: B, value: Pair[A, B]) -> I64 { return 4I64 }
+    assoc fn staticAccept[A, B](value: Pair[A, B], sample: B) -> I64 { return 2I64 }
+}
+fn main() {
+    val marker = <Marker />
+    print(marker.accept(value: <Pair first=3I64 second=marker.produce() />, sample: <Optional.Some v=true />))
+    print(Marker.staticAccept(value: <Pair first=3I64 second=marker.produce() />, sample: <Optional.Some v=true />))
+    print(Pair.accept(value: <Pair first=3I64 second=marker.produce() />, sample: <Optional.Some v=true />))
+    print(marker.reverse(sample: <Optional.Some v=true />, value: <Pair first=3I64 second=marker.produce() />))
+}

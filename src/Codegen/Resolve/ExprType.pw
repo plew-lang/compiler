@@ -177,20 +177,38 @@ pub impl Comp {
             mut val index = 0U64
             while index < retainedArguments.count() {
                 val retained = retainedArguments[index]
-                if retained == 0U64 || (fullArgs[index] != 0U64 && !self.typeRefEq(a: fullArgs[index], b: retained)) {
+                if retained == 0U64 || retained >= self.arena.typeCount() || (fullArgs[index] != 0U64 && !self.typeRefEq(a: fullArgs[index], b: retained)) {
                     return <Result.Err error=self.diagnosticAt(offset: f.defOffset, msg: "selected forwarding arguments conflict with the receiver evidence") />
                 }
                 fullArgs.set(i: index, value: retained)
                 index += 1U64
             }
         }
-        // Fill only binders the receiver pattern did not determine. Those are
-        // method-owned generic parameters and may be inferred from arguments.
-        val inferred: Array[U64] = (try self.inferFnArgs(f: f, args: args))
-        mut val fi = 0U64
-        while fi < inferred.count() && fi < fullArgs.count() {
-            if fullArgs[fi] == 0U64 { fullArgs.set(i: fi, value: inferred[fi]) }
-            fi += 1U64
+        for value in fullArgs {
+            if value != 0U64 && value >= self.arena.typeCount() { return <Result.Err error=self.diagnosticAt(offset: f.defOffset, msg: "selected method binder is outside the type arena") /> }
+        }
+        // Complete only missing declaration slots from the shared prepared
+        // argument reader. Already retained/receiver/proof values are fixed;
+        // final consumers do not reopen argument inference for a complete map.
+        if f.typeParams.count() != 0U64 && !self.fnArgsAllResolved(args: fullArgs) {
+            val partial = try self.withLexicalSelfBinding(f: f, environment: <InstanceEnvironment params=self.copyFuncBinds(binds: f.typeParams) args=fullArgs receiverRef=semanticReceiver proof=proof />)
+            mut val knownParams: Array[Bind] = []
+            mut val knownValues: Array[U64] = []
+            for index in 0U64..<partial.params.count() {
+                if index < partial.args.count() && partial.args[index] != 0U64 {
+                    knownParams.append(partial.params[index])
+                    knownValues.append(partial.args[index])
+                }
+            }
+            val known = <InstanceEnvironment params=knownParams args=knownValues receiverRef=semanticReceiver proof=proof />
+            val item = try self.finalMethodItemRef(f: f, receiverRef: semanticReceiver)
+            mut val types: Array[U64] = []
+            for index in 0U64..<f.params.count() {
+                types.append(try self.groundTermForBody(ref: self.funcParamAt(params: f.params, index: index).ty, environment: known, selfRef: semanticReceiver, itemRef: item))
+            }
+            // Signature Self/projections are already interpreted. A second
+            // receiver substitution could change a caller-owned symbolic Self.
+            fullArgs = try self.inferPreparedCallTypeArguments(f: f, args: args, parameterTypes: types, initialValues: fullArgs)
         }
         // This is a declaration-time semantic query as well as a concrete
         // codegen query.  A receiver such as `Box[T_outer]` supplies a fully
@@ -308,13 +326,17 @@ pub impl Comp {
                 if supplied >= args.len { continue }
                 val expression = self.argAt(args: args, index: supplied).expr
                 if self.expressionNeedsTypeContext(exprId: expression, allowPartialFunction: true) { continue }
+                // A prepared whole-Self operand may still contain an unfinished
+                // nested result. Its foreign slots are not a receiver equation.
+                // Raw structural observations keep their existing path.
+                if self.hasSemanticExprTypeFact(exprId: expression) && (try self.argumentRequiresResultContext(exprId: expression)) { continue }
                 val receiver = try self.inferenceArgumentType(exprId: expression)
                 if receiver == 0U64 { continue }
                 val matched = try self.methodReceiverEnvironment(f: f, instRef: receiver, sourceMatch: true)
                 if matched.conformIdx != 0U64 { return <Result.Ok value=receiver /> }
             }
         }
-        val inferred = (try self.inferFnArgs(f: f, args: args))
+        val inferred = (try self.inferPreparedCallTypeArguments(f: f, args: args, selfRef: f.recvTy))
         if inferred.count() != f.typeParams.count() || !self.fnArgsAllResolved(args: inferred) { return <Result.Ok value=0U64 />}
         return <Result.Ok value=self.groundTermInEnvironment(ref: f.recvTy, params: self.copyFuncBinds(binds: f.typeParams), values: inferred) />
     }

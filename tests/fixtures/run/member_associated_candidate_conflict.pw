@@ -1,0 +1,9 @@
+use @Std/Io only { print }
+struct Box[A] { val item: A }
+impl[A] Box[A] {
+    assoc fn choose[T](kind: Bool, value: Self, left: T, right: T) -> I64 { return 1I64 }
+    assoc fn choose(kind: I64, value: Self, left: I64, right: Bool) -> I64 { return 2I64 }
+}
+fn main() {
+    print(Box.choose(kind: 0I64, value: <Box item=1I64 />, left: 1I64, right: true))
+}

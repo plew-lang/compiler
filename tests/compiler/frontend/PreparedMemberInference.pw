@@ -1,0 +1,41 @@
+// Prepared nested results cannot bind their foreign slots into a member's map.
+use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use ../../../src/SourceAccess only { SourceAccess }
+use ../../../src/Ir only { CallTemplateKind }
+use ../../../src/Diag only { emitDiagnostic }
+use @Std/Io only { print }
+fn checkFile(path: String, functionName: String, concrete: Bool) {
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.File path=path />, sources: <SourceAccess stdRoot="std/".bytes() />).unwrap()
+    val name = compiler.internBytes(s: functionName)
+    val owner = compiler.arena.firstFunctionNamed(nameId: name.nameId)
+    match compiler.prepareLexicalBody(fnIdx: owner) {
+        Result.Ok(value: _) => {}
+        Result.Err(error: val error) => { emitDiagnostic(diagnostic: error) panic(error.message()) }
+    }
+    mut val checked = 0U64
+    for index in 0U64..<compiler.callTemplateCount() {
+        val template = compiler.callTemplateAt(index: index)
+        if template.siteKey.ownerFnIdx != owner { continue }
+        match template.kind {
+            CallTemplateKind.Direct(callee: val callee, receiver: _, args: _, calleeTypeArgs: val arguments, proofId: _) => {
+                val function = compiler.arena.functionAt(index: callee)
+                compiler.checkCallTemplateTypeArguments(arguments: arguments, parameterCount: function.typeParams.count(), offset: function.defOffset).unwrap()
+                if concrete {
+                    for value in compiler.callTemplateTypeArgs(range: arguments) {
+                        if !compiler.arena.typeIsClosed(ref: value) { panic("member substitution retained a foreign unfinished binder") }
+                    }
+                }
+                checked += 1U64
+            }
+            _ => {}
+        }
+    }
+    if checked == 0U64 { panic("missing prepared member calls") }
+}
+fn main() {
+    checkFile(path: "tests/fixtures/run/member_associated_candidate_conflict.pw", functionName: "main", concrete: true)
+    checkFile(path: "tests/fixtures/run/member_nested_constructor_context.pw", functionName: "main", concrete: true)
+    checkFile(path: "tests/fixtures/run/member_symbolic_argument_context.pw", functionName: "invoke", concrete: false)
+    print("prepared member inference preserves child and caller binder ownership")
+}

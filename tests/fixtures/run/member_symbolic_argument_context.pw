@@ -1,0 +1,14 @@
+use @Std/Io only { print }
+struct Marker {}
+impl Marker { fn produce[T]() -> Optional[T] { return <Optional.None /> } }
+struct Box[T] { val item: T }
+impl[T] Box[T] { fn consume(value: Optional[T]) -> I64 { return 11I64 } }
+fn invoke[T](value: T) {
+    val box = <Box item=value />
+    box.consume(value: <Marker />.produce())
+}
+fn main() {
+    invoke(value: 3I64)
+    invoke(value: "text")
+    print("symbolic argument context")
+}
