@@ -1921,8 +1921,9 @@ impl Comp {
                 if callee >= self.arena.functionCount() { return <Result.Ok value=<Optional.None /> /> }
                 val function = self.arena.functionAt(index: callee)
                 if function.typeParams.count() == 0U64 || typeArgs.len > function.typeParams.count() { return <Result.Ok value=<Optional.None /> /> }
+                if !self.validCallResultArguments(range: typeArgs, parameterCount: function.typeParams.count()) { return <Result.Ok value=<Optional.None /> /> }
                 val current: Array[U64] = self.callTemplateTypeArgs(range: typeArgs)
-                if !self.validCallResultArguments(range: typeArgs, parameterCount: function.typeParams.count()) || typeArgs.len != current.count() { return <Result.Ok value=<Optional.None /> /> }
+                if typeArgs.len != current.count() { return <Result.Ok value=<Optional.None /> /> }
                 if current.count() == function.typeParams.count() && self.fnArgsAllResolved(args: current) { return <Result.Ok value=<Optional.None /> /> }
                 // Self in a callable result is a receiver recipe. Expose its
                 // lexical pattern before matching the callee's binders; it
@@ -1955,8 +1956,9 @@ impl Comp {
                     StaticMemberResolution.Provided(proof: _, traitIdx: _, callee: val callee) => { give self.arena.functionAt(index: callee) }
                     StaticMemberResolution.Missing => { return <Result.Ok value=<Optional.None /> /> }
                 }
+                if !self.validCallResultArguments(range: typeArgs, parameterCount: function.typeParams.count()) { return <Result.Ok value=<Optional.None /> /> }
                 val current = self.callTemplateTypeArgs(range: typeArgs)
-                if !self.validCallResultArguments(range: typeArgs, parameterCount: function.typeParams.count()) || typeArgs.len != current.count() { return <Result.Ok value=<Optional.None /> /> }
+                if typeArgs.len != current.count() { return <Result.Ok value=<Optional.None /> /> }
                 if function.typeParams.count() == 0U64 || (current.count() == function.typeParams.count() && self.fnArgsAllResolved(args: current)) { return <Result.Ok value=<Optional.None /> /> }
                 mut val pattern = 0U64
                 mut val proof = <StaticConformanceProof.Missing />
@@ -2502,7 +2504,7 @@ pub impl Comp {
         if expected.hasDecl && expected.args.len > 0U64 && !expected.hasTopLevelView() {
             if writtenTerm != 0U64 && writtenTerm < self.arena.typeCount() {
                 val written = self.arena.typeTermAt(index: writtenTerm)
-                acceptsContext = written.args.len == 0U64 && written.hasDecl && written.declOffset == expected.declOffset && !written.hasTopLevelView()
+                acceptsContext = written.hasDecl && written.declOffset == expected.declOffset && !written.hasTopLevelView() && (written.args.len == 0U64 || (try self.contextualConstructionArgument(exprId: exprId)))
             } else if isEnum {
                 // An enum constructor without written arguments has
                 // no AST TypeRef. Its selected aggregate declaration

@@ -567,12 +567,9 @@ impl Comp {
     // An unbound callee variable can still receive a numeric expectation from
     // the call's result context. A rigid caller parameter cannot. A known
     // nonnumeric constructor remains impossible regardless of its arguments.
-    inout fn numericContextHasInferenceHole(expected: U64, parameters: FuncBindRange, values: Array[U64]) -> Bool {
+    inout fn callArgumentHasRootInferenceHole(expected: U64, parameters: FuncBindRange, values: Array[U64]) -> Bool {
         if self.bareInferenceParamId(ref: expected) == 0U64 && !self.arena.typeTermAt(index: expected).isProjection() { return false }
-        for index in 0U64..<parameters.count() {
-            if values[index] == 0U64 && self.typeTermContainsParameter(ref: expected, parameter: self.funcBindAt(binds: parameters, index: index).paramId) { return true }
-        }
-        return false
+        return self.callArgumentHasInferenceHole(expected: expected, parameters: parameters, values: values)
     }
 
     // Observe an unfinished value, never reconstruct a lexical scope or replace
@@ -678,35 +675,56 @@ impl Comp {
         }
     }
 
+    inout fn contextualConstructionArgument(exprId: U64) -> Result[Bool, CompileDiagnostic] {
+        match self.arena.exprs[exprId] {
+            Expr.Make(typeStart: _, typeLen: _, variantStart: _, variantLen: _, isEnum: _, ty: val written, fields: val fields) => {
+                if self.partialConstructionArgument(exprId: exprId) { return <Result.Ok value=true /> }
+                // Explicit constructor arguments remain fixed even if a child
+                // still needs validation. Inferred children, unlike a written
+                // specialization, may expose unfinished value recipes.
+                if self.authoredExpressionTypeSlots.contains(key: exprId) { return <Result.Ok value=false /> }
+                for index in 0U64..<fields.len {
+                    if (try self.argumentRequiresResultContext(exprId: self.makeFieldAt(fields: fields, index: index).value)) { return <Result.Ok value=true /> }
+                }
+            }
+            _ => {}
+        }
+        return <Result.Ok value=false />
+    }
+
     inout fn incompleteArgumentCall(exprId: U64) -> Result[Optional[CallTemplate], CompileDiagnostic] {
         match self.arena.exprs[exprId] {
             Expr.Call(nameStart: _, nameLen: _, args: _) | Expr.Method(recv: _, nameStart: _, nameLen: _, args: _) | Expr.ExtMethod(recv: _, source: _, nameStart: _, nameLen: _, args: _) => {}
             _ => { return <Result.Ok value=<Optional.None /> /> }
         }
-        // A closed declaration result has no binder that a result context
-        // could complete, even if an unrelated callee slot is unresolved.
-        val term = self.semanticExprTerm(exprId: exprId)
-        if term != 0U64 && term < self.arena.typeCount() && self.arena.typeIsClosed(ref: term) { return <Result.Ok value=<Optional.None /> /> }
         val site = try self.templateCallSiteKey(fnIdx: self.cur.checkFn, exprId: exprId)
         val index = self.callTemplateIndex(siteKey: site)
         if index >= self.callTemplateLocations.count() { return <Result.Ok value=<Optional.None /> /> }
         val template = self.callTemplateAt(index: index)
-        val state = try self.selectedCallParameterStateWithOrigin(template: template, exprId: exprId, origin: <Optional.Some v=index />)
-        match state {
-            SourceCallParameterState.Incomplete(source: _) => {
-                match template.kind {
-                    CallTemplateKind.Direct(callee: _, receiver: _, args: _, calleeTypeArgs: _, proofId: _) | CallTemplateKind.StaticMethod(receiver: _, args: _, resolution: _, methodTypeArgs: _, resultTerm: _) => { return <Result.Ok value=<Optional.Some v=template /> /> }
-                    _ => {}
-                }
+        val selected = match template.kind {
+            CallTemplateKind.Direct(callee: val callee, receiver: _, args: _, calleeTypeArgs: val range, proofId: _) => {
+                if callee >= self.arena.functionCount() { return <Result.Err error=self.diagnosticAt(offset: site.originStart, msg: "internal error: selected call has no declaration") /> }
+                give (count: self.arena.functionAt(index: callee).typeParams.count(), range: range)
             }
-            _ => {}
+            CallTemplateKind.StaticMethod(receiver: _, args: _, resolution: val resolution, methodTypeArgs: val range, resultTerm: _) => {
+                val declaration = try self.selectedStaticCallDeclaration(resolution: resolution, offset: site.originStart)
+                give (count: declaration.typeParams.count(), range: range)
+            }
+            _ => { return <Result.Ok value=<Optional.None /> /> }
+        }
+        // A semantic fallback term can be a closed-looking generic head.
+        // Read readiness from the saved substitution, not that type spelling.
+        // This requires neither a Source grant nor a parameter signature copy.
+        if !self.validCallResultArguments(range: selected.range, parameterCount: selected.count) { return <Result.Ok value=<Optional.None /> /> }
+        for slot in 0U64..<selected.range.len {
+            if self.callTemplateTypeArgumentPool[selected.range.start + slot] == 0U64 { return <Result.Ok value=<Optional.Some v=template /> /> }
         }
         return <Result.Ok value=<Optional.None /> />
     }
 
     inout fn argumentRequiresResultContext(exprId: U64) -> Result[Bool, CompileDiagnostic] {
         if exprId >= self.arena.exprs.count() { return <Result.Ok value=false /> }
-        if self.semanticExprTerm(exprId: exprId) == 0U64 || self.partialConstructionArgument(exprId: exprId) { return <Result.Ok value=true /> }
+        if self.semanticExprTerm(exprId: exprId) == 0U64 || (try self.contextualConstructionArgument(exprId: exprId)) { return <Result.Ok value=true /> }
         if (try self.incompleteArgumentCall(exprId: exprId)).isSome() { return <Result.Ok value=true /> }
         match self.arena.exprs[exprId] {
             Expr.Block(val body, offset: _) | Expr.Sequence(val body) => { return self.argumentBlockRequiresResultContext(blockId: body) }
@@ -752,7 +770,7 @@ impl Comp {
         if self.contextualNumericArgument(exprId: expression) {
             val term = self.arena.typeTermAt(index: expected)
             if self.isFloatType(start: term.nameStart, len: term.nameLen) || ((try self.argIsUntypedIntLit(argExpr: expression)) && self.isIntType(start: term.nameStart, len: term.nameLen)) { return <Result.Ok value=<TypeArgumentMatch.Matched /> /> }
-            if self.numericContextHasInferenceHole(expected: expected, parameters: parameters, values: values) { return <Result.Ok value=<TypeArgumentMatch.Deferred /> /> }
+            if self.callArgumentHasRootInferenceHole(expected: expected, parameters: parameters, values: values) { return <Result.Ok value=<TypeArgumentMatch.Deferred /> /> }
             return <Result.Ok value=<TypeArgumentMatch.Mismatch /> />
         }
         if (try self.argumentRequiresResultContext(exprId: expression)) {
@@ -777,9 +795,9 @@ impl Comp {
                     }
                     return <Result.Ok value=if pending { give <TypeArgumentMatch.Deferred /> } else { give <TypeArgumentMatch.Matched /> } />
                 }
-                Expr.Make(typeStart: _, typeLen: _, variantStart: val variantStart, variantLen: val variantLen, isEnum: val isEnum, ty: _, fields: val fields) => {
-                    if self.partialConstructionArgument(exprId: expression) {
-                        if self.numericContextHasInferenceHole(expected: expected, parameters: parameters, values: values) { return <Result.Ok value=<TypeArgumentMatch.Deferred /> /> }
+                Expr.Make(typeStart: _, typeLen: _, variantStart: val variantStart, variantLen: val variantLen, isEnum: val isEnum, ty: val written, fields: val fields) => {
+                    if (try self.contextualConstructionArgument(exprId: expression)) {
+                        if self.callArgumentHasRootInferenceHole(expected: expected, parameters: parameters, values: values) { return <Result.Ok value=<TypeArgumentMatch.Deferred /> /> }
                         if !(try self.makeAcceptsExpectedTerm(exprId: expression, writtenTerm: self.semanticExprTerm(exprId: expression), isEnum: isEnum, fields: fields, expectedTerm: expected)) { return <Result.Ok value=<TypeArgumentMatch.Mismatch /> /> }
                         mut val pending = false
                         for index in 0U64..<fields.len {
@@ -789,6 +807,12 @@ impl Comp {
                             val matched = try self.matchPreparedCallArgument(expression: field.value, signature: term, parameters: parameters, receiver: receiver, values: inout values)
                             match matched { TypeArgumentMatch.Mismatch | TypeArgumentMatch.Conflict => { return <Result.Ok value=matched /> } _ => {} }
                             pending = pending || (match matched { TypeArgumentMatch.Deferred => true _ => false })
+                        }
+                        val retained = try self.matchPreparedConstructionTerm(signature: signature, actual: self.semanticExprTerm(exprId: expression), parameters: parameters, receiver: receiver, values: inout values)
+                        match retained {
+                            TypeArgumentMatch.Mismatch | TypeArgumentMatch.Conflict => { return <Result.Ok value=retained /> }
+                            TypeArgumentMatch.Deferred => { pending = true }
+                            _ => {}
                         }
                         return <Result.Ok value=if pending { give <TypeArgumentMatch.Deferred /> } else { give <TypeArgumentMatch.Matched /> } />
                     }
@@ -808,14 +832,56 @@ impl Comp {
                 Optional.None => {}
             }
         }
-        val actual = try self.inferenceArgumentType(exprId: expression)
+        return self.matchPreparedArgumentTerm(signature: signature, actual: (try self.inferenceArgumentType(exprId: expression)), parameters: parameters, receiver: receiver, values: inout values)
+    }
+
+    inout fn matchPreparedArgumentTerm(signature: U64, actual: U64, parameters: FuncBindRange, receiver: U64, values: inout Array[U64]) -> Result[TypeArgumentMatch, CompileDiagnostic] {
         mut val candidate = values
         match self.matchCallTypeArguments(pattern: signature, argument: actual, params: parameters, values: inout candidate) {
             TypeArgumentMatch.Matched | TypeArgumentMatch.Deferred => { values = candidate }
             TypeArgumentMatch.Mismatch => {}
             TypeArgumentMatch.Conflict => { return <Result.Ok value=<TypeArgumentMatch.Conflict /> /> }
         }
-        expected = try self.groundKnownCallTypeArguments(ref: signature, params: parameters, values: values, receiver: receiver)
+        val expected = try self.groundKnownCallTypeArguments(ref: signature, params: parameters, values: values, receiver: receiver)
         return <Result.Ok value=if (try self.typesCompatible(expected: expected, inferred: actual)) { give <TypeArgumentMatch.Matched /> } else { give <TypeArgumentMatch.Mismatch /> } />
     }
+    // A contextual construction may contain omitted nominal arguments below
+    // an otherwise present argument list. Known siblings and phantom slots
+    // remain ordinary type constraints; only actual omitted nodes are holes.
+    inout fn preparedConstructionTermHasHoles(ref: U64) -> Bool {
+        if ref == 0U64 { return true }
+        if ref >= self.arena.typeCount() { return false }
+        val term = self.arena.typeTermAt(index: ref)
+        if term.hasDecl && !term.isAny && !term.isRecord {
+            val structure = self.structIndexForType(ref: ref)
+            if structure < self.arena.structCount() && term.args.len < self.arena.structAt(index: structure).typeParams.count() { return true }
+            val enumeration = self.enumIndexForType(ref: ref)
+            if enumeration < self.arena.enumCount() && term.args.len < self.arena.enumAt(index: enumeration).typeParams.count() { return true }
+        }
+        for index in 0U64..<self.typeTermRefChildCount(ref: ref) {
+            if self.preparedConstructionTermHasHoles(ref: self.typeTermRefChildRef(ref: ref, index: index)) { return true }
+        }
+        return false
+    }
+
+    inout fn matchPreparedConstructionTerm(signature: U64, actual: U64, parameters: FuncBindRange, receiver: U64, values: inout Array[U64]) -> Result[TypeArgumentMatch, CompileDiagnostic] {
+        if !self.preparedConstructionTermHasHoles(ref: actual) { return self.matchPreparedArgumentTerm(signature: signature, actual: actual, parameters: parameters, receiver: receiver, values: inout values) }
+        val expected = try self.groundKnownCallTypeArguments(ref: signature, params: parameters, values: values, receiver: receiver)
+        if actual == 0U64 || self.callArgumentHasRootInferenceHole(expected: expected, parameters: parameters, values: values) { return <Result.Ok value=<TypeArgumentMatch.Deferred /> /> }
+        if !self.typeTermRefSameHead(a: actual, b: expected) { return <Result.Ok value=<TypeArgumentMatch.Mismatch /> /> }
+        val count = self.typeTermRefChildCount(ref: actual)
+        if count == 0U64 { return <Result.Ok value=<TypeArgumentMatch.Deferred /> /> }
+        if count != self.typeTermRefChildCount(ref: expected) { return <Result.Ok value=<TypeArgumentMatch.Mismatch /> /> }
+        mut val pending = false
+        for index in 0U64..<count {
+            val matched = try self.matchPreparedConstructionTerm(signature: self.typeTermRefChildRef(ref: expected, index: index), actual: self.typeTermRefChildRef(ref: actual, index: index), parameters: parameters, receiver: receiver, values: inout values)
+            match matched {
+                TypeArgumentMatch.Mismatch | TypeArgumentMatch.Conflict => { return <Result.Ok value=matched /> }
+                TypeArgumentMatch.Deferred => { pending = true }
+                _ => {}
+            }
+        }
+        return <Result.Ok value=if pending { give <TypeArgumentMatch.Deferred /> } else { give <TypeArgumentMatch.Matched /> } />
+    }
+
 }

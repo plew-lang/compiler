@@ -1,5 +1,8 @@
 use @Std/Io only { print }
 struct Box[T] { val value: T }
+struct Phantom[A, B] { val value: A }
+fn phantom[T](value: Phantom[T, I64]) -> I64 { return 12I64 }
+fn nested(value: Box[Optional[I64]]) -> I64 { return accept(value: value.value) }
 fn accept(value: Optional[I64]) -> I64 {
     return match value { Optional.Some(val v) => v, Optional.None => 0I64 }
 }
@@ -20,4 +23,7 @@ fn main() {
     print(reversed(witness: 1I64, value: make()))
     val marker = <Marker />
     print(accept(value: marker#Extra.make()))
+    print(nested(value: <Box value=<Optional.None /> />))
+    print(phantom(value: <Phantom value=1I32 />))
+    print(accept(value: match true { true => <Optional.None />, false => <Optional.Some v=13 /> }))
 }

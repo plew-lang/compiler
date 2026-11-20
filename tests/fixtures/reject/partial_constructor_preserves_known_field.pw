@@ -1,0 +1,3 @@
+struct Pair[A, B] { val first: A val second: B }
+fn accept(value: Pair[Bool, Optional[I64]]) {}
+fn main() { accept(value: <Pair first=1I64 second=<Optional.None /> />) }

@@ -867,7 +867,14 @@ pub impl Comp {
             val supplied = self.argIndexForParam(params: f.params, args: args, paramIdx: index)
             if supplied < args.len {
                 val expression = self.argAt(args: args, index: supplied).expr
-                if !(try self.argumentRequiresResultContext(exprId: expression)) {
+                if (try self.argumentRequiresResultContext(exprId: expression)) {
+                    mut val candidate = out
+                    match (try self.matchPreparedCallArgument(expression: expression, signature: parameter.ty, parameters: f.typeParams, receiver: 0U64, values: inout candidate)) {
+                        TypeArgumentMatch.Matched | TypeArgumentMatch.Deferred => { out = candidate }
+                        TypeArgumentMatch.Conflict => { return <Result.Err error=self.typeArgumentConflictDiagnostic(offset: self.exprOffset(id: expression)) /> }
+                        TypeArgumentMatch.Mismatch => {}
+                    }
+                } else {
                     val argument = self.parametricCallArgumentTerm(exprId: expression)
                     out = try self.extendCallTypeArguments(pattern: parameter.ty, argument: argument, params: f.typeParams, values: out, offset: self.exprOffset(id: expression))
                 }
@@ -885,7 +892,7 @@ pub impl Comp {
     // body is verified and sealed; consumers cannot treat an early row as proof.
     inout fn freeCallParameterEnvironment(f: Func, args: ArgRange) -> Result[InstanceEnvironment, CompileDiagnostic] {
         if f.typeParams.count() == 0U64 { return <Result.Ok value=<InstanceEnvironment /> /> }
-        val inferred = try self.inferFnArgs(f: f, args: args)
+        val inferred = try self.inferRecordedFreeCallArgs(f: f, args: args)
         if !self.fnArgsAllResolved(args: inferred) { return <Result.Ok value=<InstanceEnvironment /> /> }
         return <Result.Ok value=<InstanceEnvironment params=self.copyFuncBinds(binds: f.typeParams) args=inferred /> />
     }
