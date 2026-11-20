@@ -265,6 +265,7 @@ pub impl Comp {
     // keeps method inference transactional and checks the complete parameter.
     inout fn callableParameterTypeMatchRank(function: Func, args: ArgRange, signatures: Array[U64], receiver: U64, initialValues: Array[U64]) -> Result[U64, CompileDiagnostic] {
         mut val values = initialValues
+        mut val numericContexts: Array[(signature: U64, integer: Bool)] = []
         mut val index = 0U64
         while index < args.len {
             val parameter = self.paramIndexForArg(params: function.params, args: args, argIdx: index)
@@ -278,7 +279,18 @@ pub impl Comp {
             } else {
                 if self.contextualNumericArgument(exprId: expression) {
                     val term = self.arena.typeTermAt(index: expected)
-                    if self.isFloatType(start: term.nameStart, len: term.nameLen) || ((try self.argIsUntypedIntLit(argExpr: expression)) && self.isIntType(start: term.nameStart, len: term.nameLen)) { index += 1U64 continue }
+                    if self.isFloatType(start: term.nameStart, len: term.nameLen) { index += 1U64 continue }
+                    val integer = try self.argIsUntypedIntLit(argExpr: expression)
+                    if integer && self.isIntType(start: term.nameStart, len: term.nameLen) { index += 1U64 continue }
+                    if function.typeParams.count() != 0U64 {
+                        // A literal supplies no independent substitution. Let
+                        // already-typed arguments complete this candidate map,
+                        // then validate the deferred expectation without typing
+                        // the literal under a guessed candidate environment.
+                        numericContexts.append((signature: signature, integer: integer))
+                        index += 1U64
+                        continue
+                    }
                 }
                 val actual = try self.inferenceArgumentType(exprId: expression)
                 mut val candidate = values
@@ -291,6 +303,12 @@ pub impl Comp {
                 if !(try self.typesCompatible(expected: expected, inferred: actual)) { return <Result.Ok value=1U64 /> }
             }
             index += 1U64
+        }
+        for context in numericContexts {
+            val expected = try self.groundKnownCallTypeArguments(ref: context.signature, params: function.typeParams, values: values, receiver: receiver)
+            if expected == 0U64 || expected >= self.arena.typeCount() { return <Result.Ok value=1U64 /> }
+            val term = self.arena.typeTermAt(index: expected)
+            if !self.isFloatType(start: term.nameStart, len: term.nameLen) && !(context.integer && self.isIntType(start: term.nameStart, len: term.nameLen)) && !self.numericContextHasInferenceHole(expected: expected, parameters: function.typeParams, values: values) { return <Result.Ok value=1U64 /> }
         }
         return <Result.Ok value=2U64 />
     }
@@ -571,6 +589,17 @@ pub impl Comp {
 // recording it under a candidate's expectation. A fixed caller binder remains
 // possible; a known non-Array constructor cannot provide an array context.
 impl Comp {
+    // An unbound callee variable can still receive a numeric expectation from
+    // the call's result context. A rigid caller parameter cannot. A known
+    // nonnumeric constructor remains impossible regardless of its arguments.
+    inout fn numericContextHasInferenceHole(expected: U64, parameters: FuncBindRange, values: Array[U64]) -> Bool {
+        if self.bareInferenceParamId(ref: expected) == 0U64 && !self.arena.typeTermAt(index: expected).isProjection() { return false }
+        for index in 0U64..<parameters.count() {
+            if values[index] == 0U64 && self.typeTermContainsParameter(ref: expected, parameter: self.funcBindAt(binds: parameters, index: index).paramId) { return true }
+        }
+        return false
+    }
+
     // Observe an unfinished value, never reconstruct a lexical scope or replace
     // its recorded type. The same answer drives applicability and ambiguity.
     inout fn contextualNumericArgument(exprId: U64, floatingLiterals: Bool = true) -> Bool {

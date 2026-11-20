@@ -1,0 +1,16 @@
+use @Std/Io only { print }
+fn same[T](first: T, second: T) -> I64 { return 9I64 }
+fn identity[T](value: T) -> T { return value }
+fn forward[T](first: T, second: T) -> I64 { return same(first: first, second: second) }
+fn main() {
+    print(same(first: 5, second: 6I64))
+    print(same(first: 5I64, second: 6))
+    print(forward(first: "one", second: "two"))
+    print(same(first: [], second: [1I64]))
+    val action: fn() -> I64 = fn() { return 1I64 }
+    print(same(first: action, second: action))
+    val direct: I64 = identity(value: 5)
+    val wrapped: I64 = identity(value: { give 6 })
+    print(direct)
+    print(wrapped)
+}

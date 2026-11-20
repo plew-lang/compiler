@@ -1,0 +1,4 @@
+struct Pair[A, B] { val first: A val second: B }
+fn pick[T](value: T, marker: I32, pair: Pair[T, I64]) {}
+fn pick[T](value: T, marker: I64, pair: Pair[I32, T]) {}
+fn main() { pick(value: 5, marker: 6, pair: <Pair[I32, I64] first=1I32 second=2I64 />) }

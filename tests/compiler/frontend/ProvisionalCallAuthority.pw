@@ -2,6 +2,33 @@ use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontendForRequests
 use ../../../src/SourceAccess only { SourceAccess }
 use ../../../src/Ir only { Expr, CachedCallee }
 use @Std/Io only { print }
+fn checkSelected() {
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.File path="tests/fixtures/run/generic_numeric_argument_context.pw" />, sources: <SourceAccess stdRoot="std/".bytes() />).unwrap()
+    val mainName = compiler.internBytes(s: "main")
+    val owner = compiler.arena.firstFunctionNamed(nameId: mainName.nameId)
+    compiler.prepareLexicalBody(fnIdx: owner).unwrap()
+    val name = compiler.internBytes(s: "same")
+    mut val selected = 0U64
+    for index in 0U64..<compiler.arena.exprs.count() {
+        match compiler.arena.exprs[index] {
+            Expr.Call(nameStart: val start, nameLen: val length, args: _) => {
+                if intern(c: inout compiler, start: start, len: length) == name.nameId {
+                    match compiler.typeCache.callee[index] {
+                        CachedCallee.Selected(callee: val callee) => {
+                            val function = compiler.arena.functionAt(index: callee)
+                            if function.nameId != name.nameId || function.hasRecv || function.isAssoc { panic("generic call lost its free declaration") }
+                            selected += 1U64
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    if selected != 4U64 { panic("successful numeric, array or closure arguments lost selected authority") }
+}
 fn main() {
     mut val compiler = <Comp />
     analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.File path="tests/fixtures/reject/diagnostic_candidate_argument_type_mismatch.pw" />, sources: <SourceAccess stdRoot="std/".bytes() />).unwrap()
@@ -35,5 +62,6 @@ fn main() {
             _ => { panic("diagnostic-only candidate published selected callee authority") }
         }
     }
+    checkSelected()
     print("diagnostic-only candidate does not publish a selected callable")
 }

@@ -252,7 +252,7 @@ pub impl Comp {
                 if self.lexicalValueBinding(start: start, len: len).isSome() { return <Result.Ok value=self.arena.functionCount() /> }
                 match (try self.resolvedFreeFunctionCall(id: id, nameStart: start, nameLen: len, args: args)) {
                     FreeCallLookup.Selected(function: val function) => { return <Result.Ok value=function /> }
-                    FreeCallLookup.NoCandidate | FreeCallLookup.CachedNonStatic => { return <Result.Ok value=self.arena.functionCount() /> }
+                    FreeCallLookup.DiagnosticCandidate(function: _) | FreeCallLookup.NoCandidate | FreeCallLookup.CachedNonStatic => { return <Result.Ok value=self.arena.functionCount() /> }
                 }
             }
             _ => {}
@@ -313,6 +313,7 @@ impl Comp {
         }
         val selected = match (try self.selectFreeFunction(nameStart: nameStart, nameLen: nameLen, args: args)) {
             FreeFunctionSelection.Selected(function: val function) => <FreeCallLookup.Selected function=function />
+            FreeFunctionSelection.DiagnosticCandidate(function: val function) => <FreeCallLookup.DiagnosticCandidate function=function />
             FreeFunctionSelection.NoCandidate => <FreeCallLookup.NoCandidate />
             FreeFunctionSelection.AmbiguousVisibleDeclarations => { return <Result.Err error=self.freeCallAmbiguityDiagnostic(expression: id, nameStart: nameStart, nameLen: nameLen, args: args) /> }
         }

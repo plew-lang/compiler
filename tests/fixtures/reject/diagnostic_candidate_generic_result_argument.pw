@@ -1,0 +1,2 @@
+fn make[T](flag: Bool) -> T { panic("stop") }
+fn main() { val value: I64 = make(flag: 5) }

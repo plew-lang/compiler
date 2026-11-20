@@ -1,0 +1,11 @@
+use @Std/Io only { print }
+fn forward[T](value: T, marker: I32, values: Array[T]) -> I64 { return 32I64 }
+fn forward[T](value: T, marker: I64, values: T) -> I64 { return 64I64 }
+fn reverse[T](value: T, marker: I64, values: T) -> I64 { return 64I64 }
+fn reverse[T](value: T, marker: I32, values: Array[T]) -> I64 { return 32I64 }
+fn main() {
+    print(forward(value: 5, marker: 6, values: [1I64]))
+    print(reverse(value: 5, marker: 6, values: [1I64]))
+    print(forward(value: { give 5 }, marker: 6, values: [1I64]))
+    print(reverse(value: { give 5 }, marker: 6, values: [1I64]))
+}

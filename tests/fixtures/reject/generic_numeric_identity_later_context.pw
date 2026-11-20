@@ -1,0 +1,4 @@
+fn identity[T](value: T) -> T { return value }
+fn accept(value: I64) {}
+fn main() { val x = identity(value: 5)
+ accept(value: x) }

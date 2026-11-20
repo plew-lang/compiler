@@ -739,6 +739,7 @@ pub impl Comp {
                     }
                     fi = match (try self.resolvedFreeFunctionCall(id: id, nameStart: nameStart, nameLen: nameLen, args: args)) {
                         FreeCallLookup.Selected(function: val function) => function
+                        FreeCallLookup.DiagnosticCandidate(function: _) => { return <Result.Ok value=scalarInfo() /> }
                         FreeCallLookup.NoCandidate | FreeCallLookup.CachedNonStatic => self.arena.functionCount()
                     }
                 }

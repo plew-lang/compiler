@@ -296,9 +296,11 @@ pub impl Comp {
         return candidates
     }
 
+    // Raw diagnostic observation, including selector-only candidates. Source
+    // operations consume the typed selection outcome instead of this index.
     inout fn findFunc(nameStart: U64, nameLen: U64, args: ArgRange) -> Result[U64, CompileDiagnostic] {
         return match (try self.selectFreeFunction(nameStart: nameStart, nameLen: nameLen, args: args)) {
-            FreeFunctionSelection.Selected(function: val function) => <Result.Ok value=function />
+            FreeFunctionSelection.Selected(function: val function) | FreeFunctionSelection.DiagnosticCandidate(function: val function) => <Result.Ok value=function />
             FreeFunctionSelection.NoCandidate => <Result.Ok value=self.arena.functionCount() />
             FreeFunctionSelection.AmbiguousVisibleDeclarations => <Result.Err error=self.diagnosticAt(offset: nameStart, msg: "ambiguous call: multiple visible function declarations match the argument labels and types") />
         }
@@ -358,7 +360,7 @@ impl Comp {
             }
             return <Result.Ok value=<FreeFunctionSelection.Selected function=typeMatch /> />
         }
-        if firstLabel != self.arena.functionCount() { return <Result.Ok value=<FreeFunctionSelection.Selected function=firstLabel /> /> }
+        if firstLabel != self.arena.functionCount() { return <Result.Ok value=<FreeFunctionSelection.DiagnosticCandidate function=firstLabel /> /> }
         // gen mode (spec/16): the synthesized derive-runner harness calls force-loaded std
         // free fns (`parseItem`/`write`/…) that the gen'd entry file does not `use` —
         // force-load is NOT use, so scoped resolution above found no visible candidate
@@ -389,7 +391,7 @@ impl Comp {
                 }
                 gj = self.decls.nextCallableNamed(index: gj)
             }
-            if gLabel < self.arena.functionCount() { return <Result.Ok value=<FreeFunctionSelection.Selected function=gLabel /> /> }
+            if gLabel < self.arena.functionCount() { return <Result.Ok value=<FreeFunctionSelection.DiagnosticCandidate function=gLabel /> /> }
             return <Result.Ok value=<FreeFunctionSelection.NoCandidate /> />
         }
         return <Result.Ok value=<FreeFunctionSelection.NoCandidate /> />

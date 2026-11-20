@@ -1,0 +1,2 @@
+fn same[T](first: T, second: T) {}
+fn main() { same(first: 5I32, second: 6I64) }

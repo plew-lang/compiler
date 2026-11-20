@@ -3,15 +3,15 @@ use ../../../src/SourceAccess only { SourceAccess }
 use ../../../src/Ir only { Expr, CachedCallee }
 use @Std/Io only { print }
 
-fn checkAmbiguity(path: String) {
+fn checkAmbiguity(path: String, name: String = "choose") {
     mut val compiler = <Comp />
     analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.File path=path />, sources: <SourceAccess stdRoot="std/".bytes() />).unwrap()
-    val name = compiler.internBytes(s: "choose")
+    val selectedName = compiler.internBytes(s: name)
     mut val call = compiler.arena.exprs.count()
     for index in 0U64..<compiler.arena.exprs.count() {
         match compiler.arena.exprs[index] {
             Expr.Call(nameStart: val start, nameLen: val length, args: val arguments) => {
-                if intern(c: inout compiler, start: start, len: length) == name.nameId {
+                if intern(c: inout compiler, start: start, len: length) == selectedName.nameId {
                     call = index
                     val operand = compiler.argAt(args: arguments, index: 0U64).expr
                     val candidates = compiler.visibleFreeFunctions(nameStart: start, nameLen: length)
@@ -50,6 +50,7 @@ fn main() {
     checkAmbiguity(path: "tests/fixtures/reject/numeric_block_overload_ambiguous.pw")
     checkAmbiguity(path: "tests/fixtures/reject/numeric_if_overload_ambiguous.pw")
     checkAmbiguity(path: "tests/fixtures/reject/numeric_match_overload_ambiguous.pw")
+    checkAmbiguity(path: "tests/fixtures/reject/generic_numeric_candidate_substitutions_ambiguous.pw", name: "pick")
     mut val compiler = <Comp />
     analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.File path="tests/fixtures/run/numeric_wrapper_overload_context.pw" />, sources: <SourceAccess stdRoot="std/".bytes() />).unwrap()
     val name = compiler.internBytes(s: "main")

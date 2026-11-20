@@ -132,25 +132,41 @@ pub impl Comp {
             }
             SourceCallParameterState.Unselected | SourceCallParameterState.NotApplicable => { return <Result.Ok value=false /> }
         }
-        if !self.paramsLabelsOk(params: selected.function.params, args: args) {
+        try self.checkWrittenCallArguments(exprId: exprId, function: selected.function, args: args, signature: selected.signature)
+        return <Result.Ok value=true />
+    }
+
+}
+
+impl Comp {
+    // Validation is independent of publication of a selected CallTemplate.
+    inout fn checkWrittenCallArguments(exprId: U64, function: Func, args: ArgRange, signature: SourceCallSignature) -> Result[(), CompileDiagnostic] {
+        if !self.paramsLabelsOk(params: function.params, args: args) {
             return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "selected call arguments do not match its parameter labels") />
         }
         mut val index = 0U64
         while index < args.len {
-            val position = self.paramIndexForArg(params: selected.function.params, args: args, argIdx: index)
-            val parameter = self.funcParamAt(params: selected.function.params, index: position)
+            val position = self.paramIndexForArg(params: function.params, args: args, argIdx: index)
+            val parameter = self.funcParamAt(params: function.params, index: position)
             val argument = self.argAt(args: args, index: index)
             try self.checkArgInoutMode(p: parameter, arg: argument)
-            val expected = try self.sourceCallArgumentType(parameter: parameter, position: position, signature: selected.signature)
+            val expected = try self.sourceCallArgumentType(parameter: parameter, position: position, signature: signature)
             if expected == 0U64 { return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: selected call has no parameter type") /> }
-            val type = self.typeInfoOfRef(ref: expected)
-            try self.checkLitSpanCtx(id: argument.expr, tyStart: type.nameStart, tyLen: type.nameLen, isArray: type.kind == 3, ctxRef: expected)
-            try self.tcCheckValue(expectedRef: expected, valueExpr: argument.expr, pos: "arg")
+            try self.checkWrittenCallValue(expression: argument.expr, expected: expected)
             index += 1U64
         }
-        return <Result.Ok value=true />
+        return <Result.Ok value=() />
     }
 
+    inout fn checkWrittenCallValue(expression: U64, expected: U64) -> Result[(), CompileDiagnostic] {
+        val type = self.typeInfoOfRef(ref: expected)
+        try self.checkLitSpanCtx(id: expression, tyStart: type.nameStart, tyLen: type.nameLen, isArray: type.kind == 3, ctxRef: expected)
+        return self.tcCheckValue(expectedRef: expected, valueExpr: expression, pos: "arg")
+    }
+
+}
+
+pub impl Comp {
     // Generic bodies are verified against their declared trait bounds.  This
     // deliberately returns a requirement signature, never a concrete witness:
     // the latter belongs to Mono after T is instantiated.  Keeping the two

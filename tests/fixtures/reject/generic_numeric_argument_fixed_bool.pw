@@ -1,0 +1,2 @@
+fn take[T](flag: Bool, value: T) {}
+fn main() { take(flag: 5, value: 6I64) }

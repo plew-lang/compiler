@@ -219,7 +219,11 @@ View qualification does not discard unrelated base members. Extension tags add p
 
 Lookup may filter by facts intrinsic to its domain, such as binding kind, visibility, explicit qualification, and member surface. Call checking owns label matching, concrete argument-type applicability, generic inference, and the specification's selection order. Bounds validate the selected generic operation; they must not become an unadvertised specialization ranking.
 
-Preliminary context for an omitted type may use candidate information only under the same visible candidate rules. A contextual hint is not a selected callable. If type overloads remain ambiguous, lowering must not guess one to make a child expression type-check. Once checking selects an operation, it publishes its declaration/requirement identity, signature, environment, and evidence for instantiation and Mid consumers.
+Preliminary context for an omitted type may use candidate information only under the same visible candidate rules. A contextual hint is not a selected callable.
+
+A label-only diagnostic candidate remains a distinct lookup outcome: it cannot populate a selected-callee cache, supply a call result, or publish a call descriptor. Its tentative argument context exists only for diagnostics and is not admitted expected-type evidence. Passing a diagnostic check does not promote that outcome; normal applicability must establish the operation.
+
+If type overloads remain ambiguous, lowering must not guess one to make a child expression type-check. Once checking selects an operation, it publishes its declaration/requirement identity, signature, environment, and evidence for instantiation and Mid consumers.
 
 Downstream readers cannot recover a missing required selection by rerunning name lookup with a different environment. Legitimate initial concrete witness determination remains separate from source reselection. The [publication contract](compiler-state.md) distinguishes a missing required fact, an optional absent binding, a failed request, and a complete abstract result.
 
