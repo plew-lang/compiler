@@ -626,13 +626,15 @@ pub impl Comp {
             return <Result.Ok value=() />
         }
         val args: ArgRange = self.indexCallArgs(key: key)
-        mut val callee: U64 = self.arena.functionCount()
+        mut val selection: MemberCallLookup = <MemberCallLookup.NoCandidate />
         if receiverTerm != 0U64 {
-            callee = (try self.resolveMethodForResolvedReceiver(recv: base, surfaceRef: receiverTerm, sourceId: 0U64, sourceOwner: 0U64, nameStart: name.nameStart, nameLen: name.nameLen, args: args, useOffset: self.exprOffset(id: exprId)))
+            selection = (try self.resolveMethodForResolvedReceiverWithOrigin(recv: base, surfaceRef: receiverTerm, sourceId: 0U64, sourceOwner: 0U64, nameStart: name.nameStart, nameLen: name.nameLen, args: args, useOffset: self.exprOffset(id: exprId)))
         }
-        if callee >= self.arena.functionCount() {
-            callee = (try self.resolveMethodFinalForType(recv: base, receiverType: receiverType, nameStart: name.nameStart, nameLen: name.nameLen, args: args))
+        if self.memberLookupIsMissing(selection: selection) {
+            selection = (try self.resolveMethodFinalForTypeWithOrigin(recv: base, receiverType: receiverType, nameStart: name.nameStart, nameLen: name.nameLen, args: args))
         }
+        try self.recordMemberLookupArguments(selection: selection, receiverTerm: receiverTerm, args: args, chainHoleRef: 0U64, exprId: exprId)
+        val callee = self.selectedMemberFunction(selection: selection)
         try self.recordParametricMethodCall(exprId: exprId, callee: callee, receiverSource: (try self.directReceiverTemplateForExpr(exprId: base)), receiverTerm: receiverTerm, args: args)
         return <Result.Ok value=() />
     }
@@ -1192,7 +1194,7 @@ impl Comp {
         return selected.hasDecl && written.hasDecl && selected.declOffset == written.declOffset && self.offsetIsLoaded(offset: written.declOffset)
     }
 
-    inout fn recordUnresolvedMethodTemplate(exprId: U64, receiver: CallTemplateReceiver, receiverExpr: U64, receiverTerm: U64, nameStart: U64, nameLen: U64, args: ArgRange, resolution: StaticMemberResolution) -> Result[(), CompileDiagnostic] {
+    inout fn recordUnresolvedMethodTemplate(exprId: U64, receiver: CallTemplateReceiver, receiverExpr: U64, receiverTerm: U64, nameStart: U64, nameLen: U64, args: ArgRange, resolution: StaticMemberResolution, lookupPerformed: Bool = true) -> Result[(), CompileDiagnostic] {
         match resolution {
             StaticMemberResolution.Requirement(proof: _, traitIdx: val traitIdx, reqIdx: val reqIdx) => {
                 if self.typeParameterQualifierTerm(exprId: receiverExpr) != 0U64 && !self.traitReqAt(reqs: self.decls.traitAt(index: traitIdx).reqs, index: reqIdx).isAssoc {
@@ -1220,10 +1222,10 @@ impl Comp {
                     if receiverTerm != 0U64 && receiverTerm < self.arena.typeCount() && self.arena.typeTermAt(index: receiverTerm).isAny {
                         return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "method is not part of the existential trait interface") />
                     }
-                    if receiverTerm != 0U64 && receiverTerm < self.arena.typeCount() && self.isAuthoredViaCall(owner: self.cur.checkFn, expression: exprId) {
+                    if lookupPerformed && receiverTerm != 0U64 && receiverTerm < self.arena.typeCount() && self.isAuthoredViaCall(owner: self.cur.checkFn, expression: exprId) {
                         return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "no applicable `via` target for the declared requirement", failureDomain: <FailureDomain.Source />) />
                     }
-                    val domain = if receiverTerm != 0U64 && receiverTerm < self.arena.typeCount() && (self.isAuthoredMethodLookup(exprId: exprId, nameStart: nameStart, nameLen: nameLen, args: args) || self.hasAuthoredNamedFactoryCall(exprId: exprId, receiverTerm: receiverTerm, args: args)) {
+                    val domain = if lookupPerformed && receiverTerm != 0U64 && receiverTerm < self.arena.typeCount() && (self.isAuthoredMethodLookup(exprId: exprId, nameStart: nameStart, nameLen: nameLen, args: args) || self.hasAuthoredNamedFactoryCall(exprId: exprId, receiverTerm: receiverTerm, args: args)) {
                         give <FailureDomain.Source />
                     } else { give <FailureDomain.Unclassified /> }
                     return <Result.Err error=self.unavailableSourceMethod(receiverTerm: receiverTerm, offset: self.exprOffset(id: exprId), fallback: "no matching method for this argument list", domain: domain) />
@@ -2106,8 +2108,10 @@ pub impl Comp {
                     if mctx != 0U64 && self.expressionNeedsTypeContext(exprId: argumentExpr) { try self.recordExpr(exprId: argumentExpr, chainHoleRef: chainHoleRef, expectedTerm: mctx) }
                     if mctx != 0U64 && (try self.tyRefIsGround(ref: mctx)) {
                         val parameterType: TypeInfo = self.typeInfoOfRef(ref: mctx)
-                        try self.checkLitSpanCtx(id: argumentExpr, tyStart: parameterType.nameStart, tyLen: parameterType.nameLen, isArray: parameterType.kind == 3, ctxRef: mctx)
+                        // Complete the prepared child before a literal/value
+                        // checker demands that child's selected signature.
                         try self.recordSemanticExprExpectedResult(exprId: argumentExpr, expectedTerm: mctx)
+                        try self.checkLitSpanCtx(id: argumentExpr, tyStart: parameterType.nameStart, tyLen: parameterType.nameLen, isArray: parameterType.kind == 3, ctxRef: mctx)
                         try self.tcCheckValue(expectedRef: mctx, valueExpr: argumentExpr, pos: "arg")
                     }
                 }
@@ -2294,7 +2298,9 @@ pub impl Comp {
                     }
                     _ => {}
                 }
-                cfi = (try self.resolveAssocForResolvedReceiver(surfaceRef: baseTerm, sourceId: 0U64, sourceOwner: 0U64, nameStart: callStart, nameLen: callLen, args: args, useOffset: self.exprOffset(id: exprId)))
+                val selection = try self.lookupAssocForResolvedReceiver(surfaceRef: baseTerm, sourceId: 0U64, sourceOwner: 0U64, nameStart: callStart, nameLen: callLen, args: args, useOffset: self.exprOffset(id: exprId))
+                try self.recordMemberLookupArguments(selection: selection, receiverTerm: baseTerm, args: args, chainHoleRef: chainHoleRef, exprId: exprId)
+                cfi = self.selectedMemberFunction(selection: selection)
                 if cfi < self.arena.functionCount() {
                     try self.recordParametricMethodCall(exprId: exprId, callee: cfi, receiverSource: baseReceiver, receiverTerm: baseTerm, args: args)
                     return <Result.Ok value=() />
@@ -2643,6 +2649,7 @@ pub impl Comp {
                     // the abstract checker validates that requirement, and Mono
                     // chooses the concrete witness only in the body environment.
                 }
+                val lookupPerformed = match methodSelection { MemberCallLookup.CachedNonStatic => false, _ => true }
                 val boundMember: StaticMemberResolution = (try self.writtenStaticMemberResolution(exprId: exprId, receiverRef: receiverTerm, nameStart: nameStart, nameLen: nameLen, args: args, requiredTraitOwner: self.syntheticRequiredTraitOwner(exprId: exprId)))
                 match boundMember {
                     StaticMemberResolution.Requirement(proof: _, traitIdx: _, reqIdx: _) => { methodSelection = <MemberCallLookup.NoCandidate /> }
@@ -2652,8 +2659,8 @@ pub impl Comp {
                 try self.recordMemberLookupArguments(selection: methodSelection, receiverTerm: receiverTerm, args: args, chainHoleRef: chainHoleRef, exprId: exprId)
                 val methodCallee = self.selectedMemberFunction(selection: methodSelection)
                 try self.recordParametricMethodCall(exprId: exprId, callee: methodCallee, receiverSource: (try self.writtenCallReceiverTemplate(exprId: exprId, receiverExpr: recv)), receiverTerm: receiverTerm, args: args)
-                if self.memberLookupIsMissing(selection: methodSelection) {
-                    try self.recordUnresolvedMethodTemplate(exprId: exprId, receiver: (try self.writtenCallReceiverTemplate(exprId: exprId, receiverExpr: recv)), receiverExpr: recv, receiverTerm: receiverTerm, nameStart: nameStart, nameLen: nameLen, args: args, resolution: boundMember)
+                if methodCallee >= self.arena.functionCount() {
+                    try self.recordUnresolvedMethodTemplate(exprId: exprId, receiver: (try self.writtenCallReceiverTemplate(exprId: exprId, receiverExpr: recv)), receiverExpr: recv, receiverTerm: receiverTerm, nameStart: nameStart, nameLen: nameLen, args: args, resolution: boundMember, lookupPerformed: lookupPerformed)
                 }
                 // The standard array Index witness returns the element type.
                 // Use the synthesized operation's origin and its checked result
@@ -2755,9 +2762,9 @@ pub impl Comp {
                     self.traceMonoTypeHead(ref: self.parametricExprTerm(exprId: exprId))
                     eprint(text: "\n")
                 }
-                if self.memberLookupIsMissing(selection: methodSelection) {
+                if methodCallee >= self.arena.functionCount() {
                     val resolution = try self.writtenStaticMemberResolution(exprId: exprId, receiverRef: receiverTerm, nameStart: nameStart, nameLen: nameLen, args: args, requiredTraitOwner: self.syntheticRequiredTraitOwner(exprId: exprId))
-                    try self.recordUnresolvedMethodTemplate(exprId: exprId, receiver: receiverSource, receiverExpr: recv, receiverTerm: receiverTerm, nameStart: nameStart, nameLen: nameLen, args: args, resolution: resolution)
+                    try self.recordUnresolvedMethodTemplate(exprId: exprId, receiver: receiverSource, receiverExpr: recv, receiverTerm: receiverTerm, nameStart: nameStart, nameLen: nameLen, args: args, resolution: resolution, lookupPerformed: match methodSelection { MemberCallLookup.CachedNonStatic => false, _ => true })
                 }
                 if methodCallee < self.arena.functionCount() {
                     try self.recordAccessUse(parentExpr: exprId, readExpr: recv, role: 1U64, argIndex: 0U64, parameterIndex: 0U64, modeKnown: true, write: self.arena.functionAt(index: methodCallee).selfInout)
@@ -3822,10 +3829,15 @@ impl Comp {
             MemberCallLookup.DiagnosticCandidate(function: val function) => {
                 // This path may refine operands for a detailed error, but it
                 // must not publish a successful parent template or result.
+                val declaration = self.arena.functionAt(index: function)
+                for index in 0U64..<args.len {
+                    val parameter = self.paramIndexForArg(params: declaration.params, args: args, argIdx: index)
+                    if parameter < declaration.params.count() { try self.checkArgInoutMode(p: self.funcParamAt(params: declaration.params, index: parameter), arg: self.argAt(args: args, index: index)) }
+                }
                 try self.recordSelectedMethodArguments(callee: function, receiverTerm: receiverTerm, args: args, chainHoleRef: chainHoleRef, exprId: exprId)
                 return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "no matching method for this argument list") />
             }
-            MemberCallLookup.NoCandidate => {}
+            MemberCallLookup.NoCandidate | MemberCallLookup.CachedNonStatic => {}
         }
         return <Result.Ok value=() />
     }

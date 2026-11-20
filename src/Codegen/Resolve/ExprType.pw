@@ -1063,14 +1063,24 @@ pub impl Comp {
                             }
                         }
                     }
-                    mut val mi: U64 = (try self.resolvedCallee(id: id))
+                    val selection = try self.resolvedMemberCall(id: id)
+                    match selection {
+                        MemberCallLookup.DiagnosticCandidate(function: _) => { return <Result.Ok value=scalarInfo() /> }
+                        _ => {}
+                    }
+                    mut val mi: U64 = self.selectedMemberFunction(selection: selection)
                     // Generic-body verification cannot pre-fill a callee for
                     // a synthetic ChainHole receiver. The continuation carries
                     // its receiver term explicitly, so select through that
                     // term only for this missing-descriptor case; ordinary
                     // source expressions keep their already-selected cache.
                     if mi == self.arena.functionCount() && chainHoleRef != 0U64 {
-                        mi = self.selectedMemberFunction(selection: (try self.resolveMethodFinalForTypeWithOrigin(recv: recv, receiverType: rt, nameStart: nameStart, nameLen: nameLen, args: args, methodOrigin: <MethodLookupOrigin expression=<Optional.Some v=id /> />)))
+                        val continuation = try self.resolveMethodFinalForTypeWithOrigin(recv: recv, receiverType: rt, nameStart: nameStart, nameLen: nameLen, args: args, methodOrigin: <MethodLookupOrigin expression=<Optional.Some v=id /> />)
+                        match continuation {
+                            MemberCallLookup.DiagnosticCandidate(function: _) => { return <Result.Ok value=scalarInfo() /> }
+                            _ => {}
+                        }
+                        mi = self.selectedMemberFunction(selection: continuation)
                     }
                     if mi == self.arena.functionCount() {
                         // not a method — but it may be a closure-typed FIELD called

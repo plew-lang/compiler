@@ -24,6 +24,22 @@ fn checkCall(text: String, member: String) {
                 _ => { panic("diagnostic member published a completed callee cache") }
             }
         }
+        val result = compiler.typeOf(id: index).unwrap()
+        if result.ref != 0U64 || result.nameLen != 0U64 { panic("diagnostic member supplied a result type") }
+        val mainName = compiler.internBytes(s: "main")
+        val owner = compiler.arena.firstFunctionNamed(nameId: mainName.nameId)
+        for retry in 0U64..<2U64 {
+            match compiler.prepareLexicalBody(fnIdx: owner) {
+                Result.Ok(value: _) => { panic("mismatched member was accepted") }
+                Result.Err(error: val error) => {
+                    if error.message() != "type mismatch: this value's type does not match the type required here (Plew has no implicit conversion — spec/12)" { panic(error.message()) }
+                }
+            }
+            match compiler.typeCache.callee[index] { CachedCallee.Uncomputed => {} _ => { panic("failed member published a callee cache") } }
+            val key = compiler.templateCallSiteKey(fnIdx: owner, exprId: index).unwrap()
+            if compiler.callTemplateIndex(siteKey: key) < compiler.callTemplateLocations.count() { panic("diagnostic member published a parent template") }
+            if compiler.arena.finalCalleeCount() != 0U64 { panic("diagnostic member published a final call") }
+        }
     }
     if !seen { panic("missing diagnostic member expression") }
 }

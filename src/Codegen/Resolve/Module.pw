@@ -1493,7 +1493,7 @@ impl Comp {
     fn observedMemberFunction(selection: MemberCallLookup) -> U64 {
         return match selection {
             MemberCallLookup.Selected(function: val function) | MemberCallLookup.DiagnosticCandidate(function: val function) => function,
-            MemberCallLookup.NoCandidate => self.arena.functionCount(),
+            MemberCallLookup.NoCandidate | MemberCallLookup.CachedNonStatic => self.arena.functionCount(),
         }
     }
 }

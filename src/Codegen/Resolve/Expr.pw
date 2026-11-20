@@ -3370,8 +3370,11 @@ impl Comp {
     inout fn resolvedMemberCall(id: U64) -> Result[MemberCallLookup, CompileDiagnostic] {
         if id < self.typeCache.callee.count() {
             match self.typeCache.callee[id] {
-                CachedCallee.Selected(val callee) => { return <Result.Ok value=<MemberCallLookup.Selected function=callee /> /> }
-                CachedCallee.NoStaticCallee => { return <Result.Ok value=<MemberCallLookup.NoCandidate /> /> }
+                CachedCallee.Selected(val callee) => {
+                    if callee >= self.arena.functionCount() { return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: id), msg: "cached method selection is out of range") /> }
+                    return <Result.Ok value=<MemberCallLookup.Selected function=callee /> />
+                }
+                CachedCallee.NoStaticCallee => { return <Result.Ok value=<MemberCallLookup.CachedNonStatic /> /> }
                 CachedCallee.Uncomputed => {}
             }
         }
