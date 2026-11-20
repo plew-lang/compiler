@@ -135,41 +135,10 @@ pub impl Comp {
         // They are lexical identities, not positional aliases. Finalization
         // retains the complete WitnessMatch here, including legacy binder
         // indexes while the ParamId migration is still in flight.
-        val receiverMatch: WitnessMatch = (try self.methodReceiverEnvironment(f: f, instRef: semanticReceiver, sourceMatch: true))
-        mut val proof = selectedProof
-        if self.proofIsMissing(proof: proof) && f.isProvided { proof = try self.providedBodyProof(f: f, receiverRef: semanticReceiver, assumptions: self.functionBoundAssumptions(fnIdx: self.cur.checkFn)) }
-        // A provided copy placed through a trait-subject edge is justified
-        // by its conformance path, not nominal equality with that trait.
-        if f.recvTy != 0U64 && receiverMatch.conformIdx == 0U64 && self.proofIsMissing(proof: proof) { return <Result.Ok value=<InstanceEnvironment /> />}
-        mut val fullArgs: Array[U64] = (try self.receiverCallableArguments(f: f, receiverRef: semanticReceiver, receiverMatch: receiverMatch))
-        val traitReceiver = if f.isProvided && f.recvTraitArgs.count() != 0U64 {
-            val declaration = try self.lexicalFunction(f: f)
-            give declaration.provTraitOwner != 0U64 && declaration.originTraitOwner == 0U64
-        } else {
-            give self.methodRecvIsTrait(f: f)
-        }
-        if traitReceiver && !self.proofIsMissing(proof: proof) {
-            // A concrete placement still has the lexical provider's trait
-            // arguments. Its nominal receiver cannot bind those parameters.
-            val owner = if f.isProvided { give f.provTraitOwner } else { give f.recvStart }
-            val traitIndex = self.decls.traitIndexByOffset(offset: owner)
-            val bound = try self.staticProofBound(proof: proof, traitIdx: traitIndex)
-            if bound.subject == 0U64 || bound.constraint.key.positionalArgs.count() != f.recvTraitArgs.count() { return <Result.Ok value=<InstanceEnvironment /> /> }
-            mut val argument = 0U64
-            while argument < f.recvTraitArgs.count() {
-                val pattern = self.funcTypeAt(types: f.recvTraitArgs, index: argument)
-                if !self.matchCallResultArguments(pattern: pattern, expected: bound.constraint.key.positionalArgs[argument], params: f.typeParams, values: inout fullArgs) {
-                    return <Result.Ok value=<InstanceEnvironment /> />
-                }
-                argument += 1U64
-            }
-        }
-        val proofArgs = self.providedProofArguments(f: f, proof: proof)
-        mut val proofIndex = 0U64
-        while proofIndex < proofArgs.count() && proofIndex < fullArgs.count() {
-            if fullArgs[proofIndex] == 0U64 { fullArgs[proofIndex] = proofArgs[proofIndex] }
-            proofIndex += 1U64
-        }
+        val receiverEnvironment = try self.methodReceiverSignatureEnvironment(f: f, semanticReceiver: semanticReceiver, selectedProof: selectedProof)
+        if receiverEnvironment.receiverRef == 0U64 { return <Result.Ok value=receiverEnvironment /> }
+        val proof = receiverEnvironment.proof
+        mut val fullArgs = receiverEnvironment.args
         if retainedArguments.count() != 0U64 {
             if retainedArguments.count() != f.typeParams.count() || fullArgs.count() != f.typeParams.count() {
                 return <Result.Err error=self.diagnosticAt(offset: f.defOffset, msg: "selected forwarding declaration has an invalid binder vector") />
@@ -191,16 +160,7 @@ pub impl Comp {
         // argument reader. Already retained/receiver/proof values are fixed;
         // final consumers do not reopen argument inference for a complete map.
         if f.typeParams.count() != 0U64 && !self.fnArgsAllResolved(args: fullArgs) {
-            val partial = try self.withLexicalSelfBinding(f: f, environment: <InstanceEnvironment params=self.copyFuncBinds(binds: f.typeParams) args=fullArgs receiverRef=semanticReceiver proof=proof />)
-            mut val knownParams: Array[Bind] = []
-            mut val knownValues: Array[U64] = []
-            for index in 0U64..<partial.params.count() {
-                if index < partial.args.count() && partial.args[index] != 0U64 {
-                    knownParams.append(partial.params[index])
-                    knownValues.append(partial.args[index])
-                }
-            }
-            val known = <InstanceEnvironment params=knownParams args=knownValues receiverRef=semanticReceiver proof=proof />
+            val known = try self.knownMethodSignatureEnvironment(f: f, environment: <InstanceEnvironment params=self.copyFuncBinds(binds: f.typeParams) args=fullArgs receiverRef=semanticReceiver proof=proof />)
             val item = try self.finalMethodItemRef(f: f, receiverRef: semanticReceiver)
             mut val types: Array[U64] = []
             for index in 0U64..<f.params.count() {
@@ -1405,5 +1365,61 @@ pub impl Comp {
                 return <Result.Ok value=scalarInfo() />
             }
         }
+    }
+}
+
+// Receiver equations and proof substitutions have one owner. Candidate
+// applicability does not infer operand types or publish a selected call.
+impl Comp {
+    inout fn methodReceiverSignatureEnvironment(f: Func, semanticReceiver: U64, selectedProof: StaticConformanceProof = <StaticConformanceProof.Missing />) -> Result[InstanceEnvironment, CompileDiagnostic] {
+        val receiverMatch: WitnessMatch = (try self.methodReceiverEnvironment(f: f, instRef: semanticReceiver, sourceMatch: true))
+        mut val proof = selectedProof
+        if self.proofIsMissing(proof: proof) && f.isProvided { proof = try self.providedBodyProof(f: f, receiverRef: semanticReceiver, assumptions: self.functionBoundAssumptions(fnIdx: self.cur.checkFn)) }
+        // A provided copy placed through a trait-subject edge is justified
+        // by its conformance path, not nominal equality with that trait.
+        if f.recvTy != 0U64 && receiverMatch.conformIdx == 0U64 && self.proofIsMissing(proof: proof) { return <Result.Ok value=<InstanceEnvironment /> />}
+        mut val fullArgs: Array[U64] = (try self.receiverCallableArguments(f: f, receiverRef: semanticReceiver, receiverMatch: receiverMatch))
+        val traitReceiver = if f.isProvided && f.recvTraitArgs.count() != 0U64 {
+            val declaration = try self.lexicalFunction(f: f)
+            give declaration.provTraitOwner != 0U64 && declaration.originTraitOwner == 0U64
+        } else {
+            give self.methodRecvIsTrait(f: f)
+        }
+        if traitReceiver && !self.proofIsMissing(proof: proof) {
+            // A concrete placement still has the lexical provider's trait
+            // arguments. Its nominal receiver cannot bind those parameters.
+            val owner = if f.isProvided { give f.provTraitOwner } else { give f.recvStart }
+            val traitIndex = self.decls.traitIndexByOffset(offset: owner)
+            val bound = try self.staticProofBound(proof: proof, traitIdx: traitIndex)
+            if bound.subject == 0U64 || bound.constraint.key.positionalArgs.count() != f.recvTraitArgs.count() { return <Result.Ok value=<InstanceEnvironment /> /> }
+            mut val argument = 0U64
+            while argument < f.recvTraitArgs.count() {
+                val pattern = self.funcTypeAt(types: f.recvTraitArgs, index: argument)
+                if !self.matchCallResultArguments(pattern: pattern, expected: bound.constraint.key.positionalArgs[argument], params: f.typeParams, values: inout fullArgs) {
+                    return <Result.Ok value=<InstanceEnvironment /> />
+                }
+                argument += 1U64
+            }
+        }
+        val proofArgs = self.providedProofArguments(f: f, proof: proof)
+        mut val proofIndex = 0U64
+        while proofIndex < proofArgs.count() && proofIndex < fullArgs.count() {
+            if fullArgs[proofIndex] == 0U64 { fullArgs[proofIndex] = proofArgs[proofIndex] }
+            proofIndex += 1U64
+        }
+        return <Result.Ok value=<InstanceEnvironment params=self.copyFuncBinds(binds: f.typeParams) args=fullArgs receiverRef=semanticReceiver proof=proof /> />
+    }
+
+    inout fn knownMethodSignatureEnvironment(f: Func, environment: InstanceEnvironment) -> Result[InstanceEnvironment, CompileDiagnostic] {
+        val partial = try self.withLexicalSelfBinding(f: f, environment: environment)
+        mut val parameters: Array[Bind] = []
+        mut val values: Array[U64] = []
+        for index in 0U64..<partial.params.count() {
+            if index < partial.args.count() && partial.args[index] != 0U64 {
+                parameters.append(partial.params[index])
+                values.append(partial.args[index])
+            }
+        }
+        return <Result.Ok value=<InstanceEnvironment params=parameters args=values receiverRef=partial.receiverRef proof=partial.proof constraints=partial.constraints /> />
     }
 }

@@ -321,37 +321,9 @@ pub impl Comp {
         // by finalization too. This stage fixes only receiver binders;
         // the shared candidate-local matcher below tentatively infers the
         // method-owned binders before final selected-call publication.
-        val receiverMatch: WitnessMatch = (try self.methodReceiverEnvironment(f: f, instRef: receiver, sourceMatch: true))
-        // A failed structural receiver match is not an empty substitution.
-        // Provided members may instead be justified by a trait path; their
-        // applicability is established by the static proof query.
-        if f.recvTy != 0U64 && receiverMatch.conformIdx == 0U64 && !f.isProvided {
-            return <Result.Ok value=0U64 />
-        }
-        mut val calleeParams: Array[Bind] = []
-        mut val calleeArgs: Array[U64] = []
-        mut val bindI: U64 = 0U64
-        while bindI < receiverMatch.binds.count() {
-            val binding: WitnessBind = receiverMatch.binds[bindI]
-            mut val target: U64 = f.typeParams.count()
-            if binding.paramId != 0U64 {
-                mut val paramI: U64 = 0U64
-                while paramI < f.typeParams.count() {
-                    if self.funcBindAt(binds: f.typeParams, index: paramI).paramId == binding.paramId {
-                        target = paramI
-                        break
-                    }
-                    paramI += 1U64
-                }
-            }
-            if target >= f.typeParams.count() { target = binding.binder }
-            if target < f.typeParams.count() && binding.term != 0U64 {
-                calleeParams.append(self.funcBindAt(binds: f.typeParams, index: target))
-                calleeArgs.append(binding.term)
-            }
-            bindI += 1U64
-        }
-        val calleeEnvironment: InstanceEnvironment = <InstanceEnvironment params=calleeParams args=calleeArgs receiverRef=receiver />
+        val receiverEnvironment = try self.methodReceiverSignatureEnvironment(f: f, semanticReceiver: receiver)
+        if receiverEnvironment.receiverRef == 0U64 { return <Result.Ok value=0U64 /> }
+        val calleeEnvironment = try self.knownMethodSignatureEnvironment(f: f, environment: receiverEnvironment)
         mut val signatures: Array[U64] = []
         mut val parameter = 0U64
         while parameter < f.params.count() {

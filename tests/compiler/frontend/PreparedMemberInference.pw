@@ -34,6 +34,7 @@ fn checkFile(path: String, functionName: String, concrete: Bool) {
     if checked == 0U64 { panic("missing prepared member calls") }
 }
 fn main() {
+    checkFile(path: "tests/fixtures/run/associated_output_generic_view.pw", functionName: "main", concrete: true)
     checkFile(path: "tests/fixtures/run/member_associated_candidate_conflict.pw", functionName: "main", concrete: true)
     checkFile(path: "tests/fixtures/run/member_nested_constructor_context.pw", functionName: "main", concrete: true)
     checkFile(path: "tests/fixtures/run/member_symbolic_argument_context.pw", functionName: "invoke", concrete: false)
