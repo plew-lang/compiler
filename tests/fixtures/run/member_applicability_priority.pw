@@ -1,0 +1,22 @@
+use @Std/Io only { print }
+trait Picker {}
+pub impl Picker {
+    fn choose(value: Bool) -> I64 { return 2I64 }
+}
+trait StaticSource {}
+trait StaticTarget { assoc fn staticChoose(value: Bool) -> I64 }
+impl StaticSource as StaticTarget { assoc fn staticChoose(value: Bool) -> I64 { return 4I64 } }
+struct Marker {}
+impl Marker {
+    fn choose(value: I64) -> I64 { return 1I64 }
+    assoc fn staticChoose(value: I64) -> I64 { return 3I64 }
+}
+impl Marker as Picker {}
+impl Marker as StaticSource {}
+fn main() {
+    val marker = <Marker />
+    print(marker.choose(value: false))
+    print(Marker.staticChoose(value: false))
+    print(marker.choose(value: 1I64))
+    print(Marker.staticChoose(value: 1I64))
+}

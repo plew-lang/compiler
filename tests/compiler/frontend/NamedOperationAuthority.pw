@@ -1,0 +1,46 @@
+// A named associated operation's diagnostic role cannot authorize a free fallback.
+use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontendForRequests, intern }
+use ../../../src/SourceAccess only { SourceAccess }
+use ../../../src/Ir only { Expr, CachedCallee }
+use @Std/Io only { print }
+fn checkOperation(cached: Bool) {
+    mut val compiler = <Comp />
+    val path = if cached { give "tests/fixtures/run/pow.pw" }
+    else { give "tests/fixtures/reject/named_operation_diagnostic_free_fallback.pw" }
+    match analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.File path=path />, sources: <SourceAccess stdRoot="std/".bytes() />) {
+        Result.Ok(value: _) => {}
+        Result.Err(error: val error) => { panic(error.message()) }
+    }
+    val name = compiler.internBytes(s: "pow")
+    val mainName = compiler.internBytes(s: "main")
+    val owner = compiler.arena.firstFunctionNamed(nameId: mainName.nameId)
+    val module = compiler.moduleOf(offset: compiler.arena.functionAt(index: owner).defOffset)
+    mut val seen = false
+    for index in 0U64..<compiler.arena.exprs.count() {
+        match compiler.arena.exprs[index] {
+            Expr.Call(nameStart: val start, nameLen: val length, args: _) => {
+                if compiler.moduleOf(offset: start) != module { continue }
+                if intern(c: inout compiler, start: start, len: length) != name.nameId { continue }
+                seen = true
+                if cached { compiler.typeCache.callee[index] = <CachedCallee.NoStaticCallee /> }
+                val result = match compiler.typeOf(id: index) {
+                    Result.Ok(value: val result) => result
+                    Result.Err(error: val error) => { panic(error.message()) }
+                }
+                if result.ref != 0U64 || result.nameLen != 0U64 { panic("diagnostic named operation fell through to a concrete result") }
+                match compiler.typeCache.callee[index] {
+                    CachedCallee.Uncomputed => { if cached { panic("cached observation was erased") } }
+                    CachedCallee.NoStaticCallee => { if !cached { panic("diagnostic role became a completed cache") } }
+                    _ => { panic("diagnostic named operation published a selected callee") }
+                }
+            }
+            _ => {}
+        }
+    }
+    if !seen { panic("missing named operation") }
+}
+fn main() {
+    checkOperation(cached: false)
+    checkOperation(cached: true)
+    print("named operation diagnostics do not authorize free fallback")
+}

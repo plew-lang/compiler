@@ -722,7 +722,14 @@ pub impl Comp {
                         if br != 0U64 {
                             val brt = self.arena.typeTermAt(index: br)
                             val powN: Bind = self.kwSpan(kw: "pow", kwLen: 3U64)
-                            fi = self.selectedMemberFunction(selection: (try self.findAssocWithOrigin(recvStart: brt.nameStart, recvLen: brt.nameLen, nameStart: powN.nameStart, nameLen: powN.nameLen, args: args)))
+                            val saved = try self.cachedMemberCall(id: id)
+                            val selection = if saved.isSome() { give saved.unwrap() }
+                            else { give try self.findAssocWithOrigin(recvStart: brt.nameStart, recvLen: brt.nameLen, nameStart: powN.nameStart, nameLen: powN.nameLen, args: args) }
+                            match selection {
+                                MemberCallLookup.DiagnosticCandidate(function: _) => { return <Result.Ok value=scalarInfo() /> }
+                                _ => {}
+                            }
+                            fi = self.selectedMemberFunction(selection: selection)
                         }
                     }
                 }
@@ -1162,8 +1169,13 @@ pub impl Comp {
                     // (`pop() -> Optional[T]`) as the raw template span: the recorded
                     // typed-IR slot was unusable, so a discarded or un-annotated result
                     // was never classified for release (its deinit silently skipped).
-                    val arrName: Bind = self.kwSpan(kw: "Array", kwLen: 5)
-                    val mi: U64 = self.selectedMemberFunction(selection: (try self.findMethodWithOrigin(recvStart: arrName.nameStart, recvLen: arrName.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)))
+                    mut val selection = try self.resolvedMemberCall(id: id)
+                    // Only a genuinely missing selection may use the explicit
+                    // continuation receiver, just as for nominal methods.
+                    if self.memberLookupIsMissing(selection: selection) && chainHoleRef != 0U64 {
+                        selection = try self.resolveMethodFinalForTypeWithOrigin(recv: recv, receiverType: rt, nameStart: nameStart, nameLen: nameLen, args: args, methodOrigin: <MethodLookupOrigin expression=<Optional.Some v=id /> />)
+                    }
+                    val mi = self.selectedMemberFunction(selection: selection)
                     if mi == self.arena.functionCount() {
                         return <Result.Ok value=scalarInfo() />
                     }

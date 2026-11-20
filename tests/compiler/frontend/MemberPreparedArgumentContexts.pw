@@ -10,7 +10,7 @@ fn checkFile(path: String) {
     val owner = compiler.arena.firstFunctionNamed(nameId: name.nameId)
     compiler.prepareLexicalBody(fnIdx: owner).unwrap()
     mut val checked = 0U64
-    for index in 0U64..<compiler.callTemplateLocations.count() {
+    for index in 0U64..<compiler.callTemplateCount() {
         val template = compiler.callTemplateAt(index: index)
         if template.siteKey.ownerFnIdx != owner { continue }
         match template.kind {

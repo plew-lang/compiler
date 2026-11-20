@@ -8,8 +8,12 @@ fn checkCall(text: String, member: String) {
     mut val compiler = <Comp />
     analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text path="Member.pw" text=text />, sources: <SourceAccess stdRoot="std/".bytes() />).unwrap()
     val name = compiler.internBytes(s: member)
+    val mainName = compiler.internBytes(s: "main")
+    val owner = compiler.arena.firstFunctionNamed(nameId: mainName.nameId)
+    val module = compiler.moduleOf(offset: compiler.arena.functionAt(index: owner).defOffset)
     mut val seen = false
     for index in 0U64..<compiler.arena.exprs.count() {
+        if compiler.moduleOf(offset: compiler.exprOffset(id: index)) != module { continue }
         val matches = match compiler.arena.exprs[index] {
             Expr.Method(recv: _, nameStart: val start, nameLen: val length, args: _) |
             Expr.ExtMethod(recv: _, source: _, nameStart: val start, nameLen: val length, args: _) => intern(c: inout compiler, start: start, len: length) == name.nameId,
@@ -26,8 +30,6 @@ fn checkCall(text: String, member: String) {
         }
         val result = compiler.typeOf(id: index).unwrap()
         if result.ref != 0U64 || result.nameLen != 0U64 { panic("diagnostic member supplied a result type") }
-        val mainName = compiler.internBytes(s: "main")
-        val owner = compiler.arena.firstFunctionNamed(nameId: mainName.nameId)
         for retry in 0U64..<2U64 {
             match compiler.prepareLexicalBody(fnIdx: owner) {
                 Result.Ok(value: _) => { panic("mismatched member was accepted") }
@@ -37,7 +39,7 @@ fn checkCall(text: String, member: String) {
             }
             match compiler.typeCache.callee[index] { CachedCallee.Uncomputed => {} _ => { panic("failed member published a callee cache") } }
             val key = compiler.templateCallSiteKey(fnIdx: owner, exprId: index).unwrap()
-            if compiler.callTemplateIndex(siteKey: key) < compiler.callTemplateLocations.count() { panic("diagnostic member published a parent template") }
+            if compiler.callTemplateIndex(siteKey: key) < compiler.callTemplateCount() { panic("diagnostic member published a parent template") }
             if compiler.arena.finalCalleeCount() != 0U64 { panic("diagnostic member published a final call") }
         }
     }

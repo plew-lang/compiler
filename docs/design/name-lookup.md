@@ -173,12 +173,14 @@ Each lookup is interpreted under explicit source context: module and file, lexic
 | Diagnostic-only name search | Inaccessible or otherwise excluded suggestions | Explanation of failure versus permission to call |
 
 A cached answer that no static callee exists can describe a successful value
-call. It is an observation, not evidence that visible free candidates were
+call. It is an observation, not evidence that the query's callable candidates were
 searched and rejected. Keep these outcomes distinct through the query boundary:
 readers may consume the nonstatic answer, while source-refusal publication
 requires the actual failed search and its source owner. Invalid cached indices
 are malformed implementation input, not source rejection. Table growth must not
-reinterpret a nonstatic answer as a declaration identity.
+reinterpret a nonstatic answer as a declaration identity. A nonstatic cache
+observation does not authorize a new concrete-member search; independent
+abstract-requirement or value-call evidence remains a separate valid route.
 
 Shadowing creates a new lexical binding rather than changing the old binding's type or mutability. Its uses, captures, and cleanup remain associated with the correct identity. Pattern and condition bindings have their language-defined scope; entering a closure creates a separate body/control boundary while capture analysis records the enclosing binding identities it uses. Scope traversal must not be independently reconstructed by LLVM from source names.
 
@@ -223,7 +225,7 @@ Preliminary context for an omitted type may use candidate information only under
 
 Applicability reads prepared argument facts, including unfinished construction fields and the result recipe of an already-selected nested call. A nonzero TypeTerm or a nominal head alone does not prove that the value is complete. Candidate-local completion preserves known type arguments, field constraints and rigid caller binders; it cannot turn an unselected nested call into a selected one. Only the selected operation's context is subsequently applied by the existing expression producers. Invalid saved substitution ranges or type identities are not inference holes. An absent field fact alone is not evidence of a partial construction; fully written raw arguments retain their structural type-matching path.
 
-A label-only diagnostic candidate remains a distinct lookup outcome: it cannot populate a selected-callee cache, supply a call result, or publish a call descriptor. Its tentative argument context exists only for diagnostics and is not admitted expected-type evidence. Passing a diagnostic check does not promote that outcome; normal applicability must establish the operation.
+A label-only diagnostic candidate remains a distinct lookup outcome: it cannot populate a selected-callee cache, supply a call result, or publish a call descriptor. Its tentative argument context exists only for diagnostics and is not admitted expected-type evidence. Passing a diagnostic check does not promote that outcome; normal applicability must establish the operation. A diagnostic outcome terminates its selected surface and must not be collapsed into an absent candidate that authorizes another surface search.
 
 If type overloads remain ambiguous, lowering must not guess one to make a child expression type-check. Once checking selects an operation, it publishes its declaration/requirement identity, signature, environment, and evidence for instantiation and Mid consumers.
 

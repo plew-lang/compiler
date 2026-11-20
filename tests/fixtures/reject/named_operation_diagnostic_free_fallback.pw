@@ -1,0 +1,9 @@
+// A label-matching named operation diagnoses its operands before another surface.
+use @Std/Core only { Pow }
+struct Marker {}
+impl Marker as Pow[U64] {
+    type Output = I64
+    assoc fn pow(base: Marker, exp: U64) -> I64 { return 1I64 }
+}
+fn pow(base: Marker, exp: Bool) -> String { return "free" }
+fn main() { pow(base: <Marker />, exp: false) }

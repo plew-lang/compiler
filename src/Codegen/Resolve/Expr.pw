@@ -3368,15 +3368,9 @@ impl Comp {
 
 impl Comp {
     inout fn resolvedMemberCall(id: U64) -> Result[MemberCallLookup, CompileDiagnostic] {
-        if id < self.typeCache.callee.count() {
-            match self.typeCache.callee[id] {
-                CachedCallee.Selected(val callee) => {
-                    if callee >= self.arena.functionCount() { return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: id), msg: "cached method selection is out of range") /> }
-                    return <Result.Ok value=<MemberCallLookup.Selected function=callee /> />
-                }
-                CachedCallee.NoStaticCallee => { return <Result.Ok value=<MemberCallLookup.CachedNonStatic /> /> }
-                CachedCallee.Uncomputed => {}
-            }
+        match (try self.cachedMemberCall(id: id)) {
+            Optional.Some(v: val saved) => { return <Result.Ok value=saved /> }
+            Optional.None => {}
         }
         mut val r: MemberCallLookup = <MemberCallLookup.NoCandidate />
         match self.arena.exprs[id] {
@@ -3406,5 +3400,21 @@ impl Comp {
             _ => {}
         }
         return <Result.Ok value=r />
+    }
+}
+
+impl Comp {
+    inout fn cachedMemberCall(id: U64) -> Result[Optional[MemberCallLookup], CompileDiagnostic] {
+        if id < self.typeCache.callee.count() {
+            match self.typeCache.callee[id] {
+                CachedCallee.Selected(val callee) => {
+                    if callee >= self.arena.functionCount() { return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: id), msg: "cached method selection is out of range") /> }
+                    return <Result.Ok value=<Optional.Some v=<MemberCallLookup.Selected function=callee /> /> />
+                }
+                CachedCallee.NoStaticCallee => { return <Result.Ok value=<Optional.Some v=<MemberCallLookup.CachedNonStatic /> /> /> }
+                CachedCallee.Uncomputed => {}
+            }
+        }
+        return <Result.Ok value=<Optional.None /> />
     }
 }

@@ -1,0 +1,18 @@
+use @Std/Io only { print }
+fn read(value: Optional[I64]) -> I64 { return match value { Optional.Some(val v) => v, Optional.None => 0I64 } }
+struct Marker {}
+impl Marker {
+    fn produce[T]() -> Optional[T] { return <Optional.None /> }
+    fn own[U](sample: U, value: Optional[I64]) -> I64 { return read(value: value) }
+    assoc fn staticOwn[U](sample: U, value: Optional[I64]) -> I64 { return read(value: value) }
+}
+struct Box[T] { val item: T }
+impl[T] Box[T] { fn receive(value: Optional[T]) -> I64 { return 9I64 } }
+fn main() {
+    val marker = <Marker />
+    val box = <Box item=3I64 />
+    print(marker.own(sample: false, value: marker.produce()))
+    print(Marker.staticOwn(sample: false, value: marker.produce()))
+    print(box.receive(value: marker.produce()))
+    print(box.receive(value: if true { give <Optional.Some v=3 /> } else { give <Optional.None /> }))
+}

@@ -2596,7 +2596,10 @@ pub impl Comp {
                 // The construction query preserves the synthetic requirement on its
                 // selected cache entry.
                 // Only unresolved receivers need the parametric Record query.
-                mut val methodSelection = if admittedFactoryReceiver != 0U64 {
+                val savedMember = try self.cachedMemberCall(id: exprId)
+                mut val methodSelection = if savedMember.isSome() {
+                    give savedMember.unwrap()
+                } else if admittedFactoryReceiver != 0U64 {
                     give try self.resolveWrittenMethodWithOrigin(exprId: exprId, recv: recv, nameStart: nameStart, nameLen: nameLen, args: args, admittedReceiver: admittedFactoryReceiver, methodOrigin: <MethodLookupOrigin expression=<Optional.Some v=exprId /> />)
                 } else if extensionProofs.count() != 0U64 || admittedTrait.isSome() {
                     give try self.resolveMethodForResolvedReceiverWithOrigin(recv: recv, surfaceRef: receiverTerm, sourceId: 0U64, sourceOwner: 0U64, nameStart: nameStart, nameLen: nameLen, args: args, useOffset: self.exprOffset(id: exprId), requiredTraitOwner: requiredTraitOwner, extensionProofs: extensionProofs, admittedTrait: admittedTrait, methodOrigin: <MethodLookupOrigin expression=<Optional.Some v=exprId /> />)
@@ -2737,7 +2740,10 @@ pub impl Comp {
                 val receiverSource: CallTemplateReceiver = (try self.viewedReceiverTemplateForExpr(exprId: recv, viewedTerm: receiverTerm))
                 mut val extensionProofs = self.recordedExtensionSources(exprId: recv)
                 if extension.isSome() { extensionProofs.append(extension.unwrap()) }
-                mut val methodSelection: MemberCallLookup = if admittedTrait.isSome() || extensionProofs.count() != 0U64 { give <MemberCallLookup.NoCandidate /> } else { give try self.resolvedMemberCall(id: exprId) }
+                val savedMember = try self.cachedMemberCall(id: exprId)
+                mut val methodSelection: MemberCallLookup = if savedMember.isSome() { give savedMember.unwrap() }
+                else if admittedTrait.isSome() || extensionProofs.count() != 0U64 { give <MemberCallLookup.NoCandidate /> }
+                else { give try self.resolvedMemberCall(id: exprId) }
                 // `#` fixes a trait/view source at the syntax site.  Its
                 // selected member must be recorded while that source is still
                 // present in Record; the ordinary TypeCache intentionally
@@ -3830,12 +3836,12 @@ impl Comp {
             MemberCallLookup.DiagnosticCandidate(function: val function) => {
                 // This path may refine operands for a detailed error, but it
                 // must not publish a successful parent template or result.
+                try self.recordMethodArgumentContexts(callee: function, receiverTerm: receiverTerm, args: args, chainHoleRef: chainHoleRef, exprId: exprId)
                 val declaration = self.arena.functionAt(index: function)
                 for index in 0U64..<args.len {
                     val parameter = self.paramIndexForArg(params: declaration.params, args: args, argIdx: index)
                     if parameter < declaration.params.count() { try self.checkArgInoutMode(p: self.funcParamAt(params: declaration.params, index: parameter), arg: self.argAt(args: args, index: index)) }
                 }
-                try self.recordMethodArgumentContexts(callee: function, receiverTerm: receiverTerm, args: args, chainHoleRef: chainHoleRef, exprId: exprId)
                 return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "no matching method for this argument list") />
             }
             MemberCallLookup.NoCandidate | MemberCallLookup.CachedNonStatic => {}

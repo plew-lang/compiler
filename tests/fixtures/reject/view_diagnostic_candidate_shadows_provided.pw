@@ -1,0 +1,7 @@
+// An extension selector shadows the later trait pass even when only its labels fit.
+trait Picker {}
+pub impl Picker { fn choose(value: Bool) -> I64 { return 2I64 } }
+struct Marker {}
+impl Marker as Picker {}
+extension Extra { impl Marker { fn choose(value: I64) -> I64 { return 1I64 } } }
+fn main() { <Marker />#Extra#Picker.choose(value: false) }
