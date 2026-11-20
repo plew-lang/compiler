@@ -676,6 +676,10 @@ impl Comp {
     }
 
     inout fn contextualConstructionArgument(exprId: U64) -> Result[Bool, CompileDiagnostic] {
+        // No retained field facts means this is not a prepared construction.
+        // Raw fully-written arguments keep the ordinary structural type path;
+        // absence of a field fact must not invent a contextual hole.
+        if self.semanticExprTerm(exprId: exprId) == 0U64 { return <Result.Ok value=false /> }
         match self.arena.exprs[exprId] {
             Expr.Make(typeStart: _, typeLen: _, variantStart: _, variantLen: _, isEnum: _, ty: val written, fields: val fields) => {
                 if self.partialConstructionArgument(exprId: exprId) { return <Result.Ok value=true /> }
