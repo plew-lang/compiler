@@ -1,0 +1,223 @@
+// Failed array checks own scalar source identities and presentation data.
+// Public raw services cannot create these private operation records.
+impl Comp {
+    // Exact source access correspondence, not recognition by an "index" name.
+    fn arrayContextCallShape(exprId: U64, args: ArgRange, factoryReceiver: U64 = 0U64) -> Optional[SourceArrayFailureCall] {
+        if exprId >= self.arena.exprs.count() || args.start > self.arena.argPool.count() || args.len > self.arena.argPool.count() - args.start { return <Optional.None /> }
+        val accessIndex = self.decls.accessCandidateForExpr(exprId: exprId)
+        if accessIndex < self.decls.accessCandidateCount() {
+            val access = self.decls.accessCandidateAt(index: accessIndex)
+            if (exprId == access.readExpr || exprId == access.placeExpr) && access.readExpr < self.arena.exprs.count() && access.placeExpr < self.arena.exprs.count() && args.len == 1U64 {
+                val place = match self.arena.exprs[access.placeExpr] {
+                    Expr.Index(base: val receiver, index: val key) => <Optional.Some v=(receiver: receiver, key: key) />
+                    _ => <Optional.None />
+                }
+                val siteIndex = self.syntheticCallSiteIndex(exprId: access.readExpr)
+                if place.isSome() && siteIndex < self.decls.syntheticCallSites.count() {
+                    val site = self.decls.syntheticCallSites[siteIndex]
+                    val indexRead = match site.kind { SyntheticCallKind.IndexRead => true _ => false }
+                    val target = place.unwrap()
+                    if indexRead && site.originSerial == access.originSerial && self.arena.exprOriginSerial[access.readExpr] == access.originSerial && self.argAt(args: args, index: 0U64).expr == target.key {
+                        match self.arena.exprs[access.readExpr] {
+                            Expr.Method(recv: val receiver, nameStart: val start, nameLen: val length, args: val readArgs) => {
+                                if receiver == target.receiver && readArgs.len == 1U64 && readArgs.start < self.arena.argPool.count() && self.argAt(args: readArgs, index: 0U64).expr == target.key && (exprId != access.readExpr || (args.start == readArgs.start && args.len == readArgs.len)) {
+                                    return <Optional.Some v=<SourceArrayFailureCall.Index receiver=receiver key=target.key place=access.placeExpr read=access.readExpr serial=access.originSerial selectorStart=start selectorLength=length readArguments=readArgs readArgument=self.argAt(args: readArgs, index: 0U64) /> />
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+            }
+        }
+        // The capture caller admits the actual authored factory operation.
+        // Revalidation reads its existing serial and operand receipt only.
+        if factoryReceiver != 0U64 && factoryReceiver < self.arena.typeCount() {
+            val index = self.syntheticCallSiteIndex(exprId: exprId)
+            val authored = self.authoredNamedFactoryOrigins.get(key: exprId)
+            if index < self.decls.syntheticCallSites.count() && authored.isSome() && self.authoredConstruction(exprId: exprId).isSome() {
+                val site = self.decls.syntheticCallSites[index]
+                val receipt = authored.unwrap()
+                val factory = match site.kind { SyntheticCallKind.Factory => true _ => false }
+                if factory && site.receiverIsType && site.receiverTerm != 0U64 && site.receiverTerm < self.arena.typeCount() && site.originSerial == receipt.serial && args.len == receipt.arguments.count() {
+                    val requested = self.arena.typeTermAt(index: factoryReceiver)
+                    val written = self.arena.typeTermAt(index: site.receiverTerm)
+                    mut val intact = requested.hasDecl && written.hasDecl && requested.declOffset == written.declOffset
+                    for slot in 0U64..<args.len {
+                        val current = self.argAt(args: args, index: slot)
+                        val original = receipt.arguments[slot]
+                        if current.expr != original.expr || current.isInout != original.isInout || current.hasLabel != original.hasLabel || current.labelStart != original.labelStart || current.labelLen != original.labelLen { intact = false }
+                    }
+                    if intact {
+                        match self.arena.exprs[exprId] {
+                            Expr.Method(recv: val receiver, nameStart: val start, nameLen: val length, args: _) => { return <Optional.Some v=<SourceArrayFailureCall.Factory receiver=receiver receiverTerm=factoryReceiver writtenReceiverTerm=site.receiverTerm start=start length=length serial=receipt.serial /> /> }
+                            _ => {}
+                        }
+                    }
+                }
+            }
+        }
+        return match self.arena.exprs[exprId] {
+            Expr.Call(nameStart: val start, nameLen: val length, args: _) => {
+                give if self.isAuthoredFreeCall(exprId: exprId, start: start, length: length, args: args) { give <Optional.Some v=<SourceArrayFailureCall.Free start=start length=length /> /> }
+                else { give <Optional.None /> }
+            }
+            Expr.Method(recv: val receiver, nameStart: val start, nameLen: val length, args: _) => {
+                give if self.isAuthoredMethodLookup(exprId: exprId, nameStart: start, nameLen: length, args: args) { give <Optional.Some v=<SourceArrayFailureCall.Method receiver=receiver start=start length=length /> /> }
+                else { give <Optional.None /> }
+            }
+            Expr.ExtMethod(recv: val receiver, source: val source, nameStart: val start, nameLen: val length, args: _) => {
+                give if self.isAuthoredMethodLookup(exprId: exprId, nameStart: start, nameLen: length, args: args) { give <Optional.Some v=<SourceArrayFailureCall.Extension receiver=receiver source=source start=start length=length /> /> }
+                else { give <Optional.None /> }
+            }
+            _ => <Optional.None />
+        }
+    }
+
+    inout fn diagnosticArrayContextOrigin(origin: SourceRecordingScope, exprId: U64, args: ArgRange, factoryReceiver: U64 = 0U64) -> SourceRecordingScope {
+        val request = match origin.request {
+            SourceRecordOrigin.Raw => { return origin }
+            SourceRecordOrigin.DiagnosticRequest(session: _, root: _, frontier: _) => { return origin }
+            SourceRecordOrigin.CheckingRequest(session: val session, root: val root) => (session: session, root: root)
+        }
+        if request.session != self.sourceFactSession() { return <SourceRecordingScope request=<SourceRecordOrigin.Raw /> returnContext=origin.returnContext /> }
+        val shape = match self.arrayContextCallShape(exprId: exprId, args: args, factoryReceiver: factoryReceiver) {
+            Optional.Some(v: val shape) => shape
+            Optional.None => { return <SourceRecordingScope request=<SourceRecordOrigin.Raw /> returnContext=origin.returnContext /> }
+        }
+        val owner = match self.currentSourceOwner() { Optional.Some(v: val owner) => owner Optional.None => { return <SourceRecordingScope request=<SourceRecordOrigin.Raw /> returnContext=origin.returnContext /> } }
+        if !self.sourceFacts.isActive(owner: owner) || !semanticCompletionOwnersEqual(recorded: self.lexicalSourceFactOwner(owner: owner), prepared: request.root) || args.start > self.arena.argPool.count() || args.len > self.arena.argPool.count() - args.start { return <SourceRecordingScope request=<SourceRecordOrigin.Raw /> returnContext=origin.returnContext /> }
+        mut val written: Array[Arg] = []
+        for index in 0U64..<args.len { written.append(self.argAt(args: args, index: index)) }
+        val frontier = self.failedArrayContextFrontiers.count()
+        self.failedArrayContextFrontiers.append(<SourceArrayFailureFrontier session=request.session root=request.root expression=exprId shape=shape arguments=args written=written />)
+        return <SourceRecordingScope request=<SourceRecordOrigin.DiagnosticRequest session=request.session root=request.root frontier=frontier /> returnContext=origin.returnContext />
+    }
+
+    inout fn arrayContextRefusalDiagnostic(exprId: U64, ctxRef: U64, origin: SourceRecordingScope, expectedOrigin: SourceExpectedContext) -> CompileDiagnostic {
+        val location = self.diagnosticLocationAt(offset: self.exprOffset(id: exprId))
+        val owner = self.arrayContextDiagnosticOwner()
+        mut val event = 18446744073709551615U64
+        mut val start = 0U64
+        mut val end = 0U64
+        val contextMatches = match expectedOrigin { SourceExpectedContext.Contract(term: val term) => term == ctxRef SourceExpectedContext.None => false }
+        val requestMatches = match origin.request {
+            SourceRecordOrigin.Raw => false
+            SourceRecordOrigin.CheckingRequest(session: val session, root: _) => session == self.sourceFactSession()
+            SourceRecordOrigin.DiagnosticRequest(session: val session, root: _, frontier: val frontier) => session == self.sourceFactSession() && frontier < self.failedArrayContextFrontiers.count()
+        }
+        val frontier = match origin.request {
+            SourceRecordOrigin.DiagnosticRequest(session: _, root: _, frontier: val frontier) => frontier
+            _ => 18446744073709551615U64
+        }
+        val written = self.authoredArrayLiterals.get(key: exprId)
+        if contextMatches && requestMatches && written.isSome() {
+            val literal = written.unwrap()
+            val elements = match self.arena.exprs[exprId] { Expr.Array(elems: val elems) => elems _ => <ExprRange start=0U64 len=18446744073709551615U64 /> }
+            val active = match self.currentSourceOwner() {
+                Optional.Some(v: val current) => {
+                    val root = match origin.request { SourceRecordOrigin.CheckingRequest(session: _, root: val root) | SourceRecordOrigin.DiagnosticRequest(session: _, root: val root, frontier: _) => root SourceRecordOrigin.Raw => current }
+                    give self.sourceFacts.isActive(owner: current) && semanticCompletionOwnersEqual(recorded: self.lexicalSourceFactOwner(owner: current), prepared: root)
+                }
+                Optional.None => false
+            }
+            if active && elements.len == 0U64 && elements.start == literal.elements.start && elements.len == literal.elements.len && literal.start <= literal.end {
+                event = self.failedArrayContexts.count()
+                start = literal.start
+                end = literal.end
+                val refusal = <ArrayContextRefusal session=self.sourceFactSession() owner=owner expression=exprId requestedTerm=ctxRef effectiveTerm=ctxRef writtenStart=start writtenEnd=end frontier=frontier event=event location=location />
+                self.failedArrayContexts.append(<SourceArrayContextFailure refusal=refusal origin=origin.request elements=elements />)
+            }
+        }
+        return <CompileDiagnostic.arrayContext refusal=<ArrayContextRefusal session=self.sourceFactSession() owner=owner expression=exprId requestedTerm=ctxRef effectiveTerm=ctxRef writtenStart=start writtenEnd=end frontier=frontier event=event location=location /> />
+    }
+}
+
+impl Comp {
+    fn arrayFailureLocationsEqual(first: DiagnosticLocation, second: DiagnosticLocation) -> Bool {
+        return match first {
+            DiagnosticLocation.Unpositioned => match second { DiagnosticLocation.Unpositioned => true _ => false }
+            DiagnosticLocation.Line(line: val line) => match second { DiagnosticLocation.Line(line: val other) => line == other _ => false }
+            DiagnosticLocation.File(path: val path, line: val line) => match second { DiagnosticLocation.File(path: val otherPath, line: val otherLine) => path == otherPath && line == otherLine _ => false }
+        }
+    }
+
+    fn arrayFailureOwnersEqual(first: DiagnosticOwner, second: DiagnosticOwner) -> Bool {
+        return match first {
+            DiagnosticOwner.Function(index: val index) => match second { DiagnosticOwner.Function(index: val other) => index == other _ => false }
+            DiagnosticOwner.Global(target: val target) => match second { DiagnosticOwner.Global(target: val other) => target == other _ => false }
+            DiagnosticOwner.Closure(expression: val expression) => match second { DiagnosticOwner.Closure(expression: val other) => expression == other _ => false }
+            DiagnosticOwner.Unknown => false
+        }
+    }
+
+
+    fn arrayFailureFrontierMatches(frontier: U64, session: U64, root: SemanticCompletionOwner) -> Bool {
+        if frontier >= self.failedArrayContextFrontiers.count() { return false }
+        val proof = self.failedArrayContextFrontiers[frontier]
+        if proof.session != session || !semanticCompletionOwnersEqual(recorded: proof.root, prepared: root) { return false }
+        val factoryReceiver = match proof.shape { SourceArrayFailureCall.Factory(receiver: _, receiverTerm: val term, writtenReceiverTerm: _, start: _, length: _, serial: _) => term _ => 0U64 }
+        val current = match self.arrayContextCallShape(exprId: proof.expression, args: proof.arguments, factoryReceiver: factoryReceiver) { Optional.Some(v: val shape) => shape Optional.None => { return false } }
+        if !proof.shape.same(other: current) { return false }
+        val args = proof.arguments
+        if args.start > self.arena.argPool.count() || args.len > self.arena.argPool.count() - args.start || args.len != proof.written.count() { return false }
+        for index in 0U64..<args.len {
+            val recorded = proof.written[index]
+            val current = self.argAt(args: args, index: index)
+            if recorded.expr != current.expr || recorded.isInout != current.isInout || recorded.hasLabel != current.hasLabel || recorded.labelStart != current.labelStart || recorded.labelLen != current.labelLen { return false }
+        }
+        return true
+    }
+}
+
+pub impl Comp {
+    // Necessary private-event validation, never Source interpretation permission.
+    fn sourceArrayContextHasOwner(refusal: ArrayContextRefusal) -> Bool {
+        if refusal.session() != self.sourceFactSession() || refusal.event() >= self.failedArrayContexts.count() || refusal.expression() >= self.arena.exprs.count() || refusal.effectiveTerm() == 0U64 || refusal.effectiveTerm() >= self.arena.typeCount() { return false }
+        val proof = self.failedArrayContexts[refusal.event()]
+        val saved = proof.refusal
+        if saved.session() != refusal.session() || saved.event() != refusal.event() || saved.frontier() != refusal.frontier() || saved.expression() != refusal.expression() || saved.requestedTerm() != refusal.requestedTerm() || saved.effectiveTerm() != refusal.effectiveTerm() || saved.writtenStart() != refusal.writtenStart() || saved.writtenEnd() != refusal.writtenEnd() || !self.arrayFailureOwnersEqual(first: saved.owner(), second: refusal.owner()) || !self.arrayFailureLocationsEqual(first: saved.location(), second: refusal.location()) { return false }
+        val literal = match self.authoredArrayLiterals.get(key: refusal.expression()) { Optional.Some(v: val literal) => literal Optional.None => { return false } }
+        if literal.start != refusal.writtenStart() || literal.end != refusal.writtenEnd() || literal.elements.start != proof.elements.start || literal.elements.len != proof.elements.len { return false }
+        match self.arena.exprs[refusal.expression()] {
+            Expr.Array(elems: val elements) => { if elements.start != proof.elements.start || elements.len != 0U64 || elements.len != proof.elements.len { return false } }
+            _ => { return false }
+        }
+        return match proof.origin {
+            SourceRecordOrigin.Raw => false
+            SourceRecordOrigin.CheckingRequest(session: val session, root: val root) => session == refusal.session() && self.sourceFacts.outcome(owner: root).isSome()
+            SourceRecordOrigin.DiagnosticRequest(session: val session, root: val root, frontier: val frontier) => session == refusal.session() && self.sourceFacts.outcome(owner: root).isSome() && self.arrayFailureFrontierMatches(frontier: frontier, session: session, root: root)
+        }
+    }
+}
+
+impl SourceArrayFailureCall {
+    fn same(other: SourceArrayFailureCall) -> Bool {
+        return match self {
+            SourceArrayFailureCall.Free(start: val start, length: val length) => match other {
+                SourceArrayFailureCall.Free(start: val otherStart, length: val otherLength) => start == otherStart && length == otherLength
+                _ => false
+            }
+            SourceArrayFailureCall.Method(receiver: val receiver, start: val start, length: val length) => match other {
+                SourceArrayFailureCall.Method(receiver: val otherReceiver, start: val otherStart, length: val otherLength) => receiver == otherReceiver && start == otherStart && length == otherLength
+                _ => false
+            }
+            SourceArrayFailureCall.Extension(receiver: val receiver, source: val source, start: val start, length: val length) => match other {
+                SourceArrayFailureCall.Extension(receiver: val otherReceiver, source: val otherSource, start: val otherStart, length: val otherLength) => {
+                    if receiver != otherReceiver || start != otherStart || length != otherLength || source.writtenStart != otherSource.writtenStart || source.writtenLen != otherSource.writtenLen || source.surfaceId != otherSource.surfaceId || source.traitInstance.owner != otherSource.traitInstance.owner || source.traitInstance.positionalArgs.count() != otherSource.traitInstance.positionalArgs.count() { return false }
+                    for index in 0U64..<source.traitInstance.positionalArgs.count() { if source.traitInstance.positionalArgs[index] != otherSource.traitInstance.positionalArgs[index] { return false } }
+                    give true
+                }
+                _ => false
+            }
+            SourceArrayFailureCall.Factory(receiver: val receiver, receiverTerm: val term, writtenReceiverTerm: val writtenTerm, start: val start, length: val length, serial: val serial) => match other {
+                SourceArrayFailureCall.Factory(receiver: val otherReceiver, receiverTerm: val otherTerm, writtenReceiverTerm: val otherWrittenTerm, start: val otherStart, length: val otherLength, serial: val otherSerial) => receiver == otherReceiver && term == otherTerm && writtenTerm == otherWrittenTerm && start == otherStart && length == otherLength && serial == otherSerial
+                _ => false
+            }
+            SourceArrayFailureCall.Index(receiver: val receiver, key: val key, place: val place, read: val read, serial: val serial, selectorStart: val start, selectorLength: val length, readArguments: val arguments, readArgument: val argument) => match other {
+                SourceArrayFailureCall.Index(receiver: val otherReceiver, key: val otherKey, place: val otherPlace, read: val otherRead, serial: val otherSerial, selectorStart: val otherStart, selectorLength: val otherLength, readArguments: val otherArguments, readArgument: val otherArgument) => receiver == otherReceiver && key == otherKey && place == otherPlace && read == otherRead && serial == otherSerial && start == otherStart && length == otherLength && arguments.start == otherArguments.start && arguments.len == otherArguments.len && argument.expr == otherArgument.expr && argument.isInout == otherArgument.isInout && argument.hasLabel == otherArgument.hasLabel && argument.labelStart == otherArgument.labelStart && argument.labelLen == otherArgument.labelLen
+                _ => false
+            }
+        }
+    }
+}

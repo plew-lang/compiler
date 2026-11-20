@@ -1,0 +1,160 @@
+use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontendForRequests, openFrontend }
+use ../../../src/CheckedProgram only { CompilerSession, CompilerSessionResult, ProgramCheckResult, checkCompilerSession }
+use ../../../src/Backend only { LlvmLoweringResult }
+use ../../../src/SourceAccess only { SourceAccess, SourceResource }
+use ../../../src/Diag only { CompileDiagnostic, FailureDomain, ArrayContextRefusal, DiagnosticOwner, DiagnosticLocation }
+use ../../../src/Ir only { Expr, Arg }
+use @Std/Io only { print }
+
+fn input() -> FrontendInput {
+    return <FrontendInput.Text path="ArrayContext.pw" text="fn main() {{ val value: I64 = [] }}" />
+}
+fn message() -> String { return "cannot infer an empty array's element type from a non-array context (spec/02)" }
+fn requireRaw(diagnostic: CompileDiagnostic) {
+    match diagnostic.failureDomain() { FailureDomain.Unclassified => {} _ => { panic("raw array refusal changed domain") } }
+    if diagnostic.isSourceRejection() || diagnostic.message() != message() || diagnostic.arrayContext().isNone() { panic("array refusal lost closed cause") }
+}
+fn requireSource(diagnostic: CompileDiagnostic) {
+    if !diagnostic.isSourceRejection() || diagnostic.message() != message() { panic("owned array check lost source refusal") }
+}
+fn failure(compiler: inout Comp, function: U64) -> CompileDiagnostic {
+    return match compiler.prepareLexicalBody(fnIdx: function) { Result.Err(error: val diagnostic) => diagnostic Result.Ok(value: _) => { panic("invalid array was accepted") } }
+}
+fn mutations(compiler: Comp, refusal: ArrayContextRefusal) {
+    for index in 0U64..<10U64 {
+        val changed = <ArrayContextRefusal
+            session=if index == 0U64 { give refusal.session() + 1U64 } else { give refusal.session() }
+            owner=if index == 1U64 { give <DiagnosticOwner.Unknown /> } else { give refusal.owner() }
+            expression=if index == 2U64 { give compiler.arena.exprs.count() } else { give refusal.expression() }
+            requestedTerm=if index == 3U64 { give 0U64 } else { give refusal.requestedTerm() }
+            effectiveTerm=if index == 4U64 { give 0U64 } else { give refusal.effectiveTerm() }
+            writtenStart=if index == 5U64 { give refusal.writtenStart() + 1U64 } else { give refusal.writtenStart() }
+            writtenEnd=if index == 6U64 { give refusal.writtenEnd() + 1U64 } else { give refusal.writtenEnd() }
+            frontier=if index == 9U64 { give 0U64 } else { give refusal.frontier() }
+            event=if index == 7U64 { give 18446744073709551615U64 } else { give refusal.event() }
+            location=if index == 8U64 { give <DiagnosticLocation.Unpositioned /> } else { give refusal.location() } />
+        if compiler.sourceArrayContextHasOwner(refusal: changed) { panic("mutated array refusal acquired private evidence") }
+    }
+    mut val foreign = <Comp />
+    analyzeFrontendForRequests(c: inout foreign, input: input(), sources: <SourceAccess />).unwrap()
+    if foreign.sourceArrayContextHasOwner(refusal: refusal) { panic("foreign session accepted array evidence") }
+    for domain in [<FailureDomain.Unclassified />, <FailureDomain.Internal />, <FailureDomain.Limit />, <FailureDomain.Source />] {
+        val report = <CompileDiagnostic failureDomain=domain location=refusal.location() message=message() />
+        if compiler.sourceFailureHasOwner(diagnostic: report) { panic("equal-text report acquired array evidence") }
+    }
+}
+fn session() -> CompilerSession {
+    match CompilerSession.open(input: input(), sources: <SourceAccess />) {
+        CompilerSessionResult.Success(session: val session) => { return move session }
+        CompilerSessionResult.Failure(diagnostic: val diagnostic) => { panic(diagnostic.message()) }
+    }
+}
+fn failedCall(text: String) {
+    mut val raw = <Comp />
+    match analyzeFrontendForRequests(c: inout raw, input: <FrontendInput.File path="plew:std/ArrayContextProbe.pw" />, sources: <SourceAccess stdRoot="std/".bytes() resources=[<SourceResource path="plew:std/ArrayContextProbe.pw".bytes() text=text />] />) { Result.Ok(value: _) => {} Result.Err(error: val diagnostic) => { panic("failed-query setup: " + diagnostic.message()) } }
+    val name = raw.internBytes(s: "main")
+    val function = raw.arena.firstFunctionNamed(nameId: name.nameId)
+    val module = raw.moduleOf(offset: raw.arena.functionAt(index: function).defOffset)
+    // A virtual File uses the normal loader (Text deliberately has no module
+    // loading). Exclude Selected here; the retained frontier below proves
+    // DiagnosticRequest rather than an absent or cached observation.
+    mut val diagnosticCall = raw.arena.exprs.count()
+    for expression in 0U64..<raw.arena.exprs.count() {
+        if raw.moduleOf(offset: raw.exprOffset(id: expression)) != module { continue }
+        val arguments = match raw.arena.exprs[expression] {
+            Expr.Call(nameStart: _, nameLen: _, args: val args) |
+            Expr.Method(recv: _, nameStart: _, nameLen: _, args: val args) |
+            Expr.ExtMethod(recv: _, source: _, nameStart: _, nameLen: _, args: val args) => args
+            _ => { continue }
+        }
+        if arguments.len != 2U64 { continue }
+        match raw.arena.exprs[raw.argAt(args: arguments, index: 0U64).expr] {
+            Expr.Array(elems: _) => {
+                if raw.resolvedCallee(id: expression).unwrap() < raw.arena.functionCount() { panic("control did not reach a diagnostic-only frontier") }
+                diagnosticCall = expression
+            }
+            _ => {}
+        }
+    }
+    if diagnosticCall == raw.arena.exprs.count() { panic("missing diagnostic-only frontier control") }
+    val diagnostic = failure(compiler: inout raw, function: function)
+    requireRaw(diagnostic: diagnostic)
+    if !raw.sourceFailureHasOwner(diagnostic: diagnostic) { panic("failed query lost its early array event") }
+    val refusal = diagnostic.arrayContext().unwrap()
+    if refusal.frontier() == 18446744073709551615U64 { panic("control has no retained diagnostic-only frontier") }
+    mut val seen = false
+    for expression in 0U64..<raw.arena.exprs.count() {
+        if raw.moduleOf(offset: raw.exprOffset(id: expression)) != module { continue }
+        val arguments = match raw.arena.exprs[expression] {
+            Expr.Call(nameStart: _, nameLen: _, args: val args) |
+            Expr.Method(recv: _, nameStart: _, nameLen: _, args: val args) |
+            Expr.ExtMethod(recv: _, source: _, nameStart: _, nameLen: _, args: val args) => args
+            _ => { continue }
+        }
+        if arguments.len != 2U64 { continue }
+        val argument = raw.argAt(args: arguments, index: 0U64)
+        if argument.expr != refusal.expression() { continue }
+        seen = true
+        val key = raw.templateCallSiteKey(fnIdx: function, exprId: expression).unwrap()
+        if raw.callTemplateIndex(siteKey: key) < raw.callTemplateCount() || raw.arena.finalCalleeCount() != 0U64 { panic("failed query fabricated a successful parent") }
+        mut val changed = raw
+        changed.arena.argPool.set(i: arguments.start, value: <Arg expr=expression isInout=argument.isInout labelStart=argument.labelStart labelLen=argument.labelLen hasLabel=argument.hasLabel />)
+        if changed.sourceArrayContextHasOwner(refusal: refusal) { panic("changed failed-query operand retained array evidence") }
+    }
+    if !seen { panic("missing failed-query operand control") }
+}
+fn main() {
+    mut val raw = <Comp />
+    analyzeFrontendForRequests(c: inout raw, input: input(), sources: <SourceAccess />).unwrap()
+    val name = raw.internBytes(s: "main")
+    val function = raw.arena.firstFunctionNamed(nameId: name.nameId)
+    // Raw full-body recording has an active construction owner, but it is not
+    // the canonical source request and cannot mint a private failure event.
+    val direct = match raw.recordParametricFunction(fnIdx: function, recordCallTemplates: true) {
+        Result.Err(error: val diagnostic) => diagnostic
+        Result.Ok(value: _) => { panic("raw body accepted invalid array") }
+    }
+    requireRaw(diagnostic: direct)
+    if raw.sourceFailureHasOwner(diagnostic: direct) { panic("Raw body minted array evidence") }
+    val cause = direct.arrayContext().unwrap()
+    match raw.recordArrayLitCtx(exprId: cause.expression(), ctxRef: cause.effectiveTerm()) {
+        Result.Err(error: val diagnostic) => { requireRaw(diagnostic: diagnostic) if raw.sourceFailureHasOwner(diagnostic: diagnostic) { panic("active-owner direct array API minted evidence") } }
+        Result.Ok(value: _) => { panic("direct array context stopped rejecting") }
+    }
+    match raw.recordSemanticExprExpectedResult(exprId: cause.expression(), expectedTerm: cause.effectiveTerm()) {
+        Result.Err(error: val diagnostic) => { requireRaw(diagnostic: diagnostic) if raw.sourceFailureHasOwner(diagnostic: diagnostic) { panic("Raw recursive expected-result minted evidence") } }
+        Result.Ok(value: _) => { panic("direct expected-result stopped rejecting") }
+    }
+    print("raw recursive context stayed unclassified")
+    val first = failure(compiler: inout raw, function: function)
+    requireRaw(diagnostic: first)
+    if !raw.sourceFailureHasOwner(diagnostic: first) { panic("actual checking request lost array event") }
+    mutations(compiler: raw, refusal: first.arrayContext().unwrap())
+    raw.pendingDiagnostics.append(first)
+    if raw.takeDiagnostics().count() != 1U64 { panic("array diagnostic drain lost presentation") }
+    val repeated = failure(compiler: inout raw, function: function)
+    requireRaw(diagnostic: repeated)
+    if !raw.sourceFailureHasOwner(diagnostic: repeated) || repeated.arrayContext().unwrap().event() != first.arrayContext().unwrap().event() { panic("failed retry replaced array event") }
+    print("request event and failed cache retained")
+    print("mutated provenance and ordinary reports rejected")
+    failedCall(text: "fn accept(value: I64, other: I64) {{}}\nfn main() {{ accept(value: [], other: false) }}")
+    failedCall(text: "struct Marker {{}}\nimpl Marker {{ fn accept(value: I64, other: I64) {{}} }}\nfn main() {{ <Marker />.accept(value: [], other: false) }}")
+    failedCall(text: "struct Marker {{}}\nimpl Marker {{ assoc fn accept(value: I64, other: I64) {{}} }}\nfn main() {{ Marker.accept(value: [], other: false) }}")
+    failedCall(text: "struct Marker {{}}\nextension Extra {{ impl Marker {{ fn accept(value: I64, other: I64) {{}} }} }}\nfn main() {{ <Marker />#Extra.accept(value: [], other: false) }}")
+    print("failed query evidence precedes operand rejection")
+    mut val owned = session()
+    match owned.lowerDeclarations() { LlvmLoweringResult.Success(module: _) => {} LlvmLoweringResult.Failure(diagnostic: val diagnostic) => { panic(diagnostic.message()) } }
+    val bodies = owned.registeredBodies()
+    if bodies.count() == 0U64 { panic("missing main body") }
+    for body in bodies {
+        for count in 0U64..<2U64 {
+            match owned.prepareBodyAccess(bodyId: body) { Result.Err(error: val diagnostic) => { requireSource(diagnostic: diagnostic) } Result.Ok(value: _) => { panic("owned body accepted invalid array") } }
+        }
+    }
+    match checkCompilerSession(session: move owned) { ProgramCheckResult.Failure(diagnostic: val diagnostic) => { requireSource(diagnostic: diagnostic) } ProgramCheckResult.Success(program: _) => { panic("failed session recovered") } }
+    print("owned lazy retry retained source refusal")
+    match checkCompilerSession(session: session()) { ProgramCheckResult.Failure(diagnostic: val diagnostic) => { requireSource(diagnostic: diagnostic) } ProgramCheckResult.Success(program: _) => { panic("whole check accepted invalid array") } }
+    print("whole check classified array refusal")
+    match openFrontend(input: input(), sources: <SourceAccess />) { Result.Err(error: val diagnostic) => { requireSource(diagnostic: diagnostic) } Result.Ok(value: _) => { panic("eager check accepted invalid array") } }
+    print("eager check classified array refusal")
+}

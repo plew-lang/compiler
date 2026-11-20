@@ -613,7 +613,7 @@ pub impl Comp {
     // ordinary frozen CallTemplates.  Mono may lower the already-selected
     // value form for code generation, but must never choose it from spelling.
     inout fn recordIndexCall(exprId: U64, base: U64, key: U64, receiverTerm: U64, receiverType: TypeInfo) -> Result[(), CompileDiagnostic] {
-        return self.recordIndexCallWithOrigin(exprId: exprId, base: base, key: key, receiverTerm: receiverTerm, receiverType: receiverType, origin: <SourceRecordOrigin.Raw />)
+        return self.recordIndexCallWithOrigin(exprId: exprId, base: base, key: key, receiverTerm: receiverTerm, receiverType: receiverType, origin: <SourceRecordingScope request=<SourceRecordOrigin.Raw /> returnContext=<SourceExpectedContext.None /> />, expectedOrigin: <SourceExpectedContext.None />)
     }
 
     // Preserve an expression's semantic type source without placing a call
@@ -937,14 +937,14 @@ impl Comp {
         return <Result.Ok value=functionType />
     }
 
-    inout fn recordBoundValueCall(exprId: U64, binding: LexicalValueBinding, args: ArgRange, origin: SourceRecordOrigin) -> Result[(), CompileDiagnostic] {
+    inout fn recordBoundValueCall(exprId: U64, binding: LexicalValueBinding, args: ArgRange, origin: SourceRecordingScope, expectedOrigin: SourceExpectedContext) -> Result[(), CompileDiagnostic] {
         val functionType = try self.selectedValueFunctionType(exprId: exprId, binding: binding, args: args)
         val local = self.cur.locals[binding.localIndex]
         try self.recordDeclarationCapture(localIndex: binding.localIndex)
         val target = if binding.isGlobal {
             give <DynamicCallTemplateTarget.ClosureGlobal declarationTarget=binding.declarationTarget fnTypeTerm=functionType />
         } else { give <DynamicCallTemplateTarget.ClosureLocal bindingDeclStart=binding.declarationTarget fnTypeTerm=functionType /> }
-        try self.recordDynamicCallTemplate(exprId: exprId, receiver: <CallTemplateReceiver.None />, args: args, target: target, origin: origin)
+        try self.recordDynamicCallTemplate(exprId: exprId, receiver: <CallTemplateReceiver.None />, args: args, target: target, origin: origin, expectedOrigin: expectedOrigin)
         if exprId < self.typeCache.callee.count() { self.typeCache.callee.set(i: exprId, value: <CachedCallee.NoStaticCallee />) }
         val result = self.semanticExprTerm(exprId: exprId)
         if self.bodyTypeNeedsViewAdmission(ref: result) {
@@ -959,7 +959,7 @@ impl Comp {
                 self.recordTypeChildEvidence(exprId: exprId, origin: origin.unwrap(), parentTerm: functionType, slot: 0U64, term: result)
             }
         }
-        try self.recordArgumentAccessUsesWithOrigin(parentExpr: exprId, callee: self.arena.functionCount(), args: args, origin: origin)
+        try self.recordArgumentAccessUsesWithOrigin(parentExpr: exprId, callee: self.arena.functionCount(), args: args, origin: origin, expectedOrigin: expectedOrigin)
         return <Result.Ok value=() />
     }
 
@@ -1026,7 +1026,7 @@ pub impl Comp {
     // the parametric receiver and source selector are both available; the
     // function TypeTerm is grounded only when the shared body is instantiated.
     inout fn recordDynamicMethodCall(exprId: U64, receiverExpr: U64, receiverTerm: U64, nameStart: U64, nameLen: U64, args: ArgRange) -> Result[Bool, CompileDiagnostic] {
-        return self.recordDynamicMethodCallWithOrigin(exprId: exprId, receiverExpr: receiverExpr, receiverTerm: receiverTerm, nameStart: nameStart, nameLen: nameLen, args: args, origin: <SourceRecordOrigin.Raw />)
+        return self.recordDynamicMethodCallWithOrigin(exprId: exprId, receiverExpr: receiverExpr, receiverTerm: receiverTerm, nameStart: nameStart, nameLen: nameLen, args: args, origin: <SourceRecordingScope request=<SourceRecordOrigin.Raw /> returnContext=<SourceExpectedContext.None /> />, expectedOrigin: <SourceExpectedContext.None />)
     }
 
     // A method whose concrete declaration is unavailable during the
@@ -1095,22 +1095,22 @@ impl Comp {
         return selected.hasDecl && written.hasDecl && selected.declOffset == written.declOffset && self.offsetIsLoaded(offset: written.declOffset)
     }
 
-    inout fn recordUnresolvedMethodTemplate(exprId: U64, receiver: CallTemplateReceiver, receiverExpr: U64, receiverTerm: U64, nameStart: U64, nameLen: U64, args: ArgRange, resolution: StaticMemberResolution, lookupPerformed: Bool = true, origin: SourceRecordOrigin) -> Result[(), CompileDiagnostic] {
+    inout fn recordUnresolvedMethodTemplate(exprId: U64, receiver: CallTemplateReceiver, receiverExpr: U64, receiverTerm: U64, nameStart: U64, nameLen: U64, args: ArgRange, resolution: StaticMemberResolution, lookupPerformed: Bool = true, origin: SourceRecordingScope, expectedOrigin: SourceExpectedContext) -> Result[(), CompileDiagnostic] {
         match resolution {
             StaticMemberResolution.Requirement(proof: _, traitIdx: val traitIdx, reqIdx: val reqIdx) => {
                 if self.typeParameterQualifierTerm(exprId: receiverExpr) != 0U64 && !self.traitReqAt(reqs: self.decls.traitAt(index: traitIdx).reqs, index: reqIdx).isAssoc {
                     return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "a type qualifier can only call an associated function") />
                 }
-                try self.recordStaticMethodTemplate(exprId: exprId, receiverTerm: receiverTerm, receiver: receiver, args: args, resolution: resolution, resultTerm: (try self.staticRequirementCallResultType(resolution: resolution, args: args)), origin: origin)
+                try self.recordStaticMethodTemplate(exprId: exprId, receiverTerm: receiverTerm, receiver: receiver, args: args, resolution: resolution, resultTerm: (try self.staticRequirementCallResultType(resolution: resolution, args: args)), origin: origin, expectedOrigin: expectedOrigin)
             }
             StaticMemberResolution.Provided(proof: _, traitIdx: _, callee: val declaration) => {
                 if self.typeParameterQualifierTerm(exprId: receiverExpr) != 0U64 && !self.arena.functionAt(index: declaration).isAssoc {
                     return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "a type qualifier can only call an associated function") />
                 }
-                try self.recordStaticMethodTemplate(exprId: exprId, receiverTerm: receiverTerm, receiver: receiver, args: args, resolution: resolution, resultTerm: self.parametricExprTerm(exprId: exprId), origin: origin)
+                try self.recordStaticMethodTemplate(exprId: exprId, receiverTerm: receiverTerm, receiver: receiver, args: args, resolution: resolution, resultTerm: self.parametricExprTerm(exprId: exprId), origin: origin, expectedOrigin: expectedOrigin)
             }
             _ => {
-                val selected = try self.recordDynamicMethodCallWithOrigin(exprId: exprId, receiverExpr: receiverExpr, receiverTerm: receiverTerm, nameStart: nameStart, nameLen: nameLen, args: args, origin: origin)
+                val selected = try self.recordDynamicMethodCallWithOrigin(exprId: exprId, receiverExpr: receiverExpr, receiverTerm: receiverTerm, nameStart: nameStart, nameLen: nameLen, args: args, origin: origin, expectedOrigin: expectedOrigin)
                 // Selection failure is a result of this lexical query, not
                 // inferred from whether a later publication pass wrote a row.
                 if !selected && !self.cur.recordingAccessWriteFacet {
@@ -1140,7 +1140,7 @@ impl Comp {
 
 pub impl Comp {
     inout fn recordParametricMethodCall(exprId: U64, callee: U64, receiverSource: CallTemplateReceiver, receiverTerm: U64, args: ArgRange) -> Result[(), CompileDiagnostic] {
-        return self.recordParametricMethodCallWithOrigin(exprId: exprId, callee: callee, receiverSource: receiverSource, receiverTerm: receiverTerm, args: args, origin: <SourceRecordOrigin.Raw />)
+        return self.recordParametricMethodCallWithOrigin(exprId: exprId, callee: callee, receiverSource: receiverSource, receiverTerm: receiverTerm, args: args, origin: <SourceRecordingScope request=<SourceRecordOrigin.Raw /> returnContext=<SourceExpectedContext.None /> />, expectedOrigin: <SourceExpectedContext.None />)
     }
 
     // The PARAMETRIC receiver ref for method `f` — the form `self` records as, chosen
@@ -1197,7 +1197,7 @@ pub impl Comp {
     // constructor of the expression's semantic type. All expected-result
     // consumers use this boundary, including delayed argument refinement.
     inout fn recordArrayLitCtx(exprId: U64, ctxRef: U64) -> Result[(), CompileDiagnostic] {
-        return self.recordArrayLitCtxWithOrigin(exprId: exprId, ctxRef: ctxRef, origin: <SourceRecordOrigin.Raw />)
+        return self.recordArrayLitCtxWithOrigin(exprId: exprId, ctxRef: ctxRef, origin: <SourceRecordingScope request=<SourceRecordOrigin.Raw /> returnContext=<SourceExpectedContext.None /> />, expectedOrigin: <SourceExpectedContext.None />)
     }
 
     // `Record` is the last phase allowed to turn a construction's authored
@@ -1388,13 +1388,13 @@ pub impl Comp {
     // Freeze struct field bindings while Record owns name-to-layout work.
     // Missing or invalid terms leave no fact; Mid must not reconstruct them.
     inout fn recordSemanticMatch(matchSource: MatchSource, scrut: U64, arms: MatchArmRange) -> Result[(), CompileDiagnostic] {
-        return self.recordSemanticMatchWithOrigin(matchSource: matchSource, scrut: scrut, arms: arms, origin: <SourceRecordOrigin.Raw />)
+        return self.recordSemanticMatchWithOrigin(matchSource: matchSource, scrut: scrut, arms: arms, origin: <SourceRecordingScope request=<SourceRecordOrigin.Raw /> returnContext=<SourceExpectedContext.None /> />, expectedOrigin: <SourceExpectedContext.None />)
     }
 
     // Extend the success environment only. The caller restores its mark before
     // visiting the single failure continuation.
     inout fn recordConditionClauses(conditions: ConditionClauseRange) -> Result[(), CompileDiagnostic] {
-        return self.recordConditionClausesWithOrigin(conditions: conditions, origin: <SourceRecordOrigin.Raw />)
+        return self.recordConditionClausesWithOrigin(conditions: conditions, origin: <SourceRecordingScope request=<SourceRecordOrigin.Raw /> returnContext=<SourceExpectedContext.None /> />, expectedOrigin: <SourceExpectedContext.None />)
     }
 
     inout fn recordStructPattern(matchSource: MatchSource, isConsuming: Bool, scrutineeTerm: U64, layoutReceiver: U64, arms: Array[PatInfo]) -> Result[(), CompileDiagnostic] {
@@ -1517,7 +1517,7 @@ pub impl Comp {
     // Check and publish a block result while its local and pattern bindings
     // are still in scope. All value-control forms share this boundary.
     inout fn recordValueBlock(exprId: U64, blockId: U64, expectedTerm: U64, discarded: Bool = false) -> Result[Bool, CompileDiagnostic] {
-        return self.recordValueBlockWithOrigin(exprId: exprId, blockId: blockId, expectedTerm: expectedTerm, discarded: discarded, origin: <SourceRecordOrigin.Raw />)
+        return self.recordValueBlockWithOrigin(exprId: exprId, blockId: blockId, expectedTerm: expectedTerm, discarded: discarded, origin: <SourceRecordingScope request=<SourceRecordOrigin.Raw /> returnContext=<SourceExpectedContext.None /> />, expectedOrigin: <SourceExpectedContext.None />)
     }
 
     // `readExpr` is a synthetic Index.index call made by Lower.  The candidate
@@ -1583,7 +1583,7 @@ pub impl Comp {
     // The selected declaration owns the parameter mapping and write mode;
     // unresolved modes remain explicit until finalization.
     inout fn recordArgumentAccessUses(parentExpr: U64, callee: U64, args: ArgRange) -> Result[(), CompileDiagnostic] {
-        return self.recordArgumentAccessUsesWithOrigin(parentExpr: parentExpr, callee: callee, args: args, origin: <SourceRecordOrigin.Raw />)
+        return self.recordArgumentAccessUsesWithOrigin(parentExpr: parentExpr, callee: callee, args: args, origin: <SourceRecordingScope request=<SourceRecordOrigin.Raw /> returnContext=<SourceExpectedContext.None /> />, expectedOrigin: <SourceExpectedContext.None />)
     }
 
     // Record the detached IndexSet facet under exactly the same lexical
@@ -1593,7 +1593,7 @@ pub impl Comp {
     // The guard prevents `write(value: read())` from recursively re-entering
     // this routine while it records its anchor child.
     inout fn recordAccessWriteFacet(readExpr: U64) -> Result[(), CompileDiagnostic] {
-        return self.recordAccessWriteFacetWithOrigin(readExpr: readExpr, origin: <SourceRecordOrigin.Raw />)
+        return self.recordAccessWriteFacetWithOrigin(readExpr: readExpr, origin: <SourceRecordingScope request=<SourceRecordOrigin.Raw /> returnContext=<SourceExpectedContext.None /> />, expectedOrigin: <SourceExpectedContext.None />)
     }
 
     // Declaration layout selection is separate from the value's lexical type.
@@ -1705,13 +1705,13 @@ pub impl Comp {
     // Selected and diagnostic method surfaces share operand context checks.
     // This helper never publishes parent-call authority; its caller owns the role.
     inout fn recordMethodArgumentContexts(callee: U64, receiverTerm: U64, args: ArgRange, chainHoleRef: U64, exprId: U64) -> Result[(), CompileDiagnostic] {
-        return self.recordMethodArgumentContextsWithOrigin(callee: callee, receiverTerm: receiverTerm, args: args, chainHoleRef: chainHoleRef, exprId: exprId, origin: <SourceRecordOrigin.Raw />)
+        return self.recordMethodArgumentContextsWithOrigin(callee: callee, receiverTerm: receiverTerm, args: args, chainHoleRef: chainHoleRef, exprId: exprId, origin: <SourceRecordingScope request=<SourceRecordOrigin.Raw /> returnContext=<SourceExpectedContext.None /> />, expectedOrigin: <SourceExpectedContext.None />)
     }
 
     // After result-context completion, supply unresolved children with the
     // exact selected parameter terms while Record still owns their scope.
     inout fn recordSelectedCallArgumentContexts(exprId: U64, args: ArgRange, chainHoleRef: U64) -> Result[(), CompileDiagnostic] {
-        return self.recordSelectedCallArgumentContextsWithOrigin(exprId: exprId, args: args, chainHoleRef: chainHoleRef, origin: <SourceRecordOrigin.Raw />)
+        return self.recordSelectedCallArgumentContextsWithOrigin(exprId: exprId, args: args, chainHoleRef: chainHoleRef, origin: <SourceRecordingScope request=<SourceRecordOrigin.Raw /> returnContext=<SourceExpectedContext.None /> />, expectedOrigin: <SourceExpectedContext.None />)
     }
 
     // Call selection can finish early without bypassing the common expression
@@ -1752,10 +1752,14 @@ pub impl Comp {
 }
 
 impl Comp {
-    inout fn recordFreeCallArgumentContexts(exprId: U64, context: FreeCallLookup, args: ArgRange, origin: SourceRecordOrigin) -> Result[(), CompileDiagnostic] {
+    inout fn recordFreeCallArgumentContexts(exprId: U64, context: FreeCallLookup, args: ArgRange, origin: SourceRecordingScope, expectedOrigin: SourceExpectedContext) -> Result[(), CompileDiagnostic] {
         val callee = match context {
             FreeCallLookup.Selected(function: val function) | FreeCallLookup.DiagnosticCandidate(function: val function) => function
             _ => { return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: argument context has no declaration", failureDomain: <FailureDomain.Internal />) /> }
+        }
+        val argumentOrigin = match context {
+            FreeCallLookup.DiagnosticCandidate(function: _) => self.diagnosticArrayContextOrigin(origin: origin, exprId: exprId, args: args)
+            _ => origin
         }
         val cf = self.arena.functionAt(index: callee)
         // A complete substitution may contain caller-owned symbolic
@@ -1775,7 +1779,7 @@ impl Comp {
                     cctx = try self.groundTermForBody(ref: cctx, environment: parameterEnvironment, selfRef: 0U64, itemRef: 0U64)
                 }
                 if cctx != 0U64 && (canSubstitute || (try self.tyRefIsGround(ref: cctx))) {
-                    try self.recordSemanticExprExpectedResultWithOrigin(exprId: argument.expr, expectedTerm: cctx, origin: origin)
+                    try self.recordSemanticExprExpectedResultWithOrigin(exprId: argument.expr, expectedTerm: cctx, origin: argumentOrigin, expectedOrigin: <SourceExpectedContext.Contract term=cctx />)
                     match context {
                         FreeCallLookup.DiagnosticCandidate(function: _) => {
                             // Independently known parameter errors do not wait
@@ -1833,7 +1837,7 @@ impl Comp {
 
 pub impl Comp {
     inout fn recordFreeCallExpression(exprId: U64, callStart: U64, callLen: U64, args: ArgRange, chainHoleRef: U64) -> Result[(), CompileDiagnostic] {
-        return self.recordFreeCallExpressionWithOrigin(exprId: exprId, callStart: callStart, callLen: callLen, args: args, chainHoleRef: chainHoleRef, origin: <SourceRecordOrigin.Raw />)
+        return self.recordFreeCallExpressionWithOrigin(exprId: exprId, callStart: callStart, callLen: callLen, args: args, chainHoleRef: chainHoleRef, origin: <SourceRecordingScope request=<SourceRecordOrigin.Raw /> returnContext=<SourceExpectedContext.None /> />, expectedOrigin: <SourceExpectedContext.None />)
     }
 
     // Record an expression under an optional-chain payload supplied by its
@@ -1841,7 +1845,7 @@ pub impl Comp {
     // not Cursor state: ordinary expressions use 0, and every continuation
     // descendant receives the same explicit parametric term.
     inout fn recordExpr(exprId: U64, chainHoleRef: U64 = 0U64, expectedTerm: U64 = 0U64, deferContext: Bool = false, needsValue: Bool = true, purpose: ExpressionRecordPurpose = <ExpressionRecordPurpose.Execution />, admittedContext: Bool = false, composedView: Bool = false, standaloneBlock: Bool = false) -> Result[(), CompileDiagnostic] {
-        return self.recordExprWithOrigin(exprId: exprId, chainHoleRef: chainHoleRef, expectedTerm: expectedTerm, deferContext: deferContext, needsValue: needsValue, purpose: purpose, admittedContext: admittedContext, composedView: composedView, standaloneBlock: standaloneBlock, origin: <SourceRecordOrigin.Raw />)
+        return self.recordExprWithOrigin(exprId: exprId, chainHoleRef: chainHoleRef, expectedTerm: expectedTerm, deferContext: deferContext, needsValue: needsValue, purpose: purpose, admittedContext: admittedContext, composedView: composedView, standaloneBlock: standaloneBlock, origin: <SourceRecordingScope request=<SourceRecordOrigin.Raw /> returnContext=<SourceExpectedContext.None /> />, expectedOrigin: <SourceExpectedContext.None />)
     }
 
     // Record may visit operands before their parent supplies context. Defer
@@ -1931,23 +1935,23 @@ pub impl Comp {
     // its checks — the local env drives typeOf, so it must match what the backend's
     // own local table will hold at emission.
     inout fn recordStmt(stmtId: U64, expectedTerm: U64 = 0U64, explicitResult: Bool = true) -> Result[SourceCompletion, CompileDiagnostic] {
-        return self.recordStmtWithOrigin(stmtId: stmtId, expectedTerm: expectedTerm, explicitResult: explicitResult, origin: <SourceRecordOrigin.Raw />)
+        return self.recordStmtWithOrigin(stmtId: stmtId, expectedTerm: expectedTerm, explicitResult: explicitResult, origin: <SourceRecordingScope request=<SourceRecordOrigin.Raw /> returnContext=<SourceExpectedContext.None /> />, expectedOrigin: <SourceExpectedContext.None />)
     }
 
     inout fn recordBlock(blkId: U64, continuesBindingScope: Bool = false) -> Result[(), CompileDiagnostic] {
-        return self.recordBlockWithOrigin(blkId: blkId, continuesBindingScope: continuesBindingScope, origin: <SourceRecordOrigin.Raw />)
+        return self.recordBlockWithOrigin(blkId: blkId, continuesBindingScope: continuesBindingScope, origin: <SourceRecordingScope request=<SourceRecordOrigin.Raw /> returnContext=<SourceExpectedContext.None /> />, expectedOrigin: <SourceExpectedContext.None />)
     }
 
     inout fn recordBlockContents(blkId: U64, resultContext: BlockResultContext, continuesBindingScope: Bool = false) -> Result[SourceCompletion, CompileDiagnostic] {
-        return self.recordBlockContentsWithOrigin(blkId: blkId, resultContext: resultContext, continuesBindingScope: continuesBindingScope, origin: <SourceRecordOrigin.Raw />)
+        return self.recordBlockContentsWithOrigin(blkId: blkId, resultContext: resultContext, continuesBindingScope: continuesBindingScope, origin: <SourceRecordingScope request=<SourceRecordOrigin.Raw /> returnContext=<SourceExpectedContext.None /> />, expectedOrigin: <SourceExpectedContext.None />)
     }
 
     inout fn recordBlockContentsInRegion(blkId: U64, resultContext: BlockResultContext) -> Result[SourceCompletion, CompileDiagnostic] {
-        return self.recordBlockContentsInRegionWithOrigin(blkId: blkId, resultContext: resultContext, origin: <SourceRecordOrigin.Raw />)
+        return self.recordBlockContentsInRegionWithOrigin(blkId: blkId, resultContext: resultContext, origin: <SourceRecordingScope request=<SourceRecordOrigin.Raw /> returnContext=<SourceExpectedContext.None /> />, expectedOrigin: <SourceExpectedContext.None />)
     }
 
     inout fn recordParametricFunction(fnIdx: U64, recordCallTemplates: Bool) -> Result[(), CompileDiagnostic] {
-        return self.recordParametricFunctionWithOrigin(fnIdx: fnIdx, recordCallTemplates: recordCallTemplates, origin: <SourceRecordOrigin.Raw />)
+        return self.recordParametricFunctionWithOrigin(fnIdx: fnIdx, recordCallTemplates: recordCallTemplates, origin: <SourceRecordingScope request=<SourceRecordOrigin.Raw /> returnContext=<SourceExpectedContext.None /> />, expectedOrigin: <SourceExpectedContext.None />)
     }
 
     // Demand preparation preserves the same lexical phases as the eager
@@ -2088,15 +2092,17 @@ pub impl Comp {
 }
 
 impl Comp {
-    inout fn recordMemberLookupArguments(selection: MemberCallLookup, receiverTerm: U64, args: ArgRange, chainHoleRef: U64, exprId: U64, origin: SourceRecordOrigin) -> Result[(), CompileDiagnostic] {
+    inout fn recordMemberLookupArguments(selection: MemberCallLookup, receiverTerm: U64, args: ArgRange, chainHoleRef: U64, exprId: U64, origin: SourceRecordingScope, expectedOrigin: SourceExpectedContext) -> Result[(), CompileDiagnostic] {
         match selection {
             MemberCallLookup.Selected(function: val function) => {
-                try self.recordMethodArgumentContextsWithOrigin(callee: function, receiverTerm: receiverTerm, args: args, chainHoleRef: chainHoleRef, exprId: exprId, origin: origin)
+                try self.recordMethodArgumentContextsWithOrigin(callee: function, receiverTerm: receiverTerm, args: args, chainHoleRef: chainHoleRef, exprId: exprId, origin: origin, expectedOrigin: expectedOrigin)
             }
             MemberCallLookup.DiagnosticCandidate(function: val function) => {
+                val factoryReceiver = if self.hasAuthoredNamedFactoryCall(exprId: exprId, receiverTerm: receiverTerm, args: args) { give receiverTerm } else { give 0U64 }
+                val diagnosticOrigin = self.diagnosticArrayContextOrigin(origin: origin, exprId: exprId, args: args, factoryReceiver: factoryReceiver)
                 // This path may refine operands for a detailed error, but it
                 // must not publish a successful parent template or result.
-                try self.recordMethodArgumentContextsWithOrigin(callee: function, receiverTerm: receiverTerm, args: args, chainHoleRef: chainHoleRef, exprId: exprId, origin: origin)
+                try self.recordMethodArgumentContextsWithOrigin(callee: function, receiverTerm: receiverTerm, args: args, chainHoleRef: chainHoleRef, exprId: exprId, origin: diagnosticOrigin, expectedOrigin: expectedOrigin)
                 val declaration = self.arena.functionAt(index: function)
                 for index in 0U64..<args.len {
                     val parameter = self.paramIndexForArg(params: declaration.params, args: args, argIdx: index)
@@ -2149,19 +2155,19 @@ impl Comp {
 
 // Internal recursion retains request provenance; public adapters above enter Raw.
 impl Comp {
-    inout fn recordAccessWriteFacetWithOrigin(readExpr: U64, origin: SourceRecordOrigin) -> Result[(), CompileDiagnostic] {
+    inout fn recordAccessWriteFacetWithOrigin(readExpr: U64, origin: SourceRecordingScope, expectedOrigin: SourceExpectedContext) -> Result[(), CompileDiagnostic] {
         if self.cur.recordingAccessWriteFacet { return <Result.Ok value=() /> }
         val candidateIndex: U64 = self.accessCandidateIndex(readExpr: readExpr)
         if candidateIndex >= self.decls.accessCandidateCount() { return <Result.Ok value=() /> }
         val writeExpr: U64 = self.decls.accessCandidateAt(index: candidateIndex).writeExpr
         if writeExpr >= self.arena.exprs.count() { return <Result.Ok value=() /> }
         self.cur.recordingAccessWriteFacet = true
-        try self.recordExprWithOrigin(exprId: writeExpr, needsValue: false, purpose: <ExpressionRecordPurpose.Capability />, origin: origin)
+        try self.recordExprWithOrigin(exprId: writeExpr, needsValue: false, purpose: <ExpressionRecordPurpose.Capability />, origin: origin, expectedOrigin: <SourceExpectedContext.None />)
         self.cur.recordingAccessWriteFacet = false
         return <Result.Ok value=() />
     }
 
-    inout fn recordArgumentAccessUsesWithOrigin(parentExpr: U64, callee: U64, args: ArgRange, origin: SourceRecordOrigin) -> Result[(), CompileDiagnostic] {
+    inout fn recordArgumentAccessUsesWithOrigin(parentExpr: U64, callee: U64, args: ArgRange, origin: SourceRecordingScope, expectedOrigin: SourceExpectedContext) -> Result[(), CompileDiagnostic] {
         mut val accessArg: U64 = 0U64
         while accessArg < args.len {
             val arg: Arg = self.argAt(args: args, index: accessArg)
@@ -2189,7 +2195,7 @@ impl Comp {
                 // Mono may then close the frozen setter call without
                 // reopening the authored Index expression.
                 if accessWrite {
-                    try self.recordAccessWriteFacetWithOrigin(readExpr: arg.expr, origin: origin)
+                    try self.recordAccessWriteFacetWithOrigin(readExpr: arg.expr, origin: origin, expectedOrigin: expectedOrigin)
                 }
             }
             accessArg += 1U64
@@ -2197,14 +2203,14 @@ impl Comp {
         return <Result.Ok value=() />
     }
 
-    inout fn recordArrayLitCtxWithOrigin(exprId: U64, ctxRef: U64, origin: SourceRecordOrigin) -> Result[(), CompileDiagnostic] {
+    inout fn recordArrayLitCtxWithOrigin(exprId: U64, ctxRef: U64, origin: SourceRecordingScope, expectedOrigin: SourceExpectedContext) -> Result[(), CompileDiagnostic] {
         if ctxRef == 0U64 || ctxRef >= self.arena.typeCount() { return <Result.Ok value=() /> }
         match self.arena.exprs[exprId] {
             Expr.Array(elems: val elems) => {
                 val context = self.arena.typeAt(index: ctxRef)
                 if context.args.count() != 1U64 || !self.isLangArrayType(ref: ctxRef) {
                     if elems.len == 0U64 && self.semanticExprTerm(exprId: exprId) == 0U64 {
-                        return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "cannot infer an empty array's element type from a non-array context (spec/02)") />
+                        return <Result.Err error=self.arrayContextRefusalDiagnostic(exprId: exprId, ctxRef: ctxRef, origin: origin, expectedOrigin: expectedOrigin) />
                     }
                     return <Result.Ok value=() />
                 }
@@ -2212,7 +2218,7 @@ impl Comp {
                 mut val index = 0U64
                 while index < elems.len {
                     val expression = self.exprAt(exprs: elems, index: index)
-                    try self.recordSemanticExprExpectedResultWithOrigin(exprId: expression, expectedTerm: element, origin: origin)
+                    try self.recordSemanticExprExpectedResultWithOrigin(exprId: expression, expectedTerm: element, origin: origin, expectedOrigin: expectedOrigin.projected(term: element))
                     try self.tcCheckValue(expectedRef: element, valueExpr: expression, pos: "element")
                     index += 1U64
                 }
@@ -2224,25 +2230,25 @@ impl Comp {
         return <Result.Ok value=() />
     }
 
-    inout fn recordBlockWithOrigin(blkId: U64, continuesBindingScope: Bool = false, origin: SourceRecordOrigin) -> Result[(), CompileDiagnostic] {
+    inout fn recordBlockWithOrigin(blkId: U64, continuesBindingScope: Bool = false, origin: SourceRecordingScope, expectedOrigin: SourceExpectedContext) -> Result[(), CompileDiagnostic] {
         val mark = self.scopeMark()
-        try self.recordBlockContentsWithOrigin(blkId: blkId, resultContext: <BlockResultContext.Statement />, continuesBindingScope: continuesBindingScope, origin: origin)
+        try self.recordBlockContentsWithOrigin(blkId: blkId, resultContext: <BlockResultContext.Statement />, continuesBindingScope: continuesBindingScope, origin: origin, expectedOrigin: expectedOrigin)
         self.popLocals(mark: mark)
         return <Result.Ok value=() />
     }
 
-    inout fn recordBlockContentsWithOrigin(blkId: U64, resultContext: BlockResultContext, continuesBindingScope: Bool = false, origin: SourceRecordOrigin) -> Result[SourceCompletion, CompileDiagnostic] {
+    inout fn recordBlockContentsWithOrigin(blkId: U64, resultContext: BlockResultContext, continuesBindingScope: Bool = false, origin: SourceRecordingScope, expectedOrigin: SourceExpectedContext) -> Result[SourceCompletion, CompileDiagnostic] {
         val savedScope = self.cur.bindingScopeStart
         if !continuesBindingScope { self.cur.bindingScopeStart = self.cur.locals.count() }
         val permitsGive = match resultContext { BlockResultContext.Value(expectedTerm: _) | BlockResultContext.Discarded => true _ => false }
         val checkpoint = self.enterSourceControlRegion(region: <SourceControlRegion.Block blockId=blkId permitsGive=permitsGive />)
-        val recorded = self.recordBlockContentsInRegionWithOrigin(blkId: blkId, resultContext: resultContext, origin: origin)
+        val recorded = self.recordBlockContentsInRegionWithOrigin(blkId: blkId, resultContext: resultContext, origin: origin, expectedOrigin: expectedOrigin)
         self.restoreSourceControlRegion(checkpoint: checkpoint)
         self.cur.bindingScopeStart = savedScope
         return recorded
     }
 
-    inout fn recordBlockContentsInRegionWithOrigin(blkId: U64, resultContext: BlockResultContext, origin: SourceRecordOrigin) -> Result[SourceCompletion, CompileDiagnostic] {
+    inout fn recordBlockContentsInRegionWithOrigin(blkId: U64, resultContext: BlockResultContext, origin: SourceRecordingScope, expectedOrigin: SourceExpectedContext) -> Result[SourceCompletion, CompileDiagnostic] {
         mut val expectedTerm = 0U64
         mut val permitsGive = false
         match resultContext {
@@ -2277,7 +2283,7 @@ impl Comp {
                 }
                 _ => {}
             }
-            val statementFlow = try self.recordStmtWithOrigin(stmtId: statement, expectedTerm: expectedTerm, explicitResult: !self.arena.blocks[blkId].implicitResult, origin: origin)
+            val statementFlow = try self.recordStmtWithOrigin(stmtId: statement, expectedTerm: expectedTerm, explicitResult: !self.arena.blocks[blkId].implicitResult, origin: origin, expectedOrigin: expectedOrigin.projected(term: expectedTerm))
             flow = completionThen(prefix: flow, next: statementFlow)
             if permitsGive && statementFlow.source.gives() {
                 match self.arena.stmts[statement] {
@@ -2307,11 +2313,11 @@ impl Comp {
         return <Result.Ok value=completion />
     }
 
-    inout fn recordConditionClausesWithOrigin(conditions: ConditionClauseRange, origin: SourceRecordOrigin) -> Result[(), CompileDiagnostic] {
+    inout fn recordConditionClausesWithOrigin(conditions: ConditionClauseRange, origin: SourceRecordingScope, expectedOrigin: SourceExpectedContext) -> Result[(), CompileDiagnostic] {
         mut val index = 0U64
         while index < conditions.len {
             val clause = self.conditionClauseAt(conditions: conditions, index: index)
-            try self.recordExprWithOrigin(exprId: clause.value, origin: origin)
+            try self.recordExprWithOrigin(exprId: clause.value, origin: origin, expectedOrigin: <SourceExpectedContext.None />)
             try self.recordValueOperandCall(exprId: clause.value)
             if clause.isBinding {
                 try self.checkEnumPatternSubject(scrut: clause.value, pattern: clause.pattern)
@@ -2325,7 +2331,7 @@ impl Comp {
         return <Result.Ok value=() />
     }
 
-    inout fn recordDynamicMethodCallWithOrigin(exprId: U64, receiverExpr: U64, receiverTerm: U64, nameStart: U64, nameLen: U64, args: ArgRange, origin: SourceRecordOrigin) -> Result[Bool, CompileDiagnostic] {
+    inout fn recordDynamicMethodCallWithOrigin(exprId: U64, receiverExpr: U64, receiverTerm: U64, nameStart: U64, nameLen: U64, args: ArgRange, origin: SourceRecordingScope, expectedOrigin: SourceExpectedContext) -> Result[Bool, CompileDiagnostic] {
         if self.traceCodegen {
             eprint(text: "[trace-codegen] record dynamic-method body=")
             eprintU64(n: self.cur.checkFn)
@@ -2352,7 +2358,7 @@ impl Comp {
             val slot: U64 = try self.recordAnyRequirementSlotWithOrigin(anyRef: receiverTerm, nameStart: nameStart, nameLen: nameLen, args: args, methodOrigin: <MethodLookupOrigin expression=<Optional.Some v=exprId /> />)
             if traitIndex < self.decls.traitCount() && slot != 0U64 {
                 try self.checkExistentialRequirementCall(target: receiverTerm, traitIndex: traitIndex, requirement: slot - 1U64, offset: self.exprOffset(id: exprId))
-                try self.recordDynamicCallTemplate(exprId: exprId, receiver: receiver, args: args, target: <DynamicCallTemplateTarget.ExistentialRequirement traitIdx=traitIndex slot=slot interfaceRoot=0U64 />, receiverTerm: receiverTerm, origin: origin)
+                try self.recordDynamicCallTemplate(exprId: exprId, receiver: receiver, args: args, target: <DynamicCallTemplateTarget.ExistentialRequirement traitIdx=traitIndex slot=slot interfaceRoot=0U64 />, receiverTerm: receiverTerm, origin: origin, expectedOrigin: expectedOrigin)
                 return <Result.Ok value=true />
             }
             return <Result.Ok value=false />
@@ -2371,7 +2377,7 @@ impl Comp {
         // A closure field must have a function type in its declaration.
         // Instantiation cannot retroactively make an unbounded type callable.
         if self.isFnType(ref: fieldTerm) {
-            try self.recordDynamicCallTemplate(exprId: exprId, receiver: receiver, args: args, target: <DynamicCallTemplateTarget.ClosureField fieldIndex=fieldIndex fnTypeTerm=fieldTerm />, origin: origin)
+            try self.recordDynamicCallTemplate(exprId: exprId, receiver: receiver, args: args, target: <DynamicCallTemplateTarget.ClosureField fieldIndex=fieldIndex fnTypeTerm=fieldTerm />, origin: origin, expectedOrigin: expectedOrigin)
             val occurrence = fields[fieldIndex].authoredTypeUse
             val result = self.semanticExprTerm(exprId: exprId)
             if occurrence != 0U64 && self.bodyTypeNeedsViewAdmission(ref: result) {
@@ -2382,13 +2388,14 @@ impl Comp {
         return <Result.Ok value=false />
     }
 
-    inout fn recordExprWithOrigin(exprId: U64, chainHoleRef: U64 = 0U64, expectedTerm: U64 = 0U64, deferContext: Bool = false, needsValue: Bool = true, purpose: ExpressionRecordPurpose = <ExpressionRecordPurpose.Execution />, admittedContext: Bool = false, composedView: Bool = false, standaloneBlock: Bool = false, origin: SourceRecordOrigin) -> Result[(), CompileDiagnostic] {
+    inout fn recordExprWithOrigin(exprId: U64, chainHoleRef: U64 = 0U64, expectedTerm: U64 = 0U64, deferContext: Bool = false, needsValue: Bool = true, purpose: ExpressionRecordPurpose = <ExpressionRecordPurpose.Execution />, admittedContext: Bool = false, composedView: Bool = false, standaloneBlock: Bool = false, origin: SourceRecordingScope, expectedOrigin: SourceExpectedContext) -> Result[(), CompileDiagnostic] {
         if self.semanticExprConstructionClosed(exprId: exprId) {
             return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: completed source owner cannot record an expression") />
         }
         // Normalize at the context boundary before inspecting expression shape.
         val requestedContext = if admittedContext { give expectedTerm } else { give try self.normalizedSourceTypeContext(expectedTerm: expectedTerm) }
         val normalizedContext = try self.effectiveSourceTypeContext(exprId: exprId, requested: requestedContext)
+        val contextOrigin = expectedOrigin.normalized(supplied: expectedTerm, requested: requestedContext, effective: normalizedContext)
         // A deferred value block must be recorded again in its lexical scope
         // once the selected parameter supplies its result context.
         if normalizedContext == 0U64 && deferContext && self.expressionNeedsTypeContext(exprId: exprId) {
@@ -2493,11 +2500,11 @@ impl Comp {
         // recursively reopens children whose semantic producer has already
         // written the exact term.  This keeps type recovery a compatibility
         // boundary rather than the universal source of semantic truth.
-        try self.prepareInterpolationWriteWithOrigin(exprId: exprId, origin: origin)
+        try self.prepareInterpolationWriteWithOrigin(exprId: exprId, origin: origin, expectedOrigin: contextOrigin)
         val admittedFactoryReceiver = if self.authoredExpressionTypeSlots.contains(key: exprId) { give construction } else { give 0U64 }
-        try self.prepareFactoryConstructionWithOrigin(exprId: exprId, chainHoleRef: chainHoleRef, admittedReceiver: admittedFactoryReceiver, origin: origin)
+        try self.prepareFactoryConstructionWithOrigin(exprId: exprId, chainHoleRef: chainHoleRef, admittedReceiver: admittedFactoryReceiver, origin: origin, expectedOrigin: contextOrigin)
         val hasPreparedCastOperand = match self.arena.exprs[exprId] {
-            Expr.Cast(val operand, val tyStart, val tyLen, ty: _) => { give try self.prepareCastFactoryWithOrigin(exprId: exprId, operand: operand, target: castTarget, typeStart: tyStart, typeLen: tyLen, chainHoleRef: chainHoleRef, origin: origin) }
+            Expr.Cast(val operand, val tyStart, val tyLen, ty: _) => { give try self.prepareCastFactoryWithOrigin(exprId: exprId, operand: operand, target: castTarget, typeStart: tyStart, typeLen: tyLen, chainHoleRef: chainHoleRef, origin: origin, expectedOrigin: contextOrigin) }
             _ => false
         }
         match self.arena.exprs[exprId] {
@@ -2586,7 +2593,7 @@ impl Comp {
             }
             Expr.MatchSubject(val scrut) => { self.recordSemanticExprTerm(exprId: exprId, term: self.parametricExprTerm(exprId: scrut)) }
             Expr.Unary(val op, val operand) => {
-                try self.recordExprWithOrigin(exprId: operand, chainHoleRef: chainHoleRef, origin: origin)
+                try self.recordExprWithOrigin(exprId: operand, chainHoleRef: chainHoleRef, origin: origin, expectedOrigin: <SourceExpectedContext.None />)
                 val operandTerm = self.parametricExprTerm(exprId: operand)
                 if operandTerm != 0U64 {
                     val result = try self.unaryOperatorResultType(operand: self.typeInfoOfRef(ref: operandTerm), op: op)
@@ -2594,14 +2601,14 @@ impl Comp {
                 }
             }
             Expr.Binary(val op, val lhs, val rhs) => {
-                try self.recordExprWithOrigin(exprId: lhs, chainHoleRef: chainHoleRef, origin: origin)
-                try self.recordExprWithOrigin(exprId: rhs, chainHoleRef: chainHoleRef, origin: origin)
+                try self.recordExprWithOrigin(exprId: lhs, chainHoleRef: chainHoleRef, origin: origin, expectedOrigin: <SourceExpectedContext.None />)
+                try self.recordExprWithOrigin(exprId: rhs, chainHoleRef: chainHoleRef, origin: origin, expectedOrigin: <SourceExpectedContext.None />)
                 if op == opAnd() || op == opOr() {
                     try self.recordValueOperandCall(exprId: lhs)
                     try self.recordValueOperandCall(exprId: rhs)
                 }
                 if isBinTraitOp(op: op) || op == opEq() || op == opNe() || op == opLt() || op == opLe() || op == opGt() || op == opGe() {
-                    val contextual = (try self.recordFloatingOperandContextWithOrigin(lhs: lhs, rhs: rhs, origin: origin))
+                    val contextual = (try self.recordFloatingOperandContextWithOrigin(lhs: lhs, rhs: rhs, origin: origin, expectedOrigin: contextOrigin))
                     if contextual && isBinTraitOp(op: op) {
                         val left = self.typeInfoOfRef(ref: self.parametricExprTerm(exprId: lhs))
                         val right = self.typeInfoOfRef(ref: self.parametricExprTerm(exprId: rhs))
@@ -2610,13 +2617,13 @@ impl Comp {
                 }
             }
             Expr.Call(nameStart: val callStart, nameLen: val callLen, args: val args) => {
-                try self.recordFreeCallExpressionWithOrigin(exprId: exprId, callStart: callStart, callLen: callLen, args: args, chainHoleRef: chainHoleRef, origin: origin)
+                try self.recordFreeCallExpressionWithOrigin(exprId: exprId, callStart: callStart, callLen: callLen, args: args, chainHoleRef: chainHoleRef, origin: origin, expectedOrigin: contextOrigin)
             }
             Expr.Method(val recv, val nameStart, val nameLen, val args) => {
-                try self.recordExprWithOrigin(exprId: recv, chainHoleRef: chainHoleRef, origin: origin)
+                try self.recordExprWithOrigin(exprId: recv, chainHoleRef: chainHoleRef, origin: origin, expectedOrigin: <SourceExpectedContext.None />)
                 mut val i: U64 = 0
                 while !hasPreparedCastOperand && i < args.len {
-                    try self.recordExprWithOrigin(exprId: self.argAt(args: args, index: i).expr, chainHoleRef: chainHoleRef, deferContext: true, origin: origin)
+                    try self.recordExprWithOrigin(exprId: self.argAt(args: args, index: i).expr, chainHoleRef: chainHoleRef, deferContext: true, origin: origin, expectedOrigin: <SourceExpectedContext.None />)
                     i += 1
                 }
                 val receiverTerm = if admittedFactoryReceiver != 0U64 { give admittedFactoryReceiver } else { give self.syntheticCallReceiverTerm(exprId: exprId, fallback: (try self.methodReceiverTerm(exprId: recv))) }
@@ -2690,11 +2697,11 @@ impl Comp {
                     StaticMemberResolution.Provided(proof: _, traitIdx: _, callee: _) => { methodSelection = <MemberCallLookup.NoCandidate /> }
                     _ => {}
                 }
-                try self.recordMemberLookupArguments(selection: methodSelection, receiverTerm: receiverTerm, args: args, chainHoleRef: chainHoleRef, exprId: exprId, origin: origin)
+                try self.recordMemberLookupArguments(selection: methodSelection, receiverTerm: receiverTerm, args: args, chainHoleRef: chainHoleRef, exprId: exprId, origin: origin, expectedOrigin: contextOrigin)
                 val methodCallee = self.selectedMemberFunction(selection: methodSelection)
-                try self.recordParametricMethodCallWithOrigin(exprId: exprId, callee: methodCallee, receiverSource: (try self.writtenCallReceiverTemplate(exprId: exprId, receiverExpr: recv)), receiverTerm: receiverTerm, args: args, origin: origin)
+                try self.recordParametricMethodCallWithOrigin(exprId: exprId, callee: methodCallee, receiverSource: (try self.writtenCallReceiverTemplate(exprId: exprId, receiverExpr: recv)), receiverTerm: receiverTerm, args: args, origin: origin, expectedOrigin: contextOrigin)
                 if methodCallee >= self.arena.functionCount() {
-                    try self.recordUnresolvedMethodTemplate(exprId: exprId, receiver: (try self.writtenCallReceiverTemplate(exprId: exprId, receiverExpr: recv)), receiverExpr: recv, receiverTerm: receiverTerm, nameStart: nameStart, nameLen: nameLen, args: args, resolution: boundMember, lookupPerformed: lookupPerformed, origin: origin)
+                    try self.recordUnresolvedMethodTemplate(exprId: exprId, receiver: (try self.writtenCallReceiverTemplate(exprId: exprId, receiverExpr: recv)), receiverExpr: recv, receiverTerm: receiverTerm, nameStart: nameStart, nameLen: nameLen, args: args, resolution: boundMember, lookupPerformed: lookupPerformed, origin: origin, expectedOrigin: contextOrigin)
                 }
                 // The standard array Index witness returns the element type.
                 // Use the synthesized operation's origin and its checked result
@@ -2736,12 +2743,12 @@ impl Comp {
                 // to work for non-nested paths where another walk recorded
                 // the facet; nested indexes require this exact candidate
                 // identity to close every write dependency.
-                try self.recordAccessWriteFacetWithOrigin(readExpr: recv, origin: origin)
-                try self.recordArgumentAccessUsesWithOrigin(parentExpr: exprId, callee: methodCallee, args: args, origin: origin)
+                try self.recordAccessWriteFacetWithOrigin(readExpr: recv, origin: origin, expectedOrigin: contextOrigin)
+                try self.recordArgumentAccessUsesWithOrigin(parentExpr: exprId, callee: methodCallee, args: args, origin: origin, expectedOrigin: contextOrigin)
 
             }
             Expr.ExtMethod(recv: val recv, source: val source, nameStart: val nameStart, nameLen: val nameLen, args: val args) => {
-                try self.recordExprWithOrigin(exprId: recv, chainHoleRef: chainHoleRef, origin: origin)
+                try self.recordExprWithOrigin(exprId: recv, chainHoleRef: chainHoleRef, origin: origin, expectedOrigin: <SourceExpectedContext.None />)
                 mut val admittedTrait: Optional[ResolvedViewSource] = <Optional.None />
                 mut val extension: Optional[SourceExtensionViewProof] = <Optional.None />
                 if self.assocRecvName(recv: recv).nameLen == 0U64 {
@@ -2756,7 +2763,7 @@ impl Comp {
                 }
                 mut val i: U64 = 0
                 while i < args.len {
-                    try self.recordExprWithOrigin(exprId: self.argAt(args: args, index: i).expr, chainHoleRef: chainHoleRef, deferContext: true, origin: origin)
+                    try self.recordExprWithOrigin(exprId: self.argAt(args: args, index: i).expr, chainHoleRef: chainHoleRef, deferContext: true, origin: origin, expectedOrigin: <SourceExpectedContext.None />)
                     i += 1
                 }
                 mut val receiverTerm: U64 = (try self.methodReceiverTerm(exprId: recv))
@@ -2785,9 +2792,9 @@ impl Comp {
                 if self.memberLookupIsMissing(selection: methodSelection) && source.surfaceId != 0U64 && extensionProofs.count() == 0U64 && admittedTrait.isNone() {
                         methodSelection = (try self.resolveExtMethodFinalWithOrigin(recv: recv, source: source, nameStart: nameStart, nameLen: nameLen, args: args, methodOrigin: <MethodLookupOrigin expression=<Optional.Some v=exprId /> />))
                 }
-                try self.recordMemberLookupArguments(selection: methodSelection, receiverTerm: receiverTerm, args: args, chainHoleRef: chainHoleRef, exprId: exprId, origin: origin)
+                try self.recordMemberLookupArguments(selection: methodSelection, receiverTerm: receiverTerm, args: args, chainHoleRef: chainHoleRef, exprId: exprId, origin: origin, expectedOrigin: contextOrigin)
                 val methodCallee = self.selectedMemberFunction(selection: methodSelection)
-                try self.recordParametricMethodCallWithOrigin(exprId: exprId, callee: methodCallee, receiverSource: receiverSource, receiverTerm: receiverTerm, args: args, origin: origin)
+                try self.recordParametricMethodCallWithOrigin(exprId: exprId, callee: methodCallee, receiverSource: receiverSource, receiverTerm: receiverTerm, args: args, origin: origin, expectedOrigin: contextOrigin)
                 if self.traceCodegen {
                     eprint(text: "[trace-codegen] viewed-call expr=")
                     eprintU64(n: exprId)
@@ -2801,15 +2808,15 @@ impl Comp {
                 }
                 if methodCallee >= self.arena.functionCount() {
                     val resolution = try self.writtenStaticMemberResolution(exprId: exprId, receiverRef: receiverTerm, nameStart: nameStart, nameLen: nameLen, args: args, requiredTraitOwner: self.syntheticRequiredTraitOwner(exprId: exprId))
-                    try self.recordUnresolvedMethodTemplate(exprId: exprId, receiver: receiverSource, receiverExpr: recv, receiverTerm: receiverTerm, nameStart: nameStart, nameLen: nameLen, args: args, resolution: resolution, lookupPerformed: match methodSelection { MemberCallLookup.CachedNonStatic => false, _ => true }, origin: origin)
+                    try self.recordUnresolvedMethodTemplate(exprId: exprId, receiver: receiverSource, receiverExpr: recv, receiverTerm: receiverTerm, nameStart: nameStart, nameLen: nameLen, args: args, resolution: resolution, lookupPerformed: match methodSelection { MemberCallLookup.CachedNonStatic => false, _ => true }, origin: origin, expectedOrigin: contextOrigin)
                 }
                 if methodCallee < self.arena.functionCount() {
                     try self.recordAccessUse(parentExpr: exprId, readExpr: recv, role: 1U64, argIndex: 0U64, parameterIndex: 0U64, modeKnown: true, write: self.arena.functionAt(index: methodCallee).selfInout)
                 } else {
                     try self.recordAccessUse(parentExpr: exprId, readExpr: recv, role: 1U64, argIndex: 0U64, parameterIndex: 0U64, modeKnown: false, write: false)
                 }
-                try self.recordAccessWriteFacetWithOrigin(readExpr: recv, origin: origin)
-                try self.recordArgumentAccessUsesWithOrigin(parentExpr: exprId, callee: methodCallee, args: args, origin: origin)
+                try self.recordAccessWriteFacetWithOrigin(readExpr: recv, origin: origin, expectedOrigin: contextOrigin)
+                try self.recordArgumentAccessUsesWithOrigin(parentExpr: exprId, callee: methodCallee, args: args, origin: origin, expectedOrigin: contextOrigin)
             }
             Expr.ExtView(recv: val recv, source: val source, strip: val strip) => {
                 val innerExtension = match self.arena.exprs[recv] {
@@ -2817,7 +2824,7 @@ impl Comp {
                     _ => false,
                 }
                 val composes = !strip && source.traitInstance.owner != 0U64 && innerExtension
-                try self.recordExprWithOrigin(exprId: recv, chainHoleRef: chainHoleRef, composedView: composes || (composedView && innerExtension), origin: origin)
+                try self.recordExprWithOrigin(exprId: recv, chainHoleRef: chainHoleRef, composedView: composes || (composedView && innerExtension), origin: origin, expectedOrigin: <SourceExpectedContext.None />)
                 // A view is a type-level facet of an existing value, not a
                 // method-resolution query.  Preserve the receiver's exact
                 // TypeTerm and apply the resolved source set once, matching
@@ -2866,7 +2873,7 @@ impl Comp {
                 }
             }
             Expr.Field(val base, val nameStart, val nameLen) => {
-                try self.recordExprWithOrigin(exprId: base, chainHoleRef: chainHoleRef, origin: origin)
+                try self.recordExprWithOrigin(exprId: base, chainHoleRef: chainHoleRef, origin: origin, expectedOrigin: <SourceExpectedContext.None />)
                 if !self.exprCompletesNormally(exprId: base) {
                     return <Result.Err error=self.diagnosticAt(offset: nameStart, msg: "field access requires a receiver that can produce a value (spec/11)") />
                 }
@@ -2888,6 +2895,12 @@ impl Comp {
                 // argument list; it cannot undo a prior contextual solution.
                 mut val instance = self.semanticExprTerm(exprId: exprId)
                 if instance == 0U64 { instance = construction }
+                val inputOrigin = self.constructionInputContext(exprId: exprId, construction: construction)
+                val independentProducer = instance == construction && match inputOrigin { SourceConstructionContext.Producer => true _ => false }
+                mut val constructionOrigin = match inputOrigin {
+                    SourceConstructionContext.Outer => <SourceConstructionContext.Outer />
+                    _ => if independentProducer { give <SourceConstructionContext.Producer /> } else { give <SourceConstructionContext.Reused /> }
+                }
                 // Named construction producers retain their selected head,
                 // even when generic arguments still need field/context
                 // inference. Recreating a head from spelling here would lose
@@ -2897,24 +2910,19 @@ impl Comp {
                     return <Result.Err error=self.diagnosticAt(offset: typeStart, msg: "internal error: named construction is missing its producer type term") />
                 }
                 if (try self.makeAcceptsExpectedTerm(exprId: exprId, writtenTerm: instance, isEnum: isEnum, fields: fields, expectedTerm: normalizedContext)) {
+                    if !independentProducer || instance != normalizedContext { constructionOrigin = <SourceConstructionContext.Outer /> }
                     instance = normalizedContext
                 }
                 mut val i: U64 = 0U64
                 while i < fields.len {
                     val field: MakeField = self.makeFieldAt(fields: fields, index: i)
-                    mut val fieldTerm: U64 = 0U64
-                    if instance != 0U64 {
-                        if isEnum {
-                            fieldTerm = self.typedIrRefOfInfo(ti: (try self.genericEnumFieldTypeInfo(instRef: instance, variantStart: variantStart, variantLen: variantLen, fieldStart: field.nameStart, fieldLen: field.nameLen)))
-                        } else {
-                            fieldTerm = (try self.fieldTypeRefOfReceiver(receiverRef: instance, fieldStart: field.nameStart, fieldLen: field.nameLen))
-                        }
-                    }
+                    val fieldContract = try self.makeFieldContract(typeRef: instance, variantStart: variantStart, variantLen: variantLen, isEnum: isEnum, fieldStart: field.nameStart, fieldLen: field.nameLen)
+                    mut val fieldTerm = fieldContract.term
                     // An omitted declaration argument is an inference variable,
                     // not a rigid lexical T that a child must already satisfy.
                     fieldTerm = self.constructionFieldContext(instance: instance, fieldTerm: fieldTerm)
                     if !self.recordsFieldDefault(field: field) {
-                        try self.recordExprWithOrigin(exprId: field.value, chainHoleRef: chainHoleRef, expectedTerm: fieldTerm, origin: origin)
+                        try self.recordExprWithOrigin(exprId: field.value, chainHoleRef: chainHoleRef, expectedTerm: fieldTerm, origin: origin, expectedOrigin: fieldContract.expectedContext(term: fieldTerm, input: constructionOrigin, incoming: contextOrigin))
                     }
                     i += 1U64
                 }
@@ -2922,10 +2930,15 @@ impl Comp {
                 // from the collected field terms, independent of field order.
                 if !isEnum && typeLen == 0U64 && instance == 0U64 {
                     instance = try self.inferRecordMakeRef(fields: fields)
+                    if instance != 0U64 && self.sourceTypeHasCompleteArguments(ref: instance) { constructionOrigin = <SourceConstructionContext.IndependentFields /> }
                 }
                 if !self.isGenericInst(ref: instance) {
                     val inferred = try self.inferMakeInstance(typeStart: typeStart, typeLen: typeLen, typeRef: instance, isEnum: isEnum, variantStart: variantStart, variantLen: variantLen, fields: fields, expression: <Optional.Some v=exprId />)
-                    if inferred != 0U64 { instance = inferred }
+                    if inferred != 0U64 {
+                        val fromOuter = match constructionOrigin { SourceConstructionContext.Outer => true _ => false }
+                        if inferred != instance && !fromOuter && self.sourceTypeHasCompleteArguments(ref: inferred) { constructionOrigin = <SourceConstructionContext.IndependentFields /> }
+                        instance = inferred
+                    }
                 }
                 val structural = instance != 0U64 && self.arena.typeTermAt(index: instance).isRecord
                 mut val origins: Array[(index: U64, evidence: U64)] = []
@@ -2933,11 +2946,11 @@ impl Comp {
                 i = 0U64
                 while i < fields.len {
                     val field: MakeField = self.makeFieldAt(fields: fields, index: i)
-                    val fieldType = (try self.makeFieldType(typeRef: instance, variantStart: variantStart, variantLen: variantLen, isEnum: isEnum, fieldStart: field.nameStart, fieldLen: field.nameLen))
+                    val fieldContract = try self.makeFieldContract(typeRef: instance, variantStart: variantStart, variantLen: variantLen, isEnum: isEnum, fieldStart: field.nameStart, fieldLen: field.nameLen)
                     // The completion visit obeys the same binder boundary as
                     // the initial field visit. An omitted constructor argument
                     // is still a hole, never that declaration's rigid T.
-                    val ctxRef = self.constructionFieldContext(instance: instance, fieldTerm: self.typedIrRefOfInfo(ti: fieldType))
+                    val ctxRef = self.constructionFieldContext(instance: instance, fieldTerm: fieldContract.term)
                     mut val value: U64 = field.value
                     if self.recordsFieldDefault(field: field) {
                         value = (try self.recordFieldDefaultCall(field: field, instance: instance, resultTerm: ctxRef))
@@ -2957,7 +2970,7 @@ impl Comp {
                     // `Buffer[String]`.  Dropping it merely because it is not
                     // ground loses the only result-side substitution for an
                     // argument-less generic associated call.
-                    try self.recordSemanticExprExpectedResultWithOrigin(exprId: value, expectedTerm: ctxRef, origin: origin)
+                    try self.recordSemanticExprExpectedResultWithOrigin(exprId: value, expectedTerm: ctxRef, origin: origin, expectedOrigin: fieldContract.expectedContext(term: ctxRef, input: constructionOrigin, incoming: contextOrigin))
                     if structural {
                         val term = self.parametricExprTerm(exprId: value)
                         val evidence = self.retainStructuralChildEvidence(exprId: value, term: term)
@@ -2994,7 +3007,7 @@ impl Comp {
                 mut val i: U64 = 0
                 while i < elems.len {
                     val element = self.exprAt(exprs: elems, index: i)
-                    try self.recordExprWithOrigin(exprId: element, chainHoleRef: chainHoleRef, expectedTerm: elementContext, origin: origin)
+                    try self.recordExprWithOrigin(exprId: element, chainHoleRef: chainHoleRef, expectedTerm: elementContext, origin: origin, expectedOrigin: contextOrigin.projected(term: elementContext))
                     // The first element is the forward inference frontier.
                     // Its saved type can guide later unresolved elements,
                     // including lexical T. Later elements never repair it.
@@ -3026,7 +3039,7 @@ impl Comp {
                 try self.recordSemanticAggregate(exprId: exprId)
             }
             Expr.Index(val base, val index) => {
-                try self.recordExprWithOrigin(exprId: base, chainHoleRef: chainHoleRef, origin: origin)
+                try self.recordExprWithOrigin(exprId: base, chainHoleRef: chainHoleRef, origin: origin, expectedOrigin: <SourceExpectedContext.None />)
                 mut val keyTerm: U64 = 0U64
                 // Array/Buffer indexing is equally structural: the selected
                 // element term is an existing child of the recorded receiver.
@@ -3057,18 +3070,18 @@ impl Comp {
                         }
                     }
                 }
-                try self.recordExprWithOrigin(exprId: index, chainHoleRef: chainHoleRef, expectedTerm: keyTerm, origin: origin)
+                try self.recordExprWithOrigin(exprId: index, chainHoleRef: chainHoleRef, expectedTerm: keyTerm, origin: origin, expectedOrigin: <SourceExpectedContext.Contract term=keyTerm />)
                 // A non-structural subscript is syntax for a selected method
                 // call.  Freeze that selection here, before CallTemplates are
                 // closed; Mono must not rewrite Expr.Index and then attempt
                 // first-time method resolution under a concrete body.
-                try self.recordIndexCallWithOrigin(exprId: exprId, base: base, key: index, receiverTerm: baseTerm, receiverType: (try self.exprTypeWithChainHole(id: base, chainHoleRef: chainHoleRef)), origin: origin)
+                try self.recordIndexCallWithOrigin(exprId: exprId, base: base, key: index, receiverTerm: baseTerm, receiverType: (try self.exprTypeWithChainHole(id: base, chainHoleRef: chainHoleRef)), origin: origin, expectedOrigin: contextOrigin)
             }
             Expr.Cast(val operand, tyStart: _, tyLen: _, ty: _) => {
                 try self.collectRecordedType(ref: castTarget)
                 if !hasPreparedCastOperand {
                     val operandContext = try self.castLiteralContextTerm(operand: operand, targetTerm: castTarget)
-                    try self.recordExprWithOrigin(exprId: operand, chainHoleRef: chainHoleRef, expectedTerm: operandContext, origin: origin)
+                    try self.recordExprWithOrigin(exprId: operand, chainHoleRef: chainHoleRef, expectedTerm: operandContext, origin: origin, expectedOrigin: contextOrigin.projected(term: operandContext))
                 }
                 try self.recordValueOperandCall(exprId: operand)
                 self.recordSemanticExprTerm(exprId: exprId, term: castTarget)
@@ -3082,26 +3095,26 @@ impl Comp {
             Expr.MatchExpr(val scrut, val arms) => {
                 // Validate labels before publishing lexical pattern bindings.
                 try self.checkMatchArmBinds(arms: arms)
-                try self.recordExprWithOrigin(exprId: scrut, chainHoleRef: chainHoleRef, origin: origin)
+                try self.recordExprWithOrigin(exprId: scrut, chainHoleRef: chainHoleRef, origin: origin, expectedOrigin: <SourceExpectedContext.None />)
                 try self.checkOrPatternTypes(arms: arms, scrut: scrut)
-                try self.recordSemanticMatchWithOrigin(matchSource: <MatchSource.Expression exprId=exprId />, scrut: scrut, arms: arms, origin: origin)
+                try self.recordSemanticMatchWithOrigin(matchSource: <MatchSource.Expression exprId=exprId />, scrut: scrut, arms: arms, origin: origin, expectedOrigin: contextOrigin)
                 mut val ai: U64 = 0
                 while ai < arms.len {
                     val a: MatchArm = self.matchArmAt(arms: arms, index: ai)
                     val mark: U64 = self.scopeMark()
                     try self.scanAddArmBinds(a: a, scrutTi: self.semanticExprTypeInfo(exprId: scrut))
-                    try self.recordValueBlockWithOrigin(exprId: exprId, blockId: a.body, expectedTerm: normalizedContext, origin: origin)
+                    try self.recordValueBlockWithOrigin(exprId: exprId, blockId: a.body, expectedTerm: normalizedContext, origin: origin, expectedOrigin: contextOrigin.projected(term: normalizedContext))
                     self.popLocals(mark: mark)
                     ai += 1
                 }
                 if self.cur.recordCallTemplates { self.storeBuildingValueRegion(exprId: exprId, region: <SourceValueRegion.Match scrutinee=try self.callArgumentSource(exprId: scrut) arms=arms />) }
             }
             Expr.Sequence(val body) => {
-                try self.recordValueBlockWithOrigin(exprId: exprId, blockId: body, expectedTerm: normalizedContext, origin: origin)
+                try self.recordValueBlockWithOrigin(exprId: exprId, blockId: body, expectedTerm: normalizedContext, origin: origin, expectedOrigin: contextOrigin.projected(term: normalizedContext))
                 if self.cur.recordCallTemplates { self.storeBuildingValueRegion(exprId: exprId, region: <SourceValueRegion.Block body=body sequence=true />) }
             }
             Expr.Block(val body, offset: _) => {
-                val yieldsValue = try self.recordValueBlockWithOrigin(exprId: exprId, blockId: body, expectedTerm: normalizedContext, discarded: standaloneBlock, origin: origin)
+                val yieldsValue = try self.recordValueBlockWithOrigin(exprId: exprId, blockId: body, expectedTerm: normalizedContext, discarded: standaloneBlock, origin: origin, expectedOrigin: contextOrigin.projected(term: normalizedContext))
                 if self.cur.recordCallTemplates {
                     val region = if standaloneBlock { give <SourceValueRegion.DiscardedBlock body=body yieldsValue=yieldsValue /> } else { give <SourceValueRegion.Block body=body sequence=false /> }
                     self.storeBuildingValueRegion(exprId: exprId, region: region)
@@ -3110,22 +3123,22 @@ impl Comp {
             }
             Expr.IfChain(val conditions, val thenBlk, val elseBlk) => {
                 val mark = self.scopeMark()
-                try self.recordConditionClausesWithOrigin(conditions: conditions, origin: origin)
-                try self.recordValueBlockWithOrigin(exprId: exprId, blockId: thenBlk, expectedTerm: normalizedContext, origin: origin)
+                try self.recordConditionClausesWithOrigin(conditions: conditions, origin: origin, expectedOrigin: contextOrigin)
+                try self.recordValueBlockWithOrigin(exprId: exprId, blockId: thenBlk, expectedTerm: normalizedContext, origin: origin, expectedOrigin: contextOrigin.projected(term: normalizedContext))
                 self.popLocals(mark: mark)
-                try self.recordValueBlockWithOrigin(exprId: exprId, blockId: elseBlk, expectedTerm: normalizedContext, origin: origin)
+                try self.recordValueBlockWithOrigin(exprId: exprId, blockId: elseBlk, expectedTerm: normalizedContext, origin: origin, expectedOrigin: contextOrigin.projected(term: normalizedContext))
                 if self.cur.recordCallTemplates { self.storeBuildingValueRegion(exprId: exprId, region: <SourceValueRegion.IfChain conditions=conditions thenBlock=thenBlk elseBlock=elseBlk />) }
             }
             Expr.IfExpr(val cond, val thenBlk, val elseBlk) => {
-                try self.recordExprWithOrigin(exprId: cond, chainHoleRef: chainHoleRef, origin: origin)
-                try self.recordValueBlockWithOrigin(exprId: exprId, blockId: thenBlk, expectedTerm: normalizedContext, origin: origin)
-                try self.recordValueBlockWithOrigin(exprId: exprId, blockId: elseBlk, expectedTerm: normalizedContext, origin: origin)
+                try self.recordExprWithOrigin(exprId: cond, chainHoleRef: chainHoleRef, origin: origin, expectedOrigin: <SourceExpectedContext.None />)
+                try self.recordValueBlockWithOrigin(exprId: exprId, blockId: thenBlk, expectedTerm: normalizedContext, origin: origin, expectedOrigin: contextOrigin.projected(term: normalizedContext))
+                try self.recordValueBlockWithOrigin(exprId: exprId, blockId: elseBlk, expectedTerm: normalizedContext, origin: origin, expectedOrigin: contextOrigin.projected(term: normalizedContext))
                 if self.cur.recordCallTemplates { self.storeBuildingValueRegion(exprId: exprId, region: <SourceValueRegion.If condition=try self.callArgumentSource(exprId: cond) thenBlock=thenBlk elseBlock=elseBlk />) }
             }
             Expr.OptChain(val base, val cont) => {
                 // Check the children before committing the chain result. The
                 // same complete stage then owns both source and rewritten use.
-                try self.recordExprWithOrigin(exprId: base, chainHoleRef: chainHoleRef, origin: origin)
+                try self.recordExprWithOrigin(exprId: base, chainHoleRef: chainHoleRef, origin: origin, expectedOrigin: <SourceExpectedContext.None />)
                 mut val baseInfo: TypeInfo = (try self.exprTypeWithChainHole(id: base, chainHoleRef: chainHoleRef))
                 mut val baseRef: U64 = self.parametricExprTerm(exprId: base)
                 if baseRef == 0U64 {
@@ -3140,7 +3153,7 @@ impl Comp {
                     baseInfo = self.typeInfoOfRef(ref: baseRef)
                     val valueIndex: U64 = (try self.chainValueArgIndex(typeRef: baseRef))
                     if valueIndex < baseTerm.args.count() {
-                        try self.recordExprWithOrigin(exprId: cont, chainHoleRef: baseTerm.args[valueIndex], origin: origin)
+                        try self.recordExprWithOrigin(exprId: cont, chainHoleRef: baseTerm.args[valueIndex], origin: origin, expectedOrigin: <SourceExpectedContext.None />)
                     }
                 }
                 // `?.` is a semantic desugar, not a late Mono recovery. Record
@@ -3164,7 +3177,7 @@ impl Comp {
                         // Generated match nodes must satisfy the same typed
                         // contract before declaration verification as written
                         // matches. Revisit the replacement, not the old chain.
-                        try self.recordExprWithOrigin(exprId: exprId, chainHoleRef: chainHoleRef, expectedTerm: normalizedContext, needsValue: needsValue, origin: origin)
+                        try self.recordExprWithOrigin(exprId: exprId, chainHoleRef: chainHoleRef, expectedTerm: normalizedContext, needsValue: needsValue, origin: origin, expectedOrigin: contextOrigin.projected(term: normalizedContext))
                     }
                 }
             }
@@ -3174,12 +3187,12 @@ impl Comp {
                 self.recordSemanticExprTerm(exprId: exprId, term: chainHoleRef)
             }
             Expr.Try(val expr) => {
-                try self.recordExprWithOrigin(exprId: expr, chainHoleRef: chainHoleRef, origin: origin)
+                try self.recordExprWithOrigin(exprId: expr, chainHoleRef: chainHoleRef, origin: origin, expectedOrigin: <SourceExpectedContext.None />)
                 try self.recordTryExpression(exprId: exprId, operand: expr)
                 try self.recordValueOperandCall(exprId: expr)
             }
             Expr.Arrow(val base, val nameStart, val nameLen) => {
-                try self.recordExprWithOrigin(exprId: base, chainHoleRef: chainHoleRef, origin: origin)
+                try self.recordExprWithOrigin(exprId: base, chainHoleRef: chainHoleRef, origin: origin, expectedOrigin: <SourceExpectedContext.None />)
                 val refTerm: U64 = self.parametricExprTerm(exprId: base)
                 if refTerm != 0U64 { try self.checkReferenceDereference(ref: refTerm, offset: self.exprOffset(id: base)) }
                 if self.isStrongRefInst(ref: refTerm) {
@@ -3190,7 +3203,7 @@ impl Comp {
                 }
             }
             Expr.Deref(val base) => {
-                try self.recordExprWithOrigin(exprId: base, chainHoleRef: chainHoleRef, origin: origin)
+                try self.recordExprWithOrigin(exprId: base, chainHoleRef: chainHoleRef, origin: origin, expectedOrigin: <SourceExpectedContext.None />)
                 val refTerm: U64 = self.parametricExprTerm(exprId: base)
                 if refTerm != 0U64 { try self.checkReferenceDereference(ref: refTerm, offset: self.exprOffset(id: base)) }
                 if self.isStrongRefInst(ref: refTerm) {
@@ -3201,11 +3214,11 @@ impl Comp {
                 }
             }
             Expr.Move(val operand, isBorrow: _) => {
-                try self.recordExprWithOrigin(exprId: operand, chainHoleRef: chainHoleRef, origin: origin)
+                try self.recordExprWithOrigin(exprId: operand, chainHoleRef: chainHoleRef, origin: origin, expectedOrigin: <SourceExpectedContext.None />)
                 self.recordSemanticExprTerm(exprId: exprId, term: self.parametricExprTerm(exprId: operand))
             }
             Expr.Await(val operand) => {
-                try self.recordExprWithOrigin(exprId: operand, chainHoleRef: chainHoleRef, origin: origin)
+                try self.recordExprWithOrigin(exprId: operand, chainHoleRef: chainHoleRef, origin: origin, expectedOrigin: <SourceExpectedContext.None />)
                 try self.recordValueOperandCall(exprId: operand)
                 val promiseTerm: U64 = self.parametricExprTerm(exprId: operand)
                 if promiseTerm != 0U64 && promiseTerm < self.arena.typeCount() {
@@ -3300,7 +3313,15 @@ impl Comp {
                     self.addLocal(nameStart: p.nameStart, nameLen: p.nameLen, tyStart: info.nameStart, tyLen: info.nameLen, isArray: info.kind == 3, ty: parameterType, isInout: p.isInout, isMut: false, owned: p.isMove)
                     pi += 1
                 }
-                try self.recordBlockWithOrigin(blkId: body, origin: origin)
+                val resultOrigin = if hasRet {
+                    give <SourceExpectedContext.Contract term=self.arena.typeAt(index: signature).args[0U64] />
+                } else if normalizedContext != 0U64 && self.isFnType(ref: normalizedContext) {
+                    val functionContext = self.arena.typeAt(index: normalizedContext)
+                    give if functionContext.args.count() > 0U64 { give contextOrigin.projected(term: functionContext.args[0U64]) }
+                    else { give <SourceExpectedContext.None /> }
+                } else { give <SourceExpectedContext.None /> }
+                val closureOrigin = origin.returning(context: resultOrigin)
+                try self.recordBlockWithOrigin(blkId: body, origin: closureOrigin, expectedOrigin: contextOrigin)
                 if diverging { try self.checkDivergingBody(blkId: body, offset: self.exprOffset(id: exprId)) }
                 self.cur.checkFn = savedCheckFn
                 self.cur.recordClosureIndex = savedClosureIndex
@@ -3318,11 +3339,11 @@ impl Comp {
             }
         }
         if normalizedContext != 0U64 {
-            try self.recordSemanticExprExpectedResultCore(exprId: exprId, expectedTerm: requestedContext, recordMissing: false, origin: origin)
+            try self.recordSemanticExprExpectedResultCore(exprId: exprId, expectedTerm: requestedContext, recordMissing: false, origin: origin, expectedOrigin: contextOrigin.projected(term: requestedContext))
         }
         match self.arena.exprs[exprId] {
             Expr.Call(nameStart: _, nameLen: _, args: val arguments) | Expr.Method(recv: _, nameStart: _, nameLen: _, args: val arguments) | Expr.ExtMethod(recv: _, source: _, nameStart: _, nameLen: _, args: val arguments) => {
-                try self.recordSelectedCallArgumentContextsWithOrigin(exprId: exprId, args: arguments, chainHoleRef: chainHoleRef, origin: origin)
+                try self.recordSelectedCallArgumentContextsWithOrigin(exprId: exprId, args: arguments, chainHoleRef: chainHoleRef, origin: origin, expectedOrigin: contextOrigin)
             }
             _ => {}
         }
@@ -3332,11 +3353,11 @@ impl Comp {
         match self.arena.exprs[exprId] {
             Expr.Unary(val op, val operand) => {
                 val operands: Array[U64] = [operand]
-            try self.recordOperatorTemplate(exprId: exprId, op: op, operandExprs: operands, isUnary: true, origin: origin)
+            try self.recordOperatorTemplate(exprId: exprId, op: op, operandExprs: operands, isUnary: true, origin: origin, expectedOrigin: contextOrigin)
             }
             Expr.Binary(val op, val lhs, val rhs) => {
                 val operands: Array[U64] = [lhs, rhs]
-            try self.recordOperatorTemplate(exprId: exprId, op: op, operandExprs: operands, isUnary: false, origin: origin)
+            try self.recordOperatorTemplate(exprId: exprId, op: op, operandExprs: operands, isUnary: false, origin: origin, expectedOrigin: contextOrigin)
             }
             _ => {}
         }
@@ -3345,10 +3366,10 @@ impl Comp {
         return <Result.Ok value=() />
     }
 
-    inout fn recordFreeCallExpressionWithOrigin(exprId: U64, callStart: U64, callLen: U64, args: ArgRange, chainHoleRef: U64, origin: SourceRecordOrigin) -> Result[(), CompileDiagnostic] {
+    inout fn recordFreeCallExpressionWithOrigin(exprId: U64, callStart: U64, callLen: U64, args: ArgRange, chainHoleRef: U64, origin: SourceRecordingScope, expectedOrigin: SourceExpectedContext) -> Result[(), CompileDiagnostic] {
         mut val i: U64 = 0
         while i < args.len {
-            try self.recordExprWithOrigin(exprId: self.argAt(args: args, index: i).expr, chainHoleRef: chainHoleRef, deferContext: true, origin: origin)
+            try self.recordExprWithOrigin(exprId: self.argAt(args: args, index: i).expr, chainHoleRef: chainHoleRef, deferContext: true, origin: origin, expectedOrigin: <SourceExpectedContext.None />)
             i += 1
         }
         // `pow(base:, exp:)` has free-call syntax but is a static
@@ -3365,33 +3386,33 @@ impl Comp {
                 val resolution: StaticMemberResolution = (try self.writtenStaticMemberResolution(exprId: exprId, receiverRef: baseTerm, nameStart: callStart, nameLen: callLen, args: args, requiredTraitOwner: self.syntheticRequiredTraitOwner(exprId: exprId)))
                 match resolution {
                     StaticMemberResolution.Requirement(proof: _, traitIdx: _, reqIdx: _) => {
-                        try self.recordStaticMethodTemplate(exprId: exprId, receiverTerm: baseTerm, receiver: baseReceiver, args: args, resolution: resolution, resultTerm: (try self.staticRequirementCallResultType(resolution: resolution, args: args)), origin: origin)
+                        try self.recordStaticMethodTemplate(exprId: exprId, receiverTerm: baseTerm, receiver: baseReceiver, args: args, resolution: resolution, resultTerm: (try self.staticRequirementCallResultType(resolution: resolution, args: args)), origin: origin, expectedOrigin: expectedOrigin)
                         return <Result.Ok value=() />
                     }
                     StaticMemberResolution.Provided(proof: _, traitIdx: _, callee: _) => {
-                        try self.recordStaticMethodTemplate(exprId: exprId, receiverTerm: baseTerm, receiver: baseReceiver, args: args, resolution: resolution, resultTerm: self.parametricExprTerm(exprId: exprId), origin: origin)
+                        try self.recordStaticMethodTemplate(exprId: exprId, receiverTerm: baseTerm, receiver: baseReceiver, args: args, resolution: resolution, resultTerm: self.parametricExprTerm(exprId: exprId), origin: origin, expectedOrigin: expectedOrigin)
                         return <Result.Ok value=() />
                     }
                     _ => {}
                 }
                 val selection = try self.lookupAssocForResolvedReceiver(surfaceRef: baseTerm, sourceId: 0U64, sourceOwner: 0U64, nameStart: callStart, nameLen: callLen, args: args, useOffset: self.exprOffset(id: exprId))
-                try self.recordMemberLookupArguments(selection: selection, receiverTerm: baseTerm, args: args, chainHoleRef: chainHoleRef, exprId: exprId, origin: origin)
+                try self.recordMemberLookupArguments(selection: selection, receiverTerm: baseTerm, args: args, chainHoleRef: chainHoleRef, exprId: exprId, origin: origin, expectedOrigin: expectedOrigin)
                 cfi = self.selectedMemberFunction(selection: selection)
                 if cfi < self.arena.functionCount() {
-                    try self.recordParametricMethodCallWithOrigin(exprId: exprId, callee: cfi, receiverSource: baseReceiver, receiverTerm: baseTerm, args: args, origin: origin)
+                    try self.recordParametricMethodCallWithOrigin(exprId: exprId, callee: cfi, receiverSource: baseReceiver, receiverTerm: baseTerm, args: args, origin: origin, expectedOrigin: expectedOrigin)
                     return <Result.Ok value=() />
                 }
             }
         }
         match self.lexicalValueBinding(start: callStart, len: callLen) {
-            Optional.Some(v: val binding) => { return self.recordBoundValueCall(exprId: exprId, binding: binding, args: args, origin: origin) }
+            Optional.Some(v: val binding) => { return self.recordBoundValueCall(exprId: exprId, binding: binding, args: args, origin: origin, expectedOrigin: expectedOrigin) }
             Optional.None => {}
         }
         cfi = match (try self.resolvedFreeFunctionCall(id: exprId, nameStart: callStart, nameLen: callLen, args: args)) {
             FreeCallLookup.Selected(function: val function) => function
             FreeCallLookup.DiagnosticCandidate(function: val function) => {
                 val diagnosticContext = <FreeCallLookup.DiagnosticCandidate function=function />
-                try self.recordFreeCallArgumentContexts(exprId: exprId, context: diagnosticContext, args: args, origin: origin)
+                try self.recordFreeCallArgumentContexts(exprId: exprId, context: diagnosticContext, args: args, origin: origin, expectedOrigin: expectedOrigin)
                 return <Result.Err error=self.failedFreeCallDiagnostic(exprId: exprId, callStart: callStart, callLen: callLen, args: args, selection: diagnosticContext) />
             }
             FreeCallLookup.NoCandidate => self.arena.functionCount()
@@ -3401,7 +3422,7 @@ impl Comp {
             FreeCallLookup.CachedNonStatic => { return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "no matching function for this argument list") /> }
         }
         if cfi < self.arena.functionCount() {
-            try self.recordFreeCallArgumentContexts(exprId: exprId, context: <FreeCallLookup.Selected function=cfi />, args: args, origin: origin)
+            try self.recordFreeCallArgumentContexts(exprId: exprId, context: <FreeCallLookup.Selected function=cfi />, args: args, origin: origin, expectedOrigin: expectedOrigin)
             // A call template owns the type of the value it actually
             // passes, not the pre-context probe used to choose a
             // parameter context.  In particular `[Sq]` at a selected
@@ -3419,11 +3440,11 @@ impl Comp {
             if !self.genMode && exprId < self.sourceExpressionLimit { try self.checkExpressionVisibilityCore(exprId: exprId, origin: <FreeCallVisibilityOrigin.AuthoredFreeCall />) }
             return <Result.Err error=self.failedFreeCallDiagnostic(exprId: exprId, callStart: callStart, callLen: callLen, args: args, selection: <FreeCallLookup.NoCandidate />) />
         }
-        try self.recordArgumentAccessUsesWithOrigin(parentExpr: exprId, callee: cfi, args: args, origin: origin)
+        try self.recordArgumentAccessUsesWithOrigin(parentExpr: exprId, callee: cfi, args: args, origin: origin, expectedOrigin: expectedOrigin)
         return <Result.Ok value=() />
     }
 
-    inout fn recordIndexCallWithOrigin(exprId: U64, base: U64, key: U64, receiverTerm: U64, receiverType: TypeInfo, origin: SourceRecordOrigin) -> Result[(), CompileDiagnostic] {
+    inout fn recordIndexCallWithOrigin(exprId: U64, base: U64, key: U64, receiverTerm: U64, receiverType: TypeInfo, origin: SourceRecordingScope, expectedOrigin: SourceExpectedContext) -> Result[(), CompileDiagnostic] {
         if self.isBufferType(ti: receiverType) {
             return <Result.Ok value=() />
         }
@@ -3444,13 +3465,13 @@ impl Comp {
         if self.memberLookupIsMissing(selection: selection) {
             selection = (try self.resolveMethodFinalForTypeWithOrigin(recv: base, receiverType: receiverType, nameStart: name.nameStart, nameLen: name.nameLen, args: args))
         }
-        try self.recordMemberLookupArguments(selection: selection, receiverTerm: receiverTerm, args: args, chainHoleRef: 0U64, exprId: exprId, origin: origin)
+        try self.recordMemberLookupArguments(selection: selection, receiverTerm: receiverTerm, args: args, chainHoleRef: 0U64, exprId: exprId, origin: origin, expectedOrigin: expectedOrigin)
         val callee = self.selectedMemberFunction(selection: selection)
-        try self.recordParametricMethodCallWithOrigin(exprId: exprId, callee: callee, receiverSource: (try self.directReceiverTemplateForExpr(exprId: base)), receiverTerm: receiverTerm, args: args, origin: origin)
+        try self.recordParametricMethodCallWithOrigin(exprId: exprId, callee: callee, receiverSource: (try self.directReceiverTemplateForExpr(exprId: base)), receiverTerm: receiverTerm, args: args, origin: origin, expectedOrigin: expectedOrigin)
         return <Result.Ok value=() />
     }
 
-    inout fn recordMethodArgumentContextsWithOrigin(callee: U64, receiverTerm: U64, args: ArgRange, chainHoleRef: U64, exprId: U64, origin: SourceRecordOrigin) -> Result[(), CompileDiagnostic] {
+    inout fn recordMethodArgumentContextsWithOrigin(callee: U64, receiverTerm: U64, args: ArgRange, chainHoleRef: U64, exprId: U64, origin: SourceRecordingScope, expectedOrigin: SourceExpectedContext) -> Result[(), CompileDiagnostic] {
         if callee < self.arena.functionCount() {
             val selectedMethod: Func = self.arena.functionAt(index: callee)
             val useOffset = self.exprOffset(id: exprId)
@@ -3479,12 +3500,12 @@ impl Comp {
                         }
                     }
                     val argumentExpr: U64 = self.argAt(args: args, index: mk).expr
-                    if mctx != 0U64 && self.expressionNeedsTypeContext(exprId: argumentExpr) { try self.recordExprWithOrigin(exprId: argumentExpr, chainHoleRef: chainHoleRef, expectedTerm: mctx, origin: origin) }
+                    if mctx != 0U64 && self.expressionNeedsTypeContext(exprId: argumentExpr) { try self.recordExprWithOrigin(exprId: argumentExpr, chainHoleRef: chainHoleRef, expectedTerm: mctx, origin: origin, expectedOrigin: <SourceExpectedContext.Contract term=mctx />) }
                     if mctx != 0U64 && (try self.tyRefIsGround(ref: mctx)) {
                         val parameterType: TypeInfo = self.typeInfoOfRef(ref: mctx)
                         // Complete the prepared child before a literal/value
                         // checker demands that child's selected signature.
-                        try self.recordSemanticExprExpectedResultWithOrigin(exprId: argumentExpr, expectedTerm: mctx, origin: origin)
+                        try self.recordSemanticExprExpectedResultWithOrigin(exprId: argumentExpr, expectedTerm: mctx, origin: origin, expectedOrigin: <SourceExpectedContext.Contract term=mctx />)
                         try self.checkLitSpanCtx(id: argumentExpr, tyStart: parameterType.nameStart, tyLen: parameterType.nameLen, isArray: parameterType.kind == 3, ctxRef: mctx)
                         try self.tcCheckValue(expectedRef: mctx, valueExpr: argumentExpr, pos: "arg")
                     }
@@ -3495,7 +3516,7 @@ impl Comp {
         return <Result.Ok value=() />
     }
 
-    inout fn recordParametricFunctionWithOrigin(fnIdx: U64, recordCallTemplates: Bool, origin: SourceRecordOrigin) -> Result[(), CompileDiagnostic] {
+    inout fn recordParametricFunctionWithOrigin(fnIdx: U64, recordCallTemplates: Bool, origin: SourceRecordingScope, expectedOrigin: SourceExpectedContext) -> Result[(), CompileDiagnostic] {
         val sourceOwner = try self.semanticBodyOwner(fnIdx: fnIdx)
         if self.sourceOwnerConstructionClosed(owner: <SemanticCompletionOwner.Function index=sourceOwner />) {
             return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: completed source owner cannot record its body again") />
@@ -3529,6 +3550,7 @@ impl Comp {
             self.cur.typeArgs = []
             self.cur.checkFn = fnIdx
             try self.checkDefaultGeneratorRestrictions(fnIdx: fnIdx)
+            val bodyOrigin = origin.returning(context: <SourceExpectedContext.Contract term=self.semanticBodyReturnContext(fnIdx: fnIdx) />)
             mut val parameters: Array[SourceBodyParameter] = []
             mut val pi: U64 = 0
             while pi < f.params.count() {
@@ -3546,20 +3568,20 @@ impl Comp {
                 // After preparation the generator is the sole Record
                 // owner of this expression and of its lexical locals.
                 if p.hasDefault && self.decls.defaultGeneratorRanges.count() == 0U64 {
-                    try self.recordExprWithOrigin(exprId: p.defaultExpr, expectedTerm: parameterTerm, origin: origin)
+                    try self.recordExprWithOrigin(exprId: p.defaultExpr, expectedTerm: parameterTerm, origin: bodyOrigin, expectedOrigin: <SourceExpectedContext.Contract term=parameterTerm />)
                 }
                 pi += 1
             }
             if recordCallTemplates {
                 try self.recordSourceBodySignature(fnIdx: fnIdx, signature: <SourceBodySignature hasReceiver=f.hasRecv receiverTerm=self.cur.selfRef selfInout=f.selfInout selfMove=f.selfMove isAsync=self.arena.requiresAsyncActivation(function: f) hasReturnValue=f.hasRet || self.arena.forwardsAsyncPromise(function: f) resultTerm=self.semanticBodyReturnContext(fnIdx: fnIdx) block=f.body parameters=parameters />)
             }
-            try self.recordBlockWithOrigin(blkId: f.body, origin: origin)
+            try self.recordBlockWithOrigin(blkId: f.body, origin: bodyOrigin, expectedOrigin: expectedOrigin)
             try self.checkDefaultGenerator(fnIdx: fnIdx)
         }
         return <Result.Ok value=() />
     }
 
-    inout fn recordParametricMethodCallWithOrigin(exprId: U64, callee: U64, receiverSource: CallTemplateReceiver, receiverTerm: U64, args: ArgRange, origin: SourceRecordOrigin) -> Result[(), CompileDiagnostic] {
+    inout fn recordParametricMethodCallWithOrigin(exprId: U64, callee: U64, receiverSource: CallTemplateReceiver, receiverTerm: U64, args: ArgRange, origin: SourceRecordingScope, expectedOrigin: SourceExpectedContext) -> Result[(), CompileDiagnostic] {
         if callee >= self.arena.functionCount() { return <Result.Ok value=() /> }
         val f: Func = self.arena.functionAt(index: callee)
         try self.checkCallDeclarationKind(exprId: exprId, declaration: f)
@@ -3572,7 +3594,7 @@ impl Comp {
             if f.isAssoc {
                 val inferredReceiver = try self.associatedReceiverFromArguments(f: f, args: args)
                 if inferredReceiver != 0U64 {
-                    try self.recordParametricMethodCallWithOrigin(exprId: exprId, callee: callee, receiverSource: <CallTemplateReceiver.Term term=inferredReceiver />, receiverTerm: inferredReceiver, args: args, origin: origin)
+                    try self.recordParametricMethodCallWithOrigin(exprId: exprId, callee: callee, receiverSource: <CallTemplateReceiver.Term term=inferredReceiver />, receiverTerm: inferredReceiver, args: args, origin: origin, expectedOrigin: expectedOrigin)
                     return <Result.Ok value=() />
                 }
                 val inferred = try self.inferPreparedCallTypeArguments(f: f, args: args, selfRef: f.recvTy)
@@ -3619,11 +3641,11 @@ impl Comp {
                 StaticMemberResolution.Requirement(proof: _, traitIdx: _, reqIdx: _) => {
                     val result: U64 = (try self.staticRequirementCallResultType(resolution: staticResolution, args: args))
                     if result != 0U64 { self.recordSemanticExprTerm(exprId: exprId, term: result) }
-                    try self.recordStaticMethodTemplate(exprId: exprId, receiverTerm: receiverTerm, receiver: receiverSource, args: args, resolution: staticResolution, resultTerm: result, origin: origin)
+                    try self.recordStaticMethodTemplate(exprId: exprId, receiverTerm: receiverTerm, receiver: receiverSource, args: args, resolution: staticResolution, resultTerm: result, origin: origin, expectedOrigin: expectedOrigin)
                     return <Result.Ok value=() />
                 }
                 StaticMemberResolution.Provided(proof: _, traitIdx: _, callee: _) => {
-                    try self.recordStaticMethodTemplate(exprId: exprId, receiverTerm: receiverTerm, receiver: receiverSource, args: args, resolution: staticResolution, resultTerm: self.parametricExprTerm(exprId: exprId), origin: origin)
+                    try self.recordStaticMethodTemplate(exprId: exprId, receiverTerm: receiverTerm, receiver: receiverSource, args: args, resolution: staticResolution, resultTerm: self.parametricExprTerm(exprId: exprId), origin: origin, expectedOrigin: expectedOrigin)
                     return <Result.Ok value=() />
                 }
                 _ => {}
@@ -3662,7 +3684,7 @@ impl Comp {
         return <Result.Ok value=() />
     }
 
-    inout fn recordSelectedCallArgumentContextsWithOrigin(exprId: U64, args: ArgRange, chainHoleRef: U64, origin: SourceRecordOrigin) -> Result[(), CompileDiagnostic] {
+    inout fn recordSelectedCallArgumentContextsWithOrigin(exprId: U64, args: ArgRange, chainHoleRef: U64, origin: SourceRecordingScope, expectedOrigin: SourceExpectedContext) -> Result[(), CompileDiagnostic] {
         // Most calls already have complete operands. Avoid creating an
         // environment or copying a signature unless context is still needed.
         mut val index = 0U64
@@ -3683,14 +3705,14 @@ impl Comp {
                 val position = self.paramIndexForArg(params: selected.function.params, args: args, argIdx: index)
                 val parameter = self.funcParamAt(params: selected.function.params, index: position)
                 val expected = try self.sourceCallArgumentType(parameter: parameter, position: position, signature: selected.signature)
-                if expected != 0U64 { try self.recordSemanticExprExpectedResultWithOrigin(exprId: argument, expectedTerm: expected, origin: origin) }
+                if expected != 0U64 { try self.recordSemanticExprExpectedResultWithOrigin(exprId: argument, expectedTerm: expected, origin: origin, expectedOrigin: expectedOrigin.projected(term: expected)) }
             }
             index += 1U64
         }
         return <Result.Ok value=() />
     }
 
-    inout fn recordSemanticMatchWithOrigin(matchSource: MatchSource, scrut: U64, arms: MatchArmRange, origin: SourceRecordOrigin) -> Result[(), CompileDiagnostic] {
+    inout fn recordSemanticMatchWithOrigin(matchSource: MatchSource, scrut: U64, arms: MatchArmRange, origin: SourceRecordingScope, expectedOrigin: SourceExpectedContext) -> Result[(), CompileDiagnostic] {
         mut val patterns: Array[PatInfo] = []
         mut val index = 0U64
         while index < arms.len {
@@ -3710,7 +3732,7 @@ impl Comp {
                     }
                     self.arena.matchArmPool.set(i: arms.start + index, value: arm)
                 }
-                try self.recordExprWithOrigin(exprId: arm.testExpr, origin: origin)
+                try self.recordExprWithOrigin(exprId: arm.testExpr, origin: origin, expectedOrigin: <SourceExpectedContext.None />)
             }
             patterns.append(self.patternInfo(arm: arm))
             index += 1U64
@@ -3737,7 +3759,7 @@ impl Comp {
         return <Result.Ok value=() />
     }
 
-    inout fn recordStmtWithOrigin(stmtId: U64, expectedTerm: U64 = 0U64, explicitResult: Bool = true, origin: SourceRecordOrigin) -> Result[SourceCompletion, CompileDiagnostic] {
+    inout fn recordStmtWithOrigin(stmtId: U64, expectedTerm: U64 = 0U64, explicitResult: Bool = true, origin: SourceRecordingScope, expectedOrigin: SourceExpectedContext) -> Result[SourceCompletion, CompileDiagnostic] {
         if self.semanticStmtConstructionClosed(stmtId: stmtId) {
             return <Result.Err error=self.diagnosticAt(offset: self.stmtPrincipalOffset(sid: stmtId), msg: "internal error: completed source owner cannot record a statement") />
         }
@@ -3746,7 +3768,7 @@ impl Comp {
                 val annotation = try self.recordBindingAnnotation(nameStart: nameStart, written: ty, occurrence: annotationOccurrence)
                 val expected = if annotation.isSome() { give annotation.unwrap().sourceTerm } else { give ty }
                 try self.collectRecordedType(ref: expected)
-                try self.recordExprWithOrigin(exprId: init, expectedTerm: expected, admittedContext: annotation.isSome(), origin: origin)
+                try self.recordExprWithOrigin(exprId: init, expectedTerm: expected, admittedContext: annotation.isSome(), origin: origin, expectedOrigin: if annotation.isSome() { give <SourceExpectedContext.Contract term=expected /> } else { give <SourceExpectedContext.None /> })
                 mut val endedBinding: U64 = 0U64
                 val previous = self.localIndexByName(start: nameStart, len: nameLen)
                 if previous >= self.cur.bindingScopeStart && previous < self.cur.locals.count() {
@@ -3769,40 +3791,40 @@ impl Comp {
                 self.commitSourceTypeContext(exprId: init)
             }
             Stmt.Assign(val target, val value) => {
-                try self.recordExprWithOrigin(exprId: target, origin: origin)
+                try self.recordExprWithOrigin(exprId: target, origin: origin, expectedOrigin: <SourceExpectedContext.None />)
                 val expected: U64 = self.parametricExprTerm(exprId: target)
-                try self.recordExprWithOrigin(exprId: value, expectedTerm: expected, origin: origin)
+                try self.recordExprWithOrigin(exprId: value, expectedTerm: expected, origin: origin, expectedOrigin: <SourceExpectedContext.Contract term=expected />)
             }
-            Stmt.ExprStmt(val expr) => { try self.recordExprWithOrigin(exprId: expr, needsValue: false, standaloneBlock: true, origin: origin) }
+            Stmt.ExprStmt(val expr) => { try self.recordExprWithOrigin(exprId: expr, needsValue: false, standaloneBlock: true, origin: origin, expectedOrigin: <SourceExpectedContext.None />) }
             Stmt.Return(val value, val hasValue, offset: _) => {
                 if hasValue {
                     val expected: U64 = self.semanticBodyReturnContext(fnIdx: self.cur.checkFn)
-                    try self.recordExprWithOrigin(exprId: value, expectedTerm: expected, origin: origin)
+                    try self.recordExprWithOrigin(exprId: value, expectedTerm: expected, origin: origin, expectedOrigin: origin.returnContext)
                 }
             }
             Stmt.IfChain(val conditions, val thenBlk, val elseBlk) => {
                 val mark = self.scopeMark()
-                try self.recordConditionClausesWithOrigin(conditions: conditions, origin: origin)
+                try self.recordConditionClausesWithOrigin(conditions: conditions, origin: origin, expectedOrigin: expectedOrigin)
                 val guard = self.blockExitRequirements.contains(key: elseBlk)
                 if guard { self.recordGuardBindingEnds(blockId: thenBlk, introducedFrom: mark) }
-                try self.recordBlockWithOrigin(blkId: thenBlk, continuesBindingScope: guard, origin: origin)
+                try self.recordBlockWithOrigin(blkId: thenBlk, continuesBindingScope: guard, origin: origin, expectedOrigin: expectedOrigin)
                 self.popLocals(mark: mark)
-                try self.recordBlockWithOrigin(blkId: elseBlk, origin: origin)
+                try self.recordBlockWithOrigin(blkId: elseBlk, origin: origin, expectedOrigin: expectedOrigin)
             }
             Stmt.If(val cond, val thenBlk, val elseBlk, val hasElse) => {
-                try self.recordExprWithOrigin(exprId: cond, origin: origin)
-                try self.recordBlockWithOrigin(blkId: thenBlk, continuesBindingScope: hasElse && self.blockExitRequirements.contains(key: elseBlk), origin: origin)
+                try self.recordExprWithOrigin(exprId: cond, origin: origin, expectedOrigin: <SourceExpectedContext.None />)
+                try self.recordBlockWithOrigin(blkId: thenBlk, continuesBindingScope: hasElse && self.blockExitRequirements.contains(key: elseBlk), origin: origin, expectedOrigin: expectedOrigin)
                 if hasElse {
-                    try self.recordBlockWithOrigin(blkId: elseBlk, origin: origin)
+                    try self.recordBlockWithOrigin(blkId: elseBlk, origin: origin, expectedOrigin: expectedOrigin)
                 }
             }
             Stmt.While(val cond, val body) => {
                 val conditionScope = self.enterSourceControlRegion(region: <SourceControlRegion.LoopBarrier />)
-                val checked = self.recordExprWithOrigin(exprId: cond, origin: origin)
+                val checked = self.recordExprWithOrigin(exprId: cond, origin: origin, expectedOrigin: <SourceExpectedContext.None />)
                 self.restoreSourceControlRegion(checkpoint: conditionScope)
                 try checked
                 val loopScope = self.enterSourceControlRegion(region: <SourceControlRegion.Loop statementId=stmtId />)
-                val recorded = self.recordBlockWithOrigin(blkId: body, origin: origin)
+                val recorded = self.recordBlockWithOrigin(blkId: body, origin: origin, expectedOrigin: expectedOrigin)
                 self.restoreSourceControlRegion(checkpoint: loopScope)
                 try recorded
             }
@@ -3818,7 +3840,7 @@ impl Comp {
                         _ => {}
                     }
                 }
-                try self.recordExprWithOrigin(exprId: iter, expectedTerm: iteratorContext, origin: origin)
+                try self.recordExprWithOrigin(exprId: iter, expectedTerm: iteratorContext, origin: origin, expectedOrigin: <SourceExpectedContext.Contract term=iteratorContext />)
                 val iterTerm = self.parametricExprTerm(exprId: iter)
                 val iteratorReceiver = try self.protocolReceiverTemplateForExpr(exprId: iter)
                 val iteratorResult = try self.recordProtocolCallTemplate(stmtId: stmtId, iter: iter, slot: 1U64, receiver: iteratorReceiver, receiverTerm: iterTerm, useOffset: self.exprOffset(id: iter))
@@ -3838,7 +3860,7 @@ impl Comp {
                 }
 
                 val loopScope = self.enterSourceControlRegion(region: <SourceControlRegion.Loop statementId=stmtId />)
-                val recorded = self.recordBlockWithOrigin(blkId: body, origin: origin)
+                val recorded = self.recordBlockWithOrigin(blkId: body, origin: origin, expectedOrigin: expectedOrigin)
                 self.restoreSourceControlRegion(checkpoint: loopScope)
                 self.popLocals(mark: forMark)
                 try recorded
@@ -3846,22 +3868,22 @@ impl Comp {
             Stmt.Match(val scrut, val arms) => {
                 // Validate labels before publishing lexical pattern bindings.
                 try self.checkMatchArmBinds(arms: arms)
-                try self.recordExprWithOrigin(exprId: scrut, origin: origin)
+                try self.recordExprWithOrigin(exprId: scrut, origin: origin, expectedOrigin: <SourceExpectedContext.None />)
                 try self.checkOrPatternTypes(arms: arms, scrut: scrut)
-                try self.recordSemanticMatchWithOrigin(matchSource: <MatchSource.Statement stmtId=stmtId />, scrut: scrut, arms: arms, origin: origin)
+                try self.recordSemanticMatchWithOrigin(matchSource: <MatchSource.Statement stmtId=stmtId />, scrut: scrut, arms: arms, origin: origin, expectedOrigin: expectedOrigin)
                 mut val ai: U64 = 0
                 while ai < arms.len {
                     val a: MatchArm = self.matchArmAt(arms: arms, index: ai)
                     val mark: U64 = self.scopeMark()
                     try self.scanAddArmBinds(a: a, scrutTi: self.semanticExprTypeInfo(exprId: scrut))
-                    try self.recordBlockWithOrigin(blkId: a.body, origin: origin)
+                    try self.recordBlockWithOrigin(blkId: a.body, origin: origin, expectedOrigin: expectedOrigin)
                     self.popLocals(mark: mark)
                     ai += 1
                 }
             }
-            Stmt.Panic(val msg, offset: _) => { try self.recordExprWithOrigin(exprId: msg, origin: origin) }
+            Stmt.Panic(val msg, offset: _) => { try self.recordExprWithOrigin(exprId: msg, origin: origin, expectedOrigin: <SourceExpectedContext.None />) }
             Stmt.Give(val value) => {
-                try self.recordExprWithOrigin(exprId: value, expectedTerm: expectedTerm, needsValue: explicitResult, origin: origin)
+                try self.recordExprWithOrigin(exprId: value, expectedTerm: expectedTerm, needsValue: explicitResult, origin: origin, expectedOrigin: expectedOrigin.projected(term: expectedTerm))
                 try self.recordValueOperandCall(exprId: value)
             }
             Stmt.Break(offset: _) => {}
@@ -3879,12 +3901,12 @@ impl Comp {
         return <Result.Ok value=completion />
     }
 
-    inout fn recordValueBlockWithOrigin(exprId: U64, blockId: U64, expectedTerm: U64, discarded: Bool = false, origin: SourceRecordOrigin) -> Result[Bool, CompileDiagnostic] {
+    inout fn recordValueBlockWithOrigin(exprId: U64, blockId: U64, expectedTerm: U64, discarded: Bool = false, origin: SourceRecordingScope, expectedOrigin: SourceExpectedContext) -> Result[Bool, CompileDiagnostic] {
         val mark = self.scopeMark()
         mut val context = expectedTerm
         if context == 0U64 { context = self.semanticExprTerm(exprId: exprId) }
         val resultContext = if discarded { give <BlockResultContext.Discarded /> } else { give <BlockResultContext.Value expectedTerm=context /> }
-        val completion = try self.recordBlockContentsWithOrigin(blkId: blockId, resultContext: resultContext, origin: origin)
+        val completion = try self.recordBlockContentsWithOrigin(blkId: blockId, resultContext: resultContext, origin: origin, expectedOrigin: expectedOrigin)
         mut val resultTerm = 0U64
         if completion.source.normal() {
             // Analytical noncontinuation does not supply a source value. Only
@@ -3937,5 +3959,43 @@ impl Comp {
         try self.storeBuildingValueBlock(blockId: blockId, expression: exprId, completion: completion, resultTerm: resultTerm)
         self.popLocals(mark: mark)
         return <Result.Ok value=true />
+    }
+}
+
+
+impl Comp {
+    fn arrayContextDiagnosticOwner() -> DiagnosticOwner {
+        return match self.currentSourceOwner() {
+            Optional.Some(v: val owner) => match owner {
+                SemanticCompletionOwner.Function(index: val index) => <DiagnosticOwner.Function index=index />
+                SemanticCompletionOwner.Global(target: val target) => <DiagnosticOwner.Global target=target />
+                SemanticCompletionOwner.Closure(expression: val expression) => <DiagnosticOwner.Closure expression=expression />
+            }
+            Optional.None => <DiagnosticOwner.Unknown />
+        }
+    }
+}
+
+impl Comp {
+    inout fn constructionInputContext(exprId: U64, construction: U64) -> SourceConstructionContext {
+        match self.authoredConstruction(exprId: exprId) {
+            Optional.Some(v: val source) => {
+                if source.typeFromContext { return <SourceConstructionContext.Outer /> }
+                if self.sourceTypeHasCompleteArguments(ref: construction) { return <SourceConstructionContext.Producer /> }
+            }
+            Optional.None => {
+                // A stale source receipt cannot become a fresh typed producer.
+                if self.authoredConstructions.contains(key: exprId) { return <SourceConstructionContext.Reused /> }
+                // Unregistered generated types may be derived from outer context.
+                // Fresh storage and a ground type do not prove producer origin.
+            }
+        }
+        return <SourceConstructionContext.Reused />
+    }
+
+    inout fn makeFieldContract(typeRef: U64, variantStart: U64, variantLen: U64, isEnum: Bool, fieldStart: U64, fieldLen: U64) -> Result[SourceFieldContract, CompileDiagnostic] {
+        if typeRef == 0U64 { return <Result.Ok value=<SourceFieldContract term=0U64 /> /> }
+        if isEnum { return self.enumFieldContract(instRef: typeRef, variantStart: variantStart, variantLen: variantLen, fieldStart: fieldStart, fieldLen: fieldLen) }
+        return self.fieldContractOfReceiver(receiverRef: typeRef, fieldStart: fieldStart, fieldLen: fieldLen)
     }
 }

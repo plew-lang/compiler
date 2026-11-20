@@ -1280,7 +1280,7 @@ pub impl Comp {
 }
 
 impl Comp {
-    inout fn recordDynamicCallTemplate(exprId: U64, receiver: CallTemplateReceiver, args: ArgRange, target: DynamicCallTemplateTarget, receiverTerm: U64 = 0U64, origin: SourceRecordOrigin) -> Result[(), CompileDiagnostic] {
+    inout fn recordDynamicCallTemplate(exprId: U64, receiver: CallTemplateReceiver, args: ArgRange, target: DynamicCallTemplateTarget, receiverTerm: U64 = 0U64, origin: SourceRecordingScope, expectedOrigin: SourceExpectedContext) -> Result[(), CompileDiagnostic] {
         mut val functionType: U64 = 0U64
         match target {
             DynamicCallTemplateTarget.ClosureGlobal(declarationTarget: _, fnTypeTerm: val term) | DynamicCallTemplateTarget.ClosureLocal(bindingDeclStart: _, fnTypeTerm: val term) => { functionType = term }
@@ -1309,12 +1309,12 @@ impl Comp {
                 // The function signature supplies context before either the
                 // argument check or call-template publication can consume it.
                 if expected != 0U64 && self.expressionNeedsTypeContext(exprId: argument) {
-                    try self.recordExprWithOrigin(exprId: argument, expectedTerm: expected, origin: origin)
+                    try self.recordExprWithOrigin(exprId: argument, expectedTerm: expected, origin: origin, expectedOrigin: <SourceExpectedContext.Contract term=expected />)
                 }
                 if expected != 0U64 {
                     val parameter: TypeInfo = self.typeInfoOfRef(ref: expected)
                     try self.checkLitSpanCtx(id: argument, tyStart: parameter.nameStart, tyLen: parameter.nameLen, isArray: parameter.kind == 3, ctxRef: expected)
-                    try self.recordSemanticExprExpectedResultWithOrigin(exprId: argument, expectedTerm: expected, origin: origin)
+                    try self.recordSemanticExprExpectedResultWithOrigin(exprId: argument, expectedTerm: expected, origin: origin, expectedOrigin: <SourceExpectedContext.Contract term=expected />)
                 }
                 index += 1U64
             }
@@ -1340,7 +1340,7 @@ impl Comp {
         return <Result.Ok value=() />
     }
 
-    inout fn recordStaticMethodTemplate(exprId: U64, receiverTerm: U64, receiver: CallTemplateReceiver, args: ArgRange, resolution: StaticMemberResolution, resultTerm: U64, origin: SourceRecordOrigin) -> Result[(), CompileDiagnostic] {
+    inout fn recordStaticMethodTemplate(exprId: U64, receiverTerm: U64, receiver: CallTemplateReceiver, args: ArgRange, resolution: StaticMemberResolution, resultTerm: U64, origin: SourceRecordingScope, expectedOrigin: SourceExpectedContext) -> Result[(), CompileDiagnostic] {
         val offset = self.exprOffset(id: exprId)
         mut val resultOccurrence = 0U64
         val declaration = match resolution {
@@ -1410,8 +1410,8 @@ impl Comp {
                 _ => {}
             }
             if expected != 0U64 {
-                if self.expressionNeedsTypeContext(exprId: argument) { try self.recordExprWithOrigin(exprId: argument, expectedTerm: expected, origin: origin) }
-                try self.recordSemanticExprExpectedResultWithOrigin(exprId: argument, expectedTerm: expected, origin: origin)
+                if self.expressionNeedsTypeContext(exprId: argument) { try self.recordExprWithOrigin(exprId: argument, expectedTerm: expected, origin: origin, expectedOrigin: <SourceExpectedContext.Contract term=expected />) }
+                try self.recordSemanticExprExpectedResultWithOrigin(exprId: argument, expectedTerm: expected, origin: origin, expectedOrigin: <SourceExpectedContext.Contract term=expected />)
                 try self.tcCheckValue(expectedRef: expected, valueExpr: argument, pos: "static method argument")
             }
             argumentIndex += 1U64
@@ -1710,7 +1710,7 @@ pub impl Comp {
 }
 
 impl Comp {
-    inout fn recordOperatorTemplate(exprId: U64, op: I64, operandExprs: Array[U64], isUnary: Bool, origin: SourceRecordOrigin) -> Result[(), CompileDiagnostic] {
+    inout fn recordOperatorTemplate(exprId: U64, op: I64, operandExprs: Array[U64], isUnary: Bool, origin: SourceRecordingScope, expectedOrigin: SourceExpectedContext) -> Result[(), CompileDiagnostic] {
         if !isUnary && (op == opAnd() || op == opOr()) { return <Result.Ok value=() /> }
         // A typed integer sibling fixes an otherwise untyped numeric receiver
         // (e.g. 0 - value). Resolve that permitted literal hole before choosing
@@ -1721,7 +1721,7 @@ impl Comp {
             if sibling != 0U64 && sibling < self.arena.typeCount() {
                 val type = self.arena.typeTermAt(index: sibling)
                 if self.isIntType(start: type.nameStart, len: type.nameLen) {
-                    try self.recordSemanticExprExpectedResultWithOrigin(exprId: operandExprs[0U64], expectedTerm: sibling, origin: origin)
+                    try self.recordSemanticExprExpectedResultWithOrigin(exprId: operandExprs[0U64], expectedTerm: sibling, origin: origin, expectedOrigin: <SourceExpectedContext.Contract term=sibling />)
                 }
             }
         }
@@ -1755,8 +1755,8 @@ impl Comp {
                 }
             }
             if expected != 0U64 {
-                if self.expressionNeedsTypeContext(exprId: operand) { try self.recordExprWithOrigin(exprId: operand, expectedTerm: expected, origin: origin) }
-                try self.recordSemanticExprExpectedResultWithOrigin(exprId: operand, expectedTerm: expected, origin: origin)
+                if self.expressionNeedsTypeContext(exprId: operand) { try self.recordExprWithOrigin(exprId: operand, expectedTerm: expected, origin: origin, expectedOrigin: <SourceExpectedContext.Contract term=expected />) }
+                try self.recordSemanticExprExpectedResultWithOrigin(exprId: operand, expectedTerm: expected, origin: origin, expectedOrigin: <SourceExpectedContext.Contract term=expected />)
                 try self.tcCheckValue(expectedRef: expected, valueExpr: operand, pos: "operator operand")
             }
             operands.append((try self.callArgumentSource(exprId: operand)))
@@ -2502,11 +2502,11 @@ pub impl Comp {
     }
 
     inout fn recordFloatingOperandContext(lhs: U64, rhs: U64) -> Result[Bool, CompileDiagnostic] {
-        return self.recordFloatingOperandContextWithOrigin(lhs: lhs, rhs: rhs, origin: <SourceRecordOrigin.Raw />)
+        return self.recordFloatingOperandContextWithOrigin(lhs: lhs, rhs: rhs, origin: <SourceRecordingScope request=<SourceRecordOrigin.Raw /> returnContext=<SourceExpectedContext.None /> />, expectedOrigin: <SourceExpectedContext.None />)
     }
 
     inout fn recordBlockExpectedResult(blkId: U64, expectedTerm: U64) -> Result[(), CompileDiagnostic] {
-        return self.recordBlockExpectedResultWithOrigin(blkId: blkId, expectedTerm: expectedTerm, origin: <SourceRecordOrigin.Raw />)
+        return self.recordBlockExpectedResultWithOrigin(blkId: blkId, expectedTerm: expectedTerm, origin: <SourceRecordingScope request=<SourceRecordOrigin.Raw /> returnContext=<SourceExpectedContext.None /> />, expectedOrigin: <SourceExpectedContext.None />)
     }
 
     // Record the expected result while the lexical body is still being built.
@@ -2514,18 +2514,19 @@ pub impl Comp {
     // The resulting type comes from that substitution into the declaration;
     // expected terms never replace the expression's independent meaning.
     inout fn recordSemanticExprExpectedResult(exprId: U64, expectedTerm: U64) -> Result[(), CompileDiagnostic] {
-        return self.recordSemanticExprExpectedResultWithOrigin(exprId: exprId, expectedTerm: expectedTerm, origin: <SourceRecordOrigin.Raw />)
+        return self.recordSemanticExprExpectedResultWithOrigin(exprId: exprId, expectedTerm: expectedTerm, origin: <SourceRecordingScope request=<SourceRecordOrigin.Raw /> returnContext=<SourceExpectedContext.None /> />, expectedOrigin: <SourceExpectedContext.None />)
     }
 }
 
 // A just-recorded value needs context application, not another construction.
 impl Comp {
-    inout fn recordSemanticExprExpectedResultCore(exprId: U64, expectedTerm: U64, recordMissing: Bool, origin: SourceRecordOrigin) -> Result[(), CompileDiagnostic] {
+    inout fn recordSemanticExprExpectedResultCore(exprId: U64, expectedTerm: U64, recordMissing: Bool, origin: SourceRecordingScope, expectedOrigin: SourceExpectedContext) -> Result[(), CompileDiagnostic] {
         // Normalize at the context boundary before inspecting expression shape.
         val requestedContext = try self.normalizedSourceTypeContext(expectedTerm: expectedTerm)
         val normalizedContext = try self.effectiveSourceTypeContext(exprId: exprId, requested: requestedContext)
+        val contextOrigin = expectedOrigin.normalized(supplied: expectedTerm, requested: requestedContext, effective: normalizedContext)
         if normalizedContext == 0U64 || normalizedContext >= self.arena.typeCount() { return <Result.Ok value=() /> }
-        if recordMissing && self.expressionNeedsTypeContext(exprId: exprId) { try self.recordExprWithOrigin(exprId: exprId, expectedTerm: normalizedContext, origin: origin) }
+        if recordMissing && self.expressionNeedsTypeContext(exprId: exprId) { try self.recordExprWithOrigin(exprId: exprId, expectedTerm: normalizedContext, origin: origin, expectedOrigin: contextOrigin.projected(term: normalizedContext)) }
         val prior: SemanticExprType = self.constructionExpression(exprId: exprId)
         try self.recordExpectedCallResult(exprId: exprId, expectedTerm: normalizedContext, authored: true)
         // Array construction is a bidirectional value form: at its explicit
@@ -2539,16 +2540,16 @@ impl Comp {
             // Use recorded child types afterwards; never label a mismatched
             // explicit child with the expected type to make it pass.
             Expr.Sequence(val body) => {
-                try self.recordBlockExpectedResultWithOrigin(blkId: body, expectedTerm: normalizedContext, origin: origin)
+                try self.recordBlockExpectedResultWithOrigin(blkId: body, expectedTerm: normalizedContext, origin: origin, expectedOrigin: contextOrigin.projected(term: normalizedContext))
                 self.recordValueBlockResult(exprId: exprId, blockId: body)
             }
             Expr.Block(val body, offset: _) => {
-                try self.recordBlockExpectedResultWithOrigin(blkId: body, expectedTerm: normalizedContext, origin: origin)
+                try self.recordBlockExpectedResultWithOrigin(blkId: body, expectedTerm: normalizedContext, origin: origin, expectedOrigin: contextOrigin.projected(term: normalizedContext))
                 self.recordValueBlockResult(exprId: exprId, blockId: body)
             }
             Expr.IfChain(conditions: _, val thenBlk, val elseBlk) | Expr.IfExpr(cond: _, thenBlk: val thenBlk, elseBlk: val elseBlk) => {
-                try self.recordBlockExpectedResultWithOrigin(blkId: thenBlk, expectedTerm: normalizedContext, origin: origin)
-                try self.recordBlockExpectedResultWithOrigin(blkId: elseBlk, expectedTerm: normalizedContext, origin: origin)
+                try self.recordBlockExpectedResultWithOrigin(blkId: thenBlk, expectedTerm: normalizedContext, origin: origin, expectedOrigin: contextOrigin.projected(term: normalizedContext))
+                try self.recordBlockExpectedResultWithOrigin(blkId: elseBlk, expectedTerm: normalizedContext, origin: origin, expectedOrigin: contextOrigin.projected(term: normalizedContext))
                 if !self.recordValueBlockResult(exprId: exprId, blockId: thenBlk) {
                     self.recordValueBlockResult(exprId: exprId, blockId: elseBlk)
                 }
@@ -2558,7 +2559,7 @@ impl Comp {
                 mut val selected: Bool = false
                 while index < arms.len {
                     val arm = self.matchArmAt(arms: arms, index: index)
-                    try self.recordBlockExpectedResultWithOrigin(blkId: arm.body, expectedTerm: normalizedContext, origin: origin)
+                    try self.recordBlockExpectedResultWithOrigin(blkId: arm.body, expectedTerm: normalizedContext, origin: origin, expectedOrigin: contextOrigin.projected(term: normalizedContext))
                     if !selected {
                         selected = self.recordValueBlockResult(exprId: exprId, blockId: arm.body)
                     }
@@ -2579,7 +2580,7 @@ impl Comp {
                             } else {
                                 fieldTerm = (try self.fieldTypeRefOfReceiver(receiverRef: normalizedContext, fieldStart: field.nameStart, fieldLen: field.nameLen))
                             }
-                            try self.recordSemanticExprExpectedResultWithOrigin(exprId: field.value, expectedTerm: fieldTerm, origin: origin)
+                            try self.recordSemanticExprExpectedResultWithOrigin(exprId: field.value, expectedTerm: fieldTerm, origin: origin, expectedOrigin: contextOrigin.projected(term: fieldTerm))
                             fieldIndex += 1U64
                         }
                         try self.recordSemanticAggregate(exprId: exprId)
@@ -2614,7 +2615,7 @@ impl Comp {
                 }
             }
             Expr.Array(elems: _) => {
-                try self.recordArrayLitCtxWithOrigin(exprId: exprId, ctxRef: normalizedContext, origin: origin)
+                try self.recordArrayLitCtxWithOrigin(exprId: exprId, ctxRef: normalizedContext, origin: origin, expectedOrigin: contextOrigin.projected(term: normalizedContext))
             }
             _ => {}
         }
@@ -2632,25 +2633,25 @@ impl Comp {
         match self.arena.exprs[exprId] {
             Expr.Unary(val op, val operand) => {
                 if numericContext {
-                    try self.recordSemanticExprExpectedResultWithOrigin(exprId: operand, expectedTerm: normalizedContext, origin: origin)
+                    try self.recordSemanticExprExpectedResultWithOrigin(exprId: operand, expectedTerm: normalizedContext, origin: origin, expectedOrigin: contextOrigin.projected(term: normalizedContext))
                     val operandType = self.typeInfoOfRef(ref: self.parametricExprTerm(exprId: operand))
                     self.recordSemanticExprInfo(exprId: exprId, ti: (try self.unaryOperatorResultType(operand: operandType, op: op)))
-                    try self.recordOperatorTemplate(exprId: exprId, op: op, operandExprs: [operand], isUnary: true, origin: origin)
+                    try self.recordOperatorTemplate(exprId: exprId, op: op, operandExprs: [operand], isUnary: true, origin: origin, expectedOrigin: contextOrigin)
                 } else if (op == opSub() || op == opBitNot()) && self.parametricExprTerm(exprId: operand) == 0U64 {
-                    try self.recordSemanticExprExpectedResultWithOrigin(exprId: operand, expectedTerm: normalizedContext, origin: origin)
+                    try self.recordSemanticExprExpectedResultWithOrigin(exprId: operand, expectedTerm: normalizedContext, origin: origin, expectedOrigin: contextOrigin.projected(term: normalizedContext))
                 }
             }
             Expr.Binary(val op, val lhs, val rhs) => {
                 if numericContext {
-                    try self.recordSemanticExprExpectedResultWithOrigin(exprId: lhs, expectedTerm: normalizedContext, origin: origin)
-                    try self.recordSemanticExprExpectedResultWithOrigin(exprId: rhs, expectedTerm: normalizedContext, origin: origin)
+                    try self.recordSemanticExprExpectedResultWithOrigin(exprId: lhs, expectedTerm: normalizedContext, origin: origin, expectedOrigin: contextOrigin.projected(term: normalizedContext))
+                    try self.recordSemanticExprExpectedResultWithOrigin(exprId: rhs, expectedTerm: normalizedContext, origin: origin, expectedOrigin: contextOrigin.projected(term: normalizedContext))
                     val left = self.typeInfoOfRef(ref: self.parametricExprTerm(exprId: lhs))
                     val right = self.typeInfoOfRef(ref: self.parametricExprTerm(exprId: rhs))
                     self.recordSemanticExprInfo(exprId: exprId, ti: (try self.operatorOutputType(lt: left, rt: right, op: op)))
-                    try self.recordOperatorTemplate(exprId: exprId, op: op, operandExprs: [lhs, rhs], isUnary: false, origin: origin)
+                    try self.recordOperatorTemplate(exprId: exprId, op: op, operandExprs: [lhs, rhs], isUnary: false, origin: origin, expectedOrigin: contextOrigin)
                 } else if isBinTraitOp(op: op) && self.parametricExprTerm(exprId: lhs) == 0U64 && self.parametricExprTerm(exprId: rhs) == 0U64 {
-                    try self.recordSemanticExprExpectedResultWithOrigin(exprId: lhs, expectedTerm: normalizedContext, origin: origin)
-                    try self.recordSemanticExprExpectedResultWithOrigin(exprId: rhs, expectedTerm: normalizedContext, origin: origin)
+                    try self.recordSemanticExprExpectedResultWithOrigin(exprId: lhs, expectedTerm: normalizedContext, origin: origin, expectedOrigin: contextOrigin.projected(term: normalizedContext))
+                    try self.recordSemanticExprExpectedResultWithOrigin(exprId: rhs, expectedTerm: normalizedContext, origin: origin, expectedOrigin: contextOrigin.projected(term: normalizedContext))
                 }
             }
             _ => {}
@@ -3379,7 +3380,7 @@ impl Comp {
 
 // Internal recursion retains request provenance; public adapters above enter Raw.
 impl Comp {
-    inout fn recordBlockExpectedResultWithOrigin(blkId: U64, expectedTerm: U64, origin: SourceRecordOrigin) -> Result[(), CompileDiagnostic] {
+    inout fn recordBlockExpectedResultWithOrigin(blkId: U64, expectedTerm: U64, origin: SourceRecordingScope, expectedOrigin: SourceExpectedContext) -> Result[(), CompileDiagnostic] {
         // This is a construction-time refinement, not a type reader. Reuse
         // recorded completion when present and refresh the result fact after
         // contextualizing the child; parents consume only the published fact.
@@ -3400,7 +3401,7 @@ impl Comp {
         }
         val value = self.blockGiveExpr(blkId: blkId)
         if value < self.arena.exprs.count() {
-            try self.recordSemanticExprExpectedResultWithOrigin(exprId: value, expectedTerm: expectedTerm, origin: origin)
+            try self.recordSemanticExprExpectedResultWithOrigin(exprId: value, expectedTerm: expectedTerm, origin: origin, expectedOrigin: expectedOrigin.projected(term: expectedTerm))
             match typing {
                 SemanticValueBlockTyping.Checked(val completion, val resultTerm) => {
                     mut val refined = self.semanticExprTerm(exprId: value)
@@ -3415,21 +3416,21 @@ impl Comp {
         return <Result.Ok value=() />
     }
 
-    inout fn recordFloatingOperandContextWithOrigin(lhs: U64, rhs: U64, origin: SourceRecordOrigin) -> Result[Bool, CompileDiagnostic] {
+    inout fn recordFloatingOperandContextWithOrigin(lhs: U64, rhs: U64, origin: SourceRecordingScope, expectedOrigin: SourceExpectedContext) -> Result[Bool, CompileDiagnostic] {
         val left = self.parametricExprTerm(exprId: lhs)
         val right = self.parametricExprTerm(exprId: rhs)
         if self.acceptsFloatingOperandContext(exprId: rhs, siblingExprId: lhs, siblingTerm: left) {
-            try self.recordSemanticExprExpectedResultWithOrigin(exprId: rhs, expectedTerm: left, origin: origin)
+            try self.recordSemanticExprExpectedResultWithOrigin(exprId: rhs, expectedTerm: left, origin: origin, expectedOrigin: <SourceExpectedContext.Contract term=left />)
             return <Result.Ok value=true />
         }
         if self.acceptsFloatingOperandContext(exprId: lhs, siblingExprId: rhs, siblingTerm: right) {
-            try self.recordSemanticExprExpectedResultWithOrigin(exprId: lhs, expectedTerm: right, origin: origin)
+            try self.recordSemanticExprExpectedResultWithOrigin(exprId: lhs, expectedTerm: right, origin: origin, expectedOrigin: <SourceExpectedContext.Contract term=right />)
             return <Result.Ok value=true />
         }
         return <Result.Ok value=false />
     }
 
-    inout fn recordSemanticExprExpectedResultWithOrigin(exprId: U64, expectedTerm: U64, origin: SourceRecordOrigin) -> Result[(), CompileDiagnostic] {
-        return self.recordSemanticExprExpectedResultCore(exprId: exprId, expectedTerm: expectedTerm, recordMissing: true, origin: origin)
+    inout fn recordSemanticExprExpectedResultWithOrigin(exprId: U64, expectedTerm: U64, origin: SourceRecordingScope, expectedOrigin: SourceExpectedContext) -> Result[(), CompileDiagnostic] {
+        return self.recordSemanticExprExpectedResultCore(exprId: exprId, expectedTerm: expectedTerm, recordMissing: true, origin: origin, expectedOrigin: expectedOrigin.projected(term: expectedTerm))
     }
 }

@@ -273,7 +273,7 @@ pub impl Comp {
                 }
                 val fs: Array[MakeField] = (try self.lowerMakeFields(fields: fields))
                 result = self.pushExpr(e: <Expr.Make typeStart=tn.nameStart typeLen=tn.nameLen variantStart=vStart variantLen=vLen isEnum=constructionEnum ty=tyRef fields=self.pushMakeFields(fields: fs) />)
-                self.authoredConstructions[result] = <AuthoredConstruction offset=span.start expression=self.arena.exprs[result] />
+                self.authoredConstructions[result] = <AuthoredConstruction offset=span.start expression=self.arena.exprs[result] typeFromContext=false />
                 if authored.count() != 0U64 { self.authoredExpressionTypeSlots[result] = authored }
                 if typeNameSpan.start == typeNameSpan.end && typeName.bytes().count() == 0U64 { self.pendingConstructionContexts.insert(result) }
             }
@@ -284,7 +284,9 @@ pub impl Comp {
                     es.append((try self.lowerExpr(e: elems[i])))
                     i += 1
                 }
-                result = self.pushExpr(e: <Expr.Array elems=self.pushExprs(exprs: es) />)
+                val children = self.pushExprs(exprs: es)
+                result = self.pushExpr(e: <Expr.Array elems=children />)
+                self.authoredArrayLiterals[result] = <AuthoredArrayLiteral start=span.start end=span.end elements=children />
             }
             ExprAst.DictLit(val keys, val vals, val span) => {
                 // Keep source entries until Record supplies their expected type.
@@ -535,7 +537,7 @@ pub impl Comp {
                 val tyRef = try self.lowerConstructionType(nameStart: typeName.start, nameLen: typeName.end - typeName.start, args: typeArgs, siteOffset: e.name.start)
                 val fields: Array[MakeField] = (try self.lowerSyntaxMakeFields(expr: e))
                 result = self.pushExpr(e: <Expr.Make typeStart=typeName.start typeLen=typeName.end - typeName.start variantStart=variantName.start variantLen=variantName.end - variantName.start isEnum=constructionEnum ty=tyRef fields=self.pushMakeFields(fields: fields) />)
-                self.authoredConstructions[result] = <AuthoredConstruction offset=e.span.start expression=self.arena.exprs[result] />
+                self.authoredConstructions[result] = <AuthoredConstruction offset=e.span.start expression=self.arena.exprs[result] typeFromContext=false />
                 if authored.count() != 0U64 { self.authoredExpressionTypeSlots[result] = authored }
                 if e.name.start == e.name.end { self.pendingConstructionContexts.insert(result) }
             }
@@ -549,7 +551,9 @@ pub impl Comp {
                     elems.append((try self.lowerSyntaxExpr(id: syntaxExprElem(file: self.syntax, expr: e, index: i))))
                     i += 1U64
                 }
-                result = self.pushExpr(e: <Expr.Array elems=self.pushExprs(exprs: elems) />)
+                val children = self.pushExprs(exprs: elems)
+                result = self.pushExpr(e: <Expr.Array elems=children />)
+                self.authoredArrayLiterals[result] = <AuthoredArrayLiteral start=e.span.start end=e.span.end elements=children />
             }
             SyntaxExprKind.DictLit => {
                 result = (try self.lowerSyntaxDictLit(expr: e))

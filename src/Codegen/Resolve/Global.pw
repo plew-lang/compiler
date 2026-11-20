@@ -40,12 +40,12 @@ impl Comp {
 
     // Context, defaults and named-factory lowering may revise a written
     // construction. A raw replacement cannot transfer its source receipt.
-    inout fn replaceConstructionExpression(exprId: U64, expression: Expr) {
+    inout fn replaceConstructionExpression(exprId: U64, expression: Expr, typeFromContext: Bool = false) {
         val origin = self.authoredConstruction(exprId: exprId)
         self.arena.exprs.set(i: exprId, value: expression)
         match origin {
             Optional.Some(v: val receipt) => {
-                self.authoredConstructions[exprId] = <AuthoredConstruction offset=receipt.offset expression=expression />
+                self.authoredConstructions[exprId] = <AuthoredConstruction offset=receipt.offset expression=expression typeFromContext=receipt.typeFromContext || typeFromContext />
             }
             Optional.None => { self.authoredConstructions.remove(key: exprId) }
         }
@@ -585,7 +585,7 @@ pub impl Comp {
         match self.arena.exprs[exprId] {
             Expr.Make(typeStart: _, typeLen: _, val variantStart, val variantLen, val isEnum, ty: _, val fields) => {
                 val type = self.arena.typeAt(index: context)
-                self.replaceConstructionExpression(exprId: exprId, expression: <Expr.Make typeStart=type.nameStart typeLen=type.nameLen variantStart=variantStart variantLen=variantLen isEnum=isEnum ty=context fields=fields />)
+                self.replaceConstructionExpression(exprId: exprId, expression: <Expr.Make typeStart=type.nameStart typeLen=type.nameLen variantStart=variantStart variantLen=variantLen isEnum=isEnum ty=context fields=fields />, typeFromContext: true)
                 self.pendingConstructionContexts.remove(exprId)
                 try self.rewriteNamedFactoryConstructionAt(exprId: exprId)
             }
@@ -685,25 +685,25 @@ pub impl Comp {
     // An exact newtype retag takes precedence over From. Both operand
     // evidence and the cast target are available in Record's lexical scope.
     inout fn prepareCastFactory(exprId: U64, operand: U64, target: U64, typeStart: U64, typeLen: U64, chainHoleRef: U64) -> Result[Bool, CompileDiagnostic] {
-        return self.prepareCastFactoryWithOrigin(exprId: exprId, operand: operand, target: target, typeStart: typeStart, typeLen: typeLen, chainHoleRef: chainHoleRef, origin: <SourceRecordOrigin.Raw />)
+        return self.prepareCastFactoryWithOrigin(exprId: exprId, operand: operand, target: target, typeStart: typeStart, typeLen: typeLen, chainHoleRef: chainHoleRef, origin: <SourceRecordingScope request=<SourceRecordOrigin.Raw /> returnContext=<SourceExpectedContext.None /> />, expectedOrigin: <SourceExpectedContext.None />)
     }
 
     // Run under Record's lexical scope. The selected declaration is carried
     // by the synthetic call, so later passes never redo factory selection.
     inout fn prepareFactoryConstruction(exprId: U64, chainHoleRef: U64, admittedReceiver: U64) -> Result[(), CompileDiagnostic] {
-        return self.prepareFactoryConstructionWithOrigin(exprId: exprId, chainHoleRef: chainHoleRef, admittedReceiver: admittedReceiver, origin: <SourceRecordOrigin.Raw />)
+        return self.prepareFactoryConstructionWithOrigin(exprId: exprId, chainHoleRef: chainHoleRef, admittedReceiver: admittedReceiver, origin: <SourceRecordingScope request=<SourceRecordOrigin.Raw /> returnContext=<SourceExpectedContext.None /> />, expectedOrigin: <SourceExpectedContext.None />)
     }
 }
 
 // Internal recursion retains request provenance; public adapters above enter Raw.
 impl Comp {
-    inout fn prepareCastFactoryWithOrigin(exprId: U64, operand: U64, target: U64, typeStart: U64, typeLen: U64, chainHoleRef: U64, origin: SourceRecordOrigin) -> Result[Bool, CompileDiagnostic] {
+    inout fn prepareCastFactoryWithOrigin(exprId: U64, operand: U64, target: U64, typeStart: U64, typeLen: U64, chainHoleRef: U64, origin: SourceRecordingScope, expectedOrigin: SourceExpectedContext) -> Result[Bool, CompileDiagnostic] {
         val fromName = self.kwSpan(kw: "from", kwLen: 4U64)
         if !(try self.typeHasAssocFn(typeStart: typeStart, typeLen: typeLen, nameStart: fromName.nameStart, nameLen: fromName.nameLen)) {
             return <Result.Ok value=false />
         }
         val context = try self.castLiteralContextTerm(operand: operand, targetTerm: target)
-        try self.recordExprWithOrigin(exprId: operand, chainHoleRef: chainHoleRef, expectedTerm: context, deferContext: true, origin: origin)
+        try self.recordExprWithOrigin(exprId: operand, chainHoleRef: chainHoleRef, expectedTerm: context, deferContext: true, origin: origin, expectedOrigin: expectedOrigin.projected(term: context))
         if try self.isExactNewtypeRetag(source: self.parametricExprTerm(exprId: operand), target: target) {
             return <Result.Ok value=true />
         }
@@ -718,7 +718,7 @@ impl Comp {
         return <Result.Ok value=true />
     }
 
-    inout fn prepareFactoryConstructionWithOrigin(exprId: U64, chainHoleRef: U64, admittedReceiver: U64, origin: SourceRecordOrigin) -> Result[(), CompileDiagnostic] {
+    inout fn prepareFactoryConstructionWithOrigin(exprId: U64, chainHoleRef: U64, admittedReceiver: U64, origin: SourceRecordingScope, expectedOrigin: SourceExpectedContext) -> Result[(), CompileDiagnostic] {
         val useOffset = self.exprOffset(id: exprId)
         match self.arena.exprs[exprId] {
             Expr.Make(val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, val ty, val fields) => {
@@ -740,7 +740,7 @@ impl Comp {
                 mut val index = 0U64
                 while index < fields.len {
                     val field = self.makeFieldAt(fields: fields, index: index)
-                    try self.recordExprWithOrigin(exprId: field.value, chainHoleRef: chainHoleRef, deferContext: true, origin: origin)
+                    try self.recordExprWithOrigin(exprId: field.value, chainHoleRef: chainHoleRef, deferContext: true, origin: origin, expectedOrigin: <SourceExpectedContext.None />)
                     arguments.append(<Arg expr=field.value isInout=false labelStart=field.nameStart labelLen=field.nameLen hasLabel=true />)
                     index += 1U64
                 }

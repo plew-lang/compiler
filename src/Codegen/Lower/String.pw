@@ -62,7 +62,7 @@ pub impl Comp {
     // operands in the tree for checking, but do not impose generated calls
     // (or a generated default Options construction) on a path with no value.
     inout fn prepareInterpolationWrite(exprId: U64) -> Result[(), CompileDiagnostic] {
-        return self.prepareInterpolationWriteWithOrigin(exprId: exprId, origin: <SourceRecordOrigin.Raw />)
+        return self.prepareInterpolationWriteWithOrigin(exprId: exprId, origin: <SourceRecordingScope request=<SourceRecordOrigin.Raw /> returnContext=<SourceExpectedContext.None /> />, expectedOrigin: <SourceExpectedContext.None />)
     }
 
     inout fn finishStringInterpolation(output: Bind, stmts: inout Array[U64], span: Span) -> U64 {
@@ -132,12 +132,12 @@ pub impl Comp {
 
 // Internal recursion retains request provenance; public adapters above enter Raw.
 impl Comp {
-    inout fn prepareInterpolationWriteWithOrigin(exprId: U64, origin: SourceRecordOrigin) -> Result[(), CompileDiagnostic] {
+    inout fn prepareInterpolationWriteWithOrigin(exprId: U64, origin: SourceRecordingScope, expectedOrigin: SourceExpectedContext) -> Result[(), CompileDiagnostic] {
         match self.pendingInterpolationWrites.get(key: exprId) {
             Optional.None => { return <Result.Ok value=() /> }
             Optional.Some(v: val write) => {
                 self.pendingInterpolationWrites.remove(key: exprId)
-                try self.recordExprWithOrigin(exprId: write.value, origin: origin)
+                try self.recordExprWithOrigin(exprId: write.value, origin: origin, expectedOrigin: <SourceExpectedContext.None />)
                 if !self.exprCompletesNormally(exprId: write.value) {
                     mut val statements: Array[U64] = [self.pushStmt(s: <Stmt.ExprStmt expr=write.value />)]
                     if write.options != 0U64 { statements.append(self.pushStmt(s: <Stmt.ExprStmt expr=write.options />)) }

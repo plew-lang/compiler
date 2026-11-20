@@ -1511,30 +1511,8 @@ impl Comp {
     // instance supplies its substitutions. Open uses retain the admitted term
     // until a closed instance can interpret the saved conformance.
     inout fn selectedNominalFieldType(field: FieldDef, token: U64, owner: U64, params: Array[Bind], receiver: U64) -> Result[U64, CompileDiagnostic] {
-        if token == 0U64 { return self.groundUnderInst(instRef: receiver, tyRef: field.ty) }
-        if receiver == 0U64 || receiver >= self.arena.typeCount() {
-            return <Result.Err error=self.diagnosticAt(offset: field.authoredTypeSite, msg: "nominal field has no selected receiver", failureDomain: <FailureDomain.Internal />) />
-        }
-        val head = self.arena.typeTermAt(index: receiver)
-        if head.hasDecl && head.declOffset != owner {
-            return <Result.Err error=self.diagnosticAt(offset: field.authoredTypeSite, msg: "nominal field has a foreign selected receiver", failureDomain: <FailureDomain.Internal />) />
-        }
-        val saved = try self.requireNominalTypeAnnotation(id: field.authoredTypeUse, site: field.authoredTypeSite, term: field.ty, token: token, owner: owner)
-        try self.checkNominalAnnotationEvidence(saved: saved, offset: field.authoredTypeSite)
-        if self.arena.typeIsClosed(ref: field.ty) {
-            return <Result.Ok value=field.ty />
-        }
-        val instance = self.arena.typeAt(index: receiver)
-        if instance.args.count() != params.count() || !self.arena.typeIsClosed(ref: receiver) {
-            return self.groundUnderInst(instRef: receiver, tyRef: field.ty)
-        }
-        val environment = <InstanceEnvironment params=params args=instance.args receiverRef=receiver />
-        if saved.proofs.count() == 0U64 {
-            return <Result.Ok value=self.groundTermInEnvironment(ref: field.ty, params: params, values: instance.args, selfRef: receiver) />
-        }
-        mut val memo: Dictionary[U64, AuthoredRecipeRead] = [:]
-        val admitted = try self.readAuthoredTypeRecipe(proofs: saved.proofs, recipe: saved.recipe, environment: environment, memo: inout memo, context: <SignatureRecipeContext.Concrete />)
-        return <Result.Ok value=admitted.term />
+        val fieldType = try self.selectedNominalFieldContract(field: field, token: token, owner: owner, params: params, receiver: receiver)
+        return <Result.Ok value=fieldType.term />
     }
 
     inout fn requireNominalTypeAnnotation(id: U64, site: U64, term: U64, token: U64, owner: U64) -> Result[LocalAnnotationProof, CompileDiagnostic] {
@@ -3102,4 +3080,33 @@ impl Comp {
         }
     }
 
+}
+
+impl Comp {
+    inout fn selectedNominalFieldContract(field: FieldDef, token: U64, owner: U64, params: Array[Bind], receiver: U64) -> Result[SourceFieldContract, CompileDiagnostic] {
+        if token == 0U64 { return <Result.Ok value=<SourceFieldContract term=(try self.groundUnderInst(instRef: receiver, tyRef: field.ty)) occurrence=field.authoredTypeUse /> /> }
+        if receiver == 0U64 || receiver >= self.arena.typeCount() {
+            return <Result.Err error=self.diagnosticAt(offset: field.authoredTypeSite, msg: "nominal field has no selected receiver", failureDomain: <FailureDomain.Internal />) />
+        }
+        val head = self.arena.typeTermAt(index: receiver)
+        if head.hasDecl && head.declOffset != owner {
+            return <Result.Err error=self.diagnosticAt(offset: field.authoredTypeSite, msg: "nominal field has a foreign selected receiver", failureDomain: <FailureDomain.Internal />) />
+        }
+        val saved = try self.requireNominalTypeAnnotation(id: field.authoredTypeUse, site: field.authoredTypeSite, term: field.ty, token: token, owner: owner)
+        try self.checkNominalAnnotationEvidence(saved: saved, offset: field.authoredTypeSite)
+        if self.arena.typeIsClosed(ref: field.ty) {
+            return <Result.Ok value=<SourceFieldContract term=field.ty occurrence=field.authoredTypeUse independent=true /> />
+        }
+        val instance = self.arena.typeAt(index: receiver)
+        if instance.args.count() != params.count() || !self.arena.typeIsClosed(ref: receiver) {
+            return <Result.Ok value=<SourceFieldContract term=(try self.groundUnderInst(instRef: receiver, tyRef: field.ty)) occurrence=field.authoredTypeUse /> />
+        }
+        val environment = <InstanceEnvironment params=params args=instance.args receiverRef=receiver />
+        if saved.proofs.count() == 0U64 {
+            return <Result.Ok value=<SourceFieldContract term=self.groundTermInEnvironment(ref: field.ty, params: params, values: instance.args, selfRef: receiver) occurrence=field.authoredTypeUse /> />
+        }
+        mut val memo: Dictionary[U64, AuthoredRecipeRead] = [:]
+        val admitted = try self.readAuthoredTypeRecipe(proofs: saved.proofs, recipe: saved.recipe, environment: environment, memo: inout memo, context: <SignatureRecipeContext.Concrete />)
+        return <Result.Ok value=<SourceFieldContract term=admitted.term occurrence=field.authoredTypeUse /> />
+    }
 }

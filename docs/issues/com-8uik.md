@@ -40,3 +40,17 @@ New focused test tests/compiler/frontend/test-array-context-failure-domain.py ex
 ## Scoped-core increment (WIP)
 
 The24 public recording helper APIs now delegate with Raw provenance to private scoped cores. Eight existing private transits forward provenance; the two canonical roots establish actual checking-request evidence. All145 internal edges forward explicitly; the two legacy batch edges stay Raw. No Source classification is added by this increment. A fixed source snapshot passes exact-C whole compiler --check; domain tests remain RED until context-family and retained-refusal implementation. No rebuilt candidate or performance claim yet.
+
+## Connected prototype (not final acceptance)
+
+Scoped cores now carry a separate expected-contract token. Normalization drops it on an unjustified effective-term replacement; diagnostic operations capture their real failed frontier before an operand Err and preserve that upper bound through descendants. Both ArrayLit lowerers retain authored span/range. A dedicated Unclassified cause and private failure-event observer are connected to the existing owning adapters.
+
+Prototype standard build20261120T175314-build-432520 compiled/linked successfully but its final mv failed because the manually assembled isolated root lacked bin/. Artifact recovery is recorded, not called a passed build. Initial missing bin/std caused three false valid-Array rejections; the normal link restored, that exact prototype binary passes27 focused controls. Current source additionally narrows the negative-call record from whole Expr to a dedicated call shape; fresh standard build is still required. Native ArrayContextFailureDomains attempts retain Raw/event/cache/mutation successes but do not yet pass the failed-query setup. The new internal test now uses the existing embedded SourceAccess namespace contract. No final native/ASan/whole/performance/review acceptance yet.
+
+## Scoped return, construction, and synthetic-call followthrough (WIP)
+
+Return expectations are separate from block/give expectations in SourceRecordingScope. Explicit closure return slots issue contracts; contextual slots project existing evidence. Authored construction receipts retain whether their type was supplied by outer context; field substitution reuses the existing declared-field lookup metadata. Unregistered synthetic expressions do not prove independent context merely by being fresh/ground.
+
+Index frontiers reuse exact AccessCandidate read/place correspondence, including serial and read argument range/attributes. Named factory frontiers reuse existing authored factory/site receipts and the actual receiver admitted by the failed lookup. No successful parent or additional positive per-expression database is introduced. Whole compiler checks3/4 passed before the final two independent-review corrections; exact-candidate execution, mutation controls, standard build, performance and final acceptance remain outstanding. Evidence remains in the canonical meta plan.
+
+Native attempt4 passes compile/link/execution with unchanged inputs and exact golden: Raw recursion, retained event/cache/drain/retry, 10 cause mutations/foreign session/plain reports, four real diagnostic-only free/member/associated/extension frontiers before operand failure, no successful parent, owned lazy/whole/eager classification. Setup failures remain recorded. Final Factory source-receiver scalar follows this run; fresh isolated standard build is running, and final acceptance remains open.

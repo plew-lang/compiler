@@ -318,6 +318,32 @@ pub impl AssignmentRefusal {
     fn location() -> DiagnosticLocation { return self.location }
 }
 
+pub struct ArrayContextRefusal {
+    val session: U64
+    val owner: DiagnosticOwner
+    val expression: U64
+    val requestedTerm: U64
+    val effectiveTerm: U64
+    val writtenStart: U64
+    val writtenEnd: U64
+    val frontier: U64
+    val event: U64
+    val location: DiagnosticLocation
+}
+pub impl ArrayContextRefusal {
+    factory
+    fn session() -> U64 { return self.session }
+    fn owner() -> DiagnosticOwner { return self.owner }
+    fn expression() -> U64 { return self.expression }
+    fn requestedTerm() -> U64 { return self.requestedTerm }
+    fn effectiveTerm() -> U64 { return self.effectiveTerm }
+    fn writtenStart() -> U64 { return self.writtenStart }
+    fn writtenEnd() -> U64 { return self.writtenEnd }
+    fn frontier() -> U64 { return self.frontier }
+    fn event() -> U64 { return self.event }
+    fn location() -> DiagnosticLocation { return self.location }
+}
+
 // One closed cause in opaque value storage. The transport handle has no
 // variant-dependent ARC; classification and rendering inspect its cause.
 enum DiagnosticData {
@@ -331,12 +357,22 @@ enum DiagnosticData {
     NonCallableBinding(refusal: NonCallableBindingRefusal)
     FreeCallAmbiguity(refusal: FreeCallAmbiguityRefusal)
     MemberCallAmbiguity(refusal: MemberCallAmbiguityRefusal)
+    ArrayContext(refusal: ArrayContextRefusal)
 }
 pub struct CompileDiagnostic {
     val storage: Array[DiagnosticData]
 }
 
 pub impl CompileDiagnostic {
+    factory arrayContext(refusal: ArrayContextRefusal) {
+        return <CompileDiagnostic storage=[<DiagnosticData.ArrayContext refusal=refusal />] />
+    }
+    fn arrayContext() -> Optional[ArrayContextRefusal] {
+        return match self.storage[0U64] {
+            DiagnosticData.ArrayContext(refusal: val refusal) => <Optional.Some v=refusal />
+            _ => <Optional.None />
+        }
+    }
     factory(severity: DiagnosticSeverity = <DiagnosticSeverity.Error />, failureDomain: FailureDomain = <FailureDomain.Unclassified />, location: DiagnosticLocation, message: String, notes: Array[DiagnosticNote] = []) {
         return <CompileDiagnostic storage=[<DiagnosticData.Report severity=severity failureDomain=failureDomain location=location message=message notes=notes />] />
     }
@@ -433,6 +469,7 @@ pub impl CompileDiagnostic {
             DiagnosticData.NonCallableBinding(refusal: _) => <DiagnosticSeverity.Error />
             DiagnosticData.FreeCallAmbiguity(refusal: _) => <DiagnosticSeverity.Error />
             DiagnosticData.MemberCallAmbiguity(refusal: _) => <DiagnosticSeverity.Error />
+            DiagnosticData.ArrayContext(refusal: _) => <DiagnosticSeverity.Error />
         }
     }
     fn failureDomain() -> FailureDomain {
@@ -447,6 +484,7 @@ pub impl CompileDiagnostic {
             DiagnosticData.NonCallableBinding(refusal: _) => <FailureDomain.Unclassified />
             DiagnosticData.FreeCallAmbiguity(refusal: _) => <FailureDomain.Unclassified />
             DiagnosticData.MemberCallAmbiguity(refusal: _) => <FailureDomain.Unclassified />
+            DiagnosticData.ArrayContext(refusal: _) => <FailureDomain.Unclassified />
         }
     }
     fn location() -> DiagnosticLocation {
@@ -461,6 +499,7 @@ pub impl CompileDiagnostic {
             DiagnosticData.NonCallableBinding(refusal: val refusal) => refusal.location()
             DiagnosticData.FreeCallAmbiguity(refusal: val refusal) => refusal.location()
             DiagnosticData.MemberCallAmbiguity(refusal: val refusal) => refusal.location()
+            DiagnosticData.ArrayContext(refusal: val refusal) => refusal.location()
         }
     }
     fn message() -> String {
@@ -474,6 +513,7 @@ pub impl CompileDiagnostic {
             DiagnosticData.NonCallableBinding(refusal: _) => "the selected value binding is not callable"
             DiagnosticData.FreeCallAmbiguity(refusal: _) => "ambiguous call: multiple visible function declarations match the argument labels and types"
             DiagnosticData.MemberCallAmbiguity(refusal: val refusal) => refusal.kind().message()
+            DiagnosticData.ArrayContext(refusal: _) => "cannot infer an empty array's element type from a non-array context (spec/02)"
             DiagnosticData.UseAfterMove(refusal: _) => "use of a value after it was moved (`move` transfers ownership away — the variable is dead; bind a fresh value to use it again) (spec/03)"
         }
     }
@@ -489,6 +529,7 @@ pub impl CompileDiagnostic {
             DiagnosticData.NonCallableBinding(refusal: _) => []
             DiagnosticData.FreeCallAmbiguity(refusal: _) => []
             DiagnosticData.MemberCallAmbiguity(refusal: _) => []
+            DiagnosticData.ArrayContext(refusal: _) => []
         }
     }
     fn isSourceRejection() -> Bool {

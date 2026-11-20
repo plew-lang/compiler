@@ -11,7 +11,7 @@ impl Comp {
         self.cur.bodyItemRef = 0U64
         // Construct calls with their source types before compatibility reads
         // them. Later validation must not reconstruct the chosen member.
-        try self.recordParametricFunctionWithOrigin(fnIdx: owner, recordCallTemplates: true, origin: <SourceRecordOrigin.CheckingRequest session=self.sourceFactSession() root=<SemanticCompletionOwner.Function index=owner /> />)
+        try self.recordParametricFunctionWithOrigin(fnIdx: owner, recordCallTemplates: true, origin: <SourceRecordingScope request=<SourceRecordOrigin.CheckingRequest session=self.sourceFactSession() root=<SemanticCompletionOwner.Function index=owner /> /> returnContext=<SourceExpectedContext.None /> />, expectedOrigin: <SourceExpectedContext.None />)
         self.cur.recordCallTemplates = false
         try self.checkGenericFunction(fnIdx: owner)
         try self.verifyFunctionDeclaration(fnIdx: owner)
@@ -118,7 +118,7 @@ impl Comp {
         try self.enterGlobalInitializer(target: target)
         val stmt: U64 = self.arena.globals[index].letStmt
         self.cur.recordCallTemplates = true
-        try self.recordStmtWithOrigin(stmtId: stmt, origin: <SourceRecordOrigin.CheckingRequest session=self.sourceFactSession() root=<SemanticCompletionOwner.Global target=target /> />)
+        try self.recordStmtWithOrigin(stmtId: stmt, origin: <SourceRecordingScope request=<SourceRecordOrigin.CheckingRequest session=self.sourceFactSession() root=<SemanticCompletionOwner.Global target=target /> /> returnContext=<SourceExpectedContext.None /> />, expectedOrigin: <SourceExpectedContext.None />)
         self.cur.recordCallTemplates = false
         try self.enterGlobalInitializer(target: target)
         try self.verifyStmt(stmtId: stmt)

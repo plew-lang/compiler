@@ -66,7 +66,7 @@ use ./Path only { resolveImport, extractSpan, dirPrefixLen, findSrcRoot, findPkg
 use ./Manifest only { Dep, loadManifestDeps, resolveDepImport, resolveGitDepImport, loadLock, isExternalDepImport }
 use ./Lock only { Lock }
 use ./Cache only { cacheRoot }
-use ./Diag only { compileErrorAt, compileErrorAtFile, CompileDiagnostic, UseAfterMoveRefusal, MissingFieldRefusal, MissingFieldKind, AssignmentRefusal, AssignmentRefusalKind, UniqueCopyRefusal, UniqueCaptureRefusal, NonCallableBindingRefusal, FreeCallVisibilityRefusal, FreeCallVisibilityKind, FreeCallAmbiguityRefusal, MemberCallAmbiguityRefusal, MemberCallAmbiguityKind, DiagnosticOwner, DiagnosticNote, DiagnosticLocation, DiagnosticSeverity, FailureDomain, emitDiagnostic, eprintInt, digitByte, digitStrU }
+use ./Diag only { compileErrorAt, compileErrorAtFile, CompileDiagnostic, ArrayContextRefusal, UseAfterMoveRefusal, MissingFieldRefusal, MissingFieldKind, AssignmentRefusal, AssignmentRefusalKind, UniqueCopyRefusal, UniqueCaptureRefusal, NonCallableBindingRefusal, FreeCallVisibilityRefusal, FreeCallVisibilityKind, FreeCallAmbiguityRefusal, MemberCallAmbiguityRefusal, MemberCallAmbiguityKind, DiagnosticOwner, DiagnosticNote, DiagnosticLocation, DiagnosticSeverity, FailureDomain, emitDiagnostic, eprintInt, digitByte, digitStrU }
 use ./Ops only { opEq, opNe, opLt, opLe, opGt, opGe, opAdd, opSub, opMul, opDiv, opRem, opAnd, opOr, opNot, opBitAnd, opBitOr, opBitXor, opShl, opShr, opBitNot, opAssign, compoundBinOp, isBinTraitOp, binTraitName, binTraitMethodName, unaryMethodName }
 
 // Only an entirely unsuffixed numeric expression accepts a sibling's
@@ -124,9 +124,46 @@ pub impl FinalizationPublication { factory }
 
 // Checking-operation provenance, not permission to classify a failure as Source.
 // Source interpretation additionally requires the owning unexposed-input adapter.
+// A context token describes an existing checking contract, not inferred type
+// completeness. No mutable global flag or successful-parent fact is involved.
+enum SourceExpectedContext {
+    None
+    Contract(term: U64)
+}
+impl SourceExpectedContext {
+    fn projected(term: U64) -> SourceExpectedContext {
+        if term == 0U64 { return <SourceExpectedContext.None /> }
+        return match self {
+            SourceExpectedContext.Contract(term: _) => <SourceExpectedContext.Contract term=term />
+            SourceExpectedContext.None => <SourceExpectedContext.None />
+        }
+    }
+    fn normalized(supplied: U64, requested: U64, effective: U64) -> SourceExpectedContext {
+        if requested == 0U64 || requested != effective { return <SourceExpectedContext.None /> }
+        return match self {
+            SourceExpectedContext.Contract(term: val term) => if term == supplied { give <SourceExpectedContext.Contract term=requested /> } else { give <SourceExpectedContext.None /> }
+            SourceExpectedContext.None => <SourceExpectedContext.None />
+        }
+    }
+}
+
 enum SourceRecordOrigin {
     Raw
     CheckingRequest(session: U64, root: SemanticCompletionOwner)
+    DiagnosticRequest(session: U64, root: SemanticCompletionOwner, frontier: U64)
+}
+
+// An enclosing callable's result contract is independent from a value block's
+// Give contract. Scope values restore naturally when a closure body returns.
+struct SourceRecordingScope {
+    val request: SourceRecordOrigin
+    val returnContext: SourceExpectedContext
+}
+impl SourceRecordingScope {
+    factory
+    fn returning(context: SourceExpectedContext) -> SourceRecordingScope {
+        return <SourceRecordingScope request=self.request returnContext=context />
+    }
 }
 
 enum FreeFunctionSelection {
@@ -742,9 +779,60 @@ struct AuthoredBinaryExpression {
 }
 impl AuthoredBinaryExpression { factory }
 
+enum SourceConstructionContext { Producer Outer IndependentFields Reused }
+struct SourceFieldContract {
+    val term: U64
+    val occurrence: U64 = 0U64
+    val independent: Bool = false
+}
+impl SourceFieldContract {
+    factory
+    fn expectedContext(term: U64, input: SourceConstructionContext, incoming: SourceExpectedContext) -> SourceExpectedContext {
+        if term == 0U64 || term != self.term { return <SourceExpectedContext.None /> }
+        if self.independent { return <SourceExpectedContext.Contract term=term /> }
+        return match input {
+            SourceConstructionContext.Producer | SourceConstructionContext.IndependentFields => <SourceExpectedContext.Contract term=term />
+            SourceConstructionContext.Outer | SourceConstructionContext.Reused => incoming.projected(term: term)
+        }
+    }
+}
+
+enum SourceArrayFailureCall {
+    Free(start: U64, length: U64)
+    Method(receiver: U64, start: U64, length: U64)
+    Extension(receiver: U64, source: ResolvedViewSource, start: U64, length: U64)
+    Factory(receiver: U64, receiverTerm: U64, writtenReceiverTerm: U64, start: U64, length: U64, serial: U64)
+    Index(receiver: U64, key: U64, place: U64, read: U64, serial: U64, selectorStart: U64, selectorLength: U64, readArguments: ArgRange, readArgument: Arg)
+}
+
+struct SourceArrayFailureFrontier {
+    val session: U64
+    val root: SemanticCompletionOwner
+    val expression: U64
+    val shape: SourceArrayFailureCall
+    val arguments: ArgRange
+    val written: Array[Arg]
+}
+impl SourceArrayFailureFrontier { factory }
+
+struct SourceArrayContextFailure {
+    val refusal: ArrayContextRefusal
+    val origin: SourceRecordOrigin
+    val elements: ExprRange
+}
+impl SourceArrayContextFailure { factory }
+
+struct AuthoredArrayLiteral {
+    val start: U64
+    val end: U64
+    val elements: ExprRange
+}
+impl AuthoredArrayLiteral { factory }
+
 struct AuthoredConstruction {
     val offset: U64
     val expression: Expr
+    val typeFromContext: Bool
 }
 impl AuthoredConstruction { factory }
 
@@ -795,6 +883,9 @@ pub struct Comp {
     mut val failedUniqueCaptures: Array[FailedUniqueCapture] = []
     mut val failedMemberCallAmbiguities: Dictionary[U64, (kind: MemberCallAmbiguityKind, owner: SemanticCompletionOwner, receiverRef: U64, receiver: U64, source: Optional[ResolvedViewSource], nameStart: U64, nameLen: U64, arguments: Array[Arg])] = [:]
     mut val authoredNamedFactoryOrigins: Dictionary[U64, AuthoredNamedFactory] = [:]
+    mut val failedArrayContextFrontiers: Array[SourceArrayFailureFrontier] = []
+    mut val failedArrayContexts: Array[SourceArrayContextFailure] = []
+    mut val authoredArrayLiterals: Dictionary[U64, AuthoredArrayLiteral] = [:]
     mut val authoredConstructions: Dictionary[U64, AuthoredConstruction] = [:]
     mut val authoredValueBlockOwners: Dictionary[U64, U64] = [:]
     mut val authoredForIterators: Dictionary[U64, U64] = [:]
@@ -1782,6 +1873,7 @@ pub fn intern(c: inout Comp, start: U64, len: U64) -> U64 {
 // `pub` so the (still free-function) type-recovery callers can reach them during the
 // methodization transition.
 
+part ./SourceArrayFailures
 part ./SourceFacts
 part ./Parser/Decl
 part ./Codegen/Existentials
