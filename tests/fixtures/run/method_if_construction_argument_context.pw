@@ -1,0 +1,11 @@
+use @Std/Io only { print }
+struct Marker {}
+impl Marker {
+    fn accept(value: Optional[I64]) -> I64 {
+        return match value { Optional.Some(val v) => v, Optional.None => 0I64 }
+    }
+}
+fn main() {
+    val marker = <Marker />
+    print(marker.accept(value: if true { give <Optional.Some v=7 /> } else { give <Optional.None /> }))
+}

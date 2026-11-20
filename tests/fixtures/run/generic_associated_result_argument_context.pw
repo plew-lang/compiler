@@ -1,0 +1,9 @@
+use @Std/Io only { print }
+struct Marker {}
+impl Marker {
+    assoc fn accept(value: Optional[I64]) -> I64 {
+        return match value { Optional.Some(val v) => v, Optional.None => 0I64 }
+    }
+    assoc fn produce[T]() -> Optional[T] { return <Optional.None /> }
+}
+fn main() { print(Marker.accept(value: Marker.produce())) }

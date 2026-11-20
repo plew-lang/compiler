@@ -1,0 +1,20 @@
+use @Std/Io only { print }
+fn read(value: Optional[I64]) -> I64 {
+    return match value { Optional.Some(val v) => v, Optional.None => 0I64 }
+}
+struct Counter { val count: I64 = 0I64 }
+impl Counter {
+    fn accept(value: Optional[I64]) -> I64 { return read(value: value) }
+    assoc fn staticAccept(value: Optional[I64]) -> I64 { return read(value: value) }
+    fn produce[T]() -> Optional[T] { return <Optional.None /> }
+    assoc fn staticProduce[T]() -> Optional[T] { return <Optional.None /> }
+}
+fn main() {
+    val counter = <Counter />
+    print(counter.accept(value: <Optional.None />))
+    print(Counter.staticAccept(value: <Optional.Some v=5 />))
+    print(read(value: counter.produce()))
+    print(read(value: Counter.staticProduce()))
+    print(counter.accept(value: { give <Optional.None /> }))
+    print(Counter.staticAccept(value: if true { give <Optional.Some v=7I64 /> } else { give <Optional.None /> }))
+}
