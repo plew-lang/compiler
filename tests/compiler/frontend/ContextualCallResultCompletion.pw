@@ -37,5 +37,29 @@ fn main() {
         }
         if compiler.semanticExprTerm(exprId: expression) != before || compiler.publishCallTemplateTypeArgs(args: []).start != poolSize { panic("malformed substitution published completion") }
     }
+    // A legitimate raw zero slot can complete without a Source grant. This
+    // helper publishes only the supplied selected operation's substitution.
+    val unresolved = compiler.publishCallTemplateTypeArgs(args: [0U64])
+    val pending = <CallTemplateKind.Direct callee=callee receiver=<CallTemplateReceiver.None /> args=<CallTemplateArgumentRange start=0U64 len=0U64 /> calleeTypeArgs=unresolved proofId=0U64 />
+    val completed = compiler.completeCallTemplateResult(exprId: expression, kind: pending, expectedTerm: expected).unwrap()
+    match completed {
+        CallTemplateKind.Direct(callee: _, receiver: _, args: _, calleeTypeArgs: val range, proofId: _) => {
+            val values = compiler.callTemplateTypeArgs(range: range)
+            if values.count() != 1U64 || !compiler.typeRefEq(a: values[0U64], b: compiler.arena.typeAt(index: expected).args[0U64]) { panic("legitimate raw zero slot did not complete") }
+        }
+        _ => { panic("raw completion changed selected operation") }
+    }
+    if !compiler.typeRefEq(a: compiler.semanticExprTerm(exprId: expression), b: expected) { panic("result was not derived from the completed declaration") }
+    val fixed = compiler.publishCallTemplateTypeArgs(args: [expected])
+    val fixedKind = <CallTemplateKind.Direct callee=callee receiver=<CallTemplateReceiver.None /> args=<CallTemplateArgumentRange start=0U64 len=0U64 /> calleeTypeArgs=fixed proofId=0U64 />
+    val poolSize = compiler.publishCallTemplateTypeArgs(args: []).start
+    val retained = compiler.completeCallTemplateResult(exprId: expression, kind: fixedKind, expectedTerm: expected).unwrap()
+    match retained {
+        CallTemplateKind.Direct(callee: _, receiver: _, args: _, calleeTypeArgs: val range, proofId: _) => {
+            if range.start != fixed.start || range.len != fixed.len { panic("completed slot was re-inferred from expectation") }
+        }
+        _ => { panic("completed slot changed operation") }
+    }
+    if compiler.publishCallTemplateTypeArgs(args: []).start != poolSize { panic("completed slot published a replacement substitution") }
     print("malformed call result substitutions are not context-completed")
 }

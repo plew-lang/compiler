@@ -221,6 +221,8 @@ Lookup may filter by facts intrinsic to its domain, such as binding kind, visibi
 
 Preliminary context for an omitted type may use candidate information only under the same visible candidate rules. A contextual hint is not a selected callable.
 
+Applicability reads prepared argument facts, including unfinished construction fields and the result recipe of an already-selected nested call. A nonzero TypeTerm or a nominal head alone does not prove that the value is complete. Candidate-local completion preserves known type arguments, field constraints and rigid caller binders; it cannot turn an unselected nested call into a selected one. Only the selected operation's context is subsequently applied by the existing expression producers. Invalid saved substitution ranges or type identities are not inference holes.
+
 A label-only diagnostic candidate remains a distinct lookup outcome: it cannot populate a selected-callee cache, supply a call result, or publish a call descriptor. Its tentative argument context exists only for diagnostics and is not admitted expected-type evidence. Passing a diagnostic check does not promote that outcome; normal applicability must establish the operation.
 
 If type overloads remain ambiguous, lowering must not guess one to make a child expression type-check. Once checking selects an operation, it publishes its declaration/requirement identity, signature, environment, and evidence for instantiation and Mid consumers.
