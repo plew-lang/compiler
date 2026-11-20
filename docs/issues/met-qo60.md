@@ -1,6 +1,6 @@
 ---
 id: met-qo60
-status: open
+status: in_progress
 deps: [met-bu94]
 links: []
 created: 2026-11-20T11:30:39Z
