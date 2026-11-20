@@ -276,7 +276,7 @@ pub impl Comp {
             if self.expressionNeedsTypeContext(exprId: expression) {
                 if !(try self.contextualArgumentMatchesType(exprId: expression, expected: expected)) { return <Result.Ok value=1U64 /> }
             } else {
-                if self.semanticExprTerm(exprId: expression) == 0U64 && contextualNumericExpression(self.arena.exprs, exprId: expression) {
+                if self.contextualNumericArgument(exprId: expression) {
                     val term = self.arena.typeTermAt(index: expected)
                     if self.isFloatType(start: term.nameStart, len: term.nameLen) || ((try self.argIsUntypedIntLit(argExpr: expression)) && self.isIntType(start: term.nameStart, len: term.nameLen)) { index += 1U64 continue }
                 }
@@ -377,7 +377,7 @@ pub impl Comp {
     inout fn argIsUntypedIntLit(argExpr: U64) -> Result[Bool, CompileDiagnostic] {
         val ti: TypeInfo = (try self.argResolvedTypeInfo(argExpr: argExpr))
         if ti.kind == 0 {
-            return <Result.Ok value=ti.nameLen == 0 && contextualNumericExpression(self.arena.exprs, exprId: argExpr, floatingLiterals: false) />
+            return <Result.Ok value=ti.nameLen == 0 && self.contextualNumericArgument(exprId: argExpr, floatingLiterals: false) />
         }
         return <Result.Ok value=false />
     }
@@ -571,6 +571,49 @@ pub impl Comp {
 // recording it under a candidate's expectation. A fixed caller binder remains
 // possible; a known non-Array constructor cannot provide an array context.
 impl Comp {
+    // Observe an unfinished value, never reconstruct a lexical scope or replace
+    // its recorded type. The same answer drives applicability and ambiguity.
+    inout fn contextualNumericArgument(exprId: U64, floatingLiterals: Bool = true) -> Bool {
+        if exprId >= self.arena.exprs.count() { return false }
+        if self.semanticExprTerm(exprId: exprId) != 0U64 { return false }
+        if contextualNumericExpression(self.arena.exprs, exprId: exprId, floatingLiterals: floatingLiterals) { return true }
+        match self.arena.exprs[exprId] {
+            Expr.Block(val body, offset: _) | Expr.Sequence(val body) => {
+                return self.contextualNumericBlock(blockId: body, floatingLiterals: floatingLiterals).contextual
+            }
+            Expr.IfChain(conditions: _, val thenBlk, val elseBlk) | Expr.IfExpr(cond: _, val thenBlk, val elseBlk) => {
+                val first = self.contextualNumericBlock(blockId: thenBlk, floatingLiterals: floatingLiterals)
+                val second = self.contextualNumericBlock(blockId: elseBlk, floatingLiterals: floatingLiterals)
+                return (first.normal || second.normal) && (!first.normal || first.contextual) && (!second.normal || second.contextual)
+            }
+            Expr.MatchExpr(scrut: _, val arms) => {
+                mut val normal = false
+                for index in 0U64..<arms.len {
+                    val branch = self.contextualNumericBlock(blockId: self.matchArmAt(arms: arms, index: index).body, floatingLiterals: floatingLiterals)
+                    if branch.normal {
+                        normal = true
+                        if !branch.contextual { return false }
+                    }
+                }
+                return normal
+            }
+            _ => { return false }
+        }
+    }
+
+    inout fn contextualNumericBlock(blockId: U64, floatingLiterals: Bool) -> (normal: Bool, contextual: Bool) {
+        match self.constructionValueBlock(blockId: blockId) {
+            SemanticValueBlockTyping.Checked(val completion, val resultTerm) => {
+                if !completion.source.normal() { return (normal: false, contextual: false) }
+                if resultTerm != 0U64 { return (normal: true, contextual: false) }
+            }
+            SemanticValueBlockTyping.Pending => {
+                if !self.blockCompletion(blkId: blockId).source.normal() { return (normal: false, contextual: false) }
+            }
+        }
+        return (normal: true, contextual: self.contextualNumericArgument(exprId: self.blockGiveExpr(blkId: blockId), floatingLiterals: floatingLiterals))
+    }
+
     inout fn contextualArrayArgumentMatchesType(exprId: U64, expected: U64) -> Bool {
         if exprId >= self.arena.exprs.count() || expected == 0U64 || expected >= self.arena.typeCount() { return true }
         match self.arena.exprs[exprId] {

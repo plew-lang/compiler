@@ -1,0 +1,58 @@
+use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontendForRequests, intern }
+use ../../../src/SourceAccess only { SourceAccess }
+use ../../../src/Ir only { Expr, CachedCallee }
+use @Std/Io only { print }
+
+fn checkAmbiguity(path: String) {
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.File path=path />, sources: <SourceAccess stdRoot="std/".bytes() />).unwrap()
+    val name = compiler.internBytes(s: "choose")
+    mut val call = compiler.arena.exprs.count()
+    for index in 0U64..<compiler.arena.exprs.count() {
+        match compiler.arena.exprs[index] {
+            Expr.Call(nameStart: val start, nameLen: val length, args: val arguments) => {
+                if intern(c: inout compiler, start: start, len: length) == name.nameId {
+                    call = index
+                    val operand = compiler.argAt(args: arguments, index: 0U64).expr
+                    val candidates = compiler.visibleFreeFunctions(nameStart: start, nameLen: length)
+                    if candidates.count() != 2U64 { panic("missing numeric candidate frontier") }
+                    for repeat in 0U64..<2U64 {
+                        if compiler.callableArgMatchRank(f: compiler.arena.functionAt(index: candidates[0U64]), args: arguments).unwrap() != 2U64 { panic("first numeric context lost a value wrapper") }
+                        if compiler.callableArgMatchRank(f: compiler.arena.functionAt(index: candidates[1U64]), args: arguments).unwrap() != 2U64 { panic("second numeric context lost a value wrapper") }
+                    }
+                    if compiler.semanticExprTerm(exprId: operand) != 0U64 { panic("candidate probe published a numeric operand") }
+                    match compiler.typeCache.callee[index] {
+                        CachedCallee.Uncomputed => {}
+                        _ => { panic("candidate probe selected a numeric callee") }
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    if call == compiler.arena.exprs.count() { panic("missing authored numeric call") }
+    val mainName = compiler.internBytes(s: "main")
+    val owner = compiler.arena.firstFunctionNamed(nameId: mainName.nameId)
+    for repeat in 0U64..<2U64 {
+        match compiler.prepareLexicalBody(fnIdx: owner) {
+            Result.Ok(value: _) => { panic("ambiguous numeric wrapper was accepted") }
+            Result.Err(error: val error) => {
+                if error.message() != "ambiguous call: an unsuffixed integer literal matches more than one overload; add a type suffix (e.g. `5I32`)" { panic(error.message()) }
+            }
+        }
+        match compiler.typeCache.callee[call] {
+            CachedCallee.Uncomputed => {}
+            _ => { panic("failed ambiguity published a selected callee") }
+        }
+    }
+}
+fn main() {
+    checkAmbiguity(path: "tests/fixtures/reject/numeric_block_overload_ambiguous.pw")
+    checkAmbiguity(path: "tests/fixtures/reject/numeric_if_overload_ambiguous.pw")
+    checkAmbiguity(path: "tests/fixtures/reject/numeric_match_overload_ambiguous.pw")
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.File path="tests/fixtures/run/numeric_wrapper_overload_context.pw" />, sources: <SourceAccess stdRoot="std/".bytes() />).unwrap()
+    val name = compiler.internBytes(s: "main")
+    compiler.prepareLexicalBody(fnIdx: compiler.arena.firstFunctionNamed(nameId: name.nameId)).unwrap()
+    print("numeric candidate contexts preserve unresolved and determined values")
+}

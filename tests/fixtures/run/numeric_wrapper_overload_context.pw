@@ -1,0 +1,29 @@
+use @Std/Io only { print }
+fn choose(value: I32) -> I64 { return 32I64 }
+fn choose(value: I64) -> I64 { return 64I64 }
+fn reverse(value: I64) -> I64 { return 64I64 }
+fn reverse(value: I32) -> I64 { return 32I64 }
+fn arrayFirst(value: Array[I64]) -> I64 { return 1I64 }
+fn arrayFirst(value: I64) -> I64 { return 64I64 }
+fn boolFirst(value: Bool) -> I64 { return 1I64 }
+fn boolFirst(value: I64) -> I64 { return 64I64 }
+fn once() -> Bool { print("condition") return true }
+fn main() {
+    print(choose(value: { give 5I64 }))
+    print(reverse(value: { give 5I64 }))
+    print(choose(value: { val x: I64 = 5
+        give x }))
+    print(reverse(value: { val x: I64 = 5
+        give x }))
+    print(choose(value: if true { give 5I64 } else { give 6 }))
+    print(reverse(value: if true { give 5I64 } else { give 6 }))
+    print(choose(value: if true { val x: I64 = 5
+        give x } else { give 6 }))
+    print(reverse(value: if true { val x: I64 = 5
+        give x } else { give 6 }))
+    print(arrayFirst(value: { give 5 }))
+    print(boolFirst(value: { give 5 }))
+    print(arrayFirst(value: if once() { give 5 } else { give 6 }))
+    print(boolFirst(value: { print("block")
+        give 5 }))
+}

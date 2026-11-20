@@ -1,0 +1,3 @@
+fn choose(value: I32) {}
+fn choose(value: I64) {}
+fn main() { choose(value: { give 5 }) }
