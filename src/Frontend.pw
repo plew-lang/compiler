@@ -66,7 +66,7 @@ use ./Path only { resolveImport, extractSpan, dirPrefixLen, findSrcRoot, findPkg
 use ./Manifest only { Dep, loadManifestDeps, resolveDepImport, resolveGitDepImport, loadLock, isExternalDepImport }
 use ./Lock only { Lock }
 use ./Cache only { cacheRoot }
-use ./Diag only { compileErrorAt, compileErrorAtFile, CompileDiagnostic, UseAfterMoveRefusal, MissingFieldRefusal, MissingFieldKind, AssignmentRefusal, AssignmentRefusalKind, UniqueCopyRefusal, UniqueCaptureRefusal, NonCallableBindingRefusal, FreeCallAmbiguityRefusal, MemberCallAmbiguityRefusal, MemberCallAmbiguityKind, DiagnosticOwner, DiagnosticNote, DiagnosticLocation, DiagnosticSeverity, FailureDomain, emitDiagnostic, eprintInt, digitByte, digitStrU }
+use ./Diag only { compileErrorAt, compileErrorAtFile, CompileDiagnostic, UseAfterMoveRefusal, MissingFieldRefusal, MissingFieldKind, AssignmentRefusal, AssignmentRefusalKind, UniqueCopyRefusal, UniqueCaptureRefusal, NonCallableBindingRefusal, FreeCallVisibilityRefusal, FreeCallVisibilityKind, FreeCallAmbiguityRefusal, MemberCallAmbiguityRefusal, MemberCallAmbiguityKind, DiagnosticOwner, DiagnosticNote, DiagnosticLocation, DiagnosticSeverity, FailureDomain, emitDiagnostic, eprintInt, digitByte, digitStrU }
 use ./Ops only { opEq, opNe, opLt, opLe, opGt, opGe, opAdd, opSub, opMul, opDiv, opRem, opAnd, opOr, opNot, opBitAnd, opBitOr, opBitXor, opShl, opShr, opBitNot, opAssign, compoundBinOp, isBinTraitOp, binTraitName, binTraitMethodName, unaryMethodName }
 
 // Only an entirely unsuffixed numeric expression accepts a sibling's
@@ -693,7 +693,10 @@ enum FreeCallLookup {
     CachedNonStatic
 }
 
+enum FreeCallVisibilityOrigin { Raw AuthoredFreeCall }
+
 enum FailedFreeCallSelection {
+    Visibility(owner: SemanticCompletionOwner, kind: FreeCallVisibilityKind, arguments: Array[Arg], location: DiagnosticLocation)
     NoMatch(owner: SemanticCompletionOwner, arguments: Array[Arg])
     NonCallableBinding(owner: SemanticCompletionOwner, bindingTarget: U64, typeTerm: U64, arguments: Array[Arg])
 }
@@ -2578,66 +2581,8 @@ pub fn analyzeFrontendDeclarations(c: inout Comp, input: FrontendInput, sources:
 // Called only while a fresh source constructor still owns its unexposed
 // Comp. Caller-owned analysis never gains authority from this interpretation.
 fn ownedFrontendFailure(c: Comp, diagnostic: CompileDiagnostic) -> CompileDiagnostic {
-    match diagnostic.useAfterMove() {
-        Optional.Some(v: val refusal) => {
-            if c.sourceExpressionHasOwner(session: refusal.session(), expression: refusal.expression(), owner: refusal.owner()) {
-                return <CompileDiagnostic failureDomain=<FailureDomain.Source /> location=refusal.location() message=diagnostic.message() />
-            }
-        }
-        Optional.None => {}
-    }
-    match diagnostic.missingField() {
-        Optional.Some(v: val refusal) => {
-            if c.sourceMissingFieldHasOwner(refusal: refusal) {
-                return <CompileDiagnostic failureDomain=<FailureDomain.Source /> location=refusal.location() message=diagnostic.message() />
-            }
-        }
-        Optional.None => {}
-    }
-    match diagnostic.assignment() {
-        Optional.Some(v: val refusal) => {
-            if c.sourceAssignmentHasOwner(refusal: refusal) {
-                return <CompileDiagnostic failureDomain=<FailureDomain.Source /> location=refusal.location() message=diagnostic.message() />
-            }
-        }
-        Optional.None => {}
-    }
-    match diagnostic.uniqueCopy() {
-        Optional.Some(v: val refusal) => {
-            if c.sourceExpressionHasOwner(session: refusal.session(), expression: refusal.expression(), owner: refusal.owner()) {
-                return <CompileDiagnostic failureDomain=<FailureDomain.Source /> location=refusal.location() message=diagnostic.message() />
-            }
-        }
-        Optional.None => {}
-    }    match diagnostic.freeCallAmbiguity() {
-        Optional.Some(v: val refusal) => {
-            if c.sourceFreeCallAmbiguityHasOwner(refusal: refusal) {
-                return <CompileDiagnostic failureDomain=<FailureDomain.Source /> location=refusal.location() message=diagnostic.message() />
-            }
-        }
-        Optional.None => {}
-    }
-    match diagnostic.nonCallableBinding() {
-        Optional.Some(v: val refusal) => {
-            if c.sourceNonCallableBindingHasOwner(refusal: refusal) { return <CompileDiagnostic failureDomain=<FailureDomain.Source /> location=refusal.location() message=diagnostic.message() /> }
-        }
-        Optional.None => {}
-    }
-    match diagnostic.uniqueCapture() {
-        Optional.Some(v: val refusal) => {
-            if c.sourceUniqueCaptureHasOwner(refusal: refusal) {
-                return <CompileDiagnostic failureDomain=<FailureDomain.Source /> location=refusal.location() message=diagnostic.message() />
-            }
-        }
-        Optional.None => {}
-    }
-    match diagnostic.memberCallAmbiguity() {
-        Optional.Some(v: val refusal) => {
-            if c.sourceMemberCallAmbiguityHasOwner(refusal: refusal) {
-                return <CompileDiagnostic failureDomain=<FailureDomain.Source /> location=refusal.location() message=diagnostic.message() />
-            }
-        }
-        Optional.None => {}
+    if c.sourceFailureHasOwner(diagnostic: diagnostic) {
+        return <CompileDiagnostic failureDomain=<FailureDomain.Source /> location=diagnostic.location() message=diagnostic.message() />
     }
     return diagnostic
 }

@@ -44,6 +44,13 @@ runtime stderr. It does not authorize raw mutable verifier state as source.
 
 ## Manual execution procedure
 
+`FreeCallVisibilityFailureDomains.pw` checks the three ordinary free-call
+visibility failures, private retained evidence, raw/retry/drain preservation,
+shared ownership observation and eager/session interpretation. It covers
+Function/Global/Closure owners, expression0, unused lazy bodies, forged
+kind/location/session/owner/arguments, changed/synthetic operations and
+same-text ordinary reports. Its `.out` is the exact native execution golden.
+
 `NonCallableBindingFailureDomains.pw` checks the actual selected-value refusal,
 raw/cache/drain retention, owning lazy/whole/eager interpretation, and rejection
 of foreign or mismatched owner, target, type and argument provenance. Require its

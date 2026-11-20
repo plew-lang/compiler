@@ -75,6 +75,14 @@ storage invariant; consumers cannot construct an empty or malformed report.
 This representation choice neither grants source authority nor changes the
 classification or presentation of a retained failure.
 
+The frontend's read-only retained-refusal observer selects the dedicated cause
+and delegates to its exact private-event ownership predicate in one place.
+It does not recognize ordinary reports by text or domain, create failure events,
+or repeat lookup/checking. Owning entry adapters use that same observation to
+interpret a proven refusal; an unproved cause or ordinary report is returned
+unchanged. Adding a cause therefore cannot leave eager and session consumers
+with independent interpretation tables.
+
 An owned request consumer may create a Source report from such a dedicated
 semantic result only when it performed the request on its own unexposed compiler
 state. It must not accept an external failure for promotion, infer a class from

@@ -4,9 +4,9 @@ use ../../../src/Ir only { Expr, CachedCallee }
 use ../../../src/Diag only { FailureDomain }
 use @Std/Io only { print }
 
-fn poisoned(selected: Bool) {
+fn poisoned(selected: Bool, unimported: Bool = false) {
     mut val compiler = <Comp />
-    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text path="cache.pw" text="fn accept(value: I64) {{}} fn target() {{ accept(value: 1I64) }} fn main() {{}}" />, sources: <SourceAccess stdRoot=[] />).unwrap()
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text path="cache.pw" text=if unimported { give "fn target() {{ exit() }} fn main() {{}}" } else { give "fn accept(value: I64) {{}} fn target() {{ accept(value: 1I64) }} fn main() {{}}" } />, sources: <SourceAccess stdRoot=[] />).unwrap()
     val name = compiler.internBytes(s: "target")
     val target = compiler.arena.firstFunctionNamed(nameId: name.nameId)
     for index in 0U64..<compiler.arena.exprs.count() {
@@ -20,6 +20,7 @@ fn poisoned(selected: Bool) {
     match compiler.prepareLexicalBody(fnIdx: target) {
         Result.Ok(value: _) => { panic("poisoned cache published a source call") }
         Result.Err(error: val diagnostic) => {
+            if diagnostic.freeCallVisibility().isSome() || compiler.sourceFailureHasOwner(diagnostic: diagnostic) { panic("bad cache issued visibility evidence") }
             match diagnostic.failureDomain() { FailureDomain.Unclassified => {} _ => { panic("bad cache minted a Source refusal") } }
         }
     }
@@ -27,5 +28,7 @@ fn poisoned(selected: Bool) {
 fn main() {
     poisoned(selected: false)
     poisoned(selected: true)
+    poisoned(selected: false, unimported: true)
+    poisoned(selected: true, unimported: true)
     print("cached outcomes are not source selection failures")
 }

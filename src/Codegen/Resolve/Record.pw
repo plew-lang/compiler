@@ -2256,7 +2256,7 @@ pub impl Comp {
         } else {
             // Only an exhausted free-function frontier reaches this diagnostic
             // lookup. It cannot reject a selected value or select another callee.
-            if !self.genMode && exprId < self.sourceExpressionLimit { try self.checkExpressionVisibility(exprId: exprId) }
+            if !self.genMode && exprId < self.sourceExpressionLimit { try self.checkExpressionVisibilityCore(exprId: exprId, origin: <FreeCallVisibilityOrigin.AuthoredFreeCall />) }
             if self.isAuthoredFreeCall(exprId: exprId, start: callStart, length: callLen, args: args) {
                 match self.currentSourceOwner() {
                     Optional.Some(v: val owner) => {

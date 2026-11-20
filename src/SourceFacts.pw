@@ -1226,3 +1226,107 @@ pub impl Comp {
         return true
     }
 }
+
+
+pub impl Comp {
+    fn sourceFreeCallVisibilityHasOwner(refusal: FreeCallVisibilityRefusal) -> Bool {
+        if refusal.session() != self.sourceFactSession() || refusal.expression() >= self.arena.exprs.count() { return false }
+        val proof = match self.failedFreeCallSelections.get(key: refusal.expression()) {
+            Optional.Some(v: val failed) => match failed {
+                FailedFreeCallSelection.Visibility(owner: val owner, kind: val kind, arguments: val arguments, location: val location) => (owner: owner, kind: kind, arguments: arguments, location: location)
+                _ => { return false }
+            }
+            Optional.None => { return false }
+        }
+        val ownerMatches = match refusal.owner() {
+            DiagnosticOwner.Function(index: val index) => semanticCompletionOwnersEqual(recorded: proof.owner, prepared: <SemanticCompletionOwner.Function index=index />)
+            DiagnosticOwner.Global(target: val target) => semanticCompletionOwnersEqual(recorded: proof.owner, prepared: <SemanticCompletionOwner.Global target=target />)
+            DiagnosticOwner.Closure(expression: val expression) => semanticCompletionOwnersEqual(recorded: proof.owner, prepared: <SemanticCompletionOwner.Closure expression=expression />)
+            DiagnosticOwner.Unknown => false
+        }
+        if !ownerMatches || !proof.kind.same(other: refusal.kind()) { return false }
+        val locationMatches = match proof.location {
+            DiagnosticLocation.Unpositioned => match refusal.location() { DiagnosticLocation.Unpositioned => true _ => false }
+            DiagnosticLocation.Line(line: val line) => match refusal.location() { DiagnosticLocation.Line(line: val other) => line == other _ => false }
+            DiagnosticLocation.File(path: val path, line: val line) => match refusal.location() { DiagnosticLocation.File(path: val otherPath, line: val otherLine) => path == otherPath && line == otherLine _ => false }
+        }
+        if !locationMatches { return false }
+        val args = match self.arena.exprs[refusal.expression()] {
+            Expr.Call(nameStart: val start, nameLen: val length, args: val args) => {
+                if !self.isAuthoredFreeCall(exprId: refusal.expression(), start: start, length: length, args: args) { return false }
+                give args
+            }
+            _ => { return false }
+        }
+        if args.start != refusal.argumentsStart() || args.len != refusal.argumentsCount() || proof.arguments.count() != args.len { return false }
+        if args.start > self.arena.argPool.count() || args.len > self.arena.argPool.count() - args.start { return false }
+        for index in 0U64..<args.len {
+            val recorded = proof.arguments[index]
+            val current = self.argAt(args: args, index: index)
+            if recorded.expr != current.expr || recorded.isInout != current.isInout || recorded.hasLabel != current.hasLabel || recorded.labelStart != current.labelStart || recorded.labelLen != current.labelLen { return false }
+        }
+        return true
+    }
+}
+
+
+pub impl Comp {
+    // Observe retained dedicated refusal evidence, not the general Source domain.
+    // Raw reports and unknown causes have no authority from text or cursor state.
+    fn sourceFailureHasOwner(diagnostic: CompileDiagnostic) -> Bool {
+        match diagnostic.useAfterMove() {
+            Optional.Some(v: val refusal) => {
+                return self.sourceExpressionHasOwner(session: refusal.session(), expression: refusal.expression(), owner: refusal.owner())
+            }
+            Optional.None => {}
+        }
+        match diagnostic.missingField() {
+            Optional.Some(v: val refusal) => {
+                return self.sourceMissingFieldHasOwner(refusal: refusal)
+            }
+            Optional.None => {}
+        }
+        match diagnostic.assignment() {
+            Optional.Some(v: val refusal) => {
+                return self.sourceAssignmentHasOwner(refusal: refusal)
+            }
+            Optional.None => {}
+        }
+        match diagnostic.uniqueCopy() {
+            Optional.Some(v: val refusal) => {
+                return self.sourceExpressionHasOwner(session: refusal.session(), expression: refusal.expression(), owner: refusal.owner())
+            }
+            Optional.None => {}
+        }    match diagnostic.freeCallAmbiguity() {
+            Optional.Some(v: val refusal) => {
+                return self.sourceFreeCallAmbiguityHasOwner(refusal: refusal)
+            }
+            Optional.None => {}
+        }
+        match diagnostic.freeCallVisibility() {
+            Optional.Some(v: val refusal) => {
+                return self.sourceFreeCallVisibilityHasOwner(refusal: refusal)
+            }
+            Optional.None => {}
+        }
+        match diagnostic.nonCallableBinding() {
+            Optional.Some(v: val refusal) => {
+                return self.sourceNonCallableBindingHasOwner(refusal: refusal)
+            }
+            Optional.None => {}
+        }
+        match diagnostic.uniqueCapture() {
+            Optional.Some(v: val refusal) => {
+                return self.sourceUniqueCaptureHasOwner(refusal: refusal)
+            }
+            Optional.None => {}
+        }
+        match diagnostic.memberCallAmbiguity() {
+            Optional.Some(v: val refusal) => {
+                return self.sourceMemberCallAmbiguityHasOwner(refusal: refusal)
+            }
+            Optional.None => {}
+        }
+        return false
+    }
+}

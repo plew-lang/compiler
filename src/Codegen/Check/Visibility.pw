@@ -158,6 +158,42 @@ pub impl Comp {
     }
 
     inout fn checkExpressionVisibility(exprId: U64) -> Result[(), CompileDiagnostic] {
+        return self.checkExpressionVisibilityCore(exprId: exprId, origin: <FreeCallVisibilityOrigin.Raw />)
+    }
+}
+
+impl Comp {
+    // Only the Record free-frontier failure may attach source origin. Raw
+    // visibility observations never create or replace a retained failed event.
+    inout fn freeCallVisibilityDiagnostic(expression: U64, kind: FreeCallVisibilityKind, origin: FreeCallVisibilityOrigin) -> CompileDiagnostic {
+        val location = self.diagnosticLocationAt(offset: self.exprOffset(id: expression))
+        match origin {
+            FreeCallVisibilityOrigin.Raw => { return <CompileDiagnostic location=location message=kind.message() /> }
+            FreeCallVisibilityOrigin.AuthoredFreeCall => {}
+        }
+        val args = match self.arena.exprs[expression] {
+            Expr.Call(nameStart: val start, nameLen: val length, args: val args) => {
+                if !self.isAuthoredFreeCall(exprId: expression, start: start, length: length, args: args) { return <CompileDiagnostic location=location message=kind.message() /> }
+                give args
+            }
+            _ => { return <CompileDiagnostic location=location message=kind.message() /> }
+        }
+        val owner = match self.currentSourceOwner() {
+            Optional.Some(v: val owner) => owner
+            Optional.None => { return <CompileDiagnostic location=location message=kind.message() /> }
+        }
+        if !self.sourceFacts.isActive(owner: owner) { return <CompileDiagnostic location=location message=kind.message() /> }
+        mut val written: Array[Arg] = []
+        for index in 0U64..<args.len { written.append(self.argAt(args: args, index: index)) }
+        self.failedFreeCallSelections[expression] = <FailedFreeCallSelection.Visibility owner=owner kind=kind arguments=written location=location />
+        val diagnosticOwner = match owner {
+            SemanticCompletionOwner.Function(index: val index) => <DiagnosticOwner.Function index=index />
+            SemanticCompletionOwner.Global(target: val target) => <DiagnosticOwner.Global target=target />
+            SemanticCompletionOwner.Closure(expression: val expression) => <DiagnosticOwner.Closure expression=expression />
+        }
+        return <CompileDiagnostic.freeCallVisibility refusal=<FreeCallVisibilityRefusal session=self.sourceFactSession() owner=diagnosticOwner expression=expression kind=kind argumentsStart=args.start argumentsCount=args.len location=location /> />
+    }
+    inout fn checkExpressionVisibilityCore(exprId: U64, origin: FreeCallVisibilityOrigin) -> Result[(), CompileDiagnostic] {
         match self.arena.exprs[exprId] {
             Expr.Call(val nameStart, val nameLen, val args) => {
                 val useMod: U64 = self.moduleOf(offset: nameStart)
@@ -168,7 +204,7 @@ pub impl Comp {
                     if self.firstFuncByName(nameStart: nameStart, nameLen: nameLen) < self.arena.functionCount() {
                         // a free fn of this name exists only in other (loaded) modules and
                         // was not imported here — the use needs a use.
-                        return <Result.Err error=self.diagnosticAt(offset: nameStart, msg: "use of a function from another module without importing it (add `use … only {{ … }}`)") />
+                        return <Result.Err error=self.freeCallVisibilityDiagnostic(expression: exprId, kind: <FreeCallVisibilityKind.UnimportedFunction />, origin: origin) />
                     } else {
                         // no free fn of this name anywhere: a local/closure/builtin, or an
                         // `@Std` intrinsic the backend intercepts by raw name (print /
@@ -176,7 +212,7 @@ pub impl Comp {
                         // items are) and must be imported.
                         if self.isAmbientInterceptedName(start: nameStart, len: nameLen) {
                             if !(self.isImportedInto(mod: useMod, nameStart: nameStart, nameLen: nameLen)) {
-                                return <Result.Err error=self.diagnosticAt(offset: nameStart, msg: "this @Std function is not ambient — import it (e.g. `use @Std/Io only {{ print }}`); only lang items are usable without import (spec/15)") />
+                                return <Result.Err error=self.freeCallVisibilityDiagnostic(expression: exprId, kind: <FreeCallVisibilityKind.NonAmbientStd />, origin: origin) />
                             }
                         }
                     }
@@ -187,7 +223,7 @@ pub impl Comp {
                     // (name, module) visibility failure cleanly instead of an opaque backend
                     // error (spec/15).
                     if self.labelMatchOnlyInvisible(useMod: useMod, nameStart: nameStart, nameLen: nameLen, args: args) {
-                        return <Result.Err error=self.diagnosticAt(offset: nameStart, msg: "this call matches only a function that is not visible here — it is private to another module (spec/15: a private free fn is not reachable through an unrelated module's same-named export)") />
+                        return <Result.Err error=self.freeCallVisibilityDiagnostic(expression: exprId, kind: <FreeCallVisibilityKind.PrivateFunction />, origin: origin) />
                     }
                 }
             }
@@ -195,6 +231,10 @@ pub impl Comp {
         }
         return <Result.Ok value=() />
     }
+
+}
+
+pub impl Comp {
 
     // Is a user type declaration named (start,len) VISIBLE from module `useMod` (scoped
     // resolution: same module, or imported+exported)? A type decl's OWN module comes from
