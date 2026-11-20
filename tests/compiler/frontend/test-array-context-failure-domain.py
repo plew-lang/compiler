@@ -12,6 +12,7 @@ from compiler_failure_result import run_compiler
 
 MESSAGE = b"cannot infer an empty array's element type from a non-array context (spec/02)"
 REJECT = {
+    'default-expanded-field': 'struct InvalidDefaultSlot { val value: I64 = [] }\nfn main() { val value = <InvalidDefaultSlot /> }',
     'explicit-closure-return': 'fn main() { val closure = fn() -> I64 { { return [] } } }',
     'contextual-closure-return': 'fn main() { val closure: fn() -> I64 = fn() { { return [] } } }',
     'failed-call-closure-return': 'fn accept(callback: fn() -> I64, other: I64) {}\nfn main() { accept(callback: fn() { { return [] } }, other: false) }',
@@ -28,6 +29,13 @@ REJECT = {
     'outer-field': 'struct Shelf[T] { val value: T }\nfn main() { val shelf: Shelf[I64] = <Shelf value=[] /> }',
 }
 ACCEPT = {
+    'zero-field': 'struct EmptySlot {}\nfn main() { val value = <EmptySlot /> }',
+    'empty-record': 'fn main() { val value: () = () }',
+    'generic-zero-explicit': 'struct EmptySlot[T] {}\nfn main() { val value = <EmptySlot[I64] /> }',
+    'generic-zero-outer': 'struct EmptySlot[T] {}\nfn main() { val value: EmptySlot[I64] = <EmptySlot /> }',
+    'payloadless-enum': 'enum EmptyChoice[T] { Empty Value(value: T) }\nfn main() { val value = <EmptyChoice[I64].Empty /> }',
+    'default-expanded-valid': 'struct DefaultSlot { val value: I64 = 1I64 }\nfn main() { val value = <DefaultSlot /> }',
+    'nonempty-array': 'fn main() { val values: Array[I64] = [1I64] }',
     'annotation-array': 'fn main() { val value: Array[I64] = [] }',
     'explicit-array-field': 'struct Shelf[T] { val value: T }\nfn main() { val shelf = <Shelf[Array[I64]] value=[] /> }',
     'outer-array-field': 'struct Shelf[T] { val value: T }\nfn main() { val shelf: Shelf[Array[I64]] = <Shelf value=[] /> }',

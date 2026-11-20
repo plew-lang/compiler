@@ -286,7 +286,9 @@ pub impl Comp {
                 }
                 val children = self.pushExprs(exprs: es)
                 result = self.pushExpr(e: <Expr.Array elems=children />)
-                self.authoredArrayLiterals[result] = <AuthoredArrayLiteral start=span.start end=span.end elements=children />
+                if children.len == 0U64 {
+                    self.authoredArrayLiterals[result] = <AuthoredArrayLiteral start=span.start end=span.end elements=children />
+                }
             }
             ExprAst.DictLit(val keys, val vals, val span) => {
                 // Keep source entries until Record supplies their expected type.
@@ -553,7 +555,9 @@ pub impl Comp {
                 }
                 val children = self.pushExprs(exprs: elems)
                 result = self.pushExpr(e: <Expr.Array elems=children />)
-                self.authoredArrayLiterals[result] = <AuthoredArrayLiteral start=e.span.start end=e.span.end elements=children />
+                if children.len == 0U64 {
+                    self.authoredArrayLiterals[result] = <AuthoredArrayLiteral start=e.span.start end=e.span.end elements=children />
+                }
             }
             SyntaxExprKind.DictLit => {
                 result = (try self.lowerSyntaxDictLit(expr: e))

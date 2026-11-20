@@ -2895,7 +2895,10 @@ impl Comp {
                 // argument list; it cannot undo a prior contextual solution.
                 mut val instance = self.semanticExprTerm(exprId: exprId)
                 if instance == 0U64 { instance = construction }
-                val inputOrigin = self.constructionInputContext(exprId: exprId, construction: construction)
+                // Factory/default preparation already supplied this range.
+                // Without children there is no expected-context proof to issue.
+                val inputOrigin = if fields.len == 0U64 { give <SourceConstructionContext.Reused /> }
+                    else { give self.constructionInputContext(exprId: exprId, construction: construction) }
                 val independentProducer = instance == construction && match inputOrigin { SourceConstructionContext.Producer => true _ => false }
                 mut val constructionOrigin = match inputOrigin {
                     SourceConstructionContext.Outer => <SourceConstructionContext.Outer />
@@ -2930,13 +2933,13 @@ impl Comp {
                 // from the collected field terms, independent of field order.
                 if !isEnum && typeLen == 0U64 && instance == 0U64 {
                     instance = try self.inferRecordMakeRef(fields: fields)
-                    if instance != 0U64 && self.sourceTypeHasCompleteArguments(ref: instance) { constructionOrigin = <SourceConstructionContext.IndependentFields /> }
+                    if fields.len != 0U64 && instance != 0U64 && self.sourceTypeHasCompleteArguments(ref: instance) { constructionOrigin = <SourceConstructionContext.IndependentFields /> }
                 }
                 if !self.isGenericInst(ref: instance) {
                     val inferred = try self.inferMakeInstance(typeStart: typeStart, typeLen: typeLen, typeRef: instance, isEnum: isEnum, variantStart: variantStart, variantLen: variantLen, fields: fields, expression: <Optional.Some v=exprId />)
                     if inferred != 0U64 {
                         val fromOuter = match constructionOrigin { SourceConstructionContext.Outer => true _ => false }
-                        if inferred != instance && !fromOuter && self.sourceTypeHasCompleteArguments(ref: inferred) { constructionOrigin = <SourceConstructionContext.IndependentFields /> }
+                        if fields.len != 0U64 && inferred != instance && !fromOuter && self.sourceTypeHasCompleteArguments(ref: inferred) { constructionOrigin = <SourceConstructionContext.IndependentFields /> }
                         instance = inferred
                     }
                 }

@@ -183,14 +183,18 @@ fn rawDetour(text: String, name: String = "main") {
         Result.Ok(value: _) => { panic("unfilled Array context changed Raw refusal") }
     }
 }
-fn unwrittenArray() {
+fn unwrittenArray(writtenNonempty: Bool = false) {
     mut val raw = <Comp />
-    analyzeFrontendForRequests(c: inout raw, input: input(), sources: <SourceAccess />).unwrap()
+    val program = if writtenNonempty { give <FrontendInput.Text path="NonemptyArray.pw" text="fn main() {{ val value: I64 = [1I64] }}" /> } else { give input() }
+    analyzeFrontendForRequests(c: inout raw, input: program, sources: <SourceAccess />).unwrap()
     val function = raw.arena.firstFunctionNamed(nameId: raw.internBytes(s: "main").nameId)
     val statement = raw.blockStmtAt(blkId: raw.arena.functionAt(index: function).body, index: 0U64)
     val synthetic = match raw.arena.stmts[statement] {
         Stmt.Let(mutable: val mutable, nameStart: val start, nameLen: val length, tyStart: val typeStart, tyLen: val typeLength, tyIsArray: val isArray, ty: val type, init: val init, annotationOccurrence: val annotation) => {
-            val copy = raw.pushExpr(e: raw.arena.exprs[init])
+            val copy = if writtenNonempty {
+                raw.arena.exprs.set(i: init, value: <Expr.Array elems=raw.pushExprs(exprs: []) />)
+                give init
+            } else { give raw.pushExpr(e: raw.arena.exprs[init]) }
             raw.ensureExprTySlot(exprId: copy)
             // Even an exact borrowed source span cannot create authored origin.
             raw.arena.exprSpanStart.set(i: copy, value: raw.arena.exprSpanStart[init])
@@ -242,6 +246,7 @@ fn main() {
     rawDetour(text: "fn main() {{ val values: Array[I64] = [[]] }}")
     rawDetour(text: "fn probe[T]() {{ val value: T = [] }} fn main() {{}}", name: "probe")
     unwrittenArray()
+    unwrittenArray(writtenNonempty: true)
     print("raw recursive context stayed unclassified")
     val first = failure(compiler: inout raw, function: function)
     requireRaw(diagnostic: first)
