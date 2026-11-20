@@ -176,6 +176,13 @@ The initializer of a shadowing declaration is checked in the old binding environ
 
 Qualified expressions must distinguish a namespace from a same-spelled local value using lexical bindings. Once that distinction is established, later passes must not reinterpret the expression as a module path merely because a module with the spelling exists.
 
+Namespace-call normalization retains the authored operation at the actual
+Method-to-free-call transition, together with the resolved module use, selector
+and argument range. Only a recorded authored Method can transfer that origin;
+synthetic or unregistered nodes cannot acquire it from matching spans. Failure
+interpretation consumes this retained identity rather than guessing from the
+qualified spelling after normalization.
+
 ## 4. Free Functions and Public Surfaces
 
 The [module specification](https://github.com/plew-lang/spec/blob/main/spec/04-execution/15-modules.md) defines root-owned use bindings shared across the root and all parts, module-private declarations, and individual public declarations. Directive-placement validation rejects use in handwritten and generated parts before lookup; there is no separate part-file import environment. The [root-owned binding contract](sources-and-modules.md#root-owned-use-bindings) owns this boundary and its reconsideration conditions. Free-function lookup combines visible local declarations and explicitly imported public declarations into one candidate set, deduplicated by declaration identity. It does not prefer a local declaration merely because it is local, or prefer the first import encountered.

@@ -84,6 +84,11 @@ pub impl Comp {
                 if moduleId != 4000000000U64 {
                     self.recordNamespaceUse(name: <Span start=nameStart end=nameStart + nameLen />, moduleId: moduleId)
                     self.arena.exprs[id] = <Expr.Call nameStart=nameStart nameLen=nameLen args=args />
+                    // Preserve the written operation at the namespace normalization
+                    // boundary; unrelated generated Methods carry no such origin.
+                    if self.authoredMethodExpressions.contains(id) && self.syntheticCallSiteIndex(exprId: id) >= self.decls.syntheticCallSites.count() {
+                        self.authoredFreeCallOrigins[id] = (start: nameStart, length: nameLen, arguments: args)
+                    }
                 } else { self.resolveLexicalModuleExpr(id: recv, names: inout names) }
                 self.resolveLexicalModuleArgs(args: args, names: inout names)
             }

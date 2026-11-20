@@ -15,7 +15,7 @@ fn requireSource(diagnostic: CompileDiagnostic, message: String) {
 fn session(input: FrontendInput, stdRoot: String = "std/") -> CompilerSession {
     match CompilerSession.open(input: input, sources: <SourceAccess stdRoot=stdRoot.bytes() />) { CompilerSessionResult.Success(session: val session) => { return move session } CompilerSessionResult.Failure(diagnostic: val diagnostic) => { panic(diagnostic.message()) } }
 }
-fn run(input: FrontendInput, message: String, functionName: String = "main", lazyRequested: Bool = true, stdRoot: String = "std/", closureOwner: Bool = false, zeroExpression: Bool = false) {
+fn run(input: FrontendInput, message: String, functionName: String = "main", lazyRequested: Bool = true, stdRoot: String = "std/", closureOwner: Bool = false, zeroExpression: Bool = false, qualified: Bool = false) {
     mut val raw = <Comp />
     match analyzeFrontendForRequests(c: inout raw, input: input, sources: <SourceAccess stdRoot=stdRoot.bytes() />) { Result.Ok(value: _) => {} Result.Err(error: val diagnostic) => { panic(diagnostic.message()) } }
     val name = raw.internBytes(s: functionName)
@@ -25,6 +25,7 @@ fn run(input: FrontendInput, message: String, functionName: String = "main", laz
             Result.Err(error: val diagnostic) => {
                 requireUnclassified(diagnostic: diagnostic, message: message)
                 val refusal = diagnostic.freeCallVisibility().unwrap()
+                if qualified { namespaceRewriteControls(compiler: raw, refusal: refusal) }
                 if !raw.sourceFailureHasOwner(diagnostic: diagnostic) { panic("shared observer lost retained cause") }
                 if zeroExpression && refusal.expression() != 0U64 { panic("zero-expression fixture changed") }
                 if closureOwner { match refusal.owner() { DiagnosticOwner.Closure(expression: _) => {} _ => { panic("closure refusal lost owner kind") } } }
@@ -139,6 +140,40 @@ fn globalFailure() {
     match openFrontend(input: input, sources: <SourceAccess />) { Result.Err(error: val diagnostic) => { requireSource(diagnostic: diagnostic, message: message) } Result.Ok(value: _) => { panic("eager global accepted invisible call") } }
     print("global free-call visibility origin retained")
 }
+fn namespaceRewriteControls(compiler: Comp, refusal: FreeCallVisibilityRefusal) {
+    mut val original = compiler
+    val call = original.arena.exprs[refusal.expression()]
+    val args = match call { Expr.Call(nameStart: _, nameLen: _, args: val args) => args _ => { panic("qualified call was not normalized") } }
+    val start = match call { Expr.Call(nameStart: val start, nameLen: _, args: _) => start _ => { panic("qualified selector missing") } }
+    val length = match call { Expr.Call(nameStart: _, nameLen: val length, args: _) => length _ => { panic("qualified selector missing") } }
+    val useIndex = original.modules.qualifiedUseIndex(offset: start)
+    if useIndex >= original.modules.qualifiedUseCount() { panic("qualified module provenance missing") }
+    val module = original.modules.qualifiedUseAt(index: useIndex).targetModule
+    mut val receiver: Optional[U64] = <Optional.None />
+    for index in 0U64..<original.arena.exprs.count() {
+        if original.namespaceExprModule(id: index, names: []) == module { receiver = <Optional.Some v=index /> break }
+    }
+    val receiverId = receiver.unwrap()
+    mut val unregistered = original
+    val fresh = unregistered.arena.exprs.count()
+    unregistered.arena.exprs.append(<Expr.Method recv=receiverId nameStart=start nameLen=length args=args />)
+    mut val names: Array[U64] = []
+    unregistered.resolveLexicalModuleExpr(id: fresh, names: inout names)
+    match unregistered.arena.exprs[fresh] { Expr.Call(nameStart: _, nameLen: _, args: _) => {} _ => { panic("raw namespace control did not rewrite") } }
+    if unregistered.isAuthoredFreeCall(exprId: fresh, start: start, length: length, args: args) { panic("unregistered namespace Method became authored") }
+    mut val synthetic = original
+    synthetic.arena.exprs.set(i: refusal.expression(), value: <Expr.Method recv=receiverId nameStart=start nameLen=length args=args />)
+    synthetic.recordSyntheticCallSite(site: <SyntheticCallSite exprId=refusal.expression() receiverTerm=0U64 />).unwrap()
+    synthetic.resolveLexicalModuleExpr(id: refusal.expression(), names: inout names)
+    if synthetic.isAuthoredFreeCall(exprId: refusal.expression(), start: start, length: length, args: args) { panic("synthetic namespace Method became authored") }
+    mut val shadowed = original
+    val shadow = shadowed.arena.exprs.count()
+    shadowed.arena.exprs.append(<Expr.Method recv=receiverId nameStart=start nameLen=length args=args />)
+    val local = shadowed.internBytes(s: "Lib")
+    mut val locals: Array[U64] = [local.nameId]
+    shadowed.resolveLexicalModuleExpr(id: shadow, names: inout locals)
+    match shadowed.arena.exprs[shadow] { Expr.Method(recv: _, nameStart: _, nameLen: _, args: _) => {} _ => { panic("local namespace shadow was rewritten") } }
+}
 fn main() {
     run(input: <FrontendInput.File path="tests/fixtures/reject/eprint_not_imported.pw" />, message: <FreeCallVisibilityKind.NonAmbientStd />.message())
     run(input: <FrontendInput.File path="tests/fixtures/reject/assert_not_imported.pw" />, message: <FreeCallVisibilityKind.UnimportedFunction />.message())
@@ -146,5 +181,6 @@ fn main() {
     run(input: <FrontendInput.Text text="fn main() {{ exit() }}" path="visibility-zero.pw" />, message: <FreeCallVisibilityKind.NonAmbientStd />.message(), stdRoot: "", zeroExpression: true)
     run(input: <FrontendInput.Text text="fn main() {{ val callback = fn() {{ exit() }} callback() }}" path="visibility-closure.pw" />, message: <FreeCallVisibilityKind.NonAmbientStd />.message(), closureOwner: true)
     run(input: <FrontendInput.Text text="fn unused() {{ exit() }} fn main() {{}}" path="visibility-unused.pw" />, message: <FreeCallVisibilityKind.NonAmbientStd />.message(), functionName: "unused", lazyRequested: false)
+    run(input: <FrontendInput.File path="tests/fixtures/partreject/import_private_qualified/Main.pw" />, message: <FreeCallVisibilityKind.PrivateFunction />.message(), qualified: true)
     globalFailure()
 }
