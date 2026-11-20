@@ -73,3 +73,7 @@ space after the failure is158MiB. No compiler errno trace is available, so this
 is the same observed low-space status-loss class, not a completed fix or an
 intentionally invalid source rejection. The run has no formal median.
 [Evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-diagnostic-report-self-host.json).
+
+## Additional observed text-output loss
+
+During phase3 CPU-versus-wall diagnosis (unchanged source598, fixed-point compiler SHA c1a2acb1d62367f7d699a573d87677ecfc63e83f9d7ac2fe588209b6ad283804), /usr/bin/time and the existing trace watchdog returned0 but the required LLVM stdout file was zero bytes; backend trace reached print-module/write done. Available disk space was approximately140MiB. The underlying write/allocation errno was not captured, so ENOSPC and a specific writer root cause are not proven. The output checksum assertion rejected the artifact; no successful measurement/adoption is claimed. After storage recovery all six repeated CPU diagnostics and ten standard observer outputs match expected405a52ed... exactly. This observation belongs to this existing required-text-output task, not a new phase3 applicability repair. See meta canonical phase3-provisional-call-context evidence diagnostic_limits and scratch fixed-point-cpu-permitted/0-after.{ll,log,console}. No repair or controlled IO-fault test has been executed for this finding.
