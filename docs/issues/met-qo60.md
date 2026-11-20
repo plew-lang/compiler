@@ -1,6 +1,6 @@
 ---
 id: met-qo60
-status: in_progress
+status: closed
 deps: [met-bu94]
 links: []
 created: 2026-11-20T11:30:39Z
@@ -75,3 +75,14 @@ Actual a0c5ff89 CLI generic controls reproduced an A-to-B regression in existing
 ## Trait namespace signature context
 
 Standard gen `20261120T151226-gen-e42b9c` completed input-unchanged with18 pass/5reject/8fail. Actual deriveeqstruct --gen bisection succeeds on8b/0dbe/5cd but fails from e2f receiver-grounded associated ranking onward. Minimal member_trait_namespace_context succeeds on A but fails on7b: receiver Names, declared Self@1, structural match absent, no conformance proof. A namespace is not a conformance of the trait to itself. Receiver environment construction now admits only an authored associated/no-self trait namespace, maps receiver trait arguments through the existing binder matcher, then requires existing traitNamespaceReceiverMatches (exact owner/arity/arguments or exact lexical Self, never record/any/projection). Other missing proofs remain failures. Names plus all prior internal controls pass; PreparedMemberInference also executes actual deriveeqstruct frontend gen preparation successfully. Independent source review found no must-fix; final fresh gen/performance still required. Old7b target gates remain valid intermediate evidence only, not later-source adoption.
+
+
+## Closure — finite member-call role boundary
+
+Resolved on source `ba891bdf`. The selected/diagnostic/missing/cached-observation roles are retained through all enumerated member/associated collectors, composing fallbacks, caches, argument context checking, result recovery, templates and final publication. Shared prepared inference and receiver/proof/trait-namespace signature interpretation close the concrete normal-context regressions; competing successful fallback publication is removed. Diagnostic operands are checked without promoting the parent. Existing tests were not weakened.
+
+Final snapshot namespace-build passes standard build `20261120T151954-build-7797ed`; its target gates and those of exact fixedpoint compiler db40e37c both pass: generic102modes, CLI120, numeric75, Array54old/newpairs, Float48,14internal native kernels. Known com-9clj baseline failures and legitimate unrequested-lazy bodies remain separately labelled. Standard gen on both exact candidates passes25/5reject/0fail (fixedpoint run `20261120T155744-gen-a6ec07`). The completed Array scratch output relocation preserves both receipts and has an exact hash manifest.
+
+Formal `20261120T153146-self-host-32b720` finishes input-unchanged with generation2/3 LLVM e80787fa and runtime6345c743 equality, successor binaries both db40e37c. RUNS5:7.500360/6.999988/6.985542/6.986370/7.017835 seconds; formal median6.999988. This barely satisfies7seconds and establishes no margin. Independent same-source alternating5pairs gives oldA7.085223/newC6.950058 medians, every LLVM matching its formal reference; it does not replace the formal values. Independent final reviewer reconciles source, target-path/detection evidence, exact-carrier outcomes, formal hashes/immutability and comparison, with no remaining finite B must-fix.
+
+Canonical evidence: meta evidence/rejection-domains/diagnostic-domain-implementation/phase3-member-call-roles.json, final_certification. Development continuation may explicitly use the fixedpoint compiler at tmp/validation/20261120T153146-self-host-32b720/self-host/generation-2/next/plewc; main/seed/tracked bin are not promoted. Parent com-u22d has its own pending acceptance; expected-type Source authority com-b0e6/com-8uik and whole-stage324-failure repair remain their owners. This closure is not whole-suite or工程3 completion.
