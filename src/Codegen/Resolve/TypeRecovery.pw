@@ -619,9 +619,9 @@ impl Comp {
     }
 }
 
-// Prepared operands expose only their unfinished value recipe to candidate
-// matching. This is separate from the entry policy that defers recording an
-// expression: independently prepared fields and closed block locals stay put.
+// Candidate constraints distinguish recorded values, unfinished recipes and
+// the explicit shape of unrecorded literals. Entry deferral is separate:
+// prepared fields and closed block locals stay put, and probes publish no source facts.
 impl Comp {
     inout fn callArgumentHasInferenceHole(expected: U64, parameters: FuncBindRange, values: Array[U64]) -> Bool {
         for index in 0U64..<parameters.count() {
@@ -737,12 +737,74 @@ impl Comp {
         return self.matchPreparedCallArgument(expression: self.blockGiveExpr(blkId: blockId), signature: signature, parameters: parameters, receiver: receiver, values: inout values)
     }
 
+    // A missing aggregate term is not a failed type comparison. Raw literals
+    // expose only their authored shape; prepared children keep their saved facts.
+    // Only the first array element can contribute an element inference frontier.
+    inout fn matchContextualArrayArgument(expression: U64, elements: ExprRange, signature: U64, expected: U64, parameters: FuncBindRange, receiver: U64, values: inout Array[U64]) -> Result[TypeArgumentMatch, CompileDiagnostic] {
+        if self.callArgumentHasRootInferenceHole(expected: expected, parameters: parameters, values: values) {
+            val actual = try self.inferenceArgumentType(exprId: expression)
+            if actual != 0U64 && self.sourceTypeHasCompleteArguments(ref: actual) { return self.matchPreparedArgumentTerm(signature: signature, actual: actual, parameters: parameters, receiver: receiver, values: inout values) }
+            return <Result.Ok value=<TypeArgumentMatch.Deferred /> />
+        }
+        if !self.isLangArrayType(ref: expected) { return <Result.Ok value=<TypeArgumentMatch.Mismatch /> /> }
+        val context = self.arena.typeTermAt(index: expected)
+        if context.hasTopLevelView() || context.args.len != 1U64 { return <Result.Ok value=<TypeArgumentMatch.Mismatch /> /> }
+        val element = self.arena.typeArgumentAt(index: context.args.start)
+        if element == 0U64 || element >= self.arena.typeCount() { return <Result.Ok value=<TypeArgumentMatch.Mismatch /> /> }
+        mut val pending = elements.len == 0U64
+        for index in 0U64..<elements.len {
+            val matched = try self.matchPreparedCallArgument(expression: self.exprAt(exprs: elements, index: index), signature: element, parameters: parameters, receiver: receiver, values: inout values)
+            match matched {
+                TypeArgumentMatch.Mismatch | TypeArgumentMatch.Conflict => { return <Result.Ok value=matched /> }
+                TypeArgumentMatch.Deferred => {
+                    pending = true
+                    // Later elements cannot repair an unfinished first element.
+                    if index == 0U64 && self.callArgumentHasInferenceHole(expected: element, parameters: parameters, values: values) { return <Result.Ok value=<TypeArgumentMatch.Deferred /> /> }
+                }
+                _ => {}
+            }
+        }
+        return <Result.Ok value=if pending { give <TypeArgumentMatch.Deferred /> } else { give <TypeArgumentMatch.Matched /> } />
+    }
+
+    // Observe explicit closure slots without checking its body or publishing a
+    // closure descriptor. Missing slots remain obligations of the chosen call.
+    inout fn matchContextualFunctionArgument(expression: U64, signature: U64, expected: U64, parameters: FuncBindRange, receiver: U64, values: inout Array[U64]) -> Result[TypeArgumentMatch, CompileDiagnostic] {
+        val actual = (try self.exprType(id: expression)).ref
+        if !self.isFnType(ref: actual) { return <Result.Ok value=<TypeArgumentMatch.Mismatch /> /> }
+        if !self.isFnType(ref: expected) {
+            if self.callArgumentHasInferenceHole(expected: expected, parameters: parameters, values: values) {
+                if self.sourceTypeHasCompleteArguments(ref: actual) { return self.matchPreparedArgumentTerm(signature: signature, actual: actual, parameters: parameters, receiver: receiver, values: inout values) }
+                return <Result.Ok value=<TypeArgumentMatch.Deferred /> />
+            }
+            return <Result.Ok value=<TypeArgumentMatch.Mismatch /> />
+        }
+        val matched = self.matchCallTypeArguments(pattern: signature, argument: actual, params: parameters, values: inout values)
+        match matched { TypeArgumentMatch.Mismatch | TypeArgumentMatch.Conflict => { return <Result.Ok value=matched /> } _ => {} }
+        val target = try self.groundKnownCallTypeArguments(ref: signature, params: parameters, values: values, receiver: receiver)
+        val source = self.arena.typeTermAt(index: actual)
+        val context = self.arena.typeTermAt(index: target)
+        // A bare callee binder already holding a symbolic function can defer
+        // unification without comparing its skeleton. Validate the grounded
+        // range and labels before reading any of its component slots.
+        if !self.typeTermRefSameHead(a: actual, b: target) || source.args.len != context.args.len || source.argLabels.len != context.argLabels.len { return <Result.Ok value=<TypeArgumentMatch.Mismatch /> /> }
+        for index in 0U64..<source.args.len {
+            if self.typeTermRefIdentityChildLabel(ref: actual, index: index) != self.typeTermRefIdentityChildLabel(ref: target, index: index) { return <Result.Ok value=<TypeArgumentMatch.Mismatch /> /> }
+        }
+        mut val pending = false
+        for index in 0U64..<source.args.len {
+            val component = self.arena.typeArgumentAt(index: source.args.start + index)
+            if component == 0U64 { pending = true continue }
+            val destination = self.arena.typeArgumentAt(index: context.args.start + index)
+            if self.callArgumentHasInferenceHole(expected: destination, parameters: parameters, values: values) { pending = true continue }
+            if !(try self.typesCompatible(expected: destination, inferred: component)) { return <Result.Ok value=<TypeArgumentMatch.Mismatch /> /> }
+        }
+        return <Result.Ok value=if pending { give <TypeArgumentMatch.Deferred /> } else { give matched } />
+    }
+
     inout fn matchPreparedCallArgument(expression: U64, signature: U64, parameters: FuncBindRange, receiver: U64, values: inout Array[U64]) -> Result[TypeArgumentMatch, CompileDiagnostic] {
         mut val expected = try self.groundKnownCallTypeArguments(ref: signature, params: parameters, values: values, receiver: receiver)
         if expected == 0U64 || expected >= self.arena.typeCount() { return <Result.Ok value=<TypeArgumentMatch.Mismatch /> /> }
-        if self.expressionNeedsTypeContext(exprId: expression) {
-            return <Result.Ok value=if (try self.contextualArgumentMatchesType(exprId: expression, expected: expected)) { give <TypeArgumentMatch.Deferred /> } else { give <TypeArgumentMatch.Mismatch /> } />
-        }
         if self.contextualNumericArgument(exprId: expression) {
             val term = self.arena.typeTermAt(index: expected)
             if self.isFloatType(start: term.nameStart, len: term.nameLen) || ((try self.argIsUntypedIntLit(argExpr: expression)) && self.isIntType(start: term.nameStart, len: term.nameLen)) { return <Result.Ok value=<TypeArgumentMatch.Matched /> /> }
@@ -771,9 +833,21 @@ impl Comp {
                     }
                     return <Result.Ok value=if pending { give <TypeArgumentMatch.Deferred /> } else { give <TypeArgumentMatch.Matched /> } />
                 }
-                Expr.Make(typeStart: _, typeLen: _, variantStart: val variantStart, variantLen: val variantLen, isEnum: val isEnum, ty: val written, fields: val fields) => {
-                    if (try self.contextualConstructionArgument(exprId: expression)) {
-                        if self.callArgumentHasRootInferenceHole(expected: expected, parameters: parameters, values: values) { return <Result.Ok value=<TypeArgumentMatch.Deferred /> /> }
+                Expr.Array(elems: val elements) => {
+                    return self.matchContextualArrayArgument(expression: expression, elements: elements, signature: signature, expected: expected, parameters: parameters, receiver: receiver, values: inout values)
+                }
+                Expr.Closure(params: _, hasRet: _, retStart: _, retLen: _, retIsArray: _, retTy: _, body: _, isDiverging: _) => {
+                    return self.matchContextualFunctionArgument(expression: expression, signature: signature, expected: expected, parameters: parameters, receiver: receiver, values: inout values)
+                }
+                Expr.Make(typeStart: _, typeLen: val typeLen, variantStart: val variantStart, variantLen: val variantLen, isEnum: val isEnum, ty: val written, fields: val fields) => {
+                    val structural = !isEnum && typeLen == 0U64 && !self.pendingConstructionContexts.contains(expression)
+                    if structural || (try self.contextualConstructionArgument(exprId: expression)) {
+                        if self.callArgumentHasRootInferenceHole(expected: expected, parameters: parameters, values: values) {
+                            val actual = try self.inferenceArgumentType(exprId: expression)
+                            if actual != 0U64 && self.sourceTypeHasCompleteArguments(ref: actual) { return self.matchPreparedArgumentTerm(signature: signature, actual: actual, parameters: parameters, receiver: receiver, values: inout values) }
+                            return <Result.Ok value=<TypeArgumentMatch.Deferred /> />
+                        }
+                        if structural && self.arena.typeTermAt(index: expected).hasTopLevelView() { return <Result.Ok value=<TypeArgumentMatch.Mismatch /> /> }
                         if !(try self.makeAcceptsExpectedTerm(exprId: expression, writtenTerm: self.semanticExprTerm(exprId: expression), isEnum: isEnum, fields: fields, expectedTerm: expected)) { return <Result.Ok value=<TypeArgumentMatch.Mismatch /> /> }
                         mut val pending = false
                         for index in 0U64..<fields.len {
@@ -807,6 +881,9 @@ impl Comp {
                 }
                 Optional.None => {}
             }
+        }
+        if self.expressionNeedsTypeContext(exprId: expression) {
+            return <Result.Ok value=if (try self.contextualArgumentMatchesType(exprId: expression, expected: expected)) { give <TypeArgumentMatch.Deferred /> } else { give <TypeArgumentMatch.Mismatch /> } />
         }
         return self.matchPreparedArgumentTerm(signature: signature, actual: (try self.inferenceArgumentType(exprId: expression)), parameters: parameters, receiver: receiver, values: inout values)
     }

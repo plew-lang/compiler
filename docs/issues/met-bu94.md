@@ -1,6 +1,6 @@
 ---
 id: met-bu94
-status: closed
+status: open
 deps: []
 links: []
 created: 2026-11-20T11:30:39Z
@@ -11,6 +11,11 @@ parent: com-u22d
 tags: [frontend, diagnostics, verification]
 ---
 # Finish prepared argument matching and free-call selection roles
+
+## Reopened contextual-operand regression
+
+See [com-u22d current boundary](com-u22d.md#reopened-current-boundary). Existing contextual literal/noninterference acceptance regressed in both free and member/associated paths; preserve the existing scope and Selected/DiagnosticCandidate guarantees. Previously recorded bounded successes remain historical evidence, not current full acceptance.
+
 
 Contract: design/name-lookup.md applicability/publication and body-checking.md contextual commitment. Close the implemented common numeric/prepared-argument matcher and free DiagnosticCandidate/Selected boundary end to end. Covered: direct/block/if/match integer shapes and both declaration orders; known field and phantom constraints; partial nominal and already-selected nested results; rigid caller versus callee holes; Raw versus prepared facts; free lookup/cache/Record/ExprType/final publication and diagnostic precedence. Do not publish a diagnostic candidate, reopen a closed block, retype a determined operand, or infer an outer binder from a foreign unresolved callee binder.
 

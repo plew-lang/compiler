@@ -1,6 +1,6 @@
 ---
 id: met-qo60
-status: closed
+status: open
 deps: [met-bu94]
 links: []
 created: 2026-11-20T11:30:39Z
@@ -11,6 +11,11 @@ parent: com-u22d
 tags: [frontend, diagnostics, verification]
 ---
 # Retain method and associated lookup roles through publication
+
+## Reopened contextual-operand regression
+
+See [com-u22d current boundary](com-u22d.md#reopened-current-boundary). Existing contextual literal/noninterference acceptance regressed in both free and member/associated paths; preserve the existing scope and Selected/DiagnosticCandidate guarantees. Previously recorded bounded successes remain historical evidence, not current full acceptance.
+
 
 Contract: design/name-lookup.md diagnostic context is not selected authority; body-checking.md retains the chosen operation. Propagate private Selected(function)/DiagnosticCandidate(function)/NoCandidate roles through the four remaining method/associated collectors, their composing resolvers, Expr/ExprType/Verify caches, Record diagnostic argument checking and final publication. Abstract requirement/dynamic result types remain distinct. Public Raw compatibility observations may retain their old representation, but compiler source/final consumers must not use them to manufacture selected authority.
 

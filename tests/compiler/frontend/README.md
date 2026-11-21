@@ -585,3 +585,11 @@ empty labels, zero/multi-digit/U64-max counters and stride hit/miss. Compile
 against the implementation under test, link normally, and compare both `.out`
 and `.err` byte-for-byte. Whole-source traced/plain LLVM and phase-event
 comparisons additionally cover the private lowering/verification progress paths.
+
+`PreparedContextualOperands.pw` tests raw and partially prepared aggregate
+constraints without publishing source facts or callee authority. Its `.out`
+covers nested Arrays, structural records, fixed typed mismatches, partial
+closure signatures, root generic inference, view identity, and function
+arity/labels with rigid caller binders. Repeated probes preserve parent and
+child terms, cache and template counts. Compile/link the real frontend and
+compare stdout byte-for-byte; stderr must be empty.

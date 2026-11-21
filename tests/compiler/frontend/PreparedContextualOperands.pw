@@ -1,0 +1,132 @@
+use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontendForRequests, intern }
+use ../../../src/SourceAccess only { SourceAccess, SourceResource }
+use ../../../src/Ir only { Expr, CachedCallee }
+use @Std/Io only { print }
+
+fn load(compiler: inout Comp, text: String) {
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.File path="plew:std/PreparedContextProbe.pw" />, sources: <SourceAccess stdRoot="std/".bytes() resources=[<SourceResource path="plew:std/PreparedContextProbe.pw".bytes() text=text />] />).unwrap()
+}
+fn rawRank(text: String, expected: U64, prepared: Bool = false, ownerName: String = "main") -> Bool {
+    mut val compiler = <Comp />
+    load(compiler: inout compiler, text: text)
+    val mainName = compiler.internBytes(s: ownerName)
+    val owner = compiler.arena.firstFunctionNamed(nameId: mainName.nameId)
+    compiler.cur.checkFn = owner
+    val name = compiler.internBytes(s: "accept")
+    mut val found = false
+    mut val passed = true
+    for expression in 0U64..<compiler.arena.exprs.count() {
+        match compiler.arena.exprs[expression] {
+            Expr.Call(nameStart: val start, nameLen: val length, args: val arguments) => {
+                if intern(c: inout compiler, start: start, len: length) != name.nameId { continue }
+                found = true
+                val candidates = compiler.visibleFreeFunctions(nameStart: start, nameLen: length)
+                if candidates.count() != 1U64 { panic("raw control lost its unique declaration") }
+                val operand = compiler.argAt(args: arguments, index: 0U64).expr
+                if compiler.hasSemanticExprTypeFact(exprId: operand) { panic("raw operand was already checked") }
+                if prepared {
+                    compiler.cur.recordCallTemplates = true
+                    compiler.recordExpr(exprId: operand).unwrap()
+                    compiler.cur.recordCallTemplates = false
+                    if !compiler.hasSemanticExprTypeFact(exprId: operand) { panic("prepared operand has no saved state") }
+                }
+                val prior = compiler.semanticExprTerm(exprId: operand)
+                mut val children: Array[U64] = []
+                match compiler.arena.exprs[operand] {
+                    Expr.Array(val elems) => { for index in 0U64..<elems.len { children.append(compiler.exprAt(exprs: elems, index: index)) } }
+                    Expr.Make(typeStart: _, typeLen: _, variantStart: _, variantLen: _, isEnum: _, ty: _, fields: val fields) => { for index in 0U64..<fields.len { children.append(compiler.makeFieldAt(fields: fields, index: index).value) } }
+                    _ => {}
+                }
+                mut val childStates: Array[(recorded: Bool, term: U64)] = []
+                for child in children { childStates.append((recorded: compiler.hasSemanticExprTypeFact(exprId: child), term: compiler.semanticExprTerm(exprId: child))) }
+                val templates = compiler.callTemplateCount()
+                for repeat in 0U64..<2U64 {
+                    val rank = compiler.callableArgMatchRank(f: compiler.arena.functionAt(index: candidates[0U64]), args: arguments).unwrap()
+                    passed = passed && rank == expected
+                    if compiler.hasSemanticExprTypeFact(exprId: operand) != prepared || compiler.semanticExprTerm(exprId: operand) != prior || compiler.callTemplateCount() != templates { panic("candidate probe changed source facts") }
+                    for index in 0U64..<children.count() {
+                        if compiler.hasSemanticExprTypeFact(exprId: children[index]) != childStates[index].recorded || compiler.semanticExprTerm(exprId: children[index]) != childStates[index].term { panic("candidate probe retyped a saved child") }
+                    }
+                    match compiler.typeCache.callee[expression] { CachedCallee.Uncomputed => {} _ => { panic("candidate probe published callee authority") } }
+                }
+            }
+            _ => {}
+        }
+    }
+    if !found { panic("raw control call missing") }
+    return passed
+}
+fn completeCall(text: String, called: String) -> Bool {
+    mut val compiler = <Comp />
+    load(compiler: inout compiler, text: text)
+    val mainName = compiler.internBytes(s: "main")
+    val owner = compiler.arena.firstFunctionNamed(nameId: mainName.nameId)
+    match compiler.prepareLexicalBody(fnIdx: owner) {
+        Result.Err(error: _) => { return false }
+        Result.Ok(value: _) => {}
+    }
+    compiler.cur.checkFn = owner
+    val module = compiler.moduleOf(offset: compiler.arena.functionAt(index: owner).defOffset)
+    val name = compiler.internBytes(s: called)
+    mut val found = false
+    for expression in 0U64..<compiler.arena.exprs.count() {
+        if compiler.moduleOf(offset: compiler.exprOffset(id: expression)) != module { continue }
+        match compiler.arena.exprs[expression] {
+            Expr.Call(nameStart: val start, nameLen: val length, args: val arguments) => {
+                if intern(c: inout compiler, start: start, len: length) != name.nameId { continue }
+                found = true
+                val result = compiler.parametricExprTerm(exprId: expression)
+                val input = compiler.parametricExprTerm(exprId: compiler.argAt(args: arguments, index: 0U64).expr)
+                if result == 0U64 || input == 0U64 || !compiler.typeRefEq(a: result, b: input) { panic("explicit closure result did not complete the selected call") }
+                match compiler.typeCache.callee[expression] { CachedCallee.Selected(callee: _) => {} _ => { panic("completed call lost selected authority") } }
+            }
+            _ => {}
+        }
+    }
+    return found
+}
+fn main() {
+    val array = rawRank(text: "fn accept(value: Array[I32]) {{}}\nfn main() {{ accept(value: [1, 2]) }}", expected: 2U64)
+    val nested = rawRank(text: "fn accept(value: Array[Array[I32]]) {{}}\nfn main() {{ accept(value: [[1, 2], [3]]) }}", expected: 2U64)
+    val record = rawRank(text: "fn accept(value: (x: I64, y: I64)) {{}}\nfn main() {{ accept(value: (x: 3, y: 4)) }}", expected: 2U64)
+    val wrong = rawRank(text: "fn accept(value: Array[I32]) {{}}\nfn main() {{ accept(value: [1I64]) }}", expected: 1U64)
+    val preparedArray = rawRank(text: "fn accept(value: Array[I32]) {{}}\nfn main() {{ accept(value: [1, 2]) }}", expected: 2U64, prepared: true)
+    val preparedRecord = rawRank(text: "fn accept(value: (x: I64, y: I64)) {{}}\nfn main() {{ accept(value: (x: 3, y: 4)) }}", expected: 2U64, prepared: true)
+    val functionArity = rawRank(text: "fn accept[T](first: T, second: T) {{}}\nfn main() {{ accept(first: fn(value: I64) -> I64 {{ return value }}, second: fn(value, extra: I64) -> I64 {{ return extra }}) }}", expected: 1U64)
+    val functionLabel = rawRank(text: "fn accept[T](first: T, second: T) {{}}\nfn main() {{ accept(first: fn(value: I64) -> I64 {{ return value }}, second: fn(other) -> I64 {{ return other }}) }}", expected: 1U64)
+    val rigidFunctionLabel = rawRank(text: "fn accept[T](first: T, second: T) {{}}\nfn outer[U]() {{ accept(first: fn(value: U) -> U {{ return value }}, second: fn(other) -> U {{ return other }}) }}\nfn main() {{}}", expected: 1U64, ownerName: "outer")
+    val rigidFunctionArity = rawRank(text: "fn accept[T](first: T, second: T) {{}}\nfn outer[U]() {{ accept(first: fn(value: U) -> U {{ return value }}, second: fn(value, extra: U) -> U {{ return extra }}) }}\nfn main() {{}}", expected: 1U64, ownerName: "outer")
+    val fixedArray = rawRank(text: "fn accept(value: Array[I32]) {{}}\nfn main() {{ accept(value: [1I64]) }}", expected: 1U64, prepared: true)
+    val fixedRecord = rawRank(text: "fn accept(value: (x: I32, y: Bool)) {{}}\nfn main() {{ accept(value: (x: 1I64, y: false)) }}", expected: 1U64, prepared: true)
+    val functionContext = rawRank(text: "fn accept(value: fn(value: I64) -> I64) {{}}\nfn main() {{ accept(value: fn(value) -> I64 {{ return value }}) }}", expected: 2U64)
+    val wrongFunctionLabel = rawRank(text: "fn accept(value: fn(value: I64) -> I64) {{}}\nfn main() {{ accept(value: fn(other) -> I64 {{ return other }}) }}", expected: 1U64)
+    val wrongFunctionSlot = rawRank(text: "fn accept(value: fn(value: I64) -> I64) {{}}\nfn main() {{ accept(value: fn(value: Bool) -> I64 {{ return 0I64 }}) }}", expected: 1U64)
+    val wrongFunctionDivergence = rawRank(text: "fn accept(value: fn(value: I64) -> I64) {{}}\nfn main() {{ accept(value: diverge fn(value) {{ panic(\"stop\") }}) }}", expected: 1U64)
+    val nestedMismatch = rawRank(text: "fn accept(value: Array[Array[I32]]) {{}}\nfn main() {{ accept(value: [[false]]) }}", expected: 1U64)
+    val closure = completeCall(text: "fn apply[T, U](value: T, transform: fn(value: T) -> U) -> U {{ return transform(value: value) }}\nfn main() {{ val result = apply(value: 42I64, transform: fn(value) -> I64 {{ return value }}) }}", called: "apply")
+    val knownRecord = completeCall(text: "fn identity[T](value: T) -> T {{ return value }}\nfn main() {{ val result = identity(value: (x: 1I64, y: false)) }}", called: "identity")
+    val knownArray = completeCall(text: "fn identity[T](value: T) -> T {{ return value }}\nfn main() {{ val result = identity(value: [1I64, 2I64]) }}", called: "identity")
+    val arrayView = rawRank(text: "extension Extra {{ impl[T] Array[T] {{ fn tag() {{}} }} }}\nfn accept(value: Array[I32]#Extra) {{}}\nfn main() {{ accept(value: [1, 2]) }}", expected: 1U64)
+    print(array)
+    print(nested)
+    print(record)
+    print(wrong)
+    print(closure)
+    print(preparedArray)
+    print(preparedRecord)
+    print(knownRecord)
+    print(knownArray)
+    print(arrayView)
+    print(functionArity)
+    print(functionLabel)
+    print(rigidFunctionLabel)
+    print(rigidFunctionArity)
+    print(fixedArray)
+    print(fixedRecord)
+    print(functionContext)
+    print(wrongFunctionLabel)
+    print(wrongFunctionSlot)
+    print(wrongFunctionDivergence)
+    print(nestedMismatch)
+    if !array || !nested || !record || !wrong || !closure || !preparedArray || !preparedRecord || !knownRecord || !knownArray || !arrayView || !functionArity || !functionLabel || !rigidFunctionLabel || !rigidFunctionArity || !fixedArray || !fixedRecord || !functionContext || !wrongFunctionLabel || !wrongFunctionSlot || !wrongFunctionDivergence || !nestedMismatch { panic("contextual operand guarantee failed") }
+}

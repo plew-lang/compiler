@@ -1,6 +1,6 @@
 ---
 id: com-u22d
-status: closed
+status: in_progress
 deps: [met-bu94, met-qo60]
 links: []
 created: 2026-11-20T06:58:04Z
@@ -11,6 +11,14 @@ parent: met-ucze
 tags: [frontend, verification, diagnostics]
 ---
 # Preserve provisional call context without publishing a selected callable
+
+## Reopened current boundary
+
+Fresh whole test071429-test-d6c2d4 exposed formerly passing array_nested, call_arg_literal, default_arg_array, associated_literal_context, closure_contextual_generic, cow_gw_inout_elem and cow_gw_nested_index rejected by exact carrier eadf4cb9. Same frozen input bisection: pre-u22d accepts array_nested/call_arg_literal/closure_contextual_generic; u22d fixedpoint db40e37c and subsequent carriers reject all3. This is a regression within the existing single-target contextual literal/Array/function noninterference guarantee, not a new language feature or permission to weaken tests. The whole run later ended1 on ENOSPC and cannot certify a completed suite; retain that environmental failure separately from already reproduced compiler refusals.
+
+Restore candidate-local matching of genuinely contextual prepared aggregate/function recipes while fixed typed operands stay fixed. Preserve forward generic constraints, numeric overload ambiguity, source effect order and Selected/DiagnosticCandidate/cache nonpublication. Before editing, map the actual failed rank and saved operand facts, derive a finite repair plan and independently review it. Do not special-case fixture names, reopen unrelated AST checking or treat every operand as unknown.
+
+Required RED/GREEN: free/member/associated calls; structural records and nested arrays with unsuffixed versus typed elements; block/if/match wrappers; contextual closures and generic constraints; conflicting typed operands and both overload orders. Reuse existing successful fixtures and compare their actual outputs. Parent whole remains open. Meta scratch `phase3-normal-array-context-regression/reproduction.json` and `carrier-bisection.json` retain exact carrier/input hashes and diagnostics; canonical current evidence is added there after recovery. Previous closure below is superseded for this uncovered implementation regression.
 
 Contract: spec/02 forward local expectations and ambiguous calls reject; body-checking.md contextual construction versus committed compatibility; name-lookup.md a contextual hint is not a selected callable. Do not grant source authority merely from a selected-looking cache row.
 
