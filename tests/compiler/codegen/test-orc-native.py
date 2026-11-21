@@ -12,6 +12,8 @@ parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--asan', action='store_true')
 options = parser.parse_args()
 root = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(root / 'scripts/support'))
+import native_build
 default = '/opt/homebrew/opt/' + ('llvm@22' if options.asan else 'llvm') + '/bin/llvm-config'
 config = Path(os.environ.get('LLVM_CONFIG', default))
 
@@ -33,7 +35,6 @@ binary = evidence / 'test'
 # dsymutil on macOS; that packaging step is not part of this ORC diagnostic.
 # Supervise actual LLVM work per compile/link through the shared observer.
 common = [str(bindir / 'clang++'), '-std=c++17', '-O1', '-g',
-          '-Xclang', '-fdebug-pass-manager', '-mllvm', '-debug-pass=Executions',
           '-isystem', query('--includedir')]
 sanitizer = ['-fsanitize=address', '-fno-omit-frame-pointer'] if options.asan else []
 commands = [
@@ -48,8 +49,7 @@ with (evidence / 'build.log').open('wb') as combined:
     for label, command in commands:
         log = evidence / (label + '.build.log')
         try:
-            subprocess.run([sys.executable, '-B', str(root / 'scripts/support/trace-command.py'),
-                            str(log), '--', *command], check=True)
+            native_build.run(command, trace_log=log, clang=label != 'link', check=True)
         finally:
             combined.write(('=== ' + label + ' ===\n').encode())
             if log.exists():

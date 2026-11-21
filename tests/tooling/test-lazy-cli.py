@@ -10,6 +10,8 @@ import subprocess
 import tempfile
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / 'scripts/support'))
+import native_build
 COMPILER = Path(os.environ.get('PLEWC', ROOT / 'bin/plewc')).absolute()
 EVIDENCE = ROOT / 'tmp/lazy-build/cli-contract'
 EVIDENCE.mkdir(parents=True, exist_ok=True)
@@ -76,7 +78,10 @@ with tempfile.TemporaryDirectory(prefix='lazy-cli-', dir=ROOT / 'tmp') as tempor
     support = fixture.with_suffix('.c')
     shared = source.parent / ('exit-arguments.dylib' if sys.platform == 'darwin' else 'exit-arguments.so')
     flags = ['-dynamiclib', '-undefined', 'dynamic_lookup'] if sys.platform == 'darwin' else ['-shared', '-fPIC']
-    subprocess.run([*shlex.split(os.environ.get('CC', 'clang')), *flags, str(support), '-o', str(shared)], check=True, timeout=60)
+    cc = shlex.split(os.environ.get('CC', 'clang'))
+    known_clang = len(cc) == 1 and Path(cc[0]).name in ('clang', 'clang++')
+    native_build.run([*cc, *flags, str(support), '-o', shared], check=True,
+                     clang=known_clang, trace_log=EVIDENCE / 'support-build.trace.log' if known_clang else None)
     environment = dict(os.environ)
     environment['DYLD_INSERT_LIBRARIES' if sys.platform == 'darwin' else 'LD_PRELOAD'] = str(shared)
     app_arguments = ['one argument', '日本語']
@@ -89,7 +94,8 @@ with tempfile.TemporaryDirectory(prefix='lazy-cli-', dir=ROOT / 'tmp') as tempor
     subprocess.run([str(COMPILER), '--emit-object', str(obj), str(fixture)], check=True, capture_output=True, timeout=60)
     with runtime.open('wb') as output:
         subprocess.run([str(COMPILER), '--runtime'], stdout=output, check=True, timeout=60)
-    subprocess.run([*shlex.split(os.environ.get('CC', 'clang')), '-w', str(obj), str(runtime), str(support), '-o', str(binary)], check=True, timeout=60)
+    native_build.run([*cc, '-w', obj, runtime, support, '-o', binary], check=True,
+                     clang=known_clang, trace_log=EVIDENCE / 'aot-build.trace.log' if known_clang else None)
     result = subprocess.run([str(binary), *app_arguments], capture_output=True, timeout=60)
     assert (result.returncode, result.stdout, result.stderr) == (0, expected, b''), result
     print('PASS lazy CLI exit callback arguments match AOT', flush=True)

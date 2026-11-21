@@ -75,6 +75,16 @@ packaging. `tooling/test-native-orc-watch.py` exercises the actual harness with
 bounded tool doubles, checking progress transport, failure and signal handling;
 normal and ASan modes retain the same native assertions.
 
+Native test builds use `scripts/support/native_build.py`, an argv/logging
+adapter to the existing `process_watch` supervisor. Known clang producers enable
+real LLVM pass progress; opt producers use their pass-manager diagnostics.
+Each stage retains the 60-second inactivity bound, selected optimization and
+sanitizer settings. Use named per-stage logs or a unique trace prefix for repeated
+builds. Tool queries, deliberate watchdog faults, private compiler-failure
+channels and application execution deadlines retain their separate contracts.
+`tooling/test-native-build-watch.py` covers the physical-signature entry and
+shared native backend producer without replacing their native assertions.
+
 `compiler/codegen/test-orc-lazy.py` checks synchronous first-call callbacks,
 stable entry addresses (including self references), integer/FP/stack arguments,
 new registrations during preparation, unused bodies, and terminal failure.

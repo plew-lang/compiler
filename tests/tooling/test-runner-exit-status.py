@@ -8,7 +8,7 @@ import tempfile
 
 def install_supervisors(root):
     # Isolated workers must run the production supervisors and their shared module.
-    for name in ('scripts/support/watch-command.py', 'scripts/support/trace-command.py', 'scripts/support/process_watch.py', 'scripts/support/compiler_failure_result.py'):
+    for name in ('scripts/support/watch-command.py', 'scripts/support/trace-command.py', 'scripts/support/process_watch.py', 'scripts/support/native_build.py', 'scripts/support/compiler_failure_result.py'):
         (root / name).parent.mkdir(parents=True, exist_ok=True)
         (root / name).write_bytes((Path(__file__).resolve().parents[2] / name).read_bytes())
 
@@ -39,7 +39,7 @@ with tempfile.TemporaryDirectory(prefix='plew-runtime-preparation-') as director
     compiler.write_text('#!/bin/sh\necho runtime\n')
     compiler.chmod(0o755)
     clang = tools / 'clang'
-    clang.write_text('#!/bin/sh\necho compile >> "$CALLS"\n[ "$FAIL_COMPILE" = 0 ] || exit 7\ntouch "$5"\n')
+    clang.write_text('#!/bin/sh\necho compile >> "$CALLS"\n[ "$FAIL_COMPILE" = 0 ] || exit 7\nwhile [ "$#" -gt 0 ]; do\n if [ "$1" = -o ]; then shift; touch "$1"; exit; fi\n shift\ndone\nexit 8\n')
     clang.chmod(0o755)
     for fail in ('0', '1'):
         calls = root / 'calls'

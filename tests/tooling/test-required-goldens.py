@@ -43,7 +43,7 @@ with tempfile.TemporaryDirectory(prefix='plew-required-goldens-') as directory:
     root = Path(directory)
     copied = ('tests/harness/case-phase.sh', 'scripts/support/normal-case-dispatch.py',
               'scripts/support/watch-command.py', 'scripts/support/trace-command.py',
-              'scripts/support/process_watch.py', 'tests/tooling/test-fixture-package.py',
+              'scripts/support/process_watch.py', 'scripts/support/native_build.py', 'tests/tooling/test-fixture-package.py',
               'scripts/support/fixture_package.py')
     for name in copied:
         p = root / name

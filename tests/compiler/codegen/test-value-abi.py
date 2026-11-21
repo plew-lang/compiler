@@ -42,6 +42,7 @@ print(f'PASS value ABI: {checked} direct aggregate calls, indirect calls, physic
 import sys
 sys.path.insert(0, str(root / 'scripts/support'))
 import llvm_link
+import native_build
 fixture = root / 'tests/fixtures/run/value_snapshot_callback.pw'
 raw = subprocess.check_output([str(compiler), '--require-mid', str(fixture)], text=True, timeout=55)
 assert re.search(r'^target triple = "[^"]+"$', raw, re.M), 'native target must be explicit before optimization'
@@ -57,7 +58,7 @@ with tempfile.TemporaryDirectory(prefix='plew-aggregate-argument-') as directory
     source.write_text(raw)
     runtime = subprocess.check_output([str(compiler), '--runtime'], timeout=55)
     (directory / 'runtime.c').write_bytes(runtime)
-    subprocess.run(llvm_link.optimization_command(config, source, optimized), check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, timeout=55)
+    native_build.run(llvm_link.optimization_command(config, source, optimized), check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, trace_prefix=directory / "native-build")
     reduced = optimized.read_text()
     assert 'target datalayout = ' in reduced, 'layout-sensitive optimization must have a native data layout'
     # Inlining/constant folding may remove the reader entirely. A remaining
@@ -66,7 +67,7 @@ with tempfile.TemporaryDirectory(prefix='plew-aggregate-argument-') as directory
         assert re.search(r'^define internal i64 @' + re.escape(readers[0]) + r'\(i64 [^,)]*\)', reduced, re.M), 'large field reader must receive only its scalar field'
     for material in (source, optimized):
         executable = directory / material.stem
-        subprocess.run([llvm_link.selected_clang(config), '-w', '-O0', str(material), str(directory / 'runtime.c'), '-o', str(executable)], check=True, timeout=55)
+        native_build.run([llvm_link.selected_clang(config), '-w', '-O0', str(material), str(directory / 'runtime.c'), '-o', str(executable)], check=True, trace_prefix=directory / "native-build", clang=True)
         assert subprocess.check_output([str(executable)], timeout=55) == fixture.with_suffix('.out').read_bytes(), material
 print('PASS aggregate argument reduction: scalar field, callback/inout snapshots, escaping closure, raw and optimized O0 output')
 
@@ -93,12 +94,12 @@ define void @entry(ptr %p) sanitize_address {
   ret void
 }
 """)
-    subprocess.run(llvm_link.optimization_command(config, source, optimized), check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, timeout=55)
+    native_build.run(llvm_link.optimization_command(config, source, optimized), check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, trace_prefix=directory / "native-build")
     reduced = optimized.read_text()
     assert 'byval(' not in reduced and 'alloca ' not in reduced, 'private field snapshot must disappear before instrumentation'
     assert re.search(r'call void @sink\(', reduced), 'all snapshot fields must remain observable'
     assert 'sanitize_address' in reduced, 'optimization must preserve sanitizer eligibility'
-    subprocess.run([llvm_link.optimizer(config), '-passes=asan', '-S', str(optimized), '-o', str(instrumented)], check=True, timeout=55)
+    native_build.run([llvm_link.optimizer(config), '-debug-pass-manager', '-passes=asan', '-S', str(optimized), '-o', str(instrumented)], check=True, trace_prefix=directory / "native-build")
     checked = instrumented.read_text()
     assert '__asan_report_load' in checked, 'surviving loads must be instrumented'
     assert not re.search(r'\bcall\b[^\n]*@(?:llvm\.memcpy|__asan_memcpy)', checked), 'ASan must not reintroduce the eliminated snapshot copy'
@@ -135,12 +136,11 @@ with tempfile.TemporaryDirectory(prefix='plew-guaranteed-transport-') as directo
     source, optimized = directory / 'raw.ll', directory / 'optimized.ll'
     source.write_text(raw)
     (directory / 'runtime.c').write_bytes(subprocess.check_output([str(compiler), '--runtime'], timeout=55))
-    subprocess.run(llvm_link.optimization_command(config, source, optimized), check=True,
-                   stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, timeout=55)
+    native_build.run(llvm_link.optimization_command(config, source, optimized), check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, trace_prefix=directory / "native-build")
     for material in (source, optimized):
         executable = directory / material.stem
-        subprocess.run([llvm_link.selected_clang(config), '-w', '-O0', str(material), str(directory / 'runtime.c'),
-                        '-o', str(executable)], check=True, timeout=55)
+        native_build.run([llvm_link.selected_clang(config), '-w', '-O0', str(material), str(directory / 'runtime.c'),
+                        '-o', str(executable)], check=True, trace_prefix=directory / "native-build", clang=True)
         assert subprocess.check_output([str(executable)], timeout=55) == fixture.with_suffix('.out').read_bytes(), material
 print('PASS guaranteed transport: raw forwarding/recursion/indirect entries and raw/optimized async roundtrip')
 
@@ -167,11 +167,10 @@ with tempfile.TemporaryDirectory(prefix='plew-stable-homes-') as directory:
     source, optimized = directory / 'raw.ll', directory / 'optimized.ll'
     source.write_text(raw)
     (directory / 'runtime.c').write_bytes(subprocess.check_output([str(compiler), '--runtime'], timeout=55))
-    subprocess.run(llvm_link.optimization_command(config, source, optimized), check=True,
-                   stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, timeout=55)
+    native_build.run(llvm_link.optimization_command(config, source, optimized), check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, trace_prefix=directory / "native-build")
     for material in (source, optimized):
         executable = directory / material.stem
-        subprocess.run([llvm_link.selected_clang(config), '-w', '-O0', str(material), str(directory / 'runtime.c'), '-o', str(executable)], check=True, timeout=55)
+        native_build.run([llvm_link.selected_clang(config), '-w', '-O0', str(material), str(directory / 'runtime.c'), '-o', str(executable)], check=True, trace_prefix=directory / "native-build", clang=True)
         assert subprocess.check_output([str(executable)], timeout=55) == fixture.with_suffix('.out').read_bytes(), material
 print('PASS stable local/temporary/field homes: raw staging reduction and raw/optimized execution')
 
@@ -239,6 +238,6 @@ with tempfile.TemporaryDirectory(prefix='plew-inout-read-receiver-') as director
     executable = directory / 'receiver'
     source.write_text(raw)
     runtime_source.write_bytes(subprocess.check_output([str(compiler), '--runtime'], timeout=55))
-    subprocess.run([llvm_link.selected_clang(config), '-w', '-O0', source, runtime_source, '-o', executable], check=True, timeout=55)
+    native_build.run([llvm_link.selected_clang(config), '-w', '-O0', source, runtime_source, '-o', executable], check=True, trace_prefix=directory / "native-build", clang=True)
     assert subprocess.check_output([executable], timeout=55) == fixture.with_suffix('.out').read_bytes()
 print('PASS read receivers forward exact incoming parameter homes and retain evaluation order')

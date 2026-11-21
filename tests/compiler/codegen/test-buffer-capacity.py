@@ -13,6 +13,7 @@ ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / 'scripts/support'))
 import clang_environment
 import llvm_link
+import native_build
 
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--compiler', type=Path, default=Path(os.environ.get('PLEWC', ROOT / 'bin/plewc')))
@@ -34,8 +35,8 @@ with tempfile.TemporaryDirectory(prefix='buffer-capacity-', dir=ROOT / 'tmp') as
     for optimization in ('-O0', '-O2'):
         binary = directory / 'runtime-check'
         flags = ['-fsanitize=address,undefined', '-fno-omit-frame-pointer'] if args.asan else []
-        linked = run([llvm_link.selected_clang(args.llvm_config), optimization, *flags, '-I', directory,
-                      ROOT / 'tests/compiler/codegen/BufferCapacity.c', '-o', binary])
+        linked = native_build.run([llvm_link.selected_clang(args.llvm_config), optimization, *flags, '-I', directory,
+                      ROOT / 'tests/compiler/codegen/BufferCapacity.c', '-o', binary], capture_output=True, clang=True, trace_log=directory / ('build' + optimization + '.trace.log'))
         assert linked.returncode == 0, linked.stderr.decode(errors='replace')
         result = run([binary])
         assert result.returncode == 0, result.stderr.decode(errors='replace')

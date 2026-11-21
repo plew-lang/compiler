@@ -38,7 +38,7 @@ case "$phase" in
     fi
     extra_c=""
     [ -f "tests/fixtures/run/$name.c" ] && extra_c="tests/fixtures/run/$name.c"
-    if ! python3 ./scripts/support/watch-command.py -- clang -w "$ll" "$PLEW_RT" $extra_c $PLEW_LD -o "$bin" 2>/dev/null; then echo "FAIL $name(link)"; exit 0; fi
+    if ! python3 -B ./scripts/support/native_build.py --clang --log "$bin.link.trace.log" -- clang -w "$ll" "$PLEW_RT" $extra_c $PLEW_LD -o "$bin" 2>/dev/null; then echo "FAIL $name(link)"; exit 0; fi
     infile="tests/fixtures/run/$name.in"
     status=0
     if [ -f "$infile" ]; then python3 ./scripts/support/watch-command.py -- "$bin" < "$infile" > "$bin.stdout" 2>/dev/null || status=$?
@@ -55,7 +55,7 @@ case "$phase" in
     want=$(cat "tests/fixtures/panic/$name.panic")
     ll="${case_tmp}/t_panic_$name.ll"; bin="${case_tmp}/t_panic_$name"; perr="${case_tmp}/t_panic_$name.err"
     if ! python3 ./scripts/support/watch-command.py -- "$PLEWC" "$pw" > "$ll" 2>/dev/null; then echo "FAIL panic/$name(reject)"; exit 0; fi
-    if ! python3 ./scripts/support/watch-command.py -- clang -w "$ll" "$PLEW_RT" $PLEW_LD -o "$bin" 2>/dev/null; then echo "FAIL panic/$name(link)"; exit 0; fi
+    if ! python3 -B ./scripts/support/native_build.py --clang --log "$bin.link.trace.log" -- clang -w "$ll" "$PLEW_RT" $PLEW_LD -o "$bin" 2>/dev/null; then echo "FAIL panic/$name(link)"; exit 0; fi
     code=0
     # nested sh: the shell that reaps a SIGABRT child prints "Abort trap" on
     # ITS stderr — run the binary one shell deeper so that note is droppable
@@ -82,7 +82,7 @@ case "$phase" in
     name=$(basename "$dir")
     ll="${case_tmp}/t_part_$name.ll"; bin="${case_tmp}/t_part_$name"
     if ! python3 ./scripts/support/watch-command.py -- "$PLEWC" "$main" > "$ll" 2>/dev/null; then echo "FAIL part/$name(reject)"; exit 0; fi
-    if ! python3 ./scripts/support/watch-command.py -- clang -w "$ll" "$PLEW_RT" $PLEW_LD -o "$bin" 2>/dev/null; then echo "FAIL part/$name(link)"; exit 0; fi
+    if ! python3 -B ./scripts/support/native_build.py --clang --log "$bin.link.trace.log" -- clang -w "$ll" "$PLEW_RT" $PLEW_LD -o "$bin" 2>/dev/null; then echo "FAIL part/$name(link)"; exit 0; fi
     status=0
     got=$(python3 ./scripts/support/watch-command.py -- "$bin" 2>/dev/null) || status=$?
     if [ "$status" -ne 0 ]; then echo "FAIL part/$name(exit:$status)"; exit 0; fi

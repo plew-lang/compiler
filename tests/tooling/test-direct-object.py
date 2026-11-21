@@ -14,6 +14,7 @@ import tempfile
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'scripts/support'))
 import clang_environment
+import native_build
 
 
 def main():
@@ -27,9 +28,10 @@ def main():
     clang_environment.apply()
     wrapper = [sys.executable, str(ROOT / 'scripts/support/watch-command.py'), '--']
 
-    def run(command, expected=0):
-        result = subprocess.run([*wrapper, *map(str, command)], capture_output=True,
-                                env=dict(os.environ, PLEW_LLVM_TRACE='0'))
+    def run(command, expected=0, *, clang=False):
+        result = native_build.run(command, capture_output=True,
+                                  trace_prefix=directory / 'native-build' if clang else None,
+                                  clang=clang, env=dict(os.environ, PLEW_LLVM_TRACE='0'))
         assert result.returncode == expected, (command, result.returncode, result.stderr.decode(errors='replace'))
         return result
 
@@ -48,12 +50,12 @@ def main():
                 library = Path(query('--libdir'))
             run([Path(query('--bindir')) / 'clang++', '-std=c++17', '-O2',
                  '-isystem', query('--includedir'), ROOT / 'native/llvm_backend.cpp',
-                 ROOT / 'native/llvm_object_main.cpp', '-L' + str(library), '-lLLVM', '-o', worker])
+                 ROOT / 'native/llvm_object_main.cpp', '-L' + str(library), '-lLLVM', '-o', worker], clang=True)
         run([sys.executable, ROOT / 'tests/tooling/test-llvm-progress.py', '--worker', worker])
         runtime = directory / 'runtime.c'
         runtime.write_bytes(run([compiler, '--runtime']).stdout)
         runtime_object = directory / 'runtime.o'
-        run(['/usr/bin/clang', '-O2', '-c', runtime, '-o', runtime_object])
+        run(['/usr/bin/clang', '-O2', '-c', runtime, '-o', runtime_object], clang=True)
         direct, reference = directory / 'direct.o', directory / 'reference.o'
         llvm = directory / 'reference.ll'
         cases = ['run/async_match', 'run/unique_enum_arc', 'run/closure_return_boundaries',
@@ -73,7 +75,7 @@ def main():
             expected = source.with_suffix('.out').read_bytes().rstrip(b'\n')
             for object_file in (direct, reference):
                 binary = directory / 'app'
-                run(['/usr/bin/clang', object_file, runtime_object, '-o', binary])
+                run(['/usr/bin/clang', object_file, runtime_object, '-o', binary], clang=True)
                 assert run([binary]).stdout.rstrip(b'\n') == expected, (case, object_file)
             print('PASS direct-object comparison', case, flush=True)
         broken = directory / 'Broken.pw'
@@ -94,7 +96,7 @@ def main():
             symbols = run(['/usr/bin/nm', direct]).stdout
             assert b'__asan_' in symbols
             binary = directory / 'asan-app'
-            run([clang, '-fsanitize=address', direct, runtime, '-o', binary])
+            run([clang, '-fsanitize=address', direct, runtime, '-o', binary], clang=True)
             assert run([binary]).stdout.rstrip(b'\n') == source.with_suffix('.out').read_bytes().rstrip(b'\n')
             print('PASS direct-object ASan instrumentation and execution', flush=True)
 

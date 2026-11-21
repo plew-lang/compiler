@@ -14,6 +14,7 @@ ROOT = Path.cwd()
 sys.path.insert(0, str(ROOT / "scripts/support"))
 import clang_environment
 import llvm_link
+import native_build
 clang_environment.apply()
 spec = importlib.util.spec_from_file_location('self_host_measurement', ROOT / 'scripts/diagnostics/measure-self-host.py')
 measurement = importlib.util.module_from_spec(spec)
@@ -61,7 +62,7 @@ int main(int argc, char **argv) {
         code = code.replace('MUTATION', f'FILE *m = fopen({json.dumps(str(source / "_.pw"))}, "a"); fputs("// changed\\n", m); fclose(m);' if mutate else '')
         path = work / (name + '.c')
         path.write_text(code)
-        subprocess.run([CLANG, '-S', '-emit-llvm', '-O0', str(path), '-o', str(work / (name + '.ll'))], check=True)
+        native_build.run([CLANG, '-S', '-emit-llvm', '-O0', str(path), '-o', str(work / (name + '.ll'))], check=True, clang=True, trace_log=work / (name + '.compile.trace.log'))
 
     def run(label, first, expected=0, generation=None, runtime='\n', empty_artifact=None):
         carrier = work / ('carrier-' + label)
@@ -167,8 +168,8 @@ define i64 @entry(ptr %input) {
 """)
     optimized = work / 'nested-delegate.optimized.ll'
     with (work / 'nested-delegate.opt.log').open('wb') as log:
-        subprocess.run(llvm_link.optimization_command(CONFIG, nested, optimized),
-                       stderr=log, check=True)
+        native_build.run(llvm_link.optimization_command(CONFIG, nested, optimized),
+                         stderr=log, check=True, trace_log=work / 'nested-delegate.opt.trace.log')
     signatures = [line for line in optimized.read_text().splitlines() if line.startswith('define ')]
     assert all('%Outer' not in line and '%Inner' not in line for line in signatures), signatures
     driver = work / 'nested-delegate.c'
@@ -179,7 +180,8 @@ define i64 @entry(ptr %input) {
                       'int main(void) { struct Outer value={1,{2,3,7,5},6}; '
                       'return entry(&value)==7 ? 0 : 1; }\n')
     executable = work / 'nested-delegate'
-    subprocess.run([CLANG, '-w', '-O2', str(optimized), str(driver), '-o', str(executable)], check=True)
+    native_build.run([CLANG, '-w', '-O2', str(optimized), str(driver), '-o', str(executable)],
+                     check=True, clang=True, trace_log=work / 'nested-delegate.clang.trace.log')
     subprocess.run([str(executable)], check=True)
     print('PASS nested-delegate', flush=True)
     print('[trace-phase] self-host-test:nested-delegate:done', file=sys.stderr, flush=True)

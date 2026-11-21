@@ -32,7 +32,7 @@ assert real_xargs
 with tempfile.TemporaryDirectory(prefix='plew-normal-dispatch-') as directory:
     root = Path(directory)
     for name in ('scripts/support/watch-command.py', 'scripts/support/trace-command.py',
-                 'scripts/support/process_watch.py', 'scripts/support/normal-case-dispatch.py',
+                 'scripts/support/process_watch.py', 'scripts/support/native_build.py', 'scripts/support/normal-case-dispatch.py',
                  'tests/harness/case-phase.sh', 'scripts/support/compiler_failure_result.py'):
         (root / name).parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(ROOT / name, root / name)

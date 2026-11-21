@@ -5,6 +5,8 @@ from pathlib import Path
 import subprocess
 import sys
 root = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(root / 'scripts/support'))
+import native_build
 config = os.environ.get('LLVM_CONFIG', '/opt/homebrew/opt/llvm/bin/llvm-config')
 def query(flag):
     return subprocess.check_output([config, flag], text=True, timeout=10).strip()
@@ -15,7 +17,11 @@ out.mkdir(parents=True, exist_ok=True)
 def stage(name, command, expected=0, diagnostic=None):
     print('[trace-phase] source-entry-abi:' + name, file=sys.stderr, flush=True)
     with (out / (name + '.stdout')).open('wb') as stdout, (out / (name + '.stderr')).open('wb') as stderr:
-        result = subprocess.run(list(map(str, command)), stdout=stdout, stderr=stderr, timeout=55)
+        if name == 'compile':
+            result = native_build.run(command, stdout=stdout, stderr=stderr,
+                                      trace_log=out / 'compile.trace.log', clang=True)
+        else:
+            result = subprocess.run(list(map(str, command)), stdout=stdout, stderr=stderr, timeout=55)
     assert result.returncode == expected, (name, result.returncode)
     if diagnostic:
         assert diagnostic in (out / (name + '.stderr')).read_bytes(), name

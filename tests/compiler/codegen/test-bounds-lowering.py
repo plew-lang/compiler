@@ -4,9 +4,12 @@ import os
 from pathlib import Path
 import re
 import subprocess
+import sys
 import tempfile
 
 root = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(root / 'scripts/support'))
+import native_build
 compiler = Path(os.environ.get('PLEWC', root / 'bin/plewc')).absolute()
 source = root / 'tests/fixtures/run/mid_index_place_runtime_cfg_lowering.pw'
 result = subprocess.run([str(compiler), '--require-mid', str(source)], capture_output=True, timeout=55)
@@ -41,8 +44,8 @@ int main(int argc, char **argv) {
 ''')
     for optimization in ('-O0', '-O2'):
         program = directory / ('guard' + optimization)
-        subprocess.run(['clang', '-w', optimization, str(directory / 'guard.ll'),
-                        str(directory / 'runtime.c'), str(directory / 'driver.c'), '-o', str(program)], check=True, timeout=55)
+        native_build.run(['clang', '-w', optimization, str(directory / 'guard.ll'),
+                        str(directory / 'runtime.c'), str(directory / 'driver.c'), '-o', str(program)], check=True, clang=True, trace_log=directory / ('build' + optimization + '.trace.log'))
         for index, count, valid in cases:
             result = subprocess.run([str(program), str(index), str(count)], capture_output=True, timeout=5)
             if valid:

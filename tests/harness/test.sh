@@ -30,7 +30,7 @@ trap 'exit 130' INT
 trap 'exit 143' TERM
 RT="$RUNTIME_DIR/runtime.c"
 python3 ./scripts/support/watch-command.py -- "$PLEWC" --runtime > "$RT"
-python3 ./scripts/support/watch-command.py -- clang -w -c "$RT" -o "$RUNTIME_DIR/runtime.o"
+python3 -B ./scripts/support/native_build.py --clang --log "$RUNTIME_DIR/compile.trace.log" -- clang -w -c "$RT" -o "$RUNTIME_DIR/runtime.o"
 
 JOBS="${PLEW_TEST_JOBS:-$(sysctl -n hw.ncpu 2>/dev/null || nproc 2>/dev/null || echo 4)}"
 PLEW_RT="$RUNTIME_DIR/runtime.o"
@@ -119,6 +119,11 @@ else
     fail=$((fail + 1)); failed="$failed direct-object"
 fi
 
+if python3 -B ./tests/tooling/test-native-build-watch.py; then
+    echo "PASS native-build-watch"
+else
+    fail=$((fail + 1)); failed="$failed native-build-watch"
+fi
 if python3 -B ./tests/tooling/test-native-orc-watch.py; then
     echo "PASS native-orc-watch"
 else

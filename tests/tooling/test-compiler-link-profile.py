@@ -12,6 +12,7 @@ sys.dont_write_bytecode = True
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'scripts/support'))
 import llvm_link
+import native_build
 
 
 class CompilerLinkProfile(unittest.TestCase):
@@ -132,8 +133,8 @@ class CompilerLinkTools(unittest.TestCase):
             source.write_text('int value(void) { return 42; }\n')
             thin = root / 'thin.o'
             bare = root / 'bare.o'
-            subprocess.run([clang, '-flto=thin', '-c', str(source), '-o', str(thin)], check=True)
-            subprocess.run([clang, '-emit-llvm', '-c', str(source), '-o', str(bare)], check=True)
+            native_build.run([clang, '-flto=thin', '-c', str(source), '-o', str(thin)], check=True, clang=True, trace_prefix=Path(source).parent / 'compile')
+            native_build.run([clang, '-emit-llvm', '-c', str(source), '-o', str(bare)], check=True, clang=True, trace_prefix=Path(source).parent / 'compile')
             llvm_link.validate_thinlto_object(self.config, thin)
             with self.assertRaisesRegex(ValueError, 'summary'):
                 llvm_link.validate_thinlto_object(self.config, bare)
@@ -161,9 +162,9 @@ class CompilerLinkExecution(unittest.TestCase):
             runtime = root / 'runtime.c'
             runtime.write_text('int runtime_value(void) { return 42; }\n')
             text, thin, machine = [root / name for name in ('main.ll', 'thin.o', 'machine.o')]
-            subprocess.run([clang, '-O1', '-S', '-emit-llvm', str(program), '-o', str(text)], check=True)
-            subprocess.run([clang, '-O1', '-flto=thin', '-c', str(program), '-o', str(thin)], check=True)
-            subprocess.run([clang, '-O1', '-c', str(program), '-o', str(machine)], check=True)
+            native_build.run([clang, '-O1', '-S', '-emit-llvm', str(program), '-o', str(text)], check=True, clang=True, trace_prefix=Path(program).parent / 'compile')
+            native_build.run([clang, '-O1', '-flto=thin', '-c', str(program), '-o', str(thin)], check=True, clang=True, trace_prefix=Path(program).parent / 'compile')
+            native_build.run([clang, '-O1', '-c', str(program), '-o', str(machine)], check=True, clang=True, trace_prefix=Path(program).parent / 'compile')
             for kind, source in [('llvm', text), ('thinlto-object', thin), ('machine-object', machine)]:
                 with self.subTest(kind=kind):
                     prefix = root / 'reused-link'

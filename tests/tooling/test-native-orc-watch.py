@@ -22,7 +22,7 @@ class NativeOrcWatchTests(unittest.TestCase):
         shutil.copyfile(ROOT / 'tests/compiler/codegen/test-orc-native.py', self.entry)
         support = self.root / 'scripts/support'
         support.mkdir(parents=True)
-        for name in ('trace-command.py', 'watch-command.py', 'process_watch.py', 'clang_environment.py'):
+        for name in ('trace-command.py', 'watch-command.py', 'process_watch.py', 'clang_environment.py', 'native_build.py'):
             shutil.copyfile(ROOT / 'scripts/support' / name, support / name)
         for path in ('native/llvm_backend.cpp', 'tests/compiler/codegen/OrcNative.cpp'):
             target = self.root / path

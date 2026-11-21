@@ -16,8 +16,15 @@ root = Path(__file__).resolve().parents[3]
 compiler = Path(os.environ.get('PLEWC', root / 'bin/plewc')).absolute()
 sys.path.insert(0, str(root / 'scripts/support'))
 import llvm_link
+import native_build
 import compiler_failure_result as failure_result
 config = os.environ.get("LLVM_CONFIG") or ("/opt/homebrew/opt/llvm@22/bin/llvm-config" if options.asan else shutil.which("llvm-config") or "/opt/homebrew/opt/llvm/bin/llvm-config")
+
+def build(*args, clang=False):
+    log_root = root / 'tmp/value-abi/expose-build'
+    log_root.mkdir(parents=True, exist_ok=True)
+    return native_build.run(args, trace_prefix=log_root / 'build',
+                            clang=clang, check=True, capture_output=True)
 
 def run(*args):
     return subprocess.run(list(map(str, args)), check=True, capture_output=True, timeout=55)
@@ -30,7 +37,7 @@ for name in ['exposedAdd', 'exposedFloat', 'exposedEmpty', 'exposedWrite', 'expo
 assert b'@exposedImported.' not in raw
 # Use the selected target's C compiler as an ABI reference: successful low-bit
 # roundtrips alone do not prove the upper-register extension contract.
-c_reference = run(llvm_link.selected_clang(config), '-S', '-emit-llvm', '-O0', fixture.with_suffix('.c'), '-o', '-').stdout
+c_reference = build(llvm_link.selected_clang(config), '-S', '-emit-llvm', '-O0', fixture.with_suffix('.c'), '-o', '-', clang=True).stdout
 for imported, exposed in [('cSignedByte', 'exposedSignedByte'), ('cUnsignedShort', 'exposedUnsignedShort'), ('cBoolean', 'exposedBoolean')]:
     reference = re.search(rb'^define[^\n]*@' + imported.encode() + rb'\([^\n]*', c_reference, re.M)
     assert reference, imported
@@ -57,7 +64,7 @@ with tempfile.TemporaryDirectory(prefix='plew-expose-') as folder:
     link_flags = []
     if options.asan:
         bindir = Path(run(config, '--bindir').stdout.decode().strip())
-        instrumented = run(bindir / 'opt', '-passes=asan', '-S', source, '-o', '-').stdout
+        instrumented = build(bindir / 'opt', '-debug-pass-manager', '-passes=asan', '-S', source, '-o', '-').stdout
         assert b'__asan_' in instrumented
         source.write_bytes(instrumented)
         link_flags = ['-fsanitize=address', '-fno-omit-frame-pointer']
@@ -67,7 +74,7 @@ with tempfile.TemporaryDirectory(prefix='plew-expose-') as folder:
     runtime.write_bytes(run(compiler, '--runtime').stdout)
     for level in ['-O0', '-O2']:
         executable = directory / ('test' + level)
-        run(llvm_link.selected_clang(config), level, *link_flags, source, runtime, fixture.with_suffix('.c'), '-o', executable)
+        build(llvm_link.selected_clang(config), level, *link_flags, source, runtime, fixture.with_suffix('.c'), '-o', executable, clang=True)
         execution = run(executable)
         assert execution.stdout == b''
         assert execution.stderr == b'', execution.stderr

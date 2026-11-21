@@ -12,6 +12,7 @@ import subprocess
 import sys
 
 import clang_environment
+import native_build
 
 # Split aggregate loads immediately before promoting each SCC's private byval
 # arguments, after its callees have been simplified and promoted.
@@ -209,13 +210,13 @@ def compiler_backend(config, output, sanitize=False):
                    '-c', str(ROOT / 'native' / (name + '.cpp')), '-o', str(target)]
         if sanitize:
             command += ['-fsanitize=address', '-fno-omit-frame-pointer']
-        subprocess.run([sys.executable, str(ROOT / 'scripts/support/watch-command.py'), '--', *command], check=True)
+        native_build.run(command, trace_log=Path(str(target) + '.trace.log'), clang=True, check=True)
         objects.append(str(target))
     # Optional compiler adapters are pulled only by execution hosts that use
     # them. Generic LLVM tools and bootstrap carriers need no callback symbol.
     archive = Path(str(output) + '.a')
     archive.unlink(missing_ok=True)
-    subprocess.run([str(clangxx.parent / 'llvm-ar'), 'rcs', str(archive), *objects], check=True)
+    native_build.run([str(clangxx.parent / 'llvm-ar'), 'rcs', str(archive), *objects], check=True)
     exports = runtime_export_flags()
     return [str(archive), '-lc++' if sys.platform == 'darwin' else '-lstdc++', *exports]
 
