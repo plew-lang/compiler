@@ -107,6 +107,12 @@ fn main() {
     val knownRecord = completeCall(text: "fn identity[T](value: T) -> T {{ return value }}\nfn main() {{ val result = identity(value: (x: 1I64, y: false)) }}", called: "identity")
     val knownArray = completeCall(text: "fn identity[T](value: T) -> T {{ return value }}\nfn main() {{ val result = identity(value: [1I64, 2I64]) }}", called: "identity")
     val arrayView = rawRank(text: "extension Extra {{ impl[T] Array[T] {{ fn tag() {{}} }} }}\nfn accept(value: Array[I32]#Extra) {{}}\nfn main() {{ accept(value: [1, 2]) }}", expected: 1U64)
+    val rawReturnBranch = rawRank(text: "fn accept(value: Array[I64]) {{}}\nfn outer() -> I64 {{ accept(value: if true {{ give [] }} else {{ return 0I64 }}) return 1I64 }}\nfn main() {{}}", expected: 2U64, ownerName: "outer")
+    val rawReturnArm = rawRank(text: "fn accept(value: Array[I64]) {{}}\nfn outer() -> I64 {{ accept(value: match true {{ true => {{ give [] }} false => {{ return 0I64 }} }}) return 1I64 }}\nfn main() {{}}", expected: 2U64, ownerName: "outer")
+    val projectionLateOwner = rawRank(text: "trait Q {{ type Item }}\nstruct Owner {{}}\nstruct Payload {{}}\nimpl Owner as Q {{ type Item = Payload }}\nfn accept[T](value: T#Q.Item, owner: T) where T: Q {{}}\nfn main() {{ accept(value: <Payload />, owner: <Owner />) }}", expected: 2U64)
+    val projectionPrepared = rawRank(text: "trait Q {{ type Item }}\nstruct Owner {{}}\nstruct Payload {{}}\nimpl Owner as Q {{ type Item = Payload }}\nfn accept[T](value: T#Q.Item, owner: T) where T: Q {{}}\nfn main() {{ accept(value: <Payload />, owner: <Owner />) }}", expected: 2U64, prepared: true)
+    val projectionWrong = rawRank(text: "trait Q {{ type Item }}\nstruct Owner {{}}\nstruct Payload {{}}\nimpl Owner as Q {{ type Item = Payload }}\nfn accept[T](value: T#Q.Item, owner: T) where T: Q {{}}\nfn main() {{ accept(value: false, owner: <Owner />) }}", expected: 1U64)
+    val projectionEarlyOwner = rawRank(text: "trait Q {{ type Item }}\nstruct Owner {{}}\nstruct Payload {{}}\nimpl Owner as Q {{ type Item = Payload }}\nfn accept[T](owner: T, value: T#Q.Item) where T: Q {{}}\nfn main() {{ accept(owner: <Owner />, value: <Payload />) }}", expected: 2U64)
     print(array)
     print(nested)
     print(record)
@@ -128,5 +134,11 @@ fn main() {
     print(wrongFunctionSlot)
     print(wrongFunctionDivergence)
     print(nestedMismatch)
-    if !array || !nested || !record || !wrong || !closure || !preparedArray || !preparedRecord || !knownRecord || !knownArray || !arrayView || !functionArity || !functionLabel || !rigidFunctionLabel || !rigidFunctionArity || !fixedArray || !fixedRecord || !functionContext || !wrongFunctionLabel || !wrongFunctionSlot || !wrongFunctionDivergence || !nestedMismatch { panic("contextual operand guarantee failed") }
+    print(rawReturnBranch)
+    print(rawReturnArm)
+    print(projectionLateOwner)
+    print(projectionPrepared)
+    print(projectionWrong)
+    print(projectionEarlyOwner)
+    if !projectionLateOwner || !projectionPrepared || !projectionWrong || !projectionEarlyOwner || !rawReturnBranch || !rawReturnArm || !array || !nested || !record || !wrong || !closure || !preparedArray || !preparedRecord || !knownRecord || !knownArray || !arrayView || !functionArity || !functionLabel || !rigidFunctionLabel || !rigidFunctionArity || !fixedArray || !fixedRecord || !functionContext || !wrongFunctionLabel || !wrongFunctionSlot || !wrongFunctionDivergence || !nestedMismatch { panic("contextual operand guarantee failed") }
 }

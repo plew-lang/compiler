@@ -732,9 +732,15 @@ impl Comp {
             SemanticValueBlockTyping.Checked(completion: val completion, resultTerm: _) => {
                 if !completion.source.normal() { return <Result.Ok value=<TypeArgumentMatch.Matched /> /> }
             }
-            _ => {}
+            SemanticValueBlockTyping.Pending => {
+                if !self.blockCompletion(blkId: blockId).source.normal() { return <Result.Ok value=<TypeArgumentMatch.Matched /> /> }
+            }
         }
-        return self.matchPreparedCallArgument(expression: self.blockGiveExpr(blkId: blockId), signature: signature, parameters: parameters, receiver: receiver, values: inout values)
+        val yielded = self.blockGiveExpr(blkId: blockId)
+        // A raw normal block without a yield is diagnosed by its source owner.
+        // Candidate probing must neither invent a value nor read the sentinel.
+        if yielded >= self.arena.exprs.count() { return <Result.Ok value=<TypeArgumentMatch.Deferred /> /> }
+        return self.matchPreparedCallArgument(expression: yielded, signature: signature, parameters: parameters, receiver: receiver, values: inout values)
     }
 
     // A missing aggregate term is not a failed type comparison. Raw literals
@@ -890,12 +896,17 @@ impl Comp {
 
     inout fn matchPreparedArgumentTerm(signature: U64, actual: U64, parameters: FuncBindRange, receiver: U64, values: inout Array[U64]) -> Result[TypeArgumentMatch, CompileDiagnostic] {
         mut val candidate = values
-        match self.matchCallTypeArguments(pattern: signature, argument: actual, params: parameters, values: inout candidate) {
+        val matched = self.matchCallTypeArguments(pattern: signature, argument: actual, params: parameters, values: inout candidate)
+        match matched {
             TypeArgumentMatch.Matched | TypeArgumentMatch.Deferred => { values = candidate }
             TypeArgumentMatch.Mismatch => {}
             TypeArgumentMatch.Conflict => { return <Result.Ok value=<TypeArgumentMatch.Conflict /> /> }
         }
         val expected = try self.groundKnownCallTypeArguments(ref: signature, params: parameters, values: values, receiver: receiver)
+        // Projection equality can depend on another independent operand's
+        // callee-owned slot. Keep that obligation until the common retry;
+        // rigid caller parameters do not satisfy this predicate.
+        if (match matched { TypeArgumentMatch.Deferred => true _ => false }) && self.callArgumentHasInferenceHole(expected: expected, parameters: parameters, values: values) { return <Result.Ok value=<TypeArgumentMatch.Deferred /> /> }
         return <Result.Ok value=if (try self.typesCompatible(expected: expected, inferred: actual)) { give <TypeArgumentMatch.Matched /> } else { give <TypeArgumentMatch.Mismatch /> } />
     }
     // A contextual construction may contain omitted nominal arguments below
