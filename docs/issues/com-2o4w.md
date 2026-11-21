@@ -34,7 +34,7 @@ passing managed values through C. See [com-ab7u](com-ab7u.md).
 
 Two-way C controls on the current host for permitted widths/signs, Float, pointer, inout writeback, exposed names and labels, signature mismatches and unsupported boundary rejection; compare AOT/JIT entry failure/lifetime. Aggregate-layout absence remains in the parent and does not become an asserted supported feature.
 
-Close with exact revision/scope, final-consumer evidence, removed competing paths and applicable correctness/performance gates. Preserve matching-input baseline evidence; the approved formal self-compilation target is below 7 seconds. This task does not close the mixed/new-feature parent automatically.
+Close with exact revision/scope, final-consumer evidence, removed competing paths and applicable correctness/performance gates. Preserve matching-input baseline evidence; the approved formal self-compilation target is [the current user-approved bound](../../../agents/validation.md#自己コンパイル性能基準). This task does not close the mixed/new-feature parent automatically.
 
 ## Scoped Audit Intake com-71gu
 

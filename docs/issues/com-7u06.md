@@ -26,7 +26,7 @@ Saved source signature -> common Mid activation-input acquisition/transfer plan 
 
 Ready and pending awaits, completion during entry, dropping a user handle while pending, timer/waiter lifetime, copy/move input cleanup and rejected explicit borrows. Establish the exact existing timer contract; do not claim wall-clock/OS readiness from the virtual-clock lane. Trace actual producers/consumers before labeling any missing guard a runtime bug.
 
-Close with exact revision/scope, final-consumer evidence, removed competing paths and applicable correctness/performance gates. Preserve matching-input baseline evidence; the approved formal self-compilation target is below 7 seconds. This task does not close the mixed/new-feature parent automatically.
+Close with exact revision/scope, final-consumer evidence, removed competing paths and applicable correctness/performance gates. Preserve matching-input baseline evidence; the approved formal self-compilation target is [the current user-approved bound](../../../agents/validation.md#自己コンパイル性能基準). This task does not close the mixed/new-feature parent automatically.
 
 ## Scoped Test Audit Intake com-5azh
 

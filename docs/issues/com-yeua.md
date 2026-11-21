@@ -11,6 +11,10 @@ tags: [diagnostics, frontend, driver, verification]
 ---
 # Carry producer failure domains to compiler rejection consumers
 
+## Current boundary
+
+com-8uik is finitely accepted at product c07017f5 and formal carrier eadf4cb9, including Raw/owned array provenance, cache/failure transport and scoped runtime/lifetime controls. Formal225054-self-host-3a5aff median7.132815s meets the [current approved7.5s median bound](../../../agents/validation.md#自己コンパイル性能基準). This parent remains open. Fresh whole normal test071429-test-d6c2d4 is running against the frozen trace-batching-build and exact formal carrier; old324fail is not current full-green evidence. Reconcile remaining failures before selecting the next producer slice. Historical checkpoints below do not replace the current acceptance and final whole obligations.
+
 ## Contract and audit evidence
 
 Follow the existing diagnostics, verification and owning stage contracts. Origin: [com-6lza](com-6lza.md), [finite assignment evidence](../../../evidence/compiler-failure-audit/correction-owner-candidates.json), unit `SOURCE-FAILURE-DOMAIN-CHANNEL`. Audit findings are source-backed unless the referenced evidence explicitly records executed controls; no product repair or GREEN is implied.

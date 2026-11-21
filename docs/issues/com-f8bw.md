@@ -26,7 +26,7 @@ Infer/Type and Infer/Check consume Infer/Sendability.typeRefIsSendable; current 
 
 Supported generic/annotation checks with scalars, arrays/structs/enums containing Ref or WeakRef, unrelated same-named types, mutable-reference controls and nested/recursive query termination. Preserve explicit unsupported worker rejection. Close current predicate/result evidence without claiming safe cross-thread execution exists.
 
-Close with exact revision/scope, final-consumer evidence, removed competing paths and applicable correctness/performance gates. Preserve matching-input baseline evidence; the approved formal self-compilation target is below 7 seconds. This task does not close the mixed/new-feature parent automatically.
+Close with exact revision/scope, final-consumer evidence, removed competing paths and applicable correctness/performance gates. Preserve matching-input baseline evidence; the approved formal self-compilation target is [the current user-approved bound](../../../agents/validation.md#自己コンパイル性能基準). This task does not close the mixed/new-feature parent automatically.
 
 ## Scoped Audit Intake com-vr57
 

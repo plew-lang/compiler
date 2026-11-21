@@ -26,7 +26,7 @@ Existing driver/CompilerSession roots -> initializer execution and application e
 
 Current main forms and rejection controls; arguments/status, synchronous and supported async INT/TERM/HUP exit, repeated one-shot admission failure, unknown/stale session IDs and ordinary associated-storage identity/mutation. Establish current accepted cases rather than adding missing public APIs. Initializer dependency ordering is separately owned by the startup-plan unit.
 
-Close with exact revision/scope, final-consumer evidence, removed competing paths and applicable correctness/performance gates. Preserve matching-input baseline evidence; the approved formal self-compilation target is below 7 seconds. This task does not close the mixed/new-feature parent automatically.
+Close with exact revision/scope, final-consumer evidence, removed competing paths and applicable correctness/performance gates. Preserve matching-input baseline evidence; the approved formal self-compilation target is [the current user-approved bound](../../../agents/validation.md#自己コンパイル性能基準). This task does not close the mixed/new-feature parent automatically.
 
 ## Scoped Test Audit Intake com-ti5b
 

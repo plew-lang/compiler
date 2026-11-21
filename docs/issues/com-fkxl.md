@@ -28,7 +28,7 @@ This task owns generating, retaining and closing the startup summaries it consum
 
 Direct/indirect/single-root cycles, declaration order reversal, dependencies through blocks/defaults/invoked closures/drop and supported async, clean independent initializers and AOT/JIT agreement. Refine existing effect producers with their owners; do not add hidden global waits or force a new worker service to finish this current-subset task.
 
-Close with exact revision/scope, final-consumer evidence, removed competing paths and applicable correctness/performance gates. Preserve matching-input baseline evidence; the approved formal self-compilation target is below 7 seconds. This task does not close the mixed/new-feature parent automatically.
+Close with exact revision/scope, final-consumer evidence, removed competing paths and applicable correctness/performance gates. Preserve matching-input baseline evidence; the approved formal self-compilation target is [the current user-approved bound](../../../agents/validation.md#自己コンパイル性能基準). This task does not close the mixed/new-feature parent automatically.
 
 ## Frontend and Syntax Failure Audit Intake com-6lza
 

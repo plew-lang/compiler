@@ -1,6 +1,6 @@
 ---
 id: com-8uik
-status: in_progress
+status: closed
 deps: [com-b0e6, com-5n0l, com-u22d]
 links: []
 created: 2026-11-20T05:06:49Z
@@ -71,6 +71,12 @@ Formal20261120T210648-self-host-976af1 ended1 on generation2 successor clang lin
 
 Formal retry212529-self-host-8c36d8 reaches generation2 identical LLVM/runtime/successor with unchanged inputs. Median7.041626s (7.569981/7.041626/7.034715) still misses7s. A separate machine review found the result-unused None-branch contains lookup surviving optimization, so difficulty was not declared without testing that candidate. Sourceee1611e5 removes only that lookup. Missing anonymous-record and mismatched existing-Make receipt controls passed before/after; new candidate build215942-build-309982,60CLI, exact native, LLVM22ASan/LSan11,289definitions/30,586checks, and gen221038-gen-04dd5e pass. Read-only final source review has no must-fix. Same-source alternating5 pairs6.910358→6.895419s, all10LLVM identical;15ms is not a confirmed improvement. Formal221329-self-host-d8bc28 passes generation2 equality and immutable inputs, median7.076789s (7.554481/7.076789/7.016650), still above7s. Measurement review found no proven wrapper defect. Child met-quvh tests event-preserving trace write batching; task and overall7s/whole gates remain open.
 
-## Current performance stop boundary
+## Final finite acceptance
 
-met-quvh preserves every phase event while batching writes; its build, native event boundaries, full-source15175events, CLI60, gen and independent review passed. Formal225054-self-host-3a5aff reaches generation2 LLVM/runtime/binary equality with immutable inputs, median7.132815s; final carrier eadf4cb9 passes CLI60 and array internal native. Goal7s remains unmet. Four concrete local costs have now been removed/evaluated, boxed diagnostic transport and wrapper timing were investigated, and independent review found no remaining mandatory concrete local fix. Stable<=7s recovery with these established local corrections is judged difficult; renewed scoped profiling is the next step, not a claim of unavoidable semantic cost or global impossibility. This task remains open and no parent/whole gate is waived. Canonical meta evidence owns detailed results.
+Product c07017f5 is accepted within this task. Source origin propagation and private failure evidence are implemented; Raw helpers remain non-authoritative and the owning adapters interpret only exact saved operations. The final formal carrier is `eadf4cb9b64132dfa69185b7da9a1aab454acf77d1397dc9c02a1177d859f3e6`, at meta `tmp/validation/20261120T225054-self-host-3a5aff/self-host/generation-1/next/plewc`.
+
+Executed guarantees: CLI60/off-target0 across check/AOT/ORC; internal native8-line golden with immutable inputs; Raw recursion/malformed contexts, private event/cache/retry/drain, owner/session/type/span/frontier/synthetic mutations and owning lazy/whole/eager paths. Relevant ownership source ee1611e5 passed LLVM22 ASan/LSan11,289definitions/30,586memory checks. The later change only batches trace output; current native controls and gen224947-gen-0c2522 also pass. Full-source15175trace events match in bytes/order/count, with all6 matching-source LLVM identical. This is not a claimed measured speedup.
+
+Formal225054-self-host-3a5aff passes generation2 LLVM/runtime/binary equality and unchanged inputs, median7.132815s (7.503753/7.132815/7.001206). User explicitly unified the active bound and difficult-repair stop condition to7.5s; the formal median meets the [current approved bound](../../../agents/validation.md#自己コンパイル性能基準). Historical7s assessments remain in canonical evidence and do not define current acceptance.
+
+Independent array_context_origin_plan_review reconciled current source, required cases, exact final-carrier results and ownership-evidence applicability: no product must-fix or uncovered required finite guarantee. Meta canonical `phase3-array-context-refusal-plan.json` current_acceptance owns the review and evidence pointers. Parentcom-yeua/phase3 whole gates remain open, and the old324-failure suite is not current full-green evidence. No main/seed/carrier promotion is included.

@@ -26,7 +26,7 @@ Standard declaration registration -> semantic term and selected intrinsic identi
 
 Same-named unrelated user types versus exact standard declarations, qualified/re-exported standard uses, known intrinsic valid/invalid signatures, strong/weak expiration and restoration, alias mutation and cell pin during current inout projection. Verify AOT/JIT and ownership failure/cleanup; no new public pointer API is required.
 
-Close with exact revision/scope, final-consumer evidence, removed competing paths and applicable correctness/performance gates. Preserve matching-input baseline evidence; the approved formal self-compilation target is below 7 seconds. This task does not close the mixed/new-feature parent automatically.
+Close with exact revision/scope, final-consumer evidence, removed competing paths and applicable correctness/performance gates. Preserve matching-input baseline evidence; the approved formal self-compilation target is [the current user-approved bound](../../../agents/validation.md#自己コンパイル性能基準). This task does not close the mixed/new-feature parent automatically.
 
 ## Scoped Test Audit Intake com-2kze
 

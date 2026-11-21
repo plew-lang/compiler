@@ -26,4 +26,4 @@ Saved lexical/capture facts -> existing environment allocation and descriptors -
 
 Admitted scalar/String/Array/nominal captures, shared cells and alias mutation, copied/escaped handles, final release order and failure cleanup. Reject controls keep known unsupported shapes loud. Do not assume all enum/struct shapes are missing or promise their exhaustive implementation from one passing fixture.
 
-Close with exact revision/scope, final-consumer evidence, removed competing paths and applicable correctness/performance gates. Preserve matching-input baseline evidence; the approved formal self-compilation target is below 7 seconds. This task does not close the mixed/new-feature parent automatically.
+Close with exact revision/scope, final-consumer evidence, removed competing paths and applicable correctness/performance gates. Preserve matching-input baseline evidence; the approved formal self-compilation target is [the current user-approved bound](../../../agents/validation.md#自己コンパイル性能基準). This task does not close the mixed/new-feature parent automatically.
