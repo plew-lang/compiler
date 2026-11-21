@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import sys
 
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--asan', action='store_true')
@@ -28,13 +29,32 @@ evidence.mkdir(parents=True, exist_ok=True)
 for previous in ['summary.txt', 'summary.json']:
     (evidence / previous).unlink(missing_ok=True)
 binary = evidence / 'test'
-command = [str(bindir / 'clang++'), '-std=c++17', '-O1', '-g', '-isystem', query('--includedir'),
-           str(root / 'native/llvm_backend.cpp'), str(root / 'tests/compiler/codegen/OrcNative.cpp'),
-           '-L' + str(libdir), '-lLLVM', '-o', str(binary)]
-if options.asan:
-    command += ['-fsanitize=address', '-fno-omit-frame-pointer']
-with (evidence / 'build.log').open('wb') as log:
-    subprocess.run(command, stdout=log, stderr=log, timeout=60, check=True)
+# Keep DWARF in retained objects. Linking sources with -g implicitly runs
+# dsymutil on macOS; that packaging step is not part of this ORC diagnostic.
+# Supervise actual LLVM work per compile/link through the shared observer.
+common = [str(bindir / 'clang++'), '-std=c++17', '-O1', '-g',
+          '-Xclang', '-fdebug-pass-manager', '-mllvm', '-debug-pass=Executions',
+          '-isystem', query('--includedir')]
+sanitizer = ['-fsanitize=address', '-fno-omit-frame-pointer'] if options.asan else []
+commands = [
+    ('backend', [*common, *sanitizer, '-c', str(root / 'native/llvm_backend.cpp'),
+                 '-o', str(evidence / 'backend.o')]),
+    ('OrcNative', [*common, *sanitizer, '-c', str(root / 'tests/compiler/codegen/OrcNative.cpp'),
+                   '-o', str(evidence / 'OrcNative.o')]),
+    ('link', [str(bindir / 'clang++'), str(evidence / 'backend.o'), str(evidence / 'OrcNative.o'),
+              *sanitizer, '-L' + str(libdir), '-lLLVM', '-o', str(binary)]),
+]
+with (evidence / 'build.log').open('wb') as combined:
+    for label, command in commands:
+        log = evidence / (label + '.build.log')
+        try:
+            subprocess.run([sys.executable, '-B', str(root / 'scripts/support/trace-command.py'),
+                            str(log), '--', *command], check=True)
+        finally:
+            combined.write(('=== ' + label + ' ===\n').encode())
+            if log.exists():
+                combined.write(log.read_bytes())
+            combined.flush()
 print('PASS native ORC build', flush=True)
 environment = dict(os.environ)
 if options.asan:
@@ -53,6 +73,8 @@ assert not (evidence / 'stdout').read_bytes()
 (evidence / 'summary.txt').write_text('status=passed\nllvm=' + query('--version') + '\n')
 (evidence / 'summary.json').write_text(json.dumps({
     'status': 'passed', 'llvm': query('--version'),
+    'build_commands': [command for _, command in commands],
+    'debug_objects': ['backend.o', 'OrcNative.o'],
     'native_sha256': hashlib.sha256((root / 'native/llvm_backend.cpp').read_bytes()).hexdigest(),
     'test_sha256': hashlib.sha256((root / 'tests/compiler/codegen/OrcNative.cpp').read_bytes()).hexdigest(),
     'sanitizers': 'ASan/LSan native bridge and host; JIT instructions not instrumented' if options.asan else 'none',

@@ -119,6 +119,12 @@ else
     fail=$((fail + 1)); failed="$failed direct-object"
 fi
 
+if python3 -B ./tests/tooling/test-native-orc-watch.py; then
+    echo "PASS native-orc-watch"
+else
+    fail=$((fail + 1)); failed="$failed native-orc-watch"
+fi
+
 if LLVM_CONFIG="$LC" python3 -B ./tests/compiler/codegen/test-orc-native.py; then
     :
 else

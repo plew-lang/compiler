@@ -69,6 +69,11 @@ ASan/LSan; it does not instrument the generated JIT instructions. This check is
 registered in the normal harness and covers object/ORC layout admission,
 shared storage, existing host symbols and terminal failures,
 not frontend lazy requests or the product CLI.
+Compilation retains debug objects and supervises each compile/link stage through
+the shared60-second idle monitor. The separate link avoids implicit macOS dSYM
+packaging. `tooling/test-native-orc-watch.py` exercises the actual harness with
+bounded tool doubles, checking progress transport, failure and signal handling;
+normal and ASan modes retain the same native assertions.
 
 `compiler/codegen/test-orc-lazy.py` checks synchronous first-call callbacks,
 stable entry addresses (including self references), integer/FP/stack arguments,
