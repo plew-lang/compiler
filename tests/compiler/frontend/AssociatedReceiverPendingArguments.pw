@@ -1,6 +1,6 @@
 use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
-use ../../../src/SourceAccess only { SourceAccess }
-use ../../../src/Ir only { ArgRange }
+use ../../../src/SourceAccess only { SourceAccess, SourceResource }
+use ../../../src/Ir only { ArgRange, CallTemplateKind }
 use @Std/Io only { print }
 fn main() {
     mut val compiler = <Comp />
@@ -30,5 +30,46 @@ fn main() {
         if raw != 2U64 || written != 2U64 || pattern != 2U64 { panic("omitted receiver arguments lost pending context") }
     }
     if !found { panic("factory candidate missing") }
+    val mainIndex = compiler.cur.checkFn
+    match compiler.prepareLexicalBody(fnIdx: mainIndex) {
+        Result.Ok(value: _) => {}
+        Result.Err(error: val error) => { panic(error.message()) }
+    }
+    val integer = compiler.internBytes(s: "I64")
+    val string = compiler.internBytes(s: "String")
+    mut val integerSeen = false
+    mut val stringSeen = false
+    for index in 0U64..<compiler.callTemplateCount() {
+        val template = compiler.callTemplateAt(index: index)
+        if template.siteKey.ownerFnIdx != mainIndex { continue }
+        match template.kind {
+            CallTemplateKind.Direct(callee: val callee, receiver: _, args: _, calleeTypeArgs: val arguments, proofId: _) => {
+                val function = compiler.arena.functionAt(index: callee)
+                if !function.isFactory || function.recvId != owner.nameId { continue }
+                val values = compiler.callTemplateTypeArgs(range: arguments)
+                if values.count() != 1U64 || !compiler.arena.typeIsClosed(ref: values[0U64]) { panic("factory published an unfinished receiver binder") }
+                val term = compiler.arena.typeTermAt(index: values[0U64])
+                integerSeen = integerSeen || term.nameId == integer.nameId
+                stringSeen = stringSeen || term.nameId == string.nameId
+            }
+            _ => {}
+        }
+    }
+    if !integerSeen || !stringSeen { panic("factory contexts were merged or missing") }
+    checkIndependentFactory(contextual: false)
+    checkIndependentFactory(contextual: true)
     print("omitted receiver arguments retain candidate-local context")
+}
+
+fn checkIndependentFactory(contextual: Bool) {
+    mut val compiler = <Comp />
+    val construction = if contextual { give "<Box[I64].new />" } else { give "<Box.new />" }
+    val text = "struct Box[T] {{}}\nimpl[T] Box[T] {{ factory new() {{ return <Box[T] /> }} }}\nfn main() {{ val value = " + construction + " }}"
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.File path="plew:std/ReceiverContext.pw" />, sources: <SourceAccess stdRoot="std/".bytes() resources=[<SourceResource path="plew:std/ReceiverContext.pw".bytes() text=text />] />).unwrap()
+    val name = compiler.internBytes(s: "main")
+    val owner = compiler.arena.firstFunctionNamed(nameId: name.nameId)
+    match compiler.prepareLexicalBody(fnIdx: owner) {
+        Result.Ok(value: _) => { if !contextual { panic("factory without any type context was accepted") } }
+        Result.Err(error: val error) => { if contextual { panic(error.message()) } }
+    }
 }
