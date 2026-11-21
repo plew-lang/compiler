@@ -1,0 +1,34 @@
+use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use ../../../src/SourceAccess only { SourceAccess }
+use ../../../src/Ir only { ArgRange }
+use @Std/Io only { print }
+fn main() {
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.File path="tests/fixtures/run/user_collection.pw" />, sources: <SourceAccess stdRoot="std/".bytes() />).unwrap()
+    val mainName = compiler.internBytes(s: "main")
+    compiler.cur.checkFn = compiler.arena.firstFunctionNamed(nameId: mainName.nameId)
+    val owner = compiler.internBytes(s: "Stack")
+    val name = compiler.internBytes(s: "new")
+    mut val bare = 0U64
+    mut val concrete = 0U64
+    for index in 1U64..<compiler.arena.typeCount() {
+        val term = compiler.arena.typeTermAt(index: index)
+        if term.nameId != owner.nameId || !term.hasDecl { continue }
+        if term.args.len == 0U64 { bare = index }
+        if term.args.len == 1U64 && compiler.arena.typeTermAt(index: compiler.arena.typeArgumentAt(index: term.args.start)).paramId == 0U64 { concrete = index }
+    }
+    if bare == 0U64 || concrete == 0U64 { panic("receiver controls missing") }
+    mut val found = false
+    for index in 0U64..<compiler.arena.functionCount() {
+        val function = compiler.arena.functionAt(index: index)
+        if function.nameId != name.nameId || function.recvId != owner.nameId || !function.isAssoc { continue }
+        found = true
+        val args = <ArgRange start=0U64 len=0U64 />
+        val raw = compiler.groundedMethodArgMatchRank(f: function, args: args, recvRef: bare).unwrap()
+        val written = compiler.groundedMethodArgMatchRank(f: function, args: args, recvRef: concrete).unwrap()
+        val pattern = compiler.groundedMethodArgMatchRank(f: function, args: args, recvRef: function.recvTy).unwrap()
+        if raw != 2U64 || written != 2U64 || pattern != 2U64 { panic("omitted receiver arguments lost pending context") }
+    }
+    if !found { panic("factory candidate missing") }
+    print("omitted receiver arguments retain candidate-local context")
+}

@@ -113,6 +113,7 @@ fn main() {
     val projectionPrepared = rawRank(text: "trait Q {{ type Item }}\nstruct Owner {{}}\nstruct Payload {{}}\nimpl Owner as Q {{ type Item = Payload }}\nfn accept[T](value: T#Q.Item, owner: T) where T: Q {{}}\nfn main() {{ accept(value: <Payload />, owner: <Owner />) }}", expected: 2U64, prepared: true)
     val projectionWrong = rawRank(text: "trait Q {{ type Item }}\nstruct Owner {{}}\nstruct Payload {{}}\nimpl Owner as Q {{ type Item = Payload }}\nfn accept[T](value: T#Q.Item, owner: T) where T: Q {{}}\nfn main() {{ accept(value: false, owner: <Owner />) }}", expected: 1U64)
     val projectionEarlyOwner = rawRank(text: "trait Q {{ type Item }}\nstruct Owner {{}}\nstruct Payload {{}}\nimpl Owner as Q {{ type Item = Payload }}\nfn accept[T](owner: T, value: T#Q.Item) where T: Q {{}}\nfn main() {{ accept(owner: <Owner />, value: <Payload />) }}", expected: 2U64)
+    val rigidProjection = rawRank(text: "trait Q {{ type Item }}\nfn accept[T](owner: fn() -> T, value: T#Q.Item) where T: Q {{}}\nfn outer[U]() where U: Q {{ accept(owner: fn() -> U {{ panic(\"stop\") }}, value: false) }}\nfn main() {{}}", expected: 1U64, ownerName: "outer")
     print(array)
     print(nested)
     print(record)
@@ -140,5 +141,6 @@ fn main() {
     print(projectionPrepared)
     print(projectionWrong)
     print(projectionEarlyOwner)
-    if !projectionLateOwner || !projectionPrepared || !projectionWrong || !projectionEarlyOwner || !rawReturnBranch || !rawReturnArm || !array || !nested || !record || !wrong || !closure || !preparedArray || !preparedRecord || !knownRecord || !knownArray || !arrayView || !functionArity || !functionLabel || !rigidFunctionLabel || !rigidFunctionArity || !fixedArray || !fixedRecord || !functionContext || !wrongFunctionLabel || !wrongFunctionSlot || !wrongFunctionDivergence || !nestedMismatch { panic("contextual operand guarantee failed") }
+    print(rigidProjection)
+    if !rigidProjection || !projectionLateOwner || !projectionPrepared || !projectionWrong || !projectionEarlyOwner || !rawReturnBranch || !rawReturnArm || !array || !nested || !record || !wrong || !closure || !preparedArray || !preparedRecord || !knownRecord || !knownArray || !arrayView || !functionArity || !functionLabel || !rigidFunctionLabel || !rigidFunctionArity || !fixedArray || !fixedRecord || !functionContext || !wrongFunctionLabel || !wrongFunctionSlot || !wrongFunctionDivergence || !nestedMismatch { panic("contextual operand guarantee failed") }
 }

@@ -101,3 +101,21 @@ Resolved on final source ba891bdf with met-bu94 and met-qo60 closed. Independent
 Formal run20261120T153146-self-host-32b720: generation3 fixedpoint, generation2/3 LLVM/runtime/successor equality, five samples median6.999988seconds (<7, no margin claim). Same-source alternating5pairs: oldA7.085223/newC6.950058, all reference LLVM hashes match. Canonical A/B evidence remains meta phase3-provisional-call-context.json and phase3-member-call-roles.json under evidence/rejection-domains/diagnostic-domain-implementation/.
 
 Limits: the whole normal suite was not rerun for this combined candidate, so current-corpus noninterference beyond executed targets is unconfirmed. Last whole324 failures remains historical, not a successful current corpus. Per工程3 progress policy, each finite task closes by applicable target validation, while final fixed-candidate whole gates remain G2a/G2b and com-yeua / 工程3 owners. This is neither their closure nor main/seed/bin promotion. Next is com-b0e6's complete expected-context role plan, then com-8uik's implementation under it.
+
+## Current finite repair checkpoint
+
+The normal run20261121T092032-test-b7974b processed all1817 run fixtures
+but stopped later at an unobserved native ORC C++ build; it is not a whole
+gate pass. Six acceptance regressions were compared on identical sources.
+The current repair consumes pending block completion, retains callee-dependent
+projection obligations until the existing retry, excludes provided copies with
+missing conformance proof, and retains an omitted receiver equation only in
+candidate ranking. The strict selected substitution is unchanged.
+
+Retained native RED/GREEN controls cover late/early projection owner ordering,
+wrong payload and rigid caller mismatch, raw return branches, valid/invalid
+provided placements, and omitted/concrete/pattern associated receivers. Current
+three native kernels pass (28 operand flags plus two boundary kernels).
+Production adoption, completed selected factory arguments, a new formal run,
+the complete normal gate and final independent acceptance remain open. Follow
+[the canonical current evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-contextual-operand-regression.json).

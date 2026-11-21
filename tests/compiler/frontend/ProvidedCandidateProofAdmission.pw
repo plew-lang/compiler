@@ -1,0 +1,41 @@
+use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use ../../../src/SourceAccess only { SourceAccess }
+use ../../../src/Ir only { ArgRange }
+use @Std/Io only { print }
+fn checkReceiver(compiler: inout Comp, typeName: String) {
+    val owner = compiler.internBytes(s: typeName)
+    val read = compiler.internBytes(s: "read")
+    val name = compiler.internBytes(s: "twice")
+    mut val receiver = 0U64
+    for index in 0U64..<compiler.arena.functionCount() {
+        val function = compiler.arena.functionAt(index: index)
+        if function.nameId == read.nameId && function.recvId == owner.nameId { receiver = function.recvTy }
+    }
+    if receiver == 0U64 { panic("receiver control missing") }
+    mut val valid = 0U64
+    mut val rejected = 0U64
+    for index in 0U64..<compiler.decls.callableCount() {
+        val candidate = compiler.decls.callableAt(index: index)
+        val function = compiler.arena.functionAt(index: candidate.funcIdx)
+        if function.nameId != name.nameId { continue }
+        val rank = compiler.groundedMethodArgMatchRank(f: function, args: <ArgRange start=0U64 len=0U64 />, recvRef: receiver).unwrap()
+        val proof = compiler.providedBodyProof(f: function, receiverRef: receiver).unwrap()
+        if function.originConformIdx != 0U64 && compiler.proofIsMissing(proof: proof) {
+            if rank == 2U64 { panic("provided candidate has no conformance proof") }
+            rejected += 1U64
+        }
+        if rank == 2U64 { valid += 1U64 }
+    }
+    if valid != 1U64 || rejected == 0U64 { panic("provided candidate controls missing") }
+}
+fn main() {
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.File path="tests/fixtures/run/trait_subject_receiver_placements.pw" />, sources: <SourceAccess stdRoot="std/".bytes() />).unwrap()
+    val mainName = compiler.internBytes(s: "main")
+    val owner = compiler.arena.firstFunctionNamed(nameId: mainName.nameId)
+    compiler.cur.checkFn = owner
+    checkReceiver(compiler: inout compiler, typeName: "A")
+    checkReceiver(compiler: inout compiler, typeName: "B")
+    compiler.prepareLexicalBody(fnIdx: owner).unwrap()
+    print("provided candidate admission requires its conformance proof")
+}

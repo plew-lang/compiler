@@ -1375,6 +1375,9 @@ impl Comp {
         val receiverMatch: WitnessMatch = (try self.methodReceiverEnvironment(f: f, instRef: semanticReceiver, sourceMatch: true))
         mut val proof = selectedProof
         if self.proofIsMissing(proof: proof) && f.isProvided { proof = try self.providedBodyProof(f: f, receiverRef: semanticReceiver, assumptions: self.functionBoundAssumptions(fnIdx: self.cur.checkFn)) }
+        // A copied provided body is applicable only through its saved
+        // conformance path. Nominal receiver shape cannot replace that proof.
+        if f.isProvided && f.originConformIdx != 0U64 && self.proofIsMissing(proof: proof) { return <Result.Ok value=<InstanceEnvironment /> /> }
         // A provided copy placed through a trait-subject edge is justified
         // by its conformance path, not nominal equality with that trait.
         mut val fullArgs: Array[U64] = (try self.receiverCallableArguments(f: f, receiverRef: semanticReceiver, receiverMatch: receiverMatch))

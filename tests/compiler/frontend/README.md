@@ -593,3 +593,16 @@ closure signatures, root generic inference, view identity, and function
 arity/labels with rigid caller binders. Repeated probes preserve parent and
 child terms, cache and template counts. Compile/link the real frontend and
 compare stdout byte-for-byte; stderr must be empty.
+
+`ProvidedCandidateProofAdmission.pw` checks that copied provided methods with a
+missing conformance proof cannot enter as matching candidates, while the valid
+trait-subject path remains selected for distinct nominal receivers and the
+existing generic/newtype fixture prepares successfully.
+
+`AssociatedReceiverPendingArguments.pw` compares an omitted generic receiver,
+its explicit concrete instance and the declaration receiver equation. Omitted
+arguments remain candidate-local context obligations; they are not a completed
+zero-argument instantiation. Both tests are manual native frontend diagnostics:
+compile/link against the implementation, require exit0, exact `.out` and empty
+stderr. `PreparedContextualOperands.pw` also covers raw non-value return branches
+and candidate-owned deferred projections, including rigid caller mismatches.
