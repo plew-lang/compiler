@@ -13,7 +13,20 @@ tags: [diagnostics, frontend, driver, verification]
 
 ## Current boundary
 
-com-8uik is finitely accepted at product c07017f5 and formal carrier eadf4cb9, including Raw/owned array provenance, cache/failure transport and scoped runtime/lifetime controls. Formal225054-self-host-3a5aff median7.132815s meets the [current approved7.5s median bound](../../../agents/validation.md#自己コンパイル性能基準). This parent remains open. Fresh whole normal test071429-test-d6c2d4 is running against the frozen trace-batching-build and exact formal carrier; old324fail is not current full-green evidence. Reconcile remaining failures before selecting the next producer slice. Historical checkpoints below do not replace the current acceptance and final whole obligations.
+This parent remains open. com-8uik is finitely accepted, but the next whole
+normal checks exposed com-u22d contextual operand regressions; com-u22d and
+met-bu94/met-qo60 remain reopened until the corrected source's adoption gates
+are reconciled. Source/testbf5d3292 passes the targeted production controls,
+18native kernels, scopedASan/LSan and gen. Fresh formalself-host
+20261121T112220-self-host-4da702 passes unchanged inputs and generation2
+fixed point, median6.986708seconds. Whole normal reconciliation remains open.
+
+Whole normal092032-test-b7974b processed1817run fixtures then stalled in the
+native ORC build; its29fail run slice is not a whole suite result. The separate
+monitor repairmet-kjb2 is independently accepted at9e491708 and must be included
+in the next whole retry. Old324fail and historical checkpoints below do not
+replace current whole-gate obligations. Reconcile all remaining failures before
+selecting the next producer slice. See the [current contextual operand evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-contextual-operand-regression.json).
 
 ## Contract and audit evidence
 
