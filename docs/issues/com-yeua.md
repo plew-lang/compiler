@@ -28,6 +28,13 @@ in the next whole retry. Old324fail and historical checkpoints below do not
 replace current whole-gate obligations. Reconcile all remaining failures before
 selecting the next producer slice. See the [current contextual operand evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-contextual-operand-regression.json).
 
+Current whole retry113941-test-130232 passes native ORC but stalls later in
+test-physical-signature's hidden compile/link capture. Run1817 completes with
+23remaining failure rows: the six new contextual regressions are resolved and
+no new failure row appears against092032; this is not proof of unchanged
+messages or a complete normal gate. The separate native-harness monitoring
+work unit is awaiting scope confirmation; com-u22d and this parent remain open.
+
 ## Contract and audit evidence
 
 Follow the existing diagnostics, verification and owning stage contracts. Origin: [com-6lza](com-6lza.md), [finite assignment evidence](../../../evidence/compiler-failure-audit/correction-owner-candidates.json), unit `SOURCE-FAILURE-DOMAIN-CHANNEL`. Audit findings are source-backed unless the referenced evidence explicitly records executed controls; no product repair or GREEN is implied.
