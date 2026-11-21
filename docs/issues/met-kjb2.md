@@ -1,6 +1,6 @@
 ---
 id: met-kjb2
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-11-21T10:48:20Z
@@ -52,3 +52,21 @@ com-yeua normal retry also consumes the repaired harness.
 Evidence begins at meta run20261121T092032-test-b7974b and its unchanged-input
 stalled result, with the native build log empty. Reuse existing shared monitor
 edge controls, adding only this missing harness integration scenario.
+
+## Outcome
+
+Implemented9e491708. Real LLVM20normal and LLVM22ASan/LSan pass with unchanged
+native assertion ASTs. Four actual-entry tool-double controls and13shared monitor
+controls pass. The same standard observer accepts the real native local gate
+with unchanged inputs; a70.70second build control with260progress events also
+passes with the idle deadline unchanged. Independent review found no must-fix
+and accepts this finite task. Whole normal suite/com-9l3b/phase3 remain open.
+
+The silent process was implicit dsymutil after both TU compilation and linking.
+Objects retain-g; explicit object linking avoids that unnecessary packaging.
+The reason dsymutil itself waited is not established and is not required by
+this native ORC diagnostic. Query/summary-save I/O receipt endpoints predate
+this repair and are outside its compile/link/run guarantee; never accept a
+standalone old summary without the successful process/input result.
+
+[Canonical evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-native-orc-build-monitor.json).
