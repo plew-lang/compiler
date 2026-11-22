@@ -11,7 +11,9 @@ import os
 def prepared(command, *, clang=False):
     command = list(map(str, command))
     if clang:
-        command[1:1] = ['-Xclang', '-fdebug-pass-manager', '-mllvm', '-debug-pass=Executions']
+        # Timestamped legacy machine-pass detail can cost more than codegen on
+        # large fixture IR. Keep real IR-pass progress without that detail.
+        command[1:1] = ['-Xclang', '-fdebug-pass-manager']
     return command
 
 

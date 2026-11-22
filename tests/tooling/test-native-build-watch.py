@@ -93,6 +93,7 @@ class NativeBuildWatchTests(unittest.TestCase):
             self.assertIn('-c', command)
             self.assertIn('-g', command)
             self.assertIn('-fdebug-pass-manager', command)
+            self.assertNotIn('-debug-pass=Executions', command)
         self.assertNotIn('-g', commands[-1])
         self.assertFalse(any(name.endswith(('.cpp', '.c', '.ll')) for name in commands[-1]))
         self.assertEqual((output / 'stdout').read_bytes(), b'ok\n')

@@ -77,7 +77,12 @@ normal and ASan modes retain the same native assertions.
 
 Native test builds use `scripts/support/native_build.py`, an argv/logging
 adapter to the existing `process_watch` supervisor. Known clang producers enable
-real LLVM pass progress; opt producers use their pass-manager diagnostics.
+real IR-pass progress; opt producers use their pass-manager diagnostics. Avoid
+timestamped legacy machine-pass detail for ordinary fixture builds: producing
+those lines can dominate compilation of large IR even when logs are compact.
+Check observer cost and output equality on a representative large input.
+Machine-codegen/link intervals without events remain bounded by60seconds; an
+actual longer gap needs a real progress provider, not a deadline increase.
 Each stage retains the 60-second inactivity bound, selected optimization and
 sanitizer settings. Use named per-stage logs or a unique trace prefix for repeated
 builds. Tool queries, deliberate watchdog faults, private compiler-failure
