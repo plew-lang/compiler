@@ -1,7 +1,7 @@
 ---
 id: com-yeua
 status: in_progress
-deps: [met-c1pg, com-to2g, com-ew3i, com-x7ql, com-8uik, met-1yd7, met-tb7u, met-r3us, met-9ym8]
+deps: [met-c1pg, com-to2g, com-ew3i, com-x7ql, com-8uik, met-1yd7, met-tb7u, met-r3us, met-9ym8, met-g2x4]
 links: []
 created: 2026-11-02T21:30:19Z
 type: task
@@ -13,11 +13,11 @@ tags: [diagnostics, frontend, driver, verification]
 
 ## Current boundary
 
-This parent remains open. The last completed whole normal run is
-`20261122T152131-test-9ce06a`: exit1,314fail,skip0, unchanged inputs and7595
-worker pairs reaped. Its complete supervision evidence is retained in the
-[normal-build record](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-normal-native-build-supervision.json).
-Targeted repairs do not retroactively change that result.
+This parent remains open. Latest complete normal run
+20261123T123611-test-19e1c3: exit1,295fail,skip0, unchanged inputs and7642
+matched worker pairs. Against previous314 run:19 resolved,0new,0reason changes;
+resolved source/golden bytes unchanged. See
+[whole reconciliation](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-post-numeric-normal-suite.json).
 
 Contextual operand children com-u22d/met-bu94/met-qo60, monitor repairs
 met-9455/met-kjb2, associated refusal met-1yd7, numeric ambiguity met-tb7u and
@@ -29,10 +29,10 @@ candidate and exact receipts are in the
 [contextual operand record](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-contextual-operand-regression.json)
 and meta worklog.
 
-Whole refresh20261123T123611-test-19e1c3 is running on frozen source5bafacff
-and the formally measured carrier2b5475. Collect its complete result and
-reconcile every remaining failure with the pinned audit scopes. Neither child reviews nor a partial run slice closes this parent,
-normal-suite reconciliation or phase three.
+The whole result uses frozen source5bafacff and measured carrier2b5475.
+Next finite child met-g2x4 owns unresolved source-typing publication refusal,
+separating genuine source obligations from missing internal facts. Neither
+finite child reviews nor this failed whole run closes the parent or phase three.
 
 ## Contract and audit evidence
 
