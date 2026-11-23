@@ -1,6 +1,6 @@
 ---
 id: met-0av7
-status: in_progress
+status: closed
 deps: [met-6hrd]
 links: []
 created: 2026-11-23T19:21:47Z
@@ -37,3 +37,7 @@ Full compiler-source --check succeeded on current changes. Fresh candidate AOT/n
 ## Final Mid consumer and executable diagnostic evidence
 
 A genuine RED against 4c9b28de Mid/Instantiate passes direct Index and fails inherited signature retention. Mid now consumes the validated full saved InterfaceCallEvidence signature; receiver/count/argument passing checks remain, without root declaration reselection or duplicate mode/count authority. The private actual-Mid probe is GREEN. Diagnostic O0 fresh compiler passes all 45 check/AOT-emission/ORC modes and 15 separately linked native apps; LLVM22 ASan+LSan passes all 15 apps and private frontend witnesses (24033 instrumented function checks). Exact input hashes and RED/GREEN reports are saved in canonical parent evidence. Independent reviewer typing_obligation_plan_review found no must-fix in this source/test boundary and verified support64 hashes. Optimized frozen build existential-witness-build-v2 is running; final candidate execution remains required before closure. Parent met-lrep retains whole/gen/formal gates.
+
+## Accepted finite consumer boundary
+
+Product b46390a9, fresh build20261123T221915-build-bb493b passed with invariant inputs; all194 frozen/current source files match. Optimized candidate b0f643fed27c1f0d71d04405f8740b8f75acdf75a9adfacd9d58ff651fb54a23 passes CLI45, native15 and real LLVM22 ASan/LSan15. Reviewer typing_obligation_plan_review independently checked source, recorded inputs and all30 native artifacts/goldens/empty stderr/LLVM and binary hashes/memory hooks, and certifies this finite consumer boundary with no mandatory gap. This was artifact/source review, not independent rerun. Standard registration, whole/gen/formal<=7.5s and final integration remain met-lrep; parent stays open and carrier unchanged.

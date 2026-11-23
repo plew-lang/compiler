@@ -522,6 +522,30 @@ else
     fail=$((fail + 1)); failed="$failed provided-source-endpoints-private"
 fi
 
+if PLEWC="$PLEWC" LLVM_CONFIG="$LC" python3 -B ./tests/compiler/frontend/test-existential-interfaces.py; then
+    :
+else
+    fail=$((fail + 1)); failed="$failed existential-interfaces-private"
+fi
+
+if PLEWC="$PLEWC" LLVM_CONFIG="$LC" python3 -B ./tests/compiler/frontend/test-existential-witnesses.py; then
+    :
+else
+    fail=$((fail + 1)); failed="$failed existential-witnesses-private"
+fi
+
+if PLEWC="$PLEWC" LLVM_CONFIG="$LC" python3 -B ./tests/compiler/codegen/test-existential-mid-signature.py; then
+    :
+else
+    fail=$((fail + 1)); failed="$failed existential-mid-signature-private"
+fi
+
+if PLEWC="$PLEWC" LLVM_CONFIG="$LC" python3 -B ./tests/compiler/codegen/test-existential-endpoint-preflight.py; then
+    :
+else
+    fail=$((fail + 1)); failed="$failed existential-endpoint-preflight-private"
+fi
+
 if python3 ./tests/compiler/codegen/test-expose.py; then
     :
 else
