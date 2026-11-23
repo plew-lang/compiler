@@ -1,0 +1,21 @@
+use @Std/Io only { print }
+trait Parent { type Output fn get() -> Output }
+trait Child: Parent[Output=Array[I64]] {}
+struct Shelf { pub val items: Array[I64] }
+pub impl Shelf { factory }
+pub impl Shelf as Parent {
+    type Output = Array[I64]
+    fn get() -> Array[I64] { return self.items }
+}
+pub impl Shelf as Child {}
+fn main() {
+    mut val items: Array[I64] = []
+    items.append(61I64)
+    items.append(67I64)
+    val first: any Child = <Shelf items=items />
+    val second = first
+    val one = first.get()
+    val two = second.get()
+    print(one.count())
+    print(two[0U64])
+}

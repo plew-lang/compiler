@@ -6,7 +6,7 @@
 
 use ../Frontend only { Comp }
 use ./Types only { midViewTypesMatch }
-use ../Ir only { Arena, CallSiteKey, BodyInstance, Func, Param, TypeRef, CallResolution, CallTarget, CallReceiverPassing, CallArgumentPassing, FinalAggregateResolution, FinalMatchResolution, FinalMatchArmResolution, FinalMatchPayloadResolution, FinalReturnResolution, FinalStorageResolution, FinalTryResolution, FinalForResolution, MatchSource, SemanticMatchKind, SemanticClosure, SemanticClosureCaptureMode }
+use ../Ir only { ExistentialRequirementSignature, Arena, CallSiteKey, BodyInstance, Func, Param, TypeRef, CallResolution, CallTarget, CallReceiverPassing, CallArgumentPassing, FinalAggregateResolution, FinalMatchResolution, FinalMatchArmResolution, FinalMatchPayloadResolution, FinalReturnResolution, FinalStorageResolution, FinalTryResolution, FinalForResolution, MatchSource, SemanticMatchKind, SemanticClosure, SemanticClosureCaptureMode }
 use ../Diag only { eprintU64, CompileDiagnostic }
 use @Std/Io only { eprint }
 use @Std/Core only { bitCastI64 }
@@ -1426,6 +1426,7 @@ pub fn instantiateCanonicalMidBody(c: inout Comp, body: MidCanonicalBody, bodyId
 }
 
 enum MidSelectedSignature {
+    Interface(signature: ExistentialRequirementSignature)
     Invalid
     Declaration(function: Func, hasReceiver: Bool)
     Closure(functionType: TypeRef, hasReceiver: Bool)
@@ -1446,9 +1447,10 @@ fn midSelectedSignature(c: inout Comp, selected: CallResolution) -> MidSelectedS
             hasReceiver = true
         }
         CallTarget.ExistentialRequirement(traitIdx: val traitIndex, slot: val slot) => {
-            if c.checkFinalInterfaceEvidence(resolution: selected).isErr() { return <MidSelectedSignature.Invalid /> }
-            if traitIndex >= c.decls.traitCount() || slot == 0U64 || slot > c.decls.traitAt(index: traitIndex).reqs.count() { return <MidSelectedSignature.Invalid /> }
-            return <MidSelectedSignature.Declaration function=c.traitReqAt(reqs: c.decls.traitAt(index: traitIndex).reqs, index: slot - 1U64) hasReceiver=true />
+            return match c.finalInterfaceCallSignature(resolution: selected) {
+                Result.Ok(value: val signature) => <MidSelectedSignature.Interface signature=signature />,
+                Result.Err(error: _) => <MidSelectedSignature.Invalid />,
+            }
         }
         _ => {
             if selected.callee >= c.arena.functionCount() { return <MidSelectedSignature.Invalid /> }
@@ -1463,6 +1465,15 @@ fn midSelectedSignature(c: inout Comp, selected: CallResolution) -> MidSelectedS
 
 fn midSignatureMatches(signature: MidSelectedSignature, count: U64, passing: CallReceiverPassing) -> Bool {
     match signature {
+        MidSelectedSignature.Interface(signature: val signature) => {
+            if signature.parameterTypes.count() != count { return false }
+            return match signature.receiverPassing {
+                CallReceiverPassing.Borrow => match passing { CallReceiverPassing.Borrow => true _ => false },
+                CallReceiverPassing.Inout => match passing { CallReceiverPassing.Inout => true _ => false },
+                CallReceiverPassing.Move => match passing { CallReceiverPassing.Move => true _ => false },
+                CallReceiverPassing.None => false,
+            }
+        }
         MidSelectedSignature.Invalid => { return false }
         MidSelectedSignature.Declaration(function: val function, hasReceiver: val hasReceiver) => {
             return function.params.count() == count && midReceiverPassingMatches(callee: function, passing: passing, hasReceiver: hasReceiver)
@@ -1477,6 +1488,14 @@ fn midSignatureMatches(signature: MidSelectedSignature, count: U64, passing: Cal
 
 fn midSignatureArgumentMatches(c: Comp, signature: MidSelectedSignature, index: U64, passing: CallArgumentPassing) -> Bool {
     match signature {
+        MidSelectedSignature.Interface(signature: val signature) => {
+            if index >= signature.argumentPassings.count() { return false }
+            return match signature.argumentPassings[index] {
+                CallArgumentPassing.Borrow => match passing { CallArgumentPassing.Borrow => true _ => false },
+                CallArgumentPassing.Inout => match passing { CallArgumentPassing.Inout => true _ => false },
+                CallArgumentPassing.Move => match passing { CallArgumentPassing.Move => true _ => false },
+            }
+        }
         MidSelectedSignature.Invalid => { return false }
         MidSelectedSignature.Declaration(function: val function, hasReceiver: _) => {
             return index < function.params.count() && midArgumentPassingMatches(parameter: c.funcParamAt(params: function.params, index: index), passing: passing)

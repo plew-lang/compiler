@@ -29,6 +29,7 @@ def main():
                  'inherited_existential_late_binding', 'inherited_existential_converging_bindings',
                  'inherited_existential_unavailable_slot', 'inherited_existential_generic_erasure',
                  'inherited_existential_self_result', 'inherited_existential_inout',
+                 'inherited_existential_owned_result',
                  'index_existential_requirement', 'index_generic_inherited_requirement']:
         source = ROOT / 'tests/fixtures/run' / (name + '.pw')
         retain(source)

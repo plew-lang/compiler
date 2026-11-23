@@ -1,0 +1,36 @@
+// Appended to Mid/Instantiate: exercise its actual final-signature consumer.
+use ../Frontend only { analyzeFrontend, FrontendInput }
+use ../SourceAccess only { SourceAccess }
+use @Std/Io only { eprint }
+fn main() {
+    for name in ["index_existential_requirement", "index_inherited_existential_requirement", "inherited_existential_inout", "inherited_existential_owned_result"] {
+        mut val compiler = <Comp />
+        match analyzeFrontend(c: inout compiler, input: <FrontendInput.File path="tests/fixtures/run/" + name + ".pw" />, sources: <SourceAccess stdRoot="std/".bytes() />) {
+            Result.Ok(value: _) => {}
+            Result.Err(error: val diagnostic) => { panic(diagnostic.message()) }
+        }
+        mut val checked = 0U64
+        for index in 0U64..<compiler.arena.finalCalleeCount() {
+            val row = compiler.arena.finalCalleeAt(index: index)
+            match row.target {
+                CallTarget.ExistentialRequirement(traitIdx: _, slot: _) => {
+                    val signature = midSelectedSignature(c: inout compiler, selected: row)
+                    if !midSignatureMatches(signature: signature, count: row.parameterTypeRefs.len, passing: row.receiverPassing) { panic("Mid lost its finalized inherited endpoint signature") }
+                    if midSignatureMatches(signature: signature, count: row.parameterTypeRefs.len + 1U64, passing: row.receiverPassing) { panic("Mid accepted a wrong inherited argument count") }
+                    val wrong = match row.receiverPassing { CallReceiverPassing.Inout => <CallReceiverPassing.Borrow /> _ => <CallReceiverPassing.Inout /> }
+                    if midSignatureMatches(signature: signature, count: row.parameterTypeRefs.len, passing: wrong) { panic("Mid accepted a wrong inherited receiver mode") }
+                    for argument in 0U64..<row.argumentPassings.len {
+                        val passing = compiler.arena.finalCalleeArgumentPassingAt(passings: row.argumentPassings, index: argument)
+                        if !midSignatureArgumentMatches(c: compiler, signature: signature, index: argument, passing: passing) { panic("Mid lost a finalized inherited argument mode") }
+                        val wrongPassing = match passing { CallArgumentPassing.Borrow => <CallArgumentPassing.Inout /> _ => <CallArgumentPassing.Borrow /> }
+                        if midSignatureArgumentMatches(c: compiler, signature: signature, index: argument, passing: wrongPassing) { panic("Mid accepted a wrong inherited argument mode") }
+                    }
+                    checked += 1U64
+                }
+                _ => {}
+            }
+        }
+        if checked == 0U64 { panic("Mid signature fixture missed its final interface call") }
+        eprint(text: name + " Mid signature retained\n")
+    }
+}

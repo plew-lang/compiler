@@ -651,7 +651,7 @@ impl Comp {
         // No hidden binder is interpreted by an empty condition set. Retain
         // its source provenance without manufacturing an unused fresh scope.
         if plan.bounds.count() == 0U64 {
-            self.interfaceCalls.append(<Ref value=<InterfaceCallEvidenceCell evidence=<InterfaceCallEvidence interface=publicInterface isAsync=publicDeclaration.isAsync receiverPassing=publicSignature.receiverPassing parameterCount=publicSignature.parameterTypes.count() sourceRoot=root instanceRoot=root owner=owner receiver=receiver traitIndex=traitAndSlot.traitIndex slot=traitAndSlot.slot bounds=[] proofs=[] /> /> />)
+            self.interfaceCalls.append(<Ref value=<InterfaceCallEvidenceCell evidence=<InterfaceCallEvidence interface=publicInterface isAsync=publicDeclaration.isAsync signature=publicSignature sourceRoot=root instanceRoot=root owner=owner receiver=receiver traitIndex=traitAndSlot.traitIndex slot=traitAndSlot.slot bounds=[] proofs=[] /> /> />)
             return <Result.Ok value=<Optional.Some v=self.interfaceCalls.count() /> />
         }
         val context = try self.createInterfaceProofContext(source: source, sourceRoot: root, owner: owner, environment: environment, selfRef: selfRef, itemRef: itemRef)
@@ -685,7 +685,7 @@ impl Comp {
             bounds.append(bound)
             proofs.append(self.freezeStaticConformanceProof(proof: instantiated))
         }
-        self.interfaceCalls.append(<Ref value=<InterfaceCallEvidenceCell evidence=<InterfaceCallEvidence interface=publicInterface isAsync=publicDeclaration.isAsync receiverPassing=publicSignature.receiverPassing parameterCount=publicSignature.parameterTypes.count() sourceRoot=root instanceRoot=instanceRoot owner=owner receiver=receiver traitIndex=traitAndSlot.traitIndex slot=traitAndSlot.slot bounds=bounds proofs=proofs /> /> />)
+        self.interfaceCalls.append(<Ref value=<InterfaceCallEvidenceCell evidence=<InterfaceCallEvidence interface=publicInterface isAsync=publicDeclaration.isAsync signature=publicSignature sourceRoot=root instanceRoot=instanceRoot owner=owner receiver=receiver traitIndex=traitAndSlot.traitIndex slot=traitAndSlot.slot bounds=bounds proofs=proofs /> /> />)
         return <Result.Ok value=<Optional.Some v=self.interfaceCalls.count() /> />
     }
 }
@@ -702,7 +702,14 @@ pub impl Comp {
         if saved.interface >= self.sourceExistentialInterfaces.count() { return <Result.Err error=self.diagnosticAt(offset: resolution.siteKey.originStart, msg: "finalized interface metadata has no retained interface", failureDomain: <FailureDomain.Internal />) /> }
         val interface = self.sourceExistentialInterfaces[saved.interface]
         if interface.traitIndex != saved.traitIndex || saved.slot == 0U64 || saved.slot > interface.members.count() { return <Result.Err error=self.diagnosticAt(offset: resolution.siteKey.originStart, msg: "finalized interface metadata has an invalid effective slot", failureDomain: <FailureDomain.Internal />) /> }
-        return <Result.Ok value=(slotCount: interface.members.count(), isAsync: saved.isAsync, receiverPassing: saved.receiverPassing, parameterCount: saved.parameterCount) />
+        return <Result.Ok value=(slotCount: interface.members.count(), isAsync: saved.isAsync, receiverPassing: saved.signature.receiverPassing, parameterCount: saved.signature.parameterTypes.count()) />
+    }
+
+    inout fn finalInterfaceCallSignature(resolution: CallResolution) -> Result[ExistentialRequirementSignature, CompileDiagnostic] {
+        try self.finalInterfaceCallMetadata(resolution: resolution)
+        val signature = self.interfaceCalls[resolution.interfaceEvidence - 1U64]->evidence.signature
+        if signature.parameterTypes.count() != signature.argumentPassings.count() { return <Result.Err error=self.diagnosticAt(offset: resolution.siteKey.originStart, msg: "finalized interface signature has an incomplete argument contract", failureDomain: <FailureDomain.Internal />) /> }
+        return <Result.Ok value=signature />
     }
 
     // Validate the completed descriptor before using its member count as a

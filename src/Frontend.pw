@@ -403,8 +403,7 @@ struct InterfaceCallEvidence {
     // Frozen public endpoint facts; LLVM does not re-read trait declarations.
     val interface: U64
     val isAsync: Bool
-    val receiverPassing: CallReceiverPassing
-    val parameterCount: U64
+    val signature: ExistentialRequirementSignature
     val sourceRoot: U64
     val instanceRoot: U64
     val owner: InterfaceEvidenceOwner

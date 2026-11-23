@@ -38,7 +38,11 @@ fn checkFinalDispatchMetadata() {
                 val cell = compiler.interfaceCalls[row.interfaceEvidence - 1U64]
                 val saved = cell->evidence
                 for fault in 0U64..<4U64 {
-                    val changed = <InterfaceCallEvidence interface=(if fault == 0U64 { give compiler.sourceExistentialInterfaces.count() } else { give saved.interface }) isAsync=(fault == 1U64) receiverPassing=(if fault == 2U64 { give <CallReceiverPassing.Inout /> } else { give saved.receiverPassing }) parameterCount=(if fault == 3U64 { give saved.parameterCount + 1U64 } else { give saved.parameterCount }) sourceRoot=saved.sourceRoot instanceRoot=saved.instanceRoot owner=saved.owner receiver=saved.receiver traitIndex=saved.traitIndex slot=saved.slot bounds=saved.bounds proofs=saved.proofs />
+                    mut val types = saved.signature.parameterTypes
+                    mut val passings = saved.signature.argumentPassings
+                    if fault == 3U64 { types.append(types[0U64]) passings.append(passings[0U64]) }
+                    val signature = <ExistentialRequirementSignature receiverPassing=(if fault == 2U64 { give <CallReceiverPassing.Inout /> } else { give saved.signature.receiverPassing }) parameterTypes=types argumentPassings=passings resultType=saved.signature.resultType />
+                    val changed = <InterfaceCallEvidence interface=(if fault == 0U64 { give compiler.sourceExistentialInterfaces.count() } else { give saved.interface }) isAsync=(fault == 1U64) signature=signature sourceRoot=saved.sourceRoot instanceRoot=saved.instanceRoot owner=saved.owner receiver=saved.receiver traitIndex=saved.traitIndex slot=saved.slot bounds=saved.bounds proofs=saved.proofs />
                     compiler.interfaceCalls[row.interfaceEvidence - 1U64] = <Ref value=<InterfaceCallEvidenceCell evidence=changed /> />
                     if fault == 0U64 { expectInterfaceRefusal(result: compiler.finalInterfaceCallMetadata(resolution: row)) }
                     else {
