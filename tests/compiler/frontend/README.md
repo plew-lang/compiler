@@ -619,3 +619,13 @@ program with that graph was accepted. Public multi-module provided-helper
 fixtures and MemberCandidateIdentities cover actual candidate lookup and final
 execution separately. Require exit0, exact `.out`, empty native stderr and source
 immutability; compiler/link stages use the shared semantic-progress supervisor.
+
+The endpoint gate also compares the shared signature/obligation receiver argument
+vector on actual Box[I64]/Box[String] copies, for helpers and authored conformance
+implementations. It covers strict/zero/symbolic receiver failure, foreign helper
+proof, conflicting nonzero ParamIds, legitimate receiver-free slots and retained
+argument completion versus admission. Concrete retained contradictions are
+Internal; symbolic terms stay on the existing readiness path. The generic public
+fixture's associated projection is asserted in a real StaticMethod.Provided
+saved argument before full frontend checking. Fixture/std/dependency and support
+input hashes accompany the exact source snapshot.

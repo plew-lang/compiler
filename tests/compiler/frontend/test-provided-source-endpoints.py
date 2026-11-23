@@ -35,6 +35,23 @@ def sha(path):
 
 inputs = {str(p.relative_to(root / 'src')): sha(p) for p in (root / 'src').rglob('*') if p.is_file()}
 (out / 'inputs.json').write_text(json.dumps(inputs, indent=2) + '\n')
+support_paths = {root / 'Plew.toml', root / 'Plew.lock', root / 'tests/compiler/frontend/ProvidedSourceEndpointMain.pw', root / 'tests/compiler/frontend/ProvidedSourceEndpointMain.out', Path(__file__).resolve()}
+for fixture in ('traitprovidedblanketgeneric', 'traitprovidedblanketassociated'):
+    support_paths.update((root / 'tests/fixtures/part' / fixture).iterdir())
+for name in ('llvm_backend.cpp', 'compiler_callbacks.cpp', 'compiler_execution.cpp', 'llvm_pipeline.h'):
+    support_paths.add(root / 'native' / name)
+for name in ('native_build.py', 'llvm_link.py', 'process_watch.py', 'clang_environment.py'):
+    support_paths.add(root / 'scripts/support' / name)
+for tree in (root / 'std', compiler.parent / 'std'):
+    if tree.exists():
+        support_paths.update(tree.resolve().rglob('*.pw'))
+for match in re.finditer(r'path\s*=\s*"([^\"]+)"', (root / 'Plew.toml').read_text()):
+    dependency = (root / match[1]).resolve()
+    support_paths.update((dependency / 'src').rglob('*.pw'))
+    support_paths.add(dependency / 'Plew.toml')
+support_inputs = {str(path.resolve()): sha(path) for path in support_paths if path.is_file()}
+(out / 'support-inputs.json').write_text(json.dumps(support_inputs, indent=2) + '\n')
+
 sys.path.insert(0, str(root / 'scripts/support'))
 import clang_environment
 import llvm_link
@@ -60,5 +77,6 @@ assert (out / 'run.stdout').read_bytes() == (root / 'tests/compiler/frontend/Pro
 assert not (out / 'run.stderr').read_bytes()
 assert all(sha(root / 'src' / p) == value for p, value in inputs.items()), 'source inputs changed during validation'
 assert entry.read_bytes() == original + b'\n' + test
-(out / 'summary.json').write_text(json.dumps({'status': 'passed', 'source_inputs': inputs, 'frontend_prefix_unchanged': True, 'frontend_prefix_sha256': hashlib.sha256(original).hexdigest(), 'test_main_sha256': hashlib.sha256(test).hexdigest(), 'compiler_sha256': sha(compiler), 'scope': 'private endpoint projection: exact instances, terminal guards, raw position and assumption/supertrait roots; source program acceptance is checked separately'}, indent=2) + '\n')
+assert all(sha(Path(path)) == value for path, value in support_inputs.items()), 'support inputs changed during validation'
+(out / 'summary.json').write_text(json.dumps({'status': 'passed', 'source_inputs': inputs, 'support_inputs': support_inputs, 'frontend_prefix_unchanged': True, 'frontend_prefix_sha256': hashlib.sha256(original).hexdigest(), 'test_main_sha256': hashlib.sha256(test).hexdigest(), 'compiler_sha256': sha(compiler), 'scope': 'private endpoint and argument guards, exact instances, strict receivers and generic/associated frontend checks; public native/ORC execution is separate'}, indent=2) + '\n')
 print('PASS private provided source endpoint projection')

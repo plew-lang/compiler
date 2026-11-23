@@ -1,5 +1,5 @@
 use @Std/Io only { print }
-use ./Lib only { Box }
+use ./Lib only { Box, ProjectionOwner, projected }
 // Both the retained helper and its blanket caller must bind the source's T.
 fn main() {
     val number = <Box[I64] value=42I64 />
@@ -8,4 +8,5 @@ fn main() {
     print(number.forward())
     print(text.retained())
     print(text.forward())
+    print(projected(owner: <ProjectionOwner />, value: number))
 }

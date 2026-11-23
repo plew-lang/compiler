@@ -112,6 +112,29 @@ Aggregate results retain resolved type identity, field/payload mappings, child c
 
 A function body belongs to its declaration. A provided-method copy retains the original semantic source owner while its concrete instance has separate placement and evidence. A global initializer and a default-value generator also have explicit owners. A closure has its own body identity and signature, while retaining its lexical parent and captured binding identities. Checking a closure expression's construction does not mean its body has executed or that all interprocedural effects are closed.
 
+A provided copy's placement target is not the identity of its authored body
+instance. A helper inherited from a conferring edge's subject namespace belongs to that
+subject instance; a helper supplied by the target namespace belongs to the
+target instance. A conformance implementation retains its authored source edge
+and that edge's substitutions. Compare exact retained witness positions and their
+substitutions, including assumption roots and supertrait steps. An owner or
+edge can recur at different generic instances, so its first occurrence is not
+an endpoint identity. This comparison projection does not replace the complete
+selected proof used to interpret and execute the body.
+
+Receiver/proof-derived callable arguments have one shared construction, in the
+selected function's ParamId order. Source probing and declaration obligations
+supply their own admitted receiver equations and evidence; sharing construction
+does not share lookup permission. Only the source entry may perform its allowed
+namespace recovery or proof query. A retained obligation cannot turn a strict
+receiver failure into arguments from a nominal spelling. Helper trait parameters
+come from the providing source instance, not the unrelated binders of its
+conferring bridge. Retained arguments can complete missing slots; incompatible
+concrete substitutions are an internal handoff failure, while unresolved terms
+remain subject to the ordinary readiness gate. An argument-only reader does not
+need a duplicate parameter array or a new owner-bearing environment.
+
+
 For implicit copy captures of a spawn body, source checking admits only immutable value bindings with copyable, sendable contents. Reading an outer mutable binding is rejected even if no write occurs in the spawn body; lowering must not silently replace that binding with a snapshot. An explicit immutable local created outside the spawn body can supply that snapshot. Captured borrow/inout bindings are also rejected. Binding immutability is distinct from freezing a referenced payload. Record capture origin and transfer obligations once for environment construction to consume; do not reclassify mutable bindings downstream. Explicit ownership transfer is a separate contract from implicit copy capture.
 
 Construction is private and owner-scoped. Before successful publication, the owner checks that all required source facts and selected operations are complete for that result's scope. Published facts cannot be overwritten by a subsequent verification pass. A shared traversal or multiple internal passes are acceptable if they have explicit read/write phases; several independent selectors followed by a consistency assertion are not the final design.

@@ -40,6 +40,8 @@ fn main() {
     if compiler.sameSourceProofPath(a: source, b: other) { panic("different source substitutions collapsed") }
     val body = compiler.memberSourceProofEndpoint(proof: proofs[0U64], targetConformance: terminal, traitOwner: targetOwner, subject: false).unwrap()
     if !compiler.sameSourceProofPath(a: body, b: <StaticConformanceProof.ConcreteWitness witness=first[1U64] />) { panic("authored implementation lost its own edge") }
+    val otherBody = compiler.memberSourceProofEndpoint(proof: proofs[1U64], targetConformance: terminal, traitOwner: targetOwner, subject: false).unwrap()
+    if compiler.sameSourceProofPath(a: body, b: otherBody) { panic("authored implementation substitutions collapsed at the same edge") }
     requireMissingSourceEndpoint(proof: compiler.memberSourceProofEndpoint(proof: proofs[0U64], targetConformance: 0U64, traitOwner: providerOwner, subject: true).unwrap())
     requireMissingSourceEndpoint(proof: compiler.memberSourceProofEndpoint(proof: <StaticConformanceProof.TraitPath edges=first terminalConformIdx=first[0U64].conformIdx />, targetConformance: terminal, traitOwner: providerOwner, subject: true).unwrap())
     requireMissingSourceEndpoint(proof: compiler.memberSourceProofEndpoint(proof: <StaticConformanceProof.TraitPath edges=[] terminalConformIdx=terminal />, targetConformance: terminal, traitOwner: providerOwner, subject: true).unwrap())
@@ -71,5 +73,135 @@ fn main() {
         }
         _ => { panic("supertrait proof did not retain its steps") }
     }
+    checkProvidedReceiverArguments()
+    openFrontend(input: <FrontendInput.File path="tests/fixtures/part/traitprovidedblanketgeneric/Main.pw" />, sources: <SourceAccess stdRoot="std/".bytes() />).unwrap()
+    openFrontend(input: <FrontendInput.File path="tests/fixtures/part/traitprovidedblanketassociated/Main.pw" />, sources: <SourceAccess stdRoot="std/".bytes() />).unwrap()
     print("provided source endpoints retain exact instances and assumption roots")
+}
+
+fn checkProvidedReceiverArguments() {
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.File path="tests/fixtures/part/traitprovidedblanketgeneric/Main.pw" />, sources: <SourceAccess stdRoot="std/".bytes() />).unwrap()
+    val mainName = compiler.internBytes(s: "main")
+    compiler.cur.checkFn = compiler.arena.firstFunctionNamed(nameId: mainName.nameId)
+    val boxName = compiler.internBytes(s: "Box")
+    val method = compiler.internBytes(s: "retained")
+    val forward = compiler.internBytes(s: "forward")
+    mut val checked = 0U64
+    mut val conflicts = 0U64
+    mut val receivers: Array[U64] = []
+    mut val prototype = compiler.arena.functionCount()
+    for expression in 0U64..<compiler.arena.exprs.count() {
+        match compiler.arena.exprs[expression] {
+            Expr.Make(typeStart: val start, typeLen: val length, variantStart: _, variantLen: _, isEnum: _, ty: _, fields: _) => {
+                if intern(c: inout compiler, start: start, len: length) != boxName.nameId { continue }
+                val receiver = compiler.exprType(id: expression).unwrap().ref
+                receivers.append(receiver)
+                for index in 0U64..<compiler.arena.functionCount() {
+                    val declaration = compiler.arena.functionAt(index: index)
+                    if (declaration.nameId != method.nameId && declaration.nameId != forward.nameId) || !declaration.isProvided { continue }
+                    val proof = compiler.providedBodyProof(f: declaration, receiverRef: receiver).unwrap()
+                    if compiler.proofIsMissing(proof: proof) { continue }
+                    val signature = compiler.methodReceiverSignatureEnvironment(f: declaration, semanticReceiver: receiver, selectedProof: proof).unwrap()
+                    for argument in signature.args { if argument == 0U64 { panic("signature receiver setup is incomplete") } }
+                    val obligations = compiler.callConstraintTypeArguments(function: declaration, receiver: receiver, proof: proof).unwrap()
+                    if !compiler.sameResolvedTypeRefs(a: signature.args, b: obligations) { panic("obligations lost the selected receiver proof arguments") }
+                    val structural = compiler.methodReceiverEnvironment(f: declaration, instRef: receiver).unwrap()
+                    val missing = compiler.methodReceiverProofArguments(f: declaration, semanticReceiver: receiver, receiverMatch: structural, proof: <StaticConformanceProof.Missing />, namespace: false).unwrap()
+                    if missing.isSome() { panic("strict obligation core reopened a missing provided proof") }
+                    val proofArguments = compiler.providedProofArguments(f: declaration, proof: proof)
+                    for slot in 0U64..<proofArguments.count() {
+                        if proofArguments[slot] == 0U64 { continue }
+                        val spelling = compiler.internBytes(s: "Bool")
+                        val wrong = compiler.pushType(t: <TypeRef nameStart=spelling.nameStart nameLen=spelling.nameLen args=[] />)
+                        if compiler.typeRefEq(a: wrong, b: proofArguments[slot]) { continue }
+                        val binder = compiler.funcBindAt(binds: declaration.typeParams, index: slot)
+                        val contradictory = <WitnessMatch binds=[<WitnessBind binder=slot paramId=binder.paramId term=wrong />] />
+                        match compiler.methodReceiverProofArguments(f: declaration, semanticReceiver: receiver, receiverMatch: contradictory, proof: proof, namespace: false) {
+                            Result.Ok(value: _) => { panic("receiver/proof conflict was overwritten") }
+                            Result.Err(error: val failure) => {
+                                match failure.failureDomain() { FailureDomain.Internal => {} _ => { panic("receiver/proof conflict lost Internal classification") } }
+                            }
+                        }
+                        conflicts += 1U64
+                    }
+                    if declaration.nameId == method.nameId { prototype = index }
+                    checked += 1U64
+                }
+            }
+            _ => {}
+        }
+    }
+    if checked < 6U64 || conflicts == 0U64 { panic("provided receiver argument controls missing") }
+    if receivers.count() != 2U64 || prototype >= compiler.arena.functionCount() { panic("strict receiver setup missing") }
+    val original = compiler.arena.functionAt(index: prototype)
+    val mismatched = <Func nameStart=original.nameStart nameLen=original.nameLen recvId=boxName.nameId recvTy=receivers[1U64] typeParams=original.typeParams hasRet=false retStart=0U64 retLen=0U64 retIsArray=false retTy=0U64 body=0U64 hasRecv=true recvStart=boxName.nameStart recvLen=boxName.nameLen selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false />
+    val failed = compiler.methodReceiverEnvironment(f: mismatched, instRef: receivers[0U64]).unwrap()
+    if failed.conformIdx != 0U64 { panic("strict receiver mismatch was not exercised") }
+    val denied = compiler.methodReceiverProofArguments(f: mismatched, semanticReceiver: receivers[0U64], receiverMatch: failed, proof: <StaticConformanceProof.Missing />, namespace: false).unwrap()
+    if denied.isSome() { panic("strict failed receiver acquired namespace arguments") }
+    val absent = compiler.methodReceiverProofArguments(f: mismatched, semanticReceiver: 0U64, receiverMatch: <WitnessMatch />, proof: <StaticConformanceProof.Missing />, namespace: false).unwrap()
+    if absent.isSome() { panic("zero receiver acquired a strict argument vector") }
+    val binder = compiler.funcBindAt(binds: original.typeParams, index: 0U64)
+    val symbolic = compiler.pushType(t: <TypeRef nameStart=binder.nameStart nameLen=binder.nameLen paramId=binder.paramId args=[] />)
+    val symbolicMatch = compiler.methodReceiverEnvironment(f: mismatched, instRef: symbolic).unwrap()
+    val symbolicArguments = compiler.methodReceiverProofArguments(f: mismatched, semanticReceiver: symbolic, receiverMatch: symbolicMatch, proof: <StaticConformanceProof.Missing />, namespace: false).unwrap()
+    if symbolicArguments.isSome() { panic("symbolic mismatch acquired nominal arguments") }
+    val proper = compiler.methodReceiverEnvironment(f: original, instRef: receivers[0U64]).unwrap()
+    val foreign = compiler.providedBodyProof(f: original, receiverRef: receivers[1U64]).unwrap()
+    val foreignArguments = compiler.methodReceiverProofArguments(f: original, semanticReceiver: receivers[0U64], receiverMatch: proper, proof: foreign, namespace: false).unwrap()
+    if foreignArguments.isSome() { panic("foreign receiver proof acquired source helper arguments") }
+    val free = <Func nameStart=original.nameStart nameLen=original.nameLen typeParams=original.typeParams hasRet=false retStart=0U64 retLen=0U64 retIsArray=false retTy=0U64 body=0U64 hasRecv=false recvStart=0U64 recvLen=0U64 selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false />
+    val freeArguments = compiler.methodReceiverProofArguments(f: free, semanticReceiver: 0U64, receiverMatch: <WitnessMatch />, proof: <StaticConformanceProof.Missing />, namespace: false).unwrap()
+    if freeArguments.isNone() || freeArguments.unwrap().count() != free.typeParams.count() { panic("legitimate receiver-free slots were rejected") }
+    val sourceFunction = original.sourceWitnessFuncId - 1U64
+    if compiler.arena.functionAt(index: sourceFunction).typeParams.count() != 1U64 { panic("retained provided argument setup is not unary") }
+    val validProof = compiler.providedBodyProof(f: original, receiverRef: receivers[0U64]).unwrap()
+    val retained = <StaticMemberResolution.Provided proof=validProof traitIdx=compiler.decls.traitIndexByOffset(offset: original.provTraitOwner) callee=sourceFunction />
+    val known = compiler.callConstraintTypeArguments(function: original, receiver: receivers[0U64], proof: validProof).unwrap()
+    val equalArguments = compiler.staticMemberInstanceArguments(resolution: retained, function: prototype, receiver: receivers[0U64], proof: validProof, methodArguments: [known[0U64]], environment: <InstanceEnvironment />).unwrap()
+    if !compiler.sameResolvedTypeRefs(a: equalArguments, b: known) { panic("equal retained provided arguments changed the source instance") }
+    val incomplete = compiler.staticMemberInstanceArguments(resolution: retained, function: prototype, receiver: 0U64, proof: <StaticConformanceProof.Missing />, methodArguments: [known[0U64]], environment: <InstanceEnvironment />).unwrap()
+    mut val completed = false
+    for value in incomplete { if value != 0U64 { completed = true } }
+    if !completed { panic("recorded argument did not fill its zero slot") }
+    match compiler.callConstraintSubstitutionState(function: prototype, arguments: incomplete, receiver: 0U64) {
+        Result.Ok(value: val state) => { if !state.isDeferred() { panic("recorded argument completion granted a missing receiver") } }
+        Result.Err(error: val failure) => {
+            if failure.isSourceRejection() || failure.message() != "declaration obligation has an unresolved type argument" { panic(failure.message()) }
+        }
+    }
+    // Verify the public projection case really records a Provided-method
+    // substitution containing the caller's associated projection.
+    val projectedName = compiler.internBytes(s: "projected")
+    val projectedFunction = compiler.arena.firstFunctionNamed(nameId: projectedName.nameId)
+    match compiler.prepareLexicalBody(fnIdx: projectedFunction) { Result.Ok(value: _) => {} Result.Err(error: val failure) => { panic(failure.message()) } }
+    mut val projectionArguments = false
+    for expression in 0U64..<compiler.arena.exprs.count() {
+        val site = compiler.templateCallSiteKey(fnIdx: projectedFunction, exprId: expression).unwrap()
+        val template = compiler.callTemplateIndex(siteKey: site)
+        if template >= compiler.callTemplateCount() { continue }
+        match compiler.callTemplateAt(index: template).kind {
+            CallTemplateKind.StaticMethod(receiver: _, args: _, resolution: val resolution, methodTypeArgs: val arguments, resultTerm: _) => {
+                match resolution {
+                    StaticMemberResolution.Provided(proof: _, traitIdx: _, callee: _) => {
+                        for slot in 0U64..<arguments.len {
+                            if compiler.arena.typeContainsAssociatedProjection(ref: compiler.callTemplateTypeArgumentPool[arguments.start + slot]) { projectionArguments = true }
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            _ => {}
+        }
+    }
+    if !projectionArguments { panic("public projection case did not reach the retained Provided argument branch") }
+
+    match compiler.staticMemberInstanceArguments(resolution: retained, function: prototype, receiver: receivers[0U64], proof: validProof, methodArguments: [receivers[1U64]], environment: <InstanceEnvironment />) {
+        Result.Ok(value: _) => { panic("retained provided arguments overwrote the known source instance") }
+        Result.Err(error: val failure) => { match failure.failureDomain() { FailureDomain.Internal => {} _ => { panic(failure.message()) } } }
+    }
+
+
+
 }

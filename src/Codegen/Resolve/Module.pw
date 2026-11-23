@@ -1412,14 +1412,11 @@ impl Comp {
         val left = self.arena.functionAt(index: a.funcIdx)
         val right = self.arena.functionAt(index: b.funcIdx)
         if left.sourceWitnessFuncId == 0U64 || left.sourceWitnessFuncId > self.arena.functionCount() || left.sourceWitnessFuncId != right.sourceWitnessFuncId || !left.isProvided || !right.isProvided { return <Result.Ok value=false /> }
-        val original = self.arena.functionAt(index: left.sourceWitnessFuncId - 1U64)
-        val owner = if original.originTraitOwner != 0U64 { give original.originTraitOwner } else { give original.provTraitOwner }
-        if owner == 0U64 || self.decls.traitIndexByOffset(offset: owner) >= self.decls.traitCount() { return <Result.Ok value=false /> }
         val first = try self.providedBodyProof(f: left, receiverRef: receiverRef)
         val second = try self.providedBodyProof(f: right, receiverRef: receiverRef)
         if self.proofIsMissing(proof: first) || self.proofIsMissing(proof: second) { return <Result.Ok value=false /> }
-        val firstSource = try self.memberSourceProofEndpoint(proof: first, targetConformance: if left.sourceConformIdx != 0U64 { give left.sourceConformIdx } else { give left.originConformIdx }, traitOwner: owner, subject: original.originTraitOwner == 0U64 && left.sourceConformIdx != 0U64)
-        val secondSource = try self.memberSourceProofEndpoint(proof: second, targetConformance: if right.sourceConformIdx != 0U64 { give right.sourceConformIdx } else { give right.originConformIdx }, traitOwner: owner, subject: original.originTraitOwner == 0U64 && right.sourceConformIdx != 0U64)
+        val firstSource = try self.providedMemberSourceProof(function: left, proof: first)
+        val secondSource = try self.providedMemberSourceProof(function: right, proof: second)
         if self.proofIsMissing(proof: firstSource) || self.proofIsMissing(proof: secondSource) { return <Result.Ok value=false /> }
         return <Result.Ok value=self.sameSourceProofPath(a: firstSource, b: secondSource) />
     }
@@ -1533,6 +1530,15 @@ impl Comp {
 }
 
 impl Comp {
+    inout fn providedMemberSourceProof(function: Func, proof: StaticConformanceProof) -> Result[StaticConformanceProof, CompileDiagnostic] {
+        if !function.isProvided || function.sourceWitnessFuncId == 0U64 || function.sourceWitnessFuncId > self.arena.functionCount() { return <Result.Ok value=<StaticConformanceProof.Missing /> /> }
+        val original = self.arena.functionAt(index: function.sourceWitnessFuncId - 1U64)
+        val owner = if original.originTraitOwner != 0U64 { give original.originTraitOwner } else { give original.provTraitOwner }
+        if owner == 0U64 || self.decls.traitIndexByOffset(offset: owner) >= self.decls.traitCount() { return <Result.Ok value=<StaticConformanceProof.Missing /> /> }
+        val target = if function.sourceConformIdx != 0U64 { give function.sourceConformIdx } else { give function.originConformIdx }
+        return self.memberSourceProofEndpoint(proof: proof, targetConformance: target, traitOwner: owner, subject: original.originTraitOwner == 0U64 && function.sourceConformIdx != 0U64)
+    }
+
     // An authored helper belongs to the subject of its final conferring edge;
     // an authored conformance body belongs to that edge itself. A repeated
     // generic owner/edge is not ambiguous here: only the pinned final position

@@ -628,23 +628,22 @@ pub impl Comp {
     // members and operators. Provided-path binders come from its proof; the
     // receiver pattern supplies nominal implementation binders by ParamId.
     inout fn callConstraintTypeArguments(function: Func, receiver: U64, proof: StaticConformanceProof) -> Result[Array[U64], CompileDiagnostic] {
-        mut val arguments = self.providedProofArguments(f: function, proof: proof)
-        while arguments.count() < function.typeParams.count() { arguments.append(0U64) }
-        if function.typeParams.count() == 0U64 { return <Result.Ok value=arguments /> }
+        if function.typeParams.count() == 0U64 { return <Result.Ok value=[] /> }
         val bindings = if function.originTraitOwner != 0U64 && self.nominalConformanceReceiverScopes.count() != 0U64 && self.selectedImplementationDeclarationMatches(function: function, proof: proof, receiverRef: receiver) {
             give self.proofWitnessForTrait(proof: proof, traitIdx: self.decls.traitIndexByOffset(offset: function.originTraitOwner))
         } else {
             give try self.methodReceiverEnvironment(f: function, instRef: receiver)
         }
-        mut val index = 0U64
-        while index < function.typeParams.count() {
-            val parameter = self.funcBindAt(binds: function.typeParams, index: index)
-            for binding in bindings.binds {
-                if (binding.paramId != 0U64 && binding.paramId == parameter.paramId) || (binding.paramId == 0U64 && binding.binder == index) { arguments[index] = binding.term }
+        match (try self.methodReceiverProofArguments(f: function, semanticReceiver: receiver, receiverMatch: bindings, proof: proof, namespace: false)) {
+            Optional.Some(v: val arguments) => { return <Result.Ok value=arguments /> }
+            Optional.None => {
+                // Preserve unresolved selected slots without manufacturing a
+                // receiver equation from its nominal spelling after a mismatch.
+                mut val arguments: Array[U64] = []
+                while arguments.count() < function.typeParams.count() { arguments.append(0U64) }
+                return <Result.Ok value=arguments />
             }
-            index += 1U64
         }
-        return <Result.Ok value=arguments />
     }
 
     // Requirement method binders are alpha-renamed by conformance checking:
@@ -669,7 +668,16 @@ pub impl Comp {
                 val recorded = <InstanceEnvironment params=self.copyFuncBinds(binds: original.typeParams) args=values />
                 val mapped = self.signatureTypeArguments(f: declaration, environment: recorded)
                 mut val index = 0U64
-                while index < mapped.count() { if mapped[index] != 0U64 { arguments[index] = mapped[index] } index += 1U64 }
+                while index < mapped.count() {
+                    if mapped[index] != 0U64 {
+                        // Ready concrete substitutions must agree. Unresolved
+                        // terms retain the existing Deferred path below; they
+                        // are not rejected as unequal concrete runtime types.
+                        if arguments[index] != 0U64 && self.arena.typeIsClosed(ref: arguments[index]) && self.arena.typeIsClosed(ref: mapped[index]) && !self.typeRefEq(a: arguments[index], b: mapped[index]) { return <Result.Err error=self.diagnosticAt(offset: original.defOffset, msg: "retained provided arguments conflict with the receiver proof", failureDomain: <FailureDomain.Internal />) /> }
+                        arguments[index] = mapped[index]
+                    }
+                    index += 1U64
+                }
             }
             _ => {}
         }

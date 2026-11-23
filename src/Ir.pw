@@ -3014,10 +3014,12 @@ pub struct Func {
     // so 0 remains absent.  It selects the body's receiver environment and
     // must not be replaced by a source witness edge.
     pub val originConformIdx: U64 = 0
-    // When the source witness was authored by a trait-subject conformance,
-    // that distinct conformance owns the source method's impl binders.  It is
-    // used only to substitute those binders at the final call; 0 means the
-    // provided template has no such source-edge substitution.
+    // Pinned source edge of a conferred copy. For an authored conformance
+    // implementation it owns that body's impl binders and terminal trait.
+    // For a trait-namespace helper it is the bridge whose subject provides
+    // the helper's lexical trait instance, not the helper's own ParamIds.
+    // sourceWitnessFuncId retains the original declaration that distinguishes
+    // these roles. Zero denotes direct placement without a separate source edge.
     pub val sourceConformIdx: U64 = 0
     // Root-birth edge retained by a conferred copy. Zero is an unrooted
     // placement; this is separate from the terminal implementation edge.

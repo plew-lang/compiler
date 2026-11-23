@@ -1205,6 +1205,8 @@ pub impl Comp {
     inout fn providedProofArguments(f: Func, proof: StaticConformanceProof) -> Array[U64] {
         mut val out: Array[U64] = []
         if !(f.isProvided) || f.sourceConformIdx == 0U64 { return out }
+        if f.sourceWitnessFuncId == 0U64 || f.sourceWitnessFuncId > self.arena.functionCount() { return out }
+        if self.arena.functionAt(index: f.sourceWitnessFuncId - 1U64).originTraitOwner == 0U64 { return out }
         mut val witness: WitnessMatch = <WitnessMatch />
         match proof {
             StaticConformanceProof.ConcreteWitness(witness: val direct) => {

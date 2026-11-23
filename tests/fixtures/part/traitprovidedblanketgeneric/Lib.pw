@@ -11,3 +11,11 @@ pub impl[T] Box[T] { factory }
 pub impl[T] Box[T] as Source[T] {
     fn read() -> T { return self.value }
 }
+
+pub trait ItemSource { type Item }
+pub struct ProjectionOwner {}
+pub impl ProjectionOwner { factory }
+pub impl ProjectionOwner as ItemSource { type Item = I64 }
+pub fn projected[Owner, Value](owner: Owner, value: Value) -> Owner#ItemSource.Item where Owner: ItemSource, Value: Source[Owner#ItemSource.Item] {
+    return value.retained()
+}

@@ -1375,16 +1375,34 @@ impl Comp {
         val receiverMatch: WitnessMatch = (try self.methodReceiverEnvironment(f: f, instRef: semanticReceiver, sourceMatch: true))
         mut val proof = selectedProof
         if self.proofIsMissing(proof: proof) && f.isProvided { proof = try self.providedBodyProof(f: f, receiverRef: semanticReceiver, assumptions: self.functionBoundAssumptions(fnIdx: self.cur.checkFn)) }
+        match (try self.methodReceiverProofArguments(f: f, semanticReceiver: semanticReceiver, receiverMatch: receiverMatch, proof: proof, namespace: true)) {
+            Optional.Some(v: val arguments) => { return <Result.Ok value=<InstanceEnvironment params=self.copyFuncBinds(binds: f.typeParams) args=arguments receiverRef=semanticReceiver proof=proof /> /> }
+            Optional.None => { return <Result.Ok value=<InstanceEnvironment /> /> }
+        }
+    }
+
+    // This core consumes admitted receiver/proof inputs; it cannot reopen lookup.
+    // Return only the ordered argument vector. Obligation readers do not need
+    // a second parameter-array copy or another owner-bearing environment.
+    inout fn methodReceiverProofArguments(f: Func, semanticReceiver: U64, receiverMatch: WitnessMatch, proof: StaticConformanceProof, namespace: Bool) -> Result[Optional[Array[U64]], CompileDiagnostic] {
+        val hasReceiver = f.hasRecv || f.isAssoc || f.recvTy != 0U64
+        if hasReceiver && (semanticReceiver == 0U64 || semanticReceiver >= self.arena.typeCount()) { return <Result.Ok value=<Optional.None /> /> }
+        if !namespace && hasReceiver && f.recvTy != 0U64 && receiverMatch.conformIdx == 0U64 && self.proofIsMissing(proof: proof) { return <Result.Ok value=<Optional.None /> /> }
         // A copied provided body is applicable only through its saved
         // conformance path. Nominal receiver shape cannot replace that proof.
-        if f.isProvided && f.originConformIdx != 0U64 && self.proofIsMissing(proof: proof) { return <Result.Ok value=<InstanceEnvironment /> /> }
+        if f.isProvided && f.originConformIdx != 0U64 && self.proofIsMissing(proof: proof) { return <Result.Ok value=<Optional.None /> /> }
         // A provided copy placed through a trait-subject edge is justified
         // by its conformance path, not nominal equality with that trait.
-        mut val fullArgs: Array[U64] = (try self.receiverCallableArguments(f: f, receiverRef: semanticReceiver, receiverMatch: receiverMatch))
-        if f.recvTy != 0U64 && receiverMatch.conformIdx == 0U64 && self.proofIsMissing(proof: proof) {
+        mut val fullArgs: Array[U64] = []
+        if hasReceiver {
+            fullArgs = try self.receiverCallableArguments(f: f, receiverRef: semanticReceiver, receiverMatch: receiverMatch)
+        } else {
+            while fullArgs.count() < f.typeParams.count() { fullArgs.append(0U64) }
+        }
+        if namespace && f.recvTy != 0U64 && receiverMatch.conformIdx == 0U64 && self.proofIsMissing(proof: proof) {
             match (try self.traitNamespaceCallableArguments(f: f, receiver: semanticReceiver, values: fullArgs)) {
                 Optional.Some(v: val arguments) => { fullArgs = arguments }
-                Optional.None => { return <Result.Ok value=<InstanceEnvironment /> /> }
+                Optional.None => { return <Result.Ok value=<Optional.None /> /> }
             }
         }
         val traitReceiver = if f.isProvided && f.recvTraitArgs.count() != 0U64 {
@@ -1398,13 +1416,14 @@ impl Comp {
             // arguments. Its nominal receiver cannot bind those parameters.
             val owner = if f.isProvided { give f.provTraitOwner } else { give f.recvStart }
             val traitIndex = self.decls.traitIndexByOffset(offset: owner)
-            val bound = try self.staticProofBound(proof: proof, traitIdx: traitIndex)
-            if bound.subject == 0U64 || bound.constraint.key.positionalArgs.count() != f.recvTraitArgs.count() { return <Result.Ok value=<InstanceEnvironment /> /> }
+            val sourceProof = if f.isProvided { give try self.providedMemberSourceProof(function: f, proof: proof) } else { give proof }
+            val bound = try self.staticProofBound(proof: sourceProof, traitIdx: traitIndex)
+            if bound.subject == 0U64 || !self.typeRefEq(a: self.typeRefWithoutOuterViews(ref: bound.subject), b: self.typeRefWithoutOuterViews(ref: semanticReceiver)) || bound.constraint.key.positionalArgs.count() != f.recvTraitArgs.count() { return <Result.Ok value=<Optional.None /> /> }
             mut val argument = 0U64
             while argument < f.recvTraitArgs.count() {
                 val pattern = self.funcTypeAt(types: f.recvTraitArgs, index: argument)
                 if !self.matchCallResultArguments(pattern: pattern, expected: bound.constraint.key.positionalArgs[argument], params: f.typeParams, values: inout fullArgs) {
-                    return <Result.Ok value=<InstanceEnvironment /> />
+                    return <Result.Ok value=<Optional.None /> />
                 }
                 argument += 1U64
             }
@@ -1412,10 +1431,11 @@ impl Comp {
         val proofArgs = self.providedProofArguments(f: f, proof: proof)
         mut val proofIndex = 0U64
         while proofIndex < proofArgs.count() && proofIndex < fullArgs.count() {
+            if fullArgs[proofIndex] != 0U64 && proofArgs[proofIndex] != 0U64 && !self.typeRefEq(a: fullArgs[proofIndex], b: proofArgs[proofIndex]) { return <Result.Err error=self.diagnosticAt(offset: f.defOffset, msg: "internal error: receiver and source proof substitutions disagree", failureDomain: <FailureDomain.Internal />) /> }
             if fullArgs[proofIndex] == 0U64 { fullArgs[proofIndex] = proofArgs[proofIndex] }
             proofIndex += 1U64
         }
-        return <Result.Ok value=<InstanceEnvironment params=self.copyFuncBinds(binds: f.typeParams) args=fullArgs receiverRef=semanticReceiver proof=proof /> />
+        return <Result.Ok value=<Optional.Some v=fullArgs /> />
     }
 
     inout fn knownMethodSignatureEnvironment(f: Func, environment: InstanceEnvironment) -> Result[InstanceEnvironment, CompileDiagnostic] {
