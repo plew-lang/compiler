@@ -319,6 +319,50 @@ struct PreparedExistentialBox {
     val members: Array[Optional[PreparedExistentialMember]]
 }
 
+// Public interface slots are not raw declaration slots. An inherited member
+// retains its original authored signature and the ancestor instance recipe.
+struct SourceExistentialMember {
+    val signature: U64
+    val ancestor: U64
+}
+impl SourceExistentialMember { factory }
+
+struct SourceExistentialEdge {
+    val source: U64
+    val target: U64
+    val clause: U64
+}
+impl SourceExistentialEdge { factory }
+
+struct SourceExistentialAncestor {
+    val traitIndex: U64
+    val bound: TraitBound
+    mut val incoming: Array[U64] = []
+    mut val outgoing: Array[U64] = []
+}
+impl SourceExistentialAncestor { factory }
+
+struct SourceExistentialInterface {
+    val traitIndex: U64
+    val selfTerm: U64
+    val ancestors: Array[SourceExistentialAncestor]
+    val edges: Array[SourceExistentialEdge]
+    val members: Array[SourceExistentialMember]
+    val order: Array[U64]
+}
+impl SourceExistentialInterface { factory }
+
+struct BoundExistentialInterface {
+    val source: U64
+    val target: U64
+    val receiver: U64
+    val ancestors: Array[TraitBound]
+    // Source slots remain stable; target substitution can identify several
+    // source paths with the same original requirement and complete instance.
+    val canonicalMembers: Array[U64]
+}
+impl BoundExistentialInterface { factory }
+
 struct ExistentialMethodConditions {
     val root: U64
     val bounds: Array[TraitBound]
@@ -1099,6 +1143,10 @@ pub struct Comp {
     // Provenance prefix only: not yet the admission/consumer receipt channel.
     pub mut val sourceTypeUses: SourceTypeUses = <SourceTypeUses />
     mut val preparedExistentialBoxes: Array[PreparedExistentialBox] = []
+    mut val sourceExistentialInterfaces: Array[SourceExistentialInterface] = []
+    mut val sourceExistentialInterfaceIndex: Dictionary[U64, U64] = [:]
+    mut val boundExistentialInterfaces: Array[BoundExistentialInterface] = []
+    mut val boundExistentialInterfaceIndex: Dictionary[U64, Dictionary[U64, U64]] = [:]
     mut val declarationBoxPreparationComplete: Bool = false
     mut val fixedRequirementAssociatedProofs: Dictionary[U64, Array[FixedRequirementAssociatedProof]] = [:]
     mut val rawRequirementPremises: Array[RawRequirementPremise] = []
@@ -1989,6 +2037,7 @@ part ./SourceArrayFailures
 part ./SourceFacts
 part ./Parser/Decl
 part ./Codegen/Existentials
+part ./Codegen/ExistentialInterfaces
 part ./Codegen/Arc
 part ./Codegen/Emit
 part ./Codegen/Resolve

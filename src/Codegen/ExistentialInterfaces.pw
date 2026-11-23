@@ -1,0 +1,210 @@
+// Declaration-owned interface discovery. Target substitution and concrete
+// witness realization consume this graph; neither repeats inheritance lookup.
+impl SourceExistentialAncestor {
+    inout fn addIncoming(edge: U64) { self.incoming.append(edge) }
+    inout fn addOutgoing(edge: U64) { self.outgoing.append(edge) }
+}
+
+impl Comp {
+    inout fn sourceExistentialRootBound(traitIndex: U64, receiver: U64) -> Result[TraitBound, CompileDiagnostic] {
+        val declaration = self.decls.traitAt(index: traitIndex)
+        mut val arguments: Array[U64] = []
+        for index in 0U64..<declaration.typeParams.count() {
+            val parameter = self.traitBindAt(binds: declaration.typeParams, index: index)
+            if parameter.paramId == 0U64 { return <Result.Err error=self.diagnosticAt(offset: declaration.nameStart, msg: "existential interface parameter has no declaration identity", failureDomain: <FailureDomain.Internal />) /> }
+            arguments.append(self.pushType(t: <TypeRef nameStart=parameter.nameStart nameLen=parameter.nameLen nameId=parameter.nameId paramId=parameter.paramId args=[] />))
+        }
+        return <Result.Ok value=<TraitBound subject=receiver constraint=<TraitConstraint key=<TraitInstanceKey owner=declaration.nameStart positionalArgs=arguments /> positionalArgsOpen=false assocPredicates=[] /> offset=declaration.nameStart /> />
+    }
+
+    // Publish only a complete graph. A shared ancestor keeps every incoming
+    // declaration edge, so a diamond cannot erase conflicting witness paths.
+    inout fn sourceExistentialInterface(traitIndex: U64) -> Result[U64, CompileDiagnostic] {
+        if traitIndex >= self.decls.traitCount() { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "existential interface has an invalid trait identity", failureDomain: <FailureDomain.Input />) /> }
+        try self.checkAuthoredSignatureAdmissionOutcome()
+        match self.sourceExistentialInterfaceIndex.get(key: traitIndex) {
+            Optional.Some(v: val index) => { return <Result.Ok value=index /> }
+            Optional.None => {}
+        }
+        val receiver = try self.existentialSelfTerm(traitIndex: traitIndex)
+        val root = try self.sourceExistentialRootBound(traitIndex: traitIndex, receiver: receiver)
+        mut val ancestors: Array[SourceExistentialAncestor] = [<SourceExistentialAncestor traitIndex=traitIndex bound=root />]
+        mut val byOwner: Dictionary[U64, Array[U64]] = [:]
+        byOwner[root.constraint.key.owner] = [0U64]
+        mut val members: Array[SourceExistentialMember] = []
+        mut val edges: Array[SourceExistentialEdge] = []
+        mut val current = 0U64
+        while current < ancestors.count() {
+            val ancestor = ancestors[current]
+            val declaration = self.decls.traitAt(index: ancestor.traitIndex)
+            for slot in 0U64..<declaration.reqs.count() {
+                val scope = try self.requireAdmittedRawRequirement(traitIndex: ancestor.traitIndex, slot: slot, offset: declaration.nameStart)
+                members.append(<SourceExistentialMember signature=scope ancestor=current />)
+            }
+            for clause in 0U64..<declaration.supertraits.count() {
+                val operand = declaration.supertraits.start + clause
+                if self.authoredSupertraitOperands.contains(key: operand) && (!self.admittedSupertraitOperands.contains(key: operand) || !self.admittedSupertraitOperands[operand].complete) {
+                    return <Result.Err error=self.diagnosticAt(offset: declaration.nameStart, msg: "existential interface requires admitted supertrait operands", failureDomain: <FailureDomain.Internal />) />
+                }
+                val written = self.semanticSupertraitConstraintAt(constraints: declaration.supertraits, index: clause)
+                val substituted = self.traitConstraintInBound(constraint: written, bound: ancestor.bound, traitIndex: ancestor.traitIndex)
+                mut val arguments = substituted.key.positionalArgs
+                for index in 0U64..<arguments.count() {
+                    arguments[index] = self.normalizeBoundProjectionTerm(ref: arguments[index], context: root, projectionPath: [])
+                }
+                mut val predicates = substituted.assocPredicates
+                for index in 0U64..<predicates.count() {
+                    val predicate = predicates[index]
+                    predicates[index] = <TraitAssocPredicate member=predicate.member value=self.normalizeBoundProjectionTerm(ref: predicate.value, context: root, projectionPath: []) span=predicate.span />
+                }
+                val parent = self.decls.traitIndexByOffset(offset: substituted.key.owner)
+                if parent >= self.decls.traitCount() { return <Result.Err error=self.diagnosticAt(offset: declaration.nameStart, msg: "existential interface supertrait has no declaration", failureDomain: <FailureDomain.Internal />) /> }
+                val open = substituted.positionalArgsOpen && arguments.count() < self.decls.traitAt(index: parent).typeParams.count()
+                val constraint = <TraitConstraint key=<TraitInstanceKey owner=substituted.key.owner positionalArgs=arguments /> positionalArgsOpen=open assocPredicates=predicates />
+                mut val candidates: Array[U64] = byOwner.getOr(key: constraint.key.owner, fallback: [])
+                mut val target = ancestors.count()
+                for candidate in candidates {
+                    if ancestors[candidate].bound.constraint.positionalArgsOpen == constraint.positionalArgsOpen && self.sameResolvedTypeRefs(a: ancestors[candidate].bound.constraint.key.positionalArgs, b: constraint.key.positionalArgs) { target = candidate break }
+                }
+                if target == ancestors.count() {
+                    // A resource bound is not a proof that two growing
+                    // instances are equal, cyclic, or semantically invalid.
+                    if ancestors.count() >= 4096U64 { return <Result.Err error=self.diagnosticAt(offset: declaration.nameStart, msg: "existential interface expansion exceeds the implementation limit", failureDomain: <FailureDomain.Limit />) /> }
+                    ancestors.append(<SourceExistentialAncestor traitIndex=parent bound=<TraitBound subject=receiver constraint=constraint offset=declaration.nameStart /> />)
+                    candidates.append(target)
+                    byOwner[constraint.key.owner] = candidates
+                } else {
+                    // Associated bindings are conjunctions on one instance,
+                    // not a second trait-instance identity. Keep every
+                    // nonidentical equation until the target is substituted.
+                    val saved = ancestors[target]
+                    mut val equations = saved.bound.constraint.assocPredicates
+                    for predicate in predicates {
+                        mut val duplicate = false
+                        for present in equations {
+                            if present.member == predicate.member && self.typeRefEq(a: present.value, b: predicate.value) { duplicate = true break }
+                        }
+                        if !duplicate { equations.append(predicate) }
+                    }
+                    val combined = <TraitConstraint key=saved.bound.constraint.key positionalArgsOpen=saved.bound.constraint.positionalArgsOpen assocPredicates=equations />
+                    ancestors[target] = <SourceExistentialAncestor traitIndex=saved.traitIndex bound=<TraitBound subject=saved.bound.subject constraint=combined offset=saved.bound.offset /> incoming=saved.incoming outgoing=saved.outgoing />
+                }
+                val edge = edges.count()
+                edges.append(<SourceExistentialEdge source=current target=target clause=clause />)
+                ancestors[current].addOutgoing(edge: edge)
+                ancestors[target].addIncoming(edge: edge)
+            }
+            current += 1U64
+        }
+        // Retain one topological order for every later target/proof reader.
+        mut val remaining: Array[U64] = []
+        mut val ready: Array[U64] = []
+        for index in 0U64..<ancestors.count() {
+            val count = ancestors[index].incoming.count()
+            remaining.append(count)
+            if count == 0U64 { ready.append(index) }
+        }
+        mut val order: Array[U64] = []
+        current = 0U64
+        while current < ready.count() {
+            val index = ready[current]
+            order.append(index)
+            for edge in ancestors[index].outgoing {
+                val target = edges[edge].target
+                remaining[target] -= 1U64
+                if remaining[target] == 0U64 { ready.append(target) }
+            }
+            current += 1U64
+        }
+        if order.count() != ancestors.count() { return <Result.Err error=self.diagnosticAt(offset: self.decls.traitAt(index: traitIndex).nameStart, msg: "existential interface contains a cyclic inheritance graph", failureDomain: <FailureDomain.Input />) /> }
+        val index = self.sourceExistentialInterfaces.count()
+        self.sourceExistentialInterfaces.append(<SourceExistentialInterface traitIndex=traitIndex selfTerm=receiver ancestors=ancestors edges=edges members=members order=order />)
+        self.sourceExistentialInterfaceIndex[traitIndex] = index
+        return <Result.Ok value=index />
+    }
+
+    // Canonical declaration order removes written-order differences. A
+    // target must justify coincident equations; unknown equality is not a
+    // reason to choose one incoming path or report a false source conflict.
+    inout fn boundExistentialEquations(constraint: TraitConstraint, traitIndex: U64, root: TraitBound, offset: U64) -> Result[Array[TraitAssocPredicate], CompileDiagnostic] {
+        val declaration = self.decls.traitAt(index: traitIndex)
+        mut val predicates: Array[TraitAssocPredicate] = []
+        for index in 0U64..<declaration.assocTypes.count() {
+            val member = self.traitBindAt(binds: declaration.assocTypes, index: index)
+            mut val selected = 0U64
+            mut val span = 0U64
+            for predicate in constraint.assocPredicates {
+                if predicate.member != member.nameId { continue }
+                val value = self.normalizeBoundProjectionTerm(ref: predicate.value, context: root, projectionPath: [])
+                if selected != 0U64 && !self.typeRefEq(a: selected, b: value) {
+                    return <Result.Err error=self.diagnosticAt(offset: offset, msg: "cannot establish equivalent inherited associated bindings for this existential target", failureDomain: <FailureDomain.Limit />) />
+                }
+                selected = value
+                span = predicate.span
+            }
+            if selected != 0U64 { predicates.append(<TraitAssocPredicate member=member.nameId value=selected span=span />) }
+        }
+        for predicate in constraint.assocPredicates {
+            mut val known = false
+            for member in predicates { if member.member == predicate.member { known = true break } }
+            if !known { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "existential constraint binding has no admitted associated declaration", failureDomain: <FailureDomain.Input />) /> }
+        }
+        return <Result.Ok value=predicates />
+    }
+
+    // Interpret each saved ancestor recipe once for a target/receiver pair.
+    // This is substitution under the public interface, not conformance search.
+    inout fn boundExistentialInterface(target: U64, receiver: U64, offset: U64) -> Result[U64, CompileDiagnostic] {
+        try self.checkAuthoredSignatureAdmissionOutcome()
+        match self.boundExistentialInterfaceIndex.get(key: target) {
+            Optional.Some(v: val receivers) => {
+                match receivers.get(key: receiver) {
+                    Optional.Some(v: val index) => { return <Result.Ok value=index /> }
+                    Optional.None => {}
+                }
+            }
+            Optional.None => {}
+        }
+        val traitIndex = self.recordAnyTraitIndex(anyRef: target)
+        val interface = try self.sourceExistentialInterface(traitIndex: traitIndex)
+        val root = try self.existentialRequirementBound(target: target, traitIndex: traitIndex, receiver: receiver, offset: offset)
+        mut val ancestors: Array[TraitBound] = []
+        for position in 0U64..<self.sourceExistentialInterfaces[interface].ancestors.count() {
+            if position == 0U64 { ancestors.append(root) continue }
+            val ancestor = self.sourceExistentialInterfaces[interface].ancestors[position]
+            val substituted = self.traitConstraintInBound(constraint: ancestor.bound.constraint, bound: root, traitIndex: traitIndex)
+            mut val arguments = substituted.key.positionalArgs
+            for index in 0U64..<arguments.count() { arguments[index] = self.normalizeBoundProjectionTerm(ref: arguments[index], context: root, projectionPath: []) }
+            val equations = try self.boundExistentialEquations(constraint: substituted, traitIndex: ancestor.traitIndex, root: root, offset: offset)
+            ancestors.append(<TraitBound subject=receiver constraint=<TraitConstraint key=<TraitInstanceKey owner=substituted.key.owner positionalArgs=arguments /> positionalArgsOpen=substituted.positionalArgsOpen assocPredicates=equations /> offset=ancestor.bound.offset />)
+        }
+        mut val canonicalMembers: Array[U64] = []
+        val members = self.sourceExistentialInterfaces[interface].members
+        for slot in 0U64..<members.count() {
+            val member = members[slot]
+            mut val canonical = slot
+            for previous in 0U64..<slot {
+                if members[previous].signature == member.signature && self.sameTraitConstraint(a: ancestors[members[previous].ancestor].constraint, b: ancestors[member.ancestor].constraint) {
+                    canonical = canonicalMembers[previous]
+                    break
+                }
+            }
+            canonicalMembers.append(canonical)
+        }
+        val index = self.boundExistentialInterfaces.count()
+        self.boundExistentialInterfaces.append(<BoundExistentialInterface source=interface target=target receiver=receiver ancestors=ancestors canonicalMembers=canonicalMembers />)
+        mut val receivers: Dictionary[U64, U64] = self.boundExistentialInterfaceIndex.getOr(key: target, fallback: [:])
+        receivers[receiver] = index
+        self.boundExistentialInterfaceIndex[target] = receivers
+        return <Result.Ok value=index />
+    }
+
+    inout fn existentialInterfaceSignatureRead(target: U64, traitIndex: U64, slot: U64, receiver: U64, offset: U64, proofRead: SignatureProofRead = <SignatureProofRead.Admission />) -> Result[RequirementSignatureRead, CompileDiagnostic] {
+        if self.recordAnyTraitIndex(anyRef: target) != traitIndex { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "existential interface target does not match its root", failureDomain: <FailureDomain.Input />) /> }
+        val bound = try self.boundExistentialInterface(target: target, receiver: receiver, offset: offset)
+        val interface = self.boundExistentialInterfaces[bound].source
+        if slot >= self.sourceExistentialInterfaces[interface].members.count() { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "existential interface has an invalid effective slot", failureDomain: <FailureDomain.Input />) /> }
+        val member = self.sourceExistentialInterfaces[interface].members[slot]
+        return <Result.Ok value=<RequirementSignatureRead scope=member.signature bound=self.boundExistentialInterfaces[bound].ancestors[member.ancestor] proofRead=proofRead /> />
+    }
+}

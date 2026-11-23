@@ -35,16 +35,13 @@ inout fn checkExistentialRequirementCall(target: U64, traitIndex: U64, requireme
 impl Comp {
 
 inout fn readExistentialRequirementDispatchability(target: U64, traitIndex: U64, slot: U64, proofRead: SignatureProofRead) -> Result[Bool, CompileDiagnostic] {
-    if traitIndex >= self.decls.traitCount() || slot >= self.decls.traitAt(index: traitIndex).reqs.count() {
-        return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "existential dispatch has no selected declaration", failureDomain: <FailureDomain.Internal />) />
-    }
-    val scope = try self.requireAdmittedRawRequirement(traitIndex: traitIndex, slot: slot, offset: 0U64)
-    val requirement = self.authoredRequirementViews[scope].declaration
+    val interface = try self.sourceExistentialInterface(traitIndex: traitIndex)
+    val source = self.sourceExistentialInterfaces[interface].selfTerm
+    val signature = try self.existentialInterfaceSignatureRead(target: target, traitIndex: traitIndex, slot: slot, receiver: source, offset: 0U64, proofRead: proofRead)
+    val requirement = self.authoredRequirementViews[signature.scope].declaration
     if requirement.isAssoc { return <Result.Ok value=false /> }
-    val source = try self.existentialSelfTerm(traitIndex: traitIndex)
-    val bound = try self.existentialRequirementBound(target: target, traitIndex: traitIndex, receiver: source, offset: requirement.nameStart)
     val parameter = self.decls.traitAt(index: traitIndex).selfParamId
-    for input in (try self.requirementParameterTypes(signature: <RequirementSignatureRead scope=scope bound=bound proofRead=proofRead />)) {
+    for input in (try self.requirementParameterTypes(signature: signature)) {
         if self.typeTermContainsParameter(ref: input, parameter: parameter) { return <Result.Ok value=false /> }
     }
     return <Result.Ok value=true />
@@ -59,7 +56,8 @@ inout fn readCheckedExistentialRequirementCall(target: U64, traitIndex: U64, req
     val source = try self.existentialSelfTerm(traitIndex: traitIndex)
     val proof = <StaticConformanceProof.TraitSelf traitIdx=traitIndex receiverRef=source traitArgs=self.existentialTraitConstraint(ref: target).key.positionalArgs />
     val evidence = <ExistentialBoxEvidence sourceRef=source targetRef=target traitIdx=traitIndex proof=proof />
-    match (try self.readExistentialWitnessPlan(evidence: evidence, requirement: requirement, sourceReceiver: source, proofRead: proofRead)) {
+    val interface = try self.existentialInterfaceSignatureRead(target: target, traitIndex: traitIndex, slot: requirement, receiver: source, offset: offset, proofRead: proofRead)
+    match (try self.readExistentialResultPlan(evidence: evidence, requirement: requirement, interface: interface, proofRead: proofRead)) {
         Optional.Some(v: val plan) => { return <Result.Ok value=plan.signature /> }
         Optional.None => { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "this member's existential result conversion is not supported") /> }
     }

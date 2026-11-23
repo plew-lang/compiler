@@ -1,0 +1,7 @@
+trait Parent { fn duplicate() -> Self }
+trait Child: Parent {}
+struct Payload {}
+pub impl Payload { factory }
+pub impl Payload as Parent { fn duplicate() -> Self { return <Payload /> } }
+pub impl Payload as Child {}
+fn main() { val payload: any Child = <Payload /> }

@@ -1,0 +1,15 @@
+use @Std/Io only { print }
+trait Parent[T] { fn get(value: T) -> T }
+trait Left[T]: Parent[T] {}
+trait Right[T]: Parent[T] {}
+trait Joined[T, U]: Left[T] + Right[U] {}
+struct Payload {}
+pub impl Payload { factory }
+pub impl Payload as Parent[I64] { fn get(value: I64) -> I64 { return value } }
+pub impl Payload as Left[I64] {}
+pub impl Payload as Right[I64] {}
+pub impl Payload as Joined[I64, I64] {}
+fn main() {
+    val payload: any Joined[I64, I64] = <Payload />
+    print(payload.get(value: 23I64))
+}

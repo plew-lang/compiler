@@ -975,12 +975,7 @@ pub impl Comp {
             owner = self.traitOwnerAtUse(start: anyTy.nameStart, len: anyTy.nameLen, arity: 0U64, openArgs: true)
         }
         if owner == 0U64 { return self.decls.traitCount() }
-        mut val i: U64 = 0U64
-        while i < self.decls.traitCount() {
-            if self.decls.traitAt(index: i).nameStart == owner { return i }
-            i += 1U64
-        }
-        return self.decls.traitCount()
+        return self.decls.traitIndexByOffset(offset: owner)
     }
 
     inout fn recordAnyRequirementSlot(anyRef: U64, nameStart: U64, nameLen: U64, args: ArgRange) -> Result[U64, CompileDiagnostic] {
@@ -992,15 +987,17 @@ impl Comp {
         val traitIndex = self.recordAnyTraitIndex(anyRef: anyRef)
         if traitIndex >= self.decls.traitCount() { return <Result.Ok value=0U64 /> }
         val nameId = intern(c: inout self, start: nameStart, len: nameLen)
-        val declaration = self.decls.traitAt(index: traitIndex)
-        val bound = try self.existentialRequirementBound(target: anyRef, traitIndex: traitIndex, receiver: anyRef, offset: nameStart)
+        val interface = try self.sourceExistentialInterface(traitIndex: traitIndex)
+        val boundInterface = try self.boundExistentialInterface(target: anyRef, receiver: anyRef, offset: nameStart)
         mut val selected = 0U64
         mut val bestRank = 0U64
         mut val index = 0U64
-        while index < declaration.reqs.count() {
-            val requirement = self.traitReqAt(reqs: declaration.reqs, index: index)
+        while index < self.sourceExistentialInterfaces[interface].members.count() {
+            if self.boundExistentialInterfaces[boundInterface].canonicalMembers[index] != index { index += 1U64 continue }
+            val member = self.sourceExistentialInterfaces[interface].members[index]
+            val scope = member.signature
+            val requirement = self.authoredRequirementViews[scope].declaration
             if requirement.nameId == nameId && self.paramsLabelsOk(params: requirement.params, args: args) {
-                val scope = try self.requireAdmittedRawRequirement(traitIndex: traitIndex, slot: index, offset: requirement.defOffset)
                 if requiredTraitOwner != 0U64 {
                     // Match the selected declaration's identity, not an
                     // unrelated interface requirement with the same spelling.
@@ -1008,7 +1005,8 @@ impl Comp {
                     if owner >= self.decls.traitCount() { return <Result.Err error=self.diagnosticAt(offset: requirement.defOffset, msg: "existential requirement has no declaration owner", failureDomain: <FailureDomain.Internal />) /> }
                     if self.decls.traitAt(index: owner).nameStart != requiredTraitOwner { index += 1U64 continue }
                 }
-                val callable = self.authoredRequirementViews[scope].declaration
+                val callable = requirement
+                val bound = self.boundExistentialInterfaces[boundInterface].ancestors[member.ancestor]
                 val signatures = try self.requirementParameterTypes(signature: <RequirementSignatureRead scope=scope bound=bound />)
                 mut val values: Array[U64] = []
                 while values.count() < callable.typeParams.count() { values.append(0U64) }

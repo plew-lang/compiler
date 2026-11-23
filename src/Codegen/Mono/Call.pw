@@ -2569,17 +2569,9 @@ impl Comp {
     // Public parameter/result terms and ownership modes belong to the selected
     // requirement, not to an executable witness body or incidental Cursor.
     inout fn readExistentialRequirementSignature(target: U64, traitIndex: U64, slot: U64, proofRead: SignatureProofRead) -> Result[ExistentialRequirementSignature, CompileDiagnostic] {
-        if traitIndex >= self.decls.traitCount() {
-            return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "invalid existential signature trait", failureDomain: <FailureDomain.Input />) />
-        }
-        val requirements = self.decls.traitAt(index: traitIndex).reqs
-        if slot >= requirements.len {
-            return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "invalid existential signature slot", failureDomain: <FailureDomain.Input />) />
-        }
-        val requirement = self.traitReqAt(reqs: requirements, index: slot)
-        val bound = try self.existentialRequirementBound(target: target, traitIndex: traitIndex, receiver: target, offset: requirement.nameStart)
-        val scope = try self.requireAdmittedRawRequirement(traitIndex: traitIndex, slot: slot, offset: requirement.defOffset)
-        return self.readRequirementInterfaceSignature(scope: scope, bound: bound, traitIndex: traitIndex, proofRead: proofRead)
+        val signature = try self.existentialInterfaceSignatureRead(target: target, traitIndex: traitIndex, slot: slot, receiver: target, offset: 0U64, proofRead: proofRead)
+        val owner = self.authoredRequirementViews[signature.scope].source.traitIndex
+        return self.readRequirementInterfaceSignature(scope: signature.scope, bound: signature.bound, traitIndex: owner, proofRead: proofRead)
     }
 
     // Build the adapter's semantic plan without registering an executable
@@ -2591,12 +2583,21 @@ impl Comp {
         if requirement >= trait.reqs.count() { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "existential conversion has no selected requirement") /> }
         val requested = self.traitReqAt(reqs: trait.reqs, index: requirement)
         if !(try self.readExistentialRequirementDispatchability(target: evidence.targetRef, traitIndex: evidence.traitIdx, slot: requirement, proofRead: proofRead)) { return <Result.Ok value=<Optional.None /> /> }
-        val signature = try self.readExistentialRequirementSignature(target: evidence.targetRef, traitIndex: evidence.traitIdx, slot: requirement, proofRead: proofRead)
         val bound = try self.existentialRequirementBound(target: evidence.targetRef, traitIndex: evidence.traitIdx, receiver: sourceReceiver, offset: requested.nameStart)
         val scope = try self.requireAdmittedRawRequirement(traitIndex: evidence.traitIdx, slot: requirement, offset: requested.defOffset)
-        val environment = self.requirementSignatureEnvironment(bound: bound, traitIndex: evidence.traitIdx)
+        val interface = <RequirementSignatureRead scope=scope bound=bound evidence=<RequirementSelfEvidence.Static proof=evidence.proof /> proofRead=proofRead />
+        return self.readExistentialResultPlan(evidence: evidence, requirement: requirement, interface: interface, proofRead: proofRead)
+    }
+
+    // Public interface checking and concrete witness preparation interpret the
+    // same admitted result recipe. Only the explicit evidence reader differs;
+    // an inherited public interface does not fabricate static parent proof.
+    inout fn readExistentialResultPlan(evidence: ExistentialBoxEvidence, requirement: U64, interface: RequirementSignatureRead, proofRead: SignatureProofRead) -> Result[Optional[ExistentialWitnessPlan], CompileDiagnostic] {
+        val signature = try self.readExistentialRequirementSignature(target: evidence.targetRef, traitIndex: evidence.traitIdx, slot: requirement, proofRead: proofRead)
+        val owner = self.authoredRequirementViews[interface.scope].source.traitIndex
+        val environment = self.requirementSignatureEnvironment(bound: interface.bound, traitIndex: owner)
         mut val memo: Dictionary[U64, AuthoredRecipeRead] = [:]
-        val sourceResult = self.callableResultSlot(ref: (try self.readRequirementResult(interface: <RequirementSignatureRead scope=scope bound=bound evidence=<RequirementSelfEvidence.Static proof=evidence.proof /> proofRead=<SignatureProofRead.Retained /> />, environment: environment, memo: inout memo)))
+        val sourceResult = self.callableResultSlot(ref: (try self.readRequirementResult(interface: interface, environment: environment, memo: inout memo)))
         mut val conversion = <ValueConversionProof.Identity />
         if sourceResult != 0U64 || signature.resultType != 0U64 {
             conversion = try self.callArgumentConversion(sourceRef: sourceResult, targetRef: signature.resultType, knownBox: <Optional.Some v=evidence />)

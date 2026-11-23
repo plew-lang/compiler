@@ -1,0 +1,164 @@
+// Appended to an exact Frontend snapshot; no product API is widened.
+fn requireHeldAdmissionFailure[T](result: Result[T, CompileDiagnostic]) {
+    match result {
+        Result.Err(error: val diagnostic) => {
+            if diagnostic.message() != "held signature admission failure" { panic("interface cache changed the saved failure") }
+            match diagnostic.failureDomain() { FailureDomain.Internal => {} _ => { panic("interface cache reclassified the saved failure") } }
+        }
+        Result.Ok(value: _) => { panic("interface cache bypassed failed admission") }
+    }
+}
+fn checkInheritedSelfInput() {
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.File path="tests/compiler/frontend/fixtures/ExistentialInterfaces/SelfInput.pw" />, sources: <SourceAccess stdRoot="std/".bytes() />).unwrap()
+    mut val target = 0U64
+    for statement in compiler.arena.stmts {
+        match statement {
+            Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: val type, init: _, annotationOccurrence: _) => {
+                if type != 0U64 && compiler.arena.typeTermAt(index: type).isAny { target = type break }
+            }
+            _ => {}
+        }
+    }
+    if target == 0U64 { panic("Self fixture lost its existential annotation") }
+    val root = compiler.recordAnyTraitIndex(anyRef: target)
+    if compiler.existentialRequirementIsDispatchable(target: target, traitIndex: root, slot: 0U64).unwrap() { panic("inherited input Self became callable") }
+    match compiler.existentialRequirementSignature(target: target, traitIndex: root, slot: 1U64) {
+        Result.Err(error: val diagnostic) => { match diagnostic.failureDomain() { FailureDomain.Input => {} _ => { panic("invalid slot lost its input domain") } } }
+        Result.Ok(value: _) => { panic("nonexistent effective slot was accepted") }
+    }
+    eprint(text: "inherited Self input unavailable; invalid slot refused\n")
+}
+fn checkInheritedSelfResult() {
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.File path="tests/compiler/frontend/fixtures/ExistentialInterfaces/SelfResult.pw" />, sources: <SourceAccess stdRoot="std/".bytes() />).unwrap()
+    mut val target = 0U64
+    for statement in compiler.arena.stmts {
+        match statement {
+            Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: val type, init: _, annotationOccurrence: _) => {
+                if type != 0U64 && compiler.arena.typeTermAt(index: type).isAny { target = type break }
+            }
+            _ => {}
+        }
+    }
+    if target == 0U64 { panic("Self-result fixture lost its existential annotation") }
+    val root = compiler.recordAnyTraitIndex(anyRef: target)
+    val signature = compiler.readCheckedExistentialRequirementCall(target: target, traitIndex: root, requirement: 0U64, offset: 0U64, proofRead: <SignatureProofRead.Admission />).unwrap()
+    if !compiler.typeRefEq(a: signature.resultType, b: target) { panic("inherited Self result lost root erasure") }
+    eprint(text: "inherited Self result re-erased to root interface\n")
+}
+fn main() {
+    for scenario in 0U64..<7U64 {
+        val names: Array[String] = ["index_existential_requirement", "index_inherited_existential_requirement", "inherited_existential_diamond", "inherited_existential_generic", "inherited_existential_assoc_order", "inherited_existential_converging", "inherited_existential_late_binding"]
+        val traits: Array[String] = ["Index", "TaggedIndex", "DiamondIndex", "GenericChild", "JoinedPair", "Joined", "Joined"]
+        val expectedAncestors: Array[U64] = [1U64, 2U64, 4U64, 2U64, 4U64, 5U64, 6U64]
+        val inherited = scenario != 0U64
+        mut val compiler = <Comp />
+        val name = names[scenario]
+        analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.File path="tests/fixtures/run/" + name + ".pw" />, sources: <SourceAccess stdRoot="std/".bytes() />).unwrap()
+        val mainName = compiler.internBytes(s: "main")
+        val function = compiler.arena.firstFunctionNamed(nameId: mainName.nameId)
+        compiler.cur.checkFn = function
+        val module = compiler.moduleOf(offset: compiler.arena.functionAt(index: function).defOffset)
+        mut val selected = false
+        for expression in 0U64..<compiler.arena.exprs.count() {
+            match compiler.arena.exprs[expression] {
+                Expr.Method(recv: val receiver, nameStart: val start, nameLen: val length, args: val args) => {
+                    if compiler.moduleOf(offset: compiler.exprOffset(id: receiver)) != module { continue }
+                    val wanted = compiler.internBytes(s: if scenario == 3U64 || scenario == 5U64 || scenario == 6U64 { give "get" } else if scenario == 4U64 { give "first" } else { give "index" })
+                    if intern(c: inout compiler, start: start, len: length) != wanted.nameId { continue }
+                    mut val target = 0U64
+                    val traitName = compiler.internBytes(s: traits[scenario])
+                    for statement in compiler.arena.stmts {
+                        match statement {
+                            Stmt.Let(mutable: _, nameStart: val binding, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: val type, init: _, annotationOccurrence: _) => {
+                                if type != 0U64 && compiler.moduleOf(offset: binding) == module {
+                                    val term = compiler.arena.typeTermAt(index: type)
+                                    if term.isAny && term.nameId == traitName.nameId { target = type break }
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                    if target == 0U64 { panic("fixture lost its existential annotation") }
+                    val root = compiler.recordAnyTraitIndex(anyRef: target)
+                    // All header operands were admitted by frontend analysis.
+                    // Opening the outer phase must not change their meaning;
+                    // completing it reuses the same immutable interface.
+                    compiler.authoredSignatureAdmission = <AuthoredSignatureAdmissionPhase.Open />
+                    val interface = compiler.sourceExistentialInterface(traitIndex: root).unwrap()
+                    compiler.authoredSignatureAdmission = <AuthoredSignatureAdmissionPhase.Complete />
+                    if compiler.sourceExistentialInterface(traitIndex: root).unwrap() != interface { panic("admission completion changed an admitted interface") }
+                    val expected = expectedAncestors[scenario]
+                    if compiler.sourceExistentialInterfaces[interface].ancestors.count() != expected || compiler.sourceExistentialInterfaces[interface].members.count() != (if scenario == 5U64 { give 2U64 } else { give 1U64 }) {
+                        eprint(text: name)
+                        eprint(text: " nodes=")
+                        eprintU64(n: compiler.sourceExistentialInterfaces[interface].ancestors.count())
+                        eprint(text: " members=")
+                        eprintU64(n: compiler.sourceExistentialInterfaces[interface].members.count())
+                        for ancestor in compiler.sourceExistentialInterfaces[interface].ancestors {
+                            eprint(text: "\nowner=")
+                            eprintU64(n: ancestor.bound.constraint.key.owner)
+                            for argument in ancestor.bound.constraint.key.positionalArgs {
+                                eprint(text: " arg=")
+                                eprintU64(n: argument)
+                                compiler.traceMonoTypeHead(ref: argument)
+                                eprint(text: " decl=")
+                                eprintU64(n: compiler.arena.typeTermAt(index: argument).declOffset)
+                            }
+                            for predicate in ancestor.bound.constraint.assocPredicates {
+                                eprint(text: " assoc=")
+                                eprintU64(n: predicate.member)
+                                eprint(text: ":")
+                                eprintU64(n: predicate.value)
+                                compiler.traceMonoTypeHead(ref: predicate.value)
+                                eprint(text: " decl=")
+                                eprintU64(n: compiler.arena.typeTermAt(index: predicate.value).declOffset)
+                            }
+                        }
+                        eprint(text: "\n")
+                        panic("effective interface has the wrong inherited shape")
+                    }
+                    if inherited && compiler.decls.traitAt(index: root).reqs.count() != 0U64 { panic("inherited member was copied into its child declaration") }
+                    val slot = compiler.recordAnyRequirementSlot(anyRef: target, nameStart: start, nameLen: length, args: args).unwrap()
+                    if slot == 0U64 { panic("effective existential interface omitted inherited requirement") }
+                    val signature = compiler.existentialRequirementSignature(target: target, traitIndex: root, slot: slot - 1U64).unwrap()
+                    val integer = compiler.langTypeRef(name: "I64", args: [])
+                    if !compiler.typeRefEq(a: signature.resultType, b: integer) {
+                        eprint(text: name)
+                        eprint(text: " actual=")
+                        compiler.traceMonoTypeHead(ref: signature.resultType)
+                        eprint(text: " expected=")
+                        compiler.traceMonoTypeHead(ref: integer)
+                        eprint(text: "\n")
+                        panic("inherited signature lost its target binding")
+                    }
+                    if !compiler.existentialRequirementIsDispatchable(target: target, traitIndex: root, slot: slot - 1U64).unwrap() { panic("inherited requirement lost dispatchability") }
+                    // Logical call validation must consume the same effective
+                    // slot, even before a concrete payload witness is built.
+                    val checked = compiler.readCheckedExistentialRequirementCall(target: target, traitIndex: root, requirement: slot - 1U64, offset: start, proofRead: <SignatureProofRead.Admission />).unwrap()
+                    if !compiler.typeRefEq(a: checked.resultType, b: integer) { panic("checked call lost its inherited signature") }
+                    val viewCount = compiler.sourceExistentialInterfaces.count()
+                    val targetCount = compiler.boundExistentialInterfaces.count()
+                    if compiler.recordAnyRequirementSlot(anyRef: target, nameStart: start, nameLen: length, args: args).unwrap() != slot { panic("repeated selection changed its endpoint") }
+                    compiler.existentialRequirementIsDispatchable(target: target, traitIndex: root, slot: slot - 1U64).unwrap()
+                    if compiler.sourceExistentialInterface(traitIndex: root).unwrap() != interface || compiler.sourceExistentialInterfaces.count() != viewCount || compiler.boundExistentialInterfaces.count() != targetCount { panic("interface read rebuilt its source/target graph") }
+                    if (scenario == 2U64 || scenario == 4U64) && compiler.sourceExistentialInterfaces[interface].ancestors[3U64].incoming.count() != 2U64 { panic("diamond discarded a witness provenance edge") }
+                    val held = compiler.diagnosticAt(offset: 0U64, msg: "held signature admission failure", failureDomain: <FailureDomain.Internal />)
+                    compiler.authoredSignatureAdmission = <AuthoredSignatureAdmissionPhase.Failed diagnostic=held />
+                    requireHeldAdmissionFailure(result: compiler.sourceExistentialInterface(traitIndex: root))
+                    requireHeldAdmissionFailure(result: compiler.boundExistentialInterface(target: target, receiver: target, offset: start))
+                    requireHeldAdmissionFailure(result: compiler.existentialRequirementSignature(target: target, traitIndex: root, slot: slot - 1U64))
+                    selected = true
+                    break
+                }
+                _ => {}
+            }
+        }
+        if !selected { panic("fixture lost its root index occurrence") }
+        eprint(text: name)
+        eprint(text: " interface retained\n")
+    }
+    checkInheritedSelfInput()
+    checkInheritedSelfResult()
+}

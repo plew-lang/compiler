@@ -1,0 +1,4 @@
+trait A {}
+trait B {}
+trait Child: A, B {}
+fn main() {}

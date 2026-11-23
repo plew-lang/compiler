@@ -1,7 +1,7 @@
 ---
 id: met-ajht
-status: open
-deps: [met-tsa3, met-ia2q]
+status: in_progress
+deps: [met-tsa3, met-ia2q, met-6hrd, met-0av7, met-lrep]
 links: []
 created: 2026-11-23T17:18:10Z
 type: bug
@@ -72,3 +72,25 @@ or genuinely ambiguous paths. Do not silently treat trait-to-trait `impl P as Q`
 as equivalent to explicit supertrait inheritance: spec08 keeps its existential
 ambiguity rule. Acceptance must reach actual ORC output, not check alone.
 This is task/contract review only; implementation and validation are still open.
+
+
+## Retained-interface implementation sequence
+
+Source investigation confirms separate direct-only gates in Record's enumeration,
+existentialRequirementBound/signature/dispatchability, and prepareExistentialBox.
+The fixed0655 carrier rejects both inherited dot and subscript in all3 modes;
+direct anyIndex/generic inheritedIndex all6 modes remain valid. The12-mode RED
+record is inherited-existential-red-v1/result.json; new fixtures and runner keep
+the expected11 output, not the existing rejection.
+
+Independent plan review accepts a source-owned effective-interface view as an
+internal implementation of the adopted endpoint/slot contract, not a new surface
+or heavy architecture decision. Keep effective/root slots distinct from original
+trait/slot identities and preserve the original declaration list. Diamond sharing
+may not erase incompatible conformance evidence. Explicit supertraits and trait
+impl derivations remain separate. Reuse the finite declaration view with separate
+target bindings/witnesses; source-only acceptance is not executable adoption.
+
+- met-6hrd: producer/shared semantic readers.
+- met-0av7: witness/adapter/Ready/physical consumers; depends on producer.
+- met-lrep: final source-to-execution reconciliation and gates; depends on both.

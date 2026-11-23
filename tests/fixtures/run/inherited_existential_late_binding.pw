@@ -1,0 +1,19 @@
+use @Std/Io only { print }
+trait Base[T] { fn get() -> T }
+trait Middle: Base[Item] { type Item }
+trait Short: Middle {}
+trait Other: Middle[Item=I64] {}
+trait Long: Other {}
+trait Joined: Short + Long {}
+struct Payload {}
+pub impl Payload { factory }
+pub impl Payload as Base[I64] { fn get() -> I64 { return 29I64 } }
+pub impl Payload as Middle { type Item = I64 }
+pub impl Payload as Short {}
+pub impl Payload as Other {}
+pub impl Payload as Long {}
+pub impl Payload as Joined {}
+fn main() {
+    val payload: any Joined = <Payload />
+    print(payload.get())
+}

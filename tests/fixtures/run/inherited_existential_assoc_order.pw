@@ -1,0 +1,19 @@
+use @Std/Io only { print }
+trait Pair { type X type Y fn first() -> X }
+trait LeftPair: Pair[X=I64, Y=Bool] {}
+trait RightPair: Pair[Y=Bool, X=I64] {}
+trait JoinedPair: LeftPair + RightPair {}
+struct Shelf {}
+pub impl Shelf { factory }
+pub impl Shelf as Pair {
+    type X = I64
+    type Y = Bool
+    fn first() -> I64 { return 19I64 }
+}
+pub impl Shelf as LeftPair {}
+pub impl Shelf as RightPair {}
+pub impl Shelf as JoinedPair {}
+fn main() {
+    val shelf: any JoinedPair = <Shelf />
+    print(shelf.first())
+}

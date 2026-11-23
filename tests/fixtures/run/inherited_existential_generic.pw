@@ -1,0 +1,11 @@
+use @Std/Io only { print }
+trait GenericParent[T] { fn get(value: T) -> T }
+trait GenericChild[U]: GenericParent[U] {}
+struct Shelf {}
+pub impl Shelf { factory }
+pub impl Shelf as GenericParent[I64] { fn get(value: I64) -> I64 { return value } }
+pub impl Shelf as GenericChild[I64] {}
+fn main() {
+    val shelf: any GenericChild[I64] = <Shelf />
+    print(shelf.get(value: 37I64))
+}
