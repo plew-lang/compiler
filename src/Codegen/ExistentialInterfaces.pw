@@ -233,4 +233,9 @@ impl Comp {
         val member = self.sourceExistentialInterfaces[interface].members[slot]
         return <Result.Ok value=<RequirementSignatureRead scope=member.signature bound=self.boundExistentialInterfaces[bound].ancestors[member.ancestor] proofRead=proofRead /> />
     }
+    inout fn existentialInterfaceDeclaration(target: U64, traitIndex: U64, slot: U64, offset: U64) -> Result[Func, CompileDiagnostic] {
+        val signature = try self.existentialInterfaceSignatureRead(target: target, traitIndex: traitIndex, slot: slot, receiver: target, offset: offset)
+        return <Result.Ok value=self.authoredRequirementViews[signature.scope].declaration />
+    }
+
 }

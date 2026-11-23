@@ -9,3 +9,4 @@ inherited_existential_converging_bindings interface retained
 inherited Self input unavailable; invalid slot refused
 inherited Self result re-erased to root interface
 inherited conditions admitted only the justified target
+inherited Unit and diverging invocation metadata retained

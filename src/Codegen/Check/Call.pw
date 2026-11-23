@@ -111,14 +111,14 @@ pub impl Comp {
     // the retained requirement and interface proof through the same signature
     // projection used by Record contexts, argument checking and source closure.
     inout fn sourceExistentialCallParameters(template: CallTemplate, traitIndex: U64, slot: U64, root: U64) -> Result[SourceCallParameterState, CompileDiagnostic] {
-        if traitIndex >= self.decls.traitCount() || slot == 0U64 || slot > self.decls.traitAt(index: traitIndex).reqs.count() {
+        if slot == 0U64 {
             return <Result.Err error=self.diagnosticAt(offset: template.siteKey.originStart, msg: "internal error: selected dynamic call has no requirement") />
         }
         val source = try self.requireSourceInterfaceRoot(root: root, site: template.siteKey, receiver: template.receiverTypeTerm, traitIndex: traitIndex)
-        val scope = try self.requireAdmittedRawRequirement(traitIndex: traitIndex, slot: slot - 1U64, offset: template.siteKey.originStart)
-        val function = self.authoredRequirementViews[scope].declaration
+        val selected = try self.existentialInterfaceSignatureRead(target: source.receiver, traitIndex: traitIndex, slot: slot - 1U64, receiver: source.bound.subject, offset: template.siteKey.originStart)
+        val function = self.authoredRequirementViews[selected.scope].declaration
         val proof = <StaticConformanceProof.AssumedBound source=<DeclarationBoundRef.Interface index=root - 1U64 /> />
-        val types = try self.requirementParameterTypes(signature: <RequirementSignatureRead scope=scope bound=source.bound />)
+        val types = try self.requirementParameterTypes(signature: selected)
         val signature = <SourceCallSignature.RequirementParameters types=types environment=<InstanceEnvironment receiverRef=source.bound.subject proof=proof /> />
         return <Result.Ok value=<SourceCallParameterState.Selected function=function signature=signature /> />
     }

@@ -324,10 +324,11 @@ pub impl Comp {
             CallTemplateKind.Dynamic(receiver: _, args: _, target: val target) => {
                 match target {
                     DynamicCallTemplateTarget.ExistentialRequirement(traitIdx: val traitIndex, slot: val slot, interfaceRoot: _) => {
-                        if traitIndex >= self.decls.traitCount() || slot == 0U64 || slot > self.decls.traitAt(index: traitIndex).reqs.count() {
+                        if slot == 0U64 {
                             return <Result.Err error=self.diagnosticAt(offset: offset, msg: "internal error: selected dynamic method has no requirement") />
                         }
-                        try self.verifySelectedMethodReceiverWithOrigin(recv: recv, function: self.traitReqAt(reqs: self.decls.traitAt(index: traitIndex).reqs, index: slot - 1U64), args: args, origin: <Optional.Some v=index />)
+                        val declaration = try self.existentialInterfaceDeclaration(target: template.receiverTypeTerm, traitIndex: traitIndex, slot: slot - 1U64, offset: offset)
+                        try self.verifySelectedMethodReceiverWithOrigin(recv: recv, function: declaration, args: args, origin: <Optional.Some v=index />)
                     }
                     DynamicCallTemplateTarget.ClosureField(fieldIndex: _, fnTypeTerm: _) => {}
                     _ => { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "internal error: recorded method has a non-method dynamic target") /> }

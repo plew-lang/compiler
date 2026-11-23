@@ -1,0 +1,10 @@
+trait Parent { type Output fn ping() -> Output }
+trait Child: Parent[Output=()] {}
+struct Payload {}
+pub impl Payload { factory }
+pub impl Payload as Parent { type Output = () fn ping() -> () { return () } }
+pub impl Payload as Child {}
+fn main() {
+    val payload: any Child = <Payload />
+    payload.ping()
+}

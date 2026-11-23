@@ -66,6 +66,37 @@ fn checkInheritedConditions() {
     if checked != 2U64 { panic("condition fixture lost its existential annotations") }
     eprint(text: "inherited conditions admitted only the justified target\n")
 }
+fn checkInheritedInvocation() {
+    for scenario in 0U64..<4U64 {
+        mut val compiler = <Comp />
+        val filenames: Array[String] = ["InvocationUnit", "InvocationExplicitUnit", "InvocationAssociatedUnit", "InvocationDiverge"]
+        val filename = filenames[scenario]
+        analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.File path="tests/compiler/frontend/fixtures/ExistentialInterfaces/" + filename + ".pw" />, sources: <SourceAccess stdRoot="std/".bytes() />).unwrap()
+        val name = compiler.internBytes(s: "main")
+        val function = compiler.arena.firstFunctionNamed(nameId: name.nameId)
+        compiler.prepareLexicalBody(fnIdx: function).unwrap()
+        mut val checked = 0U64
+        for index in 0U64..<compiler.callTemplateLocations.count() {
+            val template = compiler.callTemplateAt(index: index)
+            match template.kind {
+                CallTemplateKind.Dynamic(receiver: _, args: _, target: val selected) => {
+                    match selected {
+                        DynamicCallTemplateTarget.ExistentialRequirement(traitIdx: val root, slot: val slot, interfaceRoot: _) => {
+                            val declaration = compiler.existentialInterfaceDeclaration(target: template.receiverTypeTerm, traitIndex: root, slot: slot - 1U64, offset: template.siteKey.originStart).unwrap()
+                            if declaration.isDiverging != (scenario == 3U64) { panic("inherited invocation lost its divergence contract") }
+                            if scenario != 3U64 && !compiler.callTemplateReturnsUnit(template: template).unwrap() { panic("inherited Unit result became a value") }
+                            checked += 1U64
+                        }
+                        _ => {}
+                    }
+                }
+                _ => {}
+            }
+        }
+        if checked != 1U64 { panic("invocation fixture missed its saved dynamic call") }
+    }
+    eprint(text: "inherited Unit and diverging invocation metadata retained\n")
+}
 fn main() {
     for scenario in 0U64..<8U64 {
         val names: Array[String] = ["index_existential_requirement", "index_inherited_existential_requirement", "inherited_existential_diamond", "inherited_existential_generic", "inherited_existential_assoc_order", "inherited_existential_converging", "inherited_existential_late_binding", "inherited_existential_converging_bindings"]
@@ -166,7 +197,7 @@ fn main() {
                     compiler.existentialRequirementIsDispatchable(target: target, traitIndex: root, slot: slot - 1U64).unwrap()
                     if compiler.sourceExistentialInterface(traitIndex: root).unwrap() != interface || compiler.sourceExistentialInterfaces.count() != viewCount || compiler.boundExistentialInterfaces.count() != targetCount { panic("interface read rebuilt its source/target graph") }
                     if (scenario == 2U64 || scenario == 4U64) && compiler.sourceExistentialInterfaces[interface].ancestors[3U64].incoming.count() != 2U64 { panic("diamond discarded a witness provenance edge") }
-                    match compiler.recordParametricFunction(fnIdx: function, recordCallTemplates: true) {
+                    match compiler.prepareLexicalBody(fnIdx: function) {
                         Result.Ok(value: _) => {}
                         Result.Err(error: val diagnostic) => { panic(diagnostic.message()) }
                     }
@@ -178,6 +209,11 @@ fn main() {
                             _ => false,
                         }
                         if !dynamic { continue }
+                        if compiler.callTemplateReturnsUnit(template: template).unwrap() { panic("integer interface result was treated as Unit") }
+                        match compiler.checkCallTemplateSelection(template: template) {
+                            Result.Ok(value: _) => {}
+                            Result.Err(error: val diagnostic) => { panic(diagnostic.message()) }
+                        }
                         match compiler.sourceSelectedCallBounds(template: template) {
                             Result.Ok(value: _) => {}
                             Result.Err(error: val diagnostic) => { panic(diagnostic.message()) }
@@ -203,4 +239,5 @@ fn main() {
     checkInheritedSelfInput()
     checkInheritedSelfResult()
     checkInheritedConditions()
+    checkInheritedInvocation()
 }
