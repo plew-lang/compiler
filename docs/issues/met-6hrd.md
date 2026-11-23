@@ -1,6 +1,6 @@
 ---
 id: met-6hrd
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-11-23T19:21:47Z
@@ -28,3 +28,9 @@ Target-convergence and complementary-associated-equation native REDs are repaire
 Source CallTemplate obligations had one further raw-slot reader. Recording alone passed and is not counted as RED; explicitly consuming real Dynamic/Protocol templates through sourceSelectedCallBounds failed with `selected interface has no retained requirement`. The retained root/effective signature reader replaces the raw helper; native source-obligation-green-v1 succeeds. Tracked `tests/compiler/frontend/test-existential-interfaces.py` and `.err` golden now reproduce eight source scenarios and semantic boundaries, including actual template consumption; carrier and runtime File fixtures are checked before/after. Independent semantic source review finds no further must-fix; final build/scoped controls are pending.
 
 Fresh fc0a08 preserves six check/AOT/ORC normal controls, but reveals additional semantic raw-slot readers in source argument/arity verification. They are migrated through the common effective declaration/signature reader, including invocation divergence and post-substitution Unit classification. Owned prepareLexicalBody plus actual saved template selection/bounds/Unit consumers now run in the internal test. Explicit and associated Unit exposed a further real RED, repaired by reading the substituted result rather than hasRet. Latest tracked native gate passes all eight source cases and four inherited invocation forms (omitted/explicit/associated Unit, diverge), preserving Self/conditional/cache controls and all input fingerprints. Final independent source review finds no further must-fix; final build and normal controls are still pending.
+
+## Finite acceptance
+
+Product fee53eda; final standard build f490ba passed with all inputs unchanged and all193 source files equal the frozen v4 root. Candidate4a3b1430…3389318 passes all10 check cases and all6 existing normal check/AOT/ORC controls. Eight inherited AOT/ORC pairs still refuse at the concrete Mono slot boundary; the full CLI tool exits1 and is NOT reported green. The final tracked native probe matches empty stdout/12-line golden, source193/support60 inputs unchanged, including carrier.
+
+Independent final reviewer typing_obligation_plan_review rehashed source, candidate/22 CLI inputs and native193/60 inputs and accepts this public-interface finite child with no must-fix. met-0av7 owns the remaining16 execution refusals, met-lrep owns integration, met-ajht and phase3 remain open. Development carrier0655 remains unchanged; no main/seed promotion. See canonical retained evidence for exact run records.
