@@ -1,0 +1,71 @@
+// Append to an exact Frontend snapshot; no product API is widened.
+fn typingRequire(result: Result[(), CompileDiagnostic]) {
+    match result { Result.Ok(value: _) => {} Result.Err(error: val diagnostic) => { panic(diagnostic.message()) } }
+}
+fn main() {
+    for scenario in 0U64..<12U64 {
+        mut val compiler = <Comp />
+        typingRequire(result: analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text path="Typing.pw" text="use @Std/Core only {{ Array, I64 }}\nfn bad() {{ val values = [] }}\nfn main() {{}}" />, sources: <SourceAccess />))
+        val name = compiler.internBytes(s: "bad")
+        val function = compiler.arena.firstFunctionNamed(nameId: name.nameId)
+        val owner = <SemanticCompletionOwner.Function index=function />
+        val request = <SourceRecordOrigin.CheckingRequest session=compiler.sourceFactSession() root=owner />
+        mut val expression = 0U64
+        mut val found = false
+        for index in 0U64..<compiler.arena.exprs.count() {
+            match compiler.arena.exprs[index] {
+                Expr.Array(elems: val elements) => { if elements.len == 0U64 { expression = index found = true } }
+                _ => {}
+            }
+        }
+        if !found { panic("missing authored array") }
+        if scenario == 2U64 { compiler.arena.exprOriginSerial[expression] += 1U64 }
+        if scenario == 0U64 {
+            typingRequire(result: compiler.recordParametricFunction(fnIdx: function, recordCallTemplates: true))
+        } else {
+            typingRequire(result: compiler.recordParametricFunctionWithOrigin(fnIdx: function, recordCallTemplates: true, origin: <SourceRecordingScope request=request returnContext=<SourceExpectedContext.None /> />, expectedOrigin: <SourceExpectedContext.None />))
+        }
+        compiler.sourceFacts.activate(owner: owner)
+        if scenario == 3U64 { compiler.arena.exprOriginSerial[expression] += 1U64 }
+        if scenario == 4U64 { compiler.arena.exprSpanStart[expression] += 1U64 }
+        if scenario == 5U64 { compiler.sourceFacts.expressionOwners[expression] = <SemanticCompletionOwner.Global target=0U64 /> }
+        if scenario == 6U64 || scenario == 7U64 {
+            // A successfully completed obligation cannot justify later corruption.
+            if scenario == 7U64 {
+                val integer = compiler.internBytes(s: "I64")
+                val scalar = compiler.findOrAddTypeRef(nameStart: integer.nameStart, nameLen: integer.nameLen)
+                val array = compiler.sourceArrayTypeRef(elemRef: scalar, offset: 0U64).unwrap()
+                compiler.recordSemanticExprTerm(exprId: expression, term: array)
+                if compiler.sourceFacts.activeBuilder.data.arrayTypingObligations.contains(key: expression) { panic("completed array retained unresolved authority") }
+            }
+            compiler.sourceFacts.activeBuilder.data.expressions = []
+            compiler.sourceFacts.activeBuilder.data.expressionIds = []
+            compiler.sourceFacts.activeBuilder.data.expressionIndexSlots = []
+        }
+        if scenario == 8U64 {
+            compiler.sourceFacts.activeBuilder.data.putExpression(exprId: expression, fact: <SemanticExprType typeState=<SemanticExpressionTypeState.Pending /> />)
+        }
+        val diagnostic = match if scenario == 1U64 {
+            give compiler.checkSourceTypingObligations(owner: owner)
+        } else if scenario == 9U64 {
+            give compiler.checkSourceTypingObligationsWithOrigin(owner: owner, origin: <SourceRecordOrigin.CheckingRequest session=compiler.sourceFactSession()+1U64 root=owner />)
+        } else if scenario == 10U64 {
+            give compiler.checkSourceTypingObligationsWithOrigin(owner: owner, origin: <SourceRecordOrigin.CheckingRequest session=compiler.sourceFactSession() root=<SemanticCompletionOwner.Global target=0U64 /> />)
+        } else {
+            give compiler.checkSourceTypingObligationsWithOrigin(owner: owner, origin: request)
+        } {
+            Result.Err(error: val diagnostic) => diagnostic
+            Result.Ok(value: _) => { panic("unresolved array unexpectedly completed") }
+        }
+        val expected = scenario >= 11U64
+        if compiler.sourceFailureHasOwner(diagnostic: diagnostic) != expected || diagnostic.sourceTyping().isSome() != expected || diagnostic.isSourceRejection() { panic("source typing authority crossed a boundary") }
+        match diagnostic.failureDomain() { FailureDomain.Unclassified => {} _ => { panic("raw cause acquired Source domain") } }
+        if expected {
+            val refusal = diagnostic.sourceTyping().unwrap()
+            val forged = <CompileDiagnostic.sourceTyping refusal=<SourceTypingRefusal session=refusal.session() owner=refusal.owner() expression=refusal.expression() event=refusal.event()+1U64 location=refusal.location() /> />
+            if compiler.sourceFailureHasOwner(diagnostic: forged) { panic("unknown event acquired authority") }
+            compiler.arena.exprOriginSerial[expression] += 1U64
+            if compiler.sourceFailureHasOwner(diagnostic: diagnostic) { panic("changed syntax retained authority") }
+        }
+    }
+}

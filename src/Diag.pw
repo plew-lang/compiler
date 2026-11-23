@@ -356,6 +356,22 @@ pub impl AssignmentRefusal {
 
 pub fn opaqueNumericMessage() -> String { return "cannot assign a literal to a type parameter: it is an opaque type with no numeric bound (spec/06)" }
 
+pub struct SourceTypingRefusal {
+    val session: U64
+    val owner: DiagnosticOwner
+    val expression: U64
+    val event: U64
+    val location: DiagnosticLocation
+}
+pub impl SourceTypingRefusal {
+    factory
+    fn session() -> U64 { return self.session }
+    fn owner() -> DiagnosticOwner { return self.owner }
+    fn expression() -> U64 { return self.expression }
+    fn event() -> U64 { return self.event }
+    fn location() -> DiagnosticLocation { return self.location }
+}
+
 pub struct OpaqueNumericRefusal {
     val session: U64
     val owner: DiagnosticOwner
@@ -435,6 +451,7 @@ enum DiagnosticData {
     NonCallableBinding(refusal: NonCallableBindingRefusal)
     FreeCallAmbiguity(refusal: FreeCallAmbiguityRefusal)
     MemberCallAmbiguity(refusal: MemberCallAmbiguityRefusal)
+    SourceTyping(refusal: SourceTypingRefusal)
     OpaqueNumeric(refusal: OpaqueNumericRefusal)
     GenericCallConflict(refusal: GenericCallConflictRefusal)
     ArrayContext(refusal: ArrayContextRefusal)
@@ -444,6 +461,16 @@ pub struct CompileDiagnostic {
 }
 
 pub impl CompileDiagnostic {
+    factory sourceTyping(refusal: SourceTypingRefusal) {
+        return <CompileDiagnostic storage=[<DiagnosticData.SourceTyping refusal=refusal />] />
+    }
+    fn sourceTyping() -> Optional[SourceTypingRefusal] {
+        return match self.storage[0U64] {
+            DiagnosticData.SourceTyping(refusal: val refusal) => <Optional.Some v=refusal />
+            _ => <Optional.None />
+        }
+    }
+
     factory opaqueNumeric(refusal: OpaqueNumericRefusal) {
         return <CompileDiagnostic storage=[<DiagnosticData.OpaqueNumeric refusal=refusal />] />
     }
@@ -569,6 +596,7 @@ pub impl CompileDiagnostic {
             DiagnosticData.NonCallableBinding(refusal: _) => <DiagnosticSeverity.Error />
             DiagnosticData.FreeCallAmbiguity(refusal: _) => <DiagnosticSeverity.Error />
             DiagnosticData.MemberCallAmbiguity(refusal: _) => <DiagnosticSeverity.Error />
+            DiagnosticData.SourceTyping(refusal: _) => <DiagnosticSeverity.Error />
             DiagnosticData.OpaqueNumeric(refusal: _) => <DiagnosticSeverity.Error />
             DiagnosticData.GenericCallConflict(refusal: _) => <DiagnosticSeverity.Error />
             DiagnosticData.ArrayContext(refusal: _) => <DiagnosticSeverity.Error />
@@ -586,6 +614,7 @@ pub impl CompileDiagnostic {
             DiagnosticData.NonCallableBinding(refusal: _) => <FailureDomain.Unclassified />
             DiagnosticData.FreeCallAmbiguity(refusal: _) => <FailureDomain.Unclassified />
             DiagnosticData.MemberCallAmbiguity(refusal: _) => <FailureDomain.Unclassified />
+            DiagnosticData.SourceTyping(refusal: _) => <FailureDomain.Unclassified />
             DiagnosticData.OpaqueNumeric(refusal: _) => <FailureDomain.Unclassified />
             DiagnosticData.GenericCallConflict(refusal: _) => <FailureDomain.Unclassified />
             DiagnosticData.ArrayContext(refusal: _) => <FailureDomain.Unclassified />
@@ -603,6 +632,7 @@ pub impl CompileDiagnostic {
             DiagnosticData.NonCallableBinding(refusal: val refusal) => refusal.location()
             DiagnosticData.FreeCallAmbiguity(refusal: val refusal) => refusal.location()
             DiagnosticData.MemberCallAmbiguity(refusal: val refusal) => refusal.location()
+            DiagnosticData.SourceTyping(refusal: val refusal) => refusal.location()
             DiagnosticData.OpaqueNumeric(refusal: val refusal) => refusal.location()
             DiagnosticData.GenericCallConflict(refusal: val refusal) => refusal.location()
             DiagnosticData.ArrayContext(refusal: val refusal) => refusal.location()
@@ -619,6 +649,7 @@ pub impl CompileDiagnostic {
             DiagnosticData.NonCallableBinding(refusal: _) => "the selected value binding is not callable"
             DiagnosticData.FreeCallAmbiguity(refusal: val refusal) => refusal.kind().message()
             DiagnosticData.MemberCallAmbiguity(refusal: val refusal) => refusal.kind().message()
+            DiagnosticData.SourceTyping(refusal: _) => "cannot infer this expression's type; add a type annotation or provide an expected type"
             DiagnosticData.OpaqueNumeric(refusal: _) => opaqueNumericMessage()
             DiagnosticData.GenericCallConflict(refusal: _) => genericCallConflictMessage()
             DiagnosticData.ArrayContext(refusal: _) => "cannot infer an empty array's element type from a non-array context (spec/02)"
@@ -637,6 +668,7 @@ pub impl CompileDiagnostic {
             DiagnosticData.NonCallableBinding(refusal: _) => []
             DiagnosticData.FreeCallAmbiguity(refusal: _) => []
             DiagnosticData.MemberCallAmbiguity(refusal: _) => []
+            DiagnosticData.SourceTyping(refusal: _) => []
             DiagnosticData.OpaqueNumeric(refusal: _) => []
             DiagnosticData.GenericCallConflict(refusal: _) => []
             DiagnosticData.ArrayContext(refusal: _) => []

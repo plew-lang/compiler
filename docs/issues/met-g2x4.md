@@ -76,3 +76,22 @@ scope/contract correction or new semantic decision. It independently checked
 whole failure maps, original result/stdout hashes,7642worker pairs and32unchanged
 resolved fixture files. This is plan/evidence review, not code acceptance.
 [Whole reconciliation](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-post-numeric-normal-suite.json).
+
+## WIP implementation boundary
+
+Dedicated SourceTyping cause and retained negative events are being added.
+Only Lower-authored empty arrays without element context register a typed
+obligation; general expression recording avoids a new lookup. Private
+publication checks carry request origin for function/global/nested closures;
+Raw wrappers retain Unclassified. Missing expression facts remain Raw,
+including intentionally deferred but never completed facts. Pending source
+facts additionally require their normal completion and matching owner.
+Successful term storage discharges the array obligation at putExpression.
+Lower metadata now retains its own serial in both lowering entrances.
+
+Independent source review identified pre-record serial replacement and stale
+obligations after completion; both have dedicated probe scenarios and WIP fixes.
+The initial build rejected a private origin type in a public impl; the core
+was moved into a private impl, preserving the public Raw wrapper. This is not
+implementation acceptance. Standard frozen build1c0f8f and final private probe
+remain to be collected; don't reuse the failed860807 setup/build as a pass.

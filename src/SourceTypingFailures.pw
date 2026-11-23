@@ -1,0 +1,122 @@
+// Source recording owns unresolved array-element obligations. Publication only
+// observes them; an absent arbitrary semantic fact is not source evidence.
+impl Comp {
+    inout fn checkSourceTypingObligationsWithOrigin(owner: SemanticCompletionOwner, checkGenericOwnership: Bool = false, origin: SourceRecordOrigin) -> Result[(), CompileDiagnostic] {
+        if !self.arena.typeDeclarationResolutionComplete() {
+            return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: source publication requires completed type declaration resolution") />
+        }
+        val required = self.sourceFacts.requiredExpressions(owner: owner)
+        for expression in required {
+            val fact = match self.sourceFacts.expression(owner: owner, exprId: expression) {
+                Optional.Some(v: val fact) => fact
+                Optional.None => { return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: expression), msg: "cannot infer this expression's type; add a type annotation or provide an expected type") /> }
+            }
+            match fact.typeState {
+                SemanticExpressionTypeState.Pending | SemanticExpressionTypeState.Unrecorded => {
+                    return <Result.Err error=self.sourceTypingRefusalDiagnostic(owner: owner, expression: expression, origin: origin) />
+                }
+                _ => {}
+            }
+            match fact.completion {
+                Optional.Some(v: val completion) => {
+                    if !semanticCompletionOwnersEqual(recorded: completion.owner, prepared: owner) {
+                        return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: expression), msg: "internal error: source typing obligation completion changed owner") />
+                    }
+                }
+                Optional.None => { return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: expression), msg: "internal error: typed source obligation has no checked completion") /> }
+            }
+        }
+        self.sourceFacts.activate(owner: owner)
+        if checkGenericOwnership {
+            mut val checkedTypes: Set[U64] = Set.new()
+            for fact in self.sourceFacts.activeBuilder.data.expressions {
+                match fact.typeState {
+                    SemanticExpressionTypeState.Pending | SemanticExpressionTypeState.Unrecorded => {}
+                    _ => { try self.checkSourceGenericUniqueArguments(ref: fact.term, seen: inout checkedTypes) }
+                }
+            }
+            for binding in self.sourceFacts.activeBuilder.data.bindings {
+                try self.checkSourceGenericUniqueArguments(ref: binding.typeTerm, seen: inout checkedTypes)
+            }
+        }
+        for block in self.sourceFacts.activeBuilder.data.valueBlockIds {
+            val fact = self.sourceFacts.activeBuilder.data.valueBlocks.get(key: block).unwrap()
+            if fact.completion.source.normal() && fact.resultTerm == 0U64 && self.sourceFacts.activeBuilder.requiredKeys.contains(fact.expression) {
+                return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: fact.expression), msg: "cannot infer this expression's type; add a type annotation or provide an expected type") />
+            }
+        }
+        return <Result.Ok value=() />
+    }
+
+    inout fn recordSourceTypingObligationWithOrigin(exprId: U64, needsValue: Bool, purpose: ExpressionRecordPurpose, origin: SourceRecordOrigin, expectedTerm: U64) -> Result[(), CompileDiagnostic] {
+        try self.recordSourceTypingObligation(exprId: exprId, needsValue: needsValue, purpose: purpose)
+        match purpose { ExpressionRecordPurpose.Capability => { return <Result.Ok value=() /> } _ => {} }
+        if !self.cur.recordCallTemplates || expectedTerm != 0U64 || self.semanticExprTerm(exprId: exprId) != 0U64 { return <Result.Ok value=() /> }
+        val request = match origin {
+            SourceRecordOrigin.Raw => { return <Result.Ok value=() /> }
+            SourceRecordOrigin.CheckingRequest(session: val session, root: val root) => (session: session, root: root)
+        }
+        if request.session != self.sourceFactSession() { return <Result.Ok value=() /> }
+        val authored = match self.authoredArrayLiterals.get(key: exprId) { Optional.Some(v: val authored) => authored Optional.None => { return <Result.Ok value=() /> } }
+        if authored.elements.len != 0U64 || exprId >= self.arena.exprOriginSerial.count() || authored.serial != self.arena.exprOriginSerial[exprId] { return <Result.Ok value=() /> }
+        val owner = match self.sourceRecordingOwner() { Optional.Some(v: val owner) => owner Optional.None => { return <Result.Ok value=() /> } }
+        if !semanticCompletionOwnersEqual(recorded: self.lexicalSourceFactOwner(owner: owner), prepared: request.root) { return <Result.Ok value=() /> }
+        self.sourceFacts.activate(owner: owner)
+        if !self.sourceFacts.activeBuilder.requiredKeys.contains(exprId) { return <Result.Ok value=() /> }
+        self.sourceFacts.activeBuilder.data.arrayTypingObligations[exprId] = <SourceArrayTypingObligation session=request.session root=request.root owner=owner serial=authored.serial start=authored.start end=authored.end elements=authored.elements />
+        return <Result.Ok value=() />
+    }
+
+    fn sourceArrayTypingObligationMatches(expression: U64, obligation: SourceArrayTypingObligation) -> Bool {
+        if obligation.session != self.sourceFactSession() || expression >= self.arena.exprs.count() || expression >= self.arena.exprOriginSerial.count() || expression >= self.arena.exprSpanStart.count() || expression >= self.arena.exprSpanEnd.count() { return false }
+        if obligation.serial != self.arena.exprOriginSerial[expression] || obligation.start != self.arena.exprSpanStart[expression] || obligation.end != self.arena.exprSpanEnd[expression] { return false }
+        val authored = match self.authoredArrayLiterals.get(key: expression) { Optional.Some(v: val authored) => authored Optional.None => { return false } }
+        if authored.serial != obligation.serial || authored.start != obligation.start || authored.end != obligation.end || authored.elements.start != obligation.elements.start || authored.elements.len != 0U64 || obligation.elements.len != 0U64 { return false }
+        return match self.arena.exprs[expression] {
+            Expr.Array(elems: val elements) => elements.start == obligation.elements.start && elements.len == 0U64
+            _ => false
+        }
+    }
+
+    inout fn sourceTypingRefusalDiagnostic(owner: SemanticCompletionOwner, expression: U64, origin: SourceRecordOrigin) -> CompileDiagnostic {
+        val location = self.diagnosticLocationAt(offset: self.exprOffset(id: expression))
+        val raw = <CompileDiagnostic location=location message="cannot infer this expression's type; add a type annotation or provide an expected type" />
+        val request = match origin {
+            SourceRecordOrigin.Raw => { return raw }
+            SourceRecordOrigin.CheckingRequest(session: val session, root: val root) => (session: session, root: root)
+        }
+        self.sourceFacts.activate(owner: owner)
+        if !self.sourceFacts.activeBuilder.requiredKeys.contains(expression) { return raw }
+        match self.sourceFacts.expressionOwners.get(key: expression) {
+            Optional.Some(v: val recorded) => { if !semanticCompletionOwnersEqual(recorded: recorded, prepared: owner) { return raw } }
+            Optional.None => { return raw }
+        }
+        val obligation = match self.sourceFacts.activeBuilder.data.arrayTypingObligations.get(key: expression) { Optional.Some(v: val obligation) => obligation Optional.None => { return raw } }
+        if request.session != obligation.session || !semanticCompletionOwnersEqual(recorded: request.root, prepared: obligation.root) || !semanticCompletionOwnersEqual(recorded: owner, prepared: obligation.owner) || !semanticCompletionOwnersEqual(recorded: self.lexicalSourceFactOwner(owner: owner), prepared: request.root) || !self.sourceArrayTypingObligationMatches(expression: expression, obligation: obligation) { return raw }
+        val fact = match self.sourceFacts.expression(owner: owner, exprId: expression) { Optional.Some(v: val fact) => fact Optional.None => { return raw } }
+        if fact.term != 0U64 { return raw }
+        val completion = match fact.completion { Optional.Some(v: val completion) => completion Optional.None => { return raw } }
+        if !semanticCompletionOwnersEqual(recorded: completion.owner, prepared: owner) || !completion.flow.source.normal() { return raw }
+        val diagnosticOwner = match owner {
+            SemanticCompletionOwner.Function(index: val index) => <DiagnosticOwner.Function index=index />
+            SemanticCompletionOwner.Global(target: val target) => <DiagnosticOwner.Global target=target />
+            SemanticCompletionOwner.Closure(expression: val closure) => <DiagnosticOwner.Closure expression=closure />
+        }
+        val refusal = <SourceTypingRefusal session=request.session owner=diagnosticOwner expression=expression event=self.failedSourceTyping.count() location=location />
+        self.failedSourceTyping.append(<SourceTypingFailure refusal=refusal obligation=obligation />)
+        return <CompileDiagnostic.sourceTyping refusal=refusal />
+    }
+
+    fn sourceTypingFailureHasOwner(refusal: SourceTypingRefusal) -> Bool {
+        if refusal.event() >= self.failedSourceTyping.count() { return false }
+        val proof = self.failedSourceTyping[refusal.event()]
+        val saved = proof.refusal
+        if saved.session() != refusal.session() || saved.expression() != refusal.expression() || saved.event() != refusal.event() || !self.diagnosticOwnersEqual(first: saved.owner(), second: refusal.owner()) || !saved.location().same(other: refusal.location()) { return false }
+        val owner = match proof.obligation.owner {
+            SemanticCompletionOwner.Function(index: val index) => <DiagnosticOwner.Function index=index />
+            SemanticCompletionOwner.Global(target: val target) => <DiagnosticOwner.Global target=target />
+            SemanticCompletionOwner.Closure(expression: val closure) => <DiagnosticOwner.Closure expression=closure />
+        }
+        return self.diagnosticOwnersEqual(first: owner, second: refusal.owner()) && self.sourceArrayTypingObligationMatches(expression: refusal.expression(), obligation: proof.obligation) && semanticCompletionOwnersEqual(recorded: self.lexicalSourceFactOwner(owner: proof.obligation.owner), prepared: proof.obligation.root)
+    }
+}

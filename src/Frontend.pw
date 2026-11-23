@@ -66,7 +66,7 @@ use ./Path only { resolveImport, extractSpan, dirPrefixLen, findSrcRoot, findPkg
 use ./Manifest only { Dep, loadManifestDeps, resolveDepImport, resolveGitDepImport, loadLock, isExternalDepImport }
 use ./Lock only { Lock }
 use ./Cache only { cacheRoot }
-use ./Diag only { compileErrorAt, compileErrorAtFile, CompileDiagnostic, ArrayContextRefusal, UseAfterMoveRefusal, MissingFieldRefusal, MissingFieldKind, AssignmentRefusal, AssignmentRefusalKind, UniqueCopyRefusal, UniqueCaptureRefusal, NonCallableBindingRefusal, FreeCallVisibilityRefusal, FreeCallVisibilityKind, FreeCallAmbiguityRefusal, FreeCallAmbiguityKind, MemberCallAmbiguityRefusal, MemberCallAmbiguityKind, GenericCallConflictRefusal, genericCallConflictMessage, OpaqueNumericRefusal, opaqueNumericMessage, DiagnosticOwner, DiagnosticNote, DiagnosticLocation, DiagnosticSeverity, FailureDomain, emitDiagnostic, eprintInt, digitByte, digitStrU }
+use ./Diag only { compileErrorAt, compileErrorAtFile, CompileDiagnostic, ArrayContextRefusal, UseAfterMoveRefusal, MissingFieldRefusal, MissingFieldKind, AssignmentRefusal, AssignmentRefusalKind, UniqueCopyRefusal, UniqueCaptureRefusal, NonCallableBindingRefusal, FreeCallVisibilityRefusal, FreeCallVisibilityKind, FreeCallAmbiguityRefusal, FreeCallAmbiguityKind, MemberCallAmbiguityRefusal, MemberCallAmbiguityKind, GenericCallConflictRefusal, genericCallConflictMessage, OpaqueNumericRefusal, SourceTypingRefusal, opaqueNumericMessage, DiagnosticOwner, DiagnosticNote, DiagnosticLocation, DiagnosticSeverity, FailureDomain, emitDiagnostic, eprintInt, digitByte, digitStrU }
 use ./Ops only { opEq, opNe, opLt, opLe, opGt, opGe, opAdd, opSub, opMul, opDiv, opRem, opAnd, opOr, opNot, opBitAnd, opBitOr, opBitXor, opShl, opShr, opBitNot, opAssign, compoundBinOp, isBinTraitOp, binTraitName, binTraitMethodName, unaryMethodName }
 
 // Only an entirely unsuffixed numeric expression accepts a sibling's
@@ -815,6 +815,24 @@ enum GenericCallInferenceOrigin {
     Call(request: SourceRecordOrigin, expression: U64, callee: U64, arguments: ArgRange, diagnostic: Bool)
 }
 
+// A deferred authored array has a known missing element-context obligation.
+// Missing arbitrary semantic facts are not such an obligation.
+struct SourceArrayTypingObligation {
+    val session: U64
+    val root: SemanticCompletionOwner
+    val owner: SemanticCompletionOwner
+    val serial: U64
+    val start: U64
+    val end: U64
+    val elements: ExprRange
+}
+impl SourceArrayTypingObligation { factory }
+struct SourceTypingFailure {
+    val refusal: SourceTypingRefusal
+    val obligation: SourceArrayTypingObligation
+}
+impl SourceTypingFailure { factory }
+
 struct AuthoredNumericLiteral {
     val serial: U64
     val start: U64
@@ -880,6 +898,7 @@ struct SourceArrayContextFailure {
 impl SourceArrayContextFailure { factory }
 
 struct AuthoredArrayLiteral {
+    val serial: U64
     val start: U64
     val end: U64
     val elements: ExprRange
@@ -942,6 +961,7 @@ pub struct Comp {
     mut val authoredNamedFactoryOrigins: Dictionary[U64, AuthoredNamedFactory] = [:]
     mut val failedArrayContextFrontiers: Array[SourceArrayFailureFrontier] = []
     mut val authoredNumericLiterals: Dictionary[U64, AuthoredNumericLiteral] = [:]
+    mut val failedSourceTyping: Array[SourceTypingFailure] = []
     mut val failedOpaqueNumerics: Array[SourceOpaqueNumericFailure] = []
     mut val failedGenericCallConflicts: Array[SourceGenericCallConflict] = []
     mut val failedArrayContexts: Array[SourceArrayContextFailure] = []
@@ -1934,6 +1954,7 @@ pub fn intern(c: inout Comp, start: U64, len: U64) -> U64 {
 // methodization transition.
 
 part ./SourceCallOperations
+part ./SourceTypingFailures
 part ./SourceOpaqueNumerics
 part ./SourceGenericFailures
 part ./SourceArrayFailures
@@ -3272,6 +3293,7 @@ struct SourceBodyData {
     mut val expressionIndexSlots: Array[U64] = []
     mut val expressionIds: Array[U64] = []
     mut val requiredExpressions: Array[U64] = []
+    mut val arrayTypingObligations: Dictionary[U64, SourceArrayTypingObligation] = [:]
     mut val valueOperandCalls: Dictionary[U64, CallSiteKey] = [:]
     mut val valueRegions: Dictionary[U64, SourceValueRegion] = [:]
     mut val guardBindingEnds: Dictionary[U64, Array[U64]] = [:]

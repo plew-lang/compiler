@@ -28,8 +28,8 @@ impl Comp {
         }
         try self.checkSourceConversionEvidence(owner: <SemanticCompletionOwner.Function index=owner />)
         try self.checkSourceDiagnosticFailures(owner: <SemanticCompletionOwner.Function index=owner />)
-        try self.checkSourceTypingObligations(owner: <SemanticCompletionOwner.Function index=owner />)
-        try self.checkNestedSourceFacts(owner: <SemanticCompletionOwner.Function index=owner />)
+        try self.checkSourceTypingObligationsWithOrigin(owner: <SemanticCompletionOwner.Function index=owner />, origin: <SourceRecordOrigin.CheckingRequest session=self.sourceFactSession() root=<SemanticCompletionOwner.Function index=owner /> />)
+        try self.checkNestedSourceFactsWithOrigin(owner: <SemanticCompletionOwner.Function index=owner />, origin: <SourceRecordOrigin.CheckingRequest session=self.sourceFactSession() root=<SemanticCompletionOwner.Function index=owner /> />)
         self.finalizeLexicalCallStorage(owner: owner)
         for token in admitted { self.publishPreparedCallConstraints(admitted: token) }
         return <Result.Ok value=() />
@@ -131,8 +131,8 @@ impl Comp {
         val admitted = try self.admitGlobalCallConstraints(target: target)
         try self.checkSourceConversionEvidence(owner: <SemanticCompletionOwner.Global target=target />)
         try self.checkSourceDiagnosticFailures(owner: <SemanticCompletionOwner.Global target=target />)
-        try self.checkSourceTypingObligations(owner: <SemanticCompletionOwner.Global target=target />, checkGenericOwnership: true)
-        try self.checkNestedSourceFacts(owner: <SemanticCompletionOwner.Global target=target />, checkGenericOwnership: true)
+        try self.checkSourceTypingObligationsWithOrigin(owner: <SemanticCompletionOwner.Global target=target />, checkGenericOwnership: true, origin: <SourceRecordOrigin.CheckingRequest session=self.sourceFactSession() root=<SemanticCompletionOwner.Global target=target /> />)
+        try self.checkNestedSourceFactsWithOrigin(owner: <SemanticCompletionOwner.Global target=target />, checkGenericOwnership: true, origin: <SourceRecordOrigin.CheckingRequest session=self.sourceFactSession() root=<SemanticCompletionOwner.Global target=target /> />)
         self.finalizeGlobalCallStorage(target: target)
         for token in admitted { self.publishPreparedCallConstraints(admitted: token) }
         return <Result.Ok value=() />

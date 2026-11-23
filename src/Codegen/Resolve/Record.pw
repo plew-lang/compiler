@@ -1883,50 +1883,7 @@ pub impl Comp {
     }
 
     inout fn checkSourceTypingObligations(owner: SemanticCompletionOwner, checkGenericOwnership: Bool = false) -> Result[(), CompileDiagnostic] {
-        if !self.arena.typeDeclarationResolutionComplete() {
-            return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: source publication requires completed type declaration resolution") />
-        }
-        val required = self.sourceFacts.requiredExpressions(owner: owner)
-        for expression in required {
-            val fact = match self.sourceFacts.expression(owner: owner, exprId: expression) {
-                Optional.Some(v: val fact) => fact
-                Optional.None => { return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: expression), msg: "cannot infer this expression's type; add a type annotation or provide an expected type") /> }
-            }
-            match fact.typeState {
-                SemanticExpressionTypeState.Pending | SemanticExpressionTypeState.Unrecorded => {
-                    return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: expression), msg: "cannot infer this expression's type; add a type annotation or provide an expected type") />
-                }
-                _ => {}
-            }
-            match fact.completion {
-                Optional.Some(v: val completion) => {
-                    if !semanticCompletionOwnersEqual(recorded: completion.owner, prepared: owner) {
-                        return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: expression), msg: "internal error: source typing obligation completion changed owner") />
-                    }
-                }
-                Optional.None => { return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: expression), msg: "internal error: typed source obligation has no checked completion") /> }
-            }
-        }
-        self.sourceFacts.activate(owner: owner)
-        if checkGenericOwnership {
-            mut val checkedTypes: Set[U64] = Set.new()
-            for fact in self.sourceFacts.activeBuilder.data.expressions {
-                match fact.typeState {
-                    SemanticExpressionTypeState.Pending | SemanticExpressionTypeState.Unrecorded => {}
-                    _ => { try self.checkSourceGenericUniqueArguments(ref: fact.term, seen: inout checkedTypes) }
-                }
-            }
-            for binding in self.sourceFacts.activeBuilder.data.bindings {
-                try self.checkSourceGenericUniqueArguments(ref: binding.typeTerm, seen: inout checkedTypes)
-            }
-        }
-        for block in self.sourceFacts.activeBuilder.data.valueBlockIds {
-            val fact = self.sourceFacts.activeBuilder.data.valueBlocks.get(key: block).unwrap()
-            if fact.completion.source.normal() && fact.resultTerm == 0U64 && self.sourceFacts.activeBuilder.requiredKeys.contains(fact.expression) {
-                return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: fact.expression), msg: "cannot infer this expression's type; add a type annotation or provide an expected type") />
-            }
-        }
-        return <Result.Ok value=() />
+        return self.checkSourceTypingObligationsWithOrigin(owner: owner, checkGenericOwnership: checkGenericOwnership, origin: <SourceRecordOrigin.Raw />)
     }
 
     // Mirror checkBoundsStmt's SCOPE maintenance (Let/For/Match binds) without any of
@@ -2405,6 +2362,10 @@ impl Comp {
             if needsValue { try self.requireExpressionValue(exprId: exprId) }
             // Retain the obligation without publishing an unchecked completion.
             try self.recordSourceTypingObligation(exprId: exprId, needsValue: needsValue, purpose: purpose)
+            match self.arena.exprs[exprId] {
+                Expr.Array(elems: val elements) => { if elements.len == 0U64 { try self.recordSourceTypingObligationWithOrigin(exprId: exprId, needsValue: needsValue, purpose: purpose, origin: origin.request, expectedTerm: normalizedContext) } }
+                _ => {}
+            }
             return <Result.Ok value=() />
         }
         match self.arena.exprs[exprId] {
@@ -3043,6 +3004,7 @@ impl Comp {
                     self.recordSemanticExprTerm(exprId: exprId, term: (try self.sourceArrayTypeRef(elemRef: elementContext, offset: self.exprOffset(id: exprId))))
                 }
                 try self.recordSemanticAggregate(exprId: exprId)
+                if elems.len == 0U64 { try self.recordSourceTypingObligationWithOrigin(exprId: exprId, needsValue: needsValue, purpose: purpose, origin: origin.request, expectedTerm: normalizedContext) }
             }
             Expr.Index(val base, val index) => {
                 try self.recordExprWithOrigin(exprId: base, chainHoleRef: chainHoleRef, origin: origin, expectedOrigin: <SourceExpectedContext.None />)
