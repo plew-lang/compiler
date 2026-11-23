@@ -2,27 +2,30 @@
 // Public raw services cannot create these private operation records.
 impl Comp {
     inout fn diagnosticArrayContextOrigin(origin: SourceRecordingScope, exprId: U64, args: ArgRange, factoryReceiver: U64 = 0U64) -> SourceRecordingScope {
+        match origin.arrayContext {
+            SourceArrayContextOrigin.Diagnostic(frontier: _) | SourceArrayContextOrigin.Unavailable => { return origin }
+            SourceArrayContextOrigin.Regular => {}
+        }
         val request = match origin.request {
             SourceRecordOrigin.Raw => { return origin }
-            SourceRecordOrigin.DiagnosticRequest(session: _, root: _, frontier: _) => { return origin }
             SourceRecordOrigin.CheckingRequest(session: val session, root: val root) => (session: session, root: root)
         }
-        if request.session != self.sourceFactSession() { return <SourceRecordingScope request=<SourceRecordOrigin.Raw /> returnContext=origin.returnContext /> }
+        if request.session != self.sourceFactSession() { return origin.forArrayContext(context: <SourceArrayContextOrigin.Unavailable />) }
         val shape = match self.sourceCallOperation(exprId: exprId, args: args, factoryReceiver: factoryReceiver) {
             Optional.Some(v: val shape) => shape
-            Optional.None => { return <SourceRecordingScope request=<SourceRecordOrigin.Raw /> returnContext=origin.returnContext /> }
+            Optional.None => { return origin.forArrayContext(context: <SourceArrayContextOrigin.Unavailable />) }
         }
         match shape {
-            SourceCallOperation.Factory(receiver: _, receiverTerm: val receiver, writtenReceiverTerm: _, start: _, length: _, serial: _) => { if receiver == 0U64 || receiver >= self.arena.typeCount() { return <SourceRecordingScope request=<SourceRecordOrigin.Raw /> returnContext=origin.returnContext /> } }
+            SourceCallOperation.Factory(receiver: _, receiverTerm: val receiver, writtenReceiverTerm: _, start: _, length: _, serial: _) => { if receiver == 0U64 || receiver >= self.arena.typeCount() { return origin.forArrayContext(context: <SourceArrayContextOrigin.Unavailable />) } }
             _ => {}
         }
-        val owner = match self.currentSourceOwner() { Optional.Some(v: val owner) => owner Optional.None => { return <SourceRecordingScope request=<SourceRecordOrigin.Raw /> returnContext=origin.returnContext /> } }
-        if !self.sourceFacts.isActive(owner: owner) || !semanticCompletionOwnersEqual(recorded: self.lexicalSourceFactOwner(owner: owner), prepared: request.root) || args.start > self.arena.argPool.count() || args.len > self.arena.argPool.count() - args.start { return <SourceRecordingScope request=<SourceRecordOrigin.Raw /> returnContext=origin.returnContext /> }
+        val owner = match self.currentSourceOwner() { Optional.Some(v: val owner) => owner Optional.None => { return origin.forArrayContext(context: <SourceArrayContextOrigin.Unavailable />) } }
+        if !self.sourceFacts.isActive(owner: owner) || !semanticCompletionOwnersEqual(recorded: self.lexicalSourceFactOwner(owner: owner), prepared: request.root) || args.start > self.arena.argPool.count() || args.len > self.arena.argPool.count() - args.start { return origin.forArrayContext(context: <SourceArrayContextOrigin.Unavailable />) }
         mut val written: Array[Arg] = []
         for index in 0U64..<args.len { written.append(self.argAt(args: args, index: index)) }
         val frontier = self.failedArrayContextFrontiers.count()
         self.failedArrayContextFrontiers.append(<SourceArrayFailureFrontier session=request.session root=request.root expression=exprId shape=shape arguments=args written=written />)
-        return <SourceRecordingScope request=<SourceRecordOrigin.DiagnosticRequest session=request.session root=request.root frontier=frontier /> returnContext=origin.returnContext />
+        return origin.forArrayContext(context: <SourceArrayContextOrigin.Diagnostic frontier=frontier />)
     }
 
     inout fn arrayContextRefusalDiagnostic(exprId: U64, ctxRef: U64, origin: SourceRecordingScope, expectedOrigin: SourceExpectedContext) -> CompileDiagnostic {
@@ -35,19 +38,23 @@ impl Comp {
         val requestMatches = match origin.request {
             SourceRecordOrigin.Raw => false
             SourceRecordOrigin.CheckingRequest(session: val session, root: _) => session == self.sourceFactSession()
-            SourceRecordOrigin.DiagnosticRequest(session: val session, root: _, frontier: val frontier) => session == self.sourceFactSession() && frontier < self.failedArrayContextFrontiers.count()
         }
-        val frontier = match origin.request {
-            SourceRecordOrigin.DiagnosticRequest(session: _, root: _, frontier: val frontier) => frontier
+        val contextAdmitted = match origin.arrayContext {
+            SourceArrayContextOrigin.Regular => true
+            SourceArrayContextOrigin.Diagnostic(frontier: val frontier) => frontier < self.failedArrayContextFrontiers.count()
+            SourceArrayContextOrigin.Unavailable => false
+        }
+        val frontier = match origin.arrayContext {
+            SourceArrayContextOrigin.Diagnostic(frontier: val frontier) => frontier
             _ => 18446744073709551615U64
         }
         val written = self.authoredArrayLiterals.get(key: exprId)
-        if contextMatches && requestMatches && written.isSome() {
+        if contextMatches && requestMatches && contextAdmitted && written.isSome() {
             val literal = written.unwrap()
             val elements = match self.arena.exprs[exprId] { Expr.Array(elems: val elems) => elems _ => <ExprRange start=0U64 len=18446744073709551615U64 /> }
             val active = match self.currentSourceOwner() {
                 Optional.Some(v: val current) => {
-                    val root = match origin.request { SourceRecordOrigin.CheckingRequest(session: _, root: val root) | SourceRecordOrigin.DiagnosticRequest(session: _, root: val root, frontier: _) => root SourceRecordOrigin.Raw => current }
+                    val root = match origin.request { SourceRecordOrigin.CheckingRequest(session: _, root: val root) => root SourceRecordOrigin.Raw => current }
                     give self.sourceFacts.isActive(owner: current) && semanticCompletionOwnersEqual(recorded: self.lexicalSourceFactOwner(owner: current), prepared: root)
                 }
                 Optional.None => false
@@ -57,7 +64,7 @@ impl Comp {
                 start = literal.start
                 end = literal.end
                 val refusal = <ArrayContextRefusal session=self.sourceFactSession() owner=owner expression=exprId requestedTerm=ctxRef effectiveTerm=ctxRef writtenStart=start writtenEnd=end frontier=frontier event=event location=location />
-                self.failedArrayContexts.append(<SourceArrayContextFailure refusal=refusal origin=origin.request elements=elements />)
+                self.failedArrayContexts.append(<SourceArrayContextFailure refusal=refusal origin=origin.request arrayContext=origin.arrayContext elements=elements />)
             }
         }
         return <CompileDiagnostic.arrayContext refusal=<ArrayContextRefusal session=self.sourceFactSession() owner=owner expression=exprId requestedTerm=ctxRef effectiveTerm=ctxRef writtenStart=start writtenEnd=end frontier=frontier event=event location=location /> />
@@ -114,10 +121,15 @@ pub impl Comp {
             Expr.Array(elems: val elements) => { if elements.start != proof.elements.start || elements.len != 0U64 || elements.len != proof.elements.len { return false } }
             _ => { return false }
         }
-        return match proof.origin {
-            SourceRecordOrigin.Raw => false
-            SourceRecordOrigin.CheckingRequest(session: val session, root: val root) => session == refusal.session() && self.sourceFacts.outcome(owner: root).isSome()
-            SourceRecordOrigin.DiagnosticRequest(session: val session, root: val root, frontier: val frontier) => session == refusal.session() && self.sourceFacts.outcome(owner: root).isSome() && self.arrayFailureFrontierMatches(frontier: frontier, session: session, root: root)
+        val request = match proof.origin {
+            SourceRecordOrigin.Raw => { return false }
+            SourceRecordOrigin.CheckingRequest(session: val session, root: val root) => (session: session, root: root)
+        }
+        if request.session != refusal.session() || self.sourceFacts.outcome(owner: request.root).isNone() { return false }
+        return match proof.arrayContext {
+            SourceArrayContextOrigin.Regular => refusal.frontier() == 18446744073709551615U64
+            SourceArrayContextOrigin.Unavailable => false
+            SourceArrayContextOrigin.Diagnostic(frontier: val frontier) => frontier == refusal.frontier() && self.arrayFailureFrontierMatches(frontier: frontier, session: request.session, root: request.root)
         }
     }
 }

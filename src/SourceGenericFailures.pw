@@ -17,7 +17,7 @@ impl Comp {
         }
         val source = match request.request {
             SourceRecordOrigin.Raw => { return self.typeArgumentConflictDiagnostic(offset: offset) }
-            SourceRecordOrigin.CheckingRequest(session: val session, root: val root) | SourceRecordOrigin.DiagnosticRequest(session: val session, root: val root, frontier: _) => (session: session, root: root)
+            SourceRecordOrigin.CheckingRequest(session: val session, root: val root) => (session: session, root: root)
         }
         if source.session != self.sourceFactSession() || request.callee >= self.arena.functionCount() || request.arguments.start != args.start || request.arguments.len != args.len { return self.typeArgumentConflictDiagnostic(offset: offset) }
         val owner = match self.currentSourceOwner() { Optional.Some(v: val owner) => owner Optional.None => { return self.typeArgumentConflictDiagnostic(offset: offset) } }

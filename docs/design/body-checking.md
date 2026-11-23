@@ -15,6 +15,14 @@ The specification owns [local inference](https://github.com/plew-lang/spec/blob/
 
 Checking receives the source owner, lexical binding environment, declaration binders and bounds, receiver/associated-type environment where applicable, expected value contract if available, and explicit enclosing function/block/loop targets. An expectation is input to construction, not permission to relabel an already typed result.
 
+General source request identity is separate from context-specific diagnostic
+admission. Failing to establish an Array context for a diagnostic candidate makes
+only that Array authority unavailable; it does not erase the source owner or
+session for other findings. Recursive scope and callable-result-context changes
+preserve these dimensions independently. An ordinary context still requires a
+valid checking request, owner and expected contract; its default state is not
+source authority by itself.
+
 An expression result distinguishes:
 
 - A produced value with its semantic term, value/place shape, literal constraints, selected projections or operations, and conversion evidence where required.

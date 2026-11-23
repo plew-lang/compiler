@@ -14,6 +14,19 @@ tags: [frontend, diagnostics, verification]
 
 Existing generic_numeric_argument_type_conflict correctly rejects but remains Unclassified. Check/Call typeArgumentConflictDiagnostic receives only an offset; Resolve/Expr extendCallTypeArguments and Resolve/Record prepared inference are distinct actual producers. Retain each actual Conflict decision once with exact call operation, argument mapping and known binder identities. Use a private failure receipt and common sourceFailureHasOwner observer; no offset/text/cursor promotion. Reuse prepared inference, do not rerun it or publish success to justify failure. Scope confirmed by independent numeric_refusal_intake_review; existing com-8uik/met-bu94/met-qo60 finite closures remain intact.
 
+## Current boundary
+
+The v7 real consumer now passes the exact 12-line golden and the combined
+private guard passes after separating ranking from strict receiver inference.
+A direct private RED additionally showed that failed Array admission erased the
+otherwise valid source request. The request type now contains only Raw/checking
+identity; Scope holds separate Regular/Diagnostic/Unavailable Array admission.
+Generic inference receives no Array frontier. The source/scope-constructor review
+found no authority relaxation. V8's Generic consumer, combined private guard and
+existing Array consumer are running; final build, affected gates and formal
+performance are not yet accepted. Earlier failures below are retained evidence,
+not the current consumer result or a whole-suite claim.
+
 ## Acceptance Criteria
 
 Exact final candidate RED; both direct typed-argument and prepared contextual inference paths, contradictory known bindings and legitimate independent/rigid callers. Raw and active-owner checker, equal-text Internal, synthetic, foreign owner/session, changed binder/operand/callee/args/location, retry/drain/cache. Actual lazy/whole/eager owning adapters; no new success fact/template/closure/callee result after rejection. Fresh affected gates and independent source/evidence review.
@@ -89,3 +102,31 @@ observer rejection. Follow-up debug2 tags only failed Raw wrappers to find the
 caller. Preserve public Raw behavior; close the owning producer before its Raw
 fallback/query instead of promoting a dependency diagnostic. V6 source matches
 all current product source files; final candidate is still not accepted.
+
+## Confirmed ranking responsibility defect
+
+Debug2 identified callReceiverTerm as the Raw wrapper that fails. Its only
+external caller is TypeRecovery.groundedMethodArgMatchRank. Candidate ranking
+was invoking strict selected-call receiver inference before its own tentative
+matcher, contrary to findAssocWithOrigin's existing contract. The direct
+CandidateReceiverRankMain probe confirms the old implementation throws instead
+of returning selector-only rank1 (compile/link0; deliberate native panic).
+
+Normalize only lexical Self at the shared receiver boundary. Ranking then keeps
+its existing same-head bare-qualifier candidate recipe and uses the existing
+candidate-local matcher (Conflict/Mismatch rank1; dependency Err unchanged).
+Selected source inference retains its full origin-bearing receiver inference.
+No Raw promotion or catch/reclassification is involved. Independent review
+confirmed this is the cause correction within this task's factory path, with
+normal bare factory, concrete receiver, receiver-pattern priority and generic
+caller/projection controls required before acceptance.
+
+## Current source gate
+
+V8's actual Generic consumer passed compile/link/native0 with the exact 12-line
+golden and empty runtime stderr. The combined private guard passed with empty
+output, and the existing ArrayContextFailureDomains passed its exact 8-line
+golden and empty runtime stderr. This checks the orthogonal request/Array scope
+change without relaxing the earlier Array guarantees. All sessions were reaped.
+The final build and public/affected mode matrix, formal median and final review
+remain pending; the parent whole gate remains open.

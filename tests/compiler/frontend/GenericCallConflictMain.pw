@@ -1,5 +1,5 @@
 // Appended to an exact Frontend snapshot; no production API is made public.
-fn requireGenericConflict(prepared: Bool) {
+fn requireGenericConflict(prepared: Bool, unavailableArrayContext: Bool = false) {
     mut val compiler = <Comp />
     analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text path="GenericConflict.pw" text="fn acceptBoth[T](first: T, second: T) {{}}\nfn main() {{ acceptBoth(first: 5I32, second: 6I64) }}" />, sources: <SourceAccess />).unwrap()
     val mainName = compiler.internBytes(s: "main")
@@ -26,7 +26,7 @@ fn requireGenericConflict(prepared: Bool) {
     for index in 0U64..<arguments.len {
         if compiler.argumentRequiresResultContext(exprId: compiler.argAt(args: arguments, index: index).expr).unwrap() != prepared { panic("generic conflict setup did not select its inference path") }
     }
-    val origin = <SourceRecordingScope request=<SourceRecordOrigin.CheckingRequest session=compiler.sourceFactSession() root=owner /> returnContext=<SourceExpectedContext.None /> />
+    val origin = <SourceRecordingScope request=<SourceRecordOrigin.CheckingRequest session=compiler.sourceFactSession() root=owner /> returnContext=<SourceExpectedContext.None /> arrayContext=if unavailableArrayContext { give <SourceArrayContextOrigin.Unavailable /> } else { give <SourceArrayContextOrigin.Regular /> } />
     val written = match compiler.arena.exprs[expression] {
         Expr.Call(nameStart: val start, nameLen: val length, args: _) => (start: start, length: length)
         _ => { panic("generic conflict setup lost free syntax") }
@@ -96,8 +96,16 @@ fn requireBareFactoryOperation() {
     analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text path="BareFactoryConflict.pw" text="struct Holder[T] {{}}\nimpl[T] Holder[T] {{ factory same(first: T, second: T) {{ return <Holder[T] /> }} }}\nfn main() {{ val h = <Holder.same first=5I32 second=6I64 /> }}" />, sources: <SourceAccess />).unwrap()
     val mainName = compiler.internBytes(s: "main")
     val owner = <SemanticCompletionOwner.Function index=compiler.arena.firstFunctionNamed(nameId: mainName.nameId) />
+    val factoryName = compiler.internBytes(s: "same")
     mut val expression = compiler.arena.exprs.count()
-    for index in 0U64..<compiler.arena.exprs.count() { if compiler.authoredNamedFactoryOrigins.contains(key: index) { expression = index } }
+    for index in 0U64..<compiler.arena.exprs.count() {
+        if compiler.authoredNamedFactoryOrigins.contains(key: index) {
+            match compiler.arena.exprs[index] {
+                Expr.Method(recv: _, nameStart: val start, nameLen: val length, args: val args) => { if args.len == 2U64 && intern(c: inout compiler, start: start, len: length) == factoryName.nameId { expression = index } }
+                _ => {}
+            }
+        }
+    }
     if expression >= compiler.arena.exprs.count() { panic("missing authored factory receipt") }
     val args = match compiler.arena.exprs[expression] { Expr.Method(recv: _, nameStart: _, nameLen: _, args: val args) => args _ => { panic("factory normalization lost its method") } }
     if compiler.sourceCallOperation(exprId: expression, args: args).isNone() { panic("bare factory lost its authored operation") }
@@ -106,7 +114,15 @@ fn requireBareFactoryOperation() {
     val origin = <SourceRecordingScope request=<SourceRecordOrigin.CheckingRequest session=compiler.sourceFactSession() root=owner /> returnContext=<SourceExpectedContext.None /> />
     val frontierCount = compiler.failedArrayContextFrontiers.count()
     val arrayOrigin = compiler.diagnosticArrayContextOrigin(origin: origin, exprId: expression, args: args)
-    match arrayOrigin.request { SourceRecordOrigin.Raw => {} _ => { panic("bare factory operation granted Array type context") } }
+    match arrayOrigin.request {
+        SourceRecordOrigin.CheckingRequest(session: val session, root: val root) => { if session != compiler.sourceFactSession() || !semanticCompletionOwnersEqual(recorded: root, prepared: owner) { panic("Array context changed the source request") } }
+        _ => { panic("Array context erased the authored source request") }
+    }
+    match arrayOrigin.arrayContext { SourceArrayContextOrigin.Unavailable => {} _ => { panic("bare factory granted Array context authority") } }
+    val returned = arrayOrigin.returning(context: <SourceExpectedContext.None />)
+    match returned.arrayContext { SourceArrayContextOrigin.Unavailable => {} _ => { panic("return context reset unavailable Array authority") } }
+    val retried = compiler.diagnosticArrayContextOrigin(origin: returned, exprId: expression, args: args)
+    match retried.arrayContext { SourceArrayContextOrigin.Unavailable => {} _ => { panic("recursive context retried unavailable Array authority") } }
     if compiler.failedArrayContextFrontiers.count() != frontierCount { panic("bare factory published an Array frontier") }
     val name = compiler.internBytes(s: "I64")
     val unrelated = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] />)
@@ -121,5 +137,7 @@ fn requireBareFactoryOperation() {
 fn main() {
     requireGenericConflict(prepared: false)
     requireGenericConflict(prepared: true)
+    requireGenericConflict(prepared: false, unavailableArrayContext: true)
+    requireGenericConflict(prepared: true, unavailableArrayContext: true)
     requireBareFactoryOperation()
 }

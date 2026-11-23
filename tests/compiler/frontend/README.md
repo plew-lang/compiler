@@ -645,3 +645,11 @@ and named-factory conflicts through raw cache/drain, owned lazy repeated body
 requests, whole-session failure retention and fresh eager checking. Its `.out`
 is the exact 12-line native golden. Run it with the manual procedure above;
 public language and private provenance mutation probes remain separate controls.
+
+`CandidateReceiverRankMain.pw` checks that a bare generic receiver with
+conflicting operands remains a diagnostic candidate instead of invoking strict
+selected-call inference. `ArrayContextScopeMain.pw` checks independent request
+identity and Regular/Diagnostic/Unavailable Array admission, including Raw and
+foreign inputs, frontier bounds and recursive/return-context preservation.
+Append each to a frozen `Frontend.pw`, or combine their helpers with
+`GenericCallConflictMain` under one entry. Require exit0 and empty stdout/stderr.

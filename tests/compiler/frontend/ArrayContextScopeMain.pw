@@ -1,0 +1,43 @@
+// Private source request identity and Array-context authority are independent.
+fn requireArrayContextScopeStates() {
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text path="ArrayScope.pw" text="fn accept(value: I64) {{}}\nfn main() {{ accept(value: []) }}" />, sources: <SourceAccess />).unwrap()
+    val name = compiler.internBytes(s: "main")
+    val function = compiler.arena.firstFunctionNamed(nameId: name.nameId)
+    val owner = <SemanticCompletionOwner.Function index=function />
+    compiler.cur.checkFn = function
+    compiler.sourceFacts.activate(owner: owner)
+    val called = compiler.internBytes(s: "accept")
+    mut val call = compiler.arena.exprs.count()
+    mut val arguments = <ArgRange start=0U64 len=0U64 />
+    for index in 0U64..<compiler.arena.exprs.count() {
+        match compiler.arena.exprs[index] { Expr.Call(nameStart: val start, nameLen: val length, args: val args) => { if args.len == 1U64 && intern(c: inout compiler, start: start, len: length) == called.nameId { call = index arguments = args } } _ => {} }
+    }
+    if call >= compiler.arena.exprs.count() { panic("Array scope setup lost its call") }
+    val operand = compiler.argAt(args: arguments, index: 0U64).expr
+    val declaration = compiler.arena.functionAt(index: compiler.arena.firstFunctionNamed(nameId: called.nameId))
+    val expected = compiler.funcParamAt(params: declaration.params, index: 0U64).ty
+    if expected == 0U64 || !compiler.authoredArrayLiterals.contains(key: operand) { panic("Array scope setup lost its type or source") }
+    val origin = <SourceRecordingScope request=<SourceRecordOrigin.CheckingRequest session=compiler.sourceFactSession() root=owner /> returnContext=<SourceExpectedContext.None /> />
+    val diagnosticOrigin = compiler.diagnosticArrayContextOrigin(origin: origin, exprId: call, args: arguments)
+    val frontier = match diagnosticOrigin.arrayContext { SourceArrayContextOrigin.Diagnostic(frontier: val frontier) => frontier _ => { panic("diagnostic Array context did not retain its frontier") } }
+    val returned = diagnosticOrigin.returning(context: <SourceExpectedContext.Contract term=expected />)
+    val repeated = compiler.diagnosticArrayContextOrigin(origin: returned, exprId: call, args: arguments)
+    match repeated.arrayContext { SourceArrayContextOrigin.Diagnostic(frontier: val current) => { if current != frontier { panic("recursive Array context replaced its frontier") } } _ => { panic("returning lost diagnostic Array authority") } }
+    val regular = compiler.arrayContextRefusalDiagnostic(exprId: operand, ctxRef: expected, origin: origin, expectedOrigin: <SourceExpectedContext.Contract term=expected />)
+    val diagnostic = compiler.arrayContextRefusalDiagnostic(exprId: operand, ctxRef: expected, origin: repeated, expectedOrigin: <SourceExpectedContext.Contract term=expected />)
+    val count = compiler.failedArrayContexts.count()
+    val unavailable = origin.forArrayContext(context: <SourceArrayContextOrigin.Unavailable />)
+    val denied = compiler.arrayContextRefusalDiagnostic(exprId: operand, ctxRef: expected, origin: unavailable, expectedOrigin: <SourceExpectedContext.Contract term=expected />)
+    val raw = <SourceRecordingScope request=<SourceRecordOrigin.Raw /> returnContext=<SourceExpectedContext.None /> arrayContext=<SourceArrayContextOrigin.Diagnostic frontier=frontier /> />
+    val unowned = compiler.arrayContextRefusalDiagnostic(exprId: operand, ctxRef: expected, origin: raw, expectedOrigin: <SourceExpectedContext.Contract term=expected />)
+    val foreign = <SourceRecordingScope request=<SourceRecordOrigin.CheckingRequest session=compiler.sourceFactSession()+1U64 root=owner /> returnContext=<SourceExpectedContext.None /> />
+    val foreignFailure = compiler.arrayContextRefusalDiagnostic(exprId: operand, ctxRef: expected, origin: foreign, expectedOrigin: <SourceExpectedContext.Contract term=expected />)
+    val invalidFrontier = origin.forArrayContext(context: <SourceArrayContextOrigin.Diagnostic frontier=frontier+1U64 />)
+    val invalid = compiler.arrayContextRefusalDiagnostic(exprId: operand, ctxRef: expected, origin: invalidFrontier, expectedOrigin: <SourceExpectedContext.Contract term=expected />)
+    if compiler.failedArrayContexts.count() != count { panic("unavailable or Raw Array context issued a private event") }
+    compiler.sourceFacts.fail(owner: owner, diagnostic: diagnostic)
+    if !compiler.sourceFailureHasOwner(diagnostic: regular) || !compiler.sourceFailureHasOwner(diagnostic: diagnostic) { panic("valid Array context lost ownership") }
+    for failure in [denied, unowned, foreignFailure, invalid] { if compiler.sourceFailureHasOwner(diagnostic: failure) { panic("unproved Array context acquired ownership") } }
+}
+fn main() { requireArrayContextScopeStates() }

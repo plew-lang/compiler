@@ -1,0 +1,29 @@
+// Appended to an exact Frontend snapshot; ranking is not selected-call inference.
+fn requireCandidateReceiverRanking() {
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text path="CandidateReceiver.pw" text="struct Holder[T] {{}}\nimpl[T] Holder[T] {{ factory same(first: T, second: T) {{ return <Holder[T] /> }} }}\nfn main() {{ val h = <Holder.same first=5I32 second=6I64 /> }}" />, sources: <SourceAccess />).unwrap()
+    val name = compiler.internBytes(s: "same")
+    mut val callee = compiler.arena.firstFunctionNamed(nameId: name.nameId)
+    while callee < compiler.arena.functionCount() && !compiler.arena.functionAt(index: callee).isFactory { callee = compiler.arena.nextFunctionNamed(index: callee) }
+    if callee >= compiler.arena.functionCount() { panic("missing candidate factory") }
+    val function = compiler.arena.functionAt(index: callee)
+    mut val arguments = <ArgRange start=0U64 len=0U64 />
+    for expression in 0U64..<compiler.arena.exprs.count() {
+        if compiler.authoredNamedFactoryOrigins.contains(key: expression) {
+            match compiler.arena.exprs[expression] { Expr.Method(recv: _, nameStart: _, nameLen: _, args: val args) => { arguments = args } _ => {} }
+        }
+    }
+    if arguments.len != 2U64 || function.recvTy == 0U64 { panic("candidate setup lost its receiver or arguments") }
+    for index in 0U64..<arguments.len { compiler.recordExpr(exprId: compiler.argAt(args: arguments, index: index).expr).unwrap() }
+    val receiver = compiler.arena.typeAt(index: function.recvTy)
+    if receiver.args.count() == 0U64 { panic("candidate setup lost its generic receiver pattern") }
+    val bare = compiler.pushType(t: <TypeRef nameStart=receiver.nameStart nameLen=receiver.nameLen args=[] hasDecl=receiver.hasDecl declOffset=receiver.declOffset />)
+    val count = compiler.failedGenericCallConflicts.count()
+    val rank = match compiler.groundedMethodArgMatchRank(f: function, args: arguments, recvRef: bare) {
+        Result.Err(error: _) => { panic("candidate ranking demanded completed receiver inference") }
+        Result.Ok(value: val rank) => rank
+    }
+    if rank != 1U64 { panic("conflicting arguments did not retain a diagnostic candidate") }
+    if compiler.failedGenericCallConflicts.count() != count { panic("ranking manufactured an owned source failure") }
+}
+fn main() { requireCandidateReceiverRanking() }

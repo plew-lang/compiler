@@ -237,6 +237,15 @@ Declaration-time conflict checking and use-site ambiguity are also separate. Som
 
 Ordinary calls, trait satisfaction, and `via` delegation use the same callable applicability rules. Lookup supplies candidates; semantic applicability determines the operation each candidate can provide. Its retained plan identifies the declaration, explicit-argument mapping, omitted defaults and their declaration environment, substitutions and evidence, and any delegation path. Conformance checking proves that the entire required operation is available, rather than testing one favorable concrete argument value.
 
+Receiver normalization shared with candidate ranking interprets lexical `Self`
+only. A bare nominal qualifier supplies the candidate's receiver recipe, not a
+completed call substitution. Candidate-local matching owns tentative holes and
+conflicts and must consider the other candidates before source-call failure is
+authoritative. Strict receiver/argument inference runs after selection at the
+owning source call. Ranking must not invoke that strict inference merely to
+obtain its initial receiver or catch its errors as an alternative ranking rule.
+Dependency failures still propagate from the ordinary candidate matcher.
+
 An implementation `factory(count: I64 = 5)` can satisfy declared requirements for both `factory()` and `factory(count: I64)`, subject to the ordinary conformance declaration and compatibility rules. Trait requirements do not declare defaults. Concrete and generic calls use the selected implementation's defaults; there is no competing trait-default authority. Visibility, callable kind, result/failure types, ownership, and async compatibility remain mandatory.
 
 Body checking retains the selected plan. Lowering realizes it as ordinary expression evaluation and a complete argument call; witness or delegation entries are ordinary forwarding bodies derived from the same plan. Explicit arguments are evaluated in source order, then omitted defaults in parameter declaration order, before operands are arranged in parameter order. Plans may be shared; evaluated default values are not cached. This does not require enumerating every omission combination or adding default-specific Mid execution semantics. [Body checking](body-checking.md) owns the evaluation plan; Mid and ownership preparation realize its evaluation order, access completion, and temporary lifetime contracts. [Generics](generics.md) owns concrete evidence and adapters.

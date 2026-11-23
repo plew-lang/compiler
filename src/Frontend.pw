@@ -150,7 +150,13 @@ impl SourceExpectedContext {
 enum SourceRecordOrigin {
     Raw
     CheckingRequest(session: U64, root: SemanticCompletionOwner)
-    DiagnosticRequest(session: U64, root: SemanticCompletionOwner, frontier: U64)
+}
+
+// Array context admission is independent from general source request identity.
+enum SourceArrayContextOrigin {
+    Regular
+    Diagnostic(frontier: U64)
+    Unavailable
 }
 
 // An enclosing callable's result contract is independent from a value block's
@@ -158,11 +164,15 @@ enum SourceRecordOrigin {
 struct SourceRecordingScope {
     val request: SourceRecordOrigin
     val returnContext: SourceExpectedContext
+    val arrayContext: SourceArrayContextOrigin = <SourceArrayContextOrigin.Regular />
 }
 impl SourceRecordingScope {
     factory
     fn returning(context: SourceExpectedContext) -> SourceRecordingScope {
-        return <SourceRecordingScope request=self.request returnContext=context />
+        return <SourceRecordingScope request=self.request returnContext=context arrayContext=self.arrayContext />
+    }
+    fn forArrayContext(context: SourceArrayContextOrigin) -> SourceRecordingScope {
+        return <SourceRecordingScope request=self.request returnContext=self.returnContext arrayContext=context />
     }
 }
 
@@ -842,6 +852,7 @@ impl SourceArrayFailureFrontier { factory }
 struct SourceArrayContextFailure {
     val refusal: ArrayContextRefusal
     val origin: SourceRecordOrigin
+    val arrayContext: SourceArrayContextOrigin
     val elements: ExprRange
 }
 impl SourceArrayContextFailure { factory }
