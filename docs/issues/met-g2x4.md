@@ -95,3 +95,22 @@ The initial build rejected a private origin type in a public impl; the core
 was moved into a private impl, preserving the public Raw wrapper. This is not
 implementation acceptance. Standard frozen build1c0f8f and final private probe
 remain to be collected; don't reuse the failed860807 setup/build as a pass.
+
+### Corrected failure lifetime checkpoint
+
+Private12-scenario native typing-private-v7 exits0 with empty stdout/stderr;
+raw/request/session/root, serial before/after recording, span, owner before/after
+event, missing facts, missing completion and resolved-obligation fault injection
+are covered. Consumer typing-consumer-v3 exits0 with exact21-line golden and
+empty stderr: five function/closure shapes through Raw retry/drain,
+owned prepareFunction retry then whole checking, fresh whole/eager, plus global.
+Inputs unchanged for both. These are native execution receipts, not ASan gates.
+
+The closure consumer found a real failure-lifetime bug in the initial observer:
+failed closure builders discard parent links. Root ancestry is now checked only
+at the producer while live and retained in the negative event; observation
+validates the saved event and persistent expression ownership without rebuilding
+that ancestry. Post-event foreign-owner observation is now rejected as well.
+CLI18 controls pass with the intermediate frozen candidate; final candidate
+build001731 and LLVM22 metadata ASan/LSan are in progress. No closure/whole
+acceptance is inferred from CLI-only results or the intermediate candidate.

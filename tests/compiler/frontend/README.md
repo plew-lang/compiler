@@ -665,3 +665,14 @@ checks Raw versus private requests, retained literal/expected identities, foreig
 metadata, recorded synthetic copied-span nodes, serial/span/kind mutation,
 Internal same-text reports, drain and both syntax Lower entry contracts. Require
 native exit0 and empty stdout/stderr; do not expose private production APIs.
+
+`SourceTypingFailureDomains.pw` checks unresolved empty-array source typing
+through Raw cached retry/drain, owned lazy request then whole check, fresh whole
+and eager checking, nested closure failure and global initialization. Require
+exact `SourceTypingFailureDomains.out`, exit0 and empty runtime stderr.
+`SourceTypingMain.pw` is appended only to a fresh private Frontend diagnostic
+snapshot. It checks Raw/request/owner/session/serial/span boundaries, missing
+facts, missing completion and obligation discharge before fault injection.
+Require exit0 and empty stdout/stderr; it does not widen product visibility.
+`tests/tooling/test-source-typing-origin.py` separately exercises the actual CLI
+channel in check/AOT/ORC, unused lazy bodies and typed-array language controls.

@@ -5,7 +5,7 @@ fn typingRequire(result: Result[(), CompileDiagnostic]) {
 fn main() {
     for scenario in 0U64..<12U64 {
         mut val compiler = <Comp />
-        typingRequire(result: analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text path="Typing.pw" text="use @Std/Core only {{ Array, I64 }}\nfn bad() {{ val values = [] }}\nfn main() {{}}" />, sources: <SourceAccess />))
+        typingRequire(result: analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text path="Typing.pw" text="use @Std/Core only {{ Array, I64 }}\nfn bad() {{ val values = [] }}\nfn main() {{}}" />, sources: <SourceAccess stdRoot="std".bytes() />))
         val name = compiler.internBytes(s: "bad")
         val function = compiler.arena.firstFunctionNamed(nameId: name.nameId)
         val owner = <SemanticCompletionOwner.Function index=function />
@@ -34,8 +34,10 @@ fn main() {
             if scenario == 7U64 {
                 val integer = compiler.internBytes(s: "I64")
                 val scalar = compiler.findOrAddTypeRef(nameStart: integer.nameStart, nameLen: integer.nameLen)
-                val array = compiler.sourceArrayTypeRef(elemRef: scalar, offset: 0U64).unwrap()
-                compiler.recordSemanticExprTerm(exprId: expression, term: array)
+                // This is a storage-boundary fault-injection test, not source
+                // acceptance: any determined term discharges an unresolved row.
+                // Language controls separately verify valid Array[I64] completion.
+                compiler.recordSemanticExprTerm(exprId: expression, term: scalar)
                 if compiler.sourceFacts.activeBuilder.data.arrayTypingObligations.contains(key: expression) { panic("completed array retained unresolved authority") }
             }
             compiler.sourceFacts.activeBuilder.data.expressions = []
@@ -64,6 +66,9 @@ fn main() {
             val refusal = diagnostic.sourceTyping().unwrap()
             val forged = <CompileDiagnostic.sourceTyping refusal=<SourceTypingRefusal session=refusal.session() owner=refusal.owner() expression=refusal.expression() event=refusal.event()+1U64 location=refusal.location() /> />
             if compiler.sourceFailureHasOwner(diagnostic: forged) { panic("unknown event acquired authority") }
+            compiler.sourceFacts.expressionOwners[expression] = <SemanticCompletionOwner.Global target=0U64 />
+            if compiler.sourceFailureHasOwner(diagnostic: diagnostic) { panic("changed owner retained authority") }
+            compiler.sourceFacts.expressionOwners[expression] = owner
             compiler.arena.exprOriginSerial[expression] += 1U64
             if compiler.sourceFailureHasOwner(diagnostic: diagnostic) { panic("changed syntax retained authority") }
         }

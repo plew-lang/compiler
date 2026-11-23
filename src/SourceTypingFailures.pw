@@ -117,6 +117,9 @@ impl Comp {
             SemanticCompletionOwner.Global(target: val target) => <DiagnosticOwner.Global target=target />
             SemanticCompletionOwner.Closure(expression: val closure) => <DiagnosticOwner.Closure expression=closure />
         }
-        return self.diagnosticOwnersEqual(first: owner, second: refusal.owner()) && self.sourceArrayTypingObligationMatches(expression: refusal.expression(), obligation: proof.obligation) && semanticCompletionOwnersEqual(recorded: self.lexicalSourceFactOwner(owner: proof.obligation.owner), prepared: proof.obligation.root)
+        // The producer validated the lexical root while the builder existed.
+        // Failed closure builders are discarded; their parent must not be
+        // rediscovered while observing the retained failure event.
+        return proof.obligation.session == refusal.session() && self.diagnosticOwnersEqual(first: owner, second: refusal.owner()) && self.sourceExpressionHasOwner(session: refusal.session(), expression: refusal.expression(), owner: refusal.owner()) && self.sourceArrayTypingObligationMatches(expression: refusal.expression(), obligation: proof.obligation)
     }
 }
