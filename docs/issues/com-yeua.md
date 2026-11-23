@@ -14,25 +14,27 @@ tags: [diagnostics, frontend, driver, verification]
 ## Current boundary
 
 This parent remains open. Latest complete normal run
-20261123T123611-test-19e1c3: exit1,295fail,skip0, unchanged inputs and7642
-matched worker pairs. Against previous314 run:19 resolved,0new,0reason changes;
-resolved source/golden bytes unchanged. See
-[whole reconciliation](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-post-numeric-normal-suite.json).
+20261123T145308-test-b59031: exit1,290fail,skip0, unchanged inputs and7642
+matched worker pairs. Against prior295: only5 source-typing empty-array cases
+resolve,0new,0reason changes; source/golden hashes unchanged. See
+[whole reconciliation](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-post-typing-normal-suite.json).
 
-Contextual operand children com-u22d/met-bu94/met-qo60, monitor repairs
-met-9455/met-kjb2, associated refusal met-1yd7, numeric ambiguity met-tb7u and
-generic Conflict met-r3us are finitely accepted and closed. Opaque numeric
-expectation ownership met-9ym8 is independently accepted at source5bafacff,
-with final correctness/lifetime gates and formal435306 G2 fixed point,
-median7.227027s within7.5. Current
-candidate and exact receipts are in the
-[contextual operand record](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-contextual-operand-regression.json)
-and meta worklog.
+Numeric ambiguity/Conflict/opaque children met-tb7u/met-r3us/met-9ym8 and
+source typing-obligation child met-g2x4 are finitely closed with independent
+acceptance. Latest source5f12e9a1 reaches formal1c067a G2 fixed point,
+standard3 median7.247575s<=7.5; actual artifacts and measured compiler18mode
+smoke were checked. Final build/gen, private12-scenario and21-line consumer
+natives, LLVM22 ASan/LSan and whole reconciliation are in the
+[typing refusal record](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-source-typing-obligation-refusal.json).
 
-The whole result uses frozen source5bafacff and measured carrier2b5475.
-Next finite child met-g2x4 owns unresolved source-typing publication refusal,
-separating genuine source obligations from missing internal facts. Neither
-finite child reviews nor this failed whole run closes the parent or phase three.
+Remaining failure discovery/attribution is preserved in
+[267 negative cases](../../../evidence/rejection-domains/diagnostic-domain-implementation/whole-after-typing-negative-survey.json),
+plus the unchanged23 non-negative fixture failures in the whole failure map.
+Message grouping never authorizes Source classification. Generic compatibility
+Unresolved, index protocol admission, other source producers and met-bejv's
+fixture assumptions remain unclosed; finite children do not certify this parent
+or phase three. Select the next producer from its actual existing boundary and
+contracts, not by relabeling a whole diagnostic message group.
 
 ## Contract and audit evidence
 
