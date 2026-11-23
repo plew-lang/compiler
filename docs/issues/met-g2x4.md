@@ -7,6 +7,7 @@ created: 2026-11-23T13:45:54Z
 type: task
 priority: 1
 assignee: Koji Murata
+parent: com-yeua
 tags: [frontend, diagnostics]
 ---
 # Preserve owned source typing-obligation refusals
