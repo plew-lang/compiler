@@ -1,6 +1,5 @@
 use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontendForRequests, openFrontend }
 use ../../../src/CheckedProgram only { CompilerSession, CompilerSessionResult, ProgramCheckResult, checkCompilerSession }
-use ../../../src/Backend only { LlvmLoweringResult }
 use ../../../src/SourceAccess only { SourceAccess }
 use ../../../src/Diag only { CompileDiagnostic, FailureDomain }
 use @Std/Io only { print }
@@ -43,25 +42,14 @@ fn main() {
         print("raw opaque rejection retained")
         if kind < 3U64 {
             mut val owned = session(kind: kind)
-            match owned.lowerDeclarations() {
-                LlvmLoweringResult.Success(module: _) => {}
-                LlvmLoweringResult.Failure(diagnostic: val diagnostic) => { panic(diagnostic.message()) }
-            }
-            mut val failures = 0U64
-            for body in owned.registeredBodies() {
-                match owned.prepareBodyAccess(bodyId: body) {
-                    Result.Err(error: val diagnostic) => {
-                        requireOpaque(diagnostic: diagnostic)
-                        failures += 1U64
-                        match owned.prepareBodyAccess(bodyId: body) {
-                            Result.Err(error: val retained) => { requireOpaque(diagnostic: retained) }
-                            Result.Ok(value: _) => { panic("failed lazy request published success") }
-                        }
-                    }
-                    Result.Ok(value: _) => {}
+            for attempt in 0U64..<2U64 {
+                // Both instances admit the same immutable declarations. The
+                // source function ID is obtained before any body is requested.
+                match owned.prepareFunction(function: function) {
+                    Result.Err(error: val diagnostic) => { requireOpaque(diagnostic: diagnostic) }
+                    Result.Ok(value: _) => { panic("failed lazy function request published success") }
                 }
             }
-            if failures == 0U64 { panic("lazy probe never reached the opaque refusal") }
             match checkCompilerSession(session: move owned) {
                 ProgramCheckResult.Failure(diagnostic: val diagnostic) => { requireOpaque(diagnostic: diagnostic) }
                 ProgramCheckResult.Success(program: _) => { panic("failed lazy session published a checked program") }

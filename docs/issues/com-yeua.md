@@ -13,30 +13,26 @@ tags: [diagnostics, frontend, driver, verification]
 
 ## Current boundary
 
-This parent remains open. com-8uik is finitely accepted, but the next whole
-normal checks exposed com-u22d contextual operand regressions; com-u22d and
-met-bu94/met-qo60 remain reopened until the corrected source's adoption gates
-are reconciled. Source/testbf5d3292 passes the targeted production controls,
-18native kernels, scopedASan/LSan and gen. Fresh formalself-host
-20261121T112220-self-host-4da702 passes unchanged inputs and generation2
-fixed point, median6.986708seconds. Whole normal reconciliation remains open.
+This parent remains open. The last completed whole normal run is
+`20261122T152131-test-9ce06a`: exit1,314fail,skip0, unchanged inputs and7595
+worker pairs reaped. Its complete supervision evidence is retained in the
+[normal-build record](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-normal-native-build-supervision.json).
+Targeted repairs do not retroactively change that result.
 
-Whole normal092032-test-b7974b processed1817run fixtures then stalled in the
-native ORC build; its29fail run slice is not a whole suite result. The separate
-monitor repairmet-kjb2 is independently accepted at9e491708 and must be included
-in the next whole retry. Old324fail and historical checkpoints below do not
-replace current whole-gate obligations. Reconcile all remaining failures before
-selecting the next producer slice. See the [current contextual operand evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-contextual-operand-regression.json).
+Contextual operand children com-u22d/met-bu94/met-qo60, monitor repairs
+met-9455/met-kjb2, associated refusal met-1yd7, numeric ambiguity met-tb7u and
+generic Conflict met-r3us are finitely accepted and closed. Opaque numeric
+expectation ownership met-9ym8 has passed its final source/control/lifetime
+review; formal self-host0919bf reaches generation2 fixed point but its7.599326s median
+exceeds7.5; performance recovery remains required before child closure. Current
+candidate and exact receipts are in the
+[contextual operand record](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-contextual-operand-regression.json)
+and meta worklog.
 
-Whole113941-test-130232 processed1817run fixtures with23remaining failure
-rows before the physical-signature hidden build stalled. This is a partial
-baseline, not whole acceptance. The approved native-build audit [met-9455](met-9455.md)
-repairs the required supervision routes; its first retry exposed excessive
-legacy machine-pass tracing cost and was interrupted unchanged. IR-only real
-progress preserves idle60 and passed21new-flag scoped gates. A fresh full
-normal retry is running; [canonical native-build evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-normal-native-build-supervision.json)
-and the meta worklog own its current run, candidate and results. Reconcile the
-completed suite before closing this parent or the reopened contextual children.
+After the finite numeric children are accepted, refresh the whole normal gate
+on the frozen product and reconcile every remaining failure with the pinned
+audit scopes. Neither child reviews nor a partial run slice closes this parent,
+normal-suite reconciliation or phase three.
 
 ## Contract and audit evidence
 

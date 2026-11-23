@@ -78,5 +78,59 @@ Independent source review found two origin-dropping legacy helpers; both now hav
 Raw wrappers and private origin-bearing cores. Bool/suffixed Int need no stored
 numeric provenance. Updated private guards (including both Lower contracts) and
 Raw retry/drain/whole/eager consumer native runs pass with unchanged inputs.
-Final candidate build, lazy additions, lifetime/performance gates and independent
-final acceptance remain pending. Source and evidence checkpoints are not closure.
+The final correctness/lifetime receipts and independent acceptance are below.
+Formal performance recovery remains required; these scoped gates are not closure.
+
+## Final candidate correctness gates
+
+Product source `8e3aefe5` is identical, file for file, to candidate-v2's source.
+Build59247c and generationc4833e both exit0 with immutable inputs unchanged.
+The final candidate passes24 opaque/concrete/unrequested modes,96 inherited
+Conflict controls, and generic51 / CLI120 / numeric75 / Array54 / Float48
+controls. The CLI protocol preserves com-9clj's known three mode failures;
+these results are not a whole-suite green claim.
+
+The current consumer has an exact18-line golden covering Raw repeated body
+requests/drain, source-owned lazy prepareFunction retry followed by failed whole
+checking, fresh whole checking and eager frontend checking. Initial body-only
+lazy setup never requested the callee and is retained as a test setup failure.
+Both consumer and private probe run under final-candidate LLVM22 ASan/LSan:
+8554/10662 sanitized definitions,20638/28443 memory checks,5271/6583 checked
+function bodies, all stages/native exit0, empty stderr and exact goldens.
+Captured input hashes were independently recomputed without discrepancy.
+
+Independent reviewer generic_conflict_source_review found no outstanding finite
+contract violation or required evidence gap outside formal performance. The
+finite scope explicitly preserves earlier block/Array/closure diagnoses rather
+than relocating them to the opaque producer. Formal self-host0919bf is complete and independently artifact-checked, but its
+5-run median exceeds7.5s. The recovery boundary below remains open.
+
+## Formal fixed point and performance recovery
+
+Formal0919bf completes at generation2 with immutable inputs unchanged and
+matching LLVM/runtime/successor artifacts; all generation/measurement artifact
+hashes were independently recomputed. Its5 times are8.061463,7.599326,
+7.747968,7.359638,7.583590seconds: median7.599326 exceeds7.5.
+Nonperformance acceptance does not close this task. Recovery is not judged
+impractical.
+
+Same latest source, old fixed-point53eb versus new fixed-point3d468, alternating
+5pairs: medians7.525688 /7.540193seconds,10 identical LLVM outputs. This is
+an uninstrumented diagnostic comparison, not formal acceptance. Old-source
+cross-controls follow to separate input growth from compiler/runtime conditions;
+do not attribute the earlier7.135-to7.599 cross-source difference to this
+implementation without that evidence. Preserve the existing rejection/ownership
+contracts while removing any demonstrated unnecessary cost.
+
+Old-source3pairs also retain identical LLVM, including the prior formal
+old-source output: before7.488072 /after7.558915seconds. The exact old compiler
+and old source no longer reproduce the earlier7.135462 result under current
+conditions. These samples do not establish a specific thermal cause or waive
+the7.5 limit. No compiler/test processes remain live.
+
+Next bounded recovery candidate: Lower already knows numeric kind, Boolean flag
+and suffix length. Pass that syntax metadata to the private provenance issuer
+instead of rereading/copying its newly appended Expr. Keep one central admission
+predicate, both Lower entry contracts and failure ownership unchanged. Verify
+unchanged behavior and measured benefit; do not alter the measurement protocol
+or source acceptance to meet the bound.
