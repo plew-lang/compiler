@@ -1,6 +1,6 @@
 ---
 id: met-tsa3
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-11-23T16:21:34Z
@@ -100,3 +100,22 @@ pass. Formal341b9f reachesG2 and median7.329713s (ceiling7.5s); final ordinary
 suite f44c09 and independent acceptance are pending. Pre-existing inherited
 existential refusal is separately assigned to met-ajht under the same area;
 it is not a repaired-feature claim for this task.
+
+
+## Accepted finite outcome
+
+Independent reviewer typing_obligation_plan_review accepts closure against
+product26974e78 and tests708ca1cc/a7b73266. Final build5ae294,39 measured-carrier
+CLI controls, native28/consumer25, LLVM22 ASan24/consumer, gen-eacb2f and formal
+341b9f (G2, median7.329713s<=7.5s) establish the bounded guarantees.
+Normal6d65db completed exit1 with immutable inputs, no worker failure and7655
+paired workers. Its290 baseline becomes285: only the targeted5 refusals resolve,
+no added failures/reason changes,3 registered CLI gates pass. Nine fixture files
+are byte-identical; the pre-existing absent generic_index_no_bound.err remains
+absent and its diagnostic is asserted by the scoped CLI. No golden was weakened.
+
+The reviewer independently checked source, assertions, saved execution and actual
+input/artifact hashes; this is not a second independent full-suite execution.
+The ENOSPC predecessor is excluded. met-ajht, met-ucze/com-yeua and remaining285
+failures stay open. No main/seed/binary promotion. See combined finite evidence
+and phase3-post-index-normal-suite.json in the evidence directory.
