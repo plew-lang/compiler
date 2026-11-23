@@ -14,13 +14,15 @@ tags: [frontend, verification]
 
 ## Current Candidate Refresh
 
-Reopened for the source repair e73a8476 in [com-ugee](com-ugee.md). The prior
-043e2402/3c532ce1 gate remains valid only for its recorded inputs/binary; it does
-not certify the new source or candidate073f0375. G1 current admission and the
-actual final measured compiler must determine which checks can apply. The
-current ordinary suite on candidate073f0375 is a repair milestone, not evidence
-that an as-yet unmeasured successor passed the gate. Do not weaken any final
-fixed-point, performance, gen/deps or LLVM22 sanitizer requirement.
+Use the current exact candidate and formal receipt in the [meta worklog](../../../agents/worklog.md),
+not historical candidate073f0375 or043e2402/3c532ce1 receipts below. The current
+source contextual repairs remain with [com-u22d](com-u22d.md) and rejection-domain
+whole reconciliation with [com-yeua](com-yeua.md). Native supervision and its
+observation-cost correction are [met-9455](met-9455.md); its scoped gates do not
+replace this task's complete final-candidate gates. Whole normal retry is running
+from a fresh frozen snapshot. Previous receipts certify only their own recorded
+inputs and binaries; unchanged scoped controls may be explicitly reused. Final
+fixed-point, performance, gen/deps and LLVM22 sanitizer requirements are unchanged.
 
 ## Boundary
 

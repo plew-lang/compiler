@@ -28,12 +28,15 @@ in the next whole retry. Old324fail and historical checkpoints below do not
 replace current whole-gate obligations. Reconcile all remaining failures before
 selecting the next producer slice. See the [current contextual operand evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-contextual-operand-regression.json).
 
-Current whole retry113941-test-130232 passes native ORC but stalls later in
-test-physical-signature's hidden compile/link capture. Run1817 completes with
-23remaining failure rows: the six new contextual regressions are resolved and
-no new failure row appears against092032; this is not proof of unchanged
-messages or a complete normal gate. The separate native-harness monitoring
-work unit is awaiting scope confirmation; com-u22d and this parent remain open.
+Whole113941-test-130232 processed1817run fixtures with23remaining failure
+rows before the physical-signature hidden build stalled. This is a partial
+baseline, not whole acceptance. The approved native-build audit [met-9455](met-9455.md)
+repairs the required supervision routes; its first retry exposed excessive
+legacy machine-pass tracing cost and was interrupted unchanged. IR-only real
+progress preserves idle60 and passed21new-flag scoped gates. A fresh full
+normal retry is running; [canonical native-build evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-normal-native-build-supervision.json)
+and the meta worklog own its current run, candidate and results. Reconcile the
+completed suite before closing this parent or the reopened contextual children.
 
 ## Contract and audit evidence
 
