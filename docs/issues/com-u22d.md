@@ -102,7 +102,7 @@ Formal run20261120T153146-self-host-32b720: generation3 fixedpoint, generation2/
 
 Limits: the whole normal suite was not rerun for this combined candidate, so current-corpus noninterference beyond executed targets is unconfirmed. Last whole324 failures remains historical, not a successful current corpus. Per工程3 progress policy, each finite task closes by applicable target validation, while final fixed-candidate whole gates remain G2a/G2b and com-yeua / 工程3 owners. This is neither their closure nor main/seed/bin promotion. Next is com-b0e6's complete expected-context role plan, then com-8uik's implementation under it.
 
-## Current finite repair checkpoint
+## Intermediate finite repair checkpoint
 
 The normal run20261121T092032-test-b7974b processed all1817 run fixtures
 but stopped later at an unobserved native ORC C++ build; it is not a whole
@@ -116,6 +116,13 @@ Retained native RED/GREEN controls cover late/early projection owner ordering,
 wrong payload and rigid caller mismatch, raw return branches, valid/invalid
 provided placements, and omitted/concrete/pattern associated receivers. Current
 three native kernels pass (28 operand flags plus two boundary kernels).
-Production adoption, completed selected factory arguments, a new formal run,
-the complete normal gate and final independent acceptance remain open. Follow
+The final finite certificate and limits below supersede this intermediate
+pending checkpoint. The complete normal gate remains a separate parent
+obligation. Follow
 [the canonical current evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-contextual-operand-regression.json).
+
+## Current parent acceptance boundary
+
+Met-bu94/met-qo60 are resolved on the source31241607 finite certificate with exact target/native/gen receipts and formal5c9627 (G2, immutable, median7.145550s/5runs). Additional a76f2f9c associated refusal classification is separately resolved by com-yeua childmet-1yd7: freshbuild27d1db, all63public modes and12-line native guard/genaea48a pass. Former3Unclassified modes were not counted as successes on312. Neutral contextual_parent_final_review found no remaining mandatory finite product repair; closure remains conditional on currenta76 formal0633ed input stability/fixedpoint/<=7.5 and this checkpoint synchronization. Formal312 does not certifya76.
+
+Current whole normal remains314fail and has not been rerun on this final combined source. Com-yeua/engineering3 and main/seed/carrier promotion remain open; broader unresolved producer-domain tasks are not silently removed from this boundary. Canonical current status/product and all original failed receipts are retained in phase3-contextual-operand-regression.json.
