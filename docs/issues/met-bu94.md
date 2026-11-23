@@ -1,6 +1,6 @@
 ---
 id: met-bu94
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-11-20T11:30:39Z
@@ -36,14 +36,22 @@ Repair boundary: separate candidate compatibility from whether the first normall
 
 Before editing: independently review a finite common-frontier plan against body-checking and spec01. Add missing numeric if/match order controls and raw nonpublication assertions, reuse existing closure cases, reproduce RED with fixed f94 carrier, then implement and run affected modes plus fresh candidate/performance gates. This is within the existing guarantee, not a new task or closure. Source-domain transport of seven new numeric rejections remains com-yeua/com-8uik.
 
-Independent forward_frontier_plan_review supports the finite matcher-result plan, with numeric Matched/readiness separation, source-normal filtering and no parallel AST classifier. New tracked numeric later-if/match both falsely accept on fixed f94; existing late-closure two also accept; existing forward-closure succeeds. Exact RED receipt and review disposition are in canonical phase3-contextual-operand-regression.json current_whole_regression_followthrough. Source implementation pending.
+Independent forward_frontier_plan_review supports the finite matcher-result plan, with numeric Matched/readiness separation, source-normal filtering and no parallel AST classifier. New tracked numeric later-if/match both falsely accept on fixed f94; existing late-closure two also accept; existing forward-closure succeeds. Exact RED receipt and review disposition are in canonical phase3-contextual-operand-regression.json current_whole_regression_followthrough. Source frontier implementation and final31241607 certificate are recorded below.
 
 ## First-normal frontier implementation increment
 
 The shared recursive matcher now returns compatibility, context dependence and source-normal value presence in one walk. Joins stop before later arms when the first normal value needs the selected expectation; explicit constraints still filter candidates, independent arguments/retries stay active. Array readiness comes from its first element; nominal field context comes from its independently recovered full type, while structural record fields contribute readiness. No second AST classifier or source-fact publication is added.
 
-Standard isolated build20261123T042558-build-190b67 succeeded; its initial implementation passes42check/AOT/ORC controls. The later readiness refinements are not retroactively certified by that binary. New BranchCandidateFrontiers has16 raw scenarios and complete fact/template/closure/callee nonpublication assertions. Old-source native RED and new-source GREEN are verified; review caught a structural-record OR omission during refinement, separately reproduced as native RED and fixed. Final3 native kernels (branch16, existing prepared28, numeric) pass exit0/exact golden/empty stderr. Fresh final candidate, remaining affected gates, formal performance and task acceptance remain pending. Canonical evidence forward_frontier_implementation distinguishes every source stage.
+Standard isolated build20261123T042558-build-190b67 succeeded; its initial implementation passes42check/AOT/ORC controls. The later readiness refinements are not retroactively certified by that binary. New BranchCandidateFrontiers has16 raw scenarios and complete fact/template/closure/callee nonpublication assertions. Old-source native RED and new-source GREEN are verified; review caught a structural-record OR omission during refinement, separately reproduced as native RED and fixed. Final3 native kernels (branch16, existing prepared28, numeric) pass exit0/exact golden/empty stderr. Final31241607 candidate and formal gates are recorded below; parent/whole gates remain separate. Canonical evidence forward_frontier_implementation distinguishes every source stage.
 
 ## Member surface frontier controls
 
 Added method later-if and associated later-match closure refusals plus a successful early-typed member/associated counterpart. Fixed f94 falsely accepts both negative inputs; final31241607 candidate rejects both and executes the positive42/42. The associated rejection currently has Unclassified instead of Source in all three CLI modes, explicitly owned by com-yeua child met-1yd7, not silently accepted here. RED/final receipts are in canonical phase3-contextual-operand-regression.json. No existing input or expectation changed.
+
+## Final finite source certificate
+
+Source31241607, fresh build20261123T060114-build-80c563 / carrier5d9ee2bb, has exact6native (branch frontier, prepared contexts, numeric contexts, member identities/admission/inference), provided private guards, public generic5-line and associated/identity/native/ORC controls, existing generic102/CLI120/numeric75/Array54/Float48 and standard genf3902a. Formal20261123T061202-self-host-5c9627 is immutable, generation2 fixedpoint, successor equality, five times7.846941/7.157484/7.081429/7.106972/7.145550; median7.145550 meets approved7.5seconds. Old7.525428 failure remains evidence. Neutral final source/evidence review finds no remaining finite obligation. Canonical phase3-contextual-operand-regression.json retains exact receipts.
+
+Currenta76f2f9c adds only the separately owned associated ambiguity refusal kind/owner-helper route (met-1yd7), not matcher/proof/obligation changes. Fresh build27d1db and all63public modes pass, including previously Unclassified3 now Source with original main diagnostic/status. These failures were not counted as successes on31241607. Do not apply312 formal timings retroactively to a76. New associated guard/gen receipt and independent final review remain their owner. Parentcom-u22d/com-yeua, whole normal/ASan and main/seed/carrier promotion are not certified here.
+
+Closure reason: resolved within the finite scope above. Fresh a76 guard12-line native and genaea48a have now also passed; no pending changed-path functional control remains. Neutral final reviews forward_frontier_plan_review/provided_identity_plan_review are reconciled against the source312 certificate and current63mode receipts. The a76 formal run is a separate parent-candidate gate, not a retroactive source312 result.
