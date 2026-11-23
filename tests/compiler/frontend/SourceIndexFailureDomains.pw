@@ -1,0 +1,98 @@
+use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontendForRequests, openFrontend, intern }
+use ../../../src/CheckedProgram only { CompilerSession, CompilerSessionResult, ProgramCheckResult, checkCompilerSession }
+use ../../../src/SourceAccess only { SourceAccess }
+use ../../../src/Diag only { CompileDiagnostic, FailureDomain }
+use @Std/Io only { print }
+
+fn input(kind: U64) -> FrontendInput {
+    val names: Array[String] = ["index_no_trait", "index_requires_nominal_conformance", "index_set_requires_nominal_conformance", "generic_index_no_bound", "generic_index_requires_nominal_bound"]
+    if kind < names.count() { return <FrontendInput.File path="tests/fixtures/reject/" + names[kind] + ".pw" /> }
+    return <FrontendInput.File path="tests/compiler/frontend/fixtures/IndexRefusals/Closure.pw" />
+}
+
+fn requireIndex(diagnostic: CompileDiagnostic, owned: Bool = true) {
+    if diagnostic.message() != "subscript requires an Index implementation for reading or an IndexSet implementation for writing" { panic(diagnostic.message()) }
+    if diagnostic.isSourceRejection() != owned { panic("source index rejection lost its required ownership boundary") }
+    if !owned { match diagnostic.failureDomain() { FailureDomain.Unclassified => {} _ => { panic("Raw index failure domain changed") } } }
+}
+
+fn indexSession(kind: U64) -> CompilerSession {
+    match CompilerSession.open(input: input(kind: kind), sources: <SourceAccess stdRoot="std/".bytes() />) {
+        CompilerSessionResult.Success(session: val session) => { return move session }
+        CompilerSessionResult.Failure(diagnostic: val diagnostic) => { panic(diagnostic.message()) }
+    }
+}
+
+fn globalTypingFailure() {
+    val input = <FrontendInput.File path="tests/compiler/frontend/fixtures/IndexRefusals/Global.pw" />
+    mut val raw = <Comp />
+    analyzeFrontendForRequests(c: inout raw, input: input, sources: <SourceAccess stdRoot="std/".bytes() />).unwrap()
+    val name = raw.internBytes(s: "first")
+    mut val target = 0U64
+    for global in raw.arena.globals { if intern(c: inout raw, start: global.nameStart, len: global.nameLen) == name.nameId { target = global.nameStart } }
+    if target == 0U64 { panic("global index fixture changed") }
+    for attempt in 0U64..<2U64 {
+        match raw.prepareGlobalInitializer(target: target) {
+            Result.Err(error: val diagnostic) => { requireIndex(diagnostic: diagnostic, owned: false) raw.pendingDiagnostics.append(diagnostic) }
+            Result.Ok(value: _) => { panic("raw global index failure accepted") }
+        }
+        if raw.takeDiagnostics().count() != 1U64 { panic("global drain lost retained index failure") }
+    }
+    match CompilerSession.open(input: input, sources: <SourceAccess stdRoot="std/".bytes() />) {
+        CompilerSessionResult.Failure(diagnostic: val diagnostic) => { requireIndex(diagnostic: diagnostic) }
+        CompilerSessionResult.Success(session: val opened) => {
+            match checkCompilerSession(session: move opened) {
+                ProgramCheckResult.Failure(diagnostic: val diagnostic) => { requireIndex(diagnostic: diagnostic) }
+                ProgramCheckResult.Success(program: _) => { panic("whole global index failure accepted") }
+            }
+        }
+    }
+    match openFrontend(input: input, sources: <SourceAccess stdRoot="std/".bytes() />) {
+        Result.Err(error: val diagnostic) => { requireIndex(diagnostic: diagnostic) }
+        Result.Ok(value: _) => { panic("eager global index failure accepted") }
+    }
+    print("global index rejection retained")
+}
+fn main() {
+    for kind in 0U64..<6U64 {
+        mut val raw = <Comp />
+        analyzeFrontendForRequests(c: inout raw, input: input(kind: kind), sources: <SourceAccess stdRoot="std/".bytes() />).unwrap()
+        val name = raw.internBytes(s: if kind == 3U64 { give "f" } else if kind == 4U64 { give "first" } else { give "main" })
+        val function = raw.arena.firstFunctionNamed(nameId: name.nameId)
+        for attempt in 0U64..<2U64 {
+            match raw.prepareLexicalBody(fnIdx: function) {
+                Result.Err(error: val diagnostic) => { requireIndex(diagnostic: diagnostic, owned: false) raw.pendingDiagnostics.append(diagnostic) }
+                Result.Ok(value: _) => { panic("Raw body request accepted source index value") }
+            }
+            if raw.takeDiagnostics().count() != 1U64 { panic("drain lost retained index rejection") }
+        }
+        print("raw index rejection retained")
+        {
+            mut val owned = indexSession(kind: kind)
+            for attempt in 0U64..<2U64 {
+                // Both instances admit the same immutable declarations. The
+                // source function ID is obtained before any body is requested.
+                match owned.prepareFunction(function: function) {
+                    Result.Err(error: val diagnostic) => { requireIndex(diagnostic: diagnostic) }
+                    Result.Ok(value: _) => { panic("failed lazy function request published success") }
+                }
+            }
+            match checkCompilerSession(session: move owned) {
+                ProgramCheckResult.Failure(diagnostic: val diagnostic) => { requireIndex(diagnostic: diagnostic) }
+                ProgramCheckResult.Success(program: _) => { panic("failed lazy session published a checked program") }
+            }
+            print("lazy index rejection retained")
+        }
+        match checkCompilerSession(session: indexSession(kind: kind)) {
+            ProgramCheckResult.Failure(diagnostic: val diagnostic) => { requireIndex(diagnostic: diagnostic) }
+            ProgramCheckResult.Success(program: _) => { panic("whole check accepted source index value") }
+        }
+        print("whole index rejection retained")
+        match openFrontend(input: input(kind: kind), sources: <SourceAccess stdRoot="std/".bytes() />) {
+            Result.Err(error: val diagnostic) => { requireIndex(diagnostic: diagnostic) }
+            Result.Ok(value: _) => { panic("eager check accepted source index value") }
+        }
+        print("eager index rejection retained")
+    }
+    globalTypingFailure()
+}

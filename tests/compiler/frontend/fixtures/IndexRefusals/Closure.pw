@@ -1,0 +1,4 @@
+use @Std/Io only { print }
+struct Shelf { pub val item: I64 }
+pub impl Shelf { factory }
+fn main() { val action: fn() = fn() { val shelf = <Shelf item=1I64 /> print(shelf[0I64]) } }

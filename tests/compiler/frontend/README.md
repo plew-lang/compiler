@@ -678,3 +678,16 @@ Require exit0 and empty stdout/stderr; it does not widen product visibility.
 channel in check/AOT/ORC, unused lazy bodies and typed-array language controls.
 The normal harness registers this inexpensive CLI gate; the private/native
 implementation probes retain their separate manual execution contract.
+
+
+### Index requirement refusal ownership
+
+`SourceIndexMain.pw` is a private same-module probe appended to a frozen Frontend
+snapshot; do not expose its internal authority constructors. It distinguishes
+actual read/write Lower receipts from public synthetic builders and checks
+request/event/owner/serial consistency, including an optional failed-call owner.
+`SourceIndexFailureDomains.pw` and its golden exercise raw versus owned failure,
+retry/drain, whole/eager requests, closure and global lifetime. The copied
+`fixtures/IndexRefusals` inputs are runtime File reads and must be included in
+input fingerprints. CLI acceptance and non-interference are also covered by
+`test-index-requirement-origin.py` and `test-dynamic-protocol-requirement.py`.

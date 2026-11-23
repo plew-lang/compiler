@@ -1,0 +1,5 @@
+use @Std/Io only { print }
+struct Shelf { pub val item: I64 }
+pub impl Shelf { factory }
+val first = <Shelf item=1I64 />[0I64]
+fn main() {}

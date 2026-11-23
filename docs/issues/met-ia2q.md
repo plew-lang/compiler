@@ -112,3 +112,31 @@ invalid protocol fallback. Refusal transport alone cannot close the new case.
 Source/private-receipt/dedicated-cause code is WIP, not built or adopted; pause
 implementation for the goal's task-gap decision. Latest adopted source and
 carrier remain5f12e9a1/1b22eb22 with formal7.247575 and290 whole failures.
+
+## Current finite implementation evidence
+
+Implementation26974e78 retains canonical requirements through the upstream
+met-tsa3 repair and authenticates actual Index Lower receipts separately from
+public synthetic builders. Optional call-owner entries must agree if present;
+None is legitimate before a failed call publishes any success fact. Receiver
+ownership remains mandatory. Missing published-template rows stay Raw.
+
+SourceIndexMain is appended only to an exact Frontend snapshot.24 scenarios
+cover read/write, Raw request, erased receipt, changed serial, session/root,
+event, receiver owner, core module and present-but-foreign call owner, plus public
+lowerIndexRead's inability to mint a private receipt. Actual refusal expression
+must equal the selected source occurrence; the probe excludes unrelated std
+operations. index-private-v6 native succeeds with empty stdout/stderr.
+
+SourceIndexFailureDomains exercises five existing refusal fixtures plus closure
+and global fixtures through raw retry/drain, owned prepareFunction retry then
+whole check, fresh whole and eager entry. index-consumer-v2 matches its25-line
+golden. The two tests' actual native input reread, including copied fixture
+files, is recorded separately in index-native-runtime-inputs.json; the original
+compile input list alone did not describe runtime File reads.
+
+LLVM22 ASan/LSan private24 scenarios:20967 memory checks/5355 checked bodies;
+consumer25-line golden:28768/6666. Both pass with empty stderr and fixed recorded
+compile inputs. Final source build, scoped CLI, formal fixed point/performance,
+normal290 baseline reconciliation and final independent adoption remain open.
+See [combined finite evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-canonical-protocol-demand.json).
