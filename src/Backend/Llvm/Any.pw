@@ -8,7 +8,7 @@
 // `vtable` at a static per-(concrete-struct, trait) global of function pointers:
 // slot 0 = the copy thunk (value semantics / box privatization), slot 1 = the drop
 // thunk (destroys the boxed concrete's owned heap at rc 0 — emitAnyRelease), slots
-// 2.. = a thunk per trait requirement in declaration order. Each requirement thunk
+// 2.. = a thunk per retained effective interface slot. Each requirement thunk
 // has the ERASED signature `(ptr self_data, <req params>) -> <req ret>` and forwards
 // to the concrete witness pf<wfi> after loading the boxed self.
 //
@@ -36,8 +36,8 @@ pub impl LlvmCtx {
         return <Result.Ok value=abiId />
     }
 
-    inout fn saveWitnessValueAbi(c: inout Comp, targetType: U64, traitIndex: U64, slot: U64, signature: ExistentialRequirementSignature) -> Result[U64, CompileDiagnostic] {
-        if targetType == 0U64 || targetType >= c.arena.typeCount() || !c.arena.typeAt(index: targetType).isAny || traitIndex >= c.decls.traitCount() || slot == 0U64 || slot > c.decls.traitAt(index: traitIndex).reqs.count() || signature.parameterTypes.count() != signature.argumentPassings.count() { return <Result.Err error=valueAbiFailure(message: "witness public signature is incomplete") /> }
+    inout fn saveWitnessValueAbi(c: inout Comp, targetType: U64, traitIndex: U64, slot: U64, slotCount: U64, signature: ExistentialRequirementSignature) -> Result[U64, CompileDiagnostic] {
+        if targetType == 0U64 || targetType >= c.arena.typeCount() || !c.arena.typeAt(index: targetType).isAny || traitIndex >= c.decls.traitCount() || slot == 0U64 || slot > slotCount || signature.parameterTypes.count() != signature.argumentPassings.count() { return <Result.Err error=valueAbiFailure(message: "witness public signature is incomplete") /> }
         mut val parameters: Array[LlvmLogicalParameter] = [<LlvmLogicalParameter type=self.ptrty semanticType=targetType role=<LlvmParameterRole.ErasedReceiver /> mode=(try witnessReceiverMode(passing: signature.receiverPassing)) />]
         mut val index = 0U64
         while index < signature.parameterTypes.count() {
@@ -48,7 +48,7 @@ pub impl LlvmCtx {
         }
         val result = if signature.resultType == 0U64 { give self.voidty } else { give (try self.llvmTypeOfRef(c: inout c, ref: signature.resultType)) }
         mut val slots = self.witnessValueAbis.getOr(key: targetType, fallback: [])
-        while slots.count() < c.decls.traitAt(index: traitIndex).reqs.count() { slots.append(0U64) }
+        while slots.count() < slotCount { slots.append(0U64) }
         if slots[slot - 1U64] != 0U64 { return <Result.Err error=valueAbiFailure(message: "witness template published twice") /> }
         val template = (try self.saveValueAbi(signature: <LlvmLogicalSignature convention=<LlvmValueConvention.Witness targetType=targetType traitIndex=traitIndex slot=slot /> parameters=parameters result=result resultTerm=signature.resultType />, ownerBody: 0U64))
         slots.set(i: slot - 1U64, value: template)
@@ -64,7 +64,8 @@ pub impl LlvmCtx {
         if cached != 0U64 { return <Result.Ok value=cached /> }
         val member = resolution.members[memberIndex]
         val parameterTypes: Array[U64] = member.parameterTypes
-        return self.saveWitnessValueAbi(c: inout c, targetType: resolution.targetRef, traitIndex: resolution.traitIdx, slot: memberIndex + 1U64, signature: <ExistentialRequirementSignature receiverPassing=member.receiverPassing parameterTypes=parameterTypes argumentPassings=member.argumentPassings resultType=member.resultType />)
+        val memberCount = try c.finalExistentialMemberCount(resolutionIndex: resolutionIndex)
+        return self.saveWitnessValueAbi(c: inout c, targetType: resolution.targetRef, traitIndex: resolution.traitIdx, slot: memberIndex + 1U64, slotCount: memberCount, signature: <ExistentialRequirementSignature receiverPassing=member.receiverPassing parameterTypes=parameterTypes argumentPassings=member.argumentPassings resultType=member.resultType />)
     }
 
     inout fn witnessTemplateForCall(c: inout Comp, selected: CallResolution) -> Result[U64, CompileDiagnostic] {
@@ -83,7 +84,8 @@ pub impl LlvmCtx {
         // Calls retain the source expression's Unit term; member facts retain
         // the callable payload slot. Use the existing normalization before
         // caching so cold/warm endpoints agree on void without losing Unit.
-        return self.saveWitnessValueAbi(c: inout c, targetType: selected.recvTypeRef, traitIndex: endpoint.traitIndex, slot: endpoint.slot, signature: <ExistentialRequirementSignature receiverPassing=selected.receiverPassing parameterTypes=parameters argumentPassings=passings resultType=c.callableResultSlot(ref: selected.resultTypeRef) />)
+        val metadata = try c.finalInterfaceCallMetadata(resolution: selected)
+        return self.saveWitnessValueAbi(c: inout c, targetType: selected.recvTypeRef, traitIndex: endpoint.traitIndex, slot: endpoint.slot, slotCount: metadata.slotCount, signature: <ExistentialRequirementSignature receiverPassing=selected.receiverPassing parameterTypes=parameters argumentPassings=passings resultType=c.callableResultSlot(ref: selected.resultTypeRef) />)
     }
 
     inout fn witnessBodyValueAbi(c: inout Comp, resolutionIndex: U64, memberIndex: U64, template: U64) -> Result[U64, CompileDiagnostic] {
@@ -396,7 +398,7 @@ pub impl LlvmCtx {
     // Build (or fetch cached) the vtable global for (concrete struct `sidx`, trait
     // `traitIdx`): an array of ptr slots — slot 0 = copy thunk (value semantics /
     // privatization), slot 1 = drop thunk (box destruction at rc 0), slots 2.. = a
-    // thunk per requirement in declaration order. Returns the global pointer.
+    // thunk per finalized effective interface slot. Returns the global pointer.
     inout fn ensureAnyVtable(c: inout Comp, sourceRef: U64, sidx: U64, anyRef: U64, traitIdx: U64) -> Result[LLVMValueRef, CompileDiagnostic] {
         val resolutionIndex: U64 = c.finalExistentialIndex(sourceRef: sourceRef, targetRef: anyRef)
         if resolutionIndex >= c.arena.finalExistentials.count() {
@@ -423,11 +425,11 @@ pub impl LlvmCtx {
             if self.anyVtResolution[ci] == resolutionIndex + 1U64 { return <Result.Ok value=self.anyVtVal[ci] /> }
             ci += 1U64
         }
-        val t: TraitDef = c.decls.traitAt(index: traitIdx)
+        val memberCount = try c.finalExistentialMemberCount(resolutionIndex: resolutionIndex)
         // pre-create the global (with its final array type) and CACHE it before building
         // thunks, so a `-> Self` re-erasure thunk that re-boxes into this same existential
         // resolves to this vtable instead of recursing into ensureAnyVtable forever.
-        val slotCount: U64 = 2U64 + t.reqs.count()
+        val slotCount: U64 = 2U64 + memberCount
         val arrTy: LLVMTypeRef = LLVMArrayType2(self.ptrty, slotCount)
         mut val nm: Array[U8] = []
         appendBytes(into: inout nm, from: "plew.metadata.vtable.".bytes())
@@ -452,7 +454,7 @@ pub impl LlvmCtx {
         slots.append((try self.buildAnyCopyThunk(c: inout c, sourceRef: sourceRef, sidx: sidx)))
         slots.append((try self.buildAnyDropThunk(c: inout c, sourceRef: sourceRef, sidx: sidx)))
         mut val ri: U64 = 0
-        while ri < t.reqs.count() {
+        while ri < memberCount {
             slots.append((try self.buildAnyThunk(c: inout c, resolutionIndex: resolutionIndex, sidx: sidx, idx: ri)))
             ri += 1
         }

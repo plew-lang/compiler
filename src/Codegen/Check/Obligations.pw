@@ -498,11 +498,13 @@ pub impl Comp {
     // dependency request; recursively expanding it would revisit this box.
     inout fn checkAbstractExistentialPlans(evidence: ExistentialBoxEvidence) -> Result[(), CompileDiagnostic] {
         if evidence.traitIdx >= self.decls.traitCount() { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "existential conversion has no selected trait") /> }
-        val trait = self.decls.traitAt(index: evidence.traitIdx)
-        mut val index = 0U64
-        while index < trait.reqs.count() {
-            try self.existentialWitnessPlan(evidence: evidence, requirement: index, sourceReceiver: evidence.sourceRef)
-            index += 1U64
+        val interface = try self.sourceExistentialInterface(traitIndex: evidence.traitIdx)
+        for index in 0U64..<self.sourceExistentialInterfaces[interface].members.count() {
+            if !(try self.existentialRequirementIsDispatchable(target: evidence.targetRef, traitIndex: evidence.traitIdx, slot: index)) { continue }
+            // Shape checking reads public constraints, not a concrete body or
+            // a fabricated static proof of an inherited trait for hidden Self.
+            val signature = try self.existentialInterfaceSignatureRead(target: evidence.targetRef, traitIndex: evidence.traitIdx, slot: index, receiver: evidence.sourceRef, offset: 0U64)
+            try self.readExistentialResultPlan(evidence: evidence, requirement: index, interface: signature, proofRead: <SignatureProofRead.Admission />)
         }
         return <Result.Ok value=() />
     }

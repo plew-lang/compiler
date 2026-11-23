@@ -3,6 +3,23 @@
 // places, semantic constants, and explicit ownership operations.
 
 
+// Representation-only endpoint checks. These consume frozen frontend facts;
+// receiver storage and LLVM lane checks remain in the call preflight below.
+impl LlvmCtx {
+assoc fn midExistentialEndpointPreflight(slot: U64, metadata: (slotCount: U64, isAsync: Bool, receiverPassing: CallReceiverPassing, parameterCount: U64), receiverPassing: CallReceiverPassing, argumentCount: U64, parameterCount: U64, passingCount: U64) -> MidCallPreflight {
+    if slot == 0U64 || slot > metadata.slotCount { return <MidCallPreflight.Callee /> }
+    if metadata.isAsync { return <MidCallPreflight.Async /> }
+    val matches = match receiverPassing {
+        CallReceiverPassing.Borrow => match metadata.receiverPassing { CallReceiverPassing.Borrow => true _ => false },
+        CallReceiverPassing.Inout => match metadata.receiverPassing { CallReceiverPassing.Inout => true _ => false },
+        _ => false,
+    }
+    if !matches { return <MidCallPreflight.Receiver /> }
+    if argumentCount != metadata.parameterCount || parameterCount != argumentCount || passingCount != argumentCount { return <MidCallPreflight.ArgumentShape /> }
+    return <MidCallPreflight.None />
+}
+}
+
 pub impl LlvmCtx {
 
     // Semantic newtype evidence is necessary but cannot excuse a layout bug.
@@ -1787,26 +1804,18 @@ pub impl LlvmCtx {
         val selected: CallResolution = c.arena.finalCalleeAt(index: target.resolution)
         match selected.target {
             CallTarget.ExistentialRequirement(traitIdx: val traitIndex, slot: val slot) => {
-                try c.checkFinalInterfaceEvidence(resolution: selected)
-                if traitIndex >= c.decls.traitCount() || slot == 0U64 || slot > c.decls.traitAt(index: traitIndex).reqs.count() { return <Result.Ok value=<MidCallPreflight.Callee /> /> }
-                val requirement: Func = c.traitReqAt(reqs: c.decls.traitAt(index: traitIndex).reqs, index: slot - 1U64)
-                if requirement.isAsync { return <Result.Ok value=<MidCallPreflight.Async /> /> }
+                val metadata = try c.finalInterfaceCallMetadata(resolution: selected)
+                val endpoint = LlvmCtx.midExistentialEndpointPreflight(slot: slot, metadata: metadata, receiverPassing: selected.receiverPassing, argumentCount: term.args.len, parameterCount: selected.parameterTypeRefs.len, passingCount: selected.argumentPassings.len)
+                match endpoint { MidCallPreflight.None => {} _ => { return <Result.Ok value=endpoint /> } }
                 // Final call publication has already checked erased Self input
                 // and result admissibility. Preflight validates the selected ABI;
                 // it must not reopen requirement type/name resolution.
-                if requirement.isAssoc { return <Result.Ok value=<MidCallPreflight.Callee /> /> }
                 if selected.recvTypeRef == 0U64 || selected.recvTypeRef >= c.arena.typeCount() || !c.arena.typeAt(index: selected.recvTypeRef).isAny { return <Result.Ok value=<MidCallPreflight.Receiver /> /> }
                 // Thunks borrow their box or mutate its privatized storage.
                 // Consuming receivers require a distinct box-ownership ABI.
-                match selected.receiverPassing {
-                    CallReceiverPassing.Borrow => { if requirement.selfInout || requirement.selfMove { return <Result.Ok value=<MidCallPreflight.Receiver /> /> } }
-                    CallReceiverPassing.Inout => { if !requirement.selfInout { return <Result.Ok value=<MidCallPreflight.Receiver /> /> } }
-                    _ => { return <Result.Ok value=<MidCallPreflight.Receiver /> /> }
-                }
                 if !(try self.midCanonicalReceiverSupported(c: inout c, body: body, receiverId: term.callReceiver, passing: selected.receiverPassing)) { return <Result.Ok value=<MidCallPreflight.Receiver /> /> }
                 val receiver: MidCallReceiverNode = c.mid.callReceivers[term.callReceiver - 1U64]
                 if !c.typeRefEq(a: self.midCanonicalOperandTypeTerm(c: c, body: body, operandId: receiver.operand), b: selected.recvTypeRef) { return <Result.Ok value=<MidCallPreflight.Receiver /> /> }
-                if term.args.len != requirement.params.count() || selected.parameterTypeRefs.len != term.args.len || selected.argumentPassings.len != term.args.len { return <Result.Ok value=<MidCallPreflight.ArgumentShape /> /> }
                 if selected.resultTypeRef != 0U64 {
                     if selected.resultTypeRef == 0U64 || selected.resultTypeRef >= c.arena.typeCount() || !(try self.midCanonicalPlaceLlvmSupported(c: inout c, body: body, placeId: term.destination)) { return <Result.Ok value=<MidCallPreflight.Result /> /> }
                     val destination: MidPlaceNode = c.mid.places[term.destination - 1U64]

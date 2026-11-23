@@ -1,0 +1,11 @@
+use @Std/Io only { print }
+trait Parent { fn duplicate() -> Self fn get() -> I64 }
+trait Child: Parent {}
+struct Shelf { pub val item: I64 }
+pub impl Shelf { factory }
+pub impl Shelf as Parent {
+    fn duplicate() -> Self { return <Shelf item=self.item /> }
+    fn get() -> I64 { return self.item }
+}
+pub impl Shelf as Child {}
+fn main() { val shelf: any Child = <Shelf item=59I64 /> val other = shelf.duplicate() print(other.get()) }

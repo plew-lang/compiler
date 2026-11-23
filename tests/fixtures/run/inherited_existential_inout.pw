@@ -1,0 +1,14 @@
+use @Std/Io only { print }
+trait Parent { inout fn bump() -> I64 }
+trait Child: Parent {}
+struct Shelf { pub mut val n: I64 }
+pub impl Shelf { factory }
+pub impl Shelf as Parent { inout fn bump() -> I64 { self.n += 1I64 return self.n } }
+pub impl Shelf as Child {}
+fn main() {
+    mut val first: any Child = <Shelf n=0I64 />
+    mut val second = first
+    print(first.bump())
+    print(second.bump())
+    print(first.bump())
+}

@@ -636,6 +636,11 @@ impl Comp {
         }
         val receiver = try self.groundTermForBody(ref: source.receiver, environment: environment, selfRef: selfRef, itemRef: itemRef)
         if !self.arena.typeIsClosed(ref: receiver) { return <Result.Ok value=<Optional.None /> /> }
+        if traitAndSlot.slot == 0U64 { return <Result.Err error=self.diagnosticAt(offset: template.siteKey.originStart, msg: "interpreted interface call has no effective slot", failureDomain: <FailureDomain.Internal />) /> }
+        val publicInterface = try self.sourceExistentialInterface(traitIndex: traitAndSlot.traitIndex)
+        val publicDeclaration = try self.existentialInterfaceDeclaration(target: receiver, traitIndex: traitAndSlot.traitIndex, slot: traitAndSlot.slot - 1U64, offset: template.siteKey.originStart)
+        if publicDeclaration.isAssoc { return <Result.Err error=self.diagnosticAt(offset: template.siteKey.originStart, msg: "an associated declaration cannot be a dynamic receiver call", failureDomain: <FailureDomain.Internal />) /> }
+        val publicSignature = try self.readExistentialRequirementSignature(target: receiver, traitIndex: traitAndSlot.traitIndex, slot: traitAndSlot.slot - 1U64, proofRead: <SignatureProofRead.Retained />)
         val index = self.callTemplateIndex(siteKey: template.siteKey)
         val snapshot = match self.preparedCallConstraints(index: index) {
             Optional.Some(v: val snapshot) => snapshot,
@@ -646,7 +651,7 @@ impl Comp {
         // No hidden binder is interpreted by an empty condition set. Retain
         // its source provenance without manufacturing an unused fresh scope.
         if plan.bounds.count() == 0U64 {
-            self.interfaceCalls.append(<Ref value=<InterfaceCallEvidenceCell evidence=<InterfaceCallEvidence sourceRoot=root instanceRoot=root owner=owner receiver=receiver traitIndex=traitAndSlot.traitIndex slot=traitAndSlot.slot bounds=[] proofs=[] /> /> />)
+            self.interfaceCalls.append(<Ref value=<InterfaceCallEvidenceCell evidence=<InterfaceCallEvidence interface=publicInterface isAsync=publicDeclaration.isAsync receiverPassing=publicSignature.receiverPassing parameterCount=publicSignature.parameterTypes.count() sourceRoot=root instanceRoot=root owner=owner receiver=receiver traitIndex=traitAndSlot.traitIndex slot=traitAndSlot.slot bounds=[] proofs=[] /> /> />)
             return <Result.Ok value=<Optional.Some v=self.interfaceCalls.count() /> />
         }
         val context = try self.createInterfaceProofContext(source: source, sourceRoot: root, owner: owner, environment: environment, selfRef: selfRef, itemRef: itemRef)
@@ -680,7 +685,7 @@ impl Comp {
             bounds.append(bound)
             proofs.append(self.freezeStaticConformanceProof(proof: instantiated))
         }
-        self.interfaceCalls.append(<Ref value=<InterfaceCallEvidenceCell evidence=<InterfaceCallEvidence sourceRoot=root instanceRoot=instanceRoot owner=owner receiver=receiver traitIndex=traitAndSlot.traitIndex slot=traitAndSlot.slot bounds=bounds proofs=proofs /> /> />)
+        self.interfaceCalls.append(<Ref value=<InterfaceCallEvidenceCell evidence=<InterfaceCallEvidence interface=publicInterface isAsync=publicDeclaration.isAsync receiverPassing=publicSignature.receiverPassing parameterCount=publicSignature.parameterTypes.count() sourceRoot=root instanceRoot=instanceRoot owner=owner receiver=receiver traitIndex=traitAndSlot.traitIndex slot=traitAndSlot.slot bounds=bounds proofs=proofs /> /> />)
         return <Result.Ok value=<Optional.Some v=self.interfaceCalls.count() /> />
     }
 }
@@ -688,6 +693,34 @@ impl Comp {
 // Validate the immutable capability at publication and its actual consumers.
 // No where-clause solver or source lookup can replace an absent capability.
 pub impl Comp {
+    // Read only the completed endpoint contract. No declaration search or
+    // signature reconstruction is permitted at LLVM preflight/emission.
+    inout fn finalInterfaceCallMetadata(resolution: CallResolution) -> Result[(slotCount: U64, isAsync: Bool, receiverPassing: CallReceiverPassing, parameterCount: U64), CompileDiagnostic] {
+        try self.checkFinalInterfaceEvidence(resolution: resolution)
+        if resolution.interfaceEvidence == 0U64 || resolution.interfaceEvidence > self.interfaceCalls.count() { return <Result.Err error=self.diagnosticAt(offset: resolution.siteKey.originStart, msg: "call has no finalized interface metadata", failureDomain: <FailureDomain.Internal />) /> }
+        val saved = self.interfaceCalls[resolution.interfaceEvidence - 1U64]->evidence
+        if saved.interface >= self.sourceExistentialInterfaces.count() { return <Result.Err error=self.diagnosticAt(offset: resolution.siteKey.originStart, msg: "finalized interface metadata has no retained interface", failureDomain: <FailureDomain.Internal />) /> }
+        val interface = self.sourceExistentialInterfaces[saved.interface]
+        if interface.traitIndex != saved.traitIndex || saved.slot == 0U64 || saved.slot > interface.members.count() { return <Result.Err error=self.diagnosticAt(offset: resolution.siteKey.originStart, msg: "finalized interface metadata has an invalid effective slot", failureDomain: <FailureDomain.Internal />) /> }
+        return <Result.Ok value=(slotCount: interface.members.count(), isAsync: saved.isAsync, receiverPassing: saved.receiverPassing, parameterCount: saved.parameterCount) />
+    }
+
+    // Validate the completed descriptor before using its member count as a
+    // physical table size. Missing members cannot become an undersized table.
+    fn finalExistentialMemberCount(resolutionIndex: U64) -> Result[U64, CompileDiagnostic] {
+        if resolutionIndex >= self.arena.finalExistentials.count() { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "existential descriptor is outside its finalized domain", failureDomain: <FailureDomain.Internal />) /> }
+        val resolution = self.arena.finalExistentials[resolutionIndex]
+        if resolution.traitIdx >= self.decls.traitCount() || resolution.sourceRef == 0U64 || resolution.sourceRef >= self.arena.typeCount() || resolution.targetRef == 0U64 || resolution.targetRef >= self.arena.typeCount() { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "existential descriptor has an invalid source or target", failureDomain: <FailureDomain.Internal />) /> }
+        val target = self.arena.typeTermAt(index: resolution.targetRef)
+        if !target.isAny || !target.hasDecl || target.declOffset != self.decls.traitAt(index: resolution.traitIdx).nameStart { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "existential descriptor has a different target interface", failureDomain: <FailureDomain.Internal />) /> }
+        val interface = match self.sourceExistentialInterfaceIndex.get(key: resolution.traitIdx) {
+            Optional.Some(v: val interface) => interface,
+            Optional.None => { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "existential descriptor has no retained interface", failureDomain: <FailureDomain.Internal />) /> },
+        }
+        if interface >= self.sourceExistentialInterfaces.count() || self.sourceExistentialInterfaces[interface].traitIndex != resolution.traitIdx || resolution.members.count() != self.sourceExistentialInterfaces[interface].members.count() { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "existential descriptor has incomplete effective witness slots", failureDomain: <FailureDomain.Internal />) /> }
+        return <Result.Ok value=resolution.members.count() />
+    }
+
     inout fn checkFinalInterfaceEvidence(resolution: CallResolution) -> Result[(), CompileDiagnostic] {
         val requirement = match resolution.target {
             CallTarget.ExistentialRequirement(traitIdx: val traitIndex, slot: val slot) => <InterfaceRequirementKey traitIndex=traitIndex slot=slot />,
@@ -774,8 +807,9 @@ impl Comp {
 
 impl Comp {
     inout fn prepareExistentialMember(evidence: ExistentialBoxEvidence, requirement: U64) -> Result[Optional[PreparedExistentialMember], CompileDiagnostic] {
-        if evidence.traitIdx >= self.decls.traitCount() || requirement >= self.decls.traitAt(index: evidence.traitIdx).reqs.count() { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "existential member has no selected declaration") /> }
-        val requested = self.traitReqAt(reqs: self.decls.traitAt(index: evidence.traitIdx).reqs, index: requirement)
+        val signature = try self.existentialInterfaceSignatureRead(target: evidence.targetRef, traitIndex: evidence.traitIdx, slot: requirement, receiver: evidence.sourceRef, offset: 0U64)
+        val authored = self.authoredRequirementViews[signature.scope]
+        val requested = authored.declaration
         if !(try self.existentialRequirementIsDispatchable(target: evidence.targetRef, traitIndex: evidence.traitIdx, slot: requirement)) { return <Result.Ok value=<Optional.None /> /> }
         val conditions = match (try self.interfaceMethodConditions(target: evidence.targetRef, traitIndex: evidence.traitIdx, requirement: requirement)) {
             Optional.Some(v: val conditions) => conditions,
@@ -785,27 +819,29 @@ impl Comp {
             Optional.Some(v: val implementation) => implementation,
             Optional.None => { return <Result.Err error=self.diagnosticAt(offset: requested.nameStart, msg: "admitted interface member lost its selected implementation") /> },
         }
+        val proof = implementation.proof
         val publicEvidence = try self.concreteInterfaceConditions(conditions: conditions, evidence: evidence, requirement: requirement)
-        val plan = try self.selectedRequirementImplementationPlan(callee: implementation.function, proof: evidence.proof, traitIndex: evidence.traitIdx, requirement: requirement, offset: self.arena.functionAt(index: implementation.function).nameStart)
+        val plan = try self.selectedRequirementImplementationPlan(callee: implementation.function, proof: proof, traitIndex: authored.source.traitIndex, requirement: authored.source.slot, offset: self.arena.functionAt(index: implementation.function).nameStart)
         val constraints = <CallableConstraintEvidence.Requirement plan=plan bounds=publicEvidence.bounds proofs=publicEvidence.proofs normalizations=publicEvidence.normalizations />
         val receiver = self.canonicalBodyReceiverRef(fnIdx: implementation.function, recvInstRef: evidence.sourceRef)
         val witness = match (try self.existentialWitnessPlan(evidence: evidence, requirement: requirement, sourceReceiver: receiver)) {
             Optional.Some(v: val witness) => witness,
             Optional.None => { return <Result.Ok value=<Optional.None /> /> },
         }
-        val environment = try self.existentialImplementationEnvironment(implementation: implementation, evidence: evidence, constraints: constraints)
+        val environment = try self.existentialImplementationEnvironment(implementation: implementation, receiver: evidence.sourceRef, proof: proof, constraints: constraints)
         try self.checkPreparedExistentialWitnessSignature(plan: witness, function: implementation.function, environment: environment)
         return <Result.Ok value=<Optional.Some v=<PreparedExistentialMember implementation=implementation environment=environment plan=witness /> /> />
     }
 
-    inout fn existentialImplementationEnvironment(implementation: ExistentialImplementation, evidence: ExistentialBoxEvidence, constraints: CallableConstraintEvidence) -> Result[InstanceEnvironment, CompileDiagnostic] {
-        val substitution = try self.bodyInstanceEnvironment(fnIdx: implementation.function, args: implementation.arguments, recvInstRef: evidence.sourceRef, selectedProof: evidence.proof)
+    inout fn existentialImplementationEnvironment(implementation: ExistentialImplementation, receiver: U64, proof: StaticConformanceProof, constraints: CallableConstraintEvidence) -> Result[InstanceEnvironment, CompileDiagnostic] {
+        val substitution = try self.bodyInstanceEnvironment(fnIdx: implementation.function, args: implementation.arguments, recvInstRef: receiver, selectedProof: proof)
         return self.environmentWithCallableConstraints(fnIdx: implementation.function, environment: substitution, evidence: constraints)
     }
 }
 
 impl Comp {
     inout fn preparedExistentialBoxIndex(evidence: ExistentialBoxEvidence) -> Result[U64, CompileDiagnostic] {
+        try self.checkAuthoredSignatureAdmissionOutcome()
         for index in 0U64..<self.preparedExistentialBoxes.count() {
             val saved = self.preparedExistentialBoxes[index].evidence
             if self.typeRefEq(a: saved.sourceRef, b: evidence.sourceRef) && self.typeRefEq(a: saved.targetRef, b: evidence.targetRef) {
@@ -822,9 +858,11 @@ impl Comp {
         val index = try self.preparedExistentialBoxIndex(evidence: evidence)
         if index < self.preparedExistentialBoxes.count() { return <Result.Ok value=index /> }
         try self.checkConversionProofEvidence(proof: <ValueConversionProof.ExistentialBox sourceRef=evidence.sourceRef targetRef=evidence.targetRef traitIdx=evidence.traitIdx proof=evidence.proof />, offset: 0U64)
-        val trait = self.decls.traitAt(index: evidence.traitIdx)
+        val witnesses = try self.existentialWitnessInterface(evidence: evidence)
+        val bound = self.existentialWitnessInterfaces[witnesses].bound
+        val interface = self.boundExistentialInterfaces[bound].source
         mut val members: Array[Optional[PreparedExistentialMember]] = []
-        for slot in 0U64..<trait.reqs.count() {
+        for slot in 0U64..<self.sourceExistentialInterfaces[interface].members.count() {
             members.append(try self.prepareExistentialMember(evidence: evidence, requirement: slot))
         }
         self.preparedExistentialBoxes.append(<PreparedExistentialBox evidence=evidence members=members />)

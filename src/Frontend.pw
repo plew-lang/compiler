@@ -315,6 +315,13 @@ struct PreparedExistentialMember {
     val plan: ExistentialWitnessPlan
 }
 
+struct ExistentialWitnessInterface {
+    val evidence: ExistentialBoxEvidence
+    val bound: U64
+    val proofs: Array[StaticConformanceProof]
+}
+impl ExistentialWitnessInterface { factory }
+
 struct PreparedExistentialBox {
     val evidence: ExistentialBoxEvidence
     val members: Array[Optional[PreparedExistentialMember]]
@@ -393,6 +400,11 @@ enum ConstraintProofReplay {
 }
 
 struct InterfaceCallEvidence {
+    // Frozen public endpoint facts; LLVM does not re-read trait declarations.
+    val interface: U64
+    val isAsync: Bool
+    val receiverPassing: CallReceiverPassing
+    val parameterCount: U64
     val sourceRoot: U64
     val instanceRoot: U64
     val owner: InterfaceEvidenceOwner
@@ -1144,6 +1156,8 @@ pub struct Comp {
     // Provenance prefix only: not yet the admission/consumer receipt channel.
     pub mut val sourceTypeUses: SourceTypeUses = <SourceTypeUses />
     mut val preparedExistentialBoxes: Array[PreparedExistentialBox] = []
+    mut val existentialWitnessInterfaces: Array[ExistentialWitnessInterface] = []
+    mut val existentialWitnessInterfaceIndex: Dictionary[U64, Dictionary[U64, U64]] = [:]
     mut val sourceExistentialInterfaces: Array[SourceExistentialInterface] = []
     mut val sourceExistentialInterfaceIndex: Dictionary[U64, U64] = [:]
     mut val boundExistentialInterfaces: Array[BoundExistentialInterface] = []
@@ -2039,6 +2053,7 @@ part ./SourceFacts
 part ./Parser/Decl
 part ./Codegen/Existentials
 part ./Codegen/ExistentialInterfaces
+part ./Codegen/Mono/ExistentialWitnesses
 part ./Codegen/Arc
 part ./Codegen/Emit
 part ./Codegen/Resolve

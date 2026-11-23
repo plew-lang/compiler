@@ -1,0 +1,30 @@
+// Appended to Backend so the actual private endpoint preflight is exercised.
+fn expectEndpoint(reason: MidCallPreflight, expected: U64) {
+    val actual = match reason {
+        MidCallPreflight.None => 0U64,
+        MidCallPreflight.Callee => 1U64,
+        MidCallPreflight.Async => 2U64,
+        MidCallPreflight.Receiver => 3U64,
+        MidCallPreflight.ArgumentShape => 4U64,
+        _ => { panic("unexpected endpoint refusal") },
+    }
+    if actual != expected { panic("retained endpoint metadata lost its preflight check") }
+}
+fn main() {
+    val borrowPassing = <CallReceiverPassing.Borrow />
+    val inoutPassing = <CallReceiverPassing.Inout />
+    val valid = (slotCount: 2U64, isAsync: false, receiverPassing: borrowPassing, parameterCount: 1U64)
+    expectEndpoint(reason: LlvmCtx.midExistentialEndpointPreflight(slot: 1U64, metadata: valid, receiverPassing: borrowPassing, argumentCount: 1U64, parameterCount: 1U64, passingCount: 1U64), expected: 0U64)
+    expectEndpoint(reason: LlvmCtx.midExistentialEndpointPreflight(slot: 0U64, metadata: valid, receiverPassing: borrowPassing, argumentCount: 1U64, parameterCount: 1U64, passingCount: 1U64), expected: 1U64)
+    expectEndpoint(reason: LlvmCtx.midExistentialEndpointPreflight(slot: 3U64, metadata: valid, receiverPassing: borrowPassing, argumentCount: 1U64, parameterCount: 1U64, passingCount: 1U64), expected: 1U64)
+    expectEndpoint(reason: LlvmCtx.midExistentialEndpointPreflight(slot: 1U64, metadata: (slotCount: 0U64, isAsync: false, receiverPassing: borrowPassing, parameterCount: 1U64), receiverPassing: borrowPassing, argumentCount: 1U64, parameterCount: 1U64, passingCount: 1U64), expected: 1U64)
+    expectEndpoint(reason: LlvmCtx.midExistentialEndpointPreflight(slot: 1U64, metadata: (slotCount: 2U64, isAsync: true, receiverPassing: borrowPassing, parameterCount: 1U64), receiverPassing: borrowPassing, argumentCount: 1U64, parameterCount: 1U64, passingCount: 1U64), expected: 2U64)
+    expectEndpoint(reason: LlvmCtx.midExistentialEndpointPreflight(slot: 1U64, metadata: (slotCount: 2U64, isAsync: false, receiverPassing: inoutPassing, parameterCount: 1U64), receiverPassing: borrowPassing, argumentCount: 1U64, parameterCount: 1U64, passingCount: 1U64), expected: 3U64)
+    expectEndpoint(reason: LlvmCtx.midExistentialEndpointPreflight(slot: 1U64, metadata: valid, receiverPassing: <CallReceiverPassing.Move />, argumentCount: 1U64, parameterCount: 1U64, passingCount: 1U64), expected: 3U64)
+    expectEndpoint(reason: LlvmCtx.midExistentialEndpointPreflight(slot: 1U64, metadata: (slotCount: 2U64, isAsync: false, receiverPassing: borrowPassing, parameterCount: 2U64), receiverPassing: borrowPassing, argumentCount: 1U64, parameterCount: 1U64, passingCount: 1U64), expected: 4U64)
+    expectEndpoint(reason: LlvmCtx.midExistentialEndpointPreflight(slot: 1U64, metadata: valid, receiverPassing: borrowPassing, argumentCount: 0U64, parameterCount: 1U64, passingCount: 1U64), expected: 4U64)
+    expectEndpoint(reason: LlvmCtx.midExistentialEndpointPreflight(slot: 1U64, metadata: valid, receiverPassing: borrowPassing, argumentCount: 1U64, parameterCount: 0U64, passingCount: 1U64), expected: 4U64)
+    expectEndpoint(reason: LlvmCtx.midExistentialEndpointPreflight(slot: 1U64, metadata: valid, receiverPassing: borrowPassing, argumentCount: 1U64, parameterCount: 1U64, passingCount: 0U64), expected: 4U64)
+    expectEndpoint(reason: LlvmCtx.midExistentialEndpointPreflight(slot: 2U64, metadata: (slotCount: 2U64, isAsync: false, receiverPassing: inoutPassing, parameterCount: 0U64), receiverPassing: inoutPassing, argumentCount: 0U64, parameterCount: 0U64, passingCount: 0U64), expected: 0U64)
+    eprint(text: "retained endpoint metadata preflight controls\n")
+}

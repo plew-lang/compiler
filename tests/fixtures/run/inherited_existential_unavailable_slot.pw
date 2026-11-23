@@ -1,0 +1,11 @@
+use @Std/Io only { print }
+trait Parent { fn same(other: Self) -> Bool fn get() -> I64 }
+trait Child: Parent {}
+struct Shelf {}
+pub impl Shelf { factory }
+pub impl Shelf as Parent {
+    fn same(other: Self) -> Bool { return true }
+    fn get() -> I64 { return 47I64 }
+}
+pub impl Shelf as Child {}
+fn main() { val shelf: any Child = <Shelf /> print(shelf.get()) }

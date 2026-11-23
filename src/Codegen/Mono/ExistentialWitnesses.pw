@@ -1,0 +1,67 @@
+// Concrete witness interpretation consumes the declaration-owned interface.
+// Public interface recipes and the payload's selected proofs remain separate.
+impl Comp {
+    inout fn existentialWitnessInterface(evidence: ExistentialBoxEvidence) -> Result[U64, CompileDiagnostic] {
+        try self.checkAuthoredSignatureAdmissionOutcome()
+        match self.existentialWitnessInterfaceIndex.get(key: evidence.sourceRef) {
+            Optional.Some(v: val targets) => {
+                match targets.get(key: evidence.targetRef) {
+                    Optional.Some(v: val index) => {
+                        val saved = self.existentialWitnessInterfaces[index].evidence
+                        if saved.traitIdx != evidence.traitIdx || !self.sameStaticConformanceProof(a: saved.proof, b: evidence.proof) { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "existential interface changed its selected payload proof", failureDomain: <FailureDomain.Internal />) /> }
+                        return <Result.Ok value=index />
+                    }
+                    Optional.None => {}
+                }
+            }
+            Optional.None => {}
+        }
+        try self.checkConversionProofEvidence(proof: <ValueConversionProof.ExistentialBox sourceRef=evidence.sourceRef targetRef=evidence.targetRef traitIdx=evidence.traitIdx proof=evidence.proof />, offset: 0U64)
+        if !self.arena.typeIsClosed(ref: evidence.sourceRef) { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "concrete existential witnesses require a closed payload", failureDomain: <FailureDomain.Input />) /> }
+        val bound = try self.boundExistentialInterface(target: evidence.targetRef, receiver: evidence.sourceRef, offset: 0U64)
+        val source = self.boundExistentialInterfaces[bound].source
+        if self.sourceExistentialInterfaces[source].traitIndex != evidence.traitIdx { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "existential payload proof has a different interface root", failureDomain: <FailureDomain.Internal />) /> }
+        val interface = self.sourceExistentialInterfaces[source]
+        val ancestors = self.boundExistentialInterfaces[bound].ancestors
+        mut val proofs: Array[StaticConformanceProof] = []
+        for ancestor in ancestors { proofs.append(<StaticConformanceProof.Missing />) }
+        proofs[0U64] = evidence.proof
+        for position in interface.order {
+            if position == 0U64 { continue }
+            mut val retained = false
+            for edgeIndex in interface.ancestors[position].incoming {
+                val edge = interface.edges[edgeIndex]
+                val step = <SupertraitRef traitIndex=interface.ancestors[edge.source].traitIndex boundIndex=edge.clause />
+                val proof = match (try self.readSignatureSupertraitWitness(proof: proofs[edge.source], steps: [step], receiver: evidence.sourceRef, offset: ancestors[position].offset)) {
+                    Optional.Some(v: val proof) => proof,
+                    Optional.None => { return <Result.Err error=self.diagnosticAt(offset: ancestors[position].offset, msg: "existential ancestor has no retained concrete witness", failureDomain: <FailureDomain.Internal />) /> },
+                }
+                try self.checkRetainedWitnessClause(expected: ancestors[position], proof: proof, normalizations: [], offset: ancestors[position].offset)
+                if retained && !self.sameStaticConformanceProof(a: proofs[position], b: proof) { return <Result.Err error=self.diagnosticAt(offset: ancestors[position].offset, msg: "existential diamond has inconsistent selected witnesses", failureDomain: <FailureDomain.Internal />) /> }
+                proofs[position] = proof
+                retained = true
+            }
+            if !retained { return <Result.Err error=self.diagnosticAt(offset: ancestors[position].offset, msg: "existential ancestor lost its declaration edge", failureDomain: <FailureDomain.Internal />) /> }
+            // Separate symbolic nodes may identify the same instance at this
+            // target. A candidate alias cannot hide different payload proofs.
+            for prior in 0U64..<proofs.count() {
+                if self.sameTraitConstraint(a: ancestors[prior].constraint, b: ancestors[position].constraint) && !self.proofIsMissing(proof: proofs[prior]) && !self.sameStaticConformanceProof(a: proofs[prior], b: proofs[position]) { return <Result.Err error=self.diagnosticAt(offset: ancestors[position].offset, msg: "coincident existential ancestors have inconsistent selected witnesses", failureDomain: <FailureDomain.Internal />) /> }
+            }
+        }
+        val index = self.existentialWitnessInterfaces.count()
+        self.existentialWitnessInterfaces.append(<ExistentialWitnessInterface evidence=evidence bound=bound proofs=proofs />)
+        mut val targets: Dictionary[U64, U64] = self.existentialWitnessInterfaceIndex.getOr(key: evidence.sourceRef, fallback: [:])
+        targets[evidence.targetRef] = index
+        self.existentialWitnessInterfaceIndex[evidence.sourceRef] = targets
+        return <Result.Ok value=index />
+    }
+
+    inout fn existentialMemberProof(evidence: ExistentialBoxEvidence, requirement: U64) -> Result[StaticConformanceProof, CompileDiagnostic] {
+        val witnesses = try self.existentialWitnessInterface(evidence: evidence)
+        val bound = self.existentialWitnessInterfaces[witnesses].bound
+        val source = self.boundExistentialInterfaces[bound].source
+        if requirement >= self.sourceExistentialInterfaces[source].members.count() { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "existential witness has an invalid effective slot", failureDomain: <FailureDomain.Input />) /> }
+        val ancestor = self.sourceExistentialInterfaces[source].members[requirement].ancestor
+        return <Result.Ok value=self.existentialWitnessInterfaces[witnesses].proofs[ancestor] />
+    }
+}

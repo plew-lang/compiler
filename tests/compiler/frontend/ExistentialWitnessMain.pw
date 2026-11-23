@@ -1,0 +1,124 @@
+// Appended to an exact Frontend snapshot, preserving private product APIs.
+fn expectInterfaceRefusal[T](result: Result[T, CompileDiagnostic]) {
+    match result {
+        Result.Err(error: val diagnostic) => { match diagnostic.failureDomain() { FailureDomain.Source => { panic("private metadata fault acquired source authority") } _ => {} } }
+        Result.Ok(value: _) => { panic("invalid interface metadata was accepted") }
+    }
+}
+fn checkFinalDispatchMetadata() {
+    mut val compiler = <Comp />
+    match analyzeFrontend(c: inout compiler, input: <FrontendInput.File path="tests/fixtures/run/index_inherited_existential_requirement.pw" />, sources: <SourceAccess stdRoot="std/".bytes() />) {
+        Result.Ok(value: _) => {}
+        Result.Err(error: val diagnostic) => { panic(diagnostic.message()) }
+    }
+    mut val descriptors = 0U64
+    for index in 0U64..<compiler.arena.finalExistentials.count() {
+        val saved = compiler.arena.finalExistentials[index]
+        val count = compiler.finalExistentialMemberCount(resolutionIndex: index).unwrap()
+        if count != 1U64 { panic("final dispatch descriptor lost its effective inherited slot") }
+        compiler.arena.finalExistentials.set(i: index, value: <FinalExistentialResolution sourceRef=saved.sourceRef targetRef=saved.targetRef traitIdx=saved.traitIdx proof=saved.proof members=[] />)
+        expectInterfaceRefusal(result: compiler.finalExistentialMemberCount(resolutionIndex: index))
+        compiler.arena.finalExistentials.set(i: index, value: <FinalExistentialResolution sourceRef=saved.sourceRef targetRef=saved.sourceRef traitIdx=saved.traitIdx proof=saved.proof members=saved.members />)
+        expectInterfaceRefusal(result: compiler.finalExistentialMemberCount(resolutionIndex: index))
+        compiler.arena.finalExistentials.set(i: index, value: saved)
+        descriptors += 1U64
+    }
+    mut val calls = 0U64
+    for index in 0U64..<compiler.arena.finalCalleeCount() {
+        val row = compiler.arena.finalCalleeAt(index: index)
+        match row.target {
+            CallTarget.ExistentialRequirement(traitIdx: val trait, slot: val slot) => {
+                val metadata = compiler.finalInterfaceCallMetadata(resolution: row).unwrap()
+                if metadata.slotCount != 1U64 || metadata.isAsync || metadata.parameterCount != 1U64 { panic("final call changed its inherited endpoint metadata") }
+                match metadata.receiverPassing { CallReceiverPassing.Borrow => {} _ => { panic("final call changed its borrowed receiver contract") } }
+                expectInterfaceRefusal(result: compiler.finalInterfaceCallMetadata(resolution: <CallResolution bodyId=row.bodyId + 1U64 exprId=row.exprId siteKey=row.siteKey callee=row.callee recvTypeRef=row.recvTypeRef target=row.target interfaceEvidence=row.interfaceEvidence />))
+                expectInterfaceRefusal(result: compiler.finalInterfaceCallMetadata(resolution: <CallResolution bodyId=row.bodyId exprId=row.exprId siteKey=row.siteKey callee=row.callee recvTypeRef=0U64 target=row.target interfaceEvidence=row.interfaceEvidence />))
+                expectInterfaceRefusal(result: compiler.finalInterfaceCallMetadata(resolution: <CallResolution bodyId=row.bodyId exprId=row.exprId siteKey=row.siteKey callee=row.callee recvTypeRef=row.recvTypeRef target=<CallTarget.ExistentialRequirement traitIdx=trait slot=slot + 1U64 /> interfaceEvidence=row.interfaceEvidence />))
+                expectInterfaceRefusal(result: compiler.finalInterfaceCallMetadata(resolution: <CallResolution bodyId=row.bodyId exprId=row.exprId siteKey=row.siteKey callee=row.callee recvTypeRef=row.recvTypeRef target=row.target interfaceEvidence=0U64 />))
+                val cell = compiler.interfaceCalls[row.interfaceEvidence - 1U64]
+                val saved = cell->evidence
+                for fault in 0U64..<4U64 {
+                    val changed = <InterfaceCallEvidence interface=(if fault == 0U64 { give compiler.sourceExistentialInterfaces.count() } else { give saved.interface }) isAsync=(fault == 1U64) receiverPassing=(if fault == 2U64 { give <CallReceiverPassing.Inout /> } else { give saved.receiverPassing }) parameterCount=(if fault == 3U64 { give saved.parameterCount + 1U64 } else { give saved.parameterCount }) sourceRoot=saved.sourceRoot instanceRoot=saved.instanceRoot owner=saved.owner receiver=saved.receiver traitIndex=saved.traitIndex slot=saved.slot bounds=saved.bounds proofs=saved.proofs />
+                    compiler.interfaceCalls[row.interfaceEvidence - 1U64] = <Ref value=<InterfaceCallEvidenceCell evidence=changed /> />
+                    if fault == 0U64 { expectInterfaceRefusal(result: compiler.finalInterfaceCallMetadata(resolution: row)) }
+                    else {
+                        val read = compiler.finalInterfaceCallMetadata(resolution: row).unwrap()
+                        if fault == 1U64 && !read.isAsync { panic("async preflight metadata fell back to the declaration") }
+                        if fault == 2U64 { match read.receiverPassing { CallReceiverPassing.Inout => {} _ => { panic("receiver preflight metadata was discarded") } } }
+                        if fault == 3U64 && read.parameterCount != 2U64 { panic("argument preflight metadata was discarded") }
+                    }
+                    compiler.interfaceCalls[row.interfaceEvidence - 1U64] = cell
+                }
+                calls += 1U64
+            }
+            _ => {}
+        }
+    }
+    if descriptors == 0U64 || calls == 0U64 { panic("final dispatch control did not reach a descriptor and call") }
+    eprint(text: "final inherited endpoint identity and metadata faults checked\n")
+}
+fn main() {
+    val names: Array[String] = ["index_existential_requirement", "index_inherited_existential_requirement", "inherited_existential_diamond", "inherited_existential_generic", "inherited_existential_assoc_order", "inherited_existential_converging", "inherited_existential_late_binding", "inherited_existential_converging_bindings", "inherited_existential_unavailable_slot", "inherited_existential_self_result", "inherited_existential_inout", "inherited_existential_generic_erasure"]
+    for name in names {
+        mut val compiler = <Comp />
+        analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.File path="tests/fixtures/run/" + name + ".pw" />, sources: <SourceAccess stdRoot="std/".bytes() />).unwrap()
+        val mainName = compiler.internBytes(s: "main")
+        val function = compiler.arena.firstFunctionNamed(nameId: mainName.nameId)
+        val module = compiler.moduleOf(offset: compiler.arena.functionAt(index: function).defOffset)
+        for index in 0U64..<compiler.arena.functionCount() {
+            val declaration = compiler.arena.functionAt(index: index)
+            if compiler.moduleOf(offset: declaration.defOffset) == module && declaration.body != 0U64 { compiler.prepareLexicalBody(fnIdx: index).unwrap() }
+        }
+        compiler.cur.checkFn = function
+        mut val target = 0U64
+        for statement in compiler.arena.stmts {
+            match statement {
+                Stmt.Let(mutable: _, nameStart: val start, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: val type, init: _, annotationOccurrence: _) => {
+                    if type != 0U64 && compiler.moduleOf(offset: start) == module && compiler.arena.typeTermAt(index: type).isAny { target = type break }
+                }
+                _ => {}
+            }
+        }
+        val shelf = compiler.internBytes(s: if name == "inherited_existential_converging" || name == "inherited_existential_late_binding" || name == "inherited_existential_converging_bindings" { give "Payload" } else { give "Shelf" })
+        mut val receiver = 0U64
+        for type in 1U64..<compiler.arena.typeCount() {
+            val term = compiler.arena.typeTermAt(index: type)
+            if term.hasDecl && !term.isAny && term.paramId == 0U64 && term.nameId == shelf.nameId && compiler.moduleOf(offset: term.declOffset) == module { receiver = type break }
+        }
+        if target == 0U64 || receiver == 0U64 { panic("witness fixture lost its admitted concrete/existential types") }
+        val evidence = match compiler.callArgumentConversion(sourceRef: receiver, targetRef: target).unwrap() {
+            ValueConversionProof.ExistentialBox(sourceRef: val source, targetRef: val target, traitIdx: val root, proof: val proof) => <ExistentialBoxEvidence sourceRef=source targetRef=target traitIdx=root proof=proof />,
+            _ => { panic("fixture did not produce its selected box evidence") },
+        }
+        val prepared = match compiler.prepareExistentialBox(evidence: evidence) {
+            Result.Ok(value: val prepared) => prepared,
+            Result.Err(error: val diagnostic) => { panic(diagnostic.message()) },
+        }
+        val expectedMembers = if name == "inherited_existential_converging" || name == "inherited_existential_converging_bindings" || name == "inherited_existential_unavailable_slot" || name == "inherited_existential_self_result" { give 2U64 } else { give 1U64 }
+        if compiler.preparedExistentialBoxes[prepared].members.count() != expectedMembers { panic("prepared box omitted its inherited effective witness slot") }
+        val interface = compiler.sourceExistentialInterface(traitIndex: evidence.traitIdx).unwrap()
+        for slot in 0U64..<expectedMembers {
+            if name == "inherited_existential_unavailable_slot" && slot == 0U64 {
+                if !compiler.preparedExistentialBoxes[prepared].members[slot].isNone() { panic("nonreceiver Self input gained a witness slot") }
+                continue
+            }
+            val member = compiler.preparedExistentialBoxes[prepared].members[slot].unwrap()
+            val source = compiler.sourceExistentialInterfaces[interface].members[slot]
+            val original = compiler.authoredRequirementViews[source.signature].source
+            val bound = compiler.staticProofBound(proof: member.environment.proof, traitIdx: original.traitIndex).unwrap()
+            if bound.subject == 0U64 || bound.constraint.key.owner != compiler.decls.traitAt(index: original.traitIndex).nameStart { panic("implementation environment retained the root instead of its parent proof") }
+            if !compiler.sameStaticConformanceProof(a: member.implementation.proof, b: member.environment.proof) { panic("implementation proof changed before body environment construction") }
+            compiler.checkExistentialWitnessSignature(plan: member.plan, implementation: member.implementation, evidence: evidence).unwrap()
+        }
+        val witnessCount = compiler.existentialWitnessInterfaces.count()
+        if compiler.prepareExistentialBox(evidence: evidence).unwrap() != prepared || compiler.existentialWitnessInterfaces.count() != witnessCount { panic("repeated boxing rebuilt its retained witness graph") }
+        val held = compiler.diagnosticAt(offset: 0U64, msg: "held witness admission failure", failureDomain: <FailureDomain.Internal />)
+        compiler.authoredSignatureAdmission = <AuthoredSignatureAdmissionPhase.Failed diagnostic=held />
+        match compiler.prepareExistentialBox(evidence: evidence) {
+            Result.Err(error: val diagnostic) => { if diagnostic.message() != held.message() { panic("prepared witness cache changed the saved admission failure") } }
+            Result.Ok(value: _) => { panic("prepared witness cache bypassed failed admission") }
+        }
+        eprint(text: name + " concrete witness retained\n")
+    }
+    checkFinalDispatchMetadata()
+}

@@ -2584,6 +2584,9 @@ pub impl FinalMatchResolution { factory }
 pub struct ExistentialImplementation {
     pub val function: U64
     pub val arguments: Array[U64]
+    // The selected implementation belongs to the original ancestor trait,
+    // not necessarily to the root existential interface.
+    pub val proof: StaticConformanceProof
 }
 pub impl ExistentialImplementation { factory }
 
