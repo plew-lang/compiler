@@ -63,6 +63,16 @@ pub enum DiagnosticLocation {
     File(path: String, line: I64)
 }
 
+pub impl DiagnosticLocation {
+    fn same(other: DiagnosticLocation) -> Bool {
+        return match self {
+            DiagnosticLocation.Unpositioned => match other { DiagnosticLocation.Unpositioned => true _ => false }
+            DiagnosticLocation.Line(line: val line) => match other { DiagnosticLocation.Line(line: val other) => line == other _ => false }
+            DiagnosticLocation.File(path: val path, line: val line) => match other { DiagnosticLocation.File(path: val otherPath, line: val otherLine) => path == otherPath && line == otherLine _ => false }
+        }
+    }
+}
+
 pub enum DiagnosticSeverity { Error Warning }
 
 // The producer owns this classification. Message text and severity alone do
@@ -220,7 +230,28 @@ pub impl UniqueCaptureRefusal {
     fn location() -> DiagnosticLocation { return self.location }
 }
 
+pub enum FreeCallAmbiguityKind { VisibleDeclarations NumericLiteralOverloads }
+pub impl FreeCallAmbiguityKind {
+    fn message() -> String {
+        return match self {
+            FreeCallAmbiguityKind.VisibleDeclarations => "ambiguous call: multiple visible function declarations match the argument labels and types"
+            FreeCallAmbiguityKind.NumericLiteralOverloads => numericOverloadAmbiguityMessage()
+        }
+    }
+    fn same(other: FreeCallAmbiguityKind) -> Bool {
+        return match self {
+            FreeCallAmbiguityKind.VisibleDeclarations => match other { FreeCallAmbiguityKind.VisibleDeclarations => true _ => false }
+            FreeCallAmbiguityKind.NumericLiteralOverloads => match other { FreeCallAmbiguityKind.NumericLiteralOverloads => true _ => false }
+        }
+    }
+}
+
+fn numericOverloadAmbiguityMessage() -> String {
+    return "ambiguous call: an unsuffixed integer literal matches more than one overload; add a type suffix (e.g. `5I32`)"
+}
+
 pub struct FreeCallAmbiguityRefusal {
+    val kind: FreeCallAmbiguityKind = <FreeCallAmbiguityKind.VisibleDeclarations />
     val session: U64
     val owner: DiagnosticOwner
     val expression: U64
@@ -232,6 +263,7 @@ pub struct FreeCallAmbiguityRefusal {
 }
 pub impl FreeCallAmbiguityRefusal {
     factory
+    fn kind() -> FreeCallAmbiguityKind { return self.kind }
     fn session() -> U64 { return self.session }
     fn owner() -> DiagnosticOwner { return self.owner }
     fn expression() -> U64 { return self.expression }
@@ -242,7 +274,7 @@ pub impl FreeCallAmbiguityRefusal {
     fn location() -> DiagnosticLocation { return self.location }
 }
 
-pub enum MemberCallAmbiguityKind { StaticInstances ExistentialRequirements ActiveViews MethodOverloads AssociatedReceiverPatterns }
+pub enum MemberCallAmbiguityKind { StaticInstances ExistentialRequirements ActiveViews MethodOverloads AssociatedReceiverPatterns NumericLiteralOverloads }
 pub impl MemberCallAmbiguityKind {
     fn message() -> String {
         return match self {
@@ -251,6 +283,7 @@ pub impl MemberCallAmbiguityKind {
             MemberCallAmbiguityKind.ActiveViews => "ambiguous source-qualified call: active views provide multiple matching methods"
             MemberCallAmbiguityKind.MethodOverloads => "ambiguous call: multiple method declarations match the argument labels and types"
             MemberCallAmbiguityKind.AssociatedReceiverPatterns => "ambiguous associated call: this type qualifier matches more than one receiver pattern"
+            MemberCallAmbiguityKind.NumericLiteralOverloads => numericOverloadAmbiguityMessage()
         }
     }
     fn same(other: MemberCallAmbiguityKind) -> Bool {
@@ -260,6 +293,7 @@ pub impl MemberCallAmbiguityKind {
             MemberCallAmbiguityKind.ActiveViews => match other { MemberCallAmbiguityKind.ActiveViews => true _ => false }
             MemberCallAmbiguityKind.MethodOverloads => match other { MemberCallAmbiguityKind.MethodOverloads => true _ => false }
             MemberCallAmbiguityKind.AssociatedReceiverPatterns => match other { MemberCallAmbiguityKind.AssociatedReceiverPatterns => true _ => false }
+            MemberCallAmbiguityKind.NumericLiteralOverloads => match other { MemberCallAmbiguityKind.NumericLiteralOverloads => true _ => false }
         }
     }
 }
@@ -513,7 +547,7 @@ pub impl CompileDiagnostic {
             DiagnosticData.UniqueCapture(refusal: _) => "closure capture does not support unique, generic struct, or function-typed values"
             DiagnosticData.FreeCallVisibility(refusal: val refusal) => refusal.kind().message()
             DiagnosticData.NonCallableBinding(refusal: _) => "the selected value binding is not callable"
-            DiagnosticData.FreeCallAmbiguity(refusal: _) => "ambiguous call: multiple visible function declarations match the argument labels and types"
+            DiagnosticData.FreeCallAmbiguity(refusal: val refusal) => refusal.kind().message()
             DiagnosticData.MemberCallAmbiguity(refusal: val refusal) => refusal.kind().message()
             DiagnosticData.ArrayContext(refusal: _) => "cannot infer an empty array's element type from a non-array context (spec/02)"
             DiagnosticData.UseAfterMove(refusal: _) => "use of a value after it was moved (`move` transfers ownership away — the variable is dead; bind a fresh value to use it again) (spec/03)"

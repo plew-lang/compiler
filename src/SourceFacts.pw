@@ -1084,7 +1084,7 @@ pub impl Comp {
             DiagnosticOwner.Closure(expression: val expression) => semanticCompletionOwnersEqual(recorded: proof.owner, prepared: <SemanticCompletionOwner.Closure expression=expression />)
             DiagnosticOwner.Unknown => false
         }
-        if !ownerMatches || proof.nameStart != refusal.nameStart() || proof.nameLen != refusal.nameLen() { return false }
+        if !proof.kind.same(other: refusal.kind()) || !proof.location.same(other: refusal.location()) || !ownerMatches || proof.nameStart != refusal.nameStart() || proof.nameLen != refusal.nameLen() { return false }
         val args = match self.arena.exprs[refusal.expression()] {
             Expr.Call(nameStart: val start, nameLen: val length, args: val args) => {
                 if start != refusal.nameStart() || length != refusal.nameLen() { return false }
@@ -1118,7 +1118,7 @@ pub impl Comp {
             DiagnosticOwner.Closure(expression: val expression) => semanticCompletionOwnersEqual(recorded: proof.owner, prepared: <SemanticCompletionOwner.Closure expression=expression />)
             DiagnosticOwner.Unknown => false
         }
-        if !proof.kind.same(other: refusal.kind()) || proof.receiverRef != refusal.receiverRef() || !ownerMatches || proof.nameStart != refusal.nameStart() || proof.nameLen != refusal.nameLen() { return false }
+        if !proof.kind.same(other: refusal.kind()) || !proof.location.same(other: refusal.location()) || proof.receiverRef != refusal.receiverRef() || !ownerMatches || proof.nameStart != refusal.nameStart() || proof.nameLen != refusal.nameLen() { return false }
         val args = match self.arena.exprs[refusal.expression()] {
             Expr.Method(recv: val receiver, nameStart: val start, nameLen: val length, args: val args) => {
                 if receiver != proof.receiver || proof.source.isSome() || start != refusal.nameStart() || length != refusal.nameLen() { return false }

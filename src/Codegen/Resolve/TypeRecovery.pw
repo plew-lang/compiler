@@ -373,22 +373,42 @@ pub impl Comp {
         return <Result.Ok value=false />
     }
 
-    // Loudly reject (exits) when the two type-matching overloads `a`/`b` are
-    // ambiguous for this call — picking the first silently would invent meaning
-    // (spec: 補完はする／忖度はしない／曖昧はエラー).
-    inout fn checkOverloadAmbiguity(a: U64, b: U64, args: ArgRange) -> Result[(), CompileDiagnostic] {
+}
+
+impl Comp {
+    // One semantic ambiguity decision; consumers choose raw or owned reporting.
+    inout fn numericOverloadAmbiguityOffset(a: U64, b: U64, args: ArgRange) -> Result[Optional[U64], CompileDiagnostic] {
         if b != self.arena.functionCount() {
             if (try self.overloadsAmbiguous(fa: self.arena.functionAt(index: a), fb: self.arena.functionAt(index: b), args: args)) {
-                mut val off: U64 = 0
-                if args.len > 0 {
-                    off = self.exprOffset(id: self.argAt(args: args, index: 0U64).expr)
-                }
-                return <Result.Err error=self.diagnosticAt(offset: off, msg: "ambiguous call: an unsuffixed integer literal matches more than one overload; add a type suffix (e.g. `5I32`)") />
+                val offset = if args.len > 0U64 { give self.exprOffset(id: self.argAt(args: args, index: 0U64).expr) } else { give 0U64 }
+                return <Result.Ok value=<Optional.Some v=offset /> />
             }
         }
+        return <Result.Ok value=<Optional.None /> />
+    }
+
+}
+
+pub impl Comp {
+    // Public/raw and synthetic observation has no source-origin authority.
+    inout fn checkOverloadAmbiguity(a: U64, b: U64, args: ArgRange) -> Result[(), CompileDiagnostic] {
+        val offset = try self.numericOverloadAmbiguityOffset(a: a, b: b, args: args)
+        if offset.isSome() { return <Result.Err error=self.diagnosticAt(offset: offset.unwrap(), msg: <FreeCallAmbiguityKind.NumericLiteralOverloads />.message()) /> }
         return <Result.Ok value=() />
     }
 
+}
+
+impl Comp {
+    inout fn checkMethodOverloadAmbiguity(a: U64, b: U64, args: ArgRange, receiverRef: U64, nameStart: U64, nameLen: U64, methodOrigin: MethodLookupOrigin) -> Result[(), CompileDiagnostic] {
+        val offset = try self.numericOverloadAmbiguityOffset(a: a, b: b, args: args)
+        if offset.isSome() { return <Result.Err error=self.memberCallAmbiguityDiagnostic(kind: <MemberCallAmbiguityKind.NumericLiteralOverloads />, receiverRef: receiverRef, nameStart: nameStart, nameLen: nameLen, args: args, methodOrigin: methodOrigin, diagnosticOffset: <Optional.Some v=offset.unwrap() />) /> }
+        return <Result.Ok value=() />
+    }
+
+}
+
+pub impl Comp {
     // Does some arm cover the variant (variantStart,variantLen)? A wildcard arm
     // covers everything.
     inout fn armCovers(arms: MatchArmRange, variantStart: U64, variantLen: U64) -> Bool {

@@ -629,3 +629,5 @@ Internal; symbolic terms stay on the existing readiness path. The generic public
 fixture's associated projection is asserted in a real StaticMethod.Provided
 saved argument before full frontend checking. Fixture/std/dependency and support
 input hashes accompany the exact source snapshot.
+
+`FreeCallAmbiguityFailureDomains.pw` and `StaticMemberAmbiguityFailureDomains.pw` have exact `.out` goldens for manual native checking of retained negative selection. They preserve ordinary free/static/associated ambiguity and add numeric free/member/extension-view controls. Require exit0, exact golden and empty stderr. The assertions cover original operand locations, kind/path/line and owner/session/argument mutations, Raw versus owned adapters, synthetic origins, retries/drains and absence of successful parent result/callee publication. The malformed-cast query Report passthrough is distinct from the equal-text Internal observer control. Public rejection fixtures are discovered separately by the normal/ASan profiles.

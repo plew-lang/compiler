@@ -302,13 +302,15 @@ pub impl Comp {
         return match (try self.selectFreeFunction(nameStart: nameStart, nameLen: nameLen, args: args)) {
             FreeFunctionSelection.Selected(function: val function) | FreeFunctionSelection.DiagnosticCandidate(function: val function) => <Result.Ok value=function />
             FreeFunctionSelection.NoCandidate => <Result.Ok value=self.arena.functionCount() />
-            FreeFunctionSelection.AmbiguousVisibleDeclarations => <Result.Err error=self.diagnosticAt(offset: nameStart, msg: "ambiguous call: multiple visible function declarations match the argument labels and types") />
+            FreeFunctionSelection.AmbiguousVisibleDeclarations => <Result.Err error=self.diagnosticAt(offset: nameStart, msg: <FreeCallAmbiguityKind.VisibleDeclarations />.message()) />
+            FreeFunctionSelection.AmbiguousNumericOverloads(offset: val offset) => <Result.Err error=self.diagnosticAt(offset: offset, msg: <FreeCallAmbiguityKind.NumericLiteralOverloads />.message()) />
         }
     }
 }
 
 impl Comp {
-    inout fn freeCallAmbiguityDiagnostic(expression: U64, nameStart: U64, nameLen: U64, args: ArgRange) -> CompileDiagnostic {
+    inout fn freeCallAmbiguityDiagnostic(kind: FreeCallAmbiguityKind, expression: U64, nameStart: U64, nameLen: U64, args: ArgRange, offset: U64) -> CompileDiagnostic {
+        val location = self.diagnosticLocationAt(offset: offset)
         val current = self.currentSourceOwner()
         val owner: DiagnosticOwner = match current {
             Optional.Some(v: val owner) => match owner {
@@ -325,13 +327,13 @@ impl Comp {
                     if self.sourceFacts.isActive(owner: owner) {
                         mut val written: Array[Arg] = []
                         for index in 0U64..<args.len { written.append(self.argAt(args: args, index: index)) }
-                        self.failedFreeCallAmbiguities[expression] = (owner: owner, nameStart: nameStart, nameLen: nameLen, arguments: written)
+                        self.failedFreeCallAmbiguities[expression] = (kind: kind, location: location, owner: owner, nameStart: nameStart, nameLen: nameLen, arguments: written)
                     }
                 }
                 Optional.None => {}
             }
         }
-        return <CompileDiagnostic.freeCallAmbiguity refusal=<FreeCallAmbiguityRefusal session=self.sourceFactSession() owner=owner expression=expression nameStart=nameStart nameLen=nameLen argumentsStart=args.start argumentsCount=args.len location=self.diagnosticLocationAt(offset: nameStart) /> />
+        return <CompileDiagnostic.freeCallAmbiguity refusal=<FreeCallAmbiguityRefusal kind=kind session=self.sourceFactSession() owner=owner expression=expression nameStart=nameStart nameLen=nameLen argumentsStart=args.start argumentsCount=args.len location=location /> />
     }
 
     inout fn selectFreeFunction(nameStart: U64, nameLen: U64, args: ArgRange) -> Result[FreeFunctionSelection, CompileDiagnostic] {
@@ -354,7 +356,8 @@ impl Comp {
             i += 1U64
         }
         if typeMatch != self.arena.functionCount() {
-            try self.checkOverloadAmbiguity(a: typeMatch, b: typeMatch2, args: args)
+            val ambiguity = try self.numericOverloadAmbiguityOffset(a: typeMatch, b: typeMatch2, args: args)
+            if ambiguity.isSome() { return <Result.Ok value=<FreeFunctionSelection.AmbiguousNumericOverloads offset=ambiguity.unwrap() /> /> }
             if typeMatch2 != self.arena.functionCount() {
                 return <Result.Ok value=<FreeFunctionSelection.AmbiguousVisibleDeclarations /> />
             }
@@ -584,7 +587,7 @@ impl Comp {
         // the same selector.  The provided copy remains registered so `#Trait`
         // can select it; only bare lookup gives the inherent surface priority.
         if inherentMatch != self.arena.functionCount() {
-            try self.checkOverloadAmbiguity(a: inherentMatch, b: inherentMatch2, args: args)
+            try self.checkMethodOverloadAmbiguity(a: inherentMatch, b: inherentMatch2, args: args, receiverRef: recvRef, nameStart: nameStart, nameLen: nameLen, methodOrigin: methodOrigin)
             if inherentMatch2 != self.arena.functionCount() {
                 return <Result.Err error=self.memberCallAmbiguityDiagnostic(kind: <MemberCallAmbiguityKind.MethodOverloads />, receiverRef: recvRef, nameStart: nameStart, nameLen: nameLen, args: args, methodOrigin: methodOrigin) />
             }
@@ -606,7 +609,7 @@ impl Comp {
                     }
                 }
             }
-            try self.checkOverloadAmbiguity(a: typeMatch, b: typeMatch2, args: args)
+            try self.checkMethodOverloadAmbiguity(a: typeMatch, b: typeMatch2, args: args, receiverRef: recvRef, nameStart: nameStart, nameLen: nameLen, methodOrigin: methodOrigin)
             return <Result.Ok value=<MemberCallLookup.Selected function=typeMatch /> />
         }
         if !typeMatchOnly && firstLabel != self.arena.functionCount() {
@@ -969,7 +972,7 @@ impl Comp {
                 i = self.decls.nextCallableNamed(index: i)
             }
             if typeMatch != self.arena.functionCount() {
-                try self.checkOverloadAmbiguity(a: typeMatch, b: typeMatch2, args: args)
+                try self.checkMethodOverloadAmbiguity(a: typeMatch, b: typeMatch2, args: args, receiverRef: recvRef, nameStart: nameStart, nameLen: nameLen, methodOrigin: methodOrigin)
                 if typeMatch2 != self.arena.functionCount() {
                     if typeMatchEntry < self.decls.callableCount() && typeMatch2Entry < self.decls.callableCount() {
                         return <Result.Err error=self.memberCallAmbiguityDiagnostic(kind: self.memberCandidateAmbiguityKind(a: self.decls.callableAt(index: typeMatchEntry), b: self.decls.callableAt(index: typeMatch2Entry)), receiverRef: recvRef, nameStart: nameStart, nameLen: nameLen, args: args, methodOrigin: methodOrigin) />
@@ -1243,7 +1246,7 @@ impl Comp {
             if typeMatch2 != self.arena.functionCount() {
                 return <Result.Err error=self.memberCallAmbiguityDiagnostic(kind: <MemberCallAmbiguityKind.AssociatedReceiverPatterns />, receiverRef: recvRef, nameStart: nameStart, nameLen: nameLen, args: args, methodOrigin: methodOrigin) />
             }
-            try self.checkOverloadAmbiguity(a: typeMatch, b: typeMatch2, args: args)
+            try self.checkMethodOverloadAmbiguity(a: typeMatch, b: typeMatch2, args: args, receiverRef: recvRef, nameStart: nameStart, nameLen: nameLen, methodOrigin: methodOrigin)
             return <Result.Ok value=<MemberCallLookup.Selected function=typeMatch /> />
         }
         // A concrete trait-subject witness carries a trait source even on

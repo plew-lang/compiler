@@ -1,0 +1,8 @@
+struct Number {}
+extension Extra {
+ impl Number {
+    fn choose(value: I32) -> I64 { return 32I64 }
+    fn choose(value: I64) -> I64 { return 64I64 }
+ }
+}
+fn main() { <Number />#Extra.choose(value: if true { give 5 } else { give 6 }) }

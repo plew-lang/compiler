@@ -281,7 +281,8 @@ impl Comp {
             FreeFunctionSelection.Selected(function: val function) => <FreeCallLookup.Selected function=function />
             FreeFunctionSelection.DiagnosticCandidate(function: val function) => <FreeCallLookup.DiagnosticCandidate function=function />
             FreeFunctionSelection.NoCandidate => <FreeCallLookup.NoCandidate />
-            FreeFunctionSelection.AmbiguousVisibleDeclarations => { return <Result.Err error=self.freeCallAmbiguityDiagnostic(expression: id, nameStart: nameStart, nameLen: nameLen, args: args) /> }
+            FreeFunctionSelection.AmbiguousVisibleDeclarations => { return <Result.Err error=self.freeCallAmbiguityDiagnostic(kind: <FreeCallAmbiguityKind.VisibleDeclarations />, expression: id, nameStart: nameStart, nameLen: nameLen, args: args, offset: nameStart) /> }
+            FreeFunctionSelection.AmbiguousNumericOverloads(offset: val offset) => { return <Result.Err error=self.freeCallAmbiguityDiagnostic(kind: <FreeCallAmbiguityKind.NumericLiteralOverloads />, expression: id, nameStart: nameStart, nameLen: nameLen, args: args, offset: offset) /> }
         }
         // An incomplete probe is not a completed negative selection. Source
         // request failures retain their own outcome after recording instead.

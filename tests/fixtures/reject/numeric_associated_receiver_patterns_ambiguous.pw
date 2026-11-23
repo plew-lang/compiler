@@ -1,0 +1,6 @@
+struct Number {}
+impl Number {
+    assoc fn choose(value: I32) -> I64 { return 32I64 }
+    assoc fn choose(value: I64) -> I64 { return 64I64 }
+}
+fn main() { Number.choose(value: 5) }
