@@ -1,6 +1,6 @@
 ---
 id: met-tb7u
-status: open
+status: in_progress
 deps: []
 links: []
 created: 2026-11-23T06:42:31Z
@@ -18,3 +18,6 @@ Five whole-suite controls: numeric_block_overload_ambiguous, numeric_if_divergin
 
 Exact final candidate RED first, then direct/block/if/match, both declaration orders, diverging-first and generic ambiguity controls; free/member/associated and existing general ambiguity. Raw active-owner versus owned, synthetic/copied-span and session/owner/kind/selector/arguments/location mutation, retry/drain/cache and no successful result/template/closure publication. Preserve normal frontier/typed controls. Fresh gates, independent acceptance and parent whole remain required.
 
+## Exact final-candidate RED
+
+A76f2f9c fixed associated-candidate carrier reproduces all7fixtures/check-AOT-ORC21modes: status1/stdout empty/intended primary diagnostic/Unclassified, with unchanged source/expectation/carrier fingerprints. Full receipt is canonical meta phase3-contextual-operand-regression.json numeric_refusal_intake.red and scratch tmp/phase3-forward-frontier/numeric-refusal-red/results.json. Generic candidate substitutions ambiguity actually reports the unsuffixed numeric overload message, confirming assignment to met-tb7u. No product implementation or GREEN for these tasks yet.

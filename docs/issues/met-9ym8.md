@@ -18,3 +18,6 @@ Existing generic_numeric_rigid_caller rejects but remains Unclassified. Check/Ge
 
 Exact final candidate RED; caller rigid T, provided Self, Int and Float, real nested Array/block transit where reachable, and valid concrete expectations. Raw active-owner checks versus source-owned lazy/whole/eager, foreign session/owner, changed expected/operand/kind/location, synthetic with copied span, equal-text Internal, retry/drain/cache. No success publication. Fresh candidate targeted controls and independent acceptance; parent whole gate remains separate.
 
+## Exact final-candidate RED
+
+A76f2f9c fixed associated-candidate carrier reproduces all7fixtures/check-AOT-ORC21modes: status1/stdout empty/intended primary diagnostic/Unclassified, with unchanged source/expectation/carrier fingerprints. Full receipt is canonical meta phase3-contextual-operand-regression.json numeric_refusal_intake.red and scratch tmp/phase3-forward-frontier/numeric-refusal-red/results.json. Generic candidate substitutions ambiguity actually reports the unsuffixed numeric overload message, confirming assignment to met-tb7u. No product implementation or GREEN for these tasks yet.

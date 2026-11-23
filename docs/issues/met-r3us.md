@@ -18,3 +18,6 @@ Existing generic_numeric_argument_type_conflict correctly rejects but remains Un
 
 Exact final candidate RED; both direct typed-argument and prepared contextual inference paths, contradictory known bindings and legitimate independent/rigid callers. Raw and active-owner checker, equal-text Internal, synthetic, foreign owner/session, changed binder/operand/callee/args/location, retry/drain/cache. Actual lazy/whole/eager owning adapters; no new success fact/template/closure/callee result after rejection. Fresh affected gates and independent source/evidence review.
 
+## Exact final-candidate RED
+
+A76f2f9c fixed associated-candidate carrier reproduces all7fixtures/check-AOT-ORC21modes: status1/stdout empty/intended primary diagnostic/Unclassified, with unchanged source/expectation/carrier fingerprints. Full receipt is canonical meta phase3-contextual-operand-regression.json numeric_refusal_intake.red and scratch tmp/phase3-forward-frontier/numeric-refusal-red/results.json. Generic candidate substitutions ambiguity actually reports the unsuffixed numeric overload message, confirming assignment to met-tb7u. No product implementation or GREEN for these tasks yet.

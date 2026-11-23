@@ -1,6 +1,6 @@
 ---
 id: com-u22d
-status: in_progress
+status: closed
 deps: [met-bu94, met-qo60]
 links: []
 created: 2026-11-20T06:58:04Z
@@ -123,6 +123,10 @@ obligation. Follow
 
 ## Current parent acceptance boundary
 
-Met-bu94/met-qo60 are resolved on the source31241607 finite certificate with exact target/native/gen receipts and formal5c9627 (G2, immutable, median7.145550s/5runs). Additional a76f2f9c associated refusal classification is separately resolved by com-yeua childmet-1yd7: freshbuild27d1db, all63public modes and12-line native guard/genaea48a pass. Former3Unclassified modes were not counted as successes on312. Neutral contextual_parent_final_review found no remaining mandatory finite product repair; closure remains conditional on currenta76 formal0633ed input stability/fixedpoint/<=7.5 and this checkpoint synchronization. Formal312 does not certifya76.
+Met-bu94/met-qo60 are resolved on the source31241607 finite certificate with exact target/native/gen receipts and formal5c9627 (G2, immutable, median7.145550s/5runs). Additional a76f2f9c associated refusal classification is separately resolved by com-yeua childmet-1yd7: freshbuild27d1db, all63public modes and12-line native guard/genaea48a pass. Former3Unclassified modes were not counted as successes on312. Neutral contextual_parent_final_review found no remaining mandatory finite product repair; currenta76 formal0633ed has now completed with immutable inputs, generation2 fixedpoint/successor equality and median7.100693seconds (five times7.538927/7.147599/7.019827/7.097479/7.100693), meeting7.5. Final review reconciliation remains before status closure. Formal312 does not certifya76.
 
 Current whole normal remains314fail and has not been rerun on this final combined source. Com-yeua/engineering3 and main/seed/carrier promotion remain open; broader unresolved producer-domain tasks are not silently removed from this boundary. Canonical current status/product and all original failed receipts are retained in phase3-contextual-operand-regression.json.
+
+Current formal measured carrier79b999a7fe3cf2a5d1f52dfad1987e95561d4e6a5551b872933a4c2875d59e73 is at meta tmp/validation/20261123T063648-self-host-0633ed/self-host/generation-1/next/plewc. This is the exacta76 fixedpoint/performance result, not reuse of312 timing. Original formal7.525428 remains preserved.
+
+Closure reason: resolved within this finite parent. Neutral contextual_parent_final_review verified actual formal summary SHA, measured binary and successor hashes, G2 LLVM/runtime equality, unchanged inputs, all five times/median and updated canonical status/product. The two conditional closure items are satisfied; no mandatory product repair or unproved finite guarantee remains. Com-yeua/engineering3 normal314/ASan/final integration gates remain open.
