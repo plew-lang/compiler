@@ -18,6 +18,7 @@ impl Comp {
     }
 
     fn authoredIndexOperation(expression: U64, args: ArgRange) -> Optional[SourceIndexOperation] {
+        if expression >= self.arena.exprs.count() || expression >= self.arena.exprOriginSerial.count() { return <Optional.None /> }
         val siteIndex = self.syntheticCallSiteIndex(exprId: expression)
         if siteIndex >= self.decls.syntheticCallSites.count() { return <Optional.None /> }
         match self.decls.syntheticCallSites[siteIndex].kind {
@@ -60,8 +61,12 @@ impl Comp {
             SemanticCompletionOwner.Closure(expression: val closure) => <DiagnosticOwner.Closure expression=closure />
         }
         if !self.sourceExpressionHasOwner(session: request.session, expression: receiver, owner: diagnosticOwner) { return raw }
+        match self.sourceFacts.expressionOwners.get(key: expression) {
+            Optional.Some(v: _) => { if !self.sourceExpressionHasOwner(session: request.session, expression: expression, owner: diagnosticOwner) { return raw } }
+            Optional.None => {}
+        }
         val refusal = <IndexRequirementRefusal session=request.session owner=diagnosticOwner expression=expression event=self.failedIndexRequirements.count() location=location />
-        self.failedIndexRequirements.append(<SourceIndexRequirementFailure refusal=refusal root=request.root receiver=receiver receiverTerm=receiverTerm requiredOwner=requiredOwner traitIndex=traitIndex operation=operation />)
+        self.failedIndexRequirements.append(<SourceIndexRequirementFailure refusal=refusal root=request.root receiver=receiver receiverTerm=receiverTerm requiredOwner=requiredOwner traitIndex=traitIndex coreModule=self.modules.coreModule operation=operation />)
         return <CompileDiagnostic.indexRequirement refusal=refusal />
     }
 
@@ -70,8 +75,12 @@ impl Comp {
         val proof = self.failedIndexRequirements[refusal.event()]
         val original = proof.refusal
         if original.session() != refusal.session() || original.expression() != refusal.expression() || original.event() != refusal.event() || !original.location().same(other: refusal.location()) || !self.diagnosticOwnersEqual(first: original.owner(), second: refusal.owner()) { return false }
-        if proof.receiverTerm == 0U64 || proof.receiverTerm >= self.arena.typeCount() || proof.traitIndex >= self.decls.traitCount() || self.decls.traitAt(index: proof.traitIndex).nameStart != proof.requiredOwner || self.moduleOf(offset: proof.requiredOwner) != self.modules.coreModule { return false }
+        if proof.receiverTerm == 0U64 || proof.receiverTerm >= self.arena.typeCount() || proof.traitIndex >= self.decls.traitCount() || self.decls.traitAt(index: proof.traitIndex).nameStart != proof.requiredOwner || proof.coreModule != self.modules.coreModule { return false }
         if !self.sourceExpressionHasOwner(session: refusal.session(), expression: proof.receiver, owner: refusal.owner()) { return false }
+        match self.sourceFacts.expressionOwners.get(key: refusal.expression()) {
+            Optional.Some(v: _) => { if !self.sourceExpressionHasOwner(session: refusal.session(), expression: refusal.expression(), owner: refusal.owner()) { return false } }
+            Optional.None => {}
+        }
         // The producer retained verified ancestry before failed builders were
         // discarded. Observe the operation and persistent owner, not parents.
         val current = match self.authoredIndexOperation(expression: refusal.expression(), args: proof.operation.arguments()) { Optional.Some(v: val current) => current Optional.None => { return false } }

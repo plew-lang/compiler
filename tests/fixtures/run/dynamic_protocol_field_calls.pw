@@ -1,0 +1,18 @@
+use @Std/Io only { print }
+struct Reader { pub val index: fn(key: I64) -> I64 }
+pub impl Reader { factory }
+struct Writer { pub val indexSet: fn(key: I64, I64) }
+pub impl Writer { factory }
+trait Lookup { fn index(key: I64) -> I64 }
+struct Shelf {}
+pub impl Shelf { factory }
+pub impl Shelf as Lookup { fn index(key: I64) -> I64 { return key } }
+fn main() {
+    val reader = <Reader index=fn(key: I64) -> I64 { return key } />
+    reader.index(key: 7I64)
+    print(reader.index(key: 8I64))
+    val writer = <Writer indexSet=fn(key: I64, value~: I64) { print(value) } />
+    writer.indexSet(key: 0I64, 9I64)
+    val shelf: any Lookup = <Shelf />
+    print(shelf.index(key: 10I64))
+}

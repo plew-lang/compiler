@@ -1,0 +1,93 @@
+// Appended to a frozen Frontend module; private authority is not exported.
+fn indexRequire(result: Result[(), CompileDiagnostic]) {
+    match result { Result.Ok(value: _) => {} Result.Err(error: val diagnostic) => { panic(diagnostic.message()) } }
+}
+fn main() {
+    for write in [false, true] {
+        for scenario in 0U64..<12U64 {
+            mut val compiler = <Comp />
+            val name = if write { give "index_set_requires_nominal_conformance" } else { give "index_no_trait" }
+            indexRequire(result: analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.File path="tests/fixtures/reject/" + name + ".pw" />, sources: <SourceAccess stdRoot="std/".bytes() />))
+            val mainName = compiler.internBytes(s: "main")
+            val function = compiler.arena.firstFunctionNamed(nameId: mainName.nameId)
+            val owner = <SemanticCompletionOwner.Function index=function />
+            val module = compiler.moduleOf(offset: compiler.arena.functionAt(index: function).defOffset)
+            mut val expression = 0U64
+            mut val found = false
+            for index in 0U64..<compiler.arena.exprs.count() {
+                val indexSite = compiler.syntheticCallSiteIndex(exprId: index)
+                if indexSite >= compiler.decls.syntheticCallSites.count() { continue }
+                val matches = match compiler.decls.syntheticCallSites[indexSite].kind {
+                    SyntheticCallKind.IndexRead => !write
+                    SyntheticCallKind.IndexWrite => write
+                    _ => false
+                }
+                if !matches || compiler.moduleOf(offset: compiler.exprOffset(id: index)) != module { continue }
+                if write {
+                    if compiler.authoredIndexWrites.get(key: index).isNone() { continue }
+                } else {
+                    if compiler.authoredIndexReads.get(key: index).isNone() { continue }
+                }
+                expression = index
+                found = true
+                break
+            }
+            if !found { panic("missing actual source index receipt") }
+            if scenario == 2U64 { compiler.authoredIndexReads = [:] compiler.authoredIndexWrites = [:] }
+            if scenario == 3U64 { compiler.arena.exprOriginSerial[expression] += 1U64 }
+            if scenario == 11U64 { compiler.sourceFacts.expressionOwners[expression] = <SemanticCompletionOwner.Global target=0U64 /> }
+            val session = compiler.sourceFactSession()
+            val request = if scenario == 4U64 {
+                give <SourceRecordOrigin.CheckingRequest session=session+1U64 root=owner />
+            } else if scenario == 5U64 {
+                give <SourceRecordOrigin.CheckingRequest session=session root=<SemanticCompletionOwner.Global target=0U64 /> />
+            } else { give <SourceRecordOrigin.CheckingRequest session=session root=owner /> }
+            val diagnostic = match if scenario == 1U64 {
+                give compiler.recordParametricFunction(fnIdx: function, recordCallTemplates: true)
+            } else {
+                give compiler.recordParametricFunctionWithOrigin(fnIdx: function, recordCallTemplates: true, origin: <SourceRecordingScope request=request returnContext=<SourceExpectedContext.None /> />, expectedOrigin: <SourceExpectedContext.None />)
+            } {
+                Result.Err(error: val diagnostic) => diagnostic
+                Result.Ok(value: _) => { panic("index without conformance completed") }
+            }
+            val expected = scenario == 0U64 || (scenario >= 6U64 && scenario < 11U64)
+            if compiler.sourceFailureHasOwner(diagnostic: diagnostic) != expected || diagnostic.indexRequirement().isSome() != expected || diagnostic.isSourceRejection() {
+                eprint(text: name)
+                eprint(text: " scenario=")
+                eprintU64(n: scenario)
+                eprint(text: " expression=")
+                eprintU64(n: expression)
+                if diagnostic.indexRequirement().isSome() { eprint(text: " actual=") eprintU64(n: diagnostic.indexRequirement().unwrap().expression()) }
+                eprint(text: " message=")
+                eprint(text: diagnostic.message())
+                eprint(text: "\n")
+                panic("index refusal authority crossed a boundary")
+            }
+            match diagnostic.failureDomain() { FailureDomain.Unclassified => {} _ => { panic("raw cause acquired Source domain") } }
+            if expected {
+                val refusal = diagnostic.indexRequirement().unwrap()
+                if scenario == 0U64 {
+                    val proof = compiler.failedIndexRequirements[refusal.event()]
+                    val args = proof.operation.arguments()
+                    val key = compiler.argAt(args: args, index: 0U64).expr
+                    val rawRead = compiler.lowerIndexRead(recv: proof.receiver, key: key).unwrap()
+                    val rawArgs = match compiler.arena.exprs[rawRead] { Expr.Method(recv: _, nameStart: _, nameLen: _, args: val args) => args _ => { panic("public lower did not produce a read") } }
+                    if compiler.authoredIndexOperation(expression: rawRead, args: rawArgs).isSome() { panic("public index builder minted private authority") }
+                    val rawDiagnostic = compiler.indexRequirementRefusalDiagnostic(expression: rawRead, receiver: proof.receiver, receiverTerm: proof.receiverTerm, requiredOwner: proof.requiredOwner, args: rawArgs, lookupPerformed: true, origin: request)
+                    if rawDiagnostic.indexRequirement().isSome() || compiler.sourceFailureHasOwner(diagnostic: rawDiagnostic) { panic("raw public index became an owned refusal") }
+                }
+
+                if scenario == 6U64 {
+                    val forged = <CompileDiagnostic.indexRequirement refusal=<IndexRequirementRefusal session=refusal.session() owner=refusal.owner() expression=refusal.expression() event=refusal.event()+1U64 location=refusal.location() /> />
+                    if compiler.sourceFailureHasOwner(diagnostic: forged) { panic("unknown index event admitted") }
+                }
+                if scenario == 7U64 { compiler.arena.exprOriginSerial[expression] += 1U64 }
+                if scenario == 8U64 { compiler.sourceFacts.expressionOwners[compiler.failedIndexRequirements[refusal.event()].receiver] = <SemanticCompletionOwner.Global target=0U64 /> }
+                if refusal.expression() != expression { panic("test selected a different source operation") }
+                if scenario == 9U64 { compiler.modules.coreModule += 1U64 }
+                if scenario == 10U64 { compiler.sourceFacts.expressionOwners[expression] = <SemanticCompletionOwner.Global target=0U64 /> }
+                if scenario >= 7U64 && compiler.sourceFailureHasOwner(diagnostic: diagnostic) { eprint(text: name) eprint(text: " changed scenario=") eprintU64(n: scenario) eprint(text: "\n") panic("changed index provenance retained authority") }
+            }
+        }
+    }
+}

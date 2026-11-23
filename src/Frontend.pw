@@ -917,6 +917,7 @@ struct SourceIndexRequirementFailure {
     val receiverTerm: U64
     val requiredOwner: U64
     val traitIndex: U64
+    val coreModule: U64
     val operation: SourceIndexOperation
 }
 impl SourceIndexRequirementFailure { factory }

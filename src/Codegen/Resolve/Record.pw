@@ -984,11 +984,11 @@ pub impl Comp {
     }
 
     inout fn recordAnyRequirementSlot(anyRef: U64, nameStart: U64, nameLen: U64, args: ArgRange) -> Result[U64, CompileDiagnostic] {
-        return self.recordAnyRequirementSlotWithOrigin(anyRef: anyRef, nameStart: nameStart, nameLen: nameLen, args: args, methodOrigin: <MethodLookupOrigin />)
+        return self.recordAnyRequirementSlotWithOrigin(anyRef: anyRef, nameStart: nameStart, nameLen: nameLen, args: args, methodOrigin: <MethodLookupOrigin />, requiredTraitOwner: 0U64)
     }
 }
 impl Comp {
-    inout fn recordAnyRequirementSlotWithOrigin(anyRef: U64, nameStart: U64, nameLen: U64, args: ArgRange, methodOrigin: MethodLookupOrigin) -> Result[U64, CompileDiagnostic] {
+    inout fn recordAnyRequirementSlotWithOrigin(anyRef: U64, nameStart: U64, nameLen: U64, args: ArgRange, methodOrigin: MethodLookupOrigin, requiredTraitOwner: U64) -> Result[U64, CompileDiagnostic] {
         val traitIndex = self.recordAnyTraitIndex(anyRef: anyRef)
         if traitIndex >= self.decls.traitCount() { return <Result.Ok value=0U64 /> }
         val nameId = intern(c: inout self, start: nameStart, len: nameLen)
@@ -1001,6 +1001,13 @@ impl Comp {
             val requirement = self.traitReqAt(reqs: declaration.reqs, index: index)
             if requirement.nameId == nameId && self.paramsLabelsOk(params: requirement.params, args: args) {
                 val scope = try self.requireAdmittedRawRequirement(traitIndex: traitIndex, slot: index, offset: requirement.defOffset)
+                if requiredTraitOwner != 0U64 {
+                    // Match the selected declaration's identity, not an
+                    // unrelated interface requirement with the same spelling.
+                    val owner = self.authoredRequirementViews[scope].source.traitIndex
+                    if owner >= self.decls.traitCount() { return <Result.Err error=self.diagnosticAt(offset: requirement.defOffset, msg: "existential requirement has no declaration owner", failureDomain: <FailureDomain.Internal />) /> }
+                    if self.decls.traitAt(index: owner).nameStart != requiredTraitOwner { index += 1U64 continue }
+                }
                 val callable = self.authoredRequirementViews[scope].declaration
                 val signatures = try self.requirementParameterTypes(signature: <RequirementSignatureRead scope=scope bound=bound />)
                 mut val values: Array[U64] = []
@@ -1023,7 +1030,8 @@ pub impl Comp {
     // the parametric receiver and source selector are both available; the
     // function TypeTerm is grounded only when the shared body is instantiated.
     inout fn recordDynamicMethodCall(exprId: U64, receiverExpr: U64, receiverTerm: U64, nameStart: U64, nameLen: U64, args: ArgRange) -> Result[Bool, CompileDiagnostic] {
-        return self.recordDynamicMethodCallWithOrigin(exprId: exprId, receiverExpr: receiverExpr, receiverTerm: receiverTerm, nameStart: nameStart, nameLen: nameLen, args: args, origin: <SourceRecordingScope request=<SourceRecordOrigin.Raw /> returnContext=<SourceExpectedContext.None /> />, expectedOrigin: <SourceExpectedContext.None />)
+        val requirement = self.syntheticRequiredTraitOwner(exprId: exprId)
+        return self.recordDynamicMethodCallWithOrigin(exprId: exprId, receiverExpr: receiverExpr, receiverTerm: receiverTerm, nameStart: nameStart, nameLen: nameLen, args: args, requiredTraitOwner: requirement, origin: <SourceRecordingScope request=<SourceRecordOrigin.Raw /> returnContext=<SourceExpectedContext.None /> />, expectedOrigin: <SourceExpectedContext.None />)
     }
 
     // A method whose concrete declaration is unavailable during the
@@ -1092,7 +1100,7 @@ impl Comp {
         return selected.hasDecl && written.hasDecl && selected.declOffset == written.declOffset && self.offsetIsLoaded(offset: written.declOffset)
     }
 
-    inout fn recordUnresolvedMethodTemplate(exprId: U64, receiver: CallTemplateReceiver, receiverExpr: U64, receiverTerm: U64, nameStart: U64, nameLen: U64, args: ArgRange, resolution: StaticMemberResolution, lookupPerformed: Bool = true, origin: SourceRecordingScope, expectedOrigin: SourceExpectedContext) -> Result[(), CompileDiagnostic] {
+    inout fn recordUnresolvedMethodTemplate(exprId: U64, receiver: CallTemplateReceiver, receiverExpr: U64, receiverTerm: U64, nameStart: U64, nameLen: U64, args: ArgRange, resolution: StaticMemberResolution, requiredTraitOwner: U64, lookupPerformed: Bool = true, origin: SourceRecordingScope, expectedOrigin: SourceExpectedContext) -> Result[(), CompileDiagnostic] {
         match resolution {
             StaticMemberResolution.Requirement(proof: _, traitIdx: val traitIdx, reqIdx: val reqIdx) => {
                 if self.typeParameterQualifierTerm(exprId: receiverExpr) != 0U64 && !self.traitReqAt(reqs: self.decls.traitAt(index: traitIdx).reqs, index: reqIdx).isAssoc {
@@ -1107,14 +1115,14 @@ impl Comp {
                 try self.recordStaticMethodTemplate(exprId: exprId, receiverTerm: receiverTerm, receiver: receiver, args: args, resolution: resolution, resultTerm: self.parametricExprTerm(exprId: exprId), origin: origin, expectedOrigin: expectedOrigin)
             }
             _ => {
-                val selected = try self.recordDynamicMethodCallWithOrigin(exprId: exprId, receiverExpr: receiverExpr, receiverTerm: receiverTerm, nameStart: nameStart, nameLen: nameLen, args: args, origin: origin, expectedOrigin: expectedOrigin)
+                val selected = try self.recordDynamicMethodCallWithOrigin(exprId: exprId, receiverExpr: receiverExpr, receiverTerm: receiverTerm, nameStart: nameStart, nameLen: nameLen, args: args, requiredTraitOwner: requiredTraitOwner, origin: origin, expectedOrigin: expectedOrigin)
                 // Selection failure is a result of this lexical query, not
                 // inferred from whether a later publication pass wrote a row.
                 if !selected && !self.cur.recordingAccessWriteFacet {
                     // No selected signature can provide further context here.
                     // Diagnose an untyped receiver before missing conformance.
                     if receiverTerm == 0U64 { try self.checkLitCtx(id: receiverExpr, eKind: 0U64, eBits: 0U64, eSgn: false) }
-                    val missingRequirement = self.syntheticRequiredTraitOwner(exprId: exprId)
+                    val missingRequirement = requiredTraitOwner
                     if missingRequirement != 0U64 {
                         return <Result.Err error=self.indexRequirementRefusalDiagnostic(expression: exprId, receiver: receiverExpr, receiverTerm: receiverTerm, requiredOwner: missingRequirement, args: args, lookupPerformed: lookupPerformed, origin: origin.request) />
                     }
@@ -2292,7 +2300,7 @@ impl Comp {
         return <Result.Ok value=() />
     }
 
-    inout fn recordDynamicMethodCallWithOrigin(exprId: U64, receiverExpr: U64, receiverTerm: U64, nameStart: U64, nameLen: U64, args: ArgRange, origin: SourceRecordingScope, expectedOrigin: SourceExpectedContext) -> Result[Bool, CompileDiagnostic] {
+    inout fn recordDynamicMethodCallWithOrigin(exprId: U64, receiverExpr: U64, receiverTerm: U64, nameStart: U64, nameLen: U64, args: ArgRange, requiredTraitOwner: U64, origin: SourceRecordingScope, expectedOrigin: SourceExpectedContext) -> Result[Bool, CompileDiagnostic] {
         if self.traceCodegen {
             eprint(text: "[trace-codegen] record dynamic-method body=")
             eprintU64(n: self.cur.checkFn)
@@ -2316,7 +2324,7 @@ impl Comp {
         val recvTy: TypeRef = self.arena.typeAt(index: receiverTerm)
         if recvTy.isAny {
             val traitIndex: U64 = self.recordAnyTraitIndex(anyRef: receiverTerm)
-            val slot: U64 = try self.recordAnyRequirementSlotWithOrigin(anyRef: receiverTerm, nameStart: nameStart, nameLen: nameLen, args: args, methodOrigin: <MethodLookupOrigin expression=<Optional.Some v=exprId /> />)
+            val slot: U64 = try self.recordAnyRequirementSlotWithOrigin(anyRef: receiverTerm, nameStart: nameStart, nameLen: nameLen, args: args, methodOrigin: <MethodLookupOrigin expression=<Optional.Some v=exprId /> />, requiredTraitOwner: requiredTraitOwner)
             if traitIndex < self.decls.traitCount() && slot != 0U64 {
                 try self.checkExistentialRequirementCall(target: receiverTerm, traitIndex: traitIndex, requirement: slot - 1U64, offset: self.exprOffset(id: exprId))
                 try self.recordDynamicCallTemplate(exprId: exprId, receiver: receiver, args: args, target: <DynamicCallTemplateTarget.ExistentialRequirement traitIdx=traitIndex slot=slot interfaceRoot=0U64 />, receiverTerm: receiverTerm, origin: origin, expectedOrigin: expectedOrigin)
@@ -2324,6 +2332,9 @@ impl Comp {
             }
             return <Result.Ok value=false />
         }
+        // Closure fields are ordinary callable values, never conformance
+        // witnesses for a required canonical protocol operation.
+        if requiredTraitOwner != 0U64 { return <Result.Ok value=false /> }
         val structIndex: U64 = self.structIndexForType(ref: receiverTerm)
         if structIndex >= self.arena.structCount() { return <Result.Ok value=false /> }
         val fieldName: U64 = intern(c: inout self, start: nameStart, len: nameLen)
@@ -2656,7 +2667,7 @@ impl Comp {
                     // chooses the concrete witness only in the body environment.
                 }
                 val lookupPerformed = match methodSelection { MemberCallLookup.CachedNonStatic => false, _ => true }
-                val boundMember: StaticMemberResolution = (try self.writtenStaticMemberResolution(exprId: exprId, receiverRef: receiverTerm, nameStart: nameStart, nameLen: nameLen, args: args, requiredTraitOwner: self.syntheticRequiredTraitOwner(exprId: exprId)))
+                val boundMember: StaticMemberResolution = (try self.writtenStaticMemberResolution(exprId: exprId, receiverRef: receiverTerm, nameStart: nameStart, nameLen: nameLen, args: args, requiredTraitOwner: requiredTraitOwner))
                 match boundMember {
                     StaticMemberResolution.Requirement(proof: _, traitIdx: _, reqIdx: _) => { methodSelection = <MemberCallLookup.NoCandidate /> }
                     StaticMemberResolution.Provided(proof: _, traitIdx: _, callee: _) => { methodSelection = <MemberCallLookup.NoCandidate /> }
@@ -2666,7 +2677,7 @@ impl Comp {
                 val methodCallee = self.selectedMemberFunction(selection: methodSelection)
                 try self.recordParametricMethodCallWithOrigin(exprId: exprId, callee: methodCallee, receiverSource: (try self.writtenCallReceiverTemplate(exprId: exprId, receiverExpr: recv)), receiverTerm: receiverTerm, args: args, origin: origin, expectedOrigin: contextOrigin)
                 if methodCallee >= self.arena.functionCount() {
-                    try self.recordUnresolvedMethodTemplate(exprId: exprId, receiver: (try self.writtenCallReceiverTemplate(exprId: exprId, receiverExpr: recv)), receiverExpr: recv, receiverTerm: receiverTerm, nameStart: nameStart, nameLen: nameLen, args: args, resolution: boundMember, lookupPerformed: lookupPerformed, origin: origin, expectedOrigin: contextOrigin)
+                    try self.recordUnresolvedMethodTemplate(exprId: exprId, receiver: (try self.writtenCallReceiverTemplate(exprId: exprId, receiverExpr: recv)), receiverExpr: recv, receiverTerm: receiverTerm, nameStart: nameStart, nameLen: nameLen, args: args, resolution: boundMember, requiredTraitOwner: requiredTraitOwner, lookupPerformed: lookupPerformed, origin: origin, expectedOrigin: contextOrigin)
                 }
                 // The standard array Index witness returns the element type.
                 // Use the synthesized operation's origin and its checked result
@@ -2772,8 +2783,9 @@ impl Comp {
                     eprint(text: "\n")
                 }
                 if methodCallee >= self.arena.functionCount() {
-                    val resolution = try self.writtenStaticMemberResolution(exprId: exprId, receiverRef: receiverTerm, nameStart: nameStart, nameLen: nameLen, args: args, requiredTraitOwner: self.syntheticRequiredTraitOwner(exprId: exprId))
-                    try self.recordUnresolvedMethodTemplate(exprId: exprId, receiver: receiverSource, receiverExpr: recv, receiverTerm: receiverTerm, nameStart: nameStart, nameLen: nameLen, args: args, resolution: resolution, lookupPerformed: match methodSelection { MemberCallLookup.CachedNonStatic => false, _ => true }, origin: origin, expectedOrigin: contextOrigin)
+                    val requiredTraitOwner = self.syntheticRequiredTraitOwner(exprId: exprId)
+                    val resolution = try self.writtenStaticMemberResolution(exprId: exprId, receiverRef: receiverTerm, nameStart: nameStart, nameLen: nameLen, args: args, requiredTraitOwner: requiredTraitOwner)
+                    try self.recordUnresolvedMethodTemplate(exprId: exprId, receiver: receiverSource, receiverExpr: recv, receiverTerm: receiverTerm, nameStart: nameStart, nameLen: nameLen, args: args, resolution: resolution, requiredTraitOwner: requiredTraitOwner, lookupPerformed: match methodSelection { MemberCallLookup.CachedNonStatic => false, _ => true }, origin: origin, expectedOrigin: contextOrigin)
                 }
                 if methodCallee < self.arena.functionCount() {
                     try self.recordAccessUse(parentExpr: exprId, readExpr: recv, role: 1U64, argIndex: 0U64, parameterIndex: 0U64, modeKnown: true, write: self.arena.functionAt(index: methodCallee).selfInout)

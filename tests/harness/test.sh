@@ -148,6 +148,14 @@ else
     fail=$((fail + 1)); failed="$failed source-typing-origin"
 fi
 
+for origin_gate in index-requirement-origin dynamic-protocol-requirement; do
+    if python3 -B "./tests/tooling/test-$origin_gate.py" --compiler "$PLEWC" --out "$RUNTIME_DIR/$origin_gate"; then
+        echo "PASS $origin_gate"
+    else
+        fail=$((fail + 1)); failed="$failed $origin_gate"
+    fi
+done
+
 if python3 -B ./tests/tooling/test-module-cycle-diagnostics.py --compiler "$PLEWC"; then
     echo "PASS module-cycle-diagnostics"
 else

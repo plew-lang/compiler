@@ -1,6 +1,6 @@
 ---
 id: met-tsa3
-status: open
+status: in_progress
 deps: []
 links: []
 created: 2026-11-23T16:21:34Z
@@ -56,10 +56,10 @@ checks function-value signatures; neither currently specifies this protocol
 role leak. The new ticket is a newly confirmed phase-three gap, not a claim that
 those tasks or existing valid evidence should all be reopened.
 
-The active goal's stop condition for a missing/incorrect task is reached.
-Record the concrete repair and dependency, then obtain user confirmation of
-this added work/order before implementation. met-ia2q's refusal/provenance WIP
-is unvalidated and must not be promoted or used to claim repair of this defect.
+User approved this added repair before met-ia2q and delegated routine task
+creation, corrections and ordering. Proceed under existing semantics/design;
+new language-surface decisions still require consultation. met-ia2q WIP is not
+an adopted candidate; keep its evidence separate until validated.
 
 ## Independent finding / ownership review
 
@@ -69,3 +69,25 @@ and selection-before-transport dependency. Carrier/source/output hashes were
 cross-checked, including saved AOT reruns equal to both original AOT hashes.
 The existing genuine existential dispatch path is separately successful and
 must not be disabled indiscriminately. No repair/WIP acceptance is claimed.
+
+## Construction-query boundary and current evidence
+
+Independent source review also found the same lost canonical requirement in
+unfinished result construction (`exprTypeWithChainHole`): symbolic-bound/static
+selection, existential requirement slots, ChainHole continuation and closure-field
+return fallback. Propagate the same demand through these queries; an ineligible
+field or unrelated trait must not supply a result type before final recording.
+This is part of this finite repair, not a new inference/Index feature.
+
+Scoped RED v2 (fixed adopted1b22eb22) has21 mode controls:9 invalid operations
+are actually accepted (field read/write and unrelated existential);3 generic
+wrong-bound operations are already rejected but Unclassified;9 positive controls
+pass (ordinary field/interface calls, direct anyIndex, generic inheritedIndex).
+Do not describe all12 assertion failures as erroneous acceptance.
+
+Intermediate frozen v2 build20261123T164333-build-02336a passed; its21 mode
+controls pass, including Source transport supplied by unadopted met-ia2q WIP.
+This candidate predates the construction-query correction and is not final
+adoption evidence. Final v3 is frozen and building. Direct inherited-anyTaggedIndex
+was already unsupported by the adopted carrier and is not implemented here;
+generic inheritedIndex is supported and retained as a positive fixture.

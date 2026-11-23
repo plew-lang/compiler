@@ -1,0 +1,7 @@
+use @Std/Io only { print }
+struct Shelf { pub val index: fn(key: I64) -> I64 }
+pub impl Shelf { factory }
+fn main() {
+    val shelf = <Shelf index=fn(key: I64) -> I64 { return key } />
+    print(shelf[7I64])
+}

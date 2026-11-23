@@ -259,9 +259,9 @@ pub impl Comp {
         }
     }
 
-    inout fn boundMethodRetInfo(fnIdx: U64, receiverRef: U64, tpStart: U64, tpLen: U64, nameStart: U64, nameLen: U64, args: ArgRange) -> Result[TypeInfo, CompileDiagnostic] {
+    inout fn boundMethodRetInfo(fnIdx: U64, receiverRef: U64, tpStart: U64, tpLen: U64, nameStart: U64, nameLen: U64, args: ArgRange, requiredTraitOwner: U64) -> Result[TypeInfo, CompileDiagnostic] {
         if receiverRef == 0U64 { return <Result.Ok value=scalarInfo() /> }
-        val resolution = try self.staticMemberResolution(fnIdx: fnIdx, receiverRef: receiverRef, nameStart: nameStart, nameLen: nameLen, args: args)
+        val resolution = try self.staticMemberResolution(fnIdx: fnIdx, receiverRef: receiverRef, nameStart: nameStart, nameLen: nameLen, args: args, requiredTraitOwner: requiredTraitOwner)
         val result = try self.staticMemberCallResultType(resolution: resolution, receiverTerm: receiverRef, args: args)
         if result != 0U64 { return <Result.Ok value=self.typeInfoOfRef(ref: result) /> }
         return <Result.Ok value=scalarInfo() />
@@ -891,6 +891,7 @@ pub impl Comp {
                     }
                     return <Result.Ok value=scalarInfo() />
                 }
+                val requiredTraitOwner = self.syntheticRequiredTraitOwner(exprId: id)
                 mut val rt: TypeInfo = (try self.exprTypeWithChainHole(id: recv, chainHoleRef: chainHoleRef))
                 // a newtype receiver inherits its underlying's members (spec/10):
                 // resolve the name to the underlying BEFORE method lookup (`u.bytes()`
@@ -910,14 +911,14 @@ pub impl Comp {
                     // value: T, T: Format): the bound trait's member signature types the
                     // result (rustc-style bound-based method typing).
                     if self.isTypeParamOf(fnIdx: self.cur.checkFn, start: rt.nameStart, len: rt.nameLen) {
-                        return <Result.Ok value=(try self.boundMethodRetInfo(fnIdx: self.cur.checkFn, receiverRef: rt.ref, tpStart: rt.nameStart, tpLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)) />
+                        return <Result.Ok value=(try self.boundMethodRetInfo(fnIdx: self.cur.checkFn, receiverRef: rt.ref, tpStart: rt.nameStart, tpLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args, requiredTraitOwner: requiredTraitOwner)) />
                     }
                     // Keep the return of a requirement selected through an
                     // assumed bound symbolic during generic-body validation.
                     // Reusing a concrete implementation's return here would
                     // prematurely instantiate a rigid type parameter.
                     if self.cur.checkFn < self.arena.functionCount() {
-                        val staticResolution: StaticMemberResolution = (try self.staticMemberResolution(fnIdx: self.cur.checkFn, receiverRef: (try self.inferType(id: recv)), nameStart: nameStart, nameLen: nameLen, args: args))
+                        val staticResolution: StaticMemberResolution = (try self.staticMemberResolution(fnIdx: self.cur.checkFn, receiverRef: (try self.inferType(id: recv)), nameStart: nameStart, nameLen: nameLen, args: args, requiredTraitOwner: requiredTraitOwner))
                         match staticResolution {
                             StaticMemberResolution.Missing => {}
                             _ => {
@@ -938,7 +939,7 @@ pub impl Comp {
                         if rt.ref < self.arena.typeCount() {
                             if self.arena.typeTermAt(index: rt.ref).isAny {
                                 val traitIndex = self.recordAnyTraitIndex(anyRef: rt.ref)
-                                val slot = try self.recordAnyRequirementSlotWithOrigin(anyRef: rt.ref, nameStart: nameStart, nameLen: nameLen, args: args, methodOrigin: <MethodLookupOrigin expression=<Optional.Some v=id /> />)
+                                val slot = try self.recordAnyRequirementSlotWithOrigin(anyRef: rt.ref, nameStart: nameStart, nameLen: nameLen, args: args, methodOrigin: <MethodLookupOrigin expression=<Optional.Some v=id /> />, requiredTraitOwner: requiredTraitOwner)
                                 if traitIndex < self.decls.traitCount() && slot != 0U64 {
                                     return <Result.Ok value=(try self.anyMemberRetInfo(anyRef: rt.ref, traitIndex: traitIndex, slot: slot - 1U64)) />
                                 }
@@ -958,7 +959,7 @@ pub impl Comp {
                     // term only for this missing-descriptor case; ordinary
                     // source expressions keep their already-selected cache.
                     if self.memberLookupIsMissing(selection: selection) && chainHoleRef != 0U64 {
-                        val continuation = try self.resolveMethodFinalForTypeWithOrigin(recv: recv, receiverType: rt, nameStart: nameStart, nameLen: nameLen, args: args, methodOrigin: <MethodLookupOrigin expression=<Optional.Some v=id /> />)
+                        val continuation = try self.resolveMethodFinalForTypeWithOrigin(recv: recv, receiverType: rt, nameStart: nameStart, nameLen: nameLen, args: args, requiredTraitOwner: requiredTraitOwner, methodOrigin: <MethodLookupOrigin expression=<Optional.Some v=id /> />)
                         match continuation {
                             MemberCallLookup.DiagnosticCandidate(function: _) => { return <Result.Ok value=scalarInfo() /> }
                             _ => {}
@@ -966,6 +967,7 @@ pub impl Comp {
                         mi = self.selectedMemberFunction(selection: continuation)
                     }
                     if mi == self.arena.functionCount() {
+                        if requiredTraitOwner != 0U64 { return <Result.Ok value=scalarInfo() /> }
                         // not a method — but it may be a closure-typed FIELD called
                         // indirectly (`h.run()`); recover the fn type's return.
                         return <Result.Ok value=(try self.closureFieldRetInfo(rt: rt, nameStart: nameStart, nameLen: nameLen)) />

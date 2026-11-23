@@ -1,0 +1,7 @@
+use @Std/Io only { print }
+struct Shelf { pub val indexSet: fn(key: I64, I64) }
+pub impl Shelf { factory }
+fn main() {
+    mut val shelf = <Shelf indexSet=fn(key: I64, value~: I64) { print(value) } />
+    shelf[0I64] = 7I64
+}

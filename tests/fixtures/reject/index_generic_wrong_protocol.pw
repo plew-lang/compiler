@@ -1,0 +1,9 @@
+use @Std/Io only { print }
+trait Lookup { fn index(key: I64) -> I64 }
+struct Shelf {}
+pub impl Shelf { factory }
+pub impl Shelf as Lookup { fn index(key: I64) -> I64 { return key } }
+fn read[T](value: T) -> I64 where T: Lookup {
+    return value[7I64]
+}
+fn main() { print(read(value: <Shelf />)) }
