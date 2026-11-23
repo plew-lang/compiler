@@ -2197,13 +2197,11 @@ pub impl Comp {
     // Candidate writes are transactional: a mismatched constructor cannot
     // leak partially collected substitutions into the next argument.
     inout fn extendCallTypeArguments(pattern: U64, argument: U64, params: FuncBindRange, values: Array[U64], offset: U64) -> Result[Array[U64], CompileDiagnostic] {
-        mut val candidate = values
-        match self.matchCallTypeArguments(pattern: pattern, argument: argument, params: params, values: inout candidate) {
-            TypeArgumentMatch.Matched | TypeArgumentMatch.Deferred => { return <Result.Ok value=candidate /> }
-            TypeArgumentMatch.Mismatch => { return <Result.Ok value=values /> }
-            TypeArgumentMatch.Conflict => {
-                return <Result.Err error=self.typeArgumentConflictDiagnostic(offset: offset) />
-            }
+        val extension = self.callTypeArgumentExtension(pattern: pattern, argument: argument, params: params, values: values)
+        return match extension.matched {
+            TypeArgumentMatch.Matched | TypeArgumentMatch.Deferred => <Result.Ok value=extension.values />
+            TypeArgumentMatch.Mismatch => <Result.Ok value=values />
+            TypeArgumentMatch.Conflict => <Result.Err error=self.typeArgumentConflictDiagnostic(offset: offset) />
         }
     }
 

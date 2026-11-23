@@ -37,3 +37,37 @@ Fixed source33b94603 numeric-candidate reproduces the existing typed conflict an
 Private GenericCallConflictMain directly enters recordFreeCallArgumentContexts after obtaining the actual DiagnosticCandidate. One case pre-records arguments and asserts result context is unnecessary; the other leaves them prepared and asserts it is necessary at that boundary. Both compile/link successfully and deliberately fail the missing source-cause assertion. Receipts: meta tmp/phase3-forward-frontier/generic-conflict-core-red-{typed,prepared}/result.json. Host f94 compiles frozen source33 compiler plus the private test; these are source-level native probes, not runs of the numeric-candidate binary. An earlier whole-expression probe did not establish the prepared branch and is not used for that claim.
 
 No product fix, final GREEN, or parent closure is claimed. The next step is the private origin/receipt implementation followed by the Raw and owned control matrix.
+
+## In-progress implementation and first controls
+
+The private source origin now threads through free/method/associated inference;
+public wrappers and Mono remain Raw. Typed-term extension shares one transactional
+match with the Raw adapter. Both actual Conflict branches create a dedicated
+closed diagnostic and a private event; the common source owner observer validates
+it without repeating inference. Failure snapshots retain callee declaration,
+parameter labels/default omission mapping, binder identities, existing bindings,
+operation and owned location. Ordinary dependency errors still propagate.
+
+Independent source review found and prompted correction of member candidate-role
+recording and declaration/label revalidation. It found no public Raw-to-owned
+origin construction path and did not request callee re-lookup. The final review
+and complete scenario reconciliation remain required.
+
+Intermediate v2 build 20261123T084621-build-65a420 passed. Native private typed /
+prepared Raw-and-owned controls, foreign metadata, argument mutation, synthetic
+operation, equal-text Internal, drain and nonpublication passed in generic-guard-
+v3b-output/result.json (compile/link/native0, empty runtime output). This compiles
+v3 source with a v2 host; it is not final-source validation. The earlier guard
+setup failure used wrong custom-factory argument order and is retained separately.
+
+Check probes for ordinary method, associated qualifier, extension view, omitted
+default mapping and nested call changed Unclassified to Source without changing
+the original diagnostic. A named generic factory still failed ownership because
+its uninstantiated receiver was conflated with Array's type-context precondition.
+The shared passive operation reader is being separated from that precondition:
+source construction/serial/args receipts can identify a bare factory operation;
+Array capture and observation still explicitly require a valid nonzero receiver.
+Independent plan review accepted this separation with synthetic/serial/args and
+nonzero-receiver mismatch controls. The new final guard covers the zero-receiver
+Array non-admission. Final candidate, targeted consumer matrix and performance
+remain outstanding; no parent closure or source/carrier promotion.

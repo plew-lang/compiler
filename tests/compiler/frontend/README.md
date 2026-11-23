@@ -631,3 +631,11 @@ saved argument before full frontend checking. Fixture/std/dependency and support
 input hashes accompany the exact source snapshot.
 
 `FreeCallAmbiguityFailureDomains.pw` and `StaticMemberAmbiguityFailureDomains.pw` have exact `.out` goldens for manual native checking of retained negative selection. They preserve ordinary free/static/associated ambiguity and add numeric free/member/extension-view controls. Require exit0, exact golden and empty stderr. The assertions cover original operand locations, kind/path/line and owner/session/argument mutations, Raw versus owned adapters, synthetic origins, retries/drains and absence of successful parent result/callee publication. The malformed-cast query Report passthrough is distinct from the equal-text Internal observer control. Public rejection fixtures are discovered separately by the normal/ASan profiles.
+
+`GenericCallConflictMain.pw` is a private-boundary probe: append it to an exact
+copy of `src/Frontend.pw`, without widening production visibility. It exercises
+Raw and source-owned typed/prepared Conflict decisions, retained known bindings
+and candidate role, foreign metadata, changed arguments, synthetic operations,
+equal-text Internal reports, drain retention and absence of parent publication.
+Require native exit 0 with empty stdout/stderr. Whole-session consumers and
+language fixtures are separate controls; this probe alone cannot close the task.

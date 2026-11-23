@@ -96,28 +96,7 @@ pub impl Comp {
     // equation. A bare generic qualifier is completed from call arguments;
     // it must not be mistaken for a conflicting zero-argument instantiation.
     inout fn callReceiverTerm(f: Func, receiverRef: U64, args: ArgRange) -> Result[U64, CompileDiagnostic] {
-        // A declared Self is rigid but has the lexical receiver equation of
-        // this body. Apply that equation before matching another method's
-        // receiver pattern, rather than leaving its impl binders unresolved.
-        // Closedness is registered with the immutable type graph. No Self
-        // can occur below a closed term, so this Self-only substitution is
-        // an identity without traversing its arguments again.
-        val semanticReceiver = if self.arena.typeIsClosed(ref: receiverRef) { give receiverRef } else {
-            give self.groundTermInEnvironment(ref: receiverRef, params: [], values: [], selfRef: self.cur.selfRef)
-        }
-        if semanticReceiver == 0U64 || semanticReceiver >= self.arena.typeCount() {
-            return <Result.Ok value=semanticReceiver />
-        }
-        // A generic type qualifier without written arguments is an inference
-        // request, not an instantiated receiver with zero parameters. Complete
-        // it from this call before matching the declaration's receiver pattern.
-        if f.isAssoc && f.recvTy != 0U64 && f.recvTy < self.arena.typeCount() && self.arena.typeTermAt(index: semanticReceiver).args.len == 0U64 && self.arena.typeTermAt(index: f.recvTy).args.len != 0U64 {
-            val inferredReceiver = try self.associatedReceiverFromArguments(f: f, args: args)
-            if inferredReceiver != 0U64 && inferredReceiver != semanticReceiver && self.typeTermRefSameHead(a: semanticReceiver, b: inferredReceiver) {
-                return <Result.Ok value=inferredReceiver />
-            }
-        }
-        return <Result.Ok value=semanticReceiver />
+        return self.callReceiverTermWithOrigin(f: f, receiverRef: receiverRef, args: args, inferenceOrigin: <GenericCallInferenceOrigin.Raw />)
     }
 
     // Infer the selected method's lexical substitution, retaining open slots.  Return
@@ -128,73 +107,14 @@ pub impl Comp {
     // outcome; a valid non-generic method has a nonzero receiverRef and no
     // parameter entries.
     inout fn inferMethodEnvironment(f: Func, receiverRef: U64, args: ArgRange, selectedProof: StaticConformanceProof = <StaticConformanceProof.Missing />, retainedArguments: Array[U64] = []) -> Result[InstanceEnvironment, CompileDiagnostic] {
-        val semanticReceiver = try self.callReceiverTerm(f: f, receiverRef: receiverRef, args: args)
-        if semanticReceiver == 0U64 || semanticReceiver >= self.arena.typeCount() { return <Result.Ok value=<InstanceEnvironment /> /> }
-        // A method's generic binder list can contain the nominal declaration
-        // binder, an impl receiver-pattern binder, and method-owned binders.
-        // They are lexical identities, not positional aliases. Finalization
-        // retains the complete WitnessMatch here, including legacy binder
-        // indexes while the ParamId migration is still in flight.
-        val receiverEnvironment = try self.methodReceiverSignatureEnvironment(f: f, semanticReceiver: semanticReceiver, selectedProof: selectedProof)
-        if receiverEnvironment.receiverRef == 0U64 { return <Result.Ok value=receiverEnvironment /> }
-        val proof = receiverEnvironment.proof
-        mut val fullArgs = receiverEnvironment.args
-        if retainedArguments.count() != 0U64 {
-            if retainedArguments.count() != f.typeParams.count() || fullArgs.count() != f.typeParams.count() {
-                return <Result.Err error=self.diagnosticAt(offset: f.defOffset, msg: "selected forwarding declaration has an invalid binder vector") />
-            }
-            mut val index = 0U64
-            while index < retainedArguments.count() {
-                val retained = retainedArguments[index]
-                if retained == 0U64 || retained >= self.arena.typeCount() || (fullArgs[index] != 0U64 && !self.typeRefEq(a: fullArgs[index], b: retained)) {
-                    return <Result.Err error=self.diagnosticAt(offset: f.defOffset, msg: "selected forwarding arguments conflict with the receiver evidence") />
-                }
-                fullArgs.set(i: index, value: retained)
-                index += 1U64
-            }
-        }
-        for value in fullArgs {
-            if value != 0U64 && value >= self.arena.typeCount() { return <Result.Err error=self.diagnosticAt(offset: f.defOffset, msg: "selected method binder is outside the type arena") /> }
-        }
-        // Complete only missing declaration slots from the shared prepared
-        // argument reader. Already retained/receiver/proof values are fixed;
-        // final consumers do not reopen argument inference for a complete map.
-        if f.typeParams.count() != 0U64 && !self.fnArgsAllResolved(args: fullArgs) {
-            val known = try self.knownMethodSignatureEnvironment(f: f, environment: <InstanceEnvironment params=self.copyFuncBinds(binds: f.typeParams) args=fullArgs receiverRef=semanticReceiver proof=proof />)
-            val item = try self.finalMethodItemRef(f: f, receiverRef: semanticReceiver)
-            mut val types: Array[U64] = []
-            for index in 0U64..<f.params.count() {
-                types.append(try self.groundTermForBody(ref: self.funcParamAt(params: f.params, index: index).ty, environment: known, selfRef: semanticReceiver, itemRef: item))
-            }
-            // Signature Self/projections are already interpreted. A second
-            // receiver substitution could change a caller-owned symbolic Self.
-            fullArgs = try self.inferPreparedCallTypeArguments(f: f, args: args, parameterTypes: types, initialValues: fullArgs)
-        }
-        // This is a declaration-time semantic query as well as a concrete
-        // codegen query.  A receiver such as `Box[T_outer]` supplies a fully
-        // resolved *symbolic* argument for the method's `T_impl`; requiring a
-        // concrete term here discards that relation and makes `?.read()` lose
-        // its outer T.  Only an absent inference slot is incomplete.
-        if fullArgs.count() != f.typeParams.count() {
-            return <Result.Ok value=<InstanceEnvironment /> />
-        }
-        // Preserve ParamId identity in the result. The legacy Cursor grounding
-        // path can use spelling fallback while translating a method binder;
-        // an immutable map cannot, so the returned outer `T` remains the
-        // caller's lexical term for later BodyInstance grounding.
-        return <Result.Ok value=(try self.withLexicalSelfBinding(f: f, environment: <InstanceEnvironment params=self.copyFuncBinds(binds: f.typeParams) args=fullArgs receiverRef=semanticReceiver proof=proof />)) />
+        return self.inferMethodEnvironmentWithOrigin(f: f, receiverRef: receiverRef, args: args, selectedProof: selectedProof, retainedArguments: retainedArguments, inferenceOrigin: <GenericCallInferenceOrigin.Raw />)
     }
 
     // Consumers that need a complete signature retain the strict boundary.
     // Source inference instead keeps known receiver/proof bindings while a
     // method-owned parameter waits for its expected result context.
     inout fn finalMethodEnvironment(f: Func, receiverRef: U64, args: ArgRange, selectedProof: StaticConformanceProof = <StaticConformanceProof.Missing />) -> Result[InstanceEnvironment, CompileDiagnostic] {
-        val environment = try self.inferMethodEnvironment(f: f, receiverRef: receiverRef, args: args, selectedProof: selectedProof)
-        // The inference environment contains every declaration binder and
-        // may also contain lexical Self. All supplied bindings must resolve;
-        // their order is deliberately not part of this consumer's contract.
-        if f.typeParams.count() > 0U64 && (environment.args.count() < f.typeParams.count() || !self.fnArgsAllResolved(args: environment.args)) { return <Result.Ok value=<InstanceEnvironment /> /> }
-        return <Result.Ok value=environment />
+        return self.finalMethodEnvironmentWithOrigin(f: f, receiverRef: receiverRef, args: args, selectedProof: selectedProof, inferenceOrigin: <GenericCallInferenceOrigin.Raw />)
     }
 
     inout fn signatureTypeArguments(f: Func, environment: InstanceEnvironment) -> Array[U64] {
@@ -272,33 +192,7 @@ pub impl Comp {
     // callable substitution once, then instantiate the declaration's receiver
     // pattern before grounding Self in the public signature.
     inout fn associatedReceiverFromArguments(f: Func, args: ArgRange) -> Result[U64, CompileDiagnostic] {
-        if f.recvTy == 0U64 || f.typeParams.count() == 0U64 { return <Result.Ok value=0U64 />}
-        if f.dependentReceiverScope != 0U64 {
-            // A bare Self parameter supplies the whole receiver term.
-            // Keep the operand's type when the declared receiver recipe
-            // matches it, including the concrete associated output.
-            for index in 0U64..<f.params.count() {
-                val parameter = self.funcParamAt(params: f.params, index: index)
-                if parameter.ty == 0U64 { continue }
-                val pattern = self.groundTermInEnvironment(ref: parameter.ty, params: [], values: [], selfRef: f.recvTy)
-                if !self.typeRefEq(a: pattern, b: f.recvTy) { continue }
-                val supplied = self.argIndexForParam(params: f.params, args: args, paramIdx: index)
-                if supplied >= args.len { continue }
-                val expression = self.argAt(args: args, index: supplied).expr
-                if self.expressionNeedsTypeContext(exprId: expression, allowPartialFunction: true) { continue }
-                // A prepared whole-Self operand may still contain an unfinished
-                // nested result. Its foreign slots are not a receiver equation.
-                // Raw structural observations keep their existing path.
-                if self.hasSemanticExprTypeFact(exprId: expression) && (try self.argumentRequiresResultContext(exprId: expression)) { continue }
-                val receiver = try self.inferenceArgumentType(exprId: expression)
-                if receiver == 0U64 { continue }
-                val matched = try self.methodReceiverEnvironment(f: f, instRef: receiver, sourceMatch: true)
-                if matched.conformIdx != 0U64 { return <Result.Ok value=receiver /> }
-            }
-        }
-        val inferred = (try self.inferPreparedCallTypeArguments(f: f, args: args, selfRef: f.recvTy))
-        if inferred.count() != f.typeParams.count() || !self.fnArgsAllResolved(args: inferred) { return <Result.Ok value=0U64 />}
-        return <Result.Ok value=self.groundTermInEnvironment(ref: f.recvTy, params: self.copyFuncBinds(binds: f.typeParams), values: inferred) />
+        return self.associatedReceiverFromArgumentsWithOrigin(f: f, args: args, inferenceOrigin: <GenericCallInferenceOrigin.Raw />)
     }
 
     inout fn selectedMethodResult(callee: U64, environment: InstanceEnvironment) -> Result[U64, CompileDiagnostic] {
@@ -1472,5 +1366,135 @@ impl Comp {
         val environment = <InstanceEnvironment params=self.copyFuncBinds(binds: f.typeParams) args=arguments receiverRef=receiver />
         if !self.traitNamespaceReceiverMatches(function: declaration, environment: environment) { return <Result.Ok value=<Optional.None /> /> }
         return <Result.Ok value=<Optional.Some v=arguments /> />
+    }
+}
+
+impl Comp {
+    inout fn callReceiverTermWithOrigin(f: Func, receiverRef: U64, args: ArgRange, inferenceOrigin: GenericCallInferenceOrigin) -> Result[U64, CompileDiagnostic] {
+        // A declared Self is rigid but has the lexical receiver equation of
+        // this body. Apply that equation before matching another method's
+        // receiver pattern, rather than leaving its impl binders unresolved.
+        // Closedness is registered with the immutable type graph. No Self
+        // can occur below a closed term, so this Self-only substitution is
+        // an identity without traversing its arguments again.
+        val semanticReceiver = if self.arena.typeIsClosed(ref: receiverRef) { give receiverRef } else {
+            give self.groundTermInEnvironment(ref: receiverRef, params: [], values: [], selfRef: self.cur.selfRef)
+        }
+        if semanticReceiver == 0U64 || semanticReceiver >= self.arena.typeCount() {
+            return <Result.Ok value=semanticReceiver />
+        }
+        // A generic type qualifier without written arguments is an inference
+        // request, not an instantiated receiver with zero parameters. Complete
+        // it from this call before matching the declaration's receiver pattern.
+        if f.isAssoc && f.recvTy != 0U64 && f.recvTy < self.arena.typeCount() && self.arena.typeTermAt(index: semanticReceiver).args.len == 0U64 && self.arena.typeTermAt(index: f.recvTy).args.len != 0U64 {
+            val inferredReceiver = try self.associatedReceiverFromArgumentsWithOrigin(f: f, args: args, inferenceOrigin: inferenceOrigin)
+            if inferredReceiver != 0U64 && inferredReceiver != semanticReceiver && self.typeTermRefSameHead(a: semanticReceiver, b: inferredReceiver) {
+                return <Result.Ok value=inferredReceiver />
+            }
+        }
+        return <Result.Ok value=semanticReceiver />
+    }
+}
+
+impl Comp {
+    inout fn inferMethodEnvironmentWithOrigin(f: Func, receiverRef: U64, args: ArgRange, selectedProof: StaticConformanceProof = <StaticConformanceProof.Missing />, retainedArguments: Array[U64] = [], inferenceOrigin: GenericCallInferenceOrigin) -> Result[InstanceEnvironment, CompileDiagnostic] {
+        val semanticReceiver = try self.callReceiverTermWithOrigin(f: f, receiverRef: receiverRef, args: args, inferenceOrigin: inferenceOrigin)
+        if semanticReceiver == 0U64 || semanticReceiver >= self.arena.typeCount() { return <Result.Ok value=<InstanceEnvironment /> /> }
+        // A method's generic binder list can contain the nominal declaration
+        // binder, an impl receiver-pattern binder, and method-owned binders.
+        // They are lexical identities, not positional aliases. Finalization
+        // retains the complete WitnessMatch here, including legacy binder
+        // indexes while the ParamId migration is still in flight.
+        val receiverEnvironment = try self.methodReceiverSignatureEnvironment(f: f, semanticReceiver: semanticReceiver, selectedProof: selectedProof)
+        if receiverEnvironment.receiverRef == 0U64 { return <Result.Ok value=receiverEnvironment /> }
+        val proof = receiverEnvironment.proof
+        mut val fullArgs = receiverEnvironment.args
+        if retainedArguments.count() != 0U64 {
+            if retainedArguments.count() != f.typeParams.count() || fullArgs.count() != f.typeParams.count() {
+                return <Result.Err error=self.diagnosticAt(offset: f.defOffset, msg: "selected forwarding declaration has an invalid binder vector") />
+            }
+            mut val index = 0U64
+            while index < retainedArguments.count() {
+                val retained = retainedArguments[index]
+                if retained == 0U64 || retained >= self.arena.typeCount() || (fullArgs[index] != 0U64 && !self.typeRefEq(a: fullArgs[index], b: retained)) {
+                    return <Result.Err error=self.diagnosticAt(offset: f.defOffset, msg: "selected forwarding arguments conflict with the receiver evidence") />
+                }
+                fullArgs.set(i: index, value: retained)
+                index += 1U64
+            }
+        }
+        for value in fullArgs {
+            if value != 0U64 && value >= self.arena.typeCount() { return <Result.Err error=self.diagnosticAt(offset: f.defOffset, msg: "selected method binder is outside the type arena") /> }
+        }
+        // Complete only missing declaration slots from the shared prepared
+        // argument reader. Already retained/receiver/proof values are fixed;
+        // final consumers do not reopen argument inference for a complete map.
+        if f.typeParams.count() != 0U64 && !self.fnArgsAllResolved(args: fullArgs) {
+            val known = try self.knownMethodSignatureEnvironment(f: f, environment: <InstanceEnvironment params=self.copyFuncBinds(binds: f.typeParams) args=fullArgs receiverRef=semanticReceiver proof=proof />)
+            val item = try self.finalMethodItemRef(f: f, receiverRef: semanticReceiver)
+            mut val types: Array[U64] = []
+            for index in 0U64..<f.params.count() {
+                types.append(try self.groundTermForBody(ref: self.funcParamAt(params: f.params, index: index).ty, environment: known, selfRef: semanticReceiver, itemRef: item))
+            }
+            // Signature Self/projections are already interpreted. A second
+            // receiver substitution could change a caller-owned symbolic Self.
+            fullArgs = try self.inferPreparedCallTypeArguments(f: f, args: args, parameterTypes: types, initialValues: fullArgs, inferenceOrigin: inferenceOrigin)
+        }
+        // This is a declaration-time semantic query as well as a concrete
+        // codegen query.  A receiver such as `Box[T_outer]` supplies a fully
+        // resolved *symbolic* argument for the method's `T_impl`; requiring a
+        // concrete term here discards that relation and makes `?.read()` lose
+        // its outer T.  Only an absent inference slot is incomplete.
+        if fullArgs.count() != f.typeParams.count() {
+            return <Result.Ok value=<InstanceEnvironment /> />
+        }
+        // Preserve ParamId identity in the result. The legacy Cursor grounding
+        // path can use spelling fallback while translating a method binder;
+        // an immutable map cannot, so the returned outer `T` remains the
+        // caller's lexical term for later BodyInstance grounding.
+        return <Result.Ok value=(try self.withLexicalSelfBinding(f: f, environment: <InstanceEnvironment params=self.copyFuncBinds(binds: f.typeParams) args=fullArgs receiverRef=semanticReceiver proof=proof />)) />
+    }
+}
+
+impl Comp {
+    inout fn associatedReceiverFromArgumentsWithOrigin(f: Func, args: ArgRange, inferenceOrigin: GenericCallInferenceOrigin) -> Result[U64, CompileDiagnostic] {
+        if f.recvTy == 0U64 || f.typeParams.count() == 0U64 { return <Result.Ok value=0U64 />}
+        if f.dependentReceiverScope != 0U64 {
+            // A bare Self parameter supplies the whole receiver term.
+            // Keep the operand's type when the declared receiver recipe
+            // matches it, including the concrete associated output.
+            for index in 0U64..<f.params.count() {
+                val parameter = self.funcParamAt(params: f.params, index: index)
+                if parameter.ty == 0U64 { continue }
+                val pattern = self.groundTermInEnvironment(ref: parameter.ty, params: [], values: [], selfRef: f.recvTy)
+                if !self.typeRefEq(a: pattern, b: f.recvTy) { continue }
+                val supplied = self.argIndexForParam(params: f.params, args: args, paramIdx: index)
+                if supplied >= args.len { continue }
+                val expression = self.argAt(args: args, index: supplied).expr
+                if self.expressionNeedsTypeContext(exprId: expression, allowPartialFunction: true) { continue }
+                // A prepared whole-Self operand may still contain an unfinished
+                // nested result. Its foreign slots are not a receiver equation.
+                // Raw structural observations keep their existing path.
+                if self.hasSemanticExprTypeFact(exprId: expression) && (try self.argumentRequiresResultContext(exprId: expression)) { continue }
+                val receiver = try self.inferenceArgumentType(exprId: expression)
+                if receiver == 0U64 { continue }
+                val matched = try self.methodReceiverEnvironment(f: f, instRef: receiver, sourceMatch: true)
+                if matched.conformIdx != 0U64 { return <Result.Ok value=receiver /> }
+            }
+        }
+        val inferred = (try self.inferPreparedCallTypeArguments(f: f, args: args, selfRef: f.recvTy, inferenceOrigin: inferenceOrigin))
+        if inferred.count() != f.typeParams.count() || !self.fnArgsAllResolved(args: inferred) { return <Result.Ok value=0U64 />}
+        return <Result.Ok value=self.groundTermInEnvironment(ref: f.recvTy, params: self.copyFuncBinds(binds: f.typeParams), values: inferred) />
+    }
+}
+
+impl Comp {
+    inout fn finalMethodEnvironmentWithOrigin(f: Func, receiverRef: U64, args: ArgRange, selectedProof: StaticConformanceProof = <StaticConformanceProof.Missing />, inferenceOrigin: GenericCallInferenceOrigin) -> Result[InstanceEnvironment, CompileDiagnostic] {
+        val environment = try self.inferMethodEnvironmentWithOrigin(f: f, receiverRef: receiverRef, args: args, selectedProof: selectedProof, inferenceOrigin: inferenceOrigin)
+        // The inference environment contains every declaration binder and
+        // may also contain lexical Self. All supplied bindings must resolve;
+        // their order is deliberately not part of this consumer's contract.
+        if f.typeParams.count() > 0U64 && (environment.args.count() < f.typeParams.count() || !self.fnArgsAllResolved(args: environment.args)) { return <Result.Ok value=<InstanceEnvironment /> /> }
+        return <Result.Ok value=environment />
     }
 }

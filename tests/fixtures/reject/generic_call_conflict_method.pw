@@ -1,0 +1,7 @@
+struct Holder {}
+impl Holder { factory
+ fn same[T](first: T, second: T) {}
+}
+fn main() { val h = <Holder />
+ h.same(first: 5I32, second: 6I64)
+}

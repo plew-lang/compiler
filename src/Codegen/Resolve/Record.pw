@@ -847,10 +847,7 @@ pub impl Comp {
     // substitution. Templates are mutable construction records until the lexical
     // body is verified and sealed; consumers cannot treat an early row as proof.
     inout fn freeCallParameterEnvironment(f: Func, args: ArgRange) -> Result[InstanceEnvironment, CompileDiagnostic] {
-        if f.typeParams.count() == 0U64 { return <Result.Ok value=<InstanceEnvironment /> /> }
-        val inferred = try self.inferRecordedFreeCallArgs(f: f, args: args)
-        if !self.fnArgsAllResolved(args: inferred) { return <Result.Ok value=<InstanceEnvironment /> /> }
-        return <Result.Ok value=<InstanceEnvironment params=self.copyFuncBinds(binds: f.typeParams) args=inferred /> />
+        return self.freeCallParameterEnvironmentWithOrigin(f: f, args: args, inferenceOrigin: <GenericCallInferenceOrigin.Raw />)
     }
 
     inout fn recordParametricFreeCall(exprId: U64, callee: U64, args: ArgRange) -> Result[(), CompileDiagnostic] {
@@ -1761,11 +1758,12 @@ impl Comp {
             FreeCallLookup.DiagnosticCandidate(function: _) => self.diagnosticArrayContextOrigin(origin: origin, exprId: exprId, args: args)
             _ => origin
         }
+        val inferenceOrigin = <GenericCallInferenceOrigin.Call request=origin.request expression=exprId callee=callee arguments=args receiver=0U64 diagnostic=match context { FreeCallLookup.DiagnosticCandidate(function: _) => true _ => false } />
         val cf = self.arena.functionAt(index: callee)
         // A complete substitution may contain caller-owned symbolic
         // terms. These are valid context in a generic declaration;
         // only unresolved callee binders must stay out of the body.
-        val parameterEnvironment = try self.freeCallParameterEnvironment(f: cf, args: args)
+        val parameterEnvironment = try self.freeCallParameterEnvironmentWithOrigin(f: cf, args: args, inferenceOrigin: inferenceOrigin)
         val canSubstitute = cf.typeParams.count() == 0U64 || (parameterEnvironment.args.count() == cf.typeParams.count() && self.fnArgsAllResolved(args: parameterEnvironment.args))
         mut val checkedValues = 0U64
         mut val k: U64 = 0
@@ -1801,7 +1799,7 @@ impl Comp {
                 // Keep detailed argument errors without manufacturing a parent
                 // call descriptor or using its result type as source authority.
                 mut val typeArguments: Array[U64] = []
-                if cf.typeParams.count() != 0U64 { typeArguments = try self.inferRecordedFreeCallArgs(f: cf, args: args) }
+                if cf.typeParams.count() != 0U64 { typeArguments = try self.inferPreparedCallTypeArguments(f: cf, args: args, selfRef: if cf.isAssoc { give cf.recvTy } else { give 0U64 }, inferenceOrigin: inferenceOrigin) }
                 if typeArguments.count() != cf.typeParams.count() || (cf.typeParams.count() != 0U64 && !self.fnArgsAllResolved(args: typeArguments)) {
                     return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "cannot infer all type arguments for this call") />
                 }
@@ -2102,7 +2100,7 @@ impl Comp {
                 val diagnosticOrigin = self.diagnosticArrayContextOrigin(origin: origin, exprId: exprId, args: args, factoryReceiver: factoryReceiver)
                 // This path may refine operands for a detailed error, but it
                 // must not publish a successful parent template or result.
-                try self.recordMethodArgumentContextsWithOrigin(callee: function, receiverTerm: receiverTerm, args: args, chainHoleRef: chainHoleRef, exprId: exprId, origin: diagnosticOrigin, expectedOrigin: expectedOrigin)
+                try self.recordMethodArgumentContextsWithOrigin(callee: function, receiverTerm: receiverTerm, args: args, chainHoleRef: chainHoleRef, exprId: exprId, origin: diagnosticOrigin, expectedOrigin: expectedOrigin, diagnosticCandidate: true)
                 val declaration = self.arena.functionAt(index: function)
                 for index in 0U64..<args.len {
                     val parameter = self.paramIndexForArg(params: declaration.params, args: args, argIdx: index)
@@ -2119,7 +2117,7 @@ impl Comp {
 // Source inference and candidate applicability interpret the same prepared
 // values. An unfinished child owns its own holes, never a caller binding.
 impl Comp {
-    inout fn inferPreparedCallTypeArguments(f: Func, args: ArgRange, parameterTypes: Array[U64] = [], selfRef: U64 = 0U64, initialValues: Array[U64] = []) -> Result[Array[U64], CompileDiagnostic] {
+    inout fn inferPreparedCallTypeArguments(f: Func, args: ArgRange, parameterTypes: Array[U64] = [], selfRef: U64 = 0U64, initialValues: Array[U64] = [], inferenceOrigin: GenericCallInferenceOrigin = <GenericCallInferenceOrigin.Raw />) -> Result[Array[U64], CompileDiagnostic] {
         mut val out = initialValues
         if parameterTypes.count() != 0U64 && parameterTypes.count() != f.params.count() { return <Result.Err error=self.diagnosticAt(offset: f.defOffset, msg: "internal error: prepared inference parameter vector has the wrong size") /> }
         if out.count() != 0U64 && out.count() != f.typeParams.count() { return <Result.Err error=self.diagnosticAt(offset: f.defOffset, msg: "internal error: prepared inference binder vector has the wrong size") /> }
@@ -2139,12 +2137,17 @@ impl Comp {
                     mut val candidate = out
                     match (try self.matchPreparedCallArgument(expression: expression, signature: pattern, parameters: f.typeParams, receiver: 0U64, values: inout candidate)).matched {
                         TypeArgumentMatch.Matched | TypeArgumentMatch.Deferred => { out = candidate }
-                        TypeArgumentMatch.Conflict => { return <Result.Err error=self.typeArgumentConflictDiagnostic(offset: self.exprOffset(id: expression)) /> }
+                        TypeArgumentMatch.Conflict => { return <Result.Err error=self.genericCallConflictDiagnostic(origin: inferenceOrigin, function: f, args: args, parameter: index, operand: expression, pattern: pattern, known: out) /> }
                         TypeArgumentMatch.Mismatch => {}
                     }
                 } else {
                     val argument = self.parametricCallArgumentTerm(exprId: expression)
-                    out = try self.extendCallTypeArguments(pattern: pattern, argument: argument, params: f.typeParams, values: out, offset: self.exprOffset(id: expression))
+                    val extension = self.callTypeArgumentExtension(pattern: pattern, argument: argument, params: f.typeParams, values: out)
+                    match extension.matched {
+                        TypeArgumentMatch.Matched | TypeArgumentMatch.Deferred => { out = extension.values }
+                        TypeArgumentMatch.Mismatch => {}
+                        TypeArgumentMatch.Conflict => { return <Result.Err error=self.genericCallConflictDiagnostic(origin: inferenceOrigin, function: f, args: args, parameter: index, operand: expression, pattern: pattern, known: out) /> }
+                    }
                 }
             }
             index += 1U64
@@ -3474,7 +3477,8 @@ impl Comp {
         return <Result.Ok value=() />
     }
 
-    inout fn recordMethodArgumentContextsWithOrigin(callee: U64, receiverTerm: U64, args: ArgRange, chainHoleRef: U64, exprId: U64, origin: SourceRecordingScope, expectedOrigin: SourceExpectedContext) -> Result[(), CompileDiagnostic] {
+    inout fn recordMethodArgumentContextsWithOrigin(callee: U64, receiverTerm: U64, args: ArgRange, chainHoleRef: U64, exprId: U64, origin: SourceRecordingScope, expectedOrigin: SourceExpectedContext, diagnosticCandidate: Bool = false) -> Result[(), CompileDiagnostic] {
+        val inferenceOrigin = <GenericCallInferenceOrigin.Call request=origin.request expression=exprId callee=callee arguments=args receiver=receiverTerm diagnostic=diagnosticCandidate />
         if callee < self.arena.functionCount() {
             val selectedMethod: Func = self.arena.functionAt(index: callee)
             val useOffset = self.exprOffset(id: exprId)
@@ -3482,9 +3486,9 @@ impl Comp {
                 return <Result.Err error=self.methodPrivateDiagnostic(offset: useOffset, domain: self.sourceMethodVisibilityDomain(exprId: exprId, receiverTerm: receiverTerm)) />
             }
             if args.len == 0U64 { return <Result.Ok value=() /> }
-            val contextReceiver = if receiverTerm != 0U64 || !selectedMethod.isAssoc { give receiverTerm } else { give (try self.associatedReceiverFromArguments(f: selectedMethod, args: args)) }
+            val contextReceiver = if receiverTerm != 0U64 || !selectedMethod.isAssoc { give receiverTerm } else { give (try self.associatedReceiverFromArgumentsWithOrigin(f: selectedMethod, args: args, inferenceOrigin: inferenceOrigin)) }
             val signature = if selectedMethod.isProvided && self.isAuthoredProvidedDeclaration(function: callee) {
-                val environment = try self.finalMethodEnvironment(f: selectedMethod, receiverRef: contextReceiver, args: args)
+                val environment = try self.finalMethodEnvironmentWithOrigin(f: selectedMethod, receiverRef: contextReceiver, args: args, inferenceOrigin: inferenceOrigin)
                 if environment.receiverRef == 0U64 { return <Result.Ok value=() /> }
                 give try self.selectedDirectParameterSignature(callee: callee, environment: environment)
             } else {
@@ -3498,7 +3502,7 @@ impl Comp {
                     val mctx = match signature {
                         SourceCallSignature.ProvidedParameters(types: val types) => types[parameterIndex],
                         _ => {
-                            val environment = try self.finalMethodEnvironment(f: selectedMethod, receiverRef: contextReceiver, args: args)
+                            val environment = try self.finalMethodEnvironmentWithOrigin(f: selectedMethod, receiverRef: contextReceiver, args: args, inferenceOrigin: inferenceOrigin)
                             give try self.groundFinalMethodSignatureInEnvironment(f: selectedMethod, environment: environment, signatureTerm: parameter.ty)
                         }
                     }
@@ -3585,6 +3589,7 @@ impl Comp {
     }
 
     inout fn recordParametricMethodCallWithOrigin(exprId: U64, callee: U64, receiverSource: CallTemplateReceiver, receiverTerm: U64, args: ArgRange, origin: SourceRecordingScope, expectedOrigin: SourceExpectedContext) -> Result[(), CompileDiagnostic] {
+        val inferenceOrigin = <GenericCallInferenceOrigin.Call request=origin.request expression=exprId callee=callee arguments=args receiver=receiverTerm diagnostic=false />
         if callee >= self.arena.functionCount() { return <Result.Ok value=() /> }
         val f: Func = self.arena.functionAt(index: callee)
         try self.checkCallDeclarationKind(exprId: exprId, declaration: f)
@@ -3595,12 +3600,12 @@ impl Comp {
         // generic associated factory).  Do not discard that source selection.
         if receiverTerm == 0U64 {
             if f.isAssoc {
-                val inferredReceiver = try self.associatedReceiverFromArguments(f: f, args: args)
+                val inferredReceiver = try self.associatedReceiverFromArgumentsWithOrigin(f: f, args: args, inferenceOrigin: inferenceOrigin)
                 if inferredReceiver != 0U64 {
                     try self.recordParametricMethodCallWithOrigin(exprId: exprId, callee: callee, receiverSource: <CallTemplateReceiver.Term term=inferredReceiver />, receiverTerm: inferredReceiver, args: args, origin: origin, expectedOrigin: expectedOrigin)
                     return <Result.Ok value=() />
                 }
-                val inferred = try self.inferPreparedCallTypeArguments(f: f, args: args, selfRef: f.recvTy)
+                val inferred = try self.inferPreparedCallTypeArguments(f: f, args: args, selfRef: f.recvTy, inferenceOrigin: inferenceOrigin)
                 // A partial receiver does not erase a method-owned binder
                 // already determined by an explicit argument. Result context
                 // can complete only the remaining declared unknowns.
@@ -3660,7 +3665,7 @@ impl Comp {
         // Source result context can still fill method-owned binders. Keep the
         // already admitted receiver/proof while that local join is pending;
         // final publication still requires the completed callable signature.
-        val finalEnvironment: InstanceEnvironment = (try self.inferMethodEnvironment(f: f, receiverRef: receiverTerm, args: args, retainedArguments: (try self.syntheticSelectedTypeArguments(exprId: exprId, declaration: callee))))
+        val finalEnvironment: InstanceEnvironment = (try self.inferMethodEnvironmentWithOrigin(f: f, receiverRef: receiverTerm, args: args, retainedArguments: (try self.syntheticSelectedTypeArguments(exprId: exprId, declaration: callee)), inferenceOrigin: inferenceOrigin))
         // The final callable's complete ParamId substitution is provenance,
         // not a Mono inference request.  Persist it beside the selected
         // callee so every downstream consumer sees the same method/impl
@@ -3967,7 +3972,7 @@ impl Comp {
 
 
 impl Comp {
-    fn arrayContextDiagnosticOwner() -> DiagnosticOwner {
+    fn currentDiagnosticOwner() -> DiagnosticOwner {
         return match self.currentSourceOwner() {
             Optional.Some(v: val owner) => match owner {
                 SemanticCompletionOwner.Function(index: val index) => <DiagnosticOwner.Function index=index />
@@ -3996,5 +4001,14 @@ impl Comp {
         if typeRef == 0U64 { return <Result.Ok value=<SourceFieldContract term=0U64 /> /> }
         if isEnum { return self.enumFieldContract(instRef: typeRef, variantStart: variantStart, variantLen: variantLen, fieldStart: fieldStart, fieldLen: fieldLen) }
         return self.fieldContractOfReceiver(receiverRef: typeRef, fieldStart: fieldStart, fieldLen: fieldLen)
+    }
+}
+
+impl Comp {
+    inout fn freeCallParameterEnvironmentWithOrigin(f: Func, args: ArgRange, inferenceOrigin: GenericCallInferenceOrigin) -> Result[InstanceEnvironment, CompileDiagnostic] {
+        if f.typeParams.count() == 0U64 { return <Result.Ok value=<InstanceEnvironment /> /> }
+        val inferred = try self.inferPreparedCallTypeArguments(f: f, args: args, selfRef: if f.isAssoc { give f.recvTy } else { give 0U64 }, inferenceOrigin: inferenceOrigin)
+        if !self.fnArgsAllResolved(args: inferred) { return <Result.Ok value=<InstanceEnvironment /> /> }
+        return <Result.Ok value=<InstanceEnvironment params=self.copyFuncBinds(binds: f.typeParams) args=inferred /> />
     }
 }

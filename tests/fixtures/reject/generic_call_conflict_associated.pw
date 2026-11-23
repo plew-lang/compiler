@@ -1,0 +1,3 @@
+struct Holder[T] {}
+impl[T] Holder[T] { assoc fn same(first: T, second: T) {} }
+fn main() { Holder.same(first: 5I32, second: 6I64) }

@@ -343,7 +343,7 @@ pub impl Comp {
     }
 
     inout fn typeArgumentConflictDiagnostic(offset: U64) -> CompileDiagnostic {
-        return self.diagnosticAt(offset: offset, msg: "inconsistent types for a type parameter: two arguments bound to the same `[T]` have different types")
+        return self.diagnosticAt(offset: offset, msg: genericCallConflictMessage())
     }
 
     inout fn checkArgInoutMode(p: Param, arg: Arg) -> Result[(), CompileDiagnostic] {

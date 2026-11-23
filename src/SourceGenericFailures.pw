@@ -1,0 +1,71 @@
+impl SourceGenericCallConflict { factory }
+
+impl Comp {
+    // A candidate mutation is committed only for Matched/Deferred. Both Raw
+    // callers and source inference consume this one transactional decision.
+    inout fn callTypeArgumentExtension(pattern: U64, argument: U64, params: FuncBindRange, values: Array[U64]) -> (matched: TypeArgumentMatch, values: Array[U64]) {
+        mut val candidate = values
+        val matched = self.matchCallTypeArguments(pattern: pattern, argument: argument, params: params, values: inout candidate)
+        return (matched: matched, values: candidate)
+    }
+
+    inout fn genericCallConflictDiagnostic(origin: GenericCallInferenceOrigin, function: Func, args: ArgRange, parameter: U64, operand: U64, pattern: U64, known: Array[U64]) -> CompileDiagnostic {
+        val offset = self.exprOffset(id: operand)
+        val request = match origin {
+            GenericCallInferenceOrigin.Raw => { return self.typeArgumentConflictDiagnostic(offset: offset) }
+            GenericCallInferenceOrigin.Call(request: val request, expression: val expression, callee: val callee, arguments: val arguments, receiver: val receiver, diagnostic: val diagnostic) => (request: request, expression: expression, callee: callee, arguments: arguments, receiver: receiver, diagnostic: diagnostic)
+        }
+        val source = match request.request {
+            SourceRecordOrigin.Raw => { return self.typeArgumentConflictDiagnostic(offset: offset) }
+            SourceRecordOrigin.CheckingRequest(session: val session, root: val root) | SourceRecordOrigin.DiagnosticRequest(session: val session, root: val root, frontier: _) => (session: session, root: root)
+        }
+        if source.session != self.sourceFactSession() || request.callee >= self.arena.functionCount() || request.arguments.start != args.start || request.arguments.len != args.len { return self.typeArgumentConflictDiagnostic(offset: offset) }
+        val owner = match self.currentSourceOwner() { Optional.Some(v: val owner) => owner Optional.None => { return self.typeArgumentConflictDiagnostic(offset: offset) } }
+        if !self.sourceFacts.isActive(owner: owner) || !semanticCompletionOwnersEqual(recorded: self.lexicalSourceFactOwner(owner: owner), prepared: source.root) { return self.typeArgumentConflictDiagnostic(offset: offset) }
+        val current = self.arena.functionAt(index: request.callee)
+        if current.defOffset != function.defOffset || current.params.start != function.params.start || current.params.len != function.params.len || current.typeParams.start != function.typeParams.start || current.typeParams.len != function.typeParams.len || parameter >= function.params.count() { return self.typeArgumentConflictDiagnostic(offset: offset) }
+        val operation = match self.sourceCallOperation(exprId: request.expression, args: args, factoryReceiver: request.receiver) {
+            Optional.Some(v: val operation) => operation
+            Optional.None => { return self.typeArgumentConflictDiagnostic(offset: offset) }
+        }
+        val supplied = self.argIndexForParam(params: function.params, args: args, paramIdx: parameter)
+        if supplied >= args.len || self.argAt(args: args, index: supplied).expr != operand { return self.typeArgumentConflictDiagnostic(offset: offset) }
+        mut val written: Array[Arg] = []
+        for index in 0U64..<args.len { written.append(self.argAt(args: args, index: index)) }
+        mut val labels: Array[(start: U64, length: U64, name: U64, positional: Bool, optional: Bool)] = []
+        mut val types: Array[U64] = []
+        for index in 0U64..<function.params.count() {
+            val parameter = self.funcParamAt(params: function.params, index: index)
+            types.append(parameter.ty)
+            labels.append((start: parameter.nameStart, length: parameter.nameLen, name: parameter.nameId, positional: parameter.noLabel, optional: parameter.hasDefault))
+        }
+        mut val identities: Array[U64] = []
+        for index in 0U64..<function.typeParams.count() { identities.append(self.funcBindAt(binds: function.typeParams, index: index).paramId) }
+        val refusal = <GenericCallConflictRefusal session=source.session owner=self.currentDiagnosticOwner() expression=request.expression callee=request.callee operand=operand parameter=parameter event=self.failedGenericCallConflicts.count() location=self.diagnosticLocationAt(offset: offset) />
+        self.failedGenericCallConflicts.append(<SourceGenericCallConflict refusal=refusal operation=operation arguments=args written=written parameters=function.params parameterTypes=types parameterLabels=labels declarationOffset=function.defOffset binders=function.typeParams identities=identities known=known pattern=pattern receiver=request.receiver diagnostic=request.diagnostic />)
+        return <CompileDiagnostic.genericCallConflict refusal=refusal />
+    }
+
+    fn sourceGenericCallConflictHasOwner(refusal: GenericCallConflictRefusal) -> Bool {
+        if refusal.session() != self.sourceFactSession() || refusal.event() >= self.failedGenericCallConflicts.count() || refusal.callee() >= self.arena.functionCount() || refusal.operand() >= self.arena.exprs.count() { return false }
+        val proof = self.failedGenericCallConflicts[refusal.event()]
+        val saved = proof.refusal
+        if saved.session() != refusal.session() || !self.diagnosticOwnersEqual(first: saved.owner(), second: refusal.owner()) || saved.expression() != refusal.expression() || saved.callee() != refusal.callee() || saved.operand() != refusal.operand() || saved.parameter() != refusal.parameter() || !saved.location().same(other: refusal.location()) { return false }
+        val operation = match self.sourceCallOperation(exprId: refusal.expression(), args: proof.arguments, factoryReceiver: proof.receiver) { Optional.Some(v: val operation) => operation Optional.None => { return false } }
+        if !proof.operation.same(other: operation) || proof.written.count() != proof.arguments.len { return false }
+        for index in 0U64..<proof.arguments.len {
+            val written = proof.written[index]
+            val current = self.argAt(args: proof.arguments, index: index)
+            if written.expr != current.expr || written.isInout != current.isInout || written.hasLabel != current.hasLabel || written.labelStart != current.labelStart || written.labelLen != current.labelLen { return false }
+        }
+        val function = self.arena.functionAt(index: refusal.callee())
+        if function.defOffset != proof.declarationOffset || function.params.start != proof.parameters.start || function.params.len != proof.parameters.len || function.typeParams.start != proof.binders.start || function.typeParams.len != proof.binders.len { return false }
+        for index in 0U64..<function.params.count() {
+            val parameter = self.funcParamAt(params: function.params, index: index)
+            val label = proof.parameterLabels[index]
+            if parameter.ty != proof.parameterTypes[index] || parameter.nameStart != label.start || parameter.nameLen != label.length || parameter.nameId != label.name || parameter.noLabel != label.positional || parameter.hasDefault != label.optional { return false }
+        }
+        for index in 0U64..<function.typeParams.count() { if self.funcBindAt(binds: function.typeParams, index: index).paramId != proof.identities[index] { return false } }
+        return true
+    }
+}

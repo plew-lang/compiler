@@ -1,0 +1,114 @@
+// Passive authored-operation identity shared by distinct checking failures.
+impl Comp {
+    // Exact source access correspondence, not recognition by an "index" name.
+    fn sourceCallOperation(exprId: U64, args: ArgRange, factoryReceiver: U64 = 0U64) -> Optional[SourceCallOperation] {
+        if exprId >= self.arena.exprs.count() || args.start > self.arena.argPool.count() || args.len > self.arena.argPool.count() - args.start { return <Optional.None /> }
+        val accessIndex = self.decls.accessCandidateForExpr(exprId: exprId)
+        if accessIndex < self.decls.accessCandidateCount() {
+            val access = self.decls.accessCandidateAt(index: accessIndex)
+            if (exprId == access.readExpr || exprId == access.placeExpr) && access.readExpr < self.arena.exprs.count() && access.placeExpr < self.arena.exprs.count() && args.len == 1U64 {
+                val place = match self.arena.exprs[access.placeExpr] {
+                    Expr.Index(base: val receiver, index: val key) => <Optional.Some v=(receiver: receiver, key: key) />
+                    _ => <Optional.None />
+                }
+                val siteIndex = self.syntheticCallSiteIndex(exprId: access.readExpr)
+                if place.isSome() && siteIndex < self.decls.syntheticCallSites.count() {
+                    val site = self.decls.syntheticCallSites[siteIndex]
+                    val indexRead = match site.kind { SyntheticCallKind.IndexRead => true _ => false }
+                    val target = place.unwrap()
+                    if indexRead && site.originSerial == access.originSerial && self.arena.exprOriginSerial[access.readExpr] == access.originSerial && self.argAt(args: args, index: 0U64).expr == target.key {
+                        match self.arena.exprs[access.readExpr] {
+                            Expr.Method(recv: val receiver, nameStart: val start, nameLen: val length, args: val readArgs) => {
+                                if receiver == target.receiver && readArgs.len == 1U64 && readArgs.start < self.arena.argPool.count() && self.argAt(args: readArgs, index: 0U64).expr == target.key && (exprId != access.readExpr || (args.start == readArgs.start && args.len == readArgs.len)) {
+                                    return <Optional.Some v=<SourceCallOperation.Index receiver=receiver key=target.key place=access.placeExpr read=access.readExpr serial=access.originSerial selectorStart=start selectorLength=length readArguments=readArgs readArgument=self.argAt(args: readArgs, index: 0U64) /> />
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+            }
+        }
+        // The capture caller admits the actual authored factory operation.
+        // Revalidation reads its existing serial and operand receipt only.
+        if factoryReceiver == 0U64 || factoryReceiver < self.arena.typeCount() {
+            val index = self.syntheticCallSiteIndex(exprId: exprId)
+            val authored = self.authoredNamedFactoryOrigins.get(key: exprId)
+            if index < self.decls.syntheticCallSites.count() && authored.isSome() && self.authoredConstruction(exprId: exprId).isSome() {
+                val site = self.decls.syntheticCallSites[index]
+                val receipt = authored.unwrap()
+                val factory = match site.kind { SyntheticCallKind.Factory => true _ => false }
+                if factory && site.receiverIsType && (site.receiverTerm == 0U64 || site.receiverTerm < self.arena.typeCount()) && site.originSerial == receipt.serial && self.arena.exprOriginSerial[exprId] == receipt.serial && args.len == receipt.arguments.count() {
+                    // An uninstantiated qualifier can identify an authored
+                    // operation without supplying any result/type context.
+                    mut val intact = factoryReceiver == 0U64
+                    if factoryReceiver != 0U64 && site.receiverTerm != 0U64 {
+                        val requested = self.arena.typeTermAt(index: factoryReceiver)
+                        val written = self.arena.typeTermAt(index: site.receiverTerm)
+                        intact = requested.hasDecl && written.hasDecl && requested.declOffset == written.declOffset
+                    }
+                    for slot in 0U64..<args.len {
+                        val current = self.argAt(args: args, index: slot)
+                        val original = receipt.arguments[slot]
+                        if current.expr != original.expr || current.isInout != original.isInout || current.hasLabel != original.hasLabel || current.labelStart != original.labelStart || current.labelLen != original.labelLen { intact = false }
+                    }
+                    if intact {
+                        match self.arena.exprs[exprId] {
+                            Expr.Method(recv: val receiver, nameStart: val start, nameLen: val length, args: val writtenArgs) => {
+                                if writtenArgs.start == args.start && writtenArgs.len == args.len { return <Optional.Some v=<SourceCallOperation.Factory receiver=receiver receiverTerm=factoryReceiver writtenReceiverTerm=site.receiverTerm start=start length=length serial=receipt.serial /> /> }
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+            }
+        }
+        return match self.arena.exprs[exprId] {
+            Expr.Call(nameStart: val start, nameLen: val length, args: _) => {
+                give if self.isAuthoredFreeCall(exprId: exprId, start: start, length: length, args: args) { give <Optional.Some v=<SourceCallOperation.Free start=start length=length /> /> }
+                else { give <Optional.None /> }
+            }
+            Expr.Method(recv: val receiver, nameStart: val start, nameLen: val length, args: _) => {
+                give if self.isAuthoredMethodLookup(exprId: exprId, nameStart: start, nameLen: length, args: args) { give <Optional.Some v=<SourceCallOperation.Method receiver=receiver start=start length=length /> /> }
+                else { give <Optional.None /> }
+            }
+            Expr.ExtMethod(recv: val receiver, source: val source, nameStart: val start, nameLen: val length, args: _) => {
+                give if self.isAuthoredMethodLookup(exprId: exprId, nameStart: start, nameLen: length, args: args) { give <Optional.Some v=<SourceCallOperation.Extension receiver=receiver source=source start=start length=length /> /> }
+                else { give <Optional.None /> }
+            }
+            _ => <Optional.None />
+        }
+    }
+
+}
+
+impl SourceCallOperation {
+    fn same(other: SourceCallOperation) -> Bool {
+        return match self {
+            SourceCallOperation.Free(start: val start, length: val length) => match other {
+                SourceCallOperation.Free(start: val otherStart, length: val otherLength) => start == otherStart && length == otherLength
+                _ => false
+            }
+            SourceCallOperation.Method(receiver: val receiver, start: val start, length: val length) => match other {
+                SourceCallOperation.Method(receiver: val otherReceiver, start: val otherStart, length: val otherLength) => receiver == otherReceiver && start == otherStart && length == otherLength
+                _ => false
+            }
+            SourceCallOperation.Extension(receiver: val receiver, source: val source, start: val start, length: val length) => match other {
+                SourceCallOperation.Extension(receiver: val otherReceiver, source: val otherSource, start: val otherStart, length: val otherLength) => {
+                    if receiver != otherReceiver || start != otherStart || length != otherLength || source.writtenStart != otherSource.writtenStart || source.writtenLen != otherSource.writtenLen || source.surfaceId != otherSource.surfaceId || source.traitInstance.owner != otherSource.traitInstance.owner || source.traitInstance.positionalArgs.count() != otherSource.traitInstance.positionalArgs.count() { return false }
+                    for index in 0U64..<source.traitInstance.positionalArgs.count() { if source.traitInstance.positionalArgs[index] != otherSource.traitInstance.positionalArgs[index] { return false } }
+                    give true
+                }
+                _ => false
+            }
+            SourceCallOperation.Factory(receiver: val receiver, receiverTerm: val term, writtenReceiverTerm: val writtenTerm, start: val start, length: val length, serial: val serial) => match other {
+                SourceCallOperation.Factory(receiver: val otherReceiver, receiverTerm: val otherTerm, writtenReceiverTerm: val otherWrittenTerm, start: val otherStart, length: val otherLength, serial: val otherSerial) => receiver == otherReceiver && term == otherTerm && writtenTerm == otherWrittenTerm && start == otherStart && length == otherLength && serial == otherSerial
+                _ => false
+            }
+            SourceCallOperation.Index(receiver: val receiver, key: val key, place: val place, read: val read, serial: val serial, selectorStart: val start, selectorLength: val length, readArguments: val arguments, readArgument: val argument) => match other {
+                SourceCallOperation.Index(receiver: val otherReceiver, key: val otherKey, place: val otherPlace, read: val otherRead, serial: val otherSerial, selectorStart: val otherStart, selectorLength: val otherLength, readArguments: val otherArguments, readArgument: val otherArgument) => receiver == otherReceiver && key == otherKey && place == otherPlace && read == otherRead && serial == otherSerial && start == otherStart && length == otherLength && arguments.start == otherArguments.start && arguments.len == otherArguments.len && argument.expr == otherArgument.expr && argument.isInout == otherArgument.isInout && argument.hasLabel == otherArgument.hasLabel && argument.labelStart == otherArgument.labelStart && argument.labelLen == otherArgument.labelLen
+                _ => false
+            }
+        }
+    }
+}

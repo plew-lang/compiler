@@ -131,6 +131,23 @@ a similarly named requirement. A fallback caused by missing candidate bookkeepin
 is not evidence of source ambiguity and must not acquire the source domain from
 a nearby authored expression.
 
+Generic call-binding conflicts retain the original transactional match outcome,
+known bindings and parameter identities at the typed-term or prepared-argument
+producer. A narrow private inference origin carries the actual call, callee,
+selection role and source request; it does not carry an expected-result contract.
+Raw inference, including Mono queries, keeps ordinary unowned reports. Errors
+from dependencies propagate unchanged instead of being caught and reclassified.
+The retained event binds its owned location, operand-to-parameter mapping,
+callee declaration and lexical binders. Observation validates those identities
+without matching types again or publishing a successful parent call.
+
+Authored-operation identity is passive, shared evidence. A normalized named
+factory with an uninstantiated qualifier can retain its original construction,
+serial and arguments before its receiver type is known. This establishes an
+operation, not a type context. Array-context failure admission separately
+requires a valid instantiated factory receiver at capture and observation;
+ordinary synthetic calls and copied source spans supply neither proof.
+
 `CompileDiagnostic.isSourceRejection()` requires both error severity and the
 explicit source domain. It is a value-level query, not proof of a failed process
 or an intended rejection reason. Rendering remains nonterminal and independent

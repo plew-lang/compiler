@@ -1,0 +1,3 @@
+struct Holder[T] {}
+impl[T] Holder[T] { factory same(first: T, second: T) { return <Holder[T] /> } }
+fn main() { val h = <Holder.same first=5I32 second=6I64 /> }

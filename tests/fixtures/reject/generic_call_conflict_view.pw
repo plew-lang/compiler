@@ -1,0 +1,3 @@
+struct Holder {}
+extension Extra { impl Holder { fn same[T](first: T, second: T) {} } }
+fn main() { <Holder />#Extra.same(first: 5I32, second: 6I64) }
