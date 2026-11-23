@@ -2,13 +2,14 @@
 use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontendForRequests, openFrontend }
 use ../../../src/CheckedProgram only { CompilerSession, CompilerSessionResult, ProgramCheckResult, checkCompilerSession }
 use ../../../src/Backend only { LlvmLoweringResult }
-use ../../../src/Ir only { Expr, Arg, ResolvedViewSource, TraitInstanceKey }
+use ../../../src/Ir only { Expr, Arg, ResolvedViewSource, TraitInstanceKey, SyntheticCallSite }
 use ../../../src/SourceAccess only { SourceAccess }
 use ../../../src/Diag only { CompileDiagnostic, FailureDomain, DiagnosticOwner, MemberCallAmbiguityRefusal, MemberCallAmbiguityKind }
 use @Std/Io only { print }
 use @Plew/Syntax only { rangeEquals }
 
-fn input(view: Bool = false) -> FrontendInput {
+fn input(view: Bool = false, associated: Bool = false) -> FrontendInput {
+    if associated { return <FrontendInput.Text path="Associated.pw" text="struct Selector {{}}\nimpl Selector {{ assoc fn convert(count: I32) -> I64 {{ return 32I64 }}\n assoc fn convert(count: I64) -> I64 {{ return 64I64 }} }}\nfn other() {{}}\nfn probe() -> I64 {{ return Selector.convert(count: 1) }}\nfn main() {{}}" /> }
     if view { return <FrontendInput.Text path="Views.pw" text="trait Picker[Input] {{ fn convert(count: I32) -> I64\n fn convert(count: I64) -> I64 }}\nfn other() {{}}\npub impl[Input] Picker[Input] {{ fn probe() -> I64 {{ return self#Picker[Input].convert(count: 1) }} }}\nfn main() {{}}" /> }
     return <FrontendInput.Text path="Members.pw" text="trait Convert[Input] {{ fn convert(count: I64) -> I64 }}\nfn other() {{}}\nfn probe[T](value: T) -> I64 where T: Convert[I64], T: Convert[Bool] {{ return value.convert(count: 1I64) }}\nfn main() {{}}" />
 }
@@ -20,17 +21,21 @@ fn rawFailure(compiler: inout Comp, function: U64) -> CompileDiagnostic {
     }
 }
 
-fn requireRaw(diagnostic: CompileDiagnostic, compiler: Comp) {
+fn requireRaw(diagnostic: CompileDiagnostic, compiler: Comp, associated: Bool) {
     if diagnostic.isSourceRejection() { panic("raw ambiguity acquired source authority") }
     match diagnostic.failureDomain() { FailureDomain.Unclassified => {} _ => { panic("raw domain changed") } }
     val refusal = match diagnostic.memberCallAmbiguity() {
         Optional.Some(v: val refusal) => refusal
         Optional.None => { panic("semantic ambiguity was flattened") }
     }
+    val expected = if associated { give "ambiguous associated call: this type qualifier matches more than one receiver pattern" } else { give <MemberCallAmbiguityKind.StaticInstances />.message() }
+    if diagnostic.message() != expected { panic("ambiguity producer changed its diagnostic") }
+    val expectedKind = if associated { give <MemberCallAmbiguityKind.AssociatedReceiverPatterns /> } else { give <MemberCallAmbiguityKind.StaticInstances /> }
+    if !refusal.kind().same(other: expectedKind) { panic("ambiguity producer lost its semantic kind") }
     if !compiler.sourceMemberCallAmbiguityHasOwner(refusal: refusal) { panic("negative query lost ownership") }
-    val wrongSession = <MemberCallAmbiguityRefusal kind=<MemberCallAmbiguityKind.StaticInstances /> session=refusal.session()+1U64 owner=refusal.owner() receiverRef=refusal.receiverRef() expression=refusal.expression() nameStart=refusal.nameStart() nameLen=refusal.nameLen() argumentsStart=refusal.argumentsStart() argumentsCount=refusal.argumentsCount() location=refusal.location() />
+    val wrongSession = <MemberCallAmbiguityRefusal kind=refusal.kind() session=refusal.session()+1U64 owner=refusal.owner() receiverRef=refusal.receiverRef() expression=refusal.expression() nameStart=refusal.nameStart() nameLen=refusal.nameLen() argumentsStart=refusal.argumentsStart() argumentsCount=refusal.argumentsCount() location=refusal.location() />
     if compiler.sourceMemberCallAmbiguityHasOwner(refusal: wrongSession) { panic("foreign session matched") }
-    val wrongType = <MemberCallAmbiguityRefusal kind=<MemberCallAmbiguityKind.StaticInstances /> session=refusal.session() owner=refusal.owner() receiverRef=0U64 expression=refusal.expression() nameStart=refusal.nameStart() nameLen=refusal.nameLen() argumentsStart=refusal.argumentsStart() argumentsCount=refusal.argumentsCount() location=refusal.location() />
+    val wrongType = <MemberCallAmbiguityRefusal kind=refusal.kind() session=refusal.session() owner=refusal.owner() receiverRef=refusal.receiverRef()+1U64 expression=refusal.expression() nameStart=refusal.nameStart() nameLen=refusal.nameLen() argumentsStart=refusal.argumentsStart() argumentsCount=refusal.argumentsCount() location=refusal.location() />
     if compiler.sourceMemberCallAmbiguityHasOwner(refusal: wrongType) { panic("different receiver type matched") }
     val wrongKind = <MemberCallAmbiguityRefusal kind=<MemberCallAmbiguityKind.ExistentialRequirements /> session=refusal.session() owner=refusal.owner() receiverRef=refusal.receiverRef() expression=refusal.expression() nameStart=refusal.nameStart() nameLen=refusal.nameLen() argumentsStart=refusal.argumentsStart() argumentsCount=refusal.argumentsCount() location=refusal.location() />
     if compiler.sourceMemberCallAmbiguityHasOwner(refusal: wrongKind) { panic("another producer kind matched static selection") }
@@ -42,12 +47,14 @@ fn requireRaw(diagnostic: CompileDiagnostic, compiler: Comp) {
         _ => { panic("fixture is not a method") }
     }
     val function = match cause.owner() { DiagnosticOwner.Function(index: val index) => index _ => { panic("fixture has no function owner") } }
-    match direct.staticMemberResolution(fnIdx: function, receiverRef: cause.receiverRef(), nameStart: cause.nameStart(), nameLen: cause.nameLen(), args: args) {
-        Result.Ok(value: _) => { panic("raw selector accepted ambiguity") }
-        Result.Err(error: val raw) => {
-            if raw.isSourceRejection() || raw.memberCallAmbiguity().isSome() || raw.message() != diagnostic.message() { panic("empty origin changed raw selector") }
-        }
+    val raw = if associated {
+        val receiver = match direct.arena.exprs[cause.expression()] { Expr.Method(recv: val receiver, nameStart: _, nameLen: _, args: _) => receiver _ => { panic("associated fixture lost receiver") } }
+        val spelling = match direct.arena.exprs[receiver] { Expr.Ident(start: val start, len: val length) => (start: start, length: length) _ => { panic("associated fixture lost qualifier") } }
+        give match direct.findAssoc(recvStart: spelling.start, recvLen: spelling.length, nameStart: cause.nameStart(), nameLen: cause.nameLen(), args: args) { Result.Err(error: val raw) => raw Result.Ok(value: _) => { panic("raw associated selector accepted ambiguity") } }
+    } else {
+        give match direct.staticMemberResolution(fnIdx: function, receiverRef: cause.receiverRef(), nameStart: cause.nameStart(), nameLen: cause.nameLen(), args: args) { Result.Err(error: val raw) => raw Result.Ok(value: _) => { panic("raw static selector accepted ambiguity") } }
     }
+    if raw.isSourceRejection() || raw.memberCallAmbiguity().isSome() || raw.message() != diagnostic.message() { panic("empty origin changed raw selector") }
     if !direct.sourceMemberCallAmbiguityHasOwner(refusal: cause) { panic("raw empty origin replaced prior proof") }
     mut val other = direct.arena.functionCount()
     for index in 0U64..<direct.arena.functionCount() {
@@ -55,10 +62,10 @@ fn requireRaw(diagnostic: CompileDiagnostic, compiler: Comp) {
         if rangeEquals(bytes: direct.arena.bytes, start: function.nameStart, len: function.nameLen, kw: "other") { other = index }
     }
     for owner in [<DiagnosticOwner.Unknown />, <DiagnosticOwner.Function index=other />, <DiagnosticOwner.Global target=0U64 />, <DiagnosticOwner.Closure expression=0U64 />] {
-        val forged = <MemberCallAmbiguityRefusal kind=<MemberCallAmbiguityKind.StaticInstances /> session=cause.session() receiverRef=cause.receiverRef() owner=owner expression=cause.expression() nameStart=cause.nameStart() nameLen=cause.nameLen() argumentsStart=cause.argumentsStart() argumentsCount=cause.argumentsCount() location=cause.location() />
+        val forged = <MemberCallAmbiguityRefusal kind=refusal.kind() session=cause.session() receiverRef=cause.receiverRef() owner=owner expression=cause.expression() nameStart=cause.nameStart() nameLen=cause.nameLen() argumentsStart=cause.argumentsStart() argumentsCount=cause.argumentsCount() location=cause.location() />
         if direct.sourceMemberCallAmbiguityHasOwner(refusal: forged) { panic("foreign owner matched selection") }
     }
-    val foreign = <MemberCallAmbiguityRefusal kind=<MemberCallAmbiguityKind.StaticInstances /> session=cause.session() + 1U64 receiverRef=cause.receiverRef() owner=cause.owner() expression=cause.expression() nameStart=cause.nameStart() nameLen=cause.nameLen() argumentsStart=cause.argumentsStart() argumentsCount=cause.argumentsCount() location=cause.location() />
+    val foreign = <MemberCallAmbiguityRefusal kind=refusal.kind() session=cause.session() + 1U64 receiverRef=cause.receiverRef() owner=cause.owner() expression=cause.expression() nameStart=cause.nameStart() nameLen=cause.nameLen() argumentsStart=cause.argumentsStart() argumentsCount=cause.argumentsCount() location=cause.location() />
     if direct.sourceMemberCallAmbiguityHasOwner(refusal: foreign) { panic("foreign session matched") }
     for kind in 0U64..<7U64 {
         val expression = if kind == 0U64 { give 18446744073709551615U64 } else { give cause.expression() }
@@ -74,7 +81,7 @@ fn requireRaw(diagnostic: CompileDiagnostic, compiler: Comp) {
             val argument = changed.argAt(args: args, index: 0U64)
             changed.arena.argPool[args.start] = <Arg expr=argument.expr + 1U64 isInout=argument.isInout labelStart=argument.labelStart labelLen=argument.labelLen hasLabel=argument.hasLabel />
         }
-        val invalid = <MemberCallAmbiguityRefusal kind=<MemberCallAmbiguityKind.StaticInstances /> session=cause.session() receiverRef=cause.receiverRef() owner=cause.owner() expression=expression nameStart=start nameLen=length argumentsStart=argumentsStart argumentsCount=argumentsCount location=cause.location() />
+        val invalid = <MemberCallAmbiguityRefusal kind=refusal.kind() session=cause.session() receiverRef=cause.receiverRef() owner=cause.owner() expression=expression nameStart=start nameLen=length argumentsStart=argumentsStart argumentsCount=argumentsCount location=cause.location() />
         if (kind != 6U64 || args.len != 0U64) && changed.sourceMemberCallAmbiguityHasOwner(refusal: invalid) { panic("modified operation matched selection") }
     }
     for kind in 0U64..<8U64 {
@@ -105,51 +112,54 @@ fn requireRaw(diagnostic: CompileDiagnostic, compiler: Comp) {
         changed.arena.argPool[args.start] = <Arg expr=original.expr + if kind == 0U64 { give 1U64 } else { give 0U64 } isInout=if kind == 1U64 { give !original.isInout } else { give original.isInout } hasLabel=if kind == 2U64 { give !original.hasLabel } else { give original.hasLabel } labelStart=original.labelStart + if kind == 3U64 { give 1U64 } else { give 0U64 } labelLen=original.labelLen + if kind == 4U64 { give 1U64 } else { give 0U64 } />
         if changed.sourceMemberCallAmbiguityHasOwner(refusal: cause) { panic("modified argument matched negative query") }
     }
+    mut val synthetic = compiler
+    synthetic.recordSyntheticCallSite(site: <SyntheticCallSite exprId=cause.expression() receiverTerm=cause.receiverRef() />).unwrap()
+    if synthetic.sourceMemberCallAmbiguityHasOwner(refusal: cause) { panic("synthetic operation acquired authored ownership") }
     mut val duplicate = compiler
     val freshExpression = duplicate.arena.exprs.count()
     duplicate.arena.exprs.append(duplicate.arena.exprs[cause.expression()])
-    val unowned = <MemberCallAmbiguityRefusal kind=<MemberCallAmbiguityKind.StaticInstances /> session=cause.session() receiverRef=cause.receiverRef() owner=cause.owner() expression=freshExpression nameStart=cause.nameStart() nameLen=cause.nameLen() argumentsStart=cause.argumentsStart() argumentsCount=cause.argumentsCount() location=cause.location() />
+    val unowned = <MemberCallAmbiguityRefusal kind=refusal.kind() session=cause.session() receiverRef=cause.receiverRef() owner=cause.owner() expression=freshExpression nameStart=cause.nameStart() nameLen=cause.nameLen() argumentsStart=cause.argumentsStart() argumentsCount=cause.argumentsCount() location=cause.location() />
     if duplicate.sourceMemberCallAmbiguityHasOwner(refusal: unowned) { panic("same spelling forged a retained query") }
 
 }
 
-fn session(view: Bool) -> CompilerSession {
-    match CompilerSession.open(input: input(view: view), sources: <SourceAccess />) {
+fn session(view: Bool, associated: Bool = false) -> CompilerSession {
+    match CompilerSession.open(input: input(view: view, associated: associated), sources: <SourceAccess />) {
         CompilerSessionResult.Success(session: val session) => { return move session }
         CompilerSessionResult.Failure(diagnostic: val diagnostic) => { panic(diagnostic.message()) }
     }
 }
 
 
-fn run(view: Bool) {
+fn run(view: Bool, associated: Bool = false) {
     mut val raw = <Comp />
-    match analyzeFrontendForRequests(c: inout raw, input: input(view: view), sources: <SourceAccess />) {
+    match analyzeFrontendForRequests(c: inout raw, input: input(view: view, associated: associated), sources: <SourceAccess />) {
         Result.Ok(value: _) => {}
         Result.Err(error: val diagnostic) => { panic(diagnostic.message()) }
     }
     val name = raw.internBytes(s: "probe")
     val function = raw.arena.firstFunctionNamed(nameId: name.nameId)
     val first = rawFailure(compiler: inout raw, function: function)
-    requireRaw(diagnostic: first, compiler: raw)
+    requireRaw(diagnostic: first, compiler: raw, associated: associated)
     raw.pendingDiagnostics.append(first)
     if raw.takeDiagnostics().count() != 1U64 { panic("drain lost presentation") }
     val repeated = rawFailure(compiler: inout raw, function: function)
-    requireRaw(diagnostic: repeated, compiler: raw)
+    requireRaw(diagnostic: repeated, compiler: raw, associated: associated)
     if first.message() != repeated.message() { panic("cache changed cause") }
     print("raw semantic cache retained")
 
-    mut val owned = session(view: view)
+    mut val owned = session(view: view, associated: associated)
     match checkCompilerSession(session: move owned) {
         ProgramCheckResult.Success(program: _) => { panic("failed session became checked") }
         ProgramCheckResult.Failure(diagnostic: val diagnostic) => { if !diagnostic.isSourceRejection() { panic("check lost retained source refusal") } }
     }
     print("owned request failure retained")
-    match checkCompilerSession(session: session(view: view)) {
+    match checkCompilerSession(session: session(view: view, associated: associated)) {
         ProgramCheckResult.Success(program: _) => { panic("whole check accepted ambiguous member") }
         ProgramCheckResult.Failure(diagnostic: val diagnostic) => { if !diagnostic.isSourceRejection() { panic("whole check lost source refusal") } }
     }
     print("whole source check classified")
-    match openFrontend(input: input(view: view), sources: <SourceAccess />) {
+    match openFrontend(input: input(view: view, associated: associated), sources: <SourceAccess />) {
         Result.Ok(value: _) => { panic("fresh eager frontend accepted ambiguous member") }
         Result.Err(error: val diagnostic) => { if !diagnostic.isSourceRejection() { panic("fresh eager frontend lost source refusal") } }
     }
@@ -159,4 +169,5 @@ fn run(view: Bool) {
 fn main() {
     run(view: false)
     run(view: true)
+    run(view: false, associated: true)
 }

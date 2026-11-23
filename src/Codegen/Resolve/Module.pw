@@ -1241,7 +1241,7 @@ impl Comp {
             // not generic arguments.  Distinct receiver patterns that both
             // reach this point therefore cannot be selected by the caller.
             if typeMatch2 != self.arena.functionCount() {
-                return <Result.Err error=self.diagnosticAt(offset: nameStart, msg: "ambiguous associated call: this type qualifier matches more than one receiver pattern") />
+                return <Result.Err error=self.memberCallAmbiguityDiagnostic(kind: <MemberCallAmbiguityKind.AssociatedReceiverPatterns />, receiverRef: recvRef, nameStart: nameStart, nameLen: nameLen, args: args, methodOrigin: methodOrigin) />
             }
             try self.checkOverloadAmbiguity(a: typeMatch, b: typeMatch2, args: args)
             return <Result.Ok value=<MemberCallLookup.Selected function=typeMatch /> />

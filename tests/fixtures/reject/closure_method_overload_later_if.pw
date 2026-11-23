@@ -1,0 +1,10 @@
+// Receiver/proof adapters must preserve the common first-branch frontier.
+struct Selector {}
+impl Selector {
+    fn invoke(callback: fn(value: I64) -> I64) -> I64 { return callback(value: 42I64) }
+    fn invoke(callback: fn(value: String) -> String) -> String { return callback(value: "ok") }
+}
+fn main() {
+    val selector = <Selector />
+    selector.invoke(callback: if true { give fn(value) { return value } } else { give fn(value: I64) { return value } })
+}

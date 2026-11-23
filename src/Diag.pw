@@ -242,7 +242,7 @@ pub impl FreeCallAmbiguityRefusal {
     fn location() -> DiagnosticLocation { return self.location }
 }
 
-pub enum MemberCallAmbiguityKind { StaticInstances ExistentialRequirements ActiveViews MethodOverloads }
+pub enum MemberCallAmbiguityKind { StaticInstances ExistentialRequirements ActiveViews MethodOverloads AssociatedReceiverPatterns }
 pub impl MemberCallAmbiguityKind {
     fn message() -> String {
         return match self {
@@ -250,6 +250,7 @@ pub impl MemberCallAmbiguityKind {
             MemberCallAmbiguityKind.ExistentialRequirements => "ambiguous call: multiple trait requirements match the arguments"
             MemberCallAmbiguityKind.ActiveViews => "ambiguous source-qualified call: active views provide multiple matching methods"
             MemberCallAmbiguityKind.MethodOverloads => "ambiguous call: multiple method declarations match the argument labels and types"
+            MemberCallAmbiguityKind.AssociatedReceiverPatterns => "ambiguous associated call: this type qualifier matches more than one receiver pattern"
         }
     }
     fn same(other: MemberCallAmbiguityKind) -> Bool {
@@ -258,6 +259,7 @@ pub impl MemberCallAmbiguityKind {
             MemberCallAmbiguityKind.ExistentialRequirements => match other { MemberCallAmbiguityKind.ExistentialRequirements => true _ => false }
             MemberCallAmbiguityKind.ActiveViews => match other { MemberCallAmbiguityKind.ActiveViews => true _ => false }
             MemberCallAmbiguityKind.MethodOverloads => match other { MemberCallAmbiguityKind.MethodOverloads => true _ => false }
+            MemberCallAmbiguityKind.AssociatedReceiverPatterns => match other { MemberCallAmbiguityKind.AssociatedReceiverPatterns => true _ => false }
         }
     }
 }
