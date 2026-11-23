@@ -88,7 +88,7 @@ Do not describe all12 assertion failures as erroneous acceptance.
 Intermediate frozen v2 build20261123T164333-build-02336a passed; its21 mode
 controls pass, including Source transport supplied by unadopted met-ia2q WIP.
 This candidate predates the construction-query correction and is not final
-adoption evidence. Final v3 is frozen and building. Direct inherited-anyTaggedIndex
+adoption evidence. Final source/gates are recorded below. Direct inherited-anyTaggedIndex
 was already unsupported by the adopted carrier and is not implemented here;
 generic inheritedIndex is supported and retained as a positive fixture.
 
