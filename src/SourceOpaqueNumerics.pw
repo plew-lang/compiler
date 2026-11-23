@@ -1,14 +1,9 @@
 // Lower owns syntax provenance; ordinary pushExpr and semantic recording do not.
 impl Comp {
-    inout fn recordAuthoredNumericOrigin(expression: U64, start: U64, end: U64) {
-        val floating = match self.arena.exprs[expression] {
-            Expr.Int(value: _, offset: _, isBool: val boolean, tyStart: _, tyLen: val suffixLength, isNeg: _) => {
-                if boolean || suffixLength != 0U64 { return }
-                give false
-            }
-            Expr.Float(start: _, len: _, tyStart: _, tyLen: _) => true
-            _ => { return }
-        }
+    // The Lower branch already knows these syntax attributes. Do not load an
+    // owning Expr value from the arena merely to rediscover its literal kind.
+    inout fn recordAuthoredNumericOrigin(expression: U64, start: U64, end: U64, floating: Bool, booleanLiteral: Bool = false, suffixLength: U64 = 0U64) {
+        if !floating && (booleanLiteral || suffixLength != 0U64) { return }
         self.authoredNumericLiterals[expression] = <AuthoredNumericLiteral serial=self.arena.exprOriginSerial[expression] start=start end=end floating=floating />
     }
 

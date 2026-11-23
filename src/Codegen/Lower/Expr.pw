@@ -123,7 +123,7 @@ pub impl Comp {
                     sLen = sf.nameLen
                 }
                 result = self.pushExpr(e: <Expr.Int value=value offset=span.start isBool=isBool tyStart=sStart tyLen=sLen isNeg=false />)
-                self.recordAuthoredNumericOrigin(expression: result, start: exprAstSpan(e: e).start, end: exprAstSpan(e: e).end)
+                self.recordAuthoredNumericOrigin(expression: result, start: span.start, end: span.end, floating: false, booleanLiteral: isBool, suffixLength: sLen)
             }
             ExprAst.FloatLit(val text, val tySuffix, literalSpan: _, tySuffixSpan: _, val span) => {
                 val tb: Bind = self.internBytes(s: text)
@@ -135,7 +135,7 @@ pub impl Comp {
                     sLen = sf.nameLen
                 }
                 result = self.pushExpr(e: <Expr.Float start=tb.nameStart len=tb.nameLen tyStart=sStart tyLen=sLen />)
-                self.recordAuthoredNumericOrigin(expression: result, start: exprAstSpan(e: e).start, end: exprAstSpan(e: e).end)
+                self.recordAuthoredNumericOrigin(expression: result, start: span.start, end: span.end, floating: true)
             }
             ExprAst.StrLit(val raw, val span) => {
                 result = self.pushExpr(e: <Expr.Str start=span.start len=spanLen(s: span) />)
@@ -167,7 +167,7 @@ pub impl Comp {
                                     sLen = sf.nameLen
                                 }
                                 result = self.pushExpr(e: <Expr.Int value=value offset=litSpan.start isBool=false tyStart=sStart tyLen=sLen isNeg=true />)
-                                self.recordAuthoredNumericOrigin(expression: result, start: exprAstSpan(e: e).start, end: exprAstSpan(e: e).end)
+                                self.recordAuthoredNumericOrigin(expression: result, start: exprAstSpan(e: e).start, end: exprAstSpan(e: e).end, floating: false, suffixLength: sLen)
                                 folded = true
                             }
                         }
@@ -429,11 +429,11 @@ pub impl Comp {
         match e.kind {
             SyntaxExprKind.IntLit => {
                 result = self.pushExpr(e: <Expr.Int value=e.intValue offset=e.text.start isBool=e.flag0 tyStart=e.name.start tyLen=e.name.end - e.name.start isNeg=false />)
-                self.recordAuthoredNumericOrigin(expression: result, start: e.span.start, end: e.span.end)
+                self.recordAuthoredNumericOrigin(expression: result, start: e.span.start, end: e.span.end, floating: false, booleanLiteral: e.flag0, suffixLength: e.name.end - e.name.start)
             }
             SyntaxExprKind.FloatLit => {
                 result = self.pushExpr(e: <Expr.Float start=e.text.start len=e.text.end - e.text.start tyStart=e.name.start tyLen=e.name.end - e.name.start />)
-                self.recordAuthoredNumericOrigin(expression: result, start: e.span.start, end: e.span.end)
+                self.recordAuthoredNumericOrigin(expression: result, start: e.span.start, end: e.span.end, floating: true)
             }
             SyntaxExprKind.StrLit => {
                 result = self.pushExpr(e: <Expr.Str start=e.text.start len=e.text.end - e.text.start />)
@@ -452,7 +452,7 @@ pub impl Comp {
                         SyntaxExprKind.IntLit => {
                             if !(operand.flag0) {
                                 result = self.pushExpr(e: <Expr.Int value=operand.intValue offset=operand.text.start isBool=false tyStart=operand.name.start tyLen=operand.name.end - operand.name.start isNeg=true />)
-                                self.recordAuthoredNumericOrigin(expression: result, start: e.span.start, end: e.span.end)
+                                self.recordAuthoredNumericOrigin(expression: result, start: e.span.start, end: e.span.end, floating: false, suffixLength: operand.name.end - operand.name.start)
                                 folded = true
                             }
                         }
