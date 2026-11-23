@@ -502,6 +502,12 @@ else
     fail=$((fail + 1)); failed="$failed closure-capture-limits"
 fi
 
+if PLEWC="$PLEWC" LLVM_CONFIG="$LC" python3 -B ./tests/compiler/frontend/test-provided-source-endpoints.py; then
+    :
+else
+    fail=$((fail + 1)); failed="$failed provided-source-endpoints-private"
+fi
+
 if python3 ./tests/compiler/codegen/test-expose.py; then
     :
 else

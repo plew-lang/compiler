@@ -1,0 +1,13 @@
+pub trait Source[T] { fn read() -> T }
+pub trait Forward[T] { fn forward() -> T }
+pub impl[T] Source[T] {
+    fn retained() -> T { return self.read() }
+}
+pub impl[T] Source[T] as Forward[T] {
+    fn forward() -> T { return self.retained() }
+}
+pub struct Box[T] { pub val value: T }
+pub impl[T] Box[T] { factory }
+pub impl[T] Box[T] as Source[T] {
+    fn read() -> T { return self.value }
+}

@@ -608,3 +608,14 @@ stderr. `PreparedContextualOperands.pw` also covers raw non-value return branche
 and candidate-owned deferred projections, including rigid caller mismatches.
 
 `BranchCandidateFrontiers.pw` is a manual native public-ranking test of first-normal branch readiness: late/early typed closures and numeric literals, source-nonnormal branches, a unique contextual candidate, independent generic argument completion and raw nominal values. Repeated probes preserve every expression fact, selected-callee cache, closure descriptor and template count. Compile/link the actual frontend; require exit0, exact `.out` and empty stderr.
+
+`test-provided-source-endpoints.py` is a normal-suite private API gate. It copies
+exact compiler source and appends `ProvidedSourceEndpointMain.pw` to Frontend's
+own module, without rewriting or exposing any production declaration. It checks
+source/implementation endpoint positions, pinned-terminal failures, distinct
+generic substitutions and retained assumption/supertrait roots. The repeated
+owner/edge injection is a raw position control, not evidence that a source
+program with that graph was accepted. Public multi-module provided-helper
+fixtures and MemberCandidateIdentities cover actual candidate lookup and final
+execution separately. Require exit0, exact `.out`, empty native stderr and source
+immutability; compiler/link stages use the shared semantic-progress supervisor.

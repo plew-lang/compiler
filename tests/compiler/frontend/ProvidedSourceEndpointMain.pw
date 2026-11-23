@@ -1,0 +1,75 @@
+// Appended to an exact Frontend.pw snapshot; production visibility is unchanged.
+use ./SourceAccess only { SourceResource }
+
+fn requireMissingSourceEndpoint(proof: StaticConformanceProof) {
+    match proof { StaticConformanceProof.Missing => {} _ => { panic("invalid source endpoint accepted") } }
+}
+fn main() {
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.File path="plew:std/SourceEndpointProbe.pw" />, sources: <SourceAccess stdRoot="std/".bytes() resources=[<SourceResource path="plew:std/SourceEndpointProbe.pw".bytes() text="trait P[T] {{}}\ntrait Q[T] {{}}\ntrait Child[T]: P[T] {{}}\nimpl[T] P[T] as Q[T] {{}}\nstruct S {{}}\nimpl S as P[I64] {{}}\nimpl S as P[Bool] {{}}\npub impl S {{ fn anchor() {{}} }}\nfn root[T](value: T) where T: P[I64] {{}}\nfn superRoot[T](value: T) where T: Child[I64] {{}}\nfn main() {{}}" />] />).unwrap()
+    val provider = compiler.internBytes(s: "P")
+    val target = compiler.internBytes(s: "Q")
+    mut val providerOwner = 0U64
+    mut val targetOwner = 0U64
+    for index in 0U64..<compiler.decls.traitCount() {
+        val declaration = compiler.decls.traitAt(index: index)
+        if declaration.nameId == provider.nameId { providerOwner = declaration.nameStart }
+        if declaration.nameId == target.nameId { targetOwner = declaration.nameStart }
+    }
+    val anchor = compiler.internBytes(s: "anchor")
+    val receiver = compiler.arena.functionAt(index: compiler.arena.firstFunctionNamed(nameId: anchor.nameId)).recvTy
+    if providerOwner == 0U64 || targetOwner == 0U64 || receiver == 0U64 { panic("source endpoint setup missing") }
+    val proofs = compiler.traitMemberInstanceProofs(baseRef: receiver, traitId: target.nameId, traitOwner: targetOwner, assumptions: [], includeConcrete: true).unwrap()
+    if proofs.count() != 2U64 { panic("two generic instance proofs missing") }
+    mut val paths: Array[Array[WitnessMatch]] = []
+    for proof in proofs {
+        match proof {
+            StaticConformanceProof.TraitPath(edges: val edges, terminalConformIdx: val terminal) => {
+                if edges.count() != 2U64 || edges[1U64].conformIdx != terminal { panic("unexpected source path shape") }
+                paths.append(edges)
+            }
+            _ => { panic("source endpoint setup is not a retained path") }
+        }
+    }
+    val first = paths[0U64]
+    val second = paths[1U64]
+    val terminal = first[1U64].conformIdx
+    val source = compiler.memberSourceProofEndpoint(proof: proofs[0U64], targetConformance: terminal, traitOwner: providerOwner, subject: true).unwrap()
+    val other = compiler.memberSourceProofEndpoint(proof: proofs[1U64], targetConformance: terminal, traitOwner: providerOwner, subject: true).unwrap()
+    if !compiler.sameSourceProofPath(a: source, b: <StaticConformanceProof.ConcreteWitness witness=first[0U64] />) { panic("helper source did not retain its exact predecessor") }
+    if compiler.sameSourceProofPath(a: source, b: other) { panic("different source substitutions collapsed") }
+    val body = compiler.memberSourceProofEndpoint(proof: proofs[0U64], targetConformance: terminal, traitOwner: targetOwner, subject: false).unwrap()
+    if !compiler.sameSourceProofPath(a: body, b: <StaticConformanceProof.ConcreteWitness witness=first[1U64] />) { panic("authored implementation lost its own edge") }
+    requireMissingSourceEndpoint(proof: compiler.memberSourceProofEndpoint(proof: proofs[0U64], targetConformance: 0U64, traitOwner: providerOwner, subject: true).unwrap())
+    requireMissingSourceEndpoint(proof: compiler.memberSourceProofEndpoint(proof: <StaticConformanceProof.TraitPath edges=first terminalConformIdx=first[0U64].conformIdx />, targetConformance: terminal, traitOwner: providerOwner, subject: true).unwrap())
+    requireMissingSourceEndpoint(proof: compiler.memberSourceProofEndpoint(proof: <StaticConformanceProof.TraitPath edges=[] terminalConformIdx=terminal />, targetConformance: terminal, traitOwner: providerOwner, subject: true).unwrap())
+    requireMissingSourceEndpoint(proof: compiler.memberSourceProofEndpoint(proof: <StaticConformanceProof.ConcreteWitness witness=first[1U64] />, targetConformance: terminal, traitOwner: providerOwner, subject: true).unwrap())
+    requireMissingSourceEndpoint(proof: compiler.memberSourceProofEndpoint(proof: proofs[0U64], targetConformance: terminal, traitOwner: targetOwner, subject: true).unwrap())
+    // Raw position control, not a source-program acceptance assertion: an earlier
+    // owner/edge pair must not override the pinned final pair's substitutions.
+    val repeated = <StaticConformanceProof.TraitPath edges=[first[0U64], first[1U64], second[0U64], second[1U64]] terminalConformIdx=terminal />
+    val repeatedSource = compiler.memberSourceProofEndpoint(proof: repeated, targetConformance: terminal, traitOwner: providerOwner, subject: true).unwrap()
+    if !compiler.sameSourceProofPath(a: repeatedSource, b: other) || compiler.sameSourceProofPath(a: repeatedSource, b: source) { panic("owner or edge repetition changed the source endpoint") }
+    val rootName = compiler.internBytes(s: "root")
+    val rootFunction = compiler.arena.firstFunctionNamed(nameId: rootName.nameId)
+    val rootAssumptions = compiler.functionBoundAssumptions(fnIdx: rootFunction)
+    if rootAssumptions.count() != 1U64 { panic("source assumption setup missing") }
+    val assumed = <StaticConformanceProof.AssumedTraitPath source=rootAssumptions[0U64] steps=[] edges=[first[1U64]] />
+    val assumedSource = compiler.memberSourceProofEndpoint(proof: assumed, targetConformance: terminal, traitOwner: providerOwner, subject: true).unwrap()
+    if !compiler.sameSourceProofPath(a: assumedSource, b: <StaticConformanceProof.AssumedBound source=rootAssumptions[0U64] />) { panic("empty assumption prefix lost its root") }
+    val superName = compiler.internBytes(s: "superRoot")
+    val superFunction = compiler.arena.firstFunctionNamed(nameId: superName.nameId)
+    val superAssumptions = compiler.functionBoundAssumptions(fnIdx: superFunction)
+    val bound = compiler.declarationBound(source: superAssumptions[0U64])
+    val superProofs = compiler.traitMemberInstanceProofs(baseRef: bound.subject, traitId: target.nameId, traitOwner: targetOwner, assumptions: superAssumptions, includeConcrete: true).unwrap()
+    if superProofs.count() != 1U64 { panic("supertrait proof setup missing") }
+    match superProofs[0U64] {
+        StaticConformanceProof.AssumedTraitPath(source: val root, steps: val steps, edges: val edges) => {
+            if steps.count() == 0U64 || edges.count() != 1U64 { panic("supertrait prefix setup missing") }
+            val projected = compiler.memberSourceProofEndpoint(proof: superProofs[0U64], targetConformance: edges[0U64].conformIdx, traitOwner: providerOwner, subject: true).unwrap()
+            if !compiler.sameSourceProofPath(a: projected, b: <StaticConformanceProof.AssumedSupertraitPath source=root steps=steps />) { panic("source endpoint lost supertrait steps") }
+        }
+        _ => { panic("supertrait proof did not retain its steps") }
+    }
+    print("provided source endpoints retain exact instances and assumption roots")
+}

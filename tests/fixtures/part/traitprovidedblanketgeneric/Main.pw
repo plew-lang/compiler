@@ -1,0 +1,11 @@
+use @Std/Io only { print }
+use ./Lib only { Box }
+// Both the retained helper and its blanket caller must bind the source's T.
+fn main() {
+    val number = <Box[I64] value=42I64 />
+    val text = <Box[String] value="text" />
+    print(number.retained())
+    print(number.forward())
+    print(text.retained())
+    print(text.forward())
+}

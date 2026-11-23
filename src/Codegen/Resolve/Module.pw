@@ -1412,11 +1412,16 @@ impl Comp {
         val left = self.arena.functionAt(index: a.funcIdx)
         val right = self.arena.functionAt(index: b.funcIdx)
         if left.sourceWitnessFuncId == 0U64 || left.sourceWitnessFuncId > self.arena.functionCount() || left.sourceWitnessFuncId != right.sourceWitnessFuncId || !left.isProvided || !right.isProvided { return <Result.Ok value=false /> }
-        if left.originTraitOwner == 0U64 || left.originTraitOwner != right.originTraitOwner || self.decls.traitIndexByOffset(offset: left.originTraitOwner) >= self.decls.traitCount() { return <Result.Ok value=false /> }
+        val original = self.arena.functionAt(index: left.sourceWitnessFuncId - 1U64)
+        val owner = if original.originTraitOwner != 0U64 { give original.originTraitOwner } else { give original.provTraitOwner }
+        if owner == 0U64 || self.decls.traitIndexByOffset(offset: owner) >= self.decls.traitCount() { return <Result.Ok value=false /> }
         val first = try self.providedBodyProof(f: left, receiverRef: receiverRef)
         val second = try self.providedBodyProof(f: right, receiverRef: receiverRef)
         if self.proofIsMissing(proof: first) || self.proofIsMissing(proof: second) { return <Result.Ok value=false /> }
-        return <Result.Ok value=self.sameMemberProofEndpoint(selected: first, candidate: second, traitOwner: left.originTraitOwner) />
+        val firstSource = try self.memberSourceProofEndpoint(proof: first, targetConformance: if left.sourceConformIdx != 0U64 { give left.sourceConformIdx } else { give left.originConformIdx }, traitOwner: owner, subject: original.originTraitOwner == 0U64 && left.sourceConformIdx != 0U64)
+        val secondSource = try self.memberSourceProofEndpoint(proof: second, targetConformance: if right.sourceConformIdx != 0U64 { give right.sourceConformIdx } else { give right.originConformIdx }, traitOwner: owner, subject: original.originTraitOwner == 0U64 && right.sourceConformIdx != 0U64)
+        if self.proofIsMissing(proof: firstSource) || self.proofIsMissing(proof: secondSource) { return <Result.Ok value=false /> }
+        return <Result.Ok value=self.sameSourceProofPath(a: firstSource, b: secondSource) />
     }
 
     inout fn memberCandidateAmbiguityKind(a: Callable, b: Callable) -> MemberCallAmbiguityKind {
@@ -1524,5 +1529,46 @@ impl Comp {
             callee = (try self.findAssocWithOrigin(recvStart: rt.nameStart, recvLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: resolvedRef))
         }
         return <Result.Ok value=callee />
+    }
+}
+
+impl Comp {
+    // An authored helper belongs to the subject of its final conferring edge;
+    // an authored conformance body belongs to that edge itself. A repeated
+    // generic owner/edge is not ambiguous here: only the pinned final position
+    // can supply this body's instance. This comparison projection never replaces
+    // the full proof retained for signature interpretation or execution.
+    inout fn memberSourceProofEndpoint(proof: StaticConformanceProof, targetConformance: U64, traitOwner: U64, subject: Bool) -> Result[StaticConformanceProof, CompileDiagnostic] {
+        mut val terminal: WitnessMatch = <WitnessMatch />
+        mut val predecessor: WitnessMatch = <WitnessMatch />
+        mut val root: StaticConformanceProof = <StaticConformanceProof.Missing />
+        match proof {
+            StaticConformanceProof.ConcreteWitness(witness: val witness) => { terminal = witness }
+            StaticConformanceProof.TraitPath(edges: val edges, terminalConformIdx: val retained) => {
+                if edges.count() == 0U64 { return <Result.Ok value=<StaticConformanceProof.Missing /> /> }
+                terminal = edges[edges.count() - 1U64]
+                if terminal.conformIdx != retained { return <Result.Ok value=<StaticConformanceProof.Missing /> /> }
+                if edges.count() > 1U64 { predecessor = edges[edges.count() - 2U64] }
+            }
+            StaticConformanceProof.AssumedTraitPath(source: val source, steps: val steps, edges: val edges) => {
+                if edges.count() == 0U64 { return <Result.Ok value=<StaticConformanceProof.Missing /> /> }
+                terminal = edges[edges.count() - 1U64]
+                if edges.count() > 1U64 { predecessor = edges[edges.count() - 2U64] }
+                root = if steps.count() == 0U64 { give <StaticConformanceProof.AssumedBound source=source /> } else { give <StaticConformanceProof.AssumedSupertraitPath source=source steps=steps /> }
+            }
+            _ => { return <Result.Ok value=<StaticConformanceProof.Missing /> /> }
+        }
+        if targetConformance == 0U64 || terminal.conformIdx != targetConformance || terminal.conformIdx > self.decls.conformCount() { return <Result.Ok value=<StaticConformanceProof.Missing /> /> }
+        val placement = self.decls.conformAt(index: terminal.conformIdx - 1U64)
+        if subject && placement.subjectTraitOwner != traitOwner { return <Result.Ok value=<StaticConformanceProof.Missing /> /> }
+        val endpoint = if subject { give predecessor } else { give terminal }
+        if endpoint.conformIdx == 0U64 {
+            if !subject || self.proofIsMissing(proof: root) { return <Result.Ok value=<StaticConformanceProof.Missing /> /> }
+            val bound = try self.staticProofBound(proof: root, traitIdx: self.decls.traitIndexByOffset(offset: traitOwner))
+            if bound.subject == 0U64 || bound.constraint.key.owner != traitOwner { return <Result.Ok value=<StaticConformanceProof.Missing /> /> }
+            return <Result.Ok value=root />
+        }
+        if endpoint.conformIdx > self.decls.conformCount() || self.decls.conformAt(index: endpoint.conformIdx - 1U64).traitStart != traitOwner { return <Result.Ok value=<StaticConformanceProof.Missing /> /> }
+        return <Result.Ok value=<StaticConformanceProof.ConcreteWitness witness=endpoint /> />
     }
 }

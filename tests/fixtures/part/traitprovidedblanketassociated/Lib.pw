@@ -1,0 +1,19 @@
+pub trait Source { type Item
+    fn read() -> Self#Source.Item
+}
+pub trait Forward { type Output
+    fn forward() -> Self#Forward.Output
+}
+pub impl Source {
+    fn retained() -> Self#Source.Item { return self.read() }
+}
+pub impl Source as Forward {
+    type Output = Self#Source.Item
+    fn forward() -> Self#Forward.Output { return self.retained() }
+}
+pub struct Value { pub val number: I64 }
+pub impl Value { factory }
+pub impl Value as Source {
+    type Item = I64
+    fn read() -> I64 { return self.number }
+}

@@ -1,0 +1,8 @@
+use @Std/Io only { print }
+use ./Lib only { Value }
+// The source helper's associated Item is distinct from the placement's Output.
+fn main() {
+    val value = <Value number=17I64 />
+    print(value.retained())
+    print(value.forward())
+}
