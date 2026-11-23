@@ -41,8 +41,24 @@ fn requireGenericConflict(prepared: Bool) {
         Result.Ok(value: _) => { panic("Raw inference accepted conflicting arguments") }
     }
     if compiler.failedGenericCallConflicts.count() != beforeRaw { panic("active cursor granted Raw source authority") }
+    for invalid in 0U64..<4U64 {
+        val request = if invalid == 0U64 {
+            give <SourceRecordOrigin.CheckingRequest session=compiler.sourceFactSession()+1U64 root=owner />
+        } else if invalid == 1U64 {
+            give <SourceRecordOrigin.CheckingRequest session=compiler.sourceFactSession() root=<SemanticCompletionOwner.Function index=callee /> />
+        } else { give origin.request }
+        val inferenceOrigin = <GenericCallInferenceOrigin.Call request=request expression=if invalid == 2U64 { give expression+1U64 } else { give expression } callee=if invalid == 3U64 { give function } else { give callee } arguments=arguments diagnostic=true />
+        match compiler.inferPreparedCallTypeArguments(f: declaration, args: arguments, inferenceOrigin: inferenceOrigin) {
+            Result.Err(error: val raw) => { if raw.genericCallConflict().isSome() || compiler.sourceFailureHasOwner(diagnostic: raw) { panic("foreign inference request acquired source ownership") } }
+            Result.Ok(value: _) => { panic("foreign request swallowed the original conflict") }
+        }
+        if compiler.failedGenericCallConflicts.count() != beforeRaw { panic("foreign request published an owned conflict") }
+    }
     // Enter the real argument-inference boundary directly: recording the whole
     // expression first would prepare both scalar operands and erase this control.
+    val templatesBefore = compiler.callTemplateLocations.count()
+    val closuresBefore = compiler.semanticClosures.count()
+    val interfacesBefore = compiler.interfaceCalls.count()
     val diagnostic = match compiler.recordFreeCallArgumentContexts(exprId: expression, context: context, args: arguments, origin: origin, expectedOrigin: <SourceExpectedContext.None />) {
         Result.Err(error: val diagnostic) => diagnostic
         Result.Ok(value: _) => { panic("generic conflict was accepted") }
@@ -73,6 +89,7 @@ fn requireGenericConflict(prepared: Bool) {
     compiler.pendingDiagnostics.append(diagnostic)
     if compiler.takeDiagnostics().count() != 1U64 || !compiler.sourceFailureHasOwner(diagnostic: diagnostic) { panic("drain erased retained conflict") }
     if compiler.hasSemanticExprTypeFact(exprId: expression) { panic("failed generic call published a result") }
+    if compiler.callTemplateLocations.count() != templatesBefore || compiler.semanticClosures.count() != closuresBefore || compiler.interfaceCalls.count() != interfacesBefore { panic("failed generic call published a successful callable boundary") }
 }
 fn requireBareFactoryOperation() {
     mut val compiler = <Comp />
@@ -92,10 +109,12 @@ fn requireBareFactoryOperation() {
     match arrayOrigin.request { SourceRecordOrigin.Raw => {} _ => { panic("bare factory operation granted Array type context") } }
     if compiler.failedArrayContextFrontiers.count() != frontierCount { panic("bare factory published an Array frontier") }
     val name = compiler.internBytes(s: "I64")
-    val unrelated = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen />)
+    val unrelated = compiler.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] />)
     if compiler.sourceCallOperation(exprId: expression, args: args, factoryReceiver: unrelated).isSome() { panic("unrelated nonzero receiver fell back to bare factory proof") }
     mut val changed = compiler
-    changed.recordSyntheticCallSite(site: <SyntheticCallSite exprId=expression receiverTerm=0U64 />).unwrap()
+    val siteIndex = changed.syntheticCallSiteIndex(exprId: expression)
+    val site = changed.decls.syntheticCallSites[siteIndex]
+    changed.decls.syntheticCallSites[siteIndex] = <SyntheticCallSite exprId=expression kind=<SyntheticCallKind.Factory /> originSerial=site.originSerial+1U64 receiverTerm=site.receiverTerm receiverIsType=site.receiverIsType />
     if changed.sourceCallOperation(exprId: expression, args: args).isSome() { panic("foreign synthetic serial borrowed a factory receipt") }
 }
 

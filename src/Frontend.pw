@@ -802,7 +802,7 @@ impl SourceFieldContract {
 // Only the owned recording adapters construct Call; public queries enter Raw.
 enum GenericCallInferenceOrigin {
     Raw
-    Call(request: SourceRecordOrigin, expression: U64, callee: U64, arguments: ArgRange, receiver: U64, diagnostic: Bool)
+    Call(request: SourceRecordOrigin, expression: U64, callee: U64, arguments: ArgRange, diagnostic: Bool)
 }
 
 struct SourceGenericCallConflict {
@@ -818,7 +818,6 @@ struct SourceGenericCallConflict {
     val identities: Array[U64]
     val known: Array[U64]
     val pattern: U64
-    val receiver: U64
     val diagnostic: Bool
 }
 

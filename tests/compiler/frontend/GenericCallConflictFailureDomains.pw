@@ -1,0 +1,74 @@
+use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontendForRequests, openFrontend }
+use ../../../src/CheckedProgram only { CompilerSession, CompilerSessionResult, ProgramCheckResult, checkCompilerSession }
+use ../../../src/Backend only { LlvmLoweringResult }
+use ../../../src/SourceAccess only { SourceAccess }
+use ../../../src/Diag only { CompileDiagnostic, FailureDomain }
+use @Std/Io only { print }
+
+fn input(kind: U64) -> FrontendInput {
+    if kind == 1U64 { return <FrontendInput.Text path="PreparedConflict.pw" text="fn accept[T, Other](first: T, callback: fn(value: T, other: Other) -> T) {{}}\nfn main() {{ accept(first: 5I32, callback: fn(value: I64, other) {{ return value }}) }}" /> }
+    if kind == 2U64 { return <FrontendInput.Text path="FactoryConflict.pw" text="struct Holder[T] {{}}\nimpl[T] Holder[T] {{ factory same(first: T, second: T) {{ return <Holder[T] /> }} }}\nfn main() {{ val h = <Holder.same first=5I32 second=6I64 /> }}" /> }
+    return <FrontendInput.Text path="TypedConflict.pw" text="fn same[T](first: T, second: T) {{}}\nfn main() {{ same(first: 5I32, second: 6I64) }}" />
+}
+
+fn requireConflict(diagnostic: CompileDiagnostic, owned: Bool) {
+    if diagnostic.message() != "inconsistent types for a type parameter: two arguments bound to the same `[T]` have different types" { panic(diagnostic.message()) }
+    if diagnostic.isSourceRejection() != owned { panic("conflict lost its required failure domain") }
+    if !owned { match diagnostic.failureDomain() { FailureDomain.Unclassified => {} _ => { panic("Raw failure domain changed") } } }
+}
+
+fn session(kind: U64) -> CompilerSession {
+    match CompilerSession.open(input: input(kind: kind), sources: <SourceAccess />) {
+        CompilerSessionResult.Success(session: val session) => { return move session }
+        CompilerSessionResult.Failure(diagnostic: val diagnostic) => { panic(diagnostic.message()) }
+    }
+}
+
+fn main() {
+    for kind in 0U64..<3U64 {
+        mut val raw = <Comp />
+        analyzeFrontendForRequests(c: inout raw, input: input(kind: kind), sources: <SourceAccess />).unwrap()
+        val name = raw.internBytes(s: "main")
+        val function = raw.arena.firstFunctionNamed(nameId: name.nameId)
+        for attempt in 0U64..<2U64 {
+            val diagnostic = match raw.prepareLexicalBody(fnIdx: function) {
+                Result.Err(error: val diagnostic) => diagnostic
+                Result.Ok(value: _) => { panic("Raw request accepted conflict") }
+            }
+            requireConflict(diagnostic: diagnostic, owned: false)
+            raw.pendingDiagnostics.append(diagnostic)
+            if raw.takeDiagnostics().count() != 1U64 { panic("drain lost conflict presentation") }
+        }
+        print("raw conflict retained")
+        mut val owned = session(kind: kind)
+        match owned.lowerDeclarations() {
+            LlvmLoweringResult.Success(module: _) => {}
+            LlvmLoweringResult.Failure(diagnostic: val diagnostic) => { panic(diagnostic.message()) }
+        }
+        val bodies = owned.registeredBodies()
+        if bodies.count() == 0U64 { panic("missing entry body") }
+        for body in bodies {
+            for attempt in 0U64..<2U64 {
+                match owned.prepareBodyAccess(bodyId: body) {
+                    Result.Err(error: val diagnostic) => { requireConflict(diagnostic: diagnostic, owned: true) }
+                    Result.Ok(value: _) => { panic("owned request accepted conflict") }
+                }
+            }
+        }
+        match checkCompilerSession(session: move owned) {
+            ProgramCheckResult.Failure(diagnostic: val diagnostic) => { requireConflict(diagnostic: diagnostic, owned: true) }
+            ProgramCheckResult.Success(program: _) => { panic("failed owner became a checked program") }
+        }
+        print("owned conflict retained")
+        match checkCompilerSession(session: session(kind: kind)) {
+            ProgramCheckResult.Failure(diagnostic: val diagnostic) => { requireConflict(diagnostic: diagnostic, owned: true) }
+            ProgramCheckResult.Success(program: _) => { panic("whole check accepted conflict") }
+        }
+        print("whole conflict retained")
+        match openFrontend(input: input(kind: kind), sources: <SourceAccess />) {
+            Result.Err(error: val diagnostic) => { requireConflict(diagnostic: diagnostic, owned: true) }
+            Result.Ok(value: _) => { panic("eager frontend accepted conflict") }
+        }
+        print("eager conflict retained")
+    }
+}

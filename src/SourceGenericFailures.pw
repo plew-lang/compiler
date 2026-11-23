@@ -13,7 +13,7 @@ impl Comp {
         val offset = self.exprOffset(id: operand)
         val request = match origin {
             GenericCallInferenceOrigin.Raw => { return self.typeArgumentConflictDiagnostic(offset: offset) }
-            GenericCallInferenceOrigin.Call(request: val request, expression: val expression, callee: val callee, arguments: val arguments, receiver: val receiver, diagnostic: val diagnostic) => (request: request, expression: expression, callee: callee, arguments: arguments, receiver: receiver, diagnostic: diagnostic)
+            GenericCallInferenceOrigin.Call(request: val request, expression: val expression, callee: val callee, arguments: val arguments, diagnostic: val diagnostic) => (request: request, expression: expression, callee: callee, arguments: arguments, diagnostic: diagnostic)
         }
         val source = match request.request {
             SourceRecordOrigin.Raw => { return self.typeArgumentConflictDiagnostic(offset: offset) }
@@ -24,7 +24,7 @@ impl Comp {
         if !self.sourceFacts.isActive(owner: owner) || !semanticCompletionOwnersEqual(recorded: self.lexicalSourceFactOwner(owner: owner), prepared: source.root) { return self.typeArgumentConflictDiagnostic(offset: offset) }
         val current = self.arena.functionAt(index: request.callee)
         if current.defOffset != function.defOffset || current.params.start != function.params.start || current.params.len != function.params.len || current.typeParams.start != function.typeParams.start || current.typeParams.len != function.typeParams.len || parameter >= function.params.count() { return self.typeArgumentConflictDiagnostic(offset: offset) }
-        val operation = match self.sourceCallOperation(exprId: request.expression, args: args, factoryReceiver: request.receiver) {
+        val operation = match self.sourceCallOperation(exprId: request.expression, args: args) {
             Optional.Some(v: val operation) => operation
             Optional.None => { return self.typeArgumentConflictDiagnostic(offset: offset) }
         }
@@ -42,7 +42,7 @@ impl Comp {
         mut val identities: Array[U64] = []
         for index in 0U64..<function.typeParams.count() { identities.append(self.funcBindAt(binds: function.typeParams, index: index).paramId) }
         val refusal = <GenericCallConflictRefusal session=source.session owner=self.currentDiagnosticOwner() expression=request.expression callee=request.callee operand=operand parameter=parameter event=self.failedGenericCallConflicts.count() location=self.diagnosticLocationAt(offset: offset) />
-        self.failedGenericCallConflicts.append(<SourceGenericCallConflict refusal=refusal operation=operation arguments=args written=written parameters=function.params parameterTypes=types parameterLabels=labels declarationOffset=function.defOffset binders=function.typeParams identities=identities known=known pattern=pattern receiver=request.receiver diagnostic=request.diagnostic />)
+        self.failedGenericCallConflicts.append(<SourceGenericCallConflict refusal=refusal operation=operation arguments=args written=written parameters=function.params parameterTypes=types parameterLabels=labels declarationOffset=function.defOffset binders=function.typeParams identities=identities known=known pattern=pattern diagnostic=request.diagnostic />)
         return <CompileDiagnostic.genericCallConflict refusal=refusal />
     }
 
@@ -51,7 +51,7 @@ impl Comp {
         val proof = self.failedGenericCallConflicts[refusal.event()]
         val saved = proof.refusal
         if saved.session() != refusal.session() || !self.diagnosticOwnersEqual(first: saved.owner(), second: refusal.owner()) || saved.expression() != refusal.expression() || saved.callee() != refusal.callee() || saved.operand() != refusal.operand() || saved.parameter() != refusal.parameter() || !saved.location().same(other: refusal.location()) { return false }
-        val operation = match self.sourceCallOperation(exprId: refusal.expression(), args: proof.arguments, factoryReceiver: proof.receiver) { Optional.Some(v: val operation) => operation Optional.None => { return false } }
+        val operation = match self.sourceCallOperation(exprId: refusal.expression(), args: proof.arguments) { Optional.Some(v: val operation) => operation Optional.None => { return false } }
         if !proof.operation.same(other: operation) || proof.written.count() != proof.arguments.len { return false }
         for index in 0U64..<proof.arguments.len {
             val written = proof.written[index]

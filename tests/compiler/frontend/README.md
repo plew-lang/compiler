@@ -639,3 +639,9 @@ and candidate role, foreign metadata, changed arguments, synthetic operations,
 equal-text Internal reports, drain retention and absence of parent publication.
 Require native exit 0 with empty stdout/stderr. Whole-session consumers and
 language fixtures are separate controls; this probe alone cannot close the task.
+
+`GenericCallConflictFailureDomains.pw` checks typed, partially contextual closure
+and named-factory conflicts through raw cache/drain, owned lazy repeated body
+requests, whole-session failure retention and fresh eager checking. Its `.out`
+is the exact 12-line native golden. Run it with the manual procedure above;
+public language and private provenance mutation probes remain separate controls.

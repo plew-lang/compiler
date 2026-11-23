@@ -38,7 +38,7 @@ impl Comp {
                 val site = self.decls.syntheticCallSites[index]
                 val receipt = authored.unwrap()
                 val factory = match site.kind { SyntheticCallKind.Factory => true _ => false }
-                if factory && site.receiverIsType && (site.receiverTerm == 0U64 || site.receiverTerm < self.arena.typeCount()) && site.originSerial == receipt.serial && self.arena.exprOriginSerial[exprId] == receipt.serial && args.len == receipt.arguments.count() {
+                if factory && site.receiverIsType && (site.receiverTerm == 0U64 || site.receiverTerm < self.arena.typeCount()) && site.originSerial == receipt.serial && args.len == receipt.arguments.count() {
                     // An uninstantiated qualifier can identify an authored
                     // operation without supplying any result/type context.
                     mut val intact = factoryReceiver == 0U64

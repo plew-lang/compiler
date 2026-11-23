@@ -24,7 +24,7 @@ A76f2f9c fixed associated-candidate carrier reproduces all7fixtures/check-AOT-OR
 
 ## Implementation boundary
 
-The owner is the actual Conflict producer, not an outer diagnostic catch. Preserve Raw wrappers, including Mono/FreeFn.inferFnArgs; an active source cursor alone grants no ownership. Thread a narrow private origin through source inference: request/session/root, authored operation, selected or diagnostic-candidate callee, arguments and required receiver/normalization identity. Do not pass the full recording scope or expected-result contract to the type matcher. Do not scan functions to rediscover a known callee.
+The owner is the actual Conflict producer, not an outer diagnostic catch. Preserve Raw wrappers, including Mono/FreeFn.inferFnArgs; an active source cursor alone grants no ownership. Thread a narrow private origin through source inference: request/session/root, authored operation, selected or diagnostic-candidate callee, arguments and authored normalization identity. The source receiver belongs to the passive operation identity; do not pass a derived semantic receiver merely to establish diagnostic authority. Do not pass the full recording scope or expected-result contract to the type matcher. Do not scan functions to rediscover a known callee.
 
 Both prepared and typed-term paths retain one private rejection receipt at their existing Conflict decision. Preserve transactional bindings and unchanged dependency errors. Snapshot relevant parameter mapping and existing binder identities/bindings only on failure; do not rematch to reconstruct a conflicting pair or publish a successful fact. The common ownership observer validates the operation and receipt. Array frontiers are not generic-call proof.
 
@@ -71,3 +71,21 @@ Independent plan review accepted this separation with synthetic/serial/args and
 nonzero-receiver mismatch controls. The new final guard covers the zero-receiver
 Array non-admission. Final candidate, targeted consumer matrix and performance
 remain outstanding; no parent closure or source/carrier promotion.
+
+## Remaining actual consumer failure
+
+Intermediate v5 build d397ca passed. The v6 source private guard passed, including
+foreign input origins and the passive factory/Array separation. However the real
+consumer probe still fails on its third input (named factory), after the typed
+and prepared inputs pass all four raw/owned/whole/eager checks. The exact native
+result has 9 output lines and a failure-domain assertion; retain it as failure,
+not as a successful consumer gate. Diagnostic snapshot generic-debug tags Raw
+conflict/guard exits to identify whether emission or owner observation loses the
+cause. No final build, full affected gates, formal measurement or closure yet.
+
+The cause-routing probe confirmed GenericCallInferenceOrigin.Raw at the actual
+Conflict producer (generic-debug-output/result.json). It is not a retained-event
+observer rejection. Follow-up debug2 tags only failed Raw wrappers to find the
+caller. Preserve public Raw behavior; close the owning producer before its Raw
+fallback/query instead of promoting a dependency diagnostic. V6 source matches
+all current product source files; final candidate is still not accepted.

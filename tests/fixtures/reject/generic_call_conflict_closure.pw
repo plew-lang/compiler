@@ -1,0 +1,3 @@
+fn same[T](first: T, second: T) {}
+fn main() { val closure = fn() { same(first: 5I32, second: 6I64) }
+ closure() }

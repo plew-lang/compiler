@@ -1758,7 +1758,7 @@ impl Comp {
             FreeCallLookup.DiagnosticCandidate(function: _) => self.diagnosticArrayContextOrigin(origin: origin, exprId: exprId, args: args)
             _ => origin
         }
-        val inferenceOrigin = <GenericCallInferenceOrigin.Call request=origin.request expression=exprId callee=callee arguments=args receiver=0U64 diagnostic=match context { FreeCallLookup.DiagnosticCandidate(function: _) => true _ => false } />
+        val inferenceOrigin = <GenericCallInferenceOrigin.Call request=origin.request expression=exprId callee=callee arguments=args diagnostic=match context { FreeCallLookup.DiagnosticCandidate(function: _) => true _ => false } />
         val cf = self.arena.functionAt(index: callee)
         // A complete substitution may contain caller-owned symbolic
         // terms. These are valid context in a generic declaration;
@@ -3478,7 +3478,7 @@ impl Comp {
     }
 
     inout fn recordMethodArgumentContextsWithOrigin(callee: U64, receiverTerm: U64, args: ArgRange, chainHoleRef: U64, exprId: U64, origin: SourceRecordingScope, expectedOrigin: SourceExpectedContext, diagnosticCandidate: Bool = false) -> Result[(), CompileDiagnostic] {
-        val inferenceOrigin = <GenericCallInferenceOrigin.Call request=origin.request expression=exprId callee=callee arguments=args receiver=receiverTerm diagnostic=diagnosticCandidate />
+        val inferenceOrigin = <GenericCallInferenceOrigin.Call request=origin.request expression=exprId callee=callee arguments=args diagnostic=diagnosticCandidate />
         if callee < self.arena.functionCount() {
             val selectedMethod: Func = self.arena.functionAt(index: callee)
             val useOffset = self.exprOffset(id: exprId)
@@ -3589,7 +3589,7 @@ impl Comp {
     }
 
     inout fn recordParametricMethodCallWithOrigin(exprId: U64, callee: U64, receiverSource: CallTemplateReceiver, receiverTerm: U64, args: ArgRange, origin: SourceRecordingScope, expectedOrigin: SourceExpectedContext) -> Result[(), CompileDiagnostic] {
-        val inferenceOrigin = <GenericCallInferenceOrigin.Call request=origin.request expression=exprId callee=callee arguments=args receiver=receiverTerm diagnostic=false />
+        val inferenceOrigin = <GenericCallInferenceOrigin.Call request=origin.request expression=exprId callee=callee arguments=args diagnostic=false />
         if callee >= self.arena.functionCount() { return <Result.Ok value=() /> }
         val f: Func = self.arena.functionAt(index: callee)
         try self.checkCallDeclarationKind(exprId: exprId, declaration: f)
