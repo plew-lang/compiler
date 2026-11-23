@@ -55,3 +55,20 @@ fixed or removed from the phase-three area. Wait for the currently validated
 met-tsa3/met-ia2q boundary; do not alter frozen validation inputs.
 
 
+
+## Independent task/contract review
+
+Reviewer typing_obligation_plan_review confirms this existing-contract scope:
+spec08 explicitly admits supertrait assumptions for existential calls, while
+spec12 requires the canonical Index instance. This concrete key/result example
+has no forbidden nonreceiver Self input. The task is distinct from com-qomc
+(newtype conditional boxing evidence) and com-v2xk (requirement/callee environment
+mapping); cross-link any shared repair rather than assigning it twice.
+
+Retain the parent trait instance and U64/Output=I64 bindings with the selected
+slot/witness, never infer eligibility from the Index spelling. Cover an explicit
+supertrait, a diamond reaching the same requirement, and incompatible bindings
+or genuinely ambiguous paths. Do not silently treat trait-to-trait `impl P as Q`
+as equivalent to explicit supertrait inheritance: spec08 keeps its existential
+ambiguity rule. Acceptance must reach actual ORC output, not check alone.
+This is task/contract review only; implementation and validation are still open.
