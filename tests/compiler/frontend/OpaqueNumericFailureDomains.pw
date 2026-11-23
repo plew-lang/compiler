@@ -1,0 +1,41 @@
+use ../../../src/Frontend only { FrontendInput, openFrontend }
+use ../../../src/CheckedProgram only { CompilerSession, CompilerSessionResult, ProgramCheckResult, checkCompilerSession }
+use ../../../src/SourceAccess only { SourceAccess }
+use ../../../src/Diag only { CompileDiagnostic }
+use @Std/Io only { print }
+
+fn input(kind: U64) -> FrontendInput {
+    if kind == 0U64 { return <FrontendInput.Text path="caller_argument.pw" text="fn same[T](first: T, second: T) {{}}\nfn callSame[T](value: T) {{ same(first: 5, second: value) }}\nfn main() {{ callSame(value: 6I64) }}\n" /> }
+    if kind == 1U64 { return <FrontendInput.Text path="caller_let.pw" text="fn check[T](seed: T) {{ val value: T = 5 }}\nfn main() {{ check(seed: 1I64) }}\n" /> }
+    if kind == 2U64 { return <FrontendInput.Text path="caller_float.pw" text="fn check[T](seed: T) {{ val value: T = 1.5 }}\nfn main() {{ check(seed: 1I64) }}\n" /> }
+    if kind == 3U64 { return <FrontendInput.Text path="provided_self.pw" text="trait Literal {{}}\nimpl Literal {{ fn bad() {{ val value: Self = 5 }} }}\nfn main() {{}}\n" /> }
+    if kind == 4U64 { return <FrontendInput.Text path="provided_float.pw" text="trait Literal {{}}\nimpl Literal {{ fn bad() -> Self {{ return 1.5 }} }}\nfn main() {{}}\n" /> }
+    panic("invalid test kind")
+}
+
+fn requireOpaque(diagnostic: CompileDiagnostic) {
+    if diagnostic.message() != "cannot assign a literal to a type parameter: it is an opaque type with no numeric bound (spec/06)" { panic(diagnostic.message()) }
+    if !diagnostic.isSourceRejection() { panic("opaque numeric rejection lost its source owner") }
+}
+
+fn session(kind: U64) -> CompilerSession {
+    match CompilerSession.open(input: input(kind: kind), sources: <SourceAccess />) {
+        CompilerSessionResult.Success(session: val session) => { return move session }
+        CompilerSessionResult.Failure(diagnostic: val diagnostic) => { panic(diagnostic.message()) }
+    }
+}
+
+fn main() {
+    for kind in 0U64..<5U64 {
+        match checkCompilerSession(session: session(kind: kind)) {
+            ProgramCheckResult.Failure(diagnostic: val diagnostic) => { requireOpaque(diagnostic: diagnostic) }
+            ProgramCheckResult.Success(program: _) => { panic("whole check accepted opaque numeric value") }
+        }
+        print("whole opaque rejection retained")
+        match openFrontend(input: input(kind: kind), sources: <SourceAccess />) {
+            Result.Err(error: val diagnostic) => { requireOpaque(diagnostic: diagnostic) }
+            Result.Ok(value: _) => { panic("eager check accepted opaque numeric value") }
+        }
+        print("eager opaque rejection retained")
+    }
+}

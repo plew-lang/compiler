@@ -653,3 +653,8 @@ identity and Regular/Diagnostic/Unavailable Array admission, including Raw and
 foreign inputs, frontier bounds and recursive/return-context preservation.
 Append each to a frozen `Frontend.pw`, or combine their helpers with
 `GenericCallConflictMain` under one entry. Require exit0 and empty stdout/stderr.
+
+`OpaqueNumericFailureDomains.pw` is the whole/eager consumer regression for
+opaque caller type parameters and provided Self with integer/float literals.
+Its `.out` is the exact ten-line success golden. This focused test does not
+replace Raw, lazy-request or private provenance mutation controls.
