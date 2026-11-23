@@ -22,16 +22,16 @@ Targeted repairs do not retroactively change that result.
 Contextual operand children com-u22d/met-bu94/met-qo60, monitor repairs
 met-9455/met-kjb2, associated refusal met-1yd7, numeric ambiguity met-tb7u and
 generic Conflict met-r3us are finitely accepted and closed. Opaque numeric
-expectation ownership met-9ym8 has passed its final source/control/lifetime
-review; formal self-host0919bf reaches generation2 fixed point but its7.599326s median
-exceeds7.5; performance recovery remains required before child closure. Current
+expectation ownership met-9ym8 is independently accepted at source5bafacff,
+with final correctness/lifetime gates and formal435306 G2 fixed point,
+median7.227027s within7.5. Current
 candidate and exact receipts are in the
 [contextual operand record](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-contextual-operand-regression.json)
 and meta worklog.
 
-After the finite numeric children are accepted, refresh the whole normal gate
-on the frozen product and reconcile every remaining failure with the pinned
-audit scopes. Neither child reviews nor a partial run slice closes this parent,
+Whole refresh20261123T123611-test-19e1c3 is running on frozen source5bafacff
+and the formally measured carrier2b5475. Collect its complete result and
+reconcile every remaining failure with the pinned audit scopes. Neither child reviews nor a partial run slice closes this parent,
 normal-suite reconciliation or phase three.
 
 ## Contract and audit evidence
