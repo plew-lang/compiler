@@ -47,11 +47,30 @@ fn checkInheritedSelfResult() {
     if !compiler.typeRefEq(a: signature.resultType, b: target) { panic("inherited Self result lost root erasure") }
     eprint(text: "inherited Self result re-erased to root interface\n")
 }
+fn checkInheritedConditions() {
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.File path="tests/compiler/frontend/fixtures/ExistentialInterfaces/Conditions.pw" />, sources: <SourceAccess stdRoot="std/".bytes() />).unwrap()
+    mut val checked = 0U64
+    for statement in compiler.arena.stmts {
+        match statement {
+            Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: val type, init: _, annotationOccurrence: _) => {
+                if type == 0U64 || !compiler.arena.typeTermAt(index: type).isAny { continue }
+                val root = compiler.recordAnyTraitIndex(anyRef: type)
+                val conditions = compiler.interfaceMethodConditions(target: type, traitIndex: root, requirement: 0U64).unwrap()
+                if conditions.isNone() != (checked == 1U64) { panic("inherited method condition ignored its target binding") }
+                checked += 1U64
+            }
+            _ => {}
+        }
+    }
+    if checked != 2U64 { panic("condition fixture lost its existential annotations") }
+    eprint(text: "inherited conditions admitted only the justified target\n")
+}
 fn main() {
-    for scenario in 0U64..<7U64 {
-        val names: Array[String] = ["index_existential_requirement", "index_inherited_existential_requirement", "inherited_existential_diamond", "inherited_existential_generic", "inherited_existential_assoc_order", "inherited_existential_converging", "inherited_existential_late_binding"]
-        val traits: Array[String] = ["Index", "TaggedIndex", "DiamondIndex", "GenericChild", "JoinedPair", "Joined", "Joined"]
-        val expectedAncestors: Array[U64] = [1U64, 2U64, 4U64, 2U64, 4U64, 5U64, 6U64]
+    for scenario in 0U64..<8U64 {
+        val names: Array[String] = ["index_existential_requirement", "index_inherited_existential_requirement", "inherited_existential_diamond", "inherited_existential_generic", "inherited_existential_assoc_order", "inherited_existential_converging", "inherited_existential_late_binding", "inherited_existential_converging_bindings"]
+        val traits: Array[String] = ["Index", "TaggedIndex", "DiamondIndex", "GenericChild", "JoinedPair", "Joined", "Joined", "Joined"]
+        val expectedAncestors: Array[U64] = [1U64, 2U64, 4U64, 2U64, 4U64, 5U64, 6U64, 5U64]
         val inherited = scenario != 0U64
         mut val compiler = <Comp />
         val name = names[scenario]
@@ -65,7 +84,7 @@ fn main() {
             match compiler.arena.exprs[expression] {
                 Expr.Method(recv: val receiver, nameStart: val start, nameLen: val length, args: val args) => {
                     if compiler.moduleOf(offset: compiler.exprOffset(id: receiver)) != module { continue }
-                    val wanted = compiler.internBytes(s: if scenario == 3U64 || scenario == 5U64 || scenario == 6U64 { give "get" } else if scenario == 4U64 { give "first" } else { give "index" })
+                    val wanted = compiler.internBytes(s: if scenario == 3U64 || scenario == 5U64 || scenario == 6U64 { give "get" } else if scenario == 4U64 || scenario == 7U64 { give "first" } else { give "index" })
                     if intern(c: inout compiler, start: start, len: length) != wanted.nameId { continue }
                     mut val target = 0U64
                     val traitName = compiler.internBytes(s: traits[scenario])
@@ -90,7 +109,7 @@ fn main() {
                     compiler.authoredSignatureAdmission = <AuthoredSignatureAdmissionPhase.Complete />
                     if compiler.sourceExistentialInterface(traitIndex: root).unwrap() != interface { panic("admission completion changed an admitted interface") }
                     val expected = expectedAncestors[scenario]
-                    if compiler.sourceExistentialInterfaces[interface].ancestors.count() != expected || compiler.sourceExistentialInterfaces[interface].members.count() != (if scenario == 5U64 { give 2U64 } else { give 1U64 }) {
+                    if compiler.sourceExistentialInterfaces[interface].ancestors.count() != expected || compiler.sourceExistentialInterfaces[interface].members.count() != (if scenario == 5U64 || scenario == 7U64 { give 2U64 } else { give 1U64 }) {
                         eprint(text: name)
                         eprint(text: " nodes=")
                         eprintU64(n: compiler.sourceExistentialInterfaces[interface].ancestors.count())
@@ -138,12 +157,34 @@ fn main() {
                     // slot, even before a concrete payload witness is built.
                     val checked = compiler.readCheckedExistentialRequirementCall(target: target, traitIndex: root, requirement: slot - 1U64, offset: start, proofRead: <SignatureProofRead.Admission />).unwrap()
                     if !compiler.typeRefEq(a: checked.resultType, b: integer) { panic("checked call lost its inherited signature") }
+                    if compiler.interfaceMethodConditions(target: target, traitIndex: root, requirement: slot - 1U64).unwrap().isNone() { panic("unconditional inherited member lost its conditions") }
+                    val contract = compiler.createInterfaceContractRoot(target: target, traitIndex: root, slot: slot).unwrap()
+                    if !compiler.interfaceEvidenceIsValid(index: contract - 1U64) { panic("effective interface contract lost its saved identity") }
                     val viewCount = compiler.sourceExistentialInterfaces.count()
                     val targetCount = compiler.boundExistentialInterfaces.count()
                     if compiler.recordAnyRequirementSlot(anyRef: target, nameStart: start, nameLen: length, args: args).unwrap() != slot { panic("repeated selection changed its endpoint") }
                     compiler.existentialRequirementIsDispatchable(target: target, traitIndex: root, slot: slot - 1U64).unwrap()
                     if compiler.sourceExistentialInterface(traitIndex: root).unwrap() != interface || compiler.sourceExistentialInterfaces.count() != viewCount || compiler.boundExistentialInterfaces.count() != targetCount { panic("interface read rebuilt its source/target graph") }
                     if (scenario == 2U64 || scenario == 4U64) && compiler.sourceExistentialInterfaces[interface].ancestors[3U64].incoming.count() != 2U64 { panic("diamond discarded a witness provenance edge") }
+                    match compiler.recordParametricFunction(fnIdx: function, recordCallTemplates: true) {
+                        Result.Ok(value: _) => {}
+                        Result.Err(error: val diagnostic) => { panic(diagnostic.message()) }
+                    }
+                    mut val obligations = 0U64
+                    for location in 0U64..<compiler.callTemplateLocations.count() {
+                        val template = compiler.callTemplateAt(index: location)
+                        val dynamic = match template.kind {
+                            CallTemplateKind.Dynamic(receiver: _, args: _, target: _) | CallTemplateKind.Protocol(receiver: _, selection: _, resultTerm: _) => true,
+                            _ => false,
+                        }
+                        if !dynamic { continue }
+                        match compiler.sourceSelectedCallBounds(template: template) {
+                            Result.Ok(value: _) => {}
+                            Result.Err(error: val diagnostic) => { panic(diagnostic.message()) }
+                        }
+                        obligations += 1U64
+                    }
+                    if obligations == 0U64 { panic("source fixture did not reach a dynamic/protocol template obligation") }
                     val held = compiler.diagnosticAt(offset: 0U64, msg: "held signature admission failure", failureDomain: <FailureDomain.Internal />)
                     compiler.authoredSignatureAdmission = <AuthoredSignatureAdmissionPhase.Failed diagnostic=held />
                     requireHeldAdmissionFailure(result: compiler.sourceExistentialInterface(traitIndex: root))
@@ -161,4 +202,5 @@ fn main() {
     }
     checkInheritedSelfInput()
     checkInheritedSelfResult()
+    checkInheritedConditions()
 }

@@ -178,6 +178,32 @@ impl Comp {
             val equations = try self.boundExistentialEquations(constraint: substituted, traitIndex: ancestor.traitIndex, root: root, offset: offset)
             ancestors.append(<TraitBound subject=receiver constraint=<TraitConstraint key=<TraitInstanceKey owner=substituted.key.owner positionalArgs=arguments /> positionalArgsOpen=substituted.positionalArgsOpen assocPredicates=equations /> offset=ancestor.bound.offset />)
         }
+        // Distinct symbolic instances can coincide after target substitution.
+        // Their associated equations then constrain one instance jointly; do
+        // not make either path win, and do not erase either witness path.
+        mut val groups: Dictionary[U64, Array[U64]] = [:]
+        for position in 0U64..<ancestors.count() {
+            val bound = ancestors[position]
+            mut val group = groups.getOr(key: bound.constraint.key.owner, fallback: [])
+            mut val selected = position
+            for previous in group {
+                if ancestors[previous].constraint.positionalArgsOpen == bound.constraint.positionalArgsOpen && self.sameResolvedTypeRefs(a: ancestors[previous].constraint.key.positionalArgs, b: bound.constraint.key.positionalArgs) { selected = previous break }
+            }
+            if selected == position { group.append(position) groups[bound.constraint.key.owner] = group continue }
+            val saved = ancestors[selected]
+            mut val equations = saved.constraint.assocPredicates
+            for equation in bound.constraint.assocPredicates { equations.append(equation) }
+            val combined = <TraitConstraint key=saved.constraint.key positionalArgsOpen=saved.constraint.positionalArgsOpen assocPredicates=equations />
+            val owner = self.sourceExistentialInterfaces[interface].ancestors[position].traitIndex
+            val normalized = try self.boundExistentialEquations(constraint: combined, traitIndex: owner, root: root, offset: offset)
+            // Update every already-seen alias, retaining its source location.
+            for alias in 0U64..=position {
+                val prior = ancestors[alias]
+                if prior.constraint.key.owner == combined.key.owner && prior.constraint.positionalArgsOpen == combined.positionalArgsOpen && self.sameResolvedTypeRefs(a: prior.constraint.key.positionalArgs, b: combined.key.positionalArgs) {
+                    ancestors[alias] = <TraitBound subject=receiver constraint=<TraitConstraint key=combined.key positionalArgsOpen=combined.positionalArgsOpen assocPredicates=normalized /> offset=prior.offset />
+                }
+            }
+        }
         mut val canonicalMembers: Array[U64] = []
         val members = self.sourceExistentialInterfaces[interface].members
         for slot in 0U64..<members.count() {

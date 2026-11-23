@@ -1,0 +1,11 @@
+index_existential_requirement interface retained
+index_inherited_existential_requirement interface retained
+inherited_existential_diamond interface retained
+inherited_existential_generic interface retained
+inherited_existential_assoc_order interface retained
+inherited_existential_converging interface retained
+inherited_existential_late_binding interface retained
+inherited_existential_converging_bindings interface retained
+inherited Self input unavailable; invalid slot refused
+inherited Self result re-erased to root interface
+inherited conditions admitted only the justified target

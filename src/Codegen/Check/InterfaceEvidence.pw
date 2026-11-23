@@ -6,7 +6,9 @@ impl Comp {
         match self.interfaceEvidence[index]->node {
             InterfaceEvidenceNode.Source(root: val root) => { return root.session == self.sourceFacts.session }
             InterfaceEvidenceNode.Contract(root: val root) => {
-                return root.session == self.sourceFacts.session && root.traitIndex < self.decls.traitCount() && root.slot != 0U64 && root.slot <= self.decls.traitAt(index: root.traitIndex).reqs.count() && root.bound.constraint.key.owner == self.decls.traitAt(index: root.traitIndex).nameStart
+                if root.interface >= self.sourceExistentialInterfaces.count() { return false }
+                val interface = self.sourceExistentialInterfaces[root.interface]
+                return root.session == self.sourceFacts.session && root.traitIndex < self.decls.traitCount() && interface.traitIndex == root.traitIndex && root.slot != 0U64 && root.slot <= interface.members.count() && root.bound.constraint.key.owner == self.decls.traitAt(index: root.traitIndex).nameStart
             }
             InterfaceEvidenceNode.Instance(root: val root, owner: val owner, bound: _) => {
                 if root == 0U64 || root > self.interfaceEvidence.count() { return false }
@@ -143,16 +145,9 @@ impl Comp {
 
     inout fn sourceInterfaceSignatureBounds(template: CallTemplate, root: U64, traitIndex: U64, slot: U64) -> Result[Array[TraitBound], CompileDiagnostic] {
         val source = try self.requireSourceInterfaceRoot(root: root, site: template.siteKey, receiver: template.receiverTypeTerm, traitIndex: traitIndex)
-        return self.interfaceSignatureBounds(bound: source.bound, traitIndex: traitIndex, slot: slot, offset: template.siteKey.originStart)
-    }
-
-    inout fn interfaceSignatureBounds(bound: TraitBound, traitIndex: U64, slot: U64, offset: U64) -> Result[Array[TraitBound], CompileDiagnostic] {
-        val trait = self.decls.traitAt(index: traitIndex)
-        if slot == 0U64 || slot > trait.reqs.count() {
-            return <Result.Err error=self.diagnosticAt(offset: offset, msg: "selected interface has no retained requirement") />
-        }
-        val scope = try self.requireAdmittedRawRequirement(traitIndex: traitIndex, slot: slot - 1U64, offset: offset)
-        return self.readRequirementBounds(signature: <RequirementSignatureRead scope=scope bound=bound />, methodArguments: [])
+        if slot == 0U64 { return <Result.Err error=self.diagnosticAt(offset: template.siteKey.originStart, msg: "selected interface has no retained requirement", failureDomain: <FailureDomain.Input />) /> }
+        val signature = try self.existentialInterfaceSignatureRead(target: source.receiver, traitIndex: traitIndex, slot: slot - 1U64, receiver: source.bound.subject, offset: template.siteKey.originStart)
+        return self.readRequirementBounds(signature: signature, methodArguments: [])
     }
 }
 
@@ -320,28 +315,33 @@ impl Comp {
 // explicit scope admits only the interface and its declared associated facts.
 impl Comp {
     inout fn createInterfaceContractRoot(target: U64, traitIndex: U64, slot: U64) -> Result[U64, CompileDiagnostic] {
-        if target == 0U64 || target >= self.arena.typeCount() || !self.arena.typeTermAt(index: target).isAny || !self.arena.typeIsClosed(ref: target) || traitIndex >= self.decls.traitCount() || slot == 0U64 || slot > self.decls.traitAt(index: traitIndex).reqs.count() {
+        if target == 0U64 || target >= self.arena.typeCount() || !self.arena.typeTermAt(index: target).isAny || !self.arena.typeIsClosed(ref: target) || traitIndex >= self.decls.traitCount() || slot == 0U64 {
             return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "interface member contract has no closed target or requirement") />
         }
+        val interface = try self.sourceExistentialInterface(traitIndex: traitIndex)
+        if slot > self.sourceExistentialInterfaces[interface].members.count() { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "interface member contract has no effective requirement", failureDomain: <FailureDomain.Input />) /> }
         val constraint = self.existentialTraitConstraint(ref: target)
         if constraint.key.owner != self.decls.traitAt(index: traitIndex).nameStart { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "interface member contract belongs to another trait") /> }
         val parameter = self.nextParamId
         self.nextParamId += 1U64
         val name = self.internTmpName(prefix: "InterfaceContractSelf", n: parameter)
         val subject = self.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen paramId=parameter args=[] />)
-        val requirement = self.traitReqAt(reqs: self.decls.traitAt(index: traitIndex).reqs, index: slot - 1U64)
+        val member = self.sourceExistentialInterfaces[interface].members[slot - 1U64]
+        val requirement = self.authoredRequirementViews[member.signature].declaration
         val bound = <TraitBound subject=subject constraint=constraint offset=requirement.nameStart />
-        self.interfaceEvidence.append(<Ref value=<InterfaceEvidenceCell node=<InterfaceEvidenceNode.Contract root=<InterfaceContractRoot session=self.sourceFacts.session receiver=target traitIndex=traitIndex slot=slot bound=bound /> /> /> />)
+        self.interfaceEvidence.append(<Ref value=<InterfaceEvidenceCell node=<InterfaceEvidenceNode.Contract root=<InterfaceContractRoot interface=interface session=self.sourceFacts.session receiver=target traitIndex=traitIndex slot=slot bound=bound /> /> /> />)
         return <Result.Ok value=self.interfaceEvidence.count() />
     }
 
     inout fn interfaceMethodConditions(target: U64, traitIndex: U64, requirement: U64) -> Result[Optional[ExistentialMethodConditions], CompileDiagnostic] {
-        if traitIndex >= self.decls.traitCount() || requirement >= self.decls.traitAt(index: traitIndex).reqs.count() { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "interface member has no selected requirement") /> }
-        val declaration = self.traitReqAt(reqs: self.decls.traitAt(index: traitIndex).reqs, index: requirement)
+        val selected = try self.existentialInterfaceSignatureRead(target: target, traitIndex: traitIndex, slot: requirement, receiver: target, offset: 0U64)
+        val declaration = self.authoredRequirementViews[selected.scope].declaration
         if declaration.signatureBounds.len == 0U64 { return <Result.Ok value=<Optional.Some v=<ExistentialMethodConditions root=0U64 bounds=[] proofs=[] /> /> /> }
         val root = try self.createInterfaceContractRoot(target: target, traitIndex: traitIndex, slot: requirement + 1U64)
         val scope = <DeclarationTypeScope origin=<DeclarationScopeOrigin.InterfaceContract /> owner=0U64 parameters=<FuncBindRange start=0U64 len=0U64 /> interfaceRoot=root />
-        val bounds = try self.interfaceSignatureBounds(bound: self.interfaceEvidenceBound(index: root - 1U64), traitIndex: traitIndex, slot: requirement + 1U64, offset: declaration.nameStart)
+        val subject = self.interfaceEvidenceBound(index: root - 1U64).subject
+        val signature = try self.existentialInterfaceSignatureRead(target: target, traitIndex: traitIndex, slot: requirement, receiver: subject, offset: declaration.nameStart)
+        val bounds = try self.readRequirementBounds(signature: signature, methodArguments: [])
         val source = <DeclarationBoundRef.Interface index=root - 1U64 />
         mut val assumptions: Array[DeclarationBoundRef] = [source]
         try self.appendInterfaceAssociatedAssumptions(source: source, steps: [], assumptions: inout assumptions)

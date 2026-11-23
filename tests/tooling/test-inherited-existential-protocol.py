@@ -26,7 +26,7 @@ def main():
     for name in ['index_inherited_existential_requirement', 'inherited_existential_method',
                  'inherited_existential_diamond', 'inherited_existential_generic',
                  'inherited_existential_assoc_order', 'inherited_existential_converging',
-                 'inherited_existential_late_binding',
+                 'inherited_existential_late_binding', 'inherited_existential_converging_bindings',
                  'index_existential_requirement', 'index_generic_inherited_requirement']:
         source = ROOT / 'tests/fixtures/run' / (name + '.pw')
         retain(source)

@@ -1,0 +1,18 @@
+trait Mark {}
+struct Good {}
+pub impl Good { factory }
+pub impl Good as Mark {}
+trait Parent[T] { fn get() -> T where T: Mark }
+trait Child[T]: Parent[T] {}
+struct GoodPayload {}
+pub impl GoodPayload { factory }
+pub impl GoodPayload as Parent[Good] { fn get() -> Good { return <Good /> } }
+pub impl GoodPayload as Child[Good] {}
+struct BadPayload {}
+pub impl BadPayload { factory }
+pub impl BadPayload as Parent[I64] { fn get() -> I64 { return 0I64 } }
+pub impl BadPayload as Child[I64] {}
+fn main() {
+    val good: any Child[Good] = <GoodPayload />
+    val bad: any Child[I64] = <BadPayload />
+}

@@ -290,6 +290,7 @@ struct InterfaceEvidenceRoot {
 }
 
 struct InterfaceContractRoot {
+    val interface: U64
     val session: U64
     val receiver: U64
     val traitIndex: U64

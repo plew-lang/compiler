@@ -1,0 +1,19 @@
+use @Std/Io only { print }
+trait Parent[T] { type A type B fn first() -> A }
+trait Left[T]: Parent[T, A=I64] {}
+trait Right[T]: Parent[T, B=Bool] {}
+trait Joined[T, U]: Left[T] + Right[U] {}
+struct Payload {}
+pub impl Payload { factory }
+pub impl Payload as Parent[I64] {
+    type A = I64
+    type B = Bool
+    fn first() -> I64 { return 31I64 }
+}
+pub impl Payload as Left[I64] {}
+pub impl Payload as Right[I64] {}
+pub impl Payload as Joined[I64, I64] {}
+fn main() {
+    val payload: any Joined[I64, I64] = <Payload />
+    print(payload.first())
+}
