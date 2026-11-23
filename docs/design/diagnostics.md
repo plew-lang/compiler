@@ -148,6 +148,18 @@ operation, not a type context. Array-context failure admission separately
 requires a valid instantiated factory receiver at capture and observation;
 ordinary synthetic calls and copied source spans supply neither proof.
 
+Opaque numeric expectation rejection belongs to the abstract generic checker.
+The original rejection preserves whether its expected identity is a caller
+parameter or a provided body's abstract Self, the exact operand and diagnostic
+location, and its source owner/session. Private source requests propagate through
+recursive field, argument and bounds checks; raw entry points cannot acquire
+source authority from an active cursor. Dependencies retain their own failures.
+Lower-owned numeric provenance distinguishes authored literals from synthetic
+nodes with copied spans, even when both have recorded semantic owners. Failure
+observation checks retained identities and literal shape without repeating the
+numeric compatibility decision. Syntax provenance is not a successful type fact,
+and neither its presence nor a dedicated refusal publishes a successful body.
+
 `CompileDiagnostic.isSourceRejection()` requires both error severity and the
 explicit source domain. It is a value-level query, not proof of a failed process
 or an intended rejection reason. Rendering remains nonterminal and independent

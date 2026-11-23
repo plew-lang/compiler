@@ -1,0 +1,87 @@
+// Lower owns syntax provenance; ordinary pushExpr and semantic recording do not.
+impl Comp {
+    inout fn recordAuthoredNumericOrigin(expression: U64, start: U64, end: U64) {
+        val floating = match self.arena.exprs[expression] {
+            Expr.Int(value: _, offset: _, isBool: val boolean, tyStart: _, tyLen: val suffixLength, isNeg: _) => {
+                if boolean || suffixLength != 0U64 { return }
+                give false
+            }
+            Expr.Float(start: _, len: _, tyStart: _, tyLen: _) => true
+            _ => { return }
+        }
+        self.authoredNumericLiterals[expression] = <AuthoredNumericLiteral serial=self.arena.exprOriginSerial[expression] start=start end=end floating=floating />
+    }
+
+    fn numericLiteralSame(first: Expr, second: Expr) -> Bool {
+        return match first {
+            Expr.Int(value: val value, offset: val offset, isBool: val boolean, tyStart: val suffix, tyLen: val length, isNeg: val negative) => match second {
+                Expr.Int(value: val other, offset: val otherOffset, isBool: val otherBoolean, tyStart: val otherSuffix, tyLen: val otherLength, isNeg: val otherNegative) => value == other && offset == otherOffset && boolean == otherBoolean && suffix == otherSuffix && length == otherLength && negative == otherNegative
+                _ => false
+            }
+            Expr.Float(start: val start, len: val length, tyStart: val suffix, tyLen: val suffixLength) => match second {
+                Expr.Float(start: val other, len: val otherLength, tyStart: val otherSuffix, tyLen: val otherSuffixLength) => start == other && length == otherLength && suffix == otherSuffix && suffixLength == otherSuffixLength
+                _ => false
+            }
+            _ => false
+        }
+    }
+
+    fn numericOriginMatches(expression: U64, authored: AuthoredNumericLiteral) -> Bool {
+        if expression >= self.arena.exprs.count() || expression >= self.arena.exprOriginSerial.count() || expression >= self.arena.exprSpanStart.count() || expression >= self.arena.exprSpanEnd.count() { return false }
+        if authored.serial != self.arena.exprOriginSerial[expression] || authored.start != self.arena.exprSpanStart[expression] || authored.end != self.arena.exprSpanEnd[expression] { return false }
+        return match self.arena.exprs[expression] {
+            Expr.Int(value: _, offset: _, isBool: _, tyStart: _, tyLen: _, isNeg: _) => !authored.floating
+            Expr.Float(start: _, len: _, tyStart: _, tyLen: _) => authored.floating
+            _ => false
+        }
+    }
+
+    inout fn opaqueNumericDiagnostic(origin: SourceRecordOrigin, expectedRef: U64, valueExpr: U64, function: U64, callerParameter: Bool) -> CompileDiagnostic {
+        val location = self.diagnosticLocationAt(offset: self.exprOffset(id: valueExpr))
+        val raw = <CompileDiagnostic location=location message=opaqueNumericMessage() />
+        val request = match origin {
+            SourceRecordOrigin.Raw => { return raw }
+            SourceRecordOrigin.CheckingRequest(session: val session, root: val root) => (session: session, root: root)
+        }
+        if request.session != self.sourceFactSession() || expectedRef == 0U64 || expectedRef >= self.arena.typeCount() || function >= self.arena.functionCount() { return raw }
+        val authored = match self.authoredNumericLiterals.get(key: valueExpr) { Optional.Some(v: val authored) => authored Optional.None => { return raw } }
+        if !self.numericOriginMatches(expression: valueExpr, authored: authored) { return raw }
+        val recorded = match self.sourceFacts.expressionOwners.get(key: valueExpr) { Optional.Some(v: val recorded) => recorded Optional.None => { return raw } }
+        if !semanticCompletionOwnersEqual(recorded: self.lexicalSourceFactOwner(owner: recorded), prepared: request.root) || !semanticCompletionOwnersEqual(recorded: request.root, prepared: <SemanticCompletionOwner.Function index=function />) { return raw }
+        val owner = match recorded {
+            SemanticCompletionOwner.Function(index: val index) => <DiagnosticOwner.Function index=index />
+            SemanticCompletionOwner.Global(target: val target) => <DiagnosticOwner.Global target=target />
+            SemanticCompletionOwner.Closure(expression: val expression) => <DiagnosticOwner.Closure expression=expression />
+        }
+        val declaration = self.arena.functionAt(index: function)
+        val expectation = if callerParameter {
+            give <OpaqueNumericExpectation.Caller function=function identity=self.arena.typeTermAt(index: expectedRef).paramId />
+        } else {
+            give <OpaqueNumericExpectation.Provided function=function traitOwner=declaration.provTraitOwner receiverStart=declaration.recvStart receiverLength=declaration.recvLen />
+        }
+        val refusal = <OpaqueNumericRefusal session=request.session owner=owner expression=valueExpr expected=expectedRef event=self.failedOpaqueNumerics.count() location=location />
+        self.failedOpaqueNumerics.append(<SourceOpaqueNumericFailure refusal=refusal root=request.root authored=authored literal=self.arena.exprs[valueExpr] expectation=expectation declarationOffset=declaration.defOffset />)
+        return <CompileDiagnostic.opaqueNumeric refusal=refusal />
+    }
+
+    fn sourceOpaqueNumericHasOwner(refusal: OpaqueNumericRefusal) -> Bool {
+        if refusal.session() != self.sourceFactSession() || refusal.event() >= self.failedOpaqueNumerics.count() || refusal.expected() == 0U64 || refusal.expected() >= self.arena.typeCount() { return false }
+        val proof = self.failedOpaqueNumerics[refusal.event()]
+        val saved = proof.refusal
+        if saved.session() != refusal.session() || !self.diagnosticOwnersEqual(first: saved.owner(), second: refusal.owner()) || saved.expression() != refusal.expression() || saved.expected() != refusal.expected() || !saved.location().same(other: refusal.location()) { return false }
+        if !self.sourceExpressionHasOwner(session: refusal.session(), expression: refusal.expression(), owner: refusal.owner()) || !self.numericOriginMatches(expression: refusal.expression(), authored: proof.authored) { return false }
+        val recorded = match self.sourceFacts.expressionOwners.get(key: refusal.expression()) { Optional.Some(v: val recorded) => recorded Optional.None => { return false } }
+        if !semanticCompletionOwnersEqual(recorded: self.lexicalSourceFactOwner(owner: recorded), prepared: proof.root) || !self.numericLiteralSame(first: proof.literal, second: self.arena.exprs[refusal.expression()]) { return false }
+        return match proof.expectation {
+            OpaqueNumericExpectation.Caller(function: val function, identity: val identity) => {
+                if function >= self.arena.functionCount() || identity == 0U64 || self.arena.typeTermAt(index: refusal.expected()).paramId != identity { return false }
+                give self.arena.functionAt(index: function).defOffset == proof.declarationOffset
+            }
+            OpaqueNumericExpectation.Provided(function: val function, traitOwner: val traitOwner, receiverStart: val start, receiverLength: val length) => {
+                if function >= self.arena.functionCount() { return false }
+                val declaration = self.arena.functionAt(index: function)
+                give declaration.defOffset == proof.declarationOffset && declaration.provTraitOwner == traitOwner && declaration.recvStart == start && declaration.recvLen == length
+            }
+        }
+    }
+}

@@ -1,0 +1,80 @@
+// Append to an exact Frontend snapshot. This probe does not widen product APIs.
+fn main() {
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text path="Opaque.pw" text="fn bad[T](seed: T) {{ val number: T = 5 }}\nfn main() {{}}" />, sources: <SourceAccess />).unwrap()
+    val name = compiler.internBytes(s: "bad")
+    val function = compiler.arena.firstFunctionNamed(nameId: name.nameId)
+    compiler.recordParametricFunction(fnIdx: function, recordCallTemplates: true).unwrap()
+    val owner = <SemanticCompletionOwner.Function index=function />
+    compiler.sourceFacts.activate(owner: owner)
+    val before = compiler.failedOpaqueNumerics.count()
+    match compiler.checkGenericFunction(fnIdx: function) {
+        Result.Err(error: val diagnostic) => { if diagnostic.opaqueNumeric().isSome() || compiler.sourceFailureHasOwner(diagnostic: diagnostic) || diagnostic.message() != opaqueNumericMessage() { panic("Raw generic checking acquired authority") } }
+        Result.Ok(value: _) => { panic("Raw generic checking accepted opaque literal") }
+    }
+    if compiler.failedOpaqueNumerics.count() != before { panic("Raw generic checking published refusal") }
+    val request = <SourceRecordOrigin.CheckingRequest session=compiler.sourceFactSession() root=owner />
+    val diagnostic = match compiler.checkGenericFunctionWithOrigin(origin: request, fnIdx: function) {
+        Result.Err(error: val diagnostic) => diagnostic
+        Result.Ok(value: _) => { panic("owned generic checking accepted opaque literal") }
+    }
+    val refusal = diagnostic.opaqueNumeric().unwrap()
+    if !compiler.sourceFailureHasOwner(diagnostic: diagnostic) || diagnostic.isSourceRejection() { panic("private cause lost owner or promoted itself") }
+    for invalid in 0U64..<4U64 {
+        val forged = <OpaqueNumericRefusal session=if invalid == 0U64 { give refusal.session()+1U64 } else { give refusal.session() } owner=if invalid == 1U64 { give <DiagnosticOwner.Unknown /> } else { give refusal.owner() } expression=if invalid == 2U64 { give refusal.expression()+1U64 } else { give refusal.expression() } expected=if invalid == 3U64 { give 0U64 } else { give refusal.expected() } event=refusal.event() location=refusal.location() />
+        if compiler.sourceFailureHasOwner(diagnostic: <CompileDiagnostic.opaqueNumeric refusal=forged />) { panic("forged refusal acquired authority") }
+    }
+    val original = compiler.arena.exprs[refusal.expression()]
+    val clone = compiler.pushExpr(e: original)
+    compiler.arena.exprSpanStart[clone] = compiler.arena.exprSpanStart[refusal.expression()]
+    compiler.arena.exprSpanEnd[clone] = compiler.arena.exprSpanEnd[refusal.expression()]
+    compiler.sourceFacts.expressionOwners[clone] = owner
+    compiler.cur.checkFn = function
+    match compiler.checkGenericTypeMatchWithOrigin(origin: request, expectedRef: refusal.expected(), valueExpr: clone) {
+        Result.Err(error: val synthetic) => { if synthetic.opaqueNumeric().isSome() || compiler.sourceFailureHasOwner(diagnostic: synthetic) { panic("recorded synthetic acquired numeric source authority") } }
+        Result.Ok(value: _) => { panic("synthetic opaque literal accepted") }
+    }
+    val serial = compiler.arena.exprOriginSerial[refusal.expression()]
+    compiler.arena.exprOriginSerial[refusal.expression()] = serial+1U64
+    if compiler.sourceFailureHasOwner(diagnostic: diagnostic) { panic("changed serial preserved authority") }
+    compiler.arena.exprOriginSerial[refusal.expression()] = serial
+    if !compiler.sourceFailureHasOwner(diagnostic: diagnostic) { panic("restored receipt lost authority") }
+    compiler.pendingDiagnostics.append(diagnostic)
+    if compiler.takeDiagnostics().count() != 1U64 || !compiler.sourceFailureHasOwner(diagnostic: diagnostic) { panic("drain lost retained opaque cause") }
+    val report = <CompileDiagnostic failureDomain=<FailureDomain.Internal /> location=refusal.location() message=opaqueNumericMessage() />
+    if compiler.sourceFailureHasOwner(diagnostic: report) { panic("text promoted Internal report") }
+    val originalStart = compiler.arena.exprSpanStart[refusal.expression()]
+    compiler.arena.exprSpanStart[refusal.expression()] = originalStart+1U64
+    if compiler.sourceFailureHasOwner(diagnostic: diagnostic) { panic("changed span preserved authority") }
+    compiler.arena.exprSpanStart[refusal.expression()] = originalStart
+    compiler.arena.exprs[refusal.expression()] = <Expr.Str start=originalStart len=1U64 />
+    if compiler.sourceFailureHasOwner(diagnostic: diagnostic) { panic("changed literal kind preserved authority") }
+    compiler.arena.exprs[refusal.expression()] = original
+    for invalid in 0U64..<2U64 {
+        val foreign = if invalid == 0U64 {
+            give <SourceRecordOrigin.CheckingRequest session=compiler.sourceFactSession()+1U64 root=owner />
+        } else { give <SourceRecordOrigin.CheckingRequest session=compiler.sourceFactSession() root=<SemanticCompletionOwner.Global target=0U64 /> /> }
+        match compiler.checkGenericTypeMatchWithOrigin(origin: foreign, expectedRef: refusal.expected(), valueExpr: refusal.expression()) {
+            Result.Err(error: val error) => { if error.opaqueNumeric().isSome() { panic("foreign request published opaque cause") } }
+            Result.Ok(value: _) => { panic("foreign request changed rejection") }
+        }
+    }
+    val wrongLocation = <OpaqueNumericRefusal session=refusal.session() owner=refusal.owner() expression=refusal.expression() expected=refusal.expected() event=refusal.event() location=<DiagnosticLocation.Unpositioned /> />
+    if compiler.sourceFailureHasOwner(diagnostic: <CompileDiagnostic.opaqueNumeric refusal=wrongLocation />) { panic("changed location preserved authority") }
+    // The AST Lower entry is also used by generated source. Its receipt must
+    // agree with the resulting root span, including negative integer folding.
+    val span = <Span start=originalStart end=originalStart+1U64 />
+    val empty = <Span start=0U64 end=0U64 />
+    val integer = <ExprAst.IntLit value=5U64 isBool=false tySuffix="" literalSpan=span tySuffixSpan=empty span=span />
+    val astInteger = compiler.lowerExpr(e: integer).unwrap()
+    val astFloat = compiler.lowerExpr(e: <ExprAst.FloatLit text="1.5" tySuffix="F64" literalSpan=span tySuffixSpan=empty span=span />).unwrap()
+    val astNegative = compiler.lowerExpr(e: <ExprAst.Unary op=opSub() operand=integer span=span />).unwrap()
+    for expression in [astInteger, astFloat, astNegative] {
+        val authored = compiler.authoredNumericLiterals.get(key: expression).unwrap()
+        if !compiler.numericOriginMatches(expression: expression, authored: authored) { panic("AST Lower lost numeric provenance") }
+    }
+    val typedInteger = compiler.lowerExpr(e: <ExprAst.IntLit value=5U64 isBool=false tySuffix="I64" literalSpan=span tySuffixSpan=empty span=span />).unwrap()
+    val boolean = compiler.lowerExpr(e: <ExprAst.IntLit value=1U64 isBool=true tySuffix="" literalSpan=span tySuffixSpan=empty span=span />).unwrap()
+    if compiler.authoredNumericLiterals.contains(key: typedInteger) || compiler.authoredNumericLiterals.contains(key: boolean) { panic("non-refusable literals retained unnecessary provenance") }
+
+}

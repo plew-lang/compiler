@@ -65,3 +65,18 @@ setup errors, a60s ORC timeout and the first link's missing C filename suffix
 are excluded from RED. Canonical `numeric_refusal_intake.opaque_checkpoint`
 retains the input hashes, baseline24modes and exact outcome. This proves the
 first consumer assertion; the remaining scenarios are not claimed executed.
+
+## Implementation checkpoint
+
+The first product candidate passes source checking, standard build
+`20261123T105854-build-f6979c`, and24 baseline CLI modes with unchanged
+acceptance/primary diagnostics: only the13 opaque failure domains become Source.
+Negative integer, suffixed Float, nested statement scope and if-body add12
+preserved Source refusals. Closure intake retains its existing earlier Source
+literal-context rejection; the match intake syntax error is not product evidence.
+Independent source review found two origin-dropping legacy helpers; both now have
+Raw wrappers and private origin-bearing cores. Bool/suffixed Int need no stored
+numeric provenance. Updated private guards (including both Lower contracts) and
+Raw retry/drain/whole/eager consumer native runs pass with unchanged inputs.
+Final candidate build, lazy additions, lifetime/performance gates and independent
+final acceptance remain pending. Source and evidence checkpoints are not closure.

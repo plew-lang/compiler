@@ -1274,6 +1274,10 @@ pub impl Comp {
     // Observe retained dedicated refusal evidence, not the general Source domain.
     // Raw reports and unknown causes have no authority from text or cursor state.
     fn sourceFailureHasOwner(diagnostic: CompileDiagnostic) -> Bool {
+        match diagnostic.opaqueNumeric() {
+            Optional.Some(v: val refusal) => { return self.sourceOpaqueNumericHasOwner(refusal: refusal) }
+            Optional.None => {}
+        }
         match diagnostic.genericCallConflict() {
             Optional.Some(v: val refusal) => { return self.sourceGenericCallConflictHasOwner(refusal: refusal) }
             Optional.None => {}

@@ -1,0 +1,2 @@
+fn bad[T](seed: T) { val value: T = 1.5F64 }
+fn main() { bad(seed: 1I64) }

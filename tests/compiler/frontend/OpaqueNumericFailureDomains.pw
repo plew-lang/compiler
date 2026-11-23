@@ -1,7 +1,8 @@
-use ../../../src/Frontend only { FrontendInput, openFrontend }
+use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontendForRequests, openFrontend }
 use ../../../src/CheckedProgram only { CompilerSession, CompilerSessionResult, ProgramCheckResult, checkCompilerSession }
+use ../../../src/Backend only { LlvmLoweringResult }
 use ../../../src/SourceAccess only { SourceAccess }
-use ../../../src/Diag only { CompileDiagnostic }
+use ../../../src/Diag only { CompileDiagnostic, FailureDomain }
 use @Std/Io only { print }
 
 fn input(kind: U64) -> FrontendInput {
@@ -13,9 +14,10 @@ fn input(kind: U64) -> FrontendInput {
     panic("invalid test kind")
 }
 
-fn requireOpaque(diagnostic: CompileDiagnostic) {
+fn requireOpaque(diagnostic: CompileDiagnostic, owned: Bool = true) {
     if diagnostic.message() != "cannot assign a literal to a type parameter: it is an opaque type with no numeric bound (spec/06)" { panic(diagnostic.message()) }
-    if !diagnostic.isSourceRejection() { panic("opaque numeric rejection lost its source owner") }
+    if diagnostic.isSourceRejection() != owned { panic("opaque numeric rejection lost its required ownership boundary") }
+    if !owned { match diagnostic.failureDomain() { FailureDomain.Unclassified => {} _ => { panic("Raw opaque failure domain changed") } } }
 }
 
 fn session(kind: U64) -> CompilerSession {
@@ -27,6 +29,45 @@ fn session(kind: U64) -> CompilerSession {
 
 fn main() {
     for kind in 0U64..<5U64 {
+        mut val raw = <Comp />
+        analyzeFrontendForRequests(c: inout raw, input: input(kind: kind), sources: <SourceAccess />).unwrap()
+        val name = raw.internBytes(s: if kind == 0U64 { give "callSame" } else if kind < 3U64 { give "check" } else { give "bad" })
+        val function = raw.arena.firstFunctionNamed(nameId: name.nameId)
+        for attempt in 0U64..<2U64 {
+            match raw.prepareLexicalBody(fnIdx: function) {
+                Result.Err(error: val diagnostic) => { requireOpaque(diagnostic: diagnostic, owned: false) raw.pendingDiagnostics.append(diagnostic) }
+                Result.Ok(value: _) => { panic("Raw body request accepted opaque numeric value") }
+            }
+            if raw.takeDiagnostics().count() != 1U64 { panic("drain lost retained opaque rejection") }
+        }
+        print("raw opaque rejection retained")
+        if kind < 3U64 {
+            mut val owned = session(kind: kind)
+            match owned.lowerDeclarations() {
+                LlvmLoweringResult.Success(module: _) => {}
+                LlvmLoweringResult.Failure(diagnostic: val diagnostic) => { panic(diagnostic.message()) }
+            }
+            mut val failures = 0U64
+            for body in owned.registeredBodies() {
+                match owned.prepareBodyAccess(bodyId: body) {
+                    Result.Err(error: val diagnostic) => {
+                        requireOpaque(diagnostic: diagnostic)
+                        failures += 1U64
+                        match owned.prepareBodyAccess(bodyId: body) {
+                            Result.Err(error: val retained) => { requireOpaque(diagnostic: retained) }
+                            Result.Ok(value: _) => { panic("failed lazy request published success") }
+                        }
+                    }
+                    Result.Ok(value: _) => {}
+                }
+            }
+            if failures == 0U64 { panic("lazy probe never reached the opaque refusal") }
+            match checkCompilerSession(session: move owned) {
+                ProgramCheckResult.Failure(diagnostic: val diagnostic) => { requireOpaque(diagnostic: diagnostic) }
+                ProgramCheckResult.Success(program: _) => { panic("failed lazy session published a checked program") }
+            }
+            print("lazy opaque rejection retained")
+        }
         match checkCompilerSession(session: session(kind: kind)) {
             ProgramCheckResult.Failure(diagnostic: val diagnostic) => { requireOpaque(diagnostic: diagnostic) }
             ProgramCheckResult.Success(program: _) => { panic("whole check accepted opaque numeric value") }

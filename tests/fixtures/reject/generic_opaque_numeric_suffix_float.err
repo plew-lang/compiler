@@ -1,0 +1,1 @@
+cannot assign a literal to a type parameter: it is an opaque type with no numeric bound

@@ -1782,7 +1782,7 @@ impl Comp {
                         FreeCallLookup.DiagnosticCandidate(function: _) => {
                             // Independently known parameter errors do not wait
                             // for unrelated inference slots (such as a result).
-                            if !(try self.tyRefIsGround(ref: cctx)) { try self.checkGenericTypeMatch(expectedRef: cctx, valueExpr: argument.expr) }
+                            if !(try self.tyRefIsGround(ref: cctx)) { try self.checkGenericTypeMatchWithOrigin(origin: origin.request, expectedRef: cctx, valueExpr: argument.expr) }
                             try self.checkArgInoutMode(p: parameter, arg: argument)
                             try self.checkWrittenCallValue(expression: argument.expr, expected: cctx)
                             checkedValues += 1U64
@@ -2294,7 +2294,7 @@ impl Comp {
                         // Keep source-position binding identity, including gives
                         // in analyzed-unreachable but source-valid regions.
                         try self.tcCheckValue(expectedRef: expectedTerm, valueExpr: value, pos: "block-result")
-                        try self.checkGenericTypeMatch(expectedRef: expectedTerm, valueExpr: value)
+                        try self.checkGenericTypeMatchWithOrigin(origin: origin.request, expectedRef: expectedTerm, valueExpr: value)
                     }
                     _ => {}
                 }

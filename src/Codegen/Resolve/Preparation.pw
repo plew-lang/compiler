@@ -13,7 +13,7 @@ impl Comp {
         // them. Later validation must not reconstruct the chosen member.
         try self.recordParametricFunctionWithOrigin(fnIdx: owner, recordCallTemplates: true, origin: <SourceRecordingScope request=<SourceRecordOrigin.CheckingRequest session=self.sourceFactSession() root=<SemanticCompletionOwner.Function index=owner /> /> returnContext=<SourceExpectedContext.None /> />, expectedOrigin: <SourceExpectedContext.None />)
         self.cur.recordCallTemplates = false
-        try self.checkGenericFunction(fnIdx: owner)
+        try self.checkGenericFunctionWithOrigin(origin: <SourceRecordOrigin.CheckingRequest session=self.sourceFactSession() root=<SemanticCompletionOwner.Function index=owner /> />, fnIdx: owner)
         try self.verifyFunctionDeclaration(fnIdx: owner)
         if (try self.completeRecordedBodyDefaultCalls(owner: owner)) != 0U64 {
             return <Result.Err error=self.diagnosticAt(offset: self.arena.functionAt(index: owner).defOffset, msg: "internal error: lexical body has incomplete default argument plans") />

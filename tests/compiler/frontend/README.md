@@ -656,5 +656,12 @@ Append each to a frozen `Frontend.pw`, or combine their helpers with
 
 `OpaqueNumericFailureDomains.pw` is the whole/eager consumer regression for
 opaque caller type parameters and provided Self with integer/float literals.
-Its `.out` is the exact ten-line success golden. This focused test does not
-replace Raw, lazy-request or private provenance mutation controls.
+Its `.out` is the exact eighteen-line success golden, including Raw repeated
+requests/drain and source-owned lazy retries followed by whole-session failure.
+Private provenance mutation controls remain separate.
+
+`OpaqueNumericMain.pw` is appended to an exact Frontend source snapshot. It
+checks Raw versus private requests, retained literal/expected identities, foreign
+metadata, recorded synthetic copied-span nodes, serial/span/kind mutation,
+Internal same-text reports, drain and both syntax Lower entry contracts. Require
+native exit0 and empty stdout/stderr; do not expose private production APIs.
