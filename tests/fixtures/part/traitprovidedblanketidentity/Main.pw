@@ -1,0 +1,9 @@
+use @Std/Io only { print }
+use ./Lib only { A }
+
+// One authored Named helper remains one member through the Show blanket.
+fn main() {
+    val value = <A n=4I64 />
+    print(value.internalNameTwice())
+    print(value.show())
+}

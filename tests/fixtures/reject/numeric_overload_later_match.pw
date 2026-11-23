@@ -1,0 +1,6 @@
+// A later branch cannot choose the expected type of an earlier literal.
+fn choose(value: I32) {}
+fn choose(value: I64) {}
+fn main() {
+    choose(value: match true { true => { give 1 } false => { give 2I32 } })
+}
