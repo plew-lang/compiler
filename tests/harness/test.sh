@@ -142,6 +142,12 @@ else
     fail=$((fail + 1)); failed="$failed check-command"
 fi
 
+if python3 -B ./tests/tooling/test-source-typing-origin.py --compiler "$PLEWC" --out "$RUNTIME_DIR/source-typing-origin"; then
+    echo "PASS source-typing-origin"
+else
+    fail=$((fail + 1)); failed="$failed source-typing-origin"
+fi
+
 if python3 -B ./tests/tooling/test-module-cycle-diagnostics.py --compiler "$PLEWC"; then
     echo "PASS module-cycle-diagnostics"
 else

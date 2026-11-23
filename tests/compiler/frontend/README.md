@@ -676,3 +676,5 @@ facts, missing completion and obligation discharge before fault injection.
 Require exit0 and empty stdout/stderr; it does not widen product visibility.
 `tests/tooling/test-source-typing-origin.py` separately exercises the actual CLI
 channel in check/AOT/ORC, unused lazy bodies and typed-array language controls.
+The normal harness registers this inexpensive CLI gate; the private/native
+implementation probes retain their separate manual execution contract.
