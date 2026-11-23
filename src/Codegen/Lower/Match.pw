@@ -941,8 +941,11 @@ impl Comp {
                     match origin.kind {
                         SyntheticCallKind.IndexWrite => {
                             match self.arena.exprs[expression] {
-                                Expr.Method(recv: val receiver, nameStart: _, nameLen: _, args: val arguments) => {
-                                    self.authoredIndexWrites[expression] = (serial: origin.originSerial, receiver: receiver, arguments: arguments)
+                                Expr.Method(recv: val receiver, nameStart: val selectorStart, nameLen: val selectorLength, args: val arguments) => {
+                                    if arguments.start > self.arena.argPool.count() || arguments.len > self.arena.argPool.count() - arguments.start { continue }
+                                    mut val written: Array[Arg] = []
+                                    for index in 0U64..<arguments.len { written.append(self.argAt(args: arguments, index: index)) }
+                                    self.authoredIndexWrites[expression] = <AuthoredIndexWrite serial=origin.originSerial receiver=receiver arguments=arguments selectorStart=selectorStart selectorLength=selectorLength written=written />
                                 }
                                 _ => {}
                             }

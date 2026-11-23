@@ -230,6 +230,7 @@ pub impl Comp {
                 val b: U64 = (try self.lowerExpr(e: base))
                 val idx: U64 = (try self.lowerExpr(e: index))
                 result = (try self.lowerIndexRead(recv: b, key: idx))
+                self.retainAuthoredIndexRead(expression: result)
             }
             ExprAst.Make(val typeName, val typeNameSpan, val typePath, val typeArgs, val variant, val variantSpan, val isEnum, val fields, val span) => {
                 mut val tn: Bind = self.lowerTypeName(name: typeName, span: typeNameSpan)
@@ -500,6 +501,7 @@ pub impl Comp {
             }
             SyntaxExprKind.Index => {
                 result = (try self.lowerIndexRead(recv: (try self.lowerSyntaxExpr(id: e.child0)), key: (try self.lowerSyntaxExpr(id: e.child1))))
+                self.retainAuthoredIndexRead(expression: result)
             }
             SyntaxExprKind.Make => {
                 mut val typeName = e.name

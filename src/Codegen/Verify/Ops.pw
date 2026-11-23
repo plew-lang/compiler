@@ -617,8 +617,15 @@ impl Comp {
         if origin.originSerial != saved.serial || origin.originSerial != self.arena.exprOriginSerial[expression] { return false }
         match origin.kind { SyntheticCallKind.IndexWrite => {} _ => { return false } }
         match self.arena.exprs[expression] {
-            Expr.Method(recv: val receiver, nameStart: _, nameLen: _, args: val arguments) => {
-                return receiver == recv && arguments.start == args.start && arguments.len == args.len
+            Expr.Method(recv: val receiver, nameStart: val selectorStart, nameLen: val selectorLength, args: val arguments) => {
+                if receiver != recv || selectorStart != saved.selectorStart || selectorLength != saved.selectorLength || arguments.start != args.start || arguments.len != args.len || saved.written.count() != args.len { return false }
+                if args.start > self.arena.argPool.count() || args.len > self.arena.argPool.count() - args.start { return false }
+                for index in 0U64..<args.len {
+                    val current = self.argAt(args: args, index: index)
+                    val original = saved.written[index]
+                    if current.expr != original.expr || current.labelStart != original.labelStart || current.labelLen != original.labelLen || current.hasLabel != original.hasLabel || current.isInout != original.isInout { return false }
+                }
+                return true
             }
             _ => { return false }
         }

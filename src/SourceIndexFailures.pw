@@ -1,0 +1,112 @@
+// Lower provenance is distinct from the public synthetic builder's navigation
+// records. Only the actual source-syntax entrances issue a read receipt.
+impl Comp {
+    inout fn retainAuthoredIndexRead(expression: U64) {
+        val args = match self.arena.exprs[expression] {
+            Expr.Method(recv: _, nameStart: _, nameLen: _, args: val args) => args
+            _ => { return }
+        }
+        match self.sourceCallOperation(exprId: expression, args: args) {
+            Optional.Some(v: val operation) => {
+                match operation {
+                    SourceCallOperation.Index(receiver: _, key: _, place: _, read: _, serial: _, selectorStart: _, selectorLength: _, readArguments: _, readArgument: _) => { self.authoredIndexReads[expression] = operation }
+                    _ => {}
+                }
+            }
+            Optional.None => {}
+        }
+    }
+
+    fn authoredIndexOperation(expression: U64, args: ArgRange) -> Optional[SourceIndexOperation] {
+        val siteIndex = self.syntheticCallSiteIndex(exprId: expression)
+        if siteIndex >= self.decls.syntheticCallSites.count() { return <Optional.None /> }
+        match self.decls.syntheticCallSites[siteIndex].kind {
+            SyntheticCallKind.IndexRead => {
+                val original = match self.authoredIndexReads.get(key: expression) { Optional.Some(v: val original) => original Optional.None => { return <Optional.None /> } }
+                val current = match self.sourceCallOperation(exprId: expression, args: args) { Optional.Some(v: val current) => current Optional.None => { return <Optional.None /> } }
+                if !original.same(other: current) { return <Optional.None /> }
+                return <Optional.Some v=<SourceIndexOperation.Read operation=original /> />
+            }
+            SyntheticCallKind.IndexWrite => {
+                val original = match self.authoredIndexWrites.get(key: expression) { Optional.Some(v: val original) => original Optional.None => { return <Optional.None /> } }
+                if args.len != 2U64 || !self.isAuthoredIndexWriteReceiver(expression: expression, recv: original.receiver, args: args) { return <Optional.None /> }
+                return <Optional.Some v=<SourceIndexOperation.Write operation=original /> />
+            }
+            _ => { return <Optional.None /> }
+        }
+    }
+
+    // Called only after the performed lexical/static query and failed dynamic
+    // alternative. A later missing template is never a negative query receipt.
+    inout fn indexRequirementRefusalDiagnostic(expression: U64, receiver: U64, receiverTerm: U64, requiredOwner: U64, args: ArgRange, lookupPerformed: Bool, origin: SourceRecordOrigin) -> CompileDiagnostic {
+        val location = self.diagnosticLocationAt(offset: self.exprOffset(id: expression))
+        val raw = <CompileDiagnostic location=location message=self.missingSyntheticRequirement(exprId: expression) />
+        if !lookupPerformed || receiverTerm == 0U64 || receiverTerm >= self.arena.typeCount() || requiredOwner == 0U64 { return raw }
+        val request = match origin {
+            SourceRecordOrigin.Raw => { return raw }
+            SourceRecordOrigin.CheckingRequest(session: val session, root: val root) => (session: session, root: root)
+        }
+        if request.session != self.sourceFactSession() { return raw }
+        if requiredOwner != self.syntheticRequiredTraitOwner(exprId: expression) { return raw }
+        val operation = match self.authoredIndexOperation(expression: expression, args: args) { Optional.Some(v: val operation) => operation Optional.None => { return raw } }
+        if operation.receiver() != receiver { return raw }
+        val traitIndex = self.decls.traitIndexByOffset(offset: requiredOwner)
+        if traitIndex >= self.decls.traitCount() || self.decls.traitAt(index: traitIndex).nameStart != requiredOwner || self.moduleOf(offset: requiredOwner) != self.modules.coreModule { return raw }
+        val owner = match self.currentSourceOwner() { Optional.Some(v: val owner) => owner Optional.None => { return raw } }
+        if !semanticCompletionOwnersEqual(recorded: self.lexicalSourceFactOwner(owner: owner), prepared: request.root) { return raw }
+        val diagnosticOwner = match owner {
+            SemanticCompletionOwner.Function(index: val index) => <DiagnosticOwner.Function index=index />
+            SemanticCompletionOwner.Global(target: val target) => <DiagnosticOwner.Global target=target />
+            SemanticCompletionOwner.Closure(expression: val closure) => <DiagnosticOwner.Closure expression=closure />
+        }
+        if !self.sourceExpressionHasOwner(session: request.session, expression: receiver, owner: diagnosticOwner) { return raw }
+        val refusal = <IndexRequirementRefusal session=request.session owner=diagnosticOwner expression=expression event=self.failedIndexRequirements.count() location=location />
+        self.failedIndexRequirements.append(<SourceIndexRequirementFailure refusal=refusal root=request.root receiver=receiver receiverTerm=receiverTerm requiredOwner=requiredOwner traitIndex=traitIndex operation=operation />)
+        return <CompileDiagnostic.indexRequirement refusal=refusal />
+    }
+
+    fn sourceIndexRequirementHasOwner(refusal: IndexRequirementRefusal) -> Bool {
+        if refusal.session() != self.sourceFactSession() || refusal.event() >= self.failedIndexRequirements.count() { return false }
+        val proof = self.failedIndexRequirements[refusal.event()]
+        val original = proof.refusal
+        if original.session() != refusal.session() || original.expression() != refusal.expression() || original.event() != refusal.event() || !original.location().same(other: refusal.location()) || !self.diagnosticOwnersEqual(first: original.owner(), second: refusal.owner()) { return false }
+        if proof.receiverTerm == 0U64 || proof.receiverTerm >= self.arena.typeCount() || proof.traitIndex >= self.decls.traitCount() || self.decls.traitAt(index: proof.traitIndex).nameStart != proof.requiredOwner || self.moduleOf(offset: proof.requiredOwner) != self.modules.coreModule { return false }
+        if !self.sourceExpressionHasOwner(session: refusal.session(), expression: proof.receiver, owner: refusal.owner()) { return false }
+        // The producer retained verified ancestry before failed builders were
+        // discarded. Observe the operation and persistent owner, not parents.
+        val current = match self.authoredIndexOperation(expression: refusal.expression(), args: proof.operation.arguments()) { Optional.Some(v: val current) => current Optional.None => { return false } }
+        return proof.operation.same(other: current)
+    }
+}
+
+impl AuthoredIndexWrite {
+    fn same(other: AuthoredIndexWrite) -> Bool {
+        if self.serial != other.serial || self.receiver != other.receiver || self.selectorStart != other.selectorStart || self.selectorLength != other.selectorLength || self.arguments.start != other.arguments.start || self.arguments.len != other.arguments.len || self.written.count() != other.written.count() { return false }
+        for index in 0U64..<self.written.count() {
+            val original = self.written[index]
+            val current = other.written[index]
+            if original.expr != current.expr || original.isInout != current.isInout || original.hasLabel != current.hasLabel || original.labelStart != current.labelStart || original.labelLen != current.labelLen { return false }
+        }
+        return true
+    }
+}
+impl SourceIndexOperation {
+    fn receiver() -> U64 {
+        return match self {
+            SourceIndexOperation.Read(operation: val operation) => match operation { SourceCallOperation.Index(receiver: val receiver, key: _, place: _, read: _, serial: _, selectorStart: _, selectorLength: _, readArguments: _, readArgument: _) => receiver _ => 18446744073709551615U64 }
+            SourceIndexOperation.Write(operation: val operation) => operation.receiver
+        }
+    }
+    fn arguments() -> ArgRange {
+        return match self {
+            SourceIndexOperation.Read(operation: val operation) => match operation { SourceCallOperation.Index(receiver: _, key: _, place: _, read: _, serial: _, selectorStart: _, selectorLength: _, readArguments: val args, readArgument: _) => args _ => <ArgRange start=0U64 len=0U64 /> }
+            SourceIndexOperation.Write(operation: val operation) => operation.arguments
+        }
+    }
+    fn same(other: SourceIndexOperation) -> Bool {
+        return match self {
+            SourceIndexOperation.Read(operation: val operation) => match other { SourceIndexOperation.Read(operation: val current) => operation.same(other: current) _ => false }
+            SourceIndexOperation.Write(operation: val operation) => match other { SourceIndexOperation.Write(operation: val current) => operation.same(other: current) _ => false }
+        }
+    }
+}

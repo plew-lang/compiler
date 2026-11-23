@@ -1,7 +1,7 @@
 ---
 id: met-ia2q
 status: in_progress
-deps: []
+deps: [met-tsa3]
 links: []
 created: 2026-11-23T16:04:21Z
 type: bug
@@ -102,3 +102,13 @@ are required before implementing the owned failure:
 
 This review admits the finite plan, not an implementation or closure. Current
 product source remains5f12e9a1; only tickets and evidence changed in this step.
+
+## Required scope/order decision
+
+A new confirmed selection defect is owned by met-tsa3 (dependency): a same-named
+closure field bypasses Index conformance and actually runs. The finite task's
+"preserve current acceptance" means preserve valid ordinary calls, not this
+invalid protocol fallback. Refusal transport alone cannot close the new case.
+Source/private-receipt/dedicated-cause code is WIP, not built or adopted; pause
+implementation for the goal's task-gap decision. Latest adopted source and
+carrier remain5f12e9a1/1b22eb22 with formal7.247575 and290 whole failures.

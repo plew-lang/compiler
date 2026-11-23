@@ -1114,8 +1114,9 @@ impl Comp {
                     // No selected signature can provide further context here.
                     // Diagnose an untyped receiver before missing conformance.
                     if receiverTerm == 0U64 { try self.checkLitCtx(id: receiverExpr, eKind: 0U64, eBits: 0U64, eSgn: false) }
-                    if self.syntheticRequiredTraitOwner(exprId: exprId) != 0U64 {
-                        return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: self.missingSyntheticRequirement(exprId: exprId)) />
+                    val missingRequirement = self.syntheticRequiredTraitOwner(exprId: exprId)
+                    if missingRequirement != 0U64 {
+                        return <Result.Err error=self.indexRequirementRefusalDiagnostic(expression: exprId, receiver: receiverExpr, receiverTerm: receiverTerm, requiredOwner: missingRequirement, args: args, lookupPerformed: lookupPerformed, origin: origin.request) />
                     }
                     if receiverTerm != 0U64 && receiverTerm < self.arena.typeCount() && self.arena.typeTermAt(index: receiverTerm).isAny {
                         return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "method is not part of the existential trait interface") />

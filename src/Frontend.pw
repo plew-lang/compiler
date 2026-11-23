@@ -66,7 +66,7 @@ use ./Path only { resolveImport, extractSpan, dirPrefixLen, findSrcRoot, findPkg
 use ./Manifest only { Dep, loadManifestDeps, resolveDepImport, resolveGitDepImport, loadLock, isExternalDepImport }
 use ./Lock only { Lock }
 use ./Cache only { cacheRoot }
-use ./Diag only { compileErrorAt, compileErrorAtFile, CompileDiagnostic, ArrayContextRefusal, UseAfterMoveRefusal, MissingFieldRefusal, MissingFieldKind, AssignmentRefusal, AssignmentRefusalKind, UniqueCopyRefusal, UniqueCaptureRefusal, NonCallableBindingRefusal, FreeCallVisibilityRefusal, FreeCallVisibilityKind, FreeCallAmbiguityRefusal, FreeCallAmbiguityKind, MemberCallAmbiguityRefusal, MemberCallAmbiguityKind, GenericCallConflictRefusal, genericCallConflictMessage, OpaqueNumericRefusal, SourceTypingRefusal, opaqueNumericMessage, DiagnosticOwner, DiagnosticNote, DiagnosticLocation, DiagnosticSeverity, FailureDomain, emitDiagnostic, eprintInt, digitByte, digitStrU }
+use ./Diag only { compileErrorAt, compileErrorAtFile, CompileDiagnostic, ArrayContextRefusal, UseAfterMoveRefusal, MissingFieldRefusal, MissingFieldKind, AssignmentRefusal, AssignmentRefusalKind, UniqueCopyRefusal, UniqueCaptureRefusal, NonCallableBindingRefusal, FreeCallVisibilityRefusal, FreeCallVisibilityKind, FreeCallAmbiguityRefusal, FreeCallAmbiguityKind, MemberCallAmbiguityRefusal, MemberCallAmbiguityKind, GenericCallConflictRefusal, genericCallConflictMessage, OpaqueNumericRefusal, SourceTypingRefusal, IndexRequirementRefusal, opaqueNumericMessage, DiagnosticOwner, DiagnosticNote, DiagnosticLocation, DiagnosticSeverity, FailureDomain, emitDiagnostic, eprintInt, digitByte, digitStrU }
 use ./Ops only { opEq, opNe, opLt, opLe, opGt, opGe, opAdd, opSub, opMul, opDiv, opRem, opAnd, opOr, opNot, opBitAnd, opBitOr, opBitXor, opShl, opShr, opBitNot, opAssign, compoundBinOp, isBinTraitOp, binTraitName, binTraitMethodName, unaryMethodName }
 
 // Only an entirely unsuffixed numeric expression accepts a sibling's
@@ -897,6 +897,30 @@ struct SourceArrayContextFailure {
 }
 impl SourceArrayContextFailure { factory }
 
+struct AuthoredIndexWrite {
+    val serial: U64
+    val receiver: U64
+    val arguments: ArgRange
+    val selectorStart: U64
+    val selectorLength: U64
+    val written: Array[Arg]
+}
+impl AuthoredIndexWrite { factory }
+enum SourceIndexOperation {
+    Read(operation: SourceCallOperation)
+    Write(operation: AuthoredIndexWrite)
+}
+struct SourceIndexRequirementFailure {
+    val refusal: IndexRequirementRefusal
+    val root: SemanticCompletionOwner
+    val receiver: U64
+    val receiverTerm: U64
+    val requiredOwner: U64
+    val traitIndex: U64
+    val operation: SourceIndexOperation
+}
+impl SourceIndexRequirementFailure { factory }
+
 struct AuthoredArrayLiteral {
     val serial: U64
     val start: U64
@@ -952,7 +976,9 @@ pub struct Comp {
     mut val authoredBinaryExpressions: Dictionary[U64, AuthoredBinaryExpression] = [:]
     mut val authoredValuePatterns: Dictionary[U64, (value: U64, offset: U64)] = [:]
     mut val authoredMethodExpressions: Set[U64] = Set.new()
-    mut val authoredIndexWrites: Dictionary[U64, (serial: U64, receiver: U64, arguments: ArgRange)] = [:]
+    mut val authoredIndexWrites: Dictionary[U64, AuthoredIndexWrite] = [:]
+    mut val authoredIndexReads: Dictionary[U64, SourceCallOperation] = [:]
+    mut val failedIndexRequirements: Array[SourceIndexRequirementFailure] = []
     mut val authoredFreeCallOrigins: Dictionary[U64, (start: U64, length: U64, arguments: ArgRange)] = [:]
     mut val failedFreeCallSelections: Dictionary[U64, FailedFreeCallSelection] = [:]
     mut val failedFreeCallAmbiguities: Dictionary[U64, (kind: FreeCallAmbiguityKind, location: DiagnosticLocation, owner: SemanticCompletionOwner, nameStart: U64, nameLen: U64, arguments: Array[Arg])] = [:]
@@ -1954,6 +1980,7 @@ pub fn intern(c: inout Comp, start: U64, len: U64) -> U64 {
 // methodization transition.
 
 part ./SourceCallOperations
+part ./SourceIndexFailures
 part ./SourceTypingFailures
 part ./SourceOpaqueNumerics
 part ./SourceGenericFailures
