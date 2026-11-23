@@ -2,6 +2,7 @@
 """Owned Index/IndexSet failed selections, not missing published rows."""
 import argparse
 import json
+import hashlib
 from pathlib import Path
 import sys
 
@@ -18,11 +19,18 @@ def main():
     out = args.out.resolve()
     out.mkdir(parents=True, exist_ok=False)
     errors, rows = [], []
+    fingerprints = {}
+    def retain(path):
+        path = path.resolve()
+        fingerprints[str(path)] = hashlib.sha256(path.read_bytes()).hexdigest()
+    retain(args.compiler)
+    retain(Path(__file__))
     cases = ['generic_index_no_bound', 'generic_index_requires_nominal_bound',
              'index_no_trait', 'index_requires_nominal_conformance',
              'index_set_requires_nominal_conformance']
     for name in cases:
         fixture = ROOT / 'tests/fixtures/reject' / (name + '.pw')
+        retain(fixture)
         for mode, flags in [('check', ['--check']), ('aot', []), ('orc', ['--run'])]:
             result = run_compiler([str(args.compiler.resolve()), *flags, str(fixture)],
                                   capture_output=True, timeout=60, cwd=ROOT)
@@ -41,6 +49,8 @@ def main():
                 errors.append(label + ': unused generic body was inspected')
     for name in ['generic_index_call_template', 'index_writeonly', 'operator_index']:
         fixture = ROOT / 'tests/fixtures/run' / (name + '.pw')
+        retain(fixture)
+        retain(fixture.with_suffix('.out'))
         result = run_compiler([str(args.compiler.resolve()), '--run', str(fixture)],
                               capture_output=True, timeout=60, cwd=ROOT)
         rows.append({'case': name, 'mode': 'orc', **result.record()})
@@ -48,7 +58,11 @@ def main():
         (out / (name + '.stderr')).write_bytes(result.stderr)
         if result.returncode != 0 or result.stderr or result.failure_domain is not None or result.stdout != fixture.with_suffix('.out').read_bytes():
             errors.append(name + ': valid indexing control changed')
-    (out / 'result.json').write_text(json.dumps({'cases': rows, 'errors': errors}, indent=2) + '\n')
+    unchanged = all(hashlib.sha256(Path(path).read_bytes()).hexdigest() == digest
+                    for path, digest in fingerprints.items())
+    if not unchanged:
+        errors.append('compiler/test/fixture inputs changed during controls')
+    (out / 'result.json').write_text(json.dumps({'cases': rows, 'errors': errors, 'inputs': fingerprints, 'inputs_unchanged': unchanged}, indent=2) + '\n')
     for error in errors:
         print(error, file=sys.stderr)
     print(f'{len(rows)} index requirement controls; {len(errors)} unmet assertions')

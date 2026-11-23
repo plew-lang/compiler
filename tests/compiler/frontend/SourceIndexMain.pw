@@ -4,7 +4,7 @@ fn indexRequire(result: Result[(), CompileDiagnostic]) {
 }
 fn main() {
     for write in [false, true] {
-        for scenario in 0U64..<12U64 {
+        for scenario in 0U64..<14U64 {
             mut val compiler = <Comp />
             val name = if write { give "index_set_requires_nominal_conformance" } else { give "index_no_trait" }
             indexRequire(result: analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.File path="tests/fixtures/reject/" + name + ".pw" />, sources: <SourceAccess stdRoot="std/".bytes() />))
@@ -50,7 +50,7 @@ fn main() {
                 Result.Err(error: val diagnostic) => diagnostic
                 Result.Ok(value: _) => { panic("index without conformance completed") }
             }
-            val expected = scenario == 0U64 || (scenario >= 6U64 && scenario < 11U64)
+            val expected = scenario == 0U64 || (scenario >= 6U64 && scenario != 11U64)
             if compiler.sourceFailureHasOwner(diagnostic: diagnostic) != expected || diagnostic.indexRequirement().isSome() != expected || diagnostic.isSourceRejection() {
                 eprint(text: name)
                 eprint(text: " scenario=")
@@ -86,6 +86,17 @@ fn main() {
                 if refusal.expression() != expression { panic("test selected a different source operation") }
                 if scenario == 9U64 { compiler.modules.coreModule += 1U64 }
                 if scenario == 10U64 { compiler.sourceFacts.expressionOwners[expression] = <SemanticCompletionOwner.Global target=0U64 /> }
+                if scenario == 12U64 {
+                    match compiler.arena.exprs[expression] {
+                        Expr.Method(recv: val receiver, nameStart: val start, nameLen: val length, args: val args) => { compiler.arena.exprs[expression] = <Expr.Method recv=receiver nameStart=start nameLen=length+1U64 args=args /> }
+                        _ => { panic("index operation lost method shape") }
+                    }
+                }
+                if scenario == 13U64 {
+                    val args = compiler.failedIndexRequirements[refusal.event()].operation.arguments()
+                    val argument = compiler.argAt(args: args, index: 0U64)
+                    compiler.arena.argPool[args.start] = <Arg expr=argument.expr isInout=!argument.isInout labelStart=argument.labelStart labelLen=argument.labelLen hasLabel=argument.hasLabel />
+                }
                 if scenario >= 7U64 && compiler.sourceFailureHasOwner(diagnostic: diagnostic) { eprint(text: name) eprint(text: " changed scenario=") eprintU64(n: scenario) eprint(text: "\n") panic("changed index provenance retained authority") }
             }
         }

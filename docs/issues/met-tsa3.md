@@ -91,3 +91,12 @@ This candidate predates the construction-query correction and is not final
 adoption evidence. Final v3 is frozen and building. Direct inherited-anyTaggedIndex
 was already unsupported by the adopted carrier and is not implemented here;
 generic inheritedIndex is supported and retained as a positive fixture.
+
+
+Final v4 build5ae294 and39 combined CLI controls pass. Measured fixed-point
+compiler0655bae5 passes the same39 controls with compiler/tool/fixture hash
+invariance recorded. Shared Format/TextOutput36 old/new controls and gen-eacb2f
+pass. Formal341b9f reachesG2 and median7.329713s (ceiling7.5s); final ordinary
+suite f44c09 and independent acceptance are pending. Pre-existing inherited
+existential refusal is separately assigned to met-ajht under the same area;
+it is not a repaired-feature claim for this task.
