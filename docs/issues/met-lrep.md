@@ -2,7 +2,7 @@
 id: met-lrep
 status: in_progress
 deps: [met-6hrd, met-0av7]
-links: []
+links: [met-3f14]
 created: 2026-11-23T19:21:47Z
 type: task
 priority: 1
@@ -23,3 +23,7 @@ Register the new private interface/witness/Mid/endpoint regression runners in th
 ## Integration checkpoint
 
 Compiler4d169cf7 explicitly registers all four private regression runners in normal harness. Independent reviewer typing_obligation_plan_review found no must-fix: selected PLEWC/LLVM_CONFIG and immutable-root inputs are respected; compile/runtime/link retain semantic-progress supervision, native execution has bounded timeout/check=True, nonzero failures reach existing per-gate fail aggregation. This is source registration review, not executed whole-suite acceptance. Frozen integration-v3 gen20261123T222913-gen-91abf9 passed with invariant inputs. Formal20261123T223015-self-host-aff94a completed alone from adopted0655: G2 LLVM/runtime/successor identical, invariant inputs, times7.779548/7.259735/7.235028, median7.259735<=7.5. Measured4fdab472 passes CLI45; all15 AOT outputs equal the memory-tested optimized candidate. Full normal20261123T224611-test-41ce46 is running against that measured compiler;285 baseline reconciliation and final independent integration acceptance remain pending.
+
+## Environmental interruption and recovery
+
+Normal41ce46 aborted on controller ENOSPC and is not accepted as a completed suite. Session30083 was reaped; filtered post-exit process inventory found no related children. Reversible verified compression of old diagnostic LLVM/logs recovered13161905299bytes; sources/std/carriers/binaries/seeds/formal artifacts remain intact. Recovery receipts are phase3-existential-normal-enospc.json and phase3-existential-enospc-compression.json. Fresh immutable integration-v4 normal20261123T231405-test-c608e1 retry is active (session64746). Tooling artifact-lifetime follow-up met-3f14 is linked separately, not permission to skip this normal gate. Formal/component review independently verified all5 actual records, source194, median7.259735 and measured memory correspondence; no mandatory gap there.
