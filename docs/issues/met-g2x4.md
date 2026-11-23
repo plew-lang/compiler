@@ -111,6 +111,12 @@ failed closure builders discard parent links. Root ancestry is now checked only
 at the producer while live and retained in the negative event; observation
 validates the saved event and persistent expression ownership without rebuilding
 that ancestry. Post-event foreign-owner observation is now rejected as well.
-CLI18 controls pass with the intermediate frozen candidate; final candidate
-build001731 and LLVM22 metadata ASan/LSan are in progress. No closure/whole
-acceptance is inferred from CLI-only results or the intermediate candidate.
+Final build001731, CLI18, gen f14f22 and metadata ASan/LSan both pass with
+unchanged inputs. Formal1c067a reaches G2, LLVM/runtime/successor hashes match;
+standard3 measurements7.717293/7.247575/7.149129, median7.247575<=7.5.
+All5 generation/measurement artifact records were independently hashed at
+collection; actual measured compiler1b22eb22 also passes18CLI controls.
+The normal harness now registers that CLI gate (29c6167a; source unchanged).
+Whole20261123T145308-test-b59031 is running on source-identical typing-normal-v4
+and the measured compiler. Compare against295; this task remains open until
+whole reconciliation and final independent acceptance. No parent closure.
