@@ -1,0 +1,9 @@
+use @Std/Io only { print }
+struct Holder[A, B] { val chosen: I64 }
+impl[A, B] Holder[A, B] {
+ factory same(first: A, second: A, third: B, mode: I32) { return <Holder[A, B] chosen=1I64 /> }
+ factory same(first: A, second: B, third: B, mode: Bool) { return <Holder[A, B] chosen=2I64 /> }
+}
+fn main() { val h = <Holder.same first=5I32 second=6I64 third=7I64 mode=true />
+ val typed: Holder[I32, I64] = h
+ print(typed.chosen) }

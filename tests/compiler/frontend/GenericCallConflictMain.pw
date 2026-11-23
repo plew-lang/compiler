@@ -1,5 +1,5 @@
 // Appended to an exact Frontend snapshot; no production API is made public.
-fn requireGenericConflict(prepared: Bool, unavailableArrayContext: Bool = false) {
+fn requireGenericConflict(prepared: Bool, unavailableArrayContext: Bool = false, selectedAdapter: Bool = false) {
     mut val compiler = <Comp />
     analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text path="GenericConflict.pw" text="fn acceptBoth[T](first: T, second: T) {{}}\nfn main() {{ acceptBoth(first: 5I32, second: 6I64) }}" />, sources: <SourceAccess />).unwrap()
     val mainName = compiler.internBytes(s: "main")
@@ -59,7 +59,10 @@ fn requireGenericConflict(prepared: Bool, unavailableArrayContext: Bool = false)
     val templatesBefore = compiler.callTemplateLocations.count()
     val closuresBefore = compiler.semanticClosures.count()
     val interfacesBefore = compiler.interfaceCalls.count()
-    val diagnostic = match compiler.recordFreeCallArgumentContexts(exprId: expression, context: context, args: arguments, origin: origin, expectedOrigin: <SourceExpectedContext.None />) {
+    // A supplied Selected callee is not a completed substitution. Exercise the
+    // adapter contract without claiming this inconsistent source ranked Selected.
+    val adapter = if selectedAdapter { give <FreeCallLookup.Selected function=callee /> } else { give context }
+    val diagnostic = match compiler.recordFreeCallArgumentContexts(exprId: expression, context: adapter, args: arguments, origin: origin, expectedOrigin: <SourceExpectedContext.None />) {
         Result.Err(error: val diagnostic) => diagnostic
         Result.Ok(value: _) => { panic("generic conflict was accepted") }
     }
@@ -72,7 +75,7 @@ fn requireGenericConflict(prepared: Bool, unavailableArrayContext: Bool = false)
     }
     val refusal = diagnostic.genericCallConflict().unwrap()
     val proof = compiler.failedGenericCallConflicts[refusal.event()]
-    if !proof.diagnostic || proof.known.count() != declaration.typeParams.count() || proof.known[0U64] == 0U64 || proof.pattern == 0U64 { panic("lost original conflict bindings or role") }
+    if proof.diagnostic == selectedAdapter || proof.known.count() != declaration.typeParams.count() || proof.known[0U64] == 0U64 || proof.pattern == 0U64 { panic("lost original conflict bindings or role") }
     for kind in 0U64..<8U64 {
         val changed = <GenericCallConflictRefusal session=if kind == 0U64 { give refusal.session()+1U64 } else { give refusal.session() } owner=if kind == 1U64 { give <DiagnosticOwner.Unknown /> } else { give refusal.owner() } expression=if kind == 2U64 { give refusal.expression()+1U64 } else { give refusal.expression() } callee=if kind == 3U64 { give refusal.callee()+1U64 } else { give refusal.callee() } operand=if kind == 4U64 { give refusal.operand()+1U64 } else { give refusal.operand() } parameter=if kind == 5U64 { give refusal.parameter()+1U64 } else { give refusal.parameter() } event=if kind == 6U64 { give refusal.event()+1U64 } else { give refusal.event() } location=if kind == 7U64 { give <DiagnosticLocation.Unpositioned /> } else { give refusal.location() } />
         if compiler.sourceGenericCallConflictHasOwner(refusal: changed) { panic("foreign conflict metadata acquired source ownership") }
@@ -134,10 +137,47 @@ fn requireBareFactoryOperation() {
     if changed.sourceCallOperation(exprId: expression, args: args).isSome() { panic("foreign synthetic serial borrowed a factory receipt") }
 }
 
+fn requireNestedGenericFailure() {
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text path="NestedGeneric.pw" text="fn same[T](first: T, second: T) -> T {{ return first }}\nfn outer[T](value: T) {{}}\nfn main() {{ outer(value: same(first: 5I32, second: 6I64)) }}" />, sources: <SourceAccess />).unwrap()
+    val mainName = compiler.internBytes(s: "main")
+    val owner = <SemanticCompletionOwner.Function index=compiler.arena.firstFunctionNamed(nameId: mainName.nameId) />
+    val innerName = compiler.internBytes(s: "same")
+    val outerName = compiler.internBytes(s: "outer")
+    mut val inner = compiler.arena.exprs.count()
+    mut val outer = compiler.arena.exprs.count()
+    for index in 0U64..<compiler.arena.exprs.count() {
+        match compiler.arena.exprs[index] {
+            Expr.Call(nameStart: val start, nameLen: val length, args: _) => {
+                val name = intern(c: inout compiler, start: start, len: length)
+                if name == innerName.nameId { inner = index }
+                if name == outerName.nameId { outer = index }
+            }
+            _ => {}
+        }
+    }
+    if inner >= compiler.arena.exprs.count() || outer >= compiler.arena.exprs.count() { panic("nested failure setup lost its calls") }
+    compiler.cur.checkFn = compiler.arena.firstFunctionNamed(nameId: mainName.nameId)
+    compiler.cur.recordCallTemplates = true
+    compiler.sourceFacts.activate(owner: owner)
+    val origin = <SourceRecordingScope request=<SourceRecordOrigin.CheckingRequest session=compiler.sourceFactSession() root=owner /> returnContext=<SourceExpectedContext.None /> />
+    val diagnostic = match compiler.recordExprWithOrigin(exprId: outer, origin: origin, expectedOrigin: <SourceExpectedContext.None />) {
+        Result.Err(error: val diagnostic) => diagnostic
+        Result.Ok(value: _) => { panic("nested conflict was accepted") }
+    }
+    val refusal = diagnostic.genericCallConflict().unwrap()
+    if refusal.expression() != inner || refusal.callee() != compiler.arena.firstFunctionNamed(nameId: innerName.nameId) { panic("nested conflict was reattributed to its parent") }
+    compiler.sourceFacts.fail(owner: owner, diagnostic: diagnostic)
+    if !compiler.sourceFailureHasOwner(diagnostic: diagnostic) || compiler.hasSemanticExprTypeFact(exprId: outer) { panic("nested failure lost its owner or published its parent") }
+}
+
 fn main() {
     requireGenericConflict(prepared: false)
     requireGenericConflict(prepared: true)
     requireGenericConflict(prepared: false, unavailableArrayContext: true)
     requireGenericConflict(prepared: true, unavailableArrayContext: true)
+    requireGenericConflict(prepared: false, selectedAdapter: true)
+    requireGenericConflict(prepared: true, selectedAdapter: true)
     requireBareFactoryOperation()
+    requireNestedGenericFailure()
 }
