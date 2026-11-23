@@ -1,6 +1,6 @@
 ---
 id: met-bu94
-status: open
+status: in_progress
 deps: []
 links: []
 created: 2026-11-20T11:30:39Z
@@ -37,3 +37,9 @@ Repair boundary: separate candidate compatibility from whether the first normall
 Before editing: independently review a finite common-frontier plan against body-checking and spec01. Add missing numeric if/match order controls and raw nonpublication assertions, reuse existing closure cases, reproduce RED with fixed f94 carrier, then implement and run affected modes plus fresh candidate/performance gates. This is within the existing guarantee, not a new task or closure. Source-domain transport of seven new numeric rejections remains com-yeua/com-8uik.
 
 Independent forward_frontier_plan_review supports the finite matcher-result plan, with numeric Matched/readiness separation, source-normal filtering and no parallel AST classifier. New tracked numeric later-if/match both falsely accept on fixed f94; existing late-closure two also accept; existing forward-closure succeeds. Exact RED receipt and review disposition are in canonical phase3-contextual-operand-regression.json current_whole_regression_followthrough. Source implementation pending.
+
+## First-normal frontier implementation increment
+
+The shared recursive matcher now returns compatibility, context dependence and source-normal value presence in one walk. Joins stop before later arms when the first normal value needs the selected expectation; explicit constraints still filter candidates, independent arguments/retries stay active. Array readiness comes from its first element; nominal field context comes from its independently recovered full type, while structural record fields contribute readiness. No second AST classifier or source-fact publication is added.
+
+Standard isolated build20261123T042558-build-190b67 succeeded; its initial implementation passes42check/AOT/ORC controls. The later readiness refinements are not retroactively certified by that binary. New BranchCandidateFrontiers has16 raw scenarios and complete fact/template/closure/callee nonpublication assertions. Old-source native RED and new-source GREEN are verified; review caught a structural-record OR omission during refinement, separately reproduced as native RED and fixed. Final3 native kernels (branch16, existing prepared28, numeric) pass exit0/exact golden/empty stderr. Fresh final candidate, remaining affected gates, formal performance and task acceptance remain pending. Canonical evidence forward_frontier_implementation distinguishes every source stage.

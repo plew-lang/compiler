@@ -606,3 +606,5 @@ zero-argument instantiation. Both tests are manual native frontend diagnostics:
 compile/link against the implementation, require exit0, exact `.out` and empty
 stderr. `PreparedContextualOperands.pw` also covers raw non-value return branches
 and candidate-owned deferred projections, including rigid caller mismatches.
+
+`BranchCandidateFrontiers.pw` is a manual native public-ranking test of first-normal branch readiness: late/early typed closures and numeric literals, source-nonnormal branches, a unique contextual candidate, independent generic argument completion and raw nominal values. Repeated probes preserve every expression fact, selected-callee cache, closure descriptor and template count. Compile/link the actual frontend; require exit0, exact `.out` and empty stderr.

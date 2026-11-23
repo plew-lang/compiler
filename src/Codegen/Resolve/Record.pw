@@ -2137,7 +2137,7 @@ impl Comp {
                 val expression = self.argAt(args: args, index: supplied).expr
                 if (try self.argumentRequiresResultContext(exprId: expression)) {
                     mut val candidate = out
-                    match (try self.matchPreparedCallArgument(expression: expression, signature: pattern, parameters: f.typeParams, receiver: 0U64, values: inout candidate)) {
+                    match (try self.matchPreparedCallArgument(expression: expression, signature: pattern, parameters: f.typeParams, receiver: 0U64, values: inout candidate)).matched {
                         TypeArgumentMatch.Matched | TypeArgumentMatch.Deferred => { out = candidate }
                         TypeArgumentMatch.Conflict => { return <Result.Err error=self.typeArgumentConflictDiagnostic(offset: self.exprOffset(id: expression)) /> }
                         TypeArgumentMatch.Mismatch => {}

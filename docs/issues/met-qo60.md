@@ -1,6 +1,6 @@
 ---
 id: met-qo60
-status: open
+status: in_progress
 deps: [met-bu94]
 links: []
 created: 2026-11-20T11:30:39Z
@@ -101,3 +101,5 @@ The public native placement probe `compiler/tmp/current-whole-regressions/Provid
 Finite plan to review before implementation: derive the authored body-instance endpoint from the retained original declaration and its binder/proof environment, rather than equating its identity with a placement target. Retain placement proof validation and source-conformance substitutions; do not drop a transitive placement or deduplicate by spelling/function ID alone. Verify actual associated/generic body environment through final consumption. Reuse private rejection unchanged; add public helper/blanket success, same-source/same-instance duplication, distinct generic source-instance ambiguity and third-distinct-declaration controls. Independent plan review precedes source edits; exact-candidate modes, final body output and applicable gates precede closure. This remains within the existing same-declaration/different-instance guarantee.
 
 Independent provided_identity_plan_review supports comparison at original authored body instance after validating both placement proofs. Exact source-conformance witness/substitutions are mandatory; owner-only first-edge matching may conflate generic instances, and declaration-wide scanning per comparison is disallowed. New tracked public traitprovidedblanketidentity expects8/9 but fixed f94 rejects Source ambiguity. Existing private test unchanged. Canonical phase3-contextual-operand-regression.json records probes, RED and review. Source implementation pending.
+
+Plan refinement: spec09 explicitly allows repeated declaration edges and repeated owners at different generic instances (finite shrinking paths). The broad spec08 cycle summary is not a proof that owner lookup is unique. Neutral re-review rejects owner-only first-edge projection as a universally safe shortcut. Retained exact source-instance arguments/substitutions must identify the intended witness before equality; no product change for this sibling yet.

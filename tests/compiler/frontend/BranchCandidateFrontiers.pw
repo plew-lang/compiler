@@ -1,0 +1,65 @@
+use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontendForRequests, intern }
+use ../../../src/SourceAccess only { SourceAccess, SourceResource }
+use ../../../src/Ir only { Expr, CachedCallee }
+use @Std/Io only { print }
+
+// Public ranking must not obtain its first normal value's missing context from
+// a later branch. Observe the whole input, not just the parent operand.
+fn checkRanks(text: String, expected: Array[U64]) {
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.File path="plew:std/BranchProbe.pw" />, sources: <SourceAccess stdRoot="std/".bytes() resources=[<SourceResource path="plew:std/BranchProbe.pw".bytes() text=text />] />).unwrap()
+    val ownerName = compiler.internBytes(s: "main")
+    compiler.cur.checkFn = compiler.arena.firstFunctionNamed(nameId: ownerName.nameId)
+    val called = compiler.internBytes(s: "choose")
+    mut val found = false
+    for expression in 0U64..<compiler.arena.exprs.count() {
+        match compiler.arena.exprs[expression] {
+            Expr.Call(nameStart: val start, nameLen: val length, args: val arguments) => {
+                if intern(c: inout compiler, start: start, len: length) != called.nameId { continue }
+                found = true
+                val candidates = compiler.visibleFreeFunctions(nameStart: start, nameLen: length)
+                if candidates.count() != expected.count() { panic("missing frontier candidates") }
+                mut val recorded: Array[Bool] = []
+                mut val terms: Array[U64] = []
+                for index in 0U64..<compiler.arena.exprs.count() {
+                    recorded.append(compiler.hasSemanticExprTypeFact(exprId: index))
+                    terms.append(compiler.semanticExprTerm(exprId: index))
+                }
+                val templates = compiler.callTemplateCount()
+                val closures = compiler.semanticClosureCount()
+                for repeat in 0U64..<2U64 {
+                    for index in 0U64..<candidates.count() {
+                        val actual = compiler.callableArgMatchRank(f: compiler.arena.functionAt(index: candidates[index]), args: arguments).unwrap()
+                        if actual != expected[index] { panic("later branch crossed the candidate frontier") }
+                    }
+                    if compiler.callTemplateCount() != templates || compiler.semanticClosureCount() != closures { panic("ranking published a template or closure") }
+                    for index in 0U64..<recorded.count() {
+                        if compiler.hasSemanticExprTypeFact(exprId: index) != recorded[index] || compiler.semanticExprTerm(exprId: index) != terms[index] { panic("ranking published an operand or yield") }
+                    }
+                    match compiler.typeCache.callee[expression] { CachedCallee.Uncomputed => {} _ => { panic("ranking selected a callee") } }
+                }
+            }
+            _ => {}
+        }
+    }
+    if !found { panic("missing frontier call") }
+}
+fn main() {
+    checkRanks(text: "fn choose(value: fn(value: I64) -> I64) {{}}\nfn choose(value: fn(value: String) -> String) {{}}\nfn main() {{ choose(value: if true {{ give fn(value) {{ return value }} }} else {{ give fn(value: I64) {{ return value }} }}) }}", expected: [2U64, 2U64])
+    checkRanks(text: "fn choose(value: fn(value: I64) -> I64) {{}}\nfn choose(value: fn(value: String) -> String) {{}}\nfn main() {{ choose(value: match true {{ true => {{ give fn(value) {{ return value }} }} false => {{ give fn(value: I64) {{ return value }} }} }}) }}", expected: [2U64, 2U64])
+    checkRanks(text: "fn choose(value: fn(value: I64) -> I64) {{}}\nfn choose(value: fn(value: String) -> String) {{}}\nfn main() {{ choose(value: if true {{ give fn(value: I64) {{ return value }} }} else {{ give fn(value) {{ return value }} }}) }}", expected: [2U64, 1U64])
+    checkRanks(text: "fn choose(value: I32) {{}}\nfn choose(value: I64) {{}}\nfn main() {{ choose(value: if true {{ give 1 }} else {{ give 2I32 }}) }}", expected: [2U64, 2U64])
+    checkRanks(text: "fn choose(value: I32) {{}}\nfn choose(value: I64) {{}}\nfn main() {{ choose(value: match true {{ true => {{ give 1 }} false => {{ give 2I32 }} }}) }}", expected: [2U64, 2U64])
+    checkRanks(text: "fn choose(value: I32) {{}}\nfn choose(value: I64) {{}}\nfn main() {{ choose(value: if true {{ give 1I32 }} else {{ give 2 }}) }}", expected: [2U64, 1U64])
+    checkRanks(text: "fn choose(value: I32) {{}}\nfn choose(value: I64) {{}}\nfn main() {{ choose(value: match true {{ true => {{ give 1I32 }} false => {{ give 2 }} }}) }}", expected: [2U64, 1U64])
+    checkRanks(text: "fn choose(value: I32) {{}}\nfn choose(value: I64) {{}}\nfn main() {{ choose(value: if true {{ panic(\"stop\") }} else {{ give 2I32 }}) }}", expected: [2U64, 1U64])
+    checkRanks(text: "fn choose(value: I32) {{}}\nfn choose(value: I64) {{}}\nfn main() {{ choose(value: match true {{ true => {{ panic(\"stop\") }} false => {{ give 2I32 }} }}) }}", expected: [2U64, 1U64])
+    checkRanks(text: "fn choose(value: I32) {{}}\nfn main() {{ choose(value: if true {{ give 1 }} else {{ give 2I32 }}) }}", expected: [2U64])
+    checkRanks(text: "struct S {{}}\nfn choose(value: S) {{}}\nfn choose(value: Bool) {{}}\nfn main() {{ choose(value: if true {{ give <S /> }} else {{ give <S /> }}) }}", expected: [2U64, 1U64])
+    checkRanks(text: "fn choose[T](value: T, other: T) {{}}\nfn main() {{ choose(value: if true {{ give 1 }} else {{ give 2I32 }}, other: 3I32) }}", expected: [2U64])
+    checkRanks(text: "fn choose(value: Array[I32]) {{}}\nfn choose(value: Array[I64]) {{}}\nfn main() {{ choose(value: if true {{ give [1I32, 2] }} else {{ give [3I32] }}) }}", expected: [2U64, 1U64])
+    checkRanks(text: "fn choose(value: Array[I32]) {{}}\nfn choose(value: Array[I64]) {{}}\nfn main() {{ choose(value: match true {{ true => {{ give [1I32, 2] }} false => {{ give [3I32] }} }}) }}", expected: [2U64, 1U64])
+    checkRanks(text: "fn choose(value: I32) {{}}\nfn choose(value: I64) {{}}\nfn main() {{ choose(value: if true {{ give if false {{ give 1I32 }} else {{ give 2 }} }} else {{ give 3I32 }}) }}", expected: [2U64, 1U64])
+    checkRanks(text: "fn choose(value: (n: I32)) {{}}\nfn choose(value: (n: I64)) {{}}\nfn main() {{ choose(value: if true {{ give (n: 1) }} else {{ give (n: 2I32) }}) }}", expected: [2U64, 2U64])
+    print("branch frontiers preserve forward context and nonpublication")
+}
