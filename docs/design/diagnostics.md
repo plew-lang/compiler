@@ -104,12 +104,28 @@ core; a public direct assignment check cannot claim an authored operation. Owned
 interpretation checks the saved owner and operation shape without repeating the
 mutability decision or retaining unrelated RHS state.
 
-Member-call ambiguity findings share one authored-operation ownership boundary.
-Their finite cause kind identifies the selection result (static trait instances,
-existential requirements or active view sources), rather than a message to
-reclassify. The retained negative query includes that kind and the exact receiver,
-selector and arguments; interpretation neither repeats selection nor constructs
-a successful call fact. Public raw selectors carry no authored origin. An
+Call-ambiguity findings retain a finite semantic kind, not text to reclassify.
+Free selection distinguishes visible-declaration and numeric-overload ambiguity;
+member selection distinguishes declaration, conformance-instance, view-source
+and numeric-argument findings. A numeric ambiguity query runs once at its
+existing selection frontier and supplies the original argument diagnostic
+coordinate. It does not relocate that finding to the selector or repeat ranking
+at interpretation. Errors from the query's dependencies pass through unchanged;
+they are not another numeric-ambiguity result.
+
+The raw free selector returns a typed negative outcome. Its raw observer renders
+an ordinary report, while the owning call operation retains the dedicated
+failure. Origin-bearing member collectors use the same semantic numeric query
+and their existing authored-operation boundary. The negative event retains its
+kind, owned diagnostic location, owner/session, receiver where applicable,
+selector and arguments. Interpretation matches that event without another
+selection or a successful parent fact. Changing kind, file/line or operation
+identities cannot borrow authority from a different retained refusal.
+
+These adapters preserve selection and diagnostic precedence: a receiver-pattern
+ambiguity already established by a bare associated qualifier remains that
+finding. Public raw selectors carry no authored origin. Reusing a numeric helper
+in a raw single-source query or synthetic factory does not create one. An
 implicit protocol query is not an authored method call merely because it selects
 a similarly named requirement. A fallback caused by missing candidate bookkeeping
 is not evidence of source ambiguity and must not acquire the source domain from
