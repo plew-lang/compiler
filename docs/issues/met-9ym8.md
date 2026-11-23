@@ -12,7 +12,7 @@ tags: [frontend, diagnostics, verification]
 ---
 # Retain opaque generic numeric expectation refusal ownership
 
-Existing generic_numeric_rigid_caller rejects but remains Unclassified. Check/Generic checkGenericTypeMatch directly reports that an unsuffixed numeric value cannot inhabit opaque caller T or provided Self. Reuse the existing raw versus private expected-check origin distinction from com-8uik, while keeping a distinct cause for this actual check. Retain exact expected ParamId/type, operand and owner/session at failure. No new inference, no Array-cause mixing, no retyping committed operands. Scope confirmed by independent numeric_refusal_intake_review; existing com-8uik/met-bu94/met-qo60 finite closures remain intact. Plan only: final a76 reproduction pending while formal0633ed executes.
+Existing generic_numeric_rigid_caller rejects but remains Unclassified. Check/Generic checkGenericTypeMatch directly reports that an unsuffixed numeric value cannot inhabit opaque caller T or provided Self. Reuse the existing raw versus private expected-check origin distinction from com-8uik, while keeping a distinct cause for this actual check. Retain exact expected ParamId/type, operand and owner/session at failure. No new inference, no Array-cause mixing, no retyping committed operands. Scope confirmed by independent numeric_refusal_intake_review; existing com-8uik/met-bu94/met-qo60 finite closures remain intact. This task remains open; the sibling ambiguity task met-tb7u is closed. Reproduce this task on the next fixed candidate before implementation.
 
 ## Acceptance Criteria
 

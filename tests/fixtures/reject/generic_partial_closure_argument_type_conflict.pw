@@ -1,0 +1,5 @@
+// The partial callback needs context for Other, but its explicit Value is fixed.
+fn accept[T, Other](first: T, callback: fn(value: T, other: Other) -> T) {}
+fn main() {
+    accept(first: 5I32, callback: fn(value: I64, other) { return value })
+}

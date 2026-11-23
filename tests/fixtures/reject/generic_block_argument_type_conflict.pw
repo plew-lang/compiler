@@ -1,0 +1,5 @@
+// Both value blocks preserve the explicit type of their yielded scalar.
+fn acceptBoth[T](first: T, second: T) {}
+fn main() {
+    acceptBoth(first: { give 5I32 }, second: { give 6I64 })
+}

@@ -1,0 +1,53 @@
+// Appended to an exact Frontend snapshot; no production API is made public.
+fn requireGenericConflict(prepared: Bool) {
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text path="GenericConflict.pw" text="fn acceptBoth[T](first: T, second: T) {{}}\nfn main() {{ acceptBoth(first: 5I32, second: 6I64) }}" />, sources: <SourceAccess />).unwrap()
+    val mainName = compiler.internBytes(s: "main")
+    val function = compiler.arena.firstFunctionNamed(nameId: mainName.nameId)
+    val called = compiler.internBytes(s: "acceptBoth")
+    mut val expression = compiler.arena.exprs.count()
+    mut val arguments = <ArgRange start=0U64 len=0U64 />
+    for index in 0U64..<compiler.arena.exprs.count() {
+        match compiler.arena.exprs[index] {
+            Expr.Call(nameStart: val start, nameLen: val length, args: val args) => {
+                if intern(c: inout compiler, start: start, len: length) == called.nameId { expression = index arguments = args }
+            }
+            _ => {}
+        }
+    }
+    if expression >= compiler.arena.exprs.count() || arguments.len != 2U64 { panic("generic conflict setup lost its authored call") }
+    val owner = <SemanticCompletionOwner.Function index=function />
+    compiler.cur.checkFn = function
+    compiler.cur.recordCallTemplates = true
+    compiler.sourceFacts.activate(owner: owner)
+    if !prepared {
+        for index in 0U64..<arguments.len { compiler.recordExpr(exprId: compiler.argAt(args: arguments, index: index).expr).unwrap() }
+    }
+    for index in 0U64..<arguments.len {
+        if compiler.argumentRequiresResultContext(exprId: compiler.argAt(args: arguments, index: index).expr).unwrap() != prepared { panic("generic conflict setup did not select its inference path") }
+    }
+    val origin = <SourceRecordingScope request=<SourceRecordOrigin.CheckingRequest session=compiler.sourceFactSession() root=owner /> returnContext=<SourceExpectedContext.None /> />
+    val written = match compiler.arena.exprs[expression] {
+        Expr.Call(nameStart: val start, nameLen: val length, args: _) => (start: start, length: length)
+        _ => { panic("generic conflict setup lost free syntax") }
+    }
+    val context = compiler.resolvedFreeFunctionCall(id: expression, nameStart: written.start, nameLen: written.length, args: arguments).unwrap()
+    match context { FreeCallLookup.DiagnosticCandidate(function: _) => {} _ => { panic("generic conflict setup lost its diagnostic candidate") } }
+    // Enter the real argument-inference boundary directly: recording the whole
+    // expression first would prepare both scalar operands and erase this control.
+    val diagnostic = match compiler.recordFreeCallArgumentContexts(exprId: expression, context: context, args: arguments, origin: origin, expectedOrigin: <SourceExpectedContext.None />) {
+        Result.Err(error: val diagnostic) => diagnostic
+        Result.Ok(value: _) => { panic("generic conflict was accepted") }
+    }
+    if diagnostic.message() != "inconsistent types for a type parameter: two arguments bound to the same `[T]` have different types" { panic(diagnostic.message()) }
+    if diagnostic.isSourceRejection() { panic("private checker bypassed owning failure interpretation") }
+    compiler.sourceFacts.fail(owner: owner, diagnostic: diagnostic)
+    if !compiler.sourceFailureHasOwner(diagnostic: diagnostic) {
+        if prepared { panic("owned prepared conflict lost its source cause") }
+        panic("owned typed-term conflict lost its source cause")
+    }
+    if compiler.hasSemanticExprTypeFact(exprId: expression) { panic("failed generic call published a result") }
+}
+fn main() {
+    requireGenericConflict(prepared: false)
+}
