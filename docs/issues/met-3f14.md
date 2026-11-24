@@ -1,6 +1,6 @@
 ---
 id: met-3f14
-status: in_progress
+status: closed
 deps: []
 links: [met-lrep]
 created: 2026-11-23T23:14:37Z
@@ -11,27 +11,60 @@ tags: [tooling, verification]
 ---
 # Bound successful normal-suite scratch artifact retention
 
-Repeated completed/interrupted normal runs exhaust the developer filesystem because per-case generated LLVM remains in shared TMPDIR. Incident20261123T224611-test-41ce46 aborted with ENOSPC after about10GiB available at start; not a compiler regression or completed suite. Recovery receipt is meta evidence/rejection-domains/diagnostic-domain-implementation/phase3-existential-normal-enospc.json. Investigate scratch producer/consumer lifetimes and retain failure diagnostics and all required comparisons; define run-owned artifacts and retire successful transient output only after its final consumer and durable result. Preserve actual progress supervision, input fingerprints, exit status and all tests. Do not delete src/std/carriers/seeds/fixed-point material or weaken tests. This tooling follow-up is separate from semantic phase3; met-lrep integration/retry is separately closed; this artifact-lifetime repair remains open.
+## Contract and Scope
 
-## Acceptance Criteria
+Normal run/panic/reject/part/partreject workers use unique run/case scratch and
+adjacent durable JSON receipts. Retire successful products only after their last
+consumer and result publication. Preserve discoverable FAIL/pending evidence,
+progress supervision, input fingerprints, status classification and accounting.
+Temp/result publication failures fail closed; worker exit0 alone is not success.
+Source/std, carriers/seeds and formal fixed-point products are excluded. Manual
+probes, build/self-host archives and historical cold stores are separate owners.
+This repair does not close phase3 semantic work or eliminate all disk pressure.
 
-Identify every consumer of normal per-case LLVM/runtime/binary and its last use; add bounded-lifetime cleanup with tests for successful/failing/interrupted runs, retained failure evidence and concurrent/isolation safety. Validate meaningful disk reduction and normal result equivalence. Independent review required.
+## Design and Scenarios
 
+Shared fixed t_* outputs caused persistent accumulation and concurrent collisions.
+The common worker owns LLVM assertions, link, supervised execution and final
+output/diagnostic assertions. It publishes a fsynced result before retirement,
+then updates the retirement receipt. The existing dispatcher owns scheduling,
+reconciliation and child recovery; the suite owns its separate shared runtime.
+No second scheduler or generic zero-status cleanup trap is introduced.
 
-## Bounded Feasibility Check (2026-11-25)
+RED reproduced PASS with generated LLVM left in shared TMPDIR and no receipt.
+Controls cover all five phases, program nonzero/signal, cancellation with actual
+child recovery and pending retention, concurrent identical cases/two dispatch
+runs, temp creation failure, write/fsync/rename failures, publication-before-
+retirement and symlink protection. Ten lifetime tests, 160 dispatcher scenarios
+and22 golden controls pass; original status controls remain registered.
 
-Static tracing found a small, shared repair surface:
+## Completion Evidence
 
-- [case-phase.sh](../../tests/harness/case-phase.sh) owns normal run/panic/part LLVM, link trace, binary and output consumers within each worker. It currently writes fixed `t_*` names directly to shared TMPDIR with no retirement. Reject/partreject diagnostics use the same shared naming and need isolation too.
-- [test.sh](../../tests/harness/test.sh) already owns and retires its shared runtime in a unique directory. Preserve that once-per-invocation preparation and its fault controls.
-- [normal-case-dispatch.py](../../scripts/support/normal-case-dispatch.py) already owns result reconciliation, parallel dispatch and cancellation/process-group recovery. Reuse its existing authority; no new scheduling system is indicated.
+Resolved by d7dacd6b. Meta [saved verification](../../../evidence/normal-artifact-lifetime/README.md)
+contains commands, hashes, scenario reports, consumer map and scope limitations.
+Four real old/new-worker cases retain identical terminal results and three LLVM
+hashes while reducing retained allocated bytes86,200,320→16,384. This is storage,
+not a compiler speed or peak-disk benchmark.
 
-Recommended finite repair: introduce run/case-owned scratch, retain an identifiable small result/artifact index, and retire successful case products after their final consumers and durable result publication. Keep FAIL/unfinished evidence discoverable by run/case. Temp creation must fail closed rather than fall back to shared names. A worker emits FAIL with exit0, so a zero-status EXIT trap is not proof of success. Preserve exact PASS/FAIL accounting, crash/timeout distinctions, progress and child recovery.
+Immutable whole20261124T154015-test-f2b289 completed3313 common cases:3031 PASS
+payloads retired,282 FAIL retained, pending0/skip0, no infrastructure worker
+failure. All five labels differing from the historical whole replay identically
+with old/current workers using the same current carrier and source. Whole exit1
+reflects semantic failures and is not green/main integration. Cumulative retired
+successful products18,908,516,352 bytes; failed products752,435,200 bytes remain
+under the run roots indexed in the saved report. Wall elapsed includes host sleep
+and supplies no throughput comparison.
 
-Existing [dispatcher fault controls](../../tests/tooling/test-normal-dispatch.py) and [worker/runtime status controls](../../tests/tooling/test-runner-exit-status.py) supply focused test seams. Add successful retirement, failure/interruption retention, two-run isolation, directory-creation failure and publication-before-retirement controls; demonstrate reduced peak/retained bytes on representative real cases with unchanged results. Old source/std/carrier/seed/formal inputs are never cleanup targets.
+Independent normal_artifact_lifetime_review checked d7dacd6b source, final
+consumers, controls and all3313 actual receipts: no mandatory implementation gap,
+no duplicate directory, no receipt/payload mismatch, finite closure accepted.
+Documentation-only stale preimplementation/pending statements were removed.
 
-Normal common workers are the bounded scope. Independently owned manual probes, build/self-host archives and historical cold stores are not automatically covered; do not claim this repair eliminates every repository disk-pressure source. No production changes, runtime experiment or measured savings were performed for this light investigation. Static independent review found the localized approach feasible, with the above retention/order/isolation conditions required before closure.
+## Retention and Cleanup
 
-## Implementation Scenarios
-
-The task is in progress with the run/case lifetime boundary selected above. RED: the unchanged production worker emits PASS but leaves shared generated LLVM and has no durable case result. The new integration control reproduces that exact deficiency. Required contrasts: all five phase PASS/FAIL accounting, program nonzero/signal, cancellation with live child recovery and pending retention, simultaneous identical workers and two dispatch runs, temp creation and publication write/fsync/rename failures, publication-before-retirement and symlink protection. Existing dispatcher/status/golden fault controls remain registered and keep their original expectations. Representative real old/new workers must agree on results and LLVM while demonstrating peak/retained-byte reduction; a current whole-suite comparison remains required before closure.
+Necessary evidence was saved and pushed before retiring task-owned successful
+comparison snapshots/payloads. The current282 unresolved failures remain under
+compiler/tmp/normal-cases; their owning phase3 fixes retire them after cause
+resolution and evidence preservation. Small receipts remain discoverable. Product
+inputs, current carrier, formal evidence and recovery cold stores are untouched.
+A pass/retired:false receipt after interruption is not a payload-existence promise.
