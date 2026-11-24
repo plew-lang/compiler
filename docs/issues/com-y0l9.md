@@ -13,8 +13,27 @@ tags: [verification, frontend]
 
 Evidence: [input-authority answer](../../../evidence/compiler-api-audit/resolutions/conformance-via-inputs.json) and [independent review](../../../evidence/compiler-api-audit/review-resolution-conformance-via-inputs.json), source 9665094dcec8aa63ed20573b1306a0015058f595. Linked audit [com-mmk9](com-mmk9.md). This issue owns product repair; implementing it is not a prerequisite for the source-only input investigation.
 
+## Current API Resumption Map
+
+The endpoint names and call counts in the original audit below describe its
+frozen source, not instructions to recreate removed APIs. Removal commits:
+`b41d7e5e`. Current same-path entries: `conformanceRequirementEnvironment`, `conformanceRequirementParametersMatch` in [Codegen/Check/Bounds.pw](../../src/Codegen/Check/Bounds.pw).
+The former spelling/span substitutions were removed in favor of admitted requirement signatures and an explicit instance environment. Existing semantic repair owner: [com-30u1](com-30u1.md).
+
+The current canonical signature helpers also appear in [com-4aon](com-4aon.md).
+Coordinate their narrowing once; this task retains the obsolete associated-span / requirement-parameter substitution facet
+and its original caller guarantees, not a second independent repair of the shared helpers.
+
+Apply this task's original per-entry authority/lifetime guarantees to the
+surviving path and its actual callers. Retain the existing audit evidence as the
+baseline; reconcile which grants still need narrowing versus those eliminated
+by the semantic repair. Deleted names alone do not prove the whole family fixed.
+The task remains open until that finite reconciliation and required controls /
+independent review establish closure; do not widen it to every API of the repair
+owner or restore a superseded decision path.
+
 ## Guarantee and Scope
-Exact APIs: conformAssocBindingSpan, substReqParamHeadId, substReqParamArrayElemRef; actual calls 2. Per-entry explicit inputs and precise controlled service permissions above, not group-wide union. Keep all original family APIs under one owner, including conformsInstance/typeConformsToName despite their distinct authority.
+Audit-time APIs (9665094d): conformAssocBindingSpan, substReqParamHeadId, substReqParamArrayElemRef; actual calls 2. Per-entry explicit inputs and precise controlled service permissions above, not group-wide union. Keep all original family APIs under one owner, including conformsInstance/typeConformsToName despite their distinct authority.
 
 Per-entry services T/N/K/Q/P/L/F only where actually reachable; readonly coherent catalogs/passive records and explicit selected source/proof/ParamId/environment/default/diagnostic/lifetime preserved. No blanket graph union or receiver-field-count decomposition. Concrete whole Comp unrelated Syntax/parser/source loading/activation/preparation/signature/body/executable worklist/configuration writers, not Comp directly owning native handles. Keep per-entry source operation/default/guard/identity contract and existing unused witnessedHas formals classification separate.
 

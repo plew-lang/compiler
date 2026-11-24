@@ -13,8 +13,23 @@ tags: [verification, frontend]
 
 Evidence: [input-authority answer](../../../evidence/compiler-api-audit/resolutions/lookup-lexical-adapters-inputs.json) and [independent review](../../../evidence/compiler-api-audit/review-resolution-lookup-lexical-adapters-inputs.json), source 9665094dcec8aa63ed20573b1306a0015058f595. Linked audit [com-mmk9](com-mmk9.md). This issue owns product repair; implementing it is not a prerequisite for the source-only input investigation.
 
+## Current API Resumption Map
+
+The endpoint names and call counts in the original audit below describe its
+frozen source, not instructions to recreate removed APIs. Removal commits:
+`8912aa17`. Current same-path entries: `uniqueProjectionSource`, `uniqueSyntaxProjectionSource` in [Codegen/Lower/Decl.pw](../../src/Codegen/Lower/Decl.pw).
+The source readers retain complete lexical bound instances and source recipes rather than just a trait identity. Preserve type arguments, associated predicates and source admission evidence. Existing semantic repair owner: [com-amjl](com-amjl.md).
+
+Apply this task's original per-entry authority/lifetime guarantees to the
+surviving path and its actual callers. Retain the existing audit evidence as the
+baseline; reconcile which grants still need narrowing versus those eliminated
+by the semantic repair. Deleted names alone do not prove the whole family fixed.
+The task remains open until that finite reconciliation and required controls /
+independent review establish closure; do not widen it to every API of the repair
+owner or restore a superseded decision path.
+
 ## Guarantee and Scope
-Exact APIs: uniqueProjectionTrait, uniqueSyntaxProjectionTrait; actual calls 2. Per-entry api_input_profiles and controlled named services; group union never grants a small entry the wide query or frame effects of another. Coherent readonly pools/passive descriptors retained.
+Audit-time APIs (9665094d): uniqueProjectionTrait, uniqueSyntaxProjectionTrait; actual calls 2. Per-entry api_input_profiles and controlled named services; group union never grants a small entry the wide query or frame effects of another. Coherent readonly pools/passive descriptors retained.
 
 Keep actual per-entry readonly owners and controlled writer services. Mutable inout Comp exposes unrelated source/Syntax construction/preparation, body/executable registration, source body recording/inference cache, instantiation/worklist/configuration authority beyond each entry actual required controlled services. Not a claim Comp owns LlvmCtx native handles. Keep per-entry source operation/default/guard/identity contract and all existing main C repair classifications and owners separate.
 

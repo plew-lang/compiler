@@ -13,8 +13,23 @@ tags: [frontend, ownership, verification]
 
 Evidence: [input-authority answer](../../../evidence/compiler-api-audit/resolutions/destruction-interface-inputs.json) and [independent review](../../../evidence/compiler-api-audit/review-resolution-destruction-interface-inputs.json), source 9665094dcec8aa63ed20573b1306a0015058f595. Linked audit [com-mmk9](com-mmk9.md). This issue owns product repair; implementing it is not a prerequisite for the source-only input investigation.
 
+## Current API Resumption Map
+
+The endpoint names and call counts in the original audit below describe its
+frozen source, not instructions to recreate removed APIs. Removal commits:
+`4de28cc3`. Current same-path entries: `sourceInterfaceSignatureBounds` in [Codegen/Check/InterfaceEvidence.pw](../../src/Codegen/Check/InterfaceEvidence.pw).
+callConstraintScope survives. The removed interfaceSignatureBounds is replaced by the admitted effective-interface signature read in ExistentialInterfaces and readRequirementBounds, retaining inherited clauses and evidence. Existing semantic repair owner: [met-6hrd](met-6hrd.md).
+
+Apply this task's original per-entry authority/lifetime guarantees to the
+surviving path and its actual callers. Retain the existing audit evidence as the
+baseline; reconcile which grants still need narrowing versus those eliminated
+by the semantic repair. Deleted names alone do not prove the whole family fixed.
+The task remains open until that finite reconciliation and required controls /
+independent review establish closure; do not widen it to every API of the repair
+owner or restore a superseded decision path.
+
 ## Guarantee and Scope
-Exact APIs: callConstraintScope, sourceInterfaceSignatureBounds, interfaceSignatureBounds; actual calls 8. Narrow this original family as one finite owner across real APIs, necessary actual semantic/read/write delegates and all enumerated source/fixture callers; preserve every entry-specific default/frame/identity/retain/error prefix and cache/interner/layout/proof/source-bound mode. Only actual needed service slices, no whole Comp wrapper/capture or facade exposing source prepare/publish.
+Audit-time APIs (9665094d): callConstraintScope, sourceInterfaceSignatureBounds, interfaceSignatureBounds; actual calls 8. Narrow this original family as one finite owner across real APIs, necessary actual semantic/read/write delegates and all enumerated source/fixture callers; preserve every entry-specific default/frame/identity/retain/error prefix and cache/interner/layout/proof/source-bound mode. Only actual needed service slices, no whole Comp wrapper/capture or facade exposing source prepare/publish.
 
 Keep old main C/J and other J/C/O/optional records/owners; declaration-only does not gain executable queues. Coordinate overlapping existing shape/layout/G services without duplicate API ownership. Preserve every per-entry required operation/branch/producer/default/session/owner/binder/view/proof/field/layout/cache/diagnostic/graph/queue/publication/lifetime effect. Coherent domain owner and passive full descriptors remain legitimate; concrete unrelated Comp authority must go.
 

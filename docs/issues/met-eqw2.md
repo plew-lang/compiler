@@ -23,7 +23,11 @@ Existing adopted d2 CLI is RED: all3 required modes reject Unclassified. Add int
 
 Independent typing_obligation_plan_review recommends two increments here: stored Fn binding based non-value admission/transport, then actual qualified member category/owner admission. No argument/expected-type overload selection is needed for an overload name used as a value. A type-qualifier base alone is not a member proof; preserve real fields, qualified globals and normal qualifier calls, and do not rescue static access from ordinary instance methods. Mandatory controls include alias/overload group, target0, local closure, wrapper, missing/private member, Raw/synthetic/owner/session/serial, closure/global retry/drain and unused ORC. Normal Value/Qualifier reader migration is explicitly owned by com-tr3a and remains unfinished, so this finite repair cannot certify the whole name-resolution area.
 
-The actual T.make() paired-source probe found a wrong qualifier classification when a module fn T exists. met-f7t8 owns that finite lexical type-binder precedence correction and is a real prerequisite; fix it before this admission could freeze the wrong category. No product change has started for this ticket.
+The actual T.make() paired-source probe found a wrong qualifier classification when a module fn T exists. met-f7t8 owns that finite lexical type-binder precedence correction and is a real prerequisite; fix it before this admission could freeze the wrong category. That prerequisite is independently closed, as is named-declaration child
+[met-5vgp](met-5vgp.md). Qualified namespace normalization is independently
+closed by [met-uy77](met-uy77.md); [met-wp9l](met-wp9l.md) remains active
+for associated/instance/trait-bound category admission. Parent whole gates
+remain open; use the worklog for the current carrier and next slice.
 
 ## Bounded children
 

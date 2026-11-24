@@ -13,8 +13,23 @@ tags: [verification, frontend]
 
 Evidence: [input-authority answer](../../../evidence/compiler-api-audit/resolutions/ownership-pattern-default-inputs.json) and [independent review](../../../evidence/compiler-api-audit/review-resolution-ownership-pattern-default-inputs.json), source 9665094dcec8aa63ed20573b1306a0015058f595. Linked audit [com-mmk9](com-mmk9.md). This issue owns product repair; implementing it is not a prerequisite for the source-only input investigation.
 
+## Current API Resumption Map
+
+The endpoint names and call counts in the original audit below describe its
+frozen source, not instructions to recreate removed APIs. Removal commits:
+`747602af`. Current same-path entries: `markReplacedUniqueMoved` in [Codegen/Resolve/Locals.pw](../../src/Codegen/Resolve/Locals.pw).
+moveOperandIsAggregatePartial and verifyOwnershipSource survive. The old enclosing-scope shadowing invalidation was removed: replacement within one scope and a nested shadow are not equivalent. Preserve the adopted lifetime rule when narrowing ownership inputs. Existing semantic repair owner: [com-x7ql](com-x7ql.md).
+
+Apply this task's original per-entry authority/lifetime guarantees to the
+surviving path and its actual callers. Retain the existing audit evidence as the
+baseline; reconcile which grants still need narrowing versus those eliminated
+by the semantic repair. Deleted names alone do not prove the whole family fixed.
+The task remains open until that finite reconciliation and required controls /
+independent review establish closure; do not widen it to every API of the repair
+owner or restore a superseded decision path.
+
 ## Guarantee and Scope
-Exact APIs: moveOperandIsAggregatePartial, verifyOwnershipSource, markShadowedUniqueMoved; actual calls 10. Exactly per-entry api_input_profiles and conditional namedservices, not group-wide union. Tinyreadonly shape orpatternadapters do notinherit E/S/Q from neighboringwideentry.
+Audit-time APIs (9665094d): moveOperandIsAggregatePartial, verifyOwnershipSource, markShadowedUniqueMoved; actual calls 10. Exactly per-entry api_input_profiles and conditional namedservices, not group-wide union. Tinyreadonly shape orpatternadapters do notinherit E/S/Q from neighboringwideentry.
 
 Keep actual per-entry readonly owners and controlled writer services. Broad inout Comp exposes unrelated source loading/Syntax construction/arbitrary operation/body/signature/executable publication/final queues/config writers beyond each exact neededwriter set. Coherent readonlyowners/passivedescriptors justified; CompnotdirectnativeLlvmCtxowner. Keep per-entry source operation/default/guard/identity contract and all existing main C repair classifications and owners separate.
 

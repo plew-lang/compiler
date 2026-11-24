@@ -13,8 +13,23 @@ tags: [verification, frontend]
 
 Evidence: [input-authority answer](../../../evidence/compiler-api-audit/resolutions/check-generic-inputs.json) and [independent review](../../../evidence/compiler-api-audit/review-resolution-check-generic-inputs.json), source 9665094dcec8aa63ed20573b1306a0015058f595. Linked audit [com-mmk9](com-mmk9.md). This issue owns product repair; implementing it is not a prerequisite for the source-only input investigation.
 
+## Current API Resumption Map
+
+The endpoint names and call counts in the original audit below describe its
+frozen source, not instructions to recreate removed APIs. Removal commits:
+`69dd7e01`. Current same-path entries: `recordValueExtension` in [Codegen/Resolve/Record.pw](../../src/Codegen/Resolve/Record.pw).
+boundHasTraitNamed survives. The extension branch moved through admitValueExtension (69dd7e01) to retained value-extension admission and resolved receiver lookup (196f1156); do not restore the old Bool authority. Existing semantic repair owner: [com-3jtd](com-3jtd.md).
+
+Apply this task's original per-entry authority/lifetime guarantees to the
+surviving path and its actual callers. Retain the existing audit evidence as the
+baseline; reconcile which grants still need narrowing versus those eliminated
+by the semantic repair. Deleted names alone do not prove the whole family fixed.
+The task remains open until that finite reconciliation and required controls /
+independent review establish closure; do not widen it to every API of the repair
+owner or restore a superseded decision path.
+
 ## Guarantee and Scope
-Exact APIs: boundHasTraitNamed, boundAllowsExtension. Product calls 3, fixture calls 0. BS owninterner+readonly source bound/function/conformance patterns and local directional unifier, not full conformance query or canonical writer.
+Audit-time APIs (9665094d): boundHasTraitNamed, boundAllowsExtension. Product calls 3, fixture calls 0. BS owninterner+readonly source bound/function/conformance patterns and local directional unifier, not full conformance query or canonical writer.
 
 Own requested name interner and readonly source bound/function/conformance descriptors plus local directional unifier only. Keep exact resolved trait owner/parameter/receiver pattern identity; no full conformance query, canonical type writer or source/executable grant merely from extension applicability wording. Change actual signatures and all matching callers/consumers without full Comp escape/capture. Keep exactservicebranch/default/source/session/owner/type/ParamId/proof/frame/memo/diagnostic/prefix/lifetime contracts, outputidentity and errors; preserve passive coherent records. Existing success-only gaps are actualobservations, not endorsement of all-exit design violations. Any behavior correction is separately authorized work.
 

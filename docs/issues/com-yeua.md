@@ -15,7 +15,10 @@ tags: [diagnostics, frontend, driver, verification]
 
 This parent remains open. Latest complete normal20261124T011714-test-48a65b: exit1,285fail/skip0, invariant inputs and7725 matched worker pairs. Against intermediate288 only the declaration-plan, symbolic-scope and Ready setup regressions resolve; against the accepted285 baseline there are no additions/removals/reason changes. See [whole reconciliation](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-inherited-existential-final-normal.json).
 
-The inherited existential boundary met-ajht/met-lrep is independently certified on sourceb8c69b69/teste2d7e969, formal-eacc0f G2/median7.291978<=7.5, actualnative/ORC/memory/gen and measured controls. Measured d2e347dc is the next development carrier; main/seed/trackedbin are unchanged. Prior finite numeric/typing/protocol/source-domain children remain closed, not proof that every remaining producer has been classified.
+The inherited existential boundary met-ajht/met-lrep is independently certified on sourceb8c69b69/teste2d7e969, formal-eacc0f G2/median7.291978<=7.5, actualnative/ORC/memory/gen and measured controls. That measured d2e347dc belongs to the inherited-interface checkpoint, not
+the current restart carrier. Use the [worklog](../../../agents/worklog.md) for
+the current development carrier and selected producer. Main/seed/trackedbin
+promotion remains separate. Prior finite numeric/typing/protocol/source-domain children remain closed, not proof that every remaining producer has been classified.
 
 Fresh discovery retains [262 negative and23 nonnegative failures](../../../evidence/rejection-domains/diagnostic-domain-implementation/whole-after-inherited-existential-negative-survey.json), with current stderr and unchanged fixture hashes. Message grouping never grants Source. Select actual producer boundaries from current inputs and assign residual work before parent closure; completed dependency metadata does not certify these unowned residual cases or phase3. The Source-only negative contract and existing non-Source distinctions remain unchanged.
 

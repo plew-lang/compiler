@@ -14,14 +14,14 @@ tags: [frontend, generics, verification]
 
 ## Lexical Visibility Investigation
 
-[met-tfbl](met-tfbl.md) is a required investigation before fresh closure. An
-unrelated loaded module's same-named function makes a local closure parameter
-call fail visibility. The user requests a responsibility-level audit of lexical
-priority, candidate continuation/failure categories and diagnostic-only search,
-not an assumed closure-specific patch. The optional missing-use hint may be
-removed if it interferes; actual visibility rejection must remain. The audit
-must assign confirmed repairs before closing; no earlier finite call/argument
-repair or green gate certifies this new boundary.
+[met-tfbl](met-tfbl.md) records the investigation of the original unrelated-module
+visibility failure and the split into lexical selection, complete function-value
+arguments, global callable identity and gen synthetic authority. Its assigned
+repair tasks retain their individual state and finite guarantees; do not treat
+that original reproducer as an uninvestigated current failure or restart already
+closed lexical/global repairs. This investigation's own disposition and fresh
+source-selection/G1 admission remain required; its assignment and individual
+repair successes do not certify the whole boundary.
 
 ## Current Review Reopening
 

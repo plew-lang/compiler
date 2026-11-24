@@ -19,8 +19,8 @@ not historical candidate073f0375 or043e2402/3c532ce1 receipts below. The current
 source contextual repairs remain with [com-u22d](com-u22d.md) and rejection-domain
 whole reconciliation with [com-yeua](com-yeua.md). Native supervision and its
 observation-cost correction are [met-9455](met-9455.md); its scoped gates do not
-replace this task's complete final-candidate gates. Whole normal retry is running
-from a fresh frozen snapshot. Previous receipts certify only their own recorded
+replace this task's complete final-candidate gates. No running whole-suite retry is implied by these checkpoints; the current
+whole result and active execution state are owned by the worklog. Previous receipts certify only their own recorded
 inputs and binaries; unchanged scoped controls may be explicitly reused. Final
 fixed-point, performance, gen/deps and LLVM22 sanitizer requirements are unchanged.
 

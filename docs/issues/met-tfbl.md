@@ -151,7 +151,7 @@ This ticket's creation authorizes investigation planning, not a language change 
 an already accepted implementation. No compiler source or test expectation is
 changed by registering this task.
 
-## Investigation Results (Implementation Not Started)
+## Recorded Investigation Results (Before Repair Assignment)
 
 Source reviewed at a8f85323 (semantic source b5df0276); no compiler/std/test
 source was edited or rebuilt. Old23f7 and newe6ff were compared on **65 distinct
@@ -303,7 +303,7 @@ contract permits the priority or whether ordinary lexical shadowing must win.
 The general noncallable-value fallback is separately confirmed as V2's violation
 of the existing lexical contract. Do not use pow's special boundary to defer V2.
 
-### Proposed Finite Repair Decomposition (Not Yet Registered)
+### Repair Decomposition (Subsequently Registered Below)
 
 1. **Binding-first call selection and visibility, eager/lazy paths (V1/V2).**
    Share the lexical binding classifier with call-name selection. Retain binding

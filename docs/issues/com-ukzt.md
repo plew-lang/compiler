@@ -13,8 +13,23 @@ tags: [verification, frontend]
 
 Evidence: [input-authority answer](../../../evidence/compiler-api-audit/resolutions/conformance-via-inputs.json) and [independent review](../../../evidence/compiler-api-audit/review-resolution-conformance-via-inputs.json), source 9665094dcec8aa63ed20573b1306a0015058f595. Linked audit [com-mmk9](com-mmk9.md). This issue owns product repair; implementing it is not a prerequisite for the source-only input investigation.
 
+## Current API Resumption Map
+
+The endpoint names and call counts in the original audit below describe its
+frozen source, not instructions to recreate removed APIs. Removal commits:
+`319c9280`. Current same-path entries: `prepareViaDelegations`, `verifySelectedDelegation` in [Codegen/Resolve/Preparation.pw](../../src/Codegen/Resolve/Preparation.pw).
+The parallel via signature/target checker was removed; selection now belongs to the actual lexical forwarding call. Preserve that common selection, not a new via-only selector. Existing semantic repair owner: [com-6esv](com-6esv.md).
+
+Apply this task's original per-entry authority/lifetime guarantees to the
+surviving path and its actual callers. Retain the existing audit evidence as the
+baseline; reconcile which grants still need narrowing versus those eliminated
+by the semantic repair. Deleted names alone do not prove the whole family fixed.
+The task remains open until that finite reconciliation and required controls /
+independent review establish closure; do not widen it to every API of the repair
+owner or restore a superseded decision path.
+
 ## Guarantee and Scope
-Exact APIs: viaSignatureMatches, checkViaTargets; actual calls 5. Per-entry explicit inputs and precise controlled service permissions above, not group-wide union. Keep all original family APIs under one owner, including conformsInstance/typeConformsToName despite their distinct authority.
+Audit-time APIs (9665094d): viaSignatureMatches, checkViaTargets; actual calls 5. Per-entry explicit inputs and precise controlled service permissions above, not group-wide union. Keep all original family APIs under one owner, including conformsInstance/typeConformsToName despite their distinct authority.
 
 Per-entry services T/N/K/Q/P/L/F only where actually reachable; readonly coherent catalogs/passive records and explicit selected source/proof/ParamId/environment/default/diagnostic/lifetime preserved. No blanket graph union or receiver-field-count decomposition. Concrete whole Comp unrelated Syntax/parser/source loading/activation/preparation/signature/body/executable worklist/configuration writers, not Comp directly owning native handles. Keep per-entry source operation/default/guard/identity contract and existing unused witnessedHas formals classification separate.
 

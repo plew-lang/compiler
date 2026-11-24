@@ -13,8 +13,23 @@ tags: [verification, frontend]
 
 Evidence: [input-authority answer](../../../evidence/compiler-api-audit/resolutions/lookup-lexical-adapters-inputs.json) and [independent review](../../../evidence/compiler-api-audit/review-resolution-lookup-lexical-adapters-inputs.json), source 9665094dcec8aa63ed20573b1306a0015058f595. Linked audit [com-mmk9](com-mmk9.md). This issue owns product repair; implementing it is not a prerequisite for the source-only input investigation.
 
+## Current API Resumption Map
+
+The endpoint names and call counts in the original audit below describe its
+frozen source, not instructions to recreate removed APIs. Removal commits:
+`2da08785`. Current same-path entries: `anonymousConstructionCandidates` in [Codegen/Resolve/Global.pw](../../src/Codegen/Resolve/Global.pw).
+The other listed audit endpoints survive; constructionHasAnonymousFactories was eliminated from associated receiver handling. Use checkedAssociatedReceiverName in Resolve/Module and the real candidate reader, rather than recreating the deleted constructor heuristic. Existing semantic repair owner: [com-0n6g](com-0n6g.md).
+
+Apply this task's original per-entry authority/lifetime guarantees to the
+surviving path and its actual callers. Retain the existing audit evidence as the
+baseline; reconcile which grants still need narrowing versus those eliminated
+by the semantic repair. Deleted names alone do not prove the whole family fixed.
+The task remains open until that finite reconciliation and required controls /
+independent review establish closure; do not widen it to every API of the repair
+owner or restore a superseded decision path.
+
 ## Guarantee and Scope
-Exact APIs: resolvedImplTraitBind, resolvedSyntaxImplTraitBind, traitOwnerAtUse, providedCopyTypeParams, globalIndexAtUse, namespaceModuleAt, newtypeUnderRef, newtypeUnderName, anonymousConstructionCandidates, constructionHasAnonymousFactories; actual calls 39. Per-entry api_input_profiles and controlled named services; group union never grants a small entry the wide query or frame effects of another. Coherent readonly pools/passive descriptors retained.
+Audit-time APIs (9665094d): resolvedImplTraitBind, resolvedSyntaxImplTraitBind, traitOwnerAtUse, providedCopyTypeParams, globalIndexAtUse, namespaceModuleAt, newtypeUnderRef, newtypeUnderName, anonymousConstructionCandidates, constructionHasAnonymousFactories; actual calls 39. Per-entry api_input_profiles and controlled named services; group union never grants a small entry the wide query or frame effects of another. Coherent readonly pools/passive descriptors retained.
 
 Keep actual per-entry readonly owners and controlled writer services. Mutable inout Comp exposes unrelated source/Syntax construction/preparation, body/executable registration, source body recording/inference cache, instantiation/worklist/configuration authority beyond each entry actual required controlled services. Not a claim Comp owns LlvmCtx native handles. Keep per-entry source operation/default/guard/identity contract and all existing main C repair classifications and owners separate.
 

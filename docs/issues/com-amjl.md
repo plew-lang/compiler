@@ -76,8 +76,10 @@ completion claim follows from task count or review receipt alone.
 
 Final whole-program fixed-point/performance/full-suite/ASan gates remain G2a/G2b
 under [met-si6j](met-si6j.md), not repeated as mandatory gates for every child.
-Main/seed/carrier promotion is excluded. The current candidate and performance stop are recorded by [com-1hd3](com-1hd3.md#performance-stop-and-resume-boundary).
-Do not advance siblings to bypass that unresolved regression.
+Main/seed/carrier promotion is excluded. The current candidate and applicable performance stop are recorded by the
+[worklog](../../../agents/worklog.md) and [validation criterion](../../../agents/validation.md#自己コンパイル性能基準).
+The closed com-1hd3 checkpoint is historical; do not infer a current performance
+blocker from its old stop or bypass a newly evidenced unresolved regression.
 
 ## Guarantee Allocation and Execution Order
 

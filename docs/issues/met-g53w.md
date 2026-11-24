@@ -238,8 +238,9 @@ or claim its semantic arity/bounds gate tested here. Cover inference/bounds fail
 and no reselection on supported calls instead. Historical receipts retain the
 initial failed inputs; they are not current acceptance evidence.
 
-This remains implementation WIP pending the fresh build, target modes, performance
-comparison and independent completion review. No task/area/full gate is closed by
+At this structural checkpoint the implementation was WIP pending fresh build,
+target modes, performance comparison and independent completion review.
+The subsequent resumption findings below supersede that pending-build instruction. No task/area/full gate is closed by
 this intermediate structural review or initial slice.
 
 ## Resumption Results and Required Task-Assignment Stop
@@ -270,7 +271,9 @@ Two positives remain failing; neither is reclassified as a successful rejection:
    include shadowed parameter/local/global closure controls. Investigation is
    assigned to [met-tfbl](met-tfbl.md), with met-ucze, com-qb05 and G1 depending
    on its evidence-backed disposition. The user requires thorough investigation
-   before selecting a repair; implementation has not started.
+   before selecting a repair; implementation of that newly discovered boundary
+was not started at this investigation checkpoint. The assigned repair owners
+and current implementation state are tracked by met-tfbl and its follow-ups.
 2. Boxing Worker as any Picker fails when Picker has an unused generic requirement,
    even when only its nongeneric overload is called. An isolated single generic
    requirement reproduces the same unbound implementation parameter error on

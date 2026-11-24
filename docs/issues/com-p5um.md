@@ -12,24 +12,25 @@ tags: [frontend, verification]
 ---
 # Verify the frozen candidate fixed point and formal self compilation time
 
-## Latest diagnostic fixed-point measurement
+## Recorded diagnostic fixed-point measurement (2026-11-19)
 
-The current WIP formal measurement is [ThinLTO source0d677b0a](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-thinlto-formal-self-host.json), run20261119T164158-self-host-8d831e. Exit0, unchanged inputs, generation2LLVM/runtime/successor binary match. Candidatefc2fba44 has7.303893/6.810615/6.929691 seconds, median **6.929691 seconds**, restoring below7. Actual linker/libLTO/backend inputs are frozen and per-generation tool identities checked. This is a WIP refresh, not final frozen-G1/G2b completion. The gate remains open until its prerequisites and final admission close; main/seed/adopted carrier stay unchanged.
+The WIP formal measurement at that checkpoint was [ThinLTO source0d677b0a](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-thinlto-formal-self-host.json), run20261119T164158-self-host-8d831e. Exit0, unchanged inputs, generation2LLVM/runtime/successor binary match. Candidatefc2fba44 has7.303893/6.810615/6.929691 seconds, median **6.929691 seconds**, restoring below7. Actual linker/libLTO/backend inputs are frozen and per-generation tool identities checked. This is a WIP refresh, not final frozen-G1/G2b completion. The gate remains open until its prerequisites and final admission close; main/seed/adopted carrier stay unchanged.
 
 
 [Source56985a02 formal record](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-assignment-formal-self-host.json): standard run20261119T094138-self-host-59a400, carrier37fefb30, unchanged inputs and exit0. Generation2LLVM/runtime/successor binary match; all three measurements use1963e4c5. Times7.620871/7.132441/7.186216 give median **7.186216 seconds**, above the absolute seven-second limit. Neutral review verified197 src/std files against56985a02 and the recorded hashes/attribution. This is a diagnostic WIP measurement, not frozen-G1 final gate completion or functional green. Main/seed/adopted carrier remain unchanged; recovery has not been judged difficult.
 
 The nominal-layout index trial is rejected for no demonstrated whole-time benefit. A natural sealed SourceBodyData head-reader trial instead creates a1200-byte snapshot at the caller; it is not adopted. An extra verified argpromotion/SROA diagnostic still leaves that snapshot. [Caller investigation](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-source-head-projection-investigation.json). Conservative snapshots for reference roots remain within the current ABI contract; extending forwarding requires its own safety proof, not disabling access or ownership checks.
 
-## Current Candidate Refresh
+## Current Candidate and Gate Boundary
 
-Reopened for the source repair e73a8476 in [com-ugee](com-ugee.md). The prior
-043e2402/3c532ce1 gate remains valid only for its recorded inputs/binary; it does
-not certify the new source or candidate073f0375. G1 current admission and the
-actual final measured compiler must determine which checks can apply. The
-current ordinary suite on candidate073f0375 is a repair milestone, not evidence
-that an as-yet unmeasured successor passed the gate. Do not weaken any final
-fixed-point, performance, gen/deps or LLVM22 sanitizer requirement.
+Use the current development carrier and latest formal receipt from the
+[meta worklog](../../../agents/worklog.md) and the
+[approved performance criterion](../../../agents/validation.md#自己コンパイル性能基準).
+The final gate requires a G1-admitted frozen candidate; passing a development
+fixed point does not close this task. Historical073f0375/043e2402/3c532ce1
+and November19 measurements certify only their recorded inputs. Current whole
+source admission and exact measured-compiler correctness gates remain required;
+main/seed promotion is separate.
 
 ## Boundary
 

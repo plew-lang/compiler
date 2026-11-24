@@ -20,7 +20,7 @@ Carry the checked binding origin, selected conversion occurrence and initializer
 
 ## Acceptance Criteria
 
-Trace checked binding and conversion production through both AOT and lazy preparation to actual Mid instantiation and execution. Exercise annotated and inferred locals, prior and subsequent calls, shadowing, two distinct generic instances, non-continuing initialization and missing/foreign facts. Verify preserved global, closure, generated and adapter paths. Compare fixed-input LLVM/runtime, scan counts and timing, document the result and obtain independent review. The standard fixed-point and seven-second checks belong to com-p5um.
+Trace checked binding and conversion production through both AOT and lazy preparation to actual Mid instantiation and execution. Exercise annotated and inferred locals, prior and subsequent calls, shadowing, two distinct generic instances, non-continuing initialization and missing/foreign facts. Verify preserved global, closure, generated and adapter paths. Compare fixed-input LLVM/runtime, scan counts and timing, document the result and obtain independent review. The standard fixed-point and approved formal-performance checks belong to com-p5um.
 
 
 ## Notes

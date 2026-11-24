@@ -28,13 +28,28 @@ Existing assoc_fn_value_arg check/AOT/reachable ORC RED-to-GREEN, methods as val
 
 Independent typing_obligation_plan_review endorsed these boundaries, not implementation completion. Actual source confirms Resolve/Lexical rewrites namespace Field to Ident and records namespace-use identity; associate-value reads are rewritten by rewriteAssocValReads before Record. Preserve those transformations and their source origins, rather than mistaking any Field or qualifier as a callable. Generic binder/bound and provided/conditional receiver evidence need small probes before extraction; call-argument-dependent conditions cannot be invented at a non-value use. Full findMethod redesign and successful generic reader migration stay out of scope.
 
+## Current Remaining Scope
+
+Name-reader extraction, namespace/type-binder prerequisite met-u9uu and namespace
+Field-to-Ident provenance met-uy77 are independently accepted finite increments.
+On the measured carrier, the qualified60-mode control has18 unmet assertions,
+all associated/instance/trait-bound; namespace refusal and lazy/normal controls
+pass. The remaining work is the declaration-group producer and retained owned
+refusal for those member surfaces, not repeating the namespace repair.
+[Current evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-namespace-declaration-origin.json).
+The initial RED below remains a historical reproduction. Parent completion still
+requires the remaining scenarios and applicable whole gates.
+
 ## Fixed-candidate RED
 
 Measured fixed-point cb9eebb5 (named product b43af163) runs42 qualified modes:21 intended RED assertions,21 normal/lazy controls pass; immutable inputs. Concrete associated and abstract bound T.make fail unavailable value typing, instance method-as-value is reported as missing structural field, namespace Field-to-Ident retains correct named-declaration text but loses owned source origin. All18 ordinary assoc-val/namespace/import/alias/type-binder/overload controls pass; three unrequested ORC bodies remain uninspected. Scratch result: meta/tmp/phase3-forward-frontier/qualified-callable-cli-red-v1/result.json. No qualified product repair yet.
 
 ## Name-reader increment (not task completion)
 
-Private TraitMemberNames cursor is shared by staticMemberResolution before labels and proof. It returns canonical slot/function, associated role and visibility, never applicability/Source authority. Requirements/provided arrays, labels-before-proof, preferred source and instance dedup/rank order remain at the consumer. Independent source review found no must-fix; an extra provided Func read is an unproven cost concern, not permission to introduce signature snapshots. Baseline label-frontier native succeeds with actual query count; poisoning Selected gives expected -6, while Unrelated wrong labels is not queried. After extraction private v4 preserves frontier; direct reader/no-proof tests and fresh build remain pending. Source proof/qualified category transport is not yet implemented. Evidence: meta/evidence/rejection-domains/diagnostic-domain-implementation/phase3-qualified-member-discovery.json.
+Private TraitMemberNames cursor is shared by staticMemberResolution before labels and proof. It returns canonical slot/function, associated role and visibility, never applicability/Source authority. Requirements/provided arrays, labels-before-proof, preferred source and instance dedup/rank order remain at the consumer. Independent source review found no must-fix; an extra provided Func read is an unproven cost concern, not permission to introduce signature snapshots. Baseline label-frontier native succeeds with actual query count; poisoning Selected gives expected -6, while Unrelated wrong labels is not queried. The direct reader/no-proof controls and fresh build were subsequently
+independently accepted in the name-reader increment below. Namespace source
+transport is independently closed in [met-uy77](met-uy77.md); associated,
+instance and trait-bound category transport remains unfinished. Evidence: meta/evidence/rejection-domains/diagnostic-domain-implementation/phase3-qualified-member-discovery.json.
 
 ## Declaration-group admission versus call applicability
 

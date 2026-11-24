@@ -30,7 +30,7 @@ Full minimal source and real outcomes are retained in meta evidence/existing-fea
 
 Use the declared canonical parameter/signature contract, including nested generic identity and modes/labels where applicable, for duplicate requirements. Retain true duplicate rejection and ordinary trait conformance/dispatch validation; do not create a special exemption for Box.
 
-Close producer -> saved/publication -> explicit instance -> actual final reader, and remove the superseded semantic decision/writer rather than add a late verifier-only patch. Preserve existing positive and rejecting contracts. Verify decisive new controls and affected modes, then independently review this task and affected area. Final G2a/G2b/G3 remain mandatory, separately owned; no gate, verifier, existing expected output or seven-second condition may be weakened. No new language meaning is required or authorized by this finding.
+Close producer -> saved/publication -> explicit instance -> actual final reader, and remove the superseded semantic decision/writer rather than add a late verifier-only patch. Preserve existing positive and rejecting contracts. Verify decisive new controls and affected modes, then independently review this task and affected area. Final G2a/G2b/G3 remain mandatory, separately owned; no gate, verifier, existing expected output or [approved formal-performance condition](../../../agents/validation.md#自己コンパイル性能基準) may be weakened. No new language meaning is required or authorized by this finding.
 
 ## Selected Implementation Slice
 

@@ -37,8 +37,8 @@ Read met-si6j, met-ucze, met-g53w, com-61jt and the actual current tk graph.
   Larger uncertain mechanisms first need a bounded investigation.
 - Connect every required repair to its area and G1 (com-61jt). Do not make G1
   depend only on the closed audit/assignment while leaving repair tasks outside
-  its prerequisites. G1/G2a/G2b/G3 retain their original roles and seven-second
-  performance criterion; do not create duplicate admission/gate tasks here.
+  its prerequisites. G1/G2a/G2b/G3 retain their original roles and the [approved formal-performance
+  criterion](../../../agents/validation.md#自己コンパイル性能基準); do not create duplicate admission/gate tasks here.
 - Do not depend on met-tfbl's closure before assigning the follow-ups that
   allow it to close. No general workflow trial or cross-compiler audit is a
   prerequisite for phase-three repairs or admission.

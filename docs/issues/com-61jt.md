@@ -14,7 +14,7 @@ tags: [frontend, verification]
 
 ## Phase-three Recovery Prerequisites
 
-Begin with [com-2hx2](com-2hx2.md), then complete its bounded API/decision audit
+The initial restart map [com-2hx2](com-2hx2.md) is complete; continue its required bounded API/decision audit
 [com-sn9w](com-sn9w.md) and source-contract test audit [com-lbnc](com-lbnc.md).
 [com-x7r3](com-x7r3.md) assigns their findings to real repair owners and installs
 all required area/G1 dependencies. Closing an audit or assignment does not prove
@@ -23,14 +23,14 @@ cross-compiler audit epic or process trial is an admission prerequisite.
 
 ## Lexical Visibility Investigation
 
-[met-tfbl](met-tfbl.md) is a required investigation before fresh closure. An
-unrelated loaded module's same-named function makes a local closure parameter
-call fail visibility. The user requests a responsibility-level audit of lexical
-priority, candidate continuation/failure categories and diagnostic-only search,
-not an assumed closure-specific patch. The optional missing-use hint may be
-removed if it interferes; actual visibility rejection must remain. The audit
-must assign confirmed repairs before closing; no earlier finite call/argument
-repair or green gate certifies this new boundary.
+[met-tfbl](met-tfbl.md) records the investigation of the original unrelated-module
+visibility failure and the split into lexical selection, complete function-value
+arguments, global callable identity and gen synthetic authority. Its assigned
+repair tasks retain their individual state and finite guarantees; do not treat
+that original reproducer as an uninvestigated current failure or restart already
+closed lexical/global repairs. This investigation's own disposition and fresh
+source-selection/G1 admission remain required; its assignment and individual
+repair successes do not certify the whole boundary.
 
 ## Current Specification-first Review
 
@@ -49,10 +49,10 @@ The confirmed [com-ugee](com-ugee.md) repair and E1/completion scope are now
 independently accepted at e73a8476/candidate073f. Fresh normal/gen/deps and
 focused controls pass; durable evidence is the value-region-producer-repair.json
 receipt in meta. G1 remains open: reconcile current source-to-final-use facts,
-removed authorities, controls and exclusions before freezing a candidate. In
-particular, classify the retained heterogeneous any-join observation in
-[com-uutc](com-uutc.md) against existing admitted/excluded result-shape contracts;
-do not silently declare it unsupported or reuse it as a successful control.
+removed authorities, controls and exclusions before freezing a candidate. The
+heterogeneous any-join observation was subsequently classified as the confirmed
+[com-l8m1](com-l8m1.md) defect; preserve that owner and meaningful result-shape
+controls rather than restarting classification or treating it as unsupported.
 Old3c gates cannot certify the new source; G2a/G2b/G3 remain required.
 
 ## Boundary
@@ -102,7 +102,7 @@ criterion assignment; its decisive closure owners are reconciled below.
 | 7 | F1/com-4bib's requested-body mode matrix, F2/com-d57o and F3/com-vrvl/com-auvx; lazy unused omission is intentional. CLI session controls use opt-in progress and separate quiet contrasts. |
 | 8 | All B/C/D/E Outcome removal audits and retained-adapter classification; missing/foreign/post-outcome writes fail at actual readers. |
 | 9 | The parent F4 six-row disposition has current controls and owners; later source-copy/index/CLI repairs are complete rather than deferred risks. |
-| 10 | NOT certified here. G2a must prove formal fixed point and median below seven seconds, then G2b must run complete normal/gen/deps/LLVM22 sanitizer gates on its measured compiler. |
+| 10 | NOT certified here. G2a must prove formal fixed point and median at most 7.5 seconds, then G2b must run complete normal/gen/deps/LLVM22 sanitizer gates on its measured compiler. |
 | 11 | Area Outcomes, dependencies and F4 are synchronized; G3 owns final checklist discharge and handoff after G2, not this admission. |
 
 Remaining adapters are one-way operations: source construction creates synthetic

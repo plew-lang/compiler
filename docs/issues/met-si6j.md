@@ -30,8 +30,10 @@ independent eleven-criterion synchronization; its prior final approval is supers
 [The closure-assurance retrospective](#closure-assurance-retrospective) explains
 why prior reviewed completion was premature and proposes the recovery boundary.
 Do not equate completing the four lexical repairs with re-certifying this parent.
-The first resumed work is [com-2hx2](com-2hx2.md), followed by its API/decision
-and source-contract test audits [com-sn9w](com-sn9w.md) / [com-lbnc](com-lbnc.md).
+The initial restart map [com-2hx2](com-2hx2.md) is complete. Its required API/decision
+and source-contract test audits [com-sn9w](com-sn9w.md) / [com-lbnc](com-lbnc.md)
+retain their own unfinished scopes; the current execution slice is in the
+[meta worklog](../../../agents/worklog.md).
 [com-x7r3](com-x7r3.md) owns the finite repair/dependency assignment before G1.
 These tasks belong directly to this parent. They cannot be replaced by a general
 API-input/test-corpus audit or by completing operating-rule documentation.
@@ -199,7 +201,7 @@ or defer known repairs into final gate tickets.
 | 4. Execute bounded semantic slices | Use the five area rows below and actual ready prerequisites. Prefer the known source acceptance/call-selection and type/proof producers needed by a slice, then its retained publication, explicit instantiation and final readers. A slice closes the affected producer-to-final-use contract; do not implement all writers first and leave readers for a later mega-task. | Each required leaf has its own scoped validation, removed competing authority and independent completion review. Narrow excessive API inputs in the same affected responsibility path; a wrapper or an extra verifier does not complete the migration. |
 | 5. Re-admit areas and mode contracts | Close met-ucze, met-ia09, met-6e6k, met-acfl and com-fuo8 only after their required descendants and shared repairs. Reconcile already closed A/F/parser/ownership contracts at their actual changed boundaries. | All eleven criteria have applicable source/removal/control evidence owners, including requested check/build/run/gen bodies. Reopen only affected closed work; do not attribute an old gate to a new candidate or repeat every old review by default. |
 | 6. Admit and freeze G1 | com-61jt reconciles every required area, direct source-admission repair and recovery output. Finish applicable validation infrastructure before freezing inputs that include it. | Zero known unfinished in-scope implementation or unresolved source/owner/mode rows; exact source/carrier/std/dependency/tool/script inputs frozen. Missing repairs return to named owners, not anonymous G1 work. |
-| 7. Prove the final candidate | com-p5um (G2a): fixed point and formal self-host median **below7 seconds**. Then com-9l3b (G2b): complete normal/gen/deps/LLVM22 ASan-LSan and required registered controls on the measured compiler with matching frozen inputs. | All required standard gates pass with counts/identity/cleanup and input integrity. No concurrent build/test during formal measurement, no source edits during a run, no substituted old candidate or weakened gates. |
+| 7. Prove the final candidate | com-p5um (G2a): fixed point and formal self-host median **at most 7.5 seconds**. Then com-9l3b (G2b): complete normal/gen/deps/LLVM22 ASan-LSan and required registered controls on the measured compiler with matching frozen inputs. | All required standard gates pass with counts/identity/cleanup and input integrity. No concurrent build/test during formal measurement, no source edits during a run, no substituted old candidate or weakened gates. |
 | 8. Close the phase | com-lzpe (G3) independently reconciles final gate applicability, all eleven criteria, task/area state, design/worklog and remaining exclusions. Then close met-si6j. | Phase three complete; explicit handoff to phase four. com-604k, main integration and seed/carrier promotion remain separate boundaries. |
 
 Steps are selection priorities and admission milestones, not artificial whole-area
@@ -278,7 +280,7 @@ phase may hide a mandatory failed gate or unresolved in-scope repair.
 - A new gate failure returns to a named owning task/area and invalidates affected
   admission/gate evidence. G1/G2/G3 cannot become anonymous residual source-fixing
   buckets. Preserve unchanged valid results, rerun affected gates and never weaken
-  verifier, tests, watchdogs or the seven-second target.
+  verifier, tests, watchdogs or the [approved formal-performance target](../../../agents/validation.md#自己コンパイル性能基準).
 
 ### Mapping to the Eleven Criteria
 
@@ -300,7 +302,7 @@ initially issued investigation has finished.
 | 7 | [D2](com-vkw3.md), [F1](com-4bib.md), [F2](com-d57o.md), [F3](com-vrvl.md), [G1](com-61jt.md) | Equivalent requested bodies across modes; unused omission and separate gen program are intentional. |
 | 8 | [A](com-g2qg.md), [B0](com-qehq.md), [B1](com-qb05.md), [B2](com-17yh.md), [B3](com-v2xk.md), [B4](com-yojf.md), [C1](com-nplw.md), [C2](com-nucu.md), [shared candidate repair](com-4kti.md), [C3](com-m0bf.md), [C4](com-e9l2.md), [C5](com-loyb.md), [C6](com-3q2n.md), [D1](com-rv13.md), [D2](com-vkw3.md), [D3](com-wqa0.md), [D4](com-m3c6.md), [E1](com-2suv.md), [E2](com-0ssn.md), [E3](com-9tau.md), [E4](com-gnj9.md), [G1](com-61jt.md) | Removed competing decision/writer/fallback sites and post-outcome/foreign-owner controls. |
 | 9 | [F2](com-d57o.md), [F3](com-vrvl.md), [F4](com-s248.md), [G1](com-61jt.md) | Six concrete current historical/risk dispositions, linked to actual owners/controls. |
-| 10 | [G2a](com-p5um.md), [G2b](com-9l3b.md) | Frozen candidate, complete standard gates, fixed point and formal median below seven seconds. |
+| 10 | [G2a](com-p5um.md), [G2b](com-9l3b.md) | Frozen candidate, complete standard gates, fixed point and formal median at most 7.5 seconds. |
 | 11 | [F1](com-4bib.md), [F4](com-s248.md), [G1](com-61jt.md), [G3](com-lzpe.md) | Complete evidence assignment, current issue state and synchronized closure/handoff. |
 
 Historical D1/D4/D5 are expected-array overwrite, partial operator validity and
@@ -342,8 +344,11 @@ is computed from tickets, commits or repeated validation runs.
 
 ## Stop Conditions
 
-Stop and report an evidenced task omission, erroneous allocation or other required
-plan correction before continuing under a silently revised plan. An in-scope
+Record evidenced task omissions, erroneous allocation and required plan corrections
+in the actual task/dependency graph before implementing a revised scope. Routine
+task creation and dependency/scope maintenance are delegated; ask for judgment on
+unapproved specification changes or design choices not derivable from adopted
+policy, rather than stopping merely because a task needs correction. An in-scope
 implementation bug already covered by a task is not by itself a plan error.
 
 Stop for an unapproved specification change; a language-specific design decision not derivable from adopted policy/Rust/Swift references; tooling/environment failure preventing necessary validation after diagnosis; or self-compilation above the [approved formal median bound](../../../agents/validation.md#自己コンパイル性能基準) when repair is judged difficult. A threshold crossing alone does not establish irreparable cost: investigate with matching-source comparisons. Do not weaken validators, checks, test expectations or performance conditions to continue.
@@ -354,7 +359,7 @@ Stop for erroneous tests except authorized cases: tests broken by an approved sp
 
 [com-604k](com-604k.md), scope record [com-esri](com-esri.md): **Included repair**.
 
-The existing typed-source parent is the frontend workstream within com-604k, not the parent of every conformance task. Its 11 criteria remain mandatory on the admitted source surface, with the approved below-7-second target. Missing unique-generic/loop/new-reference facilities remain separate. Current acceptance controls from com-uutc are discharged here; unsupported forms are not enabled to close this parent.
+The existing typed-source parent is the frontend workstream within com-604k, not the parent of every conformance task. Its 11 criteria remain mandatory on the admitted source surface, with the [approved formal-performance target](../../../agents/validation.md#自己コンパイル性能基準). Missing unique-generic/loop/new-reference facilities remain separate. Current acceptance controls from com-uutc are discharged here; unsupported forms are not enabled to close this parent.
 
 ## Current Reconciliation and Reopening
 
@@ -498,7 +503,7 @@ every implementation path is defective, but known tests plus another general
 8. **Re-certify once the evidence supports the original contract.** Require zero
    known unresolved in-scope defects and zero unclassified high-risk decisions in
    the agreed inventory, the actual structural removals and behavioral controls,
-   independent area acceptance, then G1/new fixed-point and below7-second G2a/
+   independent area acceptance, then G1/new fixed-point and approved-performance G2a/
    complete G2b/G3 on applicable fixed inputs. A newly found omitted authority
    invalidates the affected inventory/area claim and requires reconciliation,
    rather than merely adding one regression and repeating broad approval.
