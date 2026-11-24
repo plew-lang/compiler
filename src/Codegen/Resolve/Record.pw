@@ -2517,6 +2517,7 @@ impl Comp {
                 // closure bodies that the declaration checker does not enter.
                 val binding = self.recordIdentBinding(id: exprId, start: start, len: len, tpFn: self.cur.checkFn)
                 if binding.code == identUndefCode() { try self.checkIdentifierValueBinding(binding: binding.code, offset: start) }
+                if binding.code == identFnCode() { return <Result.Err error=self.namedDeclarationValueDiagnostic(expression: exprId, binding: binding, origin: origin.request) /> }
                 // `self` is the receiver's declaration-time TypeTerm, not an
                 // ordinary local. Recording that lexical source is what lets
                 // a structural projection such as `self.items` retain

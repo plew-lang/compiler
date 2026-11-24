@@ -66,7 +66,7 @@ use ./Path only { resolveImport, extractSpan, dirPrefixLen, findSrcRoot, findPkg
 use ./Manifest only { Dep, loadManifestDeps, resolveDepImport, resolveGitDepImport, loadLock, isExternalDepImport }
 use ./Lock only { Lock }
 use ./Cache only { cacheRoot }
-use ./Diag only { compileErrorAt, compileErrorAtFile, CompileDiagnostic, ArrayContextRefusal, UseAfterMoveRefusal, MissingFieldRefusal, MissingFieldKind, AssignmentRefusal, AssignmentRefusalKind, UniqueCopyRefusal, UniqueCaptureRefusal, NonCallableBindingRefusal, FreeCallVisibilityRefusal, FreeCallVisibilityKind, FreeCallAmbiguityRefusal, FreeCallAmbiguityKind, MemberCallAmbiguityRefusal, MemberCallAmbiguityKind, GenericCallConflictRefusal, genericCallConflictMessage, OpaqueNumericRefusal, OperatorRequirementRefusal, SourceTypingRefusal, IndexRequirementRefusal, opaqueNumericMessage, DiagnosticOwner, DiagnosticNote, DiagnosticLocation, DiagnosticSeverity, FailureDomain, emitDiagnostic, eprintInt, digitByte, digitStrU }
+use ./Diag only { compileErrorAt, compileErrorAtFile, CompileDiagnostic, ArrayContextRefusal, UseAfterMoveRefusal, MissingFieldRefusal, MissingFieldKind, AssignmentRefusal, AssignmentRefusalKind, UniqueCopyRefusal, UniqueCaptureRefusal, NonCallableBindingRefusal, FreeCallVisibilityRefusal, FreeCallVisibilityKind, FreeCallAmbiguityRefusal, FreeCallAmbiguityKind, MemberCallAmbiguityRefusal, MemberCallAmbiguityKind, GenericCallConflictRefusal, genericCallConflictMessage, OpaqueNumericRefusal, OperatorRequirementRefusal, NamedDeclarationRefusal, SourceTypingRefusal, IndexRequirementRefusal, opaqueNumericMessage, DiagnosticOwner, DiagnosticNote, DiagnosticLocation, DiagnosticSeverity, FailureDomain, emitDiagnostic, eprintInt, digitByte, digitStrU }
 use ./Ops only { opEq, opNe, opLt, opLe, opGt, opGe, opAdd, opSub, opMul, opDiv, opRem, opAnd, opOr, opNot, opBitAnd, opBitOr, opBitXor, opShl, opShr, opBitNot, opAssign, compoundBinOp, isBinTraitOp, binTraitName, binTraitMethodName, unaryMethodName }
 
 // Only an entirely unsuffixed numeric expression accepts a sibling's
@@ -839,6 +839,28 @@ struct MethodLookupOrigin {
 }
 impl MethodLookupOrigin { factory }
 
+// Lower appends immediately after pushExpr, in strictly increasing arena-ID order.
+// This store travels with its arena/session; no late registration or separate reset.
+struct AuthoredIdentifier {
+    val expression: U64
+    val serial: U64
+    val start: U64
+    val length: U64
+    val spanStart: U64
+    val spanEnd: U64
+}
+impl AuthoredIdentifier { factory }
+struct SourceNamedDeclarationFailure {
+    val refusal: NamedDeclarationRefusal
+    val owner: SemanticCompletionOwner
+    val root: SemanticCompletionOwner
+    val authored: AuthoredIdentifier
+    val declaration: U64
+    val declarationName: U64
+    val declarationNameId: U64
+}
+impl SourceNamedDeclarationFailure { factory }
+
 struct AuthoredBinaryExpression {
     val serial: U64 = 0U64
     val start: U64 = 0U64
@@ -1045,6 +1067,8 @@ pub struct Comp {
     mut val callTemplateLocations: Array[SourceCallLocation]
     mut val viaWitnesses: Array[ViaWitness] = []
     mut val viaCallByFunction: Dictionary[U64, U64] = [:]
+    mut val authoredIdentifiers: Array[AuthoredIdentifier] = []
+    mut val failedNamedDeclarations: Array[SourceNamedDeclarationFailure] = []
     mut val authoredBinaryExpressions: Dictionary[U64, AuthoredBinaryExpression] = [:]
     mut val authoredValuePatterns: Dictionary[U64, (value: U64, offset: U64)] = [:]
     mut val authoredMethodExpressions: Set[U64] = Set.new()
@@ -2062,6 +2086,7 @@ part ./SourceCallOperations
 part ./SourceIndexFailures
 part ./SourceTypingFailures
 part ./SourceOpaqueNumerics
+part ./SourceNamedDeclarations
 part ./SourceOperatorRequirements
 part ./SourceGenericFailures
 part ./SourceArrayFailures

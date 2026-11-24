@@ -1,0 +1,66 @@
+use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontendForRequests, openFrontend, intern }
+use ../../../src/CheckedProgram only { CompilerSession, CompilerSessionResult, ProgramCheckResult, checkCompilerSession }
+use ../../../src/SourceAccess only { SourceAccess }
+use ../../../src/Diag only { CompileDiagnostic, FailureDomain }
+use @Std/Io only { print }
+fn requireRefusal(diagnostic: CompileDiagnostic, owned: Bool) {
+    if diagnostic.message() != "a named function declaration cannot be used as a value; wrap it in an explicit closure (e.g. `fn(...) {{ return name(...) }}`) (spec/04)" { panic(diagnostic.message()) }
+    if diagnostic.isSourceRejection() != owned { panic("named declaration rejection lost ownership boundary") }
+    if !owned { match diagnostic.failureDomain() { FailureDomain.Unclassified => {} _ => { panic("raw diagnostic self-promoted") } } }
+}
+fn session(input: FrontendInput) -> CompilerSession {
+    match CompilerSession.open(input: input, sources: <SourceAccess stdRoot="std/".bytes() />) {
+        CompilerSessionResult.Success(session: val session) => { return move session }
+        CompilerSessionResult.Failure(diagnostic: val diagnostic) => { panic(diagnostic.message()) }
+    }
+}
+fn globalFailure() {
+    val input = <FrontendInput.File path="tests/fixtures/reject/named_fn_value_global.pw" />
+    mut val raw = <Comp />
+    analyzeFrontendForRequests(c: inout raw, input: input, sources: <SourceAccess stdRoot="std/".bytes() />).unwrap()
+    mut val target = 18446744073709551615U64
+    val name = raw.internBytes(s: "broken")
+    for global in raw.arena.globals { if intern(c: inout raw, start: global.nameStart, len: global.nameLen) == name.nameId { target = global.nameStart } }
+    if target == 18446744073709551615U64 { panic("global fixture lost target") }
+    for attempt in 0U64..<2U64 {
+        match raw.prepareGlobalInitializer(target: target) {
+            Result.Err(error: val diagnostic) => { requireRefusal(diagnostic: diagnostic, owned: false) if diagnostic.namedDeclaration().isNone() || !raw.sourceFailureHasOwner(diagnostic: diagnostic) { panic("global cache lost retained evidence") } raw.pendingDiagnostics.append(diagnostic) }
+            Result.Ok(value: _) => { panic("global admitted declaration value") }
+        }
+        if raw.takeDiagnostics().count() != 1U64 { panic("global drain changed refusal") }
+    }
+    print("raw named declaration refusal retained")
+    mut val owned = session(input: input)
+    for attempt in 0U64..<2U64 { match owned.prepareInitializers() { Result.Err(error: val diagnostic) => { requireRefusal(diagnostic: diagnostic, owned: true) } Result.Ok(value: _) => { panic("lazy global admitted nonvalue declaration") } } }
+    print("lazy named declaration refusal retained")
+    match checkCompilerSession(session: move owned) { ProgramCheckResult.Failure(diagnostic: val diagnostic) => { requireRefusal(diagnostic: diagnostic, owned: true) } ProgramCheckResult.Success(program: _) => { panic("global failure became success") } }
+    print("whole named declaration refusal retained")
+    match openFrontend(input: input, sources: <SourceAccess stdRoot="std/".bytes() />) { Result.Err(error: val diagnostic) => { requireRefusal(diagnostic: diagnostic, owned: true) } Result.Ok(value: _) => { panic("eager global admitted declaration value") } }
+    print("eager named declaration refusal retained")
+}
+fn main() {
+    globalFailure()
+    for kind in 0U64..<3U64 {
+        val input = <FrontendInput.File path=if kind == 0U64 { give "tests/fixtures/reject/named_fn_value_arg.pw" } else if kind == 1U64 { give "tests/fixtures/reject/named_fn_value_return.pw" } else { give "tests/fixtures/reject/named_fn_value_closure.pw" } />
+        mut val raw = <Comp />
+        analyzeFrontendForRequests(c: inout raw, input: input, sources: <SourceAccess stdRoot="std/".bytes() />).unwrap()
+        val function = raw.arena.firstFunctionNamed(nameId: raw.internBytes(s: if kind == 0U64 { give "main" } else if kind == 1U64 { give "make" } else { give "broken" }).nameId)
+        for attempt in 0U64..<2U64 {
+            match raw.prepareLexicalBody(fnIdx: function) {
+                Result.Err(error: val diagnostic) => { requireRefusal(diagnostic: diagnostic, owned: false) if diagnostic.namedDeclaration().isNone() || !raw.sourceFailureHasOwner(diagnostic: diagnostic) { panic("raw cache lost retained evidence") } raw.pendingDiagnostics.append(diagnostic) }
+                Result.Ok(value: _) => { panic("named declaration became value") }
+            }
+            if raw.takeDiagnostics().count() != 1U64 { panic("drain changed refusal") }
+        }
+        print("raw named declaration refusal retained")
+        mut val owned = session(input: input)
+        for attempt in 0U64..<2U64 {
+            match owned.prepareFunction(function: function) { Result.Err(error: val diagnostic) => { requireRefusal(diagnostic: diagnostic, owned: true) } Result.Ok(value: _) => { panic("lazy admitted nonvalue declaration") } }
+        }
+        print("lazy named declaration refusal retained")
+        match checkCompilerSession(session: move owned) { ProgramCheckResult.Failure(diagnostic: val diagnostic) => { requireRefusal(diagnostic: diagnostic, owned: true) } ProgramCheckResult.Success(program: _) => { panic("failed session became success") } }
+        print("whole named declaration refusal retained")
+        match openFrontend(input: input, sources: <SourceAccess stdRoot="std/".bytes() />) { Result.Err(error: val diagnostic) => { requireRefusal(diagnostic: diagnostic, owned: true) } Result.Ok(value: _) => { panic("eager admitted declaration value") } }
+        print("eager named declaration refusal retained")
+    }
+}

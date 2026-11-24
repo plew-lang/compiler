@@ -1,0 +1,3 @@
+fn target() -> I64 { return 1I64 }
+val broken: fn() -> I64 = target
+fn main() {}

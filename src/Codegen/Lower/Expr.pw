@@ -1,6 +1,14 @@
 // Structural expression lowering. Expected types are supplied by Record.
 
 impl Comp {
+    inout fn pushAuthoredIdentifier(start: U64, length: U64, spanStart: U64, spanEnd: U64) -> U64 {
+        val expression = self.pushExpr(e: <Expr.Ident start=start len=length />)
+        val count = self.authoredIdentifiers.count()
+        if count != 0U64 && self.authoredIdentifiers[count - 1U64].expression >= expression { panic("internal error: identifier origins are not append-only") }
+        self.authoredIdentifiers.append(<AuthoredIdentifier expression=expression serial=self.arena.exprOriginSerial[expression] start=start length=length spanStart=spanStart spanEnd=spanEnd />)
+        return expression
+    }
+
     inout fn pushAuthoredBinaryExpression(op: I64, lhs: U64, rhs: U64, start: U64, end: U64) -> U64 {
         val exprId = self.pushExpr(e: <Expr.Binary op=op lhs=lhs rhs=rhs />)
         if isBinTraitOp(op: op) || op == opEq() || op == opNe() || op == opLt() || op == opLe() || op == opGt() || op == opGe() {
@@ -146,7 +154,7 @@ pub impl Comp {
                 result = try self.lowerStringInterpolation(parts: parts, span: span)
             }
             ExprAst.Ident(val name, val span) => {
-                result = self.pushExpr(e: <Expr.Ident start=span.start len=spanLen(s: span) />)
+                result = self.pushAuthoredIdentifier(start: span.start, length: spanLen(s: span), spanStart: span.start, spanEnd: span.end)
             }
             ExprAst.Unary(val op, val operand, val span) => {
                 // fold a leading `-` on a BARE integer literal into a negative literal
@@ -445,7 +453,7 @@ pub impl Comp {
                 result = try self.lowerSyntaxStringInterpolation(expr: e)
             }
             SyntaxExprKind.Ident => {
-                result = self.pushExpr(e: <Expr.Ident start=e.name.start len=e.name.end - e.name.start />)
+                result = self.pushAuthoredIdentifier(start: e.name.start, length: e.name.end - e.name.start, spanStart: e.span.start, spanEnd: e.span.end)
             }
             SyntaxExprKind.Unary => {
                 mut val folded: Bool = false

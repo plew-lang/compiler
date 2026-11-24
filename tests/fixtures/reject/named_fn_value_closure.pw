@@ -1,0 +1,5 @@
+fn target() -> I64 { return 1I64 }
+fn broken() {
+    val action: fn() -> fn() -> I64 = fn() -> fn() -> I64 { return target }
+}
+fn main() { broken() }
