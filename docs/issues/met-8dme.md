@@ -1,6 +1,6 @@
 ---
 id: met-8dme
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-11-24T00:15:28Z
@@ -22,3 +22,7 @@ Freeze actual RED and cold/warm/source failure cases; prove authority and invali
 ## Authority resolution and tested repair
 
 SourceTypeUses reset destroys canonical authored occurrences, not just a raw index. Warm source interface retains member/scope selection identity; that cannot authorize a signature interpretation after its owned occurrence store is lost. Updated internal fixture retains prior raw TraitDef mutation assertions, then checks warm rank same slot and warm signature Internal invalid authored type occurrence; a separate cold Comp checks missing authored signature Internal in both rank/signature. Existing private failed-admission warm-hit controls remain. Native scope-green-v3 succeeds with invariant source/fixture inputs, exact ok golden and empty stderr. No product guard was weakened and no source semantics changed. Independent design review supports these separate authorities; final exact-run review and standard integration gates pending.
+
+## Finite acceptance
+
+Independent reviewer typing_obligation_plan_review certified the current source/test guarantee after fresh build59c66a, candidatee2fd62b5 controls and exact native/artifact input correspondence. Symbolic3, CLI45, native15/ASan15, current private witness24030checks and standard optimized Ready controls are retained in canonical integration_repairs. Parent met-lrep keeps new formal/whole reconciliation; component success does not subtract failures from the previous whole288. No product source changes afterb8c69b69.

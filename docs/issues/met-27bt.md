@@ -1,6 +1,6 @@
 ---
 id: met-27bt
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-11-24T00:14:20Z
@@ -22,3 +22,7 @@ All existing mode0..20 and witnessCallControl positive/negative cases execute in
 ## Layered setup checkpoint
 
 All mode0..20 keep their exact Ready/LoadValue/KeepAddress negatives after admitting the interface count. CallControl now obtains genuine final call/source-root/instance-root/template evidence from real source, prepares its declared closed record layouts before executable discovery, and preserves all effective descriptor slots. Synthetic Move I64 stays explicitly at saved physical ABI/callWitnessValueFunction, not source-capability fabrication. Inout positive/role-only negative use the exact saved canonical lane term. Fast LLVM22O0 native-v4 passed all assertions; its copied runner label/scope still says endpoint-preflight, so final evidence must identify actual ReadyWitnessPlan prefix/test hashes and use standard runner acceptance. Real source check/AOT/ORC all passed separately. Standard optimized runner is active with original optimizer flags, root cwd, native60s timeout and full source/std/Syntax/native/support input fingerprints. Independent source review found no must-fix or assertion loss; task remains open pending final standard execution and integration.
+
+## Finite acceptance
+
+Independent reviewer typing_obligation_plan_review certified the current source/test guarantee after fresh build59c66a, candidatee2fd62b5 controls and exact native/artifact input correspondence. Symbolic3, CLI45, native15/ASan15, current private witness24030checks and standard optimized Ready controls are retained in canonical integration_repairs. Parent met-lrep keeps new formal/whole reconciliation; component success does not subtract failures from the previous whole288. No product source changes afterb8c69b69.
