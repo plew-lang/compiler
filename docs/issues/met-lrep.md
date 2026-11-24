@@ -1,6 +1,6 @@
 ---
 id: met-lrep
-status: in_progress
+status: closed
 deps: [met-6hrd, met-0av7, met-27bt, met-8dme]
 links: [met-3f14]
 created: 2026-11-23T19:21:47Z
@@ -35,3 +35,7 @@ Productb8c69b69/teste2d7e969: build59c66a passed,194 source files equal frozen f
 ## Final integration gates in progress
 
 Formal-eacc0f completed alone: invariant inputs, G2 LLVM/runtime/successor equality,7.854125/7.267651/7.291978, median7.291978<=7.5; measuredd2e347dc. Actual5 artifact hashes and source194 independently matched. MeasuredCLI45 and gen-ee0afa passed. Saved15normal/15ASanLLVM+runtime exactly match the executed memory material; reuse scope independently accepted. Final normal20261124T011714-test-48a65b runs on immutable normal-final-v6 against measuredd2; session83486. Do not close before completed whole and comparison with bothc608e1/288 and6d65db/285, accounting for added fixtures and unchanged existing failure reasons.
+
+## Final bounded integration acceptance
+
+Sourceb8c69b69/teste2d7e969, formal-eacc0f G2/invariant/median7.291978<=7.5, measuredd2e347dc. Final normal48a65b completed exit1/invariant with all7725worker IDs paired, skip0/fail285. Only the three integration regressions resolve vs288; existing285 have no additions/removals/reason changes. Registered private4 and Ready reports passed with actual hashes. Independent reviewer typing_obligation_plan_review verified result/events/source194/private5 artifacts plus prior actualnative/ORC/memory/gen and certifies this bounded task. Next development carrier may be measuredd2; main/seed/trackedbin are unchanged. Whole remains nongreen and phase3/parentarea are open. Canonical phase3-inherited-existential-interface.json and phase3-inherited-existential-final-normal.json retain inputs/receipts.

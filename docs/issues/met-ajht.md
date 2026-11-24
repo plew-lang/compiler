@@ -1,6 +1,6 @@
 ---
 id: met-ajht
-status: in_progress
+status: closed
 deps: [met-tsa3, met-ia2q, met-6hrd, met-0av7, met-lrep]
 links: []
 created: 2026-11-23T17:18:10Z
@@ -94,3 +94,7 @@ target bindings/witnesses; source-only acceptance is not executable adoption.
 - met-6hrd: producer/shared semantic readers.
 - met-0av7: witness/adapter/Ready/physical consumers; depends on producer.
 - met-lrep: final source-to-execution reconciliation and gates; depends on both.
+
+## Final bounded integration acceptance
+
+Sourceb8c69b69/teste2d7e969, formal-eacc0f G2/invariant/median7.291978<=7.5, measuredd2e347dc. Final normal48a65b completed exit1/invariant with all7725worker IDs paired, skip0/fail285. Only the three integration regressions resolve vs288; existing285 have no additions/removals/reason changes. Registered private4 and Ready reports passed with actual hashes. Independent reviewer typing_obligation_plan_review verified result/events/source194/private5 artifacts plus prior actualnative/ORC/memory/gen and certifies this bounded task. Next development carrier may be measuredd2; main/seed/trackedbin are unchanged. Whole remains nongreen and phase3/parentarea are open. Canonical phase3-inherited-existential-interface.json and phase3-inherited-existential-final-normal.json retain inputs/receipts.
