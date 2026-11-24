@@ -660,6 +660,13 @@ Its `.out` is the exact eighteen-line success golden, including Raw repeated
 requests/drain and source-owned lazy retries followed by whole-session failure.
 Private provenance mutation controls remain separate.
 
+`LexicalTypeBinderBinding.pw` checks the actual function/method/nominal type
+binder classification in the presence of a same-named module callable, including
+module function target0. Run from a frozen compiler root; require native exit0,
+`ok` and empty stderr. The normal run fixture
+`lexical_type_binder_callable_receiver.pw` also checks bound dispatch, an outer
+binder used inside a closure, local closure priority and the ordinary global call.
+
 `MissingOperatorFailureDomains.pw` checks actual missing operator selection in
 function, closure and global owners through Raw cache/drain, owned requests and
 whole/eager consumers. Require its twelve-line golden. `MissingOperatorMain.pw`
