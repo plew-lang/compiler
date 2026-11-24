@@ -1,6 +1,6 @@
 ---
 id: met-eqw2
-status: open
+status: in_progress
 deps: [met-f7t8]
 links: []
 created: 2026-11-24T02:53:00Z
