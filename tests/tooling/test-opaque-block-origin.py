@@ -42,15 +42,20 @@ def main():
                         errors.append(label + ': expected owned opaque numeric refusal')
                 elif result.returncode != 0 or result.stderr or result.stdout or result.failure_domain is not None:
                     errors.append(label + ': unused body was checked')
-    source = out / 'context.pw'
-    source.write_text('fn identity[T](value: T) -> T { return { give value } }\nfn main() { val value: I64 = { give 1 } val copied = identity(value: value) }\n')
-    for mode, flags in [('check', ['--check']), ('aot', []), ('orc', ['--run'])]:
-        result = run_compiler([str(args.compiler.resolve()), *flags, str(source)],
-                              capture_output=True, timeout=60, cwd=ROOT)
-        rows.append({'case': 'context-' + mode, **result.record()})
-        (out / ('context-' + mode + '.stderr')).write_bytes(result.stderr)
-        if result.returncode != 0 or (mode != 'aot' and result.stdout) or result.failure_domain is not None:
-            errors.append('context-' + mode + ': valid numeric context changed')
+    controls = {
+        'context': 'fn identity[T](value: T) -> T { return { give value } }\nfn main() { val value: I64 = { give 1 } val copied = identity(value: value) }\n',
+        'normalized': 'trait P { type Item }\nfn number[T]() -> T#P.Item where T: P[Item = I64] { return { give 1 } }\nfn main() {}\n',
+    }
+    for name, text in controls.items():
+        source = out / (name + '.pw')
+        source.write_text(text)
+        for mode, flags in [('check', ['--check']), ('aot', []), ('orc', ['--run'])]:
+            result = run_compiler([str(args.compiler.resolve()), *flags, str(source)],
+                                  capture_output=True, timeout=60, cwd=ROOT)
+            rows.append({'case': name + '-' + mode, **result.record()})
+            (out / (name + '-' + mode + '.stderr')).write_bytes(result.stderr)
+            if result.returncode != 0 or (mode != 'aot' and result.stdout) or result.failure_domain is not None:
+                errors.append(name + '-' + mode + ': valid numeric context changed')
     (out / 'result.json').write_text(json.dumps({'cases': rows, 'errors': errors}, indent=2) + '\n')
     for error in errors:
         print(error, file=sys.stderr)
