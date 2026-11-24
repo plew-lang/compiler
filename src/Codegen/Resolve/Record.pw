@@ -3310,6 +3310,20 @@ impl Comp {
             }
             _ => {}
         }
+        // Closed operands have no remaining contextual hole. Select before
+        // asking for the result type; a missing witness is not an unknown type.
+        match self.arena.exprs[exprId] {
+            Expr.Binary(val op, val lhs, val rhs) => {
+                if isBinTraitOp(op: op) {
+                    val receiver = self.parametricExprTerm(exprId: lhs)
+                    val argument = self.parametricExprTerm(exprId: rhs)
+                    if receiver != 0U64 && argument != 0U64 && receiver < self.arena.typeCount() && argument < self.arena.typeCount() && self.arena.typeIsClosed(ref: receiver) && self.arena.typeIsClosed(ref: argument) {
+                        try self.recordOperatorTemplate(exprId: exprId, op: op, operandExprs: [lhs, rhs], isUnary: false, origin: origin, expectedOrigin: contextOrigin)
+                    }
+                }
+            }
+            _ => {}
+        }
         val completion = self.exprCompletion(exprId: exprId)
         self.recordSemanticExprCompletion(exprId: exprId, completion: completion)
         if needsValue { try self.requireExpressionCompletionValue(exprId: exprId, completion: completion) }

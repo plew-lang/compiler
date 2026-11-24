@@ -1,11 +1,13 @@
 // Structural expression lowering. Expected types are supplied by Record.
 
 impl Comp {
-    inout fn pushAuthoredBinaryExpression(op: I64, lhs: U64, rhs: U64) -> U64 {
+    inout fn pushAuthoredBinaryExpression(op: I64, lhs: U64, rhs: U64, start: U64, end: U64) -> U64 {
         val exprId = self.pushExpr(e: <Expr.Binary op=op lhs=lhs rhs=rhs />)
         if isBinTraitOp(op: op) || op == opEq() || op == opNe() || op == opLt() || op == opLe() || op == opGt() || op == opGe() {
-            self.authoredBinaryExpressions[exprId] = <AuthoredBinaryExpression op=op lhs=lhs rhs=rhs />
+            self.authoredBinaryExpressions[exprId] = <AuthoredBinaryExpression serial=self.arena.exprOriginSerial[exprId] start=start end=end op=op lhs=lhs rhs=rhs />
         }
+        self.arena.exprSpanStart[exprId] = start
+        self.arena.exprSpanEnd[exprId] = end
         return exprId
     }
 }
@@ -182,7 +184,7 @@ pub impl Comp {
             ExprAst.Binary(val op, val lhs, val rhs, val span) => {
                 val l: U64 = (try self.lowerExpr(e: lhs))
                 val r: U64 = (try self.lowerExpr(e: rhs))
-                result = self.pushAuthoredBinaryExpression(op: op, lhs: l, rhs: r)
+                result = self.pushAuthoredBinaryExpression(op: op, lhs: l, rhs: r, start: span.start, end: span.end)
             }
             ExprAst.Call(val name, nameSpan: _, val args, val span) => {
                 // ORIGINAL offset (name is at the call's span start) — feeds moduleOf.
@@ -467,7 +469,7 @@ pub impl Comp {
             SyntaxExprKind.Binary => {
                 val lhs: U64 = (try self.lowerSyntaxExpr(id: e.child0))
                 val rhs: U64 = (try self.lowerSyntaxExpr(id: e.child1))
-                result = self.pushAuthoredBinaryExpression(op: e.op, lhs: lhs, rhs: rhs)
+                result = self.pushAuthoredBinaryExpression(op: e.op, lhs: lhs, rhs: rhs, start: e.span.start, end: e.span.end)
             }
             SyntaxExprKind.Call => {
                 val args = (try self.lowerSyntaxArgs(expr: e))

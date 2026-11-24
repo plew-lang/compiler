@@ -1,0 +1,66 @@
+use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontendForRequests, openFrontend }
+use ../../../src/CheckedProgram only { CompilerSession, CompilerSessionResult, ProgramCheckResult, checkCompilerSession }
+use ../../../src/SourceAccess only { SourceAccess }
+use ../../../src/Diag only { CompileDiagnostic, FailureDomain }
+use @Std/Io only { print }
+
+fn input(kind: U64) -> FrontendInput {
+    if kind == 0U64 { return <FrontendInput.File path="tests/fixtures/reject/type_operator_unused_function_operator.pw" /> }
+    panic("invalid test kind")
+}
+
+fn requireOperator(diagnostic: CompileDiagnostic, owned: Bool = true) {
+    if diagnostic.message() != "arithmetic operator needs Add/Sub/Mul/Div/Rem; not implemented for this type" { panic(diagnostic.message()) }
+    if diagnostic.isSourceRejection() != owned { panic("missing operator rejection lost its required ownership boundary") }
+    if !owned { match diagnostic.failureDomain() { FailureDomain.Unclassified => {} _ => { panic("Raw opaque failure domain changed") } } }
+}
+
+fn session(kind: U64) -> CompilerSession {
+    match CompilerSession.open(input: input(kind: kind), sources: <SourceAccess stdRoot="std/".bytes() />) {
+        CompilerSessionResult.Success(session: val session) => { return move session }
+        CompilerSessionResult.Failure(diagnostic: val diagnostic) => { panic(diagnostic.message()) }
+    }
+}
+
+fn main() {
+    for kind in 0U64..<1U64 {
+        mut val raw = <Comp />
+        analyzeFrontendForRequests(c: inout raw, input: input(kind: kind), sources: <SourceAccess stdRoot="std/".bytes() />).unwrap()
+        val name = raw.internBytes(s: "broken")
+        val function = raw.arena.firstFunctionNamed(nameId: name.nameId)
+        for attempt in 0U64..<2U64 {
+            match raw.prepareLexicalBody(fnIdx: function) {
+                Result.Err(error: val diagnostic) => { requireOperator(diagnostic: diagnostic, owned: false) raw.pendingDiagnostics.append(diagnostic) }
+                Result.Ok(value: _) => { panic("Raw body request accepted missing operator value") }
+            }
+            if raw.takeDiagnostics().count() != 1U64 { panic("drain lost retained operator rejection") }
+        }
+        print("raw operator rejection retained")
+        if kind < 3U64 {
+            mut val owned = session(kind: kind)
+            for attempt in 0U64..<2U64 {
+                // Both instances admit the same immutable declarations. The
+                // source function ID is obtained before any body is requested.
+                match owned.prepareFunction(function: function) {
+                    Result.Err(error: val diagnostic) => { requireOperator(diagnostic: diagnostic) }
+                    Result.Ok(value: _) => { panic("failed lazy function request published success") }
+                }
+            }
+            match checkCompilerSession(session: move owned) {
+                ProgramCheckResult.Failure(diagnostic: val diagnostic) => { requireOperator(diagnostic: diagnostic) }
+                ProgramCheckResult.Success(program: _) => { panic("failed lazy session published a checked program") }
+            }
+            print("lazy operator rejection retained")
+        }
+        match checkCompilerSession(session: session(kind: kind)) {
+            ProgramCheckResult.Failure(diagnostic: val diagnostic) => { requireOperator(diagnostic: diagnostic) }
+            ProgramCheckResult.Success(program: _) => { panic("whole check accepted missing operator value") }
+        }
+        print("whole operator rejection retained")
+        match openFrontend(input: input(kind: kind), sources: <SourceAccess stdRoot="std/".bytes() />) {
+            Result.Err(error: val diagnostic) => { requireOperator(diagnostic: diagnostic) }
+            Result.Ok(value: _) => { panic("eager check accepted missing operator value") }
+        }
+        print("eager operator rejection retained")
+    }
+}

@@ -354,6 +354,22 @@ pub impl AssignmentRefusal {
     fn location() -> DiagnosticLocation { return self.location }
 }
 
+pub struct OperatorRequirementRefusal {
+    val session: U64
+    val owner: DiagnosticOwner
+    val expression: U64
+    val event: U64
+    val location: DiagnosticLocation
+}
+pub impl OperatorRequirementRefusal {
+    factory
+    fn session() -> U64 { return self.session }
+    fn owner() -> DiagnosticOwner { return self.owner }
+    fn expression() -> U64 { return self.expression }
+    fn event() -> U64 { return self.event }
+    fn location() -> DiagnosticLocation { return self.location }
+}
+
 pub fn opaqueNumericMessage() -> String { return "cannot assign a literal to a type parameter: it is an opaque type with no numeric bound (spec/06)" }
 
 pub struct IndexRequirementRefusal {
@@ -470,6 +486,7 @@ enum DiagnosticData {
     IndexRequirement(refusal: IndexRequirementRefusal)
     SourceTyping(refusal: SourceTypingRefusal)
     OpaqueNumeric(refusal: OpaqueNumericRefusal)
+    OperatorRequirement(refusal: OperatorRequirementRefusal)
     GenericCallConflict(refusal: GenericCallConflictRefusal)
     ArrayContext(refusal: ArrayContextRefusal)
 }
@@ -478,6 +495,15 @@ pub struct CompileDiagnostic {
 }
 
 pub impl CompileDiagnostic {
+    factory operatorRequirement(refusal: OperatorRequirementRefusal) {
+        return <CompileDiagnostic storage=[<DiagnosticData.OperatorRequirement refusal=refusal />] />
+    }
+    fn operatorRequirement() -> Optional[OperatorRequirementRefusal] {
+        return match self.storage[0U64] {
+            DiagnosticData.OperatorRequirement(refusal: val refusal) => <Optional.Some v=refusal />
+            _ => <Optional.None />
+        }
+    }
     factory indexRequirement(refusal: IndexRequirementRefusal) {
         return <CompileDiagnostic storage=[<DiagnosticData.IndexRequirement refusal=refusal />] />
     }
@@ -626,6 +652,7 @@ pub impl CompileDiagnostic {
             DiagnosticData.IndexRequirement(refusal: _) => <DiagnosticSeverity.Error />
             DiagnosticData.SourceTyping(refusal: _) => <DiagnosticSeverity.Error />
             DiagnosticData.OpaqueNumeric(refusal: _) => <DiagnosticSeverity.Error />
+            DiagnosticData.OperatorRequirement(refusal: _) => <DiagnosticSeverity.Error />
             DiagnosticData.GenericCallConflict(refusal: _) => <DiagnosticSeverity.Error />
             DiagnosticData.ArrayContext(refusal: _) => <DiagnosticSeverity.Error />
         }
@@ -645,6 +672,7 @@ pub impl CompileDiagnostic {
             DiagnosticData.IndexRequirement(refusal: _) => <FailureDomain.Unclassified />
             DiagnosticData.SourceTyping(refusal: _) => <FailureDomain.Unclassified />
             DiagnosticData.OpaqueNumeric(refusal: _) => <FailureDomain.Unclassified />
+            DiagnosticData.OperatorRequirement(refusal: _) => <FailureDomain.Unclassified />
             DiagnosticData.GenericCallConflict(refusal: _) => <FailureDomain.Unclassified />
             DiagnosticData.ArrayContext(refusal: _) => <FailureDomain.Unclassified />
         }
@@ -664,6 +692,7 @@ pub impl CompileDiagnostic {
             DiagnosticData.IndexRequirement(refusal: val refusal) => refusal.location()
             DiagnosticData.SourceTyping(refusal: val refusal) => refusal.location()
             DiagnosticData.OpaqueNumeric(refusal: val refusal) => refusal.location()
+            DiagnosticData.OperatorRequirement(refusal: val refusal) => refusal.location()
             DiagnosticData.GenericCallConflict(refusal: val refusal) => refusal.location()
             DiagnosticData.ArrayContext(refusal: val refusal) => refusal.location()
         }
@@ -682,6 +711,7 @@ pub impl CompileDiagnostic {
             DiagnosticData.IndexRequirement(refusal: _) => "subscript requires an Index implementation for reading or an IndexSet implementation for writing"
             DiagnosticData.SourceTyping(refusal: _) => "cannot infer this expression's type; add a type annotation or provide an expected type"
             DiagnosticData.OpaqueNumeric(refusal: _) => opaqueNumericMessage()
+            DiagnosticData.OperatorRequirement(refusal: _) => "arithmetic operator needs Add/Sub/Mul/Div/Rem; not implemented for this type"
             DiagnosticData.GenericCallConflict(refusal: _) => genericCallConflictMessage()
             DiagnosticData.ArrayContext(refusal: _) => "cannot infer an empty array's element type from a non-array context (spec/02)"
             DiagnosticData.UseAfterMove(refusal: _) => "use of a value after it was moved (`move` transfers ownership away — the variable is dead; bind a fresh value to use it again) (spec/03)"
@@ -702,6 +732,7 @@ pub impl CompileDiagnostic {
             DiagnosticData.IndexRequirement(refusal: _) => []
             DiagnosticData.SourceTyping(refusal: _) => []
             DiagnosticData.OpaqueNumeric(refusal: _) => []
+            DiagnosticData.OperatorRequirement(refusal: _) => []
             DiagnosticData.GenericCallConflict(refusal: _) => []
             DiagnosticData.ArrayContext(refusal: _) => []
         }

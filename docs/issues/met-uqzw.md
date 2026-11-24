@@ -18,3 +18,7 @@ Cover type_operator_unused_function_operator. Actual String/I64 selection has ca
 
 Existing d2 check/AOT are Unclassified RED; unused ORC body and matching String operator GREEN. Test actual missing selection, canonical dependency absence, raw invalid ids, ambiguity/failure retention, final owned consumer and lazy non-demand. No global operator signature/overload redesign.
 
+
+## Implementation boundary and review
+
+Actual Record result typing precedes template selection; recordedOperatorSelection turns a missing concrete witness into Pending. New TDD consumer uses the real existing File fixture and stdRoot (Text-only v1/v2 failed setup due absent ambient String; do not count those as RED). red-v3 compiles/links successfully and native aborts at unavailable-type context: intended RED. WIP retains a private negative event and Lower-issued serial/span, admits closed operands before result typing, and reuses saved normal selections. Source review requires persistent observer evidence after failed closure/cursor changes, stored-op/operand identity checks, and private/global/closure/compound/bound controls. Those are mandatory completion conditions, not optional follow-ups. green-v1/v2 were compile errors; green-v3 reached native but ownership boundary remains unmet. No product acceptance or parent/gate update.

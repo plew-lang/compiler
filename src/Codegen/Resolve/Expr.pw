@@ -1677,7 +1677,22 @@ pub impl Comp {
         return <Result.Ok value=(try self.staticRequirementResultType(resolution: resolution)) />
     }
 
-    inout fn recordedOperatorSelection(op: I64, receiverTerm: U64, operandExprs: Array[U64], resolution: StaticMemberResolution) -> Result[OperatorSelection, CompileDiagnostic] {
+
+}
+
+impl Comp {
+    fn recordedOperatorOperandsMatch(operands: CallTemplateOperandRange, expressions: Array[U64]) -> Bool {
+        if operands.len != expressions.count() || operands.start > self.callTemplateOperandPool.count() || operands.len > self.callTemplateOperandPool.count() - operands.start { return false }
+        for index in 0U64..<operands.len {
+            val expression = match self.callTemplateOperandPool[operands.start + index] {
+                CallArgumentSource.Term(exprId: val expression, term: _) | CallArgumentSource.Local(exprId: val expression, declarationTarget: _, term: _, bindingStatement: _) | CallArgumentSource.PriorCallResult(exprId: val expression, siteKey: _) | CallArgumentSource.Expression(exprId: val expression) => expression
+            }
+            if expression != expressions[index] { return false }
+        }
+        return true
+    }
+
+    inout fn recordedOperatorSelection(op: I64, receiverTerm: U64, operandExprs: Array[U64], resolution: StaticMemberResolution, expression: U64, origin: SourceRecordOrigin) -> Result[OperatorSelection, CompileDiagnostic] {
         match resolution {
             StaticMemberResolution.Missing => {}
             _ => { return <Result.Ok value=<OperatorSelection.Static resolution=resolution /> /> }
@@ -1701,12 +1716,16 @@ pub impl Comp {
         if self.isIntType(start: receiverType.nameStart, len: receiverType.nameLen) || self.isFloatType(start: receiverType.nameStart, len: receiverType.nameLen) || rangeEquals(bytes: self.arena.bytes, start: receiverType.nameStart, len: receiverType.nameLen, kw: "Bool") {
             return <Result.Ok value=<OperatorSelection.Primitive /> />
         }
+        if operandExprs.count() == 2U64 && isBinTraitOp(op: op) && self.arena.typeIsClosed(ref: receiverTerm) {
+            val argument = self.parametricExprTerm(exprId: operandExprs[1U64])
+            val traitOwner = self.coreTraitOwner(name: self.binOpTraitName(op: op), arity: 1U64)
+            if argument != 0U64 && argument < self.arena.typeCount() && self.arena.typeIsClosed(ref: argument) && traitOwner != 0U64 {
+                return <Result.Err error=self.missingOperatorRequirementDiagnostic(expression: expression, receiver: receiverTerm, argument: argument, traitOwner: traitOwner, origin: origin) />
+            }
+        }
         return <Result.Ok value=<OperatorSelection.Pending /> />
     }
 
-}
-
-impl Comp {
     inout fn recordOperatorTemplate(exprId: U64, op: I64, operandExprs: Array[U64], isUnary: Bool, origin: SourceRecordingScope, expectedOrigin: SourceExpectedContext) -> Result[(), CompileDiagnostic] {
         if !isUnary && (op == opAnd() || op == opOr()) { return <Result.Ok value=() /> }
         // A typed integer sibling fixes an otherwise untyped numeric receiver
@@ -1728,9 +1747,26 @@ impl Comp {
         // Concrete operand context must come from the same selected callable
         // as dispatch. Literal verification is not guaranteed to revisit an
         // operator nested inside another expression (for example `!(a == 2)`).
-        val selection = if self.cur.recordCallTemplates {
-            give try self.recordedOperatorSelection(op: op, receiverTerm: receiverTerm, operandExprs: operandExprs, resolution: resolution)
-        } else { give <OperatorSelection.Pending /> }
+        mut val selection = <OperatorSelection.Pending />
+        if self.cur.recordCallTemplates {
+            val key = try self.templateCallSiteKey(fnIdx: self.cur.checkFn, exprId: exprId)
+            val prior = self.callTemplateIndex(siteKey: key)
+            if prior < self.callTemplateLocations.count() {
+                match self.callTemplateAt(index: prior).kind {
+                    CallTemplateKind.Operator(op: val savedOp, operands: val savedOperands, resolution: val recorded, resultTerm: _) => {
+                        if savedOp != op || !self.recordedOperatorOperandsMatch(operands: savedOperands, expressions: operandExprs) {
+                            return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "internal error: recorded operator selection belongs to another operation", failureDomain: <FailureDomain.Internal />) />
+                        }
+                        selection = recorded
+                    }
+                    _ => {}
+                }
+            }
+            match selection {
+                OperatorSelection.Pending => { selection = try self.recordedOperatorSelection(op: op, receiverTerm: receiverTerm, operandExprs: operandExprs, resolution: resolution, expression: exprId, origin: origin.request) }
+                _ => {}
+            }
+        }
         mut val operands: Array[CallArgumentSource] = []
         mut val i: U64 = 0U64
         while i < operandExprs.count() {

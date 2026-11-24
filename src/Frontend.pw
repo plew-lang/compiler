@@ -66,7 +66,7 @@ use ./Path only { resolveImport, extractSpan, dirPrefixLen, findSrcRoot, findPkg
 use ./Manifest only { Dep, loadManifestDeps, resolveDepImport, resolveGitDepImport, loadLock, isExternalDepImport }
 use ./Lock only { Lock }
 use ./Cache only { cacheRoot }
-use ./Diag only { compileErrorAt, compileErrorAtFile, CompileDiagnostic, ArrayContextRefusal, UseAfterMoveRefusal, MissingFieldRefusal, MissingFieldKind, AssignmentRefusal, AssignmentRefusalKind, UniqueCopyRefusal, UniqueCaptureRefusal, NonCallableBindingRefusal, FreeCallVisibilityRefusal, FreeCallVisibilityKind, FreeCallAmbiguityRefusal, FreeCallAmbiguityKind, MemberCallAmbiguityRefusal, MemberCallAmbiguityKind, GenericCallConflictRefusal, genericCallConflictMessage, OpaqueNumericRefusal, SourceTypingRefusal, IndexRequirementRefusal, opaqueNumericMessage, DiagnosticOwner, DiagnosticNote, DiagnosticLocation, DiagnosticSeverity, FailureDomain, emitDiagnostic, eprintInt, digitByte, digitStrU }
+use ./Diag only { compileErrorAt, compileErrorAtFile, CompileDiagnostic, ArrayContextRefusal, UseAfterMoveRefusal, MissingFieldRefusal, MissingFieldKind, AssignmentRefusal, AssignmentRefusalKind, UniqueCopyRefusal, UniqueCaptureRefusal, NonCallableBindingRefusal, FreeCallVisibilityRefusal, FreeCallVisibilityKind, FreeCallAmbiguityRefusal, FreeCallAmbiguityKind, MemberCallAmbiguityRefusal, MemberCallAmbiguityKind, GenericCallConflictRefusal, genericCallConflictMessage, OpaqueNumericRefusal, OperatorRequirementRefusal, SourceTypingRefusal, IndexRequirementRefusal, opaqueNumericMessage, DiagnosticOwner, DiagnosticNote, DiagnosticLocation, DiagnosticSeverity, FailureDomain, emitDiagnostic, eprintInt, digitByte, digitStrU }
 use ./Ops only { opEq, opNe, opLt, opLe, opGt, opGe, opAdd, opSub, opMul, opDiv, opRem, opAnd, opOr, opNot, opBitAnd, opBitOr, opBitXor, opShl, opShr, opBitNot, opAssign, compoundBinOp, isBinTraitOp, binTraitName, binTraitMethodName, unaryMethodName }
 
 // Only an entirely unsuffixed numeric expression accepts a sibling's
@@ -840,6 +840,9 @@ struct MethodLookupOrigin {
 impl MethodLookupOrigin { factory }
 
 struct AuthoredBinaryExpression {
+    val serial: U64 = 0U64
+    val start: U64 = 0U64
+    val end: U64 = 0U64
     val op: I64
     val lhs: U64
     val rhs: U64
@@ -901,6 +904,16 @@ enum OpaqueNumericExpectation {
     Caller(function: U64, identity: U64)
     Provided(function: U64, traitOwner: U64, receiverStart: U64, receiverLength: U64)
 }
+struct SourceOperatorRequirementFailure {
+    val refusal: OperatorRequirementRefusal
+    val root: SemanticCompletionOwner
+    val authored: AuthoredBinaryExpression
+    val receiver: U64
+    val argument: U64
+    val traitOwner: U64
+}
+impl SourceOperatorRequirementFailure { factory }
+
 struct SourceOpaqueNumericFailure {
     val refusal: OpaqueNumericRefusal
     val root: SemanticCompletionOwner
@@ -1046,6 +1059,7 @@ pub struct Comp {
     mut val authoredNumericLiterals: Dictionary[U64, AuthoredNumericLiteral] = [:]
     mut val failedSourceTyping: Array[SourceTypingFailure] = []
     mut val failedOpaqueNumerics: Array[SourceOpaqueNumericFailure] = []
+    mut val failedOperatorRequirements: Array[SourceOperatorRequirementFailure] = []
     mut val failedGenericCallConflicts: Array[SourceGenericCallConflict] = []
     mut val failedArrayContexts: Array[SourceArrayContextFailure] = []
     mut val authoredArrayLiterals: Dictionary[U64, AuthoredArrayLiteral] = [:]
@@ -2046,6 +2060,7 @@ part ./SourceCallOperations
 part ./SourceIndexFailures
 part ./SourceTypingFailures
 part ./SourceOpaqueNumerics
+part ./SourceOperatorRequirements
 part ./SourceGenericFailures
 part ./SourceArrayFailures
 part ./SourceFacts
