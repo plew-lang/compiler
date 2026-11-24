@@ -25,3 +25,6 @@
 
 # Local macOS debug bundles are generated artifacts.
 *.dSYM/
+
+# Retained local development/comparison carriers with their exact stdlib.
+/bin/carriers/
