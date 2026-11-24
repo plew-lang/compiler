@@ -31,3 +31,7 @@ Normal41ce46 aborted on controller ENOSPC and is not accepted as a completed sui
 ## Repair candidate
 
 Productb8c69b69/teste2d7e969: build59c66a passed,194 source files equal frozen final-build-v5, candidatee2fd62b5. CLI45, symbolic native3, native15/LLVM22ASanLSan15 and current private witness ASan passed. Standard optimized Ready runner passed with194live+57support hashes independently matched; no optimizer flag reduction. Formal20261124T005829-self-host-eacc0f is running alone. Children remain pending final candidate/gate recognition; prior7.259735 does not certify changed product. Full normal must rerun against measured compiler after formal completes. Preflight old probe compression retains exact bytes/mode/mtime in meta receipt and excludes carrier/seed/fixed-point material.
+
+## Final integration gates in progress
+
+Formal-eacc0f completed alone: invariant inputs, G2 LLVM/runtime/successor equality,7.854125/7.267651/7.291978, median7.291978<=7.5; measuredd2e347dc. Actual5 artifact hashes and source194 independently matched. MeasuredCLI45 and gen-ee0afa passed. Saved15normal/15ASanLLVM+runtime exactly match the executed memory material; reuse scope independently accepted. Final normal20261124T011714-test-48a65b runs on immutable normal-final-v6 against measuredd2; session83486. Do not close before completed whole and comparison with bothc608e1/288 and6d65db/285, accounting for added fixtures and unchanged existing failure reasons.

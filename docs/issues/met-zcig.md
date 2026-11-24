@@ -23,7 +23,7 @@ Independent source review confirms a product responsibility regression: the publ
 
 ## Implementation checkpoint
 
-Existing declaration_plan unchanged plus new inherited generic/Self plan succeed as native API-library tests; both preserve no final existential/body publication. New inherited probe RED is native-6 under old product. Public logical reader and checkAbstract share Interface result interpretation; concrete prepare passes already selected parent Static proof at canonical receiver into the same result reader. Current private concrete witness12 and fresh diagnostic O0 full compiler CLI45 pass with invariant inputs. Independent source review finds no additional must-fix; standard final candidate and parent integration rerun still pending, so task remains open. Canonical integration_repairs reports retain all hashes.
+Existing declaration_plan unchanged plus new inherited generic/Self plan succeed as native API-library tests; both preserve no final existential/body publication. New inherited probe RED is native-6 under old product. Public logical reader and checkAbstract share Interface result interpretation; concrete prepare passes already selected parent Static proof at canonical receiver into the same result reader. Current private concrete witness12 and fresh diagnostic O0 full compiler CLI45 pass with invariant inputs. Independent source review finds no additional must-fix; fresh final candidate controls subsequently passed and this finite task is accepted below; parent whole integration remains separate. Canonical integration_repairs reports retain all hashes.
 
 ## Finite acceptance
 
