@@ -167,6 +167,12 @@ stages run serially. Both must succeed before C starts with the full budget.
 The two large compiler builds never overlap. The raw compiler stays private to
 this invocation; E still executes every manifest input and is never skipped.
 
+`frontend/NamedCallableValueFailureDomains.pw` checks retained named-declaration
+refusals through Raw, lazy and whole owning consumers. `NamedDeclarationMain.pw`
+is appended to a frozen Frontend root for private provenance tests; it is not a
+standalone public API test. The normal harness registers
+`tooling/test-named-callable-value-origin.py` for CLI and alias/lazy controls.
+
 ## Adding or changing a test
 
 Start with the required [TDD rules](../../agents/development-workflow.md#タスク開始時に必ず読むtdd規則).
