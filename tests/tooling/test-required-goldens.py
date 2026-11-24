@@ -41,7 +41,7 @@ scenarios = [
 results = []
 with tempfile.TemporaryDirectory(prefix='plew-required-goldens-') as directory:
     root = Path(directory)
-    copied = ('tests/harness/case-phase.sh', 'scripts/support/normal-case-dispatch.py',
+    copied = ('tests/harness/case-phase.sh', 'scripts/support/normal-case-dispatch.py', 'scripts/support/normal_case_artifacts.py',
               'scripts/support/watch-command.py', 'scripts/support/trace-command.py',
               'scripts/support/process_watch.py', 'scripts/support/native_build.py', 'tests/tooling/test-fixture-package.py',
               'scripts/support/fixture_package.py')
@@ -139,7 +139,7 @@ os.execv(os.environ['REAL_CAT'],[os.environ['REAL_CAT'],*sys.argv[1:]])
 if args.report:
     args.report.parent.mkdir(parents=True, exist_ok=True)
     names = ('tests/harness/test.sh', 'tests/harness/test-gen.sh',
-             'tests/harness/case-phase.sh', 'scripts/support/normal-case-dispatch.py',
+             'tests/harness/case-phase.sh', 'scripts/support/normal-case-dispatch.py', 'scripts/support/normal_case_artifacts.py',
              'tests/tooling/test-required-goldens.py', 'tests/tooling/test-fixture-package.py',
              'scripts/support/fixture_package.py')
     args.report.write_text(json.dumps(dict(source_hashes={n:hashlib.sha256((ROOT/n).read_bytes()).hexdigest() for n in names},

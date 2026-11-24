@@ -35,6 +35,19 @@ that contract through the production callers and controlled subprocess faults,
 including parallel budgets, progress and cancellation. Compiler semantics and
 the separately owned gen/ASan classifications retain their own tests.
 
+`tooling/test-normal-artifacts.py` checks normal-worker scratch ownership,
+publication-before-retirement, failure/interruption preservation and concurrent
+run isolation. Normal phases report their artifact root under
+`tmp/normal-cases/`; each case has a small adjacent JSON receipt. Only exact
+semantic PASS retires its payload after IR/link/runtime/golden consumers finish
+and the result is atomically published and synced. FAIL/pending payloads remain
+for diagnosis; use the receipt's case/source/directory to find them. A PASS with
+`retired: false` may mean interrupted/failed cleanup after result publication;
+inspect directory existence and the run result rather than treating it as a test
+failure or assuming all files remain. Keep unresolved/needed comparisons; apply
+the development workflow's cleanup review when their purpose ends. This policy
+covers common normal workers, not unrelated manual/build/self-host artifacts.
+
 `tooling/test-compiler-link-profile.py` is registered through the self-host tooling
 gate. It checks explicit ThinLTO input kinds, selected-tool provenance, native
 object noninterference and real text/LTO-object links with one runtime C. Ordinary

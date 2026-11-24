@@ -70,13 +70,18 @@ def dispatch(phase, paths):
             print(f'plewc: {phase} {len(seen)}/{len(cases)} complete: {line}',
                   file=sys.stderr, flush=True)
     try:
+        base = Path(__file__).resolve().parents[2] / 'tmp/normal-cases'
+        base.mkdir(parents=True, exist_ok=True)
+        run_root = tempfile.mkdtemp(prefix=phase + '-', dir=base)
+        print(f'plewc: {phase} artifacts: {run_root}', file=sys.stderr, flush=True)
+        worker_env = {**os.environ, '_PLEW_NORMAL_CASE_ROOT': run_root}
         for number in (signal.SIGHUP, signal.SIGINT, signal.SIGTERM):
             handlers[number] = signal.signal(number, cancel)
         with tempfile.TemporaryFile() as inputs:
             inputs.write(b'\0'.join(os.fsencode(p) for p in cases) + b'\0')
             inputs.seek(0)
             process = subprocess.Popen(command, stdin=inputs, stdout=subprocess.PIPE,
-                                       start_new_session=True)
+                                       start_new_session=True, env=worker_env)
             selector.register(process.stdout, selectors.EVENT_READ)
             pending = b''
             while selector.get_map() or process.poll() is None:

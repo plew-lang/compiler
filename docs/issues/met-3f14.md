@@ -1,6 +1,6 @@
 ---
 id: met-3f14
-status: open
+status: in_progress
 deps: []
 links: [met-lrep]
 created: 2026-11-23T23:14:37Z
@@ -31,3 +31,7 @@ Recommended finite repair: introduce run/case-owned scratch, retain an identifia
 Existing [dispatcher fault controls](../../tests/tooling/test-normal-dispatch.py) and [worker/runtime status controls](../../tests/tooling/test-runner-exit-status.py) supply focused test seams. Add successful retirement, failure/interruption retention, two-run isolation, directory-creation failure and publication-before-retirement controls; demonstrate reduced peak/retained bytes on representative real cases with unchanged results. Old source/std/carrier/seed/formal inputs are never cleanup targets.
 
 Normal common workers are the bounded scope. Independently owned manual probes, build/self-host archives and historical cold stores are not automatically covered; do not claim this repair eliminates every repository disk-pressure source. No production changes, runtime experiment or measured savings were performed for this light investigation. Static independent review found the localized approach feasible, with the above retention/order/isolation conditions required before closure.
+
+## Implementation Scenarios
+
+The task is in progress with the run/case lifetime boundary selected above. RED: the unchanged production worker emits PASS but leaves shared generated LLVM and has no durable case result. The new integration control reproduces that exact deficiency. Required contrasts: all five phase PASS/FAIL accounting, program nonzero/signal, cancellation with live child recovery and pending retention, simultaneous identical workers and two dispatch runs, temp creation and publication write/fsync/rename failures, publication-before-retirement and symlink protection. Existing dispatcher/status/golden fault controls remain registered and keep their original expectations. Representative real old/new workers must agree on results and LLVM while demonstrating peak/retained-byte reduction; a current whole-suite comparison remains required before closure.

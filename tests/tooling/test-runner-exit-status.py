@@ -8,7 +8,7 @@ import tempfile
 
 def install_supervisors(root):
     # Isolated workers must run the production supervisors and their shared module.
-    for name in ('scripts/support/watch-command.py', 'scripts/support/trace-command.py', 'scripts/support/process_watch.py', 'scripts/support/native_build.py', 'scripts/support/compiler_failure_result.py'):
+    for name in ('scripts/support/watch-command.py', 'scripts/support/trace-command.py', 'scripts/support/process_watch.py', 'scripts/support/native_build.py', 'scripts/support/compiler_failure_result.py', 'scripts/support/normal_case_artifacts.py'):
         (root / name).parent.mkdir(parents=True, exist_ok=True)
         (root / name).write_bytes((Path(__file__).resolve().parents[2] / name).read_bytes())
 
