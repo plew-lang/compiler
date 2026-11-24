@@ -1,0 +1,43 @@
+use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontendForRequests, Expr, intern }
+use ../../../src/SourceAccess only { SourceAccess }
+use @Std/Io only { print }
+fn main() {
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.File path="tests/fixtures/part/NamespaceTypeBinder/Main.pw" />, sources: <SourceAccess stdRoot="std/".bytes() />).unwrap()
+    val binder = compiler.internBytes(s: "T")
+    val make = compiler.internBytes(s: "make")
+    mut val lexical = 0U64
+    mut val qualified = 0U64
+    for expression in compiler.arena.exprs {
+        match expression {
+            Expr.Method(recv: val receiver, nameStart: val start, nameLen: val length, args: _) => {
+                if intern(c: inout compiler, start: start, len: length) == make.nameId {
+                    match compiler.arena.exprs[receiver] {
+                        Expr.Ident(start: val nameStart, len: val nameLength) => { if intern(c: inout compiler, start: nameStart, len: nameLength) == binder.nameId { lexical += 1U64 } }
+                        _ => {}
+                    }
+                }
+            }
+            Expr.Call(nameStart: val start, nameLen: val length, args: _) => {
+                if intern(c: inout compiler, start: start, len: length) == make.nameId && compiler.modules.qualifiedUseIndex(offset: start) < compiler.modules.qualifiedUseCount() { qualified += 1U64 }
+            }
+            _ => {}
+        }
+    }
+    if lexical != 5U64 || qualified != 2U64 { panic("namespace normalization replaced a lexical type binder") }
+    val defaultName = compiler.internBytes(s: "defaultCreate")
+    mut val defaultGenerator = compiler.arena.functionCount()
+    for index in 0U64..<compiler.arena.functionCount() {
+        val function = compiler.arena.functionAt(index: index)
+        if function.isDefaultGenerator && function.lexicalOwnerFnId != 0U64 {
+            val owner = compiler.arena.functionLexicalOwner(index: index)
+            if owner < compiler.arena.functionCount() && compiler.arena.functionAt(index: owner).nameId == defaultName.nameId {
+                if compiler.arena.functionAt(index: owner).typeParams.count() != 1U64 { panic("default helper lost lexical type binder") }
+                defaultGenerator = index
+            }
+        }
+    }
+    if defaultGenerator >= compiler.arena.functionCount() { panic("default generator route was not created") }
+    compiler.prepareLexicalBody(fnIdx: defaultGenerator).unwrap()
+    print("lexical namespace frontier preserved")
+}

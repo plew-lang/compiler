@@ -1,0 +1,50 @@
+use @Std/Io only { print }
+use ./Library as T
+
+// A module callable does not replace a lexical generic type binder.
+
+trait Maker { assoc fn make() -> Self }
+struct Item { pub val value: I64 }
+pub impl Item { factory }
+impl Item as Maker { assoc fn make() -> Item { return <Item value=1I64 /> } }
+
+fn functionCreate[T]() -> T where T: Maker { return T.make() }
+struct MethodHost {}
+pub impl MethodHost { factory }
+impl MethodHost {
+    fn methodCreate[T]() -> T where T: Maker { return T.make() }
+}
+struct NominalHost[T] { pub val seed: T }
+pub impl NominalHost { factory }
+impl[T] NominalHost[T] where T: Maker {
+    fn nominalCreate() -> T { return T.make() }
+}
+fn closureCreate[T]() -> T where T: Maker {
+    val action: fn() -> T = fn() -> T { return T.make() }
+    return action()
+}
+fn localClosure[T](seed: T) -> I64 {
+    val T: fn() -> I64 = fn() -> I64 { return 19I64 }
+    return T()
+}
+fn defaultCreate[T](value: T = T.make()) -> T where T: Maker { return value }
+struct NamespaceOnly { pub val value: I64 = T.make() }
+pub impl NamespaceOnly { factory }
+fn main() {
+    val functionValue: Item = functionCreate()
+    print(functionValue.value)
+    val host = <MethodHost />
+    val methodValue: Item = host.methodCreate()
+    print(methodValue.value)
+    val nominal = <NominalHost seed=<Item value=0I64 /> />
+    val nominalValue: Item = nominal.nominalCreate()
+    print(nominalValue.value)
+    val closureValue: Item = closureCreate()
+    print(closureValue.value)
+    print(localClosure(seed: <Item value=0I64 />))
+    val defaultValue: Item = defaultCreate()
+    print(defaultValue.value)
+    print(T.make())
+    val namespaceDefault = <NamespaceOnly />
+    print(namespaceDefault.value)
+}

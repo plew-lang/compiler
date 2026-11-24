@@ -1,0 +1,7 @@
+use ./Library as T
+struct Box[T] {
+    pub val seed: T
+    pub val count: I64 = T.make()
+}
+pub impl Box { factory }
+fn main() { val box = <Box seed=true /> }

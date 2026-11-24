@@ -234,9 +234,15 @@ pub impl Comp {
             val function = self.arena.functionAt(index: index)
             if !function.isExtern && active.contains(self.funcDeclModule(f: function)) {
                 names.truncate(count: 0U64)
+                // Lexical type binders are available in signatures and defaults;
+                // their namespace shadowing is not a value-parameter scope.
+                val binderOwner = self.arena.functionAt(index: self.arena.functionLexicalOwner(index: index))
+                for binderIndex in 0U64..<binderOwner.typeParams.count() {
+                    names.append(self.funcBindAt(binds: binderOwner.typeParams, index: binderIndex).nameId)
+                }
                 mut val parameterIndex = 0U64
                 // Defaults are signatures evaluated in the defining module,
-                // outside the scope of all parameters and the receiver.
+                // outside the scope of all value parameters and the receiver.
                 while parameterIndex < function.params.count() {
                     val parameter = self.funcParamAt(params: function.params, index: parameterIndex)
                     if parameter.hasDefault { self.resolveLexicalModuleExpr(id: parameter.defaultExpr, names: inout names) }
@@ -263,6 +269,8 @@ pub impl Comp {
         while index < self.arena.structCount() {
             val structure = self.arena.structAt(index: index)
             if active.contains(self.moduleOf(offset: structure.defOffset)) {
+                names.truncate(count: 0U64)
+                for parameter in structure.typeParams { names.append(parameter.nameId) }
                 mut val fieldIndex = 0U64
                 while fieldIndex < structure.fields.count() {
                     val field = structure.fields[fieldIndex]
