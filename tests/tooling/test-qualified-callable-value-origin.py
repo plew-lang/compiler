@@ -54,7 +54,7 @@ def main():
         if not result.source_rejection or associated not in result.stderr:
             errors.append('assoc_fn_value_arg-' + mode + ': nonvalue category lost before argument typing')
     library = out / 'Library.pw'
-    library.write_text('pub fn target() -> I64 { return 3I64 }\npub val value: I64 = 4I64\n')
+    library.write_text('pub fn target() -> I64 { return 3I64 }\npub fn target(value: Bool) -> Bool { return value }\npub val value: I64 = 4I64\n')
     inputs[str(library)] = digest(library)
     path = out / 'namespace-declaration.pw'
     path.write_text('use ./Library\nfn main() { val value: fn() -> I64 = Library.target }\n')
@@ -78,6 +78,17 @@ def main():
             result = run('namespace-' + owner + '-' + mode, path, flags)
             if not result.source_rejection or b'a named function declaration cannot be used as a value' not in result.stderr:
                 errors.append('namespace-' + owner + '-' + mode + ': normalized owner lost')
+    for demanded in [False, True]:
+        path = out / ('namespace-function-' + ('used' if demanded else 'unused') + '.pw')
+        path.write_text('use ./Facade\nfn broken() { val value: fn() -> I64 = Facade.target }\nfn main() { ' + ('broken()' if demanded else '') + ' }\n')
+        for mode, flags in modes:
+            label = path.stem + '-' + mode
+            result = run(label, path, flags)
+            if demanded or mode != 'orc':
+                if not result.source_rejection or b'a named function declaration cannot be used as a value' not in result.stderr:
+                    errors.append(label + ': normalized function owner lost')
+            elif result.returncode != 0 or result.failure_domain is not None or result.stdout or result.stderr:
+                errors.append(label + ': unused namespace body inspected')
     controls = ['assoc_val', 'namespace_import', 'namespace_alias', 'callable_surface_namespaces',
                 'lexical_type_binder_callable_receiver', 'member_associated_candidate_conflict', 'member_discovery_label_frontier']
     for name in controls:

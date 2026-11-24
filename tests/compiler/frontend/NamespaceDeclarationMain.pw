@@ -46,11 +46,41 @@ fn main() {
     compiler.typeCache.identBind[clone] = identFnCode()
     compiler.typeCache.identTarget[clone] = proof.declaration
     if compiler.namedDeclarationValueDiagnostic(expression: clone, binding: binding, origin: request).namedDeclaration().isSome() { panic("copied span acquired namespace authority") }
+    // Replay only the real normalization branch with malformed or synthetic
+    // Fields. Public qualification is still registered, but cannot seal them.
+    val beforeReplay = compiler.modules
+    val copiedBase = compiler.pushExpr(e: compiler.arena.exprs[field.base])
+    for invalid in 0U64..<6U64 {
+        compiler.namespaceFieldNormalizations.remove(key: field.expression)
+        compiler.arena.exprs[field.expression] = <Expr.Field base=if invalid == 0U64 { give copiedBase } else { give field.base } nameStart=if invalid == 1U64 { give field.start+1U64 } else { give field.start } nameLen=field.length />
+        if invalid == 2U64 { compiler.arena.exprOriginSerial[field.expression] = field.serial+1U64 }
+        if invalid == 3U64 { compiler.arena.exprSpanStart[field.expression] = field.spanStart+1U64 }
+        if invalid == 4U64 { compiler.arena.exprSpanEnd[field.expression] = field.spanEnd+1U64 }
+        val target = if invalid == 5U64 { give compiler.pushExpr(e: compiler.arena.exprs[field.expression]) } else { give field.expression }
+        if invalid == 5U64 {
+            compiler.arena.exprSpanStart[target] = field.spanStart
+            compiler.arena.exprSpanEnd[target] = field.spanEnd
+            compiler.ensureExprTySlot(exprId: target)
+            compiler.typeCache.identBind[target] = identFnCode()
+            compiler.typeCache.identTarget[target] = proof.declaration
+        }
+        mut val names: Array[U64] = []
+        compiler.resolveLexicalModuleExpr(id: target, names: inout names)
+        if compiler.namespaceFieldNormalizations.contains(key: target) { panic("malformed or synthetic Field sealed a normalization") }
+        if compiler.namedDeclarationValueDiagnostic(expression: target, binding: binding, origin: request).namedDeclaration().isSome() { panic("public-only normalization minted refusal") }
+        compiler.modules = beforeReplay
+        compiler.arena.exprOriginSerial[field.expression] = field.serial
+        compiler.arena.exprSpanStart[field.expression] = field.spanStart
+        compiler.arena.exprSpanEnd[field.expression] = field.spanEnd
+        compiler.arena.exprs[field.expression] = original
+        compiler.namespaceFieldNormalizations[field.expression] = normalization
+    }
     // A replacement public table can preserve the index and spelling but
     // change its module/kind. The saved receipt must detect that substitution.
     val originalModules = compiler.modules
     for invalid in 0U64..<2U64 {
-        mut val replacement = <Modules />
+        val empty = <Comp />
+        mut val replacement = empty.modules
         mut val index = 0U64
         while index <= normalization.qualification {
             val prior = originalModules.qualifiedUseAt(index: index)
@@ -64,8 +94,6 @@ fn main() {
         if compiler.namedDeclarationValueDiagnostic(expression: field.expression, binding: binding, origin: request).namedDeclaration().isSome() { panic("changed qualification module or kind minted authority") }
         compiler.modules = originalModules
     }
-    compiler.finishSourceFacts(owner: owner, result: <Result.Err error=diagnostic />, bodyless: false)
-    if !compiler.sourceFailureHasOwner(diagnostic: diagnostic) { panic("failed builder erased namespace provenance") }
     // Re-registering the very same public qualification cannot replace the
     // sealed private receipt, even when all visible spelling/module data match.
     val qualification = compiler.modules.qualifiedUseAt(index: normalization.qualification)
@@ -73,4 +101,8 @@ fn main() {
     if compiler.sourceFailureHasOwner(diagnostic: diagnostic) { panic("replaced qualification retained authority") }
     compiler.namespaceFieldNormalizations.remove(key: field.expression)
     if compiler.namedDeclarationValueDiagnostic(expression: field.expression, binding: binding, origin: request).namedDeclaration().isSome() { panic("public qualification minted authority") }
+    compiler.modules = originalModules
+    compiler.namespaceFieldNormalizations[field.expression] = normalization
+    compiler.finishSourceFacts(owner: owner, result: <Result.Err error=diagnostic />, bodyless: false)
+    if !compiler.sourceFailureHasOwner(diagnostic: diagnostic) { panic("failed builder erased namespace provenance") }
 }
