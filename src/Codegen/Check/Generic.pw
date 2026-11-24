@@ -607,15 +607,12 @@ impl Comp {
         }
     }
 
-    inout fn checkGenericTypeMatchWithOrigin(origin: SourceRecordOrigin, expectedRef: U64, valueExpr: U64) -> Result[(), CompileDiagnostic] {
-        if expectedRef == 0U64 {
-            return <Result.Ok value=() />
-        }
+    // A rigid numeric expectation is a source construction rule, not an
+    // unavailable inferred type. Both admission paths share this one decision.
+    inout fn checkOpaqueNumericExpectationWithOrigin(origin: SourceRecordOrigin, expectedRef: U64, valueExpr: U64) -> Result[(), CompileDiagnostic] {
+        if expectedRef == 0U64 || expectedRef >= self.arena.typeCount() { return <Result.Ok value=() /> }
         val owner = self.sourceLexicalFunction(fnIdx: self.cur.checkFn)
-        if owner >= self.arena.functionCount() {
-            return <Result.Ok value=() />
-        }
-        try self.requireExpressionValue(exprId: valueExpr)
+        if owner >= self.arena.functionCount() { return <Result.Ok value=() /> }
         // an untyped numeric literal cannot flow into a type parameter / Self: `val y: T = 5`
         // is invalid — T is opaque, and no bound makes it numeric-literal-receptive (spec/06).
         if expectedRef < self.arena.typeCount() {
@@ -636,6 +633,19 @@ impl Comp {
                 }
             }
         }
+        return <Result.Ok value=() />
+    }
+
+    inout fn checkGenericTypeMatchWithOrigin(origin: SourceRecordOrigin, expectedRef: U64, valueExpr: U64) -> Result[(), CompileDiagnostic] {
+        if expectedRef == 0U64 {
+            return <Result.Ok value=() />
+        }
+        val owner = self.sourceLexicalFunction(fnIdx: self.cur.checkFn)
+        if owner >= self.arena.functionCount() {
+            return <Result.Ok value=() />
+        }
+        try self.requireExpressionValue(exprId: valueExpr)
+        try self.checkOpaqueNumericExpectationWithOrigin(origin: origin, expectedRef: expectedRef, valueExpr: valueExpr)
         // Record checks each value block while its bindings are live; the
         // enclosing generic check consumes the recorded result, not its AST.
         if (try self.genericCheckMakeFieldsWithOrigin(origin: origin, expectedRef: expectedRef, valueExpr: valueExpr)) {

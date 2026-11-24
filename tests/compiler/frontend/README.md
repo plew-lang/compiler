@@ -660,6 +660,12 @@ Its `.out` is the exact eighteen-line success golden, including Raw repeated
 requests/drain and source-owned lazy retries followed by whole-session failure.
 Private provenance mutation controls remain separate.
 
+`OpaqueBlockFailureDomains.pw` extends the same owned/Raw consumer guarantee
+to integer, float and nested block results; require its exact twelve-line golden.
+`tests/tooling/test-opaque-block-origin.py` is registered in the normal harness
+and checks demanded and unused bodies plus valid concrete/generic value contexts.
+Successful check/build may retain existing standard-library warnings.
+
 `OpaqueNumericMain.pw` is appended to an exact Frontend source snapshot. It
 checks Raw versus private requests, retained literal/expected identities, foreign
 metadata, recorded synthetic copied-span nodes, serial/span/kind mutation,

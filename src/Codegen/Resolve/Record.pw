@@ -2257,6 +2257,7 @@ impl Comp {
                     Stmt.Give(val value) => {
                         // Keep source-position binding identity, including gives
                         // in analyzed-unreachable but source-valid regions.
+                        try self.checkOpaqueNumericExpectationWithOrigin(origin: origin.request, expectedRef: expectedTerm, valueExpr: value)
                         try self.tcCheckValue(expectedRef: expectedTerm, valueExpr: value, pos: "block-result")
                         try self.checkGenericTypeMatchWithOrigin(origin: origin.request, expectedRef: expectedTerm, valueExpr: value)
                     }

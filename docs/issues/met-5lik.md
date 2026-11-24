@@ -18,3 +18,7 @@ Cover block_generic_literal, valid Expr0. Record Give currently calls tcCheckVal
 
 Existing adopted d2 check/AOT reject Unclassified (RED); unused ORC body succeeds (preserved GREEN). Existing Raw numeric guard emits opaque diagnostic with no Source event. Assert owned cause reaches real consumer once, Raw/wrong owner does not acquire Source, Expr0 retained, and concrete context/generic value controls succeed.
 
+
+## Implementation checkpoint
+
+Existing guard extracted once into checkOpaqueNumericExpectationWithOrigin and invoked before block-result compatibility. No new private authority or blanket Unresolved domain. OpaqueBlockFailureDomains integer/float/nested tests: fixed old source native-6 expected policy absent; modified source native0/exact12-line golden/empty stderr, both input invariant. Actual new CLI test v3 has15 intended RED and six preserved GREEN; v1/v2 new test setup assertions corrected for standard warnings and AOT LLVM. Independent source review finds no must-fix; fresh compiler and final context/gates pending. Evidence: meta/evidence/rejection-domains/diagnostic-domain-implementation/phase3-opaque-block-refusal.json.
