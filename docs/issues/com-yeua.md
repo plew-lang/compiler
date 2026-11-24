@@ -1,7 +1,7 @@
 ---
 id: com-yeua
 status: in_progress
-deps: [met-c1pg, com-to2g, com-ew3i, com-x7ql, com-8uik, met-1yd7, met-tb7u, met-r3us, met-9ym8, met-g2x4, met-ia2q]
+deps: [met-c1pg, com-to2g, com-ew3i, com-x7ql, com-8uik, met-1yd7, met-tb7u, met-r3us, met-9ym8, met-g2x4, met-ia2q, met-ajht, met-6s5c]
 links: []
 created: 2026-11-02T21:30:19Z
 type: task
@@ -13,28 +13,11 @@ tags: [diagnostics, frontend, driver, verification]
 
 ## Current boundary
 
-This parent remains open. Latest complete normal run
-20261123T145308-test-b59031: exit1,290fail,skip0, unchanged inputs and7642
-matched worker pairs. Against prior295: only5 source-typing empty-array cases
-resolve,0new,0reason changes; source/golden hashes unchanged. See
-[whole reconciliation](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-post-typing-normal-suite.json).
+This parent remains open. Latest complete normal20261124T011714-test-48a65b: exit1,285fail/skip0, invariant inputs and7725 matched worker pairs. Against intermediate288 only the declaration-plan, symbolic-scope and Ready setup regressions resolve; against the accepted285 baseline there are no additions/removals/reason changes. See [whole reconciliation](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-inherited-existential-final-normal.json).
 
-Numeric ambiguity/Conflict/opaque children met-tb7u/met-r3us/met-9ym8 and
-source typing-obligation child met-g2x4 are finitely closed with independent
-acceptance. Latest source5f12e9a1 reaches formal1c067a G2 fixed point,
-standard3 median7.247575s<=7.5; actual artifacts and measured compiler18mode
-smoke were checked. Final build/gen, private12-scenario and21-line consumer
-natives, LLVM22 ASan/LSan and whole reconciliation are in the
-[typing refusal record](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-source-typing-obligation-refusal.json).
+The inherited existential boundary met-ajht/met-lrep is independently certified on sourceb8c69b69/teste2d7e969, formal-eacc0f G2/median7.291978<=7.5, actualnative/ORC/memory/gen and measured controls. Measured d2e347dc is the next development carrier; main/seed/trackedbin are unchanged. Prior finite numeric/typing/protocol/source-domain children remain closed, not proof that every remaining producer has been classified.
 
-Remaining failure discovery/attribution is preserved in
-[267 negative cases](../../../evidence/rejection-domains/diagnostic-domain-implementation/whole-after-typing-negative-survey.json),
-plus the unchanged23 non-negative fixture failures in the whole failure map.
-Message grouping never authorizes Source classification. Generic compatibility
-Unresolved, index protocol admission, other source producers and met-bejv's
-fixture assumptions remain unclosed; finite children do not certify this parent
-or phase three. Select the next producer from its actual existing boundary and
-contracts, not by relabeling a whole diagnostic message group.
+Fresh discovery retains [262 negative and23 nonnegative failures](../../../evidence/rejection-domains/diagnostic-domain-implementation/whole-after-inherited-existential-negative-survey.json), with current stderr and unchanged fixture hashes. Message grouping never grants Source. Select actual producer boundaries from current inputs and assign residual work before parent closure; completed dependency metadata does not certify these unowned residual cases or phase3. The Source-only negative contract and existing non-Source distinctions remain unchanged.
 
 ## Contract and audit evidence
 
