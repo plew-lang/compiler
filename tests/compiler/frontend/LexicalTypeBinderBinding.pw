@@ -1,0 +1,23 @@
+use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontendForRequests }
+use ../../../src/SourceAccess only { SourceAccess }
+use ../../../src/Ir only { identFnCode, identTypeQualCode, identNoTarget }
+use @Std/Io only { print }
+fn main() {
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.File path="tests/fixtures/run/lexical_type_binder_callable_receiver.pw" />, sources: <SourceAccess stdRoot="std/".bytes() />).unwrap()
+    val global = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "T").nameId)
+    if global != 0U64 { panic("target0 control no longer denotes the module callable") }
+    val declaration = compiler.arena.functionAt(index: global)
+    val ordinary = compiler.resolveIdent(start: declaration.nameStart, len: declaration.nameLen, tpFn: global)
+    if ordinary.code != identFnCode() || ordinary.target != 0U64 { panic("ordinary module callable identity changed") }
+    for name in ["functionCreate", "methodCreate", "nominalCreate"] {
+        val function = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: name).nameId)
+        val parameters = compiler.arena.functionAt(index: function).typeParams
+        if parameters.count() != 1U64 { panic("lexical binder test did not declare one type parameter") }
+        val parameter = compiler.funcBindAt(binds: parameters, index: 0U64)
+        val binding = compiler.resolveIdent(start: parameter.nameStart, len: parameter.nameLen, tpFn: function)
+        if binding.code != identTypeQualCode() || binding.target != identNoTarget() { panic("module callable replaced a lexical type binder") }
+        if !compiler.identIsTypeQualifier(start: parameter.nameStart, len: parameter.nameLen, tpFn: function) { panic("qualifier adapter disagrees with binding identity") }
+    }
+    print("ok")
+}

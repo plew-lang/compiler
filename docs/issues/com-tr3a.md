@@ -35,3 +35,7 @@ Other groups/original J/C/O/optional/other U; language/source/type/ownership/sol
 [Scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-source-verification.json) retains all main/mixed roles and normative grounds. Identifier category/target precedence feeds source call/qualifier selection and stable recorded binding cache. recordIdent is controlled construction write; bindIsValue is scalar-only. Reuse lexical recovery path rather than duplicate its semantic repair.
 
 Original audit-time independence does not waive this implementation admission. Preserve the original finite guarantee, actual callers/delegates, controls and excluded optional/new-feature scopes. Assignment is not product repair/GREEN.
+
+## Recorded binding reader endpoint
+
+This existing owner also closes valid Value/Qualifier transport: Record fixes identity/category, and source-backed Generic/Verify consumers read it rather than repeating name lookup. Preserve shadowing, namespace/local distinction, capture, target0 and owner/lifetime correspondence; keep Raw lookup distinct and remove competing later authority. No extra callback/whole-Comp escape or duplicate source binding decision. met-eqw2 owns only non-value declaration admission/retained failure; do not duplicate that producer. The separately evidenced lexical type-binder/callable interference belongs to met-f7t8, not a silent behavioral change inside this refactor. met-ucze already depends on this task; name-resolution design conformance remains open until this reader endpoint is complete.

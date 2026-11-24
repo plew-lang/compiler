@@ -59,11 +59,11 @@ pub impl Comp {
         if owner >= self.arena.functionCount() {
             return false
         }
-        val tps: Array[Bind] = self.copyFuncBinds(binds: self.arena.functionAt(index: owner).typeParams)
+        val tps = self.arena.functionAt(index: owner).typeParams
         val qTp: U64 = intern(c: inout self, start: start, len: len)
         mut val i: U64 = 0
         while i < tps.count() {
-            if tps[i].nameId == qTp {
+            if self.funcBindAt(binds: tps, index: i).nameId == qTp {
                 return true
             }
             i += 1
@@ -99,6 +99,12 @@ pub impl Comp {
             Optional.Some(v: val binding) => { return <IdentBinding code=identValueCode() target=binding.declarationTarget localIndex=<Optional.Some v=binding.localIndex /> /> }
             Optional.None => {}
         }
+        // The lexical binder is already declared in this body environment.
+        // A module callable cannot replace it. Actual value bindings above
+        // still retain their existing receiver/call priority.
+        if self.isTypeParamOf(fnIdx: tpFn, start: start, len: len) {
+            return <IdentBinding code=identTypeQualCode() target=identNoTarget() />
+        }
         val fi: U64 = self.firstVisibleFuncByName(useMod: self.moduleOf(offset: start), nameStart: start, nameLen: len)
         if fi < self.arena.functionCount() {
             return <IdentBinding code=identFnCode() target=fi />
@@ -107,9 +113,6 @@ pub impl Comp {
             return <IdentBinding code=identTypeQualCode() target=identNoTarget() />
         }
         if self.isPrimType(start: start, len: len) {
-            return <IdentBinding code=identTypeQualCode() target=identNoTarget() />
-        }
-        if self.isTypeParamOf(fnIdx: tpFn, start: start, len: len) {
             return <IdentBinding code=identTypeQualCode() target=identNoTarget() />
         }
         if self.traceCodegen {
