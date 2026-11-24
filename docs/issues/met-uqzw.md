@@ -1,6 +1,6 @@
 ---
 id: met-uqzw
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-11-24T02:53:00Z
@@ -26,3 +26,7 @@ Actual Record result typing precedes template selection; recordedOperatorSelecti
 ## Ownership and lifetime correction
 
 Review found cursor/failed-parent dependencies in the first observer. A diagnostic-only snapshot confirmed the parent expression has no successful owner fact when selection fails. The negative event now saves the active validated source owner/root/terms; no successful parent fact is fabricated. Optional known parent ownership and required persistent operand ownership must agree. Observer uses persistent event/Lower/trait identity only. Actual function/closure/global consumer intermediate v8 passes12-line native golden; private final v4 passes native0 with source195/support224 immutable. Standalone CLI red-v3 has10 intended function/closure RED and38 preserved controls (including already-Source global). Core/unknown/ambiguity are kept separate. Fresh standardbuild d9edd2 passed with immutable inputs. Final fresh candidate CLI48/native12 and final independent certification pending. Source receipt strengthening includes both Lower entries and compound sugar; normal compound/match execution controls are explicit. Canonical: meta/evidence/rejection-domains/diagnostic-domain-implementation/phase3-missing-operator-refusal.json.
+
+## Finite acceptance
+
+Resolved at6132c432. Fresh build d9edd2 passed with immutable inputs and195 source equality. Fresh candidate CLI48 passes (223 actual inputs independently hash-checked); fresh native12 consumer matches golden/empty stderr (216 inputs checked). Fresh private boundary probe exits0 with empty streams; source195/support224 actual hashes independently match. Reviewer typing_obligation_plan_review accepts the finite negative-selection producer/cache/owned-consumer contract with no remaining mandatory finding. Existing global Source refusal is a preserved control, not a new resolved failure. Close this repair only. Formal d5adf0 is still running, and normal whole/formal performance/parent/phase3 acceptance remain open; no source performance, main, seed or carrier promotion is claimed.
