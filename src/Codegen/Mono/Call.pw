@@ -2580,9 +2580,9 @@ impl Comp {
     inout fn readExistentialWitnessPlan(evidence: ExistentialBoxEvidence, requirement: U64, sourceReceiver: U64, proofRead: SignatureProofRead) -> Result[Optional[ExistentialWitnessPlan], CompileDiagnostic] {
         if evidence.traitIdx >= self.decls.traitCount() { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "existential conversion has no selected trait") /> }
         if !(try self.readExistentialRequirementDispatchability(target: evidence.targetRef, traitIndex: evidence.traitIdx, slot: requirement, proofRead: proofRead)) { return <Result.Ok value=<Optional.None /> /> }
-        val selected = try self.existentialInterfaceSignatureRead(target: evidence.targetRef, traitIndex: evidence.traitIdx, slot: requirement, receiver: sourceReceiver, offset: 0U64, proofRead: proofRead)
-        val proof = try self.existentialMemberProof(evidence: evidence, requirement: requirement)
-        val interface = <RequirementSignatureRead scope=selected.scope bound=selected.bound evidence=<RequirementSelfEvidence.Static proof=proof /> proofRead=proofRead />
+        // Semantic planning reads the retained public interface even when the
+        // payload is an assumed generic. It cannot require a concrete witness.
+        val interface = try self.existentialInterfaceSignatureRead(target: evidence.targetRef, traitIndex: evidence.traitIdx, slot: requirement, receiver: sourceReceiver, offset: 0U64, proofRead: proofRead)
         return self.readExistentialResultPlan(evidence: evidence, requirement: requirement, interface: interface, proofRead: proofRead)
     }
 

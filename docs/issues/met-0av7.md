@@ -1,7 +1,7 @@
 ---
 id: met-0av7
-status: closed
-deps: [met-6hrd]
+status: in_progress
+deps: [met-6hrd, met-zcig]
 links: []
 created: 2026-11-23T19:21:47Z
 type: task
@@ -41,3 +41,7 @@ A genuine RED against 4c9b28de Mid/Instantiate passes direct Index and fails inh
 ## Accepted finite consumer boundary
 
 Product b46390a9, fresh build20261123T221915-build-bb493b passed with invariant inputs; all194 frozen/current source files match. Optimized candidate b0f643fed27c1f0d71d04405f8740b8f75acdf75a9adfacd9d58ff651fb54a23 passes CLI45, native15 and real LLVM22 ASan/LSan15. Reviewer typing_obligation_plan_review independently checked source, recorded inputs and all30 native artifacts/goldens/empty stderr/LLVM and binary hashes/memory hooks, and certifies this finite consumer boundary with no mandatory gap. This was artifact/source review, not independent rerun. Standard registration, whole/gen/formal<=7.5s and final integration remain met-lrep; parent stays open and carrier unchanged.
+
+## Integration acceptance withdrawn
+
+Wholec608e1 discovered existential_declaration_plan regression: public semantic plan now incorrectly requires closed concrete payload even when only interpreting generic assumed evidence without publishing executable descriptors. Independent review confirms a product abstract/concrete responsibility regression, owned by child met-zcig. Previous finite physical execution evidence remains valid for its candidate, but task acceptance is withdrawn and task reopened until the preserved abstract guarantee and affected integration gates pass. Do not rewrite this fixture to concrete input.

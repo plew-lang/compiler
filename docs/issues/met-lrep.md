@@ -1,7 +1,7 @@
 ---
 id: met-lrep
 status: in_progress
-deps: [met-6hrd, met-0av7]
+deps: [met-6hrd, met-0av7, met-27bt, met-8dme]
 links: [met-3f14]
 created: 2026-11-23T19:21:47Z
 type: task

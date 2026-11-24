@@ -831,7 +831,11 @@ impl Comp {
         val plan = try self.selectedRequirementImplementationPlan(callee: implementation.function, proof: proof, traitIndex: authored.source.traitIndex, requirement: authored.source.slot, offset: self.arena.functionAt(index: implementation.function).nameStart)
         val constraints = <CallableConstraintEvidence.Requirement plan=plan bounds=publicEvidence.bounds proofs=publicEvidence.proofs normalizations=publicEvidence.normalizations />
         val receiver = self.canonicalBodyReceiverRef(fnIdx: implementation.function, recvInstRef: evidence.sourceRef)
-        val witness = match (try self.existentialWitnessPlan(evidence: evidence, requirement: requirement, sourceReceiver: receiver)) {
+        // Concrete preparation owns this already selected parent proof. The
+        // public semantic planner must not materialize or rediscover it.
+        val selected = try self.existentialInterfaceSignatureRead(target: evidence.targetRef, traitIndex: evidence.traitIdx, slot: requirement, receiver: receiver, offset: 0U64)
+        val concrete = <RequirementSignatureRead scope=selected.scope bound=selected.bound evidence=<RequirementSelfEvidence.Static proof=proof /> proofRead=<SignatureProofRead.Admission /> />
+        val witness = match (try self.readExistentialResultPlan(evidence: evidence, requirement: requirement, interface: concrete, proofRead: <SignatureProofRead.Admission />)) {
             Optional.Some(v: val witness) => witness,
             Optional.None => { return <Result.Ok value=<Optional.None /> /> },
         }

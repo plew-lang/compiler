@@ -500,11 +500,7 @@ pub impl Comp {
         if evidence.traitIdx >= self.decls.traitCount() { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "existential conversion has no selected trait") /> }
         val interface = try self.sourceExistentialInterface(traitIndex: evidence.traitIdx)
         for index in 0U64..<self.sourceExistentialInterfaces[interface].members.count() {
-            if !(try self.existentialRequirementIsDispatchable(target: evidence.targetRef, traitIndex: evidence.traitIdx, slot: index)) { continue }
-            // Shape checking reads public constraints, not a concrete body or
-            // a fabricated static proof of an inherited trait for hidden Self.
-            val signature = try self.existentialInterfaceSignatureRead(target: evidence.targetRef, traitIndex: evidence.traitIdx, slot: index, receiver: evidence.sourceRef, offset: 0U64)
-            try self.readExistentialResultPlan(evidence: evidence, requirement: index, interface: signature, proofRead: <SignatureProofRead.Admission />)
+            try self.readExistentialWitnessPlan(evidence: evidence, requirement: index, sourceReceiver: evidence.sourceRef, proofRead: <SignatureProofRead.Admission />)
         }
         return <Result.Ok value=() />
     }

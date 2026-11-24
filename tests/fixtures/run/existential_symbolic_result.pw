@@ -1,4 +1,4 @@
-use /Diag only { FailureDomain }
+use /Diag only { FailureDomain, CompileDiagnostic }
 use /Ir only { ConformanceProofDemand, StaticMemberResolution, StaticConformanceProof, DeclarationBoundRef, CallTemplate, CallTemplateKind, CallTemplateReceiver, CallSiteKey, ConformBound, FuncBound, TraitConstraint, TraitAssocPredicate }
 use @Std/Io only { print }
 use @Std/Process only { argCount, argAt }
@@ -7,6 +7,12 @@ use /Frontend only { Comp, FrontendInput, analyzeFrontendDeclarations }
 use /SourceAccess only { SourceAccess }
 use /SourceTypeUses only { SourceTypeUses }
 use /Ir only { TypeRef }
+fn requireScopeResult[T](result: Result[T, CompileDiagnostic], stage: String) -> T {
+    match result {
+        Result.Ok(value: val value) => { return value }
+        Result.Err(error: val diagnostic) => { panic("{stage}: {diagnostic.message()}") }
+    }
+}
 fn checkRequirementWhereProjection(source: String) {
     mut val compiler = <Comp />
     analyzeFrontendDeclarations(c: inout compiler, input: <FrontendInput.Text text=source path="clause-reader.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
@@ -222,7 +228,7 @@ fn main() {
     c.decls.traitReqPool[requirements.start] = originalRequirement
     val name = c.internBytes(s: "iterator")
     val args = c.pushArgs(args: [])
-    assert(c.recordAnyRequirementSlot(anyRef: receiver, nameStart: name.nameStart, nameLen: name.nameLen, args: args).unwrap() == 1U64)
+    assert(requireScopeResult(result: c.recordAnyRequirementSlot(anyRef: receiver, nameStart: name.nameStart, nameLen: name.nameLen, args: args), stage: "warm requirement rank") == 1U64)
     if argCount() < 2I64 || argAt(1I64) == "hidden" {
         val hidden = c.traitReqAt(reqs: requirements, index: 2U64)
         c.decls.traitReqPool[requirements.start + 2U64] = c.traitReqAt(reqs: requirements, index: 1U64)
@@ -248,21 +254,45 @@ fn main() {
     val retainedParameter = c.staticRequirementParamTypeAt(resolution: staticCall, paramIdx: 0U64).unwrap()
     if !c.typeRefEq(a: retainedParameter, b: staticParameter) { panic "raw trait row replaced the retained static parameter" }
     c.decls.traitReqPool[cursorRequirements.start] = staticDeclaration
+    // The interface retains selection identity. Erasing SourceTypeUses also
+    // destroys canonical authored occurrences, so a retained slot alone cannot
+    // authorize reading a signature whose underlying recipe is now missing.
     c.sourceTypeUses = <SourceTypeUses />
     if argCount() < 2I64 || argAt(1I64) == "rank" {
-        if c.recordAnyRequirementSlot(anyRef: receiver, nameStart: name.nameStart, nameLen: name.nameLen, args: args).isOk() {
-            panic "ranked a requirement without its source signature"
-        }
+        assert(requireScopeResult(result: c.recordAnyRequirementSlot(anyRef: receiver, nameStart: name.nameStart, nameLen: name.nameLen, args: args), stage: "warm requirement rank") == 1U64)
     }
     match c.existentialRequirementSignature(target: receiver, traitIndex: traitIndex, slot: 0U64) {
         Result.Err(error: val diagnostic) => {
-            assert(diagnostic.message() == "selected requirement has no authored signature")
-            match diagnostic.failureDomain() {
-                FailureDomain.Internal => {}
-                _ => { panic "missing source requirement was not an internal error" }
-            }
+            assert(diagnostic.message() == "invalid authored type occurrence")
+            match diagnostic.failureDomain() { FailureDomain.Internal => {} _ => { panic "missing admitted occurrence was not an internal error" } }
         }
-        Result.Ok(value: _) => { panic "read an existential signature without its source requirement" }
+        Result.Ok(value: _) => { panic "retained selection authorized a missing signature recipe" }
+    }
+
+    // Before any interface request, the same missing registration cannot be
+    // repaired using another Comp's warm signature token.
+    mut val cold = <Comp />
+    requireScopeResult(result: analyzeFrontendDeclarations(c: inout cold, input: <FrontendInput.Text text=source path="cold-cursor.pw" />, sources: <SourceAccess stdRoot=[] />), stage: "cold declarations")
+    val coldBound = cold.decls.funcBounds.at(index: 0U64)
+    val coldFunction = cold.arena.functionAt(index: coldBound.fnIdx)
+    val coldReceiver = cold.funcParamAt(params: coldFunction.params, index: 0U64).ty
+    val coldTrait = cold.recordAnyTraitIndex(anyRef: coldReceiver)
+    val coldName = cold.internBytes(s: "iterator")
+    val coldArgs = cold.pushArgs(args: [])
+    cold.sourceTypeUses = <SourceTypeUses />
+    match cold.recordAnyRequirementSlot(anyRef: coldReceiver, nameStart: coldName.nameStart, nameLen: coldName.nameLen, args: coldArgs) {
+        Result.Err(error: val diagnostic) => {
+            assert(diagnostic.message() == "selected requirement has no authored signature")
+            match diagnostic.failureDomain() { FailureDomain.Internal => {} _ => { panic "missing cold source requirement was not an internal error" } }
+        }
+        Result.Ok(value: _) => { panic "ranked a cold requirement without its source signature" }
+    }
+    match cold.existentialRequirementSignature(target: coldReceiver, traitIndex: coldTrait, slot: 0U64) {
+        Result.Err(error: val diagnostic) => {
+            assert(diagnostic.message() == "selected requirement has no authored signature")
+            match diagnostic.failureDomain() { FailureDomain.Internal => {} _ => { panic "missing cold source signature was not an internal error" } }
+        }
+        Result.Ok(value: _) => { panic "read a cold existential signature without its source requirement" }
     }
     print("ok")
 }

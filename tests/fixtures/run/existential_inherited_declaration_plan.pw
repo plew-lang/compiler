@@ -1,0 +1,37 @@
+use @Std/Core only { assert }
+use @Std/Io only { print }
+use /Frontend only { Comp, FrontendInput, analyzeFrontendDeclarations }
+use /SourceAccess only { SourceAccess }
+use /Ir only { ExistentialBoxEvidence, ValueConversionProof }
+
+fn main() {
+    mut val compiler = <Comp />
+    val source = "trait Parent {{ fn next() -> Self }} trait Child: Parent {{}} fn probe[T](value: T, target: any Child) where T: Child {{}}"
+    analyzeFrontendDeclarations(c: inout compiler, input: <FrontendInput.Text text=source path="inherited-plan.pw" />, sources: <SourceAccess stdRoot=[] />).unwrap()
+    val declaration = compiler.arena.functionAt(index: 0U64)
+    val sourceType = compiler.funcParamAt(params: declaration.params, index: 0U64).ty
+    val targetType = compiler.funcParamAt(params: declaration.params, index: 1U64).ty
+    val conversion = compiler.callArgumentConversion(sourceRef: sourceType, targetRef: targetType, assumptions: compiler.functionBoundAssumptions(fnIdx: 0U64)).unwrap()
+    match conversion {
+        ValueConversionProof.ExistentialBox(sourceRef: val sourceRef, targetRef: val targetRef, traitIdx: val traitIndex, proof: val proof) => {
+            val evidence = <ExistentialBoxEvidence sourceRef=sourceRef targetRef=targetRef traitIdx=traitIndex proof=proof />
+            val plan = compiler.existentialWitnessPlan(evidence: evidence, requirement: 0U64, sourceReceiver: sourceType).unwrap().unwrap()
+            assert(compiler.typeRefEq(a: plan.sourceResultType, b: sourceType))
+            assert(compiler.typeRefEq(a: plan.signature.resultType, b: targetType))
+            match plan.resultConversion {
+                ValueConversionProof.ExistentialBox(sourceRef: val actualSource, targetRef: val actualTarget, traitIdx: val actualTrait, proof: val actualProof) => {
+                    assert(compiler.typeRefEq(a: actualSource, b: sourceType))
+                    assert(compiler.typeRefEq(a: actualTarget, b: targetType))
+                    assert(actualTrait == traitIndex)
+                    assert(compiler.sameStaticConformanceProof(a: proof, b: actualProof))
+                }
+                _ => { panic("inherited symbolic Self lost the root box evidence") }
+            }
+            compiler.checkAbstractExistentialPlans(evidence: evidence).unwrap()
+        }
+        _ => { panic("missing symbolic inherited evidence") }
+    }
+    assert(compiler.arena.finalExistentials.count() == 0U64)
+    assert(compiler.monoWork.bodyCount() == 0U64)
+    print("ok")
+}
