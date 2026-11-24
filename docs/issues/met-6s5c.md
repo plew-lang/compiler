@@ -1,6 +1,6 @@
 ---
 id: met-6s5c
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-11-24T02:23:59Z
@@ -22,3 +22,7 @@ For all5 cases preserve source/golden/carrier/actual CLI domain evidence; identi
 ## Executed frontier and split proposal
 
 Adoptedd2 reproduces all5 check/AOT Unclassified rejections; run rejects3 reachable callable-value cases and correctly defers2unused bad bodies. Diagnostic trace shows inferred0 at tcCheckValue positions arg/return/block-result, not one proven violation. Three positive programs pass9modes with expected ORC stdout; raw native compatibility(0,0)/(999,998) remains Ok(Unresolved), proving broad Source promotion unsound. Source paths identify3 repair domains: callable declaration value admission(3), numeric literal under rigid result context(1, validExpr0), rejected operator selection lost before result typing(1). Preserve namespace qualifiers/static globals and local closure priority; literals obey existing builtin numeric context; operator diagnostics require actual canonical selection origin. Related completed met-g2x4 explicitly excludes these residuals. Canonical phase3-value-inference-refusal-investigation.json retains actual reports/source locations. Independent review and exact child assignment remain before investigation closure; no product source has changed.
+
+## Investigation closure
+
+Investigated at compiler9be1f948 with adopted d2 and unchanged product sources. Actual diagnostic snapshot probe confirms named Fn target0, absent associated member identity, existing Raw opaque refusal without Source event, and canonical Add missing-callee sentinel. Assigned repairs to met-eqw2, met-5lik and met-uqzw, all com-yeua dependencies. Independent neutral reviewer typing_obligation_plan_review verified actual evidence and all three assignment contracts; no mandatory gap. Close discovery only; implementation children, parent285 failures and phase3 remain open. Canonical evidence retains reports and limitations.
