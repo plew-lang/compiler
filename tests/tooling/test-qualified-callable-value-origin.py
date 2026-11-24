@@ -63,7 +63,7 @@ def main():
         if not result.source_rejection or b'a named function declaration cannot be used as a value' not in result.stderr:
             errors.append('namespace-declaration-' + mode + ': namespace declaration identity lost')
     controls = ['assoc_val', 'namespace_import', 'namespace_alias', 'callable_surface_namespaces',
-                'lexical_type_binder_callable_receiver', 'member_associated_candidate_conflict']
+                'lexical_type_binder_callable_receiver', 'member_associated_candidate_conflict', 'member_discovery_label_frontier']
     for name in controls:
         path = ROOT / 'tests/fixtures/run' / (name + '.pw')
         golden = path.with_suffix('.out')

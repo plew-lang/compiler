@@ -1,0 +1,38 @@
+// Append to a frozen Frontend root with diagnostic-only receiver-proof guards.
+// Product Comp and query bodies are unchanged; the diagnostic runner injects
+// the two counters and checks the poison guard's detection with a second main.
+fn main() {
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.File path="tests/fixtures/run/member_discovery_label_frontier.pw" />, sources: <SourceAccess stdRoot="std/".bytes() />).unwrap()
+    val poisonSelected = false
+    val name = compiler.internBytes(s: if poisonSelected { give "Selected" } else { give "Unrelated" })
+    for index in 0U64..<compiler.decls.traitCount() {
+        val trait = compiler.decls.traitAt(index: index)
+        if trait.nameId == name.nameId { compiler.memberDiscoveryForbiddenProofOwner = trait.nameStart }
+    }
+    if compiler.memberDiscoveryForbiddenProofOwner == 0U64 { panic("probe trait was not registered") }
+    val function = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "selectedRead").nameId)
+    compiler.prepareLexicalBody(fnIdx: function).unwrap()
+    if compiler.memberDiscoveryProofQueries == 0U64 { panic("probe did not reach receiver-proof discovery") }
+    val priorQueries = compiler.memberDiscoveryProofQueries
+    for associated in [false, true] {
+        val traitName = compiler.internBytes(s: if associated { give "Maker" } else { give "Unrelated" })
+        mut val traitIndex = compiler.decls.traitCount()
+        for index in 0U64..<compiler.decls.traitCount() { if compiler.decls.traitAt(index: index).nameId == traitName.nameId { traitIndex = index } }
+        if traitIndex >= compiler.decls.traitCount() { panic("name-reader control trait missing") }
+        val member = compiler.internBytes(s: if associated { give "make" } else { give "read" })
+        mut val names = compiler.traitMemberNames(traitIndex: traitIndex, memberId: member.nameId, useOffset: compiler.decls.traitAt(index: traitIndex).nameStart)
+        match compiler.nextTraitMemberName(cursor: inout names) {
+            Optional.Some(v: val candidate) => match candidate {
+                TraitMemberNameCandidate.Requirement(traitIndex: val owner, slot: val slot, associated: val actual) => { if owner != traitIndex || slot != 0U64 || actual != associated { panic("reader changed canonical member category") } }
+                _ => { panic("requirement became a provided callable") }
+            }
+            Optional.None => { panic("reader dropped a name because call arguments were absent") }
+        }
+        if compiler.nextTraitMemberName(cursor: inout names).isSome() { panic("name cursor repeated a declaration") }
+    }
+    mut val invalid = compiler.traitMemberNames(traitIndex: compiler.decls.traitCount(), memberId: compiler.internBytes(s: "read").nameId, useOffset: 0U64)
+    if compiler.nextTraitMemberName(cursor: inout invalid).isSome() { panic("invalid owner acquired member identity") }
+    if compiler.memberDiscoveryProofQueries != priorQueries { panic("name discovery queried receiver proof") }
+    print("label frontier preserved")
+}

@@ -530,18 +530,23 @@ impl Comp {
             val declaration = self.decls.traitAt(index: traitIndex)
             if requiredTraitOwner == 0U64 || declaration.nameStart == requiredTraitOwner {
                 mut val requirements: Array[U64] = []
-                mut val index = 0U64
-                while index < declaration.reqs.count() {
-                    val requirement = self.traitReqAt(reqs: declaration.reqs, index: index)
-                    if requirement.nameId == memberId && self.paramsLabelsOk(params: requirement.params, args: args) { requirements.append(index) }
-                    index += 1U64
-                }
                 mut val provided: Array[U64] = []
-                index = self.arena.firstFunctionNamed(nameId: memberId)
-                while index < self.arena.functionCount() {
-                    val function = self.arena.functionAt(index: index)
-                    if !function.isProvided && function.originTraitOwner == 0U64 && function.hasRecv && function.body != 0U64 && function.recvId == declaration.nameId && function.provTraitOwner == declaration.nameStart && self.methodIsVisible(mf: function, offset: nameStart) && self.paramsLabelsOk(params: function.params, args: args) { provided.append(index) }
-                    index = self.arena.nextFunctionNamed(index: index)
+                mut val names = self.traitMemberNames(traitIndex: traitIndex, memberId: memberId, useOffset: nameStart)
+                while true {
+                    match self.nextTraitMemberName(cursor: inout names) {
+                        Optional.Some(v: val candidate) => {
+                            match candidate {
+                                TraitMemberNameCandidate.Requirement(traitIndex: val owner, slot: val slot, associated: _) => {
+                                    val requirement = self.traitReqAt(reqs: self.decls.traitAt(index: owner).reqs, index: slot)
+                                    if self.paramsLabelsOk(params: requirement.params, args: args) { requirements.append(slot) }
+                                }
+                                TraitMemberNameCandidate.Provided(traitIndex: _, function: val function, associated: _, visible: val visible) => {
+                                    if visible && self.paramsLabelsOk(params: self.arena.functionAt(index: function).params, args: args) { provided.append(function) }
+                                }
+                            }
+                        }
+                        Optional.None => { break }
+                    }
                 }
                 if requirements.count() != 0U64 || provided.count() != 0U64 {
                     val discovered = try self.traitMemberInstanceProofs(baseRef: receiverRef, traitId: declaration.nameId, traitOwner: declaration.nameStart, assumptions: assumptions)

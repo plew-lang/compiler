@@ -1,0 +1,28 @@
+// Name discovery retains declaration identity/category, not applicability or
+// conformance authority. Consumers filter their operation before querying proof.
+
+impl Comp {
+    fn traitMemberNames(traitIndex: U64, memberId: U64, useOffset: U64) -> TraitMemberNameCursor {
+        return <TraitMemberNameCursor traitIndex=traitIndex memberId=memberId useOffset=useOffset providedFunction=self.arena.firstFunctionNamed(nameId: memberId) />
+    }
+
+    inout fn nextTraitMemberName(cursor: inout TraitMemberNameCursor) -> Optional[TraitMemberNameCandidate] {
+        if cursor.traitIndex >= self.decls.traitCount() { return <Optional.None /> }
+        val declaration = self.decls.traitAt(index: cursor.traitIndex)
+        while cursor.requirementSlot < declaration.reqs.count() {
+            val slot = cursor.requirementSlot
+            cursor.requirementSlot += 1U64
+            val requirement = self.traitReqAt(reqs: declaration.reqs, index: slot)
+            if requirement.nameId == cursor.memberId { return <Optional.Some v=<TraitMemberNameCandidate.Requirement traitIndex=cursor.traitIndex slot=slot associated=requirement.isAssoc /> /> }
+        }
+        while cursor.providedFunction < self.arena.functionCount() {
+            val index = cursor.providedFunction
+            cursor.providedFunction = self.arena.nextFunctionNamed(index: index)
+            val function = self.arena.functionAt(index: index)
+            if !function.isProvided && function.originTraitOwner == 0U64 && function.hasRecv && function.body != 0U64 && function.recvId == declaration.nameId && function.provTraitOwner == declaration.nameStart {
+                return <Optional.Some v=<TraitMemberNameCandidate.Provided traitIndex=cursor.traitIndex function=index associated=function.isAssoc visible=self.methodIsVisible(mf: function, offset: cursor.useOffset) /> />
+            }
+        }
+        return <Optional.None />
+    }
+}

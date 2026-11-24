@@ -1,0 +1,16 @@
+use @Std/Io only { print }
+trait Selected {
+    fn read(first: I64) -> I64
+}
+trait Unrelated {
+    fn read(second: Bool) -> I64
+}
+trait Maker { assoc fn make() -> Self }
+struct Item {}
+impl Item as Selected {
+    fn read(first: I64) -> I64 { return first }
+}
+fn selectedRead[T](value: T) -> I64 where T: Selected {
+    return value.read(first: 42I64)
+}
+fn main() { print(selectedRead(value: <Item />)) }

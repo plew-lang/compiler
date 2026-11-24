@@ -839,6 +839,19 @@ struct MethodLookupOrigin {
 }
 impl MethodLookupOrigin { factory }
 
+enum TraitMemberNameCandidate {
+    Requirement(traitIndex: U64, slot: U64, associated: Bool)
+    Provided(traitIndex: U64, function: U64, associated: Bool, visible: Bool)
+}
+struct TraitMemberNameCursor {
+    val traitIndex: U64
+    val memberId: U64
+    val useOffset: U64
+    mut val requirementSlot: U64 = 0U64
+    mut val providedFunction: U64
+}
+impl TraitMemberNameCursor { factory }
+
 // Lower appends immediately after pushExpr, in strictly increasing arena-ID order.
 // This store travels with its arena/session; no late registration or separate reset.
 struct AuthoredIdentifier {
@@ -2086,6 +2099,7 @@ part ./SourceCallOperations
 part ./SourceIndexFailures
 part ./SourceTypingFailures
 part ./SourceOpaqueNumerics
+part ./TraitMemberNames
 part ./SourceNamedDeclarations
 part ./SourceOperatorRequirements
 part ./SourceGenericFailures
