@@ -1,6 +1,6 @@
 ---
 id: met-5lik
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-11-24T02:53:00Z
@@ -21,4 +21,8 @@ Existing adopted d2 check/AOT reject Unclassified (RED); unused ORC body succeed
 
 ## Implementation checkpoint
 
-Existing guard extracted once into checkOpaqueNumericExpectationWithOrigin and invoked before block-result compatibility. No new private authority or blanket Unresolved domain. OpaqueBlockFailureDomains integer/float/nested tests: fixed old source native-6 expected policy absent; modified source native0/exact12-line golden/empty stderr, both input invariant. Actual new CLI test v3 has15 intended RED and six preserved GREEN; v1/v2 new test setup assertions corrected for standard warnings and AOT LLVM. Independent source review finds no must-fix; fresh compiler and final context/gates pending. Evidence: meta/evidence/rejection-domains/diagnostic-domain-implementation/phase3-opaque-block-refusal.json.
+Existing guard extracted once into checkOpaqueNumericExpectationWithOrigin and invoked before block-result compatibility. No new private authority or blanket Unresolved domain. OpaqueBlockFailureDomains integer/float/nested tests: fixed old source native-6 expected policy absent; modified source native0/exact12-line golden/empty stderr, both input invariant. Actual new CLI test v3 has15 intended RED and six preserved GREEN; v1/v2 new test setup assertions corrected for standard warnings and AOT LLVM. Independent source review finds no must-fix. Final finite verification is recorded below. Evidence: meta/evidence/rejection-domains/diagnostic-domain-implementation/phase3-opaque-block-refusal.json.
+
+## Finite acceptance
+
+Resolved at product2aade1a4 / CLI1b296b91. Fresh standard build20261124T025759-build-6d9fd3 passed with immutable inputs and194 live/frozen source equality. Fresh candidate CLI24 modes pass; integer/float/nested demanded refusals retain Source and unused ORC remains lazy. Concrete/generic value and associated-equation check/AOT contexts pass (normalized ORC is unused, not runtime proof). New native12-consumer and prior18-consumer goldens pass; private existing ownership mutation controls pass with194 source/197 support hashes independently verified. Reviewer typing_obligation_plan_review accepts this finite admission contract with no mandatory gaps. One existing policy/cause is reused; no blanket unresolved Source promotion. Successful Give can repeat the helper in the later generic check; optional cost cleanup is not claimed as measured regression. Whole normal, formal fixed point/performance and parent acceptance remain integration gates; last accepted formal7.291978 is not a measurement of this revision. No carrier/main/seed promotion.
