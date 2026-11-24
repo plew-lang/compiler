@@ -20,3 +20,14 @@ Establish argument-independent qualified member category and canonical declarati
 ## Scenarios and completion
 
 Existing assoc_fn_value_arg check/AOT/reachable ORC RED-to-GREEN, methods as values, overloads/aliases/views, real closure fields/static globals/type qualifiers/missing/private controls, Raw/synthetic/foreign owner/session and failed builder retries/drain. Producer through final consumers, shared lookup responsibility, fresh candidate and independent review required. Named declaration transport is met-5vgp; successful binding readers remain com-tr3a.
+
+## Reviewed implementation increments
+
+1. Establish a receiver-scoped candidate reader before groundedMethodArgMatchRank in findAssocWithOrigin/findMethodWithOrigin. It retains canonical declaration or abstract requirement, associated/instance category, receiver/source/view proof and visibility disposition; use name-index cursor if whole candidate-array allocation would add normal-call cost. Normal call alone performs argument label/type/default/rank/ambiguity selection. Do not select one overload without arguments.
+2. Record classifies real storage fields first and retains actual callable-category failure through private source provenance/cache/owning consumers. Remove typeHasAssocFn/typeHasMethodNamed Bool authority from the migrated path. Preserve Raw/unknown/malformed and missing/private differences.
+
+Independent typing_obligation_plan_review endorsed these boundaries, not implementation completion. Actual source confirms Resolve/Lexical rewrites namespace Field to Ident and records namespace-use identity; associate-value reads are rewritten by rewriteAssocValReads before Record. Preserve those transformations and their source origins, rather than mistaking any Field or qualifier as a callable. Generic binder/bound and provided/conditional receiver evidence need small probes before extraction; call-argument-dependent conditions cannot be invented at a non-value use. Full findMethod redesign and successful generic reader migration stay out of scope.
+
+## Fixed-candidate RED
+
+Measured fixed-point cb9eebb5 (named product b43af163) runs42 qualified modes:21 intended RED assertions,21 normal/lazy controls pass; immutable inputs. Concrete associated and abstract bound T.make fail unavailable value typing, instance method-as-value is reported as missing structural field, namespace Field-to-Ident retains correct named-declaration text but loses owned source origin. All18 ordinary assoc-val/namespace/import/alias/type-binder/overload controls pass; three unrequested ORC bodies remain uninspected. Scratch result: meta/tmp/phase3-forward-frontier/qualified-callable-cli-red-v1/result.json. No qualified product repair yet.
