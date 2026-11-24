@@ -1,7 +1,7 @@
 ---
 id: met-wp9l
 status: in_progress
-deps: [met-u9uu]
+deps: [met-u9uu, met-uy77]
 links: []
 created: 2026-11-24T05:14:39Z
 type: bug
@@ -35,3 +35,9 @@ Measured fixed-point cb9eebb5 (named product b43af163) runs42 qualified modes:21
 ## Name-reader increment (not task completion)
 
 Private TraitMemberNames cursor is shared by staticMemberResolution before labels and proof. It returns canonical slot/function, associated role and visibility, never applicability/Source authority. Requirements/provided arrays, labels-before-proof, preferred source and instance dedup/rank order remain at the consumer. Independent source review found no must-fix; an extra provided Func read is an unproven cost concern, not permission to introduce signature snapshots. Baseline label-frontier native succeeds with actual query count; poisoning Selected gives expected -6, while Unrelated wrong labels is not queried. After extraction private v4 preserves frontier; direct reader/no-proof tests and fresh build remain pending. Source proof/qualified category transport is not yet implemented. Evidence: meta/evidence/rejection-domains/diagnostic-domain-implementation/phase3-qualified-member-discovery.json.
+
+## Declaration-group admission versus call applicability
+
+Neutral review clarified that an admitted non-value binding is not an applicable call. For an inherent nominal declaration group, retain canonical receiver/group identity, role, visibility and matching receiver pattern; method/call argument conditions are not solved without a call. Different concrete receiver specializations must remain distinct, and an incomplete generic head retains the unresolved matching group rather than selecting one specialization. For lexical-bound/provided/trait-view surfaces, existing receiver/bound/source proof establishes where the group comes from. Neither case invents call arguments or an expected function type. Lower origin/owner and actual binding admission remain required; a spelling Bool or name-reader alone cannot publish Source authority. Preserve real fields/assoc values/globals first. Required contrasts: conditional inherent groups, incompatible concrete receiver pattern, incomplete generic head, private candidate, field/static value, absent provided/trait-view proof.
+
+The first name-reader increment5c81e676 is independently recognized as complete after build8f7316/exact197source/native reader and poison sensitivity/qualified45 unchanged/named45 GREEN. It is only one increment; remaining qualified rejection cases are still RED. met-u9uu separately repairs the real namespace/type-binder prerequisite.
