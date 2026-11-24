@@ -1,6 +1,6 @@
 ---
 id: met-u9uu
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-11-24T06:08:52Z
@@ -26,3 +26,7 @@ New part/NamespaceTypeBinder fixture and API test: function/method/nominal/closu
 ## RED and source repair
 
 Field-default paired probe confirms false acceptance, not only diagnostics: aliasT check/ORC0 and stdout99; aliasModule check/ORC1 Source bounds rejection. The dedicated partreject fixture covers this. New valid part fixture also places a non-generic namespace field default after generic structs to catch leaked binder scope. API native prechange exits-6 with normalization assertion; after Lexical change native0 with exact golden, Method5/qualifiedCall2. Source review has no must-fix; generated default helper actual owner/body preparation is added to the final native check. Fresh build and CLI gates pending. Shared candidate reader extraction is separate commit5c81e676; this product repair changes only Lexical.pw.
+
+## Outcome
+
+Resolved at a7ce4368. Fresh build-e19884 is immutable and matches all197 product sources. Same-case matrix12 is GREEN (valid eight-line ORC golden; unbounded field-default call Source-rejects). Exact strengthened API native has RED old5c→GREEN fresh, recorded222 inputs rehashed unchanged, Method5/namespaceCall2 and generated default helper owner/typeParams/body request asserted. Named45 passes; qualified45 preserves the known21 RED and normal24. Independent neutral review certifies the finite fix with no mandatory gap. Evidence: meta/evidence/rejection-domains/diagnostic-domain-implementation/phase3-namespace-type-binder-normalization.json. met-wp9l/com-tr3a and parent whole/formal remain outside this closure.
