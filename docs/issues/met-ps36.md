@@ -1,6 +1,6 @@
 ---
 id: met-ps36
-status: in_progress
+status: closed
 deps: []
 links: [met-3f14]
 created: 2026-11-24T09:31:08Z
@@ -19,3 +19,9 @@ User-authorized one-time disk cleanup, separate from automatic producer-lifetime
 ## Verification and completion
 
 Inventory and process/open-file checks; archived source/metadata/unknown-asset mode/hash/link roundtrip; exact carrier+stdlib and user-file before/after hashes; change-detection and symlink-escape self-tests; independent safety review before destructive stage and outcome review. Measure reclaimed space, preserve current resumption paths and document kept generated material reasons/expiry. Commit/push compact necessary evidence before deletion. Full ASan/self-host is not necessary for a storage-only operation; selected carrier runtime/stdlib smoke checks suffice. Canonical compact record: meta/evidence/disk-cleanup/2026-11-24/. Local private archive and restore data stay under meta/artifacts/retained/2026-11-24/, outside tmp and outside Git.
+
+## Notes
+
+**2026-11-24T10:22:52Z**
+
+Cleanup completed and independently accepted. 54 inactive worktrees removed with 73 HEAD refs retained; OS temp 1146 roots removed. compiler/tmp empty; meta/tmp ~731MiB; bin ~194MiB. Disk free ~413GiB (initial ~12GiB). Five carrier/std identities and user changes unchanged; current relocated carrier runtime smoke succeeds. Local 26GiB recovery store remains outside Git; see meta/evidence/disk-cleanup/2026-11-24/README.md and verification/results. Automatic retention met-3f14 remains separate.
