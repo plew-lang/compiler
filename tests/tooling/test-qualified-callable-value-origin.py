@@ -62,6 +62,22 @@ def main():
         result = run('namespace-declaration-' + mode, path, flags)
         if not result.source_rejection or b'a named function declaration cannot be used as a value' not in result.stderr:
             errors.append('namespace-declaration-' + mode + ': namespace declaration identity lost')
+    # All three owners retain namespace normalization; reexports keep the
+    # defining declaration distinct from its namespace surface.
+    facade = out / 'Facade.pw'
+    facade.write_text('pub use ./Library only { target }\n')
+    inputs[str(facade)] = digest(facade)
+    for owner, body in {
+        'global': 'val broken: fn() -> I64 = Facade.target\nfn main() {}',
+        'closure': 'fn main() { val action: fn() = fn() { val value: fn() -> I64 = Facade.target } }',
+        'overload': 'fn main() { val value: fn() -> I64 = Facade.target }',
+    }.items():
+        path = out / ('namespace-' + owner + '.pw')
+        path.write_text('use ./Facade\n' + body + '\n')
+        for mode, flags in modes:
+            result = run('namespace-' + owner + '-' + mode, path, flags)
+            if not result.source_rejection or b'a named function declaration cannot be used as a value' not in result.stderr:
+                errors.append('namespace-' + owner + '-' + mode + ': normalized owner lost')
     controls = ['assoc_val', 'namespace_import', 'namespace_alias', 'callable_surface_namespaces',
                 'lexical_type_binder_callable_receiver', 'member_associated_candidate_conflict', 'member_discovery_label_frontier']
     for name in controls:

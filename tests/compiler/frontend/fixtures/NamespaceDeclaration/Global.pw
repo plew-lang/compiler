@@ -1,0 +1,3 @@
+use ./Library
+val broken: fn() -> I64 = Library.target
+fn main() {}

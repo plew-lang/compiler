@@ -713,3 +713,5 @@ retry/drain, whole/eager requests, closure and global lifetime. The copied
 `fixtures/IndexRefusals` inputs are runtime File reads and must be included in
 input fingerprints. CLI acceptance and non-interference are also covered by
 `test-index-requirement-origin.py` and `test-dynamic-protocol-requirement.py`.
+
+`NamespaceDeclarationMain.pw` is appended to a frozen Frontend root to exercise private Lower Field / lexical namespace normalization receipts. It checks original versus synthetic/replaced expressions, request and owner boundaries, qualification identity/module/kind, and failed-builder retention. `NamespaceCallableValueFailureDomains.pw` exercises the public Raw, owned lazy, whole and eager consumer paths for function/closure/global owners, retry and diagnostic drain. Its `.out` is the native execution golden; both use `fixtures/NamespaceDeclaration/`. These are focused manual frontend diagnostics, not language fixture discovery.

@@ -20,3 +20,9 @@ Cover the three namespace-declaration CLI RED modes in qualified-callable-value-
 ## Scenarios and completion
 
 Private boundary: real Lower Field manually replaced by Ident plus public qualified-use registration must not mint authority; same-offset re-registration, missing/swapped/synthesized qualification, serial/span/base/member mutation, copied-span synthetic, Raw/wrong session/root/owner, retained failure/retry/drain. Normal namespace functions/aliases/reexports/overload sets, globals, lexical closure shadow, real field values, direct target0 and wrappers remain correct. Fresh CLI check/AOT/reachable ORC plus unused lazy control; internal Raw and owned initializer/function/closure consumers and private negative tests; old direct-Identifier tests keep intent. Structural gate seals only at actual normalization branch; no blanket Source classification. Independent neutral plan review requires private boundary receipt, accepts qualified-use as its referenced data. Parent whole/formal gates stay open.
+
+## Notes
+
+**2026-11-24T11:16:48Z**
+
+Resumed after scratch cleanup with retained b218 carrier. Fixed-candidate CLI45 reproduces 21 known unmet assertions (namespace3 included). Expanded CLI54 produces30 unmet assertions on old candidate, including9 additional namespace owner/reexport modes. Product adds append-only Lower Field receipts, private normalization receipt at Lexical branch, and a NamedDeclarationSource sum observed by the existing non-value cause. Neutral source review requested localModule/isNamespace contrasts; accepted and implemented, pending fresh runtime verification. Build/CLI/private/consumer/formal gates remain open; parent associated/instance/bound cases are not claimed fixed.

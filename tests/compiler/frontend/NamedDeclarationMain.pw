@@ -12,6 +12,7 @@ fn main() {
     }
     val refusal = diagnostic.namedDeclaration().unwrap()
     val proof = compiler.failedNamedDeclarations[refusal.event()]
+    val authored = match proof.source { NamedDeclarationSource.Identifier(val authored) => authored _ => { panic("direct identifier receipt changed") } }
     if proof.declaration != 0U64 { panic("target0 fixture changed") }
     if !compiler.sourceFailureHasOwner(diagnostic: diagnostic) || diagnostic.isSourceRejection() { panic("refusal lost private authority") }
     if compiler.sourceFacts.expressionOwners.contains(key: refusal.expression()) { panic("failed declaration published successful value fact") }
@@ -29,7 +30,7 @@ fn main() {
         if invalid == 0U64 { compiler.arena.exprOriginSerial[refusal.expression()] = serial+1U64 }
         if invalid == 1U64 { compiler.arena.exprSpanStart[refusal.expression()] = spanStart+1U64 }
         if invalid == 2U64 { compiler.arena.exprSpanEnd[refusal.expression()] = spanEnd+1U64 }
-        if invalid == 3U64 { compiler.arena.exprs[refusal.expression()] = <Expr.Ident start=proof.authored.start+1U64 len=proof.authored.length /> }
+        if invalid == 3U64 { compiler.arena.exprs[refusal.expression()] = <Expr.Ident start=authored.start+1U64 len=authored.length /> }
         if invalid == 4U64 { compiler.sourceFacts.expressionOwners[refusal.expression()] = <SemanticCompletionOwner.Global target=0U64 /> }
         if compiler.sourceFailureHasOwner(diagnostic: diagnostic) { panic("mutated source retained authority") }
         if compiler.namedDeclarationValueDiagnostic(expression: refusal.expression(), binding: binding, origin: request).namedDeclaration().isSome() { panic("mutated source minted event") }

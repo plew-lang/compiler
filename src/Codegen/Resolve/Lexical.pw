@@ -100,7 +100,18 @@ pub impl Comp {
             Expr.Field(val base, val nameStart, val nameLen) => {
                 val moduleId = self.namespaceExprModule(id: base, names: names)
                 if moduleId != 4000000000U64 {
+                    val authored = self.authoredField(expression: id)
+                    val qualification = self.modules.qualifiedUseCount()
                     self.recordNamespaceUse(name: <Span start=nameStart end=nameStart + nameLen />, moduleId: moduleId)
+                    // Authority is sealed here, before losing the original Field.
+                    match authored {
+                        Optional.Some(v: val field) => {
+                            if self.authoredFieldMatches(authored: field) {
+                                self.namespaceFieldNormalizations[id] = <NamespaceFieldNormalization authored=field localModule=self.modules.qualifiedUseAt(index: qualification).localModule moduleId=moduleId qualification=qualification />
+                            }
+                        }
+                        Optional.None => {}
+                    }
                     self.arena.exprs[id] = <Expr.Ident start=nameStart len=nameLen />
                 } else { self.resolveLexicalModuleExpr(id: base, names: inout names) }
             }

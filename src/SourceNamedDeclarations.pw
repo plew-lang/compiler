@@ -23,6 +23,63 @@ impl Comp {
         }
     }
 
+    fn authoredField(expression: U64) -> Optional[AuthoredField] {
+        mut val begin = 0U64
+        mut val end = self.authoredFields.count()
+        while begin < end {
+            val middle = begin + (end - begin) / 2U64
+            if self.authoredFields[middle].expression < expression { begin = middle + 1U64 } else { end = middle }
+        }
+        if begin < self.authoredFields.count() && self.authoredFields[begin].expression == expression { return <Optional.Some v=self.authoredFields[begin] /> }
+        return <Optional.None />
+    }
+
+    fn authoredFieldMatches(authored: AuthoredField) -> Bool {
+        val expression = authored.expression
+        if expression >= self.arena.exprs.count() || expression >= self.arena.exprOriginSerial.count() || expression >= self.arena.exprSpanStart.count() || expression >= self.arena.exprSpanEnd.count() { return false }
+        if authored.serial == 0U64 || authored.serial != self.arena.exprOriginSerial[expression] || authored.spanStart != self.arena.exprSpanStart[expression] || authored.spanEnd != self.arena.exprSpanEnd[expression] { return false }
+        return match self.arena.exprs[expression] {
+            Expr.Field(val base, nameStart: val start, nameLen: val length) => base == authored.base && start == authored.start && length == authored.length
+            _ => false
+        }
+    }
+
+    fn namedDeclarationSourceMatches(source: NamedDeclarationSource, expression: U64) -> Bool {
+        match source {
+            NamedDeclarationSource.Identifier(val authored) => { return authored.expression == expression && self.authoredIdentifierMatches(authored: authored) }
+            NamedDeclarationSource.NamespaceMember(val normalization) => {
+                val field = normalization.authored
+                if field.expression != expression || expression >= self.arena.exprs.count() || expression >= self.arena.exprOriginSerial.count() || expression >= self.arena.exprSpanStart.count() || expression >= self.arena.exprSpanEnd.count() { return false }
+                if field.serial == 0U64 || field.serial != self.arena.exprOriginSerial[expression] || field.spanStart != self.arena.exprSpanStart[expression] || field.spanEnd != self.arena.exprSpanEnd[expression] { return false }
+                if normalization.qualification >= self.modules.qualifiedUseCount() || self.modules.qualifiedUseIndex(offset: field.start) != normalization.qualification { return false }
+                val qualification = self.modules.qualifiedUseAt(index: normalization.qualification)
+                if qualification.localStart != field.start || qualification.localLength != field.length || qualification.sourceStart != field.start || qualification.sourceLength != field.length || qualification.localModule != normalization.localModule || qualification.targetModule != normalization.moduleId || qualification.isSynthesized || qualification.isNamespace { return false }
+                return match self.arena.exprs[expression] {
+                    Expr.Ident(val start, len: val length) => start == field.start && length == field.length
+                    _ => false
+                }
+            }
+        }
+    }
+
+    fn namedDeclarationSource(expression: U64) -> Optional[NamedDeclarationSource] {
+        match self.authoredIdentifier(expression: expression) {
+            Optional.Some(v: val authored) => {
+                val source = <NamedDeclarationSource.Identifier authored=authored />
+                if self.namedDeclarationSourceMatches(source: source, expression: expression) { return <Optional.Some v=source /> }
+            }
+            Optional.None => {}
+        }
+        match self.namespaceFieldNormalizations.get(key: expression) {
+            Optional.Some(v: val normalization) => {
+                val source = <NamedDeclarationSource.NamespaceMember normalization=normalization />
+                if self.namedDeclarationSourceMatches(source: source, expression: expression) { return <Optional.Some v=source /> }
+            }
+            Optional.None => {}
+        }
+        return <Optional.None />
+    }
+
     inout fn namedDeclarationValueDiagnostic(expression: U64, binding: IdentBinding, origin: SourceRecordOrigin) -> CompileDiagnostic {
         val location = self.diagnosticLocationAt(offset: self.exprOffset(id: expression))
         val raw = <CompileDiagnostic location=location message="a named function declaration cannot be used as a value; wrap it in an explicit closure (e.g. `fn(...) {{ return name(...) }}`) (spec/04)" />
@@ -32,8 +89,7 @@ impl Comp {
         }
         if request.session != self.sourceFactSession() || binding.code != identFnCode() || binding.target >= self.arena.functionCount() { return raw }
         if expression >= self.typeCache.identBind.count() || expression >= self.typeCache.identTarget.count() || self.typeCache.identBind[expression] != binding.code || self.typeCache.identTarget[expression] != binding.target { return raw }
-        val authored = match self.authoredIdentifier(expression: expression) { Optional.Some(v: val authored) => authored Optional.None => { return raw } }
-        if !self.authoredIdentifierMatches(authored: authored) { return raw }
+        val source = match self.namedDeclarationSource(expression: expression) { Optional.Some(v: val source) => source Optional.None => { return raw } }
         val recorded = match self.currentSourceOwner() { Optional.Some(v: val recorded) => recorded Optional.None => { return raw } }
         if !self.sourceFacts.isActive(owner: recorded) || !semanticCompletionOwnersEqual(recorded: self.lexicalSourceFactOwner(owner: recorded), prepared: request.root) { return raw }
         match self.sourceFacts.expressionOwners.get(key: expression) {
@@ -42,7 +98,7 @@ impl Comp {
         }
         val declaration = self.arena.functionAt(index: binding.target)
         val refusal = <NamedDeclarationRefusal session=request.session owner=self.currentDiagnosticOwner() expression=expression event=self.failedNamedDeclarations.count() location=location />
-        self.failedNamedDeclarations.append(<SourceNamedDeclarationFailure refusal=refusal owner=recorded root=request.root authored=authored declaration=binding.target declarationName=declaration.nameStart declarationNameId=declaration.nameId />)
+        self.failedNamedDeclarations.append(<SourceNamedDeclarationFailure refusal=refusal owner=recorded root=request.root source=source declaration=binding.target declarationName=declaration.nameStart declarationNameId=declaration.nameId />)
         return <CompileDiagnostic.namedDeclaration refusal=refusal />
     }
 
@@ -57,7 +113,7 @@ impl Comp {
             DiagnosticOwner.Closure(expression: val expression) => semanticCompletionOwnersEqual(recorded: proof.owner, prepared: <SemanticCompletionOwner.Closure expression=expression />)
             DiagnosticOwner.Unknown => false
         }
-        if !ownerMatches || proof.authored.expression != refusal.expression() || !self.authoredIdentifierMatches(authored: proof.authored) { return false }
+        if !ownerMatches || !self.namedDeclarationSourceMatches(source: proof.source, expression: refusal.expression()) { return false }
         match self.sourceFacts.expressionOwners.get(key: refusal.expression()) {
             Optional.Some(v: val prior) => { if !semanticCompletionOwnersEqual(recorded: prior, prepared: proof.owner) { return false } }
             Optional.None => {}

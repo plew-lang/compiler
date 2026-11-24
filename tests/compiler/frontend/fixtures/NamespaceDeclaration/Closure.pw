@@ -1,0 +1,3 @@
+use ./Library
+fn broken() { val action: fn() = fn() { val value: fn() -> I64 = Library.target } }
+fn main() { broken() }

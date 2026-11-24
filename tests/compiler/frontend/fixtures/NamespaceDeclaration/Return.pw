@@ -1,0 +1,3 @@
+use ./Library
+fn make() -> fn() -> I64 { return Library.target }
+fn main() { make() }

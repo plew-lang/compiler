@@ -863,11 +863,34 @@ struct AuthoredIdentifier {
     val spanEnd: U64
 }
 impl AuthoredIdentifier { factory }
+// Original Field receipts are append-only Lower output, distinct from public
+// module qualification. Only lexical normalization seals the derived receipt.
+struct AuthoredField {
+    val expression: U64
+    val serial: U64
+    val base: U64
+    val start: U64
+    val length: U64
+    val spanStart: U64
+    val spanEnd: U64
+}
+impl AuthoredField { factory }
+struct NamespaceFieldNormalization {
+    val authored: AuthoredField
+    val localModule: U64
+    val moduleId: U64
+    val qualification: U64
+}
+impl NamespaceFieldNormalization { factory }
+enum NamedDeclarationSource {
+    Identifier(authored: AuthoredIdentifier)
+    NamespaceMember(normalization: NamespaceFieldNormalization)
+}
 struct SourceNamedDeclarationFailure {
     val refusal: NamedDeclarationRefusal
     val owner: SemanticCompletionOwner
     val root: SemanticCompletionOwner
-    val authored: AuthoredIdentifier
+    val source: NamedDeclarationSource
     val declaration: U64
     val declarationName: U64
     val declarationNameId: U64
@@ -1081,6 +1104,8 @@ pub struct Comp {
     mut val viaWitnesses: Array[ViaWitness] = []
     mut val viaCallByFunction: Dictionary[U64, U64] = [:]
     mut val authoredIdentifiers: Array[AuthoredIdentifier] = []
+    mut val authoredFields: Array[AuthoredField] = []
+    mut val namespaceFieldNormalizations: Dictionary[U64, NamespaceFieldNormalization] = [:]
     mut val failedNamedDeclarations: Array[SourceNamedDeclarationFailure] = []
     mut val authoredBinaryExpressions: Dictionary[U64, AuthoredBinaryExpression] = [:]
     mut val authoredValuePatterns: Dictionary[U64, (value: U64, offset: U64)] = [:]

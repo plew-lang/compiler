@@ -1,0 +1,3 @@
+use ./Library
+fn consume(value: fn() -> I64) {}
+fn main() { consume(value: Library.target) }
