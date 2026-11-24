@@ -1,6 +1,6 @@
 ---
 id: met-uy77
-status: in_progress
+status: closed
 deps: [met-u9uu]
 links: []
 created: 2026-11-24T06:45:19Z
@@ -26,3 +26,7 @@ Private boundary: real Lower Field manually replaced by Ident plus public qualif
 **2026-11-24T11:16:48Z**
 
 Resumed after scratch cleanup with retained b218 carrier. Fixed-candidate CLI45 reproduces 21 known unmet assertions (namespace3 included). Expanded CLI54 produces30 unmet assertions on old candidate, including9 additional namespace owner/reexport modes. Product adds append-only Lower Field receipts, private normalization receipt at Lexical branch, and a NamedDeclarationSource sum observed by the existing non-value cause. Neutral source review requested localModule/isNamespace contrasts; accepted and implemented, pending fresh runtime verification. Build/CLI/private/consumer/formal gates remain open; parent associated/instance/bound cases are not claimed fixed.
+
+**2026-11-24T11:50:42Z**
+
+Finite completion independently accepted by typing_obligation_plan_review. Product5eef632e/final tests6c4b151c; live197source equals product and frozen build30ecac. Fixed b218 CLI60 has35 unmet assertions; measured7e13 has18, all parent associated/instance/bound. Namespace17 refusal modes plus lazy/normal controls pass, named45 pass, actual measured private223-input and consumer225-input natives pass (16-line golden). Formal5faf8e fixed point G2, LLVM/runtime/successor and 4 frozen tool hashes checked; times7.760499/7.412734/7.323386 median7.412734<=7.5. Formal inputs were unchanged during execution; only3 additional private assertions changed afterwards and passed on measured carrier. Full evidence meta/evidence/rejection-domains/diagnostic-domain-implementation/phase3-namespace-declaration-origin.json. Parent whole/remaining18 not recognized complete. Adopted next development carrier compiler/bin/carriers/7e13a9206aad/plewc with deep-copied std; main/seed/canonical bin untouched.
