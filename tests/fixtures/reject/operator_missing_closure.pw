@@ -1,0 +1,5 @@
+use @Std/Io only { print }
+fn broken() {
+    val action: fn() -> String = fn() -> String { return "bad" + 1I64 }
+}
+fn main() {}

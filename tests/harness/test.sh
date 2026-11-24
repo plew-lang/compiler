@@ -148,7 +148,7 @@ else
     fail=$((fail + 1)); failed="$failed source-typing-origin"
 fi
 
-for origin_gate in opaque-block-origin index-requirement-origin dynamic-protocol-requirement; do
+for origin_gate in missing-operator-origin opaque-block-origin index-requirement-origin dynamic-protocol-requirement; do
     if python3 -B "./tests/tooling/test-$origin_gate.py" --compiler "$PLEWC" --out "$RUNTIME_DIR/$origin_gate"; then
         echo "PASS $origin_gate"
     else

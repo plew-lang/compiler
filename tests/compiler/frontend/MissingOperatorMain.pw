@@ -1,0 +1,90 @@
+// Append to a frozen Frontend root; no product APIs are exposed for this probe.
+fn noOperatorCause(compiler: Comp, diagnostic: CompileDiagnostic) {
+    if diagnostic.operatorRequirement().isSome() || diagnostic.isSourceRejection() || compiler.sourceFailureHasOwner(diagnostic: diagnostic) { panic("invalid request acquired operator source authority") }
+}
+fn main() {
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.File path="tests/fixtures/reject/type_operator_unused_function_operator.pw" />, sources: <SourceAccess stdRoot="std/".bytes() />).unwrap()
+    val function = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "broken").nameId)
+    val owner = <SemanticCompletionOwner.Function index=function />
+    if !compiler.sourceFacts.begin(owner: owner) { panic("fresh body was already prepared") }
+    val request = <SourceRecordOrigin.CheckingRequest session=compiler.sourceFactSession() root=owner />
+    val diagnostic = match compiler.recordParametricFunctionWithOrigin(fnIdx: function, recordCallTemplates: true, origin: <SourceRecordingScope request=request returnContext=<SourceExpectedContext.None /> />, expectedOrigin: <SourceExpectedContext.None />) {
+        Result.Err(error: val diagnostic) => diagnostic
+        Result.Ok(value: _) => { panic("missing operator was accepted") }
+    }
+    val refusal = diagnostic.operatorRequirement().unwrap()
+    val proof = compiler.failedOperatorRequirements[refusal.event()]
+    if !compiler.sourceFailureHasOwner(diagnostic: diagnostic) || diagnostic.isSourceRejection() { panic("private event lost ownership or self-promoted") }
+    if compiler.sourceFacts.expressionOwners.contains(key: refusal.expression()) { panic("refusal required a fabricated successful parent fact") }
+    for invalid in 0U64..<5U64 {
+        val forged = <OperatorRequirementRefusal session=if invalid == 0U64 { give refusal.session()+1U64 } else { give refusal.session() } owner=if invalid == 1U64 { give <DiagnosticOwner.Unknown /> } else { give refusal.owner() } expression=if invalid == 2U64 { give 0U64 } else { give refusal.expression() } event=if invalid == 3U64 { give compiler.failedOperatorRequirements.count() } else { give refusal.event() } location=if invalid == 4U64 { give <DiagnosticLocation.Unpositioned /> } else { give refusal.location() } />
+        if compiler.sourceFailureHasOwner(diagnostic: <CompileDiagnostic.operatorRequirement refusal=forged />) { panic("forged refusal acquired authority") }
+    }
+    val eventCount = compiler.failedOperatorRequirements.count()
+    val original = compiler.arena.exprs[refusal.expression()]
+    val serial = compiler.arena.exprOriginSerial[refusal.expression()]
+    val start = compiler.arena.exprSpanStart[refusal.expression()]
+    val end = compiler.arena.exprSpanEnd[refusal.expression()]
+    for invalid in 0U64..<6U64 {
+        if invalid == 0U64 { compiler.arena.exprOriginSerial[refusal.expression()] = serial+1U64 }
+        if invalid == 1U64 { compiler.arena.exprSpanStart[refusal.expression()] = start+1U64 }
+        if invalid == 2U64 { compiler.arena.exprs[refusal.expression()] = <Expr.Binary op=opSub() lhs=proof.authored.lhs rhs=proof.authored.rhs /> }
+        if invalid == 3U64 { compiler.arena.exprs[refusal.expression()] = <Expr.Binary op=proof.authored.op lhs=proof.authored.rhs rhs=proof.authored.lhs /> }
+        if invalid == 4U64 { compiler.sourceFacts.expressionOwners[refusal.expression()] = <SemanticCompletionOwner.Global target=0U64 /> }
+        if invalid == 5U64 { compiler.arena.exprSpanEnd[refusal.expression()] = end+1U64 }
+        if compiler.sourceFailureHasOwner(diagnostic: diagnostic) { panic("mutated provenance preserved operator authority") }
+        noOperatorCause(compiler: compiler, diagnostic: compiler.missingOperatorRequirementDiagnostic(expression: refusal.expression(), receiver: proof.receiver, argument: proof.argument, traitOwner: proof.traitOwner, origin: request))
+        compiler.arena.exprOriginSerial[refusal.expression()] = serial
+        compiler.arena.exprSpanStart[refusal.expression()] = start
+        compiler.arena.exprSpanEnd[refusal.expression()] = end
+        compiler.arena.exprs[refusal.expression()] = original
+        compiler.sourceFacts.expressionOwners.remove(key: refusal.expression())
+    }
+    compiler.sourceFacts.expressionOwners[proof.authored.lhs] = <SemanticCompletionOwner.Global target=0U64 />
+    if compiler.sourceFailureHasOwner(diagnostic: diagnostic) { panic("foreign operand owner preserved authority") }
+    noOperatorCause(compiler: compiler, diagnostic: compiler.missingOperatorRequirementDiagnostic(expression: refusal.expression(), receiver: proof.receiver, argument: proof.argument, traitOwner: proof.traitOwner, origin: request))
+    compiler.sourceFacts.expressionOwners[proof.authored.lhs] = owner
+    for invalid in 0U64..<3U64 {
+        val invalidOrigin = if invalid == 0U64 { give <SourceRecordOrigin.Raw /> } else if invalid == 1U64 { give <SourceRecordOrigin.CheckingRequest session=compiler.sourceFactSession()+1U64 root=owner /> } else { give <SourceRecordOrigin.CheckingRequest session=compiler.sourceFactSession() root=<SemanticCompletionOwner.Global target=0U64 /> /> }
+        noOperatorCause(compiler: compiler, diagnostic: compiler.missingOperatorRequirementDiagnostic(expression: refusal.expression(), receiver: proof.receiver, argument: proof.argument, traitOwner: proof.traitOwner, origin: invalidOrigin))
+    }
+    for receiver in [0U64, compiler.arena.typeCount()] {
+        match compiler.recordedOperatorSelection(op: proof.authored.op, receiverTerm: receiver, operandExprs: [proof.authored.lhs, proof.authored.rhs], resolution: <StaticMemberResolution.Missing />, expression: refusal.expression(), origin: request) {
+            Result.Ok(value: val selection) => match selection { OperatorSelection.Pending => {} _ => { panic("unknown receiver acquired a selection") } }
+            Result.Err(error: _) => { panic("unknown receiver became source refusal") }
+        }
+    }
+    mut val symbolic = 0U64
+    for index in 1U64..<compiler.arena.typeCount() { if compiler.arena.typeTermAt(index: index).paramId != 0U64 { symbolic = index break } }
+    if symbolic == 0U64 { panic("Core had no symbolic binder for the control") }
+    noOperatorCause(compiler: compiler, diagnostic: compiler.missingOperatorRequirementDiagnostic(expression: refusal.expression(), receiver: symbolic, argument: proof.argument, traitOwner: proof.traitOwner, origin: request))
+    val wrongTrait = compiler.coreTraitOwner(name: "Sub", arity: 1U64)
+    if wrongTrait == 0U64 || wrongTrait == proof.traitOwner { panic("wrong-Core-trait control was not distinct") }
+    for traitOwner in [0U64, 18446744073709551615U64, wrongTrait] { noOperatorCause(compiler: compiler, diagnostic: compiler.missingOperatorRequirementDiagnostic(expression: refusal.expression(), receiver: proof.receiver, argument: proof.argument, traitOwner: traitOwner, origin: request)) }
+    val clone = compiler.pushExpr(e: original)
+    compiler.arena.exprSpanStart[clone] = start
+    compiler.arena.exprSpanEnd[clone] = end
+    noOperatorCause(compiler: compiler, diagnostic: compiler.missingOperatorRequirementDiagnostic(expression: clone, receiver: proof.receiver, argument: proof.argument, traitOwner: proof.traitOwner, origin: request))
+    val core = compiler.modules.coreModule
+    compiler.modules.coreModule = 18446744073709551615U64
+    match compiler.recordedOperatorSelection(op: proof.authored.op, receiverTerm: proof.receiver, operandExprs: [proof.authored.lhs, proof.authored.rhs], resolution: <StaticMemberResolution.Missing />, expression: refusal.expression(), origin: request) {
+        Result.Ok(value: val selection) => match selection { OperatorSelection.Pending => {} _ => { panic("missing Core acquired a selection") } }
+        Result.Err(error: _) => { panic("missing Core was classified as missing witness") }
+    }
+    compiler.modules.coreModule = core
+    mut val ambiguous = <Comp />
+    analyzeFrontendForRequests(c: inout ambiguous, input: <FrontendInput.File path="tests/fixtures/reject/operator_ambiguous_int_overload.pw" />, sources: <SourceAccess stdRoot="std/".bytes() />).unwrap()
+    match ambiguous.prepareLexicalBody(fnIdx: ambiguous.arena.firstFunctionNamed(nameId: ambiguous.internBytes(s: "main").nameId)) {
+        Result.Err(error: val diagnostic) => { if diagnostic.operatorRequirement().isSome() || diagnostic.message() != "ambiguous operator: the right operand matches more than one integer overload — add a suffix to the literal (e.g. `10I64`)" { panic("ambiguity became missing selection") } }
+        Result.Ok(value: _) => { panic("ambiguous operator was accepted") }
+    }
+    if ambiguous.failedOperatorRequirements.count() != 0U64 { panic("ambiguity published missing-witness evidence") }
+    if compiler.failedOperatorRequirements.count() != eventCount { panic("invalid requests published negative authority") }
+    val internal = <CompileDiagnostic failureDomain=<FailureDomain.Internal /> location=refusal.location() message=diagnostic.message() />
+    noOperatorCause(compiler: compiler, diagnostic: internal)
+    compiler.finishSourceFacts(owner: owner, result: <Result.Err error=diagnostic />, bodyless: false)
+    if !compiler.sourceFailureHasOwner(diagnostic: diagnostic) { panic("failed builder discarded negative selection") }
+    compiler.prepareLexicalBody(fnIdx: compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "main").nameId)).unwrap()
+    if !compiler.sourceFailureHasOwner(diagnostic: diagnostic) { panic("another cursor invalidated negative selection") }
+}

@@ -1,4 +1,4 @@
-use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontendForRequests, openFrontend }
+use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontendForRequests, openFrontend, intern }
 use ../../../src/CheckedProgram only { CompilerSession, CompilerSessionResult, ProgramCheckResult, checkCompilerSession }
 use ../../../src/SourceAccess only { SourceAccess }
 use ../../../src/Diag only { CompileDiagnostic, FailureDomain }
@@ -6,6 +6,8 @@ use @Std/Io only { print }
 
 fn input(kind: U64) -> FrontendInput {
     if kind == 0U64 { return <FrontendInput.File path="tests/fixtures/reject/type_operator_unused_function_operator.pw" /> }
+    if kind == 1U64 { return <FrontendInput.File path="tests/fixtures/reject/operator_missing_closure.pw" /> }
+    if kind == 2U64 { return <FrontendInput.File path="tests/fixtures/reject/operator_missing_global.pw" /> }
     panic("invalid test kind")
 }
 
@@ -22,19 +24,50 @@ fn session(kind: U64) -> CompilerSession {
     }
 }
 
+fn globalFailure() {
+    val input = <FrontendInput.File path="tests/fixtures/reject/operator_missing_global.pw" />
+    mut val raw = <Comp />
+    analyzeFrontendForRequests(c: inout raw, input: input, sources: <SourceAccess stdRoot="std/".bytes() />).unwrap()
+    mut val target = 18446744073709551615U64
+    val name = raw.internBytes(s: "broken")
+    for global in raw.arena.globals { if intern(c: inout raw, start: global.nameStart, len: global.nameLen) == name.nameId { target = global.nameStart } }
+    if target == 18446744073709551615U64 { panic("global fixture lost target") }
+    for attempt in 0U64..<2U64 {
+        match raw.prepareGlobalInitializer(target: target) {
+            Result.Err(error: val diagnostic) => { requireOperator(diagnostic: diagnostic, owned: false) if !raw.sourceFailureHasOwner(diagnostic: diagnostic) { panic("global refusal lost private evidence") } raw.pendingDiagnostics.append(diagnostic) }
+            Result.Ok(value: _) => { panic("Raw global initializer accepted missing witness") }
+        }
+        if raw.takeDiagnostics().count() != 1U64 { panic("global refusal drain changed") }
+    }
+    print("raw operator rejection retained")
+    mut val owned = session(kind: 2U64)
+    for attempt in 0U64..<2U64 {
+        match owned.prepareInitializers() { Result.Err(error: val diagnostic) => { requireOperator(diagnostic: diagnostic) } Result.Ok(value: _) => { panic("owned initializer accepted missing witness") } }
+    }
+    print("lazy operator rejection retained")
+    match checkCompilerSession(session: move owned) { ProgramCheckResult.Failure(diagnostic: val diagnostic) => { requireOperator(diagnostic: diagnostic) } ProgramCheckResult.Success(program: _) => { panic("failed initializer became success") } }
+    print("whole operator rejection retained")
+    match openFrontend(input: input, sources: <SourceAccess stdRoot="std/".bytes() />) { Result.Err(error: val diagnostic) => { requireOperator(diagnostic: diagnostic) } Result.Ok(value: _) => { panic("eager global check accepted missing witness") } }
+    print("eager operator rejection retained")
+}
+
 fn main() {
-    for kind in 0U64..<1U64 {
+    globalFailure()
+    for kind in 0U64..<2U64 {
         mut val raw = <Comp />
         analyzeFrontendForRequests(c: inout raw, input: input(kind: kind), sources: <SourceAccess stdRoot="std/".bytes() />).unwrap()
         val name = raw.internBytes(s: "broken")
         val function = raw.arena.firstFunctionNamed(nameId: name.nameId)
         for attempt in 0U64..<2U64 {
             match raw.prepareLexicalBody(fnIdx: function) {
-                Result.Err(error: val diagnostic) => { requireOperator(diagnostic: diagnostic, owned: false) raw.pendingDiagnostics.append(diagnostic) }
+                Result.Err(error: val diagnostic) => { requireOperator(diagnostic: diagnostic, owned: false) if diagnostic.operatorRequirement().isNone() || !raw.sourceFailureHasOwner(diagnostic: diagnostic) { panic("Raw cached refusal lost retained private evidence") } raw.pendingDiagnostics.append(diagnostic) }
                 Result.Ok(value: _) => { panic("Raw body request accepted missing operator value") }
             }
             if raw.takeDiagnostics().count() != 1U64 { panic("drain lost retained operator rejection") }
         }
+        val retained = raw.prepareLexicalBody(fnIdx: function)
+        raw.prepareLexicalBody(fnIdx: raw.arena.firstFunctionNamed(nameId: raw.internBytes(s: "main").nameId)).unwrap()
+        match retained { Result.Err(error: val diagnostic) => { if !raw.sourceFailureHasOwner(diagnostic: diagnostic) { panic("another owner invalidated retained operator refusal") } } Result.Ok(value: _) => { panic("failed body cached success") } }
         print("raw operator rejection retained")
         if kind < 3U64 {
             mut val owned = session(kind: kind)

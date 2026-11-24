@@ -660,6 +660,15 @@ Its `.out` is the exact eighteen-line success golden, including Raw repeated
 requests/drain and source-owned lazy retries followed by whole-session failure.
 Private provenance mutation controls remain separate.
 
+`MissingOperatorFailureDomains.pw` checks actual missing operator selection in
+function, closure and global owners through Raw cache/drain, owned requests and
+whole/eager consumers. Require its twelve-line golden. `MissingOperatorMain.pw`
+is appended only to a fresh Frontend snapshot and checks Lower serial/span,
+operation/operand/owner mutation, Raw/foreign requests, unknown terms/Core,
+ambiguity and failure/cursor lifetime. Require native exit0 and empty streams.
+`tests/tooling/test-missing-operator-origin.py` is a normal-harness gate for
+concrete missing selection, lazy non-demand and preserved normal dispatch.
+
 `OpaqueBlockFailureDomains.pw` extends the same owned/Raw consumer guarantee
 to integer, float and nested block results; require its exact twelve-line golden.
 `tests/tooling/test-opaque-block-origin.py` is registered in the normal harness

@@ -23,13 +23,24 @@ impl Comp {
         if !self.arena.typeIsClosed(ref: receiver) || !self.arena.typeIsClosed(ref: argument) { return raw }
         val authored = match self.authoredBinaryExpressions.get(key: expression) { Optional.Some(v: val authored) => authored Optional.None => { return raw } }
         if !isBinTraitOp(op: authored.op) || !self.authoredBinaryMatches(expression: expression, authored: authored) { return raw }
-        val recorded = match self.sourceFacts.expressionOwners.get(key: expression) { Optional.Some(v: val recorded) => recorded Optional.None => { return raw } }
-        if !semanticCompletionOwnersEqual(recorded: self.lexicalSourceFactOwner(owner: recorded), prepared: request.root) { return raw }
+        val index = self.decls.traitOwnerIndex(offset: traitOwner)
+        if index >= self.decls.traitOwnerCount() { return raw }
+        val declaration = self.decls.traitOwnerAt(index: index)
+        if declaration.nameStart != traitOwner || declaration.arity != 1U64 || declaration.sourceModule != self.modules.coreModule || !rangeEquals(bytes: self.arena.bytes, start: declaration.nameStart, len: declaration.nameLen, kw: self.binOpTraitName(op: authored.op)) { return raw }
+        val recorded = match self.currentSourceOwner() { Optional.Some(v: val recorded) => recorded Optional.None => { return raw } }
+        if !self.sourceFacts.isActive(owner: recorded) || !semanticCompletionOwnersEqual(recorded: self.lexicalSourceFactOwner(owner: recorded), prepared: request.root) { return raw }
+        match self.sourceFacts.expressionOwners.get(key: expression) {
+            Optional.Some(v: val prior) => { if !semanticCompletionOwnersEqual(recorded: prior, prepared: recorded) { return raw } }
+            Optional.None => {}
+        }
+        for operand in [authored.lhs, authored.rhs] {
+            val operandOwner = match self.sourceFacts.expressionOwners.get(key: operand) { Optional.Some(v: val owner) => owner Optional.None => { return raw } }
+            if !semanticCompletionOwnersEqual(recorded: operandOwner, prepared: recorded) { return raw }
+        }
         if self.semanticExprTerm(exprId: authored.lhs) != receiver || self.semanticExprTerm(exprId: authored.rhs) != argument { return raw }
         val owner = self.currentDiagnosticOwner()
-        if !self.sourceExpressionHasOwner(session: request.session, expression: expression, owner: owner) { return raw }
         val refusal = <OperatorRequirementRefusal session=request.session owner=owner expression=expression event=self.failedOperatorRequirements.count() location=location />
-        self.failedOperatorRequirements.append(<SourceOperatorRequirementFailure refusal=refusal root=request.root authored=authored receiver=receiver argument=argument traitOwner=traitOwner />)
+        self.failedOperatorRequirements.append(<SourceOperatorRequirementFailure refusal=refusal owner=recorded root=request.root authored=authored receiver=receiver argument=argument traitOwner=traitOwner traitNameId=declaration.nameId />)
         return <CompileDiagnostic.operatorRequirement refusal=refusal />
     }
 
@@ -38,13 +49,27 @@ impl Comp {
         val proof = self.failedOperatorRequirements[refusal.event()]
         val saved = proof.refusal
         if saved.session() != refusal.session() || !self.diagnosticOwnersEqual(first: saved.owner(), second: refusal.owner()) || saved.expression() != refusal.expression() || !saved.location().same(other: refusal.location()) { return false }
-        if !self.sourceExpressionHasOwner(session: refusal.session(), expression: refusal.expression(), owner: refusal.owner()) || !self.authoredBinaryMatches(expression: refusal.expression(), authored: proof.authored) { return false }
+        val ownerMatches = match refusal.owner() {
+            DiagnosticOwner.Function(index: val index) => semanticCompletionOwnersEqual(recorded: proof.owner, prepared: <SemanticCompletionOwner.Function index=index />)
+            DiagnosticOwner.Global(target: val target) => semanticCompletionOwnersEqual(recorded: proof.owner, prepared: <SemanticCompletionOwner.Global target=target />)
+            DiagnosticOwner.Closure(expression: val expression) => semanticCompletionOwnersEqual(recorded: proof.owner, prepared: <SemanticCompletionOwner.Closure expression=expression />)
+            DiagnosticOwner.Unknown => false
+        }
+        if !ownerMatches || !self.authoredBinaryMatches(expression: refusal.expression(), authored: proof.authored) { return false }
+        match self.sourceFacts.expressionOwners.get(key: refusal.expression()) {
+            Optional.Some(v: val prior) => { if !semanticCompletionOwnersEqual(recorded: prior, prepared: proof.owner) { return false } }
+            Optional.None => {}
+        }
+        for operand in [proof.authored.lhs, proof.authored.rhs] {
+            val operandOwner = match self.sourceFacts.expressionOwners.get(key: operand) { Optional.Some(v: val owner) => owner Optional.None => { return false } }
+            if !semanticCompletionOwnersEqual(recorded: operandOwner, prepared: proof.owner) { return false }
+        }
         // The event owns the construction-time root and terms. Failed body
         // builders and the current recording cursor are not persistent evidence.
         if proof.receiver == 0U64 || proof.argument == 0U64 || proof.receiver >= self.arena.typeCount() || proof.argument >= self.arena.typeCount() { return false }
         val index = self.decls.traitOwnerIndex(offset: proof.traitOwner)
         if index >= self.decls.traitOwnerCount() { return false }
         val declaration = self.decls.traitOwnerAt(index: index)
-        return declaration.nameStart == proof.traitOwner && declaration.arity == 1U64 && declaration.sourceModule == self.modules.coreModule
+        return declaration.nameStart == proof.traitOwner && declaration.nameId == proof.traitNameId && declaration.arity == 1U64 && declaration.sourceModule == self.modules.coreModule
     }
 }

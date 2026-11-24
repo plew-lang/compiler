@@ -1743,7 +1743,6 @@ impl Comp {
         }
         mut val receiverTerm: U64 = 0U64
         if operandExprs.count() > 0U64 { receiverTerm = self.parametricExprTerm(exprId: operandExprs[0]) }
-        val resolution: StaticMemberResolution = (try self.staticOperatorTemplateResolution(op: op, receiverTerm: receiverTerm, isUnary: isUnary))
         // Concrete operand context must come from the same selected callable
         // as dispatch. Literal verification is not guaranteed to revisit an
         // operator nested inside another expression (for example `!(a == 2)`).
@@ -1762,6 +1761,13 @@ impl Comp {
                     _ => {}
                 }
             }
+        }
+        val resolution = match selection {
+            OperatorSelection.Static(resolution: val saved) => saved
+            OperatorSelection.Direct(callee: _) | OperatorSelection.Primitive => <StaticMemberResolution.Missing />
+            OperatorSelection.Pending => try self.staticOperatorTemplateResolution(op: op, receiverTerm: receiverTerm, isUnary: isUnary)
+        }
+        if self.cur.recordCallTemplates {
             match selection {
                 OperatorSelection.Pending => { selection = try self.recordedOperatorSelection(op: op, receiverTerm: receiverTerm, operandExprs: operandExprs, resolution: resolution, expression: exprId, origin: origin.request) }
                 _ => {}

@@ -906,11 +906,13 @@ enum OpaqueNumericExpectation {
 }
 struct SourceOperatorRequirementFailure {
     val refusal: OperatorRequirementRefusal
+    val owner: SemanticCompletionOwner
     val root: SemanticCompletionOwner
     val authored: AuthoredBinaryExpression
     val receiver: U64
     val argument: U64
     val traitOwner: U64
+    val traitNameId: U64
 }
 impl SourceOperatorRequirementFailure { factory }
 

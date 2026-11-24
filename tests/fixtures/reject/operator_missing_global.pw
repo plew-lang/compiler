@@ -1,0 +1,3 @@
+use @Std/Io only { print }
+val broken: String = "bad" + 1I64
+fn main() {}
