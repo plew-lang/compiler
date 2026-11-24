@@ -66,6 +66,7 @@ fn main() {
         }
         mut val names: Array[U64] = []
         compiler.resolveLexicalModuleExpr(id: target, names: inout names)
+        if compiler.modules.qualifiedUseCount() != beforeReplay.qualifiedUseCount()+1U64 { panic("normalization replay missed the qualified branch") }
         if compiler.namespaceFieldNormalizations.contains(key: target) { panic("malformed or synthetic Field sealed a normalization") }
         if compiler.namedDeclarationValueDiagnostic(expression: target, binding: binding, origin: request).namedDeclaration().isSome() { panic("public-only normalization minted refusal") }
         compiler.modules = beforeReplay
@@ -105,4 +106,6 @@ fn main() {
     compiler.namespaceFieldNormalizations[field.expression] = normalization
     compiler.finishSourceFacts(owner: owner, result: <Result.Err error=diagnostic />, bodyless: false)
     if !compiler.sourceFailureHasOwner(diagnostic: diagnostic) { panic("failed builder erased namespace provenance") }
+    compiler.prepareLexicalBody(fnIdx: compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "main").nameId)).unwrap()
+    if !compiler.sourceFailureHasOwner(diagnostic: diagnostic) { panic("another body cursor erased namespace provenance") }
 }
