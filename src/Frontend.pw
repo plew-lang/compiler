@@ -901,6 +901,16 @@ struct AuthoredField {
     val spanEnd: U64
 }
 impl AuthoredField { factory }
+// Only direct authored break/continue lowering creates these receipts.
+// The serial belongs to this append-only receipt store, not a mutable cursor.
+struct AuthoredLoopTransfer {
+    val statement: U64
+    val serial: U64
+    val isContinue: Bool
+    val spanStart: U64
+    val spanEnd: U64
+}
+impl AuthoredLoopTransfer { factory }
 struct NamespaceFieldNormalization {
     val authored: AuthoredField
     val localModule: U64
@@ -1189,6 +1199,7 @@ pub struct Comp {
     mut val viaCallByFunction: Dictionary[U64, U64] = [:]
     mut val authoredIdentifiers: Array[AuthoredIdentifier] = []
     mut val authoredFields: Array[AuthoredField] = []
+    mut val authoredLoopTransfers: Array[AuthoredLoopTransfer] = []
     mut val namespaceFieldNormalizations: Dictionary[U64, NamespaceFieldNormalization] = [:]
     mut val memberDeclarationAdmissions: Array[MemberDeclarationAdmission] = []
     mut val failedNamedDeclarations: Array[SourceNamedDeclarationFailure] = []
@@ -2217,6 +2228,7 @@ part ./SourceNamedDeclarations
 part ./SourceOperatorRequirements
 part ./SourceGenericFailures
 part ./SourceArrayFailures
+part ./SourceControlPaths
 part ./SourceFacts
 part ./Parser/Decl
 part ./Codegen/Existentials
@@ -3598,6 +3610,88 @@ enum SourceControlRegion {
     Loop(statementId: U64)
     LoopBarrier
 }
+enum SourceLoopEdge { Condition Body }
+// Structural ancestry used only when admitting a failed authored transfer.
+// Closures are roots, never children of another invocation's walk.
+enum SourceControlNode {
+    Block(id: U64)
+    Statement(id: U64)
+    Expression(id: U64)
+    Arguments(range: ArgRange)
+    Expressions(range: ExprRange)
+    Fields(range: MakeFieldRange)
+    Arms(range: MatchArmRange)
+    Conditions(range: ConditionClauseRange)
+}
+struct SourceControlChild {
+    val node: SourceControlNode
+    val region: Optional[SourceControlRegion] = <Optional.None />
+}
+impl SourceControlChild { factory }
+// Structural descriptors seal path variants and range boundaries, not types.
+enum SourceControlShape {
+    Block(start: U64, length: U64)
+    StatementLet(value: U64)
+    StatementAssign(target: U64, value: U64)
+    StatementExpression(value: U64)
+    StatementReturn(value: U64, hasValue: Bool)
+    StatementIf(condition: U64, yes: U64, no: U64, hasElse: Bool)
+    StatementIfChain(start: U64, length: U64, yes: U64, no: U64)
+    StatementWhile(condition: U64, body: U64)
+    StatementFor(iterator: U64, body: U64)
+    StatementMatch(value: U64, start: U64, length: U64)
+    StatementPanic(value: U64)
+    StatementGive(value: U64)
+    ExpressionUnary(value: U64)
+    ExpressionField(value: U64)
+    ExpressionExtView(value: U64)
+    ExpressionCast(value: U64)
+    ExpressionTry(value: U64)
+    ExpressionArrow(value: U64)
+    ExpressionDeref(value: U64)
+    ExpressionMove(value: U64)
+    ExpressionAwait(value: U64)
+    ExpressionBinary(first: U64, second: U64)
+    ExpressionIndex(first: U64, second: U64)
+    ExpressionOptChain(first: U64, second: U64)
+    ExpressionCall(start: U64, length: U64)
+    ExpressionMethod(receiver: U64, start: U64, length: U64)
+    ExpressionExtMethod(receiver: U64, start: U64, length: U64)
+    ExpressionMake(start: U64, length: U64)
+    ExpressionArray(start: U64, length: U64)
+    ExpressionDictionary(start: U64, length: U64)
+    ExpressionRange(start: U64, length: U64)
+    ExpressionSequence(body: U64)
+    ExpressionBlock(body: U64)
+    ExpressionMatch(value: U64, start: U64, length: U64)
+    ExpressionIf(condition: U64, yes: U64, no: U64)
+    ExpressionIfChain(start: U64, length: U64, yes: U64, no: U64)
+    Arguments(start: U64, length: U64)
+    Expressions(start: U64, length: U64)
+    Fields(start: U64, length: U64)
+    Arms(start: U64, length: U64)
+    Conditions(start: U64, length: U64)
+}
+struct SourceControlPathLink {
+    val parent: SourceControlNode
+    val shape: SourceControlShape
+    val slot: U64
+    val child: SourceControlChild
+}
+impl SourceControlPathLink { factory }
+struct SourceControlPathFrame {
+    val node: SourceControlNode
+    val children: Array[SourceControlChild]
+    mut val next: U64 = 0U64
+}
+impl SourceControlPathFrame { factory }
+struct SourceControlPath {
+    val owner: SemanticCompletionOwner
+    val root: SourceControlNode
+    val statement: U64
+    val links: Array[SourceControlPathLink]
+}
+impl SourceControlPath { factory }
 struct SourceControlCheckpoint {
     val owner: Optional[SemanticCompletionOwner] = <Optional.None />
     val depth: U64 = 0U64

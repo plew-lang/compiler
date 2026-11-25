@@ -1,0 +1,5 @@
+fn loopOwner() { while false { break } }
+fn otherOwner() { while false { continue } }
+fn closureOwner() { val action = fn() { break } }
+val globalValue: I64 = { break }
+fn main() {}

@@ -448,8 +448,8 @@ pub impl Comp {
             SyntaxStmtKind.For => { return <Result.Ok value=(try self.lowerSyntaxFor(stmt: s)) />}
             SyntaxStmtKind.Panic => { return <Result.Ok value=self.pushStmt(s: <Stmt.Panic msg=(try self.lowerSyntaxExpr(id: s.child0)) offset=s.span.start />) />}
             SyntaxStmtKind.Give => { return <Result.Ok value=self.pushStmt(s: <Stmt.Give value=(try self.lowerSyntaxExpr(id: s.child0)) />) />}
-            SyntaxStmtKind.Break => { return <Result.Ok value=self.pushStmt(s: <Stmt.Break offset=s.span.start />) />}
-            SyntaxStmtKind.Continue => { return <Result.Ok value=self.pushStmt(s: <Stmt.Continue offset=s.span.start />) />}
+            SyntaxStmtKind.Break => { return <Result.Ok value=self.pushAuthoredLoopTransfer(isContinue: false, spanStart: s.span.start, spanEnd: s.span.end) />}
+            SyntaxStmtKind.Continue => { return <Result.Ok value=self.pushAuthoredLoopTransfer(isContinue: true, spanStart: s.span.start, spanEnd: s.span.end) />}
             _ => { panic "compiler bug: SyntaxFile statement desugaring is incomplete" }
         }
     }
@@ -626,8 +626,8 @@ pub impl Comp {
                 val v: U64 = (try self.lowerExpr(e: value))
                 result = self.pushStmt(s: <Stmt.Give value=v />)
             }
-            StmtAst.Break(val span) => { result = self.pushStmt(s: <Stmt.Break offset=span.start />) }
-            StmtAst.Continue(val span) => { result = self.pushStmt(s: <Stmt.Continue offset=span.start />) }
+            StmtAst.Break(val span) => { result = self.pushAuthoredLoopTransfer(isContinue: false, spanStart: span.start, spanEnd: span.end) }
+            StmtAst.Continue(val span) => { result = self.pushAuthoredLoopTransfer(isContinue: true, spanStart: span.start, spanEnd: span.end) }
             StmtAst.Destructure(val binds, val typeName, typeNameSpan: _, val init, val span) => {
                 // normally expanded by lowerBlock into several statements; reached only if a
                 // destructuring appears outside a statement list — lower the initializer as a
@@ -955,6 +955,38 @@ impl Comp {
                 }
                 _ => {}
             }
+        }
+    }
+}
+
+// Generic/synthetic pushStmt deliberately has no authored-source authority.
+impl Comp {
+    inout fn pushAuthoredLoopTransfer(isContinue: Bool, spanStart: U64, spanEnd: U64) -> U64 {
+        val statement = self.pushStmt(s: if isContinue { give <Stmt.Continue offset=spanStart /> } else { give <Stmt.Break offset=spanStart /> })
+        self.authoredLoopTransfers.append(<AuthoredLoopTransfer statement=statement serial=self.authoredLoopTransfers.count()+1U64 isContinue=isContinue spanStart=spanStart spanEnd=spanEnd />)
+        return statement
+    }
+
+    fn authoredLoopTransfer(statement: U64) -> Optional[AuthoredLoopTransfer] {
+        mut val start = 0U64
+        mut val end = self.authoredLoopTransfers.count()
+        while start < end {
+            val middle = start+(end-start)/2U64
+            val authored = self.authoredLoopTransfers[middle]
+            if authored.statement < statement { start = middle+1U64 } else { end = middle }
+        }
+        if start < self.authoredLoopTransfers.count() && self.authoredLoopTransfers[start].statement == statement { return <Optional.Some v=self.authoredLoopTransfers[start] /> }
+        return <Optional.None />
+    }
+
+    fn authoredLoopTransferMatches(authored: AuthoredLoopTransfer) -> Bool {
+        if authored.statement >= self.arena.stmts.count() || authored.spanStart >= authored.spanEnd || authored.spanEnd > self.arena.bytes.count() { return false }
+        val original = match self.authoredLoopTransfer(statement: authored.statement) { Optional.Some(v: val original) => original Optional.None => { return false } }
+        if original.serial != authored.serial || original.isContinue != authored.isContinue || original.spanStart != authored.spanStart || original.spanEnd != authored.spanEnd { return false }
+        return match self.arena.stmts[authored.statement] {
+            Stmt.Break(offset: val offset) => !authored.isContinue && offset == authored.spanStart
+            Stmt.Continue(offset: val offset) => authored.isContinue && offset == authored.spanStart
+            _ => false
         }
     }
 }

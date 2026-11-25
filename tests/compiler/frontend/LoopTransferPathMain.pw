@@ -1,0 +1,81 @@
+// Append to Frontend: real invocation boundaries and retained-path mutation.
+fn main() {
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.File path="tests/compiler/frontend/fixtures/LoopTransfer/Scopes.pw" />, sources: <SourceAccess stdRoot="std/".bytes() />).unwrap()
+    val function = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "loopOwner").nameId)
+    val other = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "otherOwner").nameId)
+    val container = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "closureOwner").nameId)
+    val binding = compiler.blockStmtAt(blkId: compiler.arena.functionAt(index: container).body, index: 0U64)
+    val closure = match compiler.arena.stmts[binding] { Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, init: val init, annotationOccurrence: _) => init _ => { panic("fixture lost closure binding") } }
+    val owner = <SemanticCompletionOwner.Function index=function />
+    mut val loopCount = 0U64
+    mut val otherCount = 0U64
+    mut val closureCount = 0U64
+    mut val globalCount = 0U64
+    mut val saved: Optional[SourceControlPath] = <Optional.None />
+    mut val savedClosure: Optional[SourceControlPath] = <Optional.None />
+    for authored in compiler.authoredLoopTransfers {
+        match compiler.sourceLoopTransferPath(owner: owner, statement: authored.statement) {
+            Optional.Some(v: val path) => {
+                loopCount += 1U64
+                saved = <Optional.Some v=path />
+                if !compiler.sourceControlPathMatches(path: path) { panic("real loop-owner path failed") }
+                if compiler.sourceLoopTransferPath(owner: <SemanticCompletionOwner.Function index=other />, statement: authored.statement).isSome() { panic("another real function acquired transfer") }
+            }
+            Optional.None => {}
+        }
+        if compiler.sourceLoopTransferPath(owner: <SemanticCompletionOwner.Function index=other />, statement: authored.statement).isSome() { otherCount += 1U64 }
+        match compiler.sourceLoopTransferPath(owner: <SemanticCompletionOwner.Closure expression=closure />, statement: authored.statement) {
+            Optional.Some(v: val path) => {
+                closureCount += 1U64
+                savedClosure = <Optional.Some v=path />
+                if !compiler.sourceControlPathMatches(path: path) { panic("closure root path failed") }
+                if compiler.sourceLoopTransferPath(owner: <SemanticCompletionOwner.Function index=container />, statement: authored.statement).isSome() { panic("walk crossed nested invocation") }
+            }
+            Optional.None => {}
+        }
+        for global in compiler.arena.globals {
+            if compiler.sourceLoopTransferPath(owner: <SemanticCompletionOwner.Global target=global.nameStart />, statement: authored.statement).isSome() { globalCount += 1U64 }
+        }
+    }
+    if loopCount != 1U64 || otherCount != 1U64 || closureCount != 1U64 || globalCount != 1U64 { panic("fixture invocation coverage changed") }
+    val path = saved.unwrap()
+    val forgedOwner = <SourceControlPath owner=<SemanticCompletionOwner.Function index=other /> root=path.root statement=path.statement links=path.links />
+    if compiler.sourceControlPathMatches(path: forgedOwner) { panic("foreign real body retained path authority") }
+    val closurePath = savedClosure.unwrap()
+    val originalClosure = compiler.arena.exprs[closure]
+    match originalClosure {
+        Expr.Closure(params: val params, hasRet: val hasRet, retStart: val retStart, retLen: val retLen, retIsArray: val retIsArray, retTy: val retTy, body: _, isDiverging: val diverging) => {
+            compiler.arena.exprs[closure] = <Expr.Closure params=params hasRet=hasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retTy body=compiler.arena.functionAt(index: other).body isDiverging=diverging />
+            if compiler.sourceControlPathMatches(path: closurePath) { panic("owner body replacement retained authority") }
+        }
+        _ => { panic("fixture lost closure") }
+    }
+    compiler.arena.exprs[closure] = originalClosure
+    val root = compiler.arena.functionAt(index: function).body
+    val originalBlock = compiler.arena.blocks[root]
+    val loopStatement = compiler.blockStmtAt(blkId: root, index: 0U64)
+    val originalLoop = compiler.arena.stmts[loopStatement]
+    match originalLoop {
+        Stmt.While(cond: val condition, body: val body) => {
+            compiler.arena.stmts[loopStatement] = <Stmt.For varStart=0U64 varLen=0U64 varTyStart=0U64 varTyLen=0U64 varTy=0U64 iter=condition body=body isStruct=false patStart=0U64 patLen=0U64 binds=<BindRange start=0U64 len=0U64 /> />
+            if compiler.sourceControlPathMatches(path: path) { panic("parent variant replacement retained authority") }
+            compiler.arena.stmts[loopStatement] = <Stmt.While cond=body body=condition />
+            if compiler.sourceControlPathMatches(path: path) { panic("condition and body swap retained authority") }
+        }
+        _ => { panic("fixture lost while") }
+    }
+    compiler.arena.stmts[loopStatement] = originalLoop
+    val duplicate = compiler.pushBlock(stmts: [loopStatement, loopStatement])
+    compiler.arena.blocks[root] = compiler.arena.blocks[duplicate]
+    if compiler.sourceLoopTransferPath(owner: owner, statement: path.statement).isSome() { panic("reused statement had unique ancestry") }
+    if compiler.sourceControlPathMatches(path: path) { panic("duplicate range retained saved authority") }
+    compiler.arena.blocks[root] = originalBlock
+    val cycleExpression = compiler.pushExpr(e: <Expr.Block body=root offset=0U64 />)
+    val cycleStatement = compiler.pushStmt(s: <Stmt.ExprStmt expr=cycleExpression />)
+    val cycle = compiler.pushBlock(stmts: [cycleStatement])
+    compiler.arena.blocks[root] = compiler.arena.blocks[cycle]
+    if compiler.sourceLoopTransferPath(owner: owner, statement: path.statement).isSome() { panic("cyclic body acquired transfer ancestry") }
+    compiler.arena.blocks[root] = originalBlock
+    if !compiler.sourceControlPathMatches(path: path) { panic("fixture did not restore source ancestry") }
+}

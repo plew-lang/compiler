@@ -68,5 +68,54 @@ entire epics prerequisites. This is a finite child of com-yeua, not parent closu
 
 qualified_member_plan independently accepts the slice and size. The plan includes
 its requested statement provenance boundary, separate success/failure, fail-closed
-Verify consumption, no-loop RED and closure-target contrasts. Implementation has
-not started; investigate reachability/provenance before choosing storage details.
+Verify consumption, no-loop RED and closure-target contrasts. The initial plan precedes implementation; current helper progress is recorded below.
+
+## Investigation and fixed-candidate RED
+
+Fixed dde345e4da6d: CLI75 modes,60 expected Source-ownership REDs with the
+correct exact target diagnostic and Unclassified domain;12 unused ORC and3
+valid-condition-local-loop controls pass. Private direct Record entry reaches
+the real while-condition refusal but sourceFailureHasOwner is false. It aborts
+at that first assertion; the other private cases are not yet exercised.
+[Saved RED and runner](../../../evidence/rejection-domains/diagnostic-domain-implementation/loop-transfer-refusals/red.json).
+
+Lower has no statement receipt. A receipt plus the current builder does not prove
+that the statement belongs to that invocation or that the active control stack
+represents its position. Establish actual membership/ancestry on the refusal
+path only; retain that structural path in the private event so final consumers
+validate saved identities without another whole-body walk or target selection.
+Exclude nested closures when locating a statement under a function/global root.
+Use common control-edge metadata where Record and ancestry traversal need the
+same while-condition/loop-body boundary, rather than duplicate target semantics.
+Successful target selection remains source-owned and unchanged.
+
+Verify is not uniformly post-publication: ordinary/global uncached preparation
+runs Verify while the owner is Active/Building. A narrow transfer consumer reads
+that existing builder, reads the retained reader for Succeeded, propagates Failed,
+and treats missing/foreign transfer under a recorded owner as internal handoff
+failure. Only a genuinely absent owner lifecycle uses non-Source Raw verification.
+Do not use missing statementOwners or a new mode Bool as the Raw discriminator.
+Independent source review confirms this is within the task, not a Verify-wide
+API redesign. Helper progress follows; Source refusal publication remains pending.
+
+## Helper increment, not task completion
+
+Direct Syntax/legacy break/continue lowering now retains an append-only private
+receipt. Its serial identifies the receipt, not arbitrary Stmt mutation history;
+kind/offset/span/current receipt are checked. Synthetic pushStmt cannot mint it.
+Refusal-only structural ancestry finds the unique invocation path without crossing
+nested closures. Record and ancestry share while/for control-edge metadata.
+
+Independent review found that selected-child equality alone missed a changed
+parent range. A real native RED extends the root range while preserving its
+selected child. Path links now retain a narrow variant/child/range descriptor,
+and validate owner/root binding plus saved descriptors/edges without another
+body walk or target selection. The RED is GREEN. Whole parent AST values and
+pool contents are not copied into the proof.
+
+Native controls cover real functions, closure and global roots; foreign body,
+synthetic/mutated transfer, body replacement, duplicate/range/cycle and parent
+variant/condition-body changes. Normal condition-local loops still prepare
+successfully. [Helper evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/loop-transfer-refusals/helper.json).
+Still pending: retained typed refusal/event, lifecycle-aware Verify consumption,
+Source/Raw/cache/consumer adversarial controls, fresh candidate and final gates.

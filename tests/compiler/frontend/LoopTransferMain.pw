@@ -1,0 +1,16 @@
+// Append to a frozen Frontend root: real source recording must own the refusal.
+fn main() {
+    for name in ["while_condition_plain_break", "while_condition_plain_continue", "block_break_outside_loop", "block_continue_outside_loop"] {
+        mut val compiler = <Comp />
+        analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.File path="tests/fixtures/reject/"+name+".pw" />, sources: <SourceAccess stdRoot="std/".bytes() />).unwrap()
+        val function = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "main").nameId)
+        val owner = <SemanticCompletionOwner.Function index=function />
+        if !compiler.sourceFacts.begin(owner: owner) { panic("body not fresh") }
+        val request = <SourceRecordOrigin.CheckingRequest session=compiler.sourceFactSession() root=owner />
+        val diagnostic = match compiler.recordParametricFunctionWithOrigin(fnIdx: function, recordCallTemplates: true, origin: <SourceRecordingScope request=request returnContext=<SourceExpectedContext.None /> />, expectedOrigin: <SourceExpectedContext.None />) {
+            Result.Err(error: val diagnostic) => diagnostic
+            Result.Ok(value: _) => { panic(name+": source recording did not reject transfer") }
+        }
+        if !compiler.sourceFailureHasOwner(diagnostic: diagnostic) { panic(name+": target refusal lost source owner: "+diagnostic.message()) }
+    }
+}

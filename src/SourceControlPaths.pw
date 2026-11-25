@@ -1,0 +1,375 @@
+impl SourceControlNode {
+    fn same(other: SourceControlNode) -> Bool {
+        return match self {
+            SourceControlNode.Block(id: val a) => match other { SourceControlNode.Block(id: val b) => a == b _ => false }
+            SourceControlNode.Statement(id: val a) => match other { SourceControlNode.Statement(id: val b) => a == b _ => false }
+            SourceControlNode.Expression(id: val a) => match other { SourceControlNode.Expression(id: val b) => a == b _ => false }
+            SourceControlNode.Arguments(range: val a) => match other { SourceControlNode.Arguments(range: val b) => a.start == b.start && a.len == b.len _ => false }
+            SourceControlNode.Expressions(range: val a) => match other { SourceControlNode.Expressions(range: val b) => a.start == b.start && a.len == b.len _ => false }
+            SourceControlNode.Fields(range: val a) => match other { SourceControlNode.Fields(range: val b) => a.start == b.start && a.len == b.len _ => false }
+            SourceControlNode.Arms(range: val a) => match other { SourceControlNode.Arms(range: val b) => a.start == b.start && a.len == b.len _ => false }
+            SourceControlNode.Conditions(range: val a) => match other { SourceControlNode.Conditions(range: val b) => a.start == b.start && a.len == b.len _ => false }
+        }
+    }
+}
+
+impl SourceControlRegion {
+    fn same(other: SourceControlRegion) -> Bool {
+        return match self {
+            SourceControlRegion.Block(blockId: val block, permitsGive: val permits) => match other { SourceControlRegion.Block(blockId: val candidate, permitsGive: val candidatePermits) => block == candidate && permits == candidatePermits _ => false }
+            SourceControlRegion.Loop(statementId: val statement) => match other { SourceControlRegion.Loop(statementId: val candidate) => statement == candidate _ => false }
+            SourceControlRegion.LoopBarrier => match other { SourceControlRegion.LoopBarrier => true _ => false }
+        }
+    }
+}
+
+impl SourceControlChild {
+    fn same(other: SourceControlChild) -> Bool {
+        if !self.node.same(other: other.node) { return false }
+        return match self.region {
+            Optional.Some(v: val region) => match other.region { Optional.Some(v: val candidate) => region.same(other: candidate) Optional.None => false }
+            Optional.None => other.region.isNone()
+        }
+    }
+}
+
+impl Comp {
+    // Refusal-only ownership proof. Keep the unique structural path; a reused
+    // statement under multiple positions or a cycle is not source authority.
+    fn sourceLoopTransferPath(owner: SemanticCompletionOwner, statement: U64) -> Optional[SourceControlPath] {
+        if statement >= self.arena.stmts.count() { return <Optional.None /> }
+        val root = match self.sourceControlRoot(owner: owner) { Optional.Some(v: val root) => root Optional.None => { return <Optional.None /> } }
+        val target = <SourceControlNode.Statement id=statement />
+        mut val frames = [<SourceControlPathFrame node=root children=self.sourceControlChildren(node: root) />]
+        mut val path: Array[SourceControlPathLink] = []
+        mut val found: Optional[SourceControlPath] = <Optional.None />
+        while frames.count() != 0U64 {
+            val last = frames.count()-1U64
+            val frame = frames[last]
+            if frame.next == 0U64 && frame.node.same(other: target) {
+                if found.isSome() { return <Optional.None /> }
+                found = <Optional.Some v=<SourceControlPath owner=owner root=root statement=statement links=path /> />
+            }
+            if frame.next >= frame.children.count() {
+                frames.removeLast()
+                if path.count() != 0U64 { path.removeLast() }
+                continue
+            }
+            val slot = frame.next
+            frames[last].next += 1U64
+            val child = frame.children[slot]
+            for active in frames { if active.node.same(other: child.node) { return <Optional.None /> } }
+            val shape = match self.sourceControlShape(node: frame.node) { Optional.Some(v: val shape) => shape Optional.None => { return <Optional.None /> } }
+            path.append(<SourceControlPathLink parent=frame.node shape=shape slot=slot child=child />)
+            frames.append(<SourceControlPathFrame node=child.node children=self.sourceControlChildren(node: child.node) />)
+        }
+        return found
+    }
+
+    // Validate only the retained edges and owner/root binding. This neither
+    // searches the body again nor decides a loop target a second time.
+    fn sourceControlPathMatches(path: SourceControlPath) -> Bool {
+        val root = match self.sourceControlRoot(owner: path.owner) { Optional.Some(v: val root) => root Optional.None => { return false } }
+        if !root.same(other: path.root) { return false }
+        mut val parent = root
+        for link in path.links {
+            if !parent.same(other: link.parent) { return false }
+            val shape = match self.sourceControlShape(node: parent) { Optional.Some(v: val shape) => shape Optional.None => { return false } }
+            if !shape.same(other: link.shape) { return false }
+            val children = self.sourceControlChildren(node: parent)
+            if link.slot >= children.count() || !children[link.slot].same(other: link.child) { return false }
+            parent = link.child.node
+        }
+        return parent.same(other: <SourceControlNode.Statement id=path.statement />)
+    }
+
+    fn sourceLoopPathMatchesActiveRegions(path: SourceControlPath) -> Bool {
+        mut val actual: Array[SourceControlRegion] = []
+        for link in path.links { match link.child.region { Optional.Some(v: val region) => { actual.append(region) } Optional.None => {} } }
+        mut val next = 0U64
+        for region in self.sourceFacts.activeBuilder.controlRegions {
+            match region { SourceControlRegion.Block(blockId: _, permitsGive: _) => { continue } _ => {} }
+            if next >= actual.count() || !region.same(other: actual[next]) { return false }
+            next += 1U64
+        }
+        return next == actual.count()
+    }
+
+    // Shared by normal Record and refusal ancestry: one definition of edges
+    // that introduce a loop target or prevent reaching a surrounding loop.
+    fn sourceLoopRegionForEdge(statement: U64, edge: SourceLoopEdge) -> Optional[SourceControlRegion] {
+        if statement >= self.arena.stmts.count() { return <Optional.None /> }
+        return match self.arena.stmts[statement] {
+            Stmt.While(cond: _, body: _) => match edge {
+                SourceLoopEdge.Condition => <Optional.Some v=<SourceControlRegion.LoopBarrier /> />
+                SourceLoopEdge.Body => <Optional.Some v=<SourceControlRegion.Loop statementId=statement /> />
+            }
+            Stmt.For(varStart: _, varLen: _, varTyStart: _, varTyLen: _, varTy: _, iter: _, body: _, isStruct: _, patStart: _, patLen: _, binds: _) => match edge {
+                SourceLoopEdge.Condition => <Optional.None />
+                SourceLoopEdge.Body => <Optional.Some v=<SourceControlRegion.Loop statementId=statement /> />
+            }
+            _ => <Optional.None />
+        }
+    }
+
+    inout fn enterSourceLoopEdge(statement: U64, edge: SourceLoopEdge) -> SourceControlCheckpoint {
+        return match self.sourceLoopRegionForEdge(statement: statement, edge: edge) {
+            Optional.Some(v: val region) => self.enterSourceControlRegion(region: region)
+            Optional.None => <SourceControlCheckpoint />
+        }
+    }
+
+    fn sourceControlRoot(owner: SemanticCompletionOwner) -> Optional[SourceControlNode] {
+        match owner {
+            SemanticCompletionOwner.Function(index: val index) => {
+                if index < self.arena.functionCount() {
+                    val body = self.arena.functionAt(index: index).body
+                    if body != 0U64 && body < self.arena.blocks.count() { return <Optional.Some v=<SourceControlNode.Block id=body /> /> }
+                }
+            }
+            SemanticCompletionOwner.Closure(expression: val expression) => {
+                if expression < self.arena.exprs.count() {
+                    match self.arena.exprs[expression] {
+                        Expr.Closure(params: _, hasRet: _, retStart: _, retLen: _, retIsArray: _, retTy: _, body: val body, isDiverging: _) => {
+                            if body < self.arena.blocks.count() { return <Optional.Some v=<SourceControlNode.Block id=body /> /> }
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            SemanticCompletionOwner.Global(target: val target) => {
+                for global in self.arena.globals {
+                    if global.nameStart != target { continue }
+                    if global.letStmt >= self.arena.stmts.count() { return <Optional.None /> }
+                    match self.arena.stmts[global.letStmt] {
+                        Stmt.Let(mutable: _, nameStart: val start, nameLen: val length, tyStart: _, tyLen: _, tyIsArray: _, ty: _, init: _, annotationOccurrence: _) => {
+                            if start == global.nameStart && length == global.nameLen { return <Optional.Some v=<SourceControlNode.Statement id=global.letStmt /> /> }
+                        }
+                        _ => {}
+                    }
+                    return <Optional.None />
+                }
+            }
+        }
+        return <Optional.None />
+    }
+
+    // This read is used on a refusal path, never on ordinary successful
+    // statement checking. Ranges remain identities; only direct child IDs copy.
+    fn sourceControlChildren(node: SourceControlNode) -> Array[SourceControlChild] {
+        mut val children: Array[SourceControlChild] = []
+        match node {
+            SourceControlNode.Block(id: val block) => {
+                if block >= self.arena.blocks.count() { return children }
+                val range = self.arena.blocks[block]
+                if range.stmtStart > self.arena.blockStmtPool.count() || range.stmtLen > self.arena.blockStmtPool.count()-range.stmtStart { return children }
+                for index in 0U64..<range.stmtLen { children.append(<SourceControlChild node=<SourceControlNode.Statement id=self.blockStmtAt(blkId: block, index: index) /> />) }
+            }
+            SourceControlNode.Statement(id: val statement) => {
+                if statement >= self.arena.stmts.count() { return children }
+                match self.arena.stmts[statement] {
+                    Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, init: val value, annotationOccurrence: _) | Stmt.ExprStmt(expr: val value) | Stmt.Panic(msg: val value, offset: _) | Stmt.Give(value: val value) => { children.append(<SourceControlChild node=<SourceControlNode.Expression id=value /> />) }
+                    Stmt.Assign(target: val target, value: val value) => {
+                        children.append(<SourceControlChild node=<SourceControlNode.Expression id=target /> />)
+                        children.append(<SourceControlChild node=<SourceControlNode.Expression id=value /> />)
+                    }
+                    Stmt.Return(value: val value, hasValue: val hasValue, offset: _) => { if hasValue { children.append(<SourceControlChild node=<SourceControlNode.Expression id=value /> />) } }
+                    Stmt.If(cond: val condition, thenBlk: val yes, elseBlk: val no, hasElse: val hasElse) => {
+                        children.append(<SourceControlChild node=<SourceControlNode.Expression id=condition /> />)
+                        children.append(<SourceControlChild node=<SourceControlNode.Block id=yes /> />)
+                        if hasElse { children.append(<SourceControlChild node=<SourceControlNode.Block id=no /> />) }
+                    }
+                    Stmt.IfChain(conditions: val conditions, thenBlk: val yes, elseBlk: val no) => {
+                        children.append(<SourceControlChild node=<SourceControlNode.Conditions range=conditions /> />)
+                        children.append(<SourceControlChild node=<SourceControlNode.Block id=yes /> />)
+                        children.append(<SourceControlChild node=<SourceControlNode.Block id=no /> />)
+                    }
+                    Stmt.While(cond: val condition, body: val body) => {
+                        children.append(<SourceControlChild node=<SourceControlNode.Expression id=condition /> region=self.sourceLoopRegionForEdge(statement: statement, edge: <SourceLoopEdge.Condition />) />)
+                        children.append(<SourceControlChild node=<SourceControlNode.Block id=body /> region=self.sourceLoopRegionForEdge(statement: statement, edge: <SourceLoopEdge.Body />) />)
+                    }
+                    Stmt.For(varStart: _, varLen: _, varTyStart: _, varTyLen: _, varTy: _, iter: val value, body: val body, isStruct: _, patStart: _, patLen: _, binds: _) => {
+                        children.append(<SourceControlChild node=<SourceControlNode.Expression id=value /> />)
+                        children.append(<SourceControlChild node=<SourceControlNode.Block id=body /> region=self.sourceLoopRegionForEdge(statement: statement, edge: <SourceLoopEdge.Body />) />)
+                    }
+                    Stmt.Match(scrut: val value, arms: val arms) => {
+                        children.append(<SourceControlChild node=<SourceControlNode.Expression id=value /> />)
+                        children.append(<SourceControlChild node=<SourceControlNode.Arms range=arms /> />)
+                    }
+                    Stmt.Break(offset: _) | Stmt.Continue(offset: _) => {}
+                }
+            }
+            SourceControlNode.Expression(id: val expression) => {
+                if expression >= self.arena.exprs.count() { return children }
+                match self.arena.exprs[expression] {
+                    Expr.Unary(op: _, operand: val value) | Expr.Cast(operand: val value, tyStart: _, tyLen: _, ty: _) | Expr.Try(expr: val value) | Expr.Move(operand: val value, isBorrow: _) | Expr.Await(operand: val value) | Expr.Deref(base: val value) | Expr.Arrow(base: val value, nameStart: _, nameLen: _) | Expr.Field(base: val value, nameStart: _, nameLen: _) | Expr.ExtView(recv: val value, source: _, strip: _) => { children.append(<SourceControlChild node=<SourceControlNode.Expression id=value /> />) }
+                    Expr.Binary(op: _, lhs: val first, rhs: val second) | Expr.Index(base: val first, index: val second) | Expr.OptChain(base: val first, cont: val second) => {
+                        children.append(<SourceControlChild node=<SourceControlNode.Expression id=first /> />)
+                        children.append(<SourceControlChild node=<SourceControlNode.Expression id=second /> />)
+                    }
+                    Expr.Call(nameStart: _, nameLen: _, args: val args) => { children.append(<SourceControlChild node=<SourceControlNode.Arguments range=args /> />) }
+                    Expr.Method(recv: val receiver, nameStart: _, nameLen: _, args: val args) | Expr.ExtMethod(recv: val receiver, source: _, nameStart: _, nameLen: _, args: val args) => {
+                        children.append(<SourceControlChild node=<SourceControlNode.Expression id=receiver /> />)
+                        children.append(<SourceControlChild node=<SourceControlNode.Arguments range=args /> />)
+                    }
+                    Expr.Make(typeStart: _, typeLen: _, variantStart: _, variantLen: _, isEnum: _, ty: _, fields: val fields) => { children.append(<SourceControlChild node=<SourceControlNode.Fields range=fields /> />) }
+                    Expr.Array(elems: val values) | Expr.Dictionary(entries: val values) | Expr.Range(rangeTy: _, endpoints: val values) => { children.append(<SourceControlChild node=<SourceControlNode.Expressions range=values /> />) }
+                    Expr.Sequence(body: val body) | Expr.Block(body: val body, offset: _) => { children.append(<SourceControlChild node=<SourceControlNode.Block id=body /> />) }
+                    Expr.MatchExpr(scrut: val value, arms: val arms) => {
+                        children.append(<SourceControlChild node=<SourceControlNode.Expression id=value /> />)
+                        children.append(<SourceControlChild node=<SourceControlNode.Arms range=arms /> />)
+                    }
+                    Expr.IfExpr(cond: val value, thenBlk: val yes, elseBlk: val no) => {
+                        children.append(<SourceControlChild node=<SourceControlNode.Expression id=value /> />)
+                        children.append(<SourceControlChild node=<SourceControlNode.Block id=yes /> />)
+                        children.append(<SourceControlChild node=<SourceControlNode.Block id=no /> />)
+                    }
+                    Expr.IfChain(conditions: val conditions, thenBlk: val yes, elseBlk: val no) => {
+                        children.append(<SourceControlChild node=<SourceControlNode.Conditions range=conditions /> />)
+                        children.append(<SourceControlChild node=<SourceControlNode.Block id=yes /> />)
+                        children.append(<SourceControlChild node=<SourceControlNode.Block id=no /> />)
+                    }
+                    // MatchSubject reads an already evaluated expression. A
+                    // nested closure's body belongs to its own invocation.
+                    Expr.MatchSubject(scrut: _) | Expr.Closure(params: _, hasRet: _, retStart: _, retLen: _, retIsArray: _, retTy: _, body: _, isDiverging: _) | Expr.Int(value: _, offset: _, isBool: _, tyStart: _, tyLen: _, isNeg: _) | Expr.Float(start: _, len: _, tyStart: _, tyLen: _) | Expr.Ident(start: _, len: _) | Expr.Str(start: _, len: _) | Expr.ChainHole => {}
+                }
+            }
+            SourceControlNode.Arguments(range: val range) => {
+                if range.start > self.arena.argPool.count() || range.len > self.arena.argPool.count()-range.start { return children }
+                for index in 0U64..<range.len { children.append(<SourceControlChild node=<SourceControlNode.Expression id=self.argAt(args: range, index: index).expr /> />) }
+            }
+            SourceControlNode.Expressions(range: val range) => {
+                if range.start > self.arena.exprChildPool.count() || range.len > self.arena.exprChildPool.count()-range.start { return children }
+                for index in 0U64..<range.len { children.append(<SourceControlChild node=<SourceControlNode.Expression id=self.exprAt(exprs: range, index: index) /> />) }
+            }
+            SourceControlNode.Fields(range: val range) => {
+                if range.start > self.arena.makeFieldPool.count() || range.len > self.arena.makeFieldPool.count()-range.start { return children }
+                for index in 0U64..<range.len { children.append(<SourceControlChild node=<SourceControlNode.Expression id=self.makeFieldAt(fields: range, index: index).value /> />) }
+            }
+            SourceControlNode.Arms(range: val range) => {
+                if range.start > self.arena.matchArmPool.count() || range.len > self.arena.matchArmPool.count()-range.start { return children }
+                for index in 0U64..<range.len {
+                    val arm = self.matchArmAt(arms: range, index: index)
+                    if arm.isValuePattern { children.append(<SourceControlChild node=<SourceControlNode.Expression id=arm.valueExpr /> />) }
+                    children.append(<SourceControlChild node=<SourceControlNode.Block id=arm.body /> />)
+                }
+            }
+            SourceControlNode.Conditions(range: val range) => {
+                if range.start > self.arena.conditionClausePool.count() || range.len > self.arena.conditionClausePool.count()-range.start { return children }
+                for index in 0U64..<range.len { children.append(<SourceControlChild node=<SourceControlNode.Expression id=self.conditionClauseAt(conditions: range, index: index).value /> />) }
+            }
+        }
+        return children
+    }
+}
+
+impl SourceControlShape {
+    fn same(other: SourceControlShape) -> Bool {
+        return match self {
+            SourceControlShape.Block(start: val aStart, length: val aLength) => match other { SourceControlShape.Block(start: val bStart, length: val bLength) => aStart == bStart && aLength == bLength _ => false }
+            SourceControlShape.StatementLet(value: val aValue) => match other { SourceControlShape.StatementLet(value: val bValue) => aValue == bValue _ => false }
+            SourceControlShape.StatementAssign(target: val aTarget, value: val aValue) => match other { SourceControlShape.StatementAssign(target: val bTarget, value: val bValue) => aTarget == bTarget && aValue == bValue _ => false }
+            SourceControlShape.StatementExpression(value: val aValue) => match other { SourceControlShape.StatementExpression(value: val bValue) => aValue == bValue _ => false }
+            SourceControlShape.StatementReturn(value: val aValue, hasValue: val aHasValue) => match other { SourceControlShape.StatementReturn(value: val bValue, hasValue: val bHasValue) => aValue == bValue && aHasValue == bHasValue _ => false }
+            SourceControlShape.StatementIf(condition: val aCondition, yes: val aYes, no: val aNo, hasElse: val aHasElse) => match other { SourceControlShape.StatementIf(condition: val bCondition, yes: val bYes, no: val bNo, hasElse: val bHasElse) => aCondition == bCondition && aYes == bYes && aNo == bNo && aHasElse == bHasElse _ => false }
+            SourceControlShape.StatementIfChain(start: val aStart, length: val aLength, yes: val aYes, no: val aNo) => match other { SourceControlShape.StatementIfChain(start: val bStart, length: val bLength, yes: val bYes, no: val bNo) => aStart == bStart && aLength == bLength && aYes == bYes && aNo == bNo _ => false }
+            SourceControlShape.StatementWhile(condition: val aCondition, body: val aBody) => match other { SourceControlShape.StatementWhile(condition: val bCondition, body: val bBody) => aCondition == bCondition && aBody == bBody _ => false }
+            SourceControlShape.StatementFor(iterator: val aIterator, body: val aBody) => match other { SourceControlShape.StatementFor(iterator: val bIterator, body: val bBody) => aIterator == bIterator && aBody == bBody _ => false }
+            SourceControlShape.StatementMatch(value: val aValue, start: val aStart, length: val aLength) => match other { SourceControlShape.StatementMatch(value: val bValue, start: val bStart, length: val bLength) => aValue == bValue && aStart == bStart && aLength == bLength _ => false }
+            SourceControlShape.StatementPanic(value: val aValue) => match other { SourceControlShape.StatementPanic(value: val bValue) => aValue == bValue _ => false }
+            SourceControlShape.StatementGive(value: val aValue) => match other { SourceControlShape.StatementGive(value: val bValue) => aValue == bValue _ => false }
+            SourceControlShape.ExpressionUnary(value: val aValue) => match other { SourceControlShape.ExpressionUnary(value: val bValue) => aValue == bValue _ => false }
+            SourceControlShape.ExpressionField(value: val aValue) => match other { SourceControlShape.ExpressionField(value: val bValue) => aValue == bValue _ => false }
+            SourceControlShape.ExpressionExtView(value: val aValue) => match other { SourceControlShape.ExpressionExtView(value: val bValue) => aValue == bValue _ => false }
+            SourceControlShape.ExpressionCast(value: val aValue) => match other { SourceControlShape.ExpressionCast(value: val bValue) => aValue == bValue _ => false }
+            SourceControlShape.ExpressionTry(value: val aValue) => match other { SourceControlShape.ExpressionTry(value: val bValue) => aValue == bValue _ => false }
+            SourceControlShape.ExpressionArrow(value: val aValue) => match other { SourceControlShape.ExpressionArrow(value: val bValue) => aValue == bValue _ => false }
+            SourceControlShape.ExpressionDeref(value: val aValue) => match other { SourceControlShape.ExpressionDeref(value: val bValue) => aValue == bValue _ => false }
+            SourceControlShape.ExpressionMove(value: val aValue) => match other { SourceControlShape.ExpressionMove(value: val bValue) => aValue == bValue _ => false }
+            SourceControlShape.ExpressionAwait(value: val aValue) => match other { SourceControlShape.ExpressionAwait(value: val bValue) => aValue == bValue _ => false }
+            SourceControlShape.ExpressionBinary(first: val aFirst, second: val aSecond) => match other { SourceControlShape.ExpressionBinary(first: val bFirst, second: val bSecond) => aFirst == bFirst && aSecond == bSecond _ => false }
+            SourceControlShape.ExpressionIndex(first: val aFirst, second: val aSecond) => match other { SourceControlShape.ExpressionIndex(first: val bFirst, second: val bSecond) => aFirst == bFirst && aSecond == bSecond _ => false }
+            SourceControlShape.ExpressionOptChain(first: val aFirst, second: val aSecond) => match other { SourceControlShape.ExpressionOptChain(first: val bFirst, second: val bSecond) => aFirst == bFirst && aSecond == bSecond _ => false }
+            SourceControlShape.ExpressionCall(start: val aStart, length: val aLength) => match other { SourceControlShape.ExpressionCall(start: val bStart, length: val bLength) => aStart == bStart && aLength == bLength _ => false }
+            SourceControlShape.ExpressionMethod(receiver: val aReceiver, start: val aStart, length: val aLength) => match other { SourceControlShape.ExpressionMethod(receiver: val bReceiver, start: val bStart, length: val bLength) => aReceiver == bReceiver && aStart == bStart && aLength == bLength _ => false }
+            SourceControlShape.ExpressionExtMethod(receiver: val aReceiver, start: val aStart, length: val aLength) => match other { SourceControlShape.ExpressionExtMethod(receiver: val bReceiver, start: val bStart, length: val bLength) => aReceiver == bReceiver && aStart == bStart && aLength == bLength _ => false }
+            SourceControlShape.ExpressionMake(start: val aStart, length: val aLength) => match other { SourceControlShape.ExpressionMake(start: val bStart, length: val bLength) => aStart == bStart && aLength == bLength _ => false }
+            SourceControlShape.ExpressionArray(start: val aStart, length: val aLength) => match other { SourceControlShape.ExpressionArray(start: val bStart, length: val bLength) => aStart == bStart && aLength == bLength _ => false }
+            SourceControlShape.ExpressionDictionary(start: val aStart, length: val aLength) => match other { SourceControlShape.ExpressionDictionary(start: val bStart, length: val bLength) => aStart == bStart && aLength == bLength _ => false }
+            SourceControlShape.ExpressionRange(start: val aStart, length: val aLength) => match other { SourceControlShape.ExpressionRange(start: val bStart, length: val bLength) => aStart == bStart && aLength == bLength _ => false }
+            SourceControlShape.ExpressionSequence(body: val aBody) => match other { SourceControlShape.ExpressionSequence(body: val bBody) => aBody == bBody _ => false }
+            SourceControlShape.ExpressionBlock(body: val aBody) => match other { SourceControlShape.ExpressionBlock(body: val bBody) => aBody == bBody _ => false }
+            SourceControlShape.ExpressionMatch(value: val aValue, start: val aStart, length: val aLength) => match other { SourceControlShape.ExpressionMatch(value: val bValue, start: val bStart, length: val bLength) => aValue == bValue && aStart == bStart && aLength == bLength _ => false }
+            SourceControlShape.ExpressionIf(condition: val aCondition, yes: val aYes, no: val aNo) => match other { SourceControlShape.ExpressionIf(condition: val bCondition, yes: val bYes, no: val bNo) => aCondition == bCondition && aYes == bYes && aNo == bNo _ => false }
+            SourceControlShape.ExpressionIfChain(start: val aStart, length: val aLength, yes: val aYes, no: val aNo) => match other { SourceControlShape.ExpressionIfChain(start: val bStart, length: val bLength, yes: val bYes, no: val bNo) => aStart == bStart && aLength == bLength && aYes == bYes && aNo == bNo _ => false }
+            SourceControlShape.Arguments(start: val aStart, length: val aLength) => match other { SourceControlShape.Arguments(start: val bStart, length: val bLength) => aStart == bStart && aLength == bLength _ => false }
+            SourceControlShape.Expressions(start: val aStart, length: val aLength) => match other { SourceControlShape.Expressions(start: val bStart, length: val bLength) => aStart == bStart && aLength == bLength _ => false }
+            SourceControlShape.Fields(start: val aStart, length: val aLength) => match other { SourceControlShape.Fields(start: val bStart, length: val bLength) => aStart == bStart && aLength == bLength _ => false }
+            SourceControlShape.Arms(start: val aStart, length: val aLength) => match other { SourceControlShape.Arms(start: val bStart, length: val bLength) => aStart == bStart && aLength == bLength _ => false }
+            SourceControlShape.Conditions(start: val aStart, length: val aLength) => match other { SourceControlShape.Conditions(start: val bStart, length: val bLength) => aStart == bStart && aLength == bLength _ => false }
+        }
+    }
+}
+impl Comp {
+    fn sourceControlShape(node: SourceControlNode) -> Optional[SourceControlShape] {
+        return match node {
+            SourceControlNode.Block(id: val index) => {
+                if index >= self.arena.blocks.count() { return <Optional.None /> }
+                val block = self.arena.blocks[index]
+                give <Optional.Some v=<SourceControlShape.Block start=block.stmtStart length=block.stmtLen /> />
+            }
+            SourceControlNode.Statement(id: val index) => {
+                if index >= self.arena.stmts.count() { return <Optional.None /> }
+                give match self.arena.stmts[index] {
+                    Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, init: val value, annotationOccurrence: _) => <Optional.Some v=<SourceControlShape.StatementLet value=value /> />
+                    Stmt.Assign(target: val target, value: val value) => <Optional.Some v=<SourceControlShape.StatementAssign target=target value=value /> />
+                    Stmt.ExprStmt(expr: val value) => <Optional.Some v=<SourceControlShape.StatementExpression value=value /> />
+                    Stmt.Return(value: val value, hasValue: val hasValue, offset: _) => <Optional.Some v=<SourceControlShape.StatementReturn value=value hasValue=hasValue /> />
+                    Stmt.If(cond: val condition, thenBlk: val yes, elseBlk: val no, hasElse: val hasElse) => <Optional.Some v=<SourceControlShape.StatementIf condition=condition yes=yes no=no hasElse=hasElse /> />
+                    Stmt.IfChain(conditions: val range, thenBlk: val yes, elseBlk: val no) => <Optional.Some v=<SourceControlShape.StatementIfChain start=range.start length=range.len yes=yes no=no /> />
+                    Stmt.While(cond: val condition, body: val body) => <Optional.Some v=<SourceControlShape.StatementWhile condition=condition body=body /> />
+                    Stmt.For(varStart: _, varLen: _, varTyStart: _, varTyLen: _, varTy: _, iter: val iterator, body: val body, isStruct: _, patStart: _, patLen: _, binds: _) => <Optional.Some v=<SourceControlShape.StatementFor iterator=iterator body=body /> />
+                    Stmt.Match(scrut: val value, arms: val range) => <Optional.Some v=<SourceControlShape.StatementMatch value=value start=range.start length=range.len /> />
+                    Stmt.Panic(msg: val value, offset: _) => <Optional.Some v=<SourceControlShape.StatementPanic value=value /> />
+                    Stmt.Give(value: val value) => <Optional.Some v=<SourceControlShape.StatementGive value=value /> />
+                    Stmt.Break(offset: _) | Stmt.Continue(offset: _) => <Optional.None />
+                }
+            }
+            SourceControlNode.Expression(id: val index) => {
+                if index >= self.arena.exprs.count() { return <Optional.None /> }
+                give match self.arena.exprs[index] {
+                    Expr.Unary(op: _, operand: val value) => <Optional.Some v=<SourceControlShape.ExpressionUnary value=value /> />
+                    Expr.Field(base: val value, nameStart: _, nameLen: _) => <Optional.Some v=<SourceControlShape.ExpressionField value=value /> />
+                    Expr.ExtView(recv: val value, source: _, strip: _) => <Optional.Some v=<SourceControlShape.ExpressionExtView value=value /> />
+                    Expr.Cast(operand: val value, tyStart: _, tyLen: _, ty: _) => <Optional.Some v=<SourceControlShape.ExpressionCast value=value /> />
+                    Expr.Try(expr: val value) => <Optional.Some v=<SourceControlShape.ExpressionTry value=value /> />
+                    Expr.Arrow(base: val value, nameStart: _, nameLen: _) => <Optional.Some v=<SourceControlShape.ExpressionArrow value=value /> />
+                    Expr.Deref(base: val value) => <Optional.Some v=<SourceControlShape.ExpressionDeref value=value /> />
+                    Expr.Move(operand: val value, isBorrow: _) => <Optional.Some v=<SourceControlShape.ExpressionMove value=value /> />
+                    Expr.Await(operand: val value) => <Optional.Some v=<SourceControlShape.ExpressionAwait value=value /> />
+                    Expr.Binary(op: _, lhs: val first, rhs: val second) => <Optional.Some v=<SourceControlShape.ExpressionBinary first=first second=second /> />
+                    Expr.Index(base: val first, index: val second) => <Optional.Some v=<SourceControlShape.ExpressionIndex first=first second=second /> />
+                    Expr.OptChain(base: val first, cont: val second) => <Optional.Some v=<SourceControlShape.ExpressionOptChain first=first second=second /> />
+                    Expr.Call(nameStart: _, nameLen: _, args: val range) => <Optional.Some v=<SourceControlShape.ExpressionCall start=range.start length=range.len /> />
+                    Expr.Method(recv: val receiver, nameStart: _, nameLen: _, args: val range) => <Optional.Some v=<SourceControlShape.ExpressionMethod receiver=receiver start=range.start length=range.len /> />
+                    Expr.ExtMethod(recv: val receiver, source: _, nameStart: _, nameLen: _, args: val range) => <Optional.Some v=<SourceControlShape.ExpressionExtMethod receiver=receiver start=range.start length=range.len /> />
+                    Expr.Make(typeStart: _, typeLen: _, variantStart: _, variantLen: _, isEnum: _, ty: _, fields: val range) => <Optional.Some v=<SourceControlShape.ExpressionMake start=range.start length=range.len /> />
+                    Expr.Array(elems: val range) => <Optional.Some v=<SourceControlShape.ExpressionArray start=range.start length=range.len /> />
+                    Expr.Dictionary(entries: val range) => <Optional.Some v=<SourceControlShape.ExpressionDictionary start=range.start length=range.len /> />
+                    Expr.Range(rangeTy: _, endpoints: val range) => <Optional.Some v=<SourceControlShape.ExpressionRange start=range.start length=range.len /> />
+                    Expr.Sequence(body: val body) => <Optional.Some v=<SourceControlShape.ExpressionSequence body=body /> />
+                    Expr.Block(body: val body, offset: _) => <Optional.Some v=<SourceControlShape.ExpressionBlock body=body /> />
+                    Expr.MatchExpr(scrut: val value, arms: val range) => <Optional.Some v=<SourceControlShape.ExpressionMatch value=value start=range.start length=range.len /> />
+                    Expr.IfExpr(cond: val condition, thenBlk: val yes, elseBlk: val no) => <Optional.Some v=<SourceControlShape.ExpressionIf condition=condition yes=yes no=no /> />
+                    Expr.IfChain(conditions: val range, thenBlk: val yes, elseBlk: val no) => <Optional.Some v=<SourceControlShape.ExpressionIfChain start=range.start length=range.len yes=yes no=no /> />
+                    Expr.MatchSubject(scrut: _) | Expr.Closure(params: _, hasRet: _, retStart: _, retLen: _, retIsArray: _, retTy: _, body: _, isDiverging: _) | Expr.Int(value: _, offset: _, isBool: _, tyStart: _, tyLen: _, isNeg: _) | Expr.Float(start: _, len: _, tyStart: _, tyLen: _) | Expr.Ident(start: _, len: _) | Expr.Str(start: _, len: _) | Expr.ChainHole => <Optional.None />
+                }
+            }
+            SourceControlNode.Arguments(range: val range) => <Optional.Some v=<SourceControlShape.Arguments start=range.start length=range.len /> />
+            SourceControlNode.Expressions(range: val range) => <Optional.Some v=<SourceControlShape.Expressions start=range.start length=range.len /> />
+            SourceControlNode.Fields(range: val range) => <Optional.Some v=<SourceControlShape.Fields start=range.start length=range.len /> />
+            SourceControlNode.Arms(range: val range) => <Optional.Some v=<SourceControlShape.Arms start=range.start length=range.len /> />
+            SourceControlNode.Conditions(range: val range) => <Optional.Some v=<SourceControlShape.Conditions start=range.start length=range.len /> />
+        }
+    }
+}

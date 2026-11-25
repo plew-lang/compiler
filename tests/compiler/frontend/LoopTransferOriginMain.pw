@@ -1,0 +1,42 @@
+// Append to Frontend: Lower provenance alone never publishes Source authority.
+fn main() {
+    for name in ["while_condition_plain_break", "while_condition_plain_continue", "block_break_outside_loop", "block_continue_outside_loop"] {
+        mut val compiler = <Comp />
+        analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.File path="tests/fixtures/reject/"+name+".pw" />, sources: <SourceAccess stdRoot="std/".bytes() />).unwrap()
+        if compiler.authoredLoopTransfers.count() == 0U64 { panic("Lower lost authored transfer") }
+        val authored = compiler.authoredLoopTransfers[0]
+        if !compiler.authoredLoopTransferMatches(authored: authored) { panic("Lower receipt does not match actual statement") }
+        val forged = <AuthoredLoopTransfer statement=authored.statement serial=authored.serial+1U64 isContinue=authored.isContinue spanStart=authored.spanStart spanEnd=authored.spanEnd />
+        if compiler.authoredLoopTransferMatches(authored: forged) { panic("forged serial matched") }
+        val wrongSpan = <AuthoredLoopTransfer statement=authored.statement serial=authored.serial isContinue=authored.isContinue spanStart=authored.spanStart spanEnd=authored.spanEnd+1U64 />
+        if compiler.authoredLoopTransferMatches(authored: wrongSpan) { panic("forged span matched") }
+        val wrongKind = <AuthoredLoopTransfer statement=authored.statement serial=authored.serial isContinue=!authored.isContinue spanStart=authored.spanStart spanEnd=authored.spanEnd />
+        if compiler.authoredLoopTransferMatches(authored: wrongKind) { panic("forged operation matched") }
+        val function = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "main").nameId)
+        val owner = <SemanticCompletionOwner.Function index=function />
+        val path = compiler.sourceLoopTransferPath(owner: owner, statement: authored.statement).unwrap()
+        if !compiler.sourceControlPathMatches(path: path) { panic("actual source path did not validate") }
+        if compiler.sourceLoopTransferPath(owner: <SemanticCompletionOwner.Closure expression=0U64 />, statement: authored.statement).isSome() { panic("foreign owner acquired source path") }
+        val rootBlock = compiler.arena.functionAt(index: function).body
+        val originalBlock = compiler.arena.blocks[rootBlock]
+        mut val statements: Array[U64] = []
+        for index in 0U64..<originalBlock.stmtLen { statements.append(compiler.blockStmtAt(blkId: rootBlock, index: index)) }
+        statements.append(statements[0])
+        val replacement = compiler.pushBlock(stmts: statements)
+        compiler.arena.blocks[rootBlock] = compiler.arena.blocks[replacement]
+        if compiler.sourceControlPathMatches(path: path) { panic("saved path admitted changed root statement range") }
+        compiler.arena.blocks[rootBlock] = originalBlock
+        val original = compiler.arena.stmts[authored.statement]
+        val clone = compiler.pushStmt(s: original)
+        if compiler.sourceLoopTransferPath(owner: owner, statement: clone).isSome() { panic("unattached clone acquired source path") }
+        if compiler.authoredLoopTransfer(statement: clone).isSome() { panic("synthetic clone acquired Lower authority") }
+        compiler.arena.stmts[authored.statement] = <Stmt.ExprStmt expr=0U64 />
+        if compiler.authoredLoopTransferMatches(authored: authored) { panic("mutated operation matched") }
+        compiler.arena.stmts[authored.statement] = original
+        if !compiler.authoredLoopTransferMatches(authored: authored) { panic("test did not restore actual statement") }
+    }
+    mut val normal = <Comp />
+    analyzeFrontendForRequests(c: inout normal, input: <FrontendInput.File path="tests/fixtures/run/while_condition_local_loops.pw" />, sources: <SourceAccess stdRoot="std/".bytes() />).unwrap()
+    val function = normal.arena.firstFunctionNamed(nameId: normal.internBytes(s: "main").nameId)
+    normal.prepareLexicalBody(fnIdx: function).unwrap()
+}

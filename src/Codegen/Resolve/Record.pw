@@ -3816,11 +3816,11 @@ impl Comp {
                 }
             }
             Stmt.While(val cond, val body) => {
-                val conditionScope = self.enterSourceControlRegion(region: <SourceControlRegion.LoopBarrier />)
+                val conditionScope = self.enterSourceLoopEdge(statement: stmtId, edge: <SourceLoopEdge.Condition />)
                 val checked = self.recordExprWithOrigin(exprId: cond, origin: origin, expectedOrigin: <SourceExpectedContext.None />)
                 self.restoreSourceControlRegion(checkpoint: conditionScope)
                 try checked
-                val loopScope = self.enterSourceControlRegion(region: <SourceControlRegion.Loop statementId=stmtId />)
+                val loopScope = self.enterSourceLoopEdge(statement: stmtId, edge: <SourceLoopEdge.Body />)
                 val recorded = self.recordBlockWithOrigin(blkId: body, origin: origin, expectedOrigin: expectedOrigin)
                 self.restoreSourceControlRegion(checkpoint: loopScope)
                 try recorded
@@ -3856,7 +3856,7 @@ impl Comp {
                     self.addLocal(nameStart: varStart, nameLen: varLen, tyStart: item.nameStart, tyLen: item.nameLen, isArray: item.kind == 3, ty: semanticItem, isInout: false, isMut: false, owned: false)
                 }
 
-                val loopScope = self.enterSourceControlRegion(region: <SourceControlRegion.Loop statementId=stmtId />)
+                val loopScope = self.enterSourceLoopEdge(statement: stmtId, edge: <SourceLoopEdge.Body />)
                 val recorded = self.recordBlockWithOrigin(blkId: body, origin: origin, expectedOrigin: expectedOrigin)
                 self.restoreSourceControlRegion(checkpoint: loopScope)
                 self.popLocals(mark: forMark)
