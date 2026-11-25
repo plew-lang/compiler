@@ -111,19 +111,44 @@ Shared loop saved-target authority remains GREEN. Independent review confirms
 these specific corrections; it has not certified the whole task.
 [Checkpoint and runners](../../../evidence/rejection-domains/diagnostic-domain-implementation/type-visibility-refusals/checkpoint.json).
 
-## Next mandatory unit and remaining gates
+## Declaration frontier checkpoint and remaining work
 
-Declaration role/scope/frontier membership alone is insufficient: still seal
-actual declaration slot binding. The independently accepted location is the
-real SourceAdmission constructor immediately after Lower completes, before
-nominal admission. Seal private Lower receipt to registered declaration slots;
-do not seal a caller-populated Raw Comp or let a later origin enum manufacture
-permission. Consume saved declaration identity/slot bindings without a rescan.
-Preserve correspondence through any intervening legitimate normalization.
-Pre-Lower failures are outside this post-Lower missing-import boundary.
+The fresh SourceAdmission constructor enters a private construction state and
+seals the session/scope/root prefix immediately after actual Lower. Raw analysis
+cannot seal existing state by supplying an origin enum. Real callable registration
+retains scalar root occurrence/slot locators; nominal/global registration is
+collected at the trusted seal boundary. No all-slot value snapshot is created.
+Private Lower recipe nodes and scalar child edges connect a registered root to
+an actual child occurrence; final observers validate saved edges and slot values.
+
+Native evidence establishes the Raw-enum escalation RED->GREEN, correct owned
+Core/Ordering/Tok/newtype constructor refusals, wrong session/occurrence/event/
+location refusal rejection, parameter replacement and recipe edge corruption.
+The latter two invalidate both new producer events and saved consumer authority;
+restoration recovers the saved original cause. Body/closure/global/cache and typed
+closure controls remain successful. Independent source review found no must-fix
+in this implemented portion, without certifying remaining coverage or task closure.
+[Declaration checkpoint](../../../evidence/rejection-domains/diagnostic-domain-implementation/type-visibility-refusals/declaration-checkpoint.json).
+
+### Remaining declaration root inventory
+
+| Family | Current implementation / next action |
+|---|---|
+| Function/method, extern, requirement parameter/result/factory-error | root locators and slot readers implemented; extend dedicated source controls |
+| Struct/enum fields, newtype underlying, global declared annotation | locators/readers implemented; underlying exercised, expand field/global controls |
+| Implementation receiver, receiver/target arguments | connect actual bindImplementation inputs to private roots and actual owner slot |
+| Impl associated-type binding | retain AssocBinding authored occurrence/site/impl identity and real type slot |
+| Where operands | preserve PreparedProjectionBound subjectRecipe/arguments/predicates and registered clause/scope; no authored subject when recipe0 |
+| Trait supertrait and associated bounds | use existing private authored operand bindings and actual pool/owner slots, separately for same-anchor scopes |
+
+Do not infer coverage from scope kind or count the remaining rows as done. Private
+Lower recipe edges also apply to these roots. Deferred original bound completion
+must retain its registered input ownership; do not silently authorize new synthetic
+registrations after sealing. Preserve any legitimate normalization correspondence
+without a new semantic lookup.
 
 Then complete Raw/forged/foreign scope, shared-term/different-occurrence and
 alias/binder/unknown-type controls; all five public roots plus demanded/lazy/body
-contrasts on a fresh candidate; required regression, formal<=7.5s and final
-independent review. Current adopted f329 carrier and whole264 baseline are
-unchanged. The WIP source is not an adopted compiler and remains unmeasured.
+contrasts on a fresh candidate; regression/formal<=7.5s and final independent
+review. Adopted f329 and whole264 baseline are unchanged. The WIP source remains
+unmeasured/unadopted. Pre-Lower failures are outside this post-Lower boundary.

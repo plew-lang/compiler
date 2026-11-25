@@ -19,7 +19,7 @@ impl Comp {
             labels.append(self.typeTermRefIdentityChildLabel(ref: ref, index: index))
             index += 1U64
         }
-        return self.sourceTypeUses.deriveRecipe(term: ref, children: children, labels: labels, origin: origin)
+        return self.deriveAuthoredTypeRecipe(term: ref, children: children, labels: labels, origin: origin)
     }
 
     inout fn deriveTypeRecipeWithChildren(ref: U64, children: Array[U64], origin: SourceTypeRecipeOrigin) -> U64 {
@@ -29,7 +29,7 @@ impl Comp {
             labels.append(self.typeTermRefIdentityChildLabel(ref: ref, index: index))
             index += 1U64
         }
-        return self.sourceTypeUses.deriveRecipe(term: ref, children: children, labels: labels, origin: origin)
+        return self.deriveAuthoredTypeRecipe(term: ref, children: children, labels: labels, origin: origin)
     }
 
     inout fn loweredArgumentRecipes(types: Array[PType], terms: Array[U64]) -> Result[Array[U64], CompileDiagnostic] {
@@ -43,7 +43,7 @@ impl Comp {
                 // Source Unit becomes the ordinary closed empty-record payload
                 // at a function result boundary. No caller substitution occurs.
                 if !self.sourceResultRepresentationMatches(source: type.ref, payload: terms[index]) { return <Result.Err error=self.diagnosticAt(offset: type.start, msg: "source argument changed without a representation mapping", failureDomain: <FailureDomain.Internal />) /> }
-                recipes.append(self.sourceTypeUses.deriveRecipe(term: terms[index], children: [], labels: [], origin: <SourceTypeRecipeOrigin.ResultRepresentation />, sourceRecipe: (try self.authoredChildRecipe(type: type))))
+                recipes.append(self.deriveAuthoredTypeRecipe(term: terms[index], children: [], labels: [], origin: <SourceTypeRecipeOrigin.ResultRepresentation />, sourceRecipe: (try self.authoredChildRecipe(type: type))))
             }
             index += 1U64
         }
@@ -124,7 +124,7 @@ impl Comp {
             for recipe in self.lowerMethodReceiverRecipes { children.append(recipe) }
         } else {
             for argument in type.assocTraitArgs {
-                children.append(self.sourceTypeUses.deriveRecipe(term: argument, children: [], labels: [], origin: <SourceTypeRecipeOrigin.LexicalParameter />))
+                children.append(self.deriveAuthoredTypeRecipe(term: argument, children: [], labels: [], origin: <SourceTypeRecipeOrigin.LexicalParameter />))
             }
         }
         try self.appendViewArgumentRecipes(ref: ref, sources: sources, children: inout children)

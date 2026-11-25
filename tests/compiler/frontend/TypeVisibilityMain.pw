@@ -10,6 +10,11 @@ fn main() {
     }
     if !diagnostic.isSourceRejection() { panic("actual declaration type visibility refusal lost source authority: "+diagnostic.message()) }
 
+    for name in ["ordering_needs_import", "use_type_without_import_newtype", "use_type_without_import"] {
+        val result = openFrontend(input: <FrontendInput.File path="tests/fixtures/reject/"+name+".pw" />, sources: <SourceAccess stdRoot="std/".bytes() />)
+        val diagnostic = match result { Result.Err(error: val diagnostic) => diagnostic Result.Ok(value: _) => { panic(name+": invalid declaration accepted") } }
+        if !diagnostic.isSourceRejection() { panic(name+": actual declaration lost Source: "+diagnostic.message()) }
+    }
     for name in ["Body", "Closure", "Global"] {
         mut val compiler = <Comp />
         analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.File path="tests/compiler/frontend/fixtures/TypeVisibility/"+name+".pw" />, sources: <SourceAccess stdRoot="std/".bytes() />).unwrap()

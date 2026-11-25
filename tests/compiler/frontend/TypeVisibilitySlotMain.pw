@@ -23,6 +23,7 @@ fn main() {
         Result.Err(error: val diagnostic) => diagnostic
         Result.Ok(value: _) => { panic("malformed annotation unexpectedly succeeded") }
     }
+    if diagnostic.typeVisibility().isSome() || compiler.failedTypeVisibility.count() != 0U64 { panic("unproved annotation minted a private event") }
     if compiler.sourceFailureHasOwner(diagnostic: diagnostic) { panic(if swapChild { give "detached block child retained Source authority" } else { give "detached annotation retained Source authority" }) }
     }
 }

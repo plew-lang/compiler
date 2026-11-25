@@ -1,0 +1,263 @@
+// Private authored declaration frontier. Raw caller state cannot be promoted by
+// supplying an admission enum; only the fresh source constructor seals it.
+impl Comp {
+    inout fn beginSourceTypeDeclarationConstruction(origin: FrontendDeclarationOrigin) -> Result[(), CompileDiagnostic] {
+        match origin { FrontendDeclarationOrigin.Raw => { return <Result.Ok value=() /> } FrontendDeclarationOrigin.SourceAdmission => {} }
+        if self.arena.bytes.count() != 0U64 || self.arena.typeCount() != 0U64 || self.arena.functionCount() != 0U64 || self.arena.structCount() != 0U64 || self.arena.enumCount() != 0U64 || self.arena.newtypeCount() != 0U64 || self.arena.globals.count() != 0U64 || self.modules.sourceFileCount() != 0U64 || self.sourceTypeUses.scopeCount() != 0U64 || self.authoredTypeDeclarationRoots.count() != 0U64 {
+            return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "source declaration constructor requires fresh state", failureDomain: <FailureDomain.Internal />) />
+        }
+        match self.sourceTypeDeclarationState { SourceTypeDeclarationState.Raw => {} _ => { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "source declaration construction already started", failureDomain: <FailureDomain.Internal />) /> } }
+        self.sourceTypeDeclarationState = <SourceTypeDeclarationState.Lowering session=self.sourceFactSession() />
+        return <Result.Ok value=() />
+    }
+    inout fn sealSourceTypeDeclarationFrontier() -> Result[(), CompileDiagnostic] {
+        val session = match self.sourceTypeDeclarationState {
+            SourceTypeDeclarationState.Raw => { return <Result.Ok value=() /> }
+            SourceTypeDeclarationState.Lowering(session: val session) => session
+            SourceTypeDeclarationState.Sealed(session: _, scopes: _, roots: _) => { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "source declaration frontier already sealed", failureDomain: <FailureDomain.Internal />) /> }
+        }
+        if session != self.sourceFactSession() { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "foreign source declaration frontier", failureDomain: <FailureDomain.Internal />) /> }
+        self.recordNominalTypeDeclarationRoots()
+        self.sourceTypeDeclarationState = <SourceTypeDeclarationState.Sealed session=session scopes=self.sourceTypeUses.scopeCount() roots=self.authoredTypeDeclarationRoots.count() />
+        return <Result.Ok value=() />
+    }
+    inout fn recordTypeDeclarationRoot(scope: U64, occurrence: U64, site: SourceTypeDeclarationSite) {
+        match self.sourceTypeDeclarationState { SourceTypeDeclarationState.Lowering(session: _) => {} _ => { return } }
+        if occurrence == 0U64 { return }
+        val receipt = match self.registeredLowerTypeUse(id: occurrence) { Optional.Some(v: val receipt) => receipt Optional.None => { return } }
+        match receipt.role { SourceTypeUseRole.Declaration => {} _ => { return } }
+        if receipt.scope != scope { return }
+        self.authoredTypeDeclarationRoots.append(<AuthoredTypeDeclarationRoot scope=scope occurrence=occurrence term=receipt.term recipe=receipt.recipe site=site />)
+    }
+    inout fn recordCallableTypeDeclarationRoots(scope: U64, owner: SourceTypeCallableOwner, parameters: Array[U64], result: U64, factoryError: U64) {
+        for index in 0U64..<parameters.count() { self.recordTypeDeclarationRoot(scope: scope, occurrence: parameters[index], site: <SourceTypeDeclarationSite.Parameter owner=owner index=index />) }
+        self.recordTypeDeclarationRoot(scope: scope, occurrence: result, site: <SourceTypeDeclarationSite.Result owner=owner />)
+        self.recordTypeDeclarationRoot(scope: scope, occurrence: factoryError, site: <SourceTypeDeclarationSite.FactoryError owner=owner />)
+    }
+    inout fn recordNominalTypeDeclarationRoots() {
+        for index in 0U64..<self.arena.structCount() {
+            val declaration = self.arena.structAt(index: index)
+            for field in 0U64..<declaration.fields.count() { self.recordTypeDeclarationRoot(scope: declaration.sourceTypeScope, occurrence: declaration.fields[field].authoredTypeUse, site: <SourceTypeDeclarationSite.StructField structure=index field=field />) }
+        }
+        for index in 0U64..<self.arena.enumCount() {
+            val declaration = self.arena.enumAt(index: index)
+            for variant in 0U64..<declaration.variants.count() {
+                for field in 0U64..<declaration.variants[variant].fields.count() { self.recordTypeDeclarationRoot(scope: declaration.sourceTypeScope, occurrence: declaration.variants[variant].fields[field].authoredTypeUse, site: <SourceTypeDeclarationSite.EnumField enumeration=index variant=variant field=field />) }
+            }
+        }
+        for index in 0U64..<self.arena.newtypeCount() {
+            val declaration = self.arena.newtypeAt(index: index)
+            self.recordTypeDeclarationRoot(scope: declaration.sourceTypeScope, occurrence: declaration.authoredTypeUse, site: <SourceTypeDeclarationSite.Underlying index=index />)
+        }
+        for index in 0U64..<self.arena.globals.count() {
+            val declaration = self.arena.globals[index]
+            if declaration.letStmt >= self.arena.stmts.count() { continue }
+            match self.arena.stmts[declaration.letStmt] {
+                Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, init: _, annotationOccurrence: val occurrence) => {
+                    if occurrence.isSome() { self.recordTypeDeclarationRoot(scope: self.sourceTypeUses.globalScope(target: declaration.nameStart), occurrence: occurrence.unwrap(), site: <SourceTypeDeclarationSite.Global index=index />) }
+                }
+                _ => {}
+            }
+        }
+    }
+    inout fn deriveAuthoredTypeRecipe(term: U64, children: Array[U64], labels: Array[U64], origin: SourceTypeRecipeOrigin, sourceRecipe: U64 = 0U64) -> U64 {
+        val id = self.sourceTypeUses.deriveRecipe(term: term, children: children, labels: labels, origin: origin, sourceRecipe: sourceRecipe)
+        self.recordLowerTypeRecipe(id: id, term: term, occurrence: 0U64, children: children, origin: origin, sourceRecipe: sourceRecipe)
+        return id
+    }
+    inout fn recordLowerTypeRecipe(id: U64, term: U64, occurrence: U64, children: Array[U64], origin: SourceTypeRecipeOrigin, sourceRecipe: U64) {
+        val first = self.authoredTypeRecipeEdges.count()
+        for child in children { self.authoredTypeRecipeEdges.append(child) }
+        self.authoredTypeRecipeNodes.append(<AuthoredTypeRecipeNode id=id term=term occurrence=occurrence origin=origin first=first count=children.count() sourceRecipe=sourceRecipe />)
+    }
+    fn authoredTypeRecipeNode(id: U64) -> Optional[AuthoredTypeRecipeNode] {
+        mut val first = 0U64
+        mut val end = self.authoredTypeRecipeNodes.count()
+        while first < end {
+            val middle = first + (end-first)/2U64
+            if self.authoredTypeRecipeNodes[middle].id < id { first = middle+1U64 } else { end = middle }
+        }
+        if first >= self.authoredTypeRecipeNodes.count() || self.authoredTypeRecipeNodes[first].id != id { return <Optional.None /> }
+        return <Optional.Some v=self.authoredTypeRecipeNodes[first] />
+    }
+    fn authoredTypeRecipeNodeMatches(node: AuthoredTypeRecipeNode) -> Bool {
+        val current = match self.sourceTypeUses.recipeAt(id: node.id) { Optional.Some(v: val current) => current Optional.None => { return false } }
+        if current.term != node.term || current.occurrence != node.occurrence || current.sourceRecipe != node.sourceRecipe || current.children.count() != node.count || !node.originMatches(origin: current.origin) { return false }
+        if node.first > self.authoredTypeRecipeEdges.count() || node.count > self.authoredTypeRecipeEdges.count()-node.first { return false }
+        for index in 0U64..<node.count {
+            val child = self.authoredTypeRecipeEdges[node.first+index]
+            if child == 0U64 || child >= node.id || current.children[index] != child { return false }
+        }
+        return node.sourceRecipe == 0U64 || node.sourceRecipe < node.id
+    }
+    fn authoredTypeRecipePath(root: U64, target: U64) -> Optional[Array[U64]] {
+        mut val pending = [(id: root, parent: 0U64)]
+        mut val parents: Dictionary[U64, U64] = [:]
+        while pending.count() != 0U64 {
+            val current = pending[pending.count()-1U64]
+            pending.removeLast()
+            if parents.contains(key: current.id) { continue }
+            val node = match self.authoredTypeRecipeNode(id: current.id) { Optional.Some(v: val node) => node Optional.None => { return <Optional.None /> } }
+            if !self.authoredTypeRecipeNodeMatches(node: node) { return <Optional.None /> }
+            parents[current.id] = current.parent
+            if current.id == target {
+                mut val path: Array[U64] = []
+                mut val id = target
+                while id != 0U64 { path.append(id) id = parents[id] }
+                return <Optional.Some v=path />
+            }
+            for index in 0U64..<node.count { pending.append((id: self.authoredTypeRecipeEdges[node.first+index], parent: node.id)) }
+            if node.sourceRecipe != 0U64 { pending.append((id: node.sourceRecipe, parent: node.id)) }
+        }
+        return <Optional.None />
+    }
+    fn sourceTypeDeclarationProof(receipt: AuthoredTypeUseReceipt) -> Optional[SourceTypeDeclarationProof] {
+        val limit = match self.sourceTypeDeclarationState {
+            SourceTypeDeclarationState.Sealed(session: val session, scopes: val scopes, roots: val roots) => { if session != self.sourceFactSession() || receipt.scope > scopes { return <Optional.None /> } give roots }
+            _ => { return <Optional.None /> }
+        }
+        if limit > self.authoredTypeDeclarationRoots.count() { return <Optional.None /> }
+        for index in 0U64..<limit {
+            val root = self.authoredTypeDeclarationRoots[index]
+            if root.scope != receipt.scope { continue }
+            val path = self.authoredTypeRecipePath(root: root.recipe, target: receipt.recipe)
+            if path.isNone() { continue }
+            val values = match self.sourceTypeDeclarationSlotValues(root: root) { Optional.Some(v: val values) => values Optional.None => { return <Optional.None /> } }
+            return <Optional.Some v=<SourceTypeDeclarationProof root=index values=values recipes=path.unwrap() /> />
+        }
+        return <Optional.None />
+    }
+}
+
+impl AuthoredTypeRecipeNode {
+    fn originMatches(origin: SourceTypeRecipeOrigin) -> Bool {
+        return match self.origin {
+            SourceTypeRecipeOrigin.Authored => match origin { SourceTypeRecipeOrigin.Authored => true _ => false }
+            SourceTypeRecipeOrigin.ProjectionReceiver => match origin { SourceTypeRecipeOrigin.ProjectionReceiver => true _ => false }
+            SourceTypeRecipeOrigin.BoundSelection => match origin { SourceTypeRecipeOrigin.BoundSelection => true _ => false }
+            SourceTypeRecipeOrigin.ResultRepresentation => match origin { SourceTypeRecipeOrigin.ResultRepresentation => true _ => false }
+            SourceTypeRecipeOrigin.LexicalParameter => match origin { SourceTypeRecipeOrigin.LexicalParameter => true _ => false }
+            SourceTypeRecipeOrigin.InheritedTraitArgument => match origin { SourceTypeRecipeOrigin.InheritedTraitArgument => true _ => false }
+        }
+    }
+}
+
+impl Comp {
+    fn sourceTypeDeclarationCallable(owner: SourceTypeCallableOwner) -> Optional[Func] {
+        return match owner {
+            SourceTypeCallableOwner.Function(index: val index) => {
+                if index >= self.arena.functionCount() { return <Optional.None /> }
+                give <Optional.Some v=self.arena.functionAt(index: index) />
+            }
+            SourceTypeCallableOwner.Requirement(traitIndex: val traitIndex, slot: val slot) => {
+                if traitIndex >= self.decls.traitCount() { return <Optional.None /> }
+                val declaration = self.decls.traitAt(index: traitIndex)
+                if slot >= declaration.reqs.len || declaration.reqs.start > self.decls.traitReqPool.count() || declaration.reqs.len > self.decls.traitReqPool.count()-declaration.reqs.start { return <Optional.None /> }
+                give <Optional.Some v=self.traitReqAt(reqs: declaration.reqs, index: slot) />
+            }
+        }
+    }
+    fn sourceTypeDeclarationCallableSlot(root: AuthoredTypeDeclarationRoot, owner: SourceTypeCallableOwner, slot: SourceSignatureSlot) -> Optional[Array[U64]] {
+        val function = match self.sourceTypeDeclarationCallable(owner: owner) { Optional.Some(v: val function) => function Optional.None => { return <Optional.None /> } }
+        val scope = match self.authoredTypeScopeReceipt(token: root.scope) { Optional.Some(v: val scope) => scope Optional.None => { return <Optional.None /> } }
+        if function.defOffset != scope.anchor { return <Optional.None /> }
+        val ids = match owner {
+            SourceTypeCallableOwner.Function(index: val index) => {
+                val signature = match self.sourceTypeUses.signatureFor(function: index) { Optional.Some(v: val signature) => signature Optional.None => { return <Optional.None /> } }
+                if signature.scope != root.scope { return <Optional.None /> }
+                give (result: signature.result, error: signature.factoryError)
+            }
+            SourceTypeCallableOwner.Requirement(traitIndex: val traitIndex, slot: val index) => {
+                val source = self.sourceTypeUses.scopeAt(token: root.scope).unwrap()
+                val requirement = match source.requirement { Optional.Some(v: val requirement) => requirement Optional.None => { return <Optional.None /> } }
+                if requirement.traitIndex != traitIndex || requirement.slot != index { return <Optional.None /> }
+                give (result: requirement.result, error: requirement.factoryError)
+            }
+        }
+        return match slot {
+            SourceSignatureSlot.Parameter(index: val index) => {
+                if index >= function.params.len || function.params.start > self.decls.funcParamPool.count() || function.params.len > self.decls.funcParamPool.count()-function.params.start { return <Optional.None /> }
+                val parameter = self.funcParamAt(params: function.params, index: index)
+                if parameter.authoredTypeUse != root.occurrence || parameter.ty != root.term { return <Optional.None /> }
+                give <Optional.Some v=[function.defOffset, function.params.start, function.params.len, index, parameter.authoredTypeUse, parameter.tyStart, parameter.tyLen, parameter.ty] />
+            }
+            SourceSignatureSlot.Result => {
+                if !function.hasRet || ids.result != root.occurrence || function.retTy != root.term { return <Optional.None /> }
+                give <Optional.Some v=[function.defOffset, ids.result, function.retStart, function.retLen, function.retTy] />
+            }
+            SourceSignatureSlot.FactoryError => {
+                if !function.isFactory || !function.hasRet || ids.error != root.occurrence || function.retTy >= self.arena.typeCount() { return <Optional.None /> }
+                val args = self.arena.typeAt(index: function.retTy).args
+                if args.count() != 2U64 || args[1U64] != root.term { return <Optional.None /> }
+                give <Optional.Some v=[function.defOffset, ids.error, function.retTy, args[1U64]] />
+            }
+        }
+    }
+    fn sourceTypeDeclarationSlotValues(root: AuthoredTypeDeclarationRoot) -> Optional[Array[U64]] {
+        val scope = match self.authoredTypeScopeReceipt(token: root.scope) { Optional.Some(v: val scope) => scope Optional.None => { return <Optional.None /> } }
+        val receipt = match self.authoredTypeUseReceipt(id: root.occurrence) { Optional.Some(v: val receipt) => receipt Optional.None => { return <Optional.None /> } }
+        if receipt.term != root.term || receipt.scope != root.scope || receipt.recipe != root.recipe { return <Optional.None /> }
+        return match root.site {
+            SourceTypeDeclarationSite.Parameter(owner: val owner, index: val index) => self.sourceTypeDeclarationCallableSlot(root: root, owner: owner, slot: <SourceSignatureSlot.Parameter index=index />)
+            SourceTypeDeclarationSite.Result(owner: val owner) => self.sourceTypeDeclarationCallableSlot(root: root, owner: owner, slot: <SourceSignatureSlot.Result />)
+            SourceTypeDeclarationSite.FactoryError(owner: val owner) => self.sourceTypeDeclarationCallableSlot(root: root, owner: owner, slot: <SourceSignatureSlot.FactoryError />)
+            SourceTypeDeclarationSite.StructField(structure: val structure, field: val field) => {
+                if structure >= self.arena.structCount() { return <Optional.None /> }
+                val declaration = self.arena.structAt(index: structure)
+                if declaration.sourceTypeScope != root.scope || declaration.defOffset != scope.anchor || field >= declaration.fields.count() { return <Optional.None /> }
+                val annotation = declaration.fields[field]
+                if annotation.authoredTypeUse != root.occurrence || annotation.ty != root.term { return <Optional.None /> }
+                give <Optional.Some v=[declaration.defOffset, declaration.sourceTypeScope, field, annotation.nameStart, annotation.authoredTypeUse, annotation.authoredTypeSite, annotation.ty] />
+            }
+            SourceTypeDeclarationSite.EnumField(enumeration: val enumeration, variant: val variant, field: val field) => {
+                if enumeration >= self.arena.enumCount() { return <Optional.None /> }
+                val declaration = self.arena.enumAt(index: enumeration)
+                if declaration.sourceTypeScope != root.scope || declaration.defOffset != scope.anchor || variant >= declaration.variants.count() || field >= declaration.variants[variant].fields.count() { return <Optional.None /> }
+                val annotation = declaration.variants[variant].fields[field]
+                if annotation.authoredTypeUse != root.occurrence || annotation.ty != root.term { return <Optional.None /> }
+                give <Optional.Some v=[declaration.defOffset, declaration.sourceTypeScope, variant, field, annotation.nameStart, annotation.authoredTypeUse, annotation.authoredTypeSite, annotation.ty] />
+            }
+            SourceTypeDeclarationSite.Underlying(index: val index) => {
+                if index >= self.arena.newtypeCount() { return <Optional.None /> }
+                val declaration = self.arena.newtypeAt(index: index)
+                if declaration.sourceTypeScope != root.scope || declaration.defOffset != scope.anchor || declaration.authoredTypeUse != root.occurrence || declaration.underRef != root.term { return <Optional.None /> }
+                give <Optional.Some v=[declaration.defOffset, declaration.sourceTypeScope, declaration.nameStart, declaration.authoredTypeUse, declaration.authoredTypeSite, declaration.underRef] />
+            }
+            SourceTypeDeclarationSite.Global(index: val index) => {
+                if index >= self.arena.globals.count() { return <Optional.None /> }
+                val global = self.arena.globals[index]
+                if global.nameStart != scope.anchor || self.sourceTypeUses.globalScope(target: global.nameStart) != root.scope || global.letStmt >= self.arena.stmts.count() { return <Optional.None /> }
+                give match self.arena.stmts[global.letStmt] {
+                    Stmt.Let(mutable: _, nameStart: val name, nameLen: _, tyStart: val start, tyLen: val length, tyIsArray: _, ty: val type, init: _, annotationOccurrence: val occurrence) => {
+                        if name != global.nameStart || occurrence.unwrapOr(fallback: 0U64) != root.occurrence || type != root.term { return <Optional.None /> }
+                        give <Optional.Some v=[name, global.letStmt, start, length, type, root.occurrence] />
+                    }
+                    _ => <Optional.None />
+                }
+            }
+        }
+    }
+    fn sourceTypeDeclarationProofMatches(proof: SourceTypeDeclarationProof, receipt: AuthoredTypeUseReceipt) -> Bool {
+        val limit = match self.sourceTypeDeclarationState {
+            SourceTypeDeclarationState.Sealed(session: val session, scopes: val scopes, roots: val roots) => { if session != self.sourceFactSession() || receipt.scope > scopes { return false } give roots }
+            _ => { return false }
+        }
+        if proof.root >= limit || proof.root >= self.authoredTypeDeclarationRoots.count() || proof.recipes.count() == 0U64 { return false }
+        val root = self.authoredTypeDeclarationRoots[proof.root]
+        if root.scope != receipt.scope || proof.recipes[0U64] != receipt.recipe || proof.recipes[proof.recipes.count()-1U64] != root.recipe { return false }
+        for index in 0U64..<proof.recipes.count() {
+            val node = match self.authoredTypeRecipeNode(id: proof.recipes[index]) { Optional.Some(v: val node) => node Optional.None => { return false } }
+            if !self.authoredTypeRecipeNodeMatches(node: node) { return false }
+            if index != 0U64 {
+                val child = proof.recipes[index-1U64]
+                mut val found = node.sourceRecipe == child
+                for edge in 0U64..<node.count { if self.authoredTypeRecipeEdges[node.first+edge] == child { found = true break } }
+                if !found { return false }
+            }
+        }
+        val values = match self.sourceTypeDeclarationSlotValues(root: root) { Optional.Some(v: val values) => values Optional.None => { return false } }
+        if values.count() != proof.values.count() { return false }
+        for index in 0U64..<values.count() { if values[index] != proof.values[index] { return false } }
+        return true
+    }
+}

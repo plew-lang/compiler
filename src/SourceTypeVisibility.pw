@@ -20,7 +20,10 @@ impl Comp {
         if !receipt.matches(scope: scope) { return <Optional.None /> }
         return <Optional.Some v=receipt />
     }
-    fn authoredTypeUseReceipt(id: U64) -> Optional[AuthoredTypeUseReceipt] {
+    fn registeredLowerTypeUse(id: U64) -> Optional[AuthoredTypeUseReceipt] {
+        // Production Lower IDs are contiguous; external Raw records may leave
+        // gaps. The verified direct probe is an index fast path, not authority.
+        if id != 0U64 && id <= self.authoredTypeOccurrences.count() && self.authoredTypeOccurrences[id-1U64].id == id { return <Optional.Some v=self.authoredTypeOccurrences[id-1U64] /> }
         mut val first = 0U64
         mut val end = self.authoredTypeOccurrences.count()
         while first < end {
@@ -28,7 +31,10 @@ impl Comp {
             if self.authoredTypeOccurrences[middle].id < id { first = middle + 1U64 } else { end = middle }
         }
         if first >= self.authoredTypeOccurrences.count() || self.authoredTypeOccurrences[first].id != id { return <Optional.None /> }
-        val receipt = self.authoredTypeOccurrences[first]
+        return <Optional.Some v=self.authoredTypeOccurrences[first] />
+    }
+    fn authoredTypeUseReceipt(id: U64) -> Optional[AuthoredTypeUseReceipt] {
+        val receipt = match self.registeredLowerTypeUse(id: id) { Optional.Some(v: val receipt) => receipt Optional.None => { return <Optional.None /> } }
         val occurrence = match self.sourceTypeUses.useAt(index: id - 1U64) { Optional.Some(v: val use) => use Optional.None => { return <Optional.None /> } }
         if !receipt.matches(occurrence: occurrence) || receipt.term >= self.arena.typeCount() { return <Optional.None /> }
         val head = self.arena.typeAt(index: receipt.term)
@@ -109,6 +115,13 @@ impl Comp {
         val receipt = match self.authoredTypeUseReceipt(id: occurrence) { Optional.Some(v: val receipt) => receipt Optional.None => { return <Result.Err error=raw /> } }
         if receipt.headStart != start || receipt.headLength != len || receipt.headSite != siteOffset { return <Result.Err error=raw /> }
         val owner = match self.typeVisibilitySourceOwner(receipt: receipt, origin: origin) { Optional.Some(v: val owner) => owner Optional.None => { return <Result.Err error=raw /> } }
+        val declaration = match origin {
+            SourceTypeVisibilityOrigin.Declaration => {
+                val proof = match self.sourceTypeDeclarationProof(receipt: receipt) { Optional.Some(v: val proof) => proof Optional.None => { return <Result.Err error=raw /> } }
+                give <Optional.Some v=proof />
+            }
+            _ => <Optional.None />
+        }
         mut val frontier: Optional[AuthoredTypeFrontier] = <Optional.None />
         val path = match origin {
             SourceTypeVisibilityOrigin.Body(request: _) => {
@@ -121,7 +134,7 @@ impl Comp {
             _ => <Optional.None />
         }
         val refusal = <TypeVisibilityRefusal session=self.sourceFactSession() occurrence=occurrence event=self.failedTypeVisibility.count() location=raw.location() />
-        self.failedTypeVisibility.append(<SourceTypeVisibilityFailure refusal=refusal receipt=receipt owner=owner path=path frontier=frontier useModule=useMod realStart=real.nameStart realLength=real.nameLen />)
+        self.failedTypeVisibility.append(<SourceTypeVisibilityFailure refusal=refusal receipt=receipt owner=owner path=path frontier=frontier declaration=declaration useModule=useMod realStart=real.nameStart realLength=real.nameLen />)
         return <Result.Err error=<CompileDiagnostic.typeVisibility refusal=refusal /> />
     }
     inout fn typeVisibilitySourceOwner(receipt: AuthoredTypeUseReceipt, origin: SourceTypeVisibilityOrigin) -> Optional[SourceTypeVisibilityOwner] {
@@ -197,6 +210,7 @@ impl Comp {
         if receipt.id != proof.receipt.id || receipt.term != proof.receipt.term || receipt.scope != proof.receipt.scope || receipt.recipe != proof.receipt.recipe { return false }
         val file = match self.modules.sourceFileContaining(offset: receipt.headSite) { Optional.Some(v: val file) => file Optional.None => { return false } }
         if self.modules.sourceFileRange(index: file).moduleId != proof.useModule { return false }
+        match proof.declaration { Optional.Some(v: val declaration) => { if !self.sourceTypeDeclarationProofMatches(proof: declaration, receipt: receipt) { return false } } Optional.None => {} }
         match proof.frontier { Optional.Some(v: val frontier) => { if !self.authoredTypeFrontierMatches(frontier: frontier) { return false } } Optional.None => {} }
         match proof.path {
             Optional.Some(v: val path) => { if !self.sourceControlNodePathMatches(path: path) { return false } }

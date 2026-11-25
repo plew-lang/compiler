@@ -904,6 +904,45 @@ impl AuthoredField { factory }
 // Only direct authored break/continue lowering creates these receipts.
 // The serial belongs to this append-only receipt store, not a mutable cursor.
 // Private Lower registration, separate from the caller-writable provenance store.
+enum SourceTypeDeclarationState {
+    Raw
+    Lowering(session: U64)
+    Sealed(session: U64, scopes: U64, roots: U64)
+}
+enum SourceTypeCallableOwner { Function(index: U64) Requirement(traitIndex: U64, slot: U64) }
+enum SourceTypeDeclarationSite {
+    Parameter(owner: SourceTypeCallableOwner, index: U64)
+    Result(owner: SourceTypeCallableOwner)
+    FactoryError(owner: SourceTypeCallableOwner)
+    StructField(structure: U64, field: U64)
+    EnumField(enumeration: U64, variant: U64, field: U64)
+    Underlying(index: U64)
+    Global(index: U64)
+}
+struct AuthoredTypeDeclarationRoot {
+    val scope: U64
+    val occurrence: U64
+    val term: U64
+    val recipe: U64
+    val site: SourceTypeDeclarationSite
+}
+impl AuthoredTypeDeclarationRoot { factory }
+struct AuthoredTypeRecipeNode {
+    val id: U64
+    val term: U64
+    val occurrence: U64
+    val origin: SourceTypeRecipeOrigin
+    val first: U64
+    val count: U64
+    val sourceRecipe: U64
+}
+impl AuthoredTypeRecipeNode { factory }
+struct SourceTypeDeclarationProof {
+    val root: U64
+    val values: Array[U64]
+    val recipes: Array[U64]
+}
+impl SourceTypeDeclarationProof { factory }
 enum SourceTypeVisibilityOrigin { Raw Declaration Body(request: SourceRecordOrigin) }
 enum SourceTypeVisibilityOwner {
     Declaration
@@ -916,6 +955,7 @@ struct SourceTypeVisibilityFailure {
     val owner: SourceTypeVisibilityOwner
     val path: Optional[SourceNodePath]
     val frontier: Optional[AuthoredTypeFrontier]
+    val declaration: Optional[SourceTypeDeclarationProof]
     val useModule: U64
     val realStart: U64
     val realLength: U64
@@ -1267,6 +1307,10 @@ pub struct Comp {
     mut val viaCallByFunction: Dictionary[U64, U64] = [:]
     mut val authoredIdentifiers: Array[AuthoredIdentifier] = []
     mut val authoredFields: Array[AuthoredField] = []
+    mut val sourceTypeDeclarationState: SourceTypeDeclarationState = <SourceTypeDeclarationState.Raw />
+    mut val authoredTypeDeclarationRoots: Array[AuthoredTypeDeclarationRoot] = []
+    mut val authoredTypeRecipeNodes: Array[AuthoredTypeRecipeNode] = []
+    mut val authoredTypeRecipeEdges: Array[U64] = []
     mut val authoredTypeFrontiers: Array[AuthoredTypeFrontier] = []
     mut val failedTypeVisibility: Array[SourceTypeVisibilityFailure] = []
     mut val authoredTypeScopes: Array[AuthoredTypeScopeReceipt] = []
@@ -2301,6 +2345,7 @@ part ./SourceNamedDeclarations
 part ./SourceOperatorRequirements
 part ./SourceGenericFailures
 part ./SourceArrayFailures
+part ./SourceTypeDeclarationVisibility
 part ./SourceTypeVisibility
 part ./SourceLoopFailures
 part ./SourceControlPaths
@@ -2560,6 +2605,7 @@ fn admitFrontendNominalDependencies(c: inout Comp, origin: FrontendDeclarationOr
 // closing the executable BodyInstance/destruction worklist.
 fn loadFrontendDeclarations(c: inout Comp, input: FrontendInput, sources: SourceAccess,
                             options: FrontendOptions, origin: FrontendDeclarationOrigin) -> Result[(), CompileDiagnostic] {
+    try c.beginSourceTypeDeclarationConstruction(origin: origin)
     val genMode = options.genMode
     val tcLog = options.tcLog
     val asan = options.asan
@@ -3038,6 +3084,7 @@ fn loadFrontendDeclarations(c: inout Comp, input: FrontendInput, sources: Source
         }
         rootIndex += 1U64
     }
+    try c.sealSourceTypeDeclarationFrontier()
     tracePhase(c: inout c, label: "lower:done")
     tracePhase(c: inout c, label: "declaration-checks:start")
     // (The former @Std/Prelude force-load is gone: the ambient lang items it once carried

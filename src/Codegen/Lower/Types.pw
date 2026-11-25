@@ -16,6 +16,9 @@ impl Comp {
         if origin.isNone() || origin.unwrap().anchor != self.traitReqAt(reqs: declaration.reqs, index: slot).defOffset || !self.sourceTypeUses.bindRequirement(token: scope, traitOwner: declaration.nameStart, index: declaration.reqs.start + slot, requirement: <SourceRequirementOwner traitIndex=traitIndex slot=slot result=signature.result factoryError=signature.factoryError />) {
             return <Result.Err error=self.diagnosticAt(offset: site, msg: "invalid authored requirement scope binding", failureDomain: <FailureDomain.Internal />) />
         }
+        mut val parameters: Array[U64] = []
+        for index in 0U64..<signature.function.params.len { parameters.append(self.funcParamAt(params: signature.function.params, index: index).authoredTypeUse) }
+        self.recordCallableTypeDeclarationRoots(scope: scope, owner: <SourceTypeCallableOwner.Requirement traitIndex=traitIndex slot=slot />, parameters: parameters, result: signature.result, factoryError: signature.factoryError)
         return <Result.Ok value=() />
     }
 
@@ -53,6 +56,7 @@ impl Comp {
         if !self.sourceTypeUses.bindSignature(token: signature.scope, function: function, parameters: uses, result: signature.result, factoryError: signature.factoryError) {
             return <Result.Err error=self.diagnosticAt(offset: f.defOffset, msg: "invalid authored signature binding", failureDomain: <FailureDomain.Internal />) />
         }
+        self.recordCallableTypeDeclarationRoots(scope: signature.scope, owner: <SourceTypeCallableOwner.Function index=function />, parameters: uses, result: signature.result, factoryError: signature.factoryError)
         return <Result.Ok value=() />
     }
 
@@ -64,6 +68,8 @@ impl Comp {
             index += 1U64
         }
         val occurrence = self.sourceTypeUses.record(term: ref, site: site, parameters: self.cur.typeParams, children: children, labels: labels)
+        val recipe = self.sourceTypeUses.useAt(index: occurrence - 1U64).unwrap().recipe
+        self.recordLowerTypeRecipe(id: recipe, term: ref, occurrence: occurrence, children: children, origin: <SourceTypeRecipeOrigin.Authored />, sourceRecipe: 0U64)
         if ref < self.arena.typeCount() {
             val occurrenceSource = self.sourceTypeUses.useAt(index: occurrence - 1U64).unwrap()
             val head = self.arena.typeAt(index: ref)
