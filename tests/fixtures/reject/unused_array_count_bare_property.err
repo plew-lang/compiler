@@ -1,1 +1,1 @@
-no such field on this value's type
+a method cannot be used as a value; call it, or wrap it in an explicit closure (spec/07)

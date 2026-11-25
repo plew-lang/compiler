@@ -1,6 +1,6 @@
 ---
 id: met-eqw2
-status: in_progress
+status: closed
 deps: [met-f7t8, met-5vgp, met-wp9l]
 links: []
 created: 2026-11-24T02:53:00Z
@@ -24,11 +24,19 @@ Existing adopted d2 CLI is RED: all3 required modes reject Unclassified. Add int
 Independent typing_obligation_plan_review recommends two increments here: stored Fn binding based non-value admission/transport, then actual qualified member category/owner admission. No argument/expected-type overload selection is needed for an overload name used as a value. A type-qualifier base alone is not a member proof; preserve real fields, qualified globals and normal qualifier calls, and do not rescue static access from ordinary instance methods. Mandatory controls include alias/overload group, target0, local closure, wrapper, missing/private member, Raw/synthetic/owner/session/serial, closure/global retry/drain and unused ORC. Normal Value/Qualifier reader migration is explicitly owned by com-tr3a and remains unfinished, so this finite repair cannot certify the whole name-resolution area.
 
 The actual T.make() paired-source probe found a wrong qualifier classification when a module fn T exists. met-f7t8 owns that finite lexical type-binder precedence correction and is a real prerequisite; fix it before this admission could freeze the wrong category. That prerequisite is independently closed, as is named-declaration child
-[met-5vgp](met-5vgp.md). Qualified namespace normalization is independently
-closed by [met-uy77](met-uy77.md); [met-wp9l](met-wp9l.md) remains active
-for associated/instance/trait-bound category admission. Parent whole gates
-remain open; use the worklog for the current carrier and next slice.
+[met-5vgp](met-5vgp.md). Qualified namespace normalization [met-uy77](met-uy77.md) and member category
+[met-wp9l](met-wp9l.md) are independently closed. The wider com-yeua boundary
+remains open; use the worklog for the current carrier and next slice.
 
 ## Bounded children
 
 met-5vgp owns named declaration admission/negative transport; met-wp9l owns the separately missing qualified member category producer. Parent closure requires both; child closure does not certify the whole name-resolution area.
+
+## Outcome
+
+Both children and actual prerequisites are independently accepted. Named and
+qualified declaration category failures retain owner/origin to final consumers;
+argument applicability and successful binding reader migration remain separate.
+See [met-wp9l outcome](met-wp9l.md#outcome-and-limits) and its saved evidence for
+formal G2/7.350999s, measured qualified108/named45 controls and whole comparison.
+277 inherited failures remain; neither com-yeua nor phase3/main is certified.

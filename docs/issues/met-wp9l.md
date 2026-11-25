@@ -1,6 +1,6 @@
 ---
 id: met-wp9l
-status: in_progress
+status: closed
 deps: [met-u9uu, met-uy77]
 links: []
 created: 2026-11-24T05:14:39Z
@@ -74,12 +74,20 @@ and label-frontier poison controls remain in
 - Independent source/guarantee review found no remaining mandatory scenario or
   confirmed design defect, excluding outstanding formal/whole gates below.
 
-## Remaining completion gates
+## Outcome and limits
 
-Formal run20261125T154512-self-host-889dad passed with immutable inputs, generation2
-LLVM/runtime/successor binary fixed point and3-run median7.350999s (<=7.5s).
-Whole regression comparison20261125T160113-test-e49efb is running against the
-recorded282-failure baseline. Reconcile new differences and obtain independent
-final recognition.
-Do not count inherited failures as new regressions or claim the whole suite green.
-This task and its parents remain open until their respective guarantees close.
+Independently accepted as a finite repair. Formal20261125T154512-self-host-889dad
+has immutable inputs, generation2 LLVM/runtime/successor fixed point and3-run
+median7.350999s<=7.5s. Actual artifact/tool/carrier hashes were verified.
+Measured carrier qualified108 and named45 modes all pass.
+
+Whole20261125T160113-test-e49efb completed with278 failures versus282, identical
+3313 fixtures and source hashes. Five associated-value refusals are repaired.
+The only added failure was an obsolete missing-field golden for Array.count;
+its non-value diagnostic was synchronized without changing the fixture or
+rejection guarantee, and the production-worker replay passes.277 inherited
+failures remain after this finite reconciliation; this is not whole green.
+
+Independent final review accepts this task and met-eqw2, not com-yeua,
+com-tr3a, phase3 or main/seed promotion. The measured carrier with frozen std
+is saved at bin/carriers/dde345e4da6d/plewc for subsequent development.
