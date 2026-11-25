@@ -354,7 +354,19 @@ pub impl AssignmentRefusal {
     fn location() -> DiagnosticLocation { return self.location }
 }
 
+pub enum NamedDeclarationKind { Free Associated Instance }
+pub impl NamedDeclarationKind {
+    fn key() -> U64 { return match self { NamedDeclarationKind.Free => 0U64 NamedDeclarationKind.Associated => 1U64 NamedDeclarationKind.Instance => 2U64 } }
+    fn message() -> String {
+        return match self {
+            NamedDeclarationKind.Free => "a named function declaration cannot be used as a value; wrap it in an explicit closure (e.g. `fn(...) {{ return name(...) }}`) (spec/04)"
+            NamedDeclarationKind.Associated => "an associated function declaration cannot be used as a value; wrap the call in an explicit closure (spec/07)"
+            NamedDeclarationKind.Instance => "a method cannot be used as a value; call it, or wrap it in an explicit closure (spec/07)"
+        }
+    }
+}
 pub struct NamedDeclarationRefusal {
+    val kind: NamedDeclarationKind = <NamedDeclarationKind.Free />
     val session: U64
     val owner: DiagnosticOwner
     val expression: U64
@@ -362,6 +374,7 @@ pub struct NamedDeclarationRefusal {
     val location: DiagnosticLocation
 }
 pub impl NamedDeclarationRefusal {
+    fn kind() -> NamedDeclarationKind { return self.kind }
     factory
     fn session() -> U64 { return self.session }
     fn owner() -> DiagnosticOwner { return self.owner }
@@ -740,7 +753,7 @@ pub impl CompileDiagnostic {
             DiagnosticData.IndexRequirement(refusal: _) => "subscript requires an Index implementation for reading or an IndexSet implementation for writing"
             DiagnosticData.SourceTyping(refusal: _) => "cannot infer this expression's type; add a type annotation or provide an expected type"
             DiagnosticData.OpaqueNumeric(refusal: _) => opaqueNumericMessage()
-            DiagnosticData.NamedDeclaration(refusal: _) => "a named function declaration cannot be used as a value; wrap it in an explicit closure (e.g. `fn(...) {{ return name(...) }}`) (spec/04)"
+            DiagnosticData.NamedDeclaration(refusal: val refusal) => refusal.kind().message()
             DiagnosticData.OperatorRequirement(refusal: _) => "arithmetic operator needs Add/Sub/Mul/Div/Rem; not implemented for this type"
             DiagnosticData.GenericCallConflict(refusal: _) => genericCallConflictMessage()
             DiagnosticData.ArrayContext(refusal: _) => "cannot infer an empty array's element type from a non-array context (spec/02)"

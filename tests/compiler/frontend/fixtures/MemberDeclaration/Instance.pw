@@ -1,0 +1,4 @@
+struct Item {}
+impl Item { fn read() -> I64 { return 1I64 } }
+fn broken() -> fn() -> I64 { val item = <Item /> return item.read }
+fn main() {  }

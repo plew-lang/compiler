@@ -1,0 +1,5 @@
+trait Maker { assoc fn make() -> Self }
+struct Item {}
+impl Item as Maker { assoc fn make() -> Item { return <Item /> } }
+fn broken[T](seed: T) -> fn() -> T where T: Maker { return T.make }
+fn main() {  }

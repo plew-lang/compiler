@@ -1,0 +1,4 @@
+struct Item {}
+extension Extra { impl Item { fn read() -> I64 { return 1I64 } } }
+fn broken(seed: Item) -> fn() -> I64 { return seed#Extra.read }
+fn main() {}

@@ -1,0 +1,4 @@
+pub trait Reader { fn basis() -> I64 }
+impl Reader { fn read() -> I64 { return 1I64 } }
+pub struct Item {}
+pub impl Item as Reader { fn basis() -> I64 { return 1I64 } }

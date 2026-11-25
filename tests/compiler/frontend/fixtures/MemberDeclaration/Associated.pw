@@ -1,0 +1,4 @@
+struct Item {}
+impl Item { assoc fn make() -> I64 { return 1I64 } }
+fn broken() -> fn() -> I64 { return Item.make }
+fn main() {  }

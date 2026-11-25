@@ -11,6 +11,8 @@ impl Comp {
 
     inout fn pushAuthoredField(base: U64, start: U64, length: U64, spanStart: U64, spanEnd: U64) -> U64 {
         val expression = self.pushExpr(e: <Expr.Field base=base nameStart=start nameLen=length />)
+        self.arena.exprSpanStart[expression] = spanStart
+        self.arena.exprSpanEnd[expression] = spanEnd
         val count = self.authoredFields.count()
         if count != 0U64 && self.authoredFields[count - 1U64].expression >= expression { panic("internal error: field origins are not append-only") }
         self.authoredFields.append(<AuthoredField expression=expression serial=self.arena.exprOriginSerial[expression] base=base start=start length=length spanStart=spanStart spanEnd=spanEnd />)
@@ -239,7 +241,7 @@ pub impl Comp {
                 result = self.pushExpr(e: <Expr.ExtMethod recv=r source=(try self.lowerViewSourceSpan(siteOffset: span.start, start: srcSpan.start, len: srcSpan.end - srcSpan.start)) nameStart=nm.nameStart nameLen=nm.nameLen args=a />)
                 self.authoredMethodExpressions.insert(result)
             }
-            ExprAst.SourceSelection(val recv, val path, val application, val strip, sourceSpan: _, span: _) => { result = try self.lowerValueSourceSelection(recv: recv, path: path, application: application, strip: strip) }
+            ExprAst.SourceSelection(val recv, val path, val application, val strip, sourceSpan: _, val span) => { result = try self.lowerValueSourceSelection(recv: recv, path: path, application: application, strip: strip, span: span) }
             ExprAst.ExtView(val recv, val src, val srcSpan, val strip, val span) => {
                 val r: U64 = (try self.lowerExpr(e: recv))
                 result = try self.lowerValueView(recv: r, source: (try self.lowerViewSourceSpan(siteOffset: span.start, start: srcSpan.start, len: srcSpan.end - srcSpan.start)), strip: strip)

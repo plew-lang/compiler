@@ -1,0 +1,199 @@
+// Non-value declaration admission consumes the same name readers as calls.
+// It never invents arguments, selects an overload, or prepares a callee body.
+impl Comp {
+    fn memberReceiverIsQualifier(expression: U64) -> Bool {
+        if expression < self.typeCache.identBind.count() && self.typeCache.identBind[expression] == identTypeQualCode() { return true }
+        return match self.arena.exprs[expression] {
+            Expr.ExtView(recv: val receiver, source: _, strip: _) => self.memberReceiverIsQualifier(expression: receiver)
+            _ => false
+        }
+    }
+
+    inout fn memberReceiverHasField(receiverTerm: U64, nameStart: U64, nameLen: U64) -> Result[Bool, CompileDiagnostic] {
+        if receiverTerm == 0U64 { return <Result.Ok value=false /> }
+        val storage = try self.readFieldStorageType(receiverRef: self.lexicalLayoutReceiver(receiverTerm: receiverTerm), requireEvidence: true)
+        if storage == 0U64 { return <Result.Ok value=false /> }
+        val type = self.arena.typeAt(index: storage)
+        val index = self.fieldIndexOfReceiver(receiverRef: storage, fieldStart: nameStart, fieldLen: nameLen)
+        if type.isRecord { return <Result.Ok value=index < type.recordFieldLabels.count() /> }
+        val nominal = self.structIndexForType(ref: storage)
+        return <Result.Ok value=nominal < self.arena.structCount() && index < self.arena.structAt(index: nominal).fields.count() />
+    }
+
+    inout fn memberDeclarationGroup(receiver: U64, receiverTerm: U64, nameStart: U64, nameLen: U64) -> Result[MemberDeclarationLookup, CompileDiagnostic] {
+        val associated = self.memberReceiverIsQualifier(expression: receiver)
+        val name = intern(c: inout self, start: nameStart, len: nameLen)
+        val qualifier = if associated { give self.assocRecvName(recv: receiver) } else { give self.missingDeclIdentity() }
+        mut val declaration = if qualifier.nameLen != 0U64 {
+            give self.typeDeclIdentityAt(useMod: self.moduleOf(offset: qualifier.nameStart), start: qualifier.nameStart, len: qualifier.nameLen)
+        } else { give self.missingDeclIdentity() }
+        mut val receiverId = 0U64
+        mut val storage = receiverTerm
+        if storage != 0U64 {
+            storage = try self.readFieldStorageType(receiverRef: storage, requireEvidence: true)
+            if storage != 0U64 {
+                val type = self.arena.typeAt(index: storage)
+                receiverId = type.nameId
+                if associated && type.hasDecl { declaration = self.typeDeclIdentityAt(useMod: self.moduleOf(offset: type.nameStart), start: type.nameStart, len: type.nameLen) }
+            }
+        }
+        if receiverId == 0U64 && qualifier.nameLen != 0U64 { receiverId = intern(c: inout self, start: qualifier.nameStart, len: qualifier.nameLen) }
+        if receiverId == 0U64 { return <Result.Ok value=<MemberDeclarationLookup.Missing /> /> }
+        val receiverType = if receiverTerm != 0U64 { give self.arena.typeAt(index: receiverTerm) } else { give <TypeRef nameStart=qualifier.nameStart nameLen=qualifier.nameLen args=[] /> }
+        val sources = try self.collectViewSources(recv: receiver, recvStart: receiverType.nameStart, recvLen: receiverType.nameLen, recvRef: receiverTerm, readReceiverSyntax: true, extensionProofs: self.recordedExtensionSources(exprId: receiver))
+        mut val surfaces = if associated { give [<NominalMemberSurface.Associated />, <NominalMemberSurface.ProvidedAssociated />] } else { give [<NominalMemberSurface.Instance />] }
+        if sources.count() != 0U64 {
+            surfaces.append(<NominalMemberSurface.ViewSet sources=sources associated=associated pass=0U64 requiredTraitOwner=0U64 />)
+            surfaces.append(<NominalMemberSurface.ViewSet sources=sources associated=associated pass=1U64 requiredTraitOwner=0U64 />)
+        }
+        mut val extensions: Array[U64] = []
+        mut val selectedTraits: Array[U64] = []
+        mut val nominal: Array[U64] = []
+        mut val inaccessible = false
+        for surface in surfaces {
+            mut val names = self.nominalMemberNames(name: name, receiver: receiverId, receiverTerm: receiverTerm, declaration: declaration, surface: surface)
+            while true {
+                val index = match self.nextNominalMemberName(cursor: inout names) { Optional.Some(v: val index) => index Optional.None => { break } }
+                val entry = self.decls.callableAt(index: index)
+                val function = self.arena.functionAt(index: entry.funcIdx)
+                val qualified = match surface { NominalMemberSurface.ViewSet(sources: _, associated: _, pass: _, requiredTraitOwner: _) => true _ => false }
+                if function.viewOnly && !qualified { continue }
+                if function.isProvided {
+                    if !(try self.callableReceiverMatches(f: function, recvId: receiverId, recvRef: receiverTerm)) { continue }
+                } else if storage != 0U64 && function.recvTy != 0U64 {
+                    if !self.memberReceiverPatternMatches(function: function, receiver: storage) { continue }
+                }
+                if !self.methodIsVisible(mf: function, offset: nameStart) { inaccessible = true continue }
+                match surface {
+                    NominalMemberSurface.ViewSet(sources: _, associated: _, pass: val pass, requiredTraitOwner: _) => { if pass == 0U64 { extensions.append(index) } else { selectedTraits.append(index) } }
+                    _ => { nominal.append(index) }
+                }
+            }
+        }
+        if extensions.count() != 0U64 { nominal = extensions } else if selectedTraits.count() != 0U64 { nominal = selectedTraits }
+        // Lexical bounds and view-selected trait members retain complete proof
+        // instances. Name/category filtering precedes any proof query, as calls do.
+        mut val abstract: Array[StaticMemberResolution] = []
+        mut val preferred: Array[StaticMemberResolution] = []
+        if receiverTerm != 0U64 {
+            val assumptions = self.functionBoundAssumptions(fnIdx: self.cur.checkFn)
+            mut val sourceOwners: Array[U64] = []
+            for source in self.arena.typeViewSources(ref: receiverTerm) { if source.traitInstance.owner != 0U64 { sourceOwners.append(source.traitInstance.owner) } }
+            for traitIndex in 0U64..<self.decls.traitCount() {
+                val trait = self.decls.traitAt(index: traitIndex)
+                mut val members: Array[TraitMemberNameCandidate] = []
+                mut val names = self.traitMemberNames(traitIndex: traitIndex, memberId: name, useOffset: nameStart)
+                while true {
+                    val member = match self.nextTraitMemberName(cursor: inout names) { Optional.Some(v: val member) => member Optional.None => { break } }
+                    val eligible = match member {
+                        TraitMemberNameCandidate.Requirement(traitIndex: _, slot: _, associated: val role) => role == associated
+                        TraitMemberNameCandidate.Provided(traitIndex: _, function: _, associated: val role, visible: val visible) => role == associated
+                    }
+                    if eligible { members.append(member) }
+                }
+                if members.count() == 0U64 { continue }
+                val discovered = try self.traitMemberInstanceProofs(baseRef: receiverTerm, traitId: trait.nameId, traitOwner: trait.nameStart, assumptions: assumptions)
+                val proofs = self.preferredTraitMemberProofs(discovered: discovered, traitOwner: trait.nameStart, sourceOwners: sourceOwners)
+                mut val instances: Array[TraitBound] = []
+                for proof in proofs {
+                    val bound = try self.staticProofBound(proof: proof, traitIdx: traitIndex)
+                    if bound.subject == 0U64 { continue }
+                    mut val duplicate = false
+                    for instance in instances { if instance.constraint.key.owner == bound.constraint.key.owner && self.sameResolvedTypeRefs(a: instance.constraint.key.positionalArgs, b: bound.constraint.key.positionalArgs) { duplicate = true } }
+                    if duplicate { continue }
+                    instances.append(bound)
+                    for member in members {
+                        match member { TraitMemberNameCandidate.Provided(traitIndex: _, function: _, associated: _, visible: val visible) => { if !visible { inaccessible = true continue } } _ => {} }
+                        val candidate = match member {
+                            TraitMemberNameCandidate.Requirement(traitIndex: val owner, slot: val slot, associated: _) => <StaticMemberResolution.Requirement proof=proof traitIdx=owner reqIdx=slot />
+                            TraitMemberNameCandidate.Provided(traitIndex: val owner, function: val function, associated: _, visible: _) => <StaticMemberResolution.Provided proof=proof traitIdx=owner callee=function />
+                        }
+                        val admitted = try self.admitStaticMemberInstance(resolution: candidate, receiverRef: receiverTerm, assumptions: assumptions)
+                        match admitted { StaticMemberResolution.Missing => { continue } _ => {} }
+                        abstract.append(admitted)
+                        if sourceOwners.count() != 0U64 && self.traitProofMatchesSources(proof: proof, traitOwner: trait.nameStart, sourceOwners: sourceOwners) { preferred.append(admitted) }
+                    }
+                }
+            }
+        }
+        if preferred.count() != 0U64 { abstract = preferred }
+        if nominal.count() != 0U64 || abstract.count() != 0U64 { return <Result.Ok value=<MemberDeclarationLookup.Admitted group=<MemberDeclarationGroup receiverExpression=receiver memberStart=nameStart memberLen=nameLen memberId=name receiverTerm=receiverTerm declaration=declaration associated=associated nominal=nominal abstract=abstract /> /> /> }
+        if inaccessible { return <Result.Ok value=<MemberDeclarationLookup.Inaccessible /> /> }
+        return <Result.Ok value=<MemberDeclarationLookup.Missing /> />
+    }
+
+    fn retainedMemberGroupMatches(group: MemberDeclarationGroup, associated: Bool) -> Bool {
+        if associated != group.associated || group.receiverTerm >= self.arena.typeCount() || (group.nominal.count() == 0U64 && group.abstract.count() == 0U64) { return false }
+        for index in group.nominal {
+            if index >= self.decls.callableCount() { return false }
+            val candidate = self.decls.callableAt(index: index)
+            if candidate.funcIdx >= self.arena.functionCount() { return false }
+            val function = self.arena.functionAt(index: candidate.funcIdx)
+            if function.nameId != group.memberId { return false }
+            if associated { if !function.isAssoc { return false } } else { if !function.hasRecv { return false } }
+        }
+        for member in group.abstract {
+            match member {
+                StaticMemberResolution.Missing => { return false }
+                StaticMemberResolution.Requirement(proof: _, traitIdx: val owner, reqIdx: val slot) => {
+                    if owner >= self.decls.traitCount() || slot >= self.decls.traitAt(index: owner).reqs.count() { return false }
+                    val requirement = self.traitReqAt(reqs: self.decls.traitAt(index: owner).reqs, index: slot)
+                    if requirement.nameId != group.memberId || requirement.isAssoc != associated { return false }
+                }
+                StaticMemberResolution.Provided(proof: _, traitIdx: val owner, callee: val function) => {
+                    if owner >= self.decls.traitCount() || function >= self.arena.functionCount() || self.arena.functionAt(index: function).isAssoc != associated || self.arena.functionAt(index: function).nameId != group.memberId { return false }
+                }
+            }
+        }
+        return true
+    }
+
+    // Only this producer binds source operation, recorded receiver and lookup.
+    // Diagnostic construction consumes its journal index, never a supplied group.
+    inout fn recordMemberDeclarationValue(expression: U64, origin: SourceRecordOrigin) -> Result[(), CompileDiagnostic] {
+        val field = match self.arena.exprs[expression] {
+            Expr.Field(val base, val nameStart, val nameLen) => (base: base, start: nameStart, length: nameLen)
+            _ => { return <Result.Ok value=() /> }
+        }
+        if !self.memberReceiverIsQualifier(expression: field.base) {
+            val stored = self.constructionExpression(exprId: expression).hasFieldProjection
+            if stored || (try self.memberReceiverHasField(receiverTerm: self.parametricExprTerm(exprId: field.base), nameStart: field.start, nameLen: field.length)) { return <Result.Ok value=() /> }
+        }
+        val receiver = try self.methodReceiverTerm(exprId: field.base)
+        match try self.memberDeclarationGroup(receiver: field.base, receiverTerm: receiver, nameStart: field.start, nameLen: field.length) {
+            MemberDeclarationLookup.Missing => { return <Result.Ok value=() /> }
+            MemberDeclarationLookup.Inaccessible => { return <Result.Err error=self.diagnosticAt(offset: field.start, msg: "method is private (callable only in its defining module; put it in a `pub impl`)") /> }
+            MemberDeclarationLookup.Admitted(group: val group) => {
+                val kind = if group.associated { give <NamedDeclarationKind.Associated /> } else { give <NamedDeclarationKind.Instance /> }
+                val raw = self.diagnosticAt(offset: self.exprOffset(id: expression), msg: kind.message())
+                val request = match origin { SourceRecordOrigin.Raw => { return <Result.Err error=raw /> } SourceRecordOrigin.CheckingRequest(session: val session, root: val root) => (session: session, root: root) }
+                val authored = match self.authoredField(expression: expression) { Optional.Some(v: val authored) => authored Optional.None => { return <Result.Err error=raw /> } }
+                val owner = match self.currentSourceOwner() { Optional.Some(v: val owner) => owner Optional.None => { return <Result.Err error=raw /> } }
+                if request.session != self.sourceFactSession() || !self.authoredFieldMatches(authored: authored) || !self.sourceFacts.isActive(owner: owner) || !semanticCompletionOwnersEqual(recorded: self.lexicalSourceFactOwner(owner: owner), prepared: request.root) { return <Result.Err error=raw /> }
+                val admission = self.memberDeclarationAdmissions.count()
+                self.memberDeclarationAdmissions.append(<MemberDeclarationAdmission session=request.session owner=owner root=request.root authored=authored group=group />)
+                return <Result.Err error=self.memberDeclarationValueDiagnostic(expression: expression, admission: admission, origin: origin) />
+            }
+        }
+    }
+
+    inout fn memberDeclarationValueDiagnostic(expression: U64, admission: U64, origin: SourceRecordOrigin) -> CompileDiagnostic {
+        if admission >= self.memberDeclarationAdmissions.count() { return self.diagnosticAt(offset: self.exprOffset(id: expression), msg: "internal error: invalid member declaration admission") }
+        val sealed = self.memberDeclarationAdmissions[admission]
+        val group = sealed.group
+        val authored = sealed.authored
+        val kind = if group.associated { give <NamedDeclarationKind.Associated /> } else { give <NamedDeclarationKind.Instance /> }
+        val location = self.diagnosticLocationAt(offset: self.exprOffset(id: expression))
+        val raw = <CompileDiagnostic location=location message=kind.message() />
+        val request = match origin { SourceRecordOrigin.Raw => { return raw } SourceRecordOrigin.CheckingRequest(session: val session, root: val root) => (session: session, root: root) }
+        if request.session != self.sourceFactSession() || sealed.session != request.session || authored.expression != expression || !semanticCompletionOwnersEqual(recorded: sealed.root, prepared: request.root) { return raw }
+        if authored.base != group.receiverExpression || authored.start != group.memberStart || authored.length != group.memberLen { return raw }
+        if !self.authoredFieldMatches(authored: authored) || !self.retainedMemberGroupMatches(group: group, associated: group.associated) { return raw }
+        val recorded = match self.currentSourceOwner() { Optional.Some(v: val owner) => owner Optional.None => { return raw } }
+        if !semanticCompletionOwnersEqual(recorded: sealed.owner, prepared: recorded) || !self.sourceFacts.isActive(owner: recorded) { return raw }
+        match self.sourceFacts.expressionOwners.get(key: expression) { Optional.Some(v: val owner) => { if !semanticCompletionOwnersEqual(recorded: owner, prepared: recorded) { return raw } } Optional.None => {} }
+        val refusal = <NamedDeclarationRefusal kind=kind session=request.session owner=self.currentDiagnosticOwner() expression=expression event=self.failedNamedDeclarations.count() location=location />
+        self.failedNamedDeclarations.append(<SourceNamedDeclarationFailure refusal=refusal owner=recorded root=request.root source=<NamedDeclarationSource.Member authored=authored /> memberAdmission=<Optional.Some v=admission /> />)
+        return <CompileDiagnostic.namedDeclaration refusal=refusal />
+    }
+}

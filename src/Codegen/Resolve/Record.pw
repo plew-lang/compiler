@@ -2861,6 +2861,7 @@ impl Comp {
                 // receiver argument (Box[T]) for later body grounding.
                 val baseTerm: U64 = self.parametricExprTerm(exprId: base)
                 try self.recordFieldSelection(exprId: exprId, receiverTerm: baseTerm, nameStart: nameStart, nameLen: nameLen, base: <Optional.Some v=base />)
+                try self.recordMemberDeclarationValue(expression: exprId, origin: origin.request)
                 try self.verifySourceFieldExists(exprId: exprId, receiver: base, receiverTerm: baseTerm, nameStart: nameStart, nameLen: nameLen, kind: <MissingFieldKind.ValueCheck />)
             }
             Expr.Make(val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, val ty, val fields) => {

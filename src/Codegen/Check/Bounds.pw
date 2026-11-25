@@ -550,13 +550,7 @@ impl Comp {
                 }
                 if requirements.count() != 0U64 || provided.count() != 0U64 {
                     val discovered = try self.traitMemberInstanceProofs(baseRef: receiverRef, traitId: declaration.nameId, traitOwner: declaration.nameStart, assumptions: assumptions)
-                    mut val proofs: Array[StaticConformanceProof] = []
-                    // Put preferred paths first before instance deduplication;
-                    // another path to that instance cannot erase provenance.
-                    if sourceOwners.count() != 0U64 {
-                        for proof in discovered { if self.traitProofMatchesSources(proof: proof, traitOwner: declaration.nameStart, sourceOwners: sourceOwners) { proofs.append(proof) } }
-                    }
-                    for proof in discovered { if sourceOwners.count() == 0U64 || !self.traitProofMatchesSources(proof: proof, traitOwner: declaration.nameStart, sourceOwners: sourceOwners) { proofs.append(proof) } }
+                    val proofs = self.preferredTraitMemberProofs(discovered: discovered, traitOwner: declaration.nameStart, sourceOwners: sourceOwners)
                     mut val instances: Array[TraitBound] = []
                     for proof in proofs {
                         val bound = try self.staticProofBound(proof: proof, traitIdx: traitIndex)

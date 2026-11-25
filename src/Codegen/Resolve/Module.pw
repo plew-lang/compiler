@@ -856,7 +856,7 @@ pub impl Comp {
         return <Result.Ok value=self.selectedMemberFunction(selection: (try self.lookupAssocForResolvedReceiver(surfaceRef: surfaceRef, sourceId: sourceId, sourceOwner: sourceOwner, nameStart: nameStart, nameLen: nameLen, args: args, useOffset: useOffset))) />
     }
 
-    inout fn viewSetHasTrait(sources: Array[CallableSourceHead]) -> Bool {
+    fn viewSetHasTrait(sources: Array[CallableSourceHead]) -> Bool {
         mut val i: U64 = 0U64
         while i < sources.count() {
             if sources[i].kind == 2U64 { return true }
@@ -865,7 +865,7 @@ pub impl Comp {
         return false
     }
 
-    inout fn callableMatchesAnyExtension(c: Callable, sources: Array[CallableSourceHead]) -> Bool {
+    fn callableMatchesAnyExtension(c: Callable, sources: Array[CallableSourceHead]) -> Bool {
         if c.sourceKind != 1U64 { return false }
         mut val i: U64 = 0U64
         while i < sources.count() {
@@ -875,7 +875,7 @@ pub impl Comp {
         return false
     }
 
-    inout fn callableMatchesAnyTrait(c: Callable, sources: Array[CallableSourceHead]) -> Bool {
+    fn callableMatchesAnyTrait(c: Callable, sources: Array[CallableSourceHead]) -> Bool {
         mut val i: U64 = 0U64
         while i < sources.count() {
             if sources[i].kind == 2U64 && self.callableMatchesTrait(c: c, source: sources[i]) { return true }
@@ -901,7 +901,6 @@ impl Comp {
         val qNameId: U64 = intern(c: inout self, start: nameStart, len: nameLen)
         val qRecvId: U64 = intern(c: inout self, start: recvStart, len: recvLen)
         val useMod: U64 = self.moduleOf(offset: nameStart)
-        val hasTrait: Bool = self.viewSetHasTrait(sources: sources)
         mut val pass: U64 = 0U64
         while pass < 2U64 {
             mut val firstLabel: U64 = self.arena.functionCount()
@@ -909,53 +908,25 @@ impl Comp {
             mut val typeMatch2: U64 = self.arena.functionCount()
             mut val typeMatchEntry: U64 = self.decls.callableCount()
             mut val typeMatch2Entry: U64 = self.decls.callableCount()
-            mut val i: U64 = self.decls.firstCallableNamed(nameId: qNameId)
-            while i < self.decls.callableCount() {
-                val cand: Callable = self.decls.callableAt(index: i)
-                val f: Func = self.arena.functionAt(index: cand.funcIdx)
-                mut val sourceMatches: Bool = false
-                if pass == 0U64 {
-                    sourceMatches = self.callableMatchesAnyExtension(c: cand, sources: sources)
-                    // Direct extension members have no trait provenance and
-                    // remain visible under an additional `#Trait`. Extension
-                    // copies contributed through a trait subject, however,
-                    // are narrowed by that one selected trait.
-                    if sourceMatches && hasTrait && cand.traitId != 0U64 {
-                        sourceMatches = self.callableMatchesAnyTrait(c: cand, sources: sources)
-                    }
-                } else {
-                    sourceMatches = cand.sourceKind == 2U64 && self.callableMatchesAnyTrait(c: cand, sources: sources)
-                }
-                // Direct conformance witnesses live on the bare callable surface.
-                // Their declared conformance is distinct from a provided copy's
-                // selected trait surface; neither is an anonymous same-name method.
-                mut val candidateTraitOwner = cand.traitOwner
-                if candidateTraitOwner == 0U64 { candidateTraitOwner = f.originTraitOwner }
-                if requiredTraitOwner != 0U64 && pass == 1U64 && cand.sourceKind == 0U64 {
-                    sourceMatches = candidateTraitOwner == requiredTraitOwner
-                }
-                // A trait requirement has no executable body. It participates
-                // in declaration-time static member resolution, but never in
-                // this concrete callable surface; otherwise a trait receiver
-                // proof makes the requirement compete with its implementation.
-                if sourceMatches && (requiredTraitOwner == 0U64 || candidateTraitOwner == requiredTraitOwner) && (f.body != 0U64 || f.isExtern) && ((associated && f.isAssoc) || (!associated && f.hasRecv)) {
-                    if f.nameId == qNameId && (try self.callableReceiverMatches(f: f, recvId: qRecvId, recvRef: recvRef)) {
-                        val matchRank: U64 = (try self.groundedMethodArgMatchRank(f: f, args: args, recvRef: recvRef))
-                        if matchRank != 0U64 {
-                            if firstLabel == self.arena.functionCount() { firstLabel = cand.funcIdx }
-                            if matchRank == 2U64 {
-                                if typeMatch == self.arena.functionCount() {
-                                    typeMatch = cand.funcIdx
-                                    typeMatchEntry = i
-                                } else if typeMatch2 == self.arena.functionCount() && !(try self.sameCallableMemberInstance(a: self.decls.callableAt(index: typeMatchEntry), b: cand, receiverRef: recvRef)) {
-                                    typeMatch2 = cand.funcIdx
-                                    typeMatch2Entry = i
-                                }
-                            }
+            mut val names = self.nominalMemberNames(name: qNameId, receiver: qRecvId, receiverTerm: recvRef, declaration: self.missingDeclIdentity(), surface: <NominalMemberSurface.ViewSet sources=sources associated=associated pass=pass requiredTraitOwner=requiredTraitOwner />)
+            while true {
+                val i = match self.nextNominalMemberName(cursor: inout names) { Optional.Some(v: val index) => index Optional.None => { break } }
+                val cand = self.decls.callableAt(index: i)
+                val f = self.arena.functionAt(index: cand.funcIdx)
+                if !(try self.callableReceiverMatches(f: f, recvId: qRecvId, recvRef: recvRef)) { continue }
+                val matchRank = try self.groundedMethodArgMatchRank(f: f, args: args, recvRef: recvRef)
+                if matchRank != 0U64 {
+                    if firstLabel == self.arena.functionCount() { firstLabel = cand.funcIdx }
+                    if matchRank == 2U64 {
+                        if typeMatch == self.arena.functionCount() {
+                            typeMatch = cand.funcIdx
+                            typeMatchEntry = i
+                        } else if typeMatch2 == self.arena.functionCount() && !(try self.sameCallableMemberInstance(a: self.decls.callableAt(index: typeMatchEntry), b: cand, receiverRef: recvRef)) {
+                            typeMatch2 = cand.funcIdx
+                            typeMatch2Entry = i
                         }
                     }
                 }
-                i = self.decls.nextCallableNamed(index: i)
             }
             if typeMatch != self.arena.functionCount() {
                 try self.checkMethodOverloadAmbiguity(a: typeMatch, b: typeMatch2, args: args, receiverRef: recvRef, nameStart: nameStart, nameLen: nameLen, methodOrigin: methodOrigin)
@@ -1154,7 +1125,7 @@ pub impl Comp {
     // Associated lookup precedes argument inference, so an authored bare
     // generic qualifier may have no arguments yet. Restrict the declaration
     // identity here; argument/pattern checking remains in its normal phase.
-    inout fn receiverDeclarationMatches(f: Func, receiverRef: U64) -> Bool {
+    fn receiverDeclarationMatches(f: Func, receiverRef: U64) -> Bool {
         if receiverRef == 0U64 || receiverRef >= self.arena.typeCount() || f.recvTy == 0U64 || f.recvTy >= self.arena.typeCount() { return true }
         mut val receiver = receiverRef
         val underlying = self.arena.newtypeUnderlying(ref: receiver)
@@ -1423,34 +1394,27 @@ impl Comp {
         mut val typeMatch2: U64 = self.arena.functionCount()
         mut val typeMatchEntry: U64 = self.decls.callableCount()
         mut val typeMatch2Entry: U64 = self.decls.callableCount()
-        mut val i: U64 = self.decls.firstCallableNamed(nameId: qNameId)
-        while i < self.decls.callableCount() {
-            val cand: Callable = self.decls.callableAt(index: i)
-            val f: Func = self.arena.functionAt(index: cand.funcIdx)
-            if f.hasRecv {
-                if self.callableMatchesSource(c: cand, source: source) {
-                        if f.nameId == qNameId {
-                            if (try self.callableReceiverMatches(f: f, recvId: qRecvId, recvRef: recvRef)) {
-                                val matchRank: U64 = (try self.groundedMethodArgMatchRank(f: f, args: args, recvRef: recvRef))
-                                if matchRank != 0U64 {
-                                    if firstLabel == self.arena.functionCount() {
-                                        firstLabel = cand.funcIdx
-                                    }
-                                    if matchRank == 2U64 {
-                                        if typeMatch == self.arena.functionCount() {
-                                            typeMatch = cand.funcIdx
-                                            typeMatchEntry = i
-                                        } else if typeMatch2 == self.arena.functionCount() && !(try self.sameCallableMemberInstance(a: self.decls.callableAt(index: typeMatchEntry), b: cand, receiverRef: recvRef)) {
-                                            typeMatch2 = cand.funcIdx
-                                            typeMatch2Entry = i
-                                        }
-                                    }
-                                }
-                            }
-                        }
+        mut val names = self.nominalMemberNames(name: qNameId, receiver: qRecvId, receiverTerm: recvRef, declaration: self.missingDeclIdentity(), surface: <NominalMemberSurface.Source source=source />)
+        while true {
+            val i = match self.nextNominalMemberName(cursor: inout names) { Optional.Some(v: val index) => index Optional.None => { break } }
+            val cand = self.decls.callableAt(index: i)
+            val f = self.arena.functionAt(index: cand.funcIdx)
+            if !(try self.callableReceiverMatches(f: f, recvId: qRecvId, recvRef: recvRef)) { continue }
+            val matchRank = try self.groundedMethodArgMatchRank(f: f, args: args, recvRef: recvRef)
+            if matchRank != 0U64 {
+                if firstLabel == self.arena.functionCount() {
+                    firstLabel = cand.funcIdx
+                }
+                if matchRank == 2U64 {
+                    if typeMatch == self.arena.functionCount() {
+                        typeMatch = cand.funcIdx
+                        typeMatchEntry = i
+                    } else if typeMatch2 == self.arena.functionCount() && !(try self.sameCallableMemberInstance(a: self.decls.callableAt(index: typeMatchEntry), b: cand, receiverRef: recvRef)) {
+                        typeMatch2 = cand.funcIdx
+                        typeMatch2Entry = i
+                    }
                 }
             }
-            i = self.decls.nextCallableNamed(index: i)
         }
         if typeMatch != self.arena.functionCount() {
             try self.checkOverloadAmbiguity(a: typeMatch, b: typeMatch2, args: args)

@@ -1,0 +1,4 @@
+struct Box[T] { val item: T }
+impl Box[I64] { fn read() -> I64 { return 1I64 } }
+fn broken(seed: Box[Bool]) -> fn() -> I64 { return seed.read }
+fn main() {}

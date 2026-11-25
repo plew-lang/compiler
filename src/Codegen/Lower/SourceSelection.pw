@@ -211,7 +211,7 @@ impl Comp {
         return <Result.Ok value=viewed />
     }
 
-    inout fn lowerBoundValueView(recv: U64, source: ResolvedViewSource, names: Array[Span], head: U64, strip: Bool, argumentOccurrences: Array[U64]) -> Result[U64, CompileDiagnostic] {
+    inout fn lowerBoundValueView(recv: U64, source: ResolvedViewSource, names: Array[Span], head: U64, strip: Bool, argumentOccurrences: Array[U64], spanStart: U64) -> Result[U64, CompileDiagnostic] {
         mut val authoredArguments: Optional[Array[U64]] = <Optional.None />
         if argumentOccurrences.count() != 0U64 {
             match self.sourceTypeUses.currentRole() {
@@ -237,7 +237,7 @@ impl Comp {
         mut val index = head + 1U64
         while index < names.count() {
             val name = names[index]
-            result = self.pushExpr(e: <Expr.Field base=result nameStart=name.start nameLen=name.end - name.start />)
+            result = self.pushAuthoredField(base: result, start: name.start, length: name.end - name.start, spanStart: spanStart, spanEnd: name.end)
             index += 1U64
         }
         return <Result.Ok value=result />
@@ -279,14 +279,14 @@ impl Comp {
         }
         val source = try self.completeTypeViewSource(source: head.source, arguments: arguments, hasLabels: labels)
         val receiver = try self.lowerSyntaxExpr(id: expr.child0)
-        val viewed = try self.lowerBoundValueView(recv: receiver, source: source, names: names, head: head.index, strip: expr.flag0, argumentOccurrences: argumentOccurrences)
+        val viewed = try self.lowerBoundValueView(recv: receiver, source: source, names: names, head: head.index, strip: expr.flag0, argumentOccurrences: argumentOccurrences, spanStart: expr.span.start)
         match key {
             Optional.Some(v: val expression) => { return self.lowerIndexRead(recv: viewed, key: (try self.lowerSyntaxExpr(id: expression))) }
             Optional.None => { return <Result.Ok value=viewed /> }
         }
     }
 
-    inout fn lowerValueSourceSelection(recv: ExprAst, path: Array[NameSegmentAst], application: Optional[SourceApplicationAst], strip: Bool) -> Result[U64, CompileDiagnostic] {
+    inout fn lowerValueSourceSelection(recv: ExprAst, path: Array[NameSegmentAst], application: Optional[SourceApplicationAst], strip: Bool, span: Span) -> Result[U64, CompileDiagnostic] {
         mut val names: Array[Span] = []
         for segment in path { names.append(segment.nameSpan) }
         val head = try self.bindValueViewSource(names: names)
@@ -320,7 +320,7 @@ impl Comp {
         }
         val source = try self.completeTypeViewSource(source: head.source, arguments: arguments, hasLabels: labels)
         val receiver = try self.lowerExpr(e: recv)
-        val viewed = try self.lowerBoundValueView(recv: receiver, source: source, names: names, head: head.index, strip: strip, argumentOccurrences: argumentOccurrences)
+        val viewed = try self.lowerBoundValueView(recv: receiver, source: source, names: names, head: head.index, strip: strip, argumentOccurrences: argumentOccurrences, spanStart: span.start)
         match key {
             Optional.Some(v: val expression) => { return self.lowerIndexRead(recv: viewed, key: (try self.lowerExpr(e: expression))) }
             Optional.None => { return <Result.Ok value=viewed /> }

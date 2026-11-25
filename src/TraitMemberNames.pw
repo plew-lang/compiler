@@ -25,4 +25,12 @@ impl Comp {
         }
         return <Optional.None />
     }
+    inout fn preferredTraitMemberProofs(discovered: Array[StaticConformanceProof], traitOwner: U64, sourceOwners: Array[U64]) -> Array[StaticConformanceProof] {
+        if sourceOwners.count() == 0U64 { return discovered }
+        mut val ordered: Array[StaticConformanceProof] = []
+        for proof in discovered { if self.traitProofMatchesSources(proof: proof, traitOwner: traitOwner, sourceOwners: sourceOwners) { ordered.append(proof) } }
+        for proof in discovered { if !self.traitProofMatchesSources(proof: proof, traitOwner: traitOwner, sourceOwners: sourceOwners) { ordered.append(proof) } }
+        return ordered
+    }
+
 }

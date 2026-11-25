@@ -56,3 +56,46 @@ instance and trait-bound category transport remains unfinished. Evidence: meta/e
 Neutral review clarified that an admitted non-value binding is not an applicable call. For an inherent nominal declaration group, retain canonical receiver/group identity, role, visibility and matching receiver pattern; method/call argument conditions are not solved without a call. Different concrete receiver specializations must remain distinct, and an incomplete generic head retains the unresolved matching group rather than selecting one specialization. For lexical-bound/provided/trait-view surfaces, existing receiver/bound/source proof establishes where the group comes from. Neither case invents call arguments or an expected function type. Lower origin/owner and actual binding admission remain required; a spelling Bool or name-reader alone cannot publish Source authority. Preserve real fields/assoc values/globals first. Required contrasts: conditional inherent groups, incompatible concrete receiver pattern, incomplete generic head, private candidate, field/static value, absent provided/trait-view proof.
 
 The first name-reader increment5c81e676 is independently recognized as complete after build8f7316/exact197source/native reader and poison sensitivity/qualified45 unchanged/named45 GREEN. It is only one increment; remaining qualified rejection cases are still RED. met-u9uu separately repairs the real namespace/type-binder prerequisite.
+
+## Current implementation boundary
+
+Nominal reader9d488af2 is shared by normal method/assoc lookup. Frozen build
+20261125T141437-build-df9d68 passed; corrected adjacent-std setup preserves old
+60-mode result exactly (18 expected REDs, normal contrasts GREEN). The initial
+missing-std run was a setup failure, not a product regression.
+
+Uncommitted member admission now derives Field/receiver internally and saves an
+opaque private admission journal; rejection/consumer use its index, not a caller-
+supplied group. Kind, Lower serial/span/base/name, session/root/owner, failure
+retention and retry are checked. Independent review exposed supplied-group
+permission and preferred-proof ordering defects; both were repaired, with the
+ordering helper shared with normal static lookup. Value-Field Bool diagnostics
+were removed. Source/ViewSet reader extraction preserves normal call filters,
+proof/rank/pass order; read-only source predicates now accurately use fn.
+
+Lower.SourceSelection written dotted members now use pushAuthoredField with
+prefix spans; synthetic fields remain untrusted. Native controls cover concrete,
+bound, provided, trait/extension/static views, newtype, conditional inherent,
+incomplete heads, Raw/foreign/mutated/synthetic/retry/cursor, mismatched receiver,
+absent proof, foreign private provided and real function storage. These passed
+in member-declaration-storage-proof-native-v2 before two new boundary REDs.
+Frozen group build20261125T142908-build-6d3f1f passed and75/78 CLI modes passed;
+remaining3 were inherited-newtype refusal, subsequently fixed in native probes.
+
+### Remaining confirmed defects before next candidate
+
+- Independent review: group must retain distinct canonical source/priority
+  families, not discard fallbacks based on basename before arguments exist.
+  Native Families control expects2 alternatives; current name-only preference
+  leaves1. Preserve true same-declaration/path dedup, not cross-family selection.
+- Independent review and actual MultiTrait RED: full Reader[I64] selector still
+  admits Reader[Bool] nominal member. Owner/arity/source head and saved receiver
+  alone are insufficient. Bind each trait-owned alternative to its exact
+  conformance/witness and complete instance, preserve that proof in the group,
+  and filter against the admitted selector before publishing Source authority.
+  Include intermediate proof-path instances when a selected source is a bridge.
+
+Native/CLI logs and fixed snapshots are under meta/tmp/phase3-forward-frontier;
+archive necessary compact evidence before cleanup. No parent/task closure, no
+current formal performance/main green claim. Next: fix these two REDs, extend
+producer/consumer contrasts, fresh candidate and formal7.5s validation.

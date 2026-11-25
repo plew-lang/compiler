@@ -1,0 +1,87 @@
+// Append to frozen Frontend; exercise admission and retained owner authority.
+fn main() {
+    for name in ["Associated", "Instance", "Bound", "BoundInstance", "Newtype", "Extension", "StaticExtension", "TraitView", "Conditional", "Incomplete", "Provided", "MultiTrait", "Families"] {
+        mut val compiler = <Comp />
+        analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.File path="tests/compiler/frontend/fixtures/MemberDeclaration/"+name+".pw" />, sources: <SourceAccess stdRoot="std/".bytes() />).unwrap()
+        val function = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "broken").nameId)
+        val owner = <SemanticCompletionOwner.Function index=function />
+        if !compiler.sourceFacts.begin(owner: owner) { panic("body not fresh") }
+        val request = <SourceRecordOrigin.CheckingRequest session=compiler.sourceFactSession() root=owner />
+        val diagnostic = match compiler.recordParametricFunctionWithOrigin(fnIdx: function, recordCallTemplates: true, origin: <SourceRecordingScope request=request returnContext=<SourceExpectedContext.None /> />, expectedOrigin: <SourceExpectedContext.None />) {
+            Result.Err(error: val diagnostic) => diagnostic
+            Result.Ok(value: _) => { panic("member declaration became value") }
+        }
+        val refusal = match diagnostic.namedDeclaration() { Optional.Some(v: val refusal) => refusal Optional.None => { panic(name+": member refused without declaration admission: "+diagnostic.message()) } }
+        val proof = compiler.failedNamedDeclarations[refusal.event()]
+        val admission = proof.memberAdmission.unwrap()
+        val group = compiler.memberDeclarationAdmissions[admission].group
+        val field = match proof.source { NamedDeclarationSource.Member(val authored) => authored _ => { panic("member lost Field receipt") } }
+        if !compiler.sourceFailureHasOwner(diagnostic: diagnostic) || diagnostic.isSourceRejection() { panic("member lost private authority") }
+        if group.associated != (name == "Associated" || name == "Bound" || name == "Newtype" || name == "StaticExtension" || name == "Incomplete") { panic("member changed category") }
+        if name == "Bound" || name == "BoundInstance" || name == "Provided" { if group.abstract.count() == 0U64 { panic(name+": bound lost canonical requirement") } }
+        if name == "Incomplete" && group.nominal.count() != 2U64 { panic("incomplete head selected a concrete receiver") }
+        if name == "MultiTrait" && group.nominal.count() != 1U64 { panic("trait selector admitted another complete instance") }
+        if name == "Families" && group.nominal.count() != 2U64 { panic("name-only preference discarded fallback family") }
+        val count = compiler.failedNamedDeclarations.count()
+        val wrongKind = <NamedDeclarationRefusal kind=if group.associated { give <NamedDeclarationKind.Instance /> } else { give <NamedDeclarationKind.Associated /> } session=refusal.session() owner=refusal.owner() expression=refusal.expression() event=refusal.event() location=refusal.location() />
+        if compiler.sourceFailureHasOwner(diagnostic: <CompileDiagnostic.namedDeclaration refusal=wrongKind />) { panic("forged category acquired authority") }
+        if compiler.memberDeclarationValueDiagnostic(expression: field.expression, admission: compiler.memberDeclarationAdmissions.count(), origin: request).namedDeclaration().isSome() { panic("missing admission minted source refusal") }
+        for invalid in 0U64..<3U64 {
+            val origin = if invalid == 0U64 { give <SourceRecordOrigin.Raw /> } else if invalid == 1U64 { give <SourceRecordOrigin.CheckingRequest session=compiler.sourceFactSession()+1U64 root=owner /> } else { give <SourceRecordOrigin.CheckingRequest session=compiler.sourceFactSession() root=<SemanticCompletionOwner.Global target=0U64 /> /> }
+            if compiler.memberDeclarationValueDiagnostic(expression: field.expression, admission: admission, origin: origin).namedDeclaration().isSome() { panic("invalid request minted member refusal") }
+        }
+        val original = compiler.arena.exprs[field.expression]
+        for invalid in 0U64..<5U64 {
+            if invalid == 0U64 { compiler.arena.exprOriginSerial[field.expression] = field.serial+1U64 }
+            if invalid == 1U64 { compiler.arena.exprSpanStart[field.expression] = field.spanStart+1U64 }
+            if invalid == 2U64 { compiler.arena.exprSpanEnd[field.expression] = field.spanEnd+1U64 }
+            if invalid == 3U64 { compiler.arena.exprs[field.expression] = <Expr.Field base=field.base nameStart=field.start+1U64 nameLen=field.length /> }
+            if invalid == 4U64 { compiler.sourceFacts.expressionOwners[field.expression] = <SemanticCompletionOwner.Global target=0U64 /> }
+            if compiler.sourceFailureHasOwner(diagnostic: diagnostic) { panic("mutated Field retained authority") }
+            if compiler.memberDeclarationValueDiagnostic(expression: field.expression, admission: admission, origin: request).namedDeclaration().isSome() { panic("mutated Field minted refusal") }
+            compiler.arena.exprOriginSerial[field.expression] = field.serial
+            compiler.arena.exprSpanStart[field.expression] = field.spanStart
+            compiler.arena.exprSpanEnd[field.expression] = field.spanEnd
+            compiler.arena.exprs[field.expression] = original
+            compiler.sourceFacts.expressionOwners.remove(key: field.expression)
+        }
+        val clone = compiler.pushExpr(e: original)
+        compiler.arena.exprSpanStart[clone] = field.spanStart
+        compiler.arena.exprSpanEnd[clone] = field.spanEnd
+        if compiler.memberDeclarationValueDiagnostic(expression: clone, admission: admission, origin: request).namedDeclaration().isSome() { panic("synthetic Field minted authority") }
+        if compiler.failedNamedDeclarations.count() != count { panic("invalid requests changed evidence") }
+        compiler.finishSourceFacts(owner: owner, result: <Result.Err error=diagnostic />, bodyless: false)
+        if !compiler.sourceFailureHasOwner(diagnostic: diagnostic) { panic("builder failure erased member category") }
+        val retried = match compiler.prepareLexicalBody(fnIdx: function) { Result.Err(error: val diagnostic) => diagnostic Result.Ok(value: _) => { panic("failed member builder became success") } }
+        if !compiler.sourceFailureHasOwner(diagnostic: retried) || retried.namedDeclaration().unwrap().event() != refusal.event() || compiler.failedNamedDeclarations.count() != count { panic("retry lost retained member refusal") }
+        compiler.prepareLexicalBody(fnIdx: compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "main").nameId)).unwrap()
+        if !compiler.sourceFailureHasOwner(diagnostic: diagnostic) { panic("another cursor erased member category") }
+    }
+    for name in ["WrongReceiver", "AbsentProof", "Private"] {
+        mut val compiler = <Comp />
+        analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.File path="tests/compiler/frontend/fixtures/MemberDeclaration/"+name+".pw" />, sources: <SourceAccess stdRoot="std/".bytes() />).unwrap()
+        val function = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "broken").nameId)
+        val diagnostic = match compiler.prepareLexicalBody(fnIdx: function) { Result.Err(error: val diagnostic) => diagnostic Result.Ok(value: _) => { panic("invalid member became value") } }
+        if diagnostic.namedDeclaration().isSome() || compiler.memberDeclarationAdmissions.count() != 0U64 { panic("missing or private member acquired declaration admission") }
+        if name == "Private" { if diagnostic.message() != "method is private (callable only in its defining module; put it in a `pub impl`)" { panic("private provided candidate became missing") } }
+    }
+    mut val storage = <Comp />
+    analyzeFrontendForRequests(c: inout storage, input: <FrontendInput.File path="tests/compiler/frontend/fixtures/MemberDeclaration/Storage.pw" />, sources: <SourceAccess stdRoot="std/".bytes() />).unwrap()
+    val function = storage.arena.firstFunctionNamed(nameId: storage.internBytes(s: "broken").nameId)
+    storage.prepareLexicalBody(fnIdx: function).unwrap()
+    val owner = <SemanticCompletionOwner.Function index=function />
+    mut val fields = 0U64
+    for authored in storage.authoredFields {
+        match storage.sourceFacts.expressionOwners.get(key: authored.expression) {
+            Optional.Some(v: val recorded) => {
+                if semanticCompletionOwnersEqual(recorded: recorded, prepared: owner) {
+                    storage.recordMemberDeclarationValue(expression: authored.expression, origin: <SourceRecordOrigin.Raw />).unwrap()
+                    fields += 1U64
+                }
+            }
+            Optional.None => {}
+        }
+    }
+    if fields != 1U64 || storage.memberDeclarationAdmissions.count() != 0U64 { panic("storage field entered declaration refusal producer") }
+
+}

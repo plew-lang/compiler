@@ -47,6 +47,7 @@ impl Comp {
     fn namedDeclarationSourceMatches(source: NamedDeclarationSource, expression: U64) -> Bool {
         match source {
             NamedDeclarationSource.Identifier(val authored) => { return authored.expression == expression && self.authoredIdentifierMatches(authored: authored) }
+            NamedDeclarationSource.Member(val authored) => { return authored.expression == expression && self.authoredFieldMatches(authored: authored) }
             NamedDeclarationSource.NamespaceMember(val normalization) => {
                 val field = normalization.authored
                 if field.expression != expression || expression >= self.arena.exprs.count() || expression >= self.arena.exprOriginSerial.count() || expression >= self.arena.exprSpanStart.count() || expression >= self.arena.exprSpanEnd.count() { return false }
@@ -106,7 +107,7 @@ impl Comp {
         if refusal.session() != self.sourceFactSession() || refusal.event() >= self.failedNamedDeclarations.count() { return false }
         val proof = self.failedNamedDeclarations[refusal.event()]
         val saved = proof.refusal
-        if saved.session() != refusal.session() || !self.diagnosticOwnersEqual(first: saved.owner(), second: refusal.owner()) || saved.expression() != refusal.expression() || !saved.location().same(other: refusal.location()) { return false }
+        if saved.kind().key() != refusal.kind().key() || saved.session() != refusal.session() || !self.diagnosticOwnersEqual(first: saved.owner(), second: refusal.owner()) || saved.expression() != refusal.expression() || !saved.location().same(other: refusal.location()) { return false }
         val ownerMatches = match refusal.owner() {
             DiagnosticOwner.Function(index: val index) => semanticCompletionOwnersEqual(recorded: proof.owner, prepared: <SemanticCompletionOwner.Function index=index />)
             DiagnosticOwner.Global(target: val target) => semanticCompletionOwnersEqual(recorded: proof.owner, prepared: <SemanticCompletionOwner.Global target=target />)
@@ -117,6 +118,21 @@ impl Comp {
         match self.sourceFacts.expressionOwners.get(key: refusal.expression()) {
             Optional.Some(v: val prior) => { if !semanticCompletionOwnersEqual(recorded: prior, prepared: proof.owner) { return false } }
             Optional.None => {}
+        }
+        match proof.memberAdmission {
+            Optional.Some(v: val index) => {
+                if index >= self.memberDeclarationAdmissions.count() { return false }
+                val admission = self.memberDeclarationAdmissions[index]
+                if admission.session != refusal.session() || admission.authored.expression != refusal.expression() || !semanticCompletionOwnersEqual(recorded: admission.owner, prepared: proof.owner) || !semanticCompletionOwnersEqual(recorded: admission.root, prepared: proof.root) { return false }
+                val group = admission.group
+                match proof.source {
+                    NamedDeclarationSource.Member(val authored) => { if authored.base != group.receiverExpression || authored.start != group.memberStart || authored.length != group.memberLen { return false } }
+                    _ => { return false }
+                }
+                if refusal.kind().key() == 0U64 { return false }
+                return self.retainedMemberGroupMatches(group: group, associated: refusal.kind().key() == 1U64)
+            }
+            Optional.None => { if refusal.kind().key() != 0U64 { return false } }
         }
         if proof.declaration >= self.arena.functionCount() { return false }
         val declaration = self.arena.functionAt(index: proof.declaration)

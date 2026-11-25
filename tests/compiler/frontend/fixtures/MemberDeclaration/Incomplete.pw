@@ -1,0 +1,5 @@
+struct Box[T] { val item: T }
+impl Box[I64] { assoc fn make() -> I64 { return 1I64 } }
+impl Box[Bool] { assoc fn make() -> I64 { return 2I64 } }
+fn broken() -> fn() -> I64 { return Box.make }
+fn main() {}

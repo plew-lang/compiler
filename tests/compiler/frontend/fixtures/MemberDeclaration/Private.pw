@@ -1,0 +1,3 @@
+use ./PrivateLibrary only { Item }
+fn broken(seed: Item) -> fn() -> I64 { return seed.read }
+fn main() {}

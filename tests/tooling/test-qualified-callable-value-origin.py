@@ -34,11 +34,12 @@ def main():
         'associated': ('struct Item {}\nimpl Item { assoc fn make() -> I64 { return 1I64 } }\nfn broken() -> fn() -> I64 { return Item.make }', associated),
         'instance': ('struct Item {}\nimpl Item { fn read() -> I64 { return 1I64 } }\nfn broken() -> fn() -> I64 { val item = <Item /> return item.read }', b'a method cannot be used as a value'),
         'bound': ('trait Maker { assoc fn make() -> Self }\nstruct Item {}\nimpl Item as Maker { assoc fn make() -> Item { return <Item /> } }\nfn broken[T](seed: T) -> fn() -> T where T: Maker { return T.make }', associated),
+        'bound-instance': ('trait Reader { fn read() -> I64 }\nstruct Item {}\nimpl Item as Reader { fn read() -> I64 { return 1I64 } }\nfn broken[T](seed: T) -> fn() -> I64 where T: Reader { return seed.read }', b'a method cannot be used as a value'),
     }
     for name, (body, message) in cases.items():
         for demanded in [False, True]:
             path = out / (name + ('-used' if demanded else '-unused') + '.pw')
-            call = 'broken(seed: <Item />)' if name == 'bound' else 'broken()'
+            call = 'broken(seed: <Item />)' if name in ['bound', 'bound-instance'] else 'broken()'
             path.write_text(body + '\nfn main() { ' + (call if demanded else '') + ' }\n')
             for mode, flags in modes:
                 label = path.stem + '-' + mode
@@ -48,6 +49,20 @@ def main():
                         errors.append(label + ': missing owned member-category refusal')
                 elif result.returncode != 0 or result.failure_domain is not None or result.stdout or result.stderr:
                     errors.append(label + ': unused body was inspected')
+    # These owners must retain the same real member admission as functions.
+    member_owners = {
+        'associated-global': ('struct Item {}\nimpl Item { assoc fn make() -> I64 { return 1I64 } }\nval broken: fn() -> I64 = Item.make\nfn main() {}', associated),
+        'associated-closure': ('struct Item {}\nimpl Item { assoc fn make() -> I64 { return 1I64 } }\nfn main() { val action: fn() = fn() { val broken: fn() -> I64 = Item.make } }', associated),
+        'associated-overloads': ('struct Item {}\nimpl Item { assoc fn make() -> I64 { return 1I64 } assoc fn make(value: Bool) -> Bool { return value } }\nfn main() { val broken: fn() -> I64 = Item.make }', associated),
+        'associated-newtype': ('struct Item {}\nimpl Item { assoc fn make() -> I64 { return 1I64 } }\nnewtype Brand = Item\nfn main() { val broken: fn() -> I64 = Brand.make }', associated),
+    }
+    for name, (body, message) in member_owners.items():
+        path = out / (name + '.pw')
+        path.write_text(body + '\n')
+        for mode, flags in modes:
+            result = run(name + '-' + mode, path, flags)
+            if not result.source_rejection or message not in result.stderr:
+                errors.append(name + '-' + mode + ': member owner/group identity lost')
     path = ROOT / 'tests/fixtures/reject/assoc_fn_value_arg.pw'
     for mode, flags in modes:
         result = run('assoc_fn_value_arg-' + mode, path, flags)

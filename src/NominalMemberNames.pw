@@ -2,10 +2,11 @@
 // Entries preserve callable source identity; no overload is selected here.
 impl Comp {
     fn nominalMemberNames(name: U64, receiver: U64, receiverTerm: U64, declaration: Bind, surface: NominalMemberSurface) -> NominalMemberNameCursor {
-        return <NominalMemberNameCursor next=self.decls.firstCallableNamed(nameId: name) name=name receiver=receiver receiverTerm=receiverTerm declaration=declaration surface=surface />
+        val hasTrait = match surface { NominalMemberSurface.ViewSet(val sources, associated: _, pass: _, requiredTraitOwner: _) => self.viewSetHasTrait(sources: sources) _ => false }
+        return <NominalMemberNameCursor hasTrait=hasTrait next=self.decls.firstCallableNamed(nameId: name) name=name receiver=receiver receiverTerm=receiverTerm declaration=declaration surface=surface />
     }
 
-    inout fn nextNominalMemberName(cursor: inout NominalMemberNameCursor) -> Optional[U64] {
+    fn nextNominalMemberName(cursor: inout NominalMemberNameCursor) -> Optional[U64] {
         while cursor.next < self.decls.callableCount() {
             val index = cursor.next
             cursor.next = self.decls.nextCallableNamed(index: index)
@@ -13,6 +14,8 @@ impl Comp {
             val function = self.arena.functionAt(index: candidate.funcIdx)
             if function.nameId != cursor.name { continue }
             val eligible = match cursor.surface {
+                NominalMemberSurface.Source(val source) => function.hasRecv && self.callableMatchesSource(c: candidate, source: source)
+                NominalMemberSurface.ViewSet(val sources, val associated, val pass, requiredTraitOwner: val required) => self.memberNameInViewSet(candidate: candidate, function: function, sources: sources, associated: associated, pass: pass, requiredTraitOwner: required, hasTrait: cursor.hasTrait)
                 NominalMemberSurface.Instance => function.hasRecv && candidate.sourceKind != 1U64
                 NominalMemberSurface.Associated => function.isAssoc && self.callableIsBare(c: candidate) && function.recvId == cursor.receiver && self.receiverDeclarationMatches(f: function, receiverRef: cursor.receiverTerm) && self.receiverDeclarationHasOwner(f: function, declaration: cursor.declaration)
                 NominalMemberSurface.ProvidedAssociated => function.isAssoc && function.isProvided && candidate.sourceKind != 1U64 && self.receiverDeclarationMatches(f: function, receiverRef: cursor.receiverTerm) && self.receiverDeclarationHasOwner(f: function, declaration: cursor.declaration)
@@ -21,4 +24,24 @@ impl Comp {
         }
         return <Optional.None />
     }
+    inout fn memberReceiverPatternMatches(function: Func, receiver: U64) -> Bool {
+        mut val binds: Array[UnifyBind] = []
+        mut val parameters = self.copyFuncBinds(binds: function.typeParams)
+        if function.recvPatternParams.count() != 0U64 { parameters = self.copyFuncBinds(binds: function.recvPatternParams) }
+        return self.unifyPatterns(a: function.recvTy, aSide: 0U64, b: receiver, bSide: 1U64, aParams: <PatternBindInput.Values values=parameters />, bParams: <PatternBindInput.Values values=[] />, binds: inout binds, ignoreTopView: true)
+    }
+
+    fn memberNameInViewSet(candidate: Callable, function: Func, sources: Array[CallableSourceHead], associated: Bool, pass: U64, requiredTraitOwner: U64, hasTrait: Bool) -> Bool {
+        mut val matches = false
+        if pass == 0U64 {
+            matches = self.callableMatchesAnyExtension(c: candidate, sources: sources)
+            if matches && hasTrait && candidate.traitId != 0U64 { matches = self.callableMatchesAnyTrait(c: candidate, sources: sources) }
+        } else {
+            matches = candidate.sourceKind == 2U64 && self.callableMatchesAnyTrait(c: candidate, sources: sources)
+        }
+        val owner = if candidate.traitOwner != 0U64 { give candidate.traitOwner } else { give function.originTraitOwner }
+        if requiredTraitOwner != 0U64 && pass == 1U64 && candidate.sourceKind == 0U64 { matches = owner == requiredTraitOwner }
+        return matches && (requiredTraitOwner == 0U64 || owner == requiredTraitOwner) && (function.body != 0U64 || function.isExtern) && ((associated && function.isAssoc) || (!associated && function.hasRecv))
+    }
+
 }

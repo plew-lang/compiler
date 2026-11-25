@@ -1,0 +1,5 @@
+trait Reader { fn read() -> I64 }
+struct Item {}
+impl Item as Reader { fn read() -> I64 { return 1I64 } }
+fn broken(seed: Item) -> fn() -> I64 { return seed#Reader.read }
+fn main() {}
