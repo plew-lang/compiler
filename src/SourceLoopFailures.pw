@@ -1,0 +1,157 @@
+// A loop-target refusal owns its actual query, authored statement and ancestry.
+// Neither a caller-supplied selection nor rendered text can mint Source authority.
+impl Comp {
+    inout fn recordSourceLoopTransferTarget(statement: U64, origin: SourceRecordOrigin) -> Result[SourceExitTarget, CompileDiagnostic] {
+        if statement >= self.arena.stmts.count() { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: loop transfer has no statement", failureDomain: <FailureDomain.Internal />) /> }
+        val operation = match self.arena.stmts[statement] {
+            Stmt.Break(offset: val offset) => (isContinue: false, offset: offset)
+            Stmt.Continue(offset: val offset) => (isContinue: true, offset: offset)
+            _ => { return <Result.Err error=self.diagnosticAt(offset: self.stmtPrincipalOffset(sid: statement), msg: "internal error: loop target requested for another operation", failureDomain: <FailureDomain.Internal />) /> }
+        }
+        val selection = self.sourceTransferLoopTarget()
+        val kind = match selection {
+            SourceLoopTargetSelection.Target(statementId: val target) => { return <Result.Ok value=<SourceExitTarget.Loop statementId=target /> /> }
+            SourceLoopTargetSelection.NoLoop => if operation.isContinue { give <LoopTargetRefusalKind.ContinueNoLoop /> } else { give <LoopTargetRefusalKind.BreakNoLoop /> }
+            SourceLoopTargetSelection.WhileConditionBarrier => if operation.isContinue { give <LoopTargetRefusalKind.ContinueCondition /> } else { give <LoopTargetRefusalKind.BreakCondition /> }
+        }
+        val raw = self.diagnosticAt(offset: operation.offset, msg: kind.message())
+        val request = match origin {
+            SourceRecordOrigin.Raw => { return <Result.Err error=raw /> }
+            SourceRecordOrigin.CheckingRequest(session: val session, root: val root) => (session: session, root: root)
+        }
+        if request.session != self.sourceFactSession() { return <Result.Err error=raw /> }
+        val owner = match self.currentSourceOwner() { Optional.Some(v: val owner) => owner Optional.None => { return <Result.Err error=raw /> } }
+        if !self.sourceFacts.isActive(owner: owner) || !semanticCompletionOwnersEqual(recorded: self.lexicalSourceFactOwner(owner: owner), prepared: request.root) { return <Result.Err error=raw /> }
+        val authored = match self.authoredLoopTransfer(statement: statement) { Optional.Some(v: val authored) => authored Optional.None => { return <Result.Err error=raw /> } }
+        if authored.isContinue != operation.isContinue || !self.authoredLoopTransferMatches(authored: authored) { return <Result.Err error=raw /> }
+        val path = match self.sourceLoopTransferPath(owner: owner, statement: statement) { Optional.Some(v: val path) => path Optional.None => { return <Result.Err error=raw /> } }
+        if !self.sourceLoopPathMatchesActiveRegions(path: path) { return <Result.Err error=raw /> }
+        val refusal = <LoopTargetRefusal session=request.session owner=self.currentDiagnosticOwner() statement=statement event=self.failedLoopTargets.count() kind=kind location=raw.location() />
+        self.failedLoopTargets.append(<SourceLoopTargetFailure refusal=refusal owner=owner root=request.root authored=authored path=path />)
+        return <Result.Err error=<CompileDiagnostic.loopTarget refusal=refusal /> />
+    }
+
+    fn sourceLoopTargetFailureHasOwner(refusal: LoopTargetRefusal) -> Bool {
+        if refusal.session() != self.sourceFactSession() || refusal.event() >= self.failedLoopTargets.count() { return false }
+        val proof = self.failedLoopTargets[refusal.event()]
+        val original = proof.refusal
+        if original.session() != refusal.session() || original.statement() != refusal.statement() || original.event() != refusal.event() || !original.kind().same(other: refusal.kind()) || !original.location().same(other: refusal.location()) || !self.diagnosticOwnersEqual(first: original.owner(), second: refusal.owner()) { return false }
+        if proof.authored.statement != refusal.statement() || proof.path.statement != refusal.statement() || !self.authoredLoopTransferMatches(authored: proof.authored) { return false }
+        // The lexical root was admitted while the builder existed. Failed
+        // closures deliberately discard that mutable parent navigation.
+        if !semanticCompletionOwnersEqual(recorded: proof.owner, prepared: proof.path.owner) || !proof.hasDiagnosticOwner(owner: refusal.owner()) { return false }
+        return self.sourceControlPathMatches(path: proof.path)
+    }
+}
+
+impl SourceFactDirectory {
+    // A narrow pre-publication reader; no PreparedSemanticFacts is fabricated.
+    fn buildingTransfer(owner: SemanticCompletionOwner, statement: U64) -> Optional[SourceTransferFact] {
+        if self.isActive(owner: owner) { return readSourceRow(rows: self.activeBuilder.data.transfers, keys: self.activeBuilder.data.transferKeys, key: statement) }
+        match self.state(owner: owner) {
+            Optional.Some(v: val state) => match state {
+                SourceBodyState.Building => {
+                    val builder = self.inactiveBuilder(owner: owner)
+                    return readSourceRow(rows: builder.data.transfers, keys: builder.data.transferKeys, key: statement)
+                }
+                _ => {}
+            }
+            Optional.None => {}
+        }
+        return <Optional.None />
+    }
+}
+
+impl Comp {
+    fn loopTransferHandoffFailure(statement: U64) -> CompileDiagnostic {
+        val offset = if statement < self.arena.stmts.count() {
+            give match self.arena.stmts[statement] { Stmt.Break(offset: val offset) | Stmt.Continue(offset: val offset) => offset _ => 0U64 }
+        } else { give 0U64 }
+        return self.diagnosticAt(offset: offset, msg: "internal error: recorded loop transfer lost its owner or target", failureDomain: <FailureDomain.Internal />)
+    }
+
+    // None means that this invocation has no source construction lifecycle.
+    // Missing/foreign rows inside an existing lifecycle are handoff failures.
+    inout fn sourceLoopTransferForVerification(statement: U64) -> Result[Optional[SourceTransferFact], CompileDiagnostic] {
+        if statement >= self.arena.stmts.count() { return <Result.Err error=self.loopTransferHandoffFailure(statement: statement) /> }
+        val expected = match self.arena.stmts[statement] {
+            Stmt.Break(offset: _) => <CompletionTransfer.Break />
+            Stmt.Continue(offset: _) => <CompletionTransfer.Continue />
+            _ => { return <Result.Err error=self.loopTransferHandoffFailure(statement: statement) /> }
+        }
+        val observed = match self.currentSourceOwner() { Optional.Some(v: val owner) => owner Optional.None => { return <Result.Ok value=<Optional.None /> /> } }
+        mut val owner = observed
+        if self.sourceFacts.state(owner: observed).isNone() {
+            // Normalize only a function body alias. Closure/global identities
+            // are already canonical; a Raw read must not prepare a closure.
+            match observed {
+                SemanticCompletionOwner.Function(index: val index) => {
+                    val source = match self.semanticBodyOwner(fnIdx: index) {
+                        Result.Ok(value: val source) => source
+                        Result.Err(error: _) => { return <Result.Err error=self.loopTransferHandoffFailure(statement: statement) /> }
+                    }
+                    owner = <SemanticCompletionOwner.Function index=self.callTemplateLexicalRoots.getOr(key: source, fallback: source) />
+                }
+                _ => {}
+            }
+        }
+        val state = match self.sourceFacts.state(owner: owner) { Optional.Some(v: val state) => state Optional.None => { return <Result.Ok value=<Optional.None /> /> } }
+        val fact = match state {
+            SourceBodyState.Failed(diagnostic: val diagnostic) => { return <Result.Err error=diagnostic /> }
+            SourceBodyState.Registered => { return <Result.Err error=self.loopTransferHandoffFailure(statement: statement) /> }
+            SourceBodyState.Active | SourceBodyState.Building => match self.sourceFacts.buildingTransfer(owner: owner, statement: statement) {
+                Optional.Some(v: val fact) => fact
+                Optional.None => { return <Result.Err error=self.loopTransferHandoffFailure(statement: statement) /> }
+            }
+            SourceBodyState.Succeeded(reader: val reader) => {
+                if reader >= self.sourceFacts.readers.count() { return <Result.Err error=self.loopTransferHandoffFailure(statement: statement) /> }
+                give match self.sourceTransferFact(facts: self.sourceFacts.readers[reader], stmtId: statement, transfer: expected) {
+                    Result.Ok(value: val fact) => fact
+                    Result.Err(error: _) => { return <Result.Err error=self.loopTransferHandoffFailure(statement: statement) /> }
+                }
+            }
+        }
+        if fact.statementId != statement || !semanticCompletionOwnersEqual(recorded: fact.owner, prepared: owner) || !fact.matches(transfer: expected) { return <Result.Err error=self.loopTransferHandoffFailure(statement: statement) /> }
+        match self.sourceFacts.statementOwners.get(key: statement) {
+            Optional.Some(v: val recorded) => { if !semanticCompletionOwnersEqual(recorded: recorded, prepared: owner) { return <Result.Err error=self.loopTransferHandoffFailure(statement: statement) /> } }
+            Optional.None => { return <Result.Err error=self.loopTransferHandoffFailure(statement: statement) /> }
+        }
+        val target = match fact.target { SourceExitTarget.Loop(statementId: val target) => target _ => { return <Result.Err error=self.loopTransferHandoffFailure(statement: statement) /> } }
+        if target >= self.arena.stmts.count() { return <Result.Err error=self.loopTransferHandoffFailure(statement: statement) /> }
+        match self.arena.stmts[target] {
+            Stmt.While(cond: _, body: _) | Stmt.For(varStart: _, varLen: _, varTyStart: _, varTyLen: _, varTy: _, iter: _, body: _, isStruct: _, patStart: _, patLen: _, binds: _) => {}
+            _ => { return <Result.Err error=self.loopTransferHandoffFailure(statement: statement) /> }
+        }
+        match self.sourceFacts.statementOwners.get(key: target) {
+            Optional.Some(v: val recorded) => { if !semanticCompletionOwnersEqual(recorded: recorded, prepared: owner) { return <Result.Err error=self.loopTransferHandoffFailure(statement: statement) /> } }
+            Optional.None => { return <Result.Err error=self.loopTransferHandoffFailure(statement: statement) /> }
+        }
+        return <Result.Ok value=<Optional.Some v=fact /> />
+    }
+
+    inout fn verifyLoopTransferTarget(statement: U64) -> Result[(), CompileDiagnostic] {
+        if (try self.sourceLoopTransferForVerification(statement: statement)).isSome() { return <Result.Ok value=() /> }
+        // Legacy Raw verification has no source owner construction, and cannot
+        // publish a Source refusal merely from its depth/condition cursor.
+        if self.cur.verifyLoopDepth != 0U64 { return <Result.Ok value=() /> }
+        val operation = match self.arena.stmts[statement] {
+            Stmt.Break(offset: val offset) => (isContinue: false, offset: offset)
+            Stmt.Continue(offset: val offset) => (isContinue: true, offset: offset)
+            _ => { return <Result.Err error=self.diagnosticAt(offset: self.stmtPrincipalOffset(sid: statement), msg: "internal error: raw loop verification has another operation", failureDomain: <FailureDomain.Internal />) /> }
+        }
+        val kind = if self.cur.verifyWhileCondition {
+            give if operation.isContinue { give <LoopTargetRefusalKind.ContinueCondition /> } else { give <LoopTargetRefusalKind.BreakCondition /> }
+        } else { give if operation.isContinue { give <LoopTargetRefusalKind.ContinueNoLoop /> } else { give <LoopTargetRefusalKind.BreakNoLoop /> } }
+        return <Result.Err error=self.diagnosticAt(offset: operation.offset, msg: kind.message()) />
+    }
+}
+
+impl SourceLoopTargetFailure {
+    fn hasDiagnosticOwner(owner: DiagnosticOwner) -> Bool {
+        return match self.owner {
+            SemanticCompletionOwner.Function(index: val index) => match owner { DiagnosticOwner.Function(index: val candidate) => index == candidate _ => false }
+            SemanticCompletionOwner.Closure(expression: val expression) => match owner { DiagnosticOwner.Closure(expression: val candidate) => expression == candidate _ => false }
+            SemanticCompletionOwner.Global(target: val target) => match owner { DiagnosticOwner.Global(target: val candidate) => target == candidate _ => false }
+        }
+    }
+}

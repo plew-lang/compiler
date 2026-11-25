@@ -664,11 +664,11 @@ impl Comp {
         }
     }
 
-    inout fn storeBuildingSemanticStmtCompletion(stmtId: U64, fact: SemanticExpressionCompletion) -> Result[(), CompileDiagnostic] {
+    inout fn storeBuildingSemanticStmtCompletion(stmtId: U64, fact: SemanticExpressionCompletion, origin: SourceRecordOrigin) -> Result[(), CompileDiagnostic] {
         self.sourceFacts.activate(owner: fact.owner)
         // This is the sole statement publication entry. A direct transfer
         // cannot publish its completion without its selected target.
-        try self.recordSourceTransfer(stmtId: stmtId, owner: fact.owner)
+        try self.recordSourceTransfer(stmtId: stmtId, owner: fact.owner, origin: origin)
         self.sourceFacts.activeBuilder.data.putStatement(stmtId: stmtId, fact: fact)
         self.sourceFacts.statementOwners[stmtId] = fact.owner
         return <Result.Ok value=() />
@@ -1278,6 +1278,10 @@ pub impl Comp {
     // Observe retained dedicated refusal evidence, not the general Source domain.
     // Raw reports and unknown causes have no authority from text or cursor state.
     fn sourceFailureHasOwner(diagnostic: CompileDiagnostic) -> Bool {
+        match diagnostic.loopTarget() {
+            Optional.Some(v: val refusal) => { return self.sourceLoopTargetFailureHasOwner(refusal: refusal) }
+            Optional.None => {}
+        }
         match diagnostic.namedDeclaration() {
             Optional.Some(v: val refusal) => { return self.sourceNamedDeclarationHasOwner(refusal: refusal) }
             Optional.None => {}

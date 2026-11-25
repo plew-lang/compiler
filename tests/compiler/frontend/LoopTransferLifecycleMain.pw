@@ -1,0 +1,87 @@
+fn requireInternalLoopRead(compiler: Comp, result: Result[Optional[SourceTransferFact], CompileDiagnostic]) {
+    val diagnostic = match result { Result.Err(error: val diagnostic) => diagnostic Result.Ok(value: _) => { panic("missing metadata became a successful read") } }
+    match diagnostic.failureDomain() { FailureDomain.Internal => {} _ => { panic("handoff failure was not internal") } }
+    if compiler.sourceFailureHasOwner(diagnostic: diagnostic) { panic("handoff failure acquired source ownership") }
+}
+
+fn main() {
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text path="loop-lifecycle.pw" text="fn sample() {{ while false {{ break }} }} fn main() {{}}" />, sources: <SourceAccess stdRoot="std/".bytes() />).unwrap()
+    val function = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "sample").nameId)
+    val other = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "main").nameId)
+    val owner = <SemanticCompletionOwner.Function index=function />
+    val otherOwner = <SemanticCompletionOwner.Function index=other />
+    mut val statement = 18446744073709551615U64
+    for authored in compiler.authoredLoopTransfers {
+        if compiler.sourceLoopTransferPath(owner: owner, statement: authored.statement).isSome() { statement = authored.statement }
+    }
+    if statement >= compiler.arena.stmts.count() { panic("fixture lost authored break") }
+    compiler.cur.checkFn = function
+    if compiler.sourceLoopTransferForVerification(statement: statement).unwrap().isSome() { panic("unrecorded invocation fabricated a target") }
+    compiler.cur.verifyLoopDepth = 0U64
+    compiler.cur.verifyWhileCondition = true
+    val raw = match compiler.verifyLoopTransferTarget(statement: statement) { Result.Err(error: val diagnostic) => diagnostic Result.Ok(value: _) => { panic("raw cursor stopped checking") } }
+    if compiler.sourceFailureHasOwner(diagnostic: raw) || raw.isSourceRejection() { panic("raw cursor acquired source authority") }
+    compiler.cur.verifyLoopDepth = 1U64
+    compiler.verifyLoopTransferTarget(statement: statement).unwrap()
+    if !compiler.sourceFacts.begin(owner: owner) { panic("body not fresh") }
+    val missing = compiler.sourceLoopTransferForVerification(statement: statement)
+    requireInternalLoopRead(compiler: compiler, result: missing)
+    compiler.recordParametricFunctionWithOrigin(fnIdx: function, recordCallTemplates: true, origin: <SourceRecordingScope request=<SourceRecordOrigin.CheckingRequest session=compiler.sourceFactSession() root=owner /> returnContext=<SourceExpectedContext.None /> />, expectedOrigin: <SourceExpectedContext.None />).unwrap()
+    val fact = compiler.sourceLoopTransferForVerification(statement: statement).unwrap().unwrap()
+    if !fact.matches(transfer: <CompletionTransfer.Break />) { panic("recorded read changed transfer kind") }
+    compiler.cur.verifyLoopDepth = 0U64
+    compiler.cur.verifyWhileCondition = true
+    compiler.verifyStmt(stmtId: statement).unwrap()
+    val index = compiler.sourceFacts.activeBuilder.data.transferKeys.get(key: statement).unwrap()
+    val original = compiler.sourceFacts.activeBuilder.data.transfers[index]
+    compiler.sourceFacts.activeBuilder.data.transfers[index] = <SourceTransferFact owner=otherOwner statementId=statement transfer=original.transfer target=original.target />
+    val foreign = compiler.sourceLoopTransferForVerification(statement: statement)
+    requireInternalLoopRead(compiler: compiler, result: foreign)
+    compiler.sourceFacts.activeBuilder.data.transfers[index] = <SourceTransferFact owner=owner statementId=statement transfer=<CompletionTransfer.Continue /> target=original.target />
+    val wrongKind = compiler.sourceLoopTransferForVerification(statement: statement)
+    requireInternalLoopRead(compiler: compiler, result: wrongKind)
+    compiler.sourceFacts.activeBuilder.data.transfers[index] = <SourceTransferFact owner=owner statementId=statement transfer=original.transfer target=<SourceExitTarget.Loop statementId=compiler.arena.stmts.count()+1U64 /> />
+    val badTarget = compiler.sourceLoopTransferForVerification(statement: statement)
+    requireInternalLoopRead(compiler: compiler, result: badTarget)
+    compiler.sourceFacts.activeBuilder.data.transfers[index] = original
+    val keys = compiler.sourceFacts.activeBuilder.data.transferKeys
+    compiler.sourceFacts.activeBuilder.data.transferKeys = [:]
+    val lost = compiler.sourceLoopTransferForVerification(statement: statement)
+    requireInternalLoopRead(compiler: compiler, result: lost)
+    compiler.sourceFacts.activeBuilder.data.transferKeys = keys
+    compiler.sourceFacts.statementOwners[statement] = otherOwner
+    val wrongMap = compiler.sourceLoopTransferForVerification(statement: statement)
+    requireInternalLoopRead(compiler: compiler, result: wrongMap)
+    compiler.sourceFacts.statementOwners[statement] = owner
+    if !compiler.sourceFacts.begin(owner: otherOwner) { panic("second owner not fresh") }
+    if !compiler.sourceLoopTransferForVerification(statement: statement).unwrap().isSome() || !compiler.sourceFacts.isActive(owner: otherOwner) { panic("building read changed active cursor or lost target") }
+    compiler.finishSourceFacts(owner: owner, result: <Result.Ok value=() />)
+    if !compiler.sourceLoopTransferForVerification(statement: statement).unwrap().isSome() { panic("published reader lost saved target") }
+    val state = compiler.sourceFacts.state(owner: owner).unwrap()
+    compiler.sourceFacts.setState(owner: owner, state: <SourceBodyState.Succeeded reader=compiler.sourceFacts.readers.count()+1U64 />)
+    val badReader = compiler.sourceLoopTransferForVerification(statement: statement)
+    requireInternalLoopRead(compiler: compiler, result: badReader)
+    compiler.sourceFacts.setState(owner: owner, state: <SourceBodyState.Registered />)
+    val bodyless = compiler.sourceLoopTransferForVerification(statement: statement)
+    requireInternalLoopRead(compiler: compiler, result: bodyless)
+    compiler.sourceFacts.setState(owner: owner, state: state)
+    val outOfRange = compiler.sourceLoopTransferForVerification(statement: compiler.arena.stmts.count()+1U64)
+    requireInternalLoopRead(compiler: compiler, result: outOfRange)
+    mut val foreignCompiler = <Comp />
+    analyzeFrontendForRequests(c: inout foreignCompiler, input: <FrontendInput.Text path="loop-foreign.pw" text="fn sample() {{ while false {{ break }} }} fn main() {{}}" />, sources: <SourceAccess stdRoot="std/".bytes() />).unwrap()
+    val foreignFunction = foreignCompiler.arena.firstFunctionNamed(nameId: foreignCompiler.internBytes(s: "sample").nameId)
+    foreignCompiler.prepareLexicalBody(fnIdx: foreignFunction).unwrap()
+    val foreignFacts = foreignCompiler.sourceFacts.prepared(owner: <SemanticCompletionOwner.Function index=foreignFunction />).unwrap()
+    val reader = match state { SourceBodyState.Succeeded(reader: val reader) => reader _ => { panic("fixture lost published state") } }
+    val originalReader = compiler.sourceFacts.readers[reader]
+    compiler.sourceFacts.readers[reader] = foreignFacts
+    val foreignRead = compiler.sourceLoopTransferForVerification(statement: statement)
+    requireInternalLoopRead(compiler: compiler, result: foreignRead)
+    compiler.sourceFacts.readers[reader] = originalReader
+    val cached = compiler.diagnosticAt(offset: 0U64, msg: "cached loop metadata failure", failureDomain: <FailureDomain.Internal />)
+    compiler.sourceFacts.fail(owner: otherOwner, diagnostic: cached)
+    compiler.cur.checkFn = other
+    val failed = match compiler.sourceLoopTransferForVerification(statement: statement) { Result.Err(error: val diagnostic) => diagnostic Result.Ok(value: _) => { panic("failed lifecycle returned a target") } }
+    if failed.message() != cached.message() { panic("failed lifecycle did not propagate cached result") }
+}

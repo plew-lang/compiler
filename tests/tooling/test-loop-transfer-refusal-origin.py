@@ -47,6 +47,14 @@ def main():
             'fn main() { while true { val action = fn() { ' + transfer + ' } action() break } }\n',
             f'`{transfer}` outside a loop'.encode())
 
+    cases.update({
+        'generic_break': ('fn broken[T](value: T) { break }\nfn main() { broken(value: 1I64) }\n', b'`break` outside a loop'),
+        'method_continue': ('struct Item {}\nimpl Item { fn broken() { continue } }\nfn main() { val item = <Item /> item.broken() }\n', b'`continue` outside a loop'),
+        'provided_break': ('trait Worker { fn basis() -> Bool }\npub impl Worker { fn broken() { break } }\nstruct Item {}\nimpl Item as Worker { fn basis() -> Bool { return false } }\nfn main() { val item = <Item /> item.broken() }\n', b'`break` outside a loop'),
+        'default_break': ('fn broken(value: I64 = { break }) {}\nfn main() { broken() }\n', b'`break` outside a loop'),
+        'default_continue': ('fn broken(value: I64 = { continue }) {}\nfn main() { broken() }\n', b'`continue` outside a loop'),
+    })
+
     for name, (source, message) in cases.items():
         for demanded in [False, True]:
             path = out / (name + ('-used' if demanded else '-unused') + '.pw')
@@ -61,6 +69,15 @@ def main():
                         errors.append(label + ': target refusal lost source ownership')
                 elif result.returncode != 0 or result.failure_domain is not None or result.stdout or result.stderr:
                     errors.append(label + ': unrequested transfer was inspected')
+
+    for transfer in ['break', 'continue']:
+        path = out / ('global-' + transfer + '.pw')
+        path.write_text('val sample: I64 = { ' + transfer + ' }\nfn main() {}\n')
+        for mode, flags in modes:
+            label = path.stem + '-' + mode
+            result = run(label, path, flags)
+            if not result.source_rejection or ('`' + transfer + '` outside a loop').encode() not in result.stderr:
+                errors.append(label + ': initializer lost owned transfer refusal')
 
     path = ROOT / 'tests/fixtures/run/while_condition_local_loops.pw'
     golden = path.with_suffix('.out')

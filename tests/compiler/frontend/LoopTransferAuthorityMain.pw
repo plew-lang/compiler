@@ -1,0 +1,21 @@
+// Uses the original API so the fixed pre-repair source can exercise this RED.
+fn main() {
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text path="loop-authority.pw" text="fn sample() {{ while false {{ break }} }} fn main() {{}}" />, sources: <SourceAccess stdRoot="std/".bytes() />).unwrap()
+    val function = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "sample").nameId)
+    val owner = <SemanticCompletionOwner.Function index=function />
+    if !compiler.sourceFacts.begin(owner: owner) { panic("body not fresh") }
+    compiler.recordParametricFunctionWithOrigin(fnIdx: function, recordCallTemplates: true, origin: <SourceRecordingScope request=<SourceRecordOrigin.CheckingRequest session=compiler.sourceFactSession() root=owner /> returnContext=<SourceExpectedContext.None /> />, expectedOrigin: <SourceExpectedContext.None />).unwrap()
+    mut val statement = 18446744073709551615U64
+    for fact in compiler.sourceFacts.activeBuilder.data.transfers {
+        if fact.matches(transfer: <CompletionTransfer.Break />) { statement = fact.statementId }
+    }
+    if statement >= compiler.arena.stmts.count() { panic("actual source recording did not select a break target") }
+    compiler.cur.checkFn = function
+    compiler.cur.verifyLoopDepth = 0U64
+    compiler.cur.verifyWhileCondition = true
+    match compiler.verifyStmt(stmtId: statement) {
+        Result.Ok(value: _) => {}
+        Result.Err(error: val diagnostic) => { panic("Verify reselected a recorded target from its cursor: "+diagnostic.message()) }
+    }
+}

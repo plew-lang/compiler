@@ -112,6 +112,11 @@ impl Comp {
         }
     }
 
+    fn sourceConditionValueRegion(clause: U64) -> Optional[SourceControlRegion] {
+        if clause < self.arena.conditionClausePool.count() && self.arena.conditionClausePool[clause].isWhileCondition { return <Optional.Some v=<SourceControlRegion.LoopBarrier /> /> }
+        return <Optional.None />
+    }
+
     inout fn enterSourceLoopEdge(statement: U64, edge: SourceLoopEdge) -> SourceControlCheckpoint {
         return match self.sourceLoopRegionForEdge(statement: statement, edge: edge) {
             Optional.Some(v: val region) => self.enterSourceControlRegion(region: region)
@@ -256,7 +261,7 @@ impl Comp {
             }
             SourceControlNode.Conditions(range: val range) => {
                 if range.start > self.arena.conditionClausePool.count() || range.len > self.arena.conditionClausePool.count()-range.start { return children }
-                for index in 0U64..<range.len { children.append(<SourceControlChild node=<SourceControlNode.Expression id=self.conditionClauseAt(conditions: range, index: index).value /> />) }
+                for index in 0U64..<range.len { children.append(<SourceControlChild node=<SourceControlNode.Expression id=self.conditionClauseAt(conditions: range, index: index).value /> region=self.sourceConditionValueRegion(clause: range.start+index) />) }
             }
         }
         return children

@@ -1,0 +1,63 @@
+fn requireUnownedLoop(compiler: Comp, result: Result[SourceExitTarget, CompileDiagnostic]) {
+    val diagnostic = match result { Result.Err(error: val diagnostic) => diagnostic Result.Ok(value: _) => { panic("expected rejected raw target") } }
+    if compiler.sourceFailureHasOwner(diagnostic: diagnostic) || compiler.failedLoopTargets.count() != 0U64 { panic("unproved query acquired source authority") }
+}
+
+fn main() {
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text path="loop-raw.pw" text="fn sample() {{ if false {{ break }} while false {{ break }} }} fn other() {{ break }} fn main() {{}}" />, sources: <SourceAccess stdRoot="std/".bytes() />).unwrap()
+    val function = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "sample").nameId)
+    val other = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "other").nameId)
+    val owner = <SemanticCompletionOwner.Function index=function />
+    mut val outside = 18446744073709551615U64
+    mut val inside = 18446744073709551615U64
+    mut val foreign = 18446744073709551615U64
+    for authored in compiler.authoredLoopTransfers {
+        match compiler.sourceLoopTransferPath(owner: owner, statement: authored.statement) {
+            Optional.Some(v: val path) => {
+                mut val hasLoop = false
+                for link in path.links { if link.child.region.isSome() { hasLoop = true } }
+                if hasLoop { inside = authored.statement } else { outside = authored.statement }
+            }
+            Optional.None => {}
+        }
+        if compiler.sourceLoopTransferPath(owner: <SemanticCompletionOwner.Function index=other />, statement: authored.statement).isSome() { foreign = authored.statement }
+    }
+    if outside >= compiler.arena.stmts.count() || inside >= compiler.arena.stmts.count() || foreign >= compiler.arena.stmts.count() { panic("fixture lost control positions") }
+    if !compiler.sourceFacts.begin(owner: owner) { panic("body not fresh") }
+    compiler.cur.checkFn = function
+    compiler.cur.recordCallTemplates = true
+    val request = <SourceRecordOrigin.CheckingRequest session=compiler.sourceFactSession() root=owner />
+    for origin in [<SourceRecordOrigin.Raw />, <SourceRecordOrigin.CheckingRequest session=compiler.sourceFactSession()+1U64 root=owner />, <SourceRecordOrigin.CheckingRequest session=compiler.sourceFactSession() root=<SemanticCompletionOwner.Function index=other /> />] {
+        val result = compiler.recordSourceLoopTransferTarget(statement: outside, origin: origin)
+        requireUnownedLoop(compiler: compiler, result: result)
+    }
+    val wrongPosition = compiler.recordSourceLoopTransferTarget(statement: inside, origin: request)
+    requireUnownedLoop(compiler: compiler, result: wrongPosition)
+    val wrongBody = compiler.recordSourceLoopTransferTarget(statement: foreign, origin: request)
+    requireUnownedLoop(compiler: compiler, result: wrongBody)
+    val original = compiler.arena.stmts[outside]
+    val clone = compiler.pushStmt(s: original)
+    val synthetic = compiler.recordSourceLoopTransferTarget(statement: clone, origin: request)
+    requireUnownedLoop(compiler: compiler, result: synthetic)
+    val offset = match original { Stmt.Break(offset: val offset) => offset _ => { panic("fixture lost break") } }
+    compiler.arena.stmts[outside] = <Stmt.Continue offset=offset />
+    val wrongOperation = compiler.recordSourceLoopTransferTarget(statement: outside, origin: request)
+    requireUnownedLoop(compiler: compiler, result: wrongOperation)
+    compiler.arena.stmts[outside] = <Stmt.Break offset=offset+1U64 />
+    val wrongSpan = compiler.recordSourceLoopTransferTarget(statement: outside, origin: request)
+    requireUnownedLoop(compiler: compiler, result: wrongSpan)
+    compiler.arena.stmts[outside] = original
+    compiler.sourceFacts.activeBuilder.controlRegions = [<SourceControlRegion.LoopBarrier />]
+    val wrongStack = compiler.recordSourceLoopTransferTarget(statement: outside, origin: request)
+    requireUnownedLoop(compiler: compiler, result: wrongStack)
+    compiler.sourceFacts.activeBuilder.controlRegions = []
+    compiler.cur.checkFn = other
+    val wrongOwner = compiler.recordSourceLoopTransferTarget(statement: outside, origin: request)
+    requireUnownedLoop(compiler: compiler, result: wrongOwner)
+    compiler.cur.checkFn = function
+    val missing = compiler.recordSourceLoopTransferTarget(statement: compiler.arena.stmts.count()+1U64, origin: request)
+    requireUnownedLoop(compiler: compiler, result: missing)
+    val owned = match compiler.recordSourceLoopTransferTarget(statement: outside, origin: request) { Result.Err(error: val diagnostic) => diagnostic Result.Ok(value: _) => { panic("real invalid transfer did not reject") } }
+    if !compiler.sourceFailureHasOwner(diagnostic: owned) || compiler.failedLoopTargets.count() != 1U64 { panic("raw denial controls never reached real admission") }
+}

@@ -401,6 +401,43 @@ pub impl OperatorRequirementRefusal {
 
 pub fn opaqueNumericMessage() -> String { return "cannot assign a literal to a type parameter: it is an opaque type with no numeric bound (spec/06)" }
 
+pub enum LoopTargetRefusalKind { BreakNoLoop ContinueNoLoop BreakCondition ContinueCondition }
+pub impl LoopTargetRefusalKind {
+    fn message() -> String {
+        return match self {
+            LoopTargetRefusalKind.BreakNoLoop => "`break` outside a loop (spec/11)"
+            LoopTargetRefusalKind.ContinueNoLoop => "`continue` outside a loop (spec/11)"
+            LoopTargetRefusalKind.BreakCondition => "`break` cannot target a surrounding loop from a while condition (spec/11)"
+            LoopTargetRefusalKind.ContinueCondition => "`continue` cannot target a surrounding loop from a while condition (spec/11)"
+        }
+    }
+    fn same(other: LoopTargetRefusalKind) -> Bool {
+        return match self {
+            LoopTargetRefusalKind.BreakNoLoop => match other { LoopTargetRefusalKind.BreakNoLoop => true _ => false }
+            LoopTargetRefusalKind.ContinueNoLoop => match other { LoopTargetRefusalKind.ContinueNoLoop => true _ => false }
+            LoopTargetRefusalKind.BreakCondition => match other { LoopTargetRefusalKind.BreakCondition => true _ => false }
+            LoopTargetRefusalKind.ContinueCondition => match other { LoopTargetRefusalKind.ContinueCondition => true _ => false }
+        }
+    }
+}
+pub struct LoopTargetRefusal {
+    val session: U64
+    val owner: DiagnosticOwner
+    val statement: U64
+    val event: U64
+    val kind: LoopTargetRefusalKind
+    val location: DiagnosticLocation
+}
+pub impl LoopTargetRefusal {
+    factory
+    fn session() -> U64 { return self.session }
+    fn owner() -> DiagnosticOwner { return self.owner }
+    fn statement() -> U64 { return self.statement }
+    fn event() -> U64 { return self.event }
+    fn kind() -> LoopTargetRefusalKind { return self.kind }
+    fn location() -> DiagnosticLocation { return self.location }
+}
+
 pub struct IndexRequirementRefusal {
     val session: U64
     val owner: DiagnosticOwner
@@ -513,6 +550,7 @@ enum DiagnosticData {
     FreeCallAmbiguity(refusal: FreeCallAmbiguityRefusal)
     MemberCallAmbiguity(refusal: MemberCallAmbiguityRefusal)
     IndexRequirement(refusal: IndexRequirementRefusal)
+    LoopTarget(refusal: LoopTargetRefusal)
     SourceTyping(refusal: SourceTypingRefusal)
     OpaqueNumeric(refusal: OpaqueNumericRefusal)
     NamedDeclaration(refusal: NamedDeclarationRefusal)
@@ -540,6 +578,15 @@ pub impl CompileDiagnostic {
     fn operatorRequirement() -> Optional[OperatorRequirementRefusal] {
         return match self.storage[0U64] {
             DiagnosticData.OperatorRequirement(refusal: val refusal) => <Optional.Some v=refusal />
+            _ => <Optional.None />
+        }
+    }
+    factory loopTarget(refusal: LoopTargetRefusal) {
+        return <CompileDiagnostic storage=[<DiagnosticData.LoopTarget refusal=refusal />] />
+    }
+    fn loopTarget() -> Optional[LoopTargetRefusal] {
+        return match self.storage[0U64] {
+            DiagnosticData.LoopTarget(refusal: val refusal) => <Optional.Some v=refusal />
             _ => <Optional.None />
         }
     }
@@ -689,6 +736,7 @@ pub impl CompileDiagnostic {
             DiagnosticData.FreeCallAmbiguity(refusal: _) => <DiagnosticSeverity.Error />
             DiagnosticData.MemberCallAmbiguity(refusal: _) => <DiagnosticSeverity.Error />
             DiagnosticData.IndexRequirement(refusal: _) => <DiagnosticSeverity.Error />
+            DiagnosticData.LoopTarget(refusal: _) => <DiagnosticSeverity.Error />
             DiagnosticData.SourceTyping(refusal: _) => <DiagnosticSeverity.Error />
             DiagnosticData.OpaqueNumeric(refusal: _) => <DiagnosticSeverity.Error />
             DiagnosticData.NamedDeclaration(refusal: _) => <DiagnosticSeverity.Error />
@@ -710,6 +758,7 @@ pub impl CompileDiagnostic {
             DiagnosticData.FreeCallAmbiguity(refusal: _) => <FailureDomain.Unclassified />
             DiagnosticData.MemberCallAmbiguity(refusal: _) => <FailureDomain.Unclassified />
             DiagnosticData.IndexRequirement(refusal: _) => <FailureDomain.Unclassified />
+            DiagnosticData.LoopTarget(refusal: _) => <FailureDomain.Unclassified />
             DiagnosticData.SourceTyping(refusal: _) => <FailureDomain.Unclassified />
             DiagnosticData.OpaqueNumeric(refusal: _) => <FailureDomain.Unclassified />
             DiagnosticData.NamedDeclaration(refusal: _) => <FailureDomain.Unclassified />
@@ -731,6 +780,7 @@ pub impl CompileDiagnostic {
             DiagnosticData.FreeCallAmbiguity(refusal: val refusal) => refusal.location()
             DiagnosticData.MemberCallAmbiguity(refusal: val refusal) => refusal.location()
             DiagnosticData.IndexRequirement(refusal: val refusal) => refusal.location()
+            DiagnosticData.LoopTarget(refusal: val refusal) => refusal.location()
             DiagnosticData.SourceTyping(refusal: val refusal) => refusal.location()
             DiagnosticData.OpaqueNumeric(refusal: val refusal) => refusal.location()
             DiagnosticData.NamedDeclaration(refusal: val refusal) => refusal.location()
@@ -751,6 +801,7 @@ pub impl CompileDiagnostic {
             DiagnosticData.FreeCallAmbiguity(refusal: val refusal) => refusal.kind().message()
             DiagnosticData.MemberCallAmbiguity(refusal: val refusal) => refusal.kind().message()
             DiagnosticData.IndexRequirement(refusal: _) => "subscript requires an Index implementation for reading or an IndexSet implementation for writing"
+            DiagnosticData.LoopTarget(refusal: val refusal) => refusal.kind().message()
             DiagnosticData.SourceTyping(refusal: _) => "cannot infer this expression's type; add a type annotation or provide an expected type"
             DiagnosticData.OpaqueNumeric(refusal: _) => opaqueNumericMessage()
             DiagnosticData.NamedDeclaration(refusal: val refusal) => refusal.kind().message()
@@ -773,6 +824,7 @@ pub impl CompileDiagnostic {
             DiagnosticData.FreeCallAmbiguity(refusal: _) => []
             DiagnosticData.MemberCallAmbiguity(refusal: _) => []
             DiagnosticData.IndexRequirement(refusal: _) => []
+            DiagnosticData.LoopTarget(refusal: _) => []
             DiagnosticData.SourceTyping(refusal: _) => []
             DiagnosticData.OpaqueNumeric(refusal: _) => []
             DiagnosticData.NamedDeclaration(refusal: _) => []

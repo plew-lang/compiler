@@ -276,22 +276,8 @@ pub impl Comp {
                 }
                 try self.verifyExpr(id: value)
             }
-            Stmt.Break(val offset) => {
-                if self.cur.verifyLoopDepth == 0U64 {
-                    if self.cur.verifyWhileCondition {
-                        return <Result.Err error=self.diagnosticAt(offset: offset, msg: "`break` cannot target a surrounding loop from a while condition (spec/11)") />
-                    }
-                    return <Result.Err error=self.diagnosticAt(offset: offset, msg: "`break` outside a loop (spec/11)") />
-                }
-            }
-            Stmt.Continue(val offset) => {
-                if self.cur.verifyLoopDepth == 0U64 {
-                    if self.cur.verifyWhileCondition {
-                        return <Result.Err error=self.diagnosticAt(offset: offset, msg: "`continue` cannot target a surrounding loop from a while condition (spec/11)") />
-                    }
-                    return <Result.Err error=self.diagnosticAt(offset: offset, msg: "`continue` outside a loop (spec/11)") />
-                }
-            }
+            Stmt.Break(offset: _) | Stmt.Continue(offset: _) => { try self.verifyLoopTransferTarget(statement: stmtId) }
+
         }
         return <Result.Ok value=() />
     }

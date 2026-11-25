@@ -2284,8 +2284,17 @@ impl Comp {
         mut val index = 0U64
         while index < conditions.len {
             val clause = self.conditionClauseAt(conditions: conditions, index: index)
-            try self.recordExprWithOrigin(exprId: clause.value, origin: origin, expectedOrigin: <SourceExpectedContext.None />)
-            try self.recordValueOperandCall(exprId: clause.value)
+            val checkpoint = match self.sourceConditionValueRegion(clause: conditions.start+index) {
+                Optional.Some(v: val region) => self.enterSourceControlRegion(region: region)
+                Optional.None => <SourceControlCheckpoint />
+            }
+            val recorded = self.recordExprWithOrigin(exprId: clause.value, origin: origin, expectedOrigin: <SourceExpectedContext.None />)
+            val checked = match recorded {
+                Result.Ok(value: _) => self.recordValueOperandCall(exprId: clause.value)
+                Result.Err(error: val diagnostic) => <Result.Err error=diagnostic />
+            }
+            self.restoreSourceControlRegion(checkpoint: checkpoint)
+            try checked
             if clause.isBinding {
                 try self.checkEnumPatternSubject(scrut: clause.value, pattern: clause.pattern)
                 try self.checkPatternBinds(a: clause.pattern)
@@ -3890,7 +3899,7 @@ impl Comp {
         if self.cur.recordCallTemplates {
             match self.recordedCompletionFact(completion: completion) {
                 Optional.Some(v: val fact) => {
-                    try self.storeBuildingSemanticStmtCompletion(stmtId: stmtId, fact: fact)
+                    try self.storeBuildingSemanticStmtCompletion(stmtId: stmtId, fact: fact, origin: origin.request)
                 }
                 Optional.None => {}
             }

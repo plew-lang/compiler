@@ -1,6 +1,6 @@
 // Append to a frozen Frontend root: real source recording must own the refusal.
 fn main() {
-    for name in ["while_condition_plain_break", "while_condition_plain_continue", "block_break_outside_loop", "block_continue_outside_loop"] {
+    for name in ["while_condition_plain_break", "while_condition_plain_continue", "while_condition_binding_break", "while_condition_binding_continue", "while_condition_chain_break", "while_condition_chain_continue", "while_condition_nested_if_break", "while_condition_nested_if_continue", "block_break_outside_loop", "block_continue_outside_loop"] {
         mut val compiler = <Comp />
         analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.File path="tests/fixtures/reject/"+name+".pw" />, sources: <SourceAccess stdRoot="std/".bytes() />).unwrap()
         val function = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "main").nameId)
@@ -12,5 +12,32 @@ fn main() {
             Result.Ok(value: _) => { panic(name+": source recording did not reject transfer") }
         }
         if !compiler.sourceFailureHasOwner(diagnostic: diagnostic) { panic(name+": target refusal lost source owner: "+diagnostic.message()) }
+        if diagnostic.isSourceRejection() { panic("private refusal bypassed its owning consumer") }
+        val refusal = diagnostic.loopTarget().unwrap()
+        val proof = compiler.failedLoopTargets[refusal.event()]
+        if proof.authored.statement != refusal.statement() || !compiler.sourceControlPathMatches(path: proof.path) { panic("refusal lost authored statement path") }
+        val raw = <CompileDiagnostic location=diagnostic.location() message=diagnostic.message() />
+        if compiler.sourceFailureHasOwner(diagnostic: raw) { panic("text minted source refusal") }
+        val foreign = <LoopTargetRefusal session=refusal.session()+1U64 owner=refusal.owner() statement=refusal.statement() event=refusal.event() kind=refusal.kind() location=refusal.location() />
+        if compiler.sourceFailureHasOwner(diagnostic: <CompileDiagnostic.loopTarget refusal=foreign />) { panic("foreign session acquired refusal") }
+        val wrongOwner = <LoopTargetRefusal session=refusal.session() owner=<DiagnosticOwner.Function index=function+1U64 /> statement=refusal.statement() event=refusal.event() kind=refusal.kind() location=refusal.location() />
+        if compiler.sourceFailureHasOwner(diagnostic: <CompileDiagnostic.loopTarget refusal=wrongOwner />) { panic("wrong owner acquired refusal") }
+        val kind = match refusal.kind() { LoopTargetRefusalKind.BreakNoLoop => <LoopTargetRefusalKind.ContinueNoLoop /> _ => <LoopTargetRefusalKind.BreakNoLoop /> }
+        val forged = <LoopTargetRefusal session=refusal.session() owner=refusal.owner() statement=refusal.statement() event=refusal.event() kind=kind location=refusal.location() />
+        if compiler.sourceFailureHasOwner(diagnostic: <CompileDiagnostic.loopTarget refusal=forged />) { panic("forged cause acquired refusal") }
+        val missing = <LoopTargetRefusal session=refusal.session() owner=refusal.owner() statement=refusal.statement() event=compiler.failedLoopTargets.count() kind=refusal.kind() location=refusal.location() />
+        if compiler.sourceFailureHasOwner(diagnostic: <CompileDiagnostic.loopTarget refusal=missing />) { panic("missing event acquired refusal") }
+        val original = compiler.arena.stmts[refusal.statement()]
+        compiler.arena.stmts[refusal.statement()] = <Stmt.ExprStmt expr=0U64 />
+        if compiler.sourceFailureHasOwner(diagnostic: diagnostic) { panic("mutated statement retained source refusal") }
+        compiler.arena.stmts[refusal.statement()] = original
+        if !compiler.sourceFailureHasOwner(diagnostic: diagnostic) { panic("test did not restore authored transfer") }
+        compiler.finishSourceFacts(owner: owner, result: <Result.Err error=diagnostic />)
+        val count = compiler.failedLoopTargets.count()
+        val retry = match compiler.prepareLexicalBody(fnIdx: function) { Result.Err(error: val retry) => retry Result.Ok(value: _) => { panic("failed owner became success") } }
+        if retry.loopTarget().unwrap().event() != refusal.event() || !compiler.sourceFailureHasOwner(diagnostic: retry) || compiler.failedLoopTargets.count() != count { panic("cache retry lost the same refusal") }
+        compiler.cur.checkFn = 18446744073709551615U64
+        if !compiler.sourceFailureHasOwner(diagnostic: diagnostic) { panic("another cursor erased retained source refusal") }
+
     }
 }

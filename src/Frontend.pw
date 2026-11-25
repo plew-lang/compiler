@@ -66,7 +66,7 @@ use ./Path only { resolveImport, extractSpan, dirPrefixLen, findSrcRoot, findPkg
 use ./Manifest only { Dep, loadManifestDeps, resolveDepImport, resolveGitDepImport, loadLock, isExternalDepImport }
 use ./Lock only { Lock }
 use ./Cache only { cacheRoot }
-use ./Diag only { compileErrorAt, compileErrorAtFile, CompileDiagnostic, ArrayContextRefusal, UseAfterMoveRefusal, MissingFieldRefusal, MissingFieldKind, AssignmentRefusal, AssignmentRefusalKind, UniqueCopyRefusal, UniqueCaptureRefusal, NonCallableBindingRefusal, FreeCallVisibilityRefusal, FreeCallVisibilityKind, FreeCallAmbiguityRefusal, FreeCallAmbiguityKind, MemberCallAmbiguityRefusal, MemberCallAmbiguityKind, GenericCallConflictRefusal, genericCallConflictMessage, OpaqueNumericRefusal, OperatorRequirementRefusal, NamedDeclarationRefusal, NamedDeclarationKind, SourceTypingRefusal, IndexRequirementRefusal, opaqueNumericMessage, DiagnosticOwner, DiagnosticNote, DiagnosticLocation, DiagnosticSeverity, FailureDomain, emitDiagnostic, eprintInt, digitByte, digitStrU }
+use ./Diag only { compileErrorAt, compileErrorAtFile, CompileDiagnostic, ArrayContextRefusal, UseAfterMoveRefusal, MissingFieldRefusal, MissingFieldKind, AssignmentRefusal, AssignmentRefusalKind, UniqueCopyRefusal, UniqueCaptureRefusal, NonCallableBindingRefusal, FreeCallVisibilityRefusal, FreeCallVisibilityKind, FreeCallAmbiguityRefusal, FreeCallAmbiguityKind, MemberCallAmbiguityRefusal, MemberCallAmbiguityKind, GenericCallConflictRefusal, genericCallConflictMessage, OpaqueNumericRefusal, OperatorRequirementRefusal, NamedDeclarationRefusal, NamedDeclarationKind, SourceTypingRefusal, IndexRequirementRefusal, LoopTargetRefusal, LoopTargetRefusalKind, opaqueNumericMessage, DiagnosticOwner, DiagnosticNote, DiagnosticLocation, DiagnosticSeverity, FailureDomain, emitDiagnostic, eprintInt, digitByte, digitStrU }
 use ./Ops only { opEq, opNe, opLt, opLe, opGt, opGe, opAdd, opSub, opMul, opDiv, opRem, opAnd, opOr, opNot, opBitAnd, opBitOr, opBitXor, opShl, opShr, opBitNot, opAssign, compoundBinOp, isBinTraitOp, binTraitName, binTraitMethodName, unaryMethodName }
 
 // Only an entirely unsuffixed numeric expression accepts a sibling's
@@ -1200,6 +1200,7 @@ pub struct Comp {
     mut val authoredIdentifiers: Array[AuthoredIdentifier] = []
     mut val authoredFields: Array[AuthoredField] = []
     mut val authoredLoopTransfers: Array[AuthoredLoopTransfer] = []
+    mut val failedLoopTargets: Array[SourceLoopTargetFailure] = []
     mut val namespaceFieldNormalizations: Dictionary[U64, NamespaceFieldNormalization] = [:]
     mut val memberDeclarationAdmissions: Array[MemberDeclarationAdmission] = []
     mut val failedNamedDeclarations: Array[SourceNamedDeclarationFailure] = []
@@ -2228,6 +2229,7 @@ part ./SourceNamedDeclarations
 part ./SourceOperatorRequirements
 part ./SourceGenericFailures
 part ./SourceArrayFailures
+part ./SourceLoopFailures
 part ./SourceControlPaths
 part ./SourceFacts
 part ./Parser/Decl
@@ -3610,6 +3612,15 @@ enum SourceControlRegion {
     Loop(statementId: U64)
     LoopBarrier
 }
+enum SourceLoopTargetSelection { Target(statementId: U64) NoLoop WhileConditionBarrier }
+struct SourceLoopTargetFailure {
+    val refusal: LoopTargetRefusal
+    val owner: SemanticCompletionOwner
+    val root: SemanticCompletionOwner
+    val authored: AuthoredLoopTransfer
+    val path: SourceControlPath
+}
+impl SourceLoopTargetFailure { factory }
 enum SourceLoopEdge { Condition Body }
 // Structural ancestry used only when admitting a failed authored transfer.
 // Closures are roots, never children of another invocation's walk.

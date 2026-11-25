@@ -1,0 +1,20 @@
+// Body adapters must preserve a real refusal after their builders are discarded.
+fn main() {
+    for isGlobal in [false, true] {
+        mut val compiler = <Comp />
+        val text = if isGlobal { give "val sample: I64 = {{ break }} fn main() {{}} fn okay() {{}}" } else { give "fn host() {{ val action = fn() {{ continue }} action() }} fn main() {{}} fn okay() {{}}" }
+        analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.Text path="loop-context.pw" text=text />, sources: <SourceAccess stdRoot="std/".bytes() />).unwrap()
+        val function = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "host").nameId)
+        val result = if isGlobal { give compiler.prepareGlobalInitializer(target: compiler.arena.globals[0].nameStart) } else { give compiler.prepareLexicalBody(fnIdx: function) }
+        val diagnostic = match result { Result.Err(error: val diagnostic) => diagnostic Result.Ok(value: _) => { panic("context accepted invalid transfer") } }
+        if diagnostic.loopTarget().isNone() { panic("context lost typed refusal: "+diagnostic.message()) }
+        if !compiler.sourceFailureHasOwner(diagnostic: diagnostic) { panic("finished context lost retained source ownership") }
+        val control = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "okay").nameId)
+        compiler.prepareLexicalBody(fnIdx: control).unwrap()
+        if !compiler.sourceFailureHasOwner(diagnostic: diagnostic) { panic("other owner erased context refusal") }
+        val count = compiler.failedLoopTargets.count()
+        val retry = if isGlobal { give compiler.prepareGlobalInitializer(target: compiler.arena.globals[0].nameStart) } else { give compiler.prepareLexicalBody(fnIdx: function) }
+        val repeated = match retry { Result.Err(error: val diagnostic) => diagnostic Result.Ok(value: _) => { panic("context retry became success") } }
+        if compiler.failedLoopTargets.count() != count || repeated.loopTarget().unwrap().event() != diagnostic.loopTarget().unwrap().event() || !compiler.sourceFailureHasOwner(diagnostic: repeated) { panic("context retry lost same source refusal") }
+    }
+}

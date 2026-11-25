@@ -117,5 +117,25 @@ Native controls cover real functions, closure and global roots; foreign body,
 synthetic/mutated transfer, body replacement, duplicate/range/cycle and parent
 variant/condition-body changes. Normal condition-local loops still prepare
 successfully. [Helper evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/loop-transfer-refusals/helper.json).
-Still pending: retained typed refusal/event, lifecycle-aware Verify consumption,
-Source/Raw/cache/consumer adversarial controls, fresh candidate and final gates.
+The consumer verifies the retained path, not global uniqueness/cycle absence
+after unrelated off-path edits. The admission walk establishes those properties;
+normal processing must not rewrite a failed owner body afterward.
+## Producer and lifecycle integration
+
+Typed target refusal now retains the verified Lower receipt, owner/root and path
+in a private event. Successful targets do not allocate failure diagnostics or walk
+the body. Verify consumes Active/Building/Succeeded facts, propagates Failed and
+rejects damaged handoff; only absent lifecycle uses Raw depth verification.
+
+Actual REDs exposed binding-condition metadata omitted by Record and failed
+closure parent lookup after builder disposal. Shared condition-edge metadata and
+producer-sealed owner correspondence repair these causes. Native GREEN covers
+all eight condition refusals, no-loop cases, cache/retry, foreign/synthetic input,
+retained targets under contradictory Verify cursor, malformed lifecycle readers,
+finished closure/global failure and preparation of another owner afterward.
+Independent source review reports no further confirmed in-scope violation.
+[Integration evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/loop-transfer-refusals/integration.json).
+
+The expanded fixed-carrier CLI111 modes establish91 ownership failures and20
+controls. Fresh candidate build/CLI, regression/performance and final completion
+review remain pending. This task and its parent stay open.
