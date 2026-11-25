@@ -13,26 +13,19 @@ tags: [diagnostics, frontend, driver, verification]
 
 ## Current boundary
 
-This parent remains open. Current normal20261125T160113-test-e49efb completed
-with278 failures, invariant inputs and3313 cases matching the prior282-failure
-baseline. Five associated declaration refusals resolve. One obsolete Array.count
-missing-field golden was synchronized to the method-non-value diagnostic and
-passes production-worker replay;277 inherited failures remain. See
-[whole reconciliation](../../../evidence/rejection-domains/diagnostic-domain-implementation/member-declaration-admission/whole.json).
+This parent remains open. Current normal20261125T185842-test-f4334c completed
+with264 failures, invariant inputs and3313 identical-source cases. No new failures;
+met-mb9u resolves13 loop-target refusals from the effective277 baseline. The prior
+physical278 additionally included an already-reconciled Array.count golden.
+[Current whole reconciliation](../../../evidence/rejection-domains/diagnostic-domain-implementation/loop-transfer-refusals/whole.json).
 
-Named/qualified non-value transport met-eqw2 is independently closed, including
-its actual prerequisites. Its formal G2/median7.350999<=7.5 and measured controls
-certify that finite boundary, not this parent or phase3. Current carrier and
-retention are in the [worklog](../../../agents/worklog.md); main/seed/tracked bin
-promotion remains separate.
-
-[Current residual survey](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-after-member-admission-survey.json)
-has24 run,224 reject and29 partreject failures;252 negative outcomes still lack
-Source classification. Message groups are investigation hints, never admission
-authority. Select actual producer boundaries and reconcile existing task owners
-before parent closure. Completed dependency metadata alone cannot certify these
-residual cases. The Source-only negative contract and non-Source distinctions
-remain unchanged.
+Named/qualified non-value transport met-eqw2 and loop-target refusal met-mb9u are
+independently closed finite boundaries. Current formal G2/median7.447430<=7.5
+certifies the candidate, not this parent or phase3. Current carrier and retention
+are in the [worklog](../../../agents/worklog.md); main/seed/tracked bin promotion
+remains separate. Residual message groupings are investigative hints, never
+Source admission authority. Reconcile actual producer boundaries and existing
+owners before parent closure; completed dependency metadata alone is insufficient.
 
 ## Contract and audit evidence
 

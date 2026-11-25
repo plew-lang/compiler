@@ -1,6 +1,6 @@
 ---
 id: met-mb9u
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-11-25T17:20:39Z
@@ -144,5 +144,20 @@ median7.447430s is within7.5s. Tool and successor hashes were independently read
 and compared. [Candidate](../../../evidence/rejection-domains/diagnostic-domain-implementation/loop-transfer-refusals/candidate.json),
 [formal](../../../evidence/rejection-domains/diagnostic-domain-implementation/loop-transfer-refusals/formal.json).
 Independent guarantee/test review found no remaining mandatory gap apart from
-whole-suite reconciliation and its final review. Whole run20261125T185842-test-f4334c
-is still active. This task and its parent stay open.
+whole-suite reconciliation and its final review at that stage.
+
+## Completion
+
+Whole run20261125T185842-test-f4334c completed with invariant inputs, no worker
+failure and3313 identical-source cases. No new failures; thirteen loop-refusal
+cases resolve. The effective baseline277 falls to264 (physical prior278 also
+includes the already-reconciled Array.count golden). [Whole evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/loop-transfer-refusals/whole.json).
+The formal measured carrier f329fa419735, retained with frozen std, passes111
+additional target controls. Independent final review certifies this finite repair
+at0663011b; no in-scope unresolved violation or mandatory guarantee gap remains.
+No main/seed promotion or parent/phase3 completion is implied.
+
+Superseded helper/initial producer payloads totaling569121277 bytes were removed
+after evidence preservation. Snapshots/results/diagnostic traces and decisive
+final probes remain; latest264 unresolved whole cases, fresh build, formal,
+carriers and backend archive are retained for follow-up/reproduction. [Retention](../../../evidence/rejection-domains/diagnostic-domain-implementation/loop-transfer-refusals/retirement.json).
