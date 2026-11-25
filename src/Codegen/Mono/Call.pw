@@ -527,6 +527,9 @@ impl Comp {
         return <Result.Ok value=<ProvidedBodyEvidence.Paths owner=cf.traitStart proofs=(try self.providedPlacementCandidates(f: f, receiverRef: receiverRef, proofReceiver: proofReceiver, targetConformIdx: f.originConformIdx, assumptions: assumptions)) /> />
     }
 
+}
+
+pub impl Comp {
     // Calls alone select one member-dispatch path. Declaration-category readers
     // consume the same evidence frontier without turning it into a call result.
     inout fn providedBodyProof(f: Func, receiverRef: U64, assumptions: Array[DeclarationBoundRef] = []) -> Result[StaticConformanceProof, CompileDiagnostic] {
