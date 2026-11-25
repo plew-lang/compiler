@@ -1,7 +1,7 @@
 ---
 id: com-yeua
 status: in_progress
-deps: [met-c1pg, com-to2g, com-ew3i, com-x7ql, com-8uik, met-1yd7, met-tb7u, met-r3us, met-9ym8, met-g2x4, met-ia2q, met-ajht, met-6s5c, met-eqw2, met-5lik, met-uqzw]
+deps: [met-c1pg, com-to2g, com-ew3i, com-x7ql, com-8uik, met-1yd7, met-tb7u, met-r3us, met-9ym8, met-g2x4, met-ia2q, met-ajht, met-6s5c, met-eqw2, met-5lik, met-uqzw, met-mb9u]
 links: []
 created: 2026-11-02T21:30:19Z
 type: task
@@ -13,14 +13,26 @@ tags: [diagnostics, frontend, driver, verification]
 
 ## Current boundary
 
-This parent remains open. Latest complete normal20261124T011714-test-48a65b: exit1,285fail/skip0, invariant inputs and7725 matched worker pairs. Against intermediate288 only the declaration-plan, symbolic-scope and Ready setup regressions resolve; against the accepted285 baseline there are no additions/removals/reason changes. See [whole reconciliation](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-inherited-existential-final-normal.json).
+This parent remains open. Current normal20261125T160113-test-e49efb completed
+with278 failures, invariant inputs and3313 cases matching the prior282-failure
+baseline. Five associated declaration refusals resolve. One obsolete Array.count
+missing-field golden was synchronized to the method-non-value diagnostic and
+passes production-worker replay;277 inherited failures remain. See
+[whole reconciliation](../../../evidence/rejection-domains/diagnostic-domain-implementation/member-declaration-admission/whole.json).
 
-The inherited existential boundary met-ajht/met-lrep is independently certified on sourceb8c69b69/teste2d7e969, formal-eacc0f G2/median7.291978<=7.5, actualnative/ORC/memory/gen and measured controls. That measured d2e347dc belongs to the inherited-interface checkpoint, not
-the current restart carrier. Use the [worklog](../../../agents/worklog.md) for
-the current development carrier and selected producer. Main/seed/trackedbin
-promotion remains separate. Prior finite numeric/typing/protocol/source-domain children remain closed, not proof that every remaining producer has been classified.
+Named/qualified non-value transport met-eqw2 is independently closed, including
+its actual prerequisites. Its formal G2/median7.350999<=7.5 and measured controls
+certify that finite boundary, not this parent or phase3. Current carrier and
+retention are in the [worklog](../../../agents/worklog.md); main/seed/tracked bin
+promotion remains separate.
 
-Fresh discovery retains [262 negative and23 nonnegative failures](../../../evidence/rejection-domains/diagnostic-domain-implementation/whole-after-inherited-existential-negative-survey.json), with current stderr and unchanged fixture hashes. Message grouping never grants Source. Select actual producer boundaries from current inputs and assign residual work before parent closure; completed dependency metadata does not certify these unowned residual cases or phase3. The Source-only negative contract and existing non-Source distinctions remain unchanged.
+[Current residual survey](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-after-member-admission-survey.json)
+has24 run,224 reject and29 partreject failures;252 negative outcomes still lack
+Source classification. Message groups are investigation hints, never admission
+authority. Select actual producer boundaries and reconcile existing task owners
+before parent closure. Completed dependency metadata alone cannot certify these
+residual cases. The Source-only negative contract and non-Source distinctions
+remain unchanged.
 
 ## Contract and audit evidence
 
