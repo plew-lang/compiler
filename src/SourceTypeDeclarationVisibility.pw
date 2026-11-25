@@ -85,6 +85,9 @@ impl Comp {
         self.authoredTypeRecipeNodes.append(<AuthoredTypeRecipeNode id=id term=term occurrence=occurrence origin=origin first=first count=children.count() sourceRecipe=sourceRecipe />)
     }
     fn authoredTypeRecipeNode(id: U64) -> Optional[AuthoredTypeRecipeNode] {
+        // Lower normally registers every recipe in ID order. Raw insertions
+        // can leave gaps, so verify the ID before using the direct index.
+        if id != 0U64 && id <= self.authoredTypeRecipeNodes.count() && self.authoredTypeRecipeNodes[id-1U64].id == id { return <Optional.Some v=self.authoredTypeRecipeNodes[id-1U64] /> }
         mut val first = 0U64
         mut val end = self.authoredTypeRecipeNodes.count()
         while first < end {

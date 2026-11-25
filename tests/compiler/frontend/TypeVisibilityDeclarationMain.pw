@@ -1,5 +1,11 @@
 // A later origin enum cannot turn a Raw caller's Comp into an owned declaration.
 fn main() {
+    // Raw recipe creation may leave holes before private Lower registration.
+    mut val sparse = <Comp />
+    sparse.recordLowerTypeRecipe(id: 2U64, term: 7U64, occurrence: 0U64, children: [], origin: <SourceTypeRecipeOrigin.ProjectionReceiver />, sourceRecipe: 0U64)
+    sparse.recordLowerTypeRecipe(id: 4U64, term: 9U64, occurrence: 0U64, children: [], origin: <SourceTypeRecipeOrigin.ProjectionReceiver />, sourceRecipe: 0U64)
+    if sparse.authoredTypeRecipeNode(id: 2U64).unwrap().term != 7U64 || sparse.authoredTypeRecipeNode(id: 4U64).unwrap().term != 9U64 { panic("sparse recipe lookup lost exact identity") }
+    for absent in [0U64, 1U64, 3U64, 5U64] { if sparse.authoredTypeRecipeNode(id: absent).isSome() { panic("recipe index lent another ID its receipt") } }
     mut val compiler = <Comp />
     match analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.File path="tests/fixtures/reject/private_extern_generic_type_not_ambient.pw" />, sources: <SourceAccess stdRoot="std/".bytes() />) {
         Result.Err(error: _) => {}
