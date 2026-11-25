@@ -174,3 +174,20 @@ public whole-store replacement remains a distinct unexecuted concern.
 Fresh CLI, missing adversarial contrasts, formal performance and whole remain
 pending. Task and parent remain open; adopted carrier and 264-failure baseline
 are unchanged.
+
+
+### Fresh CLI and performance recovery
+
+Fresh 18910c9e build passed. The original five fixtures pass all 15 mode
+postconditions (14 Source refusals; unused ORC body succeeds). Additional old/new
+controls pass 42 executions for demanded body/closure/global, explicit import,
+alias, lexical binder and ambient types, with rejection messages unchanged.
+[CLI checkpoint](../../../evidence/rejection-domains/diagnostic-domain-implementation/type-visibility-refusals/cli-checkpoint.json).
+
+Formal second-generation fixed point median is 7.563479s, above 7.5. Alternating
+same-source measurements give old f329 7.619205s versus new 7.517756s, all LLVM
+hashes identical. This does not establish a compiler slowdown, but does not waive
+the absolute ceiling. Recovery continues: 362a7480 avoids constructing empty
+occurrence frontiers, which no reader can select. Native context remains GREEN;
+independent review confirms unchanged guarantees. Fresh rebuild and formal
+recovery are pending. [Performance checkpoint](../../../evidence/rejection-domains/diagnostic-domain-implementation/type-visibility-refusals/performance-checkpoint.json).
