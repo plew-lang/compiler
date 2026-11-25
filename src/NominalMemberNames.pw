@@ -1,0 +1,24 @@
+// Shared declaration-surface discovery, before argument labels/types/defaults.
+// Entries preserve callable source identity; no overload is selected here.
+impl Comp {
+    fn nominalMemberNames(name: U64, receiver: U64, receiverTerm: U64, declaration: Bind, surface: NominalMemberSurface) -> NominalMemberNameCursor {
+        return <NominalMemberNameCursor next=self.decls.firstCallableNamed(nameId: name) name=name receiver=receiver receiverTerm=receiverTerm declaration=declaration surface=surface />
+    }
+
+    inout fn nextNominalMemberName(cursor: inout NominalMemberNameCursor) -> Optional[U64] {
+        while cursor.next < self.decls.callableCount() {
+            val index = cursor.next
+            cursor.next = self.decls.nextCallableNamed(index: index)
+            val candidate = self.decls.callableAt(index: index)
+            val function = self.arena.functionAt(index: candidate.funcIdx)
+            if function.nameId != cursor.name { continue }
+            val eligible = match cursor.surface {
+                NominalMemberSurface.Instance => function.hasRecv && candidate.sourceKind != 1U64
+                NominalMemberSurface.Associated => function.isAssoc && self.callableIsBare(c: candidate) && function.recvId == cursor.receiver && self.receiverDeclarationMatches(f: function, receiverRef: cursor.receiverTerm) && self.receiverDeclarationHasOwner(f: function, declaration: cursor.declaration)
+                NominalMemberSurface.ProvidedAssociated => function.isAssoc && function.isProvided && candidate.sourceKind != 1U64 && self.receiverDeclarationMatches(f: function, receiverRef: cursor.receiverTerm) && self.receiverDeclarationHasOwner(f: function, declaration: cursor.declaration)
+            }
+            if eligible { return <Optional.Some v=index /> }
+        }
+        return <Optional.None />
+    }
+}

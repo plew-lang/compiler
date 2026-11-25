@@ -531,57 +531,43 @@ impl Comp {
         val receiverDeclaration = if associated && recvRef == 0U64 {
             give self.typeDeclIdentityAt(useMod: self.moduleOf(offset: recvStart), start: recvStart, len: recvLen)
         } else { give self.missingDeclIdentity() }
-        mut val i: U64 = self.decls.firstCallableNamed(nameId: qNameId)
-        while i < self.decls.callableCount() {
-            val cand: Callable = self.decls.callableAt(index: i)
-            val f: Func = self.arena.functionAt(index: cand.funcIdx)
-            // Namespace-only associated helpers use findAssoc's own admission.
-            // A conferred associated witness uses this same bare/provided
-            // source, receiver, signature and ambiguity contract as a method.
-            val eligible = (!associated && f.hasRecv) || (associated && f.isAssoc && f.isProvided && self.receiverDeclarationMatches(f: f, receiverRef: recvRef) && self.receiverDeclarationHasOwner(f: f, declaration: receiverDeclaration))
-            if eligible {
-                // an extension method does not join bare resolution (spec/09): it is
-                // reachable only through a `value#Ext.m()` view (findExtMethod).
-                if cand.sourceKind != 1U64 {
-                // a multi-path inter-trait conformance witness (spec/09) does not join
-                // bare resolution — the type does not conform to the target trait bare;
-                // it is reachable only through the path view `value#P` (findExtMethodById).
-                if f.viewOnly && f.extId == 0U64 && cand.sourceKind == 2U64 && f.nameId == qNameId {
-                    gatedCandidates.append(i)
+        mut val names = self.nominalMemberNames(name: qNameId, receiver: qRecvId, receiverTerm: recvRef, declaration: receiverDeclaration, surface: if associated { give <NominalMemberSurface.ProvidedAssociated /> } else { give <NominalMemberSurface.Instance /> })
+        while true {
+            val i = match self.nextNominalMemberName(cursor: inout names) {
+                Optional.Some(v: val index) => index
+                Optional.None => { break }
+            }
+            val cand = self.decls.callableAt(index: i)
+            val f = self.arena.functionAt(index: cand.funcIdx)
+            if f.viewOnly {
+                if f.extId == 0U64 && cand.sourceKind == 2U64 { gatedCandidates.append(i) }
+                continue
+            }
+            if !(try self.callableReceiverMatches(f: f, recvId: qRecvId, recvRef: recvRef)) { continue }
+            val matchRank = try self.groundedMethodArgMatchRank(f: f, args: args, recvRef: recvRef)
+            if matchRank != 0U64 {
+                if firstLabel == self.arena.functionCount() {
+                    firstLabel = cand.funcIdx
                 }
-                if !(f.viewOnly) {
-                if f.nameId == qNameId {
-                    if (try self.callableReceiverMatches(f: f, recvId: qRecvId, recvRef: recvRef)) {
-                        val matchRank: U64 = (try self.groundedMethodArgMatchRank(f: f, args: args, recvRef: recvRef))
-                        if matchRank != 0U64 {
-                            if firstLabel == self.arena.functionCount() {
-                                firstLabel = cand.funcIdx
-                            }
-                            if matchRank == 2U64 {
-                                if cand.sourceKind == 0U64 {
-                                    if inherentMatch == self.arena.functionCount() {
-                                        inherentMatch = cand.funcIdx
-                                    } else if inherentMatch2 == self.arena.functionCount() && cand.funcIdx != inherentMatch {
-                                        inherentMatch2 = cand.funcIdx
-                                    }
-                                }
-                                if typeMatch == self.arena.functionCount() {
-                                    typeMatch = cand.funcIdx
-                                    typeMatchEntry = i
-                                } else {
-                                    if typeMatch2 == self.arena.functionCount() && !(try self.sameCallableMemberInstance(a: self.decls.callableAt(index: typeMatchEntry), b: cand, receiverRef: recvRef)) {
-                                        typeMatch2 = cand.funcIdx
-                                        typeMatch2Entry = i
-                                    }
-                                }
-                            }
+                if matchRank == 2U64 {
+                    if cand.sourceKind == 0U64 {
+                        if inherentMatch == self.arena.functionCount() {
+                            inherentMatch = cand.funcIdx
+                        } else if inherentMatch2 == self.arena.functionCount() && cand.funcIdx != inherentMatch {
+                            inherentMatch2 = cand.funcIdx
+                        }
+                    }
+                    if typeMatch == self.arena.functionCount() {
+                        typeMatch = cand.funcIdx
+                        typeMatchEntry = i
+                    } else {
+                        if typeMatch2 == self.arena.functionCount() && !(try self.sameCallableMemberInstance(a: self.decls.callableAt(index: typeMatchEntry), b: cand, receiverRef: recvRef)) {
+                            typeMatch2 = cand.funcIdx
+                            typeMatch2Entry = i
                         }
                     }
                 }
-                }
-                }
             }
-            i = self.decls.nextCallableNamed(index: i)
         }
         // Inherent methods are the bare default over trait-provided methods with
         // the same selector.  The provided copy remains registered so `#Trait`
@@ -1207,37 +1193,31 @@ impl Comp {
         val receiverDeclaration = if recvRef == 0U64 {
             give self.typeDeclIdentityAt(useMod: self.moduleOf(offset: rnu.nameStart), start: rnu.nameStart, len: rnu.nameLen)
         } else { give self.missingDeclIdentity() }
-        mut val i: U64 = self.decls.firstCallableNamed(nameId: qNameId)
-        while i < self.decls.callableCount() {
-            val cand: Callable = self.decls.callableAt(index: i)
-            val f: Func = self.arena.functionAt(index: cand.funcIdx)
-            if f.isAssoc && self.callableIsBare(c: cand) {
-                if f.nameId == qNameId {
-                    if f.recvId == qRecvId && self.receiverDeclarationMatches(f: f, receiverRef: recvRef) && self.receiverDeclarationHasOwner(f: f, declaration: receiverDeclaration) {
-                        // A bare qualifier fixes this declaration, not its type
-                        // arguments. Interpret candidate Self with its lexical
-                        // receiver pattern; tentative matching still owns holes
-                        // and conflicts. Strict inference runs after selection.
-                        val candidateReceiver = if recvRef != 0U64 { give recvRef } else { give f.recvTy }
-                        val matchRank: U64 = (try self.groundedMethodArgMatchRank(f: f, args: args, recvRef: candidateReceiver))
-                        if matchRank != 0U64 {
-                            if firstLabel == self.arena.functionCount() {
-                                firstLabel = cand.funcIdx
-                            }
-                            if matchRank == 2U64 {
-                                if typeMatch == self.arena.functionCount() {
-                                    typeMatch = cand.funcIdx
-                                } else {
-                                    if typeMatch2 == self.arena.functionCount() {
-                                        typeMatch2 = cand.funcIdx
-                                    }
-                                }
-                            }
+        mut val names = self.nominalMemberNames(name: qNameId, receiver: qRecvId, receiverTerm: recvRef, declaration: receiverDeclaration, surface: <NominalMemberSurface.Associated />)
+        while true {
+            val i = match self.nextNominalMemberName(cursor: inout names) {
+                Optional.Some(v: val index) => index
+                Optional.None => { break }
+            }
+            val cand = self.decls.callableAt(index: i)
+            val f = self.arena.functionAt(index: cand.funcIdx)
+            // A bare head fixes the declaration, not missing type arguments.
+            val candidateReceiver = if recvRef != 0U64 { give recvRef } else { give f.recvTy }
+            val matchRank = try self.groundedMethodArgMatchRank(f: f, args: args, recvRef: candidateReceiver)
+            if matchRank != 0U64 {
+                if firstLabel == self.arena.functionCount() {
+                    firstLabel = cand.funcIdx
+                }
+                if matchRank == 2U64 {
+                    if typeMatch == self.arena.functionCount() {
+                        typeMatch = cand.funcIdx
+                    } else {
+                        if typeMatch2 == self.arena.functionCount() {
+                            typeMatch2 = cand.funcIdx
                         }
                     }
                 }
             }
-            i = self.decls.nextCallableNamed(index: i)
         }
         if typeMatch != self.arena.functionCount() {
             // A type qualifier carries only the receiver head (`Box.tag()`),

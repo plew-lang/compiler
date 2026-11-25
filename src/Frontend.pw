@@ -839,6 +839,19 @@ struct MethodLookupOrigin {
 }
 impl MethodLookupOrigin { factory }
 
+// Discovery yields declaration entries, never call applicability or a selected
+// overload. Receiver-pattern/proof checking and visibility remain explicit users.
+enum NominalMemberSurface { Instance Associated ProvidedAssociated }
+struct NominalMemberNameCursor {
+    mut val next: U64
+    val name: U64
+    val receiver: U64
+    val receiverTerm: U64
+    val declaration: Bind
+    val surface: NominalMemberSurface
+}
+impl NominalMemberNameCursor { factory }
+
 enum TraitMemberNameCandidate {
     Requirement(traitIndex: U64, slot: U64, associated: Bool)
     Provided(traitIndex: U64, function: U64, associated: Bool, visible: Bool)
@@ -2124,6 +2137,7 @@ part ./SourceCallOperations
 part ./SourceIndexFailures
 part ./SourceTypingFailures
 part ./SourceOpaqueNumerics
+part ./NominalMemberNames
 part ./TraitMemberNames
 part ./SourceNamedDeclarations
 part ./SourceOperatorRequirements

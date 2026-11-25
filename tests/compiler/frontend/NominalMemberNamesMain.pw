@@ -1,0 +1,31 @@
+// Private discovery control: no invented call arguments and no selected overload.
+fn main() {
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.File path="tests/fixtures/run/member_associated_candidate_conflict.pw" />, sources: <SourceAccess stdRoot="std/".bytes() />).unwrap()
+    val boxName = compiler.internBytes(s: "Box")
+    mut val declaration = compiler.missingDeclIdentity()
+    for index in 0U64..<compiler.arena.structCount() {
+        val type = compiler.arena.structAt(index: index)
+        if type.nameId == boxName.nameId {
+            declaration = compiler.typeDeclIdentityAt(useMod: compiler.moduleOf(offset: type.nameStart), start: type.nameStart, len: type.nameLen)
+        }
+    }
+    if declaration.nameLen == 0U64 { panic("receiver declaration missing") }
+    val member = compiler.internBytes(s: "choose")
+    mut val names = compiler.nominalMemberNames(name: member.nameId, receiver: boxName.nameId, receiverTerm: 0U64, declaration: declaration, surface: <NominalMemberSurface.Associated />)
+    mut val entries: Set[U64] = Set.new()
+    while true {
+        val index = match compiler.nextNominalMemberName(cursor: inout names) { Optional.Some(v: val index) => index Optional.None => { break } }
+        val candidate = compiler.decls.callableAt(index: index)
+        val function = compiler.arena.functionAt(index: candidate.funcIdx)
+        if !function.isAssoc || function.nameId != member.nameId || function.recvId != boxName.nameId || entries.contains(candidate.funcIdx) { panic("discovery lost canonical role or repeated entry") }
+        entries.insert(candidate.funcIdx)
+    }
+    if entries.count() != 2U64 { panic("argument-free discovery selected or dropped an overload") }
+    for surface in [<NominalMemberSurface.Instance />, <NominalMemberSurface.ProvidedAssociated />] {
+        mut val wrongRole = compiler.nominalMemberNames(name: member.nameId, receiver: boxName.nameId, receiverTerm: 0U64, declaration: declaration, surface: surface)
+        if compiler.nextNominalMemberName(cursor: inout wrongRole).isSome() { panic("associated declaration changed surface") }
+    }
+    mut val absent = compiler.nominalMemberNames(name: compiler.internBytes(s: "absentMember").nameId, receiver: boxName.nameId, receiverTerm: 0U64, declaration: declaration, surface: <NominalMemberSurface.Associated />)
+    if compiler.nextNominalMemberName(cursor: inout absent).isSome() { panic("missing selector acquired declaration") }
+}
