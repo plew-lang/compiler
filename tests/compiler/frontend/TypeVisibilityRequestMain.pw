@@ -1,0 +1,59 @@
+// Real recording requests must not borrow another request's permission.
+fn main() {
+    for name in ["BodyTwin", "Closure"] {
+        mut val expectedMessage = ""
+        for scenario in [4U64, 0U64, 1U64, 2U64, 3U64] {
+            mut val compiler = <Comp />
+            analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.File path="tests/compiler/frontend/fixtures/TypeVisibility/"+name+".pw" />, sources: <SourceAccess stdRoot="std/".bytes() />).unwrap()
+            val function = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "broken").nameId)
+            val other = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "okay").nameId)
+            val owner = <SemanticCompletionOwner.Function index=function />
+            compiler.sourceFacts.begin(owner: owner)
+            val request = if scenario == 0U64 { give <SourceRecordOrigin.Raw /> }
+                else if scenario == 1U64 { give <SourceRecordOrigin.CheckingRequest session=compiler.sourceFactSession()+1U64 root=owner /> }
+                else if scenario == 2U64 { give <SourceRecordOrigin.CheckingRequest session=compiler.sourceFactSession() root=<SemanticCompletionOwner.Global target=0U64 /> /> }
+                else if scenario == 3U64 { give <SourceRecordOrigin.CheckingRequest session=compiler.sourceFactSession() root=<SemanticCompletionOwner.Function index=other /> /> }
+                else { give <SourceRecordOrigin.CheckingRequest session=compiler.sourceFactSession() root=owner /> }
+            val diagnostic = match compiler.recordParametricFunctionWithOrigin(fnIdx: function, recordCallTemplates: true, origin: <SourceRecordingScope request=request returnContext=<SourceExpectedContext.None /> />, expectedOrigin: <SourceExpectedContext.None />) {
+                Result.Err(error: val diagnostic) => diagnostic
+                Result.Ok(value: _) => { panic("missing import became success") }
+            }
+            if scenario == 4U64 {
+                expectedMessage = diagnostic.message()
+                if diagnostic.typeVisibility().isNone() || !compiler.sourceFailureHasOwner(diagnostic: diagnostic) || compiler.failedTypeVisibility.count() != 1U64 { panic("correct real request lost its negative event") }
+            } else {
+                if diagnostic.typeVisibility().isSome() || compiler.sourceFailureHasOwner(diagnostic: diagnostic) || compiler.failedTypeVisibility.count() != 0U64 { panic("invalid real request minted a negative event") }
+                if diagnostic.message() != expectedMessage { panic("invalid request tested a different refusal") }
+            }
+            if name != "BodyTwin" || scenario != 4U64 { continue }
+            val first = compiler.failedTypeVisibility[diagnostic.typeVisibility().unwrap().event()].receipt
+            mut val second: Optional[AuthoredTypeUseReceipt] = <Optional.None />
+            for receipt in compiler.authoredTypeOccurrences {
+                if receipt.scope != first.scope && rangeEquals(bytes: compiler.arena.bytes, start: receipt.headStart, len: receipt.headLength, kw: "Marker") {
+                    match receipt.role { SourceTypeUseRole.Body => { second = <Optional.Some v=receipt /> } _ => {} }
+                }
+            }
+            val peer = second.unwrap()
+            if peer.id == first.id || !compiler.typeRefEq(a: first.term, b: peer.term) { panic("fixture did not produce two real occurrences of the same semantic type") }
+            val count = compiler.failedTypeVisibility.count()
+            for exchanged in [false, true] {
+                val receipt = if exchanged { give first } else { give peer }
+                val failure = match compiler.checkTypeNameWithOrigin(siteOffset: peer.headSite, start: peer.headStart, len: peer.headLength, occurrence: receipt.id, origin: <SourceTypeVisibilityOrigin.Body request=request />) {
+                    Result.Err(error: val failure) => failure
+                    Result.Ok(value: _) => { panic("peer missing import became success") }
+                }
+                if failure.typeVisibility().isSome() || compiler.failedTypeVisibility.count() != count { panic("another real occurrence borrowed request authority") }
+            }
+            val peerFunction = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "other").nameId)
+            val peerOwner = <SemanticCompletionOwner.Function index=peerFunction />
+            compiler.sourceFacts.begin(owner: peerOwner)
+            compiler.cur.checkFn = peerFunction
+            val peerRequest = <SourceRecordOrigin.CheckingRequest session=compiler.sourceFactSession() root=peerOwner />
+            val failure = match compiler.checkTypeNameWithOrigin(siteOffset: peer.headSite, start: peer.headStart, len: peer.headLength, occurrence: peer.id, origin: <SourceTypeVisibilityOrigin.Body request=peerRequest />) {
+                Result.Err(error: val failure) => failure
+                Result.Ok(value: _) => { panic("peer missing import became success") }
+            }
+            if failure.typeVisibility().isNone() || compiler.failedTypeVisibility.count() != count+1U64 || !compiler.sourceFailureHasOwner(diagnostic: failure) { panic("peer's own request lost its real occurrence") }
+        }
+    }
+}

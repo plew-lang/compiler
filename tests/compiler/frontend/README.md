@@ -715,3 +715,12 @@ input fingerprints. CLI acceptance and non-interference are also covered by
 `test-index-requirement-origin.py` and `test-dynamic-protocol-requirement.py`.
 
 `NamespaceDeclarationMain.pw` is appended to a frozen Frontend root to exercise private Lower Field / lexical namespace normalization receipts. It checks original versus synthetic/replaced expressions, request and owner boundaries, qualification identity/module/kind, and failed-builder retention. `NamespaceCallableValueFailureDomains.pw` exercises the public Raw, owned lazy, whole and eager consumer paths for function/closure/global owners, retry and diagnostic drain. Its `.out` is the native execution golden; both use `fixtures/NamespaceDeclaration/`. These are focused manual frontend diagnostics, not language fixture discovery.
+
+`TypeVisibility*Main.pw` are private same-module templates appended individually
+to a frozen Frontend root. They cover Lower occurrence provenance, declaration
+and body slots, actual implementation receiver binding, retained normalization,
+failure caches and exact owning consumers; `InventoryMain` also reconciles the
+actual declaration occurrences with registered roots. Use the native runners
+linked from `met-un2r`, require exit0 and empty stdout/stderr, and keep product
+APIs private. These diagnostics do not replace the public missing-import CLI
+controls or certify task completion by themselves.

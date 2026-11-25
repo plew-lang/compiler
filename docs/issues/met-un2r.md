@@ -191,3 +191,27 @@ the absolute ceiling. Recovery continues: 362a7480 avoids constructing empty
 occurrence frontiers, which no reader can select. Native context remains GREEN;
 independent review confirms unchanged guarantees. Fresh rebuild and formal
 recovery are pending. [Performance checkpoint](../../../evidence/rejection-domains/diagnostic-domain-implementation/type-visibility-refusals/performance-checkpoint.json).
+
+
+### Guarantee-level review and completed finite controls
+
+Independent whole-contract review found no new confirmed implementation defect,
+but required producer request-boundary and cross-real-occurrence controls.
+TypeVisibilityRequestMain now passes on the measured ff4 carrier: actual Body
+and Closure recording with Raw/foreign-session/wrong-global-root/other-function
+requests never mints events, and the real request does. Two real occurrences of
+the same semantic type reject exchanged site/ID/owner and accept the peer's own
+request. Same numeric term ID reuse is a separate synthetic public registration
+control; no natural same-ID real missing-import head case is claimed.
+
+Thirteen additional declaration forms across check/AOT/ORC and old/new carriers
+pass 78 executions with unchanged diagnostics and new Source retention, covering
+field/payload/function/requirement-error/impl receiver-target-associated/where/
+trait constraint operands. The reviewer accepts the two former gaps as resolved;
+no further mandatory control or confirmed code violation remains in this finite
+contract. [Completion controls](../../../evidence/rejection-domains/diagnostic-domain-implementation/type-visibility-refusals/completion-controls.json).
+
+com-p2qh is closed after independent certification, formal G2/7.361221s and
+publication. Whole 20261125T225114-test-caf022 uses frozen e27 product and measured
+ff4 carrier, comparing the inherited264 failures; completion remains pending its
+terminal result and reconciliation. main/seed/carrier adoption is not implied.
