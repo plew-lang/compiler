@@ -1,0 +1,24 @@
+// Public provenance data is not permission to issue an owned refusal.
+fn main() {
+    mut val compiler = <Comp />
+    match analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.File path="tests/fixtures/reject/private_extern_generic_type_not_ambient.pw" />, sources: <SourceAccess stdRoot="std/".bytes() />) {
+        Result.Err(error: _) => {}
+        Result.Ok(value: _) => { panic("expected actual visibility refusal") }
+    }
+    val function = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "takes").nameId)
+    val parameter = compiler.funcParamAt(params: compiler.arena.functionAt(index: function).params, index: 0U64)
+    val id = parameter.authoredTypeUse
+    val receipt = compiler.authoredTypeUseReceipt(id: id).unwrap()
+    if receipt.term != parameter.ty || compiler.authoredTypeUseReceipt(id: 0U64).isSome() { panic("wrong occurrence identity") }
+    val saved = compiler.sourceTypeUses
+    val synthetic = compiler.sourceTypeUses.record(term: receipt.term, site: receipt.site, parameters: [])
+    if compiler.authoredTypeUseReceipt(id: synthetic).isSome() { panic("public record acquired Lower receipt") }
+    compiler.sourceTypeUses = saved
+    val receipts = compiler.authoredTypeOccurrences
+    mut val index = 0U64
+    while compiler.authoredTypeOccurrences[index].id != id { index += 1U64 }
+    compiler.authoredTypeOccurrences[index] = <AuthoredTypeUseReceipt id=id term=receipt.term site=receipt.site scope=receipt.scope recipe=receipt.recipe role=receipt.role headStart=receipt.headStart headLength=receipt.headLength headSite=receipt.headSite+1U64 />
+    if compiler.authoredTypeUseReceipt(id: id).isSome() { panic("stale query head retained receipt") }
+    compiler.authoredTypeOccurrences = receipts
+    if compiler.authoredTypeUseReceipt(id: id).isNone() { panic("failed to restore actual query") }
+}

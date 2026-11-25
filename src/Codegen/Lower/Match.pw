@@ -468,7 +468,10 @@ pub impl Comp {
             Result.Ok(value: val node) => {
                 val guardOffset = syntaxBlock(file: self.syntax, id: id).guardElseOffset
                 if guardOffset != 0U64 { self.blockExitRequirements[node] = guardOffset - 1U64 }
-                if uses.count() != 0U64 { self.blockTypeUses[node] = uses }
+                if uses.count() != 0U64 {
+                    self.blockTypeUses[node] = uses
+                    self.recordAuthoredTypeFrontier(node: <SourceControlNode.Block id=node />, occurrences: uses)
+                }
             }
             Result.Err(error: _) => {}
         }
@@ -868,7 +871,10 @@ pub impl Comp {
         match result {
             Result.Ok(value: val node) => {
                 if b.guardElseOffset != 0U64 { self.blockExitRequirements[node] = b.guardElseOffset - 1U64 }
-                if uses.count() != 0U64 { self.blockTypeUses[node] = uses }
+                if uses.count() != 0U64 {
+                    self.blockTypeUses[node] = uses
+                    self.recordAuthoredTypeFrontier(node: <SourceControlNode.Block id=node />, occurrences: uses)
+                }
             }
             Result.Err(error: _) => {}
         }

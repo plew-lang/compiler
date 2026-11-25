@@ -66,7 +66,7 @@ use ./Path only { resolveImport, extractSpan, dirPrefixLen, findSrcRoot, findPkg
 use ./Manifest only { Dep, loadManifestDeps, resolveDepImport, resolveGitDepImport, loadLock, isExternalDepImport }
 use ./Lock only { Lock }
 use ./Cache only { cacheRoot }
-use ./Diag only { compileErrorAt, compileErrorAtFile, CompileDiagnostic, ArrayContextRefusal, UseAfterMoveRefusal, MissingFieldRefusal, MissingFieldKind, AssignmentRefusal, AssignmentRefusalKind, UniqueCopyRefusal, UniqueCaptureRefusal, NonCallableBindingRefusal, FreeCallVisibilityRefusal, FreeCallVisibilityKind, FreeCallAmbiguityRefusal, FreeCallAmbiguityKind, MemberCallAmbiguityRefusal, MemberCallAmbiguityKind, GenericCallConflictRefusal, genericCallConflictMessage, OpaqueNumericRefusal, OperatorRequirementRefusal, NamedDeclarationRefusal, NamedDeclarationKind, SourceTypingRefusal, IndexRequirementRefusal, LoopTargetRefusal, LoopTargetRefusalKind, opaqueNumericMessage, DiagnosticOwner, DiagnosticNote, DiagnosticLocation, DiagnosticSeverity, FailureDomain, emitDiagnostic, eprintInt, digitByte, digitStrU }
+use ./Diag only { compileErrorAt, compileErrorAtFile, CompileDiagnostic, ArrayContextRefusal, UseAfterMoveRefusal, MissingFieldRefusal, MissingFieldKind, AssignmentRefusal, AssignmentRefusalKind, UniqueCopyRefusal, UniqueCaptureRefusal, NonCallableBindingRefusal, FreeCallVisibilityRefusal, FreeCallVisibilityKind, FreeCallAmbiguityRefusal, FreeCallAmbiguityKind, MemberCallAmbiguityRefusal, MemberCallAmbiguityKind, GenericCallConflictRefusal, genericCallConflictMessage, OpaqueNumericRefusal, OperatorRequirementRefusal, NamedDeclarationRefusal, NamedDeclarationKind, SourceTypingRefusal, IndexRequirementRefusal, TypeVisibilityRefusal, LoopTargetRefusal, LoopTargetRefusalKind, opaqueNumericMessage, DiagnosticOwner, DiagnosticNote, DiagnosticLocation, DiagnosticSeverity, FailureDomain, emitDiagnostic, eprintInt, digitByte, digitStrU }
 use ./Ops only { opEq, opNe, opLt, opLe, opGt, opGe, opAdd, opSub, opMul, opDiv, opRem, opAnd, opOr, opNot, opBitAnd, opBitOr, opBitXor, opShl, opShr, opBitNot, opAssign, compoundBinOp, isBinTraitOp, binTraitName, binTraitMethodName, unaryMethodName }
 
 // Only an entirely unsuffixed numeric expression accepts a sibling's
@@ -903,6 +903,74 @@ struct AuthoredField {
 impl AuthoredField { factory }
 // Only direct authored break/continue lowering creates these receipts.
 // The serial belongs to this append-only receipt store, not a mutable cursor.
+// Private Lower registration, separate from the caller-writable provenance store.
+enum SourceTypeVisibilityOrigin { Raw Declaration Body(request: SourceRecordOrigin) }
+enum SourceTypeVisibilityOwner {
+    Declaration
+    Function(owner: SemanticCompletionOwner, function: U64, scope: U64)
+    Global(owner: SemanticCompletionOwner, target: U64, scope: U64)
+}
+struct SourceTypeVisibilityFailure {
+    val refusal: TypeVisibilityRefusal
+    val receipt: AuthoredTypeUseReceipt
+    val owner: SourceTypeVisibilityOwner
+    val path: Optional[SourceNodePath]
+    val frontier: Optional[AuthoredTypeFrontier]
+    val useModule: U64
+    val realStart: U64
+    val realLength: U64
+}
+impl SourceTypeVisibilityFailure { factory }
+enum SourceTypeAnnotationSite {
+    Local(block: U64, index: U64, statement: U64)
+    Loop(block: U64, index: U64, statement: U64)
+    Cast(expression: U64)
+    Make(expression: U64)
+    ClosureResult(expression: U64)
+    ClosureParameter(expression: U64, index: U64)
+    Selector(expression: U64)
+    Callable(expression: U64)
+}
+struct SourceTypeAnnotationSlot {
+    val site: SourceTypeAnnotationSite
+    val values: Array[U64]
+}
+impl SourceTypeAnnotationSlot { factory }
+struct AuthoredTypeFrontier {
+    val annotations: Array[SourceTypeAnnotationSlot]
+    val shape: Optional[SourceControlShape]
+    val node: SourceControlNode
+    val occurrences: Array[U64]
+}
+impl AuthoredTypeFrontier { factory }
+struct SourceNodePath {
+    val targetShape: Optional[SourceControlShape] = <Optional.None />
+    val owner: SemanticCompletionOwner
+    val root: SourceControlNode
+    val target: SourceControlNode
+    val links: Array[SourceControlPathLink]
+}
+impl SourceNodePath { factory }
+struct AuthoredTypeScopeReceipt {
+    val token: U64
+    val kind: SourceTypeScopeKind
+    val anchor: U64
+    val parent: U64
+}
+impl AuthoredTypeScopeReceipt { factory }
+struct AuthoredTypeUseReceipt {
+    val id: U64
+    val term: U64
+    val site: U64
+    val scope: U64
+    val recipe: U64
+    val role: SourceTypeUseRole
+    val headStart: U64
+    val headLength: U64
+    val headSite: U64
+}
+impl AuthoredTypeUseReceipt { factory }
+
 struct AuthoredLoopTransfer {
     val statement: U64
     val serial: U64
@@ -1199,6 +1267,10 @@ pub struct Comp {
     mut val viaCallByFunction: Dictionary[U64, U64] = [:]
     mut val authoredIdentifiers: Array[AuthoredIdentifier] = []
     mut val authoredFields: Array[AuthoredField] = []
+    mut val authoredTypeFrontiers: Array[AuthoredTypeFrontier] = []
+    mut val failedTypeVisibility: Array[SourceTypeVisibilityFailure] = []
+    mut val authoredTypeScopes: Array[AuthoredTypeScopeReceipt] = []
+    mut val authoredTypeOccurrences: Array[AuthoredTypeUseReceipt] = []
     mut val authoredLoopTransfers: Array[AuthoredLoopTransfer] = []
     mut val failedLoopTargets: Array[SourceLoopTargetFailure] = []
     mut val namespaceFieldNormalizations: Dictionary[U64, NamespaceFieldNormalization] = [:]
@@ -2229,6 +2301,7 @@ part ./SourceNamedDeclarations
 part ./SourceOperatorRequirements
 part ./SourceGenericFailures
 part ./SourceArrayFailures
+part ./SourceTypeVisibility
 part ./SourceLoopFailures
 part ./SourceControlPaths
 part ./SourceFacts
@@ -2476,7 +2549,7 @@ fn admitFrontendNominalDependencies(c: inout Comp, origin: FrontendDeclarationOr
         try c.checkUseVisibility()
         try c.checkTypeVisibility()
     } else {
-        try c.checkSourceTypeUses(occurrences: c.loweringTypeUses)
+        try c.checkSourceTypeUsesForAdmission(occurrences: c.loweringTypeUses, origin: origin)
     }
     try c.resolveTypeDeclIdentities()
     return c.admitNominalTypeAnnotations()

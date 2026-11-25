@@ -301,7 +301,7 @@ pub impl Comp {
     }
 
     inout fn lowerSyntaxStructDecl(d: SyntaxDecl) -> Result[(), CompileDiagnostic] {
-        val scope = self.sourceTypeUses.begin(kind: <SourceTypeScopeKind.Nominal />, anchor: d.span.start)
+        val scope = self.beginAuthoredTypeScope(kind: <SourceTypeScopeKind.Nominal />, anchor: d.span.start)
         val parameters = self.cur.typeParams
         val result = self.lowerSyntaxStructDeclInScope(d: d, scope: scope)
         self.cur.typeParams = parameters
@@ -328,7 +328,7 @@ pub impl Comp {
     }
 
     inout fn lowerSyntaxEnumDecl(d: SyntaxDecl) -> Result[(), CompileDiagnostic] {
-        val scope = self.sourceTypeUses.begin(kind: <SourceTypeScopeKind.Nominal />, anchor: d.span.start)
+        val scope = self.beginAuthoredTypeScope(kind: <SourceTypeScopeKind.Nominal />, anchor: d.span.start)
         val parameters = self.cur.typeParams
         val result = self.lowerSyntaxEnumDeclInScope(d: d, scope: scope)
         self.cur.typeParams = parameters
@@ -375,7 +375,7 @@ pub impl Comp {
         val savedBounds = self.activeProjectionBounds
         val savedParameters = self.cur.typeParams
         val savedReturn = self.cur.lowerRetTy
-        val scope = self.sourceTypeUses.begin(kind: <SourceTypeScopeKind.FreeFunction />, anchor: d.name.start)
+        val scope = self.beginAuthoredTypeScope(kind: <SourceTypeScopeKind.FreeFunction />, anchor: d.name.start)
         val result = self.lowerSyntaxFuncDeclInSourceScope(d: d)
         self.activeProjectionBounds = savedBounds
         self.cur.typeParams = savedParameters
@@ -427,7 +427,7 @@ impl Comp {
 pub impl Comp {
 
     inout fn lowerStructDecl(d: DeclAst) -> Result[(), CompileDiagnostic] {
-        val scope = self.sourceTypeUses.begin(kind: <SourceTypeScopeKind.Nominal />, anchor: d.span.start)
+        val scope = self.beginAuthoredTypeScope(kind: <SourceTypeScopeKind.Nominal />, anchor: d.span.start)
         val parameters = self.cur.typeParams
         val result = self.lowerStructDeclInScope(d: d, scope: scope)
         self.cur.typeParams = parameters
@@ -461,7 +461,7 @@ pub impl Comp {
     }
 
     inout fn lowerEnumDecl(d: DeclAst) -> Result[(), CompileDiagnostic] {
-        val scope = self.sourceTypeUses.begin(kind: <SourceTypeScopeKind.Nominal />, anchor: d.span.start)
+        val scope = self.beginAuthoredTypeScope(kind: <SourceTypeScopeKind.Nominal />, anchor: d.span.start)
         val parameters = self.cur.typeParams
         val result = self.lowerEnumDeclInScope(d: d, scope: scope)
         self.cur.typeParams = parameters
@@ -496,7 +496,7 @@ pub impl Comp {
         val savedBounds = self.activeProjectionBounds
         val savedParameters = self.cur.typeParams
         val savedReturn = self.cur.lowerRetTy
-        val scope = self.sourceTypeUses.begin(kind: <SourceTypeScopeKind.FreeFunction />, anchor: d.nameSpan.start)
+        val scope = self.beginAuthoredTypeScope(kind: <SourceTypeScopeKind.FreeFunction />, anchor: d.nameSpan.start)
         val result = self.lowerFuncDeclInSourceScope(d: d)
         self.activeProjectionBounds = savedBounds
         self.cur.typeParams = savedParameters

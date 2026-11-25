@@ -1,0 +1,4 @@
+use ./Other only { load }
+val sample: I64 = { val value: Optional[Marker] = <Optional.None /> give 1I64 }
+fn okay() {}
+fn main() {}

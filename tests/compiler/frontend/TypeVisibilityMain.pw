@@ -1,0 +1,29 @@
+// The actual source declaration constructor must preserve the rejection cause.
+fn main() {
+    mut val normal = <Comp />
+    analyzeFrontendForRequests(c: inout normal, input: <FrontendInput.Text path="typed-closure.pw" text="fn main() {{ val action = fn() -> I64 {{ return 1I64 }} action() }}" />, sources: <SourceAccess stdRoot="std/".bytes() />).unwrap()
+
+    val result = openFrontend(input: <FrontendInput.File path="tests/fixtures/reject/private_extern_generic_type_not_ambient.pw" />, sources: <SourceAccess stdRoot="std/".bytes() />)
+    val diagnostic = match result {
+        Result.Err(error: val diagnostic) => diagnostic
+        Result.Ok(value: _) => { panic("private Core type accepted") }
+    }
+    if !diagnostic.isSourceRejection() { panic("actual declaration type visibility refusal lost source authority: "+diagnostic.message()) }
+
+    for name in ["Body", "Closure", "Global"] {
+        mut val compiler = <Comp />
+        analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.File path="tests/compiler/frontend/fixtures/TypeVisibility/"+name+".pw" />, sources: <SourceAccess stdRoot="std/".bytes() />).unwrap()
+        val function = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "broken").nameId)
+        val result = if name == "Global" { give compiler.prepareGlobalInitializer(target: compiler.arena.globals[0U64].nameStart) } else { give compiler.prepareLexicalBody(fnIdx: function) }
+        val diagnostic = match result { Result.Err(error: val diagnostic) => diagnostic Result.Ok(value: _) => { panic(name+": invalid annotation accepted") } }
+        if diagnostic.typeVisibility().isNone() || !compiler.sourceFailureHasOwner(diagnostic: diagnostic) { panic(name+": body refusal lost private Source authority: "+diagnostic.message()) }
+        val event = diagnostic.typeVisibility().unwrap().event()
+        val count = compiler.failedTypeVisibility.count()
+        val okay = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "okay").nameId)
+        compiler.prepareLexicalBody(fnIdx: okay).unwrap()
+        if !compiler.sourceFailureHasOwner(diagnostic: diagnostic) { panic(name+": another owner erased refusal") }
+        val retry = if name == "Global" { give compiler.prepareGlobalInitializer(target: compiler.arena.globals[0U64].nameStart) } else { give compiler.prepareLexicalBody(fnIdx: function) }
+        val cached = match retry { Result.Err(error: val cached) => cached Result.Ok(value: _) => { panic("failed body retried as success") } }
+        if cached.typeVisibility().unwrap().event() != event || compiler.failedTypeVisibility.count() != count || !compiler.sourceFailureHasOwner(diagnostic: cached) { panic(name+": failed cache lost cause") }
+    }
+}

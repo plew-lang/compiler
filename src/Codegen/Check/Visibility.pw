@@ -324,15 +324,7 @@ pub impl Comp {
     }
 
     inout fn checkTypeName(siteOffset: U64, start: U64, len: U64) -> Result[(), CompileDiagnostic] {
-        if len == 0 { return <Result.Ok value=() /> }
-        if self.isAmbientInLang(start: start, len: len) { return <Result.Ok value=() /> }
-        val useMod: U64 = self.moduleOf(offset: siteOffset)
-        if self.typeDeclVisibleFrom(useMod: useMod, start: start, len: len) { return <Result.Ok value=() /> }
-        val real: Bind = self.realTypeNameInModule(useMod: useMod, start: start, len: len)
-        if self.typeDeclExistsGlobally(start: real.nameStart, len: real.nameLen) {
-            return <Result.Err error=self.diagnosticAt(offset: siteOffset, msg: "use of a type from another module without importing it (add `use … only {{ … }}`)") />
-        }
-        return <Result.Ok value=() />
+        return self.checkTypeNameWithOrigin(siteOffset: siteOffset, start: start, len: len, occurrence: 0U64, origin: <SourceTypeVisibilityOrigin.Raw />)
     }
 
     inout fn checkProjectionMember(type: TypeRef) -> Result[(), CompileDiagnostic] {
@@ -359,29 +351,15 @@ pub impl Comp {
     }
 
     inout fn checkSourceTypeUses(occurrences: Array[U64]) -> Result[(), CompileDiagnostic] {
-        for id in occurrences {
-            val ref = (try self.signatureOccurrence(id: id)).term
-            if !self.checkedTypeUses.contains(ref) {
-                try self.checkAnyTypeFormation(ref: ref)
-                try self.checkTypeUseVisibility(ref: ref)
-                self.checkedTypeUses.insert(ref)
-            }
-        }
-        return <Result.Ok value=() />
+        return self.checkSourceTypeUsesWithOrigin(occurrences: occurrences, origin: <SourceTypeVisibilityOrigin.Raw />)
     }
 
     inout fn checkRequestedTypeUses(occurrences: Array[U64]) -> Result[(), CompileDiagnostic] {
-        if !self.genMode { try self.checkSourceTypeUses(occurrences: occurrences) }
-        return self.checkAuthoredTypeViews(occurrences: occurrences, requested: self.currentSourceOwner())
+        return self.checkRequestedTypeUsesWithOrigin(occurrences: occurrences, origin: <SourceRecordOrigin.Raw />)
     }
 
     inout fn checkTypeUseVisibility(ref: U64) -> Result[(), CompileDiagnostic] {
-        val type = self.arena.typeAt(index: ref)
-        try self.checkProjectionMember(type: type)
-        if type.siteOffset != 0U64 && self.offsetIsLoaded(offset: type.siteOffset) {
-            try self.checkTypeName(siteOffset: type.siteOffset, start: type.nameStart, len: type.nameLen)
-        }
-        return <Result.Ok value=() />
+        return self.checkTypeUseVisibilityWithOrigin(ref: ref, occurrence: 0U64, origin: <SourceTypeVisibilityOrigin.Raw />)
     }
 
     inout fn checkTypeVisibility() -> Result[(), CompileDiagnostic] {

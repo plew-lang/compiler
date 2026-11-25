@@ -1,0 +1,2 @@
+pub struct Marker {}
+pub fn load() -> I64 { return 1I64 }

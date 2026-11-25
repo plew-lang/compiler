@@ -124,6 +124,7 @@ pub impl Comp {
                     mut val combined: Array[U64] = self.expressionTypeUses.getOr(key: node, fallback: [])
                     for occurrence in uses { combined.append(occurrence) }
                     self.expressionTypeUses[node] = combined
+                    self.recordAuthoredTypeFrontier(node: <SourceControlNode.Expression id=node />, occurrences: uses)
                 }
             }
             Result.Err(error: _) => {}
@@ -437,6 +438,7 @@ pub impl Comp {
                     mut val combined: Array[U64] = self.expressionTypeUses.getOr(key: node, fallback: [])
                     for occurrence in uses { combined.append(occurrence) }
                     self.expressionTypeUses[node] = combined
+                    self.recordAuthoredTypeFrontier(node: <SourceControlNode.Expression id=node />, occurrences: uses)
                 }
             }
             Result.Err(error: _) => {}

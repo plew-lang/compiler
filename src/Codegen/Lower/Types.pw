@@ -64,6 +64,11 @@ impl Comp {
             index += 1U64
         }
         val occurrence = self.sourceTypeUses.record(term: ref, site: site, parameters: self.cur.typeParams, children: children, labels: labels)
+        if ref < self.arena.typeCount() {
+            val occurrenceSource = self.sourceTypeUses.useAt(index: occurrence - 1U64).unwrap()
+            val head = self.arena.typeAt(index: ref)
+            self.authoredTypeOccurrences.append(<AuthoredTypeUseReceipt id=occurrence term=ref site=site scope=occurrenceSource.scope recipe=occurrenceSource.recipe role=occurrenceSource.role headStart=head.nameStart headLength=head.nameLen headSite=head.siteOffset />)
+        }
         self.loweringTypeUses.append(occurrence)
         if site != 0U64 && self.modules.sourceFileContaining(offset: site).isSome() && !self.authoredTypeUseSites.contains(key: ref) {
             self.authoredTypeUseSites[ref] = site

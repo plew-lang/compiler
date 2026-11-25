@@ -2226,7 +2226,7 @@ impl Comp {
             }
         }
         match self.blockTypeUses.get(key: blkId) {
-            Optional.Some(v: val uses) => { try self.checkRequestedTypeUses(occurrences: uses) }
+            Optional.Some(v: val uses) => { try self.checkRequestedTypeUsesWithOrigin(occurrences: uses, origin: origin.request) }
             Optional.None => {}
         }
         mut val i: U64 = 0
@@ -2465,7 +2465,7 @@ impl Comp {
             _ => [],
         }
         match self.expressionTypeUses.get(key: exprId) {
-            Optional.Some(v: val uses) => { try self.checkRequestedTypeUses(occurrences: uses) }
+            Optional.Some(v: val uses) => { try self.checkRequestedTypeUsesWithOrigin(occurrences: uses, origin: origin.request) }
             Optional.None => {}
         }
         // Recording owns its destination slot. Parent expressions can be

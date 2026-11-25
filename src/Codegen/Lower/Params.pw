@@ -11,14 +11,14 @@ impl Comp {
     }
     inout fn lowerDefaultExpr(e: ExprAst) -> Result[U64, CompileDiagnostic] {
         val site = exprAstSpan(e: e).start
-        val scope = self.sourceTypeUses.begin(kind: <SourceTypeScopeKind.DefaultExpression />, anchor: site)
+        val scope = self.beginAuthoredTypeScope(kind: <SourceTypeScopeKind.DefaultExpression />, anchor: site)
         try self.setAuthoredTypeUseRole(role: <SourceTypeUseRole.DefaultArgument />, site: site)
         val result = self.lowerExpr(e: e)
         return self.finishDefaultExpressionScope(scope: scope, site: site, result: result)
     }
     inout fn lowerSyntaxDefaultExpr(id: ExprId) -> Result[U64, CompileDiagnostic] {
         val site = syntaxExpr(file: self.syntax, id: id).span.start
-        val scope = self.sourceTypeUses.begin(kind: <SourceTypeScopeKind.DefaultExpression />, anchor: site)
+        val scope = self.beginAuthoredTypeScope(kind: <SourceTypeScopeKind.DefaultExpression />, anchor: site)
         try self.setAuthoredTypeUseRole(role: <SourceTypeUseRole.DefaultArgument />, site: site)
         val result = self.lowerSyntaxExpr(id: id)
         return self.finishDefaultExpressionScope(scope: scope, site: site, result: result)

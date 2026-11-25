@@ -1,0 +1,4 @@
+use ./Other only { load }
+fn broken() { val value: Optional[Marker] = <Optional.None /> }
+fn okay() {}
+fn main() {}

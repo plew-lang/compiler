@@ -86,5 +86,44 @@ SourceRecordingScope.request before checking and relying on current owner.
 SourceTypeUses is a public mutable field; signatureOccurrence currently validates
 only the range. Lower-private provenance and exact occurrence ownership require
 explicit tests, not assumptions from a populated scope or loaded offset.
-No repair has been implemented; next establish those private tests and retained
-negative representation before modifying declaration/body producers.
+Implementation checkpoints below supersede the initial unconnected state; no
+fresh candidate or task completion has been certified.
+
+## WIP producer and body-frontier checkpoint
+
+Private Lower scope/use receipts now retain only stable provenance and the
+name/site query inputs. Declaration origin and body request are distinct private
+entries; public/gen Raw entry points retain Raw behavior. The actual visibility
+branch produces the retained typed negative event; failed body/closure/global
+cache and owning consumer preserve it without another visibility lookup.
+
+Body membership uses a private Lower frontier and the shared structural path
+walker (loop wrappers retain their existing API). Direct annotation slots retain
+only their locator and relevant type/occurrence fields. Block slots include the
+block/index/Stmt binding; closure signatures do not force a control-shape unwrap
+or walk into a nested body. The final consumer checks saved edges and slots.
+
+Executed RED->GREEN corrections: actual declaration Source loss; typed closure
+normal-lowering panic; detached Let annotation; block child replacement with
+unchanged range. Latest native context passes normal typed closure, actual
+Body/Closure/Global refusals, discarded builder/cache/retry and another owner.
+Shared loop saved-target authority remains GREEN. Independent review confirms
+these specific corrections; it has not certified the whole task.
+[Checkpoint and runners](../../../evidence/rejection-domains/diagnostic-domain-implementation/type-visibility-refusals/checkpoint.json).
+
+## Next mandatory unit and remaining gates
+
+Declaration role/scope/frontier membership alone is insufficient: still seal
+actual declaration slot binding. The independently accepted location is the
+real SourceAdmission constructor immediately after Lower completes, before
+nominal admission. Seal private Lower receipt to registered declaration slots;
+do not seal a caller-populated Raw Comp or let a later origin enum manufacture
+permission. Consume saved declaration identity/slot bindings without a rescan.
+Preserve correspondence through any intervening legitimate normalization.
+Pre-Lower failures are outside this post-Lower missing-import boundary.
+
+Then complete Raw/forged/foreign scope, shared-term/different-occurrence and
+alias/binder/unknown-type controls; all five public roots plus demanded/lazy/body
+contrasts on a fresh candidate; required regression, formal<=7.5s and final
+independent review. Current adopted f329 carrier and whole264 baseline are
+unchanged. The WIP source is not an adopted compiler and remains unmeasured.

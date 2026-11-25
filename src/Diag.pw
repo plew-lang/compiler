@@ -420,6 +420,21 @@ pub impl LoopTargetRefusalKind {
         }
     }
 }
+pub struct TypeVisibilityRefusal {
+    val session: U64
+    val occurrence: U64
+    val event: U64
+    val location: DiagnosticLocation
+}
+pub impl TypeVisibilityRefusal {
+    factory
+    fn session() -> U64 { return self.session }
+    fn occurrence() -> U64 { return self.occurrence }
+    fn event() -> U64 { return self.event }
+    fn location() -> DiagnosticLocation { return self.location }
+    fn message() -> String { return "use of a type from another module without importing it (add `use … only {{ … }}`)" }
+}
+
 pub struct LoopTargetRefusal {
     val session: U64
     val owner: DiagnosticOwner
@@ -550,6 +565,7 @@ enum DiagnosticData {
     FreeCallAmbiguity(refusal: FreeCallAmbiguityRefusal)
     MemberCallAmbiguity(refusal: MemberCallAmbiguityRefusal)
     IndexRequirement(refusal: IndexRequirementRefusal)
+    TypeVisibility(refusal: TypeVisibilityRefusal)
     LoopTarget(refusal: LoopTargetRefusal)
     SourceTyping(refusal: SourceTypingRefusal)
     OpaqueNumeric(refusal: OpaqueNumericRefusal)
@@ -578,6 +594,15 @@ pub impl CompileDiagnostic {
     fn operatorRequirement() -> Optional[OperatorRequirementRefusal] {
         return match self.storage[0U64] {
             DiagnosticData.OperatorRequirement(refusal: val refusal) => <Optional.Some v=refusal />
+            _ => <Optional.None />
+        }
+    }
+    factory typeVisibility(refusal: TypeVisibilityRefusal) {
+        return <CompileDiagnostic storage=[<DiagnosticData.TypeVisibility refusal=refusal />] />
+    }
+    fn typeVisibility() -> Optional[TypeVisibilityRefusal] {
+        return match self.storage[0U64] {
+            DiagnosticData.TypeVisibility(refusal: val refusal) => <Optional.Some v=refusal />
             _ => <Optional.None />
         }
     }
@@ -736,6 +761,7 @@ pub impl CompileDiagnostic {
             DiagnosticData.FreeCallAmbiguity(refusal: _) => <DiagnosticSeverity.Error />
             DiagnosticData.MemberCallAmbiguity(refusal: _) => <DiagnosticSeverity.Error />
             DiagnosticData.IndexRequirement(refusal: _) => <DiagnosticSeverity.Error />
+            DiagnosticData.TypeVisibility(refusal: _) => <DiagnosticSeverity.Error />
             DiagnosticData.LoopTarget(refusal: _) => <DiagnosticSeverity.Error />
             DiagnosticData.SourceTyping(refusal: _) => <DiagnosticSeverity.Error />
             DiagnosticData.OpaqueNumeric(refusal: _) => <DiagnosticSeverity.Error />
@@ -758,6 +784,7 @@ pub impl CompileDiagnostic {
             DiagnosticData.FreeCallAmbiguity(refusal: _) => <FailureDomain.Unclassified />
             DiagnosticData.MemberCallAmbiguity(refusal: _) => <FailureDomain.Unclassified />
             DiagnosticData.IndexRequirement(refusal: _) => <FailureDomain.Unclassified />
+            DiagnosticData.TypeVisibility(refusal: _) => <FailureDomain.Unclassified />
             DiagnosticData.LoopTarget(refusal: _) => <FailureDomain.Unclassified />
             DiagnosticData.SourceTyping(refusal: _) => <FailureDomain.Unclassified />
             DiagnosticData.OpaqueNumeric(refusal: _) => <FailureDomain.Unclassified />
@@ -780,6 +807,7 @@ pub impl CompileDiagnostic {
             DiagnosticData.FreeCallAmbiguity(refusal: val refusal) => refusal.location()
             DiagnosticData.MemberCallAmbiguity(refusal: val refusal) => refusal.location()
             DiagnosticData.IndexRequirement(refusal: val refusal) => refusal.location()
+            DiagnosticData.TypeVisibility(refusal: val refusal) => refusal.location()
             DiagnosticData.LoopTarget(refusal: val refusal) => refusal.location()
             DiagnosticData.SourceTyping(refusal: val refusal) => refusal.location()
             DiagnosticData.OpaqueNumeric(refusal: val refusal) => refusal.location()
@@ -801,6 +829,7 @@ pub impl CompileDiagnostic {
             DiagnosticData.FreeCallAmbiguity(refusal: val refusal) => refusal.kind().message()
             DiagnosticData.MemberCallAmbiguity(refusal: val refusal) => refusal.kind().message()
             DiagnosticData.IndexRequirement(refusal: _) => "subscript requires an Index implementation for reading or an IndexSet implementation for writing"
+            DiagnosticData.TypeVisibility(refusal: val refusal) => refusal.message()
             DiagnosticData.LoopTarget(refusal: val refusal) => refusal.kind().message()
             DiagnosticData.SourceTyping(refusal: _) => "cannot infer this expression's type; add a type annotation or provide an expected type"
             DiagnosticData.OpaqueNumeric(refusal: _) => opaqueNumericMessage()
@@ -824,6 +853,7 @@ pub impl CompileDiagnostic {
             DiagnosticData.FreeCallAmbiguity(refusal: _) => []
             DiagnosticData.MemberCallAmbiguity(refusal: _) => []
             DiagnosticData.IndexRequirement(refusal: _) => []
+            DiagnosticData.TypeVisibility(refusal: _) => []
             DiagnosticData.LoopTarget(refusal: _) => []
             DiagnosticData.SourceTyping(refusal: _) => []
             DiagnosticData.OpaqueNumeric(refusal: _) => []

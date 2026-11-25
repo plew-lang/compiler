@@ -1,0 +1,28 @@
+// A saved frontier must still point at the actual annotation slot.
+fn main() {
+    for swapChild in [false, true] {
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.File path="tests/compiler/frontend/fixtures/TypeVisibility/Body.pw" />, sources: <SourceAccess stdRoot="std/".bytes() />).unwrap()
+    val function = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "broken").nameId)
+    val body = compiler.arena.functionAt(index: function).body
+    val statement = compiler.blockStmtAt(blkId: body, index: 0U64)
+    val original = compiler.arena.stmts[statement]
+    if swapChild {
+        val initializer = match original { Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, init: val value, annotationOccurrence: _) => value _ => { panic("expected annotated local") } }
+        val replacement = compiler.pushStmt(s: <Stmt.ExprStmt expr=initializer />)
+        compiler.arena.blockStmtPool[compiler.arena.blocks[body].stmtStart] = replacement
+    } else {
+    compiler.arena.stmts[statement] = match original {
+        Stmt.Let(mutable: val mutable, nameStart: val name, nameLen: val length, tyStart: val start, tyLen: val count, tyIsArray: val array, ty: val type, init: val value, annotationOccurrence: _) => <Stmt.Let mutable=mutable nameStart=name nameLen=length tyStart=start tyLen=count tyIsArray=array ty=type init=value annotationOccurrence=<Optional.None /> />
+        _ => { panic("expected annotated local") }
+    }
+    }
+    val owner = <SemanticCompletionOwner.Function index=function />
+    compiler.sourceFacts.begin(owner: owner)
+    val diagnostic = match compiler.recordParametricFunctionWithOrigin(fnIdx: function, recordCallTemplates: true, origin: <SourceRecordingScope request=<SourceRecordOrigin.CheckingRequest session=compiler.sourceFactSession() root=owner /> returnContext=<SourceExpectedContext.None /> />, expectedOrigin: <SourceExpectedContext.None />) {
+        Result.Err(error: val diagnostic) => diagnostic
+        Result.Ok(value: _) => { panic("malformed annotation unexpectedly succeeded") }
+    }
+    if compiler.sourceFailureHasOwner(diagnostic: diagnostic) { panic(if swapChild { give "detached block child retained Source authority" } else { give "detached annotation retained Source authority" }) }
+    }
+}

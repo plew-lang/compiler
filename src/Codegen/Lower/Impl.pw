@@ -3,7 +3,7 @@
 
 impl Comp {
     inout fn lowerAuthoredDeinit(input: DeinitBodyInput, receiver: Bind, receiverType: U64, parameters: Array[Bind], offset: U64) -> Result[(), CompileDiagnostic] {
-        val scope = self.sourceTypeUses.begin(kind: <SourceTypeScopeKind.Deinit />, anchor: offset)
+        val scope = self.beginAuthoredTypeScope(kind: <SourceTypeScopeKind.Deinit />, anchor: offset)
         val result = self.lowerDeinitInSourceScope(input: input, receiver: receiver, receiverType: receiverType, parameters: parameters, offset: offset)
         if !self.sourceTypeUses.finish(token: scope, succeeded: result.isOk()) {
             return <Result.Err error=self.diagnosticAt(offset: offset, msg: "invalid authored type scope restoration", failureDomain: <FailureDomain.Internal />) />
@@ -745,7 +745,7 @@ pub impl Comp {
         val savedReturn = self.cur.lowerRetTy
         val savedAssociatedOwner = self.lowerAssociatedOwner
         val savedAssociatedArgs = self.lowerAssociatedArgs
-        val scope = self.sourceTypeUses.begin(kind: <SourceTypeScopeKind.Method />, anchor: m.name.start, traitOwner: recvTraitOwner)
+        val scope = self.beginAuthoredTypeScope(kind: <SourceTypeScopeKind.Method />, anchor: m.name.start, traitOwner: recvTraitOwner)
         val result = self.lowerSyntaxMethodMemberInSourceScope(im: im, conformanceTrait: conformanceTrait, m: m, recvN: recvN, recvTy: recvTy, recvTraitArgs: recvTraitArgs, recvTraitOwner: recvTraitOwner, implParamBinds: implParamBinds, hasRecv: hasRecv, isAssoc: isAssoc, witnessed: inout witnessed, stagedBounds: inout stagedBounds)
         self.activeProjectionBounds = savedBounds
         self.cur.typeParams = savedParameters
@@ -894,7 +894,7 @@ pub impl Comp {
         val savedReturn = self.cur.lowerRetTy
         val savedAssociatedOwner = self.lowerAssociatedOwner
         val savedAssociatedArgs = self.lowerAssociatedArgs
-        val scope = self.sourceTypeUses.begin(kind: <SourceTypeScopeKind.Method />, anchor: m.nameSpan.start, traitOwner: recvTraitOwner)
+        val scope = self.beginAuthoredTypeScope(kind: <SourceTypeScopeKind.Method />, anchor: m.nameSpan.start, traitOwner: recvTraitOwner)
         val result = self.lowerMethodMemberInSourceScope(im: im, conformanceTrait: conformanceTrait, m: m, recvN: recvN, recvTy: recvTy, recvTraitArgs: recvTraitArgs, recvTraitOwner: recvTraitOwner, implParamBinds: implParamBinds, hasRecv: hasRecv, isAssoc: isAssoc, witnessed: inout witnessed, stagedBounds: inout stagedBounds)
         self.activeProjectionBounds = savedBounds
         self.cur.typeParams = savedParameters
@@ -1060,7 +1060,7 @@ pub impl Comp {
         val savedAssociatedOwner = self.lowerAssociatedOwner
         val savedAssociatedArgs = self.lowerAssociatedArgs
         val savedReceiverRecipes = self.lowerMethodReceiverRecipes
-        val scope = self.sourceTypeUses.begin(kind: <SourceTypeScopeKind.Implementation />, anchor: im.span.start)
+        val scope = self.beginAuthoredTypeScope(kind: <SourceTypeScopeKind.Implementation />, anchor: im.span.start)
         mut val stagedBounds: Array[FuncBound] = []
         val result = self.lowerImplInSourceScope(im: im, stagedBounds: inout stagedBounds)
         self.activeProjectionBounds = savedBounds
@@ -1233,7 +1233,7 @@ impl Comp {
         val savedAssociatedOwner = self.lowerAssociatedOwner
         val savedAssociatedArgs = self.lowerAssociatedArgs
         val savedReceiverRecipes = self.lowerMethodReceiverRecipes
-        val scope = self.sourceTypeUses.begin(kind: <SourceTypeScopeKind.Implementation />, anchor: im.span.start)
+        val scope = self.beginAuthoredTypeScope(kind: <SourceTypeScopeKind.Implementation />, anchor: im.span.start)
         mut val stagedBounds: Array[FuncBound] = []
         val result = self.lowerSyntaxImplInSourceScope(im: im, stagedBounds: inout stagedBounds, origin: origin)
         self.activeProjectionBounds = savedBounds
@@ -1386,7 +1386,7 @@ pub impl Comp {
     inout fn lowerSigToFunc(sig: SigAst, isExtern: Bool, isCExtern: Bool) -> Result[LoweredSourceSignature, CompileDiagnostic] {
         val savedBounds = self.activeProjectionBounds
         val savedParameters = self.cur.typeParams
-        val scope = self.sourceTypeUses.begin(kind: (if isExtern { give <SourceTypeScopeKind.ExternSignature /> } else { give <SourceTypeScopeKind.RequirementSignature /> }), anchor: sig.nameSpan.start, traitOwner: self.lowerAssociatedOwner)
+        val scope = self.beginAuthoredTypeScope(kind: (if isExtern { give <SourceTypeScopeKind.ExternSignature /> } else { give <SourceTypeScopeKind.RequirementSignature /> }), anchor: sig.nameSpan.start, traitOwner: self.lowerAssociatedOwner)
         val result = self.lowerSigToFuncInSourceScope(sig: sig, isExtern: isExtern, isCExtern: isCExtern)
         self.activeProjectionBounds = savedBounds
         self.cur.typeParams = savedParameters
@@ -1457,7 +1457,7 @@ pub impl Comp {
     inout fn lowerSyntaxSigToFunc(sig: SyntaxSig, isExtern: Bool, isCExtern: Bool) -> Result[LoweredSourceSignature, CompileDiagnostic] {
         val savedBounds = self.activeProjectionBounds
         val savedParameters = self.cur.typeParams
-        val scope = self.sourceTypeUses.begin(kind: (if isExtern { give <SourceTypeScopeKind.ExternSignature /> } else { give <SourceTypeScopeKind.RequirementSignature /> }), anchor: sig.name.start, traitOwner: self.lowerAssociatedOwner)
+        val scope = self.beginAuthoredTypeScope(kind: (if isExtern { give <SourceTypeScopeKind.ExternSignature /> } else { give <SourceTypeScopeKind.RequirementSignature /> }), anchor: sig.name.start, traitOwner: self.lowerAssociatedOwner)
         val result = self.lowerSyntaxSigToFuncInSourceScope(sig: sig, isExtern: isExtern, isCExtern: isCExtern)
         self.activeProjectionBounds = savedBounds
         self.cur.typeParams = savedParameters
@@ -1575,7 +1575,7 @@ impl Comp {
         val owner = trait.nameSpan.start
         val parameters = try self.lowerTypeParamNames(names: trait.typeParams, anchor: owner, sendableFlags: trait.typeParamSendable)
         self.enterTraitSignatureScope(owner: owner, parameters: parameters)
-        val scope = self.sourceTypeUses.begin(kind: <SourceTypeScopeKind.TraitDeclaration />, anchor: owner)
+        val scope = self.beginAuthoredTypeScope(kind: <SourceTypeScopeKind.TraitDeclaration />, anchor: owner)
         val lowered = self.lowerValueSupertraits(trait: trait)
         self.sourceTypeUses.finish(token: scope, succeeded: lowered.isOk())
         try self.saveTraitLexicalHeader(owner: owner, parameters: parameters, supertraits: (try lowered), scope: scope)
@@ -1641,7 +1641,7 @@ impl Comp {
             requirements.append(requirement)
             ri += 1
         }
-        val scope = self.sourceTypeUses.begin(kind: <SourceTypeScopeKind.TraitDeclaration />, anchor: nameStart)
+        val scope = self.beginAuthoredTypeScope(kind: <SourceTypeScopeKind.TraitDeclaration />, anchor: nameStart)
         val loweredBounds = self.lowerValueAssociatedConstraints(trait: t, scope: scope)
         self.sourceTypeUses.finish(token: scope, succeeded: loweredBounds.isOk())
         val associatedBounds = try loweredBounds
@@ -1698,7 +1698,7 @@ impl Comp {
         }
         val parameters = try self.lowerTypeParamSpans(spans: spans, anchor: trait.name.start, sendableFlags: flags)
         self.enterTraitSignatureScope(owner: trait.name.start, parameters: parameters)
-        val scope = self.sourceTypeUses.begin(kind: <SourceTypeScopeKind.TraitDeclaration />, anchor: trait.name.start)
+        val scope = self.beginAuthoredTypeScope(kind: <SourceTypeScopeKind.TraitDeclaration />, anchor: trait.name.start)
         val lowered = self.lowerSyntaxSupertraits(trait: trait)
         self.sourceTypeUses.finish(token: scope, succeeded: lowered.isOk())
         return self.saveTraitLexicalHeader(owner: trait.name.start, parameters: parameters, supertraits: (try lowered), scope: scope)
@@ -1801,7 +1801,7 @@ impl Comp {
             requirements.append(lowered)
             i += 1U64
         }
-        val scope = self.sourceTypeUses.begin(kind: <SourceTypeScopeKind.TraitDeclaration />, anchor: t.name.start)
+        val scope = self.beginAuthoredTypeScope(kind: <SourceTypeScopeKind.TraitDeclaration />, anchor: t.name.start)
         val loweredBounds = self.lowerSyntaxAssociatedConstraints(trait: t, scope: scope)
         self.sourceTypeUses.finish(token: scope, succeeded: loweredBounds.isOk())
         val associatedBounds = try loweredBounds

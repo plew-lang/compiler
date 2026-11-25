@@ -38,17 +38,21 @@ impl Comp {
     // statement under multiple positions or a cycle is not source authority.
     fn sourceLoopTransferPath(owner: SemanticCompletionOwner, statement: U64) -> Optional[SourceControlPath] {
         if statement >= self.arena.stmts.count() { return <Optional.None /> }
+        val path = match self.sourceControlNodePath(owner: owner, target: <SourceControlNode.Statement id=statement />) { Optional.Some(v: val path) => path Optional.None => { return <Optional.None /> } }
+        return <Optional.Some v=<SourceControlPath owner=path.owner root=path.root statement=statement links=path.links /> />
+    }
+
+    fn sourceControlNodePath(owner: SemanticCompletionOwner, target: SourceControlNode) -> Optional[SourceNodePath] {
         val root = match self.sourceControlRoot(owner: owner) { Optional.Some(v: val root) => root Optional.None => { return <Optional.None /> } }
-        val target = <SourceControlNode.Statement id=statement />
         mut val frames = [<SourceControlPathFrame node=root children=self.sourceControlChildren(node: root) />]
         mut val path: Array[SourceControlPathLink] = []
-        mut val found: Optional[SourceControlPath] = <Optional.None />
+        mut val found: Optional[SourceNodePath] = <Optional.None />
         while frames.count() != 0U64 {
             val last = frames.count()-1U64
             val frame = frames[last]
             if frame.next == 0U64 && frame.node.same(other: target) {
                 if found.isSome() { return <Optional.None /> }
-                found = <Optional.Some v=<SourceControlPath owner=owner root=root statement=statement links=path /> />
+                found = <Optional.Some v=<SourceNodePath targetShape=self.sourceControlShape(node: target) owner=owner root=root target=target links=path /> />
             }
             if frame.next >= frame.children.count() {
                 frames.removeLast()
@@ -69,6 +73,17 @@ impl Comp {
     // Validate only the retained edges and owner/root binding. This neither
     // searches the body again nor decides a loop target a second time.
     fn sourceControlPathMatches(path: SourceControlPath) -> Bool {
+        return self.sourceControlNodePathMatches(path: <SourceNodePath owner=path.owner root=path.root target=<SourceControlNode.Statement id=path.statement /> links=path.links />)
+    }
+
+    fn sourceControlNodePathMatches(path: SourceNodePath) -> Bool {
+        match path.targetShape {
+            Optional.Some(v: val shape) => {
+                val current = match self.sourceControlShape(node: path.target) { Optional.Some(v: val current) => current Optional.None => { return false } }
+                if !shape.same(other: current) { return false }
+            }
+            Optional.None => {}
+        }
         val root = match self.sourceControlRoot(owner: path.owner) { Optional.Some(v: val root) => root Optional.None => { return false } }
         if !root.same(other: path.root) { return false }
         mut val parent = root
@@ -80,7 +95,7 @@ impl Comp {
             if link.slot >= children.count() || !children[link.slot].same(other: link.child) { return false }
             parent = link.child.node
         }
-        return parent.same(other: <SourceControlNode.Statement id=path.statement />)
+        return parent.same(other: path.target)
     }
 
     fn sourceLoopPathMatchesActiveRegions(path: SourceControlPath) -> Bool {
