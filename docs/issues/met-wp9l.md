@@ -76,8 +76,10 @@ and label-frontier poison controls remain in
 
 ## Remaining completion gates
 
-Formal fixed point and median<=7.5s are running (20261125T154512-self-host-889dad).
-Then run applicable whole regression comparison against the recorded282-failure
-baseline, reconcile new differences and obtain independent final recognition.
+Formal run20261125T154512-self-host-889dad passed with immutable inputs, generation2
+LLVM/runtime/successor binary fixed point and3-run median7.350999s (<=7.5s).
+Whole regression comparison20261125T160113-test-e49efb is running against the
+recorded282-failure baseline. Reconcile new differences and obtain independent
+final recognition.
 Do not count inherited failures as new regressions or claim the whole suite green.
 This task and its parents remain open until their respective guarantees close.
