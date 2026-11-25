@@ -68,7 +68,7 @@ entire epics prerequisites. This is a finite child of com-yeua, not parent closu
 
 qualified_member_plan independently accepts the slice and size. The plan includes
 its requested statement provenance boundary, separate success/failure, fail-closed
-Verify consumption, no-loop RED and closure-target contrasts. The initial plan precedes implementation; current helper progress is recorded below.
+Verify consumption, no-loop RED and closure-target contrasts. The initial plan precedes implementation; implementation evidence follows.
 
 ## Investigation and fixed-candidate RED
 
@@ -96,9 +96,9 @@ and treats missing/foreign transfer under a recorded owner as internal handoff
 failure. Only a genuinely absent owner lifecycle uses non-Source Raw verification.
 Do not use missing statementOwners or a new mode Bool as the Raw discriminator.
 Independent source review confirms this is within the task, not a Verify-wide
-API redesign. Helper progress follows; Source refusal publication remains pending.
+API redesign. The helper stage below precedes the completed integration described afterward.
 
-## Helper increment, not task completion
+## Helper evidence and retained-path contract
 
 Direct Syntax/legacy break/continue lowering now retains an append-only private
 receipt. Its serial identifies the receipt, not arbitrary Stmt mutation history;
@@ -137,5 +137,12 @@ Independent source review reports no further confirmed in-scope violation.
 [Integration evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/loop-transfer-refusals/integration.json).
 
 The expanded fixed-carrier CLI111 modes establish91 ownership failures and20
-controls. Fresh candidate build/CLI, regression/performance and final completion
-review remain pending. This task and its parent stay open.
+controls. Fresh candidate0663011b builds successfully and passes all111 target
+controls plus108 qualified/45 named-declaration regression controls with unchanged
+inputs. Formal run20261125T184249-self-host-d731c8 reaches generation2 fixed point;
+median7.447430s is within7.5s. Tool and successor hashes were independently read
+and compared. [Candidate](../../../evidence/rejection-domains/diagnostic-domain-implementation/loop-transfer-refusals/candidate.json),
+[formal](../../../evidence/rejection-domains/diagnostic-domain-implementation/loop-transfer-refusals/formal.json).
+Independent guarantee/test review found no remaining mandatory gap apart from
+whole-suite reconciliation and its final review. Whole run20261125T185842-test-f4334c
+is still active. This task and its parent stay open.
