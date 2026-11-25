@@ -23,6 +23,34 @@ impl Comp {
     inout fn memberDeclarationGroup(receiver: U64, receiverTerm: U64, nameStart: U64, nameLen: U64) -> Result[MemberDeclarationLookup, CompileDiagnostic] {
         val associated = self.memberReceiverIsQualifier(expression: receiver)
         val name = intern(c: inout self, start: nameStart, len: nameLen)
+        if receiverTerm != 0U64 && self.arena.typeAt(index: receiverTerm).isAny {
+            val bound = try self.boundExistentialInterface(target: receiverTerm, receiver: receiverTerm, offset: nameStart)
+            val interface = self.boundExistentialInterfaces[bound].source
+            mut val members: Array[MemberDeclarationInterface] = []
+            mut val inaccessible = false
+            mut val requirements = self.interfaceMemberNames(bound: bound, name: name)
+            while true {
+                val slot = match self.nextInterfaceMemberName(cursor: inout requirements) { Optional.Some(v: val slot) => slot Optional.None => { break } }
+                val member = self.sourceExistentialInterfaces[interface].members[slot]
+                val authored = self.authoredRequirementViews[member.signature]
+                if authored.declaration.isAssoc != associated { continue }
+                members.append(<MemberDeclarationInterface bound=bound ancestor=member.ancestor member=<TraitMemberNameCandidate.Requirement traitIndex=authored.source.traitIndex slot=authored.source.slot associated=associated /> />)
+            }
+            for ancestor in 0U64..<self.sourceExistentialInterfaces[interface].ancestors.count() {
+                val index = self.sourceExistentialInterfaces[interface].ancestors[ancestor].traitIndex
+                mut val names = self.traitMemberNames(traitIndex: index, memberId: name, useOffset: nameStart, includeRequirements: false)
+                while true {
+                    val member = match self.nextTraitMemberName(cursor: inout names) { Optional.Some(v: val member) => member Optional.None => { break } }
+                    val role = match member { TraitMemberNameCandidate.Requirement(traitIndex: _, slot: _, associated: val role) | TraitMemberNameCandidate.Provided(traitIndex: _, function: _, associated: val role, visible: _) => role }
+                    if role != associated { continue }
+                    match member { TraitMemberNameCandidate.Provided(traitIndex: _, function: _, associated: _, visible: val visible) => { if !visible { inaccessible = true continue } } _ => {} }
+                    members.append(<MemberDeclarationInterface bound=bound ancestor=ancestor member=member />)
+                }
+            }
+            if members.count() != 0U64 { return <Result.Ok value=<MemberDeclarationLookup.Admitted group=<MemberDeclarationGroup receiverExpression=receiver memberStart=nameStart memberLen=nameLen memberId=name receiverTerm=receiverTerm declaration=self.missingDeclIdentity() associated=associated nominal=[] abstract=[] interfaces=members /> /> /> }
+            if inaccessible { return <Result.Ok value=<MemberDeclarationLookup.Inaccessible /> /> }
+            return <Result.Ok value=<MemberDeclarationLookup.Missing /> />
+        }
         val qualifier = if associated { give self.assocRecvName(recv: receiver) } else { give self.missingDeclIdentity() }
         mut val declaration = if qualifier.nameLen != 0U64 {
             give self.typeDeclIdentityAt(useMod: self.moduleOf(offset: qualifier.nameStart), start: qualifier.nameStart, len: qualifier.nameLen)
@@ -46,9 +74,8 @@ impl Comp {
             surfaces.append(<NominalMemberSurface.ViewSet sources=sources associated=associated pass=0U64 requiredTraitOwner=0U64 />)
             surfaces.append(<NominalMemberSurface.ViewSet sources=sources associated=associated pass=1U64 requiredTraitOwner=0U64 />)
         }
-        mut val extensions: Array[U64] = []
-        mut val selectedTraits: Array[U64] = []
-        mut val nominal: Array[U64] = []
+        val assumptions = self.functionBoundAssumptions(fnIdx: self.cur.checkFn)
+        mut val nominal: Array[MemberDeclarationNominal] = []
         mut val inaccessible = false
         for surface in surfaces {
             mut val names = self.nominalMemberNames(name: name, receiver: receiverId, receiverTerm: receiverTerm, declaration: declaration, surface: surface)
@@ -58,27 +85,26 @@ impl Comp {
                 val function = self.arena.functionAt(index: entry.funcIdx)
                 val qualified = match surface { NominalMemberSurface.ViewSet(sources: _, associated: _, pass: _, requiredTraitOwner: _) => true _ => false }
                 if function.viewOnly && !qualified { continue }
-                if function.isProvided {
-                    if !(try self.callableReceiverMatches(f: function, recvId: receiverId, recvRef: receiverTerm)) { continue }
-                } else if storage != 0U64 && function.recvTy != 0U64 {
-                    if !self.memberReceiverPatternMatches(function: function, receiver: storage) { continue }
+                if !function.isProvided {
+                    mut val patternReceiver = storage
+                    if receiverTerm != 0U64 && function.recvId == self.arena.typeAt(index: receiverTerm).nameId { patternReceiver = receiverTerm }
+                    else if function.recvId != receiverId { continue }
+                    if patternReceiver != 0U64 && function.recvTy != 0U64 && !self.memberReceiverPatternMatches(function: function, receiver: patternReceiver) { continue }
                 }
+                val evidence = try self.memberNominalEvidence(entry: index, receiver: receiverTerm, assumptions: assumptions)
+                if evidence.count() == 0U64 { continue }
                 if !self.methodIsVisible(mf: function, offset: nameStart) { inaccessible = true continue }
-                match surface {
-                    NominalMemberSurface.ViewSet(sources: _, associated: _, pass: val pass, requiredTraitOwner: _) => { if pass == 0U64 { extensions.append(index) } else { selectedTraits.append(index) } }
-                    _ => { nominal.append(index) }
+                val family = match surface {
+                    NominalMemberSurface.ViewSet(sources: _, associated: _, pass: val pass, requiredTraitOwner: _) => if pass == 0U64 { give <MemberDeclarationFamily.Extension /> } else { give <MemberDeclarationFamily.Trait /> }
+                    _ => <MemberDeclarationFamily.Bare />
                 }
+                for proof in evidence { self.appendMemberNominal(candidate: <MemberDeclarationNominal entry=index evidence=proof family=family />, alternatives: inout nominal) }
             }
         }
-        if extensions.count() != 0U64 { nominal = extensions } else if selectedTraits.count() != 0U64 { nominal = selectedTraits }
         // Lexical bounds and view-selected trait members retain complete proof
         // instances. Name/category filtering precedes any proof query, as calls do.
-        mut val abstract: Array[StaticMemberResolution] = []
-        mut val preferred: Array[StaticMemberResolution] = []
+        mut val abstract: Array[MemberDeclarationAbstract] = []
         if receiverTerm != 0U64 {
-            val assumptions = self.functionBoundAssumptions(fnIdx: self.cur.checkFn)
-            mut val sourceOwners: Array[U64] = []
-            for source in self.arena.typeViewSources(ref: receiverTerm) { if source.traitInstance.owner != 0U64 { sourceOwners.append(source.traitInstance.owner) } }
             for traitIndex in 0U64..<self.decls.traitCount() {
                 val trait = self.decls.traitAt(index: traitIndex)
                 mut val members: Array[TraitMemberNameCandidate] = []
@@ -92,56 +118,80 @@ impl Comp {
                     if eligible { members.append(member) }
                 }
                 if members.count() == 0U64 { continue }
-                val discovered = try self.traitMemberInstanceProofs(baseRef: receiverTerm, traitId: trait.nameId, traitOwner: trait.nameStart, assumptions: assumptions)
-                val proofs = self.preferredTraitMemberProofs(discovered: discovered, traitOwner: trait.nameStart, sourceOwners: sourceOwners)
-                mut val instances: Array[TraitBound] = []
-                for proof in proofs {
+                val discovered = try self.traitMemberInstanceProofs(baseRef: receiverTerm, traitId: trait.nameId, traitOwner: trait.nameStart, assumptions: assumptions, includeConcrete: true)
+                mut val seen: Array[StaticConformanceProof] = []
+                for proof in discovered {
                     val bound = try self.staticProofBound(proof: proof, traitIdx: traitIndex)
                     if bound.subject == 0U64 { continue }
+                    val relation = try self.memberProofViewRelation(proof: proof, instance: bound.constraint.key, receiver: receiverTerm)
+                    match relation { MemberViewRelation.Excluded => { continue } _ => {} }
                     mut val duplicate = false
-                    for instance in instances { if instance.constraint.key.owner == bound.constraint.key.owner && self.sameResolvedTypeRefs(a: instance.constraint.key.positionalArgs, b: bound.constraint.key.positionalArgs) { duplicate = true } }
+                    for prior in seen { if self.sameStaticConformanceProof(a: prior, b: proof) { duplicate = true } }
                     if duplicate { continue }
-                    instances.append(bound)
+                    seen.append(proof)
                     for member in members {
                         match member { TraitMemberNameCandidate.Provided(traitIndex: _, function: _, associated: _, visible: val visible) => { if !visible { inaccessible = true continue } } _ => {} }
                         val candidate = match member {
                             TraitMemberNameCandidate.Requirement(traitIndex: val owner, slot: val slot, associated: _) => <StaticMemberResolution.Requirement proof=proof traitIdx=owner reqIdx=slot />
                             TraitMemberNameCandidate.Provided(traitIndex: val owner, function: val function, associated: _, visible: _) => <StaticMemberResolution.Provided proof=proof traitIdx=owner callee=function />
                         }
-                        val admitted = try self.admitStaticMemberInstance(resolution: candidate, receiverRef: receiverTerm, assumptions: assumptions)
-                        match admitted { StaticMemberResolution.Missing => { continue } _ => {} }
-                        abstract.append(admitted)
-                        if sourceOwners.count() != 0U64 && self.traitProofMatchesSources(proof: proof, traitOwner: trait.nameStart, sourceOwners: sourceOwners) { preferred.append(admitted) }
+                        val family = match relation { MemberViewRelation.Selected => <MemberDeclarationFamily.Trait /> _ => <MemberDeclarationFamily.Bare /> }
+                        abstract.append(<MemberDeclarationAbstract instance=bound.constraint.key selection=candidate family=family />)
                     }
                 }
             }
         }
-        if preferred.count() != 0U64 { abstract = preferred }
         if nominal.count() != 0U64 || abstract.count() != 0U64 { return <Result.Ok value=<MemberDeclarationLookup.Admitted group=<MemberDeclarationGroup receiverExpression=receiver memberStart=nameStart memberLen=nameLen memberId=name receiverTerm=receiverTerm declaration=declaration associated=associated nominal=nominal abstract=abstract /> /> /> }
         if inaccessible { return <Result.Ok value=<MemberDeclarationLookup.Inaccessible /> /> }
         return <Result.Ok value=<MemberDeclarationLookup.Missing /> />
     }
 
     fn retainedMemberGroupMatches(group: MemberDeclarationGroup, associated: Bool) -> Bool {
-        if associated != group.associated || group.receiverTerm >= self.arena.typeCount() || (group.nominal.count() == 0U64 && group.abstract.count() == 0U64) { return false }
-        for index in group.nominal {
+        if associated != group.associated || group.receiverTerm >= self.arena.typeCount() || (group.nominal.count() == 0U64 && group.abstract.count() == 0U64 && group.interfaces.count() == 0U64) { return false }
+        for alternative in group.interfaces {
+            if alternative.bound >= self.boundExistentialInterfaces.count() { return false }
+            val bound = self.boundExistentialInterfaces[alternative.bound]
+            if bound.target != group.receiverTerm || bound.source >= self.sourceExistentialInterfaces.count() { return false }
+            val interface = self.sourceExistentialInterfaces[bound.source]
+            if alternative.ancestor >= interface.ancestors.count() || alternative.ancestor >= bound.ancestors.count() { return false }
+            val owner = interface.ancestors[alternative.ancestor].traitIndex
+            match alternative.member {
+                TraitMemberNameCandidate.Requirement(traitIndex: val index, slot: val slot, associated: val role) => {
+                    if index != owner || role != associated || index >= self.decls.traitCount() || slot >= self.decls.traitAt(index: index).reqs.count() { return false }
+                    if self.traitReqAt(reqs: self.decls.traitAt(index: index).reqs, index: slot).nameId != group.memberId { return false }
+                }
+                TraitMemberNameCandidate.Provided(traitIndex: val index, function: val function, associated: val role, visible: val visible) => {
+                    if index != owner || role != associated || !visible || function >= self.arena.functionCount() || self.arena.functionAt(index: function).nameId != group.memberId { return false }
+                }
+            }
+        }
+        for alternative in group.nominal {
+            val index = alternative.entry
             if index >= self.decls.callableCount() { return false }
             val candidate = self.decls.callableAt(index: index)
             if candidate.funcIdx >= self.arena.functionCount() { return false }
             val function = self.arena.functionAt(index: candidate.funcIdx)
             if function.nameId != group.memberId { return false }
+            match alternative.evidence {
+                MemberDeclarationEvidence.Inherent => { if function.isProvided || function.originTraitOwner != 0U64 || candidate.traitOwner != 0U64 || function.provTraitOwner != 0U64 { return false } }
+                MemberDeclarationEvidence.Conformance(proof: val proof, instance: val instance) => {
+                    match proof { StaticConformanceProof.Missing => { return false } _ => {} }
+                    val owner = self.decls.traitIndexByOffset(offset: instance.owner)
+                    if owner >= self.decls.traitCount() || self.decls.traitAt(index: owner).typeParams.count() != instance.positionalArgs.count() { return false }
+                }
+            }
             if associated { if !function.isAssoc { return false } } else { if !function.hasRecv { return false } }
         }
         for member in group.abstract {
-            match member {
+            match member.selection {
                 StaticMemberResolution.Missing => { return false }
                 StaticMemberResolution.Requirement(proof: _, traitIdx: val owner, reqIdx: val slot) => {
-                    if owner >= self.decls.traitCount() || slot >= self.decls.traitAt(index: owner).reqs.count() { return false }
+                    if owner >= self.decls.traitCount() || self.decls.traitAt(index: owner).nameStart != member.instance.owner || self.decls.traitAt(index: owner).typeParams.count() != member.instance.positionalArgs.count() || slot >= self.decls.traitAt(index: owner).reqs.count() { return false }
                     val requirement = self.traitReqAt(reqs: self.decls.traitAt(index: owner).reqs, index: slot)
                     if requirement.nameId != group.memberId || requirement.isAssoc != associated { return false }
                 }
                 StaticMemberResolution.Provided(proof: _, traitIdx: val owner, callee: val function) => {
-                    if owner >= self.decls.traitCount() || function >= self.arena.functionCount() || self.arena.functionAt(index: function).isAssoc != associated || self.arena.functionAt(index: function).nameId != group.memberId { return false }
+                    if owner >= self.decls.traitCount() || self.decls.traitAt(index: owner).nameStart != member.instance.owner || self.decls.traitAt(index: owner).typeParams.count() != member.instance.positionalArgs.count() || function >= self.arena.functionCount() || self.arena.functionAt(index: function).isAssoc != associated || self.arena.functionAt(index: function).nameId != group.memberId { return false }
                 }
             }
         }

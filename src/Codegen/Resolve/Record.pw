@@ -991,19 +991,19 @@ impl Comp {
         val boundInterface = try self.boundExistentialInterface(target: anyRef, receiver: anyRef, offset: nameStart)
         mut val selected = 0U64
         mut val bestRank = 0U64
-        mut val index = 0U64
-        while index < self.sourceExistentialInterfaces[interface].members.count() {
-            if self.boundExistentialInterfaces[boundInterface].canonicalMembers[index] != index { index += 1U64 continue }
+        mut val names = self.interfaceMemberNames(bound: boundInterface, name: nameId)
+        while true {
+            val index = match self.nextInterfaceMemberName(cursor: inout names) { Optional.Some(v: val index) => index Optional.None => { break } }
             val member = self.sourceExistentialInterfaces[interface].members[index]
             val scope = member.signature
             val requirement = self.authoredRequirementViews[scope].declaration
-            if requirement.nameId == nameId && self.paramsLabelsOk(params: requirement.params, args: args) {
+            if self.paramsLabelsOk(params: requirement.params, args: args) {
                 if requiredTraitOwner != 0U64 {
                     // Match the selected declaration's identity, not an
                     // unrelated interface requirement with the same spelling.
                     val owner = self.authoredRequirementViews[scope].source.traitIndex
                     if owner >= self.decls.traitCount() { return <Result.Err error=self.diagnosticAt(offset: requirement.defOffset, msg: "existential requirement has no declaration owner", failureDomain: <FailureDomain.Internal />) /> }
-                    if self.decls.traitAt(index: owner).nameStart != requiredTraitOwner { index += 1U64 continue }
+                    if self.decls.traitAt(index: owner).nameStart != requiredTraitOwner { continue }
                 }
                 val callable = requirement
                 val bound = self.boundExistentialInterfaces[boundInterface].ancestors[member.ancestor]
@@ -1016,7 +1016,6 @@ impl Comp {
                 }
                 if rank > bestRank { selected = index + 1U64 bestRank = rank }
             }
-            index += 1U64
         }
         return <Result.Ok value=selected />
     }

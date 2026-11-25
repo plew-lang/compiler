@@ -2,8 +2,9 @@
 // conformance authority. Consumers filter their operation before querying proof.
 
 impl Comp {
-    fn traitMemberNames(traitIndex: U64, memberId: U64, useOffset: U64) -> TraitMemberNameCursor {
-        return <TraitMemberNameCursor traitIndex=traitIndex memberId=memberId useOffset=useOffset providedFunction=self.arena.firstFunctionNamed(nameId: memberId) />
+    fn traitMemberNames(traitIndex: U64, memberId: U64, useOffset: U64, includeRequirements: Bool = true) -> TraitMemberNameCursor {
+        val first = if includeRequirements || traitIndex >= self.decls.traitCount() { give 0U64 } else { give self.decls.traitAt(index: traitIndex).reqs.count() }
+        return <TraitMemberNameCursor requirementSlot=first traitIndex=traitIndex memberId=memberId useOffset=useOffset providedFunction=self.arena.firstFunctionNamed(nameId: memberId) />
     }
 
     inout fn nextTraitMemberName(cursor: inout TraitMemberNameCursor) -> Optional[TraitMemberNameCandidate] {
@@ -31,6 +32,25 @@ impl Comp {
         for proof in discovered { if self.traitProofMatchesSources(proof: proof, traitOwner: traitOwner, sourceOwners: sourceOwners) { ordered.append(proof) } }
         for proof in discovered { if !self.traitProofMatchesSources(proof: proof, traitOwner: traitOwner, sourceOwners: sourceOwners) { ordered.append(proof) } }
         return ordered
+    }
+
+    fn interfaceMemberNames(bound: U64, name: U64) -> InterfaceMemberNameCursor {
+        return <InterfaceMemberNameCursor bound=bound name=name />
+    }
+
+    fn nextInterfaceMemberName(cursor: inout InterfaceMemberNameCursor) -> Optional[U64] {
+        if cursor.bound >= self.boundExistentialInterfaces.count() { return <Optional.None /> }
+        val bound = self.boundExistentialInterfaces[cursor.bound]
+        if bound.source >= self.sourceExistentialInterfaces.count() { return <Optional.None /> }
+        val interface = self.sourceExistentialInterfaces[bound.source]
+        while cursor.next < interface.members.count() {
+            val index = cursor.next
+            cursor.next += 1U64
+            if bound.canonicalMembers[index] != index { continue }
+            val member = interface.members[index]
+            if self.authoredRequirementViews[member.signature].declaration.nameId == cursor.name { return <Optional.Some v=index /> }
+        }
+        return <Optional.None />
     }
 
 }

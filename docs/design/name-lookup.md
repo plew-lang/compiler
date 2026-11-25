@@ -215,6 +215,26 @@ For a generic receiver, lookup is limited by its declared capabilities. It may i
 
 Member existence, proof that a conformance exists, and proof that a member selection is unique are different results. None can be represented soundly by a shared “found name” Boolean. The types/evidence and generics chapters own proof representation and projection; lookup preserves the identities on which they operate.
 
+A callable declaration read in a value position is a declaration group, not an
+applicable call. Establish its category from the real binding or receiver-scoped
+name reader after preserving storage fields and static values. Retain canonical
+declarations or requirements, receiver patterns, complete instance/path evidence,
+and source families with their priority. Without written arguments, neither an
+expected function type nor a preferred basename may select one overload or erase
+fallback families. Coalesce only repeated discovery of the same declaration and
+proof path. Complete trait selectors constrain candidate instances and the keys
+on intervening proof edges, not merely their owner or arity.
+
+The receiver's bounds and views retain their own admission checks. Establishing
+a non-value category does not repeat unique member-dispatch or executable-witness
+selection: it publishes only a refusal, never a call or conformance capability.
+An existential contributes its already-admitted interface graph and original
+member identities; it does not acquire self-conformance by this operation.
+The recording producer binds these observations to the authored operation and
+request owner in a private admission record. Diagnostics and failed-request
+consumers retain that record rather than accepting a supplied candidate group or
+repeating lookup in a later cursor context.
+
 View qualification does not discard unrelated base members. Extension tags add participating sources and can shadow same-named base members; the single trait-source selector disambiguates an existing conformance path without creating a conformance or hiding unrelated inherent members. A trait selector identifies a complete trait instance: canonical declaration owner and every positional type argument, not owner or arity alone. Value and type syntax require all positional arguments even when only one conformance is available; an argument-free selector is complete only for a trait with no positional parameters. Lookup consumes this retained instance through candidate selection and final call evidence rather than reconstructing arguments from receiver spelling or a projection-only field. Extension source sets and trait selection therefore remain distinct lookup inputs: `A#Ext#P` and `A#P#Ext` have the same meaning, rather than sequential filtering semantics. Private trait-provided helpers may participate within their owning module but do not accompany conforming types into an external public surface.
 
 ## 6. Applicability and Publication

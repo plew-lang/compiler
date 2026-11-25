@@ -1,6 +1,6 @@
 // Append to frozen Frontend; exercise admission and retained owner authority.
 fn main() {
-    for name in ["Associated", "Instance", "Bound", "BoundInstance", "Newtype", "Extension", "StaticExtension", "TraitView", "Conditional", "Incomplete", "Provided", "MultiTrait", "Families"] {
+    for name in ["Associated", "Instance", "Bound", "BoundInstance", "Newtype", "Extension", "StaticExtension", "TraitView", "Conditional", "Incomplete", "Provided", "MultiTrait", "Families", "Bridge", "Any", "NewtypeInherited"] {
         mut val compiler = <Comp />
         analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.File path="tests/compiler/frontend/fixtures/MemberDeclaration/"+name+".pw" />, sources: <SourceAccess stdRoot="std/".bytes() />).unwrap()
         val function = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "broken").nameId)
@@ -9,7 +9,7 @@ fn main() {
         val request = <SourceRecordOrigin.CheckingRequest session=compiler.sourceFactSession() root=owner />
         val diagnostic = match compiler.recordParametricFunctionWithOrigin(fnIdx: function, recordCallTemplates: true, origin: <SourceRecordingScope request=request returnContext=<SourceExpectedContext.None /> />, expectedOrigin: <SourceExpectedContext.None />) {
             Result.Err(error: val diagnostic) => diagnostic
-            Result.Ok(value: _) => { panic("member declaration became value") }
+            Result.Ok(value: _) => { panic(name+": member declaration classification did not reject") }
         }
         val refusal = match diagnostic.namedDeclaration() { Optional.Some(v: val refusal) => refusal Optional.None => { panic(name+": member refused without declaration admission: "+diagnostic.message()) } }
         val proof = compiler.failedNamedDeclarations[refusal.event()]
@@ -22,6 +22,22 @@ fn main() {
         if name == "Incomplete" && group.nominal.count() != 2U64 { panic("incomplete head selected a concrete receiver") }
         if name == "MultiTrait" && group.nominal.count() != 1U64 { panic("trait selector admitted another complete instance") }
         if name == "Families" && group.nominal.count() != 2U64 { panic("name-only preference discarded fallback family") }
+        if name == "Bridge" {
+            val root = compiler.internBytes(s: "Root")
+            mut val rootIndex = compiler.decls.traitCount()
+            for index in 0U64..<compiler.decls.traitCount() { if compiler.decls.traitAt(index: index).nameId == root.nameId { rootIndex = index } }
+            mut val checked = 0U64
+            for alternative in group.abstract {
+                val proof = match alternative.selection { StaticMemberResolution.Requirement(val proof, traitIdx: _, reqIdx: _) | StaticMemberResolution.Provided(val proof, traitIdx: _, callee: _) => proof _ => { panic("missing bridge proof") } }
+                val witness = compiler.proofWitnessForTrait(proof: proof, traitIdx: rootIndex)
+                if witness.conformIdx == 0U64 { panic("bridge discarded selected root") }
+                val edge = compiler.decls.conformAt(index: witness.conformIdx - 1U64)
+                val arguments = compiler.groundedWitnessTraitArgs(cf: edge, witness: witness).unwrap()
+                if arguments.count() != 1U64 || compiler.arena.typeAt(index: arguments[0U64]).nameId != compiler.internBytes(s: "I64").nameId { panic("bridge retained another root instance") }
+                checked += 1U64
+            }
+            if checked == 0U64 { panic("bridge did not reach abstract path proof") }
+        }
         val count = compiler.failedNamedDeclarations.count()
         val wrongKind = <NamedDeclarationRefusal kind=if group.associated { give <NamedDeclarationKind.Instance /> } else { give <NamedDeclarationKind.Associated /> } session=refusal.session() owner=refusal.owner() expression=refusal.expression() event=refusal.event() location=refusal.location() />
         if compiler.sourceFailureHasOwner(diagnostic: <CompileDiagnostic.namedDeclaration refusal=wrongKind />) { panic("forged category acquired authority") }
@@ -54,15 +70,16 @@ fn main() {
         if !compiler.sourceFailureHasOwner(diagnostic: diagnostic) { panic("builder failure erased member category") }
         val retried = match compiler.prepareLexicalBody(fnIdx: function) { Result.Err(error: val diagnostic) => diagnostic Result.Ok(value: _) => { panic("failed member builder became success") } }
         if !compiler.sourceFailureHasOwner(diagnostic: retried) || retried.namedDeclaration().unwrap().event() != refusal.event() || compiler.failedNamedDeclarations.count() != count { panic("retry lost retained member refusal") }
-        compiler.prepareLexicalBody(fnIdx: compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "main").nameId)).unwrap()
+        match compiler.prepareLexicalBody(fnIdx: compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "main").nameId)) { Result.Ok(value: _) => {} Result.Err(error: val failure) => { panic(name+": main control: "+failure.message()) } }
         if !compiler.sourceFailureHasOwner(diagnostic: diagnostic) { panic("another cursor erased member category") }
     }
-    for name in ["WrongReceiver", "AbsentProof", "Private"] {
+    for name in ["WrongReceiver", "AbsentProof", "Private", "AbsentBound", "AnyView"] {
         mut val compiler = <Comp />
         analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.File path="tests/compiler/frontend/fixtures/MemberDeclaration/"+name+".pw" />, sources: <SourceAccess stdRoot="std/".bytes() />).unwrap()
         val function = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "broken").nameId)
         val diagnostic = match compiler.prepareLexicalBody(fnIdx: function) { Result.Err(error: val diagnostic) => diagnostic Result.Ok(value: _) => { panic("invalid member became value") } }
         if diagnostic.namedDeclaration().isSome() || compiler.memberDeclarationAdmissions.count() != 0U64 { panic("missing or private member acquired declaration admission") }
+        if name == "AnyView" && diagnostic.message() != "trait view requires a conformance for this receiver and exact trait instance (spec/09)" { panic("existential view changed its admission boundary") }
         if name == "Private" { if diagnostic.message() != "method is private (callable only in its defining module; put it in a `pub impl`)" { panic("private provided candidate became missing") } }
     }
     mut val storage = <Comp />

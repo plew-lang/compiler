@@ -1,0 +1,4 @@
+trait Reader { fn basis() -> I64 }
+pub impl Reader { fn read() -> I64 { return 1I64 } }
+fn broken[T](seed: T) -> fn() -> I64 { return seed.read }
+fn main() {}

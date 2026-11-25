@@ -1,0 +1,120 @@
+// Presence evidence is not member-dispatch selection. Full view instances are
+// compared along the retained path; ownership and priority never replace args.
+
+impl Comp {
+    inout fn memberProofInstances(proof: StaticConformanceProof) -> Result[Array[TraitInstanceKey], CompileDiagnostic] {
+        mut val keys: Array[TraitInstanceKey] = []
+        mut val source: Optional[DeclarationBoundRef] = <Optional.None />
+        mut val steps: Array[SupertraitRef] = []
+        mut val edges: Array[WitnessMatch] = []
+        match proof {
+            StaticConformanceProof.Missing => { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: missing member presence proof") /> }
+            StaticConformanceProof.ConcreteWitness(val witness) => { edges.append(witness) }
+            StaticConformanceProof.AssumedBound(source: val bound) => { source = <Optional.Some v=bound /> }
+            StaticConformanceProof.AssumedSupertraitPath(source: val bound, steps: val path) => { source = <Optional.Some v=bound /> steps = path }
+            StaticConformanceProof.AssumedTraitPath(source: val bound, steps: val path, edges: val witnesses) => { source = <Optional.Some v=bound /> steps = path edges = witnesses }
+            StaticConformanceProof.TraitPath(edges: val witnesses, terminalConformIdx: _) => { edges = witnesses }
+            StaticConformanceProof.TraitSelf(traitIdx: val index, receiverRef: _, traitArgs: val arguments) => {
+                if index >= self.decls.traitCount() { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: invalid member trait owner") /> }
+                keys.append(<TraitInstanceKey owner=self.decls.traitAt(index: index).nameStart positionalArgs=arguments />)
+            }
+        }
+        match source {
+            Optional.Some(v: val source) => {
+                if !self.declarationBoundIsValid(source: source) { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: invalid member bound source") /> }
+                keys.append(self.declarationBound(source: source).constraint.key)
+                mut val prefix: Array[SupertraitRef] = []
+                for step in steps {
+                    prefix.append(step)
+                    val bound = self.assumedSupertraitBound(source: source, steps: prefix)
+                    if bound.subject == 0U64 { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: invalid member supertrait path") /> }
+                    keys.append(bound.constraint.key)
+                }
+            }
+            Optional.None => {}
+        }
+        for witness in edges {
+            if witness.conformIdx == 0U64 || witness.conformIdx > self.decls.conformCount() { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: invalid member witness edge") /> }
+            val edge = self.decls.conformAt(index: witness.conformIdx - 1U64)
+            if edge.subjectTraitOwner != 0U64 {
+                mut val arguments: Array[U64] = []
+                for index in 0U64..<edge.subjectArgs.count() { arguments.append(try self.groundWitnessTypeTerm(ref: self.conformTypeAt(types: edge.subjectArgs, index: index), params: <PatternBindInput.Conformance range=edge.typeParams />, matchResult: witness)) }
+                keys.append(<TraitInstanceKey owner=edge.subjectTraitOwner positionalArgs=arguments />)
+            }
+            keys.append(<TraitInstanceKey owner=edge.traitStart positionalArgs=(try self.groundedWitnessTraitArgs(cf: edge, witness: witness)) />)
+        }
+        return <Result.Ok value=keys />
+    }
+
+    inout fn memberProofViewRelation(proof: StaticConformanceProof, instance: TraitInstanceKey, receiver: U64) -> Result[MemberViewRelation, CompileDiagnostic] {
+        mut val selected: Optional[TraitInstanceKey] = <Optional.None />
+        for source in self.arena.typeViewSources(ref: receiver) { if source.traitInstance.owner != 0U64 { selected = <Optional.Some v=source.traitInstance /> } }
+        if selected.isNone() { return <Result.Ok value=<MemberViewRelation.Unrelated /> /> }
+        val wanted = selected.unwrap()
+        if instance.owner == wanted.owner {
+            return <Result.Ok value=if self.sameResolvedTypeRefs(a: instance.positionalArgs, b: wanted.positionalArgs) { give <MemberViewRelation.Selected /> } else { give <MemberViewRelation.Excluded /> } />
+        }
+        mut val related = false
+        for key in (try self.memberProofInstances(proof: proof)) {
+            if key.owner == wanted.owner {
+                related = true
+                if self.sameResolvedTypeRefs(a: key.positionalArgs, b: wanted.positionalArgs) { return <Result.Ok value=<MemberViewRelation.Selected /> /> }
+            }
+        }
+        return <Result.Ok value=if related { give <MemberViewRelation.Excluded /> } else { give <MemberViewRelation.Unrelated /> } />
+    }
+
+    inout fn memberNominalEvidence(entry: U64, receiver: U64, assumptions: Array[DeclarationBoundRef]) -> Result[Array[MemberDeclarationEvidence], CompileDiagnostic] {
+        val candidate = self.decls.callableAt(index: entry)
+        val function = self.arena.functionAt(index: candidate.funcIdx)
+        val owner = if function.originTraitOwner != 0U64 { give function.originTraitOwner } else if candidate.traitOwner != 0U64 { give candidate.traitOwner } else if function.srcTraitOwner != 0U64 { give function.srcTraitOwner } else { give function.provTraitOwner }
+        if !function.isProvided && owner == 0U64 { return <Result.Ok value=[<MemberDeclarationEvidence.Inherent />] /> }
+        if receiver == 0U64 { return <Result.Ok value=[] /> }
+        mut val proofs: Array[StaticConformanceProof] = []
+        if function.isProvided {
+            match try self.providedBodyEvidence(f: function, receiverRef: receiver, assumptions: assumptions) {
+                ProvidedBodyEvidence.Missing => {}
+                ProvidedBodyEvidence.Direct(val proof) => { proofs.append(proof) }
+                ProvidedBodyEvidence.Paths(owner: _, proofs: val discovered) => { proofs = discovered }
+            }
+        } else {
+            val source = if function.sourceWitnessFuncId != 0U64 { give function.sourceWitnessFuncId - 1U64 } else { give candidate.funcIdx }
+            val conformance = try self.sourceConformanceForDeclaration(functionIndex: source)
+            if conformance != 0U64 {
+                val witness = try self.conformanceWitnessMatch(conformIdx: conformance - 1U64, typeRef: receiver, traitArgs: [], traitArgsOpen: true)
+                match try self.witnessWithConditions(witness: witness, assumptions: assumptions) { Optional.Some(v: val completed) => { proofs.append(<StaticConformanceProof.ConcreteWitness witness=completed />) } Optional.None => {} }
+            }
+        }
+        val traitIndex = self.decls.traitIndexByOffset(offset: owner)
+        if traitIndex >= self.decls.traitCount() { return <Result.Ok value=[] /> }
+        mut val result: Array[MemberDeclarationEvidence] = []
+        for proof in proofs {
+            val bound = try self.staticProofBound(proof: proof, traitIdx: traitIndex)
+            if bound.subject == 0U64 { continue }
+            match try self.memberProofViewRelation(proof: proof, instance: bound.constraint.key, receiver: receiver) { MemberViewRelation.Excluded => { continue } _ => {} }
+            result.append(<MemberDeclarationEvidence.Conformance proof=proof instance=bound.constraint.key />)
+        }
+        return <Result.Ok value=result />
+    }
+
+    inout fn sameMemberEvidence(first: MemberDeclarationEvidence, second: MemberDeclarationEvidence) -> Bool {
+        return match first {
+            MemberDeclarationEvidence.Inherent => match second { MemberDeclarationEvidence.Inherent => true _ => false }
+            MemberDeclarationEvidence.Conformance(proof: val proof, instance: val instance) => match second {
+                MemberDeclarationEvidence.Conformance(proof: val other, instance: val key) => instance.owner == key.owner && self.sameResolvedTypeRefs(a: instance.positionalArgs, b: key.positionalArgs) && self.sameStaticConformanceProof(a: proof, b: other)
+                _ => false
+            }
+        }
+    }
+
+    inout fn appendMemberNominal(candidate: MemberDeclarationNominal, alternatives: inout Array[MemberDeclarationNominal]) {
+        for index in 0U64..<alternatives.count() {
+            val existing = alternatives[index]
+            if existing.entry == candidate.entry && self.sameMemberEvidence(first: existing.evidence, second: candidate.evidence) {
+                if candidate.family.priority() < existing.family.priority() { alternatives[index] = candidate }
+                return
+            }
+        }
+        alternatives.append(candidate)
+    }
+}

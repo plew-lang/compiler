@@ -863,6 +863,12 @@ enum TraitMemberNameCandidate {
     Requirement(traitIndex: U64, slot: U64, associated: Bool)
     Provided(traitIndex: U64, function: U64, associated: Bool, visible: Bool)
 }
+struct InterfaceMemberNameCursor {
+    val bound: U64
+    val name: U64
+    mut val next: U64 = 0U64
+}
+impl InterfaceMemberNameCursor { factory }
 struct TraitMemberNameCursor {
     val traitIndex: U64
     val memberId: U64
@@ -902,6 +908,40 @@ struct NamespaceFieldNormalization {
     val qualification: U64
 }
 impl NamespaceFieldNormalization { factory }
+enum MemberViewRelation { Unrelated Selected Excluded }
+enum ProvidedBodyEvidence {
+    Missing
+    Direct(proof: StaticConformanceProof)
+    Paths(owner: U64, proofs: Array[StaticConformanceProof])
+}
+enum MemberDeclarationFamily { Extension Trait Bare }
+impl MemberDeclarationFamily {
+    fn priority() -> U64 { return match self { MemberDeclarationFamily.Extension => 0U64 MemberDeclarationFamily.Trait => 1U64 MemberDeclarationFamily.Bare => 2U64 } }
+}
+enum MemberDeclarationEvidence {
+    Inherent
+    Conformance(proof: StaticConformanceProof, instance: TraitInstanceKey)
+}
+struct MemberDeclarationNominal {
+    val entry: U64
+    val evidence: MemberDeclarationEvidence
+    val family: MemberDeclarationFamily
+}
+impl MemberDeclarationNominal { factory }
+struct MemberDeclarationAbstract {
+    val instance: TraitInstanceKey
+    val selection: StaticMemberResolution
+    val family: MemberDeclarationFamily
+}
+impl MemberDeclarationAbstract { factory }
+// An existential supplies an admitted interface, not self-conformance or a
+// selected executable witness. Preserve the bound graph and declaring ancestor.
+struct MemberDeclarationInterface {
+    val bound: U64
+    val ancestor: U64
+    val member: TraitMemberNameCandidate
+}
+impl MemberDeclarationInterface { factory }
 struct MemberDeclarationGroup {
     val receiverExpression: U64
     val memberStart: U64
@@ -910,8 +950,9 @@ struct MemberDeclarationGroup {
     val receiverTerm: U64
     val declaration: Bind
     val associated: Bool
-    val nominal: Array[U64]
-    val abstract: Array[StaticMemberResolution]
+    val nominal: Array[MemberDeclarationNominal]
+    val abstract: Array[MemberDeclarationAbstract]
+    val interfaces: Array[MemberDeclarationInterface] = []
 }
 impl MemberDeclarationGroup { factory }
 struct MemberDeclarationAdmission {
@@ -2168,6 +2209,7 @@ part ./SourceCallOperations
 part ./SourceIndexFailures
 part ./SourceTypingFailures
 part ./SourceOpaqueNumerics
+part ./MemberDeclarationEvidence
 part ./MemberDeclarations
 part ./NominalMemberNames
 part ./TraitMemberNames

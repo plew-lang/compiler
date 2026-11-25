@@ -1,0 +1,5 @@
+struct Item {}
+impl Item { fn read() -> I64 { return 1I64 } }
+newtype Brand = Item
+fn broken(seed: Brand) -> fn() -> I64 { return seed.read }
+fn main() { val seed = <Item /> as Brand seed.read() }

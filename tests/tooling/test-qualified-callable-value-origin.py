@@ -104,6 +104,19 @@ def main():
                     errors.append(label + ': normalized function owner lost')
             elif result.returncode != 0 or result.failure_domain is not None or result.stdout or result.stderr:
                 errors.append(label + ': unused namespace body inspected')
+    # Receiver/proof boundaries share the private producer with public rejection.
+    for name in ['Extension', 'StaticExtension', 'TraitView', 'Conditional',
+                 'Incomplete', 'MultiTrait', 'Families', 'Bridge', 'Any', 'NewtypeInherited']:
+        path = ROOT / 'tests/compiler/frontend/fixtures/MemberDeclaration' / (name + '.pw')
+        message = associated if name in ['StaticExtension', 'Incomplete'] else b'a method cannot be used as a value'
+        for mode, flags in modes:
+            label = name + '-member-boundary-' + mode
+            result = run(label, path, flags)
+            if mode != 'orc':
+                if not result.source_rejection or message not in result.stderr:
+                    errors.append(label + ': boundary lost owned category refusal')
+            elif result.returncode != 0 or result.failure_domain is not None or result.stdout or result.stderr:
+                errors.append(label + ': unused boundary body was inspected')
     controls = ['assoc_val', 'namespace_import', 'namespace_alias', 'callable_surface_namespaces',
                 'lexical_type_binder_callable_receiver', 'member_associated_candidate_conflict', 'member_discovery_label_frontier']
     for name in controls:

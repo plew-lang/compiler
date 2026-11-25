@@ -1,0 +1,4 @@
+trait Reader[T] { fn read(value: T) -> I64 }
+trait Both: Reader[I64], Reader[Bool] {}
+fn broken(seed: any Both) -> fn(value: I64) -> I64 { return seed#Reader[I64].read }
+fn main() {}

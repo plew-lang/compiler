@@ -82,20 +82,28 @@ in member-declaration-storage-proof-native-v2 before two new boundary REDs.
 Frozen group build20261125T142908-build-6d3f1f passed and75/78 CLI modes passed;
 remaining3 were inherited-newtype refusal, subsequently fixed in native probes.
 
-### Remaining confirmed defects before next candidate
+### Current verified boundary and remaining gates
 
-- Independent review: group must retain distinct canonical source/priority
-  families, not discard fallbacks based on basename before arguments exist.
-  Native Families control expects2 alternatives; current name-only preference
-  leaves1. Preserve true same-declaration/path dedup, not cross-family selection.
-- Independent review and actual MultiTrait RED: full Reader[I64] selector still
-  admits Reader[Bool] nominal member. Owner/arity/source head and saved receiver
-  alone are insufficient. Bind each trait-owned alternative to its exact
-  conformance/witness and complete instance, preserve that proof in the group,
-  and filter against the admitted selector before publishing Source authority.
-  Include intermediate proof-path instances when a selected source is a bridge.
+The complete-instance and fallback-family REDs are repaired. Nominal alternatives
+retain their exact conformance proof and complete trait instance; proof paths
+include intermediate bridge instances. Name discovery preserves distinct source
+families without argument-free call preference. Provided presence discovery is
+shared with normal lookup, whose dispatch selection remains at its call consumer.
 
-Native/CLI logs and fixed snapshots are under meta/tmp/phase3-forward-frontier;
-archive necessary compact evidence before cleanup. No parent/task closure, no
-current formal performance/main green claim. Next: fix these two REDs, extend
-producer/consumer contrasts, fresh candidate and formal7.5s validation.
+Existential alternatives retain the admitted bound interface and canonical
+ancestor/member identity, without fabricating self-conformance. Normal Any slot
+lookup shares the effective name cursor. Explicit Any trait views remain subject
+to their existing exact-instance conformance prerequisite before category admission.
+
+The final native probe covers16 positive surfaces,5 negative boundaries, real
+function storage, retained failure/retry and forged/raw/foreign/mutated/synthetic
+origin denial. All pass with immutable inputs. NewtypeOwn was an unpassed test
+using a forbidden newtype impl; it was removed, while inherited instance behavior
+is retained using an underlying-value cast. Independent source review found no
+remaining must-fix. Compact RED/GREEN, actual inputs and runner are saved at
+[admission evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/member-declaration-admission/native.json).
+
+Fresh frozen candidate build is running. Remaining: public category/lazy/normal
+contrasts on that candidate, formal fixed point/performance within7.5s, applicable
+whole regression comparison, final independent completion review. Native success
+is not task/parent completion. Baseline whole suite still has282 failures.

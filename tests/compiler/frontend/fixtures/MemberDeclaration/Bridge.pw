@@ -1,0 +1,8 @@
+trait Root[T] {}
+trait Reader { fn read() -> I64 }
+pub impl[T] Root[T] as Reader { fn read() -> I64 { return 1I64 } }
+struct Item {}
+impl Item as Root[I64] {}
+impl Item as Root[Bool] {}
+fn broken(seed: Item) -> fn() -> I64 { return seed#Root[I64].read }
+fn main() {}

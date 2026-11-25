@@ -1,0 +1,3 @@
+trait Reader { fn read() -> I64 }
+fn broken(seed: any Reader) -> fn() -> I64 { return seed.read }
+fn main() {}
