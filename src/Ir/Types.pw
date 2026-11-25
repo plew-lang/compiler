@@ -2,6 +2,8 @@
 // It is not type equality: owner, binder, projection and provenance remain in
 // the returned row and are interpreted by their existing semantic consumers.
 pub impl Arena {
+    // registerType/reserveTypeSentinel keep typeRows and typeTerms in lockstep.
+    fn typeHeads() -> TypeHeadReader { return <TypeHeadReader terms=self.typeTerms bytes=self.bytes /> }
     // Resolved types carry declaration identity; representation queries must
     // never select an unrelated declaration with the same spelling.
     fn newtypeUnderlying(ref: U64) -> U64 {

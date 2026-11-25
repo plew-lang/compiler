@@ -1,0 +1,52 @@
+// Internal behavior contract for the physical writable-path verifier.
+use ../Ir only { TypeRef }
+use ./Ir only { MidRange, MidLocalDecl, MidBlock, MidStatement, MidTerminator, MidPlace, MidProjection }
+
+fn main() {
+    mut val compiler = <Comp />
+    compiler.arena.reserveTypeSentinel()
+    val integerName = compiler.internBytes(s: "I64")
+    val integer = compiler.simpleTypeRef(nameStart: integerName.nameStart, nameLen: integerName.nameLen)
+    val mutableName = compiler.internBytes(s: "MutableRef")
+    val immutableName = compiler.internBytes(s: "Ref")
+    val mutable = compiler.pushType(t: <TypeRef nameStart=mutableName.nameStart nameLen=mutableName.nameLen args=[integer] />)
+    val immutable = compiler.pushType(t: <TypeRef nameStart=immutableName.nameStart nameLen=immutableName.nameLen args=[integer] />)
+    val wrongArity = compiler.pushType(t: <TypeRef nameStart=mutableName.nameStart nameLen=mutableName.nameLen args=[] />)
+    val body = <MidBodyNode locals=<MidRange start=0U64 len=1U64 /> />
+    for root in [mutable, immutable, wrongArity, 0U64, compiler.arena.typeCount()] {
+        if compiler.isMutableRefInst(ref: root) != (root == mutable) { panic("shared mutable-reference predicate changed") }
+        compiler.mid.locals = [<MidLocalDecl typeTerm=root sourceScope=0U64 isUnique=false isParameter=true />]
+        for tag in [1U64, 2U64, 3U64, 4U64, 5U64] {
+            compiler.mid.projections = [<MidProjectionNode tag=tag typeTerm=integer />]
+            val place = <MidPlaceNode local=0U64 projections=<MidRange start=0U64 len=1U64 /> />
+            val expected = tag == 1U64 || tag == 4U64 || (tag == 3U64 && root == mutable)
+            if canonicalMidWritablePhysicalPath(locals: compiler.mid.locals, projections: compiler.mid.projections, types: compiler.arena.typeHeads(), body: body, place: place) != expected { panic("physical path changed root/tag behavior") }
+        }
+    }
+    compiler.mid.locals = [<MidLocalDecl typeTerm=mutable sourceScope=0U64 isUnique=false isParameter=true />]
+    if !canonicalMidWritablePhysicalPath(locals: compiler.mid.locals, projections: compiler.mid.projections, types: compiler.arena.typeHeads(), body: body, place: <MidPlaceNode local=0U64 />) { panic("empty physical path rejected") }
+    compiler.mid.projections = [<MidProjectionNode tag=3U64 typeTerm=immutable />, <MidProjectionNode tag=3U64 typeTerm=integer />]
+    val nested = <MidPlaceNode local=0U64 projections=<MidRange start=0U64 len=2U64 /> />
+    if canonicalMidWritablePhysicalPath(locals: compiler.mid.locals, projections: compiler.mid.projections, types: compiler.arena.typeHeads(), body: body, place: nested) { panic("nested immutable dereference accepted") }
+    compiler.mid.projections = [<MidProjectionNode tag=1U64 typeTerm=mutable />, <MidProjectionNode tag=3U64 typeTerm=integer />]
+    if !canonicalMidWritablePhysicalPath(locals: compiler.mid.locals, projections: compiler.mid.projections, types: compiler.arena.typeHeads(), body: body, place: nested) { panic("field then mutable dereference rejected") }
+    compiler.mid.projections = [<MidProjectionNode tag=3U64 typeTerm=integer />]
+    if canonicalMidWritablePhysicalPath(locals: compiler.mid.locals, projections: compiler.mid.projections, types: compiler.arena.typeHeads(), body: body, place: <MidPlaceNode rootTag=2U64 local=0U64 projections=<MidRange start=0U64 len=1U64 /> />) { panic("nonlocal root invented mutable reference") }
+    val snapshot = compiler.arena.typeHeads()
+    val laterName = compiler.internBytes(s: "Later")
+    val later = compiler.simpleTypeRef(nameStart: laterName.nameStart, nameLen: laterName.nameLen)
+    if snapshot.matches(ref: later, name: "Later", arity: 0U64) { panic("old type snapshot observed a later registration") }
+    if !compiler.arena.typeHeads().matches(ref: later, name: "Later", arity: 0U64) { panic("fresh type snapshot lost registration") }
+    compiler.enqueueFinalDestruction(typeRef: integer).unwrap()
+    for overwrite in [false, true] {
+        val destination = <MidPlace local=0U64 typeTerm=integer projections=[<MidProjection.Deref typeTerm=integer />] />
+        val statement = if overwrite { give <MidStatement.Overwrite destination=destination source=<MidPlace local=1U64 typeTerm=integer /> /> } else { give <MidStatement.Drop place=destination /> }
+        val canonical = compiler.mid.store(body: <MidBody locals=[<MidLocalDecl typeTerm=immutable sourceScope=0U64 isUnique=false isParameter=true />, <MidLocalDecl typeTerm=integer sourceScope=0U64 isUnique=false isParameter=true />] blocks=[<MidBlock statements=[statement] terminator=<MidTerminator.Abort /> />] />)
+        val result = if overwrite { give verifyCanonicalMidBody(c: inout compiler, canonical: canonical) } else { give verifyExecutableCanonicalMidBody(c: inout compiler, canonical: canonical) }
+        match result.error {
+            MidVerifyError.MoveUnavailable => { if !overwrite { panic("drop returned move error") } }
+            MidVerifyError.DropUnavailable => { if overwrite { panic("overwrite returned drop error") } }
+            _ => { panic("actual verifier caller lost its physical-write refusal") }
+        }
+    }
+}

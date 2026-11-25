@@ -4,8 +4,8 @@ use ./AccessScopes only { canonicalMidAccessScopesValid }
 // dataflow, never source AST or LLVM state. Every backend entry calls it before lowering executable canonical bodies.
 
 use ../Frontend only { Comp, PreparedSemanticFacts }
-use ../Ir only { Global, MatchSource, SemanticMatchKind, SemanticMatchPayload }
-use ./Ir only { MidCanonicalArena, canonicalMidPlaceIsWhole, MidBodyNode, MidBlockNode, MidPlaceNode, MidProjectionNode, MidOperandNode, MidRvalueNode, MidClosureCaptureNode, MidStatementNode, MidTerminatorNode, MidCanonicalBody, MidBody, MidOwnership }
+use ../Ir only { Global, MatchSource, SemanticMatchKind, SemanticMatchPayload, TypeHeadReader }
+use ./Ir only { MidCanonicalArena, canonicalMidPlaceIsWhole, MidBodyNode, MidBlockNode, MidPlaceNode, MidProjectionNode, MidOperandNode, MidRvalueNode, MidClosureCaptureNode, MidStatementNode, MidTerminatorNode, MidCanonicalBody, MidBody, MidOwnership, MidLocalDecl }
 use ./Types only { canonicalMidStatementTypesMatch, canonicalMidTerminatorTypesMatch, canonicalMidBodyParameterTypesMatch }
 use ./Drop only { analyzeCanonicalMidOwnershipFlow }
 
@@ -350,14 +350,14 @@ fn canonicalMidTargetIsValid(body: MidBodyNode, target: U64) -> Bool {
 // Field and dereference paths denote physical storage. Dereferencing a
 // MutableRef permits replacement of its pointee; Ref never grants this
 // capability. Index paths still require the semantic writeback elaborator.
-fn canonicalMidWritablePhysicalPath(c: Comp, body: MidBodyNode, place: MidPlaceNode) -> Bool {
+fn canonicalMidWritablePhysicalPath(locals: Array[MidLocalDecl], projections: Array[MidProjectionNode], types: TypeHeadReader, body: MidBodyNode, place: MidPlaceNode) -> Bool {
     mut val currentTerm: U64 = 0U64
-    if place.rootTag == 1U64 && place.local < body.locals.len { currentTerm = c.mid.locals[body.locals.start + place.local].typeTerm }
+    if place.rootTag == 1U64 && place.local < body.locals.len { currentTerm = locals[body.locals.start + place.local].typeTerm }
     mut val projectionI: U64 = 0U64
     while projectionI < place.projections.len {
-        val projection: MidProjectionNode = c.mid.projections[place.projections.start + projectionI]
+        val projection: MidProjectionNode = projections[place.projections.start + projectionI]
         if projection.tag == 3U64 {
-            if !c.isMutableRefInst(ref: currentTerm) { return false }
+            if !types.matches(ref: currentTerm, name: "MutableRef", arity: 1U64) { return false }
         } else if projection.tag != 1U64 && projection.tag != 4U64 { return false }
         currentTerm = projection.typeTerm
         projectionI += 1U64
@@ -940,7 +940,7 @@ fn verifyCanonicalMidBodyStage(c: inout Comp, canonical: MidCanonicalBody, stage
                 if statement.destination == 0U64 || statement.source == 0U64 || statement.destination > c.mid.places.count() || statement.source > c.mid.places.count() { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=blockI /> }
                 val destination: MidPlaceNode = c.mid.places[statement.destination - 1U64]
                 val source: MidPlaceNode = c.mid.places[statement.source - 1U64]
-                if !canonicalMidWritablePhysicalPath(c: c, body: body, place: destination) || source.rootTag != 1U64 || source.projections.len != 0U64 || source.local >= states.count() || destination.typeTerm == 0U64 || !c.typeRefEq(a: destination.typeTerm, b: c.mid.locals[body.locals.start + source.local].typeTerm) { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=blockI local=source.local /> }
+                if !canonicalMidWritablePhysicalPath(locals: c.mid.locals, projections: c.mid.projections, types: c.arena.typeHeads(), body: body, place: destination) || source.rootTag != 1U64 || source.projections.len != 0U64 || source.local >= states.count() || destination.typeTerm == 0U64 || !c.typeRefEq(a: destination.typeTerm, b: c.mid.locals[body.locals.start + source.local].typeTerm) { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=blockI local=source.local /> }
                 if destination.rootTag == 1U64 && (destination.local >= states.count() || destination.local == source.local) { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=blockI local=source.local /> }
                 if destination.rootTag == 2U64 && (!destination.globalMutable || !canonicalMidGlobalRootIsValid(globals: c.arena.globals, place: destination)) { return <MidVerification error=<MidVerifyError.DropUnavailable /> block=blockI local=destination.local /> }
                 if destination.rootTag != 1U64 && destination.rootTag != 2U64 { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=blockI local=destination.local /> }
@@ -999,7 +999,7 @@ fn verifyCanonicalMidBodyStage(c: inout Comp, canonical: MidCanonicalBody, stage
             if statement.tag == 3U64 {
                 if statement.destination == 0U64 || statement.destination > c.mid.places.count() { return <MidVerification error=<MidVerifyError.DropUnavailable /> block=blockI /> }
                 val place: MidPlaceNode = c.mid.places[statement.destination - 1U64]
-                if !canonicalMidWritablePhysicalPath(c: c, body: body, place: place) { return <MidVerification error=<MidVerifyError.DropUnavailable /> block=blockI local=place.local /> }
+                if !canonicalMidWritablePhysicalPath(locals: c.mid.locals, projections: c.mid.projections, types: c.arena.typeHeads(), body: body, place: place) { return <MidVerification error=<MidVerifyError.DropUnavailable /> block=blockI local=place.local /> }
                 // A pointee drop is only the release half of a replacement,
                 // never disposal of a separately owned aggregate/root.
                 val writableBorrow: Bool = place.rootTag == 1U64 && place.local < body.locals.len && c.mid.locals[body.locals.start + place.local].isInout

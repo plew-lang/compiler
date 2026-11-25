@@ -28,7 +28,7 @@ Exact affected API subsets and preserved required data are owned by the linked d
 - mid-instantiation-storage-and-return-boundary-application: ['traceMidReturnBoundary']
 - mid-instantiation-selected-enum-match-and-destructure: ['midFinalMatchShapeMatches', 'midFinalMatchPayloadMatches']
 - mid-build-and-instantiation-trace-presentation: ['traceMidBuildFailure', 'reportMidBuildError', 'traceMidInstantiationFailure']
-- mid-verifier-cfg-target-and-writable-physical-path: ['canonicalMidWritablePhysicalPath']
+- Physical writable-path leaf split into [com-p2qh](com-p2qh.md); excluded from this task after that finite repair. Other CFG/analysis readers remain in scope.
 - mid-canonical-async-storage-liveness-plan: ['planCanonicalMidAsyncFrame', 'usePlace', 'definePlace', 'useOperand', 'useRvalue', 'transferTerminator', 'transferStatements', 'borrowedOwners']
 
 ## Actions and Completion
@@ -54,3 +54,6 @@ Original audit-time independence does not waive this implementation admission. P
 [Formal56985a02 CPU/IR follow-up](../../../evidence/rejection-domains/diagnostic-domain-implementation/phase3-wide-cpu-investigation.json) identifies two canonicalMidWritablePhysicalPath calls in verifyCanonicalMidBodyStage. Despite a readonly byref callee, the caller snapshots all135 top-level Comp fields. Samples at gf8288+19640/+34152/+37944/+39472 lie in the transfer sequences, not a proven redundant verifier check. The helper reads Mid locals/projections plus the type query isMutableRefInst. Retain its complete writable-path check; do not replace it with a broad acceptance or mutate the API solely to force a borrowed receiver.
 
 This is new cost evidence for an already listed API, not a new phase-three correctness dependency. Ordinary by-value/free-argument forwarding has different proof requirements from source receiver borrowing. Narrow this helper only according to its Mid/type responsibilities, or repair generic transfer under an independently proven contract. Exact sample-time share remains unestablished.
+
+
+Physical write-path input narrowing is split into com-p2qh for the active phase-three performance gate. This task retains all other listed APIs and its phase-four admission; closing the child does not close this task.

@@ -41,14 +41,7 @@ pub impl Comp {
     // Is `ref` a `MutableRef[T]` instantiation? Same cell representation as Ref, with
     // write capability through `->`.
     fn isMutableRefInst(ref: U64) -> Bool {
-        if ref >= self.arena.typeCount() {
-            return false
-        }
-        val t = self.arena.typeTermAt(index: ref)
-        if t.args.len != 1 {
-            return false
-        }
-        return rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "MutableRef")
+        return self.arena.typeHeads().matches(ref: ref, name: "MutableRef", arity: 1U64)
     }
 
     // Is `ref` either strong reference capability (`Ref[T]` or `MutableRef[T]`)?

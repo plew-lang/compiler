@@ -344,6 +344,27 @@ pub struct ResolvedTypeDeclaration {
 }
 pub impl ResolvedTypeDeclaration { factory }
 
+// Read-only head/arity queries from one synchronized Arena snapshot. Private
+// construction prevents callers from combining unrelated name and type pools.
+pub struct TypeHeadReader {
+    val terms: Array[TypeTerm]
+    val bytes: Array[U8]
+}
+impl TypeHeadReader { factory }
+pub impl TypeHeadReader {
+    fn matches(ref: U64, name: String, arity: U64) -> Bool {
+        if ref >= self.terms.count() { return false }
+        val term = self.terms[ref]
+        if term.args.len != arity { return false }
+        val expected = name.bytes()
+        if term.nameLen != expected.count() { return false }
+        for index in 0U64..<term.nameLen {
+            if self.bytes[term.nameStart+index] != expected[index] { return false }
+        }
+        return true
+    }
+}
+
 pub struct TypeRef {
     pub val nameStart: U64
     pub val nameLen: U64
