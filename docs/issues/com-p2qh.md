@@ -66,3 +66,18 @@ MoveUnavailable and DropUnavailable, respectively. Independent source review
 finds no confirmed must-fix and confirms old full-Comp paths are gone. No new
 source semantics or invented bug RED is claimed. Fresh candidate and timing
 remain pending. [Evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/physical-write-path-inputs/checkpoint.json).
+
+
+Fresh e27ce3e5 passes the same native path/caller controls and the complete type
+visibility inventory/normalization probe. Original CLI15 also passes. Alternating
+same-source medians are old362 7.506094s versus newe27 7.289006s, with identical
+LLVM. Both emitted helper callers pass only the two Mid arrays, two-array type
+reader and scalar body/place. The reader constructor receives the Arena field
+byref through a direct GEP; no Comp or Arena snapshot remains at these sites.
+Formal 20261125T223423-self-host-f967b6 reached G2 fixed point with unchanged inputs; samples 7.915713/7.361221/7.343559s, median 7.361221s <=7.5. Measured compiler SHA ff4a21a5861e38058f4e870571c4cb6c79d73bae4a011a28501409f745ac0d80. Its CLI15 also passes. Independent final review certifies this finite leaf, with no remaining must-fix; record publication precedes closure.
+
+
+Retain fresh e27 inputs, formal materials/measured compiler and necessary
+old/new controls through met-un2r whole/final review; then reconcile retained
+hashes/reproduction inputs and remove superseded large outputs. This child does
+not close met-un2r, the remaining com-0t9x APIs, or phase4. No main/seed promotion.

@@ -1,5 +1,12 @@
 # Parametric Mid diagnostics
 
+`PhysicalWritePathMain.pw` is a private same-module probe: append it to
+`src/Mid/Verify.pw` in a fresh frozen diagnostic snapshot, rather than exposing
+the leaf verifier or running the template directly. It fixes writable-path
+behavior across projection/root/reference shapes, type-reader snapshot lifetime,
+and the real Overwrite/Drop refusal codes. Require native exit0 and empty
+stdout/stderr. The runner and finite results are linked from `com-p2qh`.
+
 `ParametricBodyCoverage.pw` enumerates authored function bodies after the real
 declaration-only frontend has recorded declaration-time facts, before executable
 finalization. The executable worklist and final destruction table must remain
