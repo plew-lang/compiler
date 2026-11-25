@@ -247,6 +247,9 @@ impl Comp {
 
 impl Comp {
     inout fn recordAuthoredTypeFrontier(node: SourceControlNode, occurrences: Array[U64]) {
+        // A frontier is addressed only by one of its authored occurrences.
+        // No refusal can refer to an empty row; do not scan its block/slots.
+        if occurrences.count() == 0U64 { return }
         mut val sites: Array[SourceTypeAnnotationSite] = []
         match node {
             SourceControlNode.Block(id: val block) => {
