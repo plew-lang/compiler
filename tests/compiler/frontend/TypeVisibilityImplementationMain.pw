@@ -1,0 +1,28 @@
+fn main() {
+    for swapArgument in [false, true] {
+        mut val compiler = <Comp />
+        val diagnostic = match analyzeFrontendDeclarationsWithOrigin(c: inout compiler, input: <FrontendInput.File path="tests/compiler/frontend/fixtures/TypeVisibility/ImplMissing.pw" />, sources: <SourceAccess stdRoot="std/".bytes() />, options: <FrontendOptions />, origin: <FrontendDeclarationOrigin.SourceAdmission />) {
+            Result.Err(error: val diagnostic) => diagnostic
+            Result.Ok(value: _) => { panic("missing implementation import accepted") }
+        }
+        if diagnostic.typeVisibility().isNone() || !compiler.sourceFailureHasOwner(diagnostic: diagnostic) { panic("real implementation refusal lost Source: "+diagnostic.message()) }
+        val refusal = diagnostic.typeVisibility().unwrap()
+        val proof = compiler.failedTypeVisibility[refusal.event()].declaration.unwrap()
+        val root = compiler.authoredTypeDeclarationRoots[proof.root]
+        val owner = compiler.sourceTypeUses.scopeAt(token: root.scope).unwrap().implementation.unwrap()
+        val index = match owner.kind { SourceImplementationKind.Conformance(index: val index) => index _ => { panic("expected real conformance") } }
+        val conformance = compiler.decls.conformAt(index: index)
+        if conformance.subjectArgs.len != 1U64 { panic("expected one subject argument") }
+        val argument = compiler.conformTypeAt(types: conformance.subjectArgs, index: 0U64)
+        if swapArgument { compiler.decls.conformTypePool[conformance.subjectArgs.start] = conformance.subjectTy }
+        else { compiler.decls.setAdmittedNominalConformanceSubject(index: index, term: argument, arguments: conformance.subjectArgs) }
+        if compiler.sourceFailureHasOwner(diagnostic: diagnostic) { panic("changed actual implementation subject retained Source") }
+        match compiler.checkSourceTypeUsesForAdmission(occurrences: [refusal.occurrence()], origin: <FrontendDeclarationOrigin.SourceAdmission />) {
+            Result.Err(error: val rejected) => { if rejected.typeVisibility().isSome() || compiler.sourceFailureHasOwner(diagnostic: rejected) { panic("changed subject minted a new Source refusal") } }
+            Result.Ok(value: _) => { panic("missing import became success") }
+        }
+        compiler.decls.conformTypePool[conformance.subjectArgs.start] = argument
+        compiler.decls.setAdmittedNominalConformanceSubject(index: index, term: conformance.subjectTy, arguments: conformance.subjectArgs)
+        if !compiler.sourceFailureHasOwner(diagnostic: diagnostic) { panic("restored implementation lost Source") }
+    }
+}

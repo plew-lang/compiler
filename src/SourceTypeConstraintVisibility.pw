@@ -1,0 +1,111 @@
+// Constraint operand roots retain the original registered source input. Trait
+// heads and synthetic where subjects do not acquire invented occurrences.
+impl Comp {
+    fn sourceTypeBoundRange(scope: U64, clause: U64) -> Optional[SourceBoundRange] {
+        val owner = match self.sourceTypeUses.scopeAt(token: scope) { Optional.Some(v: val owner) => owner Optional.None => { return <Optional.None /> } }
+        val range = match owner.bounds { Optional.Some(v: val range) => range Optional.None => { return <Optional.None /> } }
+        if range.first == 0U64 || clause < range.first || clause-range.first >= range.count { return <Optional.None /> }
+        return <Optional.Some v=range />
+    }
+    inout fn recordBoundTypeDeclarationRoots(clause: U64) {
+        match self.sourceTypeDeclarationState { SourceTypeDeclarationState.Raw => { return } _ => {} }
+        if clause == 0U64 || clause > self.projectionBoundClauses.count() || self.authoredBoundTypeRoots.contains(key: clause) { return }
+        val source = self.projectionBoundClauses[clause-1U64]
+        if self.sourceTypeBoundRange(scope: source.scope, clause: clause).isNone() { return }
+        val bound = match source.state { ProjectionBoundState.Ready(bound: val bound) => bound _ => { return } }
+        self.recordTypeRecipeDeclarationRoot(scope: source.scope, recipe: bound.subjectRecipe, site: <SourceTypeDeclarationSite.Bound clause=clause operand=<SourceTypeConstraintOperand.Subject /> />)
+        for index in 0U64..<bound.arguments.count() { self.recordTypeRecipeDeclarationRoot(scope: source.scope, recipe: bound.arguments[index], site: <SourceTypeDeclarationSite.Bound clause=clause operand=<SourceTypeConstraintOperand.Argument index=index /> />) }
+        for index in 0U64..<bound.predicateRecipes.count() { self.recordTypeRecipeDeclarationRoot(scope: source.scope, recipe: bound.predicateRecipes[index], site: <SourceTypeDeclarationSite.Bound clause=clause operand=<SourceTypeConstraintOperand.Predicate index=index /> />) }
+        self.authoredBoundTypeRoots[clause] = true
+    }
+    inout fn recordTraitConstraintTypeDeclarationRoots() {
+        for traitIndex in 0U64..<self.decls.traitCount() {
+            val declaration = self.decls.traitAt(index: traitIndex)
+            for bound in 0U64..<declaration.supertraits.len {
+                match self.typeVisibilitySupertraitOperands.get(key: declaration.supertraits.start+bound) {
+                    Optional.Some(v: val source) => { self.recordTraitConstraintOperandRoots(traitIndex: traitIndex, bound: bound, associated: false, source: source) }
+                    Optional.None => {}
+                }
+            }
+            for bound in 0U64..<declaration.assocBounds.len {
+                match self.typeVisibilityAssociatedOperands.get(key: declaration.assocBounds.start+bound) {
+                    Optional.Some(v: val source) => { self.recordTraitConstraintOperandRoots(traitIndex: traitIndex, bound: bound, associated: true, source: source) }
+                    Optional.None => {}
+                }
+            }
+        }
+    }
+    inout fn recordTraitConstraintOperandRoots(traitIndex: U64, bound: U64, associated: Bool, source: AuthoredTraitConstraintOperands) {
+        for index in 0U64..<source.arguments.count() { self.recordTypeRecipeDeclarationRoot(scope: source.scope, recipe: source.arguments[index], site: <SourceTypeDeclarationSite.TraitConstraint traitIndex=traitIndex bound=bound associated=associated operand=<SourceTypeConstraintOperand.Argument index=index /> />) }
+        for index in 0U64..<source.predicates.count() { self.recordTypeRecipeDeclarationRoot(scope: source.scope, recipe: source.predicates[index], site: <SourceTypeDeclarationSite.TraitConstraint traitIndex=traitIndex bound=bound associated=associated operand=<SourceTypeConstraintOperand.Predicate index=index /> />) }
+    }
+    fn sourceTypeBoundSlot(root: AuthoredTypeDeclarationRoot, clause: U64, operand: SourceTypeConstraintOperand) -> Optional[Array[U64]] {
+        if clause == 0U64 || clause > self.projectionBoundClauses.count() { return <Optional.None /> }
+        val source = self.projectionBoundClauses[clause-1U64]
+        if source.scope != root.scope { return <Optional.None /> }
+        val range = match self.sourceTypeBoundRange(scope: source.scope, clause: clause) { Optional.Some(v: val range) => range Optional.None => { return <Optional.None /> } }
+        val bound = match source.state { ProjectionBoundState.Ready(bound: val bound) => bound _ => { return <Optional.None /> } }
+        val selected = match operand {
+            SourceTypeConstraintOperand.Subject => {
+                if bound.subjectRecipe == 0U64 { return <Optional.None /> }
+                give (recipe: bound.subjectRecipe, term: bound.subject, member: 0U64)
+            }
+            SourceTypeConstraintOperand.Argument(index: val index) => {
+                if index >= bound.arguments.count() || index >= bound.constraint.key.positionalArgs.count() { return <Optional.None /> }
+                give (recipe: bound.arguments[index], term: bound.constraint.key.positionalArgs[index], member: 0U64)
+            }
+            SourceTypeConstraintOperand.Predicate(index: val index) => {
+                if index >= bound.predicateRecipes.count() || index >= bound.constraint.assocPredicates.count() { return <Optional.None /> }
+                give (recipe: bound.predicateRecipes[index], term: bound.constraint.assocPredicates[index].value, member: bound.constraint.assocPredicates[index].member)
+            }
+        }
+        if selected.recipe != root.recipe || selected.term != root.term { return <Optional.None /> }
+        return <Optional.Some v=[clause, source.scope, range.first, range.count, bound.constraint.key.owner, selected.member, selected.recipe, selected.term] />
+    }
+    fn sourceTypeTraitConstraintSlot(root: AuthoredTypeDeclarationRoot, traitIndex: U64, bound: U64, associated: Bool, operand: SourceTypeConstraintOperand) -> Optional[Array[U64]] {
+        if traitIndex >= self.decls.traitCount() { return <Optional.None /> }
+        val declaration = self.decls.traitAt(index: traitIndex)
+        val range = if associated { give (start: declaration.assocBounds.start, count: declaration.assocBounds.len) } else { give (start: declaration.supertraits.start, count: declaration.supertraits.len) }
+        val total = if associated { give self.decls.traitAssociatedBoundPool.count() } else { give self.decls.traitConstraintPool.count() }
+        if bound >= range.count || range.start > total || range.count > total-range.start { return <Optional.None /> }
+        val index = range.start+bound
+        val written = if associated {
+            if index >= self.decls.traitAssociatedBoundPool.count() { return <Optional.None /> }
+            val value = self.decls.traitAssociatedBoundPool[index]
+            give (constraint: value.constraint, member: value.member)
+        } else {
+            if index >= self.decls.traitConstraintPool.count() { return <Optional.None /> }
+            give (constraint: self.decls.traitConstraintPool[index], member: 0U64)
+        }
+        val source = if associated {
+            give match self.typeVisibilityAssociatedOperands.get(key: index) { Optional.Some(v: val source) => source Optional.None => { return <Optional.None /> } }
+        } else {
+            give match self.typeVisibilitySupertraitOperands.get(key: index) { Optional.Some(v: val source) => source Optional.None => { return <Optional.None /> } }
+        }
+        if source.scope != root.scope { return <Optional.None /> }
+        val scope = match self.authoredTypeScopeReceipt(token: root.scope) { Optional.Some(v: val scope) => scope Optional.None => { return <Optional.None /> } }
+        if declaration.nameStart != scope.anchor { return <Optional.None /> }
+        val selected = match operand {
+            SourceTypeConstraintOperand.Subject => { return <Optional.None /> }
+            SourceTypeConstraintOperand.Argument(index: val index) => {
+                if index >= source.arguments.count() || index >= written.constraint.key.positionalArgs.count() { return <Optional.None /> }
+                give (recipe: source.arguments[index], term: written.constraint.key.positionalArgs[index], member: 0U64)
+            }
+            SourceTypeConstraintOperand.Predicate(index: val index) => {
+                if index >= source.predicates.count() || index >= written.constraint.assocPredicates.count() { return <Optional.None /> }
+                give (recipe: source.predicates[index], term: written.constraint.assocPredicates[index].value, member: written.constraint.assocPredicates[index].member)
+            }
+        }
+        if selected.recipe != root.recipe || selected.term != root.term { return <Optional.None /> }
+        return <Optional.Some v=[declaration.nameStart, range.start, range.count, index, written.member, written.constraint.key.owner, selected.member, selected.recipe, selected.term] />
+    }
+}
+
+impl Comp {
+    inout fn recordTraitTypeVisibilityOperands(index: U64, associated: Bool, scope: U64, lowered: LoweredTraitConstraint) {
+        if lowered.arguments.count() == 0U64 && lowered.predicateRecipes.count() == 0U64 { return }
+        val source = <AuthoredTraitConstraintOperands scope=scope arguments=lowered.arguments predicates=lowered.predicateRecipes />
+        if associated { self.typeVisibilityAssociatedOperands[index] = source }
+        else { self.typeVisibilitySupertraitOperands[index] = source }
+    }
+}

@@ -1,6 +1,16 @@
 // Private authored declaration frontier. Raw caller state cannot be promoted by
 // supplying an admission enum; only the fresh source constructor seals it.
 impl Comp {
+    // Visibility remains about the written recipe. Nominal admission may
+    // replace its representation; only its retained, occurrence-bound result
+    // can explain that difference. This reader does not resolve a projection.
+    fn sourceTypeNominalSlotMatches(root: AuthoredTypeDeclarationRoot, term: U64) -> Bool {
+        if term == root.term { return true }
+        val saved = match self.nominalAnnotationProofs.get(key: root.occurrence) { Optional.Some(v: val saved) => saved Optional.None => { return false } }
+        if saved.occurrence != root.occurrence || saved.recipe != root.recipe || saved.sourceTerm != term { return false }
+        val selection = match self.nominalAnnotationSelections.get(key: root.recipe) { Optional.Some(v: val selection) => selection Optional.None => { return false } }
+        return selection.sourceTerm == term
+    }
     inout fn beginSourceTypeDeclarationConstruction(origin: FrontendDeclarationOrigin) -> Result[(), CompileDiagnostic] {
         match origin { FrontendDeclarationOrigin.Raw => { return <Result.Ok value=() /> } FrontendDeclarationOrigin.SourceAdmission => {} }
         if self.arena.bytes.count() != 0U64 || self.arena.typeCount() != 0U64 || self.arena.functionCount() != 0U64 || self.arena.structCount() != 0U64 || self.arena.enumCount() != 0U64 || self.arena.newtypeCount() != 0U64 || self.arena.globals.count() != 0U64 || self.modules.sourceFileCount() != 0U64 || self.sourceTypeUses.scopeCount() != 0U64 || self.authoredTypeDeclarationRoots.count() != 0U64 {
@@ -18,6 +28,10 @@ impl Comp {
         }
         if session != self.sourceFactSession() { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "foreign source declaration frontier", failureDomain: <FailureDomain.Internal />) /> }
         self.recordNominalTypeDeclarationRoots()
+        self.recordAssociatedBindingTypeDeclarationRoots()
+        self.recordTraitConstraintTypeDeclarationRoots()
+        self.sourceTypeDeclarationClauseLimit = self.projectionBoundClauses.count()
+        for index in 0U64..<self.projectionBoundClauses.count() { self.recordBoundTypeDeclarationRoots(clause: index+1U64) }
         self.sourceTypeDeclarationState = <SourceTypeDeclarationState.Sealed session=session scopes=self.sourceTypeUses.scopeCount() roots=self.authoredTypeDeclarationRoots.count() />
         return <Result.Ok value=() />
     }
@@ -195,9 +209,23 @@ impl Comp {
     }
     fn sourceTypeDeclarationSlotValues(root: AuthoredTypeDeclarationRoot) -> Optional[Array[U64]] {
         val scope = match self.authoredTypeScopeReceipt(token: root.scope) { Optional.Some(v: val scope) => scope Optional.None => { return <Optional.None /> } }
-        val receipt = match self.authoredTypeUseReceipt(id: root.occurrence) { Optional.Some(v: val receipt) => receipt Optional.None => { return <Optional.None /> } }
-        if receipt.term != root.term || receipt.scope != root.scope || receipt.recipe != root.recipe { return <Optional.None /> }
+        if root.occurrence != 0U64 {
+            val receipt = match self.authoredTypeUseReceipt(id: root.occurrence) { Optional.Some(v: val receipt) => receipt Optional.None => { return <Optional.None /> } }
+            if receipt.term != root.term || receipt.scope != root.scope || receipt.recipe != root.recipe { return <Optional.None /> }
+        } else {
+            val node = match self.authoredTypeRecipeNode(id: root.recipe) { Optional.Some(v: val node) => node Optional.None => { return <Optional.None /> } }
+            if node.term != root.term || !self.authoredTypeRecipeNodeMatches(node: node) { return <Optional.None /> }
+        }
         return match root.site {
+            SourceTypeDeclarationSite.Bound(clause: val clause, operand: val operand) => self.sourceTypeBoundSlot(root: root, clause: clause, operand: operand)
+            SourceTypeDeclarationSite.TraitConstraint(traitIndex: val traitIndex, bound: val bound, associated: val associated, operand: val operand) => self.sourceTypeTraitConstraintSlot(root: root, traitIndex: traitIndex, bound: bound, associated: associated, operand: operand)
+            SourceTypeDeclarationSite.ImplementationReceiver | SourceTypeDeclarationSite.ImplementationReceiverArgument(index: _) | SourceTypeDeclarationSite.ImplementationTargetArgument(index: _) => self.sourceTypeImplementationSlot(root: root)
+            SourceTypeDeclarationSite.AssociatedBinding(index: val index) => {
+                if index >= self.decls.assocBindings.count() { return <Optional.None /> }
+                val binding = self.decls.assocBindings[index]
+                if binding.implOffset != scope.anchor || binding.authoredTypeUse != root.occurrence || binding.ty != root.term { return <Optional.None /> }
+                give <Optional.Some v=[binding.implOffset, binding.recvId, binding.traitOwner, binding.nameId, binding.authoredTypeUse, binding.authoredTypeSite, binding.ty] />
+            }
             SourceTypeDeclarationSite.Parameter(owner: val owner, index: val index) => self.sourceTypeDeclarationCallableSlot(root: root, owner: owner, slot: <SourceSignatureSlot.Parameter index=index />)
             SourceTypeDeclarationSite.Result(owner: val owner) => self.sourceTypeDeclarationCallableSlot(root: root, owner: owner, slot: <SourceSignatureSlot.Result />)
             SourceTypeDeclarationSite.FactoryError(owner: val owner) => self.sourceTypeDeclarationCallableSlot(root: root, owner: owner, slot: <SourceSignatureSlot.FactoryError />)
@@ -206,7 +234,7 @@ impl Comp {
                 val declaration = self.arena.structAt(index: structure)
                 if declaration.sourceTypeScope != root.scope || declaration.defOffset != scope.anchor || field >= declaration.fields.count() { return <Optional.None /> }
                 val annotation = declaration.fields[field]
-                if annotation.authoredTypeUse != root.occurrence || annotation.ty != root.term { return <Optional.None /> }
+                if annotation.authoredTypeUse != root.occurrence || !self.sourceTypeNominalSlotMatches(root: root, term: annotation.ty) { return <Optional.None /> }
                 give <Optional.Some v=[declaration.defOffset, declaration.sourceTypeScope, field, annotation.nameStart, annotation.authoredTypeUse, annotation.authoredTypeSite, annotation.ty] />
             }
             SourceTypeDeclarationSite.EnumField(enumeration: val enumeration, variant: val variant, field: val field) => {
@@ -214,13 +242,13 @@ impl Comp {
                 val declaration = self.arena.enumAt(index: enumeration)
                 if declaration.sourceTypeScope != root.scope || declaration.defOffset != scope.anchor || variant >= declaration.variants.count() || field >= declaration.variants[variant].fields.count() { return <Optional.None /> }
                 val annotation = declaration.variants[variant].fields[field]
-                if annotation.authoredTypeUse != root.occurrence || annotation.ty != root.term { return <Optional.None /> }
+                if annotation.authoredTypeUse != root.occurrence || !self.sourceTypeNominalSlotMatches(root: root, term: annotation.ty) { return <Optional.None /> }
                 give <Optional.Some v=[declaration.defOffset, declaration.sourceTypeScope, variant, field, annotation.nameStart, annotation.authoredTypeUse, annotation.authoredTypeSite, annotation.ty] />
             }
             SourceTypeDeclarationSite.Underlying(index: val index) => {
                 if index >= self.arena.newtypeCount() { return <Optional.None /> }
                 val declaration = self.arena.newtypeAt(index: index)
-                if declaration.sourceTypeScope != root.scope || declaration.defOffset != scope.anchor || declaration.authoredTypeUse != root.occurrence || declaration.underRef != root.term { return <Optional.None /> }
+                if declaration.sourceTypeScope != root.scope || declaration.defOffset != scope.anchor || declaration.authoredTypeUse != root.occurrence || !self.sourceTypeNominalSlotMatches(root: root, term: declaration.underRef) { return <Optional.None /> }
                 give <Optional.Some v=[declaration.defOffset, declaration.sourceTypeScope, declaration.nameStart, declaration.authoredTypeUse, declaration.authoredTypeSite, declaration.underRef] />
             }
             SourceTypeDeclarationSite.Global(index: val index) => {
@@ -258,6 +286,105 @@ impl Comp {
         val values = match self.sourceTypeDeclarationSlotValues(root: root) { Optional.Some(v: val values) => values Optional.None => { return false } }
         if values.count() != proof.values.count() { return false }
         for index in 0U64..<values.count() { if values[index] != proof.values[index] { return false } }
+        return true
+    }
+}
+
+impl Comp {
+    inout fn recordTypeRecipeDeclarationRoot(scope: U64, recipe: U64, site: SourceTypeDeclarationSite) {
+        match self.sourceTypeDeclarationState {
+            SourceTypeDeclarationState.Lowering(session: _) => {}
+            SourceTypeDeclarationState.Sealed(session: val session, scopes: val scopes, roots: _) => {
+                if session != self.sourceFactSession() || scope == 0U64 || scope > scopes { return }
+                val clause = match site { SourceTypeDeclarationSite.Bound(clause: val clause, operand: _) => clause _ => { return } }
+                if clause == 0U64 || clause > self.sourceTypeDeclarationClauseLimit || clause > self.projectionBoundClauses.count() || self.projectionBoundClauses[clause-1U64].scope != scope { return }
+                if self.sourceTypeBoundRange(scope: scope, clause: clause).isNone() { return }
+            }
+            SourceTypeDeclarationState.Raw => { return }
+        }
+        val node = match self.authoredTypeRecipeNode(id: recipe) { Optional.Some(v: val node) => node Optional.None => { return } }
+        self.authoredTypeDeclarationRoots.append(<AuthoredTypeDeclarationRoot scope=scope occurrence=node.occurrence term=node.term recipe=recipe site=site />)
+        match self.sourceTypeDeclarationState {
+            SourceTypeDeclarationState.Sealed(session: val session, scopes: val scopes, roots: _) => { self.sourceTypeDeclarationState = <SourceTypeDeclarationState.Sealed session=session scopes=scopes roots=self.authoredTypeDeclarationRoots.count() /> }
+            _ => {}
+        }
+    }
+    inout fn recordImplementationTypeDeclarationRoots(scope: U64, implementation: SourceImplementationOwner) {
+        self.recordTypeDeclarationRoot(scope: scope, occurrence: implementation.receiverOccurrence, site: <SourceTypeDeclarationSite.ImplementationReceiver />)
+        for index in 0U64..<implementation.receiverArgumentRecipes.count() { self.recordTypeRecipeDeclarationRoot(scope: scope, recipe: implementation.receiverArgumentRecipes[index], site: <SourceTypeDeclarationSite.ImplementationReceiverArgument index=index />) }
+        for index in 0U64..<implementation.targetArgumentOccurrences.count() { self.recordTypeDeclarationRoot(scope: scope, occurrence: implementation.targetArgumentOccurrences[index], site: <SourceTypeDeclarationSite.ImplementationTargetArgument index=index />) }
+    }
+    inout fn recordAssociatedBindingTypeDeclarationRoots() {
+        mut val scopes: Dictionary[U64, U64] = [:]
+        for receipt in self.authoredTypeScopes {
+            match receipt.kind {
+                SourceTypeScopeKind.Implementation => {
+                    if scopes.contains(key: receipt.anchor) { scopes[receipt.anchor] = 0U64 }
+                    else { scopes[receipt.anchor] = receipt.token }
+                }
+                _ => {}
+            }
+        }
+        for index in 0U64..<self.decls.assocBindings.count() {
+            val binding = self.decls.assocBindings[index]
+            val scope = scopes.getOr(key: binding.implOffset, fallback: 0U64)
+            if scope != 0U64 { self.recordTypeDeclarationRoot(scope: scope, occurrence: binding.authoredTypeUse, site: <SourceTypeDeclarationSite.AssociatedBinding index=index />) }
+        }
+    }
+    fn sourceTypeImplementationSlot(root: AuthoredTypeDeclarationRoot) -> Optional[Array[U64]] {
+        val source = match self.sourceTypeUses.scopeAt(token: root.scope) { Optional.Some(v: val source) => source Optional.None => { return <Optional.None /> } }
+        val owner = match source.implementation { Optional.Some(v: val owner) => owner Optional.None => { return <Optional.None /> } }
+        val conformance = match owner.kind {
+            SourceImplementationKind.Inherent => 0U64
+            SourceImplementationKind.Conformance(index: val index) => {
+                if index >= self.decls.conformCount() || self.decls.conformAt(index: index).defOffset != source.anchor { return <Optional.None /> }
+                give index + 1U64
+            }
+        }
+        if conformance != 0U64 && !self.sourceTypeImplementationReceiverMatches(scope: root.scope, owner: owner, index: conformance-1U64) { return <Optional.None /> }
+        // Inherent impls have no Conform or mandatory member. Their real
+        // binding is the Lower-bound implementation scope, paired with this
+        // immutable root row; never recover a subject by scanning functions.
+        return match root.site {
+            SourceTypeDeclarationSite.ImplementationReceiver => {
+            if owner.receiverOccurrence != root.occurrence || owner.receiver != root.term { return <Optional.None /> }
+            give <Optional.Some v=[source.anchor, owner.sourceModule, owner.extensionId, conformance, owner.receiverTrait, owner.receiverOccurrence, owner.receiver] />
+        }
+            SourceTypeDeclarationSite.ImplementationReceiverArgument(index: val index) => {
+            if index >= owner.receiverArguments.count() || index >= owner.receiverArgumentRecipes.count() || owner.receiverArgumentRecipes[index] != root.recipe || owner.receiverArguments[index] != root.term { return <Optional.None /> }
+            give <Optional.Some v=[source.anchor, owner.sourceModule, owner.extensionId, conformance, owner.receiverTrait, index, owner.receiverArgumentRecipes[index], owner.receiverArguments[index]] />
+        }
+            SourceTypeDeclarationSite.ImplementationTargetArgument(index: val index) => {
+        if index >= owner.targetArgumentOccurrences.count() || owner.targetArgumentOccurrences[index] != root.occurrence { return <Optional.None /> }
+        if conformance == 0U64 { return <Optional.None /> }
+        val arguments = self.decls.conformAt(index: conformance-1U64).traitArgs
+        if index >= arguments.len || arguments.start > self.decls.conformTypePool.count() || arguments.len > self.decls.conformTypePool.count()-arguments.start { return <Optional.None /> }
+        val term = self.conformTypeAt(types: arguments, index: index)
+        if term != root.term { return <Optional.None /> }
+        give <Optional.Some v=[source.anchor, owner.sourceModule, owner.extensionId, conformance, owner.receiverTrait, index, owner.targetArgumentOccurrences[index], term] />
+            }
+            _ => <Optional.None />
+        }
+    }
+}
+
+impl Comp {
+    fn sourceTypeImplementationReceiverMatches(scope: U64, owner: SourceImplementationOwner, index: U64) -> Bool {
+        if index >= self.decls.conformCount() { return false }
+        val declaration = self.decls.conformAt(index: index)
+        if declaration.subjectTraitOwner != owner.receiverTrait || declaration.sourceModule != owner.sourceModule || declaration.extId != owner.extensionId { return false }
+        mut val expected = owner.receiver
+        mut val arguments = owner.receiverArguments
+        if declaration.subjectTy != expected {
+            if owner.receiverTrait != 0U64 || owner.receiverOccurrence == 0U64 { return false }
+            val proof = match self.authoredImplementationReceivers.get(key: scope) { Optional.Some(v: val proof) => proof Optional.None => { return false } }
+            val source = match self.registeredLowerTypeUse(id: owner.receiverOccurrence) { Optional.Some(v: val source) => source Optional.None => { return false } }
+            if proof.occurrence != owner.receiverOccurrence || proof.recipe != source.recipe || proof.sourceTerm >= self.arena.typeCount() { return false }
+            expected = proof.sourceTerm
+            arguments = self.arena.typeAt(index: expected).args
+        }
+        if declaration.subjectTy != expected || declaration.subjectArgs.len != arguments.count() || declaration.subjectArgs.start > self.decls.conformTypePool.count() || declaration.subjectArgs.len > self.decls.conformTypePool.count()-declaration.subjectArgs.start { return false }
+        for index in 0U64..<arguments.count() { if self.conformTypeAt(types: declaration.subjectArgs, index: index) != arguments[index] { return false } }
         return true
     }
 }

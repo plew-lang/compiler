@@ -1,0 +1,30 @@
+use ./Other only { Marker }
+trait Parent[T] {}
+trait Child: Parent[Marker] {}
+trait Associated { type Item }
+trait Constrained { type Item: Parent[Marker] }
+struct Box[T] {}
+impl Box[Marker] as Associated { type Item = Marker }
+struct Store { val value: Marker }
+enum Event { Item(value: Marker) }
+newtype Wrapped = Marker
+val sample: Optional[Marker] = <Optional.None />
+fn bounded[T](value: T) where T: Parent[Marker] {}
+fn main() {}
+trait Generic[T] {}
+impl Box[Marker] as Generic[Marker] {}
+trait Methods { fn echo(value: Marker) -> Marker result[Marker] factory make() }
+struct FactorySample {}
+impl FactorySample { result[Marker] factory make() { return <Result.Ok value=<FactorySample /> /> } }
+fn identity(value: Marker) -> Marker { return value }
+extern(c) { type Handle fn passthrough(value~: Handle) -> Handle }
+trait Output { type Item }
+trait Derived: Output[Item=Marker] {}
+trait Limits { type Item: Output[Item=Marker] }
+fn predicate[T](value: T) where T: Output[Item=Marker] {}
+
+struct Projector {}
+impl Projector as Output { type Item = Marker }
+newtype Projected = Projector#Output.Item
+struct ProjectedStore { val value: Projector#Output.Item }
+enum ProjectedEvent { Item(value: Projector#Output.Item) }

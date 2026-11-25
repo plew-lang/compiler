@@ -1,0 +1,72 @@
+// Match the actual declaration type-use frontier, not only scope-kind counts.
+fn main() {
+    mut val compiler = <Comp />
+    match analyzeFrontendRequestsWithOrigin(c: inout compiler, input: <FrontendInput.File path="tests/compiler/frontend/fixtures/TypeVisibility/Inventory.pw" />, sources: <SourceAccess stdRoot="std/".bytes() />, options: <FrontendOptions />, origin: <FrontendDeclarationOrigin.SourceAdmission />) {
+        Result.Ok(value: _) => {}
+        Result.Err(error: val diagnostic) => { panic("inventory setup: "+diagnostic.message()) }
+    }
+    mut val missing = 0U64
+    for receipt in compiler.authoredTypeOccurrences {
+        match receipt.role { SourceTypeUseRole.Declaration => {} _ => { continue } }
+        if receipt.headSite == 0U64 || receipt.headLength == 0U64 { continue }
+        if compiler.isAmbientInLang(start: receipt.headStart, len: receipt.headLength) || !compiler.typeDeclExistsGlobally(start: receipt.headStart, len: receipt.headLength) { continue }
+        val proof = compiler.sourceTypeDeclarationProof(receipt: receipt)
+        if proof.isNone() {
+            missing += 1U64
+            val scope = compiler.sourceTypeUses.scopeAt(token: receipt.scope).unwrap()
+            val kind = match scope.kind {
+                SourceTypeScopeKind.FreeFunction => "function"
+                SourceTypeScopeKind.Method => "method"
+                SourceTypeScopeKind.Deinit => "deinit"
+                SourceTypeScopeKind.Implementation => "implementation"
+                SourceTypeScopeKind.RequirementSignature => "requirement"
+                SourceTypeScopeKind.ExternSignature => "extern"
+                SourceTypeScopeKind.DefaultExpression => "default"
+                SourceTypeScopeKind.Global => "global"
+                SourceTypeScopeKind.Nominal => "nominal"
+                SourceTypeScopeKind.TraitDeclaration => "trait"
+            }
+            eprint(text: "uncovered "+kind+" occurrence=")
+            eprintU64(n: receipt.id)
+            eprint(text: " site=")
+            eprintU64(n: receipt.site)
+            eprint(text: "\n")
+        } else if !compiler.sourceTypeDeclarationProofMatches(proof: proof.unwrap(), receipt: receipt) { panic("root proof failed immediate observation") }
+    }
+    if missing != 0U64 { panic("declaration type-use root coverage is incomplete") }
+    mut val parameters = 0U64
+    mut val results = 0U64
+    mut val errors = 0U64
+    mut val targets = 0U64
+    mut val predicates = 0U64
+    mut val normalized = 0U64
+    for root in compiler.authoredTypeDeclarationRoots {
+        if compiler.sourceTypeDeclarationSlotValues(root: root).isNone() { panic("registered declaration slot lost its original binding") }
+        val represented = match root.site {
+            SourceTypeDeclarationSite.StructField(structure: val structure, field: val field) => compiler.arena.structAt(index: structure).fields[field].ty
+            SourceTypeDeclarationSite.EnumField(enumeration: val enumeration, variant: val variant, field: val field) => compiler.arena.enumAt(index: enumeration).variants[variant].fields[field].ty
+            SourceTypeDeclarationSite.Underlying(index: val index) => compiler.arena.newtypeAt(index: index).underRef
+            _ => root.term
+        }
+        if represented != root.term {
+            normalized += 1U64
+            val saved = compiler.nominalAnnotationProofs[root.occurrence]
+            compiler.nominalAnnotationProofs.remove(key: root.occurrence)
+            if compiler.sourceTypeDeclarationSlotValues(root: root).isSome() { panic("normalized slot accepted without retained annotation") }
+            compiler.nominalAnnotationProofs[root.occurrence] = saved
+            if compiler.sourceTypeNominalSlotMatches(root: root, term: 0U64) { panic("unselected representation accepted") }
+            if compiler.sourceTypeDeclarationSlotValues(root: root).isNone() { panic("restored normalized slot rejected") }
+        }
+        match root.site {
+            SourceTypeDeclarationSite.Parameter(owner: _, index: _) => { parameters += 1U64 }
+            SourceTypeDeclarationSite.Result(owner: _) => { results += 1U64 }
+            SourceTypeDeclarationSite.FactoryError(owner: _) => { errors += 1U64 }
+            SourceTypeDeclarationSite.ImplementationTargetArgument(index: _) => { targets += 1U64 }
+            SourceTypeDeclarationSite.TraitConstraint(traitIndex: _, bound: _, associated: _, operand: val operand) | SourceTypeDeclarationSite.Bound(clause: _, operand: val operand) => { match operand { SourceTypeConstraintOperand.Predicate(index: _) => { predicates += 1U64 } _ => {} } }
+            _ => {}
+        }
+    }
+    if parameters == 0U64 || results == 0U64 || errors == 0U64 || targets == 0U64 || predicates == 0U64 { panic("inventory fixture did not exercise required slot families") }
+    if normalized < 3U64 { panic("normalization fixture did not exercise nominal slot families") }
+
+}

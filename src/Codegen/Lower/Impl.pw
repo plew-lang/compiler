@@ -1210,6 +1210,7 @@ impl Comp {
         if !self.sourceTypeUses.bindImplementation(token: self.sourceTypeUses.currentScope(), implementation: implementation) {
             return <Result.Err error=self.diagnosticAt(offset: normalizedImpl.span.start, msg: "invalid authored implementation scope binding", failureDomain: <FailureDomain.Internal />) />
         }
+        self.recordImplementationTypeDeclarationRoots(scope: self.sourceTypeUses.currentScope(), implementation: implementation)
         // attach pending `@[...]` directives to this impl block (a macro on an impl);
         // declStart/declEnd = the impl block's source span for the gen harness slice.
         self.drainDerives(typeStart: recvN.nameStart, typeLen: recvN.nameLen, isEnum: false, declStart: normalizedImpl.span.start, declEnd: normalizedImpl.span.end)
@@ -1367,6 +1368,7 @@ impl Comp {
         if !self.sourceTypeUses.bindImplementation(token: self.sourceTypeUses.currentScope(), implementation: implementation) {
             return <Result.Err error=self.diagnosticAt(offset: normalizedImpl.span.start, msg: "invalid authored implementation scope binding", failureDomain: <FailureDomain.Internal />) />
         }
+        self.recordImplementationTypeDeclarationRoots(scope: self.sourceTypeUses.currentScope(), implementation: implementation)
         self.drainDerives(typeStart: recvN.nameStart, typeLen: recvN.nameLen, isEnum: false, declStart: normalizedImpl.span.start, declEnd: normalizedImpl.span.end)
         self.cur.typeParams = savedTP
         return <Result.Ok value=() />
@@ -1617,6 +1619,7 @@ impl Comp {
             for bound in associated.bounds {
                 val lowered = try self.lowerSourceValueTraitBound(traitType: (try self.normalizeProjectionType(t: bound)), origin: <Optional.None />)
                 val operands = try self.authoredTraitConstraintOperands(lowered: lowered, scope: scope)
+                self.recordTraitTypeVisibilityOperands(index: start+bounds.count(), associated: true, scope: scope, lowered: lowered)
                 if operands.isSome() { self.authoredAssociatedConstraintOperands[start + bounds.count()] = operands.unwrap() }
                 bounds.append(<TraitAssociatedBound member=member constraint=lowered.constraint offset=bound.span.start />)
             }
@@ -1721,6 +1724,7 @@ impl Comp {
         mut val terms: Array[TraitConstraint] = []
         for lowered in supertraits {
             val operands = try self.authoredTraitConstraintOperands(lowered: lowered, scope: scope)
+            self.recordTraitTypeVisibilityOperands(index: start+terms.count(), associated: false, scope: scope, lowered: lowered)
             if operands.isSome() { self.authoredSupertraitOperands[start + terms.count()] = operands.unwrap() }
             terms.append(lowered.constraint)
         }
@@ -1775,6 +1779,7 @@ impl Comp {
                 val boundId = syntaxAssociatedTypeBound(file: self.syntax, associated: associated, index: boundIndex)
                 val lowered = try self.lowerSourceSyntaxTraitBound(traitTy: boundId, origin: <Optional.None />)
                 val operands = try self.authoredTraitConstraintOperands(lowered: lowered, scope: scope)
+                self.recordTraitTypeVisibilityOperands(index: start+bounds.count(), associated: true, scope: scope, lowered: lowered)
                 if operands.isSome() { self.authoredAssociatedConstraintOperands[start + bounds.count()] = operands.unwrap() }
                 bounds.append(<TraitAssociatedBound member=member constraint=lowered.constraint offset=syntaxType(file: self.syntax, id: boundId).span.start />)
             }

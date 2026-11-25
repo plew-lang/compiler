@@ -1,0 +1,5 @@
+use ./Other only { load }
+trait Generic[T] {}
+struct Box[T] {}
+impl Box[Marker] as Generic[I64] {}
+fn main() {}

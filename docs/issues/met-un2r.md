@@ -130,18 +130,18 @@ closure controls remain successful. Independent source review found no must-fix
 in this implemented portion, without certifying remaining coverage or task closure.
 [Declaration checkpoint](../../../evidence/rejection-domains/diagnostic-domain-implementation/type-visibility-refusals/declaration-checkpoint.json).
 
-### Remaining declaration root inventory
+### Declaration root inventory and pending gates
 
 | Family | Current implementation / next action |
 |---|---|
 | Function/method, extern, requirement parameter/result/factory-error | root locators and slot readers implemented; extend dedicated source controls |
 | Struct/enum fields, newtype underlying, global declared annotation | locators/readers implemented; underlying exercised, expand field/global controls |
-| Implementation receiver, receiver/target arguments | connect actual bindImplementation inputs to private roots and actual owner slot |
-| Impl associated-type binding | retain AssocBinding authored occurrence/site/impl identity and real type slot |
-| Where operands | preserve PreparedProjectionBound subjectRecipe/arguments/predicates and registered clause/scope; no authored subject when recipe0 |
-| Trait supertrait and associated bounds | use existing private authored operand bindings and actual pool/owner slots, separately for same-anchor scopes |
+| Implementation receiver, receiver/target arguments | implemented; actual Conform receiver/arguments/module/extension checked |
+| Impl associated-type binding | implemented with authored occurrence/site/impl identity and real slot |
+| Where operands | implemented with PreparedProjectionBound recipes and original scope own range; no source subject for recipe0 |
+| Trait supertrait and associated bounds | dedicated private visibility recipe operands and actual pool/owner slots; view-only operands are not a complete inventory |
 
-Do not infer coverage from scope kind or count the remaining rows as done. Private
+Actual declaration-occurrence inventory and all registered slot readers pass, including normalizations; this does not certify adversarial coverage or final gates. Private
 Lower recipe edges also apply to these roots. Deferred original bound completion
 must retain its registered input ownership; do not silently authorize new synthetic
 registrations after sealing. Preserve any legitimate normalization correspondence
@@ -152,3 +152,25 @@ alias/binder/unknown-type controls; all five public roots plus demanded/lazy/bod
 contrasts on a fresh candidate; regression/formal<=7.5s and final independent
 review. Adopted f329 and whole264 baseline are unchanged. The WIP source remains
 unmeasured/unadopted. Pre-Lower failures are outside this post-Lower boundary.
+
+
+### Remaining-root finite checkpoint
+
+Implementation/associated binding, original where clause and trait constraint
+roots are connected. Native inventory covers real Lower occurrences plus every
+registered slot, with parameter/result/factory/extern/target/predicate families.
+Actual Conform receiver/argument mutation exposed a retained-authority RED;
+producer and saved consumer now reject the mutation and accept restoration.
+Projected newtype/struct/enum representation changes exposed three lost-root
+REDs. Exact occurrence/recipe-bound nominal admission results explain those
+changes without projection re-resolution. Removing the retained annotation loses
+authority; restoring it recovers, and an unselected representation is rejected.
+
+The independent reviewer found no remaining confirmed must-fix in this finite
+increment. Own-bound-range checks are consistency defense, not a claimed executed
+public mutation RED: individual scope bounds are private/write-once, while a
+public whole-store replacement remains a distinct unexecuted concern.
+[Results and runners](../../../evidence/rejection-domains/diagnostic-domain-implementation/type-visibility-refusals/remaining-roots-checkpoint.json).
+Fresh CLI, missing adversarial contrasts, formal performance and whole remain
+pending. Task and parent remain open; adopted carrier and 264-failure baseline
+are unchanged.

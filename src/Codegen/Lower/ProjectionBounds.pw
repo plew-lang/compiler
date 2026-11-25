@@ -92,6 +92,7 @@ impl Comp {
         }
         val completed = self.projectionBoundClauses[id - 1U64]
         self.projectionBoundClauses[id - 1U64] = <ProjectionBoundClause scope=clause.scope parameters=clause.parameters syntax=clause.syntax syntheticSubject=clause.syntheticSubject head=completed.head state=state />
+        if result.isOk() { self.recordBoundTypeDeclarationRoots(clause: id) }
         return result
     }
 

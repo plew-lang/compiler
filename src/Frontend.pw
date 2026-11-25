@@ -910,7 +910,14 @@ enum SourceTypeDeclarationState {
     Sealed(session: U64, scopes: U64, roots: U64)
 }
 enum SourceTypeCallableOwner { Function(index: U64) Requirement(traitIndex: U64, slot: U64) }
+enum SourceTypeConstraintOperand { Subject Argument(index: U64) Predicate(index: U64) }
 enum SourceTypeDeclarationSite {
+    Bound(clause: U64, operand: SourceTypeConstraintOperand)
+    TraitConstraint(traitIndex: U64, bound: U64, associated: Bool, operand: SourceTypeConstraintOperand)
+    ImplementationReceiver
+    ImplementationReceiverArgument(index: U64)
+    ImplementationTargetArgument(index: U64)
+    AssociatedBinding(index: U64)
     Parameter(owner: SourceTypeCallableOwner, index: U64)
     Result(owner: SourceTypeCallableOwner)
     FactoryError(owner: SourceTypeCallableOwner)
@@ -1279,6 +1286,8 @@ pub struct Comp {
     mut val traitDeclarationPremises: Dictionary[U64, TraitBound] = [:]
     mut val admittedSupertraitOperands: Dictionary[U64, AdmittedTraitConstraintOperands] = [:]
     mut val admittedAssociatedConstraintOperands: Dictionary[U64, AdmittedTraitConstraintOperands] = [:]
+    mut val typeVisibilitySupertraitOperands: Dictionary[U64, AuthoredTraitConstraintOperands] = [:]
+    mut val typeVisibilityAssociatedOperands: Dictionary[U64, AuthoredTraitConstraintOperands] = [:]
     mut val authoredSupertraitOperands: Dictionary[U64, AuthoredTraitConstraintOperands] = [:]
     mut val authoredAssociatedConstraintOperands: Dictionary[U64, AuthoredTraitConstraintOperands] = [:]
     mut val traitLexicalHeaders: Dictionary[U64, TraitBoundShape] = [:]
@@ -1307,6 +1316,8 @@ pub struct Comp {
     mut val viaCallByFunction: Dictionary[U64, U64] = [:]
     mut val authoredIdentifiers: Array[AuthoredIdentifier] = []
     mut val authoredFields: Array[AuthoredField] = []
+    mut val sourceTypeDeclarationClauseLimit: U64 = 0U64
+    mut val authoredBoundTypeRoots: Dictionary[U64, Bool] = [:]
     mut val sourceTypeDeclarationState: SourceTypeDeclarationState = <SourceTypeDeclarationState.Raw />
     mut val authoredTypeDeclarationRoots: Array[AuthoredTypeDeclarationRoot] = []
     mut val authoredTypeRecipeNodes: Array[AuthoredTypeRecipeNode] = []
@@ -2345,6 +2356,7 @@ part ./SourceNamedDeclarations
 part ./SourceOperatorRequirements
 part ./SourceGenericFailures
 part ./SourceArrayFailures
+part ./SourceTypeConstraintVisibility
 part ./SourceTypeDeclarationVisibility
 part ./SourceTypeVisibility
 part ./SourceLoopFailures
