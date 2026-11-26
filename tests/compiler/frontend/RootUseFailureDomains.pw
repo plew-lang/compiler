@@ -1,0 +1,23 @@
+use ../../../src/Frontend only { FrontendInput, openFrontend }
+use ../../../src/CheckedProgram only { CompilerSession, CompilerSessionResult }
+use ../../../src/SourceAccess only { SourceAccess }
+use ../../../src/Diag only { CompileDiagnostic }
+
+fn retained(diagnostic: CompileDiagnostic) -> CompileDiagnostic { return diagnostic }
+
+fn main() {
+    for name in ["part_use_selective", "part_pub_use_nested", "generated_part_use", "part_use_namespace_alias"] {
+        val input = <FrontendInput.File path="tests/fixtures/partreject/"+name+"/Main.pw" />
+        for attempt in 0U64..<2U64 {
+            val failure = match CompilerSession.open(input: input, sources: <SourceAccess stdRoot="std/".bytes() />) {
+                CompilerSessionResult.Failure(diagnostic: val diagnostic) => retained(diagnostic: diagnostic)
+                CompilerSessionResult.Success(session: _) => { panic("invalid part published a session") }
+            }
+            if !failure.isSourceRejection() { panic("session open result lost source part failure") }
+            match openFrontend(input: input, sources: <SourceAccess stdRoot="std/".bytes() />) {
+                Result.Err(error: val diagnostic) => { if !diagnostic.isSourceRejection() || diagnostic.message() != failure.message() { panic("eager adapter changed retained part failure") } }
+                Result.Ok(value: _) => { panic("invalid part became checked") }
+            }
+        }
+    }
+}

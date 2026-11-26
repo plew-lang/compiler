@@ -31,6 +31,16 @@ fn main() {
         Result.Err(error: val diagnostic) => { if diagnostic.isSourceRejection() { panic("foreign roots minted source authority") } }
         Result.Ok(value: _) => { panic("raw fixture lost its import root") }
     }
+    match raw.rejectNonImplSyntaxItem(item: syntaxFileTopLevel(file: raw.syntax, index: 0U64)) {
+        Result.Err(error: val diagnostic) => { if diagnostic.isSourceRejection() { panic("raw item adapter minted source authority") } }
+        Result.Ok(value: _) => { panic("raw item adapter accepted use") }
+    }
+    match openFrontend(input: <FrontendInput.File path="tests/fixtures/partreject/partfreefn/Main.pw" />, sources: <SourceAccess stdRoot="std/".bytes() />) {
+        Result.Err(error: val diagnostic) => {
+            match diagnostic.failureDomain() { FailureDomain.Unclassified => {} _ => { panic("unrelated part-item refusal was reclassified") } }
+        }
+        Result.Ok(value: _) => { panic("non-impl part item accepted") }
+    }
     for name in ["root_import_type_in_part", "root_use_nested_overloads", "namespacealias"] {
         openFrontend(input: <FrontendInput.File path="tests/fixtures/part/"+name+"/Main.pw" />, sources: <SourceAccess stdRoot="std/".bytes() />).unwrap()
     }

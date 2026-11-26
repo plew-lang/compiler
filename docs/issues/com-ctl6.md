@@ -107,3 +107,24 @@ Native REDs are executed on frozen inputs: the actual Source-input open failure
 still has Unclassified domain; an empty-store SyntaxSlice(count1) panics with
 index-out-of-bounds. Both compiled/linked successfully, so these are target
 failures, not test setup. [RED evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/root-use-refusals/red.json).
+
+## Implemented boundary and current verification
+
+Private parseLoadedSource now owns source bytes, delimiter append, derived base,
+file registration, fresh parse and part admission. PartSyntaxCheck is the shared
+immutable structural decision; Raw public adapters retain Unclassified reports.
+Only its fresh RootOnlyUse verdict creates Source. Other part item failures keep
+their domain; invalid Raw ranges return Internal without indexing.
+
+Native producer, session-open failure retention, Raw/foreign/direct-item and
+same-text non-Source controls pass. An unrelated partfreefn remains Unclassified.
+Bounds RED panic is replaced by Internal. Service RED was an actual domain
+assertion after successful compile/link; the first GREEN setup syntax error is
+not counted as a RED. [Native evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/root-use-refusals/native.json).
+
+Independent implementation review found no must-fix. It checked delimiter, file
+range, rootSeen and pendingRoots. Rejected part now fails before local
+pendingRoots append; the local array never escapes on failure. Its parse-done
+trace is consequently absent, while registered source/syntax prefix is unchanged.
+No extra parse, AST snapshot or event ledger was introduced. Fresh compiler CLI,
+whole reconciliation and formal performance remain required; task stays open.

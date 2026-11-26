@@ -55,7 +55,7 @@ use @Plew/Syntax only { syntaxTraitSupertraitCount, syntaxTraitSupertrait, synta
 use @Plew/Syntax only { syntaxTraitTypeParamSpan, syntaxTraitTypeParamIsSendable }
 use @Plew/Syntax only { MemberId, SyntaxMember, syntaxImplMemberCount, syntaxImplMember, syntaxMember, syntaxMemberTypeParamCount, syntaxMemberTypeParamSpan, syntaxMemberTypeParamIsSendable, syntaxMemberParamCount, syntaxMemberParam, syntaxMemberWhereCount, syntaxMemberWhereParamSpan, syntaxMemberWhereTraitSpan, syntaxMemberWhereType, syntaxMemberWhereTraitType }
 use @Plew/Syntax only { ImplId, SyntaxImpl, syntaxImpl, syntaxImplParamCount, syntaxImplParamSpan, syntaxImplParamIsSendable, syntaxImplTraitArgCount, syntaxImplTraitArg, syntaxImplWhereCount, syntaxImplWhereParamSpan, syntaxImplWhereTraitSpan, syntaxImplWhereType, syntaxImplWhereTraitType }
-use @Plew/Syntax only { Kind, Tok, Lexer, lex, kindCode, rangeEquals, P, SyntaxFile, SyntaxSlice, TopItemId, SyntaxTopItemKind, ImportId, SyntaxImport, TraitId, SyntaxTrait, NewtypeId, SyntaxNewtype, TypeId, SyntaxType, ExprId, SyntaxExpr, SyntaxExprKind, ArgId, SyntaxArg, ParamId, SyntaxParam, MakeFieldId, SyntaxMakeField, BindId, SyntaxBind, PatternId, SyntaxPattern, MatchArmId, SyntaxMatchArm, BlockId, SyntaxBlock, StmtId, SyntaxStmt, SyntaxStmtKind, parseProgramSyntaxInto, syntaxFileTopLevel, syntaxTopItemKind, syntaxTopItemPayload, syntaxTopItemSpan, syntaxImport, syntaxTrait, syntaxTraitTypeParamCount, syntaxNewtype, syntaxType, syntaxTypeNameSegment, syntaxTypeArgCount, syntaxTypeArg, syntaxTypeArgLabel, syntaxTypeViewSource, syntaxViewSourceSegment, syntaxNameSegmentArgLabel, syntaxTypeViewNameCount, syntaxTypeViewName, syntaxTypeProjectionTraitArgCount, syntaxTypeProjectionTraitArg, syntaxTypeProjectionTraitArgLabel, syntaxImportNameCount, syntaxImportNameSpan, syntaxImportNameAliasSpan, syntaxExpr, syntaxExprArgCount, syntaxExprArg, syntaxArg, syntaxExprMakeFieldCount, syntaxExprMakeField, syntaxMakeField, syntaxExprElemCount, syntaxExprElem, syntaxExprDictEntryCount, syntaxExprDictKey, syntaxExprDictValue, syntaxExprParamCount, syntaxExprParam, syntaxExprTypeSegment, syntaxNameSegmentArg, syntaxExprTypeArgCount, syntaxExprTypeArg, syntaxBlock, syntaxBlockStmtCount, syntaxBlockStmt, syntaxStmt, syntaxStmtBindCount, syntaxStmtBind, syntaxBind, syntaxMatchArmCount, syntaxMatchArmAt, syntaxMatchArm, syntaxPattern, syntaxPatternBindCount, syntaxPatternBind, ExprAst, exprAstSpan, StmtAst, BlockAst, PatternAst, MatchArmAst, ArgAst, MakeFieldAst, BindAst, TypeAst, ParamAst, Span, DeclAst, DeclKind, FieldAst, VariantAst, ImplAst, MemberAst, MemberKind, SigAst, TraitAst, ExternAst, ImportAst, DirectiveAst, DeriveReqAst, TopItemAst, emptyExpr }
+use @Plew/Syntax only { Kind, Tok, Lexer, lex, kindCode, rangeEquals, P, SyntaxFile, SyntaxSlice, TopItemId, SyntaxTopItemKind, ImportId, SyntaxImport, TraitId, SyntaxTrait, NewtypeId, SyntaxNewtype, TypeId, SyntaxType, ExprId, SyntaxExpr, SyntaxExprKind, ArgId, SyntaxArg, ParamId, SyntaxParam, MakeFieldId, SyntaxMakeField, BindId, SyntaxBind, PatternId, SyntaxPattern, MatchArmId, SyntaxMatchArm, BlockId, SyntaxBlock, StmtId, SyntaxStmt, SyntaxStmtKind, parseProgramSyntaxInto, syntaxFileTopLevelCount, syntaxFileTopLevel, syntaxTopItemKind, syntaxTopItemPayload, syntaxTopItemSpan, syntaxImport, syntaxTrait, syntaxTraitTypeParamCount, syntaxNewtype, syntaxType, syntaxTypeNameSegment, syntaxTypeArgCount, syntaxTypeArg, syntaxTypeArgLabel, syntaxTypeViewSource, syntaxViewSourceSegment, syntaxNameSegmentArgLabel, syntaxTypeViewNameCount, syntaxTypeViewName, syntaxTypeProjectionTraitArgCount, syntaxTypeProjectionTraitArg, syntaxTypeProjectionTraitArgLabel, syntaxImportNameCount, syntaxImportNameSpan, syntaxImportNameAliasSpan, syntaxExpr, syntaxExprArgCount, syntaxExprArg, syntaxArg, syntaxExprMakeFieldCount, syntaxExprMakeField, syntaxMakeField, syntaxExprElemCount, syntaxExprElem, syntaxExprDictEntryCount, syntaxExprDictKey, syntaxExprDictValue, syntaxExprParamCount, syntaxExprParam, syntaxExprTypeSegment, syntaxNameSegmentArg, syntaxExprTypeArgCount, syntaxExprTypeArg, syntaxBlock, syntaxBlockStmtCount, syntaxBlockStmt, syntaxStmt, syntaxStmtBindCount, syntaxStmtBind, syntaxBind, syntaxMatchArmCount, syntaxMatchArmAt, syntaxMatchArm, syntaxPattern, syntaxPatternBindCount, syntaxPatternBind, ExprAst, exprAstSpan, StmtAst, BlockAst, PatternAst, MatchArmAst, ArgAst, MakeFieldAst, BindAst, TypeAst, ParamAst, Span, DeclAst, DeclKind, FieldAst, VariantAst, ImplAst, MemberAst, MemberKind, SigAst, TraitAst, ExternAst, ImportAst, DirectiveAst, DeriveReqAst, TopItemAst, emptyExpr }
 use ./Ir only { PType, ResolvedViewSource, TypeRef, ProjectionRebuildSource, TypeTerm, TypeArgumentRange, TypeRecordLabelRange, TypeRecordFieldRange, TypeViewIdRange, TypeViewSourceRange, TypeArgumentLabelRange, TypeAssocArgumentRange, TypeAssocArgumentLabelRange, ArcClass, CaptureEntry, Local, TypeInfo, SemanticExprType, SemanticValueBlockTyping, SemanticAggregateKind, SemanticAggregateElement, SemanticAggregate, MakeFieldOrigin, MakeField, MakeFieldRange, Bind, BindRange, Arg, ArgRange, ExprRange, MatchArm, MatchArmRange, TraitBindRange, TraitReqRange, FuncBindRange, FuncTypeRange, FuncParamRange, ConformTypeRange, ConformBindRange, ConformWitnessRange, ConformFuncIdRange, PatInfo, IdentBinding, Block, Param, FieldDef, StructDef, Variant, TraitDef, TraitOwner, DeriveReq, AssocBinding, ChainSite, SyntheticCallKind, SyntheticCallSite, AccessCandidate, AccessUse, SemanticAccess, CallSiteKey, CallTemplateReceiver, CallTemplate, DestructureSite, Conform, ViaWitness, FuncBound, FnInst, InstanceEnvironment, CallResolution, FinalAggregateResolution, FinalReturnResolution, FinalTryResolution, FinalAwaitResolution, BodyInstance, EnumDef, Func, RuntimeIntrinsic, IoIntrinsic, ProcessIntrinsic, FfiIntrinsic, CoreStringIntrinsic, NumericIntrinsic, NumericConversionIntrinsic, NumericWidth, IntegerOperation, FloatWidth, FloatOperation, BoolOperation, NumericOverflow, BufferIntrinsic, RuntimeIntrinsicDeclaration, CallableSourceHead, Callable, UnifyBind, TraitInstanceKey, TraitAssocPredicate, TraitConstraint, WitnessBind, WitnessMatch, StaticConformanceProof, StaticProofInstantiation, TraitProofState, StaticMemberResolution, TraitCycleTerm, TraitCycleNode, TraitCycleBind, TraitCycleSearch, Global, NewtypeDef, Arena, Decls, Modules, MonoWork, TypeCache, InternedSpan, Interner, ParseScratch, Cursor, Expr, Stmt, appendBytes, identUnfilledCode, identValueCode, identFnCode, identTypeQualCode, identUndefCode, identNoTarget, identSelfTarget }
 use ./Mid/Ir only { MidCanonicalArena }
 use ./Ir only { CallParameterBinding, DefaultGeneratorRange, DefaultGeneratorOrigin, CachedCallee }
@@ -901,9 +901,23 @@ struct AuthoredField {
     val spanEnd: U64
 }
 impl AuthoredField { factory }
-// Only direct authored break/continue lowering creates these receipts.
-// The serial belongs to this append-only receipt store, not a mutable cursor.
-// Private Lower registration, separate from the caller-writable provenance store.
+// Loaded-file operands come from one discovery-graph entry.
+enum LoadedSourceRole { Root Part }
+struct LoadedSourceTarget {
+    val path: String
+    val moduleId: U64
+    val syntaxRoot: Bool
+    val role: LoadedSourceRole
+}
+impl LoadedSourceTarget { factory }
+enum PartSyntaxCheck {
+    Allowed
+    RootOnlyUse(offset: U64)
+    OtherPartItem(offset: U64)
+    InvalidRange
+}
+
+// Private Lower registration, separate from caller-writable provenance.
 enum SourceTypeDeclarationState {
     Raw
     Lowering(session: U64)
@@ -2894,28 +2908,16 @@ fn loadFrontendDeclarations(c: inout Comp, input: FrontendInput, sources: Source
             }
             tracePhaseCount(c: inout c, label: "load:read", count: qi)
             val src: String = sources.read(path: path)
-            val sb: Array[U8] = src.bytes()
             tracePhaseCount(c: inout c, label: "load:source-appended", count: qi)
-            if c.arena.bytes.count() > 0 {
-                c.arena.bytes.append(10)
-            }
-            val fileStart: U64 = c.arena.bytes.count()
-            c.appendSrc(from: sb)
-            c.modules.registerSourceFile(start: fileStart, length: c.arena.bytes.count() - fileStart, moduleId: moduleId, path: stringFromBytesUnchecked(path), syntaxRoot: synPath.count() != 0U64 && bytesEq(a: path, b: synPath))
-            // Parse now to discover edges; lower all retained items only after the complete
-            // graph (and therefore all use aliases and declarations) exists.
+            // The local discovery graph supplies membership. The source-input
+            // operation owns append/registration/parse/admission together.
+            val isPart = u64ArrayHas(a: rootSeen, v: moduleId)
+            val target = <LoadedSourceTarget path=stringFromBytesUnchecked(path) moduleId=moduleId syntaxRoot=synPath.count() != 0U64 && bytesEq(a: path, b: synPath) role=if isPart { give <LoadedSourceRole.Part /> } else { give <LoadedSourceRole.Root /> } />
             tracePhaseCount(c: inout c, label: "load:parse-start", count: qi)
-            val roots: SyntaxSlice = try c.parseFileSyntax(fileBytes: sb, fileStart: fileStart)
+            val roots = try c.parseLoadedSource(source: src, target: target)
             tracePhaseCount(c: inout c, label: "load:parse-done", count: qi)
             pendingRoots.append(roots)
-            // spec/15: a `part` file (a non-root file of an already-seen module) may
-            // contain only impl/part/macro items. Reject use before following its
-            // dependency edge or registering bindings; root bindings serve all parts.
-            if u64ArrayHas(a: rootSeen, v: moduleId) {
-                try c.checkPartSyntaxOnly(roots: roots)
-            } else {
-                rootSeen.append(moduleId)
-            }
+            if !isPart { rootSeen.append(moduleId) }
             val baseLen: U64 = dirPrefixLen(path: path)
             // per-package resolution context for THIS file's imports: its own package
             // dir / src root (`/…` imports) and its own declared dependencies (`@dep`

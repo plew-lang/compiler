@@ -2,11 +2,11 @@
 //
 // A module may span several files: `part <path>` stitches a file into the same
 // module (shared scope), `use <path>` pulls in a separate module. Loading is
-// PARSE-DRIVEN: the driver (main) appends each file's source to the arena's byte
+// PARSE-DRIVEN: the loader appends each file's source to the arena's byte
 // buffer, parses it with the shared @Plew/Syntax parser, lowers
 // its items, and follows the `use`/`part` nodes the parser returns to discover
 // more files — no separate directive pre-scan. Every distinct file is appended once
-// (single-arena, single-C-output; no separate compilation). `resolveImport` turns a
+// (single source arena; no per-file compilation). `resolveImport` turns a
 // path node into a file path (`@Std/X`, `/Seg`, `./Name`, `../Name`).
 
 // Parse one already-appended file (its bytes sit at c.arena.bytes[fileStart..]) through the
@@ -31,40 +31,82 @@ pub impl Comp {
         return <Result.Ok value=roots />
     }
 
-    // This deliberately needs no declaration/statement materialization: the
-    // top-level tag, source span, and Published's nested TopItemId completely
-    // determine this rule.
+    // Raw structural entry points do not own source-file membership. Keep
+    // their reports unclassified even if the caller happens to be a loader.
     inout fn checkPartSyntaxOnly(roots: SyntaxSlice) -> Result[(), CompileDiagnostic] {
-        mut val i: U64 = 0U64
-        while i < roots.count {
-            try self.rejectNonImplSyntaxItem(item: syntaxFileTopLevel(file: self.syntax, index: roots.start + i))
-            i += 1U64
-        }
-        return <Result.Ok value=() />
+        return self.rawPartSyntaxResult(check: PartSyntaxCheck.inspect(file: self.syntax, roots: roots))
     }
 
     inout fn rejectNonImplSyntaxItem(item: TopItemId) -> Result[(), CompileDiagnostic] {
-        match syntaxTopItemKind(file: self.syntax, item: item) {
-            SyntaxTopItemKind.Impl => {}
-            SyntaxTopItemKind.Import => {
-                val imp = syntaxImport(file: self.syntax, id: <ImportId raw=syntaxTopItemPayload(file: self.syntax, item: item) />)
-                if imp.isImport {
-                    return <Result.Err error=self.diagnosticAt(offset: imp.span.start, msg: "`use` / `pub use` is allowed only in a module root (spec/15) — move this directive to the root; its bindings are shared by all parts") />
-                }
-                if imp.isPublic { return <Result.Err error=self.partItemDiagnostic(offset: imp.span.start) /> }
-            }
-            SyntaxTopItemKind.Directive => {}
-            SyntaxTopItemKind.Published => {
-                try self.rejectNonImplSyntaxItem(item: <TopItemId raw=syntaxTopItemPayload(file: self.syntax, item: item) />)
-            }
-            _ => {
-                return <Result.Err error=self.partItemDiagnostic(offset: syntaxTopItemSpan(file: self.syntax, item: item).start) />
-            }
-        }
-        return <Result.Ok value=() />
+        return self.rawPartSyntaxResult(check: PartSyntaxCheck.inspectItem(file: self.syntax, item: item))
     }
 
     inout fn partItemDiagnostic(offset: U64) -> CompileDiagnostic {
         return self.diagnosticAt(offset: offset, msg: "a `part` file may contain only `impl` blocks (spec/15) — move this free function / type / extern / top-level `val` to the module root or another module")
+    }
+}
+
+
+impl PartSyntaxCheck {
+    assoc fn rootOnlyUseMessage() -> String {
+        return "`use` / `pub use` is allowed only in a module root (spec/15) — move this directive to the root; its bindings are shared by all parts"
+    }
+    assoc fn inspect(file: SyntaxFile, roots: SyntaxSlice) -> PartSyntaxCheck {
+        val count = syntaxFileTopLevelCount(file: file)
+        if roots.start > count || roots.count > count-roots.start { return <PartSyntaxCheck.InvalidRange /> }
+        for index in 0U64..<roots.count {
+            val check = PartSyntaxCheck.inspectItem(file: file, item: syntaxFileTopLevel(file: file, index: roots.start+index))
+            match check { PartSyntaxCheck.Allowed => {} _ => { return check } }
+        }
+        return <PartSyntaxCheck.Allowed />
+    }
+    assoc fn inspectItem(file: SyntaxFile, item: TopItemId) -> PartSyntaxCheck {
+        return match syntaxTopItemKind(file: file, item: item) {
+            SyntaxTopItemKind.Impl | SyntaxTopItemKind.Directive => <PartSyntaxCheck.Allowed />
+            SyntaxTopItemKind.Import => {
+                val directive = syntaxImport(file: file, id: <ImportId raw=syntaxTopItemPayload(file: file, item: item) />)
+                if directive.isImport { return <PartSyntaxCheck.RootOnlyUse offset=directive.span.start /> }
+                if directive.isPublic { return <PartSyntaxCheck.OtherPartItem offset=directive.span.start /> }
+                give <PartSyntaxCheck.Allowed />
+            }
+            SyntaxTopItemKind.Published => PartSyntaxCheck.inspectItem(file: file, item: <TopItemId raw=syntaxTopItemPayload(file: file, item: item) />)
+            _ => <PartSyntaxCheck.OtherPartItem offset=syntaxTopItemSpan(file: file, item: item).start />
+        }
+    }
+}
+
+impl Comp {
+    inout fn rawPartSyntaxResult(check: PartSyntaxCheck) -> Result[(), CompileDiagnostic] {
+        return match check {
+            PartSyntaxCheck.Allowed => <Result.Ok value=() />
+            PartSyntaxCheck.RootOnlyUse(offset: val offset) => <Result.Err error=self.diagnosticAt(offset: offset, msg: PartSyntaxCheck.rootOnlyUseMessage()) />
+            PartSyntaxCheck.OtherPartItem(offset: val offset) => <Result.Err error=self.partItemDiagnostic(offset: offset) />
+            PartSyntaxCheck.InvalidRange => <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "invalid part syntax range", failureDomain: <FailureDomain.Internal />) />
+        }
+    }
+
+    // This operation consumes source text, never an external AST or report.
+    // The load graph supplies Root/Part; parsing establishes the syntax being
+    // checked. No source-admission enum or mutable Comp flag grants authority.
+    inout fn parseLoadedSource(source: String, target: LoadedSourceTarget) -> Result[SyntaxSlice, CompileDiagnostic] {
+        val bytes = source.bytes()
+        if self.arena.bytes.count() > 0U64 { self.arena.bytes.append(10U8) }
+        val start = self.arena.bytes.count()
+        self.appendSrc(from: bytes)
+        self.modules.registerSourceFile(start: start, length: self.arena.bytes.count()-start, moduleId: target.moduleId, path: target.path, syntaxRoot: target.syntaxRoot)
+        val roots = try self.parseFileSyntax(fileBytes: bytes, fileStart: start)
+        match target.role {
+            LoadedSourceRole.Root => {}
+            LoadedSourceRole.Part => {
+                val check = PartSyntaxCheck.inspect(file: self.syntax, roots: roots)
+                match check {
+                    PartSyntaxCheck.RootOnlyUse(offset: val offset) => {
+                        return <Result.Err error=self.diagnosticAt(offset: offset, msg: PartSyntaxCheck.rootOnlyUseMessage(), failureDomain: <FailureDomain.Source />) />
+                    }
+                    _ => { try self.rawPartSyntaxResult(check: check) }
+                }
+            }
+        }
+        return <Result.Ok value=roots />
     }
 }
