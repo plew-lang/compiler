@@ -13,19 +13,23 @@ tags: [diagnostics, frontend, driver, verification]
 
 ## Current boundary
 
-This parent remains open. Current normal20261125T185842-test-f4334c completed
-with264 failures, invariant inputs and3313 identical-source cases. No new failures;
-met-mb9u resolves13 loop-target refusals from the effective277 baseline. The prior
-physical278 additionally included an already-reconciled Array.count golden.
-[Current whole reconciliation](../../../evidence/rejection-domains/diagnostic-domain-implementation/loop-transfer-refusals/whole.json).
+This parent remains open. Current normal20261125T225114-test-caf022 completed
+with259 failures, invariant inputs and3313 identical-source cases. No new
+failures or changed remaining reasons; met-un2r resolves exactly five typed
+visibility rejects from264. [Current whole](../../../evidence/rejection-domains/diagnostic-domain-implementation/type-visibility-refusals/whole.json).
 
-Named/qualified non-value transport met-eqw2 and loop-target refusal met-mb9u are
-independently closed finite boundaries. Current formal G2/median7.447430<=7.5
-certifies the candidate, not this parent or phase3. Current carrier and retention
-are in the [worklog](../../../agents/worklog.md); main/seed/tracked bin promotion
-remains separate. Residual message groupings are investigative hints, never
-Source admission authority. Reconcile actual producer boundaries and existing
-owners before parent closure; completed dependency metadata alone is insufficient.
+met-un2r has independent finite technical certification; publication precedes
+closure. Its dependent physical write-path input repair com-p2qh is closed.
+Formal G2/median7.361221<=7.5 certifies the candidate, not this parent or phase3.
+The saved measured ff4 carrier and frozen std are the next development input;
+current adoption/retention is in the [worklog](../../../agents/worklog.md).
+main/seed/tracked-bin promotion remains separate.
+
+Residual259 receipts split into run24/reject206/partreject29. Reconcile actual
+producer boundaries and existing owners before selecting another finite child;
+not every failure belongs to this transport parent. Message groupings remain
+investigative hints, never Source admission authority. Closed dependency metadata
+alone is insufficient for parent closure.
 
 ## Contract and audit evidence
 
