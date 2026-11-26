@@ -67,64 +67,44 @@ and root-use cases are in the type-visibility-refusals whole reconciliation.
 The stderr histogram is only a hint; no complete producer audit of259 is claimed.
 
 
-## Executed RED and selected design
+## Outcome and proof
 
-Fixed ff4 reproduces all4 cases in check/AOT/ORC: correct diagnostic/status1,
-actual channel Unclassified. Three root/shared-part positives pass9 modes with
-expected ORC output. Inputs including frozen std, Syntax and fixture files are
-unchanged. CLI result: root-use-refusal-cli-red-v1.
+Product324c3cfc closes the selected boundary. Private parseLoadedSource owns
+source bytes, delimiter append, derived base, registration, fresh parse and part
+admission. Shared immutable PartSyntaxCheck is the single structural authority.
+Raw adapters never gain Source; only fresh RootOnlyUse creates Source. Other
+part diagnostics preserve their domains. Invalid Raw slices return Internal.
+This is the finite source-input contract; no public origin flag, AST snapshot,
+semantic session token or event ledger grants admission.
 
-Actual route: loadFrontendDeclarations reads one source String, appends its
-bytes, registers the file and parseFileSyntax constructs Lexer/P from those
-bytes. The parser's own syntax-error contract is already Source. Immediately
-following parse, loader-local rootSeen/moduleId determines part membership;
-generated siblings enter that same work queue. checkPartSyntaxOnly is a public
-Raw SyntaxSlice validator and cannot acquire Source merely from current Comp
-state. Published recursively reaches the underlying Import node. No session is
-returned when CompilerSession.open fails here; do not invent lazy-body retries.
+- Actual source refusal and session failure retention have meaningful native
+  RED/GREEN. Raw/foreign/direct-item/same-text other-domain and unrelated
+  partfreefn controls preserve non-Source. Invalid-slice panic RED becomes
+  Internal. Setup syntax failure was not counted as RED.
+- Fresh CLI21 and saved measured-carrier CLI21 pass: four refusals across
+  check/AOT/ORC and nine root/shared-part positives.
+- Same-source medians7.270879→7.251437s, all LLVM identical. Formal
+  20261126T010148-self-host-290d36 reaches G2, median7.316513<=7.5s.
+- Whole20261126T011814-test-66a528 completes3313 identical-source cases with
+  unchanged inputs:259→255 failures, exactly four target fixes, no added
+  failures, changed remaining reasons, skipped/removed/added cases.
+- Independent qualified_member_plan accepts product and all finite guarantees.
+  On failed part admission, local pendingRoots append and parse-done trace
+  no longer occur; no array escapes and source/syntax prefix is unchanged.
 
-Independently reviewed approach: private source-input operation owns append,
-file registration, fresh parse and part-rule check for that same source String
-and loader-local Root/Part target. It does not accept an external SyntaxSlice,
-fileStart or report for promotion. Shared structural core consumes immutable
-syntax/root/item values, returns a typed rule verdict, and remains the one
-checker. Public structural APIs map it to their Raw reports. The fresh source
-operation creates Source only for its actual RootOnlyUse verdict; other part
-reports and unrelated Source/Input/Tool/Internal/Limit branches retain their
-existing domains. No body/type seal, permanent SyntaxFile snapshot or event
-ledger is needed. Private target data is from the load graph, not an editable
-Comp flag or Source-admission enum.
+[Canonical evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/root-use-refusals/native.json),
+[fresh gates](../../../evidence/rejection-domains/diagnostic-domain-implementation/root-use-refusals/fresh.json),
+[formal](../../../evidence/rejection-domains/diagnostic-domain-implementation/root-use-refusals/formal.json),
+[whole](../../../evidence/rejection-domains/diagnostic-domain-implementation/root-use-refusals/whole.json),
+[carrier](../../../evidence/rejection-domains/diagnostic-domain-implementation/root-use-refusals/carrier.json).
 
-com-qt11 retains broader parser/structural API capability narrowing. The new
-pure structural core naturally removes Comp from that decision; this child does
-not close its remaining entry/diagnostic responsibilities. Direct opaque node
-readers still require valid IDs; broader reader hardening remains with that API
-owner. New structural slice range checks must fail Internal rather than panic or
-Source, and have their own native RED before repair.
+Completed native/comparison generated outputs27 files/963347494 bytes were
+retired after independent review and evidence preservation. Source snapshots,
+small RED logs/results/manifests/runners, latest whole255 failure payloads,
+formal generations, old/new frozen carriers and required native backend archive
+remain through parent reconciliation; then reassess reproduction needs.
+[Retirement](../../../evidence/rejection-domains/diagnostic-domain-implementation/root-use-refusals/retirement.json).
 
-
-Native REDs are executed on frozen inputs: the actual Source-input open failure
-still has Unclassified domain; an empty-store SyntaxSlice(count1) panics with
-index-out-of-bounds. Both compiled/linked successfully, so these are target
-failures, not test setup. [RED evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/root-use-refusals/red.json).
-
-## Implemented boundary and current verification
-
-Private parseLoadedSource now owns source bytes, delimiter append, derived base,
-file registration, fresh parse and part admission. PartSyntaxCheck is the shared
-immutable structural decision; Raw public adapters retain Unclassified reports.
-Only its fresh RootOnlyUse verdict creates Source. Other part item failures keep
-their domain; invalid Raw ranges return Internal without indexing.
-
-Native producer, session-open failure retention, Raw/foreign/direct-item and
-same-text non-Source controls pass. An unrelated partfreefn remains Unclassified.
-Bounds RED panic is replaced by Internal. Service RED was an actual domain
-assertion after successful compile/link; the first GREEN setup syntax error is
-not counted as a RED. [Native evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/root-use-refusals/native.json).
-
-Independent implementation review found no must-fix. It checked delimiter, file
-range, rootSeen and pendingRoots. Rejected part now fails before local
-pendingRoots append; the local array never escapes on failure. Its parse-done
-trace is consequently absent, while registered source/syntax prefix is unchanged.
-No extra parse, AST snapshot or event ledger was introduced. Fresh compiler CLI,
-whole reconciliation and formal performance remain required; task stays open.
+com-w4c2 semantics remain closed. com-qt11 retains broader parser/Raw API
+narrowing, including unchecked direct opaque-node reader preconditions.
+com-yeua, residual255, phase3, main green and seed promotion are not certified.

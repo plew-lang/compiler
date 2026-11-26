@@ -13,22 +13,21 @@ tags: [diagnostics, frontend, driver, verification]
 
 ## Current boundary
 
-This parent remains open. Current normal20261125T225114-test-caf022 completed
-with259 failures, invariant inputs and3313 identical-source cases. No new
-failures or changed remaining reasons; met-un2r resolves exactly five typed
-visibility rejects from264. [Current whole](../../../evidence/rejection-domains/diagnostic-domain-implementation/type-visibility-refusals/whole.json).
+This parent remains open. Current normal20261126T011814-test-66a528 completed
+with255 failures, invariant inputs and3313 identical-source cases. No new
+failures or changed remaining reasons; com-ctl6 resolves exactly four root-only
+use transport refusals from259. [Current whole](../../../evidence/rejection-domains/diagnostic-domain-implementation/root-use-refusals/whole.json).
 
-met-un2r is independently certified and closed after evidence publication. Its dependent physical write-path input repair com-p2qh is closed.
-Formal G2/median7.361221<=7.5 certifies the candidate, not this parent or phase3.
-The saved measured ff4 carrier and frozen std are the next development input;
-current adoption/retention is in the [worklog](../../../agents/worklog.md).
-main/seed/tracked-bin promotion remains separate.
+met-un2r, its performance dependency com-p2qh and root-use child com-ctl6 have
+independent finite recognition. FormalG2/median7.316513<=7.5 certifies the current
+candidate, not this parent or phase3. The saved measured fffc4df776f2 carrier
+and frozen std are the next development input; adoption/retention are in the
+[worklog](../../../agents/worklog.md). main/seed/tracked-bin remain separate.
 
-Residual259 receipts split into run24/reject206/partreject29. Reconcile actual
-producer boundaries and existing owners before selecting another finite child;
-not every failure belongs to this transport parent. Message groupings remain
-investigative hints, never Source admission authority. Closed dependency metadata
-alone is insufficient for parent closure.
+Reconcile actual residual producer boundaries and existing owners before
+selecting another finite child; not every failure belongs to this parent.
+Message groups are investigative hints, never Source admission authority.
+Closed dependency metadata alone is insufficient for parent closure.
 
 ## Contract and audit evidence
 
