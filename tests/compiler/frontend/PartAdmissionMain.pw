@@ -1,0 +1,60 @@
+// Appended to the real Frontend root by the private diagnostic runner.
+fn main() {
+    mut val missingSource = 0U64
+    for source in ["fn rejected() {{}}", "struct Rejected {{}}", "extern(c) {{ fn rejected() }}", "val rejected: I64 = 1I64", "pub fn rejected() {{}}"] {
+        mut val compiler = <Comp />
+        val roots = compiler.parseLoadedSource(source: source, target: <LoadedSourceTarget path="Root.pw" moduleId=0U64 syntaxRoot=false role=<LoadedSourceRole.Root /> />).unwrap()
+        match PartSyntaxCheck.inspect(file: compiler.syntax, roots: roots) {
+            PartSyntaxCheck.OtherPartItem(offset: _) => {}
+            _ => { panic("fixture did not reach non-impl structural branch") }
+        }
+        val raw = match compiler.checkPartSyntaxOnly(roots: roots) {
+            Result.Err(error: val diagnostic) => diagnostic
+            Result.Ok(value: _) => { panic("Raw non-impl part accepted") }
+        }
+        if raw.isSourceRejection() { panic("Raw part query minted source authority") }
+        match compiler.rejectNonImplSyntaxItem(item: syntaxFileTopLevel(file: compiler.syntax, index: roots.start)) {
+            Result.Err(error: val diagnostic) => { if diagnostic.isSourceRejection() { panic("Raw item minted source authority") } }
+            Result.Ok(value: _) => { panic("Raw item accepted non-impl") }
+        }
+        mut val foreign = <Comp />
+        val foreignRoots = foreign.parseFileSyntax(fileBytes: "impl Other {{}}".bytes(), fileStart: 0U64).unwrap()
+        match compiler.checkPartSyntaxOnly(roots: foreignRoots) {
+            Result.Err(error: val diagnostic) => { if diagnostic.isSourceRejection() { panic("foreign roots minted source authority") } }
+            Result.Ok(value: _) => { panic("foreign roots changed current structural decision") }
+        }
+        val refusal = match compiler.parseLoadedSource(source: source, target: <LoadedSourceTarget path="Part.pw" moduleId=0U64 syntaxRoot=false role=<LoadedSourceRole.Part /> />) {
+            Result.Err(error: val diagnostic) => diagnostic
+            Result.Ok(value: _) => { panic("source non-impl part accepted") }
+        }
+        if refusal.message() != raw.message() { panic("owned admission changed the part rule") }
+        if !refusal.isSourceRejection() { missingSource += 1U64 }
+        compiler.pendingDiagnostics.append(refusal)
+        val drained = compiler.takeDiagnostics()
+        if drained.count() != 1U64 || drained[0U64].isSourceRejection() != refusal.isSourceRejection() { panic("drain changed part refusal") }
+        for domain in [<FailureDomain.Internal />, <FailureDomain.Input />, <FailureDomain.Tool />, <FailureDomain.Limit />, <FailureDomain.Unclassified />] {
+            val injected = compiler.diagnosticAt(offset: 0U64, msg: refusal.message(), failureDomain: domain)
+            if ownedFrontendFailure(c: compiler, diagnostic: injected).isSourceRejection() { panic("same-text helper failure promoted") }
+        }
+    }
+    for source in ["impl Root {{}}", "part ./Child", "@[Eq]"] {
+        mut val compiler = <Comp />
+        compiler.parseLoadedSource(source: source, target: <LoadedSourceTarget path="Part.pw" moduleId=0U64 syntaxRoot=false role=<LoadedSourceRole.Part /> />).unwrap()
+    }
+    for name in ["partfreefn", "generated_part_nonimpl"] {
+        mut val compiler = <Comp />
+        match analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.File path="tests/fixtures/partreject/"+name+"/Main.pw" />, sources: <SourceAccess stdRoot="std/".bytes() />) {
+            Result.Err(error: val diagnostic) => {
+                if diagnostic.message() != PartSyntaxCheck.otherPartItemMessage() { panic("actual part failed for another reason: "+diagnostic.message()) }
+                val filename = if name == "partfreefn" { give "Helper.pw" } else { give "Main.gen.pw" }
+                match diagnostic.location() {
+                    DiagnosticLocation.File(path: val path, line: val line) => { if path != "tests/fixtures/partreject/"+name+"/"+filename || line != 2I64 { panic("part diagnostic left the rejected file: "+path) } }
+                    _ => { panic("part diagnostic lost file location") }
+                }
+                if !diagnostic.isSourceRejection() { missingSource += 1U64 }
+            }
+            Result.Ok(value: _) => { panic("actual non-impl part accepted") }
+        }
+    }
+    if missingSource != 0U64 { panic("fresh non-impl part refusals lost Source") }
+}

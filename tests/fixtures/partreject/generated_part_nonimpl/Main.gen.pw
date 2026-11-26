@@ -1,0 +1,2 @@
+// Generated parts obey the same impl-only admission as handwritten parts.
+fn rejectedGeneratedFunction() {}

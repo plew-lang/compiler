@@ -42,12 +42,15 @@ pub impl Comp {
     }
 
     inout fn partItemDiagnostic(offset: U64) -> CompileDiagnostic {
-        return self.diagnosticAt(offset: offset, msg: "a `part` file may contain only `impl` blocks (spec/15) — move this free function / type / extern / top-level `val` to the module root or another module")
+        return self.diagnosticAt(offset: offset, msg: PartSyntaxCheck.otherPartItemMessage())
     }
 }
 
 
 impl PartSyntaxCheck {
+    assoc fn otherPartItemMessage() -> String {
+        return "a `part` file may contain only `impl` blocks (spec/15) — move this free function / type / extern / top-level `val` to the module root or another module"
+    }
     assoc fn rootOnlyUseMessage() -> String {
         return "`use` / `pub use` is allowed only in a module root (spec/15) — move this directive to the root; its bindings are shared by all parts"
     }
@@ -102,6 +105,9 @@ impl Comp {
                 match check {
                     PartSyntaxCheck.RootOnlyUse(offset: val offset) => {
                         return <Result.Err error=self.diagnosticAt(offset: offset, msg: PartSyntaxCheck.rootOnlyUseMessage(), failureDomain: <FailureDomain.Source />) />
+                    }
+                    PartSyntaxCheck.OtherPartItem(offset: val offset) => {
+                        return <Result.Err error=self.diagnosticAt(offset: offset, msg: PartSyntaxCheck.otherPartItemMessage(), failureDomain: <FailureDomain.Source />) />
                     }
                     _ => { try self.rawPartSyntaxResult(check: check) }
                 }

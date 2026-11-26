@@ -37,7 +37,7 @@ fn main() {
     }
     match openFrontend(input: <FrontendInput.File path="tests/fixtures/partreject/partfreefn/Main.pw" />, sources: <SourceAccess stdRoot="std/".bytes() />) {
         Result.Err(error: val diagnostic) => {
-            match diagnostic.failureDomain() { FailureDomain.Unclassified => {} _ => { panic("unrelated part-item refusal was reclassified") } }
+            if !diagnostic.isSourceRejection() { panic("source non-impl part refusal lost its origin") }
         }
         Result.Ok(value: _) => { panic("non-impl part item accepted") }
     }

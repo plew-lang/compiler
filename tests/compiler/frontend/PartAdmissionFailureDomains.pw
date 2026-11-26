@@ -1,0 +1,33 @@
+use ../../../src/Frontend only { FrontendInput, openFrontend }
+use ../../../src/CheckedProgram only { CompilerSession, CompilerSessionResult }
+use ../../../src/SourceAccess only { SourceAccess }
+use ../../../src/Diag only { CompileDiagnostic, DiagnosticLocation }
+
+fn retained(diagnostic: CompileDiagnostic) -> CompileDiagnostic { return diagnostic }
+
+fn checkPartAdmissionDiagnostic(diagnostic: CompileDiagnostic, name: String) {
+    if diagnostic.message() != "a `part` file may contain only `impl` blocks (spec/15) — move this free function / type / extern / top-level `val` to the module root or another module" { panic("wrong part failure: "+diagnostic.message()) }
+    val filename = if name == "partfreefn" { give "Helper.pw" } else { give "Main.gen.pw" }
+    match diagnostic.location() {
+        DiagnosticLocation.File(path: val path, line: val line) => { if path != "tests/fixtures/partreject/"+name+"/"+filename || line != 2I64 { panic("part diagnostic left the rejected file: "+path) } }
+        _ => { panic("part diagnostic lost file location") }
+    }
+}
+
+fn main() {
+    for name in ["partfreefn", "generated_part_nonimpl"] {
+        val input = <FrontendInput.File path="tests/fixtures/partreject/"+name+"/Main.pw" />
+        for attempt in 0U64..<2U64 {
+            val failure = match CompilerSession.open(input: input, sources: <SourceAccess stdRoot="std/".bytes() />) {
+                CompilerSessionResult.Failure(diagnostic: val diagnostic) => retained(diagnostic: diagnostic)
+                CompilerSessionResult.Success(session: _) => { panic("invalid part published a session") }
+            }
+            checkPartAdmissionDiagnostic(diagnostic: failure, name: name)
+            if !failure.isSourceRejection() { panic("session open result lost source part failure") }
+            match openFrontend(input: input, sources: <SourceAccess stdRoot="std/".bytes() />) {
+                Result.Err(error: val diagnostic) => { checkPartAdmissionDiagnostic(diagnostic: diagnostic, name: name) if !diagnostic.isSourceRejection() || diagnostic.message() != failure.message() { panic("eager adapter changed retained part failure") } }
+                Result.Ok(value: _) => { panic("invalid part became checked") }
+            }
+        }
+    }
+}

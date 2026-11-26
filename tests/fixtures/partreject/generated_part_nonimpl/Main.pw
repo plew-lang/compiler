@@ -1,0 +1,4 @@
+use @Std/Core only { Eq }
+@[Eq]
+struct Item {}
+fn main() {}
