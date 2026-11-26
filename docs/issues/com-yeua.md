@@ -13,21 +13,22 @@ tags: [diagnostics, frontend, driver, verification]
 
 ## Current boundary
 
-This parent remains open. Current normal20261126T011814-test-66a528 completed
-with255 failures, invariant inputs and3313 identical-source cases. No new
-failures or changed remaining reasons; com-ctl6 resolves exactly four root-only
-use transport refusals from259. [Current whole](../../../evidence/rejection-domains/diagnostic-domain-implementation/root-use-refusals/whole.json).
+This parent remains open. Current normal20261126T030736-test-e1230a completes
+3314 cases (3313 shared source hashes unchanged plus new generated-part PASS),
+with254 failures and invariant inputs. met-jjsi resolves existing partfreefn
+only; no new failures or changed remaining reasons.
+[Current whole](../../../evidence/rejection-domains/diagnostic-domain-implementation/part-item-refusals/whole.json).
 
-met-un2r, its performance dependency com-p2qh and root-use child com-ctl6 have
-independent finite recognition. FormalG2/median7.316513<=7.5 certifies the current
-candidate, not this parent or phase3. The saved measured fffc4df776f2 carrier
-and frozen std are the next development input; adoption/retention are in the
-[worklog](../../../agents/worklog.md). main/seed/tracked-bin remain separate.
+met-un2r, com-p2qh, com-ctl6 and met-jjsi have independent finite recognition.
+FormalG2/median7.350680<=7.5 certifies the current product2d482923, not this
+parent or phase3. Saved measured8f5e342f1577 and frozen std are next development
+inputs; adoption/retention are in the [worklog](../../../agents/worklog.md).
+main/seed/tracked-bin remain separate.
 
-Reconcile actual residual producer boundaries and existing owners before
-selecting another finite child; not every failure belongs to this parent.
-Message groups are investigative hints, never Source admission authority.
-Closed dependency metadata alone is insufficient for parent closure.
+Reconcile residual producer boundaries and existing owners before selecting
+another finite child; not every failure belongs to this parent. Message groups
+are investigative hints, never Source authority. Closed dependencies alone
+cannot establish parent completion.
 
 ## Contract and audit evidence
 
