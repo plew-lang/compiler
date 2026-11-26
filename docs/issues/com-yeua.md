@@ -18,8 +18,7 @@ with259 failures, invariant inputs and3313 identical-source cases. No new
 failures or changed remaining reasons; met-un2r resolves exactly five typed
 visibility rejects from264. [Current whole](../../../evidence/rejection-domains/diagnostic-domain-implementation/type-visibility-refusals/whole.json).
 
-met-un2r has independent finite technical certification; publication precedes
-closure. Its dependent physical write-path input repair com-p2qh is closed.
+met-un2r is independently certified and closed after evidence publication. Its dependent physical write-path input repair com-p2qh is closed.
 Formal G2/median7.361221<=7.5 certifies the candidate, not this parent or phase3.
 The saved measured ff4 carrier and frozen std are the next development input;
 current adoption/retention is in the [worklog](../../../agents/worklog.md).

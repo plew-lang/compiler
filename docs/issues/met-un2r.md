@@ -1,6 +1,6 @@
 ---
 id: met-un2r
-status: in_progress
+status: closed
 deps: [com-p2qh]
 links: []
 created: 2026-11-25T20:13:58Z
@@ -115,7 +115,7 @@ qualified_member_plan independently reviewed producer-to-final-consumer coverage
 corrected its unproven public-bounds-mutation classification, required and then
 accepted the request/occurrence controls, and certifies this finite repair
 technically closable after whole/formal reconciliation. No mandatory guarantee
-or confirmed code violation remains. Publication precedes status closure.
+or confirmed code violation remains. Closed after signed evidence publication and independent final record review.
 
 163 regenerable diagnostic outputs (5.164GiB) are retired after retaining hashes,
 IR boundary excerpts, terminal records, runners, RED logs and source/std/manifest
