@@ -1,0 +1,13 @@
+// Unvalidated structural ranges are not source-language rejection evidence.
+fn main() {
+    mut val compiler = <Comp />
+    for roots in [<SyntaxSlice start=0U64 count=1U64 />, <SyntaxSlice start=18446744073709551615U64 count=2U64 />] {
+        match compiler.checkPartSyntaxOnly(roots: roots) {
+            Result.Err(error: val diagnostic) => {
+                match diagnostic.failureDomain() { FailureDomain.Internal => {} _ => { panic("invalid syntax range lost internal classification") } }
+                if diagnostic.isSourceRejection() { panic("invalid syntax range classified as source") }
+            }
+            Result.Ok(value: _) => { panic("invalid syntax range accepted") }
+        }
+    }
+}

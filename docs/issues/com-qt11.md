@@ -30,3 +30,17 @@ Changes to language visibility/use/part/macro semantics, source acquisition, par
 [Scoped intake outcome](../../../evidence/existing-feature-conformance/audit-intake/api-session-and-inputs.json) preserves every main/mixed role and the normative reason. Existing parser and structural impl-only part admission need mutable syntax construction or readonly graph/source provenance, not semantic/Mid/native authority. No grammar, visibility, use or macro change.
 
 The original audit-time independence does not waive this implementation admission. Keep the original finite guarantee, caller/delegate/control and excluded optional scopes. This is assignment only, not product repair/GREEN.
+
+
+## Coordinated finite source-input transport repair
+
+com-ctl6 owns the root-only-use refusal transport through the actual loaded
+source parse/admission operation. Its shared structural core is being narrowed
+to immutable SyntaxFile plus roots/item values. Public adapters and the other
+parser/diagnostic capability work remain here; do not close this task from that
+finite change. Its native RED also demonstrates public checkPartSyntaxOnly
+panics on an unvalidated empty-store slice. The local slice range guard is
+included there. Direct TopItemId readers still have unchecked valid-ID
+preconditions (SyntaxFile.topItemKind indexes private topItems); investigate
+needed validity/owner API contracts here rather than silently claiming that all
+raw Syntax IDs are hardened by the slice fix.

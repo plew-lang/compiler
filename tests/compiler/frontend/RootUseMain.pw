@@ -1,0 +1,37 @@
+// Source-input parsing owns part admission; raw syntax queries do not.
+fn main() {
+    for name in ["part_use_selective", "part_pub_use_nested", "generated_part_use", "part_use_namespace_alias"] {
+        val input = <FrontendInput.File path="tests/fixtures/partreject/"+name+"/Main.pw" />
+        mut val compiler = <Comp />
+        val diagnostic = match analyzeFrontendForRequests(c: inout compiler, input: input, sources: <SourceAccess stdRoot="std/".bytes() />) {
+            Result.Err(error: val diagnostic) => diagnostic
+            Result.Ok(value: _) => { panic("part use accepted") }
+        }
+        if !diagnostic.isSourceRejection() { panic("real parsed part input lost source rejection: "+diagnostic.message()) }
+        val text = "use @Std/Io only {{ print }}"
+        val start = compiler.arena.bytes.count()
+        compiler.appendSrc(from: text.bytes())
+        compiler.modules.registerSourceFile(start: start, length: text.bytes().count(), moduleId: 999U64, path: "Raw.pw")
+        val roots = compiler.parseFileSyntax(fileBytes: text.bytes(), fileStart: start).unwrap()
+        val raw = match compiler.checkPartSyntaxOnly(roots: roots) { Result.Err(error: val raw) => raw Result.Ok(value: _) => { panic("raw checker accepted part use") } }
+        if raw.isSourceRejection() || compiler.sourceFailureHasOwner(diagnostic: raw) || raw.message() != diagnostic.message() { panic("raw AST borrowed source input authority") }
+        compiler.pendingDiagnostics.append(diagnostic)
+        val drained = compiler.takeDiagnostics()
+        if drained.count() != 1U64 || !drained[0U64].isSourceRejection() || drained[0U64].message() != diagnostic.message() { panic("drain lost source input failure") }
+        for domain in [<FailureDomain.Internal />, <FailureDomain.Input />, <FailureDomain.Tool />, <FailureDomain.Limit />, <FailureDomain.Unclassified />] {
+            val injected = compiler.diagnosticAt(offset: start, msg: diagnostic.message(), failureDomain: domain)
+            if ownedFrontendFailure(c: compiler, diagnostic: injected).isSourceRejection() { panic("source input context promoted unrelated same-text failure") }
+        }
+    }
+    mut val raw = <Comp />
+    raw.parseFileSyntax(fileBytes: "use @Std/Io only {{ print }}".bytes(), fileStart: 0U64).unwrap()
+    mut val foreign = <Comp />
+    val foreignRoots = foreign.parseFileSyntax(fileBytes: "struct Foreign {{}}".bytes(), fileStart: 0U64).unwrap()
+    match raw.checkPartSyntaxOnly(roots: foreignRoots) {
+        Result.Err(error: val diagnostic) => { if diagnostic.isSourceRejection() { panic("foreign roots minted source authority") } }
+        Result.Ok(value: _) => { panic("raw fixture lost its import root") }
+    }
+    for name in ["root_import_type_in_part", "root_use_nested_overloads", "namespacealias"] {
+        openFrontend(input: <FrontendInput.File path="tests/fixtures/part/"+name+"/Main.pw" />, sources: <SourceAccess stdRoot="std/".bytes() />).unwrap()
+    }
+}
