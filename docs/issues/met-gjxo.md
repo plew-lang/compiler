@@ -21,9 +21,9 @@ number or body demand. Source field unification is specified in spec05;
 frontend/declaration handoffs require valid source declarations before successful
 publication. Unused imported declarations are not an exception.
 
-Fixed productc6720051/594990c485aa has18 executed controls: all9 local
-invalid shapes reject Unclassified, while identical9 imported shapes succeed
-in check/AOT/ORC.
+Fixed productc6720051/594990c485aa has48 executed controls:24 legal passes,
+12 local invalid-shape rejections lacking Source classification and12 imported
+false successes, across check/AOT/ORC.
 [Evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/declaration-labels/README.md).
 Actual checkDeclShapes filters struct/enum loops to module0.
 
@@ -69,23 +69,19 @@ finite producer repair for its declaration-label refusal channel. com-9sa5
 owns the existing broader verifier/input audit; preserve its other functions,
 remaining callers and guarantees. No parameter/type-name duplicate overhaul,
 extern ABI/layout redesign, all-shape audit, new feature or language decision.
-No product fix or GREEN is claimed.
-
 Independent qualified_member_plan accepts this finite scope and its separation
-from behavior-preserving API narrowing. It requires actual declaration ownership
-and gen/synthetic path study before implementation.
+from behavior-preserving API narrowing. Actual declaration ownership and
+gen/synthetic registration paths were inspected before implementation.
 
-## In-progress implementation boundary
+## Implemented boundary and verification
 
 The 48-control real-CLI matrix is RED against saved594990c485aa: 24 legal
 controls pass; 24 invalid-shape controls fail acceptance/domain assertions.
 All input hashes remain unchanged. The pure comparison core's executable
 controls pass, and the whole compiler source passes `--check` with this carrier.
-The first fresh snapshot built successfully (20261127T045959-build-8e0485)
-and passed all48 real-CLI controls with unchanged inputs. Its product precedes
-the private verifier skip refinement; the final source snapshot v2 also built successfully
-(20261127T050944-build-2c10ca), with its own48 controls passing. No final
-certification is claimed. Setup mistakes in the newly written core harness were corrected
+The final source snapshot v2 built successfully
+(20261127T050944-build-2c10ca), with48 public controls passing. Final finite
+recognition is recorded below. Setup mistakes in the newly written core harness were corrected
 and do not count as RED.
 
 The private parsed-item lowering chain carries the existing admission origin to
@@ -100,9 +96,9 @@ private fresh-construction call chain, not a persisted scope-number capability.
 Structural review found the four nonzero-scope nominal registration paths all
 covered by the registration-before-publication check. Gen suppression remains.
 
-Interim independent review accepts the private Source/Raw call boundary and
-registration position, and the subsequent private verifier handoff, but requests native controls
-before final certification. Diagnostic order for multiply
+Independent review accepts the private Source/Raw call boundary,
+registration position and private verifier handoff. Its required native
+controls are recorded below. Diagnostic order for multiply
 invalid enums is now all variant names before payloads; the complete variant-name group is checked before any payload group,
 so the single comparison core owns each complete group. This only changes
 which violation is reported first when both kinds are already invalid;
@@ -125,6 +121,27 @@ Same-source alternating comparison: old594990c485aa median7.393742s versus
 new fresh v2 median7.346164s; all6 LLVM hashes equal. This does not establish a
 performance improvement; it finds no measured regression. The exact formal
 measured binary da2c8c0a82e9 passes48/48 public controls. Generation20261127T053546-gen-54ed7b passed with invariant inputs. Whole
-20261127T053719-test-48c29a is running against the formal measured binary;
-case/source identity and the existing252-failure baseline require reconciliation.
-Final review and cleanup remain open.
+20261127T053719-test-48c29a completed with unchanged inputs/no worker failure.
+All3314 cases and source hashes match the252-failure baseline:249 remain,
+exactly duplicate_enum_variant/duplicate_struct_field/duplicate_variant_field
+resolved, no new failures or other aggregate result changes, no skips or
+added/removed cases. This is not whole-green. Final recognition and retention disposition are recorded below.
+
+## Final finite certification
+
+qualified_member_plan independently reviewed source86906902, task/design,
+Source/Raw/core/publication/forwarding, all finite native/public/session
+scenarios, formal<=7.5, gen and whole reconciliation, and accepts met-gjxo
+only. No confirmed code violations or missing mandatory guarantees remain.
+The separate corpus-coherence investigation is open met-wuzv, not the closed
+editorial met-m7wx; its exact failure material remains retained. Broader
+com-9sa5, remaining249 failures, parents/phase3/main green are unrecognized.
+
+After review19 regenerable native/comparison products (846459028bytes) were
+retired, preserving sources/input/result/log evidence and the unresolved
+debug failure. Formal generations and measured da2c8c0a82e9/std remain; saved
+carrier48 controls pass. Old comparative carriers and latest249 failure
+payloads remain through parent reconciliation, then their owners recheck
+retention. Canonical evidence README indexes the final guarantees; obsolete
+18-case/interim duplicate receipts were removed after transfer. Closure
+bookkeeping follows signed evidence/task commits and pushes.
