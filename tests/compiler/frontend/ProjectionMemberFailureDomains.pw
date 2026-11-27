@@ -33,7 +33,7 @@ fn main() {
     val input = <FrontendInput.File path="tests/compiler/frontend/fixtures/ProjectionMembers/Body.pw" />
     mut val owned = projectionSession(input: input)
     mut val raw = <Comp />
-    raw.checkProjectionMember(type: <TypeRef args=[] />).unwrap()
+    raw.checkProjectionMember(type: <TypeRef nameStart=0U64 nameLen=0U64 args=[] />).unwrap()
     analyzeFrontendForRequests(c: inout raw, input: input, sources: <SourceAccess stdRoot="std/".bytes() />).unwrap()
     // Identical frozen input assigns the same named function identity in each
     // fresh session; no source capability is transferred by this observation.

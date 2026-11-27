@@ -37,7 +37,7 @@ impl Comp {
         val raw = self.missingProjectionMember(site: type.siteOffset)
         val evidence = match self.captureSourceTypeUseFailureEvidence(occurrence: occurrence, origin: origin) { Optional.Some(v: val evidence) => evidence Optional.None => { return <Result.Err error=raw /> } }
         if evidence.receipt.term != ref { return <Result.Err error=raw /> }
-        val refusal = <ProjectionMemberRefusal session=self.sourceFactSession() occurrence=occurrence event=self.failedProjectionMembers.count() location=raw.location() message=raw.message() notes=raw.notes() />
+        val refusal = <ProjectionMemberRefusal session=self.sourceFactSession() occurrence=occurrence event=self.failedProjectionMembers.count() location=self.diagnosticLocationAt(offset: evidence.receipt.site) message=raw.message() notes=raw.notes() />
         self.failedProjectionMembers.append(<SourceProjectionMemberFailure refusal=refusal evidence=evidence traitOwner=owner traitId=type.assocTraitId memberId=type.assocNameId site=type.siteOffset />)
         return <Result.Err error=<CompileDiagnostic.projectionMember refusal=refusal /> />
     }

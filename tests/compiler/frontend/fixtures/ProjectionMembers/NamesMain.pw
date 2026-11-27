@@ -1,0 +1,5 @@
+use ./First only { Parser as First }
+use ./Second only { Parser as Second }
+
+fn entry[T](value: T) -> T#First.Missing where T: First { panic("unused") }
+fn main() {}

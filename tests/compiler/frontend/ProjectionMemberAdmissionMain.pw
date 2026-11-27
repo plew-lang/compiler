@@ -1,15 +1,18 @@
 // Append to a frozen Frontend root. Exercise actual type-use ownership.
 fn main() {
+    for file in ["Main", "NamesMain"] {
+    val inputPath = "tests/compiler/frontend/fixtures/ProjectionMembers/"+file+".pw"
     for owned in [false, true] {
         mut val compiler = <Comp />
         val origin = if owned { give <FrontendDeclarationOrigin.SourceAdmission /> } else { give <FrontendDeclarationOrigin.Raw /> }
-        val failure = match analyzeFrontendDeclarationsWithOrigin(c: inout compiler, input: <FrontendInput.File path="tests/compiler/frontend/fixtures/ProjectionMembers/Main.pw" />, sources: <SourceAccess stdRoot="std/".bytes() />, options: <FrontendOptions />, origin: origin) {
+        val failure = match analyzeFrontendDeclarationsWithOrigin(c: inout compiler, input: <FrontendInput.File path=inputPath />, sources: <SourceAccess stdRoot="std/".bytes() />, options: <FrontendOptions />, origin: origin) {
             Result.Err(error: val diagnostic) => diagnostic
             Result.Ok(value: _) => { panic("declaration admitted missing associated member") }
         }
         if failure.isSourceRejection() || compiler.sourceFailureHasOwner(diagnostic: failure) != owned || failure.notes().count() != 0U64 { panic("projection member declaration ownership missing: "+failure.message()) }
-        match failure.location() { DiagnosticLocation.File(path: val path, line: val line) => { if line != 4I64 || path != "tests/compiler/frontend/fixtures/ProjectionMembers/Main.pw" { panic("projection location is not the authored occurrence") } } _ => { panic("projection location missing") } }
         if owned {
+        match failure.location() { DiagnosticLocation.File(path: val path, line: val line) => { if line != 4I64 || path != inputPath { panic("projection location is not the authored occurrence") } } _ => { panic("projection location missing") } }
+
             val refusal = failure.projectionMember().unwrap()
             for changed in ["session", "event", "occurrence", "message", "notes"] {
                 val forged = <ProjectionMemberRefusal session=(if changed == "session" { give refusal.session()+1U64 } else { give refusal.session() }) occurrence=(if changed == "occurrence" { give refusal.occurrence()+1U64 } else { give refusal.occurrence() }) event=(if changed == "event" { give 18446744073709551615U64 } else { give refusal.event() }) location=refusal.location() message=(if changed == "message" { give "not this refusal" } else { give refusal.message() }) notes=(if changed == "notes" { give [<DiagnosticNote location=<DiagnosticLocation.Unpositioned /> message="forged note" />] } else { give refusal.notes() }) />
@@ -38,6 +41,7 @@ fn main() {
             }
 
         }
+    }
     }
     mut val body = <Comp />
     analyzeFrontendForRequests(c: inout body, input: <FrontendInput.File path="tests/compiler/frontend/fixtures/ProjectionMembers/Body.pw" />, sources: <SourceAccess stdRoot="std/".bytes() />).unwrap()

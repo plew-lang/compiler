@@ -63,3 +63,21 @@ assoc IDs must not gain Source. Preserve inherited associated names and valid
 parameterized trait projections by consuming the existing flattened assocTypes
 view, not a second inheritance search. Namespace selection and actual member
 judgment precede retained owned interpretation. No source repair is claimed yet.
+
+## WIP executed findings
+
+Fixed149aac48controls yield14legal/deferred passes and34target exit1
+Unclassified refusals, all exact missing-member message, no setup failures.
+Nativev2 passes saved query/evidence boundaries. Review caught the old wrapper
+was public; type:TypeRef Raw compatibility is preserved public alongside a new
+canonical-ref adapter, with shared readonly query and private origin admission.
+
+The same-name alias NamesMain native counterexample reports the alias use on
+line1 rather than the authored projection on line4. Source interpretation now
+uses the internally retained occurrence site; Raw legacy location behavior is
+unchanged. This is a genuine original-location RED, not a source rule change.
+New controls initially used U64 for I64 diagnostic lines, omitted required
+TypeRef fields, and omitted the existing spec suffix: setup assertions corrected.
+A blank golden in existing trait_args uses the normal harness trailing-newline
+policy; the new diagnostic control adopts that same policy, not an existing-test
+change. Native original v1/Core malformed whole-corpus checks are not claimed.
