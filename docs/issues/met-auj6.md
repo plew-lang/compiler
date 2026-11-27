@@ -1,6 +1,6 @@
 ---
 id: met-auj6
-status: in_progress
+status: closed
 deps: [met-q7ig, met-g9dh, met-9luu, met-ldvd]
 links: [com-9sa5]
 created: 2026-11-27T07:01:06Z
@@ -87,3 +87,18 @@ inputs, samples7.886941/7.380636/7.350523, median7.380636<=7.5. Same-source
 alternating comparison da2 versus measured149aac is7.425221 versus7.322186,
 all6LLVM equal and input hashes unchanged. No observed regression. Whole-suite
 reconciliation is now running on the measured149aac candidate.
+
+## Finite completion
+
+Resolved at product d712af31. Independent final review accepted the structural
+caller/consumer boundary and all targeted/gen/formal/same-source/whole evidence.
+Whole20261127T121111-test-c32d9f completes3314 common cases,249->248 failures:
+only reject/duplicate_param_label resolves, no new or other changed result,
+skip0, no worker failure, all6651 fixtures/expectations and11 std files match.
+Residual248 failures and payloads remain owned by com-yeua and existing scoped
+owners. Meta declaration-parameters/{whole,whole-inputs,formal,comparison}.json
+contains exact receipts. Reviewed successful native intermediates686423893bytes
+were retired; source snapshots, baseline/current failure payloads and formal
+generations are retained for the next producer comparison. Saved measured
+149aac carrier/std hashes match and its84-case matrix passes. This certifies
+finite parameter-group admission, not phase3/main/seed or all compiler green.

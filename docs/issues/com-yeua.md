@@ -13,21 +13,20 @@ tags: [diagnostics, frontend, driver, verification]
 
 ## Current boundary
 
-This parent remains open. Current normal20261127T053719-test-48c29a completes
-3314 identical-source cases with249 failures and invariant inputs. met-gjxo
-resolves three local duplicate nominal label classifications from the252
-baseline, with no new failures or other aggregate result changes. All6651
-fixture/expectation files and11 std files also match the baseline.
-[Current whole](../../../evidence/rejection-domains/diagnostic-domain-implementation/declaration-labels/whole.json).
+This parent remains open. Current normal20261127T121111-test-c32d9f completes
+3314 identical-source cases with248 failures and invariant inputs. Finite
+met-auj6 (named/closure/function-type parameter labels) is independently
+accepted at product d712af31: one duplicate-label classification resolves from
+249, with no new failures or other aggregate changes. All6651 fixture/expectation
+files and11 std files match the baseline.
+[Current whole](../../../evidence/rejection-domains/diagnostic-domain-implementation/declaration-parameters/whole.json).
 
-The finite nominal producer is independently accepted at source86906902.
-FormalG2/median7.359985<=7.5 and gen pass certify that candidate and finite
-change, not this parent or phase3. Saved measured da2c8c0a82e9/frozen std
-pass48 controls and are the next development inputs; current adoption/retention
-are in the [worklog](../../../agents/worklog.md). Main/seed/tracked-bin remain
-separate. com-ntm8 retains older masked-oracle work. met-wuzv retains the
-separate public verifier/foreign-corpus coherence investigation, without
-classifying it as an ordinary-source or nominal-core failure.
+FormalG2/median7.380636<=7.5, focused controls and gen certify this finite
+candidate, not this parent or phase3. Measured149aacd25456 and frozen std are
+saved for the next development input; current adoption/retention belong in the
+[worklog](../../../agents/worklog.md). Main/seed/tracked-bin remain separate.
+com-ntm8 retains older masked-oracle work; met-wuzv owns public verifier/foreign
+corpus coherence, without treating it as an ordinary-source label-core defect.
 
 Reconcile residual producers and existing owners before selecting another
 finite child; not every failure belongs here. Message groups are investigative
