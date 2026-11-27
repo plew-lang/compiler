@@ -71,3 +71,27 @@ Existing gen suppression stays a caller policy: skipped harness groups are not
 ordinary checked signatures; ordinary compiled generated source is admitted.
 Fresh/native/forwarding/retained-failure and independent review remain required;
 this checkpoint is not completion.
+
+## Focused results awaiting final review
+
+WIP 7771bb48 built successfully in frozen parameter-group-build-v1
+(validate 20261127T094357-build-13df65). Fresh CLI114/114 pass with unchanged
+inputs and explicit binding-name cause. Native v2 and retained-session v1
+compile/link/run pass, empty stdout/stderr and input-invariance receipts.
+Existing9 default/provided/via/generic/async forwarding fixtures pass both
+old and fresh carriers (18 actual ORC runs, unchanged inputs). See meta
+evidence declaration-parameters/{declaration-green,native,session,forwarding}.json.
+Native v1 had a new test's DiagnosticNote field mistakenly called as a method;
+it failed test compilation, was corrected without product/expectation changes,
+and is not counted as an executed assertion.
+
+Neutral source review found no established Source leakage, pre-publication
+omission or accidental public API visibility change. createCallableFormWitness
+currently constructs a fresh Raw adapter group and uses the public registration
+validator; that subset is rechecked rather than treating a Func index as an
+admission proof. This finite additional comparison is retained because that
+public entry also accepts caller-constructed Raw rows. Plain provided copies
+preserve the source group and default generators have no parameters. No new
+capability flag or guessed Source authority is added to avoid this comparison.
+Final focused/gen/review closure is pending; whole/fixed-point/performance gates
+remain owned by met-auj6 after B/C integration.

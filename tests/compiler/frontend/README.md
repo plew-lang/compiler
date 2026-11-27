@@ -746,3 +746,5 @@ These focused controls do not certify the whole compiler or declaration-owner
 authentication, which additionally needs private/native admission controls.
 
 `test-parameter-group-admission.py --carrier PATH --out NEW_DIRECTORY` is a manual declaration-admission matrix (114 cases): named/requirement binding-name uniqueness in local/imported declarations under check/AOT/ORC, including suppressed labels and legal explicit shadowing. It requires the binding-name diagnostic and Source failure domain; closure and function-type admission have separate owners.
+
+`ParameterGroupAdmissionMain.pw` is a manual private-root diagnostic: equal-byte/zero-nameId comparison, distinct suppressed names, malformed ranges/spans, Raw registration/verifier/public Syntax decoding, Source/previous locations, and failed Func/trait publication. `ParameterGroupFailureDomains.pw` tests retained refusals across repeated session-open attempts. Run with the versioned declaration-parameters/run-private.py (optional `session` argument); both require exit0 and empty native stdout/stderr.

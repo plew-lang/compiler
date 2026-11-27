@@ -1,0 +1,75 @@
+// Append to the private Frontend root in an isolated native diagnostic snapshot.
+fn parameterGroupProbeParam(offset: U64, suppressed: Bool = false, length: U64 = 1U64) -> Param {
+    return <Param nameStart=offset nameLen=length tyStart=0U64 tyLen=0U64 tyIsArray=false ty=0U64 isInout=false isMove=false isBorrow=false noLabel=suppressed hasDefault=false defaultExpr=0U64 />
+}
+fn parameterGroupProbeFunction(params: FuncParamRange) -> Func {
+    return <Func nameStart=0U64 nameLen=1U64 params=params hasRet=false retStart=0U64 retLen=0U64 retIsArray=false retTy=0U64 body=0U64 hasRecv=false recvStart=0U64 recvLen=0U64 selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false />
+}
+fn main() {
+    mut val raw = <Comp />
+    raw.appendSrc(from: "xxz".bytes())
+    // Equal bytes at different offsets and all nameId0 must still conflict.
+    val duplicate = raw.pushFuncParams(params: [parameterGroupProbeParam(offset: 0U64), parameterGroupProbeParam(offset: 1U64, suppressed: true)])
+    val failure = match raw.admitParameterGroup(params: duplicate, origin: <FrontendDeclarationOrigin.Raw />) {
+        Result.Err(error: val diagnostic) => diagnostic
+        Result.Ok(value: _) => { panic("Raw mixed-label duplicate admitted") }
+    }
+    if failure.isSourceRejection() || failure.notes().count() != 1U64 || failure.message() != "duplicate parameter binding name (each parameter in a group must have a distinct name)" { panic("Raw duplicate lost its binding-group diagnostic") }
+    val distinct = raw.pushFuncParams(params: [parameterGroupProbeParam(offset: 0U64, suppressed: true), parameterGroupProbeParam(offset: 2U64, suppressed: true)])
+    raw.admitParameterGroup(params: distinct, origin: <FrontendDeclarationOrigin.Raw />).unwrap()
+    for malformed in [<FuncParamRange start=18446744073709551615U64 len=1U64 />, <FuncParamRange start=0U64 len=18446744073709551615U64 />, raw.pushFuncParams(params: [parameterGroupProbeParam(offset: 3U64, length: 18446744073709551615U64)])] {
+        match raw.admitParameterGroup(params: malformed, origin: <FrontendDeclarationOrigin.Raw />) {
+            Result.Err(error: val diagnostic) => { match diagnostic.failureDomain() { FailureDomain.Internal => {} _ => { panic("malformed group became source rejection") } } }
+            Result.Ok(value: _) => { panic("malformed group admitted") }
+        }
+    }
+    val before = raw.arena.functionCount()
+    match raw.registerDeclaredFunc(f: parameterGroupProbeFunction(params: duplicate)) {
+        Result.Err(error: val diagnostic) => { if diagnostic.isSourceRejection() { panic("public registration gained Source") } }
+        Result.Ok(value: _) => { panic("public registration admitted duplicate") }
+    }
+    if raw.arena.functionCount() != before { panic("failed group published a Func") }
+    raw.arena.registerFunction(parameterGroupProbeFunction(params: duplicate))
+    match raw.checkDeclShapes(sourceFuncLimit: raw.arena.functionCount()) {
+        Result.Err(error: val diagnostic) => { if diagnostic.isSourceRejection() || diagnostic.message() != failure.message() { panic("Raw verifier borrowed Source or changed comparison") } }
+        Result.Ok(value: _) => { panic("Raw verifier skipped injected group") }
+    }
+    mut val decoded = <Comp />
+    val text = "fn bad(value~: I64, value~: I64) {{}}"
+    decoded.appendSrc(from: text.bytes())
+    val roots = decoded.parseFileSyntax(fileBytes: text.bytes(), fileStart: 0U64).unwrap()
+    match decoded.lowerSyntaxTopItem(item: syntaxFileTopLevel(file: decoded.syntax, index: roots.start)) {
+        Result.Err(error: val diagnostic) => { if diagnostic.isSourceRejection() || diagnostic.message() != failure.message() { panic("public Syntax decoder gained Source") } }
+        Result.Ok(value: _) => { panic("public Syntax decoder admitted duplicate") }
+    }
+    if decoded.arena.functionCount() != 0U64 { panic("Raw Syntax decoder published duplicate") }
+    for kind in ["Function", "Requirement"] {
+        for placement in ["Local", "Imported"] {
+            val directory = "tests/compiler/frontend/fixtures/ParameterGroups/"+kind+placement+"/"
+            mut val compiler = <Comp />
+            val diagnostic = match analyzeFrontendDeclarationsWithOrigin(c: inout compiler, input: <FrontendInput.File path=directory+"Main.pw" />, sources: <SourceAccess stdRoot="std/".bytes() />, options: <FrontendOptions />, origin: <FrontendDeclarationOrigin.SourceAdmission />) {
+                Result.Err(error: val diagnostic) => diagnostic
+                Result.Ok(value: _) => { panic("fresh source group admitted duplicate") }
+            }
+            if !diagnostic.isSourceRejection() || diagnostic.notes().count() != 1U64 || diagnostic.message() != failure.message() { panic("source group diagnostic lost authority or previous location") }
+            val filename = if placement == "Imported" { give "Dep.pw" } else { give "Main.pw" }
+            match diagnostic.location() {
+                DiagnosticLocation.File(path: val path, line: val line) => { if path != directory+filename || line != 2I64 { panic("duplicate parameter location changed") } }
+                _ => { panic("duplicate parameter location lost") }
+            }
+            match diagnostic.notes()[0U64].location {
+                DiagnosticLocation.File(path: val path, line: val line) => { if path != directory+filename || line != 1I64 { panic("previous parameter location changed") } }
+                _ => { panic("previous parameter location lost") }
+            }
+            for index in 0U64..<compiler.arena.functionCount() {
+                if compiler.arena.functionAt(index: index).nameLen == 3U64 && rangeEquals(bytes: compiler.arena.bytes, start: compiler.arena.functionAt(index: index).nameStart, len: 3U64, kw: "bad") { panic("source published invalid Func") }
+            }
+            for index in 0U64..<compiler.decls.traitCount() {
+                val declaration = compiler.decls.traitAt(index: index)
+                if rangeEquals(bytes: compiler.arena.bytes, start: declaration.nameStart, len: declaration.nameLen, kw: "Broken") { panic("source published invalid requirement group") }
+            }
+        }
+    }
+    raw.genMode = true
+    raw.admitParameterGroup(params: duplicate, origin: <FrontendDeclarationOrigin.Raw />).unwrap()
+}

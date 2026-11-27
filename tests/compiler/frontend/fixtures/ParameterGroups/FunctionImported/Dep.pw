@@ -1,0 +1,2 @@
+pub fn bad(value~: I64,
+value~: I64) {}
