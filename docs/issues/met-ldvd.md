@@ -118,3 +118,10 @@ positions, original declaration evidence and forged/foreign/moved metadata,
 success-cache exclusion, body deferred admission/retry, and owned eager notes.
 It passes on current source. Fresh candidate, full84 matrix, legacy position/
 session retention and final independent review remain pending.
+
+Fresh b8a76c79 candidate passes84/84 with unchanged inputs. Legacy materialized
+AST checks pass for coherent spans and absent/swapped/out-of-bounds fallback
+(the latter requires monotonic nonoverlapping positions, now implemented).
+Raw/owned session retry, diagnostic drain, retained cache failure, whole and
+eager rejection pass with the original primary/note locations. Final-source
+frozen v2 build and final focused regressions/review are pending.

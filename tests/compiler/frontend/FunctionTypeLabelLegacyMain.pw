@@ -1,0 +1,31 @@
+// Exercise the real Syntax -> value-AST adapter and Raw synthetic metadata.
+fn main() {
+    for mode in [0U64, 1U64, 2U64, 3U64] {
+        mut val compiler = <Comp />
+        compiler.arena.reserveTypeSentinel()
+        val text = "fn host(callback: fn(value: I64,\nvalue: I64) -> I64) {{}}"
+        compiler.appendSrc(from: text.bytes())
+        val roots = compiler.parseFileSyntax(fileBytes: text.bytes(), fileStart: 0U64).unwrap()
+        val parser = <P bytes=text.bytes() toks=[] pos=0U64 base=0U64 />
+        val declaration = match compiler.syntax.materializeMacroTopItem(id: syntaxFileTopLevel(file: compiler.syntax, index: roots.start), p: parser) { TopItemAst.Decl(d: val declaration) => declaration _ => { panic("legacy parser did not produce declaration") } }
+        val original = declaration.params[0U64].ty
+        if original.argLabelSpans.count() != 3U64 { panic("legacy AST lost label positions") }
+        val spans = if mode == 0U64 { give original.argLabelSpans }
+            else if mode == 1U64 { give [] }
+            else if mode == 2U64 { give [original.argLabelSpans[0U64], original.argLabelSpans[2U64], original.argLabelSpans[1U64]] }
+            else { give [original.argLabelSpans[0U64], original.argLabelSpans[1U64], <Span start=0U64 end=18446744073709551615U64 />] }
+        val input = <TypeAst name=original.name nameSpan=original.nameSpan args=original.args span=original.span argLabels=original.argLabels argLabelSpans=spans />
+        val type = compiler.lowerType(t: input).unwrap()
+        val diagnostic = match compiler.checkFunctionTypeSignature(ref: type.ref, occurrence: type.authoredUse, origin: <SourceTypeUseOrigin.Raw />) {
+            Result.Err(error: val diagnostic) => diagnostic
+            Result.Ok(value: _) => { panic("legacy/synthetic duplicate labels admitted") }
+        }
+        if diagnostic.isSourceRejection() || diagnostic.typeSignature().isSome() || diagnostic.notes().count() != 1U64 { panic("legacy labels gained source authority") }
+        if mode == 0U64 {
+            match diagnostic.location() { DiagnosticLocation.Line(line: val line) => { if line != 2I64 { panic("legacy duplicate position lost") } } _ => { panic("legacy duplicate has wrong location form") } }
+            match diagnostic.notes()[0U64].location { DiagnosticLocation.Line(line: val line) => { if line != 1I64 { panic("legacy previous position lost") } } _ => { panic("legacy previous position missing") } }
+        } else {
+            match diagnostic.location() { DiagnosticLocation.Unpositioned => {} _ => { panic("unproved legacy label position trusted") } }
+        }
+    }
+}

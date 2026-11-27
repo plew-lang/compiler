@@ -41,6 +41,7 @@ impl Comp {
         if !self.functionTypeLabelDataIsValid(arguments: type.args, labels: type.argLabels) { return }
         mut val labels: Array[U64] = []
         mut val labelled = false
+        mut val previousEnd = site
         for slot in 0U64..<type.args.len {
             val label = if slot < type.argLabels.len { give self.arena.typeArgumentLabelAt(index: type.argLabels.start+slot) } else { give 0U64 }
             labels.append(label)
@@ -49,7 +50,8 @@ impl Comp {
                 if position.start != position.end { return }
             } else {
                 val spelling = self.interner.entries[label-1U64]
-                if position.start < site || position.start >= position.end || position.end > end || !declarationLabelBytesEqual(bytes: self.arena.bytes, first: position, second: <Span start=spelling.start end=spelling.start+spelling.len />) { return }
+                if position.start < previousEnd || position.start >= position.end || position.end > end || !declarationLabelBytesEqual(bytes: self.arena.bytes, first: position, second: <Span start=spelling.start end=spelling.start+spelling.len />) { return }
+                previousEnd = position.end
                 labelled = true
             }
         }
@@ -62,6 +64,7 @@ impl Comp {
         if type.nameStart > self.arena.bytes.count() || type.nameLen > self.arena.bytes.count()-type.nameStart { return false }
         if !rangeEquals(bytes: self.arena.bytes, start: type.nameStart, len: type.nameLen, kw: "fn") || type.args.len != positions.labels.count() || positions.positions.count() != positions.labels.count() { return false }
         if !self.functionTypeLabelDataIsValid(arguments: type.args, labels: type.argLabels) { return false }
+        mut val previousEnd = positions.site
         for slot in 0U64..<positions.labels.count() {
             val label = if slot < type.argLabels.len { give self.arena.typeArgumentLabelAt(index: type.argLabels.start+slot) } else { give 0U64 }
             if label != positions.labels[slot] { return false }
@@ -70,7 +73,8 @@ impl Comp {
                 if position.start != position.end { return false }
             } else {
                 val spelling = self.interner.entries[label-1U64]
-                if position.start < positions.site || position.start >= position.end || position.end > positions.end || !declarationLabelBytesEqual(bytes: self.arena.bytes, first: position, second: <Span start=spelling.start end=spelling.start+spelling.len />) { return false }
+                if position.start < previousEnd || position.start >= position.end || position.end > positions.end || !declarationLabelBytesEqual(bytes: self.arena.bytes, first: position, second: <Span start=spelling.start end=spelling.start+spelling.len />) { return false }
+                previousEnd = position.end
             }
         }
         return true

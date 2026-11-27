@@ -1,0 +1,64 @@
+use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontendForRequests, openFrontend }
+use ../../../src/CheckedProgram only { CompilerSession, CompilerSessionResult, ProgramCheckResult, checkCompilerSession }
+use ../../../src/SourceAccess only { SourceAccess }
+use ../../../src/Diag only { CompileDiagnostic, DiagnosticLocation }
+fn signatureFailure(diagnostic: CompileDiagnostic) {
+    if !diagnostic.isSourceRejection() || diagnostic.notes().count() != 1U64 || diagnostic.message() != "duplicate function type parameter label (each labelled position must be distinct)" { panic("function type labels failure lost source origin") }
+}
+fn sameLocation(actual: DiagnosticLocation, expected: DiagnosticLocation) {
+    match actual {
+        DiagnosticLocation.File(path: val path, line: val line) => {
+            match expected {
+                DiagnosticLocation.File(path: val expectedPath, line: val expectedLine) => { if path != expectedPath || line != expectedLine { panic("parameter group location changed in session") } }
+                _ => { panic("reference parameter group location lost") }
+            }
+        }
+        _ => { panic("session parameter group location lost") }
+    }
+}
+fn sameSignatureFailure(first: CompileDiagnostic, second: CompileDiagnostic) {
+    signatureFailure(diagnostic: first)
+    signatureFailure(diagnostic: second)
+    sameLocation(actual: first.location(), expected: second.location())
+    sameLocation(actual: first.notes()[0U64].location, expected: second.notes()[0U64].location)
+    if first.notes()[0U64].message != second.notes()[0U64].message { panic("closure note changed") }
+}
+
+fn signatureSession(input: FrontendInput) -> CompilerSession {
+    match CompilerSession.open(input: input, sources: <SourceAccess stdRoot="std/".bytes() />) {
+        CompilerSessionResult.Success(session: val session) => { return move session }
+        CompilerSessionResult.Failure(diagnostic: val diagnostic) => { panic(diagnostic.message()) }
+    }
+}
+fn main() {
+    val input = <FrontendInput.File path="tests/compiler/frontend/fixtures/FunctionTypeLabels/Body.pw" />
+    mut val owned = signatureSession(input: input)
+    mut val raw = <Comp />
+    analyzeFrontendForRequests(c: inout raw, input: input, sources: <SourceAccess stdRoot="std/".bytes() />).unwrap()
+    // Identical frozen input assigns the same named function identity in each
+    // fresh session; no source capability is transferred by this observation.
+    val function = raw.arena.firstFunctionNamed(nameId: raw.internBytes(s: "entry").nameId)
+    mut val retained: Optional[CompileDiagnostic] = <Optional.None />
+    for attempt in 0U64..<2U64 {
+        match raw.prepareLexicalBody(fnIdx: function) {
+            Result.Err(error: val diagnostic) => { if diagnostic.isSourceRejection() { panic("Raw Source diagnostic: "+diagnostic.message()) }
+                if diagnostic.notes().count() != 1U64 { panic("Raw missing note: "+diagnostic.message()) }
+                raw.pendingDiagnostics.append(diagnostic)
+                val drained = raw.takeDiagnostics()
+                if drained.count() != 1U64 || drained[0U64].isSourceRejection() || drained[0U64].message() != diagnostic.message() || drained[0U64].notes().count() != 1U64 { panic("Raw drain changed signature refusal") }
+                sameLocation(actual: drained[0U64].location(), expected: diagnostic.location())
+                sameLocation(actual: drained[0U64].notes()[0U64].location, expected: diagnostic.notes()[0U64].location)
+ }
+            Result.Ok(value: _) => { panic("Raw body admitted duplicate function type labels") }
+        }
+        match owned.prepareFunction(function: function) {
+            Result.Err(error: val diagnostic) => {
+                signatureFailure(diagnostic: diagnostic)
+                match retained { Optional.Some(v: val first) => { sameSignatureFailure(first: first, second: diagnostic) } Optional.None => { retained = <Optional.Some v=diagnostic /> } }
+            }
+            Result.Ok(value: _) => { panic("owned request admitted duplicate function type labels") }
+        }
+    }
+    match checkCompilerSession(session: move owned) { ProgramCheckResult.Failure(diagnostic: val diagnostic) => { signatureFailure(diagnostic: diagnostic) } ProgramCheckResult.Success(program: _) => { panic("refused session became checked") } }
+    match openFrontend(input: input, sources: <SourceAccess stdRoot="std/".bytes() />) { Result.Err(error: val diagnostic) => { signatureFailure(diagnostic: diagnostic) } Result.Ok(value: _) => { panic("eager check admitted function type labels") } }
+}
