@@ -1,0 +1,23 @@
+use @Std/Io only { print }
+trait Parent { type Error }
+trait Child: Parent {}
+struct Leaf {}
+impl Leaf as Parent { type Error = I64 }
+impl Leaf as Child {}
+struct Envelope[T] { val owner: T }
+impl[T] Envelope[T] where T: Child {
+    result[T#Child.Error] factory checked(owner: T, error: T#Child.Error, fail: Bool) {
+        if fail { return <Result.Err error=error /> }
+        return <Result.Ok value=<Envelope[T] owner=owner /> />
+    }
+}
+fn attempt[T](owner: T, error: T#Child.Error) -> Result[Envelope[T], T#Child.Error] where T: Child {
+    val envelope = try <Envelope[T].checked owner=owner error=error fail=true />
+    return <Result.Ok value=envelope />
+}
+fn main() {
+    match attempt(owner: <Leaf />, error: 7I64) {
+        Result.Ok(value: _) => { print(0I64) }
+        Result.Err(error: val error) => { print(error) }
+    }
+}

@@ -329,18 +329,33 @@ emission as execution. The old aefa2b90 control executes its empty AOT/ORC progr
 projection programs remain RED until a fresh mapping candidate is built. Full
 AOT/ORC, remaining reader audit and cost gates remain open.
 
-## Next implementation sequence
+## Remaining implementation and verification sequence
 
-1. Audit remaining producer/receiver environments against the receipt checkpoint;
-   retain source scope and exact roots/equations across nested/provided/associated
-   binding uses. Do not infer all-mode closure from the finite native profiles.
-2. Connect abstract and concrete admitted readers (AuthoredTypes, source/body
-   facts, call/generic instantiation, Mono/Resolve and witness output access).
-   Read saved identity/arguments/derivation under explicit environments. Concrete
-   witness output access is legitimate; fresh member-name/source selection is not.
-3. Move remaining short/lexical adapters to the same query, remove replaced
-   paths, and close all source-to-final-consumer scenarios below. Keep original
-   recipes/proofs distinct from generated Parent semantic children.
+1. Recover the running formal fixed-point/cost result for source8bec5272, then
+   reuse the existing57-row real check/AOT/ORC matrix with that final candidate
+   and run gen. Keep the six wrong Missing refusal rows assigned to met-2yhf;
+   do not weaken or silently delete them. A successful native API is not this gate.
+2. Close the small evidence gaps identified by independent contract-first audit:
+   registered signature admission in Open/Complete/Failed states plus unregistered
+   Raw; a static Requirement call through a concrete witness to inherited output;
+   and inherited FactoryError through factory body/try/final signature. Reuse
+   existing evidence first, add only the missing finite controls. Compare ordinary
+   static/provided expected-result reads where their distinct adapters are used.
+3. Record the bounded source call-chain audit: registered Source is read through
+   its receipt, an unmigrated Raw/synthetic declaration alone may return None,
+   and admitted body slots publish saved Parent before Mid. Late assocBindingFor
+   may read an exact concrete owner/arguments/member proof; it cannot choose a
+   different member or replace a missing Source receipt. Check fallback Param.ty/
+   retTy only in these chains, rather than removing every raw field read.
+4. Reconcile these gates with the existing short/lexical/head/body/recursive
+   evidence and obtain independent task review. Then met-2yhf consumes the saved
+   outcomes for owned refusals; parent met-o5z0 retains whole-gate certification.
+
+The independent remaining-scope audit found no additional confirmed defect.
+It did not request a producer-by-mode Cartesian product, new language features,
+all malformed Raw Comp states or the unrelated C6 closure-field fix. The five
+unjoined boundaries above, rather than another whole compiler audit, are the
+remaining finite acceptance work.
 
 ## Completion and limits
 

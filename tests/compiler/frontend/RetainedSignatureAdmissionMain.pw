@@ -1,0 +1,32 @@
+// Registered Source cannot fall back to a Raw signature when admission is closed.
+fn main() {
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.File path="tests/compiler/frontend/fixtures/ProjectionMembers/Inherited.pw" />, sources: <SourceAccess stdRoot="std/".bytes() />).unwrap()
+    val function = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "entry").nameId)
+    val declaration = compiler.arena.functionAt(index: function)
+    val leafFunction = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "leaf").nameId)
+    val leaf = compiler.funcParamAt(params: compiler.arena.functionAt(index: leafFunction).params, index: 0U64).ty
+    val environment = <InstanceEnvironment params=compiler.copyFuncBinds(binds: declaration.typeParams) args=[leaf] />
+    compiler.authoredSignatureViews.remove(key: function)
+    compiler.authoredSignatureAdmission = <AuthoredSignatureAdmissionPhase.Open />
+    if compiler.readRetainedCallableTypes(function: function, environment: environment, read: <CallableSignatureRead.SourceResult />).unwrap().isNone() || !compiler.authoredSignatureViews.contains(key: function) { panic("open signature admission lost its registered source") }
+    compiler.authoredSignatureViews.remove(key: function)
+    compiler.authoredSignatureAdmission = <AuthoredSignatureAdmissionPhase.Complete />
+    match compiler.readRetainedCallableTypes(function: function, environment: environment, read: <CallableSignatureRead.SourceResult />) {
+        Result.Ok(value: _) => { panic("completed admission accepted a lost receipt") }
+        Result.Err(error: val diagnostic) => {
+            match diagnostic.failureDomain() { FailureDomain.Internal => {} _ => { panic("lost receipt acquired Source authority") } }
+        }
+    }
+    val held = compiler.diagnosticAt(offset: declaration.nameStart, msg: "retained signature admission sentinel", failureDomain: <FailureDomain.Internal />)
+    compiler.authoredSignatureAdmission = <AuthoredSignatureAdmissionPhase.Failed diagnostic=held />
+    match compiler.readRetainedCallableTypes(function: function, environment: environment, read: <CallableSignatureRead.SourceResult />) {
+        Result.Ok(value: _) => { panic("failed admission produced a result") }
+        Result.Err(error: val diagnostic) => { if diagnostic.message() != held.message() { panic("failed admission replaced the original diagnostic") } }
+    }
+    compiler.authoredSignatureAdmission = <AuthoredSignatureAdmissionPhase.Complete />
+    val mainIndex = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "main").nameId)
+    val raw = compiler.arena.functionCount()
+    compiler.arena.registerFunction(compiler.arena.functionAt(index: mainIndex), registerSurface: false)
+    if compiler.readRetainedCallableTypes(function: raw, environment: <InstanceEnvironment />, read: <CallableSignatureRead.SourceResult />).unwrap().isSome() || compiler.authoredSignatureViews.contains(key: raw) || compiler.sourceTypeUses.signatureFor(function: raw).isSome() { panic("Raw registration acquired Source signature authority") }
+}
