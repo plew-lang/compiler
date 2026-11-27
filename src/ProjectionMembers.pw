@@ -1,0 +1,59 @@
+// Projection-member admission consumes the selected trait namespace. It does
+// not select a conformance or interpret missing associated bindings.
+pub impl Comp {
+    inout fn checkProjectionMember(type: TypeRef) -> Result[(), CompileDiagnostic] {
+        val owner = if type.hasAssocTraitDecl { give type.assocTraitDeclOffset } else { give type.assocTraitStart }
+        if try self.projectionMemberExists(owner: owner, traitId: type.assocTraitId, memberId: type.assocNameId) { return <Result.Ok value=() /> }
+        return <Result.Err error=self.missingProjectionMember(site: type.siteOffset) />
+    }
+
+    inout fn checkProjectionMember(ref: U64) -> Result[(), CompileDiagnostic] {
+        return self.checkProjectionMemberWithOrigin(ref: ref, occurrence: 0U64, origin: <SourceTypeUseOrigin.Raw />)
+    }
+
+}
+
+impl Comp {
+    fn missingProjectionMember(site: U64) -> CompileDiagnostic {
+        return self.diagnosticAt(offset: site, msg: "associated-type projection names an associated type that is not bound by the selected conformance (spec/08)")
+    }
+
+    fn projectionMemberExists(owner: U64, traitId: U64, memberId: U64) -> Result[Bool, CompileDiagnostic] {
+        if memberId == 0U64 || traitId == 0U64 { return <Result.Ok value=true /> }
+        val index = self.decls.traitIndexByOffset(offset: owner)
+        if index >= self.decls.traitCount() { return <Result.Ok value=true /> }
+        if memberId > self.interner.entries.count() || traitId > self.interner.entries.count() { return <Result.Err error=<CompileDiagnostic failureDomain=<FailureDomain.Internal /> location=<DiagnosticLocation.Unpositioned /> message="projection-member query has an unknown name identity" /> /> }
+        return match self.decls.traitAssociatedMember(index: index, nameId: memberId) {
+            Optional.Some(v: val exists) => <Result.Ok value=exists />
+            Optional.None => <Result.Err error=<CompileDiagnostic failureDomain=<FailureDomain.Internal /> location=<DiagnosticLocation.Unpositioned /> message="projection-member query has malformed trait member storage" /> />
+        }
+    }
+
+    inout fn checkProjectionMemberWithOrigin(ref: U64, occurrence: U64, origin: SourceTypeUseOrigin) -> Result[(), CompileDiagnostic] {
+        if ref >= self.arena.typeTermCount() { return <Result.Err error=<CompileDiagnostic failureDomain=<FailureDomain.Internal /> location=<DiagnosticLocation.Unpositioned /> message="projection-member query has an unknown type term" /> /> }
+        val type = self.arena.typeTermAt(index: ref)
+        val owner = if type.hasAssocTraitDecl { give type.assocTraitDeclOffset } else { give type.assocTraitStart }
+        if try self.projectionMemberExists(owner: owner, traitId: type.assocTraitId, memberId: type.assocNameId) { return <Result.Ok value=() /> }
+        val raw = self.missingProjectionMember(site: type.siteOffset)
+        val evidence = match self.captureSourceTypeUseFailureEvidence(occurrence: occurrence, origin: origin) { Optional.Some(v: val evidence) => evidence Optional.None => { return <Result.Err error=raw /> } }
+        if evidence.receipt.term != ref { return <Result.Err error=raw /> }
+        val refusal = <ProjectionMemberRefusal session=self.sourceFactSession() occurrence=occurrence event=self.failedProjectionMembers.count() location=raw.location() message=raw.message() notes=raw.notes() />
+        self.failedProjectionMembers.append(<SourceProjectionMemberFailure refusal=refusal evidence=evidence traitOwner=owner traitId=type.assocTraitId memberId=type.assocNameId site=type.siteOffset />)
+        return <Result.Err error=<CompileDiagnostic.projectionMember refusal=refusal /> />
+    }
+
+    fn sourceProjectionMemberFailureHasOwner(refusal: ProjectionMemberRefusal) -> Bool {
+        if refusal.session() != self.sourceFactSession() || refusal.event() >= self.failedProjectionMembers.count() { return false }
+        val proof = self.failedProjectionMembers[refusal.event()]
+        val original = proof.refusal
+        if original.session() != refusal.session() || original.occurrence() != refusal.occurrence() || original.event() != refusal.event() || !original.location().same(other: refusal.location()) || original.message() != refusal.message() || original.notes().count() != refusal.notes().count() { return false }
+        for index in 0U64..<original.notes().count() {
+            if !original.notes()[index].location.same(other: refusal.notes()[index].location) || original.notes()[index].message != refusal.notes()[index].message { return false }
+        }
+        if proof.evidence.receipt.term >= self.arena.typeTermCount() { return false }
+        val type = self.arena.typeTermAt(index: proof.evidence.receipt.term)
+        val owner = if type.hasAssocTraitDecl { give type.assocTraitDeclOffset } else { give type.assocTraitStart }
+        if owner != proof.traitOwner || type.assocTraitId != proof.traitId || type.assocNameId != proof.memberId || type.siteOffset != proof.site { return false }
+        return self.sourceTypeUseFailureEvidenceMatches(evidence: proof.evidence, occurrence: refusal.occurrence())
+    }
+}

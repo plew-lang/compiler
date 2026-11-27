@@ -1,0 +1,53 @@
+// Append to a frozen Frontend root. Exercise actual type-use ownership.
+fn main() {
+    for owned in [false, true] {
+        mut val compiler = <Comp />
+        val origin = if owned { give <FrontendDeclarationOrigin.SourceAdmission /> } else { give <FrontendDeclarationOrigin.Raw /> }
+        val failure = match analyzeFrontendDeclarationsWithOrigin(c: inout compiler, input: <FrontendInput.File path="tests/compiler/frontend/fixtures/ProjectionMembers/Main.pw" />, sources: <SourceAccess stdRoot="std/".bytes() />, options: <FrontendOptions />, origin: origin) {
+            Result.Err(error: val diagnostic) => diagnostic
+            Result.Ok(value: _) => { panic("declaration admitted missing associated member") }
+        }
+        if failure.isSourceRejection() || compiler.sourceFailureHasOwner(diagnostic: failure) != owned || failure.notes().count() != 0U64 { panic("projection member declaration ownership missing: "+failure.message()) }
+        match failure.location() { DiagnosticLocation.File(path: val path, line: val line) => { if line != 4I64 || path != "tests/compiler/frontend/fixtures/ProjectionMembers/Main.pw" { panic("projection location is not the authored occurrence") } } _ => { panic("projection location missing") } }
+        if owned {
+            val refusal = failure.projectionMember().unwrap()
+            for changed in ["session", "event", "occurrence", "message", "notes"] {
+                val forged = <ProjectionMemberRefusal session=(if changed == "session" { give refusal.session()+1U64 } else { give refusal.session() }) occurrence=(if changed == "occurrence" { give refusal.occurrence()+1U64 } else { give refusal.occurrence() }) event=(if changed == "event" { give 18446744073709551615U64 } else { give refusal.event() }) location=refusal.location() message=(if changed == "message" { give "not this refusal" } else { give refusal.message() }) notes=(if changed == "notes" { give [<DiagnosticNote location=<DiagnosticLocation.Unpositioned /> message="forged note" />] } else { give refusal.notes() }) />
+                if compiler.sourceFailureHasOwner(diagnostic: <CompileDiagnostic.projectionMember refusal=forged />) { panic("forged projection member proof admitted") }
+            }
+            mut val foreign = <Comp />
+            if foreign.sourceFailureHasOwner(diagnostic: failure) { panic("projection member proof crossed session") }
+            val proof = compiler.failedProjectionMembers[refusal.event()]
+            val term = proof.evidence.receipt.term
+            val type = compiler.arena.typeTermAt(index: term)
+            match compiler.checkProjectionMember(ref: term) { Result.Err(error: val raw) => { if raw.isSourceRejection() || compiler.sourceFailureHasOwner(diagnostic: raw) { panic("Raw query admitted source") } } Result.Ok(value: _) => { panic("Raw projection accepted") } }
+            if compiler.failedProjectionMembers.count() != refusal.event()+1U64 { panic("Raw observation overwrote proof") }
+            compiler.arena.changeProjectionProbeDeclaration(index: term, hasDecl: type.hasDecl, declOffset: type.declOffset, hasAssocTraitDecl: true, assocTraitDeclOffset: proof.traitOwner+1U64)
+            if compiler.sourceFailureHasOwner(diagnostic: failure) { panic("changed projection query reused proof") }
+            compiler.arena.changeProjectionProbeDeclaration(index: term, hasDecl: type.hasDecl, declOffset: type.declOffset, hasAssocTraitDecl: type.hasAssocTraitDecl, assocTraitDeclOffset: type.assocTraitDeclOffset)
+            if !compiler.sourceFailureHasOwner(diagnostic: failure) || compiler.checkedTypeUses.contains(term) { panic("failed projection entered success cache") }
+            // Both source-owner spellings query the same selected declaration.
+            for explicit in [false, true] {
+                val rawRef = compiler.pushType(t: <TypeRef nameStart=type.nameStart nameLen=type.nameLen nameId=type.nameId args=[] assocTraitStart=proof.traitOwner assocTraitId=proof.traitId assocNameId=proof.memberId hasAssocTraitDecl=explicit assocTraitDeclOffset=proof.traitOwner siteOffset=type.siteOffset />)
+                val raw = match compiler.checkProjectionMember(ref: rawRef) { Result.Err(error: val diagnostic) => diagnostic Result.Ok(value: _) => { panic("Raw missing member accepted") } }
+                if raw.isSourceRejection() || compiler.sourceFailureHasOwner(diagnostic: raw) || raw.message() != failure.message() { panic("Raw query gained source authority") }
+            }
+            for missing in ["trait", "member", "owner"] {
+                val rawRef = compiler.pushType(t: <TypeRef nameStart=type.nameStart nameLen=type.nameLen nameId=type.nameId args=[] assocTraitStart=18446744073709551615U64 assocTraitId=(if missing == "trait" { give 0U64 } else { give proof.traitId }) assocNameId=(if missing == "member" { give 0U64 } else { give proof.memberId }) />)
+                compiler.checkProjectionMember(ref: rawRef).unwrap()
+            }
+
+        }
+    }
+    mut val body = <Comp />
+    analyzeFrontendForRequests(c: inout body, input: <FrontendInput.File path="tests/compiler/frontend/fixtures/ProjectionMembers/Body.pw" />, sources: <SourceAccess stdRoot="std/".bytes() />).unwrap()
+    val function = body.arena.firstFunctionNamed(nameId: body.internBytes(s: "entry").nameId)
+    mut val first: Optional[CompileDiagnostic] = <Optional.None />
+    for attempt in 0U64..<2U64 {
+        val failure = match body.prepareLexicalBody(fnIdx: function) { Result.Err(error: val diagnostic) => diagnostic Result.Ok(value: _) => { panic("body admitted missing associated member") } }
+        if failure.isSourceRejection() || !body.sourceFailureHasOwner(diagnostic: failure) || failure.notes().count() != 0U64 { panic("body signature lost Raw retained proof") }
+        match first { Optional.None => { first = <Optional.Some v=failure /> } Optional.Some(v: val previous) => { if previous.projectionMember().unwrap().event() != failure.projectionMember().unwrap().event() { panic("retry repeated projection member refusal") } } }
+    }
+    val eager = openFrontend(input: <FrontendInput.File path="tests/compiler/frontend/fixtures/ProjectionMembers/Body.pw" />, sources: <SourceAccess stdRoot="std/".bytes() />)
+    match eager { Result.Err(error: val diagnostic) => { if !diagnostic.isSourceRejection() || diagnostic.notes().count() != 0U64 { panic("owned body signature lost Source or notes") } } Result.Ok(value: _) => { panic("eager source admitted missing associated member") } }
+}

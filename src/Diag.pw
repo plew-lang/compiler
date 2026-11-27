@@ -455,6 +455,24 @@ pub impl TypeSignatureRefusal {
     fn notes() -> Array[DiagnosticNote] { return self.notes }
 }
 
+pub struct ProjectionMemberRefusal {
+    val session: U64
+    val occurrence: U64
+    val event: U64
+    val location: DiagnosticLocation
+    val message: String
+    val notes: Array[DiagnosticNote]
+}
+pub impl ProjectionMemberRefusal {
+    factory
+    fn session() -> U64 { return self.session }
+    fn occurrence() -> U64 { return self.occurrence }
+    fn event() -> U64 { return self.event }
+    fn location() -> DiagnosticLocation { return self.location }
+    fn message() -> String { return self.message }
+    fn notes() -> Array[DiagnosticNote] { return self.notes }
+}
+
 pub struct ClosureSignatureRefusal {
     val session: U64
     val owner: DiagnosticOwner
@@ -607,6 +625,7 @@ enum DiagnosticData {
     IndexRequirement(refusal: IndexRequirementRefusal)
     TypeVisibility(refusal: TypeVisibilityRefusal)
     TypeSignature(refusal: TypeSignatureRefusal)
+    ProjectionMember(refusal: ProjectionMemberRefusal)
     ClosureSignature(refusal: ClosureSignatureRefusal)
     LoopTarget(refusal: LoopTargetRefusal)
     SourceTyping(refusal: SourceTypingRefusal)
@@ -654,6 +673,15 @@ pub impl CompileDiagnostic {
     fn typeSignature() -> Optional[TypeSignatureRefusal] {
         return match self.storage[0U64] {
             DiagnosticData.TypeSignature(refusal: val refusal) => <Optional.Some v=refusal />
+            _ => <Optional.None />
+        }
+    }
+    factory projectionMember(refusal: ProjectionMemberRefusal) {
+        return <CompileDiagnostic storage=[<DiagnosticData.ProjectionMember refusal=refusal />] />
+    }
+    fn projectionMember() -> Optional[ProjectionMemberRefusal] {
+        return match self.storage[0U64] {
+            DiagnosticData.ProjectionMember(refusal: val refusal) => <Optional.Some v=refusal />
             _ => <Optional.None />
         }
     }
@@ -823,6 +851,7 @@ pub impl CompileDiagnostic {
             DiagnosticData.IndexRequirement(refusal: _) => <DiagnosticSeverity.Error />
             DiagnosticData.TypeVisibility(refusal: _) => <DiagnosticSeverity.Error />
             DiagnosticData.TypeSignature(refusal: _) => <DiagnosticSeverity.Error />
+            DiagnosticData.ProjectionMember(refusal: _) => <DiagnosticSeverity.Error />
             DiagnosticData.ClosureSignature(refusal: _) => <DiagnosticSeverity.Error />
             DiagnosticData.LoopTarget(refusal: _) => <DiagnosticSeverity.Error />
             DiagnosticData.SourceTyping(refusal: _) => <DiagnosticSeverity.Error />
@@ -848,6 +877,7 @@ pub impl CompileDiagnostic {
             DiagnosticData.IndexRequirement(refusal: _) => <FailureDomain.Unclassified />
             DiagnosticData.TypeVisibility(refusal: _) => <FailureDomain.Unclassified />
             DiagnosticData.TypeSignature(refusal: _) => <FailureDomain.Unclassified />
+            DiagnosticData.ProjectionMember(refusal: _) => <FailureDomain.Unclassified />
             DiagnosticData.ClosureSignature(refusal: _) => <FailureDomain.Unclassified />
             DiagnosticData.LoopTarget(refusal: _) => <FailureDomain.Unclassified />
             DiagnosticData.SourceTyping(refusal: _) => <FailureDomain.Unclassified />
@@ -873,6 +903,7 @@ pub impl CompileDiagnostic {
             DiagnosticData.IndexRequirement(refusal: val refusal) => refusal.location()
             DiagnosticData.TypeVisibility(refusal: val refusal) => refusal.location()
             DiagnosticData.TypeSignature(refusal: val refusal) => refusal.location()
+            DiagnosticData.ProjectionMember(refusal: val refusal) => refusal.location()
             DiagnosticData.ClosureSignature(refusal: val refusal) => refusal.location()
             DiagnosticData.LoopTarget(refusal: val refusal) => refusal.location()
             DiagnosticData.SourceTyping(refusal: val refusal) => refusal.location()
@@ -897,6 +928,7 @@ pub impl CompileDiagnostic {
             DiagnosticData.IndexRequirement(refusal: _) => "subscript requires an Index implementation for reading or an IndexSet implementation for writing"
             DiagnosticData.TypeVisibility(refusal: val refusal) => refusal.message()
             DiagnosticData.TypeSignature(refusal: val refusal) => refusal.message()
+            DiagnosticData.ProjectionMember(refusal: val refusal) => refusal.message()
             DiagnosticData.ClosureSignature(refusal: val refusal) => refusal.message()
             DiagnosticData.LoopTarget(refusal: val refusal) => refusal.kind().message()
             DiagnosticData.SourceTyping(refusal: _) => "cannot infer this expression's type; add a type annotation or provide an expected type"
@@ -923,6 +955,7 @@ pub impl CompileDiagnostic {
             DiagnosticData.IndexRequirement(refusal: _) => []
             DiagnosticData.TypeVisibility(refusal: _) => []
             DiagnosticData.TypeSignature(refusal: val refusal) => refusal.notes()
+            DiagnosticData.ProjectionMember(refusal: val refusal) => refusal.notes()
             DiagnosticData.ClosureSignature(refusal: val refusal) => refusal.notes()
             DiagnosticData.LoopTarget(refusal: _) => []
             DiagnosticData.SourceTyping(refusal: _) => []

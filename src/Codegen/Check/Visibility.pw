@@ -327,20 +327,6 @@ pub impl Comp {
         return self.checkTypeNameWithOrigin(siteOffset: siteOffset, start: start, len: len, occurrence: 0U64, origin: <SourceTypeUseOrigin.Raw />)
     }
 
-    inout fn checkProjectionMember(type: TypeRef) -> Result[(), CompileDiagnostic] {
-        if type.assocNameId == 0U64 || type.assocTraitId == 0U64 { return <Result.Ok value=() /> }
-        val owner = if type.hasAssocTraitDecl { give type.assocTraitDeclOffset } else { give type.assocTraitStart }
-        val index = self.decls.traitIndexByOffset(offset: owner)
-        if index >= self.decls.traitCount() { return <Result.Ok value=() /> }
-        val trait = self.decls.traitAt(index: index)
-        mut val member = 0U64
-        while member < trait.assocTypes.count() {
-            if self.traitBindAt(binds: trait.assocTypes, index: member).nameId == type.assocNameId { return <Result.Ok value=() /> }
-            member += 1U64
-        }
-        return <Result.Err error=self.diagnosticAt(offset: type.siteOffset, msg: "associated-type projection names an associated type that is not bound by the selected conformance (spec/08)") />
-    }
-
     // A single authored use has identical semantics at declaration load and
     // lexical body request. Projection and visibility checks precede consumers.
     fn authoredDeclarationTypeUseSite(ref: U64) -> Optional[U64] {

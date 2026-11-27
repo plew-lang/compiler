@@ -92,7 +92,7 @@ impl Comp {
             if !self.checkedTypeUses.contains(ref) {
                 try self.checkFunctionTypeSignature(ref: ref, occurrence: id, origin: origin)
                 try self.checkAnyTypeFormation(ref: ref)
-                try self.checkProjectionMember(type: self.arena.typeAt(index: ref))
+                try self.checkProjectionMemberWithOrigin(ref: ref, occurrence: id, origin: origin)
                 try self.checkTypeUseVisibilityWithOrigin(ref: ref, occurrence: id, origin: origin)
                 self.checkedTypeUses.insert(ref)
             }

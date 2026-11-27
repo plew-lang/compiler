@@ -3989,6 +3989,18 @@ pub struct Decls {
     pub mut val ownershipCfgFunctions: Array[U64] = []
 }
 pub impl Decls {
+    // The admitted, flattened trait catalogue owns its member namespace.
+    // None denotes malformed query storage, not an absent language member.
+    fn traitAssociatedMember(index: U64, nameId: U64) -> Optional[Bool] {
+        if index >= self.traits.count() { return <Optional.None /> }
+        val range = self.traits[index].assocTypes
+        if range.start > self.traitBindPool.count() || range.len > self.traitBindPool.count()-range.start { return <Optional.None /> }
+        for member in 0U64..<range.len {
+            if self.traitBindPool[range.start+member].nameId == nameId { return <Optional.Some v=true /> }
+        }
+        return <Optional.Some v=false />
+    }
+
     factory
 }
 

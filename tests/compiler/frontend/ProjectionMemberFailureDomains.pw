@@ -1,0 +1,63 @@
+use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontendForRequests, openFrontend }
+use ../../../src/CheckedProgram only { CompilerSession, CompilerSessionResult, ProgramCheckResult, checkCompilerSession }
+use ../../../src/SourceAccess only { SourceAccess }
+use ../../../src/Ir only { TypeRef }
+use ../../../src/Diag only { CompileDiagnostic, DiagnosticLocation }
+fn projectionFailure(diagnostic: CompileDiagnostic) {
+    if !diagnostic.isSourceRejection() || diagnostic.notes().count() != 0U64 || diagnostic.message() != "associated-type projection names an associated type that is not bound by the selected conformance (spec/08)" { panic("projection member failure lost source origin") }
+}
+fn sameLocation(actual: DiagnosticLocation, expected: DiagnosticLocation) {
+    match actual {
+        DiagnosticLocation.File(path: val path, line: val line) => {
+            match expected {
+                DiagnosticLocation.File(path: val expectedPath, line: val expectedLine) => { if path != expectedPath || line != expectedLine { panic("parameter group location changed in session") } }
+                _ => { panic("reference parameter group location lost") }
+            }
+        }
+        _ => { panic("session parameter group location lost") }
+    }
+}
+fn sameProjectionFailure(first: CompileDiagnostic, second: CompileDiagnostic) {
+    projectionFailure(diagnostic: first)
+    projectionFailure(diagnostic: second)
+    sameLocation(actual: first.location(), expected: second.location())
+}
+
+fn projectionSession(input: FrontendInput) -> CompilerSession {
+    match CompilerSession.open(input: input, sources: <SourceAccess stdRoot="std/".bytes() />) {
+        CompilerSessionResult.Success(session: val session) => { return move session }
+        CompilerSessionResult.Failure(diagnostic: val diagnostic) => { panic(diagnostic.message()) }
+    }
+}
+fn main() {
+    val input = <FrontendInput.File path="tests/compiler/frontend/fixtures/ProjectionMembers/Body.pw" />
+    mut val owned = projectionSession(input: input)
+    mut val raw = <Comp />
+    raw.checkProjectionMember(type: <TypeRef args=[] />).unwrap()
+    analyzeFrontendForRequests(c: inout raw, input: input, sources: <SourceAccess stdRoot="std/".bytes() />).unwrap()
+    // Identical frozen input assigns the same named function identity in each
+    // fresh session; no source capability is transferred by this observation.
+    val function = raw.arena.firstFunctionNamed(nameId: raw.internBytes(s: "entry").nameId)
+    mut val retained: Optional[CompileDiagnostic] = <Optional.None />
+    for attempt in 0U64..<2U64 {
+        match raw.prepareLexicalBody(fnIdx: function) {
+            Result.Err(error: val diagnostic) => { if diagnostic.isSourceRejection() { panic("Raw Source diagnostic: "+diagnostic.message()) }
+                if diagnostic.notes().count() != 0U64 { panic("Raw missing note: "+diagnostic.message()) }
+                raw.pendingDiagnostics.append(diagnostic)
+                val drained = raw.takeDiagnostics()
+                if drained.count() != 1U64 || drained[0U64].isSourceRejection() || drained[0U64].message() != diagnostic.message() || drained[0U64].notes().count() != 0U64 { panic("Raw drain changed signature refusal") }
+                sameLocation(actual: drained[0U64].location(), expected: diagnostic.location())
+ }
+            Result.Ok(value: _) => { panic("Raw body admitted duplicate projection member") }
+        }
+        match owned.prepareFunction(function: function) {
+            Result.Err(error: val diagnostic) => {
+                projectionFailure(diagnostic: diagnostic)
+                match retained { Optional.Some(v: val first) => { sameProjectionFailure(first: first, second: diagnostic) } Optional.None => { retained = <Optional.Some v=diagnostic /> } }
+            }
+            Result.Ok(value: _) => { panic("owned request admitted duplicate projection member") }
+        }
+    }
+    match checkCompilerSession(session: move owned) { ProgramCheckResult.Failure(diagnostic: val diagnostic) => { projectionFailure(diagnostic: diagnostic) } ProgramCheckResult.Success(program: _) => { panic("refused session became checked") } }
+    match openFrontend(input: input, sources: <SourceAccess stdRoot="std/".bytes() />) { Result.Err(error: val diagnostic) => { projectionFailure(diagnostic: diagnostic) } Result.Ok(value: _) => { panic("eager check admitted projection member") } }
+}

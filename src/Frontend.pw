@@ -67,7 +67,7 @@ use ./Path only { resolveImport, extractSpan, dirPrefixLen, findSrcRoot, findPkg
 use ./Manifest only { Dep, loadManifestDeps, resolveDepImport, resolveGitDepImport, loadLock, isExternalDepImport }
 use ./Lock only { Lock }
 use ./Cache only { cacheRoot }
-use ./Diag only { compileErrorAt, compileErrorAtFile, CompileDiagnostic, ArrayContextRefusal, UseAfterMoveRefusal, MissingFieldRefusal, MissingFieldKind, AssignmentRefusal, AssignmentRefusalKind, UniqueCopyRefusal, UniqueCaptureRefusal, NonCallableBindingRefusal, FreeCallVisibilityRefusal, FreeCallVisibilityKind, FreeCallAmbiguityRefusal, FreeCallAmbiguityKind, MemberCallAmbiguityRefusal, MemberCallAmbiguityKind, GenericCallConflictRefusal, genericCallConflictMessage, OpaqueNumericRefusal, OperatorRequirementRefusal, NamedDeclarationRefusal, NamedDeclarationKind, SourceTypingRefusal, IndexRequirementRefusal, TypeVisibilityRefusal, TypeSignatureRefusal, ClosureSignatureRefusal, LoopTargetRefusal, LoopTargetRefusalKind, opaqueNumericMessage, DiagnosticOwner, DiagnosticNote, DiagnosticLocation, DiagnosticSeverity, FailureDomain, emitDiagnostic, eprintInt, digitByte, digitStrU }
+use ./Diag only { compileErrorAt, compileErrorAtFile, CompileDiagnostic, ArrayContextRefusal, UseAfterMoveRefusal, MissingFieldRefusal, MissingFieldKind, AssignmentRefusal, AssignmentRefusalKind, UniqueCopyRefusal, UniqueCaptureRefusal, NonCallableBindingRefusal, FreeCallVisibilityRefusal, FreeCallVisibilityKind, FreeCallAmbiguityRefusal, FreeCallAmbiguityKind, MemberCallAmbiguityRefusal, MemberCallAmbiguityKind, GenericCallConflictRefusal, genericCallConflictMessage, OpaqueNumericRefusal, OperatorRequirementRefusal, NamedDeclarationRefusal, NamedDeclarationKind, SourceTypingRefusal, IndexRequirementRefusal, TypeVisibilityRefusal, TypeSignatureRefusal, ProjectionMemberRefusal, ClosureSignatureRefusal, LoopTargetRefusal, LoopTargetRefusalKind, opaqueNumericMessage, DiagnosticOwner, DiagnosticNote, DiagnosticLocation, DiagnosticSeverity, FailureDomain, emitDiagnostic, eprintInt, digitByte, digitStrU }
 use ./Ops only { opEq, opNe, opLt, opLe, opGt, opGe, opAdd, opSub, opMul, opDiv, opRem, opAnd, opOr, opNot, opBitAnd, opBitOr, opBitXor, opShl, opShr, opBitNot, opAssign, compoundBinOp, isBinTraitOp, binTraitName, binTraitMethodName, unaryMethodName }
 
 // Only an entirely unsuffixed numeric expression accepts a sibling's
@@ -1006,6 +1006,15 @@ struct LoweredFunctionTypeLabels {
     val positions: Array[Span]
 }
 impl LoweredFunctionTypeLabels { factory }
+struct SourceProjectionMemberFailure {
+    val refusal: ProjectionMemberRefusal
+    val evidence: SourceTypeUseFailureEvidence
+    val traitOwner: U64
+    val traitId: U64
+    val memberId: U64
+    val site: U64
+}
+impl SourceProjectionMemberFailure { factory }
 struct SourceTypeSignatureFailure {
     val refusal: TypeSignatureRefusal
     val evidence: SourceTypeUseFailureEvidence
@@ -1567,6 +1576,7 @@ pub struct Comp {
     pub mut val pendingInterpolationWrites: Dictionary[U64, InterpolationWrite] = [:]
     mut val authoredCastTargets: Dictionary[U64, U64] = [:]
     mut val functionTypeLabelPositions: Dictionary[U64, LoweredFunctionTypeLabels] = [:]
+    mut val failedProjectionMembers: Array[SourceProjectionMemberFailure] = []
     mut val failedTypeSignatures: Array[SourceTypeSignatureFailure] = []
     mut val failedClosureSignatures: Array[SourceClosureSignatureFailure] = []
     mut val authoredClosureSignatures: Dictionary[U64, AuthoredClosureSignature] = [:]
@@ -2438,6 +2448,7 @@ part ./SourceClosureSignatures
 part ./ParameterGroups
 part ./NominalDeclarationLabels
 part ./SourceTypeDeclarationVisibility
+part ./ProjectionMembers
 part ./FunctionTypeSignatures
 part ./SourceTypeUseAdmission
 part ./SourceTypeVisibility

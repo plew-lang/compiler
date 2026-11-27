@@ -1,0 +1,5 @@
+trait Parser { type Output }
+struct P {}
+impl P as Parser { type Output = I64 }
+fn entry(value: P#Parser.Missing) {}
+fn main() {}
