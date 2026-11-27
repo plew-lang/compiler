@@ -1,0 +1,14 @@
+// Append to a frozen Frontend module; exercise actual Source admission.
+fn main() {
+    mut val compiler = <Comp />
+    match analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.File path="tests/compiler/frontend/fixtures/ProjectionMembers/Inherited.pw" />, sources: <SourceAccess stdRoot="std/".bytes() />) {
+        Result.Ok(value: _) => {}
+        Result.Err(error: val diagnostic) => { panic("Source inherited admission rejected: "+diagnostic.message()) }
+    }
+    val index = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "entry").nameId)
+    val function = compiler.arena.functionAt(index: index)
+    val parameter = compiler.funcParamAt(params: function.params, index: 0U64)
+    val projection = compiler.arena.typeAt(index: parameter.ty)
+    val parent = compiler.internBytes(s: "Parent").nameId
+    if projection.assocTraitId != parent || projection.assocNameId != compiler.internBytes(s: "Output").nameId { panic("Source projection did not publish its actual declaring trait") }
+}

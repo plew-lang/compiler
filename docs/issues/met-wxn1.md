@@ -48,3 +48,36 @@ mismatches); do not replace it with service-only outcomes. Query unit A is close
 
 This is an execution sequence within the existing task, not a relaxation of its
 final-consumer completion boundary. Missing/Ambiguous owned transport belongs C.
+
+
+## Source handoff design and native RED
+
+`InheritedSelectionMain.pw` drives analyzeFrontendForRequests on Inherited.pw
+and then requires the parameter's published projection to name declaring Parent.
+Frozen native `inherited-source-selection-red-v2` builds/links successfully and
+fails specifically with the old direct-member rejection for T#Child.Output.
+Meta `inherited-source-selection-red.json` records actual status/input hashes;
+the initial v1 unwrap panic is not relied upon to classify the cause.
+
+Use one append-only Comp selection record, referenced by an opaque draft token
+on PType and then explicitly bound once to its immutable source occurrence.
+Keep the full Missing/Unique/Ambiguous query outcome, authored roots/argument
+recipes, and derived declaring-instance recipes. A token is not Source proof.
+Binding validates session-local term/site/scope/recipe association, not ambient
+cursor or reverse lookup from a canonical interned term. Avoid copying the query
+graph at each handoff; SourceTypeUses may retain a token without depending on
+Frontend-specific graph types.
+
+The independent API review found this consistent with authoredChildren-to-recipe
+handoff and identified required implementation boundaries:
+- Canonical child recipes match Parent term children; Child argument provenance
+  belongs on a separate edge, including changed parent arity.
+- Authored Child admission and declaring-member evidence have distinct fields;
+  a single AuthoredTypeViewProof.selector cannot mean both.
+- Lexical/nested receiver creation via loweredProjectionReceiverRecipe also
+  records occurrences and must carry the token, not only the two main wrappers.
+- Query outcome never establishes conformance. Final readers consume the saved
+  identity and justified derivation; no late selection or token-based authority.
+
+This design remains within the adopted contract. Final implementation and
+producer-to-final-consumer certification are not yet complete.
