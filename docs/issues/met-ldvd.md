@@ -1,6 +1,6 @@
 ---
 id: met-ldvd
-status: in_progress
+status: closed
 deps: [met-g9dh]
 links: []
 created: 2026-11-27T09:01:39Z
@@ -125,3 +125,27 @@ AST checks pass for coherent spans and absent/swapped/out-of-bounds fallback
 Raw/owned session retry, diagnostic drain, retained cache failure, whole and
 eager rejection pass with the original primary/note locations. Final-source
 frozen v2 build and final focused regressions/review are pending.
+
+Neutral source review of d712af31 found no new must-fix. The ordered-span
+guard only denies positional metadata, never skips signature validation.
+Legacy and session controls cover actual producer/service paths. All five
+visibility native controls (Main/Request/Slot/Declaration/Implementation) now
+pass after common evidence extraction. Final v2 build and fresh regression
+remain pending; parent whole/fixed-point/performance are not certified.
+
+## Finite completion
+
+Resolved at d712af31. Final v2 frozen src/std222files match this revision.
+Fresh C84/B96/A114 all pass with unchanged inputs; all five visibility native
+controls, Raw malformed/forged/foreign/cache checks, real legacy positions and
+Raw/owned session retry/drain/whole/eager retention pass. Selected gen
+20261127T115115-gen-6efc1d passed. Neutral independent review confirmed no
+remaining must-fix or mandatory coverage gap after these conditions.
+
+Final receipts and source correspondence: meta evidence/rejection-domains/
+diagnostic-domain-implementation/declaration-parameters/function-type-*.json.
+Earlier pending checkpoints above describe earlier revisions only.
+Parent met-auj6 retains whole-suite/fixed-point/performance integration gates.
+The final v2 carrier and native snapshots are retained for parent comparison;
+retire reproducible intermediate LLVM/probes after parent receipt matching.
+No main/seed promotion or whole compiler completion is claimed.
