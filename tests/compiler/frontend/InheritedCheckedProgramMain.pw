@@ -37,6 +37,9 @@ fn checkProjectionProgram(path: String, accepted: Bool, expectedDiagnostic: Stri
 fn main() {
     mut val failures = ""
     for sample in [
+        (path: "tests/compiler/frontend/fixtures/ProjectionMembers/ExecutableStaticExpectedResultControl.pw", accepted: true, diagnostic: ""),
+        (path: "tests/compiler/frontend/fixtures/ProjectionMembers/ExecutableProvidedExpectedResultControl.pw", accepted: true, diagnostic: ""),
+        (path: "tests/compiler/frontend/fixtures/ProjectionMembers/ExecutableFactoryErrorControl.pw", accepted: true, diagnostic: ""),
         (path: "tests/compiler/frontend/fixtures/ProjectionMembers/ExecutableStaticExpectedResult.pw", accepted: true, diagnostic: ""),
         (path: "tests/compiler/frontend/fixtures/ProjectionMembers/ExecutableProvidedExpectedResult.pw", accepted: true, diagnostic: ""),
         (path: "tests/compiler/frontend/fixtures/ProjectionMembers/ExecutableStaticRequirement.pw", accepted: true, diagnostic: ""),

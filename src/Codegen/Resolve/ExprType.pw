@@ -229,7 +229,8 @@ pub impl Comp {
     inout fn groundFinalMethodReturn(callee: U64, receiver: U64, args: ArgRange) -> Result[U64, CompileDiagnostic] {
         if receiver == 0U64 { return <Result.Ok value=0U64 /> }
         val function = self.arena.functionAt(index: callee)
-        val environment = try self.finalMethodEnvironment(f: function, receiverRef: receiver, args: args)
+        val patterns: Array[U64] = if function.typeParams.count() == 0U64 { give [] } else { give try self.lexicalBodyParameterTypes(function: callee, receiver: receiver) }
+        val environment = try self.finalMethodEnvironmentWithOrigin(f: function, receiverRef: receiver, args: args, parameterTypes: patterns, inferenceOrigin: <GenericCallInferenceOrigin.Raw />)
         return self.selectedMethodResult(callee: callee, environment: environment)
     }
 
@@ -247,13 +248,21 @@ pub impl Comp {
         return true
     }
 
+}
+
+impl Comp {
     // Reuse the exact selected provided environment for source result queries
     // and the signature saved by Record.
-    inout fn staticProvidedCallEnvironment(function: Func, proof: StaticConformanceProof, receiverTerm: U64, args: ArgRange, retainedArguments: Array[U64] = []) -> Result[InstanceEnvironment, CompileDiagnostic] {
-        val inferred = try self.inferMethodEnvironment(f: function, receiverRef: receiverTerm, args: args, selectedProof: proof, retainedArguments: retainedArguments)
+    inout fn staticProvidedCallEnvironment(callee: U64, proof: StaticConformanceProof, receiverTerm: U64, args: ArgRange, retainedArguments: Array[U64] = [], inferenceOrigin: GenericCallInferenceOrigin = <GenericCallInferenceOrigin.Raw />) -> Result[InstanceEnvironment, CompileDiagnostic] {
+        val function = self.arena.functionAt(index: callee)
+        val patterns: Array[U64] = if function.typeParams.count() == 0U64 { give [] } else { give try self.lexicalBodyParameterTypes(function: callee, receiver: receiverTerm) }
+        val inferred = try self.inferMethodEnvironmentWithOrigin(f: function, receiverRef: receiverTerm, args: args, parameterTypes: patterns, selectedProof: proof, retainedArguments: retainedArguments, inferenceOrigin: inferenceOrigin)
         return self.withLexicalSelfBinding(f: function, environment: <InstanceEnvironment params=inferred.params args=inferred.args receiverRef=receiverTerm proof=proof />)
     }
 
+}
+
+pub impl Comp {
     // Source result queries interpret the selected signature and proof. They
     // cannot recover a receiver, lexical binder or another member from text.
     inout fn staticMemberCallResultType(resolution: StaticMemberResolution, receiverTerm: U64, args: ArgRange) -> Result[U64, CompileDiagnostic] {
@@ -262,8 +271,7 @@ pub impl Comp {
                 return self.staticRequirementCallResultType(resolution: resolution, args: args)
             }
             StaticMemberResolution.Provided(proof: val proof, traitIdx: _, callee: val callee) => {
-                val declaration = self.arena.functionAt(index: callee)
-                val environment = try self.staticProvidedCallEnvironment(function: declaration, proof: proof, receiverTerm: receiverTerm, args: args)
+                val environment = try self.staticProvidedCallEnvironment(callee: callee, proof: proof, receiverTerm: receiverTerm, args: args)
                 return <Result.Ok value=(try self.providedSourceSignature(function: callee, environment: environment, read: <CallableSignatureRead.SourceResult />)).resultType />
             }
             StaticMemberResolution.Missing => { return <Result.Ok value=0U64 /> }

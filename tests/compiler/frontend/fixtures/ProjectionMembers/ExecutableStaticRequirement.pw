@@ -8,7 +8,7 @@ impl Leaf as Parent[U32] { type Output = U32 }
 impl Leaf as Child[U32] {
     assoc fn echo(value: U32) -> U32 { return value }
 }
-fn relay[T](value: T#Child[U32].Output) -> T#Child[U32].Output where T: Child[U32] {
+fn relay[T](owner: T, value: T#Child[U32].Output) -> T#Child[U32].Output where T: Child[U32] {
     return T.echo(value: value)
 }
-fn main() { print(relay[Leaf](value: 7U32)) }
+fn main() { print(relay(owner: <Leaf />, value: 7U32)) }

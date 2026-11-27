@@ -1,15 +1,40 @@
-// Registered Source cannot fall back to a Raw signature when admission is closed.
+// The native driver calls this hook inside the real admission window, before
+// the first signature sweep. Erasing an already-published receipt is not a valid
+// Open setup: write-once associated admissions must reject that corruption.
+mut val signatureAdmissionObserved: Bool = false
+impl Comp {
+    inout fn probeEarlySignatureAdmission() -> Result[(), CompileDiagnostic] {
+        val function = self.arena.firstFunctionNamed(nameId: self.internBytes(s: "entry").nameId)
+        if function >= self.arena.functionCount() || self.authoredSignatureViews.contains(key: function) { return <Result.Ok value=() /> }
+        val declaration = self.arena.functionAt(index: function)
+        val binder = self.funcBindAt(binds: declaration.typeParams, index: 0U64)
+        val symbolic = self.pushType(t: <TypeRef nameStart=binder.nameStart nameLen=binder.nameLen nameId=binder.nameId paramId=binder.paramId args=[] />)
+        val environment = <InstanceEnvironment params=self.copyFuncBinds(binds: declaration.typeParams) args=[symbolic] />
+        val result = try self.readRetainedCallableTypes(function: function, environment: environment, read: <CallableSignatureRead.SourceParameters />)
+        if result.isNone() || !self.authoredSignatureViews.contains(key: function) { panic("open admission did not publish its source signature") }
+        val parameter = self.arena.typeAt(index: result.unwrap().parameterTypes[0U64])
+        if parameter.assocTraitId != self.internBytes(s: "Parent").nameId { panic("early signature construction lost its saved declaring parent") }
+        signatureAdmissionObserved = true
+        return <Result.Ok value=() />
+    }
+}
 fn main() {
     mut val compiler = <Comp />
-    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.File path="tests/compiler/frontend/fixtures/ProjectionMembers/Inherited.pw" />, sources: <SourceAccess stdRoot="std/".bytes() />).unwrap()
+    match analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.File path="tests/compiler/frontend/fixtures/ProjectionMembers/Inherited.pw" />, sources: <SourceAccess stdRoot="std/".bytes() />) {
+        Result.Ok(value: _) => {}
+        Result.Err(error: val diagnostic) => { panic("admission setup: "+diagnostic.message()) }
+    }
     val function = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "entry").nameId)
     val declaration = compiler.arena.functionAt(index: function)
     val leafFunction = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "leaf").nameId)
     val leaf = compiler.funcParamAt(params: compiler.arena.functionAt(index: leafFunction).params, index: 0U64).ty
     val environment = <InstanceEnvironment params=compiler.copyFuncBinds(binds: declaration.typeParams) args=[leaf] />
-    compiler.authoredSignatureViews.remove(key: function)
-    compiler.authoredSignatureAdmission = <AuthoredSignatureAdmissionPhase.Open />
-    if compiler.readRetainedCallableTypes(function: function, environment: environment, read: <CallableSignatureRead.SourceResult />).unwrap().isNone() || !compiler.authoredSignatureViews.contains(key: function) { panic("open signature admission lost its registered source") }
+    if !signatureAdmissionObserved { panic("early source signature construction was not exercised") }
+    val completed = match compiler.readRetainedCallableTypes(function: function, environment: environment, read: <CallableSignatureRead.SourceParameters />) {
+        Result.Ok(value: val value) => value,
+        Result.Err(error: val diagnostic) => { panic("completed admission: "+diagnostic.message()) }
+    }
+    if completed.isNone() { panic("completed signature admission lost its registered source") }
     compiler.authoredSignatureViews.remove(key: function)
     compiler.authoredSignatureAdmission = <AuthoredSignatureAdmissionPhase.Complete />
     match compiler.readRetainedCallableTypes(function: function, environment: environment, read: <CallableSignatureRead.SourceResult />) {
@@ -28,5 +53,9 @@ fn main() {
     val mainIndex = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "main").nameId)
     val raw = compiler.arena.functionCount()
     compiler.arena.registerFunction(compiler.arena.functionAt(index: mainIndex), registerSurface: false)
-    if compiler.readRetainedCallableTypes(function: raw, environment: <InstanceEnvironment />, read: <CallableSignatureRead.SourceResult />).unwrap().isSome() || compiler.authoredSignatureViews.contains(key: raw) || compiler.sourceTypeUses.signatureFor(function: raw).isSome() { panic("Raw registration acquired Source signature authority") }
+    val rawRead = match compiler.readRetainedCallableTypes(function: raw, environment: <InstanceEnvironment />, read: <CallableSignatureRead.SourceResult />) {
+        Result.Ok(value: val value) => value,
+        Result.Err(error: val diagnostic) => { panic("Raw admission: "+diagnostic.message()) }
+    }
+    if rawRead.isSome() || compiler.authoredSignatureViews.contains(key: raw) || compiler.sourceTypeUses.signatureFor(function: raw).isSome() { panic("Raw registration acquired Source signature authority") }
 }

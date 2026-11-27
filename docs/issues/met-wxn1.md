@@ -404,3 +404,26 @@ The current Source root18 aggregate also preserves those two failures rather
 than weakening them. Fresh current-source CLI, gen, same-source formal cost and
 parent gates remain required. No task, whole-green, carrier or stage3 completion
 is claimed here.
+
+## Remaining consumer and cost checkpoint
+
+See meta `remaining-consumer-checkpoint.json` for frozen inputs and actual
+results. Real Open-window admission and Complete/Failed/unregistered readers
+pass; no production admission gate was weakened. Optional absent rigid-boundary
+maps avoid constructing empty Dictionaries; the component21 gate passes and an
+independent limited source review found no semantic violation.
+
+Canonical parameter patterns now also flow through static provided environment,
+final method result and unselected call parameter environment construction.
+FactoryError uses its own admitted source slot for the lexical body Result.
+These corrections alone do not close the remaining whole-check failures.
+Parent-projection controls distinguish inherited lookup failures from an existing
+provided expected-result inference failure. Static contextual-result proposal
+and final publication are being moved from raw terms to the shared reader;
+latest native static-result-reader-v17 remains pending at this checkpoint.
+
+The vector-reuse-only candidate built successfully. Six alternating same-source
+samples retain identical LLVM; old/new medians are 8.124098/8.102937s. This is not
+a material recovery claim. Formal latest 8bec5272 is 8.073688s at G3 fixed point,
+above 7.5s. The task remains in progress; neither candidate nor completion is
+adopted. Further functional and cost work is required.

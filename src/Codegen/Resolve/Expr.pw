@@ -794,15 +794,10 @@ pub impl Comp {
         val function = self.arena.functionAt(index: fnIdx)
         val receiver = self.parametricSelfRef(f: function)
         if function.hasRet {
-            match (try self.lexicalBodySignatureType(function: fnIdx, slot: <SourceSignatureSlot.Result />, ref: function.retTy, receiver: receiver)) {
-                Optional.Some(v: val retained) => {
-                    term = retained
-                    if function.isAsync && !self.arena.forwardsAsyncPromise(function: function) {
-                        val result = self.arena.typeAt(index: term)
-                        if rangeEquals(bytes: self.arena.bytes, start: result.nameStart, len: result.nameLen, kw: "Promise") && result.args.count() == 1U64 { term = result.args[0U64] }
-                    }
-                }
-                Optional.None => {}
+            term = try self.lexicalCallableResultType(function: fnIdx)
+            if function.isAsync && !self.arena.forwardsAsyncPromise(function: function) {
+                val result = self.arena.typeAt(index: term)
+                if rangeEquals(bytes: self.arena.bytes, start: result.nameStart, len: result.nameLen, kw: "Promise") && result.args.count() == 1U64 { term = result.args[0U64] }
             }
         }
         return <Result.Ok value=self.groundTermInEnvironment(ref: term, params: [], values: [], selfRef: receiver) />
@@ -1392,7 +1387,7 @@ impl Comp {
             }
             StaticMemberResolution.Provided(proof: val proof, traitIdx: _, callee: val callee) => {
                 val function = self.arena.functionAt(index: callee)
-                val environment = try self.staticProvidedCallEnvironment(function: function, proof: proof, receiverTerm: receiverTerm, args: args, retainedArguments: (try self.syntheticSelectedTypeArguments(exprId: exprId, declaration: callee)))
+                val environment = try self.staticProvidedCallEnvironment(callee: callee, proof: proof, receiverTerm: receiverTerm, args: args, retainedArguments: (try self.syntheticSelectedTypeArguments(exprId: exprId, declaration: callee)), inferenceOrigin: <GenericCallInferenceOrigin.Call request=origin.request expression=exprId callee=callee arguments=args diagnostic=false />)
                 selectedEnvironment = environment
                 methodArguments = self.signatureTypeArguments(f: function, environment: environment)
                 val signature = try self.providedSourceSignature(function: callee, environment: environment)
@@ -1910,7 +1905,7 @@ impl Comp {
 pub impl Comp {
     // Expected results may fill only the selected declaration's unresolved
     // binders. A failed structural match never publishes a partial update.
-    inout fn completeCallTypeArguments(function: Func, current: Array[U64], resultPattern: U64, expectedTerm: U64, rigidPatternTerms: Dictionary[U64, U64] = [:]) -> Array[U64] {
+    inout fn completeCallTypeArguments(function: Func, current: Array[U64], resultPattern: U64, expectedTerm: U64, rigidPatternTerms: Optional[Dictionary[U64, U64]] = <Optional.None />) -> Array[U64] {
         if expectedTerm == 0U64 || function.typeParams.count() == 0U64 || current.count() > function.typeParams.count() { return current }
         if current.count() == function.typeParams.count() && self.fnArgsAllResolved(args: current) { return current }
         mut val completed = current
@@ -1930,17 +1925,37 @@ impl Comp {
         return true
     }
 
-    // A proposal uses the declaration's admitted symbolic result, before
-    // applying this call's known arguments. It does not authorize a final call.
-    inout fn declaredCallableResultPattern(callee: U64) -> Result[U64, CompileDiagnostic] {
-        val function = self.arena.functionAt(index: callee)
-        if function.hasRet {
-            match (try self.lexicalBodySignatureType(function: callee, slot: <SourceSignatureSlot.Result />, ref: function.retTy, receiver: self.parametricSelfRef(f: function))) {
+    // Read the declaration's admitted symbolic callable result. Factory error
+    // annotations occupy their own source slot inside the Result representation.
+    // A call still needs its selected environment before final publication.
+    inout fn lexicalCallableResultType(function: U64) -> Result[U64, CompileDiagnostic] {
+        val callee = function
+        val declaration = self.arena.functionAt(index: callee)
+        if declaration.isFactory {
+            match self.sourceTypeUses.signatureFor(function: callee) {
+                Optional.Some(v: val signature) => {
+                    if signature.factoryError != 0U64 {
+                        val occurrence = try self.authoredSignatureOccurrence(signature: signature, id: signature.factoryError)
+                        match (try self.lexicalBodySignatureType(function: callee, slot: <SourceSignatureSlot.FactoryError />, ref: occurrence.term, receiver: self.parametricSelfRef(f: declaration))) {
+                            Optional.Some(v: val error) => {
+                                val result = self.arena.typeAt(index: declaration.retTy)
+                                if result.args.count() != 2U64 { return <Result.Err error=self.diagnosticAt(offset: declaration.defOffset, msg: "factory error signature has no Result representation", failureDomain: <FailureDomain.Internal />) /> }
+                                return <Result.Ok value=self.rebuildTypeTermChildren(ref: declaration.retTy, children: [result.args[0U64], error]) />
+                            }
+                            Optional.None => {}
+                        }
+                    }
+                }
+                Optional.None => {}
+            }
+        }
+        if declaration.hasRet {
+            match (try self.lexicalBodySignatureType(function: callee, slot: <SourceSignatureSlot.Result />, ref: declaration.retTy, receiver: self.parametricSelfRef(f: declaration))) {
                 Optional.Some(v: val term) => { return <Result.Ok value=term /> }
                 Optional.None => {}
             }
         }
-        return <Result.Ok value=self.semanticCallableReturnTerm(function: function) />
+        return <Result.Ok value=self.semanticCallableReturnTerm(function: declaration) />
     }
 
     // A known replacement belongs to the caller. Match it as a whole,
@@ -1995,12 +2010,13 @@ impl Comp {
                     give try self.providedExpectedResultPattern(callee: callee, receiver: selectedReceiver, arguments: current, proof: proof)
                 } else {
                     val receiver = self.parametricSelfRef(f: function)
-                    val declaration = try self.declaredCallableResultPattern(callee: callee)
+                    val declaration = try self.lexicalCallableResultType(function: callee)
                     val pattern = self.groundTermInEnvironment(ref: declaration, params: [], values: [], selfRef: receiver)
                     try self.prepareResultPatternBoundaries(ref: pattern, params: function.typeParams, known: current, receiver: receiver, rigidPatternTerms: inout rigidPatternTerms)
                     give pattern
                 }
-                val completed = self.completeCallTypeArguments(function: function, current: current, resultPattern: resultPattern, expectedTerm: expectedTerm, rigidPatternTerms: rigidPatternTerms)
+                val boundaries: Optional[Dictionary[U64, U64]] = if rigidPatternTerms.count() == 0U64 { give <Optional.None /> } else { give <Optional.Some v=rigidPatternTerms /> }
+                val completed = self.completeCallTypeArguments(function: function, current: current, resultPattern: resultPattern, expectedTerm: expectedTerm, rigidPatternTerms: boundaries)
                 if completed.count() != function.typeParams.count() || !self.fnArgsAllResolved(args: completed) { return <Result.Ok value=<Optional.None /> /> }
                 // The expected term constrains only this callee's binders.
                 // Publish the substituted declaration result, never the expected
@@ -2037,7 +2053,8 @@ impl Comp {
                             pattern = try self.providedExpectedResultPattern(callee: callee, receiver: receiverTerm, arguments: current, proof: selectedProof)
                         } else {
                             val lexical = try self.withLexicalSelfBinding(f: function, environment: <InstanceEnvironment receiverRef=receiverTerm proof=selectedProof />)
-                            pattern = self.groundTermInEnvironment(ref: self.semanticCallableReturnTerm(function: function), params: lexical.params, values: lexical.args, selfRef: receiverTerm)
+                            val declaration = try self.lexicalCallableResultType(function: callee)
+                            pattern = self.groundTermInEnvironment(ref: declaration, params: lexical.params, values: lexical.args, selfRef: receiverTerm)
                         }
                         proof = selectedProof
                     }
@@ -2056,7 +2073,8 @@ impl Comp {
                             val lexical = try self.withLexicalSelfBinding(f: function, environment: environment)
                             give if lexical.receiverRef == 0U64 { give <RetainedCallableTypes parameterTypes=[] /> } else { give try self.providedSourceSignature(function: callee, environment: lexical, read: <CallableSignatureRead.SourceResult />) }
                         } else {
-                            give <RetainedCallableTypes parameterTypes=[] resultType=(try self.groundTermForBody(ref: pattern, environment: environment, selfRef: receiverTerm, itemRef: 0U64)) />
+                            val selected = try self.selectedCallableSourceResult(callee: callee, environment: environment)
+                            give <RetainedCallableTypes parameterTypes=[] resultType=selected.term resultOccurrence=selected.occurrence resultSelector=selected.selector />
                         }
                     }
                     _ => { give <RetainedCallableTypes parameterTypes=[] resultType=(try self.groundTermForBody(ref: pattern, environment: environment, selfRef: receiverTerm, itemRef: 0U64)) /> }
@@ -2118,7 +2136,8 @@ pub impl Comp {
         val function = self.arena.functionAt(index: callee)
         val selectedReceiver = self.syntheticCallReceiverTerm(exprId: exprId, fallback: receiverRef)
         val environment = if selectedReceiver != 0U64 {
-            give (try self.finalMethodEnvironment(f: function, receiverRef: selectedReceiver, args: args))
+            val patterns: Array[U64] = if function.typeParams.count() == 0U64 { give [] } else { give try self.lexicalBodyParameterTypes(function: callee, receiver: selectedReceiver) }
+            give (try self.finalMethodEnvironmentWithOrigin(f: function, receiverRef: selectedReceiver, args: args, parameterTypes: patterns, inferenceOrigin: <GenericCallInferenceOrigin.Raw />))
         } else {
             give (try self.freeCallParameterEnvironment(callee: callee, args: args))
         }
@@ -2251,16 +2270,19 @@ pub impl Comp {
         return self.matchTypeArgumentConstraints(pattern: pattern, argument: argument, params: <PatternBindInput.Function range=params />, values: inout values)
     }
 
-    inout fn matchTypeArgumentConstraints(pattern: U64, argument: U64, params: PatternBindInput, values: inout Array[U64], rigidPatternTerms: Dictionary[U64, U64] = [:]) -> TypeArgumentMatch {
+    inout fn matchTypeArgumentConstraints(pattern: U64, argument: U64, params: PatternBindInput, values: inout Array[U64], rigidPatternTerms: Optional[Dictionary[U64, U64]] = <Optional.None />) -> TypeArgumentMatch {
         if pattern == 0U64 || argument == 0U64 || pattern >= self.arena.typeTermCount() || argument >= self.arena.typeTermCount() { return <TypeArgumentMatch.Deferred /> }
-        if rigidPatternTerms.count() != 0U64 {
-            match rigidPatternTerms.get(key: pattern) {
-                Optional.Some(v: val replacement) => {
-                    if self.typeRefEq(a: replacement, b: argument) { return <TypeArgumentMatch.Matched /> }
-                    return <TypeArgumentMatch.Deferred />
+        match rigidPatternTerms {
+            Optional.Some(v: val boundaries) => {
+                match boundaries.get(key: pattern) {
+                    Optional.Some(v: val replacement) => {
+                        if self.typeRefEq(a: replacement, b: argument) { return <TypeArgumentMatch.Matched /> }
+                        return <TypeArgumentMatch.Deferred />
+                    }
+                    Optional.None => {}
                 }
-                Optional.None => {}
             }
+            Optional.None => {}
         }
         val term = self.arena.typeTermAt(index: pattern)
         if term.assocNameId != 0U64 {
@@ -2314,7 +2336,7 @@ pub impl Comp {
 
     // Expected-result refinement needs a complete match; a deferred equation
     // supplies no proof that the expected result fits the selected callable.
-    inout fn matchCallResultArguments(pattern: U64, expected: U64, params: FuncBindRange, values: inout Array[U64], rigidPatternTerms: Dictionary[U64, U64] = [:]) -> Bool {
+    inout fn matchCallResultArguments(pattern: U64, expected: U64, params: FuncBindRange, values: inout Array[U64], rigidPatternTerms: Optional[Dictionary[U64, U64]] = <Optional.None />) -> Bool {
         mut val candidate = values
         match self.matchTypeArgumentConstraints(pattern: pattern, argument: expected, params: <PatternBindInput.Function range=params />, values: inout candidate, rigidPatternTerms: rigidPatternTerms) {
             TypeArgumentMatch.Matched => {

@@ -331,11 +331,13 @@ pub impl Comp {
         val receiverEnvironment = try self.methodReceiverSignatureEnvironment(f: f, semanticReceiver: receiver)
         if receiverEnvironment.receiverRef == 0U64 { return <Result.Ok value=0U64 /> }
         val calleeEnvironment = try self.knownMethodSignatureEnvironment(f: f, environment: receiverEnvironment)
-        val patterns = try self.lexicalBodyParameterTypes(function: callee, receiver: receiver)
-        mut val signatures: Array[U64] = []
+        mut val signatures = try self.lexicalBodyParameterTypes(function: callee, receiver: receiver)
+        val item = if signatures.count() == 0U64 { give 0U64 } else { give try self.finalMethodItemRef(f: f, receiverRef: receiver) }
         mut val parameter = 0U64
-        while parameter < f.params.count() {
-            signatures.append(try self.groundTermForBody(ref: patterns[parameter], environment: calleeEnvironment, selfRef: receiver, itemRef: (try self.finalMethodItemRef(f: f, receiverRef: receiver))))
+        while parameter < signatures.count() {
+            val pattern = signatures[parameter]
+            val grounded = try self.groundTermForBody(ref: pattern, environment: calleeEnvironment, selfRef: receiver, itemRef: item)
+            signatures.set(i: parameter, value: grounded)
             parameter += 1U64
         }
         mut val values: Array[U64] = []
