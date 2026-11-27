@@ -73,7 +73,8 @@ also exercised. V2/v3 failed because a new readiness test did not actually hide
 a completed header; they are setup failures, not product RED or GREEN.
 
 Independent source re-review found no further confirmed contract violation;
-this is not final certification. Remaining finite service gates include distinct
-same-spelled binder/module identities, multiple search roots and bounded growth.
+this is not final certification. V6 additionally passes distinct same-spelled generic binder identities, multiple
+search roots, diamond/root overlap and distinct-root ambiguity. Remaining finite
+service gates include same-spelled module owner identities and bounded growth.
 Source publication/final consumption and owned rejection remain the dependent
 children, not guarantees established by these native results.
