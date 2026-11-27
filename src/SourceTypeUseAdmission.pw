@@ -253,9 +253,13 @@ impl Comp {
                 }
             }
             SourceControlNode.Expression(id: val expression) => {
+                match self.authoredConstruction(exprId: expression) {
+                    Optional.Some(v: val construction) => { if construction.headOccurrence != 0U64 { sites.append(<SourceTypeAnnotationSite.Make expression=expression />) } }
+                    Optional.None => {}
+                }
                 match self.arena.exprs[expression] {
                     Expr.Cast(operand: _, tyStart: _, tyLen: _, ty: _) => { sites.append(<SourceTypeAnnotationSite.Cast expression=expression />) }
-                    Expr.Make(typeStart: _, typeLen: _, variantStart: _, variantLen: _, isEnum: _, ty: _, fields: _) => { sites.append(<SourceTypeAnnotationSite.Make expression=expression />) }
+                    Expr.Make(typeStart: _, typeLen: _, variantStart: _, variantLen: _, isEnum: _, ty: _, fields: _) => { if self.authoredConstruction(exprId: expression).isNone() || self.authoredConstruction(exprId: expression).unwrap().headOccurrence == 0U64 { sites.append(<SourceTypeAnnotationSite.Make expression=expression />) } }
                     Expr.Closure(params: val params, hasRet: _, retStart: _, retLen: _, retIsArray: _, retTy: _, body: _, isDiverging: _) => {
                         sites.append(<SourceTypeAnnotationSite.ClosureResult expression=expression />)
                         for index in 0U64..<params.count() { sites.append(<SourceTypeAnnotationSite.ClosureParameter expression=expression index=index />) }
@@ -317,6 +321,16 @@ impl Comp {
             }
             SourceTypeAnnotationSite.Make(expression: val expression) => {
                 if expression >= self.arena.exprs.count() { return <Optional.None /> }
+                match self.authoredConstruction(exprId: expression) {
+                    Optional.Some(v: val construction) => {
+                        if construction.headOccurrence != 0U64 {
+                            val occurrence = self.sourceTypeUses.useAt(index: construction.headOccurrence-1U64)
+                            if occurrence.isNone() { return <Optional.None /> }
+                            return <Optional.Some v=[occurrence.unwrap().site, occurrence.unwrap().term, construction.headOccurrence] />
+                        }
+                    }
+                    Optional.None => {}
+                }
                 return match self.arena.exprs[expression] {
                     Expr.Make(typeStart: val start, typeLen: val length, variantStart: _, variantLen: _, isEnum: _, ty: val type, fields: _) => <Optional.Some v=[start, length, type] />
                     _ => <Optional.None />

@@ -3261,6 +3261,26 @@ pub impl Comp {
         self.arena.finalForIndexSlots.set(i: slot, value: self.arena.finalFors.count())
     }
 
+    inout fn replayConstructionHeadProof(exprId: U64, term: U64, bodyId: U64) -> Result[(), CompileDiagnostic] {
+        if !(try self.constructionHeadNeedsAdmission(exprId: exprId)) { return <Result.Ok value=() /> }
+        if bodyId == 0U64 || term == 0U64 { return <Result.Err error=self.associatedMemberInputFailure(message: "explicit construction lost its executable head") /> }
+        val occurrence = try self.signatureOccurrence(id: (try self.constructionHeadOccurrence(exprId: exprId)))
+        val facts = try self.preparedBodyFacts(bodyId: bodyId, globalInitializerTarget: self.cur.globalInitializerTarget)
+        val saved = match facts.constructionHeadProof(exprId: exprId) {
+            Optional.Some(v: val saved) => saved,
+            Optional.None => { return <Result.Err error=self.associatedMemberInputFailure(message: "construction head has no saved source proof") /> },
+        }
+        if saved.occurrence == 0U64 || saved.occurrence != (try self.constructionHeadOccurrence(exprId: exprId)) || saved.recipe != occurrence.recipe { return <Result.Err error=self.associatedMemberInputFailure(message: "construction head changed its saved source proof") /> }
+        mut val memo: Dictionary[U64, AuthoredRecipeRead] = [:]
+        val result = (try self.readAuthoredTypeRecipe(proofs: saved.proofs, recipe: saved.recipe, environment: self.cur.bodyEnvironment, memo: inout memo, context: <SignatureRecipeContext.Concrete />)).term
+        self.recordBodyTypeTermResult(bodyId: bodyId, source: saved.sourceTerm, result: result)
+        if term != 0U64 {
+            val actual = try self.groundAndRecordBodyType(ref: self.applyPublishedBodyTypeChildren(bodyId: bodyId, ref: term), environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef, bodyId: bodyId)
+            if !self.typeRefEq(a: actual, b: result) { return <Result.Err error=self.associatedMemberInputFailure(message: "construction head and executable receiver disagree") /> }
+        }
+        return <Result.Ok value=() />
+    }
+
     inout fn replayExpressionTypeSlotProofs(exprId: U64, written: Array[U64], term: U64, bodyId: U64, sourceBodyId: U64) -> Result[(), CompileDiagnostic] {
         val authored = self.authoredExpressionTypeSlots.getOr(key: exprId, fallback: [])
         if authored.count() == 0U64 || bodyId == 0U64 { return <Result.Ok value=() /> }
@@ -6785,6 +6805,7 @@ pub impl Comp {
                 try self.scanExprInsts(exprId: index)
             }
             Expr.Make(val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, val ty, val fields) => {
+                try self.replayConstructionHeadProof(exprId: exprId, term: (try self.preparedBodyExpression(bodyId: self.currentBodyInstanceId(), exprId: exprId, globalInitializerTarget: self.cur.globalInitializerTarget)).term, bodyId: self.currentBodyInstanceId())
                 if self.authoredExpressionTypeSlots.contains(key: exprId) {
                     val bodyId = self.currentBodyInstanceId()
                     val expression = try self.preparedBodyExpression(bodyId: bodyId, exprId: exprId, globalInitializerTarget: self.cur.globalInitializerTarget)
@@ -7208,6 +7229,7 @@ pub impl Comp {
             RecordedStorageValueType.Binding(ref: _, rootExpression: val root) => { return self.scanBindingInsts(exprId: root) }
             RecordedStorageValueType.Projection(ref: _, root: val root) => { return self.prepareCheckedCallOperand(source: root) }
             RecordedStorageValueType.Aggregate(ref: val term, aggregate: val aggregate, writtenConstruction: val written) => {
+                try self.replayConstructionHeadProof(exprId: request.expression, term: term, bodyId: self.cur.bodyId)
                 match written {
                     Optional.Some(v: val type) => {
                         if self.authoredExpressionTypeSlots.contains(key: request.expression) {
@@ -7703,6 +7725,7 @@ impl Comp {
     }
 
     inout fn prepareMethodCall(exprId: U64, receiver: U64, arguments: AuthoredCallArguments, template: CallTemplate) -> Result[(), CompileDiagnostic] {
+        try self.replayConstructionHeadProof(exprId: exprId, term: template.receiverTypeTerm, bodyId: self.currentBodyInstanceId())
         if self.authoredExpressionTypeSlots.contains(key: exprId) {
             val bodyId = self.currentBodyInstanceId()
             val written = self.syntheticCallReceiverTerm(exprId: exprId, fallback: 0U64)

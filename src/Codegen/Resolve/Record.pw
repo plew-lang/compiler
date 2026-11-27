@@ -93,7 +93,36 @@ impl Comp {
         return <Result.Ok value=arguments />
     }
 
+    inout fn recordConstructionHead(exprId: U64, occurrence: U64, written: U64) -> Result[U64, CompileDiagnostic] {
+        val use = try self.signatureOccurrence(id: occurrence)
+        if written == 0U64 || !self.typeRefEq(a: written, b: use.term, sourceTerms: true) { return <Result.Err error=self.associatedMemberInputFailure(message: "construction changed its written head before admission") /> }
+        val owner = match self.currentSourceOwner() { Optional.Some(v: val owner) => owner Optional.None => { return <Result.Err error=self.associatedMemberInputFailure(message: "construction head has no source owner") /> } }
+        self.sourceFacts.activate(owner: owner)
+        val proof = match self.sourceFacts.activeBuilder.data.constructionHeadProofs.get(key: exprId) {
+            Optional.Some(v: val proof) => proof,
+            Optional.None => {
+                val proof = try self.admitBodyTypeUse(id: occurrence, term: use.term, owner: owner)
+                self.markAdmittedRecipeTypeUses(recipe: proof.recipe)
+                self.sourceFacts.activeBuilder.data.constructionHeadProofs[exprId] = proof
+                give proof
+            },
+        }
+        if proof.occurrence != occurrence || proof.recipe != use.recipe { return <Result.Err error=self.associatedMemberInputFailure(message: "construction head has a foreign source proof") /> }
+        self.recordExpressionTypeOrigin(exprId: exprId, origin: <SourceExpressionTypeOrigin.Authored occurrence=occurrence />)
+        return <Result.Ok value=proof.sourceTerm />
+    }
+
+    inout fn constructionHeadNeedsAdmission(exprId: U64) -> Result[Bool, CompileDiagnostic] {
+        val occurrence = try self.constructionHeadOccurrence(exprId: exprId)
+        if occurrence == 0U64 { return <Result.Ok value=false /> }
+        return <Result.Ok value=self.bodyTypeNeedsViewAdmission(ref: (try self.signatureOccurrence(id: occurrence)).term) />
+    }
+
     inout fn recordExpressionNominalType(exprId: U64, written: U64) -> Result[U64, CompileDiagnostic] {
+        try self.requireConstructionWrittenHead(exprId: exprId, term: written)
+        if try self.constructionHeadNeedsAdmission(exprId: exprId) {
+            return self.recordConstructionHead(exprId: exprId, occurrence: (try self.constructionHeadOccurrence(exprId: exprId)), written: written)
+        }
         if !self.authoredExpressionTypeSlots.contains(key: exprId) { return <Result.Ok value=written /> }
         if written == 0U64 || written >= self.arena.typeCount() {
             return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "authored expression type slots have no nominal term", failureDomain: <FailureDomain.Internal />) />
@@ -588,6 +617,34 @@ pub impl Comp {
     }
 
 
+
+    // A generated factory receiver is a type operation, not a fresh value
+    // identifier lookup. Its typed producer already owns this distinction.
+    inout fn recordSyntheticTypeReceiver(call: U64, receiver: U64, admitted: U64) -> Result[Bool, CompileDiagnostic] {
+        val index = self.syntheticCallSiteIndex(exprId: call)
+        if index >= self.decls.syntheticCallSites.count() { return <Result.Ok value=false /> }
+        val site = self.decls.syntheticCallSites[index]
+        if !site.receiverIsType { return <Result.Ok value=false /> }
+        match site.kind { SyntheticCallKind.Factory => {} _ => { return <Result.Err error=self.associatedMemberInputFailure(message: "synthetic type receiver has an invalid operation") /> } }
+        val occurrence = try self.constructionHeadOccurrence(exprId: call)
+        if admitted != 0U64 {
+            if occurrence == 0U64 { return <Result.Err error=self.associatedMemberInputFailure(message: "synthetic receiver has no authored head admission") /> }
+            val owner = match self.currentSourceOwner() { Optional.Some(v: val owner) => owner Optional.None => { return <Result.Err error=self.associatedMemberInputFailure(message: "synthetic receiver has no source owner") /> } }
+            self.sourceFacts.activate(owner: owner)
+            val proof = match self.sourceFacts.activeBuilder.data.constructionHeadProofs.get(key: call) { Optional.Some(v: val proof) => proof Optional.None => { return <Result.Err error=self.associatedMemberInputFailure(message: "synthetic receiver lost its head admission") /> } }
+            val use = try self.signatureOccurrence(id: occurrence)
+            if proof.occurrence != occurrence || proof.recipe != use.recipe || !self.typeRefEq(a: proof.sourceTerm, b: admitted, sourceTerms: true) || (!self.typeRefEq(a: site.receiverTerm, b: use.term, sourceTerms: true) && !self.typeRefEq(a: site.receiverTerm, b: proof.sourceTerm, sourceTerms: true)) { return <Result.Err error=self.associatedMemberInputFailure(message: "synthetic receiver differs from its admitted construction head") /> }
+        } else if occurrence != 0U64 && self.bodyTypeNeedsViewAdmission(ref: (try self.signatureOccurrence(id: occurrence)).term) { return <Result.Err error=self.associatedMemberInputFailure(message: "typed factory receiver lost its admitted head") /> }
+        val term = if admitted != 0U64 { give admitted } else { give site.receiverTerm }
+        if term == 0U64 { return <Result.Ok value=false /> }
+        if term >= self.arena.typeCount() { return <Result.Err error=self.associatedMemberInputFailure(message: "synthetic type receiver has an invalid term") /> }
+        match self.arena.exprs[receiver] { Expr.Ident(start: _, len: _) => {} _ => { return <Result.Err error=self.associatedMemberInputFailure(message: "synthetic type receiver changed its expression") /> } }
+        self.ensureExprTySlot(exprId: receiver)
+        self.typeCache.identBind.set(i: receiver, value: identTypeQualCode())
+        self.typeCache.identTarget.set(i: receiver, value: identNoTarget())
+        self.recordSemanticExprTerm(exprId: receiver, term: term)
+        return <Result.Ok value=true />
+    }
 
     inout fn syntheticCallReceiverTerm(exprId: U64, fallback: U64) -> U64 {
         val index: U64 = self.syntheticCallSiteIndex(exprId: exprId)
@@ -2454,7 +2511,7 @@ impl Comp {
             }
             Expr.Method(recv: _, nameStart: _, nameLen: _, args: _) => {
                 mut val receiver = 0U64
-                if self.authoredExpressionTypeSlots.contains(key: exprId) {
+                if self.authoredExpressionTypeSlots.contains(key: exprId) || (try self.constructionHeadNeedsAdmission(exprId: exprId)) {
                     receiver = try self.recordExpressionNominalType(exprId: exprId, written: self.syntheticCallReceiverTerm(exprId: exprId, fallback: 0U64))
                 }
                 give receiver
@@ -2493,7 +2550,7 @@ impl Comp {
         // written the exact term.  This keeps type recovery a compatibility
         // boundary rather than the universal source of semantic truth.
         try self.prepareInterpolationWriteWithOrigin(exprId: exprId, origin: origin, expectedOrigin: contextOrigin)
-        val admittedFactoryReceiver = if self.authoredExpressionTypeSlots.contains(key: exprId) { give construction } else { give 0U64 }
+        val admittedFactoryReceiver = if construction != 0U64 && (self.authoredExpressionTypeSlots.contains(key: exprId) || (try self.constructionHeadNeedsAdmission(exprId: exprId))) { give construction } else { give 0U64 }
         try self.prepareFactoryConstructionWithOrigin(exprId: exprId, chainHoleRef: chainHoleRef, admittedReceiver: admittedFactoryReceiver, origin: origin, expectedOrigin: contextOrigin)
         val hasPreparedCastOperand = match self.arena.exprs[exprId] {
             Expr.Cast(val operand, val tyStart, val tyLen, ty: _) => { give try self.prepareCastFactoryWithOrigin(exprId: exprId, operand: operand, target: castTarget, typeStart: tyStart, typeLen: tyLen, chainHoleRef: chainHoleRef, origin: origin, expectedOrigin: contextOrigin) }
@@ -2613,7 +2670,9 @@ impl Comp {
                 try self.recordFreeCallExpressionWithOrigin(exprId: exprId, callStart: callStart, callLen: callLen, args: args, chainHoleRef: chainHoleRef, origin: origin, expectedOrigin: contextOrigin)
             }
             Expr.Method(val recv, val nameStart, val nameLen, val args) => {
-                try self.recordExprWithOrigin(exprId: recv, chainHoleRef: chainHoleRef, origin: origin, expectedOrigin: <SourceExpectedContext.None />)
+                if !(try self.recordSyntheticTypeReceiver(call: exprId, receiver: recv, admitted: admittedFactoryReceiver)) {
+                    try self.recordExprWithOrigin(exprId: recv, chainHoleRef: chainHoleRef, origin: origin, expectedOrigin: <SourceExpectedContext.None />)
+                }
                 mut val i: U64 = 0
                 while !hasPreparedCastOperand && i < args.len {
                     try self.recordExprWithOrigin(exprId: self.argAt(args: args, index: i).expr, chainHoleRef: chainHoleRef, deferContext: true, origin: origin, expectedOrigin: <SourceExpectedContext.None />)
@@ -2692,9 +2751,10 @@ impl Comp {
                 }
                 try self.recordMemberLookupArguments(selection: methodSelection, receiverTerm: receiverTerm, args: args, chainHoleRef: chainHoleRef, exprId: exprId, origin: origin, expectedOrigin: contextOrigin)
                 val methodCallee = self.selectedMemberFunction(selection: methodSelection)
-                try self.recordParametricMethodCallWithOrigin(exprId: exprId, callee: methodCallee, receiverSource: (try self.writtenCallReceiverTemplate(exprId: exprId, receiverExpr: recv)), receiverTerm: receiverTerm, args: args, origin: origin, expectedOrigin: contextOrigin)
+                val receiverSource = if admittedFactoryReceiver != 0U64 { give <CallTemplateReceiver.Term term=admittedFactoryReceiver /> } else { give try self.writtenCallReceiverTemplate(exprId: exprId, receiverExpr: recv) }
+                try self.recordParametricMethodCallWithOrigin(exprId: exprId, callee: methodCallee, receiverSource: receiverSource, receiverTerm: receiverTerm, args: args, origin: origin, expectedOrigin: contextOrigin)
                 if methodCallee >= self.arena.functionCount() {
-                    try self.recordUnresolvedMethodTemplate(exprId: exprId, receiver: (try self.writtenCallReceiverTemplate(exprId: exprId, receiverExpr: recv)), receiverExpr: recv, receiverTerm: receiverTerm, nameStart: nameStart, nameLen: nameLen, args: args, resolution: boundMember, requiredTraitOwner: requiredTraitOwner, lookupPerformed: lookupPerformed, origin: origin, expectedOrigin: contextOrigin)
+                    try self.recordUnresolvedMethodTemplate(exprId: exprId, receiver: receiverSource, receiverExpr: recv, receiverTerm: receiverTerm, nameStart: nameStart, nameLen: nameLen, args: args, resolution: boundMember, requiredTraitOwner: requiredTraitOwner, lookupPerformed: lookupPerformed, origin: origin, expectedOrigin: contextOrigin)
                 }
                 // The standard array Index witness returns the element type.
                 // Use the synthesized operation's origin and its checked result

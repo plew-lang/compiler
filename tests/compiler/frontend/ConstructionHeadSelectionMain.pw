@@ -1,0 +1,104 @@
+fn main() {
+    mut val compiler = <Comp />
+    match analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.File path="tests/compiler/frontend/fixtures/ProjectionMembers/ConstructionHead.pw" />, sources: <SourceAccess stdRoot="std/".bytes() />) {
+        Result.Ok(value: _) => {}
+        Result.Err(error: val diagnostic) => { panic("construction head source setup rejected: "+diagnostic.message()) }
+    }
+    val function = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "create").nameId)
+    val owner = <SemanticCompletionOwner.Function index=function />
+    mut val found = false
+    mut val headExpression = 0U64
+    mut val headOccurrence = 0U64
+    mut val headFields = <MakeFieldRange start=0U64 len=0U64 />
+    for expression in 0U64..<compiler.arena.exprs.count() {
+        match compiler.arena.exprs[expression] {
+            Expr.Make(typeStart: val start, typeLen: _, variantStart: _, variantLen: _, isEnum: _, ty: val term, fields: val fields) => {
+                if compiler.sourceControlNodePath(owner: owner, target: <SourceControlNode.Expression id=expression />).isNone() { continue }
+                if term == 0U64 || compiler.arena.typeAt(index: term).assocNameId != compiler.internBytes(s: "Output").nameId { continue }
+                mut val occurrence = 0U64
+                for index in 0U64..<compiler.sourceTypeUses.useCount() {
+                    val use = compiler.sourceTypeUses.useAt(index: index).unwrap()
+                    if use.site == start && use.term == term { occurrence = index+1U64 }
+                }
+                if occurrence == 0U64 { panic("construction head lost its authored occurrence") }
+                val receipt = compiler.authoredConstruction(exprId: expression).unwrap()
+                if receipt.headOccurrence != occurrence { panic("construction head receipt disagrees with its occurrence") }
+                val selection = compiler.retainedAssociatedSelection(occurrence: occurrence, ref: term).unwrap().unwrap()
+                match selection.outcome { AssociatedMemberOutcome.Unique(candidate: _) => {} _ => { panic("construction head lost its inherited selection") } }
+                headExpression = expression
+                headOccurrence = occurrence
+                headFields = fields
+                found = true
+            }
+            _ => {}
+        }
+    }
+    if !found { panic("construction head path was not exercised") }
+    val before = compiler.authoredTypeUseFrontier(id: headOccurrence).unwrap()
+    val oldPath = compiler.sourceControlNodePath(owner: owner, target: <SourceControlNode.Fields range=headFields />).unwrap()
+    val original = compiler.arena.exprs[headExpression]
+    compiler.arena.exprs[headExpression] = <Expr.Int value=0U64 offset=0U64 isBool=false tyStart=0U64 tyLen=0U64 isNeg=false />
+    if compiler.authoredTypeFrontierMatches(frontier: before) { panic("raw construction replacement kept its source frontier") }
+    match compiler.constructionHeadOccurrence(exprId: headExpression) { Result.Err(error: _) => {} Result.Ok(value: _) => { panic("raw construction replacement kept head authority") } }
+    compiler.arena.exprs[headExpression] = original
+    match compiler.requireConstructionWrittenHead(exprId: headExpression, term: 0U64) { Result.Err(error: val diagnostic) => { if diagnostic.message() != "explicit construction lost its written head" { panic("lost construction head changed refusal cause") } } Result.Ok(value: _) => { panic("explicit lost head allowed nominal fallback") } }
+    if !compiler.sourceFacts.begin(owner: owner) { panic("construction source body was not fresh") }
+    match compiler.recordParametricFunctionWithOrigin(fnIdx: function, recordCallTemplates: true, origin: <SourceRecordingScope request=<SourceRecordOrigin.CheckingRequest session=compiler.sourceFactSession() root=owner /> returnContext=<SourceExpectedContext.None /> />, expectedOrigin: <SourceExpectedContext.None />) {
+        Result.Ok(value: _) => {}
+        Result.Err(error: val diagnostic) => { panic("construction head body admission rejected: "+diagnostic.message()) }
+    }
+    if compiler.sourceFacts.activeBuilder.data.constructionHeadProofs.count() == 0U64 { panic("construction head body proof was not retained") }
+    compiler.checkSourceTypingObligationsWithOrigin(owner: owner, origin: <SourceRecordOrigin.CheckingRequest session=compiler.sourceFactSession() root=owner />).unwrap()
+
+    match compiler.arena.exprs[headExpression] {
+        Expr.Method(recv: val receiver, nameStart: _, nameLen: _, args: _) => {
+            val boolean = compiler.internBytes(s: "Bool")
+            val foreign = compiler.pushType(t: <TypeRef nameStart=boolean.nameStart nameLen=boolean.nameLen nameId=boolean.nameId args=[] />)
+            match compiler.recordSyntheticTypeReceiver(call: headExpression, receiver: receiver, admitted: foreign) {
+                Result.Err(error: val diagnostic) => { if diagnostic.message() != "synthetic receiver differs from its admitted construction head" { panic("foreign factory receiver changed refusal cause") } }
+                Result.Ok(value: _) => { panic("foreign factory receiver overwrote head admission") }
+            }
+        }
+        _ => { panic("construction was not rewritten to a typed factory call") }
+    }
+    match compiler.replayConstructionHeadProof(exprId: headExpression, term: 0U64, bodyId: 1U64) {
+        Result.Err(error: val diagnostic) => { if diagnostic.message() != "explicit construction lost its executable head" { panic("lost executable head changed refusal cause") } }
+        Result.Ok(value: _) => { panic("explicit head skipped final receiver comparison") }
+    }
+    if !compiler.authoredTypeFrontierMatches(frontier: before) { panic("factory rewrite lost the source head frontier") }
+    if compiler.sourceControlNodePathMatches(path: oldPath) { panic("old Make child path was reused after Method rewrite") }
+    compiler.recordAuthoredTypeFrontier(node: <SourceControlNode.Expression id=headExpression />, occurrences: [headOccurrence])
+    if compiler.authoredTypeUseFrontier(id: headOccurrence).isNone() { panic("rewritten Method did not collect its construction head") }
+
+
+    for name in ["named", "direct", "inferred", "viewHead", "partial"] {
+        val function = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: name).nameId)
+        val owner = <SemanticCompletionOwner.Function index=function />
+        if !compiler.sourceFacts.begin(owner: owner) { panic("additional construction body was not fresh") }
+        match compiler.recordParametricFunctionWithOrigin(fnIdx: function, recordCallTemplates: true, origin: <SourceRecordingScope request=<SourceRecordOrigin.CheckingRequest session=compiler.sourceFactSession() root=owner /> returnContext=<SourceExpectedContext.None /> />, expectedOrigin: <SourceExpectedContext.None />) {
+            Result.Ok(value: _) => {}
+            Result.Err(error: val diagnostic) => { panic(name+" construction body rejected: "+diagnostic.message()) }
+        }
+        if name == "inferred" || name == "partial" {
+            if compiler.sourceFacts.activeBuilder.data.constructionHeadProofs.count() != 0U64 { panic("context-only construction fabricated a head proof") }
+        } else if compiler.sourceFacts.activeBuilder.data.constructionHeadProofs.count() == 0U64 { panic(name+" construction head lost its body proof") }
+        compiler.checkSourceTypingObligationsWithOrigin(owner: owner, origin: <SourceRecordOrigin.CheckingRequest session=compiler.sourceFactSession() root=owner />).unwrap()
+        if name == "viewHead" {
+            val leafFunction = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "leaf").nameId)
+            val leaf = compiler.funcParamAt(params: compiler.arena.functionAt(index: leafFunction).params, index: 0U64).ty
+            val environment = compiler.environmentWithCallableConstraints(fnIdx: function, environment: <InstanceEnvironment params=compiler.copyFuncBinds(binds: compiler.arena.functionAt(index: function).typeParams) args=[leaf] />, evidence: <CallableConstraintEvidence.Declaration />).unwrap()
+            mut val concreteChecked = false
+            for expression in 0U64..<compiler.arena.exprs.count() {
+                val proof = compiler.sourceFacts.activeBuilder.data.constructionHeadProofs.get(key: expression)
+                if proof.isNone() { continue }
+                if compiler.authoredExpressionTypeSlots.contains(key: expression) { panic("construction head was admitted again as argument slots") }
+                mut val memo: Dictionary[U64, AuthoredRecipeRead] = [:]
+                val term = compiler.readAuthoredTypeRecipe(proofs: proof.unwrap().proofs, recipe: proof.unwrap().recipe, environment: environment, memo: inout memo, context: <SignatureRecipeContext.Concrete />).unwrap().term
+                val wrapper = compiler.arena.typeAt(index: term)
+                if wrapper.nameId != compiler.internBytes(s: "Wrap").nameId || wrapper.args.count() != 1U64 || compiler.arena.typeAt(index: wrapper.args[0U64]).nameId != compiler.internBytes(s: "I64").nameId { panic("concrete construction head lost its saved associated output") }
+                concreteChecked = true
+            }
+            if !concreteChecked { panic("concrete head recipe reader was not exercised") }
+        }
+    }
+}

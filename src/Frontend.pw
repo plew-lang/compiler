@@ -1534,6 +1534,7 @@ struct SourceClosureSignatureFailure {
 impl SourceClosureSignatureFailure { factory }
 
 struct AuthoredConstruction {
+    val headOccurrence: U64 = 0U64
     val offset: U64
     val expression: Expr
     val typeFromContext: Bool
@@ -3956,6 +3957,7 @@ struct SourceBodyData {
     mut val valueBlockIds: Array[U64] = []
     mut val identifierTargets: Dictionary[U64, U64] = [:]
     mut val castTargetProofs: Dictionary[U64, LocalAnnotationProof] = [:]
+    mut val constructionHeadProofs: Dictionary[U64, LocalAnnotationProof] = [:]
     mut val expressionTypeSlotProofs: Dictionary[U64, Array[LocalAnnotationProof]] = [:]
     mut val traitValueViews: Dictionary[U64, SourceValueViewProof] = [:]
     mut val extensionValueViews: Dictionary[U64, SourceExtensionViewProof] = [:]
@@ -4049,6 +4051,7 @@ enum SourceControlShape {
     ExpressionMethod(receiver: U64, start: U64, length: U64)
     ExpressionExtMethod(receiver: U64, start: U64, length: U64)
     ExpressionMake(start: U64, length: U64)
+    ExpressionConstruction(head: U64, offset: U64)
     ExpressionArray(start: U64, length: U64)
     ExpressionDictionary(start: U64, length: U64)
     ExpressionRange(start: U64, length: U64)
@@ -4266,6 +4269,7 @@ pub struct PreparedSemanticFacts {
 }
 impl PreparedSemanticFacts { factory }
 impl PreparedSemanticFacts {
+    fn constructionHeadProof(exprId: U64) -> Optional[LocalAnnotationProof] { return self.payload->constructionHeadProofs.get(key: exprId) }
     fn castTargetProof(exprId: U64) -> Optional[LocalAnnotationProof] { return self.payload->castTargetProofs.get(key: exprId) }
     fn expressionTypeSlotProofs(exprId: U64) -> Optional[Array[LocalAnnotationProof]] { return self.payload->expressionTypeSlotProofs.get(key: exprId) }
 }

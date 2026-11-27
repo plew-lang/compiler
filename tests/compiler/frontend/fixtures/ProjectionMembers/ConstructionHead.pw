@@ -1,0 +1,18 @@
+trait Build { factory() factory named() }
+trait Parent { type Output: Build }
+trait Child: Parent {}
+impl Child {
+    fn create() -> Output { return <Output /> }
+    fn named() -> Output { return <Output.named /> }
+    fn inferred() -> Output { return </> }
+}
+trait Own[A] { type Product: Build }
+impl[A] Own[A] { fn direct() -> Product { return <Product /> } }
+trait Key { type Item }
+struct Wrap[T] {}
+struct Leaf {}
+impl Leaf as Key { type Item = I64 }
+fn leaf(value: Leaf) {}
+fn viewHead[T](value: T) -> Wrap[T#Key.Item] where T: Key { return <Wrap[T#Key.Item] /> }
+fn partial() -> Wrap[I64] { return <Wrap /> }
+fn main() {}

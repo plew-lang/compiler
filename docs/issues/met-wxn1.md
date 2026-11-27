@@ -206,9 +206,32 @@ API argument is removed. Root recipes are checked by arity and exact term,
 including Root arguments1 versus declaring arguments0. The missing-handoff RED,
 wrong-representation refusal and nineteen-profile result are retained in meta
 lexical-handoff-checkpoint.json. This completes these finite annotation/receiver
-slices, not this task. Construction heads still have a term-only handoff; their
-provenance and terminal gates remain required. No all-mode or performance
+slices, not this task. Construction head formation and body proof replay are now under validation
+below; their terminal gates remain required. No all-mode or performance
 completion follows from native tests.
+
+## Construction head checkpoint
+
+Value/Syntax Make heads now produce a whole-head PType/occurrence with original
+argument recipes and retained lexical declaration/query data. The head is kept
+on AuthoredConstruction and transferred by authorized rewrite; Make's separate
+typearg-slot admission is removed. Synthetic nominal wrappers no longer perform
+lexical lookup. Projection/view heads are admitted once into owner-local body
+facts, and generated factory type receivers consume that admitted term rather
+than resolving the head spelling as a value. Missing written heads and unrelated
+receiver proofs reject. Source frontiers track only valid head/snapshot identity
+across Make/Method, retain current child-edge checks, and collect rewritten Method
+heads. Mono replays saved proof with an explicit body environment and checks its
+receiver/aggregate instance; missing executable head/proof is an internal failure.
+
+Native coverage includes the original missing-occurrence RED and the discovered
+factory-type-receiver-as-value failure, ordinary and named factory body admission,
+direct generic and inherited heads, context-only and partial nominal heads,
+head arguments containing projections, concrete Wrap[I64] recipe interpretation,
+Raw replacement, wrong receiver, missing written/executable heads and rewrite
+frontier/child-path controls. The meta construction-head checkpoint records exact
+results. Fresh CLI execution, AOT/ORC, full producer audit and performance are
+still required; this is not final construction/task certification.
 
 ## Next implementation sequence
 

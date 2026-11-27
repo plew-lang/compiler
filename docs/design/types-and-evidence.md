@@ -140,6 +140,34 @@ same clause contract regardless of whether a body is trait-provided. A raw bound
 row without source identity does not acquire Source authority by structural type
 equality.
 
+### Authored Construction Heads
+
+An explicitly written construction head owns its type-use occurrence and recipe,
+including the actual authored argument occurrences. Preserve the lexical
+associated declaration or prepared member selection at this boundary. The head
+is distinct from its argument slots; a whole-head recipe must not introduce a
+second admission of the same children. An omitted, context-supplied head has no
+fabricated annotation occurrence. Partial nominal arguments continue to use the
+construction's ordinary inference contract. Compiler-synthesized nominal wrappers
+do not perform lexical associated-member selection or acquire Source authority.
+
+When the authored head contains a projection or view, body admission retains its
+checked proof in the owning body's facts and publishes that proof's semantic
+term to factory selection. A semantic constructor walk may determine that a
+nominal head needs no such proof; missing required proof is not that state.
+A generated factory receiver is a type qualifier from this typed operation,
+not a fresh value-name lookup. Its original receiver and admitted term must
+belong to the same construction.
+
+Authorized factory/context rewrites preserve the head occurrence and the current
+expression snapshot. Source-frontier identity can follow that validated head
+across Make/Method forms, while child paths still match the current structural
+edges. Raw replacement cannot retain this authority. Final consumers interpret
+the saved proof in the explicit body environment and use the same resulting
+instance for the factory receiver, aggregate and layout. A missing written or
+executable head, missing required proof, or disagreeing receiver is a failure;
+nominal name lookup is not a repair path.
+
 ## 5. Conformance Evidence
 
 A trait instance is identified by its trait owner and positional type arguments. Associated-output predicates constrain the selected instance's outputs; they are not additional inputs that select an implementation. The subject and resolution environment are also necessary to ask a conformance question.

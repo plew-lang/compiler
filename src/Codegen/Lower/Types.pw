@@ -260,6 +260,26 @@ impl Comp {
         }
     }
 
+    inout fn lowerAuthoredConstructionType(nameStart: U64, nameLen: U64, arguments: Array[PType], site: U64) -> Result[PType, CompileDiagnostic] {
+        if nameLen == 0U64 { return <Result.Ok value=<PType start=nameStart len=0U64 isArray=false ref=0U64 /> /> }
+        val name = <Bind nameStart=nameStart nameLen=nameLen fieldStart=0U64 fieldLen=0U64 />
+        val lexical = if arguments.count() == 0U64 { give try self.lowerLexicalAssociatedType(nameStart: nameStart, nameLen: nameLen, paramId: self.sourceTypeParameter(name: name)) } else { give <Optional.None /> }
+        mut val terms: Array[U64] = []
+        mut val children: Array[U64] = []
+        for argument in arguments { terms.append(argument.ref) children.append(try self.authoredChildRecipe(type: argument)) }
+        val ref = if lexical.isSome() { give lexical.unwrap().ref } else { give try self.lowerConstructionType(nameStart: nameStart, nameLen: nameLen, args: terms, siteOffset: site) }
+        mut val selection = 0U64
+        if lexical.isSome() {
+            val lowered = lexical.unwrap()
+            children = try self.lexicalAssociatedRecipeChildren(ref: ref, sources: [])
+            selection = try self.captureLoweredLexicalSelection(ref: ref, site: site, children: children, declaration: lowered.binding, prepared: lowered.prepared, authoredArguments: <Optional.Some v=lowered.arguments />)
+        }
+        try self.checkLoweredTypeRecipeChildren(ref: ref, children: children, offset: site)
+        val occurrence = self.recordAuthoredTypeUse(ref: ref, site: site, children: children)
+        try self.bindLoweredAssociatedSelection(selection: selection, occurrence: occurrence)
+        return <Result.Ok value=<PType start=nameStart len=nameLen isArray=false ref=ref authoredChildren=children authoredUse=occurrence associatedSelection=selection /> />
+    }
+
 }
 
 pub impl Comp {
@@ -276,11 +296,9 @@ pub impl Comp {
         return 0U64
     }
 
-    // Construction heads retain the same lexical identity as written type
-    // annotations, including when their explicit argument list is empty.
-    // Associated-name entries are not lexical parameters: only a real ParamId
-    // suppresses nominal declaration resolution. Lexical projections have their
-    // own selected owner in lowerLexicalAssociatedType.
+    // Synthetic nominal construction does not perform associated-member lookup.
+    // Authored heads use lowerAuthoredConstructionType and retain their recipes.
+    // Only a real lexical ParamId suppresses nominal declaration resolution.
     inout fn lowerConstructionType(nameStart: U64, nameLen: U64, args: Array[U64], siteOffset: U64) -> Result[U64, CompileDiagnostic] {
         if nameLen == 0U64 { return <Result.Ok value=0U64 /> }
         mut val paramId: U64 = 0U64
@@ -293,10 +311,6 @@ pub impl Comp {
                 site = 0U64
             }
             index += 1U64
-        }
-        if args.count() == 0U64 {
-            val associated = try self.lowerLexicalAssociatedType(nameStart: nameStart, nameLen: nameLen, paramId: paramId)
-            if associated.isSome() { return <Result.Ok value=associated.unwrap().ref /> }
         }
         return <Result.Ok value=self.pushType(t: <TypeRef nameStart=nameStart nameLen=nameLen paramId=paramId args=args isRecord=false recordFieldLabels=[] recordFieldTerms=[] siteOffset=site />) />
     }

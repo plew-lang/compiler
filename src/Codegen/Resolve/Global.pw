@@ -38,6 +38,18 @@ impl Comp {
         return <Optional.None />
     }
 
+    fn constructionHeadOccurrence(exprId: U64) -> Result[U64, CompileDiagnostic] {
+        val source = match self.authoredConstructions.get(key: exprId) { Optional.Some(v: val source) => source Optional.None => { return <Result.Ok value=0U64 /> } }
+        if source.headOccurrence == 0U64 { return <Result.Ok value=0U64 /> }
+        if self.authoredConstruction(exprId: exprId).isNone() || source.headOccurrence > self.sourceTypeUses.useCount() { return <Result.Err error=self.associatedMemberInputFailure(message: "construction lost its authored head") /> }
+        return <Result.Ok value=source.headOccurrence />
+    }
+
+    inout fn requireConstructionWrittenHead(exprId: U64, term: U64) -> Result[(), CompileDiagnostic] {
+        if term == 0U64 && (try self.constructionHeadOccurrence(exprId: exprId)) != 0U64 { return <Result.Err error=self.associatedMemberInputFailure(message: "explicit construction lost its written head") /> }
+        return <Result.Ok value=() />
+    }
+
     // Context, defaults and named-factory lowering may revise a written
     // construction. A raw replacement cannot transfer its source receipt.
     inout fn replaceConstructionExpression(exprId: U64, expression: Expr, typeFromContext: Bool = false) {
@@ -45,7 +57,7 @@ impl Comp {
         self.arena.exprs.set(i: exprId, value: expression)
         match origin {
             Optional.Some(v: val receipt) => {
-                self.authoredConstructions[exprId] = <AuthoredConstruction offset=receipt.offset expression=expression typeFromContext=receipt.typeFromContext || typeFromContext />
+                self.authoredConstructions[exprId] = <AuthoredConstruction headOccurrence=receipt.headOccurrence offset=receipt.offset expression=expression typeFromContext=receipt.typeFromContext || typeFromContext />
             }
             Optional.None => { self.authoredConstructions.remove(key: exprId) }
         }
@@ -468,6 +480,7 @@ pub impl Comp {
     inout fn rewriteNamedFactoryConstructionAt(exprId: U64) -> Result[(), CompileDiagnostic] {
         match self.arena.exprs[exprId] {
             Expr.Make(val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, ty: val ty, val fields) => {
+                try self.requireConstructionWrittenHead(exprId: exprId, term: ty)
                 if isEnum {
                     if try self.typeHasAssocFn(typeStart: typeStart, typeLen: typeLen, nameStart: variantStart, nameLen: variantLen) {
                         val recv: U64 = self.pushExpr(e: <Expr.Ident start=typeStart len=typeLen />)
@@ -722,6 +735,7 @@ impl Comp {
         val useOffset = self.exprOffset(id: exprId)
         match self.arena.exprs[exprId] {
             Expr.Make(val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, val ty, val fields) => {
+                try self.requireConstructionWrittenHead(exprId: exprId, term: ty)
                 if self.arena.resolvedMemberwiseFactories.contains(exprId) { return <Result.Ok value=() /> }
                 // A record literal has no nominal factory receiver. Record owns
                 // its structural field/context checking through the normal path.
@@ -768,10 +782,10 @@ impl Comp {
                         return <Result.Err error=self.diagnosticAt(offset: useOffset, msg: "generic construction requires a matching factory requirement") />
                     }
                     val recv = self.pushExpr(e: <Expr.Ident start=typeStart len=typeLen />)
-                    self.arena.exprs[exprId] = <Expr.Method recv=recv nameStart=callStart nameLen=callLen args=args />
+                    self.replaceConstructionExpression(exprId: exprId, expression: <Expr.Method recv=recv nameStart=callStart nameLen=callLen args=args />)
                     val origin = self.nextExprOriginSerial
                     self.nextExprOriginSerial += 1U64
-                    try self.recordSyntheticCallSite(site: <SyntheticCallSite exprId=exprId kind=<SyntheticCallKind.Factory /> originSerial=origin receiverTerm=written receiverIsType=true />)
+                    try self.recordSyntheticCallSite(site: <SyntheticCallSite exprId=exprId kind=<SyntheticCallKind.Factory /> originSerial=origin receiverTerm=receiver receiverIsType=true />)
                     return <Result.Ok value=() />
                 }
                 val memberwise = (try self.memberwiseConstructionMatches(receiver: receiver, fields: fields, offset: useOffset))
@@ -821,10 +835,10 @@ impl Comp {
                         callStart = first.nameStart
                         callLen = first.nameLen
                     }
-                    self.arena.exprs[exprId] = <Expr.Method recv=recv nameStart=callStart nameLen=callLen args=args />
+                    self.replaceConstructionExpression(exprId: exprId, expression: <Expr.Method recv=recv nameStart=callStart nameLen=callLen args=args />)
                     val origin = self.nextExprOriginSerial
                     self.nextExprOriginSerial += 1U64
-                    try self.recordSyntheticCallSite(site: <SyntheticCallSite exprId=exprId kind=<SyntheticCallKind.Factory /> originSerial=origin receiverTerm=written receiverIsType=true selectedDeclaration=<Optional.Some v=selected /> />)
+                    try self.recordSyntheticCallSite(site: <SyntheticCallSite exprId=exprId kind=<SyntheticCallKind.Factory /> originSerial=origin receiverTerm=receiver receiverIsType=true selectedDeclaration=<Optional.Some v=selected /> />)
                 } else {
                     self.arena.resolvedMemberwiseFactories.insert(exprId)
                     self.normalizeMemberwiseDefaultsAt(exprId: exprId)

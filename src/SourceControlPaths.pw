@@ -313,6 +313,7 @@ impl SourceControlShape {
             SourceControlShape.ExpressionCall(start: val aStart, length: val aLength) => match other { SourceControlShape.ExpressionCall(start: val bStart, length: val bLength) => aStart == bStart && aLength == bLength _ => false }
             SourceControlShape.ExpressionMethod(receiver: val aReceiver, start: val aStart, length: val aLength) => match other { SourceControlShape.ExpressionMethod(receiver: val bReceiver, start: val bStart, length: val bLength) => aReceiver == bReceiver && aStart == bStart && aLength == bLength _ => false }
             SourceControlShape.ExpressionExtMethod(receiver: val aReceiver, start: val aStart, length: val aLength) => match other { SourceControlShape.ExpressionExtMethod(receiver: val bReceiver, start: val bStart, length: val bLength) => aReceiver == bReceiver && aStart == bStart && aLength == bLength _ => false }
+            SourceControlShape.ExpressionConstruction(head: val aHead, offset: val aOffset) => match other { SourceControlShape.ExpressionConstruction(head: val bHead, offset: val bOffset) => aHead == bHead && aOffset == bOffset _ => false }
             SourceControlShape.ExpressionMake(start: val aStart, length: val aLength) => match other { SourceControlShape.ExpressionMake(start: val bStart, length: val bLength) => aStart == bStart && aLength == bLength _ => false }
             SourceControlShape.ExpressionArray(start: val aStart, length: val aLength) => match other { SourceControlShape.ExpressionArray(start: val bStart, length: val bLength) => aStart == bStart && aLength == bLength _ => false }
             SourceControlShape.ExpressionDictionary(start: val aStart, length: val aLength) => match other { SourceControlShape.ExpressionDictionary(start: val bStart, length: val bLength) => aStart == bStart && aLength == bLength _ => false }
@@ -357,6 +358,10 @@ impl Comp {
             }
             SourceControlNode.Expression(id: val index) => {
                 if index >= self.arena.exprs.count() { return <Optional.None /> }
+                match self.authoredConstruction(exprId: index) {
+                    Optional.Some(v: val source) => { if source.headOccurrence != 0U64 { return <Optional.Some v=<SourceControlShape.ExpressionConstruction head=source.headOccurrence offset=source.offset /> /> } }
+                    Optional.None => {}
+                }
                 give match self.arena.exprs[index] {
                     Expr.Unary(op: _, operand: val value) => <Optional.Some v=<SourceControlShape.ExpressionUnary value=value /> />
                     Expr.Field(base: val value, nameStart: _, nameLen: _) => <Optional.Some v=<SourceControlShape.ExpressionField value=value /> />
