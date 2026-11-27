@@ -98,6 +98,13 @@ limits are distinct failures, not evidence that no member exists. This candidate
 rule does not collapse distinct conformance evidence paths or discharge their
 separate validity and uniqueness requirements.
 
+Lowering carries its prepared query result into capture; capture does not rerun
+selection or accept a separately supplied competing Root. Retain whether the
+source term represents a contributing Root or the declaring instance. Their
+argument recipes can have different arities and remain distinct. Capture and
+retained readers check that representation, source site/scope/session, receiver
+and member before associating the decision with an occurrence.
+
 The successful result retains the actual declaring instance, member identity,
 receiver, and the justified inheritance/substitution derivation from the selected
 root. Keep the authored selection and source occurrence for provenance; the

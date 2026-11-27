@@ -788,6 +788,8 @@ struct PreparedAssociatedSelectionContext {
     val clauses: Array[U64]
 }
 impl PreparedAssociatedSelectionContext { factory }
+enum AssociatedSelectionRepresentation { Root Declaring }
+
 // Explicit lowering handoff: query inputs/results are not recovered from terms.
 struct PreparedAssociatedMemberSelection {
     val site: U64
@@ -796,6 +798,7 @@ struct PreparedAssociatedMemberSelection {
     val session: U64
     val scope: U64
     val representationRoot: U64
+    val representation: AssociatedSelectionRepresentation = <AssociatedSelectionRepresentation.Root />
     val equationClauses: Array[U64]
     val result: AssociatedMemberResult
 }
@@ -820,12 +823,15 @@ enum LoweredAssociatedResolution {
 }
 struct LoweredLexicalProjection {
     val ref: U64
+    val arguments: Array[U64]
+    val prepared: Optional[PreparedAssociatedMemberSelection] = <Optional.None />
     val binding: Optional[LexicalAssociatedDeclaration] = <Optional.None />
 }
 impl LoweredLexicalProjection { factory }
 struct LoweredAssociatedSelection {
     val receiver: U64
     val representationRoot: U64
+    val representation: AssociatedSelectionRepresentation = <AssociatedSelectionRepresentation.Root />
     val termInstance: TraitInstanceKey
     val authoredSource: Optional[ResolvedViewSource]
     val equationClauses: Array[U64]

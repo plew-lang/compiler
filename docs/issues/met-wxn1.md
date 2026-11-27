@@ -198,10 +198,17 @@ redeclaration check is repaired at completed Source trait validation, after
 cycle checks and before nominal admission. Its accepted-input RED is retained.
 Meta declaration-binding-checkpoint.json owns the final results and review.
 
-This completes the local declaration-binding slice, not this task. Inherited
-lexical capture still repeats a query, and construction heads still have a
-term-only handoff. Their explicit result/provenance migration and terminal gates
-remain required. No all-mode or performance completion follows from native tests.
+The inherited lexical annotation and nested-receiver handoff now carries the
+prepared result and original Root argument recipes explicitly. Capture rejects
+missing preparation instead of querying again. Root/Declaring representation is
+retained and checked during capture and retrieval; the redundant authoredRoot
+API argument is removed. Root recipes are checked by arity and exact term,
+including Root arguments1 versus declaring arguments0. The missing-handoff RED,
+wrong-representation refusal and nineteen-profile result are retained in meta
+lexical-handoff-checkpoint.json. This completes these finite annotation/receiver
+slices, not this task. Construction heads still have a term-only handoff; their
+provenance and terminal gates remain required. No all-mode or performance
+completion follows from native tests.
 
 ## Next implementation sequence
 

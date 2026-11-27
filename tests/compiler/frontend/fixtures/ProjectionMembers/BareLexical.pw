@@ -1,4 +1,5 @@
 trait Nested { type Item }
 trait Parent { type Output: Nested }
 trait Child: Parent { fn item(value: Output) fn nested(value: Output#Nested.Item) }
+trait GenericChild[A]: Parent { fn generic(value: Output) }
 fn main() {}

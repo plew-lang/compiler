@@ -310,19 +310,30 @@ impl Comp {
 // Lowering hands the query result forward. Neither binding nor admission
 // recovers a decision from the canonical term's spelling or an ambient cursor.
 impl Comp {
-    inout fn captureLoweredAssociatedSelection(ref: U64, site: U64, children: Array[U64], authoredRoot: Optional[TraitBound] = <Optional.None />, authoredArguments: Optional[Array[U64]] = <Optional.None />, authoredSource: Optional[ResolvedViewSource] = <Optional.None />, prepared: Optional[PreparedAssociatedMemberSelection] = <Optional.None />) -> Result[U64, CompileDiagnostic] {
+    inout fn captureLoweredAssociatedSelection(ref: U64, site: U64, children: Array[U64], authoredArguments: Optional[Array[U64]] = <Optional.None />, authoredSource: Optional[ResolvedViewSource] = <Optional.None />, prepared: Optional[PreparedAssociatedMemberSelection] = <Optional.None />) -> Result[U64, CompileDiagnostic] {
         val type = self.arena.typeAt(index: ref)
         if type.assocNameId == 0U64 { return <Result.Ok value=0U64 /> }
         val receiver = self.typeTermProjectionReceiver(t: type)
         val owner = self.associatedProjectionTraitOwner(projection: type)
         val published = <TraitInstanceKey owner=owner positionalArgs=type.assocTraitArgs />
-        val root = authoredRoot.unwrapOr(fallback: <TraitBound subject=receiver constraint=<TraitConstraint key=published positionalArgsOpen=false assocPredicates=[] /> offset=site />)
+        val root = if prepared.isSome() {
+            val saved = prepared.unwrap()
+            if saved.representationRoot >= saved.result.graph.roots.count() { return <Result.Err error=self.associatedMemberInputFailure(message: "prepared associated selection changed its lowering input") /> }
+            give saved.result.graph.roots[saved.representationRoot]
+        } else { give <TraitBound subject=receiver constraint=<TraitConstraint key=published positionalArgsOpen=false assocPredicates=[] /> offset=site /> }
         if authoredSource.isSome() && !self.sameAssociatedMemberInstance(first: authoredSource.unwrap().traitInstance, second: root.constraint.key) { return <Result.Err error=self.associatedMemberInputFailure(message: "associated selection changed its authored selector") /> }
         val selection = if prepared.isSome() {
             val saved = prepared.unwrap()
-            if saved.site != site || saved.session != self.sourceFactSession() || saved.scope != self.sourceTypeUses.currentScope() || saved.member != type.assocNameId || !self.typeRefEq(a: saved.receiver, b: receiver, sourceTerms: true) || saved.representationRoot >= saved.result.graph.roots.count() || !self.sameAssociatedMemberInstance(first: saved.result.graph.roots[saved.representationRoot].constraint.key, second: published) { return <Result.Err error=self.associatedMemberInputFailure(message: "prepared associated selection changed its lowering input") /> }
+            if saved.site != site || saved.session != self.sourceFactSession() || saved.scope != self.sourceTypeUses.currentScope() || saved.member != type.assocNameId || !self.typeRefEq(a: saved.receiver, b: receiver, sourceTerms: true) { return <Result.Err error=self.associatedMemberInputFailure(message: "prepared associated selection changed its lowering input") /> }
             match saved.result.outcome {
-                AssociatedMemberOutcome.Unique(candidate: val candidate) => { if candidate.member != type.assocNameId { return <Result.Err error=self.associatedMemberInputFailure(message: "prepared associated selection changed its member") /> } }
+                AssociatedMemberOutcome.Unique(candidate: val candidate) => {
+                    if candidate.member != type.assocNameId { return <Result.Err error=self.associatedMemberInputFailure(message: "prepared associated selection changed its member") /> }
+                    val represented = match saved.representation {
+                        AssociatedSelectionRepresentation.Root => saved.result.graph.roots[saved.representationRoot].constraint.key,
+                        AssociatedSelectionRepresentation.Declaring => candidate.instance,
+                    }
+                    if !self.sameAssociatedMemberInstance(first: represented, second: published) { return <Result.Err error=self.associatedMemberInputFailure(message: "prepared associated selection changed its representation") /> }
+                }
                 _ => { return <Result.Err error=self.associatedMemberInputFailure(message: "prepared associated selection requires its unique outcome") /> }
             }
             give saved
@@ -336,30 +347,40 @@ impl Comp {
             if index >= children.count() { return <Result.Err error=self.associatedMemberInputFailure(message: "associated selection lost its authored argument recipe") /> }
             arguments.append(children[index])
         }
-        self.loweredAssociatedSelections.append(<LoweredAssociatedSelection receiver=receiver representationRoot=selection.representationRoot termInstance=published authoredSource=authoredSource equationClauses=selection.equationClauses authoredArguments=authoredArguments.unwrapOr(fallback: arguments) session=self.sourceFactSession() member=type.assocNameId term=ref site=site scope=self.sourceTypeUses.currentScope() termArguments=arguments resolution=<LoweredAssociatedResolution.Query result=selection.result /> />)
+        self.loweredAssociatedSelections.append(<LoweredAssociatedSelection receiver=receiver representationRoot=selection.representationRoot representation=selection.representation termInstance=published authoredSource=authoredSource equationClauses=selection.equationClauses authoredArguments=authoredArguments.unwrapOr(fallback: arguments) session=self.sourceFactSession() member=type.assocNameId term=ref site=site scope=self.sourceTypeUses.currentScope() termArguments=arguments resolution=<LoweredAssociatedResolution.Query result=selection.result /> />)
         return <Result.Ok value=self.loweredAssociatedSelections.count() />
     }
-    inout fn captureLoweredLexicalSelection(ref: U64, site: U64, children: Array[U64], declaration: Optional[LexicalAssociatedDeclaration]) -> Result[U64, CompileDiagnostic] {
-        val type = self.arena.typeAt(index: ref)
-        val root = <TraitBound subject=self.typeTermProjectionReceiver(t: type) constraint=<TraitConstraint key=<TraitInstanceKey owner=self.lowerAssociatedOwner positionalArgs=self.lowerAssociatedArgs /> positionalArgsOpen=false assocPredicates=[] /> offset=site />
-        mut val arguments: Array[U64] = []
-        if self.sourceTypeUses.inMethod() { arguments = self.lowerMethodReceiverRecipes }
-        else {
-            for argument in self.lowerAssociatedArgs { arguments.append(self.derivedTypeRecipe(ref: argument, origin: <SourceTypeRecipeOrigin.LexicalParameter />)) }
+    inout fn checkAssociatedRootRecipes(recipes: Array[U64], arguments: Array[U64]) -> Result[(), CompileDiagnostic] {
+        if recipes.count() != arguments.count() { return <Result.Err error=self.associatedMemberInputFailure(message: "associated root argument recipes have the wrong arity") /> }
+        for index in 0U64..<recipes.count() {
+            val recipe = self.sourceTypeUses.recipeAt(id: recipes[index])
+            if recipe.isNone() || !self.typeRefEq(a: recipe.unwrap().term, b: arguments[index], sourceTerms: true) { return <Result.Err error=self.associatedMemberInputFailure(message: "associated root argument recipe changed its term") /> }
         }
+        return <Result.Ok value=() />
+    }
+    inout fn captureLoweredLexicalSelection(ref: U64, site: U64, children: Array[U64], declaration: Optional[LexicalAssociatedDeclaration], prepared: Optional[PreparedAssociatedMemberSelection] = <Optional.None />, authoredArguments: Optional[Array[U64]] = <Optional.None />) -> Result[U64, CompileDiagnostic] {
+        val type = self.arena.typeAt(index: ref)
         if declaration.isSome() {
             val binding = declaration.unwrap()
             try self.checkLexicalAssociatedDeclaration(binding: binding)
             if binding.owner != self.lowerAssociatedOwner || binding.member != type.assocNameId || binding.owner != self.associatedProjectionTraitOwner(projection: type) || !self.typeRefEq(a: binding.receiver, b: self.typeTermProjectionReceiver(t: type), sourceTerms: true) || !self.sameResolvedTypeRefs(a: binding.arguments, b: type.assocTraitArgs) { return <Result.Err error=self.associatedMemberInputFailure(message: "lexical declaration changed before capture") /> }
+            if prepared.isSome() || authoredArguments.isNone() { return <Result.Err error=self.associatedMemberInputFailure(message: "lexical declaration lost its exclusive source handoff") /> }
+            val arguments = authoredArguments.unwrap()
+            try self.checkAssociatedRootRecipes(recipes: arguments, arguments: binding.arguments)
             mut val termArguments: Array[U64] = []
             for index in 0U64..<type.assocTraitArgs.count() {
                 if 1U64+index >= children.count() { return <Result.Err error=self.associatedMemberInputFailure(message: "lexical declaration lost its argument recipe") /> }
                 termArguments.append(children[1U64+index])
             }
-            self.loweredAssociatedSelections.append(<LoweredAssociatedSelection receiver=binding.receiver representationRoot=0U64 termInstance=root.constraint.key authoredSource=<Optional.None /> equationClauses=[] authoredArguments=arguments session=self.sourceFactSession() member=binding.member term=ref site=site scope=self.sourceTypeUses.currentScope() termArguments=termArguments resolution=<LoweredAssociatedResolution.Declaration binding=binding /> />)
+            self.loweredAssociatedSelections.append(<LoweredAssociatedSelection receiver=binding.receiver representationRoot=0U64 termInstance=<TraitInstanceKey owner=binding.owner positionalArgs=binding.arguments /> authoredSource=<Optional.None /> equationClauses=[] authoredArguments=arguments session=self.sourceFactSession() member=binding.member term=ref site=site scope=self.sourceTypeUses.currentScope() termArguments=termArguments resolution=<LoweredAssociatedResolution.Declaration binding=binding /> />)
             return <Result.Ok value=self.loweredAssociatedSelections.count() />
         }
-        return self.captureLoweredAssociatedSelection(ref: ref, site: site, children: children, authoredRoot: <Optional.Some v=root />, authoredArguments: <Optional.Some v=arguments />)
+        if prepared.isNone() { return <Result.Err error=self.associatedMemberInputFailure(message: "lexical selection lost its prepared result") /> }
+        val saved = prepared.unwrap()
+        match saved.representation { AssociatedSelectionRepresentation.Declaring => {} _ => { return <Result.Err error=self.associatedMemberInputFailure(message: "lexical selection lost its declaring representation") /> } }
+        if authoredArguments.isNone() || saved.representationRoot >= saved.result.graph.roots.count() { return <Result.Err error=self.associatedMemberInputFailure(message: "lexical selection lost its root recipe") /> }
+        try self.checkAssociatedRootRecipes(recipes: authoredArguments.unwrap(), arguments: saved.result.graph.roots[saved.representationRoot].constraint.key.positionalArgs)
+        return self.captureLoweredAssociatedSelection(ref: ref, site: site, children: children, authoredArguments: authoredArguments, prepared: prepared)
     }
     fn checkLexicalAssociatedDeclaration(binding: LexicalAssociatedDeclaration) -> Result[(), CompileDiagnostic] {
         val index = self.decls.traitOwnerIndex(offset: binding.owner)
@@ -388,7 +409,14 @@ impl Comp {
         if use.isNone() { return <Result.Err error=self.associatedMemberInputFailure(message: "associated selection lost its occurrence") /> }
         val draft = self.loweredAssociatedSelections[saved.selection - 1U64]
         match draft.resolution {
-            LoweredAssociatedResolution.Query(result: val result) => { if draft.representationRoot >= result.graph.roots.count() { return <Result.Err error=self.associatedMemberInputFailure(message: "associated selection lost its representation root") /> } }
+            LoweredAssociatedResolution.Query(result: val result) => {
+                if draft.representationRoot >= result.graph.roots.count() { return <Result.Err error=self.associatedMemberInputFailure(message: "associated selection lost its representation root") /> }
+                val represented = match draft.representation {
+                    AssociatedSelectionRepresentation.Root => result.graph.roots[draft.representationRoot].constraint.key,
+                    AssociatedSelectionRepresentation.Declaring => match result.outcome { AssociatedMemberOutcome.Unique(candidate: val candidate) => candidate.instance _ => { return <Result.Err error=self.associatedMemberInputFailure(message: "associated selection lost its declaring outcome") /> } },
+                }
+                if !self.sameAssociatedMemberInstance(first: represented, second: draft.termInstance) { return <Result.Err error=self.associatedMemberInputFailure(message: "associated selection changed its retained representation") /> }
+            }
             LoweredAssociatedResolution.Declaration(binding: val declaration) => {
                 try self.checkLexicalAssociatedDeclaration(binding: declaration)
                 if declaration.owner != draft.termInstance.owner || declaration.member != draft.member || !self.sameResolvedTypeRefs(a: declaration.arguments, b: draft.termInstance.positionalArgs) || !self.typeRefEq(a: declaration.receiver, b: draft.receiver, sourceTerms: true) { return <Result.Err error=self.associatedMemberInputFailure(message: "lexical declaration changed its retained binding") /> }

@@ -32,6 +32,28 @@ fn main() {
         val receiverRecipe = compiler.sourceTypeUses.recipeAt(id: nestedRecipe.children[0U64]).unwrap()
         val receiverSelection = compiler.retainedAssociatedSelection(occurrence: receiverRecipe.occurrence, ref: receiverRecipe.term).unwrap().unwrap()
         if receiverSelection.graph.roots[0U64].constraint.key.owner != trait.nameStart { panic("nested lexical receiver lost original Child Self root") }
+        val occurrence = compiler.sourceTypeUses.useAt(index: parameter.authoredTypeUse-1U64).unwrap()
+        val recipe = compiler.sourceTypeUses.recipeAt(id: occurrence.recipe).unwrap()
+        val savedScope = compiler.sourceTypeUses.currentScope()
+        val savedOwner = compiler.lowerAssociatedOwner
+        val savedArguments = compiler.lowerAssociatedArgs
+        compiler.sourceTypeUses.selectionProbeScope(scope: occurrence.scope)
+        compiler.lowerAssociatedOwner = trait.nameStart
+        compiler.lowerAssociatedArgs = []
+        match compiler.captureLoweredLexicalSelection(ref: parameter.ty, site: occurrence.site, children: recipe.children, declaration: <Optional.None />) {
+            Result.Err(error: val diagnostic) => { if diagnostic.message() != "lexical selection lost its prepared result" { panic("missing lexical handoff changed failure cause") } }
+            Result.Ok(value: _) => { panic("lexical capture reconstructed a missing selection") }
+        }
+        val draft = compiler.retainedLoweredAssociatedSelection(occurrence: parameter.authoredTypeUse, ref: parameter.ty).unwrap().unwrap()
+        match draft.representation { AssociatedSelectionRepresentation.Declaring => {} _ => { panic("lexical saved projection lost its declaring representation") } }
+        val wrongRepresentation = <PreparedAssociatedMemberSelection site=occurrence.site receiver=draft.receiver member=draft.member session=draft.session scope=draft.scope representationRoot=draft.representationRoot representation=<AssociatedSelectionRepresentation.Root /> equationClauses=draft.equationClauses result=selected />
+        match compiler.captureLoweredAssociatedSelection(ref: parameter.ty, site: occurrence.site, children: recipe.children, prepared: <Optional.Some v=wrongRepresentation />) {
+            Result.Err(error: val diagnostic) => { if diagnostic.message() != "prepared associated selection changed its representation" { panic("wrong lexical representation lost its refusal cause") } }
+            Result.Ok(value: _) => { panic("lexical declaring term was accepted as its source root") }
+        }
+        compiler.sourceTypeUses.selectionProbeScope(scope: savedScope)
+        compiler.lowerAssociatedOwner = savedOwner
+        compiler.lowerAssociatedArgs = savedArguments
         // Missing preparation is not a successful absence of a lexical member.
         val completed = compiler.decls.queryProbeTraitEntry(owner: trait.nameStart)
         val header = compiler.traitLexicalHeaders.get(key: trait.nameStart)
@@ -54,6 +76,10 @@ fn main() {
         found = true
     }
     if !found { panic("lexical requirement setup missing") }
+    val genericOwner = compiler.decls.traitAt(index: compiler.decls.firstTraitNamed(nameId: compiler.internBytes(s: "GenericChild").nameId))
+    val genericParameter = compiler.funcParamAt(params: compiler.traitReqAt(reqs: genericOwner.reqs, index: 0U64).params, index: 0U64)
+    val genericDraft = compiler.retainedLoweredAssociatedSelection(occurrence: genericParameter.authoredTypeUse, ref: genericParameter.ty).unwrap().unwrap()
+    if genericDraft.authoredArguments.count() != 1U64 || genericDraft.termArguments.count() != 0U64 { panic("lexical root recipes were replaced by declaring argument recipes") }
     checkValueLexicalNamespace()
 
 }
