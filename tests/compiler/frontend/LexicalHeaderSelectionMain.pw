@@ -4,4 +4,60 @@ fn main() {
         Result.Ok(value: _) => {}
         Result.Err(error: val diagnostic) => { panic("lexical header preparation rejected: "+diagnostic.message()) }
     }
+    mut val found = 0U64
+    for index in 0U64..<compiler.decls.traitCount() {
+        val owner = compiler.decls.traitAt(index: index)
+        if owner.nameId != compiler.internBytes(s: "Child").nameId && owner.nameId != compiler.internBytes(s: "Generic").nameId { continue }
+        val slot = owner.supertraits.start
+        val source = compiler.authoredSupertraitOperands.get(key: slot).unwrap()
+        val recipe = compiler.sourceTypeUses.recipeAt(id: source.arguments[0U64]).unwrap()
+        val lowered = compiler.retainedLoweredAssociatedSelection(occurrence: recipe.occurrence, ref: recipe.term).unwrap().unwrap()
+        val binding = match lowered.resolution { LoweredAssociatedResolution.Declaration(binding: val binding) => binding _ => { panic("lexical declaration was forged as a query result") } }
+        if binding.owner != owner.nameStart || binding.arguments.count() != owner.typeParams.count() { panic("lexical binder lost owner or complete arguments") }
+        if compiler.retainedAssociatedSelection(occurrence: recipe.occurrence, ref: recipe.term).unwrap().isSome() { panic("lexical declaration became an inherited query") }
+        val admitted = compiler.retainedAdmittedAssociatedSelection(occurrence: recipe.occurrence, ref: recipe.term).unwrap().unwrap()
+        if admitted.member != binding.member || admitted.declaring.owner != binding.owner || admitted.declaring.positionalArgs.count() != binding.arguments.count() { panic("lexical declaration lost admitted identity") }
+        compiler.admittedAssociatedSelections.remove(key: recipe.occurrence)
+        match compiler.admitAssociatedSelectionOccurrence(occurrence: recipe.occurrence, ref: recipe.term, viewProof: compiler.thawStaticConformanceProof(id: admitted.declaringProof), scope: <DeclarationTypeScope owner=owner.nameStart parameters=<FuncBindRange start=0U64 len=0U64 /> selfParameter=0U64 />, assumptions: [], normalizations: admitted.normalizations, offset: lowered.site) {
+            Result.Err(error: val diagnostic) => { if diagnostic.message() != "lexical declaration has a foreign Self scope" { panic("foreign lexical scope lost its refusal cause") } }
+            Result.Ok(value: _) => { panic("foreign lexical Self scope gained admission") }
+        }
+        compiler.admittedAssociatedSelections[recipe.occurrence] = admitted
+        for failure in 0U64..<3U64 {
+            val altered = <LexicalAssociatedDeclaration owner=binding.owner declaration=(if failure == 0U64 { give binding.declaration+1U64 } else { give binding.declaration }) member=binding.member receiver=(if failure == 1U64 { give compiler.lexicalSelfTerm(parameter: 0U64) } else { give binding.receiver }) arguments=(if failure == 2U64 { give [] } else { give binding.arguments }) />
+            if failure == 2U64 && binding.arguments.count() == 0U64 { continue }
+            match compiler.checkLexicalAssociatedDeclaration(binding: altered) {
+                Result.Err(error: val diagnostic) => { match diagnostic.failureDomain() { FailureDomain.Internal => {} _ => { panic("invalid binder gained source authority") } } }
+                Result.Ok(value: _) => { panic("invalid lexical declaration identity accepted") }
+            }
+        }
+        if binding.arguments.count() != 0U64 {
+            val signatureScope = compiler.requireAdmittedRawRequirement(traitIndex: index, slot: 0U64, offset: owner.nameStart).unwrap()
+            val parameters = compiler.requirementParameterTypes(signature: <RequirementSignatureRead scope=signatureScope bound=<TraitBound subject=binding.receiver constraint=<TraitConstraint key=<TraitInstanceKey owner=binding.owner positionalArgs=binding.arguments /> assocPredicates=[] /> offset=owner.nameStart /> />).unwrap()
+            val projected = compiler.arena.typeAt(index: parameters[0U64])
+            if projected.assocNameId != binding.member || projected.assocTraitDeclOffset != binding.owner || projected.assocTraitArgs.count() != binding.arguments.count() { panic("requirement reader lost its admitted lexical declaration") }
+            val originalScope = compiler.sourceTypeUses.currentScope()
+            val originalOwner = compiler.lowerAssociatedOwner
+            val originalArguments = compiler.lowerAssociatedArgs
+            compiler.sourceTypeUses.selectionProbeScope(scope: lowered.scope)
+            compiler.lowerAssociatedOwner = binding.owner
+            compiler.lowerAssociatedArgs = binding.arguments
+            val foreign = <LexicalAssociatedDeclaration owner=binding.owner declaration=binding.declaration member=binding.member receiver=binding.receiver arguments=[binding.receiver] />
+            match compiler.captureLoweredLexicalSelection(ref: recipe.term, site: lowered.site, children: recipe.children, declaration: <Optional.Some v=foreign />) {
+                Result.Err(error: val diagnostic) => { if diagnostic.message() != "lexical declaration changed before capture" { panic("foreign lexical arguments lost their refusal cause") } }
+                Result.Ok(value: _) => { panic("same-arity foreign lexical arguments were accepted") }
+            }
+            compiler.sourceTypeUses.selectionProbeScope(scope: originalScope)
+            compiler.lowerAssociatedOwner = originalOwner
+            compiler.lowerAssociatedArgs = originalArguments
+        }
+        found += 1U64
+    }
+    if found != 2U64 { panic("lexical header binder controls were not reached") }
+    mut val rejected = <Comp />
+    match analyzeFrontendForRequests(c: inout rejected, input: <FrontendInput.File path="tests/compiler/frontend/fixtures/ProjectionMembers/LexicalRedeclaration.pw" />, sources: <SourceAccess stdRoot="std/".bytes() />) {
+        Result.Ok(value: _) => { panic("lexical binder formation bypassed inherited redeclaration rejection") }
+        Result.Err(error: val diagnostic) => { if !diagnostic.isSourceRejection() { panic("inherited redeclaration was not a source rejection") } }
+    }
+
 }

@@ -21,7 +21,9 @@ success alone. No main/seed/carrier promotion or new source semantics.
 
 Use the common query for TypeAst/SyntaxType short/explicit projections and lexical
 associated names. Remove traitOwnerHasAssocId prefilters and competing
-chooseShortProjectionSource/lowerLexicalAssociatedType decisions. Preserve original
+chooseShortProjectionSource and independent inherited-lexical selection decisions.
+A directly declared lexical associated binder is a declaration reference, not an
+inherited query; retain that distinction through admission. Preserve original
 declaration scope, ProjectionBoundState readiness and demand timing; do not
 prepare unrelated clauses or reinterpret missing headers as empty namespaces.
 
@@ -178,14 +180,28 @@ native profiles pass in lexical-namespace-green-v3, including an added Value AST
 Parent[I64] case. The unavailable-namespace internal control now removes both
 namespace and header information; a valid namespace snapshot is not missing data.
 
-A new nineteenth profile, LexicalHeaderSelectionMain, requires
-`trait Child: Parent[Item] { type Item }` to succeed. Both baseline a9bce8db and
-current source fail with Limit. This is an existing preparation cycle, not a
-regression introduced by namespace filtering. Local associated declaration
-identity must be formed without requiring its own completed heritage; final
-heritage uniqueness, redeclaration and proof checks remain required. Do not claim
-this checkpoint closes lexical or all-native coverage. Keep the RED until the
-binder/admission boundary is corrected. Exact results: meta namespace-checkpoint.json.
+Local lexical declaration binders now have an explicit Declaration variant,
+separate from Query. Exact owner/member declaration offset, Self and lexical
+arguments pass through direct/nested recipes into occurrence binding. Admission
+requires independently justified complete-instance evidence, matching lexical
+Self scope and authorized normalization/proof dependencies. The admitted reader
+rejects missing binder admission and uses the saved identity/proof. Generic
+heritage checking now receives its exact lexical argument environment.
+
+The formerly failing LexicalHeaderSelectionMain succeeds for own-member heritage
+references, including generic traits. Source and Value AST controls retain the
+Declaration variant rather than fabricating Unique graphs. Negative controls
+cover wrong declaration identity, Self, argument arity, same-arity foreign
+arguments and foreign Self admission scope. Requirement reading preserves the
+admitted symbolic owner/arguments. An independently observed missing final
+redeclaration check is repaired at completed Source trait validation, after
+cycle checks and before nominal admission. Its accepted-input RED is retained.
+Meta declaration-binding-checkpoint.json owns the final results and review.
+
+This completes the local declaration-binding slice, not this task. Inherited
+lexical capture still repeats a query, and construction heads still have a
+term-only handoff. Their explicit result/provenance migration and terminal gates
+remain required. No all-mode or performance completion follows from native tests.
 
 ## Next implementation sequence
 

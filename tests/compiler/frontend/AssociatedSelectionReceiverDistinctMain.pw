@@ -10,9 +10,10 @@ fn main() {
     mut val found = false
     for draft in compiler.loweredAssociatedSelections {
         if draft.member != output { continue }
-        val owner = compiler.decls.traitIndexByOffset(offset: draft.result.graph.roots[0U64].constraint.key.owner)
+        val query = match draft.resolution { LoweredAssociatedResolution.Query(result: val result) => result _ => { continue } }
+        val owner = compiler.decls.traitIndexByOffset(offset: query.graph.roots[0U64].constraint.key.owner)
         if owner >= compiler.decls.traitCount() || compiler.decls.traitAt(index: owner).nameId != child { continue }
-        match draft.result.outcome {
+        match query.outcome {
             AssociatedMemberOutcome.Ambiguous(candidates: val candidates) => { if candidates.count() != 2U64 { panic("distinct receiver candidate count lost") } }
             _ => { panic("equation for a different receiver selected the output") }
         }

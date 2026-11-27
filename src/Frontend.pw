@@ -806,6 +806,23 @@ struct LoweredShortProjection {
     val selection: PreparedAssociatedMemberSelection
 }
 impl LoweredShortProjection { factory }
+struct LexicalAssociatedDeclaration {
+    val owner: U64
+    val declaration: U64
+    val member: U64
+    val receiver: U64
+    val arguments: Array[U64]
+}
+impl LexicalAssociatedDeclaration { factory }
+enum LoweredAssociatedResolution {
+    Query(result: AssociatedMemberResult)
+    Declaration(binding: LexicalAssociatedDeclaration)
+}
+struct LoweredLexicalProjection {
+    val ref: U64
+    val binding: Optional[LexicalAssociatedDeclaration] = <Optional.None />
+}
+impl LoweredLexicalProjection { factory }
 struct LoweredAssociatedSelection {
     val receiver: U64
     val representationRoot: U64
@@ -819,7 +836,7 @@ struct LoweredAssociatedSelection {
     val site: U64
     val scope: U64
     val termArguments: Array[U64]
-    val result: AssociatedMemberResult
+    val resolution: LoweredAssociatedResolution
 }
 impl LoweredAssociatedSelection { factory }
 struct AssociatedSelectionOccurrence {
@@ -3341,6 +3358,7 @@ fn loadFrontendDeclarations(c: inout Comp, input: FrontendInput, sources: Source
     // the concrete-conformance fixpoint, whose idempotent fact deduplication is
     // intentionally not a substitute for this diagnostic.
     try c.checkSourceTraitSubjectCycles()
+    try c.checkSourceInheritedAssociatedDeclarations()
     c.newtypeAnnotationAdmissionOpen = true
     val nominalAdmission = admitFrontendNominalDependencies(c: inout c, origin: origin)
     c.newtypeAnnotationAdmissionOpen = false

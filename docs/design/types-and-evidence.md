@@ -76,6 +76,19 @@ headers must agree with their prepared parent-owner sequence. This separates
 ordinary nominal argument lookup from dependencies on unfinished instance
 headers, without treating unavailable information as an empty namespace.
 
+A lexical reference to an associated type declared in the current trait binds
+that registered declaration identity, rather than searching the trait's unfinished
+heritage. Lowering distinguishes this declaration binding from a query result;
+it must not fabricate a Unique query or completed conformance proof. Preserve
+its exact owner/member, lexical Self, complete instance arguments and recipes
+through the same occurrence/session/scope binding boundary. Admission verifies
+the declaration membership and lexical environment against independently justified
+instance evidence before publishing a receipt. Readers consume that receipt;
+they do not repeat name lookup. The completed trait declaration separately rejects
+inherited-member redeclarations before nominal admission. External projections
+and inherited lexical names remain full associated-member queries, even when
+a matching direct declaration happens to exist on their search roots.
+
 Candidate identity is the associated declaration and its declaring trait owner
 with every substituted positional argument. Repeated reachability of that same
 candidate is deduplicated. Different declaring instances or declarations remain

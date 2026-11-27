@@ -7,12 +7,13 @@ fn main() {
     val parameter = compiler.funcParamAt(params: function.params, index: 0U64)
     val binding = compiler.associatedSelectionOccurrences.get(key: parameter.authoredTypeUse).unwrap()
     val draft = compiler.loweredAssociatedSelections[binding.selection-1U64]
+    val query = match draft.resolution { LoweredAssociatedResolution.Query(result: val result) => result _ => { panic("expected query draft") } }
     if draft.authoredSource.isNone() { panic("explicit authored selector was lost") }
     val selector = draft.authoredSource.unwrap()
     if !rangeEquals(bytes: compiler.arena.bytes, start: selector.writtenStart, len: "Chosen".bytes().count(), kw: "Chosen") || selector.writtenStart < draft.site { panic("authored alias location was replaced by declaration or where clause") }
     val child = compiler.decls.traitAt(index: compiler.decls.traitIndexByOffset(offset: selector.traitInstance.owner))
     if child.nameId != compiler.internBytes(s: "Child").nameId { panic("alias lost selected Child identity") }
-    match draft.result.outcome {
+    match query.outcome {
         AssociatedMemberOutcome.Unique(candidate: val candidate) => {
             val parent = compiler.decls.traitAt(index: compiler.decls.traitIndexByOffset(offset: candidate.instance.owner))
             if parent.nameId != compiler.internBytes(s: "Parent").nameId { panic("authored selector overwrote declaring identity") }

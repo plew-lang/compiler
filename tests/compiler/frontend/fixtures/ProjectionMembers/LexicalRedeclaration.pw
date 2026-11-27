@@ -1,0 +1,3 @@
+trait Parent { type Item }
+trait Child: Parent { type Item fn take(value: Item) }
+fn main() {}

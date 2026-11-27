@@ -59,7 +59,7 @@ fn main() {
 }
 
 fn checkValueLexicalNamespace() {
-    val source = "trait Parent[A] {{ type Output }}\ntrait Child: Parent[I64] {{ fn item(value: Output) }}"
+    val source = "trait Parent[A] {{ type Output }}\ntrait Child: Parent[I64] {{ fn item(value: Output) }}\ntrait Local[C]: Parent[Item] {{ type Item fn local(value: Item) }}"
     mut val lexer = <Lexer bytes=source.bytes() pos=0U64 toks=[] depth=0I64 />
     lex(lx: inout lexer)
     mut val parser = <P bytes=source.bytes() toks=lexer.toks pos=0U64 base=0U64 />
@@ -77,6 +77,10 @@ fn checkValueLexicalNamespace() {
     compiler.moduleScopeBindings = <Optional.Some v=bindings.finish().unwrap() />
     compiler.prepareValueTraitItems(items: items).unwrap()
     for item in items { compiler.lowerTopItem(item: item).unwrap() }
+    val local = compiler.decls.traitAt(index: 2U64)
+    val localParameter = compiler.funcParamAt(params: compiler.traitReqAt(reqs: local.reqs, index: 0U64).params, index: 0U64)
+    val localDraft = compiler.retainedLoweredAssociatedSelection(occurrence: localParameter.authoredTypeUse, ref: localParameter.ty).unwrap().unwrap()
+    match localDraft.resolution { LoweredAssociatedResolution.Declaration(binding: val binding) => { if binding.owner != local.nameStart || binding.arguments.count() != 1U64 { panic("Value lexical binder lost its identity") } } _ => { panic("Value lexical binder became a query") } }
     val child = compiler.decls.traitAt(index: 1U64)
     val requirement = compiler.traitReqAt(reqs: child.reqs, index: 0U64)
     val parameter = compiler.funcParamAt(params: requirement.params, index: 0U64)

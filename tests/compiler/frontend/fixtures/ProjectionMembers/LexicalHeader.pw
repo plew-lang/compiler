@@ -1,3 +1,4 @@
 trait Parent[A] {}
 trait Child: Parent[Item] { type Item }
+trait Generic[C]: Parent[Item] { type Item fn take(value: Item) }
 fn main() {}

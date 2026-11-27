@@ -328,7 +328,7 @@ impl Comp {
         val scope = <DeclarationTypeScope origin=<DeclarationScopeOrigin.TraitDeclaration /> owner=owner parameters=self.pushFuncBinds(binds: parameters) selfParameter=declaration.selfParamId />
         val premise = <DeclarationBoundRef.TraitDeclaration index=owner />
         val receiver = self.traitDeclarationPremises[owner].subject
-        val scopes = <SignatureProofScopes local=scope assumptions=[premise] inherited=[] receiver=receiver scopedBinders=true />
+        val scopes = <SignatureProofScopes local=scope assumptions=[premise] inherited=[] receiver=receiver scopedBinders=true lexicalTrait=owner lexicalTraitArguments=self.traitDeclarationPremises[owner].constraint.key.positionalArgs />
         return self.checkTraitConstraintOperands(source: source, written: written, scopes: scopes, closedOnly: false)
     }
 
@@ -1051,6 +1051,8 @@ impl Comp {
                     mut val projectionSource = self.arena.typeAt(index: bare).projectionRebuildSource()
                     val admission = try self.retainedAdmittedAssociatedSelection(occurrence: node.occurrence, ref: node.term)
                     if admission.isNone() {
+                        val lowered = try self.retainedLoweredAssociatedSelection(occurrence: node.occurrence, ref: node.term)
+                        if lowered.isSome() { match lowered.unwrap().resolution { LoweredAssociatedResolution.Declaration(binding: _) => { return <Result.Err error=self.associatedMemberInputFailure(message: "signature reader lost its admitted lexical declaration") /> } _ => {} } }
                         val retained = try self.retainedAssociatedSelection(occurrence: node.occurrence, ref: node.term)
                         if retained.isSome() {
                             match retained.unwrap().outcome {
@@ -2236,20 +2238,46 @@ impl Comp {
     }
 
     inout fn retainedAdmittedAssociatedSelection(occurrence: U64, ref: U64) -> Result[Optional[AdmittedAssociatedSelection], CompileDiagnostic] {
-        val retained = try self.retainedAssociatedSelection(occurrence: occurrence, ref: ref)
+        val retained = try self.retainedLoweredAssociatedSelection(occurrence: occurrence, ref: ref)
         if retained.isNone() { return <Result.Ok value=<Optional.None /> /> }
         val admitted = match self.admittedAssociatedSelections.get(key: occurrence) { Optional.Some(v: val admitted) => admitted Optional.None => { return <Result.Ok value=<Optional.None /> /> } }
         val binding = self.associatedSelectionOccurrences[occurrence]
-        val candidate = match retained.unwrap().outcome { AssociatedMemberOutcome.Unique(candidate: val candidate) => candidate _ => { return <Result.Err error=self.associatedMemberInputFailure(message: "associated selection admission lost its unique outcome") /> } }
-        if admitted.occurrence != occurrence || admitted.selection != binding.selection || admitted.member != candidate.member || !self.sameAssociatedMemberInstance(first: admitted.declaring, second: candidate.instance) || admitted.rootProofs.count() != retained.unwrap().graph.roots.count() || !self.arena.hasStaticConformanceProof(id: admitted.declaringProof) { return <Result.Err error=self.associatedMemberInputFailure(message: "associated selection admission changed its retained identity") /> }
+        val draft = retained.unwrap()
+        val expected = match draft.resolution {
+            LoweredAssociatedResolution.Query(result: val result) => {
+                val candidate = match result.outcome { AssociatedMemberOutcome.Unique(candidate: val candidate) => candidate _ => { return <Result.Err error=self.associatedMemberInputFailure(message: "associated selection admission lost its unique outcome") /> } }
+                if admitted.rootProofs.count() != result.graph.roots.count() { return <Result.Err error=self.associatedMemberInputFailure(message: "associated selection admission changed its root evidence") /> }
+                give candidate.instance
+            }
+            LoweredAssociatedResolution.Declaration(binding: val declaration) => {
+                if admitted.rootProofs.count() != 1U64 { return <Result.Err error=self.associatedMemberInputFailure(message: "lexical declaration admission lost its evidence") /> }
+                give <TraitInstanceKey owner=declaration.owner positionalArgs=declaration.arguments />
+            }
+        }
+        if admitted.occurrence != occurrence || admitted.selection != binding.selection || admitted.member != draft.member || !self.sameAssociatedMemberInstance(first: admitted.declaring, second: expected) || !self.arena.hasStaticConformanceProof(id: admitted.declaringProof) { return <Result.Err error=self.associatedMemberInputFailure(message: "associated selection admission changed its retained identity") /> }
         for proof in admitted.rootProofs { if !self.arena.hasStaticConformanceProof(id: proof) { return <Result.Err error=self.associatedMemberInputFailure(message: "associated selection admission lost its root evidence") /> } }
         return <Result.Ok value=<Optional.Some v=admitted /> />
     }
 
     inout fn admitAssociatedSelectionOccurrence(occurrence: U64, ref: U64, viewProof: StaticConformanceProof, scope: DeclarationTypeScope, assumptions: Array[DeclarationBoundRef], normalizations: Array[ProjectionNormalizationStep], offset: U64) -> Result[(), CompileDiagnostic] {
-        val retained = try self.retainedAssociatedSelection(occurrence: occurrence, ref: ref)
-        if retained.isNone() { return <Result.Ok value=() /> }
-        val selection = retained.unwrap()
+        val lowered = try self.retainedLoweredAssociatedSelection(occurrence: occurrence, ref: ref)
+        if lowered.isNone() { return <Result.Ok value=() /> }
+        val selection = match lowered.unwrap().resolution {
+            LoweredAssociatedResolution.Query(result: val result) => result,
+            LoweredAssociatedResolution.Declaration(binding: val declaration) => {
+                if self.admittedAssociatedSelections.contains(key: occurrence) { return <Result.Err error=self.associatedMemberInputFailure(message: "lexical declaration admission was written twice") /> }
+                val identity = self.decls.traitOwnerAt(index: self.decls.traitOwnerIndex(offset: declaration.owner))
+                if scope.selfParameter != identity.selfParamId { return <Result.Err error=self.associatedMemberInputFailure(message: "lexical declaration has a foreign Self scope") /> }
+                try self.checkProjectionNormalizations(normalizations: normalizations, offset: offset, assumptions: assumptions)
+                val expected = try self.replayBoundNormalizations(bound: <TraitBound subject=declaration.receiver constraint=<TraitConstraint key=<TraitInstanceKey owner=declaration.owner positionalArgs=declaration.arguments /> assocPredicates=[] /> offset=offset />, normalizations: normalizations)
+                try self.checkRetainedWitnessClause(expected: expected, proof: viewProof, normalizations: normalizations, offset: offset, assumptions: assumptions)
+                try self.requireDeclarationProofSupport(dependencies: (try self.scopedProofDependencies(proof: viewProof, scope: scope, offset: offset, normalizations: normalizations)), offset: offset)
+                val binding = self.associatedSelectionOccurrences[occurrence]
+                val frozen = self.freezeStaticConformanceProof(proof: viewProof)
+                self.admittedAssociatedSelections[occurrence] = <AdmittedAssociatedSelection selection=binding.selection occurrence=occurrence rootProofs=[frozen] declaringProof=frozen declaring=<TraitInstanceKey owner=declaration.owner positionalArgs=declaration.arguments /> member=declaration.member premises=[] normalizations=normalizations />
+                return <Result.Ok value=() />
+            },
+        }
         val candidate = match selection.outcome {
             AssociatedMemberOutcome.Unique(candidate: val candidate) => candidate,
             // Owned Missing/Ambiguous publication is a separate migration.

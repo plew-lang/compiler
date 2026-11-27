@@ -116,3 +116,24 @@ pub impl Comp {
     }
 
 }
+
+impl Comp {
+    // A local binder may be formed before heritage operands. The completed
+    // declaration must still reject redeclaring an inherited associated name.
+    inout fn checkSourceInheritedAssociatedDeclarations() -> Result[(), CompileDiagnostic] {
+        for index in 0U64..<self.decls.traitCount() {
+            val declaration = self.decls.traitAt(index: index)
+            if declaration.assocTypes.count() == 0U64 { continue }
+            for memberIndex in 0U64..<declaration.assocTypes.count() {
+                val member = self.traitBindAt(binds: declaration.assocTypes, index: memberIndex)
+                for parentIndex in 0U64..<declaration.supertraits.count() {
+                    val parent = self.traitConstraintAt(constraints: declaration.supertraits, index: parentIndex).key.owner
+                    if try self.associatedMemberNamespaceContains(owner: parent, member: member.nameId, site: member.nameStart) {
+                        return <Result.Err error=self.diagnosticAt(offset: member.nameStart, msg: "an inherited associated type cannot be redeclared (spec/08)", failureDomain: <FailureDomain.Source />) />
+                    }
+                }
+            }
+        }
+        return <Result.Ok value=() />
+    }
+}
