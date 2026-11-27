@@ -42,7 +42,13 @@ fn main() {
     for attempt in 0U64..<2U64 {
         match raw.prepareLexicalBody(fnIdx: function) {
             Result.Err(error: val diagnostic) => { if diagnostic.isSourceRejection() { panic("Raw Source diagnostic: "+diagnostic.message()) }
-                if diagnostic.notes().count() != 1U64 { panic("Raw missing note: "+diagnostic.message()) } }
+                if diagnostic.notes().count() != 1U64 { panic("Raw missing note: "+diagnostic.message()) }
+                raw.pendingDiagnostics.append(diagnostic)
+                val drained = raw.takeDiagnostics()
+                if drained.count() != 1U64 || drained[0U64].isSourceRejection() || drained[0U64].message() != diagnostic.message() || drained[0U64].notes().count() != 1U64 { panic("Raw drain changed closure refusal") }
+                sameLocation(actual: drained[0U64].location(), expected: diagnostic.location())
+                sameLocation(actual: drained[0U64].notes()[0U64].location, expected: diagnostic.notes()[0U64].location)
+ }
             Result.Ok(value: _) => { panic("Raw body admitted duplicate closure group") }
         }
         match owned.prepareFunction(function: function) {

@@ -748,3 +748,14 @@ authentication, which additionally needs private/native admission controls.
 `test-parameter-group-admission.py --carrier PATH --out NEW_DIRECTORY` is a manual declaration-admission matrix (114 cases): named/requirement binding-name uniqueness in local/imported declarations under check/AOT/ORC, including suppressed labels and legal explicit shadowing. It requires the binding-name diagnostic and Source failure domain; closure and function-type admission have separate owners.
 
 `ParameterGroupAdmissionMain.pw` is a manual private-root diagnostic: equal-byte/zero-nameId comparison, distinct suppressed names, malformed ranges/spans, Raw registration/verifier/public Syntax decoding, Source/previous locations, and failed Func/trait publication. `ParameterGroupFailureDomains.pw` tests retained refusals across repeated session-open attempts. Run with the versioned declaration-parameters/run-private.py (optional `session` argument); both require exit0 and empty native stdout/stderr.
+
+`test-closure-parameter-admission.py --carrier PATH --out NEW_DIRECTORY` is a
+manual96-case check/AOT/ORC matrix for closure group admission, contextual and
+shadowing positives, local/imported bodies, globals/defaults/provided/generic
+owner paths. `ClosureParameterAdmissionMain.pw` is a private-root native probe
+for pre-publication checks, malformed input, cache/Raw/forged/foreign identity,
+actual cross-owner transplantation and failed-builder proof retention.
+`ClosureParameterFailureDomains.pw` checks Raw preparation/drain and owned
+service retries, whole and eager checks with exact previous-location notes.
+Use the declaration-parameters/run-closure-private.py driver (`session` for the
+latter). Both native probes require exit0 and empty stdout/stderr.

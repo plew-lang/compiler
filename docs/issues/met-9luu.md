@@ -131,3 +131,9 @@ consume registered signatures or retained closure descriptors; low-level
 verifyFunc/checkGenericFunction are not Raw registration APIs. Reviewer confirmed
 that repeating admission in these passes would violate the intended owner split.
 Unrelated statement/pattern/loop binding policies are not claimed fixed.
+
+Latest native green-v4 adds malformed-group refusal and confirms13 scenarios
+plus forged/session/failed-builder proof checks. Latest session-green-v2 also
+checks Raw diagnostic drain. Neutral source review of97143377 found no further
+Diag-case, payload/proof/root or note-retention must-fix. Fresh v3,96 owner
+matrix and normal capture/ownership regressions remain pending; not closed.

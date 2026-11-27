@@ -14,7 +14,7 @@ fn closureProbeReplacement(expression: Expr, replacement: Optional[Array[Param]]
     }
 }
 fn main() {
-    for kind in ["Owned", "Raw", "PublicConstructor", "FullRecord", "Cached", "Params", "Body", "Span", "Serial", "Synthetic", "Foreign", "Transplanted"] {
+    for kind in ["Owned", "Raw", "PublicConstructor", "FullRecord", "Cached", "Params", "Body", "Span", "Serial", "Malformed", "Synthetic", "Foreign", "Transplanted"] {
         mut val compiler = <Comp />
         analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.File path="tests/compiler/frontend/fixtures/ClosureParameterGroups/Main.pw" />, sources: <SourceAccess stdRoot="std/".bytes() />).unwrap()
         val function = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "entry").nameId)
@@ -27,6 +27,10 @@ fn main() {
         if kind == "Params" {
             val parameters = match compiler.arena.exprs[expression] { Expr.Closure(params: val parameters, hasRet: _, retStart: _, retLen: _, retIsArray: _, retTy: _, body: _, isDiverging: _) => parameters _ => { panic("probe params missing") } }
             compiler.arena.exprs[expression] = closureProbeReplacement(expression: compiler.arena.exprs[expression], replacement: <Optional.Some v=[parameters[0U64], parameters[0U64]] />)
+        }
+        if kind == "Malformed" {
+            val parameter = <Param nameStart=compiler.arena.bytes.count() nameLen=18446744073709551615U64 tyStart=0U64 tyLen=0U64 tyIsArray=false ty=0U64 isInout=false isMove=false isBorrow=false noLabel=true hasDefault=false defaultExpr=0U64 />
+            compiler.arena.exprs[expression] = closureProbeReplacement(expression: compiler.arena.exprs[expression], replacement: <Optional.Some v=[parameter] />)
         }
         if kind == "Body" { compiler.arena.exprs[expression] = closureProbeReplacement(expression: compiler.arena.exprs[expression], changedBody: true) }
         if kind == "Span" { compiler.arena.exprSpanStart[expression] += 1U64 }
@@ -55,6 +59,11 @@ fn main() {
             give match compiler.recordParametricFunctionWithOrigin(fnIdx: function, recordCallTemplates: true, origin: <SourceRecordingScope request=request returnContext=<SourceExpectedContext.None /> />, expectedOrigin: <SourceExpectedContext.None />) { Result.Err(error: val diagnostic) => diagnostic Result.Ok(value: _) => { panic("Record admitted duplicate") } }
         } else {
             give match compiler.admitRecordedClosureParameters(expression: expression, origin: request) { Result.Err(error: val diagnostic) => diagnostic Result.Ok(value: _) => { panic("closure group admitted duplicate") } }
+        }
+        if kind == "Malformed" {
+            match refusal.failureDomain() { FailureDomain.Internal => {} _ => { panic("malformed closure group misclassified") } }
+            if compiler.semanticClosures.count() != closuresBefore || compiler.cur.locals.count() != localsBefore { panic("malformed group published locals") }
+            continue
         }
         val source = kind == "Owned" || kind == "FullRecord" || kind == "Cached"
         if refusal.isSourceRejection() || compiler.sourceFailureHasOwner(diagnostic: refusal) != source || refusal.notes().count() != 1U64 || refusal.message() != "duplicate parameter binding name (each parameter in a group must have a distinct name)" { panic("closure parameter refusal origin changed: "+kind) }
