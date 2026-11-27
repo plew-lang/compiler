@@ -1930,6 +1930,19 @@ impl Comp {
         return true
     }
 
+    // A proposal uses the declaration's admitted symbolic result, before
+    // applying this call's known arguments. It does not authorize a final call.
+    inout fn declaredCallableResultPattern(callee: U64) -> Result[U64, CompileDiagnostic] {
+        val function = self.arena.functionAt(index: callee)
+        if function.hasRet {
+            match (try self.lexicalBodySignatureType(function: callee, slot: <SourceSignatureSlot.Result />, ref: function.retTy, receiver: self.parametricSelfRef(f: function))) {
+                Optional.Some(v: val term) => { return <Result.Ok value=term /> }
+                Optional.None => {}
+            }
+        }
+        return <Result.Ok value=self.semanticCallableReturnTerm(function: function) />
+    }
+
     // Compare an expectation with the already-selected declaration result.
     // Only local substitutions and interned terms are produced; Record owns
     // publication after selection. Incomplete or conflicting proposals stay absent.
@@ -1953,7 +1966,10 @@ impl Comp {
                     val selectedReceiver = self.selectedCallableReceiver(function: function, receiver: receiver, receiverTerm: receiverTerm, params: self.copyFuncBinds(binds: function.typeParams), typeArgs: current)
                     give try self.providedExpectedResultPattern(callee: callee, receiver: selectedReceiver, arguments: current, proof: proof)
                 } else {
-                    give self.groundTermInEnvironment(ref: self.semanticCallableReturnTerm(function: function), params: [], values: [], selfRef: self.parametricSelfRef(f: function))
+                    val receiver = self.parametricSelfRef(f: function)
+                    val declaration = try self.declaredCallableResultPattern(callee: callee)
+                    val known = try self.groundKnownCallTypeArguments(ref: declaration, params: function.typeParams, values: current, receiver: receiver)
+                    give try self.closeBodyProjectionTerms(ref: known, environment: <InstanceEnvironment />, selfRef: receiver, itemRef: 0U64, assumptions: self.functionBoundAssumptions(fnIdx: self.cur.checkFn))
                 }
                 val completed = self.completeCallTypeArguments(function: function, current: current, resultPattern: resultPattern, expectedTerm: expectedTerm)
                 if completed.count() != function.typeParams.count() || !self.fnArgsAllResolved(args: completed) { return <Result.Ok value=<Optional.None /> /> }
@@ -1965,9 +1981,10 @@ impl Comp {
                 val result = if provided {
                     give if environment.receiverRef == 0U64 { give <RetainedCallableTypes parameterTypes=[] /> } else { give try self.providedSourceSignature(function: callee, environment: environment, read: <CallableSignatureRead.SourceResult />) }
                 } else {
-                    give <RetainedCallableTypes parameterTypes=[] resultType=(try self.groundTermForBody(ref: self.semanticCallableReturnTerm(function: function), environment: environment, selfRef: environment.receiverRef, itemRef: 0U64)) />
+                    val selected = try self.selectedCallableSourceResult(callee: callee, environment: environment)
+                    give <RetainedCallableTypes parameterTypes=[] resultType=selected.term resultOccurrence=selected.occurrence resultSelector=selected.selector />
                 }
-                return <Result.Ok value=<Optional.Some v=<ContextualCallResult publishResultSelector=provided arguments=completed result=result /> /> />
+                return <Result.Ok value=<Optional.Some v=<ContextualCallResult publishResultSelector=provided || result.resultOccurrence != 0U64 arguments=completed result=result /> /> />
             }
             CallTemplateKind.StaticMethod(receiver: val receiver, args: val args, resolution: val resolution, methodTypeArgs: val typeArgs, resultTerm: _) => {
                 val function = match resolution {

@@ -206,12 +206,12 @@ impl Comp {
         if declaration.hasRecv && environment.receiverRef == 0U64 { return <Result.Ok value=<SelectedCallableSourceResult term=0U64 /> /> }
         if declaration.isProvided && self.isAuthoredProvidedDeclaration(function: callee) {
             val types = try self.providedSourceSignature(function: callee, environment: environment, read: <CallableSignatureRead.SourceResult />)
-            return <Result.Ok value=<SelectedCallableSourceResult term=types.resultType selector=types.resultSelector /> />
+            return <Result.Ok value=<SelectedCallableSourceResult term=types.resultType occurrence=types.resultOccurrence selector=types.resultSelector /> />
         }
         match (try self.readRetainedCallableTypes(function: callee, environment: environment, read: <CallableSignatureRead.SourceResult />)) {
             Optional.Some(v: val types) => {
                 val term = try self.groundTermForBody(ref: types.resultType, environment: environment, selfRef: environment.receiverRef, itemRef: if environment.receiverRef == 0U64 { give 0U64 } else { give try self.finalMethodItemRef(f: declaration, receiverRef: environment.receiverRef) })
-                return <Result.Ok value=<SelectedCallableSourceResult term=term selector=types.resultSelector /> />
+                return <Result.Ok value=<SelectedCallableSourceResult term=term occurrence=types.resultOccurrence selector=types.resultSelector /> />
             }
             Optional.None => {}
         }

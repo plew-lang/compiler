@@ -1,0 +1,14 @@
+use @Std/Io only { print }
+trait Parent { type Output }
+trait Child: Parent {}
+struct Leaf {}
+impl Leaf as Parent { type Output = I64 }
+impl Leaf as Child {}
+fn build[T, U](owner: T, output: I64, transform: fn(value: U) -> U) -> (owner: T, output: I64, transform: fn(value: U) -> U) where T: Child {
+    return (owner: owner, output: output, transform: transform)
+}
+fn main() {
+    val bundle: (owner: Leaf, output: I64, transform: fn(value: Bool) -> Bool) = build(owner: <Leaf />, output: 7I64, transform: fn(value) { return value })
+    val transform = bundle.transform
+    if transform(value: true) { print(bundle.output) } else { print(0I64) }
+}

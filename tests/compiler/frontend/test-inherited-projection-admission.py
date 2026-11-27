@@ -29,7 +29,7 @@ arity='trait Parent[A, B] { type Output }\ntrait Child[C]: Parent[C, Array[C]] {
 for name,projection in [('ParentArity','T#Parent[I64, Array[I64]].Output'),('ChildArity','T#Child[I64].Output')]:
  cases[name]=(True,arity+'fn project[T](value: T, item: '+projection+') -> '+projection+' where T: Child[I64] { return item }\nfn main() { print(project(value: <P />, item: 7I64)) }\n')
 fixtures={}
-for name in ['Closure','Provided','Unused']:
+for name in ['Closure','Provided','Unused','ExpectedResult','ExpectedResultControl']:
  fixture=ROOT/'tests/compiler/frontend/fixtures/ProjectionMembers'/('Executable'+name+'.pw')
  fixtures[str(fixture)]=fixture
  cases[name]=(True,fixture.read_text().split('\n',1)[1])

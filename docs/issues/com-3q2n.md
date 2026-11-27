@@ -1,7 +1,7 @@
 ---
 id: com-3q2n
 status: open
-deps: [com-cwu1, com-ra96]
+deps: [com-cwu1, com-ra96, met-e06k]
 links: []
 created: 2026-10-23T10:41:58Z
 type: task

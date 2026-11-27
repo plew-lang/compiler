@@ -606,6 +606,7 @@ struct SharedInoutPlace {
 
 struct SelectedCallableSourceResult {
     val term: U64
+    val occurrence: U64 = 0U64
     val selector: Optional[ResolvedViewSource] = <Optional.None />
 }
 impl SelectedCallableSourceResult { factory }
