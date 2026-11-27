@@ -85,6 +85,22 @@ struct, enum, type, and bound additions update the corresponding indexes at the
 same boundary; value copying must copy rows and indexes consistently. Readers
 must not alter visibility, arity, aliases, or candidate order.
 
+Nominal admission checks each struct's field-name group, an enum's variant-name
+group, and each variant's payload-name group before successful declaration
+publication. Module number and body demand do not exempt imported declarations.
+One byte/span comparison core returns duplicate slots or malformed input without
+receiving compiler state, source authority, or diagnostic policy. The actual
+parsed declaration continuation binds the completed group to source locations;
+Raw and synthetic rows cannot obtain Source classification from a module ID,
+scope number, or a matching diagnostic message.
+
+An uninterrupted private fresh-construction continuation may consume its own
+completed nominal admission instead of checking those groups again. A public
+verifier over caller-owned state must validate its rows, including a replaced
+arena or injected source-scope number. Synthesized rows remain subject to their
+own admission/invariant checks. The trusted generator harness's shape policy is
+separate; ordinary generated source is admitted as source when compiled.
+
 [Shared overload declaration admission](name-lookup.md#shared-overload-declaration-admission)
 owns the complete acceptance condition across ordinary callable and requirement
 entries. Registering a row reserves identity; it does not replace the declaration

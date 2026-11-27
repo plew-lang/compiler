@@ -81,8 +81,10 @@ The 48-control real-CLI matrix is RED against saved594990c485aa: 24 legal
 controls pass; 24 invalid-shape controls fail acceptance/domain assertions.
 All input hashes remain unchanged. The pure comparison core's executable
 controls pass, and the whole compiler source passes `--check` with this carrier.
-The first fresh snapshot is building; no fresh product or final certification
-is claimed. Setup mistakes in the newly written core harness were corrected
+The first fresh snapshot built successfully (20261127T045959-build-8e0485)
+and passed all48 real-CLI controls with unchanged inputs. Its product precedes
+the private verifier skip refinement; the final source snapshot v2 is building
+(20261127T050944-build-2c10ca). No final certification is claimed. Setup mistakes in the newly written core harness were corrected
 and do not count as RED.
 
 The private parsed-item lowering chain carries the existing admission origin to
@@ -104,3 +106,14 @@ invalid enums is now all variant names before payloads; the complete variant-nam
 so the single comparison core owns each complete group. This only changes
 which violation is reported first when both kinds are already invalid;
 no declaration acceptance or effectful evaluation order is changed.
+
+Native final-source controls passed compile/runtime/link/execute with invariant
+inputs: private Source refusal before registration, Raw/synthetic/fake-scope
+checks, actual public Syntax decoder, coherent Arena replacement after source
+admission, malformed/overflow spans and gen suppression. Session controls
+retain exact Source message/location/notes after frontend state is gone across
+repeated opens. Evidence: declaration-labels/native-v4.json and session-v1.json.
+The separate foreign-corpus replacement panic is retained under met-m7wx;
+its invalid whole-Comp snapshot does not replace the coherent fake-scope
+control, which still rejects. Native setup-only v2 compilation failure and
+the v3/debug whole-state panic are not counted as successful controls.

@@ -25,6 +25,23 @@ fn main() {
         injected.genMode = true
         injected.checkDeclShapes(sourceFuncLimit: 0U64).unwrap()
     }
+    mut val decoded = <Comp />
+    val text = "pub struct Bad {{ val value: I64 val value: I64 }}"
+    decoded.appendSrc(from: text.bytes())
+    val roots = decoded.parseFileSyntax(fileBytes: text.bytes(), fileStart: 0U64).unwrap()
+    match decoded.lowerSyntaxTopItem(item: syntaxFileTopLevel(file: decoded.syntax, index: roots.start)) {
+        Result.Err(error: val diagnostic) => { if diagnostic.isSourceRejection() || diagnostic.message() != "duplicate field name (each field in a struct body / variant payload must be distinct)" { panic("public syntax decoder gained Source") } }
+        Result.Ok(value: _) => { panic("public syntax decoder admitted duplicate") }
+    }
+    if decoded.arena.structCount() != 0U64 { panic("Raw decoder published invalid nominal") }
+    mut val replaced = openFrontendForRequests(input: <FrontendInput.File path="tests/compiler/frontend/fixtures/DeclarationLabels/Good/Main.pw" />, sources: <SourceAccess stdRoot="std/".bytes() />).unwrap()
+    mut val replacement = replaced.arena
+    replacement.registerStruct(<StructDef sourceTypeScope=99U64 nameStart=0U64 nameLen=1U64 typeParams=[] fields=[field, field] isUnique=false isExtern=false />)
+    replaced.arena = replacement
+    match replaced.checkDeclShapes(sourceFuncLimit: 0U64) {
+        Result.Err(error: val diagnostic) => { if diagnostic.isSourceRejection() || diagnostic.message() != "duplicate field name (each field in a struct body / variant payload must be distinct)" { panic("replaced Arena inherited source admission") } }
+        Result.Ok(value: _) => { panic("replaced Arena bypassed public validation") }
+    }
     for kind in ["StructField", "VariantField", "VariantName"] {
         for location in ["Local", "Imported"] {
             val directory = "tests/compiler/frontend/fixtures/DeclarationLabels/"+kind+location+"/"

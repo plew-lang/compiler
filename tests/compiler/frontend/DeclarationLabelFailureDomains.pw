@@ -1,0 +1,39 @@
+use ../../../src/Frontend only { FrontendInput, openFrontend }
+use ../../../src/CheckedProgram only { CompilerSession, CompilerSessionResult }
+use ../../../src/SourceAccess only { SourceAccess }
+use ../../../src/Diag only { CompileDiagnostic, DiagnosticLocation }
+
+fn retainFailure(diagnostic: CompileDiagnostic) -> CompileDiagnostic { return diagnostic }
+fn sameLocation(actual: DiagnosticLocation, expected: DiagnosticLocation) {
+    match actual {
+        DiagnosticLocation.File(path: val path, line: val line) => {
+            match expected {
+                DiagnosticLocation.File(path: val expectedPath, line: val expectedLine) => { if path != expectedPath || line != expectedLine { panic("declaration label location changed in session") } }
+                _ => { panic("reference declaration label location lost") }
+            }
+        }
+        _ => { panic("session declaration label location lost") }
+    }
+}
+fn main() {
+    for name in ["StructFieldLocal", "StructFieldImported", "VariantFieldLocal", "VariantFieldImported", "VariantNameLocal", "VariantNameImported"] {
+        val input = <FrontendInput.File path="tests/compiler/frontend/fixtures/DeclarationLabels/"+name+"/Main.pw" />
+        val reference = match openFrontend(input: input, sources: <SourceAccess stdRoot="std/".bytes() />) {
+            Result.Err(error: val diagnostic) => retainFailure(diagnostic: diagnostic)
+            Result.Ok(value: _) => { panic("declaration label reference accepted") }
+        }
+        if !reference.isSourceRejection() || reference.notes().count() == 0U64 { panic("reference lost declaration label refusal") }
+        for attempt in 0U64..<2U64 {
+            val failure = match CompilerSession.open(input: input, sources: <SourceAccess stdRoot="std/".bytes() />) {
+                CompilerSessionResult.Failure(diagnostic: val diagnostic) => retainFailure(diagnostic: diagnostic)
+                CompilerSessionResult.Success(session: _) => { panic("conflicting declaration label published session") }
+            }
+            if !failure.isSourceRejection() || failure.message() != reference.message() || failure.notes().count() != reference.notes().count() { panic("session changed declaration label refusal") }
+            sameLocation(actual: failure.location(), expected: reference.location())
+            for index in 0U64..<failure.notes().count() {
+                if failure.notes()[index].message != reference.notes()[index].message { panic("session changed declaration label explanation") }
+                sameLocation(actual: failure.notes()[index].location, expected: reference.notes()[index].location)
+            }
+        }
+    }
+}

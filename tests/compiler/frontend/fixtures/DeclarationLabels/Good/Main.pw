@@ -1,0 +1,2 @@
+struct Good { val first: I64 val second: I64 }
+fn main() {}
