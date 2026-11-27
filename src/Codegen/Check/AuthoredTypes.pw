@@ -1112,9 +1112,9 @@ impl Comp {
                             val output = try self.readRequirementProjectionOutput(proof: proof, interface: interface, receiver: receiver, selector: selector, arguments: arguments, member: original.assocNameId, environment: environment, offset: occurrence.site, memo: inout memo)
                             if output != 0U64 { term = output }
                         }
-                        SignatureRecipeContext.Provided(owner: val function) => {
+                        SignatureRecipeContext.SourceSelection(owner: val function) => {
                             memo[recipe] = <AuthoredRecipeRead term=0U64 reading=true views=[] normalizations=[] />
-                            val output = try self.readProvidedProjectionOutput(proof: proof, function: function, receiver: receiver, selector: selector, arguments: arguments, member: original.assocNameId, environment: environment, offset: occurrence.site, memo: inout memo)
+                            val output = try self.readSourceSelectionProjectionOutput(proof: proof, function: function, receiver: receiver, selector: selector, arguments: arguments, member: original.assocNameId, environment: environment, offset: occurrence.site, memo: inout memo)
                             if output != 0U64 { term = output }
                         }
                         SignatureRecipeContext.Concrete | SignatureRecipeContext.AssociatedBinding(requirement: _) => {
@@ -1859,9 +1859,7 @@ impl Comp {
                 for recipe in bound.predicateRecipes { try self.checkAuthoredTypeRecipe(sourceScope: signature.scope, recipe: recipe, edge: <AuthoredRecipeEdge.Source />, scopes: scopes, validation: inout validation, offset: parent.anchor) }
             }
         }
-        val clauses = if self.isAuthoredProvidedDeclaration(function: signature.function) && validation.parentScope != 0U64 {
-            give try self.admitProvidedClauseIdentities(signature: signature, own: sourceScope.bounds.unwrapOr(fallback: <SourceBoundRange />), parent: validation.parentScope, offset: sourceScope.anchor)
-        } else { give [] }
+        val clauses = try self.admitSignatureClauseIdentities(signature: signature, own: sourceScope.bounds.unwrapOr(fallback: <SourceBoundRange />), parent: validation.parentScope, offset: sourceScope.anchor)
         self.authoredSignatureViews[signature.function] = <AuthoredSignatureViews signature=signature proofs=validation.proofs receiverRecipes=validation.receiverRecipes recipeChecks=validation.visited recipeEquations=validation.equations receiverEquations=validation.receiverEquations parentScope=validation.parentScope parentParameters=validation.parentParameters parentSelfParameter=validation.selfParameter inheritedRecipes=validation.inherited clauses=clauses />
         return <Result.Ok value=() />
     }
@@ -2050,7 +2048,7 @@ impl Comp {
 
     // Replace only the provided declaration's own Self premise with the
     // selected receiver proof. Other admitted premises stay in lexical scope.
-    inout fn readProvidedProjectionOutput(proof: StaticConformanceProof, function: U64, receiver: U64, selector: ResolvedViewSource, arguments: Array[U64], member: U64, environment: InstanceEnvironment, offset: U64, memo: inout Dictionary[U64, AuthoredRecipeRead]) -> Result[U64, CompileDiagnostic] {
+    inout fn readSourceSelectionProjectionOutput(proof: StaticConformanceProof, function: U64, receiver: U64, selector: ResolvedViewSource, arguments: Array[U64], member: U64, environment: InstanceEnvironment, offset: U64, memo: inout Dictionary[U64, AuthoredRecipeRead]) -> Result[U64, CompileDiagnostic] {
         val premise = self.signatureProjectionPremise(proof: proof)
         if premise.source.isSome() {
             match premise.source.unwrap() {
@@ -2081,11 +2079,11 @@ impl Comp {
                     }
                 }
                 DeclarationBoundRef.Function(index: val assumption) => {
-                    val admitted = try self.providedSignatureAdmission(function: function)
+                    val admitted = try self.admittedSourceSignature(function: function)
                     for clause in admitted.clauses {
                         if clause.assumption == assumption {
                             val prepared = try self.retainedSignatureClause(scope: clause.scope, id: clause.source, offset: offset)
-                            val context = <SignatureRecipeContext.Provided owner=function />
+                            val context = <SignatureRecipeContext.SourceSelection owner=function />
                             val bound = try self.readSignatureProjectionClause(prepared: prepared, proofs: admitted.proofs, context: context, environment: environment, memo: inout memo, steps: premise.steps, member: member, offset: offset)
                             return self.readSelectedSignatureProjection(bound: bound, selected: <Optional.None />, receiver: receiver, selector: selector, arguments: arguments, member: member, offset: offset)
                         }
@@ -2624,13 +2622,13 @@ impl Comp {
 
     // Bind registered assumption IDs to the exact lexical clause once,
     // while the signature is admitted. The ranges were published own-first.
-    inout fn admitProvidedClauseIdentities(signature: AuthoredFunctionSignature, own: SourceBoundRange, parent: U64, offset: U64) -> Result[Array[AuthoredProvidedClause], CompileDiagnostic] {
-        val inherited = self.sourceTypeUses.scopeAt(token: parent).unwrap().bounds.unwrapOr(fallback: <SourceBoundRange />)
+    inout fn admitSignatureClauseIdentities(signature: AuthoredFunctionSignature, own: SourceBoundRange, parent: U64, offset: U64) -> Result[Array[AuthoredSignatureClause], CompileDiagnostic] {
+        val inherited = if parent == 0U64 { give <SourceBoundRange /> } else { give self.sourceTypeUses.scopeAt(token: parent).unwrap().bounds.unwrapOr(fallback: <SourceBoundRange />) }
         val assumptions = self.decls.funcBounds.indices(owner: signature.function)
         if assumptions.count() != own.count + inherited.count {
-            return <Result.Err error=self.diagnosticAt(offset: offset, msg: "provided signature changed its where clause count", failureDomain: <FailureDomain.Internal />) />
+            return <Result.Err error=self.diagnosticAt(offset: offset, msg: "authored signature changed its where clause count", failureDomain: <FailureDomain.Internal />) />
         }
-        mut val clauses: Array[AuthoredProvidedClause] = []
+        mut val clauses: Array[AuthoredSignatureClause] = []
         for position in 0U64..<assumptions.count() {
             val assumption = assumptions[position]
             val id = if position < own.count { give own.first + position } else { give inherited.first + (position - own.count) }
@@ -2638,21 +2636,21 @@ impl Comp {
             val row = self.decls.funcBounds.at(index: assumption)
             val prepared = try self.retainedSignatureClause(scope: scope, id: id, offset: offset)
             if row.fnIdx != signature.function || row.sourceClause != id || !self.typeRefEq(a: row.paramTy, b: prepared.subject) || !self.sameTraitConstraint(a: row.constraint, b: prepared.constraint) {
-                return <Result.Err error=self.diagnosticAt(offset: offset, msg: "provided where clause differs from its source declaration", failureDomain: <FailureDomain.Internal />) />
+                return <Result.Err error=self.diagnosticAt(offset: offset, msg: "authored where clause differs from its source declaration", failureDomain: <FailureDomain.Internal />) />
             }
-            clauses.append(<AuthoredProvidedClause assumption=assumption scope=scope source=id />)
+            clauses.append(<AuthoredSignatureClause assumption=assumption scope=scope source=id />)
         }
         return <Result.Ok value=clauses />
     }
 
-    // Materialization can copy a conformance implementation as well as a
-    // provided declaration. Only the latter owns this source-clause contract.
+    // Materialization can copy conformance implementations too. Only an
+    // original provided declaration admits parent use recipes as its body.
     fn isAuthoredProvidedDeclaration(function: U64) -> Bool {
         val declaration = self.arena.functionAt(index: self.arena.functionLexicalOwner(index: function))
         return declaration.provTraitOwner != 0U64 && declaration.originTraitOwner == 0U64
     }
 
-    inout fn providedSignatureAdmission(function: U64) -> Result[AuthoredSignatureViews, CompileDiagnostic] {
+    inout fn admittedSourceSignature(function: U64) -> Result[AuthoredSignatureViews, CompileDiagnostic] {
         try self.checkAuthoredSignatureAdmissionOutcome()
         val owner = try self.semanticBodyOwner(fnIdx: function)
         match self.authoredSignatureViews.get(key: owner) {
@@ -2668,12 +2666,12 @@ impl Comp {
         return <Result.Ok value=self.authoredSignatureViews[owner] />
     }
 
-    inout fn readProvidedSignatureBounds(admitted: AuthoredSignatureViews, environment: InstanceEnvironment, concrete: Bool = false) -> Result[Array[TraitBound], CompileDiagnostic] {
+    inout fn readAdmittedSignatureBounds(admitted: AuthoredSignatureViews, environment: InstanceEnvironment, concrete: Bool = false) -> Result[Array[TraitBound], CompileDiagnostic] {
         if admitted.clauses.count() == 0U64 { return <Result.Ok value=[] /> }
         val source = admitted.signature
         try self.checkSignatureEnvironment(signature: source, environment: environment)
         val offset = self.arena.functionAt(index: source.function).defOffset
-        val context = if concrete { give <SignatureRecipeContext.Concrete /> } else { give <SignatureRecipeContext.Provided owner=source.function /> }
+        val context = if concrete { give <SignatureRecipeContext.Concrete /> } else { give <SignatureRecipeContext.SourceSelection owner=source.function /> }
         mut val memo: Dictionary[U64, AuthoredRecipeRead] = [:]
         mut val bounds: Array[TraitBound] = []
         for clause in admitted.clauses {

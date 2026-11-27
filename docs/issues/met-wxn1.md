@@ -94,9 +94,30 @@ input invariance and zero compile/runtime/link/native status. It includes change
 parent arity, nested equation substitution, concrete conformance binding output,
 nested Array construction, alias without direct Parent import, weak/strong
 premise orders and missing-receipt refusal. Independent source/design re-review
-found no required defect in these slices. Provided/Requirement contexts, other
+found no required defect in these slices. Broader trait-provided body contexts, closure/synthetic
 producer environments and final consumers still require the checks below.
 No formal performance, whole-green, carrier promotion or B closure is claimed.
+
+## Source-selection clause identity checkpoint
+
+SourceSelection reads ordinary callable signatures as well as trait-provided
+bodies. Clause identity storage is therefore common to all registered authored
+function signatures, with parent=0 an empty range. AuthoredSignatureClause
+retains own/inherited order and exact scope/row/clause checks. Extern signature
+registration receives its original authored scope and records exact source IDs;
+Raw scope=0 retains no invented identity. Value/Syntax extern producers bind the
+scope once at registration. Range metadata is obtained once, not per bound.
+
+The ordinary generic SourceSelection RED (foreign where premise) now succeeds.
+Finite mode tests cover symbolic Parent with changed arity, Requirement reads
+using a validated concrete Child witness and actual U32 output, own+parent method
+conditions, empty where, and both extern producers. SourceSelection/projection
+reader API names express their common role instead of suggesting provided-only
+ownership. Independent implementation and naming/design re-review found no
+required correction in these slices. Final native-v18 passes seventeen profiles
+with unchanged inputs and zero setup/native statuses. Meta
+source-clause-checkpoint.json owns exact results and exclusions. This does not
+certify closure/synthetic producers or final execution/performance gates.
 
 ## Next implementation sequence
 
@@ -126,11 +147,3 @@ aggregate formal/whole comparison. The adopted149aac baseline remains7.380636s
 and3314/248fail, not green. Missing/Ambiguous owned refusal/cache/lifetime is
 met-2yhf, not silently implemented or certified here. No all-source/global or
 stage3 completion is implied by the finite native suite.
-
-
-The independent document review confirms that this publication boundary preserves
-symbolic Parent publication, original Child proof, all final-consumer scenarios
-and performance/integration gates. The ten-profile snapshot and admitted-reader
-RED were also checked: all native controls pass; the latter fails only at the
-intended post-admission Parent assertion. This certifies the contract/evidence
-boundary, not implementation completion.

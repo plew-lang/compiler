@@ -40,12 +40,12 @@ pub struct AuthoredConformanceTarget {
 }
 pub impl AuthoredConformanceTarget { factory }
 
-pub struct AuthoredProvidedClause {
+pub struct AuthoredSignatureClause {
     pub val assumption: U64
     pub val scope: U64
     pub val source: U64
 }
-pub impl AuthoredProvidedClause { factory }
+pub impl AuthoredSignatureClause { factory }
 
 pub struct AuthoredSignatureViews {
     pub val signature: AuthoredFunctionSignature
@@ -58,7 +58,7 @@ pub struct AuthoredSignatureViews {
     pub val parentParameters: FuncBindRange = <FuncBindRange start=0U64 len=0U64 />
     pub val parentSelfParameter: U64 = 0U64
     pub val inheritedRecipes: Dictionary[U64, Bool] = [:]
-    pub val clauses: Array[AuthoredProvidedClause] = []
+    pub val clauses: Array[AuthoredSignatureClause] = []
 }
 pub impl AuthoredSignatureViews { factory }
 

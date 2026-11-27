@@ -103,6 +103,12 @@ members, qualified and unqualified roots, substituted parent arguments, identica
 diamond candidates, distinct same-name members/instances with equal outputs,
 missing members, and retained identity/provenance through final consumption.
 
+Authored callable signatures retain exact source-clause identities for ordinary
+functions, methods, and extern signatures. Source-selection readers consume that
+same clause contract regardless of whether a body is trait-provided. A raw bound
+row without source identity does not acquire Source authority by structural type
+equality.
+
 ## 5. Conformance Evidence
 
 A trait instance is identified by its trait owner and positional type arguments. Associated-output predicates constrain the selected instance's outputs; they are not additional inputs that select an implementation. The subject and resolution environment are also necessary to ask a conformance question.

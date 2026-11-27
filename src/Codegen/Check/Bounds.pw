@@ -1609,8 +1609,8 @@ pub impl Comp {
     inout fn groundCallableSignatureBounds(fnIdx: U64, environment: InstanceEnvironment) -> Result[Array[TraitBound], CompileDiagnostic] {
         mut val bounds: Array[TraitBound] = []
         if self.arena.functionAt(index: fnIdx).isProvided && self.isAuthoredProvidedDeclaration(function: fnIdx) {
-            val admitted = try self.providedSignatureAdmission(function: fnIdx)
-            for bound in (try self.readProvidedSignatureBounds(admitted: admitted, environment: environment)) {
+            val admitted = try self.admittedSourceSignature(function: fnIdx)
+            for bound in (try self.readAdmittedSignatureBounds(admitted: admitted, environment: environment)) {
                 bounds.append(try self.groundCallableBound(bound: bound, environment: environment, selfRef: environment.receiverRef, itemRef: 0U64))
             }
             return <Result.Ok value=bounds />
@@ -1736,7 +1736,7 @@ pub impl Comp {
     // obligations before they can interpret any dependent signature recipe.
     // Keep this environment local until the authored contract matches it.
     inout fn prepareRecordedProvidedConstraints(fnIdx: U64, environment: InstanceEnvironment, bounds: Array[TraitBound], proofs: Array[StaticConformanceProof]) -> Result[InstanceEnvironment, CompileDiagnostic] {
-        val admitted = try self.providedSignatureAdmission(function: fnIdx)
+        val admitted = try self.admittedSourceSignature(function: fnIdx)
         val count = admitted.clauses.count()
         val offset = self.arena.functionAt(index: fnIdx).defOffset
         if bounds.count() != count || proofs.count() != count {
@@ -1754,7 +1754,7 @@ pub impl Comp {
         }
         val prepared = self.arena.prepareCallableConstraints(function: fnIdx, environment: environment, indices: indices, bounds: bounds, proofs: retainedProofs)
         val candidate = <InstanceEnvironment params=environment.params args=environment.args receiverRef=environment.receiverRef proof=environment.proof constraints=<Optional.Some v=prepared /> />
-        val expected = try self.readProvidedSignatureBounds(admitted: admitted, environment: candidate, concrete: true)
+        val expected = try self.readAdmittedSignatureBounds(admitted: admitted, environment: candidate, concrete: true)
         for index in 0U64..<count {
             val bound = expected[index]
             if !self.typeRefEq(a: bounds[index].subject, b: bound.subject) || !self.sameTraitConstraint(a: bounds[index].constraint, b: bound.constraint) {

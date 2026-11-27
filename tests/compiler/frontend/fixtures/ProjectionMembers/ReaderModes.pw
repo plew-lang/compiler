@@ -1,0 +1,16 @@
+trait Parent[A, B] { type Output }
+trait Child[C]: Parent[Array[C], Bool] {
+    fn accept(value: Self#Child[C].Output)
+}
+struct Leaf {}
+impl Leaf as Parent[Array[I64], Bool] { type Output = U32 }
+impl Leaf as Child[I64] { fn accept(value: U32) {} }
+fn generic[T](value: T#Child[I64].Output) where T: Child[I64] {}
+fn leaf(value: Leaf) {}
+fn main() {}
+struct Holder[T] {}
+impl[T] Holder[T] where T: Child[I64] {
+    fn method[U](value: T#Child[I64].Output, other: U#Child[I64].Output) where U: Child[I64] {}
+}
+extern(c) { fn foreign[U](value~: I64) where U: Child[I64] }
+// extern(c) { fn legacyForeign[U](value~: I64) where U: Child[I64] }

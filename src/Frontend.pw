@@ -1,7 +1,7 @@
 use ./DeclarationLabels only { DeclarationLabelConflict, declarationLabelConflict, declarationLabelBytesEqual }
 use ./Ir only { SourceBindingOrigin, SourceStatementRange, SourceValueRegion, CheckedLocalStorageRequest, RecordedStorageValueType }
 use ./SourceTypeUses only { SourceTypeRecipe, SourceTypeRecipeOrigin, SourceTypeUses, SourceTypeScope, SourceTypeScopeKind, SourceTypeScopeState, SourceTypeUseRole, AuthoredTypeUse, AuthoredFunctionSignature, LoweredSourceSignature, SourceRequirementOwner, SourceImplementationOwner, SourceImplementationKind, SourceBoundRange }
-use ./SourceTypeAdmissions only { AuthoredTypeViewProof, AuthoredSignatureViews, AuthoredProvidedClause, AuthoredAssociatedBinding, AuthoredConformanceArgument, AuthoredConformanceTarget, SourceSignatureSlot }
+use ./SourceTypeAdmissions only { AuthoredTypeViewProof, AuthoredSignatureViews, AuthoredSignatureClause, AuthoredAssociatedBinding, AuthoredConformanceArgument, AuthoredConformanceTarget, SourceSignatureSlot }
 use ./ModuleScopeBindings only { ModuleScopeBindings, AdmittedModuleScopeBindings, ScopeBindingKind, ScopeBindingFailure, ScopeBinding }
 use @Plew/Syntax only { ExtensionId, syntaxExtension, NameSegmentAst, SyntaxSourceTypes, SyntaxSourceIndex, syntaxSourceApplication, syntaxSourceApplicationTypeArg, syntaxSourceApplicationTypeLabel, SourceApplicationAst, SourceTypesAst, SourceIndexAst }
 use ./Ir only { StructuralOverlap, StructuralOccurrence, StructuralBinding }
@@ -666,7 +666,7 @@ enum SignatureRecipeContext {
     Declaration
     Concrete
     Requirement(signature: RequirementSignatureRead)
-    Provided(owner: U64)
+    SourceSelection(owner: U64)
     AssociatedBinding(requirement: Optional[AssociatedBindingRequirementRead])
 }
 

@@ -1,0 +1,61 @@
+use @Plew/Syntax as ClauseProbeSyntax
+// Requirement and source-selection readers consume the same saved owner.
+fn main() {
+    mut val compiler = <Comp />
+    match analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.File path="tests/compiler/frontend/fixtures/ProjectionMembers/ReaderModes.pw" />, sources: <SourceAccess stdRoot="std/".bytes() />) {
+        Result.Ok(value: _) => {}
+        Result.Err(error: val diagnostic) => { panic("reader modes source rejected: "+diagnostic.message()) }
+    }
+    val functionIndex = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "generic").nameId)
+    val function = compiler.arena.functionAt(index: functionIndex)
+    val parameters = compiler.copyFuncBinds(binds: function.typeParams)
+    val binder = parameters[0U64]
+    val rigid = compiler.pushType(t: <TypeRef nameStart=binder.nameStart nameLen=binder.nameLen nameId=binder.nameId paramId=binder.paramId args=[] />)
+    val signature = compiler.sourceTypeUses.signatureFor(function: functionIndex).unwrap()
+    val symbolic = match compiler.readAdmittedSignatureRoots(source: signature, slots: [<SourceSignatureSlot.Parameter index=0U64 />], environment: <InstanceEnvironment params=parameters args=[rigid] />, context: <SignatureRecipeContext.SourceSelection owner=functionIndex />) {
+        Result.Ok(value: val roots) => roots.terms[0U64],
+        Result.Err(error: val diagnostic) => { panic("provided reader rejected: "+diagnostic.message()) },
+    }
+    val projection = compiler.arena.typeAt(index: symbolic)
+    if projection.assocTraitId != compiler.internBytes(s: "Parent").nameId || projection.assocTraitArgs.count() != 2U64 { panic("provided reader reselected Child or reused its arity") }
+    val leafFunction = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "leaf").nameId)
+    val leaf = compiler.funcParamAt(params: compiler.arena.functionAt(index: leafFunction).params, index: 0U64).ty
+    val parameter = compiler.funcParamAt(params: function.params, index: 0U64)
+    val integer = compiler.arena.typeAt(index: parameter.ty).assocTraitArgs[0U64]
+    val traitIndex = compiler.decls.firstTraitNamed(nameId: compiler.internBytes(s: "Child").nameId)
+    val owner = compiler.decls.traitAt(index: traitIndex).nameStart
+    val bound = <TraitBound subject=leaf constraint=<TraitConstraint key=<TraitInstanceKey owner=owner positionalArgs=[integer] /> assocPredicates=[] /> offset=0U64 />
+    val proof = compiler.viewedTraitConstraintProof(demand: <ConformanceProofDemand.SourceAdmission />, ref: leaf, constraint: bound.constraint).unwrap()
+    match proof { StaticConformanceProof.ConcreteWitness(witness: _) => {} _ => { panic("requirement reader setup did not retain a concrete Child witness") } }
+    compiler.checkRetainedWitnessClause(expected: bound, proof: proof, normalizations: [], offset: 0U64).unwrap()
+    val scope = compiler.requireAdmittedRawRequirement(traitIndex: traitIndex, slot: 0U64, offset: 0U64).unwrap()
+    val actual = match compiler.requirementParameterTypes(signature: <RequirementSignatureRead scope=scope bound=bound evidence=<RequirementSelfEvidence.Static proof=proof /> />) {
+        Result.Ok(value: val terms) => terms[0U64],
+        Result.Err(error: val diagnostic) => { panic("requirement reader rejected: "+diagnostic.message()) },
+    }
+    if compiler.arena.typeAt(index: actual).nameId != compiler.internBytes(s: "U32").nameId { panic("requirement reader lost actual Parent output") }
+    val method = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "method").nameId)
+    if compiler.authoredSignatureViews.get(key: method).unwrap().clauses.count() != 2U64 { panic("own and inherited method clauses were not both retained") }
+    val foreign = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "foreign").nameId)
+    val foreignSignature = compiler.sourceTypeUses.signatureFor(function: foreign).unwrap()
+    val foreignClauses = compiler.authoredSignatureViews.get(key: foreign).unwrap().clauses
+    if foreignClauses.count() != 1U64 || foreignClauses[0U64].scope != foreignSignature.scope || compiler.decls.funcBounds.at(index: foreignClauses[0U64].assumption).sourceClause != foreignClauses[0U64].source { panic("extern registration lost exact authored clause identity") }
+    val mainIndex = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "main").nameId)
+    if compiler.authoredSignatureViews.get(key: mainIndex).unwrap().clauses.count() != 0U64 { panic("empty signature acquired where clauses") }
+    // Exercise the value-AST extern producer without reopening Source admission.
+    val text = "extern(c) {{ fn legacyForeign[U](value~: I64) where U: Child[I64] }}"
+    mut val offset = 0U64
+    while offset + text.bytes().count() <= compiler.arena.bytes.count() {
+        if rangeEquals(bytes: compiler.arena.bytes, start: offset, len: text.bytes().count(), kw: text) { break }
+        offset += 1U64
+    }
+    if offset+text.bytes().count() > compiler.arena.bytes.count() { panic("value extern source setup missing") }
+    val foreignBlock = match ClauseProbeSyntax.parseItem(source: text, start: offset, end: offset+text.bytes().count()) { TopItemAst.Extern(e: val foreignBlock) => foreignBlock _ => { panic("value extern setup did not parse") } }
+    compiler.lowerExtern(e: foreignBlock).unwrap()
+    val legacy = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "legacyForeign").nameId)
+    val legacySignature = compiler.sourceTypeUses.signatureFor(function: legacy).unwrap()
+    val sourceRange = compiler.sourceTypeUses.scopeAt(token: legacySignature.scope).unwrap().bounds.unwrap()
+    val rows = compiler.decls.funcBounds.indices(owner: legacy)
+    if rows.count() != 1U64 || sourceRange.count != 1U64 || compiler.decls.funcBounds.at(index: rows[0U64]).sourceClause != sourceRange.first { panic("value extern producer dropped original where identity") }
+
+}
