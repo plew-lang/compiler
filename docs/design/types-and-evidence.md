@@ -80,7 +80,13 @@ root. Keep the authored selection and source occurrence for provenance; the
 resolved projection uses the actual declaring instance. Source type-use admission
 consumes that result before publication. Instantiation and final consumers
 substitute and consume the saved decision instead of searching names or selecting
-another declaring trait. Missing/ambiguous source diagnostics consume the same
+another declaring trait. An unadmitted annotation may retain its authored
+selector in its immutable structural recipe. The admitted occurrence receipt
+keeps that provenance and view proof separate from the declaring-member
+selection. Declaration, body, call, and instantiated type consumers obtain their
+semantic projection from the admitted reader, including for symbolic types;
+the annotation's selector is not the final declaring owner. Missing/ambiguous
+source diagnostics consume the same
 query outcome with the owning occurrence evidence; a declaration-local membership
 Boolean is not the authority for an inherited projection.
 

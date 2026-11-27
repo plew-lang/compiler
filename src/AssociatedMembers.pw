@@ -256,21 +256,22 @@ impl Comp {
 // Lowering hands the query result forward. Neither binding nor admission
 // recovers a decision from the canonical term's spelling or an ambient cursor.
 impl Comp {
-    inout fn captureLoweredAssociatedSelection(ref: U64, site: U64, children: Array[U64], authoredRoot: Optional[TraitBound] = <Optional.None />, authoredArguments: Optional[Array[U64]] = <Optional.None />) -> Result[U64, CompileDiagnostic] {
+    inout fn captureLoweredAssociatedSelection(ref: U64, site: U64, children: Array[U64], authoredRoot: Optional[TraitBound] = <Optional.None />, authoredArguments: Optional[Array[U64]] = <Optional.None />, authoredSource: Optional[ResolvedViewSource] = <Optional.None />) -> Result[U64, CompileDiagnostic] {
         val type = self.arena.typeAt(index: ref)
         if type.assocNameId == 0U64 { return <Result.Ok value=0U64 /> }
         val receiver = self.typeTermProjectionReceiver(t: type)
         val owner = self.associatedProjectionTraitOwner(projection: type)
         val published = <TraitInstanceKey owner=owner positionalArgs=type.assocTraitArgs />
         val root = authoredRoot.unwrapOr(fallback: <TraitBound subject=receiver constraint=<TraitConstraint key=published positionalArgsOpen=false assocPredicates=[] /> offset=site />)
+        if authoredSource.isSome() && !self.sameAssociatedMemberInstance(first: authoredSource.unwrap().traitInstance, second: root.constraint.key) { return <Result.Err error=self.associatedMemberInputFailure(message: "associated selection changed its authored selector") /> }
         val equations = try self.prepareAssociatedSelectionEquations(root: root, site: site)
-        val query = try self.queryAssociatedMember(subject: receiver, roots: [root], equationContext: equations, member: type.assocNameId, site: site)
+        val query = try self.queryAssociatedMember(subject: receiver, roots: [root], equationContext: equations.bounds, member: type.assocNameId, site: site)
         mut val arguments: Array[U64] = []
         for index in 1U64..<(1U64+type.assocTraitArgs.count()) {
             if index >= children.count() { return <Result.Err error=self.associatedMemberInputFailure(message: "associated selection lost its authored argument recipe") /> }
             arguments.append(children[index])
         }
-        self.loweredAssociatedSelections.append(<LoweredAssociatedSelection publishedInstance=published authoredArguments=authoredArguments.unwrapOr(fallback: arguments) session=self.sourceFactSession() member=type.assocNameId term=ref site=site scope=self.sourceTypeUses.currentScope() publishedArguments=arguments result=query />)
+        self.loweredAssociatedSelections.append(<LoweredAssociatedSelection termInstance=published authoredSource=authoredSource equationClauses=equations.clauses authoredArguments=authoredArguments.unwrapOr(fallback: arguments) session=self.sourceFactSession() member=type.assocNameId term=ref site=site scope=self.sourceTypeUses.currentScope() termArguments=arguments result=query />)
         return <Result.Ok value=self.loweredAssociatedSelections.count() />
     }
     inout fn captureLoweredLexicalSelection(ref: U64, site: U64, children: Array[U64]) -> Result[U64, CompileDiagnostic] {
@@ -302,7 +303,7 @@ impl Comp {
         if draft.session != self.sourceFactSession() || draft.term != ref || use.unwrap().term != ref || saved.recipe != use.unwrap().recipe || saved.scope != use.unwrap().scope || draft.scope != saved.scope || draft.site != use.unwrap().site { return <Result.Err error=self.associatedMemberInputFailure(message: "associated selection changed its retained query") /> }
         val type = self.arena.typeAt(index: ref)
         val root = draft.result.graph.roots[0U64]
-        if type.assocNameId != draft.member || !self.sameAssociatedMemberInstance(first: draft.publishedInstance, second: <TraitInstanceKey owner=self.associatedProjectionTraitOwner(projection: type) positionalArgs=type.assocTraitArgs />) || !self.typeRefEq(a: root.subject, b: self.typeTermProjectionReceiver(t: type), sourceTerms: true) || self.associatedSelectionDraftOwners.getOr(key: saved.selection, fallback: 0U64) != occurrence { return <Result.Err error=self.associatedMemberInputFailure(message: "associated selection changed its retained identity") /> }
+        if type.assocNameId != draft.member || !self.sameAssociatedMemberInstance(first: draft.termInstance, second: <TraitInstanceKey owner=self.associatedProjectionTraitOwner(projection: type) positionalArgs=type.assocTraitArgs />) || !self.typeRefEq(a: root.subject, b: self.typeTermProjectionReceiver(t: type), sourceTerms: true) || self.associatedSelectionDraftOwners.getOr(key: saved.selection, fallback: 0U64) != occurrence { return <Result.Err error=self.associatedMemberInputFailure(message: "associated selection changed its retained identity") /> }
         return <Result.Ok value=<Optional.Some v=draft.result /> />
     }
 }

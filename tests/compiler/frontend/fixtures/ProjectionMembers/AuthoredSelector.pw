@@ -1,0 +1,3 @@
+use ./AliasTypes only { Child as Chosen }
+fn entry[T](item: T#Chosen.Output) where T: Chosen {}
+fn main() {}

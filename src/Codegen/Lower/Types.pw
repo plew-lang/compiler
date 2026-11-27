@@ -859,7 +859,7 @@ pub impl Comp {
             if selected.arguments.count() != assocTraitArgs.count() { return <Result.Err error=self.diagnosticAt(offset: site, msg: "projection argument recipe count mismatch", failureDomain: <FailureDomain.Internal />) /> }
             for recipe in selected.arguments { children.append(recipe) }
         } else { try self.appendViewArgumentRecipes(ref: ref, sources: viewRecipes, children: inout children) }
-        return <Result.Ok value=<PType start=result.start len=result.len isArray=result.isArray ref=result.ref authoredChildren=children associatedSelection=(try self.captureLoweredAssociatedSelection(ref: result.ref, site: t.span.start, children: children)) /> />
+        return <Result.Ok value=<PType start=result.start len=result.len isArray=result.isArray ref=result.ref authoredChildren=children associatedSelection=(try self.captureLoweredAssociatedSelection(ref: result.ref, site: t.span.start, children: children, authoredSource: (if projection.isSome() && !shortProjection { give <Optional.Some v=projection.unwrap().source /> } else { give <Optional.None /> }))) /> />
     }
 
     // SyntaxFile path for type lowering. It has the same semantic output as
@@ -1104,7 +1104,7 @@ pub impl Comp {
             if selected.arguments.count() != assocTraitArgs.count() { return <Result.Err error=self.diagnosticAt(offset: site, msg: "projection argument recipe count mismatch", failureDomain: <FailureDomain.Internal />) /> }
             for recipe in selected.arguments { children.append(recipe) }
         } else { try self.appendViewArgumentRecipes(ref: ref, sources: viewRecipes, children: inout children) }
-        return <Result.Ok value=<PType start=result.start len=result.len isArray=result.isArray ref=result.ref authoredChildren=children associatedSelection=(try self.captureLoweredAssociatedSelection(ref: result.ref, site: t.span.start, children: children)) /> />
+        return <Result.Ok value=<PType start=result.start len=result.len isArray=result.isArray ref=result.ref authoredChildren=children associatedSelection=(try self.captureLoweredAssociatedSelection(ref: result.ref, site: t.span.start, children: children, authoredSource: (if projection.isSome() && !shortProjection { give <Optional.Some v=projection.unwrap().source /> } else { give <Optional.None /> }))) /> />
     }
 
     // Reserve the final contiguous argument range before recursive lowering.

@@ -1,0 +1,4 @@
+trait Parent { type Output }
+trait Child: Parent {}
+fn entry[T](item: T#Child.Output) where T: Parent {}
+fn main() {}

@@ -9,6 +9,16 @@ fn main() {
     val function = compiler.arena.functionAt(index: index)
     val parameter = compiler.funcParamAt(params: function.params, index: 0U64)
     val saved = compiler.retainedAssociatedSelection(occurrence: parameter.authoredTypeUse, ref: parameter.ty).unwrap().unwrap()
+    val binding = compiler.associatedSelectionOccurrences.get(key: parameter.authoredTypeUse).unwrap()
+    val draft = compiler.loweredAssociatedSelections[binding.selection-1U64]
+    if draft.result.graph.equationContext.count() != draft.result.graph.roots.count()+draft.equationClauses.count() { panic("equation context lost its source-clause mapping") }
+    for index in 0U64..<draft.equationClauses.count() {
+        val clause = draft.equationClauses[index]
+        if clause == 0U64 || clause > compiler.projectionBoundClauses.count() { panic("equation source clause is foreign") }
+        val prepared = match compiler.projectionBoundClauses[clause-1U64].state { ProjectionBoundState.Ready(bound: val bound) => bound _ => { panic("equation source is not prepared") } }
+        val context = draft.result.graph.equationContext[draft.result.graph.roots.count()+index]
+        if context.subject != prepared.subject || !compiler.sameTraitConstraint(a: context.constraint, b: prepared.constraint) { panic("equation source mapping was reconstructed from another premise") }
+    }
     match saved.outcome {
         AssociatedMemberOutcome.Unique(candidate: val candidate) => {
             if candidate.instance.positionalArgs.count() != 1U64 || saved.graph.equations.count() == 0U64 { panic("source equation did not justify instance deduplication") }

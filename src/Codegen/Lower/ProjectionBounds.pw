@@ -388,13 +388,14 @@ impl Comp {
         val normalizedReceiver = try self.normalizeAssociatedMemberTerm(ref: receiver, site: site, depth: 0U64, active: [], work: inout work)
         return <Result.Ok value=self.typeRefEq(a: normalizedSubject, b: normalizedReceiver, sourceTerms: true) />
     }
-    inout fn prepareAssociatedSelectionEquations(root: TraitBound, site: U64) -> Result[Array[TraitBound], CompileDiagnostic] {
+    inout fn prepareAssociatedSelectionEquations(root: TraitBound, site: U64) -> Result[PreparedAssociatedSelectionContext, CompileDiagnostic] {
         mut val equations: Array[TraitBound] = []
-        val context = match self.activeProjectionBounds { Optional.Some(v: val context) => context Optional.None => { return <Result.Ok value=equations /> } }
-        if context.count() == 0U64 { return <Result.Ok value=equations /> }
+        mut val clauses: Array[U64] = []
+        val context = match self.activeProjectionBounds { Optional.Some(v: val context) => context Optional.None => { return <Result.Ok value=<PreparedAssociatedSelectionContext bounds=equations clauses=clauses /> /> } }
+        if context.count() == 0U64 { return <Result.Ok value=<PreparedAssociatedSelectionContext bounds=equations clauses=clauses /> /> }
         mut val dependencies: Array[AssociatedSelectionDependency] = []
         try self.appendAssociatedSelectionDependencies(root: root, dependencies: inout dependencies, site: site)
-        if dependencies.count() == 0U64 { return <Result.Ok value=equations /> }
+        if dependencies.count() == 0U64 { return <Result.Ok value=<PreparedAssociatedSelectionContext bounds=equations clauses=clauses /> /> }
         mut val included: Set[U64] = Set.new()
         mut val expanded: Set[U64] = Set.new()
         mut val normalization = <AssociatedMemberQueryWork context=[root] />
@@ -411,6 +412,7 @@ impl Comp {
                 if ready.isSome() && !included.contains(id) {
                     val bound = ready.unwrap()
                     equations.append(<TraitBound subject=bound.subject constraint=bound.constraint offset=site />)
+                    clauses.append(id)
                     included.insert(id)
                 }
                 if dependencies.count() == 0U64 { continue }
@@ -435,12 +437,12 @@ impl Comp {
                 if !needed { continue }
                 val bound = if ready.isSome() { give ready.unwrap() } else { give try self.preparedProjectionBound(id: id, requestSite: <Optional.Some v=site />) }
                 val equation = <TraitBound subject=bound.subject constraint=bound.constraint offset=site />
-                if !included.contains(id) { equations.append(equation) included.insert(id) }
+                if !included.contains(id) { equations.append(equation) clauses.append(id) included.insert(id) }
                 expanded.insert(id)
                 try self.appendAssociatedSelectionDependencies(root: equation, dependencies: inout dependencies, site: site)
                 changed = true
             }
         }
-        return <Result.Ok value=equations />
+        return <Result.Ok value=<PreparedAssociatedSelectionContext bounds=equations clauses=clauses /> />
     }
 }

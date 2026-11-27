@@ -781,15 +781,23 @@ struct AdmittedTraitConstraintOperands {
 }
 impl AdmittedTraitConstraintOperands { factory }
 // Semantic query retention is not conformance admission authority.
+struct PreparedAssociatedSelectionContext {
+    val bounds: Array[TraitBound]
+    // Parallel exact source-clause IDs, never recovered by term equality.
+    val clauses: Array[U64]
+}
+impl PreparedAssociatedSelectionContext { factory }
 struct LoweredAssociatedSelection {
-    val publishedInstance: TraitInstanceKey
+    val termInstance: TraitInstanceKey
+    val authoredSource: Optional[ResolvedViewSource]
+    val equationClauses: Array[U64]
     val authoredArguments: Array[U64]
     val session: U64
     val member: U64
     val term: U64
     val site: U64
     val scope: U64
-    val publishedArguments: Array[U64]
+    val termArguments: Array[U64]
     val result: AssociatedMemberResult
 }
 impl LoweredAssociatedSelection { factory }

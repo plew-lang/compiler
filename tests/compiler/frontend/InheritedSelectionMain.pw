@@ -8,7 +8,11 @@ fn main() {
     val index = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "entry").nameId)
     val function = compiler.arena.functionAt(index: index)
     val parameter = compiler.funcParamAt(params: function.params, index: 0U64)
-    val projection = compiler.arena.typeAt(index: parameter.ty)
+    val source = compiler.arena.typeAt(index: parameter.ty)
+    if source.assocTraitId != compiler.internBytes(s: "Child").nameId { panic("authored term was overwritten during semantic publication") }
+    val admitted = compiler.lexicalBodyParameterType(function: index, index: 0U64, ref: parameter.ty, receiver: 0U64).unwrap()
+    if admitted.isNone() { panic("admitted abstract projection did not publish its declaring trait") }
+    val projection = compiler.arena.typeAt(index: admitted.unwrap())
     val parent = compiler.internBytes(s: "Parent").nameId
     if projection.assocTraitId != parent || projection.assocNameId != compiler.internBytes(s: "Output").nameId { panic("Source projection did not publish its actual declaring trait") }
 }

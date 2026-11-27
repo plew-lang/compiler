@@ -1,0 +1,29 @@
+// The authored selector owns visibility/provenance independently of Parent.
+fn main() {
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.File path="tests/compiler/frontend/fixtures/ProjectionMembers/AuthoredSelector.pw" />, sources: <SourceAccess stdRoot="std/".bytes() />).unwrap()
+    val index = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "entry").nameId)
+    val function = compiler.arena.functionAt(index: index)
+    val parameter = compiler.funcParamAt(params: function.params, index: 0U64)
+    val binding = compiler.associatedSelectionOccurrences.get(key: parameter.authoredTypeUse).unwrap()
+    val draft = compiler.loweredAssociatedSelections[binding.selection-1U64]
+    if draft.authoredSource.isNone() { panic("explicit authored selector was lost") }
+    val selector = draft.authoredSource.unwrap()
+    if !rangeEquals(bytes: compiler.arena.bytes, start: selector.writtenStart, len: "Chosen".bytes().count(), kw: "Chosen") || selector.writtenStart < draft.site { panic("authored alias location was replaced by declaration or where clause") }
+    val child = compiler.decls.traitAt(index: compiler.decls.traitIndexByOffset(offset: selector.traitInstance.owner))
+    if child.nameId != compiler.internBytes(s: "Child").nameId { panic("alias lost selected Child identity") }
+    match draft.result.outcome {
+        AssociatedMemberOutcome.Unique(candidate: val candidate) => {
+            val parent = compiler.decls.traitAt(index: compiler.decls.traitIndexByOffset(offset: candidate.instance.owner))
+            if parent.nameId != compiler.internBytes(s: "Parent").nameId { panic("authored selector overwrote declaring identity") }
+        }
+        _ => { panic("alias projection lost unique declaration") }
+    }
+    mut val rejected = <Comp />
+    match analyzeFrontendForRequests(c: inout rejected, input: <FrontendInput.File path="tests/compiler/frontend/fixtures/ProjectionMembers/NoChildProof.pw" />, sources: <SourceAccess stdRoot="std/".bytes() />) {
+        Result.Ok(value: _) => { panic("Parent namespace proof silently replaced missing Child conformance") }
+        Result.Err(error: val diagnostic) => {
+            if !diagnostic.isSourceRejection() || diagnostic.message() != "trait view requires a conformance for this receiver and exact trait instance (spec/09)" { panic("missing Child proof produced the wrong cause: "+diagnostic.message()) }
+        }
+    }
+}

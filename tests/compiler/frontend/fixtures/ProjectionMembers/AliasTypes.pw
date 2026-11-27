@@ -1,0 +1,2 @@
+pub trait Parent { type Output }
+pub trait Child: Parent {}
