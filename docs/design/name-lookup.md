@@ -43,6 +43,31 @@ selector does not search for an applicable same-named trait or extension after
 another interpretation fails. Checking validates the already bound source and
 its complete application, then retains the resulting evidence.
 
+### Parameter Group and Signature Admission
+
+The parameter-definition introduction owner admits a complete binding group
+before signature publication or installing its locals. Its declared binding names are distinct even when argument labels are
+suppressed. This applies to named and anonymous callable declarations and
+requirements; it is not sequential local re-declaration. Outer bindings may be
+shadowed, and later explicit local declarations retain their normal shadowing
+rules. A low-level local append operation cannot decide all these cases from
+name equality alone. Group admission needs the introduced parameter names,
+not the surrounding local environment. Generic local storage receives admitted
+bindings; do not pass a shadowing-policy flag into it or independently rerun
+parameter checks at each storage caller.
+
+Every callable signature and function type also has distinct non-absent
+argument labels. Unlabelled positions are not repeated labels; a function type
+does not introduce local parameter bindings. The signature/binding-group owner
+establishes these two guarantees before successful publication. Derived,
+provided and default-forwarding forms preserve the admitted group's guarantees
+instead of introducing independent acceptance rules. Module number, body
+demand and whether a signature is attached to a named Func row do not change
+its well-formedness rules.
+The [function specification](../../../spec/spec/01-basics/04-functions.md#引数ラベル)
+owns label and binding-name uniqueness; this boundary does not replace the
+separate module binding conflict rules.
+
 ### Extension Declaration and Member Publication
 
 Module binding/public-surface construction consumes the extension declaration's

@@ -52,6 +52,16 @@ For arrays, pass an available array element expectation to elements, construct t
 
 For a closure, complete omitted parameter/result annotations from the permitted function expectation before checking its body and publishing its descriptor. Explicit types, labels, and passing modes remain constraints, not fields to overwrite. The resulting function type passes through ordinary compatibility checks regardless of whether the expression is a literal closure, identifier, block, or branch. Partial explicit signatures can inform candidate selection; partial signatures cannot be published as complete closures.
 
+Closure parameter installation consumes one admitted binding group. Repeated
+names in that group are rejected, including label-suppressed parameters, before
+the closure descriptor/body signature is published or any of its parameter
+locals is installed. Its non-absent labels are also unique. Named callables
+and requirements use the same signature/group rules. Appending parameters one
+by one to a shadowing local stack cannot substitute for group admission:
+last-name-wins lookup is valid for explicit lexical re-declaration, not for
+malformed simultaneous parameters. Captures and outer bindings belong to their
+own scopes and are not additional members of the parameter group.
+
 An operator's result expectation is not automatically an operand expectation: receiver `Self`, right-hand type, and associated `Output` can differ. Likewise, a block result's expectation belongs at its yields, not at the value of a nested `return` to another function contract. Optional-chain payload holes receive an explicit child term; they do not make one saved expression arbitrarily change type with each reader's context.
 
 Fixed-width numeric literals are resolved from permitted local context, with

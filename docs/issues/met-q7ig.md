@@ -10,42 +10,59 @@ assignee: Koji Murata
 parent: met-auj6
 tags: [spec, frontend, design]
 ---
-# Decide label uniqueness for requirements closures and function types
+# Specify parameter binding and signature label uniqueness
 
-Confirm the scope of label uniqueness before changing accepted requirement or closure signatures. Use the recorded84 family controls; separately define function-type well-formedness without changing suppressed-label or local-binder rules.
+## Adopted contract
 
+The user approved distinct non-absent labels in every callable signature,
+including trait requirements, closures and function types. All declared
+parameter binding names are distinct within one parameter group, even with
+label suppression. Function types introduce no local binders; repeated bare
+unlabelled type positions remain valid. Explicit sequential val/mut val and
+outer-scope shadowing remain governed by spec03.
 
-## Decision needed
+The declaration-introduction owner, not generic local storage, admits the
+complete group. It knows whether this is a parameter definition or an explicit
+shadowing declaration, and needs only the new parameter group for uniqueness.
+It does not inspect unrelated outer bindings. Accepted signatures and body
+scope installation consume that result without separate per-kind checks or
+an addLocal allowShadow flag. Low-level local append is not semantic admission.
 
-Fixed da2c8c0a82e9 rejects local ordinary/generic fn, method, associated fn,
-factory, provided method and default-labelled duplicate signatures. The same
-named declarations imported from another module are incorrectly accepted.
-That module dependence can be repaired under the existing declaration rule.
+## Evidence and rationale
 
-However, trait requirements and global closure literals with repeated labels
-are accepted in both locations in the84 recorded family controls. spec04
-requires ordered labels and includes labels in function type identity, but
-does not explicitly define uniqueness within one signature. spec08/design
-shared callable admission primarily specify overload validity/collision; they
-do not establish this additional rule for every function-type surface.
-No function-type acceptance claim is made without a separate executed probe.
+Fixed da2c8c0a82e9 rejects named duplicate labelled declarations locally but
+accepts imported copies. Trait requirements and global closure literals accept
+duplicate labels in both placements. Runtime probes show labelled/suppressed
+closures and a named suppressed-parameter fn return22 for arguments11/22:
+Record appends parameters one by one and reverse lookup chooses the last.
+This is missing group admission, not legitimate explicit local re-declaration.
+Positive sequential shadowing returns22 and outer/parameter shadowing returns
+22 then11. The exact probes/results are in the linked evidence.
 
-Independent qualified_member_plan recommends uniform distinctness, but finds
-insufficient authority to change requirement/closure acceptance automatically.
-Confirm whether the same label may occur twice in any one actual callable
-signature and function type, or whether the existing named-declaration-only
-restriction should remain the language rule. Label-suppressed positions have
-no external label and are not duplicate labels. Repeated local binder names
-are a separate question and must not be changed by this decision.
+Spec04, name-lookup Parameter Group and Signature Admission, and body-checking
+state the contract. A signature can be needed without creating a body scope,
+so checking only at local installation would miss requirements/unused bodies.
+Do not duplicate the group data/validation in declaration and scope consumers.
 
-## Endpoint
+## Implementation assignment and completion
 
-Record the user's decision, synchronize the corresponding spec/design contract
-and assign finite implementation/verification children under met-auj6. Cover
-the named/signature/requirement/closure/function-type boundaries actually
-selected; preserve default/provided forwarding and existing gen policy. Do
-not close from implementation convenience or a same-named checker alone.
-Existing Source-domain/module-independent repair and broadened semantic
-acceptance changes must remain distinguishable in test/result claims.
+Required children under met-auj6: met-g9dh(shared group/named/requirement
+admission), met-9luu(body scope consumption and closure introduction),
+met-ldvd(label-only function type admission). The latter two depend on the
+shared group contract; the parent depends on all three and owns aggregate
+compatibility, fixed-point/performance and final recognition.
 
-[Recorded evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/declaration-parameters/README.md).
+This task completes the user decision, synchronized contract and finite task
+assignment, not product implementation. Independent qualified_member_plan
+accepted the rules and split, requesting removal of stale pre-decision wording
+and synchronization of the reproducible runtime receipt before closure.
+
+[Evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/declaration-parameters/README.md).
+
+## Final documentation review
+
+qualified_member_plan confirmed the adopted introduction-side ownership,
+separate label/binder rules, legal shadowing/unlabelled type positions,
+reproducible5 runtime controls, three-child dependencies and parent gates.
+No document/scope blocker remains. Product code is unchanged; this task's
+closure certifies decisions/contracts/assignment only.
