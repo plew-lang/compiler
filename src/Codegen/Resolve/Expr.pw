@@ -1910,12 +1910,12 @@ impl Comp {
 pub impl Comp {
     // Expected results may fill only the selected declaration's unresolved
     // binders. A failed structural match never publishes a partial update.
-    inout fn completeCallTypeArguments(function: Func, current: Array[U64], resultPattern: U64, expectedTerm: U64) -> Array[U64] {
+    inout fn completeCallTypeArguments(function: Func, current: Array[U64], resultPattern: U64, expectedTerm: U64, rigidPatternTerms: Dictionary[U64, U64] = [:]) -> Array[U64] {
         if expectedTerm == 0U64 || function.typeParams.count() == 0U64 || current.count() > function.typeParams.count() { return current }
         if current.count() == function.typeParams.count() && self.fnArgsAllResolved(args: current) { return current }
         mut val completed = current
         while completed.count() < function.typeParams.count() { completed.append(0U64) }
-        if !self.matchCallResultArguments(pattern: resultPattern, expected: expectedTerm, params: function.typeParams, values: inout completed) { return current }
+        if !self.matchCallResultArguments(pattern: resultPattern, expected: expectedTerm, params: function.typeParams, values: inout completed, rigidPatternTerms: rigidPatternTerms) { return current }
         return completed
     }
 
@@ -1943,6 +1943,33 @@ impl Comp {
         return <Result.Ok value=self.semanticCallableReturnTerm(function: function) />
     }
 
+    // A known replacement belongs to the caller. Match it as a whole,
+    // never re-enter its children as inference variables of this declaration.
+    // The map is private to one proposal and keyed by the original pattern node.
+    inout fn prepareResultPatternBoundaries(ref: U64, params: FuncBindRange, known: Array[U64], receiver: U64, rigidPatternTerms: inout Dictionary[U64, U64]) -> Result[(), CompileDiagnostic] {
+        if ref == 0U64 || rigidPatternTerms.contains(key: ref) { return <Result.Ok value=() /> }
+        val node = self.arena.typeTermAt(index: ref)
+        if node.paramId != 0U64 && node.assocNameId == 0U64 {
+            for index in 0U64..<params.count() {
+                if self.funcBindAt(binds: params, index: index).paramId == node.paramId && index < known.count() && known[index] != 0U64 {
+                    // Keep any explicit views on a known parameter, too.
+                    rigidPatternTerms[ref] = try self.groundKnownCallTypeArguments(ref: ref, params: params, values: known, receiver: receiver)
+                    return <Result.Ok value=() />
+                }
+            }
+        }
+        if node.assocNameId != 0U64 {
+            val substituted = try self.groundKnownCallTypeArguments(ref: ref, params: params, values: known, receiver: receiver)
+            val closed = try self.closeBodyProjectionTerms(ref: substituted, environment: <InstanceEnvironment />, selfRef: receiver, itemRef: 0U64, assumptions: self.functionBoundAssumptions(fnIdx: self.cur.checkFn))
+            rigidPatternTerms[ref] = closed
+            return <Result.Ok value=() />
+        }
+        for index in 0U64..<self.typeTermRefChildCount(ref: ref) {
+            try self.prepareResultPatternBoundaries(ref: self.typeTermRefChildRef(ref: ref, index: index), params: params, known: known, receiver: receiver, rigidPatternTerms: inout rigidPatternTerms)
+        }
+        return <Result.Ok value=() />
+    }
+
     // Compare an expectation with the already-selected declaration result.
     // Only local substitutions and interned terms are produced; Record owns
     // publication after selection. Incomplete or conflicting proposals stay absent.
@@ -1962,16 +1989,18 @@ impl Comp {
                 // must not remain an unrelated nominal name in inference.
                 val proof = self.thawStaticConformanceProof(id: proofId)
                 val provided = function.isProvided && self.isAuthoredProvidedDeclaration(function: callee)
+                mut val rigidPatternTerms: Dictionary[U64, U64] = [:]
                 val resultPattern = if provided {
                     val selectedReceiver = self.selectedCallableReceiver(function: function, receiver: receiver, receiverTerm: receiverTerm, params: self.copyFuncBinds(binds: function.typeParams), typeArgs: current)
                     give try self.providedExpectedResultPattern(callee: callee, receiver: selectedReceiver, arguments: current, proof: proof)
                 } else {
                     val receiver = self.parametricSelfRef(f: function)
                     val declaration = try self.declaredCallableResultPattern(callee: callee)
-                    val known = try self.groundKnownCallTypeArguments(ref: declaration, params: function.typeParams, values: current, receiver: receiver)
-                    give try self.closeBodyProjectionTerms(ref: known, environment: <InstanceEnvironment />, selfRef: receiver, itemRef: 0U64, assumptions: self.functionBoundAssumptions(fnIdx: self.cur.checkFn))
+                    val pattern = self.groundTermInEnvironment(ref: declaration, params: [], values: [], selfRef: receiver)
+                    try self.prepareResultPatternBoundaries(ref: pattern, params: function.typeParams, known: current, receiver: receiver, rigidPatternTerms: inout rigidPatternTerms)
+                    give pattern
                 }
-                val completed = self.completeCallTypeArguments(function: function, current: current, resultPattern: resultPattern, expectedTerm: expectedTerm)
+                val completed = self.completeCallTypeArguments(function: function, current: current, resultPattern: resultPattern, expectedTerm: expectedTerm, rigidPatternTerms: rigidPatternTerms)
                 if completed.count() != function.typeParams.count() || !self.fnArgsAllResolved(args: completed) { return <Result.Ok value=<Optional.None /> /> }
                 // The expected term constrains only this callee's binders.
                 // Publish the substituted declaration result, never the expected
@@ -2222,8 +2251,17 @@ pub impl Comp {
         return self.matchTypeArgumentConstraints(pattern: pattern, argument: argument, params: <PatternBindInput.Function range=params />, values: inout values)
     }
 
-    inout fn matchTypeArgumentConstraints(pattern: U64, argument: U64, params: PatternBindInput, values: inout Array[U64]) -> TypeArgumentMatch {
+    inout fn matchTypeArgumentConstraints(pattern: U64, argument: U64, params: PatternBindInput, values: inout Array[U64], rigidPatternTerms: Dictionary[U64, U64] = [:]) -> TypeArgumentMatch {
         if pattern == 0U64 || argument == 0U64 || pattern >= self.arena.typeTermCount() || argument >= self.arena.typeTermCount() { return <TypeArgumentMatch.Deferred /> }
+        if rigidPatternTerms.count() != 0U64 {
+            match rigidPatternTerms.get(key: pattern) {
+                Optional.Some(v: val replacement) => {
+                    if self.typeRefEq(a: replacement, b: argument) { return <TypeArgumentMatch.Matched /> }
+                    return <TypeArgumentMatch.Deferred />
+                }
+                Optional.None => {}
+            }
+        }
         val term = self.arena.typeTermAt(index: pattern)
         if term.assocNameId != 0U64 {
             if self.typeRefEq(a: pattern, b: argument) { return <TypeArgumentMatch.Matched /> }
@@ -2251,7 +2289,7 @@ pub impl Comp {
         mut val index = 0U64
         while index < count {
             if self.typeTermRefIdentityChildLabel(ref: pattern, index: index) != self.typeTermRefIdentityChildLabel(ref: argument, index: index) { return <TypeArgumentMatch.Mismatch /> }
-            match self.matchTypeArgumentConstraints(pattern: self.typeTermRefChildRef(ref: pattern, index: index), argument: self.typeTermRefChildRef(ref: argument, index: index), params: params, values: inout values) {
+            match self.matchTypeArgumentConstraints(pattern: self.typeTermRefChildRef(ref: pattern, index: index), argument: self.typeTermRefChildRef(ref: argument, index: index), params: params, values: inout values, rigidPatternTerms: rigidPatternTerms) {
                 TypeArgumentMatch.Matched => {}
                 TypeArgumentMatch.Deferred => { deferred = true }
                 TypeArgumentMatch.Mismatch => { return <TypeArgumentMatch.Mismatch /> }
@@ -2276,9 +2314,9 @@ pub impl Comp {
 
     // Expected-result refinement needs a complete match; a deferred equation
     // supplies no proof that the expected result fits the selected callable.
-    inout fn matchCallResultArguments(pattern: U64, expected: U64, params: FuncBindRange, values: inout Array[U64]) -> Bool {
+    inout fn matchCallResultArguments(pattern: U64, expected: U64, params: FuncBindRange, values: inout Array[U64], rigidPatternTerms: Dictionary[U64, U64] = [:]) -> Bool {
         mut val candidate = values
-        match self.matchCallTypeArguments(pattern: pattern, argument: expected, params: params, values: inout candidate) {
+        match self.matchTypeArgumentConstraints(pattern: pattern, argument: expected, params: <PatternBindInput.Function range=params />, values: inout candidate, rigidPatternTerms: rigidPatternTerms) {
             TypeArgumentMatch.Matched => {
                 values = candidate
                 return true

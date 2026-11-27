@@ -1,0 +1,12 @@
+struct Box[T] { val value: T }
+fn pattern[T, U](owner: T, nested: Box[T], cross: Box[U], scalar: Bool, transform: fn(value: U) -> U) -> (owner: T, transform: fn(value: U) -> U) {
+    return (owner: owner, transform: transform)
+}
+trait Parent { type Output }
+trait Child: Parent {}
+impl[T] Box[T] as Parent { type Output = T }
+impl[T] Box[T] as Child {}
+fn projected[T, U](owner: T, item: T#Child.Output, nested: Box[T], scalar: Bool, transform: fn(value: U) -> U) -> (owner: T, item: T#Child.Output, transform: fn(value: U) -> U) where T: Child {
+    return (owner: owner, item: item, transform: transform)
+}
+fn main() {}

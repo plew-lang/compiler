@@ -1,0 +1,55 @@
+// Actual Direct result-completion boundary, without recursive Source setup.
+impl Comp {
+    inout fn checkResultBoundary(function: U64, known: U64, expectedOwner: U64, accepted: Bool) {
+        val declaration = self.arena.functionAt(index: function)
+        val scalar = self.funcParamAt(params: declaration.params, index: 3U64).ty
+        val expected = self.groundTermInEnvironment(ref: self.semanticCallableReturnTerm(function: declaration), params: self.copyFuncBinds(binds: declaration.typeParams), values: [expectedOwner, scalar], selfRef: 0U64)
+        self.checkCompletedResultBoundary(function: function, known: known, expected: expected, scalar: scalar, accepted: accepted)
+    }
+    inout fn checkCompletedResultBoundary(function: U64, known: U64, expected: U64, scalar: U64, accepted: Bool) {
+        val declaration = self.arena.functionAt(index: function)
+        val range = self.publishCallTemplateTypeArgs(args: [known, 0U64])
+        val kind = <CallTemplateKind.Direct callee=function receiver=<CallTemplateReceiver.None /> args=<CallTemplateArgumentRange start=0U64 len=0U64 /> calleeTypeArgs=range proofId=0U64 />
+        val result = self.prepareCallTemplateResult(kind: kind, expectedTerm: expected, receiverTerm: 0U64, offset: declaration.nameStart).unwrap()
+        match result {
+            Optional.None => { if accepted { panic("rigid known result prevented unknown binder completion") } }
+            Optional.Some(v: val proposal) => {
+                if !accepted { panic("rigid mismatch was accepted") }
+                if proposal.arguments.count() != 2U64 || !self.typeRefEq(a: proposal.arguments[0U64], b: known) || !self.typeRefEq(a: proposal.arguments[1U64], b: scalar) { panic("result completion changed a known slot or lost the unknown slot") }
+                if !self.typeRefEq(a: proposal.result.resultType, b: expected) { panic("result reader disagrees with the completed declaration") }
+            }
+        }
+    }
+}
+fn main() {
+    mut val compiler = <Comp />
+    match analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.File path="tests/compiler/frontend/fixtures/ProjectionMembers/ExpectedResultBoundary.pw" />, sources: <SourceAccess stdRoot="std/".bytes() />) {
+        Result.Ok(value: _) => {}
+        Result.Err(error: val diagnostic) => { panic("result boundary setup rejected: "+diagnostic.message()) }
+    }
+    val function = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "pattern").nameId)
+    compiler.cur.checkFn = function
+    val declaration = compiler.arena.functionAt(index: function)
+    val scalar = compiler.funcParamAt(params: declaration.params, index: 3U64).ty
+    compiler.checkResultBoundary(function: function, known: scalar, expectedOwner: scalar, accepted: true)
+    val recursive = compiler.funcParamAt(params: declaration.params, index: 1U64).ty
+    compiler.checkResultBoundary(function: function, known: recursive, expectedOwner: recursive, accepted: true)
+    val cross = compiler.funcParamAt(params: declaration.params, index: 2U64).ty
+    compiler.checkResultBoundary(function: function, known: cross, expectedOwner: cross, accepted: true)
+    compiler.checkResultBoundary(function: function, known: recursive, expectedOwner: cross, accepted: false)
+    val projectionFunction = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "projected").nameId)
+    compiler.cur.checkFn = projectionFunction
+    val projectionDeclaration = compiler.arena.functionAt(index: projectionFunction)
+    val owner = compiler.funcParamAt(params: projectionDeclaration.params, index: 0U64).ty
+    val nested = compiler.funcParamAt(params: projectionDeclaration.params, index: 2U64).ty
+    val result = compiler.arena.typeAt(index: compiler.semanticCallableReturnTerm(function: projectionDeclaration))
+    val transform = compiler.groundTermInEnvironment(ref: result.recordFieldTerms[2U64], params: compiler.copyFuncBinds(binds: projectionDeclaration.typeParams), values: [nested, scalar], selfRef: 0U64)
+    mut val expectedFields: Array[U64] = []
+    for label in result.recordFieldLabels {
+        if label == compiler.internBytes(s: "owner").nameId { expectedFields.append(nested) }
+        else if label == compiler.internBytes(s: "item").nameId { expectedFields.append(owner) }
+        else { expectedFields.append(transform) }
+    }
+    val expected = compiler.rebuildRecordTypeTerm(t: result, fieldTerms: expectedFields)
+    compiler.checkCompletedResultBoundary(function: projectionFunction, known: nested, expected: expected, scalar: scalar, accepted: true)
+}

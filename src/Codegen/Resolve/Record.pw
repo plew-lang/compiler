@@ -1833,8 +1833,12 @@ impl Comp {
                 val parameter = self.funcParamAt(params: cf.params, index: parameterIndex)
                 val argument = self.argAt(args: args, index: k)
                 mut val cctx = if retainedParameters.isSome() { give retainedParameters.unwrap().parameterTypes[parameterIndex] } else { give parameter.ty }
-                if cctx != 0U64 && canSubstitute && (cf.typeParams.count() != 0U64 || retainedParameters.isSome()) {
-                    cctx = try self.groundTermForBody(ref: cctx, environment: parameterEnvironment, selfRef: 0U64, itemRef: 0U64)
+                if cctx != 0U64 && canSubstitute {
+                    if retainedParameters.isSome() {
+                        cctx = try self.closeBodyProjectionTerms(ref: cctx, environment: parameterEnvironment, selfRef: 0U64, itemRef: 0U64)
+                    } else if cf.typeParams.count() != 0U64 {
+                        cctx = try self.groundTermForBody(ref: cctx, environment: parameterEnvironment, selfRef: 0U64, itemRef: 0U64)
+                    }
                 }
                 if cctx != 0U64 && (canSubstitute || (try self.tyRefIsGround(ref: cctx))) {
                     try self.recordSemanticExprExpectedResultWithOrigin(exprId: argument.expr, expectedTerm: cctx, origin: argumentOrigin, expectedOrigin: <SourceExpectedContext.Contract term=cctx />)

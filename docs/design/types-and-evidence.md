@@ -51,6 +51,17 @@ Substitution takes a term and an explicit mapping from lexical parameter identit
 
 Apply a parameter map simultaneously: a replacement belongs to the caller's environment and is not recursively subjected to the same map. For a recursive generic call whose replacement is `T -> Box[T]`, substituting one occurrence of the callee parameter produces `Box[T]`, not an unbounded sequence of nested boxes. Resolving a remaining projection inside that replacement is a separate evidence-driven operation; it does not reapply the original parameter map.
 
+Expected-result inference retains the original declaration pattern and the
+boundaries of known replacements. A known replacement is compared as a rigid
+whole; its caller-owned children never become inference variables of the callee,
+even in a recursive call that shares ParamIds. Only unresolved declaration
+binders may be completed. Projection comparison consumes the saved declaring
+selection and known substitution without inferring its receiver from its output.
+Admitted signature readers return terms already interpreted in their explicit
+environment. Argument-context, result-publication and checking consumers do not
+apply that same environment again. Any remaining projection closure is a
+separate evidence read, not another binder substitution.
+
 A projection such as `T#Iterator.Item` retains its receiver and exact trait instance while abstract. A bound may justify it without a concrete conformer. Instantiation can produce its concrete associated output from the retained evidence. It must not resolve the printed word `Item` as a new nominal name or choose a different trait because another implementation happens to return the requested output.
 
 Symbolic but justified terms are valid abstract results. Missing evidence and unfinished inference are not. A consumer requiring a concrete result must reject or defer that request explicitly, rather than treating an unresolved projection as an arbitrary layout-compatible type.

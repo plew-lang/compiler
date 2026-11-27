@@ -358,27 +358,34 @@ and3314/248fail, not green. Missing/Ambiguous owned refusal/cache/lifetime is
 met-2yhf, not silently implemented or certified here. No all-source/global or
 stage3 completion is implied by the finite native suite.
 
-## Expected-result inference checkpoint
+## Expected-result inference and substitution boundary
 
-WIP 225a713c reads the admitted Direct result, substitutes known arguments and
-publishes the declaration reader's result/occurrence rather than the expectation.
-Fixed362e08ee check/native-AOT/ORC confirms ExpectedResult rejects in all three
-modes while its I64-only control passes. The changed internal CheckedProgram
-probe admits both; its aggregate still rejects the two wrong Missing diagnostics
-owned by met-2yhf. The separate component20 gate passes with frozen inputs.
+Direct contextual-result completion reads the admitted declaration pattern.
+Known substitutions are proposal-local rigid boundaries keyed by original pattern
+nodes; unknown binders alone remain inference variables. Projection boundaries
+apply the known map once and close the saved declaring projection. The common
+matcher does not re-enter replacement children, even when recursive caller and
+callee ParamIds coincide. Empty-map callers retain their existing match classes.
+The final result/occurrence/selector comes from the admitted signature reader,
+never from the expected type. Explicit views on known parameters are retained.
 
-Independent re-review identified a remaining rigidity question: traversing a
-known replacement T -> Box[caller T] with callee inference binders can reinterpret
-caller binders. Merely filtering known binders is insufficient when a replacement
-contains caller U sharing an unresolved callee U identity. Preserve the original
-pattern's substitution boundary and compare a known replacement as a rigid
-whole, or retain equivalent provenance. A Source-only recursive regression is
-being executed before further changes; no executable-recursion requirement or
-new source rule is introduced. This checkpoint does not close the task.
+Argument contexts, final parameter checks and result publication consume those
+already-interpreted reader terms. They close remaining projections separately;
+they do not apply the callee binder map a second time. This preserves concrete
+associated outputs as well as caller-owned recursive terms.
 
-The initial recursive Source fixture is not an authoritative RED: both omitted-U
-and explicitly typed-closure control reject earlier with the same opaque generic
-body mismatch. The explicit nested type-argument control also hit parsing before
-inference. Keep these failed probe attempts separate from the confirmed
-ExpectedResult RED. Next isolate known-replacement rigidity at the matcher API
-with caller-owned ParamIds, then reconnect it to a valid Source control.
+Meta rigid-result-boundary-checkpoint.json retains actual Direct API RED/GREEN,
+known concrete/recursive/cross-binder/mismatch controls, final result assertions,
+Source recursive inference/typed-closure controls and the component21 gate.
+Generic associated-output expectation is assembled by canonical record labels;
+initial positional-field probe failures were test errors, not compiler RED.
+Independent source and final fixture review found no required correction in this
+finite slice, and directly checked all three final result JSONs. Broader gates
+remain separate.
+
+The pre-rigidity CLI candidate passes51 of57 actual check/native-AOT/ORC rows.
+Only the two wrong Missing refusals remain in that candidate, owned by met-2yhf.
+The current Source root18 aggregate also preserves those two failures rather
+than weakening them. Fresh current-source CLI, gen, same-source formal cost and
+parent gates remain required. No task, whole-green, carrier or stage3 completion
+is claimed here.

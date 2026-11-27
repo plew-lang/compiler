@@ -210,7 +210,9 @@ impl Comp {
         }
         match (try self.readRetainedCallableTypes(function: callee, environment: environment, read: <CallableSignatureRead.SourceResult />)) {
             Optional.Some(v: val types) => {
-                val term = try self.groundTermForBody(ref: types.resultType, environment: environment, selfRef: environment.receiverRef, itemRef: if environment.receiverRef == 0U64 { give 0U64 } else { give try self.finalMethodItemRef(f: declaration, receiverRef: environment.receiverRef) })
+                // The admitted reader has already interpreted the recipe in
+                // this environment. Its replacements are caller-owned terms.
+                val term = try self.closeBodyProjectionTerms(ref: types.resultType, environment: environment, selfRef: environment.receiverRef, itemRef: 0U64)
                 return <Result.Ok value=<SelectedCallableSourceResult term=term occurrence=types.resultOccurrence selector=types.resultSelector /> />
             }
             Optional.None => {}

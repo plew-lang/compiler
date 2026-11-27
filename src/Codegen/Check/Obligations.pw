@@ -1074,7 +1074,7 @@ pub impl Comp {
         match (try self.readRetainedCallableTypes(function: callee, environment: environment, read: <CallableSignatureRead.SourceParameters />)) {
             Optional.Some(v: val signature) => {
                 mut val terms: Array[U64] = []
-                for term in signature.parameterTypes { terms.append(try self.groundTermForBody(ref: term, environment: environment, selfRef: environment.receiverRef, itemRef: 0U64)) }
+                for term in signature.parameterTypes { terms.append(try self.closeBodyProjectionTerms(ref: term, environment: environment, selfRef: environment.receiverRef, itemRef: 0U64)) }
                 return <Result.Ok value=<SourceCallSignature.AdmittedParameters types=terms /> />
             }
             Optional.None => {}

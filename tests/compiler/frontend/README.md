@@ -51,6 +51,15 @@ parameters. These stages do not execute emitted code. The separate
 `test-inherited-projection-admission.py` checks CLI/JIT; pass `--native-backend`
 with a fixed archive to also link and execute AOT, checking actual stdout.
 Fixtures and expected refusals remain strict even while a task is open.
+`ExpectedResultBoundaryMain.pw` runs the real Direct contextual-result proposal
+inside a frozen Frontend root. It checks rigid caller-owned replacements,
+unknown binder completion, known-slot preservation and mismatched-result refusal.
+`RecursiveExpectedResultMain.pw` runs whole Source checking in a CheckedProgram
+root, comparing an inferred closure with an explicitly typed control; it does
+not instantiate an unbounded recursive call. Both are explicit named entries
+of the projection-members/run-query-private.py diagnostic driver and require
+native exit0 with empty stdout/stderr. Neither replaces CLI execution gates.
+
 
 ## Manual execution procedure
 
