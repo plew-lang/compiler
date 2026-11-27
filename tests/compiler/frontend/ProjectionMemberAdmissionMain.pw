@@ -14,8 +14,8 @@ fn main() {
         match failure.location() { DiagnosticLocation.File(path: val path, line: val line) => { if line != 4I64 || path != inputPath { panic("projection location is not the authored occurrence") } } _ => { panic("projection location missing") } }
 
             val refusal = failure.projectionMember().unwrap()
-            for changed in ["session", "event", "occurrence", "message", "notes"] {
-                val forged = <ProjectionMemberRefusal session=(if changed == "session" { give refusal.session()+1U64 } else { give refusal.session() }) occurrence=(if changed == "occurrence" { give refusal.occurrence()+1U64 } else { give refusal.occurrence() }) event=(if changed == "event" { give 18446744073709551615U64 } else { give refusal.event() }) location=refusal.location() message=(if changed == "message" { give "not this refusal" } else { give refusal.message() }) notes=(if changed == "notes" { give [<DiagnosticNote location=<DiagnosticLocation.Unpositioned /> message="forged note" />] } else { give refusal.notes() }) />
+            for changed in ["session", "event", "occurrence", "location", "message", "notes"] {
+                val forged = <ProjectionMemberRefusal session=(if changed == "session" { give refusal.session()+1U64 } else { give refusal.session() }) occurrence=(if changed == "occurrence" { give refusal.occurrence()+1U64 } else { give refusal.occurrence() }) event=(if changed == "event" { give 18446744073709551615U64 } else { give refusal.event() }) location=(if changed == "location" { give <DiagnosticLocation.Unpositioned /> } else { give refusal.location() }) message=(if changed == "message" { give "not this refusal" } else { give refusal.message() }) notes=(if changed == "notes" { give [<DiagnosticNote location=<DiagnosticLocation.Unpositioned /> message="forged note" />] } else { give refusal.notes() }) />
                 if compiler.sourceFailureHasOwner(diagnostic: <CompileDiagnostic.projectionMember refusal=forged />) { panic("forged projection member proof admitted") }
             }
             mut val foreign = <Comp />
@@ -35,6 +35,13 @@ fn main() {
                 val raw = match compiler.checkProjectionMember(ref: rawRef) { Result.Err(error: val diagnostic) => diagnostic Result.Ok(value: _) => { panic("Raw missing member accepted") } }
                 if raw.isSourceRejection() || compiler.sourceFailureHasOwner(diagnostic: raw) || raw.message() != failure.message() { panic("Raw query gained source authority") }
             }
+            for invalid in ["trait", "member", "term"] {
+                val rawRef = if invalid == "term" { give 18446744073709551615U64 } else { give compiler.pushType(t: <TypeRef nameStart=type.nameStart nameLen=type.nameLen args=[] assocTraitStart=proof.traitOwner assocTraitId=(if invalid == "trait" { give 18446744073709551615U64 } else { give proof.traitId }) assocNameId=(if invalid == "member" { give 18446744073709551615U64 } else { give proof.memberId }) />) }
+                match compiler.checkProjectionMember(ref: rawRef) {
+                    Result.Err(error: val diagnostic) => { match diagnostic.failureDomain() { FailureDomain.Internal => {} _ => { panic("malformed query gained wrong domain") } } }
+                    Result.Ok(value: _) => { panic("malformed projection query accepted") }
+                }
+            }
             for missing in ["trait", "member", "owner"] {
                 val rawRef = compiler.pushType(t: <TypeRef nameStart=type.nameStart nameLen=type.nameLen nameId=type.nameId args=[] assocTraitStart=18446744073709551615U64 assocTraitId=(if missing == "trait" { give 0U64 } else { give proof.traitId }) assocNameId=(if missing == "member" { give 0U64 } else { give proof.memberId }) />)
                 compiler.checkProjectionMember(ref: rawRef).unwrap()
@@ -43,6 +50,18 @@ fn main() {
         }
     }
     }
+    mut val inherited = <Comp />
+    analyzeFrontendDeclarationsWithOrigin(c: inout inherited, input: <FrontendInput.File path="tests/compiler/frontend/fixtures/ProjectionMembers/InheritedParent.pw" />, sources: <SourceAccess stdRoot="std/".bytes() />, options: <FrontendOptions />, origin: <FrontendDeclarationOrigin.SourceAdmission />).unwrap()
+    val parent = inherited.internBytes(s: "Parent").nameId
+    val output = inherited.internBytes(s: "Output").nameId
+    mut val found = false
+    for index in 0U64..<inherited.decls.traitCount() {
+        if inherited.decls.traitAt(index: index).nameId == parent {
+            if !inherited.decls.traitAssociatedMember(index: index, nameId: output).unwrap() { panic("declaring parent member lost") }
+            found = true
+        }
+    }
+    if !found { panic("inherited declaration setup missing") }
     mut val body = <Comp />
     analyzeFrontendForRequests(c: inout body, input: <FrontendInput.File path="tests/compiler/frontend/fixtures/ProjectionMembers/Body.pw" />, sources: <SourceAccess stdRoot="std/".bytes() />).unwrap()
     val function = body.arena.firstFunctionNamed(nameId: body.internBytes(s: "entry").nameId)
