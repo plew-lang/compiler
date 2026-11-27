@@ -72,3 +72,18 @@ reconciliation, fixed point/formal<=7.5 and same-source regression assessment,
 independent parent review and bounded evidence/product cleanup. Baseline is
 3314 cases/249 inherited failures, not green; no tests or verifier weakening,
 no main/seed/bin promotion and no phase3 closure from this parent alone.
+
+## Integration checkpoint
+
+All three finite children are independently certified and closed. Final
+source d712af31 passes C84/B96/A114, all common-evidence visibility native
+controls, Raw/legacy/session retention and selected gen. Formal fixed-point/
+performance run20261127T115307-self-host-425d2d uses the retained adopted da2
+carrier against frozen function-type-label-build-v2; whole-suite reconciliation
+and independent parent certification remain pending. This is not phase3 closure.
+
+Formal20261127T115307-self-host-425d2d passed: G2 fixed point, unchanged
+inputs, samples7.886941/7.380636/7.350523, median7.380636<=7.5. Same-source
+alternating comparison da2 versus measured149aac is7.425221 versus7.322186,
+all6LLVM equal and input hashes unchanged. No observed regression. Whole-suite
+reconciliation is now running on the measured149aac candidate.
