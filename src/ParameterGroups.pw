@@ -1,0 +1,35 @@
+// Completed parameter groups are admitted before callable publication.
+impl Comp {
+    fn admitParameterGroup(params: FuncParamRange, origin: FrontendDeclarationOrigin) -> Result[(), CompileDiagnostic] {
+        // The AST-only gen harness is not a checked ordinary program.
+        if self.genMode { return <Result.Ok value=() /> }
+        if params.start > self.decls.funcParamPool.count() || params.len > self.decls.funcParamPool.count()-params.start {
+            return <Result.Err error=<CompileDiagnostic failureDomain=<FailureDomain.Internal /> location=<DiagnosticLocation.Unpositioned /> message="parameter group contains an invalid parameter range" /> />
+        }
+        mut val names: Array[Span] = []
+        for index in 0U64..<params.len {
+            val parameter = self.funcParamAt(params: params, index: index)
+            if parameter.nameStart > self.arena.bytes.count() || parameter.nameLen > self.arena.bytes.count()-parameter.nameStart {
+                return <Result.Err error=<CompileDiagnostic failureDomain=<FailureDomain.Internal /> location=<DiagnosticLocation.Unpositioned /> message="parameter group contains an invalid name span" /> />
+            }
+            names.append(<Span start=parameter.nameStart end=parameter.nameStart+parameter.nameLen />)
+        }
+        return self.admitParameterNames(names: names, origin: origin)
+    }
+
+    fn admitParameterNames(names: Array[Span], origin: FrontendDeclarationOrigin) -> Result[(), CompileDiagnostic] {
+        val conflict = match declarationLabelConflict(bytes: self.arena.bytes, labels: names) {
+            Optional.None => { return <Result.Ok value=() /> }
+            Optional.Some(v: val conflict) => conflict
+        }
+        match conflict {
+            DeclarationLabelConflict.Malformed(index: _) => {
+                return <Result.Err error=<CompileDiagnostic failureDomain=<FailureDomain.Internal /> location=<DiagnosticLocation.Unpositioned /> message="parameter group contains an invalid name span" /> />
+            }
+            DeclarationLabelConflict.Duplicate(first: val first, second: val second) => {
+                val domain = match origin { FrontendDeclarationOrigin.Raw => <FailureDomain.Unclassified /> FrontendDeclarationOrigin.SourceAdmission => <FailureDomain.Source /> }
+                return <Result.Err error=<CompileDiagnostic failureDomain=domain location=self.diagnosticLocationAt(offset: names[second].start) message="duplicate parameter binding name (each parameter in a group must have a distinct name)" notes=[<DiagnosticNote location=self.diagnosticLocationAt(offset: names[first].start) message="previous parameter with this name is here" />] /> />
+            }
+        }
+    }
+}

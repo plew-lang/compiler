@@ -235,7 +235,7 @@ impl Comp {
         }
         try self.checkLangItemRedef()
         try self.checkBlanketHeadless()
-        try self.checkDupParamLabels(sourceFuncLimit: sourceFuncLimit)
+        match origin { FrontendDeclarationOrigin.Raw => { try self.checkDupParamLabels(sourceFuncLimit: sourceFuncLimit) } FrontendDeclarationOrigin.SourceAdmission => {} }
         for index in 0U64..<self.arena.structCount() {
             val declaration = self.arena.structAt(index: index)
             val admitted = match origin { FrontendDeclarationOrigin.Raw => false FrontendDeclarationOrigin.SourceAdmission => declaration.sourceTypeScope != 0U64 }
@@ -304,31 +304,17 @@ pub impl Comp {
     // as verifyProgram.  It must not observe implementation rows appended while
     // expression verification resolves generic call sites.
     inout fn checkDupParamLabels(sourceFuncLimit: U64) -> Result[(), CompileDiagnostic] {
-        mut val fi: U64 = 0
-        while fi < sourceFuncLimit {
-            val f: Func = self.arena.functionAt(index: fi)
-            if !(f.isExtern || f.isProvided) {
-                if self.moduleOf(offset: f.nameStart) == 0U64 {
-                    mut val i: U64 = 0
-                    while i < f.params.count() {
-                        val param: Param = self.funcParamAt(params: f.params, index: i)
-                        if !(param.noLabel) {
-                            mut val j: U64 = i + 1U64
-                            while j < f.params.count() {
-                                val other: Param = self.funcParamAt(params: f.params, index: j)
-                                if !(other.noLabel) {
-                                    if param.nameId == other.nameId {
-                                        return <Result.Err error=self.diagnosticAt(offset: other.nameStart, msg: "duplicate parameter label (each labelled parameter must have a distinct name)") />
-                                    }
-                                }
-                                j += 1
-                            }
-                        }
-                        i += 1
-                    }
-                }
+        if sourceFuncLimit > self.arena.functionCount() {
+            return <Result.Err error=<CompileDiagnostic failureDomain=<FailureDomain.Internal /> location=<DiagnosticLocation.Unpositioned /> message="invalid parameter verification function limit" /> />
+        }
+        for index in 0U64..<sourceFuncLimit {
+            try self.admitParameterGroup(params: self.arena.functionAt(index: index).params, origin: <FrontendDeclarationOrigin.Raw />)
+        }
+        for index in 0U64..<self.decls.traitCount() {
+            val declaration = self.decls.traitAt(index: index)
+            for slot in 0U64..<declaration.reqs.len {
+                try self.admitParameterGroup(params: self.traitReqAt(reqs: declaration.reqs, index: slot).params, origin: <FrontendDeclarationOrigin.Raw />)
             }
-            fi += 1
         }
         return <Result.Ok value=() />
     }

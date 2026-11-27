@@ -1113,6 +1113,13 @@ pub impl Comp {
     }
 
     inout fn registerDeclaredFunc(f: Func, registerSurface: Bool = true, authoredScope: U64 = 0U64) -> Result[U64, CompileDiagnostic] {
+        return self.registerDeclaredFuncForAdmission(f: f, registerSurface: registerSurface, authoredScope: authoredScope, origin: <FrontendDeclarationOrigin.Raw />)
+    }
+}
+
+impl Comp {
+    inout fn registerDeclaredFuncForAdmission(f: Func, registerSurface: Bool = true, authoredScope: U64 = 0U64, origin: FrontendDeclarationOrigin) -> Result[U64, CompileDiagnostic] {
+        try self.admitParameterGroup(params: f.params, origin: origin)
         if f.isExposed {
             if f.hasRecv || f.isAssoc {
                 return <Result.Err error=self.diagnosticAt(offset: f.nameStart, msg: "expose requires a free function; methods and associated functions cannot be exposed", failureDomain: <FailureDomain.Source />) />
@@ -1163,6 +1170,9 @@ pub impl Comp {
     // The only entrance to the resolver's surface table. Derived provided
     // methods call this after their body record is appended; source selection is
     // therefore represented once, instead of reconstructed separately by # calls.
+}
+
+pub impl Comp {
     inout fn registerCallable(funcIdx: U64, checkCollisions: Bool = false) -> Result[(), CompileDiagnostic] {
         if funcIdx >= self.arena.functionCount() { return <Result.Ok value=() /> }
         val f: Func = self.arena.functionAt(index: funcIdx)

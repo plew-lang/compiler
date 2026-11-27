@@ -1,6 +1,6 @@
 ---
 id: met-q7ig
-status: open
+status: closed
 deps: []
 links: []
 created: 2026-11-27T07:12:54Z

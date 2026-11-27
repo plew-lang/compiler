@@ -412,11 +412,17 @@ pub impl Comp {
     }
 
     inout fn lowerSyntaxFuncDecl(d: SyntaxDecl) -> Result[(), CompileDiagnostic] {
+        return self.lowerSyntaxFuncDeclForAdmission(d: d, origin: <FrontendDeclarationOrigin.Raw />)
+    }
+}
+
+impl Comp {
+    inout fn lowerSyntaxFuncDeclForAdmission(d: SyntaxDecl, origin: FrontendDeclarationOrigin) -> Result[(), CompileDiagnostic] {
         val savedBounds = self.activeProjectionBounds
         val savedParameters = self.cur.typeParams
         val savedReturn = self.cur.lowerRetTy
         val scope = self.beginAuthoredTypeScope(kind: <SourceTypeScopeKind.FreeFunction />, anchor: d.name.start)
-        val result = self.lowerSyntaxFuncDeclInSourceScope(d: d)
+        val result = self.lowerSyntaxFuncDeclInSourceScopeForAdmission(d: d, origin: origin)
         self.activeProjectionBounds = savedBounds
         self.cur.typeParams = savedParameters
         self.cur.lowerRetTy = savedReturn
@@ -433,6 +439,12 @@ pub impl Comp {
 
 impl Comp {
     inout fn lowerSyntaxFuncDeclInSourceScope(d: SyntaxDecl) -> Result[(), CompileDiagnostic] {
+        return self.lowerSyntaxFuncDeclInSourceScopeForAdmission(d: d, origin: <FrontendDeclarationOrigin.Raw />)
+    }
+}
+
+impl Comp {
+    inout fn lowerSyntaxFuncDeclInSourceScopeForAdmission(d: SyntaxDecl, origin: FrontendDeclarationOrigin) -> Result[(), CompileDiagnostic] {
         val typeParams: Array[Bind] = (try self.lowerSyntaxDeclTypeParams(d: d))
         val savedTP: Array[Bind] = self.cur.typeParams
         self.cur.typeParams = typeParams
@@ -457,7 +469,7 @@ impl Comp {
         val body: U64 = (try self.lowerSyntaxBlock(id: d.body))
         try self.setAuthoredTypeUseRole(role: <SourceTypeUseRole.Declaration />, site: d.name.start)
         self.cur.lowerRetTy = savedRet
-        val fnIdx: U64 = (try self.registerAuthoredCallable(f: <Func nameStart=d.name.start nameLen=d.name.end - d.name.start nameId=intern(c: inout self, start: d.name.start, len: d.name.end - d.name.start) typeParams=self.pushFuncBinds(binds: typeParams) params=self.pushFuncParams(params: params) hasRet=d.hasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=body hasRecv=false recvStart=0U64 recvLen=0U64 selfInout=false selfMove=false isAssoc=false isAsync=d.isAsync isDiverging=d.isDiverging isExposed=d.isExposed isExtern=false defOffset=d.name.start />, result: retUse))
+        val fnIdx: U64 = (try self.registerAuthoredCallable(f: <Func nameStart=d.name.start nameLen=d.name.end - d.name.start nameId=intern(c: inout self, start: d.name.start, len: d.name.end - d.name.start) typeParams=self.pushFuncBinds(binds: typeParams) params=self.pushFuncParams(params: params) hasRet=d.hasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=body hasRecv=false recvStart=0U64 recvLen=0U64 selfInout=false selfMove=false isAssoc=false isAsync=d.isAsync isDiverging=d.isDiverging isExposed=d.isExposed isExtern=false defOffset=d.name.start />, result: retUse, origin: origin))
         try self.appendPreparedFunctionBounds(function: fnIdx)
         self.cur.typeParams = savedTP
         return <Result.Ok value=() />

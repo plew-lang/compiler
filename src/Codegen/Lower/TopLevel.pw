@@ -89,6 +89,12 @@ pub impl Comp {
     }
 
     inout fn lowerSyntaxExtern(ext: SyntaxExtern) -> Result[(), CompileDiagnostic] {
+        return self.lowerSyntaxExternForAdmission(ext: ext, origin: <FrontendDeclarationOrigin.Raw />)
+    }
+}
+
+impl Comp {
+    inout fn lowerSyntaxExternForAdmission(ext: SyntaxExtern, origin: FrontendDeclarationOrigin) -> Result[(), CompileDiagnostic] {
         if !(ext.abiOk) {
             return <Result.Err error=self.diagnosticAt(offset: ext.abiSpan.start, msg: "unknown ABI — only `extern(plewIntrinsic)` (intrinsic floor) and `extern(c)` (foreign C) are supported") />
         }
@@ -106,7 +112,7 @@ pub impl Comp {
                 }
             }
             val signature = try self.lowerSyntaxSigToFunc(sig: sig, isExtern: true, isCExtern: ext.abiC)
-            val function = try self.registerDeclaredFunc(f: signature.function)
+            val function = try self.registerDeclaredFuncForAdmission(f: signature.function, origin: origin)
             try self.bindAuthoredFunctionScope(scope: signature.scope, function: function, site: signature.function.defOffset)
             try self.bindAuthoredCallableSignature(signature: signature, function: function)
             i += 1U64
@@ -147,6 +153,9 @@ pub impl Comp {
         return <Result.Ok value=() />
     }
 
+}
+
+pub impl Comp {
     inout fn lowerDecl(d: DeclAst) -> Result[(), CompileDiagnostic] {
         match d.kind {
             DeclKind.Struct => { try self.lowerStructDecl(d: d) }
@@ -350,7 +359,7 @@ impl Comp {
         match d.kind {
             DeclKind.Struct => { try self.lowerSyntaxStructDeclForAdmission(d: d, origin: origin) }
             DeclKind.Enum => { try self.lowerSyntaxEnumDeclForAdmission(d: d, origin: origin) }
-            DeclKind.Func => { try self.lowerSyntaxFuncDecl(d: d) }
+            DeclKind.Func => { try self.lowerSyntaxFuncDeclForAdmission(d: d, origin: origin) }
         }
         return <Result.Ok value=() />
     }
@@ -363,7 +372,7 @@ impl Comp {
             SyntaxTopItemKind.Extern => {
                 val funcBefore: U64 = self.arena.functionCount()
                 val structBefore: U64 = self.arena.structCount()
-                try self.lowerSyntaxExtern(ext: syntaxExtern(file: self.syntax, id: <ExternId raw=syntaxTopItemPayload(file: self.syntax, item: item) />))
+                try self.lowerSyntaxExternForAdmission(ext: syntaxExtern(file: self.syntax, id: <ExternId raw=syntaxTopItemPayload(file: self.syntax, item: item) />), origin: origin)
                 mut val i: U64 = funcBefore
                 while i < self.arena.functionCount() {
                     self.recordExport(nameStart: self.arena.functionAt(index: i).nameStart, nameLen: self.arena.functionAt(index: i).nameLen)
@@ -382,7 +391,7 @@ impl Comp {
             }
             SyntaxTopItemKind.Trait => {
                 val before: U64 = self.decls.traitCount()
-                try self.lowerSyntaxTrait(t: syntaxTrait(file: self.syntax, id: <TraitId raw=syntaxTopItemPayload(file: self.syntax, item: item) />))
+                try self.lowerSyntaxTraitForAdmission(t: syntaxTrait(file: self.syntax, id: <TraitId raw=syntaxTopItemPayload(file: self.syntax, item: item) />), origin: origin)
                 self.recordExport(nameStart: self.decls.traitAt(index: before).nameStart, nameLen: self.decls.traitAt(index: before).nameLen)
             }
             SyntaxTopItemKind.GlobalVal => {
@@ -415,8 +424,8 @@ impl Comp {
             SyntaxTopItemKind.Extension => {}
             SyntaxTopItemKind.Decl => { try self.lowerSyntaxDeclForAdmission(d: syntaxDecl(file: self.syntax, id: <DeclId raw=syntaxTopItemPayload(file: self.syntax, item: item) />), origin: origin) }
             SyntaxTopItemKind.Impl => { try self.lowerSyntaxImplForAdmission(im: syntaxImpl(file: self.syntax, id: <ImplId raw=syntaxTopItemPayload(file: self.syntax, item: item) />), origin: origin) }
-            SyntaxTopItemKind.Trait => { try self.lowerSyntaxTrait(t: syntaxTrait(file: self.syntax, id: <TraitId raw=syntaxTopItemPayload(file: self.syntax, item: item) />)) }
-            SyntaxTopItemKind.Extern => { try self.lowerSyntaxExtern(ext: syntaxExtern(file: self.syntax, id: <ExternId raw=syntaxTopItemPayload(file: self.syntax, item: item) />)) }
+            SyntaxTopItemKind.Trait => { try self.lowerSyntaxTraitForAdmission(t: syntaxTrait(file: self.syntax, id: <TraitId raw=syntaxTopItemPayload(file: self.syntax, item: item) />), origin: origin) }
+            SyntaxTopItemKind.Extern => { try self.lowerSyntaxExternForAdmission(ext: syntaxExtern(file: self.syntax, id: <ExternId raw=syntaxTopItemPayload(file: self.syntax, item: item) />), origin: origin) }
             SyntaxTopItemKind.Import => { self.lowerSyntaxImport(imp: syntaxImport(file: self.syntax, id: <ImportId raw=syntaxTopItemPayload(file: self.syntax, item: item) />)) }
             SyntaxTopItemKind.Published => { try self.lowerSyntaxPublishedItemForAdmission(item: <TopItemId raw=syntaxTopItemPayload(file: self.syntax, item: item) />, origin: origin) }
             SyntaxTopItemKind.Directive => { try self.lowerSyntaxDirective(dir: syntaxDirective(file: self.syntax, id: <DirectiveId raw=syntaxTopItemPayload(file: self.syntax, item: item) />)) }

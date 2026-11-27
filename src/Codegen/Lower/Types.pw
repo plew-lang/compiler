@@ -38,9 +38,9 @@ impl Comp {
         return <Result.Ok value=() />
     }
 
-    inout fn registerAuthoredCallable(f: Func, result: U64, factoryError: U64 = 0U64, registerSurface: Bool = true) -> Result[U64, CompileDiagnostic] {
+    inout fn registerAuthoredCallable(f: Func, result: U64, factoryError: U64 = 0U64, registerSurface: Bool = true, origin: FrontendDeclarationOrigin = <FrontendDeclarationOrigin.Raw />) -> Result[U64, CompileDiagnostic] {
         val scope = self.sourceTypeUses.currentScope()
-        val function = try self.registerDeclaredFunc(f: f, registerSurface: registerSurface, authoredScope: scope)
+        val function = try self.registerDeclaredFuncForAdmission(f: f, registerSurface: registerSurface, authoredScope: scope, origin: origin)
         try self.bindAuthoredCallableSignature(signature: <LoweredSourceSignature function=f scope=scope result=result factoryError=factoryError />, function: function)
         return <Result.Ok value=function />
     }

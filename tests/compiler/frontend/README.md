@@ -744,3 +744,5 @@ keeps legal names in separate variants/types and generic declarations accepted.
 including malformed ranges; run it with the selected carrier's `--run`.
 These focused controls do not certify the whole compiler or declaration-owner
 authentication, which additionally needs private/native admission controls.
+
+`test-parameter-group-admission.py --carrier PATH --out NEW_DIRECTORY` is a manual declaration-admission matrix (114 cases): named/requirement binding-name uniqueness in local/imported declarations under check/AOT/ORC, including suppressed labels and legal explicit shadowing. It requires the binding-name diagnostic and Source failure domain; closure and function-type admission have separate owners.
