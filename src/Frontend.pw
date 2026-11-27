@@ -604,11 +604,11 @@ struct SharedInoutPlace {
     val fields: Array[U64]
 }
 
-struct SelectedMethodSourceResult {
+struct SelectedCallableSourceResult {
     val term: U64
     val selector: Optional[ResolvedViewSource] = <Optional.None />
 }
-impl SelectedMethodSourceResult { factory }
+impl SelectedCallableSourceResult { factory }
 
 struct RetainedCallableTypes {
     val parameterTypes: Array[U64]

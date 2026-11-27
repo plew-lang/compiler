@@ -10,3 +10,6 @@ fn boxed[T](value: Array[T#Child.Output]) where T: Child {}
 fn returning[T](value: T#Child.Output) -> T#Child.Output where T: Child { return value }
 fn returningArray[T](value: Array[T#Child.Output]) -> Array[T#Child.Output] where T: Child { return value }
 async fn returningAsync[T](value: T#Child.Output) -> Promise[T#Child.Output] where T: Child { return value }
+fn produce[T](owner: T, value: T#Child.Output) -> T#Child.Output where T: Child { return value }
+fn caller() -> I64 { return produce(owner: <Leaf />, value: 7I64) }
+fn wrongCaller() -> I64 { return produce(owner: <Leaf />, value: true) }

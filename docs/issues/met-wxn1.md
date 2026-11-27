@@ -252,6 +252,27 @@ Remaining audit: recordTryExpression still reads declaredBodyReturnTerm directly
 exercise nested Result associated error/result propagation before certifying
 that consumer. Raw/closure/forwarding were source-inspected, not newly executed.
 
+## Free callable signature checkpoint
+
+The fresh result-handoff candidate removed Child's generic return mismatch but
+still passed12/39: free call selection and argument contexts grounded raw Child
+parameter slots before the result handoff. A frozen diagnostic snapshot proved
+the failure preceded context/result entry. Source call selection now receives
+its explicit callable ID and reads admitted lexical parameter patterns through
+the common matcher. Inference receives these patterns explicitly; diagnostic
+origin is not semantic authority. Completed argument contexts read
+SourceParameters and results read SourceResult, grounding the saved declaring
+terms under the same map. Provided calls retain the strict existing proof and
+missing-signature gate; unregistered Raw declarations retain their adapter.
+
+Meta free-call-signature-checkpoint.json retains target RED and final native-v8
+20-profile GREEN, including actual caller recording/Source obligations and Bool
+argument rejection by spec12 rather than projection lookup failure. Independent
+finite source review checked explicit-ID ownership, partial inference, provided
+gates and DiagnosticCandidate fallback. No new member/name selection is added.
+Method Raw adapters and pre-admission ranking remain unaudited. Final fresh
+CLI/AOT/ORC, performance and all task gates are still required.
+
 ## Next implementation sequence
 
 1. Audit remaining producer/receiver environments against the receipt checkpoint;

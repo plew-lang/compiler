@@ -2074,7 +2074,7 @@ pub impl Comp {
         val environment = if selectedReceiver != 0U64 {
             give (try self.finalMethodEnvironment(f: function, receiverRef: selectedReceiver, args: args))
         } else {
-            give (try self.freeCallParameterEnvironment(f: function, args: args))
+            give (try self.freeCallParameterEnvironment(callee: callee, args: args))
         }
         if self.traceCodegen {
             eprint(text: "[trace-codegen] constructing-call-environment expr=")

@@ -196,20 +196,29 @@ pub impl Comp {
     }
 
     inout fn selectedMethodResult(callee: U64, environment: InstanceEnvironment) -> Result[U64, CompileDiagnostic] {
-        return <Result.Ok value=(try self.selectedMethodSourceResult(callee: callee, environment: environment)).term />
+        return <Result.Ok value=(try self.selectedCallableSourceResult(callee: callee, environment: environment)).term />
     }
 }
 
 impl Comp {
-    inout fn selectedMethodSourceResult(callee: U64, environment: InstanceEnvironment) -> Result[SelectedMethodSourceResult, CompileDiagnostic] {
-        if environment.receiverRef == 0U64 { return <Result.Ok value=<SelectedMethodSourceResult term=0U64 /> /> }
+    inout fn selectedCallableSourceResult(callee: U64, environment: InstanceEnvironment) -> Result[SelectedCallableSourceResult, CompileDiagnostic] {
         val declaration = self.arena.functionAt(index: callee)
+        if declaration.hasRecv && environment.receiverRef == 0U64 { return <Result.Ok value=<SelectedCallableSourceResult term=0U64 /> /> }
         if declaration.isProvided && self.isAuthoredProvidedDeclaration(function: callee) {
             val types = try self.providedSourceSignature(function: callee, environment: environment, read: <CallableSignatureRead.SourceResult />)
-            return <Result.Ok value=<SelectedMethodSourceResult term=types.resultType selector=types.resultSelector /> />
+            return <Result.Ok value=<SelectedCallableSourceResult term=types.resultType selector=types.resultSelector /> />
         }
-        val term = try self.groundFinalMethodSignatureInEnvironment(f: declaration, environment: environment, signatureTerm: self.semanticCallableReturnTerm(function: declaration))
-        return <Result.Ok value=<SelectedMethodSourceResult term=term /> />
+        match (try self.readRetainedCallableTypes(function: callee, environment: environment, read: <CallableSignatureRead.SourceResult />)) {
+            Optional.Some(v: val types) => {
+                val term = try self.groundTermForBody(ref: types.resultType, environment: environment, selfRef: environment.receiverRef, itemRef: if environment.receiverRef == 0U64 { give 0U64 } else { give try self.finalMethodItemRef(f: declaration, receiverRef: environment.receiverRef) })
+                return <Result.Ok value=<SelectedCallableSourceResult term=term selector=types.resultSelector /> />
+            }
+            Optional.None => {}
+        }
+        // Only declarations without an authored signature use the legacy
+        // term adapter. A registered signature failure is propagated above.
+        val term = try self.groundTermForBody(ref: self.semanticCallableReturnTerm(function: declaration), environment: environment, selfRef: environment.receiverRef, itemRef: if environment.receiverRef == 0U64 { give 0U64 } else { give try self.finalMethodItemRef(f: declaration, receiverRef: environment.receiverRef) })
+        return <Result.Ok value=<SelectedCallableSourceResult term=term /> />
     }
 }
 

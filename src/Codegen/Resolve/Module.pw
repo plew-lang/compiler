@@ -344,8 +344,7 @@ impl Comp {
         mut val i = 0U64
         while i < candidates.count() {
             val functionId = candidates[i]
-            val f = self.arena.functionAt(index: functionId)
-            val matchRank = (try self.callableArgMatchRank(f: f, args: args))
+            val matchRank = (try self.callableArgMatchRank(function: functionId, args: args))
             if matchRank != 0U64 {
                 if firstLabel == self.arena.functionCount() { firstLabel = functionId }
                 if matchRank == 2U64 {
@@ -381,7 +380,7 @@ impl Comp {
                 val gf: Func = self.arena.functionAt(index: gc.funcIdx)
                 if !(gf.hasRecv || gf.isAssoc) {
                     if gf.nameId == qId {
-                        val matchRank: U64 = (try self.callableArgMatchRank(f: gf, args: args))
+                        val matchRank: U64 = (try self.callableArgMatchRank(function: gc.funcIdx, args: args))
                         if matchRank != 0U64 {
                             if matchRank == 2U64 {
                                 return <Result.Ok value=<FreeFunctionSelection.Selected function=gc.funcIdx /> />

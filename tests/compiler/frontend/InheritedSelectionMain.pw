@@ -51,4 +51,34 @@ fn main() {
         if !compiler.typeRefEq(a: term, b: compiler.semanticBodyReturnContext(fnIdx: owner).unwrap()) { panic("logical result lost a nested admitted projection or unwrapped Promise incorrectly") }
     }
 
+    val producer = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "produce").nameId)
+    val producerFunction = compiler.arena.functionAt(index: producer)
+    val producerEnvironment = <InstanceEnvironment params=compiler.copyFuncBinds(binds: producerFunction.typeParams) args=[leaf] />
+    val selectedResult = match compiler.selectedCallableSourceResult(callee: producer, environment: producerEnvironment) {
+        Result.Ok(value: val result) => result.term,
+        Result.Err(error: val diagnostic) => { panic("selected free result reader failed: "+diagnostic.message()) }
+    }
+    if compiler.arena.typeAt(index: selectedResult).nameId != compiler.internBytes(s: "I64").nameId { panic("selected free result reader lost concrete output") }
+    val caller = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "caller").nameId)
+    val callerOwner = <SemanticCompletionOwner.Function index=caller />
+    if !compiler.sourceFacts.begin(owner: callerOwner) { panic("caller source facts were not fresh") }
+    match compiler.recordParametricFunctionWithOrigin(fnIdx: caller, recordCallTemplates: true, origin: <SourceRecordingScope request=<SourceRecordOrigin.CheckingRequest session=compiler.sourceFactSession() root=callerOwner /> returnContext=<SourceExpectedContext.None /> />, expectedOrigin: <SourceExpectedContext.None />) {
+        Result.Ok(value: _) => {}
+        Result.Err(error: val diagnostic) => { panic("free call failed to read its admitted result: "+diagnostic.message()) }
+    }
+    match compiler.checkSourceTypingObligationsWithOrigin(owner: callerOwner, origin: <SourceRecordOrigin.CheckingRequest session=compiler.sourceFactSession() root=callerOwner />) {
+        Result.Ok(value: _) => {}
+        Result.Err(error: val diagnostic) => { panic("free call source verification lost admitted signature: "+diagnostic.message()) }
+    }
+
+    val wrongCaller = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "wrongCaller").nameId)
+    val wrongOwner = <SemanticCompletionOwner.Function index=wrongCaller />
+    if !compiler.sourceFacts.begin(owner: wrongOwner) { panic("negative caller facts were not fresh") }
+    match compiler.recordParametricFunctionWithOrigin(fnIdx: wrongCaller, recordCallTemplates: true, origin: <SourceRecordingScope request=<SourceRecordOrigin.CheckingRequest session=compiler.sourceFactSession() root=wrongOwner /> returnContext=<SourceExpectedContext.None /> />, expectedOrigin: <SourceExpectedContext.None />) {
+        Result.Err(error: val diagnostic) => {
+            if diagnostic.message() != "type mismatch: this value's type does not match the type required here (Plew has no implicit conversion — spec/12)" { panic("wrong argument did not reach semantic type mismatch: "+diagnostic.message()) }
+        }
+        Result.Ok(value: _) => { panic("wrong argument passed admitted parameter checking") }
+    }
+
 }

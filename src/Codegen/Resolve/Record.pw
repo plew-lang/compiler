@@ -893,8 +893,10 @@ pub impl Comp {
     // TypeInfo result or concrete BodyInstance descriptor participates.
     // Signature verification checks the resulting argument constraints before
     // the lexical call template is sealed.
-    inout fn inferRecordedFreeCallArgs(f: Func, args: ArgRange) -> Result[Array[U64], CompileDiagnostic] {
-        return self.inferPreparedCallTypeArguments(f: f, args: args, selfRef: if f.isAssoc { give f.recvTy } else { give 0U64 })
+    inout fn inferRecordedFreeCallArgs(callee: U64, args: ArgRange) -> Result[Array[U64], CompileDiagnostic] {
+        val f = self.arena.functionAt(index: callee)
+        val signatures = try self.lexicalBodyParameterTypes(function: callee, receiver: if f.isAssoc { give f.recvTy } else { give 0U64 })
+        return self.inferPreparedCallTypeArguments(f: f, args: args, parameterTypes: signatures, selfRef: if f.isAssoc { give f.recvTy } else { give 0U64 })
     }
 
     // Record the parametric result and the independently-carried source call
@@ -903,8 +905,8 @@ pub impl Comp {
     // Record and declaration verification share the selected signature's
     // substitution. Templates are mutable construction records until the lexical
     // body is verified and sealed; consumers cannot treat an early row as proof.
-    inout fn freeCallParameterEnvironment(f: Func, args: ArgRange) -> Result[InstanceEnvironment, CompileDiagnostic] {
-        return self.freeCallParameterEnvironmentWithOrigin(f: f, args: args, inferenceOrigin: <GenericCallInferenceOrigin.Raw />)
+    inout fn freeCallParameterEnvironment(callee: U64, args: ArgRange) -> Result[InstanceEnvironment, CompileDiagnostic] {
+        return self.freeCallParameterEnvironmentWithOrigin(callee: callee, args: args, inferenceOrigin: <GenericCallInferenceOrigin.Raw />)
     }
 
     inout fn recordParametricFreeCall(exprId: U64, callee: U64, args: ArgRange) -> Result[(), CompileDiagnostic] {
@@ -913,24 +915,16 @@ pub impl Comp {
         try self.checkCallDeclarationKind(exprId: exprId, declaration: f)
         mut val calleeArgs: Array[U64] = []
         if f.typeParams.count() > 0U64 {
-            calleeArgs = try self.inferRecordedFreeCallArgs(f: f, args: args)
+            calleeArgs = try self.inferRecordedFreeCallArgs(callee: callee, args: args)
         }
-        mut val result: U64 = self.semanticCallableReturnTerm(function: f)
-        // A source body may call `id[T](value: T) -> T` while its own T is
-        // still symbolic.  That is a complete *semantic* substitution even
-        // though it is not an emittable Mono instance yet.  Preserve the
-        // caller-owned T in the expression result; retaining the callee's
-        // ParamId would make a later body environment unable to ground it.
-        // `fnArgsAllGround` is deliberately reserved for reachability/codegen.
+        mut val result = <SelectedCallableSourceResult term=self.semanticCallableReturnTerm(function: f) />
+        // Partial inference remains a construction proposal. Once all slots
+        // are known, interpret the retained signature under that exact map.
         if f.typeParams.count() == 0U64 || self.fnArgsAllResolved(args: calleeArgs) {
-            // Substitution alone leaves a concrete receiver's associated
-            // output as a projection. Close it with the same explicit
-            // environment used by method signatures before publishing the
-            // call result to field selection and local inference.
             val environment = <InstanceEnvironment params=self.copyFuncBinds(binds: f.typeParams) args=calleeArgs />
-            result = (try self.groundTermForBody(ref: result, environment: environment, selfRef: 0U64, itemRef: 0U64))
+            result = try self.selectedCallableSourceResult(callee: callee, environment: environment)
         }
-        try self.recordSemanticExprCall(exprId: exprId, callee: callee, receiver: <CallTemplateReceiver.None />, args: args, calleeTypeArgs: calleeArgs, resultTerm: result)
+        try self.recordSemanticExprCall(exprId: exprId, callee: callee, receiver: <CallTemplateReceiver.None />, args: args, calleeTypeArgs: calleeArgs, resultTerm: result.term, resultSelector: result.selector)
         return <Result.Ok value=() />
     }
 
@@ -1826,8 +1820,11 @@ impl Comp {
         // A complete substitution may contain caller-owned symbolic
         // terms. These are valid context in a generic declaration;
         // only unresolved callee binders must stay out of the body.
-        val parameterEnvironment = try self.freeCallParameterEnvironmentWithOrigin(f: cf, args: args, inferenceOrigin: inferenceOrigin)
+        val parameterEnvironment = try self.freeCallParameterEnvironmentWithOrigin(callee: callee, args: args, inferenceOrigin: inferenceOrigin)
         val canSubstitute = cf.typeParams.count() == 0U64 || (parameterEnvironment.args.count() == cf.typeParams.count() && self.fnArgsAllResolved(args: parameterEnvironment.args))
+        val retainedParameters = if canSubstitute {
+            give try self.readRetainedCallableTypes(function: callee, environment: parameterEnvironment, read: <CallableSignatureRead.SourceParameters />)
+        } else { give <Optional.None /> }
         mut val checkedValues = 0U64
         mut val k: U64 = 0
         while k < args.len {
@@ -1835,8 +1832,8 @@ impl Comp {
             if parameterIndex < cf.params.count() {
                 val parameter = self.funcParamAt(params: cf.params, index: parameterIndex)
                 val argument = self.argAt(args: args, index: k)
-                mut val cctx: U64 = parameter.ty
-                if cctx != 0U64 && canSubstitute && cf.typeParams.count() != 0U64 {
+                mut val cctx = if retainedParameters.isSome() { give retainedParameters.unwrap().parameterTypes[parameterIndex] } else { give parameter.ty }
+                if cctx != 0U64 && canSubstitute && (cf.typeParams.count() != 0U64 || retainedParameters.isSome()) {
                     cctx = try self.groundTermForBody(ref: cctx, environment: parameterEnvironment, selfRef: 0U64, itemRef: 0U64)
                 }
                 if cctx != 0U64 && (canSubstitute || (try self.tyRefIsGround(ref: cctx))) {
@@ -1862,7 +1859,10 @@ impl Comp {
                 // Keep detailed argument errors without manufacturing a parent
                 // call descriptor or using its result type as source authority.
                 mut val typeArguments: Array[U64] = []
-                if cf.typeParams.count() != 0U64 { typeArguments = try self.inferPreparedCallTypeArguments(f: cf, args: args, selfRef: if cf.isAssoc { give cf.recvTy } else { give 0U64 }, inferenceOrigin: inferenceOrigin) }
+                if cf.typeParams.count() != 0U64 {
+                    val signatures = try self.lexicalBodyParameterTypes(function: callee, receiver: if cf.isAssoc { give cf.recvTy } else { give 0U64 })
+                    typeArguments = try self.inferPreparedCallTypeArguments(f: cf, args: args, parameterTypes: signatures, selfRef: if cf.isAssoc { give cf.recvTy } else { give 0U64 }, inferenceOrigin: inferenceOrigin)
+                }
                 if typeArguments.count() != cf.typeParams.count() || (cf.typeParams.count() != 0U64 && !self.fnArgsAllResolved(args: typeArguments)) {
                     return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "cannot infer all type arguments for this call") />
                 }
@@ -3756,7 +3756,7 @@ impl Comp {
             }
         }
         val signatureEnvironment = <InstanceEnvironment params=finalEnvironment.params args=finalEnvironment.args receiverRef=finalEnvironment.receiverRef proof=proof />
-        val result = try self.selectedMethodSourceResult(callee: callee, environment: signatureEnvironment)
+        val result = try self.selectedCallableSourceResult(callee: callee, environment: signatureEnvironment)
         try self.recordSemanticExprCall(exprId: exprId, callee: callee, receiver: finalReceiverSource, args: args, calleeTypeArgs: self.signatureTypeArguments(f: f, environment: finalEnvironment), resultTerm: result.term, proof: proof, receiverTypeTerm: receiverTerm, resultSelector: result.selector)
         return <Result.Ok value=() />
     }
@@ -4074,9 +4074,11 @@ impl Comp {
 }
 
 impl Comp {
-    inout fn freeCallParameterEnvironmentWithOrigin(f: Func, args: ArgRange, inferenceOrigin: GenericCallInferenceOrigin) -> Result[InstanceEnvironment, CompileDiagnostic] {
+    inout fn freeCallParameterEnvironmentWithOrigin(callee: U64, args: ArgRange, inferenceOrigin: GenericCallInferenceOrigin) -> Result[InstanceEnvironment, CompileDiagnostic] {
+        val f = self.arena.functionAt(index: callee)
         if f.typeParams.count() == 0U64 { return <Result.Ok value=<InstanceEnvironment /> /> }
-        val inferred = try self.inferPreparedCallTypeArguments(f: f, args: args, selfRef: if f.isAssoc { give f.recvTy } else { give 0U64 }, inferenceOrigin: inferenceOrigin)
+        val signatures = try self.lexicalBodyParameterTypes(function: callee, receiver: if f.isAssoc { give f.recvTy } else { give 0U64 })
+        val inferred = try self.inferPreparedCallTypeArguments(f: f, args: args, parameterTypes: signatures, selfRef: if f.isAssoc { give f.recvTy } else { give 0U64 }, inferenceOrigin: inferenceOrigin)
         if !self.fnArgsAllResolved(args: inferred) { return <Result.Ok value=<InstanceEnvironment /> /> }
         return <Result.Ok value=<InstanceEnvironment params=self.copyFuncBinds(binds: f.typeParams) args=inferred /> />
     }

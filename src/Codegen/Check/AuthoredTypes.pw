@@ -885,6 +885,20 @@ impl Comp {
     // Abstract and concrete bodies read the same exact admitted constructor
     // recipe. Declaration evidence may remain symbolic; concrete reads must
     // interpret its retained proofs in the explicit instance environment.
+    inout fn lexicalBodyParameterTypes(function: U64, receiver: U64) -> Result[Array[U64], CompileDiagnostic] {
+        val declaration = self.arena.functionAt(index: function)
+        mut val terms: Array[U64] = []
+        for index in 0U64..<declaration.params.count() {
+            val parameter = self.funcParamAt(params: declaration.params, index: index)
+            val term = match (try self.lexicalBodyParameterType(function: function, index: index, ref: parameter.ty, receiver: receiver)) {
+                Optional.Some(v: val retained) => retained
+                Optional.None => parameter.ty
+            }
+            terms.append(term)
+        }
+        return <Result.Ok value=terms />
+    }
+
     inout fn lexicalBodyParameterType(function: U64, index: U64, ref: U64, receiver: U64) -> Result[Optional[U64], CompileDiagnostic] {
         return self.lexicalBodySignatureType(function: function, slot: <SourceSignatureSlot.Parameter index=index />, ref: ref, receiver: receiver)
     }

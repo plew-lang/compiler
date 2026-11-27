@@ -289,6 +289,15 @@ pub impl Comp {
     }
 
     // Rank 0: no selector; 1: selector-only diagnostic fallback; 2: full match.
+    inout fn callableArgMatchRank(function: U64, args: ArgRange) -> Result[U64, CompileDiagnostic] {
+        val declaration = self.arena.functionAt(index: function)
+        if !self.paramsLabelsOk(params: declaration.params, args: args) { return <Result.Ok value=0U64 /> }
+        val signatures = try self.lexicalBodyParameterTypes(function: function, receiver: 0U64)
+        mut val values: Array[U64] = []
+        while values.count() < declaration.typeParams.count() { values.append(0U64) }
+        return self.callableParameterTypeMatchRank(function: declaration, args: args, signatures: signatures, receiver: 0U64, initialValues: values)
+    }
+
     inout fn callableArgMatchRank(f: Func, args: ArgRange) -> Result[U64, CompileDiagnostic] {
         if !self.paramsLabelsOk(params: f.params, args: args) { return <Result.Ok value=0U64 /> }
         mut val signatures: Array[U64] = []
