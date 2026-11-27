@@ -112,24 +112,42 @@ correction. Native suite-v8 passes all twelve profiles, including diamond edge
 translation and invalid-ordinal refusal; inputs unchanged. This is a structural
 prerequisite with GREEN preservation, not a new language rule or B completion.
 
+## Compact graph proof replay
+
+`replayAssociatedMemberSelection` consumes a saved Unique graph plus independently
+admitted roots. It checks original roots and corresponding normalized nodes,
+replays every incoming declaration edge using the retained SupertraitRef, and
+checks target instance/predicates with checkRetainedWitnessClause. Node joins
+use context-aware path equivalence. It does not enumerate full root-to-leaf
+paths or perform fresh name selection. Missing roots, Parent-only evidence for a
+Child root and a malformed later incoming target are covered by the native
+GraphReplay profile; direct and diamond replay succeed.
+
+The returned proof represents a path, not the union of compatible output facts.
+Receipt integration must retain the root/equation context and verify weak/strong
+output premises in both orders through the final reader; using only the returned
+path to read outputs could reintroduce order dependence. Independent source
+review found no required defect in the replay prerequisite, and called out this
+integration obligation. The existing supertrait reader now forwards the supplied
+normalizations to concrete replay; existing callers still require their own
+migration/audit. Final native suite-v10 passes all thirteen profiles with unchanged
+inputs and zero compile/runtime/link/native status. The context-forwarding delta
+also passed independent source review. Publication and the receipt are not
+complete from this helper.
+
 ## Next implementation sequence
 
-1. Preserve normalization context in conformance-path comparison:
-   queryTraitPatternProof -> collectTraitProof -> sameSourceProofPath and equation
-   agreement. Replay saved equations; propagate replay failure distinctly from
-   false/ambiguous. Preserve authored root/trait-subject branch identity even if
-   endpoints become equal. No name or conformance reselection in the comparator.
-2. Build the occurrence-owned admission receipt. Bind saved equation context to
+1. Build the occurrence-owned admission receipt. Bind saved equation context to
    actual source assumptions by exact clause IDs. Retain original root proof and
    declaring proof separately. Replay the saved compact graph per node/incoming
    edge with readSignatureSupertraitWitness/checkRetainedWitnessClause; merge
    with context-aware path equivalence, not by enumerating every full path or
    by name-candidate identity alone.
-3. Connect abstract and concrete admitted readers (AuthoredTypes, source/body
+2. Connect abstract and concrete admitted readers (AuthoredTypes, source/body
    facts, call/generic instantiation, Mono/Resolve and witness output access).
    Read saved identity/arguments/derivation under explicit environments. Concrete
    witness output access is legitimate; fresh member-name/source selection is not.
-4. Move remaining short/lexical adapters to the same query, remove replaced
+3. Move remaining short/lexical adapters to the same query, remove replaced
    paths, and close all source-to-final-consumer scenarios below. Keep original
    recipes/proofs distinct from generated Parent semantic children.
 

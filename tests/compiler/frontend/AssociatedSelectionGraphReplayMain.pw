@@ -1,0 +1,37 @@
+// Retained namespace graphs consume root evidence; they do not select it.
+fn main() {
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.File path="tests/compiler/frontend/fixtures/ProjectionMembers/GraphReplay.pw" />, sources: <SourceAccess stdRoot="std/".bytes() />).unwrap()
+    for name in ["direct", "diamond"] {
+        val index = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: name).nameId)
+        val function = compiler.arena.functionAt(index: index)
+        val parameter = compiler.funcParamAt(params: function.params, index: 0U64)
+        val selection = compiler.retainedAssociatedSelection(occurrence: parameter.authoredTypeUse, ref: parameter.ty).unwrap().unwrap()
+        val candidate = match selection.outcome { AssociatedMemberOutcome.Unique(candidate: val candidate) => candidate _ => { panic("graph replay setup is not unique") } }
+        val scope = compiler.declarationTypeScope(owner: index).unwrap()
+        val assumptions = compiler.declarationScopeAssumptions(scope: scope).unwrap()
+        val root = selection.graph.roots[0U64]
+        val proof = compiler.requireAuthoredViewProof(subject: root.subject, instance: root.constraint.key, assumptions: assumptions, offset: root.offset).unwrap()
+        val selected = compiler.replayAssociatedMemberSelection(selection: selection, roots: [proof], normalizations: [], assumptions: assumptions, offset: root.offset).unwrap()
+        compiler.checkRetainedWitnessClause(expected: <TraitBound subject=root.subject constraint=<TraitConstraint key=candidate.instance assocPredicates=[] /> offset=root.offset />, proof: selected, normalizations: [], offset: root.offset, assumptions: assumptions).unwrap()
+        // A valid first route cannot hide a malformed later incoming edge.
+        val graph = selection.graph
+        mut val edges = graph.edges
+        val last = edges.count()-1U64
+        val edge = edges[last]
+        edges[last] = <AssociatedMemberEdge source=edge.source target=graph.rootNodes[0U64].node ordinal=edge.ordinal />
+        val broken = <AssociatedMemberResult outcome=selection.outcome graph=<AssociatedMemberGraph roots=graph.roots rootNodes=graph.rootNodes nodes=graph.nodes edges=edges equationContext=graph.equationContext equationGraphs=graph.equationGraphs equations=graph.equations /> />
+        match compiler.replayAssociatedMemberSelection(selection: broken, roots: [proof], normalizations: [], assumptions: assumptions, offset: root.offset) {
+            Result.Err(error: _) => {}
+            Result.Ok(value: _) => { panic("graph replay skipped an invalid incoming target") }
+        }
+        match compiler.replayAssociatedMemberSelection(selection: selection, roots: [], normalizations: [], assumptions: assumptions, offset: root.offset) {
+            Result.Err(error: _) => {}
+            Result.Ok(value: _) => { panic("graph replay accepted absent root evidence") }
+        }
+        match compiler.replayAssociatedMemberSelection(selection: selection, roots: [selected], normalizations: [], assumptions: assumptions, offset: root.offset) {
+            Result.Err(error: _) => {}
+            Result.Ok(value: _) => { panic("Parent evidence authorized the original Child view") }
+        }
+    }
+}

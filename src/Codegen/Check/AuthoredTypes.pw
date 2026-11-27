@@ -2121,7 +2121,64 @@ impl Comp {
         }
     }
 
-    inout fn readSignatureSupertraitWitness(proof: StaticConformanceProof, steps: Array[SupertraitRef], receiver: U64, offset: U64) -> Result[Optional[StaticConformanceProof], CompileDiagnostic] {
+    // Replay a retained name-selection graph with independently admitted roots.
+    // Every incoming edge is checked, even when its target already has evidence.
+    inout fn mergeAssociatedMemberProof(node: U64, proof: StaticConformanceProof, saved: inout Dictionary[U64, U64], normalizations: Array[ProjectionNormalizationStep], offset: U64) -> Result[(), CompileDiagnostic] {
+        match saved.get(key: node) {
+            Optional.Some(v: val previous) => {
+                if !(try self.sameSourceProofPath(a: self.thawStaticConformanceProof(id: previous), b: proof, normalizations: normalizations)) {
+                    return <Result.Err error=self.diagnosticAt(offset: offset, msg: "retained associated-member derivation has ambiguous conformance paths", failureDomain: <FailureDomain.Source />) />
+                }
+            }
+            Optional.None => { saved[node] = self.freezeStaticConformanceProof(proof: proof) }
+        }
+        return <Result.Ok value=() />
+    }
+    inout fn replayAssociatedMemberSelection(selection: AssociatedMemberResult, roots: Array[StaticConformanceProof], normalizations: Array[ProjectionNormalizationStep], assumptions: Array[DeclarationBoundRef], offset: U64) -> Result[StaticConformanceProof, CompileDiagnostic] {
+        val candidate = match selection.outcome {
+            AssociatedMemberOutcome.Unique(candidate: val candidate) => candidate,
+            _ => { return <Result.Err error=self.associatedMemberInputFailure(message: "associated-member proof replay requires a unique saved selection") /> },
+        }
+        val graph = selection.graph
+        if roots.count() != graph.roots.count() || graph.rootNodes.count() != roots.count() || candidate.nodes.count() == 0U64 {
+            return <Result.Err error=self.associatedMemberInputFailure(message: "associated-member proof replay lost its roots or candidate") />
+        }
+        mut val saved: Dictionary[U64, U64] = [:]
+        for root in graph.rootNodes {
+            if root.root >= roots.count() || root.node >= graph.nodes.count() { return <Result.Err error=self.associatedMemberInputFailure(message: "associated-member proof replay has an invalid root") /> }
+            val proof = roots[root.root]
+            try self.checkRetainedWitnessClause(expected: (try self.replayBoundNormalizations(bound: graph.roots[root.root], normalizations: normalizations)), proof: proof, normalizations: normalizations, offset: offset, assumptions: assumptions)
+            try self.checkRetainedWitnessClause(expected: (try self.replayBoundNormalizations(bound: graph.nodes[root.node], normalizations: normalizations)), proof: proof, normalizations: normalizations, offset: offset, assumptions: assumptions)
+            try self.mergeAssociatedMemberProof(node: root.node, proof: proof, saved: inout saved, normalizations: normalizations, offset: offset)
+        }
+        mut val checked: Dictionary[U64, Bool] = [:]
+        while checked.count() < graph.edges.count() {
+            mut val advanced = false
+            for index in 0U64..<graph.edges.count() {
+                if checked.contains(key: index) { continue }
+                val edge = graph.edges[index]
+                val step = try self.associatedMemberSupertraitRef(nodes: graph.nodes, edge: edge)
+                val source = match saved.get(key: edge.source) { Optional.Some(v: val source) => source Optional.None => { continue } }
+                val selected = try self.readSignatureSupertraitWitness(proof: self.thawStaticConformanceProof(id: source), steps: [step], receiver: graph.nodes[edge.source].subject, offset: offset, normalizations: normalizations)
+                if selected.isNone() { return <Result.Err error=self.associatedMemberInputFailure(message: "associated-member derivation has no retained parent evidence") /> }
+                val proof = selected.unwrap()
+                try self.checkRetainedWitnessClause(expected: (try self.replayBoundNormalizations(bound: graph.nodes[edge.target], normalizations: normalizations)), proof: proof, normalizations: normalizations, offset: offset, assumptions: assumptions)
+                try self.mergeAssociatedMemberProof(node: edge.target, proof: proof, saved: inout saved, normalizations: normalizations, offset: offset)
+                checked[index] = true
+                advanced = true
+            }
+            if !advanced { return <Result.Err error=self.associatedMemberInputFailure(message: "associated-member derivation has unreachable edges") /> }
+        }
+        mut val selected: Dictionary[U64, U64] = [:]
+        for node in candidate.nodes {
+            if node >= graph.nodes.count() || !self.sameAssociatedMemberInstance(first: graph.nodes[node].constraint.key, second: candidate.instance) { return <Result.Err error=self.associatedMemberInputFailure(message: "associated-member candidate changed its declaring instance") /> }
+            val proof = match saved.get(key: node) { Optional.Some(v: val proof) => self.thawStaticConformanceProof(id: proof) Optional.None => { return <Result.Err error=self.associatedMemberInputFailure(message: "associated-member candidate has no incoming evidence") /> } }
+            try self.mergeAssociatedMemberProof(node: 0U64, proof: proof, saved: inout selected, normalizations: normalizations, offset: offset)
+        }
+        return <Result.Ok value=self.thawStaticConformanceProof(id: selected[0U64]) />
+    }
+
+    inout fn readSignatureSupertraitWitness(proof: StaticConformanceProof, steps: Array[SupertraitRef], receiver: U64, offset: U64, normalizations: Array[ProjectionNormalizationStep] = []) -> Result[Optional[StaticConformanceProof], CompileDiagnostic] {
         if self.proofIsMissing(proof: proof) {
             return <Result.Err error=self.diagnosticAt(offset: offset, msg: "signature projection lost its supertrait witness", failureDomain: <FailureDomain.Internal />) />
         }
@@ -2138,7 +2195,7 @@ impl Comp {
             _ => {}
         }
         if self.retainedConstraintPathTerminal(proof: proof).isNone() { return <Result.Ok value=<Optional.None /> /> }
-        match (try self.replaySelectedSupertraits(proof: proof, steps: steps, receiver: receiver, declaration: !self.arena.typeIsClosed(ref: receiver))) {
+        match (try self.replaySelectedSupertraits(proof: proof, steps: steps, receiver: receiver, normalizations: normalizations, declaration: !self.arena.typeIsClosed(ref: receiver))) {
             ConstraintProofReplay.Concrete(proof: val selected) | ConstraintProofReplay.Universal(proof: val selected) => { return <Result.Ok value=<Optional.Some v=selected /> /> }
             ConstraintProofReplay.Deferred => { return <Result.Ok value=<Optional.None /> /> }
             ConstraintProofReplay.Missing => { return <Result.Err error=self.diagnosticAt(offset: offset, msg: "signature projection lost its supertrait witness", failureDomain: <FailureDomain.Internal />) /> }

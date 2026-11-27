@@ -1,0 +1,8 @@
+trait Parent { type Output }
+trait Child: Parent {}
+trait Left: Parent {}
+trait Right: Parent {}
+trait Diamond: Left + Right {}
+fn direct[T](value: T#Child.Output) where T: Child {}
+fn diamond[T](value: T#Diamond.Output) where T: Diamond {}
+fn main() {}
