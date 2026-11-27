@@ -2,7 +2,7 @@
 id: com-9sa5
 status: open
 deps: []
-links: [com-mmk9, met-gjxo]
+links: [com-mmk9, met-gjxo, met-auj6]
 created: 2026-10-29T18:38:27Z
 type: task
 priority: 2
