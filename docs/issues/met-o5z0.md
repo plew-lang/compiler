@@ -1,7 +1,7 @@
 ---
 id: met-o5z0
 status: in_progress
-deps: [met-ldvd, met-oxch]
+deps: [met-ldvd, met-oxch, met-4dxy, met-wxn1, met-2yhf]
 links: []
 created: 2026-11-27T13:29:11Z
 type: bug
@@ -71,3 +71,62 @@ The Child spelling in Inherited.pw is now a required legal control, not a correc
 rejection oracle. InheritedParent.pw is its already-working declaring-parent
 counterpart. The saved149aac carrier and248fail whole baseline remain adopted.
 No completion or WIP carrier promotion is claimed.
+
+## Bounded implementation units
+
+A. Common associated-member query. Introduce one missing/unique/ambiguous semantic
+result over explicit receiver/member/complete-root instances and the admitted
+equality context. Follow declaration/header supertrait edges with simultaneous
+substitution, retain actual declaring instance and derivation, deduplicate exact
+member/instance candidates, and keep bounded-analysis/malformed/unready answers
+separate from Missing. Use existing Raw admission/native cases for meaningful
+RED and test new result fields as the service is introduced. This unit certifies
+the service, not source publication or product completion.
+
+B. Source publication through final consumption. Connect legacy TypeAst and
+SyntaxType short/explicit adapters and lexical inherited names to A. Remove
+traitOwnerHasAssocId prefilters that discard a Child root before traversal and
+competing chooseShortProjectionSource/lowerLexicalAssociatedType selection.
+Use declaration/lexical headers without interpreting unfinished graph data as
+absence; preserve ProjectionBoundState readiness and original scope. Publish the
+actual declaring instance, root selector, edge derivation and recipe provenance;
+handle changed parent arity and derived argument recipes. Require the authored
+Child view's proof independently: normalization to Parent must not accept a call
+with only T:Parent. AuthoredTypes admission and Mono Resolve consume the retained
+selection; assocBindingFor/associatedOutputTermInProof may read the selected
+witness output, but must not become fresh member-name/source resolution.
+Guarantees include actual generic instantiation and final AOT/ORC behavior, not
+just a saved field or invariant checker.
+
+C. Owned refusal/result lifetime and final finite certification. Consume A/B's
+same Missing/Ambiguous outcome in SourceTypeUseAdmission/ProjectionMembers rather
+than the old declaration-local Boolean. Retain occurrence/root/frontier/query
+identity once, preserve the real authored location and Raw compatibility type:/
+ref: views, and carry failure through SourceFacts, owned/eager/session/cache/
+drain/terminal consumers. Preserve downstream missing-conformance/binding
+producers separately. Verify foreign/forged/moved/failed-builder/malformed/limit
+boundaries, lazy body timing, successful controls and no failed success cache.
+Parent met-o5z0 then reconciles all guarantees, normal regressions, gen, current
+performance and independent review without claiming com-yeua/stage3/main green.
+
+A precedes B; B precedes C. All three block this parent. Initial implementation
+map: Lower/Decl chooseShortProjectionSource and unique*Source; Lower/
+ProjectionBounds cachedValue/cachedSyntaxProjectionSource early membership
+filters; Lower/Types lowerLexicalAssociatedType plus both lowering adapters;
+Lower/TypeRecipes inherited/view argument recipes; Check/AuthoredTypes saved
+view/projection evidence; Mono/Resolve exact selected associated output; and
+ProjectionMembers/SourceTypeUseAdmission/SourceFacts failure consumers. The
+query's returned actual owner must not erase the authored Child's view obligation.
+
+## Adopted units and review
+
+- query: [met-4dxy](met-4dxy.md)
+- publication: [met-wxn1](met-wxn1.md)
+- failure: [met-2yhf](met-2yhf.md)
+
+Neutral split review found no mandatory correction: A->B->C covers the adopted
+contract without narrowing it. B is the largest unit but intentionally closes
+producer through final consumption; a further split must preserve that owner
+guarantee. The query input explicitly includes admitted source scope and selected
+view/equality context. Existing assocBindingFor is a current proof reacquisition
+site to audit, not a completion exception.
