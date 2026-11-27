@@ -1,0 +1,13 @@
+use @Std/Io only { print }
+trait Parent { type Output }
+trait Child: Parent {}
+struct Leaf {}
+impl Leaf as Parent { type Output = I64 }
+impl Leaf as Child {}
+fn create[T](owner: T, value: T#Child.Output) -> fn() -> T#Child.Output where T: Child {
+    return fn() { return value }
+}
+fn main() {
+    val next = create(owner: <Leaf />, value: 7I64)
+    print(next())
+}

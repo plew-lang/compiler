@@ -1,0 +1,21 @@
+// Appended to the frozen DeclarationProgram root, exercising the actual check bridge.
+use ./Frontend only { analyzeFrontendForRequests, FrontendInput }
+use ./SourceAccess only { SourceAccess }
+
+fn main() {
+    for path in ["tests/compiler/frontend/fixtures/ProjectionMembers/ExecutableParent.pw", "tests/compiler/frontend/fixtures/ProjectionMembers/ExecutableChild.pw", "tests/compiler/frontend/fixtures/ProjectionMembers/ExecutableShort.pw"] {
+        mut val compiler = <Comp />
+        match analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.File path=path />, sources: <SourceAccess stdRoot="std/".bytes() />) {
+            Result.Ok(value: _) => {}
+            Result.Err(error: val diagnostic) => { panic(path+": frontend rejected: "+diagnostic.message()) }
+        }
+        mut val templates = <MidFunctionTemplates />
+        match prepareDeclarationProgram(c: inout compiler, templates: inout templates) {
+            Result.Ok(value: _) => {}
+            Result.Err(error: val failure) => {
+                val diagnostic = declarationProgramDiagnostic(c: inout compiler, error: failure)
+                panic(path+": declaration Mid rejected: "+diagnostic.message())
+            }
+        }
+    }
+}

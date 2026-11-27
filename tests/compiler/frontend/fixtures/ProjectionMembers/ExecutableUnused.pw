@@ -1,0 +1,11 @@
+use @Std/Io only { print }
+trait Parent { type Output }
+trait Child: Parent {}
+struct Leaf {}
+impl Leaf as Parent { type Output = I64 }
+impl Leaf as Child {}
+fn ignore[T](owner: T, unused: T#Child.Output) where T: Child {}
+fn main() {
+    ignore(owner: <Leaf />, unused: 7I64)
+    print(7I64)
+}

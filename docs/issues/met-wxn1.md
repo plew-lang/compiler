@@ -303,6 +303,32 @@ required correction. The old e001910a fresh candidate (free-call slice only)
 still passed12/39; latest all-mode results and performance remain outstanding.
 Raw helper/early-admission auditing is not complete.
 
+## Checked body-slot publication checkpoint
+
+The real CheckedProgram.check→prepareCheckedProgram bridge exposed Parent's Mid
+MissingTypeResolution: publication only rebased provided/dependent receiver
+parameter slots, not every checked body's semantic slots or logical result.
+scanFinalBodyInstance now publishes the selected signature for every ordinary
+body (excluding bodyless declarations and explicit ABI adapters), against the
+prepared source receiver/parameters/result. Owner and slot-count checks remain;
+Mid still only substitutes and consumes published facts, never chooses evidence.
+The common contract is explicit in frontend-handoffs section9.
+
+Meta body-slot-publication-checkpoint.json retains target RED, three-case full
+preparation GREEN and the collected16-case gate. All11 positive whole-check and
+executable preparations pass, including changed arity/arguments, closure,
+provided method and unused parameter. Three negative controls reject correctly;
+AmbiguousChild and EqualOutputs still fail the required diagnostic assertion
+(Missing instead of Ambiguous), assigned to planned met-2yhf. No assertion was
+weakened. The component20 profiles also pass, input-invariant. Independent finite
+review found no required correction in body-slot publication.
+
+The CLI matrix now adds closure/provided/unused and a separate empty-main tool
+control. --native-backend links/runs accepted AOT outputs rather than counting IR
+emission as execution. The old aefa2b90 control executes its empty AOT/ORC program;
+projection programs remain RED until a fresh mapping candidate is built. Full
+AOT/ORC, remaining reader audit and cost gates remain open.
+
 ## Next implementation sequence
 
 1. Audit remaining producer/receiver environments against the receipt checkpoint;

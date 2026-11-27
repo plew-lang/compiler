@@ -1,0 +1,59 @@
+// Appended to the frozen CheckedProgram root: real whole-check and executable preparation.
+fn hasDiagnosticText(text: String, required: String) -> Bool {
+    val bytes = text.bytes()
+    val needle = required.bytes()
+    if needle.count() > bytes.count() { return false }
+    for start in 0U64..<(bytes.count() - needle.count() + 1U64) {
+        mut val matches = true
+        for index in 0U64..<needle.count() { if bytes[start + index] != needle[index] { matches = false } }
+        if matches { return true }
+    }
+    return false
+}
+
+fn checkProjectionProgram(path: String, accepted: Bool, expectedDiagnostic: String) -> String {
+    match CheckedProgram.check(input: <FrontendInput.File path=path />, sources: <SourceAccess stdRoot="std/".bytes() />) {
+        ProgramCheckResult.Failure(diagnostic: val diagnostic) => {
+            if accepted { return path+": whole check rejected: "+diagnostic.message() }
+            match diagnostic.failureDomain() {
+                FailureDomain.Source => {}
+                _ => { return path+": rejection was not a Source diagnostic: "+diagnostic.message() }
+            }
+            if !hasDiagnosticText(text: diagnostic.message(), required: expectedDiagnostic) { return path+": wrong refusal: "+diagnostic.message() }
+        }
+        ProgramCheckResult.Success(program: val program) => {
+            if !accepted { return path+": ambiguous or unjustified projection was accepted" }
+            match prepareCheckedProgram(checked: move program) {
+                ExecutableCompilationResult.Success(compilation: _) => {}
+                ExecutableCompilationResult.Failure(diagnostic: val diagnostic) => { return path+": executable preparation rejected: "+diagnostic.message() }
+            }
+        }
+    }
+    return ""
+}
+
+fn main() {
+    mut val failures = ""
+    for sample in [
+        (path: "tests/compiler/frontend/fixtures/ProjectionMembers/ExecutableUnused.pw", accepted: true, diagnostic: ""),
+        (path: "tests/compiler/frontend/fixtures/ProjectionMembers/ExecutableClosure.pw", accepted: true, diagnostic: ""),
+        (path: "tests/compiler/frontend/fixtures/ProjectionMembers/ExecutableProvided.pw", accepted: true, diagnostic: ""),
+        (path: "tests/compiler/frontend/fixtures/ProjectionMembers/ExecutableParent.pw", accepted: true, diagnostic: ""),
+        (path: "tests/compiler/frontend/fixtures/ProjectionMembers/ExecutableChild.pw", accepted: true, diagnostic: ""),
+        (path: "tests/compiler/frontend/fixtures/ProjectionMembers/ExecutableShort.pw", accepted: true, diagnostic: ""),
+        (path: "tests/compiler/frontend/fixtures/ProjectionMembers/ExecutableParentArguments.pw", accepted: true, diagnostic: ""),
+        (path: "tests/compiler/frontend/fixtures/ProjectionMembers/ExecutableChildArguments.pw", accepted: true, diagnostic: ""),
+        (path: "tests/compiler/frontend/fixtures/ProjectionMembers/ExecutableShortArguments.pw", accepted: true, diagnostic: ""),
+        (path: "tests/compiler/frontend/fixtures/ProjectionMembers/ExecutableAmbiguousChild.pw", accepted: false, diagnostic: "ambiguous"),
+        (path: "tests/compiler/frontend/fixtures/ProjectionMembers/ExecutableAmbiguousShort.pw", accepted: false, diagnostic: "ambiguous"),
+        (path: "tests/compiler/frontend/fixtures/ProjectionMembers/ExecutableEqualOutputs.pw", accepted: false, diagnostic: "ambiguous"),
+        (path: "tests/compiler/frontend/fixtures/ProjectionMembers/ExecutableAmbiguousDirectRoots.pw", accepted: false, diagnostic: "ambiguous"),
+        (path: "tests/compiler/frontend/fixtures/ProjectionMembers/ExecutableNoChildProof.pw", accepted: false, diagnostic: "requires a conformance"),
+        (path: "tests/compiler/frontend/fixtures/ProjectionMembers/ExecutableParentArity.pw", accepted: true, diagnostic: ""),
+        (path: "tests/compiler/frontend/fixtures/ProjectionMembers/ExecutableChildArity.pw", accepted: true, diagnostic: "")
+    ] {
+        val failure = checkProjectionProgram(path: sample.path, accepted: sample.accepted, expectedDiagnostic: sample.diagnostic)
+        if failure != "" { failures += failure+"\n" }
+    }
+    if failures != "" { panic(failures) }
+}

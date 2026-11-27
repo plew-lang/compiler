@@ -1,0 +1,8 @@
+use @Std/Io only { print }
+trait Parent[A, B] { type Output }
+trait Child[C]: Parent[C, Array[C]] {}
+struct P {}
+impl P as Parent[I64, Array[I64]] { type Output = I64 }
+impl P as Child[I64] {}
+fn project[T](value: T, item: T#Child[I64].Output) -> T#Child[I64].Output where T: Child[I64] { return item }
+fn main() { print(project(value: <P />, item: 7I64)) }

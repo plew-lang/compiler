@@ -1,0 +1,13 @@
+use @Std/Io only { print }
+trait Parent { type Output }
+trait Child: Parent {}
+impl Child {
+    fn echo(value: Output) -> Output { return value }
+}
+struct Leaf {}
+impl Leaf as Parent { type Output = I64 }
+impl Leaf as Child {}
+fn main() {
+    val leaf = <Leaf />
+    print(leaf.echo(value: 7I64))
+}

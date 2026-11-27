@@ -1,0 +1,10 @@
+use @Std/Io only { print }
+trait First { type Output }
+trait Second { type Output }
+trait Both: First + Second {}
+struct P {}
+impl P as First { type Output = I64 }
+impl P as Second { type Output = I64 }
+impl P as Both {}
+fn project(item: P#Both.Output) {}
+fn main() {}

@@ -448,6 +448,14 @@ result from physical entry result. Signature preparation restores scratch/cursor
 state and does not imply body success. The ABI chapter's common C classifier,
 including supported narrow/F32 handling, supersedes older unsupported-width notes.
 
+Finalization publishes the selected instance types against the exact checked body
+receiver, parameter and logical-result slots for every ordinary callable body.
+Authored annotation IDs and checked semantic slot IDs need not be equal; retaining
+only the former does not publish the latter. Slot arity, position and source owner
+must agree with the selected signature. Mid reads these body-specific results
+without selecting evidence again. Bodyless extern declarations and explicitly
+registered ABI adapters use their own declared slot protocols.
+
 Physical storage strips only a permitted outer view; nested view meaning survives.
 Newtype adapters are reachable on demand through calls and witnesses, keyed by
 newtype, original function, complete arguments, and evidence. The original body

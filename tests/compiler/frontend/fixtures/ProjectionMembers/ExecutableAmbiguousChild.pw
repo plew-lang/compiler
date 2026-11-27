@@ -1,0 +1,6 @@
+use @Std/Io only { print }
+trait First { type Output }
+trait Second { type Output }
+trait Both: First + Second {}
+fn project[T](value: T, item: T#Both.Output) where T: Both {}
+fn main() {}

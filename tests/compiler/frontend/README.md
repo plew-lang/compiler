@@ -1,9 +1,10 @@
 # Frontend implementation regressions
 
-These are internal tests, separate from the language fixture suite. Each entry
-imports the real `src/Frontend` module, including its parts. Never compile an
-individual `src/Codegen/...` part as a substitute: it lacks the owning `Comp`
-definition and does not test the implementation in context.
+These are internal tests, separate from the language fixture suite. Use the real
+owning module and its imports: usually `src/Frontend`, with declaration/session
+bridge probes rooted in their owning modules. Never compile an individual
+`src/Codegen/...` part as a substitute: it lacks the owning `Comp` definition and
+does not test the implementation in context.
 
 `TypeTermPublication.pw` checks projection publication outside Lower, receiver
 argument substitution, structural inequality, and allocation-free equality.
@@ -41,6 +42,15 @@ procedure. This is a manual implementation test outside the normal fixture suite
 foreign-session/unknown-owner/out-of-range provenance, owned lazy repeated
 requests and whole/eager checks. Require its exact `.out`, exit0 and empty
 runtime stderr. It does not authorize raw mutable verifier state as source.
+
+`InheritedDeclarationProgramMain.pw` is appended to a frozen DeclarationProgram
+root and checks actual declaration Mid preparation. `InheritedCheckedProgramMain.pw`
+is appended to CheckedProgram and collects whole-check/executable-preparation
+outcomes, including inherited arguments, closures, provided methods and unused
+parameters. These stages do not execute emitted code. The separate
+`test-inherited-projection-admission.py` checks CLI/JIT; pass `--native-backend`
+with a fixed archive to also link and execute AOT, checking actual stdout.
+Fixtures and expected refusals remain strict even while a task is open.
 
 ## Manual execution procedure
 
