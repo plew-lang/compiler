@@ -803,8 +803,8 @@ pub impl Comp {
             give self.pushType(t: <TypeRef nameStart=nm.nameStart nameLen=nm.nameLen paramId=paramId args=args isRecord=false recordFieldLabels=[] recordFieldTerms=[] viewExtId=viewExtId viewIds=viewIds viewSources=viewSources isAny=t.isAny argLabels=argLabels isSendable=t.isSendable isDiverging=t.isDiverging siteOffset=site />)
         } else { give 0U64 }
         if shortProjection {
-            val source = try self.uniqueProjectionSource(t: t, receiver: projectionReceiver)
-            projection = <Optional.Some v=<LoweredTypeProjection source=source.source member=self.lowerTypeName(name: t.projectionAssoc, span: t.projectionAssocSpan) arguments=source.arguments /> />
+            val source = try self.lowerShortProjectionSelection(receiver: projectionReceiver, member: self.internBytes(s: t.projectionAssoc).nameId, site: t.span.start)
+            projection = <Optional.Some v=<LoweredTypeProjection source=source.source member=self.lowerTypeName(name: t.projectionAssoc, span: t.projectionAssocSpan) arguments=source.arguments selection=<Optional.Some v=source.selection /> /> />
         }
         mut val assocTraitStart: U64 = 0U64
         mut val assocTraitLen: U64 = 0U64
@@ -859,7 +859,7 @@ pub impl Comp {
             if selected.arguments.count() != assocTraitArgs.count() { return <Result.Err error=self.diagnosticAt(offset: site, msg: "projection argument recipe count mismatch", failureDomain: <FailureDomain.Internal />) /> }
             for recipe in selected.arguments { children.append(recipe) }
         } else { try self.appendViewArgumentRecipes(ref: ref, sources: viewRecipes, children: inout children) }
-        return <Result.Ok value=<PType start=result.start len=result.len isArray=result.isArray ref=result.ref authoredChildren=children associatedSelection=(try self.captureLoweredAssociatedSelection(ref: result.ref, site: t.span.start, children: children, authoredSource: (if projection.isSome() && !shortProjection { give <Optional.Some v=projection.unwrap().source /> } else { give <Optional.None /> }))) /> />
+        return <Result.Ok value=<PType start=result.start len=result.len isArray=result.isArray ref=result.ref authoredChildren=children associatedSelection=(try self.captureLoweredAssociatedSelection(ref: result.ref, site: t.span.start, children: children, authoredSource: (if projection.isSome() && !shortProjection { give <Optional.Some v=projection.unwrap().source /> } else { give <Optional.None /> }), prepared: (if projection.isSome() { give projection.unwrap().selection } else { give <Optional.None /> }))) /> />
     }
 
     // SyntaxFile path for type lowering. It has the same semantic output as
@@ -1050,8 +1050,8 @@ pub impl Comp {
             give self.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen paramId=paramId args=args isRecord=false recordFieldLabels=[] recordFieldTerms=[] viewExtId=viewExtId viewIds=viewIds viewSources=viewSources isAny=t.isAny argLabels=argLabels isSendable=t.isSendable isDiverging=t.isDiverging siteOffset=site />)
         } else { give 0U64 }
         if shortProjection {
-            val source = try self.uniqueSyntaxProjectionSource(t: t, receiver: projectionReceiver)
-            projection = <Optional.Some v=<LoweredTypeProjection source=source.source member=<Bind nameStart=t.projectionAssoc.start nameLen=t.projectionAssoc.end - t.projectionAssoc.start fieldStart=0U64 fieldLen=0U64 /> arguments=source.arguments /> />
+            val source = try self.lowerShortProjectionSelection(receiver: projectionReceiver, member: intern(c: inout self, start: t.projectionAssoc.start, len: t.projectionAssoc.end-t.projectionAssoc.start), site: t.span.start)
+            projection = <Optional.Some v=<LoweredTypeProjection source=source.source member=<Bind nameStart=t.projectionAssoc.start nameLen=t.projectionAssoc.end - t.projectionAssoc.start fieldStart=0U64 fieldLen=0U64 /> arguments=source.arguments selection=<Optional.Some v=source.selection /> /> />
         }
         mut val assocTraitStart = 0U64
         mut val assocTraitLen = 0U64
@@ -1104,7 +1104,7 @@ pub impl Comp {
             if selected.arguments.count() != assocTraitArgs.count() { return <Result.Err error=self.diagnosticAt(offset: site, msg: "projection argument recipe count mismatch", failureDomain: <FailureDomain.Internal />) /> }
             for recipe in selected.arguments { children.append(recipe) }
         } else { try self.appendViewArgumentRecipes(ref: ref, sources: viewRecipes, children: inout children) }
-        return <Result.Ok value=<PType start=result.start len=result.len isArray=result.isArray ref=result.ref authoredChildren=children associatedSelection=(try self.captureLoweredAssociatedSelection(ref: result.ref, site: t.span.start, children: children, authoredSource: (if projection.isSome() && !shortProjection { give <Optional.Some v=projection.unwrap().source /> } else { give <Optional.None /> }))) /> />
+        return <Result.Ok value=<PType start=result.start len=result.len isArray=result.isArray ref=result.ref authoredChildren=children associatedSelection=(try self.captureLoweredAssociatedSelection(ref: result.ref, site: t.span.start, children: children, authoredSource: (if projection.isSome() && !shortProjection { give <Optional.Some v=projection.unwrap().source /> } else { give <Optional.None /> }), prepared: (if projection.isSome() { give projection.unwrap().selection } else { give <Optional.None /> }))) /> />
     }
 
     // Reserve the final contiguous argument range before recursive lowering.

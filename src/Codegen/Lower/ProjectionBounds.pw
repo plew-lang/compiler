@@ -184,24 +184,13 @@ impl Comp {
         return <Result.Ok value=() />
     }
 
-    // Head binding is only a prefilter for not-yet-lowered candidates. Once
-    // Ready, the exact canonical source is part of the saved bound result.
-    inout fn projectionBoundCandidateSource(id: U64) -> Result[ResolvedViewSource, CompileDiagnostic] {
-        val clause = self.projectionBoundClauses[id - 1U64]
-        match clause.state {
-            ProjectionBoundState.Ready(bound: val bound) => { return <Result.Ok value=bound.source /> }
-            ProjectionBoundState.Failed(diagnostic: val diagnostic) => { return <Result.Err error=diagnostic /> }
-            _ => {}
-        }
-        return self.projectionBoundDeclaredHead(id: id)
-    }
-
     // Namespace identity is independent of preparation success. This reader
     // lets dependency filtering precede consumption of a clause's state.
     inout fn projectionBoundDeclaredHead(id: U64) -> Result[ResolvedViewSource, CompileDiagnostic] {
         if id == 0U64 || id > self.projectionBoundClauses.count() { return <Result.Err error=self.associatedMemberInputFailure(message: "source bound has an invalid declared head") /> }
         val clause = self.projectionBoundClauses[id - 1U64]
         match clause.head { Optional.Some(v: val head) => { return <Result.Ok value=head /> } Optional.None => {} }
+        match clause.state { ProjectionBoundState.Ready(bound: val bound) => { return <Result.Ok value=bound.source /> } _ => {} }
         val source = match clause.syntax {
             ProjectionBoundSyntax.Value(subject: _, traitType: val traitType, parameter: _) => {
                 val type = try self.normalizeProjectionType(t: traitType)
@@ -216,130 +205,58 @@ impl Comp {
         return <Result.Ok value=source />
     }
 
-    // Pending rows use a prefilter to avoid evaluating a recursive RHS for an
-    // unrelated subject. Only the prepared semantic term can grant evidence.
-    inout fn pendingProjectionHeadMatches(name: Bind, site: U64, term: TypeTerm) -> Bool {
-        val binder = self.sourceTypeParameter(name: name)
-        if binder != term.paramId { return false }
-        if binder != 0U64 { return true }
-        val nameId = intern(c: inout self, start: name.nameStart, len: name.nameLen)
-        val left = self.sourceNominalOwner(nameStart: name.nameStart, nameLen: name.nameLen, nameId: nameId, site: site)
-        val right = self.sourceNominalOwner(nameStart: term.nameStart, nameLen: term.nameLen, nameId: term.nameId, site: term.siteOffset)
-        if left.isSome() || right.isSome() { return left.isSome() && right.isSome() && left.unwrap() == right.unwrap() }
-        return nameId == term.nameId
+    inout fn appendAssociatedSelectionContext(context: PreparedAssociatedSelectionContext, bounds: inout Array[TraitBound], clauses: inout Array[U64]) -> Result[(), CompileDiagnostic] {
+        if context.bounds.count() != context.clauses.count() { return <Result.Err error=self.associatedMemberInputFailure(message: "associated context lost its source identities") /> }
+        for index in 0U64..<context.clauses.count() {
+            mut val present = false
+            for previous in 0U64..<clauses.count() {
+                if clauses[previous] == context.clauses[index] {
+                    if !self.sameAssociatedMemberBound(first: bounds[previous], second: context.bounds[index]) { return <Result.Err error=self.associatedMemberInputFailure(message: "associated context changed its source clause") /> }
+                    present = true
+                    break
+                }
+            }
+            if !present { bounds.append(context.bounds[index]) clauses.append(context.clauses[index]) }
+        }
+        return <Result.Ok value=() />
     }
-
-    inout fn pendingValueProjectionSubjectMatches(subject: TypeAst, receiver: U64) -> Bool {
-        val term = self.arena.typeTermAt(index: receiver)
-        if subject.projectionAssoc.bytes().count() > 0U64 || subject.extView.bytes().count() > 0U64 || subject.args.count() != term.args.len {
-            return false
-        }
-        val name = self.lowerTypeName(name: subject.name, span: subject.nameSpan)
-        if !self.pendingProjectionHeadMatches(name: name, site: subject.span.start, term: term) { return false }
-        mut val index = 0U64
-        while index < term.args.len {
-            if !self.pendingValueProjectionSubjectMatches(subject: subject.args[index], receiver: self.typeTermArgAt(ref: receiver, index: index)) { return false }
-            index += 1U64
-        }
-        return true
-    }
-
-    inout fn pendingSyntaxProjectionSubjectMatches(raw: TypeId, receiver: U64) -> Result[Bool, CompileDiagnostic] {
-        val subject = try self.resolveSyntaxTypePath(t: syntaxType(file: self.syntax, id: raw))
-        val term = self.arena.typeTermAt(index: receiver)
-        if subject.projectionAssoc.end > subject.projectionAssoc.start || subject.extView.end > subject.extView.start || syntaxTypeArgCount(file: self.syntax, ty: subject) != term.args.len {
-            return <Result.Ok value=false />
-        }
-        val name = <Bind nameStart=subject.name.start nameLen=subject.name.end - subject.name.start fieldStart=0U64 fieldLen=0U64 />
-        if !self.pendingProjectionHeadMatches(name: name, site: subject.span.start, term: term) { return <Result.Ok value=false /> }
-        mut val index = 0U64
-        while index < term.args.len {
-            val child = syntaxTypeArg(file: self.syntax, ty: subject, index: index)
-            if !(try self.pendingSyntaxProjectionSubjectMatches(raw: child, receiver: self.typeTermArgAt(ref: receiver, index: index))) { return <Result.Ok value=false /> }
-            index += 1U64
-        }
-        return <Result.Ok value=true />
-    }
-
-    inout fn cachedValueProjectionSource(type: TypeAst, receiver: U64) -> Result[LoweredTypeViewRecipe, CompileDiagnostic] {
-        val member = self.internBytes(s: type.projectionAssoc).nameId
+    inout fn prepareShortProjectionSelection(receiver: U64, member: U64, site: U64) -> Result[LoweredShortProjection, CompileDiagnostic] {
+        mut val roots: Array[TraitBound] = []
         mut val sources: Array[LoweredTypeViewRecipe] = []
-        val context = self.activeProjectionBounds.unwrap()
-        mut val index = 0U64
-        while index < context.count() {
-            val id = context.clause(index: index)
-            index += 1U64
-            if id == 0U64 || id > self.projectionBoundClauses.count() {
-                return <Result.Err error=self.diagnosticAt(offset: type.span.start, msg: "invalid source bound clause", failureDomain: <FailureDomain.Internal />) />
-            }
-            val clause = self.projectionBoundClauses[id - 1U64]
-            match clause.state {
-                ProjectionBoundState.Ready(bound: val bound) => {
-                    if self.typeRefEq(a: bound.subject, b: receiver, sourceTerms: true) && self.traitOwnerHasAssocId(owner: bound.source.traitInstance.owner, assocId: member) {
-                        try self.preparedProjectionBound(id: id)
-                        sources.append(<LoweredTypeViewRecipe source=bound.source arguments=bound.arguments />)
-                    }
-                    continue
-                }
-                _ => {}
-            }
-            match clause.syntax {
-                ProjectionBoundSyntax.Value(subject: val subject, traitType: _, parameter: _) => {
-                    if self.pendingValueProjectionSubjectMatches(subject: (try self.normalizeProjectionType(t: subject)), receiver: receiver) {
-                        val source = try self.projectionBoundCandidateSource(id: id)
-                        if self.traitOwnerHasAssocId(owner: source.traitInstance.owner, assocId: member) {
-                            val bound = try self.preparedProjectionBound(id: id, requestSite: <Optional.Some v=type.span.start />)
-                            if self.typeRefEq(a: bound.subject, b: receiver, sourceTerms: true) {
-                                sources.append(<LoweredTypeViewRecipe source=bound.source arguments=bound.arguments />)
-                            }
-                        }
-                    }
-                }
-                _ => {}
+        mut val equations: Array[TraitBound] = []
+        mut val clauses: Array[U64] = []
+        if self.activeProjectionBounds.isSome() {
+            val context = self.activeProjectionBounds.unwrap()
+            for index in 0U64..<context.count() {
+                val id = context.clause(index: index)
+                val head = try self.projectionBoundDeclaredHead(id: id)
+                if !(try self.associatedMemberNamespaceContains(owner: head.traitInstance.owner, member: member, site: site)) { continue }
+                val subject = try self.preparedProjectionSubject(id: id)
+                val receiverContext = try self.prepareAssociatedSelectionTermEquations(terms: [subject.term, receiver], site: site)
+                try self.appendAssociatedSelectionContext(context: receiverContext, bounds: inout equations, clauses: inout clauses)
+                mut val normalization = <AssociatedMemberQueryWork context=equations />
+                if !(try self.associatedSelectionReceiversEqual(subject: subject.term, receiver: receiver, site: site, work: inout normalization)) { continue }
+                val bound = try self.preparedProjectionBound(id: id, requestSite: <Optional.Some v=site />)
+                roots.append(<TraitBound subject=bound.subject constraint=bound.constraint offset=site />)
+                sources.append(<LoweredTypeViewRecipe source=bound.source arguments=bound.arguments />)
             }
         }
-        return self.chooseShortProjectionSource(sources: sources, member: member, site: type.span.start)
+        for root in roots {
+            try self.appendAssociatedSelectionContext(context: (try self.prepareAssociatedSelectionEquations(root: root, site: site)), bounds: inout equations, clauses: inout clauses)
+        }
+        val result = try self.queryAssociatedMember(subject: receiver, roots: roots, equationContext: equations, member: member, site: site)
+        match result.outcome {
+            AssociatedMemberOutcome.Unique(candidate: _) => {
+                val root = try result.representationRoot()
+                if root >= sources.count() { return <Result.Err error=self.associatedMemberInputFailure(message: "short projection lost its representation recipes") /> }
+                val source = sources[root]
+                return <Result.Ok value=<LoweredShortProjection source=source.source arguments=source.arguments selection=<PreparedAssociatedMemberSelection site=site receiver=receiver member=member session=self.sourceFactSession() scope=self.sourceTypeUses.currentScope() representationRoot=root equationClauses=clauses result=result /> /> />
+            }
+            AssociatedMemberOutcome.Missing => { return <Result.Err error=self.diagnosticAt(offset: site, msg: "associated-type short projection has no unique trait source — write `T#Trait.Item` or add an appropriate `where T: Trait` bound (spec/08)", failureDomain: <FailureDomain.Source />) /> }
+            AssociatedMemberOutcome.Ambiguous(candidates: _) => { return <Result.Err error=self.diagnosticAt(offset: site, msg: "associated-type short projection is ambiguous — write the canonical `T#Trait.Item` form (spec/08)", failureDomain: <FailureDomain.Source />) /> }
+        }
     }
 
-    inout fn cachedSyntaxProjectionSource(type: SyntaxType, receiver: U64) -> Result[LoweredTypeViewRecipe, CompileDiagnostic] {
-        val member = intern(c: inout self, start: type.projectionAssoc.start, len: type.projectionAssoc.end - type.projectionAssoc.start)
-        mut val sources: Array[LoweredTypeViewRecipe] = []
-        val context = self.activeProjectionBounds.unwrap()
-        mut val index = 0U64
-        while index < context.count() {
-            val id = context.clause(index: index)
-            index += 1U64
-            if id == 0U64 || id > self.projectionBoundClauses.count() {
-                return <Result.Err error=self.diagnosticAt(offset: type.span.start, msg: "invalid source bound clause", failureDomain: <FailureDomain.Internal />) />
-            }
-            val clause = self.projectionBoundClauses[id - 1U64]
-            match clause.state {
-                ProjectionBoundState.Ready(bound: val bound) => {
-                    if self.typeRefEq(a: bound.subject, b: receiver, sourceTerms: true) && self.traitOwnerHasAssocId(owner: bound.source.traitInstance.owner, assocId: member) {
-                        try self.preparedProjectionBound(id: id)
-                        sources.append(<LoweredTypeViewRecipe source=bound.source arguments=bound.arguments />)
-                    }
-                    continue
-                }
-                _ => {}
-            }
-            match clause.syntax {
-                ProjectionBoundSyntax.Syntax(subject: val subject, traitType: _, parameter: _) => {
-                    if try self.pendingSyntaxProjectionSubjectMatches(raw: subject, receiver: receiver) {
-                        val source = try self.projectionBoundCandidateSource(id: id)
-                        if self.traitOwnerHasAssocId(owner: source.traitInstance.owner, assocId: member) {
-                            val bound = try self.preparedProjectionBound(id: id, requestSite: <Optional.Some v=type.span.start />)
-                            if self.typeRefEq(a: bound.subject, b: receiver, sourceTerms: true) {
-                                sources.append(<LoweredTypeViewRecipe source=bound.source arguments=bound.arguments />)
-                            }
-                        }
-                    }
-                }
-                _ => {}
-            }
-        }
-        return self.chooseShortProjectionSource(sources: sources, member: member, site: type.span.start)
-    }
 }
 
 
@@ -389,16 +306,25 @@ impl Comp {
         return <Result.Ok value=self.typeRefEq(a: normalizedSubject, b: normalizedReceiver, sourceTerms: true) />
     }
     inout fn prepareAssociatedSelectionEquations(root: TraitBound, site: U64) -> Result[PreparedAssociatedSelectionContext, CompileDiagnostic] {
+        if self.activeProjectionBounds.isNone() || self.activeProjectionBounds.unwrap().count() == 0U64 { return <Result.Ok value=<PreparedAssociatedSelectionContext bounds=[] clauses=[] /> /> }
+        mut val dependencies: Array[AssociatedSelectionDependency] = []
+        try self.appendAssociatedSelectionDependencies(root: root, dependencies: inout dependencies, site: site)
+        return self.prepareAssociatedSelectionDependencies(roots: [root], needed: dependencies, site: site)
+    }
+    inout fn prepareAssociatedSelectionTermEquations(terms: Array[U64], site: U64) -> Result[PreparedAssociatedSelectionContext, CompileDiagnostic] {
+        mut val dependencies: Array[AssociatedSelectionDependency] = []
+        try self.appendAssociatedSelectionTermDependencies(terms: terms, dependencies: inout dependencies)
+        return self.prepareAssociatedSelectionDependencies(roots: [], needed: dependencies, site: site)
+    }
+    inout fn prepareAssociatedSelectionDependencies(roots: Array[TraitBound], needed: Array[AssociatedSelectionDependency], site: U64) -> Result[PreparedAssociatedSelectionContext, CompileDiagnostic] {
         mut val equations: Array[TraitBound] = []
         mut val clauses: Array[U64] = []
         val context = match self.activeProjectionBounds { Optional.Some(v: val context) => context Optional.None => { return <Result.Ok value=<PreparedAssociatedSelectionContext bounds=equations clauses=clauses /> /> } }
-        if context.count() == 0U64 { return <Result.Ok value=<PreparedAssociatedSelectionContext bounds=equations clauses=clauses /> /> }
-        mut val dependencies: Array[AssociatedSelectionDependency] = []
-        try self.appendAssociatedSelectionDependencies(root: root, dependencies: inout dependencies, site: site)
-        if dependencies.count() == 0U64 { return <Result.Ok value=<PreparedAssociatedSelectionContext bounds=equations clauses=clauses /> /> }
+        if context.count() == 0U64 || needed.count() == 0U64 { return <Result.Ok value=<PreparedAssociatedSelectionContext bounds=equations clauses=clauses /> /> }
+        mut val dependencies = needed
         mut val included: Set[U64] = Set.new()
         mut val expanded: Set[U64] = Set.new()
-        mut val normalization = <AssociatedMemberQueryWork context=[root] />
+        mut val normalization = <AssociatedMemberQueryWork context=roots />
         mut val normalizationCount = 0U64
         mut val changed = true
         while changed {
@@ -426,7 +352,7 @@ impl Comp {
                         try self.appendAssociatedSelectionTermDependencies(terms: [subject], dependencies: inout dependencies)
                         if dependencies.count() != count { changed = true }
                         if normalizationCount != equations.count() {
-                            mut val available = [root]
+                            mut val available = roots
                             for equation in equations { available.append(equation) }
                             normalization = <AssociatedMemberQueryWork context=available />
                             normalizationCount = equations.count()

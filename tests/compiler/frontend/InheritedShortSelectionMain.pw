@@ -1,0 +1,88 @@
+use @Plew/Syntax as ShortProbeSyntax
+// Short spelling varies roots, not candidate identity or the saved decision.
+fn main() {
+    mut val compiler = <Comp />
+    match analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.File path="tests/compiler/frontend/fixtures/ProjectionMembers/ShortInherited.pw" />, sources: <SourceAccess stdRoot="std/".bytes() />) {
+        Result.Ok(value: _) => {}
+        Result.Err(error: val diagnostic) => { panic("inherited short source rejected: "+diagnostic.message()) }
+    }
+    for name in ["simple", "combined", "recursive", "pair"] {
+        val index = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: name).nameId)
+        val function = compiler.arena.functionAt(index: index)
+        val parameter = compiler.funcParamAt(params: function.params, index: 0U64)
+        val selection = compiler.retainedAssociatedSelection(occurrence: parameter.authoredTypeUse, ref: parameter.ty).unwrap().unwrap()
+        val expected = if name == "combined" { give 2U64 } else { give 1U64 }
+        if selection.graph.roots.count() != expected || selection.graph.rootNodes.count() != expected { panic("short selection discarded original contributing roots") }
+        for root in selection.graph.roots {
+            if compiler.decls.traitAt(index: compiler.decls.traitIndexByOffset(offset: root.constraint.key.owner)).nameId != compiler.internBytes(s: "Child").nameId { panic("equation-only Key became a member search root") }
+        }
+        val binding = compiler.associatedSelectionOccurrences.get(key: parameter.authoredTypeUse).unwrap()
+        val draft = compiler.loweredAssociatedSelections[binding.selection-1U64]
+        if draft.authoredSource.isSome() || draft.representationRoot >= selection.graph.roots.count() || !compiler.sameAssociatedMemberInstance(first: draft.termInstance, second: selection.graph.roots[draft.representationRoot].constraint.key) { panic("short representation lost its exact original root") }
+        if compiler.retainedAdmittedAssociatedSelection(occurrence: parameter.authoredTypeUse, ref: parameter.ty).unwrap().unwrap().rootProofs.count() != expected { panic("short admission discarded a contributing root proof") }
+        if name == "pair" {
+            val second = compiler.funcParamAt(params: function.params, index: 1U64)
+            val secondUse = compiler.sourceTypeUses.useAt(index: second.authoredTypeUse-1U64).unwrap()
+            val prepared = <PreparedAssociatedMemberSelection site=draft.site receiver=draft.receiver member=draft.member session=draft.session scope=draft.scope representationRoot=draft.representationRoot equationClauses=draft.equationClauses result=selection />
+            val use = compiler.sourceTypeUses.useAt(index: parameter.authoredTypeUse-1U64).unwrap()
+            val recipe = compiler.sourceTypeUses.recipeAt(id: use.recipe).unwrap()
+            val previousScope = compiler.sourceTypeUses.currentScope()
+            compiler.sourceTypeUses.selectionProbeScope(scope: draft.scope)
+            match compiler.captureLoweredAssociatedSelection(ref: parameter.ty, site: secondUse.site, children: recipe.children, prepared: <Optional.Some v=prepared />) {
+                Result.Err(error: val diagnostic) => { if diagnostic.message() != "prepared associated selection changed its lowering input" { panic("wrong prepared-site refusal cause: "+diagnostic.message()) } }
+                Result.Ok(value: _) => { panic("prepared short selection crossed source sites") }
+            }
+            compiler.sourceTypeUses.selectionProbeScope(scope: previousScope)
+        }
+        val published = compiler.lexicalBodyParameterType(function: index, index: 0U64, ref: parameter.ty, receiver: 0U64).unwrap().unwrap()
+        val term = compiler.arena.typeAt(index: published)
+        if term.assocTraitId != compiler.internBytes(s: "Parent").nameId || term.assocTraitArgs.count() != 1U64 || compiler.arena.typeAt(index: term.assocTraitArgs[0U64]).nameId != compiler.internBytes(s: "I64").nameId { panic("short selection did not publish the saved Parent instance") }
+    }
+    val equality = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "equality").nameId)
+    val equalityFunction = compiler.arena.functionAt(index: equality)
+    val equalityParameter = compiler.funcParamAt(params: equalityFunction.params, index: 0U64)
+    val equalitySelection = compiler.retainedAssociatedSelection(occurrence: equalityParameter.authoredTypeUse, ref: equalityParameter.ty).unwrap().unwrap()
+    if equalitySelection.graph.roots.count() != 1U64 { panic("receiver equation lost the actual Out root") }
+    val equalityTerm = compiler.lexicalBodyParameterType(function: equality, index: 0U64, ref: equalityParameter.ty, receiver: 0U64).unwrap().unwrap()
+    val equalityProjection = compiler.arena.typeAt(index: equalityTerm)
+    val receiver = compiler.arena.typeAt(index: compiler.typeTermProjectionReceiver(t: equalityProjection))
+    val parameter = compiler.funcBindAt(binds: equalityFunction.typeParams, index: 1U64)
+    if equalityProjection.assocTraitId != compiler.internBytes(s: "Out").nameId || receiver.args.count() != 1U64 || compiler.arena.typeAt(index: receiver.args[0U64]).paramId != parameter.paramId { panic("short receiver equality was not retained through publication") }
+    for scenario in ["ShortAmbiguous", "ShortWrongReceiver"] {
+        mut val rejected = <Comp />
+        match analyzeFrontendForRequests(c: inout rejected, input: <FrontendInput.File path="tests/compiler/frontend/fixtures/ProjectionMembers/"+scenario+".pw" />, sources: <SourceAccess stdRoot="std/".bytes() />) {
+            Result.Err(error: val diagnostic) => { if !diagnostic.isSourceRejection() { panic("short refusal lost source ownership: "+diagnostic.message()) } }
+            Result.Ok(value: _) => { panic("short selection merged distinct declarations or receivers") }
+        }
+    }
+
+    val childIndex = compiler.decls.firstTraitNamed(nameId: compiler.internBytes(s: "Child").nameId)
+    val childOwner = compiler.decls.traitAt(index: childIndex).nameStart
+    val completed = compiler.decls.queryProbeTraitEntry(owner: childOwner)
+    val headers = compiler.traitLexicalHeaders
+    compiler.decls.setQueryProbeTraitEntry(owner: childOwner, entry: 0U64)
+    compiler.traitLexicalHeaders = [:]
+    match compiler.associatedMemberNamespaceContains(owner: childOwner, member: compiler.internBytes(s: "Output").nameId, site: 0U64) {
+        Result.Err(error: val diagnostic) => { match diagnostic.failureDomain() { FailureDomain.Limit => {} _ => { panic("unavailable namespace changed failure class") } } }
+        Result.Ok(value: _) => { panic("unavailable inherited namespace was treated as a boolean result") }
+    }
+    compiler.decls.setQueryProbeTraitEntry(owner: childOwner, entry: completed)
+    compiler.traitLexicalHeaders = headers
+
+    // Value-AST lowering carries the same prepared result; no admission reset.
+    val text = "fn legacyShort[T](value: T.Output) where T: Child[I64] {{}}"
+    mut val offset = 0U64
+    while offset+text.bytes().count() <= compiler.arena.bytes.count() {
+        if rangeEquals(bytes: compiler.arena.bytes, start: offset, len: text.bytes().count(), kw: text) { break }
+        offset += 1U64
+    }
+    if offset+text.bytes().count() > compiler.arena.bytes.count() { panic("value short source setup missing") }
+    val declaration = match ShortProbeSyntax.parseItem(source: text, start: offset, end: offset+text.bytes().count()) { TopItemAst.Decl(d: val declaration) => declaration _ => { panic("value short source did not parse") } }
+    compiler.lowerFuncDecl(d: declaration).unwrap()
+    val legacy = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "legacyShort").nameId)
+    val legacyParameter = compiler.funcParamAt(params: compiler.arena.functionAt(index: legacy).params, index: 0U64)
+    val legacySelection = compiler.retainedAssociatedSelection(occurrence: legacyParameter.authoredTypeUse, ref: legacyParameter.ty).unwrap().unwrap()
+    match legacySelection.outcome { AssociatedMemberOutcome.Unique(candidate: _) => {} _ => { panic("value short lowering lost its saved inherited choice") } }
+    if compiler.sourceTypeUses.currentScope() != 0U64 || compiler.lowerProjectionDepth != 0U64 { panic("value short lowering leaked its source frame") }
+
+}

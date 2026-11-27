@@ -119,6 +119,26 @@ with unchanged inputs and zero setup/native statuses. Meta
 source-clause-checkpoint.json owns exact results and exclusions. This does not
 certify closure/synthetic producers or final execution/performance gates.
 
+## Short-selection checkpoint
+
+Both Syntax and Value short projection adapters now pass one prepared common
+query result explicitly into occurrence capture. Search roots and equation-only
+context are separate. A contributing representation root retains the original
+source argument recipes without changing the declaring-member decision or
+removing other roots/edges. Capture checks session, scope, site and receiver;
+normalization may justify a receiver distinct from a root's authored subject.
+The old short source chooser and unused spelling-based subject prefilters are
+removed. Lexical selection remains a separate migration obligation: its declaring
+term representation must not be confused with the short adapter's root recipe.
+
+The native short profile covers inherited/combined roots, recursive unrelated
+bounds, equal-output ambiguity, wrong receivers, unavailable-header Limit,
+receiver equations, separate real source occurrences and the legacy Value AST.
+The site-guard-removal mutation fails the crossing assertion; this is mutation
+evidence, not a historical RED. Final results and exact input hashes are linked
+from the meta projection-members evidence index. These internal gates do not
+prove fresh AOT/ORC execution or performance.
+
 ## Next implementation sequence
 
 1. Audit remaining producer/receiver environments against the receipt checkpoint;

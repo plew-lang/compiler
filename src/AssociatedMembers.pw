@@ -39,6 +39,29 @@ impl Comp {
         if !self.supertraitOperandAvailable(slot: shape.supertraits.start+index) { return <Result.Err error=self.associatedMemberLimit(site: site) /> }
         return <Result.Ok value=self.semanticSupertraitConstraintAt(constraints: shape.supertraits, index: index) />
     }
+    // Preparation filter only: inspect inherited namespaces without forcing
+    // instance arguments. Unavailable headers/edges remain explicit failures.
+    fn associatedMemberNamespaceContains(owner: U64, member: U64, site: U64) -> Result[Bool, CompileDiagnostic] {
+        mut val owners = [owner]
+        mut val cursor = 0U64
+        while cursor < owners.count() {
+            val shape = try self.associatedMemberShape(owner: owners[cursor], site: site)
+            cursor += 1U64
+            for index in 0U64..<shape.assocTypes.len {
+                if self.traitBindAt(binds: shape.assocTypes, index: index).nameId == member { return <Result.Ok value=true /> }
+            }
+            for index in 0U64..<shape.supertraits.len {
+                val parent = (try self.associatedMemberEdgeConstraint(shape: shape, index: index, site: site)).key.owner
+                mut val seen = false
+                for prior in owners { if prior == parent { seen = true break } }
+                if !seen {
+                    if owners.count() >= 128U64 { return <Result.Err error=self.associatedMemberLimit(site: site) /> }
+                    owners.append(parent)
+                }
+            }
+        }
+        return <Result.Ok value=false />
+    }
     inout fn sameAssociatedMemberInstance(first: TraitInstanceKey, second: TraitInstanceKey) -> Bool {
         if first.owner != second.owner || first.positionalArgs.count() != second.positionalArgs.count() { return false }
         for index in 0U64..<first.positionalArgs.count() {
@@ -271,7 +294,7 @@ impl Comp {
 // Lowering hands the query result forward. Neither binding nor admission
 // recovers a decision from the canonical term's spelling or an ambient cursor.
 impl Comp {
-    inout fn captureLoweredAssociatedSelection(ref: U64, site: U64, children: Array[U64], authoredRoot: Optional[TraitBound] = <Optional.None />, authoredArguments: Optional[Array[U64]] = <Optional.None />, authoredSource: Optional[ResolvedViewSource] = <Optional.None />) -> Result[U64, CompileDiagnostic] {
+    inout fn captureLoweredAssociatedSelection(ref: U64, site: U64, children: Array[U64], authoredRoot: Optional[TraitBound] = <Optional.None />, authoredArguments: Optional[Array[U64]] = <Optional.None />, authoredSource: Optional[ResolvedViewSource] = <Optional.None />, prepared: Optional[PreparedAssociatedMemberSelection] = <Optional.None />) -> Result[U64, CompileDiagnostic] {
         val type = self.arena.typeAt(index: ref)
         if type.assocNameId == 0U64 { return <Result.Ok value=0U64 /> }
         val receiver = self.typeTermProjectionReceiver(t: type)
@@ -279,14 +302,25 @@ impl Comp {
         val published = <TraitInstanceKey owner=owner positionalArgs=type.assocTraitArgs />
         val root = authoredRoot.unwrapOr(fallback: <TraitBound subject=receiver constraint=<TraitConstraint key=published positionalArgsOpen=false assocPredicates=[] /> offset=site />)
         if authoredSource.isSome() && !self.sameAssociatedMemberInstance(first: authoredSource.unwrap().traitInstance, second: root.constraint.key) { return <Result.Err error=self.associatedMemberInputFailure(message: "associated selection changed its authored selector") /> }
-        val equations = try self.prepareAssociatedSelectionEquations(root: root, site: site)
-        val query = try self.queryAssociatedMember(subject: receiver, roots: [root], equationContext: equations.bounds, member: type.assocNameId, site: site)
+        val selection = if prepared.isSome() {
+            val saved = prepared.unwrap()
+            if saved.site != site || saved.session != self.sourceFactSession() || saved.scope != self.sourceTypeUses.currentScope() || saved.member != type.assocNameId || !self.typeRefEq(a: saved.receiver, b: receiver, sourceTerms: true) || saved.representationRoot >= saved.result.graph.roots.count() || !self.sameAssociatedMemberInstance(first: saved.result.graph.roots[saved.representationRoot].constraint.key, second: published) { return <Result.Err error=self.associatedMemberInputFailure(message: "prepared associated selection changed its lowering input") /> }
+            match saved.result.outcome {
+                AssociatedMemberOutcome.Unique(candidate: val candidate) => { if candidate.member != type.assocNameId { return <Result.Err error=self.associatedMemberInputFailure(message: "prepared associated selection changed its member") /> } }
+                _ => { return <Result.Err error=self.associatedMemberInputFailure(message: "prepared associated selection requires its unique outcome") /> }
+            }
+            give saved
+        } else {
+            val equations = try self.prepareAssociatedSelectionEquations(root: root, site: site)
+            val query = try self.queryAssociatedMember(subject: receiver, roots: [root], equationContext: equations.bounds, member: type.assocNameId, site: site)
+            give <PreparedAssociatedMemberSelection site=site receiver=receiver member=type.assocNameId session=self.sourceFactSession() scope=self.sourceTypeUses.currentScope() representationRoot=0U64 equationClauses=equations.clauses result=query />
+        }
         mut val arguments: Array[U64] = []
         for index in 1U64..<(1U64+type.assocTraitArgs.count()) {
             if index >= children.count() { return <Result.Err error=self.associatedMemberInputFailure(message: "associated selection lost its authored argument recipe") /> }
             arguments.append(children[index])
         }
-        self.loweredAssociatedSelections.append(<LoweredAssociatedSelection termInstance=published authoredSource=authoredSource equationClauses=equations.clauses authoredArguments=authoredArguments.unwrapOr(fallback: arguments) session=self.sourceFactSession() member=type.assocNameId term=ref site=site scope=self.sourceTypeUses.currentScope() termArguments=arguments result=query />)
+        self.loweredAssociatedSelections.append(<LoweredAssociatedSelection receiver=receiver representationRoot=selection.representationRoot termInstance=published authoredSource=authoredSource equationClauses=selection.equationClauses authoredArguments=authoredArguments.unwrapOr(fallback: arguments) session=self.sourceFactSession() member=type.assocNameId term=ref site=site scope=self.sourceTypeUses.currentScope() termArguments=arguments result=selection.result />)
         return <Result.Ok value=self.loweredAssociatedSelections.count() />
     }
     inout fn captureLoweredLexicalSelection(ref: U64, site: U64, children: Array[U64]) -> Result[U64, CompileDiagnostic] {
@@ -315,10 +349,36 @@ impl Comp {
         val use = self.sourceTypeUses.useAt(index: occurrence - 1U64)
         if use.isNone() { return <Result.Err error=self.associatedMemberInputFailure(message: "associated selection lost its occurrence") /> }
         val draft = self.loweredAssociatedSelections[saved.selection - 1U64]
+        if draft.representationRoot >= draft.result.graph.roots.count() { return <Result.Err error=self.associatedMemberInputFailure(message: "associated selection lost its representation root") /> }
         if draft.session != self.sourceFactSession() || draft.term != ref || use.unwrap().term != ref || saved.recipe != use.unwrap().recipe || saved.scope != use.unwrap().scope || draft.scope != saved.scope || draft.site != use.unwrap().site { return <Result.Err error=self.associatedMemberInputFailure(message: "associated selection changed its retained query") /> }
         val type = self.arena.typeAt(index: ref)
-        val root = draft.result.graph.roots[0U64]
-        if type.assocNameId != draft.member || !self.sameAssociatedMemberInstance(first: draft.termInstance, second: <TraitInstanceKey owner=self.associatedProjectionTraitOwner(projection: type) positionalArgs=type.assocTraitArgs />) || !self.typeRefEq(a: root.subject, b: self.typeTermProjectionReceiver(t: type), sourceTerms: true) || self.associatedSelectionDraftOwners.getOr(key: saved.selection, fallback: 0U64) != occurrence { return <Result.Err error=self.associatedMemberInputFailure(message: "associated selection changed its retained identity") /> }
+        if type.assocNameId != draft.member || !self.sameAssociatedMemberInstance(first: draft.termInstance, second: <TraitInstanceKey owner=self.associatedProjectionTraitOwner(projection: type) positionalArgs=type.assocTraitArgs />) || !self.typeRefEq(a: draft.receiver, b: self.typeTermProjectionReceiver(t: type), sourceTerms: true) || self.associatedSelectionDraftOwners.getOr(key: saved.selection, fallback: 0U64) != occurrence { return <Result.Err error=self.associatedMemberInputFailure(message: "associated selection changed its retained identity") /> }
         return <Result.Ok value=<Optional.Some v=draft.result /> />
+    }
+}
+
+impl AssociatedMemberResult {
+    // Pick a recipe representation only after the semantic candidate is Unique.
+    // All contributing roots and incoming proof edges remain in the saved graph.
+    fn representationRoot() -> Result[U64, CompileDiagnostic] {
+        val candidate = match self.outcome { AssociatedMemberOutcome.Unique(candidate: val candidate) => candidate _ => { return <Result.Err error=<CompileDiagnostic failureDomain=<FailureDomain.Internal /> location=<DiagnosticLocation.Unpositioned /> message="associated representation requires a unique query outcome" /> /> } }
+        mut val incoming: Dictionary[U64, Array[U64]] = [:]
+        for edge in self.graph.edges {
+            mut val sources = incoming.getOr(key: edge.target, fallback: [])
+            sources.append(edge.source)
+            incoming[edge.target] = sources
+        }
+        mut val pending = candidate.nodes
+        mut val visited: Set[U64] = Set.new()
+        mut val cursor = 0U64
+        while cursor < pending.count() {
+            val node = pending[cursor]
+            cursor += 1U64
+            if visited.contains(node) { continue }
+            visited.insert(node)
+            for source in incoming.getOr(key: node, fallback: []) { pending.append(source) }
+        }
+        for root in self.graph.rootNodes { if visited.contains(root.node) { return <Result.Ok value=root.root /> } }
+        return <Result.Err error=<CompileDiagnostic failureDomain=<FailureDomain.Internal /> location=<DiagnosticLocation.Unpositioned /> message="associated member has no contributing representation root" /> />
     }
 }

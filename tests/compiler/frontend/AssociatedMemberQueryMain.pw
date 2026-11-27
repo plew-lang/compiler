@@ -79,6 +79,11 @@ fn main() {
     val repeatedRoots = compiler.queryAssociatedMember(subject: integer, roots: [diamond, root], equationContext: [], member: output, site: 0U64).unwrap()
     queryUnique(result: repeatedRoots)
     if repeatedRoots.graph.rootNodes.count() != 2U64 { panic("multiple roots lost their identities") }
+    val otherName = compiler.internBytes(s: "Bool")
+    val otherSubject = compiler.pushType(t: <TypeRef nameStart=otherName.nameStart nameLen=otherName.nameLen nameId=otherName.nameId args=[] />)
+    val unrelatedRoot = <TraitBound subject=otherSubject constraint=root.constraint offset=0U64 />
+    val represented = compiler.queryAssociatedMember(subject: integer, roots: [unrelatedRoot, root], equationContext: [], member: output, site: 0U64).unwrap()
+    if represented.representationRoot().unwrap() != 1U64 { panic("representation used the first root instead of an actual contributor") }
     val firstRoot = queryBound(compiler: inout compiler, name: "First", subject: integer, arguments: [])
     val secondRoot = queryBound(compiler: inout compiler, name: "Second", subject: integer, arguments: [])
     match compiler.queryAssociatedMember(subject: integer, roots: [firstRoot, secondRoot], equationContext: [], member: output, site: 0U64).unwrap().outcome {

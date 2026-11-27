@@ -1,0 +1,14 @@
+trait Key { type Item }
+trait Parent[A] { type Output }
+trait Child[A]: Parent[A] + Parent[I64] {}
+fn simple[T](value: T.Output) where T: Child[I64] {}
+fn combined[T](value: T.Output) where T: Child[T#Key.Item] + Child[I64] + Key[Item=I64] {}
+fn main() {}
+trait User[X] {}
+fn recursive[T](value: T.Output) where T: User[T.Output] + Child[I64] {}
+// fn legacyShort[T](value: T.Output) where T: Child[I64] {}
+trait Link { type Next }
+trait Out { type Output }
+struct Wrapper[T] {}
+fn equality[T, U](value: Wrapper[T#Link.Next].Output) where Wrapper[U]: Out, T: Link[Next=U] {}
+fn pair[T](first: T.Output, second: T.Output) where T: Child[I64] {}

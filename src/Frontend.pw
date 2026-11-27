@@ -788,7 +788,27 @@ struct PreparedAssociatedSelectionContext {
     val clauses: Array[U64]
 }
 impl PreparedAssociatedSelectionContext { factory }
+// Explicit lowering handoff: query inputs/results are not recovered from terms.
+struct PreparedAssociatedMemberSelection {
+    val site: U64
+    val receiver: U64
+    val member: U64
+    val session: U64
+    val scope: U64
+    val representationRoot: U64
+    val equationClauses: Array[U64]
+    val result: AssociatedMemberResult
+}
+impl PreparedAssociatedMemberSelection { factory }
+struct LoweredShortProjection {
+    val source: ResolvedViewSource
+    val arguments: Array[U64]
+    val selection: PreparedAssociatedMemberSelection
+}
+impl LoweredShortProjection { factory }
 struct LoweredAssociatedSelection {
+    val receiver: U64
+    val representationRoot: U64
     val termInstance: TraitInstanceKey
     val authoredSource: Optional[ResolvedViewSource]
     val equationClauses: Array[U64]
@@ -830,6 +850,7 @@ struct LoweredTypeProjection {
     val source: ResolvedViewSource
     val member: Bind
     val arguments: Array[U64] = []
+    val selection: Optional[PreparedAssociatedMemberSelection] = <Optional.None />
 }
 impl LoweredTypeProjection { factory }
 

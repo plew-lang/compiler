@@ -1,0 +1,4 @@
+trait First { type Output }
+trait Second { type Output }
+fn entry[T](value: T.Output) where T: First[Output=I64] + Second[Output=I64] {}
+fn main() {}
