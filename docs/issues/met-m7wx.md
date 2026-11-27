@@ -102,24 +102,3 @@ Focused evidence directories retain separate scopes: `source-typing-closure`,
 `call-bound-admission`. The last includes append-only proof/final-call publication
 and source-template row/pool slice comparisons. These are evidence pointers, not
 adopted physical storage APIs or a current all-green claim.
-
-## Whole Comp/Arena coherence probe
-
-met-gjxo exposed an additional Raw-state hazard: open a valid source Comp,
-replace its public Arena with a different two-byte corpus and an invalid nominal
-row, then call public checkDeclShapes. Before nominal label validation, the
-ambient-name checks reuse the old Comp's source/cached spans against the new
-bytes and panic (`interner stored a span outside the source buffer`). The
-standalone nominal byte/span core itself rejects malformed spans safely.
-[Executed probe](../../../evidence/rejection-domains/diagnostic-domain-implementation/declaration-labels/raw-arena-incoherence.json)
-retains a native snapshot and phase markers proving the public Syntax decoder
-completed before this replacement check failed. It is internal caller-owned
-state, not evidence that ordinary user source triggers this panic.
-
-Resolve the whole-state publication/input contract here: either make such
-replacement unrepresentable at the appropriate owner boundary or diagnose
-incoherent Raw snapshots before dependent readers use unrelated cached spans.
-Do not add another nominal Source flag or reorder checks merely to hide this
-foreign-corpus inconsistency. The met-gjxo skip-authentication control preserves
-the actual source corpus while replacing its Arena value and injecting a
-nonzero-scope duplicate; that remains a required rejecting control.

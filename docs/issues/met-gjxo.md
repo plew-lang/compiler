@@ -2,7 +2,7 @@
 id: met-gjxo
 status: in_progress
 deps: []
-links: [com-9sa5]
+links: [com-9sa5, met-wuzv]
 created: 2026-11-27T04:45:28Z
 type: bug
 priority: 1
@@ -113,7 +113,7 @@ checks, actual public Syntax decoder, coherent Arena replacement after source
 admission, malformed/overflow spans and gen suppression. Session controls
 retain exact Source message/location/notes after frontend state is gone across
 repeated opens. Evidence: declaration-labels/native-v4.json and session-v1.json.
-The separate foreign-corpus replacement panic is retained under met-m7wx;
+The separate foreign-corpus replacement panic is retained under met-wuzv;
 its invalid whole-Comp snapshot does not replace the coherent fake-scope
 control, which still rejects. Native setup-only v2 compilation failure and
 the v3/debug whole-state panic are not counted as successful controls.
