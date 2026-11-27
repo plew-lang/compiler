@@ -83,8 +83,9 @@ All input hashes remain unchanged. The pure comparison core's executable
 controls pass, and the whole compiler source passes `--check` with this carrier.
 The first fresh snapshot built successfully (20261127T045959-build-8e0485)
 and passed all48 real-CLI controls with unchanged inputs. Its product precedes
-the private verifier skip refinement; the final source snapshot v2 is building
-(20261127T050944-build-2c10ca). No final certification is claimed. Setup mistakes in the newly written core harness were corrected
+the private verifier skip refinement; the final source snapshot v2 also built successfully
+(20261127T050944-build-2c10ca), with its own48 controls passing. No final
+certification is claimed. Setup mistakes in the newly written core harness were corrected
 and do not count as RED.
 
 The private parsed-item lowering chain carries the existing admission origin to
@@ -117,3 +118,11 @@ The separate foreign-corpus replacement panic is retained under met-wuzv;
 its invalid whole-Comp snapshot does not replace the coherent fake-scope
 control, which still rejects. Native setup-only v2 compilation failure and
 the v3/debug whole-state panic are not counted as successful controls.
+
+Formal20261127T051755-self-host-5658f2 reached generation2 fixed point, all
+inputs unchanged, samples7.782508/7.359985/7.306692s, median7.359985s<=7.5.
+Same-source alternating comparison: old594990c485aa median7.393742s versus
+new fresh v2 median7.346164s; all6 LLVM hashes equal. This does not establish a
+performance improvement; it finds no measured regression. The exact formal
+measured binary da2c8c0a82e9 passes48/48 public controls. Generation gate is
+running; whole-suite reconciliation, final review and cleanup remain open.
