@@ -91,3 +91,30 @@ follow the extracted .evidence field while preserving their original mutation,
 owner and slot assertions. Existing visibility controls must accompany the new
 Raw/foreign/malformed/retained type-signature controls. Product edits and GREEN
 are not yet claimed.
+
+## Implementation checkpoint
+
+Shared occurrence ownership is extracted to SourceTypeUseAdmission.pw; namespace
+visibility keeps its own decision and payload. Existing visibility Main/Request/
+Slot native controls pass. The historical Main driver lacked3 fixture files;
+that setup failure is excluded and a new driver supplies its actual inputs.
+Internal tests preserve their proof assertions through the .evidence field.
+Projection formation remains in type-use admission, rather than a visibility
+helper. Syntax/legacy exact label positions are retained only when coherent with
+ordered canonical labels; absent positions do not disable Raw checking. The
+signature check reads pooled TypeTerm/ranges, not legacy TypeRef reconstruction.
+Arena owns bounded range validation. Owned interpretation uses one type-signature
+refusal and the shared stored evidence; no semantic re-comparison/fullwalk.
+
+The constructor trace also found an actual Raw nameId0/stale-ID bug: closure
+function-type construction used cached Param.nameId as label authority although
+binding-group admission uses actual spelling. Native raw-label-red-v2 explicitly
+asserts erased/duplicated labels; raw-label-green-v1 passes after interning the
+admitted spelling. Initial missing sentinel in the new probe is a setup failure,
+not RED. This is within the planned callable/closure type-construction boundary.
+
+Native admission smoke covers Raw duplicate/malformed/unknown IDs, repeated bare
+positions, original declaration evidence and forged/foreign/moved metadata,
+success-cache exclusion, body deferred admission/retry, and owned eager notes.
+It passes on current source. Fresh candidate, full84 matrix, legacy position/
+session retention and final independent review remain pending.

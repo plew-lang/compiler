@@ -1,0 +1,3 @@
+fn entry(callback: fn(value: I64,
+                      value: I64) -> I64) {}
+fn main() {}

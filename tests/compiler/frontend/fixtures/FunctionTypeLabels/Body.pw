@@ -1,0 +1,5 @@
+fn entry() {
+    val callback: Optional[fn(value: I64,
+                              value: I64) -> I64] = <Optional.None />
+}
+fn main() { entry() }

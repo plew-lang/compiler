@@ -1,0 +1,67 @@
+// Append to a frozen Frontend root. These are actual type-use admission calls.
+fn requireRawTypeSignature(result: Result[(), CompileDiagnostic], internal: Bool = false) {
+    match result {
+        Result.Err(error: val diagnostic) => {
+            if diagnostic.isSourceRejection() { panic("Raw type signature gained Source") }
+            if internal { match diagnostic.failureDomain() { FailureDomain.Internal => {} _ => { panic("malformed type signature misclassified") } } }
+            else { if diagnostic.message() != "duplicate function type parameter label (each labelled position must be distinct)" || diagnostic.notes().count() != 1U64 { panic("Raw signature lost conflict") } }
+        }
+        Result.Ok(value: _) => { panic("Raw invalid type signature admitted") }
+    }
+}
+fn main() {
+    mut val raw = <Comp />
+    raw.arena.reserveTypeSentinel()
+    val scalar = raw.internBytes(s: "I64")
+    val integer = raw.pushType(t: <TypeRef nameStart=scalar.nameStart nameLen=scalar.nameLen args=[] />)
+    val head = raw.internBytes(s: "fn")
+    val label = raw.internBytes(s: "value")
+    val rejectedLabels: Array[Array[U64]] = [[0U64, label.nameId, label.nameId], [0U64, 18446744073709551615U64, label.nameId], [label.nameId, label.nameId, label.nameId], [0U64, label.nameId, label.nameId, label.nameId]]
+    for labels in rejectedLabels {
+        val ref = raw.pushType(t: <TypeRef nameStart=head.nameStart nameLen=head.nameLen args=[integer, integer, integer] argLabels=labels />)
+        requireRawTypeSignature(result: raw.checkFunctionTypeSignature(ref: ref, occurrence: 0U64, origin: <SourceTypeUseOrigin.Raw />), internal: labels[0U64] != 0U64 || labels[1U64] == 18446744073709551615U64 || labels.count() > 3U64)
+    }
+    val empty = raw.pushType(t: <TypeRef nameStart=head.nameStart nameLen=head.nameLen args=[] />)
+    requireRawTypeSignature(result: raw.checkFunctionTypeSignature(ref: empty, occurrence: 0U64, origin: <SourceTypeUseOrigin.Raw />), internal: true)
+    requireRawTypeSignature(result: raw.checkFunctionTypeSignature(ref: 18446744073709551615U64, occurrence: 0U64, origin: <SourceTypeUseOrigin.Raw />), internal: true)
+    val acceptedLabels: Array[Array[U64]] = [[], [0U64, 0U64, 0U64], [0U64, label.nameId, 0U64]]
+    for labels in acceptedLabels {
+        val ref = raw.pushType(t: <TypeRef nameStart=head.nameStart nameLen=head.nameLen args=[integer, integer, integer] argLabels=labels />)
+        raw.checkFunctionTypeSignature(ref: ref, occurrence: 0U64, origin: <SourceTypeUseOrigin.Raw />).unwrap()
+    }
+    for owned in [false, true] {
+        mut val compiler = <Comp />
+        val origin = if owned { give <FrontendDeclarationOrigin.SourceAdmission /> } else { give <FrontendDeclarationOrigin.Raw /> }
+        val failure = match analyzeFrontendDeclarationsWithOrigin(c: inout compiler, input: <FrontendInput.File path="tests/compiler/frontend/fixtures/FunctionTypeLabels/Main.pw" />, sources: <SourceAccess stdRoot="std/".bytes() />, options: <FrontendOptions />, origin: origin) {
+            Result.Err(error: val diagnostic) => diagnostic
+            Result.Ok(value: _) => { panic("declaration admitted invalid function type") }
+        }
+        if failure.isSourceRejection() || compiler.sourceFailureHasOwner(diagnostic: failure) != owned || failure.notes().count() != 1U64 { panic("type signature declaration ownership missing: "+failure.message()) }
+        if owned {
+            val refusal = failure.typeSignature().unwrap()
+            for changed in ["session", "event", "occurrence", "message", "notes"] {
+                val forged = <TypeSignatureRefusal session=(if changed == "session" { give refusal.session()+1U64 } else { give refusal.session() }) occurrence=(if changed == "occurrence" { give refusal.occurrence()+1U64 } else { give refusal.occurrence() }) event=(if changed == "event" { give 18446744073709551615U64 } else { give refusal.event() }) location=refusal.location() message=(if changed == "message" { give "not this refusal" } else { give refusal.message() }) notes=(if changed == "notes" { give [] } else { give refusal.notes() }) />
+                if compiler.sourceFailureHasOwner(diagnostic: <CompileDiagnostic.typeSignature refusal=forged />) { panic("forged type signature proof admitted") }
+            }
+            mut val foreign = <Comp />
+            if foreign.sourceFailureHasOwner(diagnostic: failure) { panic("type signature proof crossed session") }
+            val proof = compiler.failedTypeSignatures[refusal.event()]
+            val positions = compiler.functionTypeLabelPositions.get(key: refusal.occurrence()).unwrap()
+            compiler.functionTypeLabelPositions[refusal.occurrence()] = <LoweredFunctionTypeLabels occurrence=positions.occurrence+1U64 term=positions.term site=positions.site end=positions.end labels=positions.labels positions=positions.positions />
+            if compiler.sourceFailureHasOwner(diagnostic: failure) { panic("foreign occurrence positions reused") }
+            compiler.functionTypeLabelPositions[refusal.occurrence()] = positions
+            if !compiler.sourceFailureHasOwner(diagnostic: failure) || compiler.checkedTypeUses.contains(proof.evidence.receipt.term) { panic("failed signature entered success cache") }
+        }
+    }
+    mut val body = <Comp />
+    analyzeFrontendForRequests(c: inout body, input: <FrontendInput.File path="tests/compiler/frontend/fixtures/FunctionTypeLabels/Body.pw" />, sources: <SourceAccess stdRoot="std/".bytes() />).unwrap()
+    val function = body.arena.firstFunctionNamed(nameId: body.internBytes(s: "entry").nameId)
+    mut val first: Optional[CompileDiagnostic] = <Optional.None />
+    for attempt in 0U64..<2U64 {
+        val failure = match body.prepareLexicalBody(fnIdx: function) { Result.Err(error: val diagnostic) => diagnostic Result.Ok(value: _) => { panic("body admitted invalid signature") } }
+        if failure.isSourceRejection() || !body.sourceFailureHasOwner(diagnostic: failure) || failure.notes().count() != 1U64 { panic("body signature lost Raw retained proof") }
+        match first { Optional.None => { first = <Optional.Some v=failure /> } Optional.Some(v: val previous) => { if previous.typeSignature().unwrap().event() != failure.typeSignature().unwrap().event() { panic("retry repeated type signature refusal") } } }
+    }
+    val eager = openFrontend(input: <FrontendInput.File path="tests/compiler/frontend/fixtures/FunctionTypeLabels/Body.pw" />, sources: <SourceAccess stdRoot="std/".bytes() />)
+    match eager { Result.Err(error: val diagnostic) => { if !diagnostic.isSourceRejection() || diagnostic.notes().count() != 1U64 { panic("owned body signature lost Source or notes") } } Result.Ok(value: _) => { panic("eager source admitted invalid signature") } }
+}

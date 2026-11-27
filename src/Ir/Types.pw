@@ -65,6 +65,12 @@ pub impl Arena {
         if term.viewExtId != 0U64 { return [<ResolvedViewSource surfaceId=term.viewExtId />] }
         return []
     }
+    fn typeArgumentRangeIsValid(range: TypeArgumentRange) -> Bool {
+        return range.start <= self.typeArgumentPool.count() && range.len <= self.typeArgumentPool.count()-range.start
+    }
+    fn typeArgumentLabelRangeIsValid(range: TypeArgumentLabelRange) -> Bool {
+        return range.start <= self.typeArgumentLabelPool.count() && range.len <= self.typeArgumentLabelPool.count()-range.start
+    }
     fn typeArgumentLabelAt(index: U64) -> U64 { return self.typeArgumentLabelPool[index] }
     fn typeAssocArgumentAt(index: U64) -> U64 { return self.typeAssocArgumentPool[index] }
     fn typeAssocArgumentLabelAt(index: U64) -> U64 { return self.typeAssocArgumentLabelPool[index] }

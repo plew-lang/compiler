@@ -1,0 +1,21 @@
+// Append to the Frontend root in a frozen native diagnostic snapshot.
+fn main() {
+    for stale in [false, true] {
+        mut val compiler = <Comp />
+        compiler.arena.reserveTypeSentinel()
+        compiler.appendSrc(from: "ab".bytes())
+        val expression = compiler.pushExpr(e: <Expr.Ident start=0U64 len=1U64 />)
+        val scalar = compiler.internBytes(s: "I64")
+        val type = compiler.pushType(t: <TypeRef nameStart=scalar.nameStart nameLen=scalar.nameLen args=[] />)
+        mut val parameters: Array[Param] = []
+        for offset in [0U64, 1U64] {
+            parameters.append(<Param nameStart=offset nameLen=1U64 nameId=(if stale { give scalar.nameId } else { give 0U64 }) tyStart=scalar.nameStart tyLen=scalar.nameLen tyIsArray=false ty=type isInout=false isMove=false isBorrow=false noLabel=false hasDefault=false defaultExpr=0U64 />)
+        }
+        val result = compiler.resolveClosureFunctionType(exprId: expression, parameters: parameters, hasReturn: true, returnType: type, expectedTerm: 0U64).unwrap()
+        val signature = compiler.arena.typeTermAt(index: result)
+        if signature.argLabels.len != 3U64 { panic("function label slots missing") }
+        val first = compiler.arena.typeArgumentLabelAt(index: signature.argLabels.start+1U64)
+        val second = compiler.arena.typeArgumentLabelAt(index: signature.argLabels.start+2U64)
+        if first == 0U64 || second == 0U64 || first == second { panic("Raw cached nameId erased or duplicated signature labels") }
+    }
+}

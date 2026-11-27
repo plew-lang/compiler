@@ -650,6 +650,7 @@ pub impl Comp {
         val type = (try self.lowerTypeCore(t: (try self.normalizeProjectionType(t: t))))
         try self.checkLoweredTypeRecipeChildren(ref: type.ref, children: type.authoredChildren, offset: t.span.start)
         val occurrence = self.recordAuthoredTypeUse(ref: type.ref, site: t.span.start, children: type.authoredChildren)
+        if t.name == "fn" && !t.isRecord { self.retainFunctionTypeLabelPositions(occurrence: occurrence, term: type.ref, site: t.span.start, end: t.span.end, positions: t.argLabelSpans) }
         return <Result.Ok value=<PType start=type.start len=type.len isArray=type.isArray ref=type.ref authoredUse=occurrence /> />
     }
 
@@ -868,6 +869,22 @@ pub impl Comp {
         val type = (try self.lowerSyntaxTypeNode(t: syntaxType(file: self.syntax, id: id)))
         try self.checkLoweredTypeRecipeChildren(ref: type.ref, children: type.authoredChildren, offset: syntaxType(file: self.syntax, id: id).span.start)
         val occurrence = self.recordAuthoredTypeUse(ref: type.ref, site: syntaxType(file: self.syntax, id: id).span.start, children: type.authoredChildren)
+        val node = syntaxType(file: self.syntax, id: id)
+        if !node.isRecord && rangeEquals(bytes: self.arena.bytes, start: node.name.start, len: node.name.end-node.name.start, kw: "fn") {
+            // Fewer than two written labels cannot conflict. Do not allocate
+            // position metadata for the common bare/single-label signature.
+            mut val labelled = 0U64
+            for index in 1U64..<syntaxTypeArgCount(file: self.syntax, ty: node) {
+                val label = syntaxTypeArgLabel(file: self.syntax, ty: node, index: index)
+                if label.end > label.start { labelled += 1U64 }
+                if labelled == 2U64 { break }
+            }
+            if labelled == 2U64 {
+                mut val positions: Array[Span] = []
+                for index in 0U64..<syntaxTypeArgCount(file: self.syntax, ty: node) { positions.append(syntaxTypeArgLabel(file: self.syntax, ty: node, index: index)) }
+                self.retainFunctionTypeLabelPositions(occurrence: occurrence, term: type.ref, site: node.span.start, end: node.span.end, positions: positions)
+            }
+        }
         return <Result.Ok value=<PType start=type.start len=type.len isArray=type.isArray ref=type.ref authoredUse=occurrence /> />
     }
 

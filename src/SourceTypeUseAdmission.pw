@@ -1,0 +1,371 @@
+// Shared type-use formation and original occurrence ownership.
+// Refusal-only readers for private Lower registration. Not semantic admission.
+impl Comp {
+    inout fn beginAuthoredTypeScope(kind: SourceTypeScopeKind, anchor: U64, traitOwner: U64 = 0U64) -> U64 {
+        val token = self.sourceTypeUses.begin(kind: kind, anchor: anchor, traitOwner: traitOwner)
+        val scope = self.sourceTypeUses.scopeAt(token: token).unwrap()
+        self.authoredTypeScopes.append(<AuthoredTypeScopeReceipt token=token kind=kind anchor=anchor parent=scope.parent />)
+        return token
+    }
+    fn authoredTypeScopeReceipt(token: U64) -> Optional[AuthoredTypeScopeReceipt] {
+        mut val first = 0U64
+        mut val end = self.authoredTypeScopes.count()
+        while first < end {
+            val middle = first + (end - first) / 2U64
+            val receipt = self.authoredTypeScopes[middle]
+            if receipt.token < token { first = middle + 1U64 } else { end = middle }
+        }
+        if first >= self.authoredTypeScopes.count() || self.authoredTypeScopes[first].token != token { return <Optional.None /> }
+        val receipt = self.authoredTypeScopes[first]
+        val scope = match self.sourceTypeUses.scopeAt(token: token) { Optional.Some(v: val scope) => scope Optional.None => { return <Optional.None /> } }
+        if !receipt.matches(scope: scope) { return <Optional.None /> }
+        return <Optional.Some v=receipt />
+    }
+    fn registeredLowerTypeUse(id: U64) -> Optional[AuthoredTypeUseReceipt] {
+        // Production Lower IDs are contiguous; external Raw records may leave
+        // gaps. The verified direct probe is an index fast path, not authority.
+        if id != 0U64 && id <= self.authoredTypeOccurrences.count() && self.authoredTypeOccurrences[id-1U64].id == id { return <Optional.Some v=self.authoredTypeOccurrences[id-1U64] /> }
+        mut val first = 0U64
+        mut val end = self.authoredTypeOccurrences.count()
+        while first < end {
+            val middle = first + (end - first) / 2U64
+            if self.authoredTypeOccurrences[middle].id < id { first = middle + 1U64 } else { end = middle }
+        }
+        if first >= self.authoredTypeOccurrences.count() || self.authoredTypeOccurrences[first].id != id { return <Optional.None /> }
+        return <Optional.Some v=self.authoredTypeOccurrences[first] />
+    }
+    fn authoredTypeUseReceipt(id: U64) -> Optional[AuthoredTypeUseReceipt] {
+        val receipt = match self.registeredLowerTypeUse(id: id) { Optional.Some(v: val receipt) => receipt Optional.None => { return <Optional.None /> } }
+        val occurrence = match self.sourceTypeUses.useAt(index: id - 1U64) { Optional.Some(v: val use) => use Optional.None => { return <Optional.None /> } }
+        if !receipt.matches(occurrence: occurrence) || receipt.term >= self.arena.typeCount() { return <Optional.None /> }
+        val head = self.arena.typeAt(index: receipt.term)
+        if head.nameStart != receipt.headStart || head.nameLen != receipt.headLength || head.siteOffset != receipt.headSite { return <Optional.None /> }
+        mut val scope = receipt.scope
+        mut val remaining = self.authoredTypeScopes.count()
+        if scope == 0U64 { return <Optional.None /> }
+        while scope != 0U64 {
+            if remaining == 0U64 { return <Optional.None /> }
+            val current = match self.authoredTypeScopeReceipt(token: scope) { Optional.Some(v: val current) => current Optional.None => { return <Optional.None /> } }
+            scope = current.parent
+            remaining -= 1U64
+        }
+        return <Optional.Some v=receipt />
+    }
+}
+impl AuthoredTypeScopeReceipt {
+    fn matches(scope: SourceTypeScope) -> Bool {
+        if self.anchor != scope.anchor || self.parent != scope.parent { return false }
+        return match self.kind {
+            SourceTypeScopeKind.FreeFunction => match scope.kind { SourceTypeScopeKind.FreeFunction => true _ => false }
+            SourceTypeScopeKind.Method => match scope.kind { SourceTypeScopeKind.Method => true _ => false }
+            SourceTypeScopeKind.Deinit => match scope.kind { SourceTypeScopeKind.Deinit => true _ => false }
+            SourceTypeScopeKind.Implementation => match scope.kind { SourceTypeScopeKind.Implementation => true _ => false }
+            SourceTypeScopeKind.RequirementSignature => match scope.kind { SourceTypeScopeKind.RequirementSignature => true _ => false }
+            SourceTypeScopeKind.ExternSignature => match scope.kind { SourceTypeScopeKind.ExternSignature => true _ => false }
+            SourceTypeScopeKind.DefaultExpression => match scope.kind { SourceTypeScopeKind.DefaultExpression => true _ => false }
+            SourceTypeScopeKind.Global => match scope.kind { SourceTypeScopeKind.Global => true _ => false }
+            SourceTypeScopeKind.Nominal => match scope.kind { SourceTypeScopeKind.Nominal => true _ => false }
+            SourceTypeScopeKind.TraitDeclaration => match scope.kind { SourceTypeScopeKind.TraitDeclaration => true _ => false }
+        }
+    }
+}
+impl AuthoredTypeUseReceipt {
+    fn matches(occurrence: AuthoredTypeUse) -> Bool {
+        if self.term != occurrence.term || self.site != occurrence.site || self.scope != occurrence.scope || self.recipe != occurrence.recipe { return false }
+        return match self.role {
+            SourceTypeUseRole.Unowned => match occurrence.role { SourceTypeUseRole.Unowned => true _ => false }
+            SourceTypeUseRole.Declaration => match occurrence.role { SourceTypeUseRole.Declaration => true _ => false }
+            SourceTypeUseRole.DefaultArgument => match occurrence.role { SourceTypeUseRole.DefaultArgument => true _ => false }
+            SourceTypeUseRole.Body => match occurrence.role { SourceTypeUseRole.Body => true _ => false }
+        }
+    }
+}
+
+impl Comp {
+    inout fn checkSourceTypeUsesForAdmission(occurrences: Array[U64], origin: FrontendDeclarationOrigin) -> Result[(), CompileDiagnostic] {
+        val permission = match origin { FrontendDeclarationOrigin.SourceAdmission => <SourceTypeUseOrigin.Declaration /> FrontendDeclarationOrigin.Raw => <SourceTypeUseOrigin.Raw /> }
+        return self.checkSourceTypeUsesWithOrigin(occurrences: occurrences, origin: permission)
+    }
+    inout fn checkSourceTypeUsesWithOrigin(occurrences: Array[U64], origin: SourceTypeUseOrigin) -> Result[(), CompileDiagnostic] {
+        for id in occurrences {
+            val ref = (try self.signatureOccurrence(id: id)).term
+            if !self.checkedTypeUses.contains(ref) {
+                try self.checkFunctionTypeSignature(ref: ref, occurrence: id, origin: origin)
+                try self.checkAnyTypeFormation(ref: ref)
+                try self.checkProjectionMember(type: self.arena.typeAt(index: ref))
+                try self.checkTypeUseVisibilityWithOrigin(ref: ref, occurrence: id, origin: origin)
+                self.checkedTypeUses.insert(ref)
+            }
+        }
+        return <Result.Ok value=() />
+    }
+
+    // The actual visibility decision remains here for both owned and Raw callers.
+
+    inout fn captureSourceTypeUseFailureEvidence(occurrence: U64, origin: SourceTypeUseOrigin) -> Optional[SourceTypeUseFailureEvidence] {
+        val receipt = match self.authoredTypeUseReceipt(id: occurrence) { Optional.Some(v: val receipt) => receipt Optional.None => { return <Optional.None /> } }
+        val owner = match self.sourceTypeUseOwner(receipt: receipt, origin: origin) { Optional.Some(v: val owner) => owner Optional.None => { return <Optional.None /> } }
+        val declaration = match origin {
+            SourceTypeUseOrigin.Declaration => {
+                val proof = match self.sourceTypeDeclarationProof(receipt: receipt) { Optional.Some(v: val proof) => proof Optional.None => { return <Optional.None /> } }
+                give <Optional.Some v=proof />
+            }
+            _ => <Optional.None />
+        }
+        mut val frontier: Optional[AuthoredTypeFrontier] = <Optional.None />
+        val path = match origin {
+            SourceTypeUseOrigin.Body(request: _) => {
+                val current = self.currentSourceOwner().unwrap()
+                val site = match self.authoredTypeUseFrontier(id: occurrence) { Optional.Some(v: val site) => site Optional.None => { return <Optional.None /> } }
+                frontier = <Optional.Some v=site />
+                val path = match self.sourceControlNodePath(owner: current, target: site.node) { Optional.Some(v: val path) => path Optional.None => { return <Optional.None /> } }
+                give <Optional.Some v=path />
+            }
+            _ => <Optional.None />
+        }
+        return <Optional.Some v=<SourceTypeUseFailureEvidence receipt=receipt owner=owner path=path frontier=frontier declaration=declaration /> />
+    }
+
+    fn sourceTypeUseFailureEvidenceMatches(evidence: SourceTypeUseFailureEvidence, occurrence: U64) -> Bool {
+        val receipt = match self.authoredTypeUseReceipt(id: occurrence) { Optional.Some(v: val receipt) => receipt Optional.None => { return false } }
+        if receipt.id != evidence.receipt.id || receipt.term != evidence.receipt.term || receipt.scope != evidence.receipt.scope || receipt.recipe != evidence.receipt.recipe { return false }
+        match evidence.declaration { Optional.Some(v: val declaration) => { if !self.sourceTypeDeclarationProofMatches(proof: declaration, receipt: receipt) { return false } } Optional.None => {} }
+        match evidence.frontier { Optional.Some(v: val frontier) => { if !self.authoredTypeFrontierMatches(frontier: frontier) { return false } } Optional.None => {} }
+        match evidence.path {
+            Optional.Some(v: val path) => { if !self.sourceControlNodePathMatches(path: path) { return false } }
+            Optional.None => {}
+        }
+        // The producer sealed the owner/root relation before a failed builder
+        // was discarded; consumers do not reconstruct its parent navigation.
+        return true
+    }
+
+    inout fn sourceTypeUseOwner(receipt: AuthoredTypeUseReceipt, origin: SourceTypeUseOrigin) -> Optional[SourceTypeUseOwner] {
+        val scope = self.sourceTypeUses.scopeAt(token: receipt.scope).unwrap()
+        match scope.state { SourceTypeScopeState.Lowered => {} _ => { return <Optional.None /> } }
+        if self.modules.sourceFileContaining(offset: receipt.site).isNone() { return <Optional.None /> }
+        match origin {
+            SourceTypeUseOrigin.Raw => { return <Optional.None /> }
+            SourceTypeUseOrigin.Declaration => {
+                match receipt.role { SourceTypeUseRole.Declaration => {} _ => { return <Optional.None /> } }
+                mut val onFrontier = false
+                for id in self.loweringTypeUses { if id == receipt.id { onFrontier = true break } }
+                if !onFrontier { return <Optional.None /> }
+                return <Optional.Some v=<SourceTypeUseOwner.Declaration /> />
+            }
+            SourceTypeUseOrigin.Body(request: val request) => {
+                val root = match request {
+                    SourceRecordOrigin.Raw => { return <Optional.None /> }
+                    SourceRecordOrigin.CheckingRequest(session: val session, root: val root) => { if session != self.sourceFactSession() { return <Optional.None /> } give root }
+                }
+                val owner = match self.currentSourceOwner() { Optional.Some(v: val owner) => owner Optional.None => { return <Optional.None /> } }
+                if !self.sourceFacts.isActive(owner: owner) { return <Optional.None /> }
+                val lexical = self.lexicalSourceFactOwner(owner: owner)
+                if !semanticCompletionOwnersEqual(recorded: lexical, prepared: root) { return <Optional.None /> }
+                match lexical {
+                    SemanticCompletionOwner.Global(target: val target) => {
+                        match receipt.role { SourceTypeUseRole.Body => {} _ => { return <Optional.None /> } }
+                        if self.sourceTypeUses.globalScope(target: target) != receipt.scope { return <Optional.None /> }
+                        return <Optional.Some v=<SourceTypeUseOwner.Global owner=owner target=target scope=receipt.scope /> />
+                    }
+                    SemanticCompletionOwner.Function(index: val function) => {
+                        if function >= self.arena.functionCount() { return <Optional.None /> }
+                        mut val declarationFunction = function
+                        mut val expectedScope = receipt.scope
+                        mut val defaultArgument = false
+                        match self.decls.defaultGeneratorOrigins.get(key: function) {
+                            Optional.Some(v: val source) => {
+                                val expression = match self.defaultOriginExpression(origin: source, offset: receipt.site) { Result.Ok(value: val expression) => expression Result.Err(error: _) => { return <Optional.None /> } }
+                                if expression >= self.arena.exprOriginSerial.count() || self.sourceTypeUses.defaultExpressionScope(origin: self.arena.exprOriginSerial[expression]) != receipt.scope { return <Optional.None /> }
+                                defaultArgument = true
+                                match source {
+                                    DefaultGeneratorOrigin.Parameter(function: val parent, parameter: _) => { declarationFunction = parent expectedScope = scope.parent }
+                                    DefaultGeneratorOrigin.Field(structure: val structure, field: _) => {
+                                        if structure >= self.arena.structCount() || scope.parent != self.arena.structAt(index: structure).sourceTypeScope { return <Optional.None /> }
+                                        match receipt.role { SourceTypeUseRole.DefaultArgument => {} _ => { return <Optional.None /> } }
+                                        return <Optional.Some v=<SourceTypeUseOwner.Function owner=owner function=function scope=receipt.scope /> />
+                                    }
+                                }
+                            }
+                            Optional.None => {}
+                        }
+                        if defaultArgument {
+                            match receipt.role { SourceTypeUseRole.DefaultArgument => {} _ => { return <Optional.None /> } }
+                        } else {
+                            match receipt.role { SourceTypeUseRole.Body => {} _ => { return <Optional.None /> } }
+                        }
+                        val token = match self.sourceTypeUses.signatureFor(function: declarationFunction) { Optional.Some(v: val signature) => signature.scope Optional.None => self.sourceTypeUses.deinitScopeToken(function: declarationFunction) }
+                        if token != expectedScope || self.authoredTypeScopeReceipt(token: token).isNone() { return <Optional.None /> }
+                        val lexicalScope = self.sourceTypeUses.scopeAt(token: token).unwrap()
+                        if declarationFunction >= self.arena.functionCount() || lexicalScope.anchor != self.arena.functionAt(index: declarationFunction).defOffset || lexicalScope.function.unwrapOr(fallback: 18446744073709551615U64) != declarationFunction { return <Optional.None /> }
+                        return <Optional.Some v=<SourceTypeUseOwner.Function owner=owner function=declarationFunction scope=token /> />
+                    }
+                    _ => { return <Optional.None /> }
+                }
+            }
+        }
+    }
+
+}
+
+impl Comp {
+    inout fn checkRequestedTypeUsesWithOrigin(occurrences: Array[U64], origin: SourceRecordOrigin) -> Result[(), CompileDiagnostic] {
+        if !self.genMode { try self.checkSourceTypeUsesWithOrigin(occurrences: occurrences, origin: <SourceTypeUseOrigin.Body request=origin />) }
+        return self.checkAuthoredTypeViews(occurrences: occurrences, requested: self.currentSourceOwner())
+    }
+}
+
+impl Comp {
+    fn authoredTypeUseFrontier(id: U64) -> Optional[AuthoredTypeFrontier] {
+        mut val found: Optional[AuthoredTypeFrontier] = <Optional.None />
+        for frontier in self.authoredTypeFrontiers {
+            for occurrence in frontier.occurrences {
+                if occurrence == id {
+                    if !self.authoredTypeFrontierMatches(frontier: frontier) { return <Optional.None /> }
+                    if found.isSome() && !found.unwrap().node.same(other: frontier.node) { return <Optional.None /> }
+                    found = <Optional.Some v=frontier />
+                }
+            }
+        }
+        return found
+    }
+}
+
+impl Comp {
+    inout fn recordAuthoredTypeFrontier(node: SourceControlNode, occurrences: Array[U64]) {
+        // A frontier is addressed only by one of its authored occurrences.
+        // No refusal can refer to an empty row; do not scan its block/slots.
+        if occurrences.count() == 0U64 { return }
+        mut val sites: Array[SourceTypeAnnotationSite] = []
+        match node {
+            SourceControlNode.Block(id: val block) => {
+                for index in 0U64..<self.blockStmtCount(blkId: block) {
+                    val statement = self.blockStmtAt(blkId: block, index: index)
+                    match self.arena.stmts[statement] {
+                        Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, init: _, annotationOccurrence: val occurrence) => {
+                            if occurrence.isSome() { sites.append(<SourceTypeAnnotationSite.Local block=block index=index statement=statement />) }
+                        }
+                        Stmt.For(varStart: _, varLen: _, varTyStart: _, varTyLen: val length, varTy: _, iter: _, body: _, isStruct: _, patStart: _, patLen: _, binds: _) => {
+                            if length != 0U64 { sites.append(<SourceTypeAnnotationSite.Loop block=block index=index statement=statement />) }
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            SourceControlNode.Expression(id: val expression) => {
+                match self.arena.exprs[expression] {
+                    Expr.Cast(operand: _, tyStart: _, tyLen: _, ty: _) => { sites.append(<SourceTypeAnnotationSite.Cast expression=expression />) }
+                    Expr.Make(typeStart: _, typeLen: _, variantStart: _, variantLen: _, isEnum: _, ty: _, fields: _) => { sites.append(<SourceTypeAnnotationSite.Make expression=expression />) }
+                    Expr.Closure(params: val params, hasRet: _, retStart: _, retLen: _, retIsArray: _, retTy: _, body: _, isDiverging: _) => {
+                        sites.append(<SourceTypeAnnotationSite.ClosureResult expression=expression />)
+                        for index in 0U64..<params.count() { sites.append(<SourceTypeAnnotationSite.ClosureParameter expression=expression index=index />) }
+                    }
+                    Expr.ExtView(recv: _, source: _, strip: _) | Expr.ExtMethod(recv: _, source: _, nameStart: _, nameLen: _, args: _) => { sites.append(<SourceTypeAnnotationSite.Selector expression=expression />) }
+                    Expr.Call(nameStart: _, nameLen: _, args: _) | Expr.Method(recv: _, nameStart: _, nameLen: _, args: _) => { sites.append(<SourceTypeAnnotationSite.Callable expression=expression />) }
+                    _ => {}
+                }
+            }
+            _ => {}
+        }
+        mut val annotations: Array[SourceTypeAnnotationSlot] = []
+        for site in sites {
+            val values = match self.sourceTypeAnnotationSlotValues(site: site) { Optional.Some(v: val values) => values Optional.None => { return } }
+            annotations.append(<SourceTypeAnnotationSlot site=site values=values />)
+        }
+        self.authoredTypeFrontiers.append(<AuthoredTypeFrontier annotations=annotations shape=self.sourceControlShape(node: node) node=node occurrences=occurrences />)
+    }
+    fn authoredTypeFrontierMatches(frontier: AuthoredTypeFrontier) -> Bool {
+        if frontier.annotations.count() == 0U64 { return false }
+        match frontier.shape {
+            Optional.Some(v: val shape) => {
+                val current = match self.sourceControlShape(node: frontier.node) { Optional.Some(v: val current) => current Optional.None => { return false } }
+                if !shape.same(other: current) { return false }
+            }
+            Optional.None => { if self.sourceControlShape(node: frontier.node).isSome() { return false } }
+        }
+        for slot in frontier.annotations {
+            val current = match self.sourceTypeAnnotationSlotValues(site: slot.site) { Optional.Some(v: val current) => current Optional.None => { return false } }
+            if current.count() != slot.values.count() { return false }
+            for index in 0U64..<current.count() { if current[index] != slot.values[index] { return false } }
+        }
+        return true
+    }
+    fn sourceTypeAnnotationSlotValues(site: SourceTypeAnnotationSite) -> Optional[Array[U64]] {
+        match site {
+            SourceTypeAnnotationSite.Local(block: val block, index: val index, statement: val statement) => {
+                if !self.sourceTypeAnnotationChildMatches(block: block, index: index, statement: statement) { return <Optional.None /> }
+                if statement >= self.arena.stmts.count() { return <Optional.None /> }
+                return match self.arena.stmts[statement] {
+                    Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: val start, tyLen: val length, tyIsArray: _, ty: val type, init: _, annotationOccurrence: val occurrence) => <Optional.Some v=[start, length, type, occurrence.unwrapOr(fallback: 0U64)] />
+                    _ => <Optional.None />
+                }
+            }
+            SourceTypeAnnotationSite.Loop(block: val block, index: val index, statement: val statement) => {
+                if !self.sourceTypeAnnotationChildMatches(block: block, index: index, statement: statement) { return <Optional.None /> }
+                if statement >= self.arena.stmts.count() { return <Optional.None /> }
+                return match self.arena.stmts[statement] {
+                    Stmt.For(varStart: _, varLen: _, varTyStart: val start, varTyLen: val length, varTy: val type, iter: _, body: _, isStruct: _, patStart: _, patLen: _, binds: _) => <Optional.Some v=[start, length, type] />
+                    _ => <Optional.None />
+                }
+            }
+            SourceTypeAnnotationSite.Cast(expression: val expression) => {
+                if expression >= self.arena.exprs.count() { return <Optional.None /> }
+                return match self.arena.exprs[expression] {
+                    Expr.Cast(operand: _, tyStart: val start, tyLen: val length, ty: val type) => <Optional.Some v=[start, length, type] />
+                    _ => <Optional.None />
+                }
+            }
+            SourceTypeAnnotationSite.Make(expression: val expression) => {
+                if expression >= self.arena.exprs.count() { return <Optional.None /> }
+                return match self.arena.exprs[expression] {
+                    Expr.Make(typeStart: val start, typeLen: val length, variantStart: _, variantLen: _, isEnum: _, ty: val type, fields: _) => <Optional.Some v=[start, length, type] />
+                    _ => <Optional.None />
+                }
+            }
+            SourceTypeAnnotationSite.ClosureResult(expression: val expression) => {
+                if expression >= self.arena.exprs.count() { return <Optional.None /> }
+                return match self.arena.exprs[expression] {
+                    Expr.Closure(params: val params, hasRet: val hasResult, retStart: val start, retLen: val length, retIsArray: _, retTy: val type, body: val body, isDiverging: _) => <Optional.Some v=[start, length, type, body, params.count(), if hasResult { give 1U64 } else { give 0U64 }] />
+                    _ => <Optional.None />
+                }
+            }
+            SourceTypeAnnotationSite.ClosureParameter(expression: val expression, index: val index) => {
+                if expression >= self.arena.exprs.count() { return <Optional.None /> }
+                return match self.arena.exprs[expression] {
+                    Expr.Closure(params: val params, hasRet: _, retStart: _, retLen: _, retIsArray: _, retTy: _, body: _, isDiverging: _) => {
+                        if index >= params.count() { return <Optional.None /> }
+                        val parameter = params[index]
+                        give <Optional.Some v=[parameter.tyStart, parameter.tyLen, parameter.ty, parameter.authoredTypeUse] />
+                    }
+                    _ => <Optional.None />
+                }
+            }
+            SourceTypeAnnotationSite.Selector(expression: val expression) => {
+                if expression >= self.arena.exprs.count() { return <Optional.None /> }
+                val source = match self.arena.exprs[expression] {
+                    Expr.ExtView(recv: _, source: val source, strip: _) | Expr.ExtMethod(recv: _, source: val source, nameStart: _, nameLen: _, args: _) => source
+                    _ => { return <Optional.None /> }
+                }
+                mut val values = [source.writtenStart, source.writtenLen, source.surfaceId, source.traitInstance.owner]
+                for argument in source.traitInstance.positionalArgs { values.append(argument) }
+                return <Optional.Some v=values />
+            }
+            SourceTypeAnnotationSite.Callable(expression: val expression) => {
+                if expression >= self.arena.exprs.count() { return <Optional.None /> }
+                return match self.arena.exprs[expression] {
+                    Expr.Call(nameStart: val start, nameLen: val length, args: _) | Expr.Method(recv: _, nameStart: val start, nameLen: val length, args: _) => <Optional.Some v=[start, length] />
+                    _ => <Optional.None />
+                }
+            }
+        }
+    }
+}
+
+impl Comp {
+    fn sourceTypeAnnotationChildMatches(block: U64, index: U64, statement: U64) -> Bool {
+        if block >= self.arena.blocks.count() { return false }
+        val range = self.arena.blocks[block]
+        if index >= range.stmtLen || range.stmtStart > self.arena.blockStmtPool.count() || range.stmtLen > self.arena.blockStmtPool.count() - range.stmtStart { return false }
+        return self.blockStmtAt(blkId: block, index: index) == statement
+    }
+}

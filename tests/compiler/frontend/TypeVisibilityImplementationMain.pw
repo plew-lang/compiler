@@ -7,7 +7,7 @@ fn main() {
         }
         if diagnostic.typeVisibility().isNone() || !compiler.sourceFailureHasOwner(diagnostic: diagnostic) { panic("real implementation refusal lost Source: "+diagnostic.message()) }
         val refusal = diagnostic.typeVisibility().unwrap()
-        val proof = compiler.failedTypeVisibility[refusal.event()].declaration.unwrap()
+        val proof = compiler.failedTypeVisibility[refusal.event()].evidence.declaration.unwrap()
         val root = compiler.authoredTypeDeclarationRoots[proof.root]
         val owner = compiler.sourceTypeUses.scopeAt(token: root.scope).unwrap().implementation.unwrap()
         val index = match owner.kind { SourceImplementationKind.Conformance(index: val index) => index _ => { panic("expected real conformance") } }

@@ -26,7 +26,7 @@ fn main() {
                 if diagnostic.message() != expectedMessage { panic("invalid request tested a different refusal") }
             }
             if name != "BodyTwin" || scenario != 4U64 { continue }
-            val first = compiler.failedTypeVisibility[diagnostic.typeVisibility().unwrap().event()].receipt
+            val first = compiler.failedTypeVisibility[diagnostic.typeVisibility().unwrap().event()].evidence.receipt
             mut val second: Optional[AuthoredTypeUseReceipt] = <Optional.None />
             for receipt in compiler.authoredTypeOccurrences {
                 if receipt.scope != first.scope && rangeEquals(bytes: compiler.arena.bytes, start: receipt.headStart, len: receipt.headLength, kw: "Marker") {
@@ -38,7 +38,7 @@ fn main() {
             val count = compiler.failedTypeVisibility.count()
             for exchanged in [false, true] {
                 val receipt = if exchanged { give first } else { give peer }
-                val failure = match compiler.checkTypeNameWithOrigin(siteOffset: peer.headSite, start: peer.headStart, len: peer.headLength, occurrence: receipt.id, origin: <SourceTypeVisibilityOrigin.Body request=request />) {
+                val failure = match compiler.checkTypeNameWithOrigin(siteOffset: peer.headSite, start: peer.headStart, len: peer.headLength, occurrence: receipt.id, origin: <SourceTypeUseOrigin.Body request=request />) {
                     Result.Err(error: val failure) => failure
                     Result.Ok(value: _) => { panic("peer missing import became success") }
                 }
@@ -49,7 +49,7 @@ fn main() {
             compiler.sourceFacts.begin(owner: peerOwner)
             compiler.cur.checkFn = peerFunction
             val peerRequest = <SourceRecordOrigin.CheckingRequest session=compiler.sourceFactSession() root=peerOwner />
-            val failure = match compiler.checkTypeNameWithOrigin(siteOffset: peer.headSite, start: peer.headStart, len: peer.headLength, occurrence: peer.id, origin: <SourceTypeVisibilityOrigin.Body request=peerRequest />) {
+            val failure = match compiler.checkTypeNameWithOrigin(siteOffset: peer.headSite, start: peer.headStart, len: peer.headLength, occurrence: peer.id, origin: <SourceTypeUseOrigin.Body request=peerRequest />) {
                 Result.Err(error: val failure) => failure
                 Result.Ok(value: _) => { panic("peer missing import became success") }
             }

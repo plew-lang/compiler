@@ -26,7 +26,7 @@ fn main() {
     if !owned.sourceFailureHasOwner(diagnostic: failure) || failure.typeVisibility().isNone() { panic("owned constructor lost negative event") }
     if !ownedFrontendFailure(c: owned, diagnostic: failure).isSourceRejection() { panic("owning adapter lost source domain") }
     val refusal = failure.typeVisibility().unwrap()
-    val proof = owned.failedTypeVisibility[refusal.event()].declaration.unwrap()
+    val proof = owned.failedTypeVisibility[refusal.event()].evidence.declaration.unwrap()
     val root = owned.authoredTypeDeclarationRoots[proof.root]
     for wrong in 0U64..<4U64 {
         val forged = <TypeVisibilityRefusal session=if wrong == 0U64 { give refusal.session()+1U64 } else { give refusal.session() } occurrence=if wrong == 1U64 { give 0U64 } else { give refusal.occurrence() } event=if wrong == 2U64 { give owned.failedTypeVisibility.count() } else { give refusal.event() } location=if wrong == 3U64 { give <DiagnosticLocation.Unpositioned /> } else { give refusal.location() } />

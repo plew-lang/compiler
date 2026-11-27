@@ -19,14 +19,28 @@ pub fn declarationLabelConflict(bytes: Array[U8], labels: Array[Span]) -> Option
         val left = labels[first]
         for second in first+1U64..<labels.count() {
             val right = labels[second]
-            if left.end-left.start == right.end-right.start {
-                mut val offset = 0U64
-                while offset < left.end-left.start && bytes[left.start+offset] == bytes[right.start+offset] { offset += 1U64 }
-                if offset == left.end-left.start {
-                    return <Optional.Some v=<DeclarationLabelConflict.Duplicate first=first second=second /> />
-                }
+            if equalDeclarationLabelBytes(bytes: bytes, first: left, second: right) {
+                return <Optional.Some v=<DeclarationLabelConflict.Duplicate first=first second=second /> />
             }
         }
     }
     return <Optional.None />
+}
+
+// Safe primitive for matching an authored position to its canonical spelling.
+pub fn declarationLabelBytesEqual(bytes: Array[U8], first: Span, second: Span) -> Bool {
+    if first.start > first.end || first.end > bytes.count() || second.start > second.end || second.end > bytes.count() { return false }
+    return equalDeclarationLabelBytes(bytes: bytes, first: first, second: second)
+}
+
+// The group core validates all spans once before calling this primitive.
+fn equalDeclarationLabelBytes(bytes: Array[U8], first: Span, second: Span) -> Bool {
+    if first.end-first.start != second.end-second.start { return false }
+    if first.start == second.start { return true }
+    mut val offset = 0U64
+    while offset < first.end-first.start {
+        if bytes[first.start+offset] != bytes[second.start+offset] { return false }
+        offset += 1U64
+    }
+    return true
 }

@@ -2052,7 +2052,8 @@ impl Comp {
                 return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "cannot infer closure parameter type; provide a function type context or an explicit annotation") />
             }
             types.append(type)
-            labels.append(if parameter.noLabel { give 0U64 } else { give parameter.nameId })
+            // The admitted spelling is authoritative; cached IDs may be absent or stale on Raw inputs.
+            labels.append(if parameter.noLabel { give 0U64 } else { give intern(c: inout self, start: parameter.nameStart, len: parameter.nameLen) })
             index += 1U64
         }
         val name = self.kwSpan(kw: "fn", kwLen: 2U64)

@@ -324,7 +324,7 @@ pub impl Comp {
     }
 
     inout fn checkTypeName(siteOffset: U64, start: U64, len: U64) -> Result[(), CompileDiagnostic] {
-        return self.checkTypeNameWithOrigin(siteOffset: siteOffset, start: start, len: len, occurrence: 0U64, origin: <SourceTypeVisibilityOrigin.Raw />)
+        return self.checkTypeNameWithOrigin(siteOffset: siteOffset, start: start, len: len, occurrence: 0U64, origin: <SourceTypeUseOrigin.Raw />)
     }
 
     inout fn checkProjectionMember(type: TypeRef) -> Result[(), CompileDiagnostic] {
@@ -351,7 +351,7 @@ pub impl Comp {
     }
 
     inout fn checkSourceTypeUses(occurrences: Array[U64]) -> Result[(), CompileDiagnostic] {
-        return self.checkSourceTypeUsesWithOrigin(occurrences: occurrences, origin: <SourceTypeVisibilityOrigin.Raw />)
+        return self.checkSourceTypeUsesWithOrigin(occurrences: occurrences, origin: <SourceTypeUseOrigin.Raw />)
     }
 
     inout fn checkRequestedTypeUses(occurrences: Array[U64]) -> Result[(), CompileDiagnostic] {
@@ -359,7 +359,7 @@ pub impl Comp {
     }
 
     inout fn checkTypeUseVisibility(ref: U64) -> Result[(), CompileDiagnostic] {
-        return self.checkTypeUseVisibilityWithOrigin(ref: ref, occurrence: 0U64, origin: <SourceTypeVisibilityOrigin.Raw />)
+        return self.checkTypeUseVisibilityWithOrigin(ref: ref, occurrence: 0U64, origin: <SourceTypeUseOrigin.Raw />)
     }
 
     inout fn checkTypeVisibility() -> Result[(), CompileDiagnostic] {

@@ -1,0 +1,146 @@
+// Function types introduce ordered labels, not local binders. Identity interning
+// may retain Raw terms; type-use admission owns their semantic validity.
+impl Comp {
+    fn malformedFunctionTypeSignature() -> CompileDiagnostic {
+        return <CompileDiagnostic failureDomain=<FailureDomain.Internal /> location=<DiagnosticLocation.Unpositioned /> message="function type signature contains malformed type or label data" />
+    }
+
+    fn functionTypeLabelDataIsValid(arguments: TypeArgumentRange, labels: TypeArgumentLabelRange) -> Bool {
+        if arguments.len == 0U64 || !self.arena.typeArgumentRangeIsValid(range: arguments) || !self.arena.typeArgumentLabelRangeIsValid(range: labels) || labels.len > arguments.len { return false }
+        if labels.len != 0U64 && self.arena.typeArgumentLabelAt(index: labels.start) != 0U64 { return false }
+        for slot in 1U64..<labels.len {
+            val label = self.arena.typeArgumentLabelAt(index: labels.start+slot)
+            if label != 0U64 {
+                if label > self.interner.entries.count() { return false }
+                val name = self.interner.entries[label-1U64]
+                if name.len == 0U64 || name.start > self.arena.bytes.count() || name.len > self.arena.bytes.count()-name.start { return false }
+            }
+        }
+        return true
+    }
+
+    fn functionTypeLabelSpans(arguments: TypeArgumentRange, labels: TypeArgumentLabelRange) -> Result[Array[Span], CompileDiagnostic] {
+        if !self.functionTypeLabelDataIsValid(arguments: arguments, labels: labels) { return <Result.Err error=self.malformedFunctionTypeSignature() /> }
+        mut val names: Array[Span] = []
+        for slot in 1U64..<labels.len {
+            val label = self.arena.typeArgumentLabelAt(index: labels.start+slot)
+            if label != 0U64 {
+                val name = self.interner.entries[label-1U64]
+                names.append(<Span start=name.start end=name.start+name.len />)
+            }
+        }
+        return <Result.Ok value=names />
+    }
+
+    // Source position metadata is optional for Raw AST construction. Missing or
+    // incoherent positions never suppress the semantic check or confer ownership.
+    inout fn retainFunctionTypeLabelPositions(occurrence: U64, term: U64, site: U64, end: U64, positions: Array[Span]) {
+        if term >= self.arena.typeTermCount() || positions.count() == 0U64 || site > end || end > self.arena.bytes.count() { return }
+        val type = self.arena.typeTermAt(index: term)
+        if positions.count() != type.args.len || !self.isFnType(ref: term) { return }
+        if !self.functionTypeLabelDataIsValid(arguments: type.args, labels: type.argLabels) { return }
+        mut val labels: Array[U64] = []
+        mut val labelled = false
+        for slot in 0U64..<type.args.len {
+            val label = if slot < type.argLabels.len { give self.arena.typeArgumentLabelAt(index: type.argLabels.start+slot) } else { give 0U64 }
+            labels.append(label)
+            val position = positions[slot]
+            if label == 0U64 {
+                if position.start != position.end { return }
+            } else {
+                val spelling = self.interner.entries[label-1U64]
+                if position.start < site || position.start >= position.end || position.end > end || !declarationLabelBytesEqual(bytes: self.arena.bytes, first: position, second: <Span start=spelling.start end=spelling.start+spelling.len />) { return }
+                labelled = true
+            }
+        }
+        if labelled { self.functionTypeLabelPositions[occurrence] = <LoweredFunctionTypeLabels occurrence=occurrence term=term site=site end=end labels=labels positions=positions /> }
+    }
+
+    fn functionTypeLabelPositionsMatch(positions: LoweredFunctionTypeLabels) -> Bool {
+        if positions.term >= self.arena.typeTermCount() || positions.site > positions.end || positions.end > self.arena.bytes.count() { return false }
+        val type = self.arena.typeTermAt(index: positions.term)
+        if type.nameStart > self.arena.bytes.count() || type.nameLen > self.arena.bytes.count()-type.nameStart { return false }
+        if !rangeEquals(bytes: self.arena.bytes, start: type.nameStart, len: type.nameLen, kw: "fn") || type.args.len != positions.labels.count() || positions.positions.count() != positions.labels.count() { return false }
+        if !self.functionTypeLabelDataIsValid(arguments: type.args, labels: type.argLabels) { return false }
+        for slot in 0U64..<positions.labels.count() {
+            val label = if slot < type.argLabels.len { give self.arena.typeArgumentLabelAt(index: type.argLabels.start+slot) } else { give 0U64 }
+            if label != positions.labels[slot] { return false }
+            val position = positions.positions[slot]
+            if label == 0U64 {
+                if position.start != position.end { return false }
+            } else {
+                val spelling = self.interner.entries[label-1U64]
+                if position.start < positions.site || position.start >= position.end || position.end > positions.end || !declarationLabelBytesEqual(bytes: self.arena.bytes, first: position, second: <Span start=spelling.start end=spelling.start+spelling.len />) { return false }
+            }
+        }
+        return true
+    }
+
+    fn functionTypeLabelPosition(positions: LoweredFunctionTypeLabels, index: U64) -> Optional[Span] {
+        mut val labelled = 0U64
+        for slot in 1U64..<positions.labels.count() {
+            if positions.labels[slot] != 0U64 {
+                if labelled == index { return <Optional.Some v=positions.positions[slot] /> }
+                labelled += 1U64
+            }
+        }
+        return <Optional.None />
+    }
+
+    inout fn checkFunctionTypeSignature(ref: U64, occurrence: U64, origin: SourceTypeUseOrigin) -> Result[(), CompileDiagnostic] {
+        if ref >= self.arena.typeTermCount() { return <Result.Err error=self.malformedFunctionTypeSignature() /> }
+        val type = self.arena.typeTermAt(index: ref)
+        if type.nameStart > self.arena.bytes.count() || type.nameLen > self.arena.bytes.count()-type.nameStart { return <Result.Err error=self.malformedFunctionTypeSignature() /> }
+        if !rangeEquals(bytes: self.arena.bytes, start: type.nameStart, len: type.nameLen, kw: "fn") { return <Result.Ok value=() /> }
+        val names = try self.functionTypeLabelSpans(arguments: type.args, labels: type.argLabels)
+        val conflict = match declarationLabelConflict(bytes: self.arena.bytes, labels: names) { Optional.None => { return <Result.Ok value=() /> } Optional.Some(v: val conflict) => conflict }
+        val pair = match conflict {
+            DeclarationLabelConflict.Malformed(index: _) => { return <Result.Err error=self.malformedFunctionTypeSignature() /> }
+            DeclarationLabelConflict.Duplicate(first: val first, second: val second) => (first: first, second: second)
+        }
+        mut val location = <DiagnosticLocation.Unpositioned />
+        mut val previous = <DiagnosticLocation.Unpositioned />
+        val positions = self.functionTypeLabelPositions.get(key: occurrence)
+        mut val positioned: Optional[LoweredFunctionTypeLabels] = <Optional.None />
+        match positions {
+            Optional.Some(v: val written) => {
+                if written.occurrence == occurrence && written.term == ref && self.functionTypeLabelPositionsMatch(positions: written) {
+                    match self.functionTypeLabelPosition(positions: written, index: pair.first) {
+                        Optional.Some(v: val first) => {
+                            match self.functionTypeLabelPosition(positions: written, index: pair.second) {
+                                Optional.Some(v: val second) => { location = self.diagnosticLocationAt(offset: second.start) previous = self.diagnosticLocationAt(offset: first.start) positioned = positions }
+                                Optional.None => {}
+                            }
+                        }
+                        Optional.None => {}
+                    }
+                }
+            }
+            Optional.None => {}
+        }
+        val raw = <CompileDiagnostic location=location message="duplicate function type parameter label (each labelled position must be distinct)" notes=[<DiagnosticNote location=previous message="previous function type parameter label is here" />] />
+        val written = match positioned { Optional.Some(v: val written) => written Optional.None => { return <Result.Err error=raw /> } }
+        val evidence = match self.captureSourceTypeUseFailureEvidence(occurrence: occurrence, origin: origin) { Optional.Some(v: val evidence) => evidence Optional.None => { return <Result.Err error=raw /> } }
+        if evidence.receipt.term != written.term || evidence.receipt.site != written.site { return <Result.Err error=raw /> }
+        val refusal = <TypeSignatureRefusal session=self.sourceFactSession() occurrence=occurrence event=self.failedTypeSignatures.count() location=raw.location() message=raw.message() notes=raw.notes() />
+        self.failedTypeSignatures.append(<SourceTypeSignatureFailure refusal=refusal evidence=evidence labels=written />)
+        return <Result.Err error=<CompileDiagnostic.typeSignature refusal=refusal /> />
+    }
+
+    fn sourceTypeSignatureFailureHasOwner(refusal: TypeSignatureRefusal) -> Bool {
+        if refusal.session() != self.sourceFactSession() || refusal.event() >= self.failedTypeSignatures.count() { return false }
+        val proof = self.failedTypeSignatures[refusal.event()]
+        val original = proof.refusal
+        if original.session() != refusal.session() || original.occurrence() != refusal.occurrence() || original.event() != refusal.event() || !original.location().same(other: refusal.location()) || original.message() != refusal.message() || original.notes().count() != refusal.notes().count() { return false }
+        for index in 0U64..<original.notes().count() {
+            if !original.notes()[index].location.same(other: refusal.notes()[index].location) || original.notes()[index].message != refusal.notes()[index].message { return false }
+        }
+        if proof.labels.occurrence != refusal.occurrence() || proof.labels.term != proof.evidence.receipt.term || proof.labels.site != proof.evidence.receipt.site || !self.functionTypeLabelPositionsMatch(positions: proof.labels) { return false }
+        val current = match self.functionTypeLabelPositions.get(key: refusal.occurrence()) { Optional.Some(v: val current) => current Optional.None => { return false } }
+        if current.occurrence != proof.labels.occurrence || current.term != proof.labels.term || current.site != proof.labels.site || current.end != proof.labels.end || current.labels.count() != proof.labels.labels.count() || current.positions.count() != proof.labels.positions.count() { return false }
+        for index in 0U64..<current.labels.count() {
+            if current.labels[index] != proof.labels.labels[index] || current.positions[index].start != proof.labels.positions[index].start || current.positions[index].end != proof.labels.positions[index].end { return false }
+        }
+        return self.sourceTypeUseFailureEvidenceMatches(evidence: proof.evidence, occurrence: refusal.occurrence())
+    }
+}
