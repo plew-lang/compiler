@@ -65,6 +65,17 @@ substitutions; it does not require the member to be declared directly on Child.
 Name visibility and justification of the selected view remain ordinary admission
 requirements. Finding a member does not establish a conformance.
 
+Declaration namespace preparation precedes instance-argument lowering. Its graph
+contains only registered trait owners, directly declared member identities and
+bound parent owners; it carries no receiver, substituted arguments, equations or
+conformance authority. A negative namespace result requires complete reachable
+namespace information. A positive result requests the full associated-member
+query and does not decide a candidate or justify a projection. Source and legacy
+producers prepare all such namespaces before lowering heritage arguments. Finished
+headers must agree with their prepared parent-owner sequence. This separates
+ordinary nominal argument lookup from dependencies on unfinished instance
+headers, without treating unavailable information as an empty namespace.
+
 Candidate identity is the associated declaration and its declaring trait owner
 with every substituted positional argument. Repeated reachability of that same
 candidate is deduplicated. Different declaring instances or declarations remain

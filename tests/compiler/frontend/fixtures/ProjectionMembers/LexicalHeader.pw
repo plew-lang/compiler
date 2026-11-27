@@ -1,0 +1,3 @@
+trait Parent[A] {}
+trait Child: Parent[Item] { type Item }
+fn main() {}

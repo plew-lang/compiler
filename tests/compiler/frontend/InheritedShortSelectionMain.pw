@@ -60,14 +60,17 @@ fn main() {
     val childOwner = compiler.decls.traitAt(index: childIndex).nameStart
     val completed = compiler.decls.queryProbeTraitEntry(owner: childOwner)
     val headers = compiler.traitLexicalHeaders
+    val namespaces = compiler.traitNamespaceParents
     compiler.decls.setQueryProbeTraitEntry(owner: childOwner, entry: 0U64)
     compiler.traitLexicalHeaders = [:]
+    compiler.traitNamespaceParents = [:]
     match compiler.associatedMemberNamespaceContains(owner: childOwner, member: compiler.internBytes(s: "Output").nameId, site: 0U64) {
         Result.Err(error: val diagnostic) => { match diagnostic.failureDomain() { FailureDomain.Limit => {} _ => { panic("unavailable namespace changed failure class") } } }
         Result.Ok(value: _) => { panic("unavailable inherited namespace was treated as a boolean result") }
     }
     compiler.decls.setQueryProbeTraitEntry(owner: childOwner, entry: completed)
     compiler.traitLexicalHeaders = headers
+    compiler.traitNamespaceParents = namespaces
 
     // Value-AST lowering carries the same prepared result; no admission reset.
     val text = "fn legacyShort[T](value: T.Output) where T: Child[I64] {{}}"

@@ -1,3 +1,4 @@
+use @Plew/Syntax as LexicalProbeSyntax
 // Bare lexical associated names must retain their declaring Self root.
 fn main() {
     mut val compiler = <Comp />
@@ -53,4 +54,37 @@ fn main() {
         found = true
     }
     if !found { panic("lexical requirement setup missing") }
+    checkValueLexicalNamespace()
+
+}
+
+fn checkValueLexicalNamespace() {
+    val source = "trait Parent[A] {{ type Output }}\ntrait Child: Parent[I64] {{ fn item(value: Output) }}"
+    mut val lexer = <Lexer bytes=source.bytes() pos=0U64 toks=[] depth=0I64 />
+    lex(lx: inout lexer)
+    mut val parser = <P bytes=source.bytes() toks=lexer.toks pos=0U64 base=0U64 />
+    val items = LexicalProbeSyntax.parseProgramAst(p: inout parser)
+    mut val compiler = <Comp />
+    compiler.arena.reserveTypeSentinel()
+    compiler.appendSrc(from: source.bytes())
+    mut val bindings = <ModuleScopeBindings />
+    for item in items {
+        match item {
+            TopItemAst.Trait(t: val trait) => { bindings.addDeclaration(moduleId: 0U64, nameId: compiler.internBytes(s: trait.name).nameId, kind: <ScopeBindingKind.Trait />, offset: trait.nameSpan.start, isPublic: false).unwrap() }
+            _ => {}
+        }
+    }
+    compiler.moduleScopeBindings = <Optional.Some v=bindings.finish().unwrap() />
+    compiler.prepareValueTraitItems(items: items).unwrap()
+    for item in items { compiler.lowerTopItem(item: item).unwrap() }
+    val child = compiler.decls.traitAt(index: 1U64)
+    val requirement = compiler.traitReqAt(reqs: child.reqs, index: 0U64)
+    val parameter = compiler.funcParamAt(params: requirement.params, index: 0U64)
+    val selection = compiler.retainedAssociatedSelection(occurrence: parameter.authoredTypeUse, ref: parameter.ty).unwrap().unwrap()
+    match selection.outcome {
+        AssociatedMemberOutcome.Unique(candidate: val candidate) => {
+            if candidate.instance.owner != compiler.decls.traitAt(index: 0U64).nameStart || candidate.instance.positionalArgs.count() != 1U64 { panic("Value lexical namespace lost its declaring instance") }
+        }
+        _ => { panic("Value lexical namespace did not select its inherited member") }
+    }
 }

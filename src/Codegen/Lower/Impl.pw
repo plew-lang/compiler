@@ -354,6 +354,7 @@ pub impl Comp {
 
     inout fn prepareValueTraitItems(items: Array[TopItemAst]) -> Result[(), CompileDiagnostic] {
         for item in items { self.predeclareTraitItem(item: item) }
+        for item in items { try self.prepareValueTraitItemNamespace(item: item) }
         for item in items { try self.prepareValueTraitItemHeader(item: item) }
         return <Result.Ok value=() />
     }
@@ -1599,8 +1600,30 @@ pub impl Comp {
 }
 
 impl Comp {
+    inout fn prepareValueTraitItemNamespace(item: TopItemAst) -> Result[(), CompileDiagnostic] {
+        match item {
+            TopItemAst.Trait(t: val trait) => {
+                mut val parents: Array[U64] = []
+                for declared in trait.supertraits {
+                    val source = try self.valueWhereTraitHead(traitType: (try self.normalizeProjectionType(t: declared)), origin: <Optional.None />)
+                    parents.append(source.traitInstance.owner)
+                }
+                return self.saveTraitNamespace(owner: trait.nameSpan.start, parents: parents)
+            }
+            TopItemAst.Published(inner: val item) => { return self.prepareValueTraitItemNamespace(item: item) }
+            _ => { return <Result.Ok value=() /> }
+        }
+    }
+
+    inout fn saveTraitNamespace(owner: U64, parents: Array[U64]) -> Result[(), CompileDiagnostic] {
+        if self.traitNamespaceParents.contains(key: owner) { return <Result.Err error=self.associatedMemberInputFailure(message: "trait namespace was prepared twice") /> }
+        self.traitNamespaceParents[owner] = parents
+        return <Result.Ok value=() />
+    }
+
     inout fn prepareValueTraitHeaderInLexicalScope(trait: TraitAst) -> Result[(), CompileDiagnostic] {
         val owner = trait.nameSpan.start
+        if !self.traitNamespaceParents.contains(key: owner) { try self.prepareValueTraitItemNamespace(item: <TopItemAst.Trait t=trait />) }
         val parameters = try self.lowerTypeParamNames(names: trait.typeParams, anchor: owner, sendableFlags: trait.typeParamSendable)
         self.enterTraitSignatureScope(owner: owner, parameters: parameters)
         val scope = self.beginAuthoredTypeScope(kind: <SourceTypeScopeKind.TraitDeclaration />, anchor: owner)
@@ -1708,8 +1731,20 @@ impl Comp {
 }
 
 pub impl Comp {
+    inout fn prepareSyntaxTraitNamespace(id: TraitId) -> Result[(), CompileDiagnostic] {
+        val trait = syntaxTrait(file: self.syntax, id: id)
+        mut val parents: Array[U64] = []
+        for index in 0U64..<syntaxTraitSupertraitCount(file: self.syntax, trait: trait) {
+            val declared = syntaxTraitSupertrait(file: self.syntax, trait: trait, index: index)
+            val source = try self.syntaxWhereTraitHead(traitType: (try self.resolveSyntaxTypePath(t: syntaxType(file: self.syntax, id: declared))))
+            parents.append(source.traitInstance.owner)
+        }
+        return self.saveTraitNamespace(owner: trait.name.start, parents: parents)
+    }
+
     inout fn prepareSyntaxTraitHeader(id: TraitId) -> Result[(), CompileDiagnostic] {
         val trait = syntaxTrait(file: self.syntax, id: id)
+        if !self.traitNamespaceParents.contains(key: trait.name.start) { try self.prepareSyntaxTraitNamespace(id: id) }
         val savedParameters = self.cur.typeParams
         val savedAssociatedOwner = self.lowerAssociatedOwner
         val savedAssociatedArgs = self.lowerAssociatedArgs
@@ -1752,6 +1787,15 @@ impl Comp {
 
     inout fn saveTraitLexicalHeader(owner: U64, parameters: Array[Bind], supertraits: Array[LoweredTraitConstraint], scope: U64) -> Result[(), CompileDiagnostic] {
         val identity = self.decls.traitOwnerAt(index: self.decls.traitOwnerIndex(offset: owner))
+        match self.traitNamespaceParents.get(key: owner) {
+            Optional.Some(v: val parents) => {
+                if parents.count() != supertraits.count() { return <Result.Err error=self.associatedMemberInputFailure(message: "trait header changed its namespace edges") /> }
+                for index in 0U64..<parents.count() {
+                    if parents[index] != supertraits[index].constraint.key.owner { return <Result.Err error=self.associatedMemberInputFailure(message: "trait header changed its namespace owner") /> }
+                }
+            }
+            Optional.None => {}
+        }
         val start = self.decls.traitConstraintPool.count()
         mut val terms: Array[TraitConstraint] = []
         for lowered in supertraits {

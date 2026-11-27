@@ -1533,6 +1533,8 @@ pub struct Comp {
     mut val authoredSupertraitOperands: Dictionary[U64, AuthoredTraitConstraintOperands] = [:]
     mut val authoredAssociatedConstraintOperands: Dictionary[U64, AuthoredTraitConstraintOperands] = [:]
     mut val traitLexicalHeaders: Dictionary[U64, TraitBoundShape] = [:]
+    // Declaration-only namespace edges; no instance or conformance authority.
+    mut val traitNamespaceParents: Dictionary[U64, Array[U64]] = [:]
     mut val projectionBoundClauses: Array[ProjectionBoundClause] = []
     mut val activeProjectionBounds: Optional[ProjectionBoundContext] = <Optional.None />
     pub mut val moduleScopeBindings: Optional[AdmittedModuleScopeBindings] = <Optional.None />
@@ -3298,6 +3300,7 @@ fn loadFrontendDeclarations(c: inout Comp, input: FrontendInput, sources: Source
         }
         rootIndex += 1U64
     }
+    for trait in traits { try c.prepareSyntaxTraitNamespace(id: trait) }
     for trait in traits { try c.prepareSyntaxTraitHeader(id: trait) }
     tracePhase(c: inout c, label: "predeclare:done")
     tracePhase(c: inout c, label: "lower:start")

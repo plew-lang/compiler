@@ -170,6 +170,23 @@ adopted. Resolve that producer dependency explicitly before the handoff migratio
 do not restore silent missing-header behavior or add a per-name exception.
 Meta lexical-checkpoint.json retains frozen input hashes and exact outcomes.
 
+Namespace-only preparation is now implemented for Syntax and Value producers,
+including per-entry setup and a parent-count/owner consistency check at completed
+header registration. Lexical lookup uses namespace filtering then the common
+instance query; its old BFS/comparison helpers are removed. The original eighteen
+native profiles pass in lexical-namespace-green-v3, including an added Value AST
+Parent[I64] case. The unavailable-namespace internal control now removes both
+namespace and header information; a valid namespace snapshot is not missing data.
+
+A new nineteenth profile, LexicalHeaderSelectionMain, requires
+`trait Child: Parent[Item] { type Item }` to succeed. Both baseline a9bce8db and
+current source fail with Limit. This is an existing preparation cycle, not a
+regression introduced by namespace filtering. Local associated declaration
+identity must be formed without requiring its own completed heritage; final
+heritage uniqueness, redeclaration and proof checks remain required. Do not claim
+this checkpoint closes lexical or all-native coverage. Keep the RED until the
+binder/admission boundary is corrected. Exact results: meta namespace-checkpoint.json.
+
 ## Next implementation sequence
 
 1. Audit remaining producer/receiver environments against the receipt checkpoint;

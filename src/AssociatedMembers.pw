@@ -45,13 +45,29 @@ impl Comp {
         mut val owners = [owner]
         mut val cursor = 0U64
         while cursor < owners.count() {
-            val shape = try self.associatedMemberShape(owner: owners[cursor], site: site)
+            val owner = owners[cursor]
             cursor += 1U64
-            for index in 0U64..<shape.assocTypes.len {
-                if self.traitBindAt(binds: shape.assocTypes, index: index).nameId == member { return <Result.Ok value=true /> }
+            mut val parents: Array[U64] = []
+            match self.traitNamespaceParents.get(key: owner) {
+                Optional.Some(v: val edges) => {
+                    val identity = self.decls.traitOwnerIndex(offset: owner)
+                    if identity >= self.decls.traitOwnerCount() { return <Result.Err error=self.associatedMemberInputFailure(message: "trait namespace has an unknown owner") /> }
+                    for memberBinding in self.decls.traitOwnerAt(index: identity).assocTypes {
+                        if memberBinding.nameId == member { return <Result.Ok value=true /> }
+                    }
+                    parents = edges
+                }
+                Optional.None => {
+                    val shape = try self.associatedMemberShape(owner: owner, site: site)
+                    for index in 0U64..<shape.assocTypes.len {
+                        if self.traitBindAt(binds: shape.assocTypes, index: index).nameId == member { return <Result.Ok value=true /> }
+                    }
+                    for index in 0U64..<shape.supertraits.len {
+                        parents.append((try self.associatedMemberEdgeConstraint(shape: shape, index: index, site: site)).key.owner)
+                    }
+                }
             }
-            for index in 0U64..<shape.supertraits.len {
-                val parent = (try self.associatedMemberEdgeConstraint(shape: shape, index: index, site: site)).key.owner
+            for parent in parents {
                 mut val seen = false
                 for prior in owners { if prior == parent { seen = true break } }
                 if !seen {
