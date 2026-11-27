@@ -65,23 +65,26 @@ Receipt: meta declaration-parameters/closure-red.json. The initial contextual
 negative used invalid omitted-type syntax; it was removed from target evidence
 and replaced with a legal contextual positive before this RED record.
 
-Independent source planning: Record's Expr.Closure branch owns the completed
-group before reading any signature cache, publishing descriptors/body signatures
-or installing locals. The public resolveClosureFunctionType constructor remains
-Raw and invokes the shared comparison; the private admitted continuation avoids
-a second scan in owned Record. Raw named-body introduction validates before
-clearing/installing locals; the owned named path consumes its admitted declaration.
+Record's Expr.Closure branch owns the completed group before reading any
+signature cache, publishing descriptors/body signatures or installing locals.
+The public resolveClosureFunctionType constructor remains Raw and invokes the
+shared comparison; the private admitted continuation avoids a second scan in
+owned Record. Raw named-body introduction validates before clearing/installing
+locals; the owned named path consumes its admitted declaration.
 
 Lower retains one private passive authored closure signature receipt (Expr with
-its existing CoW parameter array, serial/span/body/signature identity), not an
-event per binding/label rule or a new local environment. On actual conflict only,
-the private Record adapter verifies that receipt, request session/root, active
-owner and actual sourceControlNodePath in the constructing outer owner. It then
-generates the immutable Source diagnostic directly; failed provenance yields
-the same Raw refusal. Independent reviewer confirmed no new failure-event ledger
-or diagnostic variant is needed when the sole downstream consumer retains and
-displays that diagnostic. This does not authorize a success fact or arbitrary
-diagnostic promotion. No success-path bodywalk is added.
+its existing CoW parameter array, serial/span/body/signature identity and original
+Lower scope), not a second local environment. On actual conflict only, Record
+verifies that receipt, original lexical owner, request session/root, active owner
+and actual sourceControlNodePath. It retains one typed closure-signature refusal
+with the saved proof/path. Raw preparation/cache retains Unclassified; only the
+owned service validates and interprets the saved refusal as Source. No duplicate
+name judgement, full graph walk or parent-owner reconstruction is repeated by
+that consumer. Generic owned diagnostic conversion preserves notes as well as
+reason and primary location. This is one shared-producer/service-boundary frame,
+not a separate event dictionary for each binding/label rule. No Source success
+fact or arbitrary diagnostic-promotion API is created. No success-path bodywalk
+is added.
 
 WIP source checking passes. Fresh/native/mutation/cache/retention controls and
 independent finite certification remain pending.
@@ -108,3 +111,23 @@ paths. Receipt closure-owner-red.json. These are real accepted programs on A;
 not unrelated setup rejections. The initial session harness used an unsupported
 unique-yield match form; it is corrected to the existing statement-return pattern
 and excluded from evidence of executed assertions.
+
+## Raw preparation and retained consumer repair
+
+Native session-red-v4 proves direct Source emission at Record leaks through
+public prepareLexicalBody: exact duplicate binding-name Source report on Raw
+Comp. CheckingRequest is constructed by the shared preparation pipeline and is
+not owned-session authority. Source review independently confirmed this caller
+chain. The corrected producer emits ClosureSignatureRefusal (Unclassified),
+stores one immutable proof/path frame, and ownedFailure/sourceFailureHasOwner
+validate it without re-running acceptance. Both owned conversion points now
+retain notes. Native green-v3 passes12 scenarios plus forged payload/session and
+failed-builder checks; session-green-v1 passes Raw repeated preparation, owned
+retries, whole failed-session and eager source classification with exact notes.
+No setup failures are counted as target RED.
+
+The finite addLocal inventory is binding-installation-callers.json. Verify/Mono
+consume registered signatures or retained closure descriptors; low-level
+verifyFunc/checkGenericFunction are not Raw registration APIs. Reviewer confirmed
+that repeating admission in these passes would violate the intended owner split.
+Unrelated statement/pattern/loop binding policies are not claimed fixed.

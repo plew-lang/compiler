@@ -226,7 +226,7 @@ impl CompilerSession {
     // Neither this helper nor a raw cache accepts a caller-supplied failure.
     fn ownedFailure(diagnostic: CompileDiagnostic) -> CompileDiagnostic {
         if self.compiler.sourceFailureHasOwner(diagnostic: diagnostic) {
-            return <CompileDiagnostic failureDomain=<FailureDomain.Source /> location=diagnostic.location() message=diagnostic.message() />
+            return <CompileDiagnostic failureDomain=<FailureDomain.Source /> location=diagnostic.location() message=diagnostic.message() notes=diagnostic.notes() />
         }
         return diagnostic
     }

@@ -67,7 +67,7 @@ use ./Path only { resolveImport, extractSpan, dirPrefixLen, findSrcRoot, findPkg
 use ./Manifest only { Dep, loadManifestDeps, resolveDepImport, resolveGitDepImport, loadLock, isExternalDepImport }
 use ./Lock only { Lock }
 use ./Cache only { cacheRoot }
-use ./Diag only { compileErrorAt, compileErrorAtFile, CompileDiagnostic, ArrayContextRefusal, UseAfterMoveRefusal, MissingFieldRefusal, MissingFieldKind, AssignmentRefusal, AssignmentRefusalKind, UniqueCopyRefusal, UniqueCaptureRefusal, NonCallableBindingRefusal, FreeCallVisibilityRefusal, FreeCallVisibilityKind, FreeCallAmbiguityRefusal, FreeCallAmbiguityKind, MemberCallAmbiguityRefusal, MemberCallAmbiguityKind, GenericCallConflictRefusal, genericCallConflictMessage, OpaqueNumericRefusal, OperatorRequirementRefusal, NamedDeclarationRefusal, NamedDeclarationKind, SourceTypingRefusal, IndexRequirementRefusal, TypeVisibilityRefusal, LoopTargetRefusal, LoopTargetRefusalKind, opaqueNumericMessage, DiagnosticOwner, DiagnosticNote, DiagnosticLocation, DiagnosticSeverity, FailureDomain, emitDiagnostic, eprintInt, digitByte, digitStrU }
+use ./Diag only { compileErrorAt, compileErrorAtFile, CompileDiagnostic, ArrayContextRefusal, UseAfterMoveRefusal, MissingFieldRefusal, MissingFieldKind, AssignmentRefusal, AssignmentRefusalKind, UniqueCopyRefusal, UniqueCaptureRefusal, NonCallableBindingRefusal, FreeCallVisibilityRefusal, FreeCallVisibilityKind, FreeCallAmbiguityRefusal, FreeCallAmbiguityKind, MemberCallAmbiguityRefusal, MemberCallAmbiguityKind, GenericCallConflictRefusal, genericCallConflictMessage, OpaqueNumericRefusal, OperatorRequirementRefusal, NamedDeclarationRefusal, NamedDeclarationKind, SourceTypingRefusal, IndexRequirementRefusal, TypeVisibilityRefusal, ClosureSignatureRefusal, LoopTargetRefusal, LoopTargetRefusalKind, opaqueNumericMessage, DiagnosticOwner, DiagnosticNote, DiagnosticLocation, DiagnosticSeverity, FailureDomain, emitDiagnostic, eprintInt, digitByte, digitStrU }
 use ./Ops only { opEq, opNe, opLt, opLe, opGt, opGe, opAdd, opSub, opMul, opDiv, opRem, opAnd, opOr, opNot, opBitAnd, opBitOr, opBitXor, opShl, opShr, opBitNot, opAssign, compoundBinOp, isBinTraitOp, binTraitName, binTraitMethodName, unaryMethodName }
 
 // Only an entirely unsuffixed numeric expression accepts a sibling's
@@ -1309,6 +1309,15 @@ struct AuthoredClosureSignature {
 }
 impl AuthoredClosureSignature { factory }
 
+struct SourceClosureSignatureFailure {
+    val refusal: ClosureSignatureRefusal
+    val owner: SemanticCompletionOwner
+    val root: SemanticCompletionOwner
+    val authored: AuthoredClosureSignature
+    val path: SourceNodePath
+}
+impl SourceClosureSignatureFailure { factory }
+
 struct AuthoredConstruction {
     val offset: U64
     val expression: Expr
@@ -1534,6 +1543,7 @@ pub struct Comp {
     pub mut val pendingConstructionContexts: Set[U64] = Set.new()
     pub mut val pendingInterpolationWrites: Dictionary[U64, InterpolationWrite] = [:]
     mut val authoredCastTargets: Dictionary[U64, U64] = [:]
+    mut val failedClosureSignatures: Array[SourceClosureSignatureFailure] = []
     mut val authoredClosureSignatures: Dictionary[U64, AuthoredClosureSignature] = [:]
     mut val authoredExpressionTypeSlots: Dictionary[U64, Array[(index: U64, occurrence: U64)]] = [:]
     pub mut val expressionTypeUses: Dictionary[U64, Array[U64]] = [:]
@@ -3194,7 +3204,7 @@ pub fn analyzeFrontendDeclarations(c: inout Comp, input: FrontendInput, sources:
 // Comp. Caller-owned analysis never gains authority from this interpretation.
 fn ownedFrontendFailure(c: Comp, diagnostic: CompileDiagnostic) -> CompileDiagnostic {
     if c.sourceFailureHasOwner(diagnostic: diagnostic) {
-        return <CompileDiagnostic failureDomain=<FailureDomain.Source /> location=diagnostic.location() message=diagnostic.message() />
+        return <CompileDiagnostic failureDomain=<FailureDomain.Source /> location=diagnostic.location() message=diagnostic.message() notes=diagnostic.notes() />
     }
     return diagnostic
 }

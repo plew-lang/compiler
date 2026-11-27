@@ -66,6 +66,10 @@ closure signature and its actual occurrence in the constructing owner. A
 current edited graph cannot redefine an authored occurrence's origin. Raw
 constructors retain Raw diagnostic ownership; retained immutable diagnostics
 are not semantic success or source-admission capabilities.
+A checking request is also used by Raw preparation; it does not itself grant
+service ownership. Shared producers retain a proof-bearing refusal for an
+owned service to interpret, preserving its reason, locations and notes through
+cache and failure retention.
 
 An operator's result expectation is not automatically an operand expectation: receiver `Self`, right-hand type, and associated `Output` can differ. Likewise, a block result's expectation belongs at its yields, not at the value of a nested `return` to another function contract. Optional-chain payload holes receive an explicit child term; they do not make one saved expression arbitrarily change type with each reader's context.
 

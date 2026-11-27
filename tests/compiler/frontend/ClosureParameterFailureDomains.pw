@@ -1,6 +1,5 @@
-use ../../../src/Frontend only { FrontendInput, openFrontend }
+use ../../../src/Frontend only { Comp, FrontendInput, analyzeFrontendForRequests, openFrontend }
 use ../../../src/CheckedProgram only { CompilerSession, CompilerSessionResult, ProgramCheckResult, checkCompilerSession }
-use ../../../src/Backend only { LlvmLoweringResult }
 use ../../../src/SourceAccess only { SourceAccess }
 use ../../../src/Diag only { CompileDiagnostic, DiagnosticLocation }
 fn closureFailure(diagnostic: CompileDiagnostic) {
@@ -34,19 +33,26 @@ fn closureSession(input: FrontendInput) -> CompilerSession {
 fn main() {
     val input = <FrontendInput.File path="tests/compiler/frontend/fixtures/ClosureParameterGroups/Main.pw" />
     mut val owned = closureSession(input: input)
-    match owned.lowerDeclarations() { LlvmLoweringResult.Success(module: _) => {} LlvmLoweringResult.Failure(diagnostic: val diagnostic) => { panic(diagnostic.message()) } }
-    mut val failed = false
-    for body in owned.registeredBodies() {
-        match owned.prepareBodyAccess(bodyId: body) {
-            Result.Err(error: val first) => {
-                closureFailure(diagnostic: first)
-                failed = true
-                match owned.prepareBodyAccess(bodyId: body) { Result.Err(error: val second) => { sameClosureFailure(first: first, second: second) } Result.Ok(value: _) => { panic("retry published refused closure") } }
+    mut val raw = <Comp />
+    analyzeFrontendForRequests(c: inout raw, input: input, sources: <SourceAccess stdRoot="std/".bytes() />).unwrap()
+    // Identical frozen input assigns the same named function identity in each
+    // fresh session; no source capability is transferred by this observation.
+    val function = raw.arena.firstFunctionNamed(nameId: raw.internBytes(s: "entry").nameId)
+    mut val retained: Optional[CompileDiagnostic] = <Optional.None />
+    for attempt in 0U64..<2U64 {
+        match raw.prepareLexicalBody(fnIdx: function) {
+            Result.Err(error: val diagnostic) => { if diagnostic.isSourceRejection() { panic("Raw Source diagnostic: "+diagnostic.message()) }
+                if diagnostic.notes().count() != 1U64 { panic("Raw missing note: "+diagnostic.message()) } }
+            Result.Ok(value: _) => { panic("Raw body admitted duplicate closure group") }
+        }
+        match owned.prepareFunction(function: function) {
+            Result.Err(error: val diagnostic) => {
+                closureFailure(diagnostic: diagnostic)
+                match retained { Optional.Some(v: val first) => { sameClosureFailure(first: first, second: diagnostic) } Optional.None => { retained = <Optional.Some v=diagnostic /> } }
             }
-            Result.Ok(value: _) => {}
+            Result.Ok(value: _) => { panic("owned request admitted duplicate closure group") }
         }
     }
-    if !failed { panic("session did not check closure") }
     match checkCompilerSession(session: move owned) { ProgramCheckResult.Failure(diagnostic: val diagnostic) => { closureFailure(diagnostic: diagnostic) } ProgramCheckResult.Success(program: _) => { panic("refused session became checked") } }
     match openFrontend(input: input, sources: <SourceAccess stdRoot="std/".bytes() />) { Result.Err(error: val diagnostic) => { closureFailure(diagnostic: diagnostic) } Result.Ok(value: _) => { panic("eager check admitted closure group") } }
 }

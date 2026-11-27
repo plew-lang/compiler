@@ -21,6 +21,8 @@ pub impl Comp {
         return false
     }
 
+    // Caller supplies a registered/admitted declaration and its lexical environment.
+    // This body verifier consumes that signature; it does not register a Raw one.
     inout fn verifyFunc(f: Func, abstract: Bool = false) -> Result[(), CompileDiagnostic] {
         try self.checkFunctionReturns(f: f)
         val declarationReceiver = self.parametricSelfRef(f: f)

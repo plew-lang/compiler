@@ -57,7 +57,19 @@ fn main() {
             give match compiler.admitRecordedClosureParameters(expression: expression, origin: request) { Result.Err(error: val diagnostic) => diagnostic Result.Ok(value: _) => { panic("closure group admitted duplicate") } }
         }
         val source = kind == "Owned" || kind == "FullRecord" || kind == "Cached"
-        if refusal.isSourceRejection() != source || refusal.notes().count() != 1U64 || refusal.message() != "duplicate parameter binding name (each parameter in a group must have a distinct name)" { panic("closure parameter refusal origin changed: "+kind) }
+        if refusal.isSourceRejection() || compiler.sourceFailureHasOwner(diagnostic: refusal) != source || refusal.notes().count() != 1U64 || refusal.message() != "duplicate parameter binding name (each parameter in a group must have a distinct name)" { panic("closure parameter refusal origin changed: "+kind) }
         if compiler.semanticClosures.count() != closuresBefore || compiler.cur.locals.count() != localsBefore { panic("failed group published a descriptor or parameter local") }
+        if source {
+            val original = refusal.closureSignature().unwrap()
+            for changed in ["session", "event", "expression", "owner", "message", "notes"] {
+                val forged = <ClosureSignatureRefusal session=(if changed == "session" { give original.session()+1U64 } else { give original.session() }) owner=(if changed == "owner" { give <DiagnosticOwner.Unknown /> } else { give original.owner() }) expression=(if changed == "expression" { give original.expression()+1U64 } else { give original.expression() }) event=(if changed == "event" { give 18446744073709551615U64 } else { give original.event() }) location=original.location() message=(if changed == "message" { give "not this refusal" } else { give original.message() }) notes=(if changed == "notes" { give [] } else { give original.notes() }) />
+                if compiler.sourceFailureHasOwner(diagnostic: <CompileDiagnostic.closureSignature refusal=forged />) { panic("forged closure signature proof admitted: "+changed) }
+            }
+            mut val foreignCompiler = <Comp />
+            if foreignCompiler.sourceFailureHasOwner(diagnostic: refusal) { panic("closure refusal crossed compiler session") }
+            compiler.sourceFacts.fail(owner: owner, diagnostic: refusal)
+            if !compiler.sourceFailureHasOwner(diagnostic: refusal) { panic("discarding failed builder lost closure refusal") }
+        }
+
     }
 }

@@ -64,18 +64,18 @@ impl Comp {
         }
     }
 
-    inout fn closureParameterFailureOrigin(expression: U64, origin: SourceRecordOrigin) -> FrontendDeclarationOrigin {
+    inout fn closureParameterFailureProof(expression: U64, origin: SourceRecordOrigin) -> Optional[(session: U64, owner: SemanticCompletionOwner, root: SemanticCompletionOwner, authored: AuthoredClosureSignature, path: SourceNodePath)] {
         val request = match origin {
-            SourceRecordOrigin.Raw => { return <FrontendDeclarationOrigin.Raw /> }
+            SourceRecordOrigin.Raw => { return <Optional.None /> }
             SourceRecordOrigin.CheckingRequest(session: val session, root: val root) => (session: session, root: root)
         }
-        if request.session != self.sourceFactSession() { return <FrontendDeclarationOrigin.Raw /> }
-        val owner = match self.currentSourceOwner() { Optional.Some(v: val owner) => owner Optional.None => { return <FrontendDeclarationOrigin.Raw /> } }
-        if !self.sourceFacts.isActive(owner: owner) || !semanticCompletionOwnersEqual(recorded: self.lexicalSourceFactOwner(owner: owner), prepared: request.root) { return <FrontendDeclarationOrigin.Raw /> }
-        val written = match self.authoredClosureSignatures.get(key: expression) { Optional.Some(v: val written) => written Optional.None => { return <FrontendDeclarationOrigin.Raw /> } }
-        if !self.authoredClosureSignatureMatches(expression: expression, written: written) || !self.closureSignatureHasLexicalOwner(written: written, owner: request.root) { return <FrontendDeclarationOrigin.Raw /> }
-        if self.sourceControlNodePath(owner: owner, target: <SourceControlNode.Expression id=expression />).isNone() { return <FrontendDeclarationOrigin.Raw /> }
-        return <FrontendDeclarationOrigin.SourceAdmission />
+        if request.session != self.sourceFactSession() { return <Optional.None /> }
+        val owner = match self.currentSourceOwner() { Optional.Some(v: val owner) => owner Optional.None => { return <Optional.None /> } }
+        if !self.sourceFacts.isActive(owner: owner) || !semanticCompletionOwnersEqual(recorded: self.lexicalSourceFactOwner(owner: owner), prepared: request.root) { return <Optional.None /> }
+        val written = match self.authoredClosureSignatures.get(key: expression) { Optional.Some(v: val written) => written Optional.None => { return <Optional.None /> } }
+        if !self.authoredClosureSignatureMatches(expression: expression, written: written) || !self.closureSignatureHasLexicalOwner(written: written, owner: request.root) { return <Optional.None /> }
+        val path = match self.sourceControlNodePath(owner: owner, target: <SourceControlNode.Expression id=expression />) { Optional.Some(v: val path) => path Optional.None => { return <Optional.None /> } }
+        return <Optional.Some v=(session: request.session, owner: owner, root: request.root, authored: written, path: path) />
     }
 
     inout fn admitRecordedClosureParameters(expression: U64, origin: SourceRecordOrigin) -> Result[(), CompileDiagnostic] {
@@ -86,6 +86,34 @@ impl Comp {
         }
         val names = try self.closureParameterNames(parameters: parameters)
         val conflict = match declarationLabelConflict(bytes: self.arena.bytes, labels: names) { Optional.Some(v: val conflict) => conflict Optional.None => { return <Result.Ok value=() /> } }
-        return self.parameterNameConflictDiagnostic(names: names, conflict: conflict, origin: self.closureParameterFailureOrigin(expression: expression, origin: origin))
+        val raw = match self.parameterNameConflictDiagnostic(names: names, conflict: conflict, origin: <FrontendDeclarationOrigin.Raw />) { Result.Err(error: val diagnostic) => diagnostic Result.Ok(value: _) => { return <Result.Ok value=() /> } }
+        // Only the actual duplicate refusal has a source-owner interpretation.
+        match conflict { DeclarationLabelConflict.Duplicate(first: _, second: _) => {} DeclarationLabelConflict.Malformed(index: _) => { return <Result.Err error=raw /> } }
+        val proof = match self.closureParameterFailureProof(expression: expression, origin: origin) { Optional.Some(v: val proof) => proof Optional.None => { return <Result.Err error=raw /> } }
+        val refusal = <ClosureSignatureRefusal session=proof.session owner=self.closureSignatureDiagnosticOwner(owner: proof.owner) expression=expression event=self.failedClosureSignatures.count() location=raw.location() message=raw.message() notes=raw.notes() />
+        self.failedClosureSignatures.append(<SourceClosureSignatureFailure refusal=refusal owner=proof.owner root=proof.root authored=proof.authored path=proof.path />)
+        return <Result.Err error=<CompileDiagnostic.closureSignature refusal=refusal /> />
     }
+
+    fn closureSignatureDiagnosticOwner(owner: SemanticCompletionOwner) -> DiagnosticOwner {
+        return match owner {
+            SemanticCompletionOwner.Function(index: val function) => <DiagnosticOwner.Function index=function />
+            SemanticCompletionOwner.Global(target: val target) => <DiagnosticOwner.Global target=target />
+            SemanticCompletionOwner.Closure(expression: val expression) => <DiagnosticOwner.Closure expression=expression />
+        }
+    }
+
+    fn sourceClosureSignatureFailureHasOwner(refusal: ClosureSignatureRefusal) -> Bool {
+        if refusal.session() != self.sourceFactSession() || refusal.event() >= self.failedClosureSignatures.count() { return false }
+        val proof = self.failedClosureSignatures[refusal.event()]
+        val original = proof.refusal
+        if original.session() != refusal.session() || original.event() != refusal.event() || original.expression() != refusal.expression() || !self.diagnosticOwnersEqual(first: original.owner(), second: refusal.owner()) || !original.location().same(other: refusal.location()) || original.message() != refusal.message() || original.notes().count() != refusal.notes().count() { return false }
+        for index in 0U64..<original.notes().count() {
+            if !original.notes()[index].location.same(other: refusal.notes()[index].location) || original.notes()[index].message != refusal.notes()[index].message { return false }
+        }
+        if !semanticCompletionOwnersEqual(recorded: proof.owner, prepared: proof.path.owner) || !self.diagnosticOwnersEqual(first: self.closureSignatureDiagnosticOwner(owner: proof.owner), second: refusal.owner()) { return false }
+        if !self.authoredClosureSignatureMatches(expression: refusal.expression(), written: proof.authored) { return false }
+        return self.sourceControlNodePathMatches(path: proof.path)
+    }
+
 }
