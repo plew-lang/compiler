@@ -1,6 +1,6 @@
 ---
 id: met-wxn1
-status: open
+status: in_progress
 deps: [met-4dxy]
 links: []
 created: 2026-11-27T15:58:48Z

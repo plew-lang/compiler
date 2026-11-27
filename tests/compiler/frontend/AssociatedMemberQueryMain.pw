@@ -86,6 +86,17 @@ fn main() {
         AssociatedMemberOutcome.Ambiguous(candidates: val candidates) => { if candidates.count() != 2U64 { panic("same-spelled binders collapsed") } }
         _ => { panic("binder identity was replaced by its spelling") }
     }
+    mut val moduleRoots: Array[TraitBound] = []
+    val parserName = compiler.internBytes(s: "Parser").nameId
+    for index in 0U64..<compiler.decls.traitCount() {
+        val trait = compiler.decls.traitAt(index: index)
+        if trait.nameId == parserName { moduleRoots.append(<TraitBound subject=integer constraint=<TraitConstraint key=<TraitInstanceKey owner=trait.nameStart positionalArgs=[] /> positionalArgsOpen=false assocPredicates=[] /> offset=0U64 />) }
+    }
+    if moduleRoots.count() != 2U64 { panic("same-name module owner setup missing") }
+    match compiler.queryAssociatedMember(subject: integer, roots: moduleRoots, equationContext: [], member: output, site: 0U64).unwrap().outcome {
+        AssociatedMemberOutcome.Ambiguous(candidates: val candidates) => { if candidates.count() != 2U64 || candidates[0U64].instance.owner == candidates[1U64].instance.owner { panic("distinct module owner identity lost") } }
+        _ => { panic("same-spelled module declarations collapsed") }
+    }
     val parameterized = queryBound(compiler: inout compiler, name: "ParamChild", subject: integer, arguments: [integer])
     val changed = queryUnique(result: compiler.queryAssociatedMember(subject: integer, roots: [parameterized], equationContext: [], member: output, site: 0U64).unwrap())
     if changed.instance.positionalArgs.count() != 2U64 || !compiler.typeRefEq(a: changed.instance.positionalArgs[0U64], b: integer, sourceTerms: true) || compiler.typeTermRefChildCount(ref: changed.instance.positionalArgs[1U64]) != 1U64 || !compiler.typeRefEq(a: compiler.typeTermRefChildRef(ref: changed.instance.positionalArgs[1U64], index: 0U64), b: integer, sourceTerms: true) { panic("parent argument substitution or arity lost") }
@@ -127,6 +138,17 @@ fn main() {
     queryFailure(result: compiler.queryAssociatedMember(subject: integer, roots: [diamond], equationContext: [], member: output, site: 0U64), limited: true)
     compiler.traitLexicalHeaders = savedHeaders
     compiler.decls.setQueryProbeTraitEntry(owner: owner, entry: savedEntry)
+    // Canonical Raw graph with ever-growing instances: stop by the finite limit,
+    // not by guessing infinite recursion or reporting an empty namespace.
+    val repeated = queryBound(compiler: inout compiler, name: "Repeated", subject: integer, arguments: [integer])
+    val repeatedShape = compiler.checkAssociatedMemberBound(bound: repeated, site: 0U64).unwrap()
+    val repeatedSlot = repeatedShape.supertraits.start
+    val originalEdge = compiler.decls.traitConstraintPool[repeatedSlot]
+    val arrayName = compiler.internBytes(s: "Array")
+    val growingArgument = compiler.pushType(t: <TypeRef nameStart=arrayName.nameStart nameLen=arrayName.nameLen nameId=arrayName.nameId args=[originalEdge.key.positionalArgs[0U64]] />)
+    compiler.decls.traitConstraintPool[repeatedSlot] = <TraitConstraint key=<TraitInstanceKey owner=repeated.constraint.key.owner positionalArgs=[growingArgument] /> positionalArgsOpen=false assocPredicates=[] />
+    queryFailure(result: compiler.queryAssociatedMember(subject: integer, roots: [repeated], equationContext: [], member: output, site: 0U64), limited: true)
+    compiler.decls.traitConstraintPool[repeatedSlot] = originalEdge
     val savedPool = compiler.decls.traitConstraintPool
     compiler.decls.traitConstraintPool = []
     queryFailure(result: compiler.queryAssociatedMember(subject: integer, roots: [diamond], equationContext: [], member: output, site: 0U64), limited: false)

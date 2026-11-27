@@ -1,3 +1,5 @@
+use ./First only { Parser as QueryFirst }
+use ./QueryOther only { Parser as QuerySecond }
 trait Root { type Output }
 trait Left: Root {}
 trait Right: Root {}

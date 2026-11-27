@@ -1,6 +1,6 @@
 ---
 id: met-4dxy
-status: in_progress
+status: closed
 deps: [met-oxch]
 links: []
 created: 2026-11-27T15:58:48Z
@@ -74,7 +74,24 @@ a completed header; they are setup failures, not product RED or GREEN.
 
 Independent source re-review found no further confirmed contract violation;
 this is not final certification. V6 additionally passes distinct same-spelled generic binder identities, multiple
-search roots, diamond/root overlap and distinct-root ambiguity. Remaining finite
-service gates include same-spelled module owner identities and bounded growth.
+search roots, diamond/root overlap and distinct-root ambiguity. V7 additionally passes same-spelled module owner identities and a canonical Raw
+edge producing successively nested instances until Limit. Final independent
+certification is pending.
 Source publication/final consumption and owned rejection remain the dependent
 children, not guarantees established by these native results.
+
+
+## Independent certification
+
+The independent reviewer associated_resolution_split_review checked native-v7
+stage status, empty output, every saved input hash and the appended test body
+against the working source. The original Raw RED reaches a valid loaded graph
+and fails specifically on Diamond. All finite service scenarios above and the
+query/Raw boundary are certified; no additional required violation was found.
+Source publication, root proof, recipes/final consumers and owned refusal remain
+explicitly outside A, in met-wxn1/met-2yhf. No carrier adoption is implied.
+
+Successful native outputs were retired after review; source snapshots, input
+hashes/results and diagnostics remain. Meta evidence query-success-retirement.json
+records exact paths and byte counts. Raw RED, setup failures, shared backend and
+adopted carrier are retained for dependent/parent verification.
