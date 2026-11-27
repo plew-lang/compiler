@@ -17,4 +17,19 @@ fn main() {
     }
     if !found { panic("conformance equation source was not retained as a conformance premise") }
 
+    val function = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "boxed").nameId)
+    val box = compiler.funcParamAt(params: compiler.arena.functionAt(index: function).params, index: 0U64).ty
+    mut val owner = 0U64
+    for index in 0U64..<compiler.decls.traitCount() {
+        val declaration = compiler.decls.traitAt(index: index)
+        if declaration.nameId == compiler.internBytes(s: "Product").nameId { owner = declaration.nameStart break }
+    }
+    if owner == 0U64 { panic("conformance concrete reader setup lost Product") }
+    val proof = compiler.viewedTraitConstraintProof(demand: <ConformanceProofDemand.SourceAdmission />, ref: box, constraint: <TraitConstraint key=<TraitInstanceKey owner=owner positionalArgs=[] /> assocPredicates=[] />).unwrap()
+    val output = match compiler.readSelectedProjectionOutput(proof: proof, traitOwner: owner, assocId: compiler.internBytes(s: "Value").nameId) {
+        Result.Ok(value: val selected) => selected.term,
+        Result.Err(error: val diagnostic) => { panic("concrete conformance receipt reader rejected: "+diagnostic.message()) },
+    }
+    if output == 0U64 || compiler.arena.typeAt(index: output).nameId != compiler.internBytes(s: "U32").nameId { panic("concrete conformance did not consume its saved Parent output") }
+
 }

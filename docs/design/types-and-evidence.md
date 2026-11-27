@@ -90,6 +90,13 @@ source diagnostics consume the same
 query outcome with the owning occurrence evidence; a declaration-local membership
 Boolean is not the authority for an inherited projection.
 
+Abstract declaration reads and concrete reads share constructor and saved-selection
+interpretation. They differ in whether evidence may remain symbolic or must be
+instantiated; an unknown output never licenses another declaring-owner choice.
+When a concrete use substitutes the endpoints of a retained normalization equation,
+its proof is interpreted in that same explicit environment. Endpoint substitution
+alone does not turn a declaration proof into concrete evidence.
+
 This shared selection keeps the language's uniqueness rule independent of the
 spelling used to choose the search roots. Verification covers direct and inherited
 members, qualified and unqualified roots, substituted parent arguments, identical

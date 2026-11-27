@@ -19,6 +19,8 @@ fn main() {
         }
         _ => { panic("alias projection lost unique declaration") }
     }
+    val semantic = compiler.lexicalBodyParameterType(function: index, index: 0U64, ref: parameter.ty, receiver: 0U64).unwrap().unwrap()
+    if compiler.arena.typeAt(index: semantic).assocTraitId != compiler.internBytes(s: "Parent").nameId { panic("alias reader required a direct Parent import or kept Child") }
     mut val rejected = <Comp />
     match analyzeFrontendForRequests(c: inout rejected, input: <FrontendInput.File path="tests/compiler/frontend/fixtures/ProjectionMembers/NoChildProof.pw" />, sources: <SourceAccess stdRoot="std/".bytes() />) {
         Result.Ok(value: _) => { panic("Parent namespace proof silently replaced missing Child conformance") }

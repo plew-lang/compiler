@@ -2,3 +2,8 @@ trait Parent { type Output }
 trait Child: Parent {}
 fn entry[T](value: T#Child.Output) where T: Child {}
 fn main() {}
+struct Leaf {}
+impl Leaf as Parent { type Output = I64 }
+impl Leaf as Child {}
+fn leaf(value: Leaf) {}
+fn boxed[T](value: Array[T#Child.Output]) where T: Child {}

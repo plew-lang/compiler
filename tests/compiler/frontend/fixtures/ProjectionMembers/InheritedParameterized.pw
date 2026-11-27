@@ -1,0 +1,10 @@
+trait Key { type Item }
+trait Parent[A, B] { type Output }
+trait Child[C]: Parent[Array[C], Bool] {}
+struct Leaf {}
+impl Leaf as Key { type Item = I64 }
+impl Leaf as Parent[Array[I64], Bool] { type Output = U32 }
+impl Leaf as Child[I64] {}
+fn entry[T](value: T#Child[T#Key.Item].Output) where T: Key[Item=I64] + Child[T#Key.Item] {}
+fn leaf(value: Leaf) {}
+fn main() {}

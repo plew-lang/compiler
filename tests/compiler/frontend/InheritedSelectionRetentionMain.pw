@@ -31,6 +31,10 @@ fn main() {
     }
     val admissions = compiler.admittedAssociatedSelections
     compiler.admittedAssociatedSelections = [:]
+    match compiler.lexicalBodyParameterType(function: index, index: 0U64, ref: parameter.ty, receiver: 0U64) {
+        Result.Err(error: _) => {}
+        Result.Ok(value: _) => { panic("shared reader bypassed a missing admitted selection") }
+    }
     val otherFunction = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "main").nameId)
     val otherScope = compiler.declarationTypeScope(owner: otherFunction).unwrap()
     match compiler.admitAssociatedSelectionOccurrence(occurrence: occurrence, ref: parameter.ty, viewProof: compiler.thawStaticConformanceProof(id: admitted.declaringProof), scope: otherScope, assumptions: assumptions, normalizations: admitted.normalizations, offset: 0U64) {

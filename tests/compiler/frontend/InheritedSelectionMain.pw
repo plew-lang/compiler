@@ -15,4 +15,25 @@ fn main() {
     val projection = compiler.arena.typeAt(index: admitted.unwrap())
     val parent = compiler.internBytes(s: "Parent").nameId
     if projection.assocTraitId != parent || projection.assocNameId != compiler.internBytes(s: "Output").nameId { panic("Source projection did not publish its actual declaring trait") }
+    val leafFunction = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "leaf").nameId)
+    val leaf = compiler.funcParamAt(params: compiler.arena.functionAt(index: leafFunction).params, index: 0U64).ty
+    val environment = compiler.environmentWithCallableConstraints(fnIdx: index, environment: <InstanceEnvironment params=compiler.copyFuncBinds(binds: function.typeParams) args=[leaf] />, evidence: <CallableConstraintEvidence.Declaration />).unwrap()
+    val concrete = match compiler.readAdmittedSignatureRoot(function: index, slot: <SourceSignatureSlot.Parameter index=0U64 />, environment: environment) {
+        Result.Ok(value: val term) => term,
+        Result.Err(error: val diagnostic) => { panic("concrete retained reader rejected: "+diagnostic.message()) },
+    }
+    val output = compiler.arena.typeAt(index: concrete)
+    if output.assocNameId != 0U64 || output.nameId != compiler.internBytes(s: "I64").nameId { panic("concrete reader did not use the saved Parent output") }
+
+    val boxedIndex = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "boxed").nameId)
+    val boxed = compiler.arena.functionAt(index: boxedIndex)
+    val boxedParameter = compiler.funcParamAt(params: boxed.params, index: 0U64)
+    val abstractArray = compiler.lexicalBodyParameterType(function: boxedIndex, index: 0U64, ref: boxedParameter.ty, receiver: 0U64).unwrap().unwrap()
+    val abstractElement = compiler.arena.typeAt(index: compiler.arena.typeAt(index: abstractArray).args[0U64])
+    if abstractElement.assocTraitId != parent { panic("nested constructor did not consume its child's saved declaring instance") }
+    val boxedEnvironment = compiler.environmentWithCallableConstraints(fnIdx: boxedIndex, environment: <InstanceEnvironment params=compiler.copyFuncBinds(binds: boxed.typeParams) args=[leaf] />, evidence: <CallableConstraintEvidence.Declaration />).unwrap()
+    val concreteArray = compiler.readAdmittedSignatureRoot(function: boxedIndex, slot: <SourceSignatureSlot.Parameter index=0U64 />, environment: boxedEnvironment).unwrap()
+    val element = compiler.arena.typeAt(index: compiler.arena.typeAt(index: concreteArray).args[0U64])
+    if element.assocNameId != 0U64 || element.nameId != compiler.internBytes(s: "I64").nameId { panic("nested constructor did not consume concrete Parent output") }
+
 }

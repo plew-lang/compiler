@@ -663,6 +663,7 @@ struct SourceExtensionViewProof {
 impl SourceExtensionViewProof { factory }
 
 enum SignatureRecipeContext {
+    Declaration
     Concrete
     Requirement(signature: RequirementSignatureRead)
     Provided(owner: U64)

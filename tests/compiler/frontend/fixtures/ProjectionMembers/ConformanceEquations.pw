@@ -7,3 +7,8 @@ impl[T] Box[T] as Product where T: Child[T#Key.Item] + Key[Item=I64] {
     type Value = T#Child[T#Key.Item].Output
 }
 fn main() {}
+struct Leaf {}
+impl Leaf as Key { type Item = I64 }
+impl Leaf as Parent[I64] { type Output = U32 }
+impl Leaf as Child[I64] {}
+fn boxed(value: Box[Leaf]) {}
