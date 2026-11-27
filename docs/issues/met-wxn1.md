@@ -99,6 +99,19 @@ is a possible cost, not a demonstrated regression; formal performance is still
 required at the adoption gate. This prerequisite does not complete the occurrence
 receipt or admitted declaring-instance publication below.
 
+## Saved graph-edge identity
+
+Edges retain their source-node owner and declaration-local ordinal rather than
+an absolute constraint-pool slot. `associatedMemberSupertraitRef` translates
+that identity to the existing SupertraitRef after declaration completion,
+checking node/owner/ordinal bounds. It does not validate the target substitution
+or authorize a proof; receipt replay must still validate each incoming clause.
+The Source lowering/header/completed declaration preserve authored edge order.
+Independent neutral review confirmed both builders and ordering, with no required
+correction. Native suite-v8 passes all twelve profiles, including diamond edge
+translation and invalid-ordinal refusal; inputs unchanged. This is a structural
+prerequisite with GREEN preservation, not a new language rule or B completion.
+
 ## Next implementation sequence
 
 1. Preserve normalization context in conformance-path comparison:

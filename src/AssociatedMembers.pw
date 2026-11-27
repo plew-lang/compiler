@@ -20,6 +20,21 @@ impl Comp {
         }
         return <Result.Ok value=shape />
     }
+    // Translate saved declaration identity, never a pool address or member name.
+    fn associatedMemberSupertraitRef(nodes: Array[TraitBound], edge: AssociatedMemberEdge) -> Result[SupertraitRef, CompileDiagnostic] {
+        if edge.source >= nodes.count() || edge.target >= nodes.count() {
+            return <Result.Err error=self.associatedMemberInputFailure(message: "associated-member edge has an invalid node") />
+        }
+        val owner = nodes[edge.source].constraint.key.owner
+        val index = self.decls.traitIndexByOffset(offset: owner)
+        if index >= self.decls.traitCount() {
+            return <Result.Err error=self.associatedMemberInputFailure(message: "associated-member edge requires its completed trait declaration") />
+        }
+        if edge.ordinal >= self.decls.traitAt(index: index).supertraits.count() {
+            return <Result.Err error=self.associatedMemberInputFailure(message: "associated-member edge has an invalid declaration ordinal") />
+        }
+        return <Result.Ok value=<SupertraitRef traitIndex=index boundIndex=edge.ordinal /> />
+    }
     fn associatedMemberEdgeConstraint(shape: TraitBoundShape, index: U64, site: U64) -> Result[TraitConstraint, CompileDiagnostic] {
         if !self.supertraitOperandAvailable(slot: shape.supertraits.start+index) { return <Result.Err error=self.associatedMemberLimit(site: site) /> }
         return <Result.Ok value=self.semanticSupertraitConstraintAt(constraints: shape.supertraits, index: index) />
@@ -100,7 +115,7 @@ impl Comp {
                 val next = <TraitBound subject=bound.subject constraint=parent offset=bound.offset />
                 try self.checkAssociatedMemberBound(bound: next, site: site)
                 val target = try self.associatedMemberNode(bound: next, nodes: inout nodes, site: site)
-                edges.append(<AssociatedMemberEdge source=cursor target=target slot=shape.supertraits.start+edge />)
+                edges.append(<AssociatedMemberEdge source=cursor target=target ordinal=edge />)
             }
             outgoing.append(<AssociatedMemberEdgeRange start=start len=edges.count()-start />)
             cursor += 1U64
@@ -242,7 +257,7 @@ impl Comp {
                 val parent = self.traitConstraintInShape(constraint: written, bound: bound, shape: shape, includeInherited: false)
                 val normalized = try self.normalizeAssociatedMemberBound(bound: <TraitBound subject=bound.subject constraint=parent offset=bound.offset />, site: site, work: inout work)
                 val target = try self.associatedMemberNode(bound: normalized, nodes: inout nodes, site: site)
-                edges.append(<AssociatedMemberEdge source=cursor target=target slot=shape.supertraits.start+edge />)
+                edges.append(<AssociatedMemberEdge source=cursor target=target ordinal=edge />)
             }
             cursor += 1U64
         }

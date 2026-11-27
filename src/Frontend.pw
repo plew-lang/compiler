@@ -1051,10 +1051,12 @@ struct LoweredFunctionTypeLabels {
     val positions: Array[Span]
 }
 impl LoweredFunctionTypeLabels { factory }
+// The source node owns the declaration; ordinal preserves declaration order
+// across the lexical header and completed declaration.
 struct AssociatedMemberEdge {
     val source: U64
     val target: U64
-    val slot: U64
+    val ordinal: U64
 }
 impl AssociatedMemberEdge { factory }
 struct AssociatedMemberEdgeRange {

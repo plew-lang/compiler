@@ -66,6 +66,16 @@ fn main() {
     mut val incoming = 0U64
     for edge in result.graph.edges { if edge.target == selected.nodes[0U64] { incoming += 1U64 } }
     if incoming != 2U64 { panic("candidate dedup erased derivation edges") }
+    for edge in result.graph.edges {
+        val step = compiler.associatedMemberSupertraitRef(nodes: result.graph.nodes, edge: edge).unwrap()
+        val owner = compiler.decls.traitAt(index: step.traitIndex)
+        if owner.nameStart != result.graph.nodes[edge.source].constraint.key.owner || step.boundIndex != edge.ordinal { panic("saved edge changed its declaring clause") }
+    }
+    val invalidEdge = <AssociatedMemberEdge source=0U64 target=0U64 ordinal=999U64 />
+    match compiler.associatedMemberSupertraitRef(nodes: result.graph.nodes, edge: invalidEdge) {
+        Result.Err(error: val diagnostic) => { if diagnostic.isSourceRejection() { panic("invalid retained edge became a source rejection") } }
+        Result.Ok(value: _) => { panic("invalid saved declaration ordinal accepted") }
+    }
     val repeatedRoots = compiler.queryAssociatedMember(subject: integer, roots: [diamond, root], equationContext: [], member: output, site: 0U64).unwrap()
     queryUnique(result: repeatedRoots)
     if repeatedRoots.graph.rootNodes.count() != 2U64 { panic("multiple roots lost their identities") }
