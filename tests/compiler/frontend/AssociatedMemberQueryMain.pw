@@ -1,0 +1,127 @@
+// Append to a frozen Frontend module; exercise the existing public Raw API.
+fn queryOwner(compiler: Comp, name: U64) -> U64 {
+    for index in 0U64..<compiler.decls.traitCount() {
+        val trait = compiler.decls.traitAt(index: index)
+        if trait.nameId == name { return trait.nameStart }
+    }
+    panic("query graph owner setup missing")
+}
+fn rawMemberQuery(compiler: inout Comp, traitName: String, arguments: Array[U64], member: String) -> Result[(), CompileDiagnostic] {
+    val trait = compiler.internBytes(s: traitName)
+    val name = compiler.internBytes(s: member)
+    val owner = queryOwner(compiler: compiler, name: trait.nameId)
+    val scalar = compiler.internBytes(s: "I64")
+    return compiler.checkProjectionMember(type: <TypeRef nameStart=scalar.nameStart nameLen=scalar.nameLen nameId=scalar.nameId args=[] assocTraitStart=owner assocTraitLen=trait.nameLen assocTraitId=trait.nameId assocTraitArgs=arguments assocNameStart=name.nameStart assocNameLen=name.nameLen assocNameId=name.nameId hasAssocTraitDecl=true assocTraitDeclOffset=owner />)
+}
+fn queryBound(compiler: inout Comp, name: String, subject: U64, arguments: Array[U64]) -> TraitBound {
+    val id = compiler.internBytes(s: name).nameId
+    return <TraitBound subject=subject constraint=<TraitConstraint key=<TraitInstanceKey owner=queryOwner(compiler: compiler, name: id) positionalArgs=arguments /> positionalArgsOpen=false assocPredicates=[] /> offset=0U64 />
+}
+fn queryUnique(result: AssociatedMemberResult) -> AssociatedMemberCandidate {
+    return match result.outcome {
+        AssociatedMemberOutcome.Unique(candidate: val candidate) => candidate
+        _ => { panic("expected unique associated declaration") }
+    }
+}
+fn queryFailure(result: Result[AssociatedMemberResult, CompileDiagnostic], limited: Bool) {
+    match result {
+        Result.Ok(value: _) => { panic("invalid query produced semantic success") }
+        Result.Err(error: val diagnostic) => {
+            if diagnostic.isSourceRejection() { panic("Raw semantic query gained source domain") }
+            if limited { match diagnostic.failureDomain() { FailureDomain.Limit => {} _ => { panic("analysis limit was not retained") } } }
+            else { match diagnostic.failureDomain() { FailureDomain.Internal => {} _ => { panic("malformed query was not retained") } } }
+        }
+    }
+}
+fn main() {
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.File path="tests/compiler/frontend/fixtures/ProjectionMembers/QueryGraph.pw" />, sources: <SourceAccess stdRoot="std/".bytes() />).unwrap()
+    rawMemberQuery(compiler: inout compiler, traitName: "Root", arguments: [], member: "Output").unwrap()
+    match rawMemberQuery(compiler: inout compiler, traitName: "Diamond", arguments: [], member: "Output") {
+        Result.Ok(value: _) => {}
+        Result.Err(error: val diagnostic) => { panic("inherited Raw namespace rejected: "+diagnostic.message()) }
+    }
+    val function = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "subject").nameId)
+    val declaration = compiler.arena.functionAt(index: function)
+    val integer = compiler.funcParamAt(params: declaration.params, index: 0U64).ty
+    rawMemberQuery(compiler: inout compiler, traitName: "ParamChild", arguments: [integer], member: "Output").unwrap()
+    for trait in ["Both", "Mixed"] {
+        match rawMemberQuery(compiler: inout compiler, traitName: trait, arguments: [], member: "Output") {
+            Result.Err(error: val diagnostic) => {
+                if diagnostic.isSourceRejection() || diagnostic.message() != "associated-type projection is ambiguous in the selected trait sources (spec/08)" { panic("Raw ambiguity lost its semantic result") }
+            }
+            Result.Ok(value: _) => { panic("ambiguous Raw namespace accepted") }
+        }
+    }
+    match rawMemberQuery(compiler: inout compiler, traitName: "Root", arguments: [], member: "Missing") {
+        Result.Err(error: val diagnostic) => { if diagnostic.isSourceRejection() { panic("Raw missing member gained source domain") } }
+        Result.Ok(value: _) => { panic("Raw missing member accepted") }
+    }
+    val output = compiler.internBytes(s: "Output").nameId
+    val diamond = queryBound(compiler: inout compiler, name: "Diamond", subject: integer, arguments: [])
+    val root = queryBound(compiler: inout compiler, name: "Root", subject: integer, arguments: [])
+    val result = compiler.queryAssociatedMember(subject: integer, roots: [diamond], equationContext: [], member: output, site: 0U64).unwrap()
+    val selected = queryUnique(result: result)
+    if selected.instance.owner != root.constraint.key.owner || selected.member != output || result.graph.nodes.count() != 4U64 || result.graph.edges.count() != 4U64 { panic("diamond candidate identity or compact graph lost") }
+    mut val incoming = 0U64
+    for edge in result.graph.edges { if edge.target == selected.nodes[0U64] { incoming += 1U64 } }
+    if incoming != 2U64 { panic("candidate dedup erased derivation edges") }
+    val parameterized = queryBound(compiler: inout compiler, name: "ParamChild", subject: integer, arguments: [integer])
+    val changed = queryUnique(result: compiler.queryAssociatedMember(subject: integer, roots: [parameterized], equationContext: [], member: output, site: 0U64).unwrap())
+    if changed.instance.positionalArgs.count() != 2U64 || !compiler.typeRefEq(a: changed.instance.positionalArgs[0U64], b: integer, sourceTerms: true) || compiler.typeTermRefChildCount(ref: changed.instance.positionalArgs[1U64]) != 1U64 || !compiler.typeRefEq(a: compiler.typeTermRefChildRef(ref: changed.instance.positionalArgs[1U64], index: 0U64), b: integer, sourceTerms: true) { panic("parent argument substitution or arity lost") }
+    val item = compiler.internBytes(s: "Item").nameId
+    val itemSource = queryBound(compiler: inout compiler, name: "ItemSource", subject: integer, arguments: [])
+    val scalar = compiler.arena.typeTermAt(index: integer)
+    val projected = compiler.pushType(t: <TypeRef nameStart=scalar.nameStart nameLen=scalar.nameLen nameId=scalar.nameId args=[] projectionReceiver=integer assocTraitStart=itemSource.constraint.key.owner assocTraitId=compiler.internBytes(s: "ItemSource").nameId assocNameId=item hasAssocTraitDecl=true assocTraitDeclOffset=itemSource.constraint.key.owner />)
+    val equation = <TraitBound subject=integer constraint=<TraitConstraint key=itemSource.constraint.key positionalArgsOpen=false assocPredicates=[<TraitAssocPredicate member=item value=integer span=0U64 />] /> offset=0U64 />
+    val qualified = queryBound(compiler: inout compiler, name: "EqChild", subject: integer, arguments: [projected])
+    val normalized = compiler.queryAssociatedMember(subject: integer, roots: [qualified], equationContext: [equation], member: output, site: 0U64).unwrap()
+    val normalizedCandidate = queryUnique(result: normalized)
+    val expected = queryBound(compiler: inout compiler, name: "EqParent", subject: integer, arguments: [integer])
+    if !compiler.sameAssociatedMemberInstance(first: normalizedCandidate.instance, second: expected.constraint.key) || normalized.graph.equations.count() == 0U64 || !compiler.typeRefEq(a: normalized.graph.roots[0U64].constraint.key.positionalArgs[0U64], b: projected, sourceTerms: true) { panic("equation scope or original root lost") }
+    match compiler.queryAssociatedMember(subject: integer, roots: [qualified], equationContext: [], member: output, site: 0U64).unwrap().outcome {
+        AssociatedMemberOutcome.Ambiguous(candidates: val candidates) => { if candidates.count() != 2U64 { panic("wrong full-instance candidate count") } }
+        _ => { panic("unknown equality was guessed") }
+    }
+    // The equation-only source also declares Output, but is not a search root.
+    if normalizedCandidate.instance.owner == itemSource.constraint.key.owner { panic("equation premise widened qualified search") }
+    val key = queryBound(compiler: inout compiler, name: "Key", subject: integer, arguments: [])
+    val keyEquation = <TraitBound subject=integer constraint=<TraitConstraint key=key.constraint.key positionalArgsOpen=false assocPredicates=[<TraitAssocPredicate member=item value=integer span=0U64 />] /> offset=0U64 />
+    val carrier = queryBound(compiler: inout compiler, name: "EqCarrier", subject: integer, arguments: [])
+    val valueParent = queryBound(compiler: inout compiler, name: "ValueParent", subject: integer, arguments: [integer])
+    val valueProjection = compiler.pushType(t: <TypeRef nameStart=scalar.nameStart nameLen=scalar.nameLen nameId=scalar.nameId args=[] projectionReceiver=integer assocTraitStart=valueParent.constraint.key.owner assocTraitId=compiler.internBytes(s: "ValueParent").nameId assocTraitArgs=[integer] assocNameId=compiler.internBytes(s: "Value").nameId hasAssocTraitDecl=true assocTraitDeclOffset=valueParent.constraint.key.owner />)
+    val inheritedEquationRoot = queryBound(compiler: inout compiler, name: "EqChild", subject: integer, arguments: [valueProjection])
+    for lexicalOnly in [false, true] {
+        val carrierOwner = carrier.constraint.key.owner
+        val carrierEntry = compiler.decls.queryProbeTraitEntry(owner: carrierOwner)
+        if lexicalOnly { compiler.decls.setQueryProbeTraitEntry(owner: carrierOwner, entry: 0U64) }
+        val inheritedEquation = queryUnique(result: compiler.queryAssociatedMember(subject: integer, roots: [inheritedEquationRoot], equationContext: [carrier, keyEquation], member: output, site: 0U64).unwrap())
+        if !compiler.sameAssociatedMemberInstance(first: inheritedEquation.instance, second: expected.constraint.key) { panic("inherited equation lost independent context or lexical header") }
+        compiler.decls.setQueryProbeTraitEntry(owner: carrierOwner, entry: carrierEntry)
+    }
+    val owner = diamond.constraint.key.owner
+    val savedEntry = compiler.decls.queryProbeTraitEntry(owner: owner)
+    val savedHeaders = compiler.traitLexicalHeaders
+    compiler.decls.setQueryProbeTraitEntry(owner: owner, entry: 0U64)
+    compiler.traitLexicalHeaders = [:]
+    queryFailure(result: compiler.queryAssociatedMember(subject: integer, roots: [diamond], equationContext: [], member: output, site: 0U64), limited: true)
+    compiler.traitLexicalHeaders = savedHeaders
+    compiler.decls.setQueryProbeTraitEntry(owner: owner, entry: savedEntry)
+    val savedPool = compiler.decls.traitConstraintPool
+    compiler.decls.traitConstraintPool = []
+    queryFailure(result: compiler.queryAssociatedMember(subject: integer, roots: [diamond], equationContext: [], member: output, site: 0U64), limited: false)
+    compiler.decls.traitConstraintPool = savedPool
+    queryFailure(result: compiler.queryAssociatedMember(subject: integer, roots: [], equationContext: [], member: 0U64, site: 0U64), limited: false)
+    val badArgument = queryBound(compiler: inout compiler, name: "ParamRoot", subject: integer, arguments: [integer, 18446744073709551615U64])
+    queryFailure(result: compiler.queryAssociatedMember(subject: integer, roots: [badArgument], equationContext: [], member: output, site: 0U64), limited: false)
+    val openRoot = <TraitBound subject=integer constraint=<TraitConstraint key=parameterized.constraint.key positionalArgsOpen=true assocPredicates=[] /> offset=0U64 />
+    queryFailure(result: compiler.queryAssociatedMember(subject: integer, roots: [openRoot], equationContext: [], member: output, site: 0U64), limited: false)
+    val zeroOpen = <TraitBound subject=integer constraint=<TraitConstraint key=root.constraint.key positionalArgsOpen=true assocPredicates=[] /> offset=0U64 />
+    queryUnique(result: compiler.queryAssociatedMember(subject: integer, roots: [zeroOpen], equationContext: [], member: output, site: 0U64).unwrap())
+    for byReference in [false, true] {
+        val malformed = <TypeRef nameStart=scalar.nameStart nameLen=scalar.nameLen args=[] assocTraitStart=root.constraint.key.owner assocTraitId=18446744073709551615U64 assocNameId=output hasAssocTraitDecl=true assocTraitDeclOffset=root.constraint.key.owner />
+        val error = if byReference { give compiler.checkProjectionMember(ref: compiler.pushType(t: malformed)) } else { give compiler.checkProjectionMember(type: malformed) }
+        match error { Result.Err(error: val diagnostic) => { match diagnostic.failureDomain() { FailureDomain.Internal => {} _ => { panic("invalid trait identity lost Internal") } } } Result.Ok(value: _) => { panic("invalid trait identity accepted") } }
+    }
+
+}

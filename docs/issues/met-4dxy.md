@@ -21,3 +21,39 @@ Connect the coherent Raw compatibility validation surface or native service cons
 Cover direct and inherited members, multiple roots, parent parameter substitution and changed arity, exact same-instance diamond deduplication, different declarations/instances including equal output types, same-spelled binders/module owners, bounded recursion and incomplete input. Use existing Raw/admission controls for actual RED, not missing-new-API setup failure. New result-shape checks can be GREEN as the API is introduced. Confirm one decision owner and no repeated traversal at the consuming Raw boundary. Avoid eagerly enumerating all inheritance paths or scanning/rebuilding the complete compiler catalogue per query.
 
 
+
+## Query shape before implementation
+
+Use explicit subject/member/site, search roots:Array[TraitBound], and a
+separate equationContext:Array[TraitBound], not an ambient cursor or external
+Source permission. The receiver/selected view is explicit in the query terms. Declaration/header readers and explicit traitConstraintInShape
+substitution provide parent bounds. Source/view/equality context is represented by the query receiver, selected roots
+and available equations; do not add equation premises to the search roots or
+pass an unused source object.
+
+Retain a compact graph of bound nodes and declared supertrait edges, with root
+references and candidate references to actual declaring nodes/member declarations.
+Deduplicate candidate identity separately from graph bound/equation contexts;
+keep incoming edges, rather than enumerating every diamond path or discarding
+alternative conformance derivations. Bound normalizations use exact binder and
+semantic type identity. Unknown/malformed storage or unfinished headers are
+errors, never an empty namespace. Reuse the existing128 inherited-instance limit
+as Limit, not Source or a claim of infinite recursion.
+
+The initial native compatibility RED is associated-member-query-raw-red-v1:
+valid graph declarations load successfully, direct Root succeeds, but Diamond's
+inherited Output is rejected by the current public type: helper. This is a real
+Raw namespace defect, not a missing-new-API setup failure. Rich outcome/graph
+assertions follow once the new service exists. Source publication remains B.
+
+API pre-review required the explicit equationContext separation. For
+Child[A]:Parent[A]+Parent[I64], the independent premise T:P[Item=I64] makes
+T#Child[T#P.Item].Output unique. Roots alone cannot represent that equality;
+adding P to roots would incorrectly widen a qualified lookup (especially when
+P also declares Output). Add native controls with/without that premise and
+with an unrelated Output in the equation-only scope. Preserve conflict/limit
+handling rather than guessing equality or silently treating an unavailable
+operand as no edge. availableTraitBoundShape alone is not a readiness proof;
+check supertraitOperandAvailable and actual reached storage before expansion.
+Canonical input preconditions remain explicit: this is not a complete validator
+for every arbitrary corrupted Comp/arena, whose separate owner is met-wuzv.

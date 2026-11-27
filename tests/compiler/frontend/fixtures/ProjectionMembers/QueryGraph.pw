@@ -1,0 +1,19 @@
+trait Root { type Output }
+trait Left: Root {}
+trait Right: Root {}
+trait Diamond: Left + Right {}
+trait First { type Output }
+trait Second { type Output }
+trait Both: First + Second {}
+trait ParamRoot[A, B] { type Output }
+trait ParamChild[C]: ParamRoot[C, Array[C]] {}
+trait Repeated[C]: ParamRoot[C, C] {}
+trait Mixed: ParamRoot[I64, I64] + ParamRoot[Bool, Bool] {}
+trait ItemSource { type Item type Output }
+trait EqParent[A] { type Output }
+trait EqChild[A]: EqParent[A] + EqParent[I64] {}
+trait Key { type Item }
+trait ValueParent[A] { type Value }
+trait EqCarrier: Key + ValueParent[Self#Key.Item, Value=I64] {}
+fn subject(value: I64) {}
+fn main() {}

@@ -1006,6 +1006,85 @@ struct LoweredFunctionTypeLabels {
     val positions: Array[Span]
 }
 impl LoweredFunctionTypeLabels { factory }
+struct AssociatedMemberEdge {
+    val source: U64
+    val target: U64
+    val slot: U64
+}
+impl AssociatedMemberEdge { factory }
+struct AssociatedMemberEdgeRange {
+    val start: U64
+    val len: U64
+}
+impl AssociatedMemberEdgeRange { factory }
+struct AssociatedMemberRoot {
+    val root: U64
+    val node: U64
+}
+impl AssociatedMemberRoot { factory }
+struct AssociatedMemberEquationGraph {
+    val context: U64
+    val nodes: Array[TraitBound]
+    val edges: Array[AssociatedMemberEdge]
+    val outgoing: Array[AssociatedMemberEdgeRange]
+}
+impl AssociatedMemberEquationGraph { factory }
+struct AssociatedMemberEquationTarget {
+    val instance: TraitInstanceKey
+    val declaration: U64
+    val node: U64
+}
+impl AssociatedMemberEquationTarget { factory }
+struct AssociatedMemberEquation {
+    val term: U64
+    val output: U64
+    val graph: U64
+    val node: U64
+    val declaring: U64
+}
+impl AssociatedMemberEquation { factory }
+struct AssociatedMemberReachability {
+    val owner: U64
+    val target: U64
+    val reaches: Bool
+}
+impl AssociatedMemberReachability { factory }
+struct AssociatedMemberQueryWork {
+    val context: Array[TraitBound]
+    mut val graphs: Array[AssociatedMemberEquationGraph] = []
+    mut val equations: Array[AssociatedMemberEquation] = []
+    mut val normalized: Dictionary[U64, U64] = [:]
+    mut val reachable: Array[AssociatedMemberReachability] = []
+}
+impl AssociatedMemberQueryWork { factory }
+struct AssociatedMemberCandidate {
+    val instance: TraitInstanceKey
+    val member: U64
+    val declaration: U64
+    val nodes: Array[U64]
+}
+impl AssociatedMemberCandidate { factory }
+struct AssociatedMemberGraph {
+    val roots: Array[TraitBound]
+    val rootNodes: Array[AssociatedMemberRoot]
+    val nodes: Array[TraitBound]
+    val edges: Array[AssociatedMemberEdge]
+    val equationContext: Array[TraitBound]
+    val equationGraphs: Array[AssociatedMemberEquationGraph]
+    val equations: Array[AssociatedMemberEquation]
+}
+impl AssociatedMemberGraph { factory }
+enum AssociatedMemberOutcome {
+    Missing
+    Unique(candidate: AssociatedMemberCandidate)
+    Ambiguous(candidates: Array[AssociatedMemberCandidate])
+}
+struct AssociatedMemberResult {
+    val outcome: AssociatedMemberOutcome
+    val graph: AssociatedMemberGraph
+}
+impl AssociatedMemberResult { factory }
+
 struct SourceProjectionMemberFailure {
     val refusal: ProjectionMemberRefusal
     val evidence: SourceTypeUseFailureEvidence
@@ -2448,6 +2527,7 @@ part ./SourceClosureSignatures
 part ./ParameterGroups
 part ./NominalDeclarationLabels
 part ./SourceTypeDeclarationVisibility
+part ./AssociatedMembers
 part ./ProjectionMembers
 part ./FunctionTypeSignatures
 part ./SourceTypeUseAdmission

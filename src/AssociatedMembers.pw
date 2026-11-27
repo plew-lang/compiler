@@ -1,0 +1,253 @@
+// A name query is not a conformance proof. Search roots and available equations
+// are distinct inputs; the compact graph retains incoming declaration edges.
+impl Comp {
+    fn associatedMemberInputFailure(message: String) -> CompileDiagnostic {
+        return <CompileDiagnostic failureDomain=<FailureDomain.Internal /> location=<DiagnosticLocation.Unpositioned /> message=message />
+    }
+    fn associatedMemberLimit(site: U64) -> CompileDiagnostic {
+        return self.diagnosticAt(offset: site, msg: "inherited associated-member analysis limit exceeded", failureDomain: <FailureDomain.Limit />)
+    }
+    fn associatedMemberShape(owner: U64, site: U64) -> Result[TraitBoundShape, CompileDiagnostic] {
+        val shape = match self.availableTraitBoundShape(owner: owner) {
+            Optional.Some(v: val shape) => shape
+            Optional.None => {
+                if self.decls.traitOwnerIndex(offset: owner) < self.decls.traitOwnerCount() { return <Result.Err error=self.associatedMemberLimit(site: site) /> }
+                return <Result.Err error=self.associatedMemberInputFailure(message: "associated-member query has an unknown trait owner") />
+            }
+        }
+        if shape.typeParams.start > self.decls.traitBindPool.count() || shape.typeParams.len > self.decls.traitBindPool.count()-shape.typeParams.start || shape.assocTypes.start > self.decls.traitBindPool.count() || shape.assocTypes.len > self.decls.traitBindPool.count()-shape.assocTypes.start || shape.supertraits.start > self.decls.traitConstraintPool.count() || shape.supertraits.len > self.decls.traitConstraintPool.count()-shape.supertraits.start {
+            return <Result.Err error=self.associatedMemberInputFailure(message: "associated-member query has malformed trait ranges") />
+        }
+        return <Result.Ok value=shape />
+    }
+    fn associatedMemberEdgeConstraint(shape: TraitBoundShape, index: U64, site: U64) -> Result[TraitConstraint, CompileDiagnostic] {
+        if !self.supertraitOperandAvailable(slot: shape.supertraits.start+index) { return <Result.Err error=self.associatedMemberLimit(site: site) /> }
+        return <Result.Ok value=self.semanticSupertraitConstraintAt(constraints: shape.supertraits, index: index) />
+    }
+    inout fn sameAssociatedMemberInstance(first: TraitInstanceKey, second: TraitInstanceKey) -> Bool {
+        if first.owner != second.owner || first.positionalArgs.count() != second.positionalArgs.count() { return false }
+        for index in 0U64..<first.positionalArgs.count() {
+            if !self.typeRefEq(a: first.positionalArgs[index], b: second.positionalArgs[index], sourceTerms: true) { return false }
+        }
+        return true
+    }
+    inout fn sameAssociatedMemberBound(first: TraitBound, second: TraitBound) -> Bool {
+        if !self.typeRefEq(a: first.subject, b: second.subject, sourceTerms: true) || !self.sameAssociatedMemberInstance(first: first.constraint.key, second: second.constraint.key) || first.constraint.assocPredicates.count() != second.constraint.assocPredicates.count() { return false }
+        for predicate in first.constraint.assocPredicates {
+            mut val found = false
+            for other in second.constraint.assocPredicates {
+                if predicate.member == other.member && self.typeRefEq(a: predicate.value, b: other.value, sourceTerms: true) { found = true break }
+            }
+            if !found { return false }
+        }
+        return true
+    }
+    fn checkAssociatedMemberBound(bound: TraitBound, site: U64) -> Result[TraitBoundShape, CompileDiagnostic] {
+        if bound.subject >= self.arena.typeTermCount() { return <Result.Err error=self.associatedMemberInputFailure(message: "associated-member query has an unknown subject") /> }
+        val shape = try self.associatedMemberShape(owner: bound.constraint.key.owner, site: site)
+        if shape.typeParams.len != bound.constraint.key.positionalArgs.count() || (shape.typeParams.len != 0U64 && bound.constraint.positionalArgsOpen) { return <Result.Err error=self.associatedMemberInputFailure(message: "associated-member query requires a complete trait instance") /> }
+        for argument in bound.constraint.key.positionalArgs {
+            if argument >= self.arena.typeTermCount() { return <Result.Err error=self.associatedMemberInputFailure(message: "associated-member query has an unknown argument") /> }
+        }
+        for predicate in bound.constraint.assocPredicates {
+            if predicate.member == 0U64 || predicate.member > self.interner.entries.count() || predicate.value >= self.arena.typeTermCount() { return <Result.Err error=self.associatedMemberInputFailure(message: "associated-member query has an invalid equation") /> }
+        }
+        return <Result.Ok value=shape />
+    }
+    // This is only an owner-reachability filter for equation lookup. It neither
+    // selects a member nor substitutes a different instance for the search root.
+    fn associatedMemberOwnerReachable(owner: U64, target: U64, site: U64) -> Result[Bool, CompileDiagnostic] {
+        mut val owners = [owner]
+        mut val cursor = 0U64
+        while cursor < owners.count() {
+            val current = owners[cursor]
+            cursor += 1U64
+            if current == target { return <Result.Ok value=true /> }
+            val shape = try self.associatedMemberShape(owner: current, site: site)
+            for edge in 0U64..<shape.supertraits.len {
+                val parent = (try self.associatedMemberEdgeConstraint(shape: shape, index: edge, site: site)).key.owner
+                mut val found = false
+                for prior in owners { if prior == parent { found = true break } }
+                if !found {
+                    if owners.count() >= 128U64 { return <Result.Err error=self.associatedMemberLimit(site: site) /> }
+                    owners.append(parent)
+                }
+            }
+        }
+        return <Result.Ok value=false />
+    }
+    fn cachedAssociatedMemberOwnerReachable(owner: U64, target: U64, site: U64, work: inout AssociatedMemberQueryWork) -> Result[Bool, CompileDiagnostic] {
+        for cached in work.reachable { if cached.owner == owner && cached.target == target { return <Result.Ok value=cached.reaches /> } }
+        val reaches = try self.associatedMemberOwnerReachable(owner: owner, target: target, site: site)
+        work.reachable.append(<AssociatedMemberReachability owner=owner target=target reaches=reaches />)
+        return <Result.Ok value=reaches />
+    }
+    // Build an equation context's symbolic graph once. Do not eagerly normalize
+    // its arguments: a known parent equation may itself determine an argument.
+    inout fn associatedMemberEquationGraph(context: U64, site: U64, work: inout AssociatedMemberQueryWork) -> Result[U64, CompileDiagnostic] {
+        for index in 0U64..<work.graphs.count() { if work.graphs[index].context == context { return <Result.Ok value=index /> } }
+        mut val nodes = [work.context[context]]
+        mut val edges: Array[AssociatedMemberEdge] = []
+        mut val outgoing: Array[AssociatedMemberEdgeRange] = []
+        mut val cursor = 0U64
+        while cursor < nodes.count() {
+            val bound = nodes[cursor]
+            val shape = try self.checkAssociatedMemberBound(bound: bound, site: site)
+            val start = edges.count()
+            for edge in 0U64..<shape.supertraits.len {
+                val written = try self.associatedMemberEdgeConstraint(shape: shape, index: edge, site: site)
+                val parent = self.traitConstraintInShape(constraint: written, bound: bound, shape: shape, includeInherited: false)
+                val next = <TraitBound subject=bound.subject constraint=parent offset=bound.offset />
+                try self.checkAssociatedMemberBound(bound: next, site: site)
+                val target = try self.associatedMemberNode(bound: next, nodes: inout nodes, site: site)
+                edges.append(<AssociatedMemberEdge source=cursor target=target slot=shape.supertraits.start+edge />)
+            }
+            outgoing.append(<AssociatedMemberEdgeRange start=start len=edges.count()-start />)
+            cursor += 1U64
+        }
+        val index = work.graphs.count()
+        work.graphs.append(<AssociatedMemberEquationGraph context=context nodes=nodes edges=edges outgoing=outgoing />)
+        return <Result.Ok value=index />
+    }
+    // A binding on an inherited name is interpreted at its unique declaring
+    // instance. Equal outputs cannot choose among distinct declarations.
+    inout fn associatedMemberEquationTarget(graph: U64, node: U64, member: U64, site: U64, depth: U64, active: Array[U64], work: inout AssociatedMemberQueryWork) -> Result[AssociatedMemberEquationTarget, CompileDiagnostic] {
+        val saved = work.graphs[graph]
+        mut val pending = [node]
+        mut val cursor = 0U64
+        mut val selected: Optional[AssociatedMemberEquationTarget] = <Optional.None />
+        while cursor < pending.count() {
+            val index = pending[cursor]
+            cursor += 1U64
+            val original = saved.nodes[index]
+            val shape = try self.checkAssociatedMemberBound(bound: original, site: site)
+            for slot in 0U64..<shape.assocTypes.len {
+                val declaration = self.traitBindAt(binds: shape.assocTypes, index: slot)
+                if declaration.nameId != member { continue }
+                val bound = try self.normalizeAssociatedMemberHead(bound: original, site: site, depth: depth+1U64, active: active, work: inout work)
+                val target = <AssociatedMemberEquationTarget instance=bound.constraint.key declaration=declaration.nameStart node=index />
+                match selected {
+                    Optional.None => { selected = <Optional.Some v=target /> }
+                    Optional.Some(v: val prior) => { if prior.declaration != target.declaration || !self.sameAssociatedMemberInstance(first: prior.instance, second: target.instance) { return <Result.Err error=self.associatedMemberInputFailure(message: "equation context has an ambiguous associated declaration") /> } }
+                }
+            }
+            val range = saved.outgoing[index]
+            for edge in range.start..<range.start+range.len {
+                val next = saved.edges[edge].target
+                mut val seen = false
+                for prior in pending { if prior == next { seen = true break } }
+                if !seen { pending.append(next) }
+            }
+        }
+        match selected { Optional.Some(v: val target) => { return <Result.Ok value=target /> } Optional.None => { return <Result.Err error=self.associatedMemberInputFailure(message: "equation context has no associated declaration") /> } }
+    }
+    inout fn normalizeAssociatedMemberTerm(ref: U64, site: U64, depth: U64, active: Array[U64], work: inout AssociatedMemberQueryWork) -> Result[U64, CompileDiagnostic] {
+        if ref >= self.arena.typeTermCount() { return <Result.Err error=self.associatedMemberInputFailure(message: "associated-member normalization has an unknown term") /> }
+        match work.normalized.get(key: ref) { Optional.Some(v: val normalized) => { return <Result.Ok value=normalized /> } Optional.None => {} }
+        if !self.arena.typeContainsAssociatedProjection(ref: ref) { return <Result.Ok value=ref /> }
+        if depth >= 128U64 { return <Result.Err error=self.associatedMemberLimit(site: site) /> }
+        mut val children: Array[U64] = []
+        for index in 0U64..<self.typeTermRefChildCount(ref: ref) { children.append(try self.normalizeAssociatedMemberTerm(ref: self.typeTermRefChildRef(ref: ref, index: index), site: site, depth: depth+1U64, active: active, work: inout work)) }
+        val rebuilt = self.rebuildTypeTermChildren(ref: ref, children: children)
+        val projection = self.arena.typeAt(index: rebuilt)
+        if projection.assocNameId == 0U64 { work.normalized[ref] = rebuilt return <Result.Ok value=rebuilt /> }
+        for prior in active { if self.typeRefEq(a: prior, b: rebuilt, sourceTerms: true) { return <Result.Err error=self.associatedMemberLimit(site: site) /> } }
+        mut val next = active
+        next.append(rebuilt)
+        val receiver = self.typeTermProjectionReceiver(t: projection)
+        val owner = self.associatedProjectionTraitOwner(projection: projection)
+        mut val selected: Optional[U64] = <Optional.None />
+        for context in 0U64..<work.context.count() {
+            if !(try self.cachedAssociatedMemberOwnerReachable(owner: work.context[context].constraint.key.owner, target: owner, site: site, work: inout work)) { continue }
+            val graph = try self.associatedMemberEquationGraph(context: context, site: site, work: inout work)
+            val saved = work.graphs[graph]
+            for node in 0U64..<saved.nodes.count() {
+                val source = saved.nodes[node]
+                for predicate in source.constraint.assocPredicates {
+                    if predicate.member != projection.assocNameId { continue }
+                    val target = try self.associatedMemberEquationTarget(graph: graph, node: node, member: predicate.member, site: site, depth: depth+1U64, active: next, work: inout work)
+                    if target.instance.owner != owner { continue }
+                    val targetSubject = try self.normalizeAssociatedMemberTerm(ref: source.subject, site: site, depth: depth+1U64, active: next, work: inout work)
+                    if !self.typeRefEq(a: targetSubject, b: receiver, sourceTerms: true) || !self.sameAssociatedMemberInstance(first: target.instance, second: <TraitInstanceKey owner=owner positionalArgs=projection.assocTraitArgs />) { continue }
+                    if self.typeRefEq(a: predicate.value, b: rebuilt, sourceTerms: true) { continue }
+                    val value = try self.normalizeAssociatedMemberTerm(ref: predicate.value, site: site, depth: depth+1U64, active: next, work: inout work)
+                    match selected { Optional.Some(v: val prior) => { if !self.typeRefEq(a: prior, b: value, sourceTerms: true) { return <Result.Err error=self.associatedMemberInputFailure(message: "associated-member query has conflicting equation context") /> } } Optional.None => { selected = <Optional.Some v=value /> } }
+                    work.equations.append(<AssociatedMemberEquation term=rebuilt output=value graph=graph node=node declaring=target.node />)
+                }
+            }
+        }
+        val result = selected.unwrapOr(fallback: rebuilt)
+        work.normalized[ref] = result
+        return <Result.Ok value=result />
+    }
+    inout fn normalizeAssociatedMemberHead(bound: TraitBound, site: U64, depth: U64, active: Array[U64], work: inout AssociatedMemberQueryWork) -> Result[TraitBound, CompileDiagnostic] {
+        val shape = try self.checkAssociatedMemberBound(bound: bound, site: site)
+        val subject = try self.normalizeAssociatedMemberTerm(ref: bound.subject, site: site, depth: depth+1U64, active: active, work: inout work)
+        mut val arguments: Array[U64] = []
+        for argument in bound.constraint.key.positionalArgs { arguments.append(try self.normalizeAssociatedMemberTerm(ref: argument, site: site, depth: depth+1U64, active: active, work: inout work)) }
+        return <Result.Ok value=<TraitBound subject=subject constraint=<TraitConstraint key=<TraitInstanceKey owner=shape.nameStart positionalArgs=arguments /> positionalArgsOpen=false assocPredicates=bound.constraint.assocPredicates /> offset=bound.offset /> />
+    }
+    inout fn normalizeAssociatedMemberBound(bound: TraitBound, site: U64, work: inout AssociatedMemberQueryWork) -> Result[TraitBound, CompileDiagnostic] {
+        val normalized = try self.normalizeAssociatedMemberHead(bound: bound, site: site, depth: 0U64, active: [], work: inout work)
+        mut val predicates: Array[TraitAssocPredicate] = []
+        for predicate in normalized.constraint.assocPredicates { predicates.append(<TraitAssocPredicate member=predicate.member value=(try self.normalizeAssociatedMemberTerm(ref: predicate.value, site: site, depth: 0U64, active: [], work: inout work)) span=predicate.span />) }
+        return <Result.Ok value=<TraitBound subject=normalized.subject constraint=<TraitConstraint key=normalized.constraint.key positionalArgsOpen=false assocPredicates=predicates /> offset=normalized.offset /> />
+    }
+    inout fn associatedMemberNode(bound: TraitBound, nodes: inout Array[TraitBound], site: U64) -> Result[U64, CompileDiagnostic] {
+        for index in 0U64..<nodes.count() { if self.sameAssociatedMemberBound(first: nodes[index], second: bound) { return <Result.Ok value=index /> } }
+        if nodes.count() >= 128U64 { return <Result.Err error=self.associatedMemberLimit(site: site) /> }
+        val index = nodes.count()
+        nodes.append(bound)
+        return <Result.Ok value=index />
+    }
+    inout fn queryAssociatedMember(subject: U64, roots: Array[TraitBound], equationContext: Array[TraitBound], member: U64, site: U64) -> Result[AssociatedMemberResult, CompileDiagnostic] {
+        if subject >= self.arena.typeTermCount() || member == 0U64 || member > self.interner.entries.count() { return <Result.Err error=self.associatedMemberInputFailure(message: "associated-member query has an invalid subject or member") /> }
+        mut val context = roots
+        for bound in equationContext { context.append(bound) }
+        for bound in context { try self.checkAssociatedMemberBound(bound: bound, site: site) }
+        mut val work = <AssociatedMemberQueryWork context=context />
+        val receiver = try self.normalizeAssociatedMemberTerm(ref: subject, site: site, depth: 0U64, active: [], work: inout work)
+        mut val rootNodes: Array[AssociatedMemberRoot] = []
+        mut val nodes: Array[TraitBound] = []
+        for rootIndex in 0U64..<roots.count() {
+            val root = roots[rootIndex]
+            val normalized = try self.normalizeAssociatedMemberBound(bound: root, site: site, work: inout work)
+            if !self.typeRefEq(a: receiver, b: normalized.subject, sourceTerms: true) { continue }
+            rootNodes.append(<AssociatedMemberRoot root=rootIndex node=(try self.associatedMemberNode(bound: normalized, nodes: inout nodes, site: site)) />)
+        }
+        mut val edges: Array[AssociatedMemberEdge] = []
+        mut val candidates: Array[AssociatedMemberCandidate] = []
+        mut val cursor = 0U64
+        while cursor < nodes.count() {
+            val bound = nodes[cursor]
+            val shape = try self.checkAssociatedMemberBound(bound: bound, site: site)
+            for index in 0U64..<shape.assocTypes.len {
+                val declaration = self.traitBindAt(binds: shape.assocTypes, index: index)
+                if declaration.nameId != member { continue }
+                mut val matched = false
+                for candidateIndex in 0U64..<candidates.count() {
+                    val candidate = candidates[candidateIndex]
+                    if candidate.member == member && candidate.declaration == declaration.nameStart && self.sameAssociatedMemberInstance(first: candidate.instance, second: bound.constraint.key) {
+                        mut val referring = candidate.nodes
+                        referring.append(cursor)
+                        candidates[candidateIndex] = <AssociatedMemberCandidate instance=candidate.instance member=member declaration=candidate.declaration nodes=referring />
+                        matched = true
+                        break
+                    }
+                }
+                if !matched { candidates.append(<AssociatedMemberCandidate instance=bound.constraint.key member=member declaration=declaration.nameStart nodes=[cursor] />) }
+            }
+            for edge in 0U64..<shape.supertraits.len {
+                val written = try self.associatedMemberEdgeConstraint(shape: shape, index: edge, site: site)
+                val parent = self.traitConstraintInShape(constraint: written, bound: bound, shape: shape, includeInherited: false)
+                val normalized = try self.normalizeAssociatedMemberBound(bound: <TraitBound subject=bound.subject constraint=parent offset=bound.offset />, site: site, work: inout work)
+                val target = try self.associatedMemberNode(bound: normalized, nodes: inout nodes, site: site)
+                edges.append(<AssociatedMemberEdge source=cursor target=target slot=shape.supertraits.start+edge />)
+            }
+            cursor += 1U64
+        }
+        val graph = <AssociatedMemberGraph roots=roots rootNodes=rootNodes nodes=nodes edges=edges equationContext=context equationGraphs=work.graphs equations=work.equations />
+        val outcome = if candidates.count() == 0U64 { give <AssociatedMemberOutcome.Missing /> } else if candidates.count() == 1U64 { give <AssociatedMemberOutcome.Unique candidate=candidates[0U64] /> } else { give <AssociatedMemberOutcome.Ambiguous candidates=candidates /> }
+        return <Result.Ok value=<AssociatedMemberResult outcome=outcome graph=graph /> />
+    }
+}

@@ -2,13 +2,23 @@
 // not select a conformance or interpret missing associated bindings.
 pub impl Comp {
     inout fn checkProjectionMember(type: TypeRef) -> Result[(), CompileDiagnostic] {
+        if type.assocNameId == 0U64 || type.assocTraitId == 0U64 { return <Result.Ok value=() /> }
         val owner = if type.hasAssocTraitDecl { give type.assocTraitDeclOffset } else { give type.assocTraitStart }
-        if try self.projectionMemberExists(owner: owner, traitId: type.assocTraitId, memberId: type.assocNameId) { return <Result.Ok value=() /> }
-        return <Result.Err error=self.missingProjectionMember(site: type.siteOffset) />
+        if self.availableTraitBoundShape(owner: owner).isNone() { return <Result.Ok value=() /> }
+        if type.assocTraitId > self.interner.entries.count() { return <Result.Err error=self.associatedMemberInputFailure(message: "projection-member query has an unknown name identity") /> }
+        val receiver = self.typeTermProjectionReceiver(t: type)
+        val root = <TraitBound subject=receiver constraint=<TraitConstraint key=<TraitInstanceKey owner=owner positionalArgs=type.assocTraitArgs /> positionalArgsOpen=false assocPredicates=[] /> offset=type.siteOffset />
+        val selected = try self.queryAssociatedMember(subject: receiver, roots: [root], equationContext: [], member: type.assocNameId, site: type.siteOffset)
+        return match selected.outcome {
+            AssociatedMemberOutcome.Unique(candidate: _) => <Result.Ok value=() />
+            AssociatedMemberOutcome.Missing => <Result.Err error=self.missingProjectionMember(site: type.siteOffset) />
+            AssociatedMemberOutcome.Ambiguous(candidates: _) => <Result.Err error=self.diagnosticAt(offset: type.siteOffset, msg: "associated-type projection is ambiguous in the selected trait sources (spec/08)") />
+        }
     }
 
     inout fn checkProjectionMember(ref: U64) -> Result[(), CompileDiagnostic] {
-        return self.checkProjectionMemberWithOrigin(ref: ref, occurrence: 0U64, origin: <SourceTypeUseOrigin.Raw />)
+        if ref >= self.arena.typeTermCount() { return <Result.Err error=self.associatedMemberInputFailure(message: "projection-member query has an unknown type term") /> }
+        return self.checkProjectionMember(type: self.arena.typeAt(index: ref))
     }
 
 }
