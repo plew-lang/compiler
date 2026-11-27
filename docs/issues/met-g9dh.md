@@ -1,6 +1,6 @@
 ---
 id: met-g9dh
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-11-27T09:01:13Z
@@ -95,3 +95,17 @@ preserve the source group and default generators have no parameters. No new
 capability flag or guessed Source authority is added to avoid this comparison.
 Final focused/gen/review closure is pending; whole/fixed-point/performance gates
 remain owned by met-auj6 after B/C integration.
+
+## Finite certification
+
+Neutral independent reviewer /root/qualified_member_plan reviewed product
+7771bb48, tests fd021904 and meta3ad07188 against this task. No established
+pre-publication bypass, Source escalation, unintended API visibility change or
+focused contract/test gap remained. Selected gen passed. The native driver had
+been expanded after execution for session mode; its exact executed bytes are
+archived as run-private-native-v1.py, SHA matches native.json, with mapping in
+driver-revisions.json. Reviewer independently rechecked this correction and
+certified finite A closure. Reproducible successful native outputs are retired
+per retirement.json; results/manifests/driver, setup-error logs, source and frozen
+carrier/std remain. B/C and the parent's whole/fixed-point/performance gates
+are not covered by this child certification.
