@@ -741,7 +741,7 @@ impl Comp {
                 if hasValue {
                     try self.checkBoundsExprWithOrigin(origin: origin, exprId: value)
                     if self.cur.checkFn < self.arena.functionCount() {
-                        try self.checkGenericTypeMatchWithOrigin(origin: origin, expectedRef: self.semanticBodyReturnContext(fnIdx: self.cur.checkFn), valueExpr: value)
+                        try self.checkGenericTypeMatchWithOrigin(origin: origin, expectedRef: (try self.semanticBodyReturnContext(fnIdx: self.cur.checkFn)), valueExpr: value)
                     }
                 }
             }

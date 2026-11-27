@@ -3625,7 +3625,8 @@ impl Comp {
             self.cur.typeArgs = []
             self.cur.checkFn = fnIdx
             try self.checkDefaultGeneratorRestrictions(fnIdx: fnIdx)
-            val bodyOrigin = origin.returning(context: <SourceExpectedContext.Contract term=self.semanticBodyReturnContext(fnIdx: fnIdx) />)
+            val bodyResult = try self.semanticBodyReturnContext(fnIdx: fnIdx)
+            val bodyOrigin = origin.returning(context: <SourceExpectedContext.Contract term=bodyResult />)
             mut val parameters: Array[SourceBodyParameter] = []
             mut val pi: U64 = 0
             while pi < f.params.count() {
@@ -3648,7 +3649,7 @@ impl Comp {
                 pi += 1
             }
             if recordCallTemplates {
-                try self.recordSourceBodySignature(fnIdx: fnIdx, signature: <SourceBodySignature hasReceiver=f.hasRecv receiverTerm=self.cur.selfRef selfInout=f.selfInout selfMove=f.selfMove isAsync=self.arena.requiresAsyncActivation(function: f) hasReturnValue=f.hasRet || self.arena.forwardsAsyncPromise(function: f) resultTerm=self.semanticBodyReturnContext(fnIdx: fnIdx) block=f.body parameters=parameters />)
+                try self.recordSourceBodySignature(fnIdx: fnIdx, signature: <SourceBodySignature hasReceiver=f.hasRecv receiverTerm=self.cur.selfRef selfInout=f.selfInout selfMove=f.selfMove isAsync=self.arena.requiresAsyncActivation(function: f) hasReturnValue=f.hasRet || self.arena.forwardsAsyncPromise(function: f) resultTerm=bodyResult block=f.body parameters=parameters />)
             }
             try self.recordBlockWithOrigin(blkId: f.body, origin: bodyOrigin, expectedOrigin: expectedOrigin)
             try self.checkDefaultGenerator(fnIdx: fnIdx)
@@ -3874,7 +3875,7 @@ impl Comp {
             Stmt.ExprStmt(val expr) => { try self.recordExprWithOrigin(exprId: expr, needsValue: false, standaloneBlock: true, origin: origin, expectedOrigin: <SourceExpectedContext.None />) }
             Stmt.Return(val value, val hasValue, offset: _) => {
                 if hasValue {
-                    val expected: U64 = self.semanticBodyReturnContext(fnIdx: self.cur.checkFn)
+                    val expected: U64 = (try self.semanticBodyReturnContext(fnIdx: self.cur.checkFn))
                     try self.recordExprWithOrigin(exprId: value, expectedTerm: expected, origin: origin, expectedOrigin: origin.returnContext)
                 }
             }

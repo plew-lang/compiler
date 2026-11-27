@@ -233,6 +233,25 @@ frontier/child-path controls. The meta construction-head checkpoint records exac
 results. Fresh CLI execution, AOT/ORC, full producer audit and performance are
 still required; this is not final construction/task certification.
 
+## Body result handoff checkpoint
+
+Fresh f9aba36f CLI matrix passed12/39 with immutable inputs. Child's identity
+return rejected in generic checking; Parent passed check but failed Mid
+preparation. They are distinct unclosed consumers, not evidence of completion.
+A native regression proved semanticBodyReturnContext retained Child while its
+parameter reader published Parent. lexicalBodySignatureType now shares the
+exact admitted slot reader for parameters and results. Body recording, generic
+checking and verification propagate reader failure and use its logical result;
+async explicit Promise unwrap occurs once there and forwarding remains wrapped.
+Record reuses one result read for its origin and published body signature.
+
+Meta body-result-checkpoint.json retains target RED, GREEN and20-profile GREEN
+with input hashes. Independent finite review found no required correction in
+this slice. It did not certify CLI/AOT/ORC, performance or task completion.
+Remaining audit: recordTryExpression still reads declaredBodyReturnTerm directly;
+exercise nested Result associated error/result propagation before certifying
+that consumer. Raw/closure/forwarding were source-inspected, not newly executed.
+
 ## Next implementation sequence
 
 1. Audit remaining producer/receiver environments against the receipt checkpoint;

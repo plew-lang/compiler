@@ -886,25 +886,37 @@ impl Comp {
     // recipe. Declaration evidence may remain symbolic; concrete reads must
     // interpret its retained proofs in the explicit instance environment.
     inout fn lexicalBodyParameterType(function: U64, index: U64, ref: U64, receiver: U64) -> Result[Optional[U64], CompileDiagnostic] {
+        return self.lexicalBodySignatureType(function: function, slot: <SourceSignatureSlot.Parameter index=index />, ref: ref, receiver: receiver)
+    }
+
+    inout fn lexicalBodySignatureType(function: U64, slot: SourceSignatureSlot, ref: U64, receiver: U64) -> Result[Optional[U64], CompileDiagnostic] {
         if !self.arena.typeContainsAssociatedProjection(ref: ref) { return <Result.Ok value=<Optional.None /> /> }
         val admitted = match self.authoredSignatureViews.get(key: function) {
             Optional.Some(v: val admitted) => admitted,
             Optional.None => { return <Result.Ok value=<Optional.None /> /> },
         }
         val source = admitted.signature
-        if index >= source.parameters.count() || source.parameters[index] == 0U64 { return <Result.Ok value=<Optional.None /> /> }
+        val occurrenceId = match slot {
+            SourceSignatureSlot.Parameter(index: val index) => {
+                if index >= source.parameters.count() { return <Result.Ok value=<Optional.None /> /> }
+                give source.parameters[index]
+            }
+            SourceSignatureSlot.Result => source.result
+            SourceSignatureSlot.FactoryError => source.factoryError
+        }
+        if occurrenceId == 0U64 { return <Result.Ok value=<Optional.None /> /> }
         val declaration = self.arena.functionAt(index: function)
         if declaration.typeParams.count() != 0U64 || !self.arena.typeIsClosed(ref: receiver) {
-            val occurrence = try self.authoredSignatureOccurrence(signature: source, id: source.parameters[index])
+            val occurrence = try self.authoredSignatureOccurrence(signature: source, id: occurrenceId)
             if source.function != function || !self.typeRefEq(a: occurrence.term, b: ref) {
-                return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "lexical parameter has a foreign signature slot", failureDomain: <FailureDomain.Internal />) />
+                return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "lexical body type has a foreign signature slot", failureDomain: <FailureDomain.Internal />) />
             }
             mut val memo: Dictionary[U64, AuthoredRecipeRead] = [:]
             val read = try self.readAuthoredTypeRecipe(proofs: admitted.proofs, recipe: occurrence.recipe, environment: <InstanceEnvironment receiverRef=receiver />, memo: inout memo, receiverEquations: admitted.receiverEquations, context: <SignatureRecipeContext.Declaration />)
             return <Result.Ok value=<Optional.Some v=read.term /> />
         }
         val environment = <InstanceEnvironment receiverRef=receiver />
-        val term = try self.readAdmittedSignatureRoot(function: function, slot: <SourceSignatureSlot.Parameter index=index />, environment: environment)
+        val term = try self.readAdmittedSignatureRoot(function: function, slot: slot, environment: environment)
         return <Result.Ok value=<Optional.Some v=term /> />
     }
 

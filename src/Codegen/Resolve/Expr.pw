@@ -788,10 +788,24 @@ pub impl Comp {
 
     // Signature Self remains abstract at the public boundary. Context inside
     // the declaration uses its lexical receiver, including its own binders.
-    inout fn semanticBodyReturnContext(fnIdx: U64) -> U64 {
-        val term = self.declaredBodyReturnTerm(fnIdx: fnIdx)
-        if fnIdx >= self.arena.functionCount() { return term }
-        return self.groundTermInEnvironment(ref: term, params: [], values: [], selfRef: self.parametricSelfRef(f: self.arena.functionAt(index: fnIdx)))
+    inout fn semanticBodyReturnContext(fnIdx: U64) -> Result[U64, CompileDiagnostic] {
+        mut val term = self.declaredBodyReturnTerm(fnIdx: fnIdx)
+        if fnIdx >= self.arena.functionCount() { return <Result.Ok value=term /> }
+        val function = self.arena.functionAt(index: fnIdx)
+        val receiver = self.parametricSelfRef(f: function)
+        if function.hasRet {
+            match (try self.lexicalBodySignatureType(function: fnIdx, slot: <SourceSignatureSlot.Result />, ref: function.retTy, receiver: receiver)) {
+                Optional.Some(v: val retained) => {
+                    term = retained
+                    if function.isAsync && !self.arena.forwardsAsyncPromise(function: function) {
+                        val result = self.arena.typeAt(index: term)
+                        if rangeEquals(bytes: self.arena.bytes, start: result.nameStart, len: result.nameLen, kw: "Promise") && result.args.count() == 1U64 { term = result.args[0U64] }
+                    }
+                }
+                Optional.None => {}
+            }
+        }
+        return <Result.Ok value=self.groundTermInEnvironment(ref: term, params: [], values: [], selfRef: receiver) />
     }
 
     // A conferred callable executes an authored body under its own proof.

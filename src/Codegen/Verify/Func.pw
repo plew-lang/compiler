@@ -31,40 +31,22 @@ pub impl Comp {
             self.cur.retVoid = false
             mut val rStart: U64 = f.retStart
             mut val rLen: U64 = f.retLen
-            // The body's Self denotes its lexical receiver, not the caller's
-            // receiver or an unbound name left on the public signature.
-            mut val rTy: U64 = self.groundTermInEnvironment(ref: f.retTy, params: [], values: [], selfRef: declarationReceiver)
+            // Source recording and verification consume the same admitted
+            // logical result; async callable wrapping is interpreted there.
+            val rTy = try self.semanticBodyReturnContext(fnIdx: self.cur.checkFn)
             mut val rArr: Bool = f.retIsArray
-            // an async fn's body returns the Promise's INNER type (`return n` yields I64
-            // even for `-> Promise[I64]`; the implicit `-> I64` form is already the inner
-            // type). Unwrap an explicitly-written Promise[T] to T so the return check uses
-            // T. (tcCheckValue handles a literal/array return against the inner ref.)
-            if forwardsPromise {
-                rTy = self.semanticBodyReturnContext(fnIdx: self.cur.checkFn)
-                if rTy == 0U64 || rTy >= self.arena.typeCount() {
-                    return <Result.Err error=self.diagnosticAt(offset: self.fnAnchor(f: f), msg: "async forwarding requires a resolved Promise result") />
-                }
+            if rTy != 0U64 && rTy < self.arena.typeCount() {
                 val result = self.arena.typeTermAt(index: rTy)
                 rStart = result.nameStart
                 rLen = result.nameLen
+            }
+            if forwardsPromise {
+                if rTy == 0U64 || rTy >= self.arena.typeCount() {
+                    return <Result.Err error=self.diagnosticAt(offset: self.fnAnchor(f: f), msg: "async forwarding requires a resolved Promise result") />
+                }
                 rArr = false
             } else if f.isAsync {
-                if rangeEquals(bytes: self.arena.bytes, start: rStart, len: rLen, kw: "Promise") {
-                    if rTy != 0U64 {
-                        if rTy < self.arena.typeCount() {
-                            val pt: TypeRef = self.arena.typeAt(index: rTy)
-                            if pt.args.count() >= 1U64 {
-                                val innerRef: U64 = pt.args[0]
-                                rTy = innerRef
-                                rArr = false
-                                if innerRef < self.arena.typeCount() {
-                                    rStart = self.arena.typeTermAt(index: innerRef).nameStart
-                                    rLen = self.arena.typeTermAt(index: innerRef).nameLen
-                                }
-                            }
-                        }
-                    }
-                }
+                rArr = false
                 // provisional guard (provisional.md): the async lowering passes the
                 // resolved value through ONE type-erased i64 promise slot
                 // (genLlvmAsyncReturn extendToI64 / await re-widens), so only

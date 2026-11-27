@@ -36,4 +36,19 @@ fn main() {
     val element = compiler.arena.typeAt(index: compiler.arena.typeAt(index: concreteArray).args[0U64])
     if element.assocNameId != 0U64 || element.nameId != compiler.internBytes(s: "I64").nameId { panic("nested constructor did not consume concrete Parent output") }
 
+    val returningIndex = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "returning").nameId)
+    val returning = compiler.arena.functionAt(index: returningIndex)
+    val returningParameter = compiler.funcParamAt(params: returning.params, index: 0U64)
+    val parameterTerm = compiler.lexicalBodyParameterType(function: returningIndex, index: 0U64, ref: returningParameter.ty, receiver: 0U64).unwrap().unwrap()
+    val resultTerm = compiler.semanticBodyReturnContext(fnIdx: returningIndex).unwrap()
+    if !compiler.typeRefEq(a: parameterTerm, b: resultTerm) { panic("body result did not consume the same admitted declaring instance as its parameter") }
+
+    for name in ["returningArray", "returningAsync"] {
+        val owner = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: name).nameId)
+        val declaration = compiler.arena.functionAt(index: owner)
+        val parameter = compiler.funcParamAt(params: declaration.params, index: 0U64)
+        val term = compiler.lexicalBodyParameterType(function: owner, index: 0U64, ref: parameter.ty, receiver: 0U64).unwrap().unwrap()
+        if !compiler.typeRefEq(a: term, b: compiler.semanticBodyReturnContext(fnIdx: owner).unwrap()) { panic("logical result lost a nested admitted projection or unwrapped Promise incorrectly") }
+    }
+
 }

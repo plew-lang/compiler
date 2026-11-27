@@ -7,3 +7,6 @@ impl Leaf as Parent { type Output = I64 }
 impl Leaf as Child {}
 fn leaf(value: Leaf) {}
 fn boxed[T](value: Array[T#Child.Output]) where T: Child {}
+fn returning[T](value: T#Child.Output) -> T#Child.Output where T: Child { return value }
+fn returningArray[T](value: Array[T#Child.Output]) -> Array[T#Child.Output] where T: Child { return value }
+async fn returningAsync[T](value: T#Child.Output) -> Promise[T#Child.Output] where T: Child { return value }
