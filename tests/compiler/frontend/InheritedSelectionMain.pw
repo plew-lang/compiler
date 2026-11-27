@@ -83,6 +83,24 @@ fn main() {
     if !compiler.typeRefEq(a: propagation.sourceErrorTerm, b: propagation.targetErrorTerm) { panic("try changed identical admitted associated error types") }
     compiler.checkSourceTypingObligationsWithOrigin(owner: propagationOwner, origin: <SourceRecordOrigin.CheckingRequest session=compiler.sourceFactSession() root=propagationOwner />).unwrap()
 
+    val methodCaller = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "methodCaller").nameId)
+    val methodOwner = <SemanticCompletionOwner.Function index=methodCaller />
+    if !compiler.sourceFacts.begin(owner: methodOwner) { panic("method caller facts were not fresh") }
+    match compiler.recordParametricFunctionWithOrigin(fnIdx: methodCaller, recordCallTemplates: true, origin: <SourceRecordingScope request=<SourceRecordOrigin.CheckingRequest session=compiler.sourceFactSession() root=methodOwner /> returnContext=<SourceExpectedContext.None /> />, expectedOrigin: <SourceExpectedContext.None />) {
+        Result.Ok(value: _) => {}
+        Result.Err(error: val diagnostic) => { panic("method call lost admitted signature: "+diagnostic.message()) }
+    }
+    compiler.checkSourceTypingObligationsWithOrigin(owner: methodOwner, origin: <SourceRecordOrigin.CheckingRequest session=compiler.sourceFactSession() root=methodOwner />).unwrap()
+
+    val closureCaller = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "closureMethodCaller").nameId)
+    val closureOwner = <SemanticCompletionOwner.Function index=closureCaller />
+    if !compiler.sourceFacts.begin(owner: closureOwner) { panic("contextual closure caller facts were not fresh") }
+    match compiler.recordParametricFunctionWithOrigin(fnIdx: closureCaller, recordCallTemplates: true, origin: <SourceRecordingScope request=<SourceRecordOrigin.CheckingRequest session=compiler.sourceFactSession() root=closureOwner /> returnContext=<SourceExpectedContext.None /> />, expectedOrigin: <SourceExpectedContext.None />) {
+        Result.Ok(value: _) => {}
+        Result.Err(error: val diagnostic) => { panic("one method environment lost contextual closure inference: "+diagnostic.message()) }
+    }
+    compiler.checkSourceTypingObligationsWithOrigin(owner: closureOwner, origin: <SourceRecordOrigin.CheckingRequest session=compiler.sourceFactSession() root=closureOwner />).unwrap()
+
     val wrongCaller = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "wrongCaller").nameId)
     val wrongOwner = <SemanticCompletionOwner.Function index=wrongCaller />
     if !compiler.sourceFacts.begin(owner: wrongOwner) { panic("negative caller facts were not fresh") }
@@ -91,6 +109,16 @@ fn main() {
             if diagnostic.message() != "type mismatch: this value's type does not match the type required here (Plew has no implicit conversion — spec/12)" { panic("wrong argument did not reach semantic type mismatch: "+diagnostic.message()) }
         }
         Result.Ok(value: _) => { panic("wrong argument passed admitted parameter checking") }
+    }
+
+    val wrongMethodCaller = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "wrongMethodCaller").nameId)
+    val wrongMethodOwner = <SemanticCompletionOwner.Function index=wrongMethodCaller />
+    if !compiler.sourceFacts.begin(owner: wrongMethodOwner) { panic("negative method caller facts were not fresh") }
+    match compiler.recordParametricFunctionWithOrigin(fnIdx: wrongMethodCaller, recordCallTemplates: true, origin: <SourceRecordingScope request=<SourceRecordOrigin.CheckingRequest session=compiler.sourceFactSession() root=wrongMethodOwner /> returnContext=<SourceExpectedContext.None /> />, expectedOrigin: <SourceExpectedContext.None />) {
+        Result.Err(error: val diagnostic) => {
+            if diagnostic.message() != "type mismatch: this value's type does not match the type required here (Plew has no implicit conversion — spec/12)" { panic("wrong method argument did not reach semantic mismatch: "+diagnostic.message()) }
+        }
+        Result.Ok(value: _) => { panic("wrong method argument passed admitted parameter checking") }
     }
 
 }

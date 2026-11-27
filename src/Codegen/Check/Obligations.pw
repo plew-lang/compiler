@@ -1069,7 +1069,15 @@ pub impl Comp {
     inout fn selectedDirectParameterSignature(callee: U64, environment: InstanceEnvironment) -> Result[SourceCallSignature, CompileDiagnostic] {
         if self.arena.functionAt(index: callee).isProvided && self.isAuthoredProvidedDeclaration(function: callee) {
             val signature = try self.providedSourceSignature(function: callee, environment: environment, read: <CallableSignatureRead.SourceParameters />)
-            return <Result.Ok value=<SourceCallSignature.ProvidedParameters types=signature.parameterTypes /> />
+            return <Result.Ok value=<SourceCallSignature.AdmittedParameters types=signature.parameterTypes /> />
+        }
+        match (try self.readRetainedCallableTypes(function: callee, environment: environment, read: <CallableSignatureRead.SourceParameters />)) {
+            Optional.Some(v: val signature) => {
+                mut val terms: Array[U64] = []
+                for term in signature.parameterTypes { terms.append(try self.groundTermForBody(ref: term, environment: environment, selfRef: environment.receiverRef, itemRef: 0U64)) }
+                return <Result.Ok value=<SourceCallSignature.AdmittedParameters types=terms /> />
+            }
+            Optional.None => {}
         }
         return <Result.Ok value=<SourceCallSignature.Direct environment=environment /> />
     }
@@ -1088,7 +1096,7 @@ pub impl Comp {
             StaticMemberResolution.Provided(proof: val proof, traitIdx: _, callee: val callee) => {
                 val environment = try self.recordedDirectCallEnvironment(function: function, receiverTerm: template.receiverTypeTerm, typeArgs: self.callTemplateTypeArgs(range: typeArgs), proof: proof)
                 val signature = try self.providedSourceSignature(function: callee, environment: environment, read: <CallableSignatureRead.SourceParameters />)
-                return <Result.Ok value=<SourceCallSignature.ProvidedParameters types=signature.parameterTypes /> />
+                return <Result.Ok value=<SourceCallSignature.AdmittedParameters types=signature.parameterTypes /> />
             }
             StaticMemberResolution.Missing => { return <Result.Err error=self.diagnosticAt(offset: template.siteKey.originStart, msg: "deferred declaration obligation has no selected member") /> }
         }
@@ -1105,8 +1113,8 @@ pub impl Comp {
                 if position >= types.count() { return <Result.Err error=self.diagnosticAt(offset: parameter.nameStart, msg: "selected requirement parameter is outside its admitted signature", failureDomain: <FailureDomain.Internal />) /> }
                 return self.groundTermForBody(ref: types[position], environment: environment, selfRef: environment.receiverRef, itemRef: 0U64)
             }
-            SourceCallSignature.ProvidedParameters(types: val types) => {
-                if position >= types.count() { return <Result.Err error=self.diagnosticAt(offset: parameter.nameStart, msg: "selected provided parameter is outside its admitted signature", failureDomain: <FailureDomain.Internal />) /> }
+            SourceCallSignature.AdmittedParameters(types: val types) => {
+                if position >= types.count() { return <Result.Err error=self.diagnosticAt(offset: parameter.nameStart, msg: "selected parameter is outside its admitted signature", failureDomain: <FailureDomain.Internal />) /> }
                 return <Result.Ok value=types[position] />
             }
             _ => { return self.sourceCallSignatureParameter(ref: parameter.ty, signature: signature) }
@@ -1115,7 +1123,7 @@ pub impl Comp {
 
     inout fn sourceCallSignatureParameter(ref: U64, signature: SourceCallSignature) -> Result[U64, CompileDiagnostic] {
         match signature {
-            SourceCallSignature.RequirementParameters(types: _, environment: _) | SourceCallSignature.ProvidedParameters(types: _) => {
+            SourceCallSignature.RequirementParameters(types: _, environment: _) | SourceCallSignature.AdmittedParameters(types: _) => {
                 return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "admitted argument type needs a parameter slot", failureDomain: <FailureDomain.Internal />) />
             }
             SourceCallSignature.Direct(environment: val environment) => {

@@ -795,7 +795,7 @@ impl Comp {
                 for val candidate in candidates {
                     val function = self.arena.functionAt(index: candidate)
                     if function.extId == 0U64 && function.srcTraitId == 0U64 && self.receiverDeclarationMatches(f: function, receiverRef: receiver) {
-                        val matchRank = (try self.groundedMethodArgMatchRank(f: function, args: args, recvRef: receiver))
+                        val matchRank = (try self.groundedMethodArgMatchRank(callee: candidate, args: args, recvRef: receiver))
                         if !self.methodIsVisible(mf: function, offset: useOffset) {
                             if matchRank != 0U64 && hidden == self.arena.functionCount() { hidden = candidate }
                         } else if matchRank > rank {

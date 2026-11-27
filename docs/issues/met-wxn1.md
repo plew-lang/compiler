@@ -284,6 +284,25 @@ required correction: Result detection, error extraction and From selection are
 unchanged, and ordinary logical-result handling is shared rather than duplicated.
 This does not certify remaining method/closure producers or fresh AOT/ORC.
 
+## Method signature checkpoint
+
+A corresponding registered generic method reproduced the same missing-binding
+failure. Method ranking's six consumers now pass their exact callable ID and
+use admitted lexical patterns; the obsolete f-only rank adapter is removed.
+Source method inference receives an explicit parameter vector (shape-checked),
+without deriving authority from diagnostic origin. Both ordinary and provided
+selected calls publish AdmittedParameters; provided proof/missing-signature
+gates and unregistered Direct fallback remain. Method operand contexts compute
+one complete environment outside the loop rather than rebuilding it per operand.
+
+Meta method-signature-checkpoint.json records target RED and final native-v3
+20-profile GREEN: method Source recording/obligations, wrong Bool argument
+spec12 rejection, and an initially untyped closure argument whose expected type
+comes from a later typed operand. Independent finite source review found no
+required correction. The old e001910a fresh candidate (free-call slice only)
+still passed12/39; latest all-mode results and performance remain outstanding.
+Raw helper/early-admission auditing is not complete.
+
 ## Next implementation sequence
 
 1. Audit remaining producer/receiver environments against the receipt checkpoint;

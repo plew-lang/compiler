@@ -298,14 +298,6 @@ pub impl Comp {
         return self.callableParameterTypeMatchRank(function: declaration, args: args, signatures: signatures, receiver: 0U64, initialValues: values)
     }
 
-    inout fn callableArgMatchRank(f: Func, args: ArgRange) -> Result[U64, CompileDiagnostic] {
-        if !self.paramsLabelsOk(params: f.params, args: args) { return <Result.Ok value=0U64 /> }
-        mut val signatures: Array[U64] = []
-        for parameter in self.copyFuncParams(params: f.params) { signatures.append(parameter.ty) }
-        mut val values: Array[U64] = []
-        while values.count() < f.typeParams.count() { values.append(0U64) }
-        return self.callableParameterTypeMatchRank(function: f, args: args, signatures: signatures, receiver: 0U64, initialValues: values)
-    }
 
     // Method declarations carry the receiver's generic binders in their
     // parameter types.  Overload selection must compare after substituting the
@@ -314,7 +306,8 @@ pub impl Comp {
     // eager overload and reach LLVM as an integer.  The argument belongs to
     // the *caller* body, however: never install the candidate callee cursor
     // before reading its recorded semantic TypeTerm.
-    inout fn groundedMethodArgMatchRank(f: Func, args: ArgRange, recvRef: U64) -> Result[U64, CompileDiagnostic] {
+    inout fn groundedMethodArgMatchRank(callee: U64, args: ArgRange, recvRef: U64) -> Result[U64, CompileDiagnostic] {
+        val f = self.arena.functionAt(index: callee)
         if !(self.paramsLabelsOk(params: f.params, args: args)) { return <Result.Ok value=0U64 />}
         // Ranking owns only tentative candidate bindings. Strict receiver
         // inference can fail before another candidate has been considered.
@@ -323,7 +316,7 @@ pub impl Comp {
         // This is candidate context, not a completed selected substitution.
         if f.isAssoc && receiver != 0U64 && receiver < self.arena.typeCount() && f.recvTy != 0U64 && f.recvTy < self.arena.typeCount() && self.arena.typeTermAt(index: receiver).args.len == 0U64 && self.arena.typeTermAt(index: f.recvTy).args.len != 0U64 && self.typeTermRefSameHead(a: receiver, b: f.recvTy) { receiver = f.recvTy }
         if receiver == 0U64 || receiver >= self.arena.typeCount() {
-            return <Result.Ok value=(try self.callableArgMatchRank(f: f, args: args)) />
+            return <Result.Ok value=(try self.callableArgMatchRank(function: callee, args: args)) />
         }
         // Capture the caller meaning before selecting a callee. The semantic
         // term of `v` in `out.append(v)` can be
@@ -338,10 +331,11 @@ pub impl Comp {
         val receiverEnvironment = try self.methodReceiverSignatureEnvironment(f: f, semanticReceiver: receiver)
         if receiverEnvironment.receiverRef == 0U64 { return <Result.Ok value=0U64 /> }
         val calleeEnvironment = try self.knownMethodSignatureEnvironment(f: f, environment: receiverEnvironment)
+        val patterns = try self.lexicalBodyParameterTypes(function: callee, receiver: receiver)
         mut val signatures: Array[U64] = []
         mut val parameter = 0U64
         while parameter < f.params.count() {
-            signatures.append(try self.groundTermForBody(ref: self.funcParamAt(params: f.params, index: parameter).ty, environment: calleeEnvironment, selfRef: receiver, itemRef: (try self.finalMethodItemRef(f: f, receiverRef: receiver))))
+            signatures.append(try self.groundTermForBody(ref: patterns[parameter], environment: calleeEnvironment, selfRef: receiver, itemRef: (try self.finalMethodItemRef(f: f, receiverRef: receiver))))
             parameter += 1U64
         }
         mut val values: Array[U64] = []

@@ -543,7 +543,7 @@ impl Comp {
                 continue
             }
             if !(try self.callableReceiverMatches(f: f, recvId: qRecvId, recvRef: recvRef)) { continue }
-            val matchRank = try self.groundedMethodArgMatchRank(f: f, args: args, recvRef: recvRef)
+            val matchRank = try self.groundedMethodArgMatchRank(callee: cand.funcIdx, args: args, recvRef: recvRef)
             if matchRank != 0U64 {
                 if firstLabel == self.arena.functionCount() {
                     firstLabel = cand.funcIdx
@@ -606,7 +606,7 @@ impl Comp {
             val function = self.arena.functionAt(index: entry.funcIdx)
             if !self.methodIsVisible(mf: function, offset: if useOffset != 0U64 { give useOffset } else { give nameStart }) { continue }
             if !(try self.callableReceiverMatches(f: function, recvId: qRecvId, recvRef: recvRef)) { continue }
-            if (try self.groundedMethodArgMatchRank(f: function, args: args, recvRef: recvRef)) != 2U64 { continue }
+            if (try self.groundedMethodArgMatchRank(callee: entry.funcIdx, args: args, recvRef: recvRef)) != 2U64 { continue }
             val source = self.callableSourceKey(c: entry)
             mut val seen = false
             for existing in gatedSources { if self.sameCallableSourceHead(a: existing, b: source) { seen = true } }
@@ -913,7 +913,7 @@ impl Comp {
                 val cand = self.decls.callableAt(index: i)
                 val f = self.arena.functionAt(index: cand.funcIdx)
                 if !(try self.callableReceiverMatches(f: f, recvId: qRecvId, recvRef: recvRef)) { continue }
-                val matchRank = try self.groundedMethodArgMatchRank(f: f, args: args, recvRef: recvRef)
+                val matchRank = try self.groundedMethodArgMatchRank(callee: cand.funcIdx, args: args, recvRef: recvRef)
                 if matchRank != 0U64 {
                     if firstLabel == self.arena.functionCount() { firstLabel = cand.funcIdx }
                     if matchRank == 2U64 {
@@ -1173,7 +1173,7 @@ impl Comp {
             val f = self.arena.functionAt(index: cand.funcIdx)
             // A bare head fixes the declaration, not missing type arguments.
             val candidateReceiver = if recvRef != 0U64 { give recvRef } else { give f.recvTy }
-            val matchRank = try self.groundedMethodArgMatchRank(f: f, args: args, recvRef: candidateReceiver)
+            val matchRank = try self.groundedMethodArgMatchRank(callee: cand.funcIdx, args: args, recvRef: candidateReceiver)
             if matchRank != 0U64 {
                 if firstLabel == self.arena.functionCount() {
                     firstLabel = cand.funcIdx
@@ -1399,7 +1399,7 @@ impl Comp {
             val cand = self.decls.callableAt(index: i)
             val f = self.arena.functionAt(index: cand.funcIdx)
             if !(try self.callableReceiverMatches(f: f, recvId: qRecvId, recvRef: recvRef)) { continue }
-            val matchRank = try self.groundedMethodArgMatchRank(f: f, args: args, recvRef: recvRef)
+            val matchRank = try self.groundedMethodArgMatchRank(callee: cand.funcIdx, args: args, recvRef: recvRef)
             if matchRank != 0U64 {
                 if firstLabel == self.arena.functionCount() {
                     firstLabel = cand.funcIdx

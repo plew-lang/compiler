@@ -2162,7 +2162,7 @@ pub struct InstanceEnvironment {
 // separately from method-owned binders; no member selection is repeated.
 pub enum SourceCallSignature {
     RequirementParameters(types: Array[U64], environment: InstanceEnvironment)
-    ProvidedParameters(types: Array[U64])
+    AdmittedParameters(types: Array[U64])
     Direct(environment: InstanceEnvironment)
 }
 

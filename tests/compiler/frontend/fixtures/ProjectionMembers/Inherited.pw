@@ -17,3 +17,22 @@ fn propagating[T](value: Result[I64, T#Child.Output]) -> Result[I64, T#Child.Out
     val number = try value
     return <Result.Ok value=number />
 }
+struct Holder {}
+impl Holder {
+    fn produceMember[T](owner: T, value: T#Child.Output) -> T#Child.Output where T: Child { return value }
+}
+fn methodCaller() -> I64 {
+    val holder = <Holder />
+    return holder.produceMember(owner: <Leaf />, value: 7I64)
+}
+fn wrongMethodCaller() -> I64 {
+    val holder = <Holder />
+    return holder.produceMember(owner: <Leaf />, value: true)
+}
+impl Holder {
+    fn apply[T](transform: fn(value: T) -> T, value: T) -> T { return transform(value: value) }
+}
+fn closureMethodCaller() -> I64 {
+    val holder = <Holder />
+    return holder.apply(transform: fn(value) { return value }, value: 7I64)
+}

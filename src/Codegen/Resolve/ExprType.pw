@@ -1400,7 +1400,8 @@ impl Comp {
 }
 
 impl Comp {
-    inout fn inferMethodEnvironmentWithOrigin(f: Func, receiverRef: U64, args: ArgRange, selectedProof: StaticConformanceProof = <StaticConformanceProof.Missing />, retainedArguments: Array[U64] = [], inferenceOrigin: GenericCallInferenceOrigin) -> Result[InstanceEnvironment, CompileDiagnostic] {
+    inout fn inferMethodEnvironmentWithOrigin(f: Func, receiverRef: U64, args: ArgRange, parameterTypes: Array[U64] = [], selectedProof: StaticConformanceProof = <StaticConformanceProof.Missing />, retainedArguments: Array[U64] = [], inferenceOrigin: GenericCallInferenceOrigin) -> Result[InstanceEnvironment, CompileDiagnostic] {
+        if parameterTypes.count() != 0U64 && parameterTypes.count() != f.params.count() { return <Result.Err error=self.diagnosticAt(offset: f.defOffset, msg: "method inference parameter vector has the wrong shape", failureDomain: <FailureDomain.Internal />) /> }
         val semanticReceiver = try self.callReceiverTermWithOrigin(f: f, receiverRef: receiverRef, args: args, inferenceOrigin: inferenceOrigin)
         if semanticReceiver == 0U64 || semanticReceiver >= self.arena.typeCount() { return <Result.Ok value=<InstanceEnvironment /> /> }
         // A method's generic binder list can contain the nominal declaration
@@ -1437,7 +1438,7 @@ impl Comp {
             val item = try self.finalMethodItemRef(f: f, receiverRef: semanticReceiver)
             mut val types: Array[U64] = []
             for index in 0U64..<f.params.count() {
-                types.append(try self.groundTermForBody(ref: self.funcParamAt(params: f.params, index: index).ty, environment: known, selfRef: semanticReceiver, itemRef: item))
+                types.append(try self.groundTermForBody(ref: (if parameterTypes.count() != 0U64 { give parameterTypes[index] } else { give self.funcParamAt(params: f.params, index: index).ty }), environment: known, selfRef: semanticReceiver, itemRef: item))
             }
             // Signature Self/projections are already interpreted. A second
             // receiver substitution could change a caller-owned symbolic Self.
@@ -1492,8 +1493,8 @@ impl Comp {
 }
 
 impl Comp {
-    inout fn finalMethodEnvironmentWithOrigin(f: Func, receiverRef: U64, args: ArgRange, selectedProof: StaticConformanceProof = <StaticConformanceProof.Missing />, inferenceOrigin: GenericCallInferenceOrigin) -> Result[InstanceEnvironment, CompileDiagnostic] {
-        val environment = try self.inferMethodEnvironmentWithOrigin(f: f, receiverRef: receiverRef, args: args, selectedProof: selectedProof, inferenceOrigin: inferenceOrigin)
+    inout fn finalMethodEnvironmentWithOrigin(f: Func, receiverRef: U64, args: ArgRange, parameterTypes: Array[U64] = [], selectedProof: StaticConformanceProof = <StaticConformanceProof.Missing />, inferenceOrigin: GenericCallInferenceOrigin) -> Result[InstanceEnvironment, CompileDiagnostic] {
+        val environment = try self.inferMethodEnvironmentWithOrigin(f: f, receiverRef: receiverRef, args: args, parameterTypes: parameterTypes, selectedProof: selectedProof, inferenceOrigin: inferenceOrigin)
         // The inference environment contains every declaration binder and
         // may also contain lexical Self. All supplied bindings must resolve;
         // their order is deliberately not part of this consumer's contract.
