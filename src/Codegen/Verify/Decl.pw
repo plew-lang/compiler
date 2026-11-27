@@ -10,6 +10,14 @@ pub impl Comp {
     // to source identities before member lookup; candidate type matching must
     // never silently choose one source for the user.
     inout fn verifyProgram(includeBodies: Bool = true) -> Result[(), CompileDiagnostic] {
+        return self.verifyProgramForAdmission(includeBodies: includeBodies, origin: <FrontendDeclarationOrigin.Raw />)
+    }
+}
+
+impl Comp {
+    // Source origin is supplied only by the fresh loader's synchronous private
+    // continuation. A public verifier must recheck caller-owned/replaced rows.
+    inout fn verifyProgramForAdmission(includeBodies: Bool, origin: FrontendDeclarationOrigin) -> Result[(), CompileDiagnostic] {
         // global initializers first: module-level `val g = …` is program code too, and
         // the acceptance rules (literal context/range, array-element consistency,
         // unique-copy, generic arity) reach it exactly like a function body. Without
@@ -66,9 +74,12 @@ pub impl Comp {
             fi += 1
         }
         if self.tracePhases { eprint(text: "[trace-phase] verify:decl-shapes\n") }
-        try self.checkDeclShapes(sourceFuncLimit: sourceFuncLimit)
+        try self.checkDeclShapesForAdmission(sourceFuncLimit: sourceFuncLimit, origin: origin)
         return <Result.Ok value=() />
     }
+}
+
+pub impl Comp {
 
     // Verify one concrete lexical declaration. Generic and trait templates use
     // checkGenericFunction under their authored abstract environment.
@@ -210,6 +221,12 @@ pub impl Comp {
     }
 
     inout fn checkDeclShapes(sourceFuncLimit: U64) -> Result[(), CompileDiagnostic] {
+        return self.checkDeclShapesForAdmission(sourceFuncLimit: sourceFuncLimit, origin: <FrontendDeclarationOrigin.Raw />)
+    }
+}
+
+impl Comp {
+    inout fn checkDeclShapesForAdmission(sourceFuncLimit: U64, origin: FrontendDeclarationOrigin) -> Result[(), CompileDiagnostic] {
         // the `--gen` harness (spec/16) is a synthesized, trusted artifact that may
         // duplicate derive scaffolding by construction; the actual generated source is
         // decl-shape-checked when the final program is compiled normally (non-gen).
@@ -219,38 +236,21 @@ pub impl Comp {
         try self.checkLangItemRedef()
         try self.checkBlanketHeadless()
         try self.checkDupParamLabels(sourceFuncLimit: sourceFuncLimit)
-        mut val si: U64 = 0
-        while si < self.arena.structCount() {
-            val sd: StructDef = self.arena.structAt(index: si)
-            if !(sd.isExtern) {
-                if self.moduleOf(offset: sd.nameStart) == 0U64 {
-                    try self.checkDupFields(fs: sd.fields, ctx: "struct")
-                }
-            }
-            si += 1
+        for index in 0U64..<self.arena.structCount() {
+            val declaration = self.arena.structAt(index: index)
+            val admitted = match origin { FrontendDeclarationOrigin.Raw => false FrontendDeclarationOrigin.SourceAdmission => declaration.sourceTypeScope != 0U64 }
+            if !declaration.isExtern && !admitted { try self.admitNominalFieldLabels(fields: declaration.fields, origin: <FrontendDeclarationOrigin.Raw />) }
         }
-        mut val ei: U64 = 0
-        while ei < self.arena.enumCount() {
-            val ed: EnumDef = self.arena.enumAt(index: ei)
-            if self.moduleOf(offset: ed.nameStart) == 0U64 {
-                // duplicate variant names, and duplicate fields within each variant.
-                mut val vi: U64 = 0
-                while vi < ed.variants.count() {
-                    mut val vj: U64 = vi + 1U64
-                    while vj < ed.variants.count() {
-                        if spansEqual(c: inout self, aStart: ed.variants[vi].nameStart, aLen: ed.variants[vi].nameLen, bStart: ed.variants[vj].nameStart, bLen: ed.variants[vj].nameLen) {
-                            return <Result.Err error=self.diagnosticAt(offset: ed.variants[vj].nameStart, msg: "duplicate enum variant name (each variant must be distinct)") />
-                        }
-                        vj += 1
-                    }
-                    try self.checkDupFields(fs: ed.variants[vi].fields, ctx: "variant")
-                    vi += 1
-                }
-            }
-            ei += 1
+        for index in 0U64..<self.arena.enumCount() {
+            val declaration = self.arena.enumAt(index: index)
+            val admitted = match origin { FrontendDeclarationOrigin.Raw => false FrontendDeclarationOrigin.SourceAdmission => declaration.sourceTypeScope != 0U64 }
+            if !admitted { try self.admitNominalVariantLabels(variants: declaration.variants, origin: <FrontendDeclarationOrigin.Raw />) }
         }
         return <Result.Ok value=() />
     }
+}
+
+pub impl Comp {
 
     inout fn checkBlanketHeadless() -> Result[(), CompileDiagnostic] {
         mut val i: U64 = 0
@@ -342,21 +342,6 @@ pub impl Comp {
             i += 1
         }
         return false
-    }
-
-    inout fn checkDupFields(fs: Array[FieldDef], ctx: String) -> Result[(), CompileDiagnostic] {
-        mut val i: U64 = 0
-        while i < fs.count() {
-            mut val j: U64 = i + 1U64
-            while j < fs.count() {
-                if spansEqual(c: inout self, aStart: fs[i].nameStart, aLen: fs[i].nameLen, bStart: fs[j].nameStart, bLen: fs[j].nameLen) {
-                    return <Result.Err error=self.diagnosticAt(offset: fs[j].nameStart, msg: "duplicate field name (each field in a struct body / variant payload must be distinct)") />
-                }
-                j += 1
-            }
-            i += 1
-        }
-        return <Result.Ok value=() />
     }
 
     inout fn checkGenericArity(ref: U64, offset: U64) -> Result[(), CompileDiagnostic] {

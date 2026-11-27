@@ -157,12 +157,7 @@ pub impl Comp {
     }
 
     inout fn lowerSyntaxDecl(d: SyntaxDecl) -> Result[(), CompileDiagnostic] {
-        match d.kind {
-            DeclKind.Struct => { try self.lowerSyntaxStructDecl(d: d) }
-            DeclKind.Enum => { try self.lowerSyntaxEnumDecl(d: d) }
-            DeclKind.Func => { try self.lowerSyntaxFuncDecl(d: d) }
-        }
-        return <Result.Ok value=() />
+        return self.lowerSyntaxDeclForAdmission(d: d, origin: <FrontendDeclarationOrigin.Raw />)
     }
 
     inout fn lowerImport(imp: ImportAst) {
@@ -351,6 +346,14 @@ pub impl Comp {
 }
 
 impl Comp {
+    inout fn lowerSyntaxDeclForAdmission(d: SyntaxDecl, origin: FrontendDeclarationOrigin) -> Result[(), CompileDiagnostic] {
+        match d.kind {
+            DeclKind.Struct => { try self.lowerSyntaxStructDeclForAdmission(d: d, origin: origin) }
+            DeclKind.Enum => { try self.lowerSyntaxEnumDeclForAdmission(d: d, origin: origin) }
+            DeclKind.Func => { try self.lowerSyntaxFuncDecl(d: d) }
+        }
+        return <Result.Ok value=() />
+    }
     inout fn lowerSyntaxPublishedItemForAdmission(item: TopItemId, origin: FrontendDeclarationOrigin) -> Result[(), CompileDiagnostic] {
         match syntaxTopItemKind(file: self.syntax, item: item) {
             SyntaxTopItemKind.Extension => {
@@ -374,7 +377,7 @@ impl Comp {
             }
             SyntaxTopItemKind.Decl => {
                 val d: SyntaxDecl = syntaxDecl(file: self.syntax, id: <DeclId raw=syntaxTopItemPayload(file: self.syntax, item: item) />)
-                try self.lowerSyntaxDecl(d: d)
+                try self.lowerSyntaxDeclForAdmission(d: d, origin: origin)
                 self.recordExportFrom(nameStart: d.name.start, nameLen: d.name.end - d.name.start, moduleOffset: d.span.start)
             }
             SyntaxTopItemKind.Trait => {
@@ -410,7 +413,7 @@ impl Comp {
         self.cur.typeParams = []
         match syntaxTopItemKind(file: self.syntax, item: item) {
             SyntaxTopItemKind.Extension => {}
-            SyntaxTopItemKind.Decl => { try self.lowerSyntaxDecl(d: syntaxDecl(file: self.syntax, id: <DeclId raw=syntaxTopItemPayload(file: self.syntax, item: item) />)) }
+            SyntaxTopItemKind.Decl => { try self.lowerSyntaxDeclForAdmission(d: syntaxDecl(file: self.syntax, id: <DeclId raw=syntaxTopItemPayload(file: self.syntax, item: item) />), origin: origin) }
             SyntaxTopItemKind.Impl => { try self.lowerSyntaxImplForAdmission(im: syntaxImpl(file: self.syntax, id: <ImplId raw=syntaxTopItemPayload(file: self.syntax, item: item) />), origin: origin) }
             SyntaxTopItemKind.Trait => { try self.lowerSyntaxTrait(t: syntaxTrait(file: self.syntax, id: <TraitId raw=syntaxTopItemPayload(file: self.syntax, item: item) />)) }
             SyntaxTopItemKind.Extern => { try self.lowerSyntaxExtern(ext: syntaxExtern(file: self.syntax, id: <ExternId raw=syntaxTopItemPayload(file: self.syntax, item: item) />)) }

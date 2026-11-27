@@ -1,0 +1,32 @@
+// Name-list comparison has no declaration, module, or diagnostic authority.
+use @Plew/Syntax only { Span }
+
+pub enum DeclarationLabelConflict {
+    Malformed(index: U64)
+    Duplicate(first: U64, second: U64)
+}
+
+pub fn declarationLabelConflict(bytes: Array[U8], labels: Array[Span]) -> Optional[DeclarationLabelConflict] {
+    // Validate the whole input before comparison, including unequal-length
+    // names which would otherwise bypass a bounds check.
+    for index in 0U64..<labels.count() {
+        val label = labels[index]
+        if label.start > label.end || label.end > bytes.count() {
+            return <Optional.Some v=<DeclarationLabelConflict.Malformed index=index /> />
+        }
+    }
+    for first in 0U64..<labels.count() {
+        val left = labels[first]
+        for second in first+1U64..<labels.count() {
+            val right = labels[second]
+            if left.end-left.start == right.end-right.start {
+                mut val offset = 0U64
+                while offset < left.end-left.start && bytes[left.start+offset] == bytes[right.start+offset] { offset += 1U64 }
+                if offset == left.end-left.start {
+                    return <Optional.Some v=<DeclarationLabelConflict.Duplicate first=first second=second /> />
+                }
+            }
+        }
+    }
+    return <Optional.None />
+}

@@ -1,0 +1,56 @@
+// Append to the Frontend root in an isolated native snapshot.
+fn main() {
+    mut val raw = <Comp />
+    raw.appendSrc(from: "xx".bytes())
+    val field = <FieldDef nameStart=0U64 nameLen=1U64 tyStart=0U64 tyLen=0U64 tyIsArray=false ty=0U64 isMut=false hasDefault=false defaultVal=0U64 />
+    match raw.admitNominalFieldLabels(fields: [field, field], origin: <FrontendDeclarationOrigin.Raw />) {
+        Result.Err(error: val diagnostic) => { if diagnostic.isSourceRejection() || diagnostic.notes().count() != 1U64 { panic("Raw field core gained source authority or lost previous slot") } }
+        Result.Ok(value: _) => { panic("Raw duplicate accepted") }
+    }
+    val malformed = <FieldDef nameStart=2U64 nameLen=18446744073709551615U64 tyStart=0U64 tyLen=0U64 tyIsArray=false ty=0U64 isMut=false hasDefault=false defaultVal=0U64 />
+    match raw.admitNominalFieldLabels(fields: [malformed], origin: <FrontendDeclarationOrigin.Raw />) {
+        Result.Err(error: val diagnostic) => { match diagnostic.failureDomain() { FailureDomain.Internal => {} _ => { panic("malformed Raw span misclassified") } } }
+        Result.Ok(value: _) => { panic("malformed Raw span accepted") }
+    }
+    // A caller can manufacture a nonzero sourceTypeScope. Public verification
+    // must not treat that number, or a replaced Arena, as admission evidence.
+    for scope in [0U64, 99U64] {
+        mut val injected = <Comp />
+        injected.appendSrc(from: "xx".bytes())
+        injected.arena.registerStruct(<StructDef sourceTypeScope=scope nameStart=0U64 nameLen=1U64 typeParams=[] fields=[field, field] isUnique=false isExtern=false />)
+        match injected.checkDeclShapes(sourceFuncLimit: 0U64) {
+            Result.Err(error: val diagnostic) => { if diagnostic.isSourceRejection() || diagnostic.message() != "duplicate field name (each field in a struct body / variant payload must be distinct)" { panic("synthetic declaration borrowed source authority") } }
+            Result.Ok(value: _) => { panic("public verifier trusted injected scope") }
+        }
+        injected.genMode = true
+        injected.checkDeclShapes(sourceFuncLimit: 0U64).unwrap()
+    }
+    for kind in ["StructField", "VariantField", "VariantName"] {
+        for location in ["Local", "Imported"] {
+            val directory = "tests/compiler/frontend/fixtures/DeclarationLabels/"+kind+location+"/"
+            mut val compiler = <Comp />
+            val failure = match analyzeFrontendDeclarationsWithOrigin(c: inout compiler, input: <FrontendInput.File path=directory+"Main.pw" />, sources: <SourceAccess stdRoot="std/".bytes() />, options: <FrontendOptions />, origin: <FrontendDeclarationOrigin.SourceAdmission />) {
+                Result.Err(error: val diagnostic) => diagnostic
+                Result.Ok(value: _) => { panic("source duplicate accepted") }
+            }
+            if !failure.isSourceRejection() || failure.notes().count() != 1U64 { panic("source duplicate lost classification or previous location") }
+            val filename = if location == "Imported" { give "Dep.pw" } else { give "Main.pw" }
+            match failure.location() {
+                DiagnosticLocation.File(path: val path, line: val line) => { if path != directory+filename || line != 1I64 { panic("wrong duplicate location") } }
+                _ => { panic("source duplicate lost location") }
+            }
+            match failure.notes()[0U64].location {
+                DiagnosticLocation.File(path: val path, line: val line) => { if path != directory+filename || line != 1I64 { panic("wrong previous location") } }
+                _ => { panic("previous declaration lost location") }
+            }
+            for index in 0U64..<compiler.arena.structCount() {
+                val declaration = compiler.arena.structAt(index: index)
+                if declaration.nameLen == 3U64 && compiler.arena.bytes[declaration.nameStart] == 66U8 && compiler.arena.bytes[declaration.nameStart+1U64] == 97U8 && compiler.arena.bytes[declaration.nameStart+2U64] == 100U8 { panic("invalid struct was published") }
+            }
+            for index in 0U64..<compiler.arena.enumCount() {
+                val declaration = compiler.arena.enumAt(index: index)
+                if declaration.nameLen == 3U64 && compiler.arena.bytes[declaration.nameStart] == 66U8 && compiler.arena.bytes[declaration.nameStart+1U64] == 97U8 && compiler.arena.bytes[declaration.nameStart+2U64] == 100U8 { panic("invalid enum was published") }
+            }
+        }
+    }
+}

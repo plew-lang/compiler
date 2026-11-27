@@ -301,14 +301,29 @@ pub impl Comp {
     }
 
     inout fn lowerSyntaxStructDecl(d: SyntaxDecl) -> Result[(), CompileDiagnostic] {
+        return self.lowerSyntaxStructDeclForAdmission(d: d, origin: <FrontendDeclarationOrigin.Raw />)
+    }
+}
+
+impl Comp {
+    inout fn lowerSyntaxStructDeclForAdmission(d: SyntaxDecl, origin: FrontendDeclarationOrigin) -> Result[(), CompileDiagnostic] {
         val scope = self.beginAuthoredTypeScope(kind: <SourceTypeScopeKind.Nominal />, anchor: d.span.start)
         val parameters = self.cur.typeParams
-        val result = self.lowerSyntaxStructDeclInScope(d: d, scope: scope)
+        val result = self.lowerSyntaxStructDeclInScopeForAdmission(d: d, scope: scope, origin: origin)
         self.cur.typeParams = parameters
         return self.finishNominalSourceScope(scope: scope, offset: d.span.start, result: result)
     }
 
+}
+
+pub impl Comp {
     inout fn lowerSyntaxStructDeclInScope(d: SyntaxDecl, scope: U64) -> Result[(), CompileDiagnostic] {
+        return self.lowerSyntaxStructDeclInScopeForAdmission(d: d, scope: scope, origin: <FrontendDeclarationOrigin.Raw />)
+    }
+}
+
+impl Comp {
+    inout fn lowerSyntaxStructDeclInScopeForAdmission(d: SyntaxDecl, scope: U64, origin: FrontendDeclarationOrigin) -> Result[(), CompileDiagnostic] {
         val typeParams: Array[Bind] = (try self.lowerSyntaxDeclTypeParams(d: d))
         self.cur.typeParams = typeParams
         mut val fields: Array[FieldDef] = []
@@ -322,20 +337,40 @@ pub impl Comp {
             val receiverType = self.lowerDeclaredReceiver(nameStart: receiver.nameStart, nameLen: receiver.nameLen, parameters: typeParams, siteOffset: d.name.start)
             try self.lowerAuthoredDeinit(input: <DeinitBodyInput.Syntax block=d.deinitBody />, receiver: receiver, receiverType: receiverType, parameters: typeParams, offset: d.span.start)
         }
+        // Nonzero nominal scopes are published only after label admission.
+        try self.admitNominalFieldLabels(fields: fields, origin: origin)
         self.arena.registerStruct(<StructDef sourceTypeScope=scope nameStart=d.name.start nameLen=d.name.end - d.name.start nameId=intern(c: inout self, start: d.name.start, len: d.name.end - d.name.start) typeParams=typeParams fields=fields isUnique=d.isUnique isNonsendable=d.isNonsendable isExtern=false defOffset=d.span.start />)
         self.drainDerives(typeStart: d.name.start, typeLen: d.name.end - d.name.start, isEnum: false, declStart: d.span.start, declEnd: d.span.end)
         return <Result.Ok value=() />
     }
 
+}
+
+pub impl Comp {
     inout fn lowerSyntaxEnumDecl(d: SyntaxDecl) -> Result[(), CompileDiagnostic] {
+        return self.lowerSyntaxEnumDeclForAdmission(d: d, origin: <FrontendDeclarationOrigin.Raw />)
+    }
+}
+
+impl Comp {
+    inout fn lowerSyntaxEnumDeclForAdmission(d: SyntaxDecl, origin: FrontendDeclarationOrigin) -> Result[(), CompileDiagnostic] {
         val scope = self.beginAuthoredTypeScope(kind: <SourceTypeScopeKind.Nominal />, anchor: d.span.start)
         val parameters = self.cur.typeParams
-        val result = self.lowerSyntaxEnumDeclInScope(d: d, scope: scope)
+        val result = self.lowerSyntaxEnumDeclInScopeForAdmission(d: d, scope: scope, origin: origin)
         self.cur.typeParams = parameters
         return self.finishNominalSourceScope(scope: scope, offset: d.span.start, result: result)
     }
 
+}
+
+pub impl Comp {
     inout fn lowerSyntaxEnumDeclInScope(d: SyntaxDecl, scope: U64) -> Result[(), CompileDiagnostic] {
+        return self.lowerSyntaxEnumDeclInScopeForAdmission(d: d, scope: scope, origin: <FrontendDeclarationOrigin.Raw />)
+    }
+}
+
+impl Comp {
+    inout fn lowerSyntaxEnumDeclInScopeForAdmission(d: SyntaxDecl, scope: U64, origin: FrontendDeclarationOrigin) -> Result[(), CompileDiagnostic] {
         val typeParams: Array[Bind] = (try self.lowerSyntaxDeclTypeParams(d: d))
         self.cur.typeParams = typeParams
         mut val variants: Array[Variant] = []
@@ -351,11 +386,16 @@ pub impl Comp {
             variants.append(<Variant nameStart=v.name.start nameLen=v.name.end - v.name.start nameId=intern(c: inout self, start: v.name.start, len: v.name.end - v.name.start) fields=fields />)
             i += 1U64
         }
+        // Nonzero nominal scopes are published only after label admission.
+        try self.admitNominalVariantLabels(variants: variants, origin: origin)
         self.arena.registerEnum(<EnumDef sourceTypeScope=scope nameStart=d.name.start nameLen=d.name.end - d.name.start nameId=intern(c: inout self, start: d.name.start, len: d.name.end - d.name.start) typeParams=typeParams variants=variants isUnique=d.isUnique isNonsendable=d.isNonsendable defOffset=d.span.start />)
         self.drainDerives(typeStart: d.name.start, typeLen: d.name.end - d.name.start, isEnum: true, declStart: d.span.start, declEnd: d.span.end)
         return <Result.Ok value=() />
     }
 
+}
+
+pub impl Comp {
     inout fn lowerSyntaxDeclParams(d: SyntaxDecl) -> Result[Array[Param], CompileDiagnostic] {
         mut val out: Array[Param] = []
         mut val i: U64 = 0U64
@@ -455,6 +495,7 @@ pub impl Comp {
             val receiverType = self.lowerDeclaredReceiver(nameStart: receiver.nameStart, nameLen: receiver.nameLen, parameters: typeParams, siteOffset: d.nameSpan.start)
             try self.lowerAuthoredDeinit(input: <DeinitBodyInput.Ast block=d.deinitBody />, receiver: receiver, receiverType: receiverType, parameters: typeParams, offset: d.span.start)
         }
+        try self.admitNominalFieldLabels(fields: fields, origin: <FrontendDeclarationOrigin.Raw />)
         self.arena.registerStruct(<StructDef sourceTypeScope=scope nameStart=nm.nameStart nameLen=nm.nameLen nameId=intern(c: inout self, start: nm.nameStart, len: nm.nameLen) typeParams=typeParams fields=fields isUnique=d.isUnique isNonsendable=d.isNonsendable isExtern=false defOffset=d.span.start />)
         self.drainDerives(typeStart: nm.nameStart, typeLen: nm.nameLen, isEnum: false, declStart: d.span.start, declEnd: d.span.end)
         return <Result.Ok value=() />
@@ -487,6 +528,7 @@ pub impl Comp {
             variants.append(<Variant nameStart=vn.nameStart nameLen=vn.nameLen nameId=intern(c: inout self, start: vn.nameStart, len: vn.nameLen) fields=vfields />)
             i += 1
         }
+        try self.admitNominalVariantLabels(variants: variants, origin: <FrontendDeclarationOrigin.Raw />)
         self.arena.registerEnum(<EnumDef sourceTypeScope=scope nameStart=nm.nameStart nameLen=nm.nameLen nameId=intern(c: inout self, start: nm.nameStart, len: nm.nameLen) typeParams=typeParams variants=variants isUnique=d.isUnique isNonsendable=d.isNonsendable defOffset=d.span.start />)
         self.drainDerives(typeStart: nm.nameStart, typeLen: nm.nameLen, isEnum: true, declStart: d.span.start, declEnd: d.span.end)
         return <Result.Ok value=() />

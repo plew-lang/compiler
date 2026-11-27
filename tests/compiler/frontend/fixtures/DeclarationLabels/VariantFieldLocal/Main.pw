@@ -1,0 +1,2 @@
+pub enum Bad { V(value: I64, value: I64) }
+fn main() {}

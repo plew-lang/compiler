@@ -1,0 +1,20 @@
+use ../../../src/DeclarationLabels only { DeclarationLabelConflict, declarationLabelConflict }
+use @Plew/Syntax only { Span }
+
+fn main() {
+    val bytes = "sameother_same".bytes()
+    match declarationLabelConflict(bytes: bytes, labels: [<Span start=0U64 end=4U64 />, <Span start=10U64 end=15U64 />]) {
+        Optional.Some(v: val conflict) => { match conflict { DeclarationLabelConflict.Malformed(index: val index) => { if index != 1U64 { panic("wrong malformed slot") } } _ => { panic("expected malformed span") } } }
+        _ => { panic("out-of-range input did not fail safely") }
+    }
+    match declarationLabelConflict(bytes: bytes, labels: [<Span start=0U64 end=4U64 />, <Span start=10U64 end=14U64 />]) {
+        Optional.Some(v: val conflict) => { match conflict { DeclarationLabelConflict.Duplicate(first: val first, second: val second) => { if first != 0U64 || second != 1U64 { panic("wrong duplicate slots") } } _ => { panic("expected duplicate") } } }
+        _ => { panic("equal bytes in different locations were missed") }
+    }
+    if declarationLabelConflict(bytes: bytes, labels: [<Span start=0U64 end=4U64 />, <Span start=4U64 end=9U64 />]).isSome() { panic("different names conflicted") }
+    match declarationLabelConflict(bytes: bytes, labels: [<Span start=8U64 end=7U64 />]) {
+        Optional.Some(v: val conflict) => { match conflict { DeclarationLabelConflict.Malformed(index: _) => {} _ => { panic("expected malformed span") } } }
+        _ => { panic("reversed span accepted") }
+    }
+    if declarationLabelConflict(bytes: bytes, labels: []).isSome() { panic("empty declaration conflicted") }
+}

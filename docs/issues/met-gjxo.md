@@ -74,3 +74,33 @@ No product fix or GREEN is claimed.
 Independent qualified_member_plan accepts this finite scope and its separation
 from behavior-preserving API narrowing. It requires actual declaration ownership
 and gen/synthetic path study before implementation.
+
+## In-progress implementation boundary
+
+The 48-control real-CLI matrix is RED against saved594990c485aa: 24 legal
+controls pass; 24 invalid-shape controls fail acceptance/domain assertions.
+All input hashes remain unchanged. The pure comparison core's executable
+controls pass, and the whole compiler source passes `--check` with this carrier.
+The first fresh snapshot is building; no fresh product or final certification
+is claimed. Setup mistakes in the newly written core harness were corrected
+and do not count as RED.
+
+The private parsed-item lowering chain carries the existing admission origin to
+completed nominal labels immediately before registration. Public Syntax and
+legacy decoders stay Raw. No persistent source receipt or source-state heuristic
+is added. Raw/synthetic fallback verification shares the same core, removes
+module-zero filtering and the unused ctx parameter. The private synchronous loader-to-verifier continuation skips already
+admitted nonzero-scope nominal rows; public/caller-owned verification still
+checks every Raw row, including replaced Arenas and injected nonzero scopes.
+Scope-zero synthetic rows remain checked on both paths. This uses the actual
+private fresh-construction call chain, not a persisted scope-number capability.
+Structural review found the four nonzero-scope nominal registration paths all
+covered by the registration-before-publication check. Gen suppression remains.
+
+Interim independent review accepts the private Source/Raw call boundary and
+registration position, and the subsequent private verifier handoff, but requests native controls
+before final certification. Diagnostic order for multiply
+invalid enums is now all variant names before payloads; the complete variant-name group is checked before any payload group,
+so the single comparison core owns each complete group. This only changes
+which violation is reported first when both kinds are already invalid;
+no declaration acceptance or effectful evaluation order is changed.

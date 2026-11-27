@@ -1,0 +1,2 @@
+pub enum Bad { V V }
+fn main() {}

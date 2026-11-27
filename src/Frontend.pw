@@ -1,3 +1,4 @@
+use ./DeclarationLabels only { DeclarationLabelConflict, declarationLabelConflict }
 use ./Ir only { SourceBindingOrigin, SourceStatementRange, SourceValueRegion, CheckedLocalStorageRequest, RecordedStorageValueType }
 use ./SourceTypeUses only { SourceTypeRecipe, SourceTypeRecipeOrigin, SourceTypeUses, SourceTypeScope, SourceTypeScopeKind, SourceTypeScopeState, SourceTypeUseRole, AuthoredTypeUse, AuthoredFunctionSignature, LoweredSourceSignature, SourceRequirementOwner, SourceImplementationOwner, SourceImplementationKind, SourceBoundRange }
 use ./SourceTypeAdmissions only { AuthoredTypeViewProof, AuthoredSignatureViews, AuthoredProvidedClause, AuthoredAssociatedBinding, AuthoredConformanceArgument, AuthoredConformanceTarget, SourceSignatureSlot }
@@ -2386,6 +2387,7 @@ part ./SourceOperatorRequirements
 part ./SourceGenericFailures
 part ./SourceArrayFailures
 part ./SourceTypeConstraintVisibility
+part ./NominalDeclarationLabels
 part ./SourceTypeDeclarationVisibility
 part ./SourceTypeVisibility
 part ./SourceLoopFailures
@@ -3238,7 +3240,7 @@ fn analyzeFrontendDeclarationsWithOrigin(c: inout Comp, input: FrontendInput, so
     // emission works. Runs AFTER the typed-AST cache so the operator-witness /
     // visibility checks see recovered expression types.
     tracePhase(c: inout c, label: "verify:start")
-    try c.verifyProgram(includeBodies: !c.genMode)
+    try c.verifyProgramForAdmission(includeBodies: !c.genMode, origin: origin)
     tracePhase(c: inout c, label: "verify:done")
     tracePhase(c: inout c, label: "default-generators:start")
     try c.prepareDefaultArgumentGenerators()
@@ -3308,7 +3310,7 @@ fn analyzeFrontendRequestsWithOrigin(c: inout Comp, input: FrontendInput, source
     try c.admitGlobalAnnotations()
     c.semanticRecordingStarted = true
     c.buildExprTyTable()
-    try c.verifyProgram(includeBodies: false)
+    try c.verifyProgramForAdmission(includeBodies: false, origin: origin)
     try c.prepareDefaultArgumentGenerators()
     c.prepareFieldDefaultGenerators()
     try c.checkGenericUniqueArgs()

@@ -1,0 +1,46 @@
+// Private adapters bind a completed nominal label group to its admission call.
+// Public decoders and later Raw verification cannot supply a Source origin.
+impl Comp {
+    fn admitNominalLabels(labels: Array[Span], variantNames: Bool, origin: FrontendDeclarationOrigin) -> Result[(), CompileDiagnostic] {
+        if self.genMode { return <Result.Ok value=() /> }
+        val conflict = match declarationLabelConflict(bytes: self.arena.bytes, labels: labels) {
+            Optional.None => { return <Result.Ok value=() /> }
+            Optional.Some(v: val conflict) => conflict
+        }
+        match conflict {
+            DeclarationLabelConflict.Malformed(index: _) => {
+                return <Result.Err error=<CompileDiagnostic failureDomain=<FailureDomain.Internal /> location=<DiagnosticLocation.Unpositioned /> message="nominal declaration contains an invalid label span" /> />
+            }
+            DeclarationLabelConflict.Duplicate(first: val first, second: val second) => {
+                val domain = match origin { FrontendDeclarationOrigin.Raw => <FailureDomain.Unclassified /> FrontendDeclarationOrigin.SourceAdmission => <FailureDomain.Source /> }
+                val message = if variantNames { give "duplicate enum variant name (each variant must be distinct)" } else { give "duplicate field name (each field in a struct body / variant payload must be distinct)" }
+                return <Result.Err error=<CompileDiagnostic failureDomain=domain location=self.diagnosticLocationAt(offset: labels[second].start) message=message notes=[<DiagnosticNote location=self.diagnosticLocationAt(offset: labels[first].start) message="previous declaration of this name is here" />] /> />
+            }
+        }
+    }
+    fn admitNominalFieldLabels(fields: Array[FieldDef], origin: FrontendDeclarationOrigin) -> Result[(), CompileDiagnostic] {
+        if self.genMode { return <Result.Ok value=() /> }
+        mut val labels: Array[Span] = []
+        for field in fields {
+            // Subtraction bounds avoid wrapping when receiving malformed Raw rows.
+            if field.nameStart > self.arena.bytes.count() || field.nameLen > self.arena.bytes.count()-field.nameStart {
+                return <Result.Err error=<CompileDiagnostic failureDomain=<FailureDomain.Internal /> location=<DiagnosticLocation.Unpositioned /> message="nominal declaration contains an invalid label span" /> />
+            }
+            labels.append(<Span start=field.nameStart end=field.nameStart+field.nameLen />)
+        }
+        return self.admitNominalLabels(labels: labels, variantNames: false, origin: origin)
+    }
+    fn admitNominalVariantLabels(variants: Array[Variant], origin: FrontendDeclarationOrigin) -> Result[(), CompileDiagnostic] {
+        if self.genMode { return <Result.Ok value=() /> }
+        mut val labels: Array[Span] = []
+        for variant in variants {
+            if variant.nameStart > self.arena.bytes.count() || variant.nameLen > self.arena.bytes.count()-variant.nameStart {
+                return <Result.Err error=<CompileDiagnostic failureDomain=<FailureDomain.Internal /> location=<DiagnosticLocation.Unpositioned /> message="nominal declaration contains an invalid label span" /> />
+            }
+            labels.append(<Span start=variant.nameStart end=variant.nameStart+variant.nameLen />)
+        }
+        try self.admitNominalLabels(labels: labels, variantNames: true, origin: origin)
+        for variant in variants { try self.admitNominalFieldLabels(fields: variant.fields, origin: origin) }
+        return <Result.Ok value=() />
+    }
+}

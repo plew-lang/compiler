@@ -735,3 +735,12 @@ Frontend module; it checks raw core refusals, source authority, both diagnostic
 origins and generation suppression. `DiscoveryMembershipFailureDomains.pw` is
 a standalone service probe for retained failed-session diagnostics. Their native
 snapshot commands/results are linked from issue met-iv6d's evidence.
+
+`test-declaration-labels.py --carrier PATH --out EXCLUSIVE_DIR` compares local
+and unused imported nominal declarations in check/AOT/ORC. It requires Source
+rejection for duplicate struct fields, variant names and payload labels, and
+keeps legal names in separate variants/types and generic declarations accepted.
+`DeclarationLabels.pw` exercises the dependency-light name comparison core,
+including malformed ranges; run it with the selected carrier's `--run`.
+These focused controls do not certify the whole compiler or declaration-owner
+authentication, which additionally needs private/native admission controls.
