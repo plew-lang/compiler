@@ -32,7 +32,39 @@ impl Comp {
         return true
     }
 
-    fn closureParameterFailureOrigin(expression: U64, origin: SourceRecordOrigin) -> FrontendDeclarationOrigin {
+    // Bind the Lower occurrence to its original lexical root, not merely to
+    // whichever parent currently points at that expression in a Raw Arena.
+    inout fn closureSignatureHasLexicalOwner(written: AuthoredClosureSignature, owner: SemanticCompletionOwner) -> Bool {
+        val scope = match self.sourceTypeUses.scopeAt(token: written.scope) { Optional.Some(v: val scope) => scope Optional.None => { return false } }
+        match scope.state { SourceTypeScopeState.Lowered => {} _ => { return false } }
+        match owner {
+            SemanticCompletionOwner.Global(target: val target) => { return self.sourceTypeUses.globalScope(target: target) == written.scope }
+            SemanticCompletionOwner.Function(index: val function) => {
+                if function >= self.arena.functionCount() { return false }
+                mut val declaration = function
+                mut val expectedScope = written.scope
+                match self.decls.defaultGeneratorOrigins.get(key: function) {
+                    Optional.Some(v: val origin) => {
+                        val expression = match self.defaultOriginExpression(origin: origin, offset: written.start) { Result.Ok(value: val expression) => expression Result.Err(error: _) => { return false } }
+                        if expression >= self.arena.exprOriginSerial.count() || self.sourceTypeUses.defaultExpressionScope(origin: self.arena.exprOriginSerial[expression]) != written.scope { return false }
+                        match origin {
+                            DefaultGeneratorOrigin.Parameter(function: val parent, parameter: _) => { declaration = parent expectedScope = scope.parent }
+                            DefaultGeneratorOrigin.Field(structure: val structure, field: _) => { return structure < self.arena.structCount() && scope.parent == self.arena.structAt(index: structure).sourceTypeScope }
+                        }
+                    }
+                    Optional.None => {}
+                }
+                if declaration >= self.arena.functionCount() { return false }
+                val token = match self.sourceTypeUses.signatureFor(function: declaration) { Optional.Some(v: val signature) => signature.scope Optional.None => self.sourceTypeUses.deinitScopeToken(function: declaration) }
+                if token != expectedScope { return false }
+                val original = match self.sourceTypeUses.scopeAt(token: token) { Optional.Some(v: val original) => original Optional.None => { return false } }
+                return original.anchor == self.arena.functionAt(index: declaration).defOffset && original.function.unwrapOr(fallback: 18446744073709551615U64) == declaration
+            }
+            SemanticCompletionOwner.Closure(expression: _) => { return false }
+        }
+    }
+
+    inout fn closureParameterFailureOrigin(expression: U64, origin: SourceRecordOrigin) -> FrontendDeclarationOrigin {
         val request = match origin {
             SourceRecordOrigin.Raw => { return <FrontendDeclarationOrigin.Raw /> }
             SourceRecordOrigin.CheckingRequest(session: val session, root: val root) => (session: session, root: root)
@@ -41,13 +73,12 @@ impl Comp {
         val owner = match self.currentSourceOwner() { Optional.Some(v: val owner) => owner Optional.None => { return <FrontendDeclarationOrigin.Raw /> } }
         if !self.sourceFacts.isActive(owner: owner) || !semanticCompletionOwnersEqual(recorded: self.lexicalSourceFactOwner(owner: owner), prepared: request.root) { return <FrontendDeclarationOrigin.Raw /> }
         val written = match self.authoredClosureSignatures.get(key: expression) { Optional.Some(v: val written) => written Optional.None => { return <FrontendDeclarationOrigin.Raw /> } }
-        if !self.authoredClosureSignatureMatches(expression: expression, written: written) { return <FrontendDeclarationOrigin.Raw /> }
-        val path = match self.sourceControlNodePath(owner: owner, target: <SourceControlNode.Expression id=expression />) { Optional.Some(v: val path) => path Optional.None => { return <FrontendDeclarationOrigin.Raw /> } }
-        if !self.sourceControlNodePathMatches(path: path) { return <FrontendDeclarationOrigin.Raw /> }
+        if !self.authoredClosureSignatureMatches(expression: expression, written: written) || !self.closureSignatureHasLexicalOwner(written: written, owner: request.root) { return <FrontendDeclarationOrigin.Raw /> }
+        if self.sourceControlNodePath(owner: owner, target: <SourceControlNode.Expression id=expression />).isNone() { return <FrontendDeclarationOrigin.Raw /> }
         return <FrontendDeclarationOrigin.SourceAdmission />
     }
 
-    fn admitRecordedClosureParameters(expression: U64, origin: SourceRecordOrigin) -> Result[(), CompileDiagnostic] {
+    inout fn admitRecordedClosureParameters(expression: U64, origin: SourceRecordOrigin) -> Result[(), CompileDiagnostic] {
         if expression >= self.arena.exprs.count() { return <Result.Err error=<CompileDiagnostic failureDomain=<FailureDomain.Internal /> location=<DiagnosticLocation.Unpositioned /> message="closure parameter admission has no expression" /> /> }
         val parameters = match self.arena.exprs[expression] {
             Expr.Closure(params: val parameters, hasRet: _, retStart: _, retLen: _, retIsArray: _, retTy: _, body: _, isDiverging: _) => parameters

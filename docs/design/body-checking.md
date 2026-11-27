@@ -61,6 +61,11 @@ by one to a shadowing local stack cannot substitute for group admission:
 last-name-wins lookup is valid for explicit lexical re-declaration, not for
 malformed simultaneous parameters. Captures and outer bindings belong to their
 own scopes and are not additional members of the parameter group.
+An owned refusal preserves both the original Lower lexical owner of the
+closure signature and its actual occurrence in the constructing owner. A
+current edited graph cannot redefine an authored occurrence's origin. Raw
+constructors retain Raw diagnostic ownership; retained immutable diagnostics
+are not semantic success or source-admission capabilities.
 
 An operator's result expectation is not automatically an operand expectation: receiver `Self`, right-hand type, and associated `Output` can differ. Likewise, a block result's expectation belongs at its yields, not at the value of a nested `return` to another function contract. Optional-chain payload holes receive an explicit child term; they do not make one saved expression arbitrarily change type with each reader's context.
 

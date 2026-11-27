@@ -1,0 +1,63 @@
+// Append to a frozen Frontend root; tests private provenance boundaries.
+fn closureProbeInitializer(compiler: Comp, function: U64) -> U64 {
+    val statement = compiler.blockStmtAt(blkId: compiler.arena.functionAt(index: function).body, index: 0U64)
+    return match compiler.arena.stmts[statement] {
+        Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, init: val expression, annotationOccurrence: _) => expression
+        _ => { panic("probe initializer missing") }
+    }
+}
+fn closureProbeReplacement(expression: Expr, replacement: Optional[Array[Param]] = <Optional.None />, changedBody: Bool = false) -> Expr {
+    return match expression {
+        Expr.Closure(params: val parameters, hasRet: val hasReturn, retStart: val start, retLen: val length, retIsArray: val array, retTy: val type, body: val body, isDiverging: val diverging) =>
+            <Expr.Closure params=replacement.unwrapOr(fallback: parameters) hasRet=hasReturn retStart=start retLen=length retIsArray=array retTy=type body=(if changedBody { give body+1U64 } else { give body }) isDiverging=diverging />
+        _ => { panic("probe closure missing") }
+    }
+}
+fn main() {
+    for kind in ["Owned", "Raw", "PublicConstructor", "FullRecord", "Cached", "Params", "Body", "Span", "Serial", "Synthetic", "Foreign", "Transplanted"] {
+        mut val compiler = <Comp />
+        analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.File path="tests/compiler/frontend/fixtures/ClosureParameterGroups/Main.pw" />, sources: <SourceAccess stdRoot="std/".bytes() />).unwrap()
+        val function = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "entry").nameId)
+        val owner = <SemanticCompletionOwner.Function index=function />
+        if !compiler.sourceFacts.begin(owner: owner) { panic("probe owner not fresh") }
+        compiler.cur.checkFn = function
+        mut val expression = closureProbeInitializer(compiler: compiler, function: function)
+        mut val request = <SourceRecordOrigin.CheckingRequest session=compiler.sourceFactSession() root=owner />
+        if kind == "Raw" { request = <SourceRecordOrigin.Raw /> }
+        if kind == "Params" {
+            val parameters = match compiler.arena.exprs[expression] { Expr.Closure(params: val parameters, hasRet: _, retStart: _, retLen: _, retIsArray: _, retTy: _, body: _, isDiverging: _) => parameters _ => { panic("probe params missing") } }
+            compiler.arena.exprs[expression] = closureProbeReplacement(expression: compiler.arena.exprs[expression], replacement: <Optional.Some v=[parameters[0U64], parameters[0U64]] />)
+        }
+        if kind == "Body" { compiler.arena.exprs[expression] = closureProbeReplacement(expression: compiler.arena.exprs[expression], changedBody: true) }
+        if kind == "Span" { compiler.arena.exprSpanStart[expression] += 1U64 }
+        if kind == "Serial" { compiler.arena.exprOriginSerial[expression] += 1U64 }
+        if kind == "Synthetic" { expression = compiler.pushExpr(e: compiler.arena.exprs[expression]) }
+        if kind == "Foreign" || kind == "Transplanted" {
+            val foreign = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "foreign").nameId)
+            expression = closureProbeInitializer(compiler: compiler, function: foreign)
+            if kind == "Transplanted" {
+                val statement = compiler.blockStmtAt(blkId: compiler.arena.functionAt(index: function).body, index: 0U64)
+                match compiler.arena.stmts[statement] {
+                    Stmt.Let(mutable: val mutable, nameStart: val start, nameLen: val length, tyStart: val typeStart, tyLen: val typeLength, tyIsArray: val array, ty: val type, init: _, annotationOccurrence: val occurrence) => {
+                        compiler.arena.stmts[statement] = <Stmt.Let mutable=mutable nameStart=start nameLen=length tyStart=typeStart tyLen=typeLength tyIsArray=array ty=type init=expression annotationOccurrence=occurrence />
+                    }
+                    _ => { panic("probe transplant slot missing") }
+                }
+            }
+        }
+        if kind == "Cached" { compiler.recordSemanticExprTerm(exprId: expression, term: 1U64) }
+        val closuresBefore = compiler.semanticClosures.count()
+        val localsBefore = compiler.cur.locals.count()
+        val refusal = if kind == "PublicConstructor" {
+            val parameters = match compiler.arena.exprs[expression] { Expr.Closure(params: val parameters, hasRet: _, retStart: _, retLen: _, retIsArray: _, retTy: _, body: _, isDiverging: _) => parameters _ => { panic("probe params missing") } }
+            give match compiler.resolveClosureFunctionType(exprId: expression, parameters: parameters, hasReturn: true, returnType: 0U64, expectedTerm: 0U64) { Result.Err(error: val diagnostic) => diagnostic Result.Ok(value: _) => { panic("public constructor admitted duplicate") } }
+        } else if kind == "FullRecord" || kind == "Cached" {
+            give match compiler.recordParametricFunctionWithOrigin(fnIdx: function, recordCallTemplates: true, origin: <SourceRecordingScope request=request returnContext=<SourceExpectedContext.None /> />, expectedOrigin: <SourceExpectedContext.None />) { Result.Err(error: val diagnostic) => diagnostic Result.Ok(value: _) => { panic("Record admitted duplicate") } }
+        } else {
+            give match compiler.admitRecordedClosureParameters(expression: expression, origin: request) { Result.Err(error: val diagnostic) => diagnostic Result.Ok(value: _) => { panic("closure group admitted duplicate") } }
+        }
+        val source = kind == "Owned" || kind == "FullRecord" || kind == "Cached"
+        if refusal.isSourceRejection() != source || refusal.notes().count() != 1U64 || refusal.message() != "duplicate parameter binding name (each parameter in a group must have a distinct name)" { panic("closure parameter refusal origin changed: "+kind) }
+        if compiler.semanticClosures.count() != closuresBefore || compiler.cur.locals.count() != localsBefore { panic("failed group published a descriptor or parameter local") }
+    }
+}

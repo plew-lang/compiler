@@ -1301,6 +1301,7 @@ impl AuthoredArrayLiteral { factory }
 // Passive Lower identity for the complete authored closure signature, not a
 // source capability or a second local environment. Expr keeps its Param array CoW.
 struct AuthoredClosureSignature {
+    val scope: U64
     val serial: U64
     val start: U64
     val end: U64

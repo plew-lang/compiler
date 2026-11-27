@@ -387,7 +387,7 @@ pub impl Comp {
                 val bd: U64 = (try self.lowerBlock(b: body))
                 self.cur.lowerRetTy = savedRet
                 result = self.pushExpr(e: <Expr.Closure isDiverging=diverging params=ps hasRet=hasRet retStart=rStart retLen=rLen retIsArray=rIsArray retTy=rTy body=bd />)
-                self.authoredClosureSignatures[result] = <AuthoredClosureSignature serial=self.arena.exprOriginSerial[result] start=span.start end=span.end expression=self.arena.exprs[result] />
+                self.authoredClosureSignatures[result] = <AuthoredClosureSignature scope=self.sourceTypeUses.currentScope() serial=self.arena.exprOriginSerial[result] start=span.start end=span.end expression=self.arena.exprs[result] />
                 self.retainClosureTypeSlots(expression: result, parameters: ps, result: resultType)
             }
             ExprAst.Move(val operand, val isBorrow, val span) => {
@@ -654,7 +654,7 @@ pub impl Comp {
                 val body: U64 = (try self.lowerSyntaxBlock(id: e.block0))
                 self.cur.lowerRetTy = savedRet
                 result = self.pushExpr(e: <Expr.Closure isDiverging=e.flag1 params=params hasRet=e.flag0 retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retTy body=body />)
-                self.authoredClosureSignatures[result] = <AuthoredClosureSignature serial=self.arena.exprOriginSerial[result] start=e.span.start end=e.span.end expression=self.arena.exprs[result] />
+                self.authoredClosureSignatures[result] = <AuthoredClosureSignature scope=self.sourceTypeUses.currentScope() serial=self.arena.exprOriginSerial[result] start=e.span.start end=e.span.end expression=self.arena.exprs[result] />
                 self.retainClosureTypeSlots(expression: result, parameters: params, result: resultType)
             }
             _ => {

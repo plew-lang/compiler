@@ -85,3 +85,26 @@ diagnostic promotion. No success-path bodywalk is added.
 
 WIP source checking passes. Fresh/native/mutation/cache/retention controls and
 independent finite certification remain pending.
+
+## Foreign-owner counterexample and repair
+
+Independent review identified an actual Lower closure transplanted from another
+function into the current owner's existing Let initializer slot. A current
+structure path alone would pass despite unchanged foreign signature/span/serial.
+Native closure-parameter-native-red-v2 executes the target failure explicitly
+(status-6, Transplanted assertion; preceding cases pass), not a setup failure.
+The receipt now retains its original Lower scope and binds that scope to the
+canonical lexical function/global/default owner via SourceTypeUses before the
+current path check. Native green-v2 passes all12 owned/Raw/public/full Record/
+cache/name/body/span/serial/synthetic/foreign/transplanted controls with unchanged
+inputs. Source scopes are compared; no acceptance flag or second environment
+is added. The proof-building path is failure-only. Retained session and fresh
+build controls remain pending.
+
+Expanded owner-branch RED has96 cases:24 legal successes and72 duplicate
+acceptances on fixed A (input-invariant). It includes global initializer, direct/
+block-wrapped parameter and field defaults, provided and generic original-owner
+paths. Receipt closure-owner-red.json. These are real accepted programs on A;
+not unrelated setup rejections. The initial session harness used an unsupported
+unique-yield match form; it is corrected to the existing statement-return pattern
+and excluded from evidence of executed assertions.
