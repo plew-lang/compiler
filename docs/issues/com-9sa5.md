@@ -2,7 +2,7 @@
 id: com-9sa5
 status: open
 deps: []
-links: [com-mmk9]
+links: [com-mmk9, met-gjxo]
 created: 2026-10-29T18:38:27Z
 type: task
 priority: 2
@@ -40,3 +40,12 @@ Optional components stay optional and must not become mandatory merely because t
 [Scoped outcome](../../../evidence/existing-feature-conformance/audit-intake/api-source-verification.json) retains all main/mixed roles and normative grounds. Mixed source view/field-membership readers, selected nominal arity, structural duplicate/default declarations and owned diagnostic leaf require separate scoped receivers. Primary role never erases secondary source/declaration/diagnostic obligations.
 
 Original audit-time independence does not waive this implementation admission. Preserve the original finite guarantee, actual callers/delegates, controls and excluded optional/new-feature scopes. Assignment is not product repair/GREEN.
+
+## Coordinated declaration-label repair
+
+met-gjxo owns newly executed imported struct-field/enum-variant/payload-label
+false acceptance and source-origin repair. It may migrate the exact checkDupFields
+leaf (unused ctx, bytes/spans versus mutable Comp) while sharing one decision
+with source admission. Other functions and full audit closure stay here; do not
+close this task from that finite slice. Source module-zero bypass is acceptance
+correctness outside this task's behavior-preserving refactor contract.
