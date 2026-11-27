@@ -1,6 +1,6 @@
 ---
 id: met-9luu
-status: in_progress
+status: closed
 deps: [met-g9dh]
 links: []
 created: 2026-11-27T09:01:39Z
