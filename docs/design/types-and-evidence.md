@@ -55,6 +55,41 @@ A projection such as `T#Iterator.Item` retains its receiver and exact trait inst
 
 Symbolic but justified terms are valid abstract results. Missing evidence and unfinished inference are not. A consumer requiring a concrete result must reject or defer that request explicitly, rather than treating an unresolved projection as an arbitrary layout-compatible type.
 
+### Associated-Member Selection
+
+Unqualified `T.Item` and qualified `T#Child[Args].Item` use one associated-member
+resolution service. The input identifies the receiver, admitted source scope,
+and either the available constraint roots or one explicitly selected complete
+trait instance. The service follows inherited instances with their edge
+substitutions; it does not require the member to be declared directly on Child.
+Name visibility and justification of the selected view remain ordinary admission
+requirements. Finding a member does not establish a conformance.
+
+Candidate identity is the associated declaration and its declaring trait owner
+with every substituted positional argument. Repeated reachability of that same
+candidate is deduplicated. Different declaring instances or declarations remain
+distinct even when their outputs normalize to the same type. Return Missing,
+Unique, or Ambiguous as a semantic result; malformed inputs and bounded-analysis
+limits are distinct failures, not evidence that no member exists. This candidate
+rule does not collapse distinct conformance evidence paths or discharge their
+separate validity and uniqueness requirements.
+
+The successful result retains the actual declaring instance, member identity,
+receiver, and the justified inheritance/substitution derivation from the selected
+root. Keep the authored selection and source occurrence for provenance; the
+resolved projection uses the actual declaring instance. Source type-use admission
+consumes that result before publication. Instantiation and final consumers
+substitute and consume the saved decision instead of searching names or selecting
+another declaring trait. Missing/ambiguous source diagnostics consume the same
+query outcome with the owning occurrence evidence; a declaration-local membership
+Boolean is not the authority for an inherited projection.
+
+This shared selection keeps the language's uniqueness rule independent of the
+spelling used to choose the search roots. Verification covers direct and inherited
+members, qualified and unqualified roots, substituted parent arguments, identical
+diamond candidates, distinct same-name members/instances with equal outputs,
+missing members, and retained identity/provenance through final consumption.
+
 ## 5. Conformance Evidence
 
 A trait instance is identified by its trait owner and positional type arguments. Associated-output predicates constrain the selected instance's outputs; they are not additional inputs that select an implementation. The subject and resolution environment are also necessary to ask a conformance question.

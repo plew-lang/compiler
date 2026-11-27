@@ -238,6 +238,13 @@ The [method](https://github.com/plew-lang/spec/blob/main/spec/02-type-system/07-
 
 For a generic receiver, lookup is limited by its declared capabilities. It may identify a trait requirement without selecting a concrete impl body. Checking publishes that requirement, its signature, and the obligations/evidence context. An instance then resolves the concrete witness for that same requirement; it must not discover an unrelated concrete member that retrospectively makes the generic source valid.
 
+Associated-type name lookup uses the shared [associated-member selection
+contract](types-and-evidence.md#associated-member-selection). An explicit child
+trait instance limits the search roots but includes its inherited instances;
+`T.Item` starts from the available constraints. Neither spelling has an independent
+membership or ambiguity rule. Resolution retains the actual declaring instance
+rather than treating the selected child as the declaration owner.
+
 Member existence, proof that a conformance exists, and proof that a member selection is unique are different results. None can be represented soundly by a shared “found name” Boolean. The types/evidence and generics chapters own proof representation and projection; lookup preserves the identities on which they operate.
 
 A callable declaration read in a value position is a declaration group, not an

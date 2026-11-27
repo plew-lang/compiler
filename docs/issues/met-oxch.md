@@ -1,6 +1,6 @@
 ---
 id: met-oxch
-status: open
+status: closed
 deps: []
 links: []
 created: 2026-11-27T13:54:21Z
@@ -12,30 +12,44 @@ tags: [spec, design, generics]
 ---
 # Specify associated projection through an inheriting trait
 
-## Required source decision
+## Adopted contract and scope
 
-For trait Parent { type Output }, trait Child: Parent {}, where T: Child,
-T#Parent.Output is accepted. Decide whether T#Child.Output is forbidden because
-Parent declares the member, or permitted by resolving the inherited member.
-Spec08 describes explicit originating trait selection, but does not explicitly
-settle this inherited namespace spelling. Spec09 requires a complete trait
-instance. The current implementation is evidence, not normative grounds.
+The user adopted one uniqueness rule for T.Item and T#Child[Args].Item, with
+only the search roots differing. Inherited members are eligible; identical
+associated declarations in the same complete declaring instance deduplicate,
+while distinct declarations or instances remain ambiguous even for equal output
+types. Missing members reject. View/conformance admission remains separate.
 
-This blocks met-o5z0: promoting every absent-own-member refusal to Source would
-implicitly decide this case. Do not label it a proven source violation until
-adopted. No new superclass lookup or ad-hoc Source exception is authorized.
+This task publishes the language rule in spec08 and the shared selection and
+retained-result contract in types-and-evidence/name-lookup. It verifies their
+consistency and links through independent review. Product implementation and
+executed RED/GREEN scenarios belong to parent met-o5z0 and are not completed by
+this document change.
 
-## Evidence and completion
+## Required document checks
 
-Old149aac rejects the new Child projection control. It accepts the Parent
-projection under the Child bound. TraitDef.assocTypes is declaration-local;
-lexical inherited lookup retains the actual declaring parent owner. An earlier
-review assumed a flattened namespace; that assumption was corrected on source
-inspection. Existing inherited lexical/parameterized controls remain valid.
+- T.Output, T#Child.Output and T#Parent.Output agree for a unique inherited member.
+- Different same-name members remain ambiguous; selected parent roots disambiguate.
+- Parent arguments are substituted; distinct complete instances do not merge.
+- A diamond reaching the same candidate does not duplicate it; conformance-path
+  validity/uniqueness remains independently required.
+- One resolver owns the decision, source publication retains it, and downstream
+  consumers do not repeat name lookup or replace the selected origin.
 
-Record the user decision in spec08 and relevant design, covering Child/Parent
-spelling and parameterized full instances, then add positive/rejection tests.
-If inherited projection is adopted, clarify ambiguous/multiple inherited member
-paths before implementation. Do not rewrite current behavior into a specification.
+Rationale: the explicit trait chooses the search roots, rather than introducing
+an extra direct-declaration-only rule. The same uniqueness mechanism serves both
+spellings. Implementation gaps remain at met-o5z0, not in the normative text.
 
+## Completion
 
+Resolved as a documentation task. Spec revision 7c8e321c091f7070070447350888cd2c778bb00e publishes
+the adopted rule; design types-and-evidence Associated-Member Selection owns
+the common query/result/retained-consumer contract, and name-lookup links to it.
+Independent neutral review derived requirements before inspecting edits and found
+no required correction or remaining source decision. It checked full instance
+arguments, inherited redeclaration prohibition, view admission and the separation
+of candidate deduplication from conformance-path ambiguity. Cross-repository
+diff checks and changed local heading/link targets pass.
+
+Implementation and executed acceptance coverage remain met-o5z0 obligations.
+No product correctness, performance, whole-green or stage3 completion is claimed.
