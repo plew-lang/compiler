@@ -1,0 +1,9 @@
+trait Key { type Item }
+trait Parent[A] { type Output }
+trait Child[A]: Parent[A] + Parent[I64] {}
+trait Product { type Value }
+struct Box[T] {}
+impl[T] Box[T] as Product where T: Child[T#Key.Item] + Key[Item=I64] {
+    type Value = T#Child[T#Key.Item].Output
+}
+fn main() {}

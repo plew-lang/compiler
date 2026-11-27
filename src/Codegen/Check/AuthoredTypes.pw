@@ -2121,6 +2121,105 @@ impl Comp {
         }
     }
 
+    fn declarationBoundSourceClause(source: DeclarationBoundRef) -> U64 {
+        return match source {
+            DeclarationBoundRef.Function(index: val index) => self.decls.funcBounds.at(index: index).sourceClause,
+            DeclarationBoundRef.RawRequirement(index: val index) => self.rawRequirementPremises[index].sourceClause,
+            DeclarationBoundRef.Implementation(index: val index) => index + 1U64,
+            _ => 0U64,
+        }
+    }
+    fn declarationBoundOwnsSourceClause(source: DeclarationBoundRef, clause: U64) -> Bool {
+        match source {
+            DeclarationBoundRef.Conformance(index: val index) => {
+                if clause == 0U64 || clause > self.projectionBoundClauses.count() { return false }
+                val scope = self.sourceTypeUses.scopeAt(token: self.projectionBoundClauses[clause-1U64].scope)
+                if scope.isNone() || scope.unwrap().implementation.isNone() || scope.unwrap().bounds.isNone() { return false }
+                val original = scope.unwrap()
+                val owner = match original.implementation.unwrap().kind { SourceImplementationKind.Conformance(index: val owner) => owner _ => { return false } }
+                if owner >= self.decls.conformCount() { return false }
+                val sourceRange = original.bounds.unwrap()
+                val range = self.decls.conformAt(index: owner).bounds
+                return sourceRange.count == range.len && clause >= sourceRange.first && clause-sourceRange.first < sourceRange.count && index == range.start+(clause-sourceRange.first)
+            }
+            _ => { return clause != 0U64 && self.declarationBoundSourceClause(source: source) == clause }
+        }
+    }
+    // Query-time equations retain source clause IDs, not proof authority. Bind
+    // them only to the exact declaration premises of the admitted occurrence.
+    inout fn associatedSelectionPremises(occurrence: U64, ref: U64, assumptions: Array[DeclarationBoundRef]) -> Result[Array[DeclarationBoundRef], CompileDiagnostic] {
+        val selection = try self.retainedAssociatedSelection(occurrence: occurrence, ref: ref)
+        if selection.isNone() { return <Result.Err error=self.associatedMemberInputFailure(message: "associated selection premises have no retained occurrence") /> }
+        val binding = self.associatedSelectionOccurrences[occurrence]
+        val draft = self.loweredAssociatedSelections[binding.selection-1U64]
+        val graph = selection.unwrap().graph
+        val prefix = graph.roots.count()
+        if graph.equationContext.count() != prefix+draft.equationClauses.count() { return <Result.Err error=self.associatedMemberInputFailure(message: "associated selection lost its equation source identities") /> }
+        mut val premises: Array[DeclarationBoundRef] = []
+        for index in 0U64..<draft.equationClauses.count() {
+            val id = draft.equationClauses[index]
+            if id == 0U64 || id > self.projectionBoundClauses.count() { return <Result.Err error=self.associatedMemberInputFailure(message: "associated selection has an invalid equation source clause") /> }
+            val clause = self.projectionBoundClauses[id-1U64]
+            val prepared = try self.retainedSignatureClause(scope: clause.scope, id: id, offset: draft.site)
+            val expected = graph.equationContext[prefix+index]
+            if !self.typeRefEq(a: expected.subject, b: prepared.subject, sourceTerms: true) || !self.sameTraitConstraint(a: expected.constraint, b: prepared.constraint) { return <Result.Err error=self.associatedMemberInputFailure(message: "associated selection equation changed its prepared source clause") /> }
+            mut val found: Optional[DeclarationBoundRef] = <Optional.None />
+            for assumption in assumptions {
+                if !self.declarationBoundOwnsSourceClause(source: assumption, clause: id) { continue }
+                val bound = self.declarationBound(source: assumption)
+                if !self.typeRefEq(a: bound.subject, b: prepared.subject, sourceTerms: true) || !self.sameTraitConstraint(a: bound.constraint, b: prepared.constraint) { return <Result.Err error=self.associatedMemberInputFailure(message: "associated selection equation differs from its scoped premise") /> }
+                if found.isSome() && !self.sameDeclarationBound(a: found.unwrap(), b: assumption) { return <Result.Err error=self.associatedMemberInputFailure(message: "associated selection equation has multiple source premise identities") /> }
+                found = <Optional.Some v=assumption />
+            }
+            if found.isNone() { return <Result.Err error=self.associatedMemberInputFailure(message: "associated selection equation has no exact scoped premise") /> }
+            premises.append(found.unwrap())
+        }
+        return <Result.Ok value=premises />
+    }
+
+    inout fn retainedAdmittedAssociatedSelection(occurrence: U64, ref: U64) -> Result[Optional[AdmittedAssociatedSelection], CompileDiagnostic] {
+        val retained = try self.retainedAssociatedSelection(occurrence: occurrence, ref: ref)
+        if retained.isNone() { return <Result.Ok value=<Optional.None /> /> }
+        val admitted = match self.admittedAssociatedSelections.get(key: occurrence) { Optional.Some(v: val admitted) => admitted Optional.None => { return <Result.Ok value=<Optional.None /> /> } }
+        val binding = self.associatedSelectionOccurrences[occurrence]
+        val candidate = match retained.unwrap().outcome { AssociatedMemberOutcome.Unique(candidate: val candidate) => candidate _ => { return <Result.Err error=self.associatedMemberInputFailure(message: "associated selection admission lost its unique outcome") /> } }
+        if admitted.occurrence != occurrence || admitted.selection != binding.selection || admitted.member != candidate.member || !self.sameAssociatedMemberInstance(first: admitted.declaring, second: candidate.instance) || admitted.rootProofs.count() != retained.unwrap().graph.roots.count() || !self.arena.hasStaticConformanceProof(id: admitted.declaringProof) { return <Result.Err error=self.associatedMemberInputFailure(message: "associated selection admission changed its retained identity") /> }
+        for proof in admitted.rootProofs { if !self.arena.hasStaticConformanceProof(id: proof) { return <Result.Err error=self.associatedMemberInputFailure(message: "associated selection admission lost its root evidence") /> } }
+        return <Result.Ok value=<Optional.Some v=admitted /> />
+    }
+
+    inout fn admitAssociatedSelectionOccurrence(occurrence: U64, ref: U64, viewProof: StaticConformanceProof, scope: DeclarationTypeScope, assumptions: Array[DeclarationBoundRef], normalizations: Array[ProjectionNormalizationStep], offset: U64) -> Result[(), CompileDiagnostic] {
+        val retained = try self.retainedAssociatedSelection(occurrence: occurrence, ref: ref)
+        if retained.isNone() { return <Result.Ok value=() /> }
+        val selection = retained.unwrap()
+        val candidate = match selection.outcome {
+            AssociatedMemberOutcome.Unique(candidate: val candidate) => candidate,
+            // Owned Missing/Ambiguous publication is a separate migration.
+            _ => { return <Result.Ok value=() /> },
+        }
+        if self.admittedAssociatedSelections.contains(key: occurrence) { return <Result.Err error=self.associatedMemberInputFailure(message: "associated selection admission was written twice") /> }
+        val premises = try self.associatedSelectionPremises(occurrence: occurrence, ref: ref, assumptions: assumptions)
+        try self.checkProjectionNormalizations(normalizations: normalizations, offset: offset, assumptions: assumptions)
+        mut val roots: Array[StaticConformanceProof] = []
+        mut val frozen: Array[U64] = []
+        for root in selection.graph.roots {
+            val prepared = try self.replayBoundNormalizations(bound: root, normalizations: normalizations)
+            val proof = if (try self.retainedWitnessClauseMatches(expected: prepared, proof: viewProof, normalizations: normalizations, offset: offset)) { give viewProof } else {
+                // Lexical associated names may name Parent while their retained
+                // source root is Child/Self; that distinct permission is required.
+                give (try self.requireAuthoredViewProof(subject: prepared.subject, instance: prepared.constraint.key, assumptions: assumptions, offset: offset, normalizations: normalizations))
+            }
+            try self.requireDeclarationProofSupport(dependencies: (try self.scopedProofDependencies(proof: proof, scope: scope, offset: offset, normalizations: normalizations)), offset: offset)
+            roots.append(proof)
+            frozen.append(self.freezeStaticConformanceProof(proof: proof))
+        }
+        val declaring = try self.replayAssociatedMemberSelection(selection: selection, roots: roots, normalizations: normalizations, assumptions: assumptions, offset: offset)
+        try self.requireDeclarationProofSupport(dependencies: (try self.scopedProofDependencies(proof: declaring, scope: scope, offset: offset, normalizations: normalizations)), offset: offset)
+        val binding = self.associatedSelectionOccurrences[occurrence]
+        self.admittedAssociatedSelections[occurrence] = <AdmittedAssociatedSelection selection=binding.selection occurrence=occurrence rootProofs=frozen declaringProof=self.freezeStaticConformanceProof(proof: declaring) declaring=candidate.instance member=candidate.member premises=premises normalizations=normalizations />
+        return <Result.Ok value=() />
+    }
+
     // Replay a retained name-selection graph with independently admitted roots.
     // Every incoming edge is checked, even when its target already has evidence.
     inout fn mergeAssociatedMemberProof(node: U64, proof: StaticConformanceProof, saved: inout Dictionary[U64, U64], normalizations: Array[ProjectionNormalizationStep], offset: U64) -> Result[(), CompileDiagnostic] {
@@ -2630,12 +2729,7 @@ impl Comp {
         if term == 0U64 || (self.arena.typeViewSourceCount(ref: term) == 0U64 && !self.arena.typeContainsAssociatedProjection(ref: term)) { return 0U64 }
         match proof {
             StaticConformanceProof.AssumedBound(source: val source) => {
-                val clause = match source {
-                    DeclarationBoundRef.Function(index: val index) => self.decls.funcBounds.at(index: index).sourceClause,
-                    DeclarationBoundRef.RawRequirement(index: val index) => self.rawRequirementPremises[index].sourceClause,
-                    DeclarationBoundRef.Implementation(index: val index) => index + 1U64,
-                    _ => 0U64,
-                }
+                val clause = self.declarationBoundSourceClause(source: source)
                 if clause == 0U64 || clause > self.projectionBoundClauses.count() { return 0U64 }
                 match self.projectionBoundClauses[clause - 1U64].state {
                     ProjectionBoundState.Ready(bound: val bound) => {
@@ -2880,6 +2974,9 @@ impl Comp {
                 try self.requireDeclarationProofSupport(dependencies: (try self.scopedProofDependencies(proof: proof, scope: scope, offset: occurrence.site, normalizations: context)), offset: occurrence.site)
                 if inheritedProjection && isProjection {
                     try self.checkInheritedSignatureProjection(proof: proof, scope: scope, subject: subject, selector: <TraitInstanceKey owner=selector.traitInstance.owner positionalArgs=arguments />, offset: occurrence.site)
+                }
+                if isProjection {
+                    try self.admitAssociatedSelectionOccurrence(occurrence: id, ref: occurrence.term, viewProof: proof, scope: scope, assumptions: projectionAssumptions, normalizations: context, offset: occurrence.site)
                 }
                 mut val outputEquations: Array[ProjectionNormalizationStep] = []
                 val frozen = self.freezeStaticConformanceProof(proof: proof)

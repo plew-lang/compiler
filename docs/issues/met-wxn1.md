@@ -135,14 +135,42 @@ inputs and zero compile/runtime/link/native status. The context-forwarding delta
 also passed independent source review. Publication and the receipt are not
 complete from this helper.
 
+## Source admission receipt checkpoint
+
+Source signature admission now writes an occurrence-owned AdmittedAssociatedSelection
+only after exact equation-premise mapping, normalization verification, root proof
+scope support and complete graph replay. Existing matching view evidence is reused;
+a distinct lexical Child/Self root obtains and validates its own evidence. Original
+root proofs and declaring proof/instance/member are separate. The receipt retains
+exact premise references and the normalization context; it does not replace the
+immutable authored annotation or claim to be a union of output facts.
+
+The reader rechecks original selection/session/occurrence identity and retained
+proof IDs. Duplicate writes and foreign-session reuse reject. Conformance
+premises use the exact source scope's conformance owner and source/declaration
+range ordinal, not an equal-term search. Function/RawRequirement/Implementation
+premises retain their direct source clause mapping.
+
+Independent source review identified a missing scope-support gate for newly
+obtained Child roots; both root and derived proof now pass that gate before
+publication. The negative test forces a fresh Child fallback with an unrelated
+scope and asserts no receipt was published. Removing both gates in a separate
+snapshot triggers its target panic; this is mutation detection, not historical
+RED. A real Conformance-premise RED becomes GREEN and checks the receipt's
+Conformance reference. Final native-v12 passes all fourteen profiles with input
+invariance and zero compile/runtime/link/native status. Source re-review found
+no remaining required defect in these producer slices.
+
+Meta evidence `projection-members/admission-checkpoint.json` owns exact result
+paths. This is not B completion: admitted symbolic Parent publication is still
+RED, body/call/instantiation readers and remaining producer modes require the
+full below checks. No performance or all-suite adoption claim is made.
+
 ## Next implementation sequence
 
-1. Build the occurrence-owned admission receipt. Bind saved equation context to
-   actual source assumptions by exact clause IDs. Retain original root proof and
-   declaring proof separately. Replay the saved compact graph per node/incoming
-   edge with readSignatureSupertraitWitness/checkRetainedWitnessClause; merge
-   with context-aware path equivalence, not by enumerating every full path or
-   by name-candidate identity alone.
+1. Audit remaining producer/receiver environments against the receipt checkpoint;
+   retain source scope and exact roots/equations across nested/provided/associated
+   binding uses. Do not infer all-mode closure from the finite native profiles.
 2. Connect abstract and concrete admitted readers (AuthoredTypes, source/body
    facts, call/generic instantiation, Mono/Resolve and witness output access).
    Read saved identity/arguments/derivation under explicit environments. Concrete

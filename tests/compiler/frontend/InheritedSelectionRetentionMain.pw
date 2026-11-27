@@ -19,6 +19,26 @@ fn main() {
         }
         _ => { panic("retained source query lost its unique outcome") }
     }
+    val admitted = compiler.retainedAdmittedAssociatedSelection(occurrence: occurrence, ref: parameter.ty).unwrap().unwrap()
+    if admitted.rootProofs.count() != 1U64 || admitted.rootProofs[0U64] == admitted.declaringProof { panic("admission collapsed original view and declaring evidence") }
+    val scope = compiler.declarationTypeScope(owner: index).unwrap()
+    val assumptions = compiler.declarationScopeAssumptions(scope: scope).unwrap()
+    compiler.checkRetainedWitnessClause(expected: selected.graph.roots[0U64], proof: compiler.thawStaticConformanceProof(id: admitted.rootProofs[0U64]), normalizations: admitted.normalizations, offset: 0U64, assumptions: assumptions).unwrap()
+    compiler.checkRetainedWitnessClause(expected: <TraitBound subject=selected.graph.roots[0U64].subject constraint=<TraitConstraint key=admitted.declaring assocPredicates=[] /> offset=0U64 />, proof: compiler.thawStaticConformanceProof(id: admitted.declaringProof), normalizations: admitted.normalizations, offset: 0U64, assumptions: assumptions).unwrap()
+    match compiler.admitAssociatedSelectionOccurrence(occurrence: occurrence, ref: parameter.ty, viewProof: compiler.thawStaticConformanceProof(id: admitted.rootProofs[0U64]), scope: scope, assumptions: assumptions, normalizations: admitted.normalizations, offset: 0U64) {
+        Result.Err(error: _) => {}
+        Result.Ok(value: _) => { panic("admission receipt was overwritten") }
+    }
+    val admissions = compiler.admittedAssociatedSelections
+    compiler.admittedAssociatedSelections = [:]
+    val otherFunction = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "main").nameId)
+    val otherScope = compiler.declarationTypeScope(owner: otherFunction).unwrap()
+    match compiler.admitAssociatedSelectionOccurrence(occurrence: occurrence, ref: parameter.ty, viewProof: compiler.thawStaticConformanceProof(id: admitted.declaringProof), scope: otherScope, assumptions: assumptions, normalizations: admitted.normalizations, offset: 0U64) {
+        Result.Err(error: _) => {}
+        Result.Ok(value: _) => { panic("new Child root evidence escaped declaration scope support") }
+    }
+    if compiler.admittedAssociatedSelections.count() != 0U64 { panic("failed scope support published an admission receipt") }
+    compiler.admittedAssociatedSelections = admissions
     val binding = compiler.associatedSelectionOccurrences.get(key: occurrence).unwrap()
     match compiler.bindLoweredAssociatedSelection(selection: binding.selection, occurrence: occurrence) {
         Result.Ok(value: _) => { panic("write-once selection was rebound") }
@@ -35,6 +55,10 @@ fn main() {
     match compiler.retainedAssociatedSelection(occurrence: occurrence, ref: parameter.ty) {
         Result.Ok(value: _) => { panic("retained selection crossed compiler sessions") }
         Result.Err(error: val diagnostic) => { match diagnostic.failureDomain() { FailureDomain.Internal => {} _ => { panic("foreign session gained source authority") } } }
+    }
+    match compiler.retainedAdmittedAssociatedSelection(occurrence: occurrence, ref: parameter.ty) {
+        Result.Err(error: _) => {}
+        Result.Ok(value: _) => { panic("admission receipt crossed compiler sessions") }
     }
     compiler.sourceFacts = originalFacts
     compiler.retainedAssociatedSelection(occurrence: occurrence, ref: parameter.ty).unwrap().unwrap()

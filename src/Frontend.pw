@@ -808,6 +808,18 @@ struct AssociatedSelectionOccurrence {
     val scope: U64
 }
 impl AssociatedSelectionOccurrence { factory }
+// Source admission keeps authored view authority separate from member ownership.
+struct AdmittedAssociatedSelection {
+    val selection: U64
+    val occurrence: U64
+    val rootProofs: Array[U64]
+    val declaringProof: U64
+    val declaring: TraitInstanceKey
+    val member: U64
+    val premises: Array[DeclarationBoundRef]
+    val normalizations: Array[ProjectionNormalizationStep]
+}
+impl AdmittedAssociatedSelection { factory }
 struct LoweredTypeViewRecipe {
     val source: ResolvedViewSource
     val arguments: Array[U64]
@@ -1536,6 +1548,7 @@ pub struct Comp {
     mut val authoredTypeOccurrences: Array[AuthoredTypeUseReceipt] = []
     mut val loweredAssociatedSelections: Array[LoweredAssociatedSelection] = []
     mut val associatedSelectionOccurrences: Dictionary[U64, AssociatedSelectionOccurrence] = [:]
+    mut val admittedAssociatedSelections: Dictionary[U64, AdmittedAssociatedSelection] = [:]
     mut val associatedSelectionDraftOwners: Dictionary[U64, U64] = [:]
     mut val authoredLoopTransfers: Array[AuthoredLoopTransfer] = []
     mut val failedLoopTargets: Array[SourceLoopTargetFailure] = []

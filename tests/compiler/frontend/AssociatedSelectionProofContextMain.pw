@@ -11,6 +11,25 @@ fn projectionProofControl(compiler: inout Comp, name: String, equations: Bool, a
     if equations && context.count() == 0U64 { panic("proof context equation setup missing") }
     val scope = compiler.declarationTypeScope(owner: index).unwrap()
     val assumptions = compiler.declarationScopeAssumptions(scope: scope).unwrap()
+    val premises = compiler.associatedSelectionPremises(occurrence: parameter.authoredTypeUse, ref: parameter.ty, assumptions: assumptions).unwrap()
+    val admittedSelection = compiler.retainedAdmittedAssociatedSelection(occurrence: parameter.authoredTypeUse, ref: parameter.ty).unwrap().unwrap()
+    if admittedSelection.premises.count() != premises.count() { panic("admission discarded exact equation premises") }
+    for premise in 0U64..<premises.count() {
+        if !compiler.sameDeclarationBound(a: admittedSelection.premises[premise], b: premises[premise]) { panic("admission replaced an equation source premise") }
+    }
+    if premises.count() == 0U64 { panic("saved equation sources were not bound to exact premises") }
+    match compiler.associatedSelectionPremises(occurrence: parameter.authoredTypeUse, ref: parameter.ty, assumptions: []) {
+        Result.Err(error: val diagnostic) => { if diagnostic.isSourceRejection() { panic("missing internal equation premise became a source rejection") } }
+        Result.Ok(value: _) => { panic("equation source identity was accepted outside its declaration assumptions") }
+    }
+    val otherName = if name == "different" { give "entry" } else { give "different" }
+    val otherIndex = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: otherName).nameId)
+    val otherScope = compiler.declarationTypeScope(owner: otherIndex).unwrap()
+    val otherAssumptions = compiler.declarationScopeAssumptions(scope: otherScope).unwrap()
+    match compiler.associatedSelectionPremises(occurrence: parameter.authoredTypeUse, ref: parameter.ty, assumptions: otherAssumptions) {
+        Result.Err(error: _) => {}
+        Result.Ok(value: _) => { panic("a different declaration supplied the saved equation premises") }
+    }
     val result = compiler.queryTraitPatternProof(demand: <ConformanceProofDemand.SourceAdmission />, baseRef: saved.graph.roots[0U64].subject, traitId: 0U64, traitOwner: candidate.instance.owner, traitArgs: <PatternTypeInput.Values values=candidate.instance.positionalArgs />, patternParams: <PatternBindInput.Values values=[] />, traitArgsOpen: !equations, assumptions: assumptions, normalizations: context).unwrap()
     match result {
         ConformanceProofResult.Found(proof: _) => { if !accepted { panic("different proof paths collapsed") } }

@@ -1,0 +1,20 @@
+// Conformance clauses must retain the same source equation authority.
+fn main() {
+    mut val compiler = <Comp />
+    match analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.File path="tests/compiler/frontend/fixtures/ProjectionMembers/ConformanceEquations.pw" />, sources: <SourceAccess stdRoot="std/".bytes() />) {
+        Result.Ok(value: _) => {}
+        Result.Err(error: val diagnostic) => { panic("conformance equation admission rejected: "+diagnostic.message()) }
+    }
+    mut val found = false
+    for index in 0U64..<compiler.sourceTypeUses.useCount() {
+        val occurrence = compiler.sourceTypeUses.useAt(index: index).unwrap()
+        if compiler.arena.typeAt(index: occurrence.term).assocNameId == 0U64 { continue }
+        val admitted = compiler.retainedAdmittedAssociatedSelection(occurrence: index+1U64, ref: occurrence.term).unwrap()
+        if admitted.isNone() { continue }
+        for premise in admitted.unwrap().premises {
+            match premise { DeclarationBoundRef.Conformance(index: _) => { found = true } _ => {} }
+        }
+    }
+    if !found { panic("conformance equation source was not retained as a conformance premise") }
+
+}
