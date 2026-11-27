@@ -139,6 +139,37 @@ evidence, not a historical RED. Final results and exact input hashes are linked
 from the meta projection-members evidence index. These internal gates do not
 prove fresh AOT/ORC execution or performance.
 
+## Lexical migration boundary
+
+Independent source/design review confirms that lexical lowering must return the
+term and its prepared query together. Keep an explicit representation kind:
+short source recipes describe the contributing root; lexical recipes describe
+the declaring candidate while preserving the original Child/Self roots and
+arguments separately. Capture validates this mapping instead of inferring it
+from a coincidentally equal term. Missing may continue lexical name lookup;
+Ambiguous, unavailable preparation and Limit must propagate.
+
+The migration includes direct TypeAst/SyntaxType annotations, nested projection
+receiver recipes and construction heads. Expr.Make currently retains argument
+occurrences but only a U64 for its head. Move source construction heads to an
+explicit term/provenance result and retain that occurrence through body admission
+and factory rewrite. Synthetic Optional/Result wrapper creation is nominal
+construction, not ambient lexical lookup. A factory rewrite with an existing
+writtenTerm transfers its saved provenance; an unfinished-declaration fallback
+must not silently start another lexical selection. These are existing
+source-to-final-consumer obligations, not a new language feature or a reason to
+close the task after fixing annotation callers alone.
+
+Lexical unavailable-header RED is confirmed: compile/runtime/link succeed,
+native aborts because missing preparation becomes successful absence. A direct
+unconditional common-query trial fixes that case but rejects the existing
+parameterized source profile with Limit. Header preparation enters Child lexical
+scope, lowers Parent[I64], then publishes Child's header; the I64 nominal name
+must not become a demand for an unfinished inherited namespace. The trial is not
+adopted. Resolve that producer dependency explicitly before the handoff migration;
+do not restore silent missing-header behavior or add a per-name exception.
+Meta lexical-checkpoint.json retains frozen input hashes and exact outcomes.
+
 ## Next implementation sequence
 
 1. Audit remaining producer/receiver environments against the receipt checkpoint;

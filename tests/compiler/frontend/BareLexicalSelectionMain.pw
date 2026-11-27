@@ -31,6 +31,25 @@ fn main() {
         val receiverRecipe = compiler.sourceTypeUses.recipeAt(id: nestedRecipe.children[0U64]).unwrap()
         val receiverSelection = compiler.retainedAssociatedSelection(occurrence: receiverRecipe.occurrence, ref: receiverRecipe.term).unwrap().unwrap()
         if receiverSelection.graph.roots[0U64].constraint.key.owner != trait.nameStart { panic("nested lexical receiver lost original Child Self root") }
+        // Missing preparation is not a successful absence of a lexical member.
+        val completed = compiler.decls.queryProbeTraitEntry(owner: trait.nameStart)
+        val header = compiler.traitLexicalHeaders.get(key: trait.nameStart)
+        compiler.decls.setQueryProbeTraitEntry(owner: trait.nameStart, entry: 0U64)
+        compiler.traitLexicalHeaders.remove(key: trait.nameStart)
+        val originalOwner = compiler.lowerAssociatedOwner
+        val originalArguments = compiler.lowerAssociatedArgs
+        compiler.lowerAssociatedOwner = trait.nameStart
+        compiler.lowerAssociatedArgs = []
+        val written = compiler.arena.typeAt(index: parameter.ty)
+        val unavailable = compiler.lowerLexicalAssociatedType(nameStart: written.assocNameStart, nameLen: written.assocNameLen, paramId: 0U64)
+        compiler.lowerAssociatedOwner = originalOwner
+        compiler.lowerAssociatedArgs = originalArguments
+        compiler.decls.setQueryProbeTraitEntry(owner: trait.nameStart, entry: completed)
+        match header { Optional.Some(v: val savedHeader) => { compiler.traitLexicalHeaders[trait.nameStart] = savedHeader } Optional.None => {} }
+        match unavailable {
+            Result.Err(error: val diagnostic) => { match diagnostic.failureDomain() { FailureDomain.Limit => {} _ => { panic("lexical unavailable namespace lost its preparation failure") } } }
+            Result.Ok(value: _) => { panic("lexical unavailable namespace became missing") }
+        }
         found = true
     }
     if !found { panic("lexical requirement setup missing") }
