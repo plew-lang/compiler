@@ -1298,6 +1298,16 @@ struct AuthoredArrayLiteral {
 }
 impl AuthoredArrayLiteral { factory }
 
+// Passive Lower identity for the complete authored closure signature, not a
+// source capability or a second local environment. Expr keeps its Param array CoW.
+struct AuthoredClosureSignature {
+    val serial: U64
+    val start: U64
+    val end: U64
+    val expression: Expr
+}
+impl AuthoredClosureSignature { factory }
+
 struct AuthoredConstruction {
     val offset: U64
     val expression: Expr
@@ -1523,6 +1533,7 @@ pub struct Comp {
     pub mut val pendingConstructionContexts: Set[U64] = Set.new()
     pub mut val pendingInterpolationWrites: Dictionary[U64, InterpolationWrite] = [:]
     mut val authoredCastTargets: Dictionary[U64, U64] = [:]
+    mut val authoredClosureSignatures: Dictionary[U64, AuthoredClosureSignature] = [:]
     mut val authoredExpressionTypeSlots: Dictionary[U64, Array[(index: U64, occurrence: U64)]] = [:]
     pub mut val expressionTypeUses: Dictionary[U64, Array[U64]] = [:]
     pub mut val blockExitRequirements: Dictionary[U64, U64] = [:]
@@ -2387,6 +2398,7 @@ part ./SourceOperatorRequirements
 part ./SourceGenericFailures
 part ./SourceArrayFailures
 part ./SourceTypeConstraintVisibility
+part ./SourceClosureSignatures
 part ./ParameterGroups
 part ./NominalDeclarationLabels
 part ./SourceTypeDeclarationVisibility

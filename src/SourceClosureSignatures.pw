@@ -1,0 +1,60 @@
+// Closure signature introduction owns group admission. Local storage only
+// receives its success; source origin is checked synchronously on refusal.
+impl Comp {
+    fn closureParameterNames(parameters: Array[Param]) -> Result[Array[Span], CompileDiagnostic] {
+        mut val names: Array[Span] = []
+        for parameter in parameters {
+            if parameter.nameStart > self.arena.bytes.count() || parameter.nameLen > self.arena.bytes.count()-parameter.nameStart {
+                return <Result.Err error=<CompileDiagnostic failureDomain=<FailureDomain.Internal /> location=<DiagnosticLocation.Unpositioned /> message="parameter group contains an invalid name span" /> />
+            }
+            names.append(<Span start=parameter.nameStart end=parameter.nameStart+parameter.nameLen />)
+        }
+        return <Result.Ok value=names />
+    }
+
+    fn authoredClosureSignatureMatches(expression: U64, written: AuthoredClosureSignature) -> Bool {
+        if expression >= self.arena.exprs.count() || expression >= self.arena.exprOriginSerial.count() || expression >= self.arena.exprSpanStart.count() || expression >= self.arena.exprSpanEnd.count() { return false }
+        if self.arena.exprOriginSerial[expression] != written.serial || self.arena.exprSpanStart[expression] != written.start || self.arena.exprSpanEnd[expression] != written.end { return false }
+        val original = match written.expression {
+            Expr.Closure(params: val parameters, hasRet: val hasReturn, retStart: val returnStart, retLen: val returnLength, retIsArray: val returnArray, retTy: val returnType, body: val body, isDiverging: val diverging) => (parameters: parameters, hasReturn: hasReturn, returnStart: returnStart, returnLength: returnLength, returnArray: returnArray, returnType: returnType, body: body, diverging: diverging)
+            _ => { return false }
+        }
+        val current = match self.arena.exprs[expression] {
+            Expr.Closure(params: val parameters, hasRet: val hasReturn, retStart: val returnStart, retLen: val returnLength, retIsArray: val returnArray, retTy: val returnType, body: val body, isDiverging: val diverging) => (parameters: parameters, hasReturn: hasReturn, returnStart: returnStart, returnLength: returnLength, returnArray: returnArray, returnType: returnType, body: body, diverging: diverging)
+            _ => { return false }
+        }
+        if current.hasReturn != original.hasReturn || current.returnStart != original.returnStart || current.returnLength != original.returnLength || current.returnArray != original.returnArray || current.returnType != original.returnType || current.body != original.body || current.diverging != original.diverging || current.parameters.count() != original.parameters.count() { return false }
+        for index in 0U64..<current.parameters.count() {
+            val first = original.parameters[index]
+            val second = current.parameters[index]
+            if first.nameStart != second.nameStart || first.nameLen != second.nameLen || first.nameId != second.nameId || first.noLabel != second.noLabel || first.tyStart != second.tyStart || first.tyLen != second.tyLen || first.tyNameId != second.tyNameId || first.tyIsArray != second.tyIsArray || first.ty != second.ty || first.isInout != second.isInout || first.isMove != second.isMove || first.isBorrow != second.isBorrow || first.hasDefault != second.hasDefault || first.defaultExpr != second.defaultExpr || first.authoredTypeUse != second.authoredTypeUse { return false }
+        }
+        return true
+    }
+
+    fn closureParameterFailureOrigin(expression: U64, origin: SourceRecordOrigin) -> FrontendDeclarationOrigin {
+        val request = match origin {
+            SourceRecordOrigin.Raw => { return <FrontendDeclarationOrigin.Raw /> }
+            SourceRecordOrigin.CheckingRequest(session: val session, root: val root) => (session: session, root: root)
+        }
+        if request.session != self.sourceFactSession() { return <FrontendDeclarationOrigin.Raw /> }
+        val owner = match self.currentSourceOwner() { Optional.Some(v: val owner) => owner Optional.None => { return <FrontendDeclarationOrigin.Raw /> } }
+        if !self.sourceFacts.isActive(owner: owner) || !semanticCompletionOwnersEqual(recorded: self.lexicalSourceFactOwner(owner: owner), prepared: request.root) { return <FrontendDeclarationOrigin.Raw /> }
+        val written = match self.authoredClosureSignatures.get(key: expression) { Optional.Some(v: val written) => written Optional.None => { return <FrontendDeclarationOrigin.Raw /> } }
+        if !self.authoredClosureSignatureMatches(expression: expression, written: written) { return <FrontendDeclarationOrigin.Raw /> }
+        val path = match self.sourceControlNodePath(owner: owner, target: <SourceControlNode.Expression id=expression />) { Optional.Some(v: val path) => path Optional.None => { return <FrontendDeclarationOrigin.Raw /> } }
+        if !self.sourceControlNodePathMatches(path: path) { return <FrontendDeclarationOrigin.Raw /> }
+        return <FrontendDeclarationOrigin.SourceAdmission />
+    }
+
+    fn admitRecordedClosureParameters(expression: U64, origin: SourceRecordOrigin) -> Result[(), CompileDiagnostic] {
+        if expression >= self.arena.exprs.count() { return <Result.Err error=<CompileDiagnostic failureDomain=<FailureDomain.Internal /> location=<DiagnosticLocation.Unpositioned /> message="closure parameter admission has no expression" /> /> }
+        val parameters = match self.arena.exprs[expression] {
+            Expr.Closure(params: val parameters, hasRet: _, retStart: _, retLen: _, retIsArray: _, retTy: _, body: _, isDiverging: _) => parameters
+            _ => { return <Result.Err error=<CompileDiagnostic failureDomain=<FailureDomain.Internal /> location=<DiagnosticLocation.Unpositioned /> message="closure parameter admission requires a closure" /> /> }
+        }
+        val names = try self.closureParameterNames(parameters: parameters)
+        val conflict = match declarationLabelConflict(bytes: self.arena.bytes, labels: names) { Optional.Some(v: val conflict) => conflict Optional.None => { return <Result.Ok value=() /> } }
+        return self.parameterNameConflictDiagnostic(names: names, conflict: conflict, origin: self.closureParameterFailureOrigin(expression: expression, origin: origin))
+    }
+}

@@ -54,3 +54,34 @@ scope storage must consume the admitted result rather than revalidate it or
 accept an allowShadow switch. Closure signature introduction invokes the shared
 admission once before publication; its generic storage helper remains neutral
 to the declaration category. No new local environment is needed for the check.
+
+## Owned introduction plan and RED
+
+The fixed A candidate (7771bb48 product) matrix has24 legal successes and30
+target failures: duplicate labelled/suppressed/mixed/differently typed and
+block-wrapped closure groups, local/imported check/AOT/ORC. Repeated bindings
+are accepted; distinct contextual signatures and shadowing execute correctly.
+Receipt: meta declaration-parameters/closure-red.json. The initial contextual
+negative used invalid omitted-type syntax; it was removed from target evidence
+and replaced with a legal contextual positive before this RED record.
+
+Independent source planning: Record's Expr.Closure branch owns the completed
+group before reading any signature cache, publishing descriptors/body signatures
+or installing locals. The public resolveClosureFunctionType constructor remains
+Raw and invokes the shared comparison; the private admitted continuation avoids
+a second scan in owned Record. Raw named-body introduction validates before
+clearing/installing locals; the owned named path consumes its admitted declaration.
+
+Lower retains one private passive authored closure signature receipt (Expr with
+its existing CoW parameter array, serial/span/body/signature identity), not an
+event per binding/label rule or a new local environment. On actual conflict only,
+the private Record adapter verifies that receipt, request session/root, active
+owner and actual sourceControlNodePath in the constructing outer owner. It then
+generates the immutable Source diagnostic directly; failed provenance yields
+the same Raw refusal. Independent reviewer confirmed no new failure-event ledger
+or diagnostic variant is needed when the sole downstream consumer retains and
+displays that diagnostic. This does not authorize a success fact or arbitrary
+diagnostic promotion. No success-path bodywalk is added.
+
+WIP source checking passes. Fresh/native/mutation/cache/retention controls and
+independent finite certification remain pending.

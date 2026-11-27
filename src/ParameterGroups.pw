@@ -22,6 +22,10 @@ impl Comp {
             Optional.None => { return <Result.Ok value=() /> }
             Optional.Some(v: val conflict) => conflict
         }
+        return self.parameterNameConflictDiagnostic(names: names, conflict: conflict, origin: origin)
+    }
+
+    fn parameterNameConflictDiagnostic(names: Array[Span], conflict: DeclarationLabelConflict, origin: FrontendDeclarationOrigin) -> Result[(), CompileDiagnostic] {
         match conflict {
             DeclarationLabelConflict.Malformed(index: _) => {
                 return <Result.Err error=<CompileDiagnostic failureDomain=<FailureDomain.Internal /> location=<DiagnosticLocation.Unpositioned /> message="parameter group contains an invalid name span" /> />

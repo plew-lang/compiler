@@ -1912,6 +1912,7 @@ pub impl Comp {
     }
 
     inout fn recordParametricFunction(fnIdx: U64, recordCallTemplates: Bool) -> Result[(), CompileDiagnostic] {
+        if fnIdx < self.arena.functionCount() { try self.admitParameterGroup(params: self.arena.functionAt(index: fnIdx).params, origin: <FrontendDeclarationOrigin.Raw />) }
         return self.recordParametricFunctionWithOrigin(fnIdx: fnIdx, recordCallTemplates: recordCallTemplates, origin: <SourceRecordingScope request=<SourceRecordOrigin.Raw /> returnContext=<SourceExpectedContext.None /> />, expectedOrigin: <SourceExpectedContext.None />)
     }
 
@@ -2018,6 +2019,13 @@ impl Comp {
 // Reuse of a previously recorded expression belongs to Record, not here.
 pub impl Comp {
     inout fn resolveClosureFunctionType(exprId: U64, parameters: Array[Param], hasReturn: Bool, returnType: U64, expectedTerm: U64, isDiverging: Bool = false, admittedSlots: Array[U64] = []) -> Result[U64, CompileDiagnostic] {
+        try self.admitParameterNames(names: (try self.closureParameterNames(parameters: parameters)), origin: <FrontendDeclarationOrigin.Raw />)
+        return self.resolveAdmittedClosureFunctionType(exprId: exprId, parameters: parameters, hasReturn: hasReturn, returnType: returnType, expectedTerm: expectedTerm, isDiverging: isDiverging, admittedSlots: admittedSlots)
+    }
+}
+
+impl Comp {
+    inout fn resolveAdmittedClosureFunctionType(exprId: U64, parameters: Array[Param], hasReturn: Bool, returnType: U64, expectedTerm: U64, isDiverging: Bool = false, admittedSlots: Array[U64] = []) -> Result[U64, CompileDiagnostic] {
         if isDiverging && hasReturn {
             return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: exprId), msg: "a diverging closure cannot declare a return type (spec/04)") />
         }
@@ -3243,11 +3251,12 @@ impl Comp {
                 // expression instead of reconstructing it through exprType.
                 // Record owns reuse of the expression's construction fact.
                 // The signature constructor never reads a source-result cache.
+                try self.admitRecordedClosureParameters(expression: exprId, origin: origin.request)
                 val recordedSignature = self.semanticExprTerm(exprId: exprId)
                 val signature = if recordedSignature != 0U64 {
                     give recordedSignature
                 } else {
-                    give try self.resolveClosureFunctionType(exprId: exprId, parameters: params, hasReturn: hasRet, returnType: retTy, expectedTerm: normalizedContext, isDiverging: diverging, admittedSlots: closureSlots)
+                    give try self.resolveAdmittedClosureFunctionType(exprId: exprId, parameters: params, hasReturn: hasRet, returnType: retTy, expectedTerm: normalizedContext, isDiverging: diverging, admittedSlots: closureSlots)
                 }
                 self.recordSemanticExprTerm(exprId: exprId, term: signature)
                 try self.publishSemanticClosure(ownerFnIdx: self.cur.checkFn, closureId: exprId, parameters: params, functionTypeTerm: signature, bodyBlock: body)
